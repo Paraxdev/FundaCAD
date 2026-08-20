@@ -28,14 +28,23 @@ import { selectionPie, toolbarOffers, type ToolOffer } from "../../ui/selectionT
 import type { SelectionCounts } from "../../features/toolCapabilities";
 import { handlePlacement } from "../../features/edgeNudge";
 import { regionAnchor } from "../../features/regionNudge";
+import { handleReachPx } from "../../features/manipulator";
 
 type Vec3 = [number, number, number];
 
 const engine = useEngine();
 
-/** How far above the anchor the bar floats, px. Clear of the drag handle, which
- *  stands ON the anchor: the two are one affordance and must not overlap. */
-const LIFT_PX = 64;
+/** Half the bar's own height, px. It is centred on the point computed below
+ *  (translate -50%, -50%), so clearing the handle means clearing this too.
+ *  Hard-coded rather than measured because happy-dom has no layout and neither
+ *  does the frame in which a selection first appears — the same reason HALF_W_PX
+ *  below is a constant. One button row, so it does not vary. */
+const BAR_HALF_PX = 20;
+
+/** Air between the handle's tip and the bar's bottom edge, px. Small, but not
+ *  zero: touching reads as one object, and the point of lifting the bar at all
+ *  is that the handle should read as a control standing on the geometry. */
+const CLEARANCE_PX = 12;
 /** Keeps the bar on screen without measuring it — happy-dom has no layout, and
  *  neither does the frame in which a selection first appears. */
 const HALF_W_PX = 110;
@@ -133,13 +142,27 @@ function refresh(): boolean {
 
   const p = engine.viewport.projectToScreen(anchor);
   const x = Math.min(Math.max(p.x, HALF_W_PX), Math.max(window.innerWidth - HALF_W_PX, HALF_W_PX));
-  const y = p.y - LIFT_PX;
+  // Measured off the handle rather than guessed: it is drawn at a constant
+  // SCREEN size only until it would dwarf the model, and from there it shrinks
+  // with it, so how much room it needs is not a constant. The old fixed 64 put
+  // the bar's bottom edge on the handle's top pixel on a fitted 40mm box.
+  const y = p.y - (barLiftPx() + BAR_HALF_PX + CLEARANCE_PX);
   const prev = screen.value;
   // Only on a real change: the viewport renders on demand, and rewriting the
   // style binding every frame of a still camera would keep Vue patching for
   // nothing.
   if (!prev || Math.abs(prev.x - x) > 0.5 || Math.abs(prev.y - y) > 0.5) screen.value = { x, y };
   return true;
+}
+
+/** How far the handle standing on the anchor reaches up the screen. Zero when
+ *  there is no anchor to measure at, which is also when there is no bar. */
+function barLiftPx(): number {
+  if (!anchor) return 0;
+  return handleReachPx(
+    engine.viewport.modelDiagonal(),
+    engine.viewport.pixelWorldSize(anchor),
+  );
 }
 
 // --- the loop ----------------------------------------------------------------

@@ -327,6 +327,23 @@ export function handleScale(
   return Math.max(MIN_HANDLE_SCALE, Math.min(1, allowed / HANDLE_LENGTH));
 }
 
+/** How far the drawn handle reaches from its anchor along its axis, in SCREEN
+ *  pixels, at this zoom and model size.
+ *
+ *  Everything that has to stand clear of the handle needs this number, and the
+ *  only alternative is a constant guessed from a screenshot. The selection
+ *  toolbar carried exactly that guess — 64px, with a comment saying the two
+ *  "must not overlap" — and measured on a fitted 40mm box the bar's bottom edge
+ *  and the handle's top landed on the same pixel: no clearance at all, so the
+ *  arrow read as a stalk hanging off the toolbar rather than as a control
+ *  standing on the face. */
+export function handleReachPx(
+  modelDiagonal: number | null,
+  pixelWorldSize: number | null,
+): number {
+  return HANDLE_LENGTH * handleScale(modelDiagonal, pixelWorldSize);
+}
+
 function lathe(profile: [number, number][]): THREE.LatheGeometry {
   return new THREE.LatheGeometry(profile.map(([r, y]) => new THREE.Vector2(r, y)), 28);
 }

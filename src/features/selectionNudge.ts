@@ -28,7 +28,15 @@ import {
 
 // Dimmer than an armed tool's handle: this is an offer, not a live control,
 // and it must not compete with the selection itself for attention.
-const IDLE_OPACITY = 0.55;
+//
+// It was 0.55, and 0.55 turned out to be dim enough to miss. The offer is a
+// 45px glyph that has to hold its own against a lit orange face under it, the
+// selection toolbar over it and the world Z axis passing straight through the
+// same patch of screen in full-strength blue — and the report that came back
+// was that selecting a face offers nothing and Press/Pull has to be armed from
+// the keyboard. Three quarters still reads as an offer against the armed
+// handle's full strength, which is the distinction this constant is for.
+const IDLE_OPACITY = 0.75;
 const HOT_OPACITY = 1;
 
 /** Everything that varies between the things you can pull. */

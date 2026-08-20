@@ -14,6 +14,7 @@ import {
   HANDLE_MODEL_FRACTION,
   MIN_HANDLE_SCALE,
   handleScale,
+  handleReachPx,
 } from "../../src/features/manipulator";
 
 describe("orientOutward", () => {
@@ -400,5 +401,37 @@ describe("handleScale", () => {
       expect(s).toBeGreaterThanOrEqual(prev - 1e-12);
       prev = s;
     }
+  });
+});
+
+describe("handleReachPx", () => {
+  // What anything standing clear of the handle has to know. The selection
+  // toolbar used to carry a guessed 64px instead, with a comment saying the two
+  // "must not overlap"; measured on a fitted 40mm box the bar's bottom edge and
+  // the handle's top landed on the same pixel.
+
+  it("is the drawn glyph's height while the handle is at full size", () => {
+    // Far enough out that the model is the bigger of the two, which is every
+    // ordinary view: the handle is then a constant screen size and its reach is
+    // simply its length.
+    expect(handleReachPx(400, 0.1)).toBe(HANDLE_LENGTH);
+  });
+
+  it("shrinks with the handle when the model is small on screen", () => {
+    // A 60px-wide part cannot carry a 45px handle, so both shrink — and the
+    // clearance has to shrink with them or the toolbar floats off on its own.
+    const small = handleReachPx(6, 0.1); // 60px of model
+    expect(small).toBeLessThan(HANDLE_LENGTH);
+    expect(small).toBeCloseTo(HANDLE_LENGTH * handleScale(6, 0.1), 9);
+  });
+
+  it("never reports a reach of zero", () => {
+    // A zero would put the bar on top of a handle that is still drawn: the
+    // shrink is floored (MIN_HANDLE_SCALE) precisely so the thing stays a
+    // target, and the clearance has to respect the same floor.
+    for (const [diag, k] of [[0, 0.1], [-1, 0.1], [400, 0], [NaN, 0.1], [400, NaN]] as const) {
+      expect(handleReachPx(diag, k), `${diag}/${k}`).toBeGreaterThan(0);
+    }
+    expect(handleReachPx(1e-6, 1)).toBeGreaterThanOrEqual(HANDLE_LENGTH * MIN_HANDLE_SCALE);
   });
 });
