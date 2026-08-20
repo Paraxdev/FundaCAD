@@ -36,7 +36,9 @@ from OCP.TopoDS import TopoDS
 from OCP.gp import gp_Pnt
 from OCP.TopTools import TopTools_IndexedDataMapOfShapeListOfShape
 
-from conic_blend import _sub, clamp_profile, conic_blend, weight_scale
+from conic_blend import (
+    PROFILE_LIMIT, _sub, clamp_profile, conic_blend, weight_scale,
+)
 
 
 def mesh_volume(shape, defl=0.005):
@@ -203,10 +205,12 @@ def test_weight_scale_anchors():
     # The interval is OPEN: the ends are degenerate (weight 0 is not a legal
     # NURBS weight, and an infinite one is no blend at all), so they are clamped
     # to something buildable that still reads as the chamfer / the sharp corner.
-    assert 0.0 < weight_scale(-1.0) < 0.01
-    assert weight_scale(1.0) > 100.0
-    assert weight_scale(-1.5) == weight_scale(-0.999)
-    assert weight_scale(9.0) == weight_scale(0.999)
+    assert 0.0 < weight_scale(-1.0) <= 1.0 - PROFILE_LIMIT
+    assert weight_scale(1.0) >= 1.0 / (1.0 - PROFILE_LIMIT)
+    for beyond in (-1.5, -1.0, -0.9995, -PROFILE_LIMIT - 1e-9):
+        assert weight_scale(beyond) == weight_scale(-PROFILE_LIMIT)
+    for beyond in (9.0, 1.0, 0.9995, PROFILE_LIMIT + 1e-9):
+        assert weight_scale(beyond) == weight_scale(PROFILE_LIMIT)
     assert clamp_profile("nonsense") == 0.0
     assert clamp_profile(float("nan")) == 0.0
     print("weight_scale anchors OK")
@@ -362,6 +366,110 @@ def test_a_mitred_corner_keeps_its_seam():
     print("mitred corner seams stay on the mirror plane and stay crisp OK")
 
 
+#: What the viewport actually asks BRepMesh for — server._effective_tolerance's
+#: relative deflection. The tearing below is a property of the mesh the USER
+#: sees, so it has to be measured at the deflection the user gets, not at a
+#: convenient one.
+VIEWPORT_DEFLECTION = 0.002
+
+
+def viewport_mesh(shape):
+    """(triangle count, smallest triangle area) at the viewport's deflection."""
+    from OCP.BRepTools import BRepTools
+    BRepTools.Clean_s(shape)   # a stored finer mesh would be served instead
+    BRepMesh_IncrementalMesh(shape, VIEWPORT_DEFLECTION, True, 0.5, True)
+    n = 0
+    worst = float("inf")
+    for f in _sub(shape, TopAbs_FACE):
+        face = TopoDS.Face_s(f)
+        loc = TopLoc_Location()
+        tri = BRep_Tool.Triangulation_s(face, loc)
+        if tri is None:
+            continue
+        trsf = loc.Transformation()
+        n += tri.NbTriangles()
+        for i in range(1, tri.NbTriangles() + 1):
+            a, b, c = tri.Triangle(i).Get()
+            pa, pb, pc = (tri.Node(k).Transformed(trsf) for k in (a, b, c))
+            ux, uy, uz = pb.X() - pa.X(), pb.Y() - pa.Y(), pb.Z() - pa.Z()
+            vx, vy, vz = pc.X() - pa.X(), pc.Y() - pa.Y(), pc.Z() - pa.Z()
+            nx = uy * vz - uz * vy
+            ny = uz * vx - ux * vz
+            nz = ux * vy - uy * vx
+            worst = min(worst, math.sqrt(nx * nx + ny * ny + nz * nz) / 2.0)
+    return n, worst
+
+
+def test_the_slider_stops_where_the_mesh_still_holds():
+    """Every profile the slider can reach must still tessellate.
+
+    The reported defect: fillet the top face of an extruded rectangle, slide the
+    profile to its negative end, and the corners break and overlap. The kernel is
+    not at fault — that solid is valid, its corner seams sit on their mirror plane
+    to 8e-7mm and its widest tolerance sleeve is 1.9e-6mm, and the same solid
+    meshed twenty times finer has no defect at all. What breaks is the
+    tessellation. As the middle weight runs to zero the section's parameterisation
+    piles up against its end poles, and past a point BRepMesh stops resolving it.
+
+    It does not fail quietly by getting slightly coarser. It falls off a cliff,
+    and the cliff is what this measures. Meshed on a 5mm blend at the viewport's
+    own deflection:
+
+        profile   -0.9   -0.95  -0.98  -0.99  -0.995 | -0.997  -0.998  -0.999
+        triangles 3462   3728   3382   3520   3380   |  2572    2572    2572
+        smallest  3.1e-4 2.3e-4 6.0e-5 2.8e-5 1.1e-5 |  5.2e-4  5.1e-4  5.1e-4
+
+    The TRIANGLE COUNT is what is asserted. It is the signal that means "stopped
+    subdividing" rather than "subdivided differently", and it is the one that
+    survives changing the model: on the 20mm cube below the smallest triangle
+    does NOT jump back up past the cliff even though the count still collapses,
+    so an assertion on the smallest triangle would have no control and would be
+    saying nothing.
+
+    The limit sits at 0.99, two measured steps to the left of that line. Both
+    ends are checked, each against a milder profile of its own sign, and the last
+    case forces the limit back to where it was so the measurement has a control
+    that must fail.
+    """
+    import conic_blend as cb
+
+    cube, top = cube_top()
+    # Each end is judged against a milder profile of ITS OWN sign. The two ends
+    # do not produce comparable blends — at +0.9 the surface has nearly vanished
+    # into the corner, so its triangles are legitimately larger than any on the
+    # chamfer side, and comparing across the middle would only measure that.
+    mild = {s: viewport_mesh(conic_blend(cube, top, CUBE_R, 0.9 * s))
+            for s in (-1, 1)}
+
+    for s in (-1, 1):
+        p = PROFILE_LIMIT * s
+        mild_n, _ = mild[s]
+        n, _ = viewport_mesh(conic_blend(cube, top, CUBE_R, p))
+        assert n >= mild_n * 0.9, (
+            f"profile {p}: {n} triangles against {mild_n} at {0.9 * s} — the "
+            f"mesher stopped subdividing, which is what the torn corner is")
+
+    # The control. Reach past the limit the way the old code did and the same
+    # two measurements have to notice. Without this, the assertions above would
+    # pass just as happily on a limit of 0.5 and say nothing about the defect.
+    real = cb.PROFILE_LIMIT
+    cb.PROFILE_LIMIT = 0.999
+    try:
+        past_n, _ = viewport_mesh(conic_blend(cube, top, CUBE_R, -0.999))
+    finally:
+        cb.PROFILE_LIMIT = real
+    mild_n, _ = mild[-1]
+    assert past_n < mild_n * 0.9, (
+        f"the old limit no longer breaks the mesh ({past_n} triangles against "
+        f"{mild_n} at -0.9) — either the mesher improved or this measurement has "
+        f"stopped describing the defect, and the limit should be re-derived "
+        f"either way")
+    at_n, _ = viewport_mesh(conic_blend(cube, top, CUBE_R, -PROFILE_LIMIT))
+    print(f"the profile limit stops before the mesh cliff OK "
+          f"({at_n} triangles at the limit, {past_n} past it, "
+          f"{mild_n} at -0.9)")
+
+
 def test_a_refused_profile_does_not_read_as_a_failed_fillet():
     """A blend outside the conic family must reach the user saying so, not
     wearing the generic "Fillet failed on Body1" jacket _blend_edges puts on
@@ -413,6 +521,7 @@ if __name__ == "__main__":
     test_extremes_reach_chamfer_and_sharp()
     test_valid_and_monotone_across_the_range()
     test_a_mitred_corner_keeps_its_seam()
+    test_the_slider_stops_where_the_mesh_still_holds()
     test_rebuilds_through_a_real_document()
     test_a_refused_profile_does_not_read_as_a_failed_fillet()
     print("\nall conic blend tests passed")

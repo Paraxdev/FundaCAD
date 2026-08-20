@@ -11,9 +11,15 @@
 
 /** How far the slider travels either side of centre. The interval is OPEN: at
  *  exactly +1 there is no blend left to speak of and at exactly -1 the section's
- *  weight is zero, which is not a legal NURBS weight. The sidecar clamps to the
- *  same figure (conic_blend.PROFILE_LIMIT) — keep them in step. */
-export const PROFILE_LIMIT = 0.999;
+ *  weight is zero, which is not a legal NURBS weight.
+ *
+ *  It stops well short of both, at 0.99, because the last thousandth is a shape
+ *  nothing can draw: past it the viewport mesher loses the section and a mitred
+ *  corner renders as a lens of surface standing proud of itself, while the
+ *  kernel solid underneath is sound. conic_blend.PROFILE_LIMIT carries the
+ *  measurements and the reasoning; the two must stay in step, and there is a
+ *  test on each side that says so. */
+export const PROFILE_LIMIT = 0.99;
 
 /** Half-width of the detent at 0, in profile units.
  *

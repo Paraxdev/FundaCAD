@@ -96,7 +96,29 @@ PROFILE_EPS = 1e-6
 
 #: The slider is open at both ends — a profile of exactly 1 is a sharp corner (no
 #: feature at all) and exactly -1 is a degenerate zero weight. Clamp inside.
-PROFILE_LIMIT = 0.999
+#:
+#: 0.99 rather than 0.999, because the last thousandth is a shape nothing can
+#: draw. As the middle weight k runs to zero the section's UV parameterisation
+#: piles up against its end poles, and past a point the viewport mesher stops
+#: resolving it: it emits FEWER triangles for the harder surface (2,572 against
+#: 3,380 one step back) and the two blends meeting at a mitred corner come out
+#: with boundaries that part company between shared nodes. That renders as a
+#: lens of surface standing proud of the corner — the reported "edges break and
+#: overlap" — while the kernel shape underneath is perfectly sound: valid, seams
+#: on their mirror plane to 8e-7mm, a 1.9e-6mm tolerance sleeve, and no lens at
+#: all when the same solid is meshed twenty times finer.
+#:
+#: Rendered corner by corner on a 5mm blend at the viewport's own deflection:
+#: -0.997 is clean and -0.998 is torn. The limit sits at 0.99, which is k = 0.01
+#: against the 0.003 that still drew and the 0.002 that did not.
+#:
+#: Nothing is lost by stopping there. The section's departure from its chord is
+#: k/(1+2k) of the corner offset, so the whole of the discarded range moves the
+#: surface by 0.035mm on that 5mm blend — under a printer's layer, under a
+#: mill's step, and indistinguishable from the chamfer it is approaching. The
+#: sharp end gains as well: +0.999 used to reach a corner the seam solver had to
+#: refuse outright, and the slider no longer goes there.
+PROFILE_LIMIT = 0.99
 
 
 class ConicNotApplicable(ValueError):
