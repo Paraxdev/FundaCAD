@@ -89,10 +89,10 @@ function getWrapper(): Promise<GcsWrapper> {
       return new GcsWrapper(new mod.GcsSystem());
     })().catch((err) => {
       // Do NOT keep a rejected promise in the cache. It would poison every
-      // later solve with the same stale failure and never retry — and the one
-      // failure we have seen in the field is environmental (a WebView2 that
-      // refuses to instantiate the WASM), so a retry can legitimately succeed
-      // after the runtime is updated, without restarting the app.
+      // later solve with the same stale failure and never retry, and a failure
+      // here can be transient (a fetch that did not land, an instantiate that
+      // raced startup), so a retry can legitimately succeed without restarting
+      // the app.
       wrapperPromise = null;
       throw new SolverUnavailable(err);
     });
@@ -100,17 +100,33 @@ function getWrapper(): Promise<GcsWrapper> {
   return wrapperPromise;
 }
 
-/** The constraint solver's WASM could not be instantiated. Carries the
- *  underlying cause, and a message worth showing a user: the only occurrence in
- *  the field was a Windows WebView2 whose CSP refused to compile the module
- *  (reported as a code-generation-from-strings violation, because V8 checks
- *  WASM compilation through the same hook as `eval`). */
+/** The constraint solver's WASM could not be instantiated.
+ *
+ *  This was misdiagnosed for a long time, so it is worth stating plainly.
+ *  planegcs is an emscripten/embind module, and embind builds each invoker by
+ *  handing SOURCE TEXT to the `Function` constructor. In the shipped 1.1.7 glue
+ *  the minifier specialised that helper to `function qb(b){var a=Function; ...
+ *  b=a.apply(c,b); ...}`. `'wasm-unsafe-eval'` permits WebAssembly COMPILATION
+ *  only; it does not permit the `Function` constructor, which needs
+ *  `'unsafe-eval'`.
+ *
+ *  So this was never about WebAssembly and never about the user's webview: it
+ *  was our own Content-Security-Policy, in every packaged build. `tauri dev`
+ *  serves from vite WITHOUT the CSP, which is why it never reproduced in
+ *  development, and vitest runs in Node, which has no CSP, so no unit test can
+ *  see it either. e2e/solver_csp.cjs is the one that can.
+ *
+ *  Keep the message blaming the build, not the machine. If this fires again it
+ *  means the policy regressed, not that anyone needs a driver update. */
 export class SolverUnavailable extends Error {
   constructor(readonly cause: unknown) {
     const detail = cause instanceof Error ? cause.message : String(cause);
     super(
       /content security policy|unsafe-eval|code generation/i.test(detail)
-        ? "The 2D constraint solver could not start: this WebView2 runtime refuses to compile WebAssembly. Updating the Microsoft Edge WebView2 Runtime should fix it. Sketching still works without constraints."
+        ? "The 2D constraint solver could not start: this build's security policy blocks the "
+          + "code it needs to initialise. That is a bug in Neocad, not a problem with your "
+          + "system, so updating your webview or graphics drivers will not help. Sketching "
+          + "still works, but without constraints, dimensions or point dragging."
         : `The 2D constraint solver could not start: ${detail}`,
     );
     this.name = "SolverUnavailable";
@@ -121,9 +137,9 @@ export class SolverUnavailable extends Error {
  *
  *  A warm-up is OPTIONAL by definition: the caller must not let a failure here
  *  reach the user as an app-level error. It used to be called as a bare
- *  `void initSolver()`, so on a WebView2 that blocks WASM the rejection hit the
+ *  `void initSolver()`, so when the solver could not start the rejection hit the
  *  global unhandledrejection net and greeted the user with "Something went
- *  wrong — check the console for details" at every startup, naming nothing.
+ *  wrong, check the console for details" at every startup, naming nothing.
  *  Resolves to false instead of rejecting; the real error is raised at the
  *  point of USE, where it can say what is actually unavailable. */
 export async function initSolver(): Promise<boolean> {

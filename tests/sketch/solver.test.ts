@@ -79,12 +79,21 @@ describe("constraint solver warm-up", () => {
 });
 
 describe("SolverUnavailable", () => {
-  it("turns a CSP refusal into something a user can act on", async () => {
+  it("blames the build for a CSP refusal, not the user's machine", async () => {
+    // This message used to send people to reinstall the Edge WebView2 Runtime.
+    // The refusal is our own policy blocking embind's Function constructor, in
+    // every packaged build, so a runtime update could never have helped and one
+    // reporter upstream did it for nothing. Pinned so it cannot drift back.
     const { SolverUnavailable } = await solverWith(works);
     const cause = new EvalError(CSP_MESSAGE);
     const e = new SolverUnavailable(cause);
-    expect(e.message).toMatch(/WebView2/);
-    expect(e.message).toMatch(/Sketching still works without constraints/);
+    // It may MENTION a webview or drivers, but only to say they are not it.
+    expect(e.message).not.toMatch(/WebView2 Runtime|should fix it|Updating the/i);
+    expect(e.message).toMatch(/security policy/i);
+    expect(e.message).toMatch(/bug in Neocad/);
+    expect(e.message).toMatch(/will not help/);
+    // and it still says what the user can and cannot do meanwhile
+    expect(e.message).toMatch(/Sketching still works/);
     expect(e.cause).toBe(cause);
   });
 
@@ -92,6 +101,6 @@ describe("SolverUnavailable", () => {
     const { SolverUnavailable } = await solverWith(works);
     const e = new SolverUnavailable(new Error("fetch failed: 404 planegcs.wasm"));
     expect(e.message).toContain("404 planegcs.wasm");
-    expect(e.message).not.toMatch(/WebView2/);
+    expect(e.message).not.toMatch(/security policy/i);
   });
 });
