@@ -1,0 +1,17 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Neocad">
+  <!-- The lockup's mark on its own, squared, for use as a favicon and a window
+       icon. Same three faces and the same accent (#4ca5e0, styles/_tokens.scss)
+       as neocad-lockup-app.svg, so the tab and the title bar cannot drift apart:
+       if one is restyled the other has to be too, and this comment is where that
+       is said.
+
+       Square and centred rather than cropped from the lockup, because a favicon
+       is rendered at 16px and an off-centre mark reads as a rendering fault. -->
+  <path d="M32 12 L54 24.7 L54 50.3 L32 63 L10 50.3 L10 24.7 Z" fill="none"/>
+  <!-- right face (in shadow) -->
+  <path d="M32 32 L53 20 L53 45 L32 57 Z" fill="#1f4f70"/>
+  <!-- left face (mid) -->
+  <path d="M32 32 L11 20 L11 45 L32 57 Z" fill="#2d76a4"/>
+  <!-- top face (lit) -->
+  <path d="M32 8 L53 20 L32 32 L11 20 Z" fill="#4ca5e0"/>
+</svg>

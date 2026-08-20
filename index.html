@@ -4,6 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Neocad</title>
+    <!-- Without this the browser asks for /favicon.ico on every load and logs a
+         404, which is noise that hides real errors in a console anyone is
+         actually reading. Vite rewrites the href for the build. -->
+    <link rel="icon" type="image/svg+xml" href="/assets/brand/neocad-mark.svg" />
   </head>
   <body>
     <!-- The shell used to be written out here as static markup. It now lives in
