@@ -6,14 +6,11 @@ import * as THREE from "three";
 import CameraControls from "camera-controls";
 import { frameRotation, pivotShift, viewQuaternion } from "./orbitPivot";
 import { anchorDolly } from "./zoomAnchor";
+import { MIN_PERSP_DIST, NEAR_AT_REST, perspNear } from "./clipPlanes";
 
 CameraControls.install({ THREE });
 
 const FOV = 45;
-// Closest the perspective camera may sit to its pivot (mm). Kept comfortably above
-// the camera's near plane (0.1) so an extreme zoom-in can't push the surface behind
-// near — which used to clip the whole model away, leaving just the grid.
-const MIN_PERSP_DIST = 0.5;
 /** Half-extent framed when there is nothing to frame (an empty document), in mm.
  *  Roughly a fist-sized part, so the ground grid lands at a legible scale rather
  *  than as one enormous cell or a haze of tiny ones. */
@@ -88,7 +85,7 @@ export function createCameraRig(
   dom: HTMLElement,
   aspect: number,
 ): CameraRig {
-  const persp = new THREE.PerspectiveCamera(FOV, aspect, 0.1, 10000);
+  const persp = new THREE.PerspectiveCamera(FOV, aspect, NEAR_AT_REST, 10000);
   persp.up.set(0, 0, 1); // Z-up
   persp.position.set(80, -120, 90);
 
@@ -276,6 +273,14 @@ export function createCameraRig(
       // than toward one it will have to be pulled back from next frame.
       correctOrbitPivot();
       const moved = controls.update(dt);
+      // The near plane follows the camera in, so a deep zoom cannot push the
+      // surface being inspected behind it. See viewport/clipPlanes.ts; at every
+      // ordinary distance this writes back the number that was already there.
+      const near = perspNear(controls.distance);
+      if (persp.near !== near) {
+        persp.near = near;
+        persp.updateProjectionMatrix();
+      }
       const swapped = applyAutoProjection();
       // Apply the persistent roll AFTER camera-controls positions the camera.
       // update() always rewrites the orientation from its own spherical state,
