@@ -1,14 +1,14 @@
 # Third-Party Notices
 
-SindriCAD incorporates the following third-party components. This file satisfies the
+Neocad incorporates the following third-party components. This file satisfies the
 attribution and source-availability requirements of their licenses. Full license texts
 are bundled under `LICENSES/` in distributed builds.
 
-No dependency is under the GPL or AGPL; nothing here requires SindriCAD's own source to
+No dependency is under the GPL or AGPL; nothing here requires Neocad's own source to
 be published. The copyleft components below are **weak-copyleft** (LGPL, plus one
 file-level copyleft component, certifi's MPL-2.0) and are used in a license-compatible
 way (dynamic linking / separate process / unmodified redistribution), which permits
-distributing SindriCAD under its own terms.
+distributing Neocad under its own terms.
 
 ## Geometry kernel
 
@@ -111,5 +111,5 @@ be regenerated the same way whenever `uv.lock` changes.
 For the LGPL components above (OCCT, OCP, PlaneGCS), the corresponding source code is
 available at the URLs listed. For any distributed binary build, the complete corresponding
 source of these libraries is also available from the project for a period of at least three
-(3) years upon request. SindriCAD links OCCT dynamically and runs OCP as a separate process,
+(3) years upon request. Neocad links OCCT dynamically and runs OCP as a separate process,
 so users may replace these libraries with compatible modified versions.

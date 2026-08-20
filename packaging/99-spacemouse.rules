@@ -1,6 +1,6 @@
-# SindriCAD SpaceMouse access — let the logged-in user read the 3Dconnexion HID device.
+# Neocad SpaceMouse access — let the logged-in user read the 3Dconnexion HID device.
 #
-# SindriCAD reads the SpaceMouse via hidapi, which opens the /dev/hidrawN node.
+# Neocad reads the SpaceMouse via hidapi, which opens the /dev/hidrawN node.
 # The rule MUST therefore target SUBSYSTEM=="hidraw" (a SUBSYSTEM=="usb" rule
 # changes the usb node, NOT the hidraw node, and will not help).
 #

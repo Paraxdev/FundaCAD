@@ -2277,6 +2277,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "neocad"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "blake2",
+ "flate2",
+ "getrandom 0.2.17",
+ "glam",
+ "hidapi",
+ "libc",
+ "opencascade",
+ "opencascade-sys",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-fs",
+ "tauri-plugin-opener",
+ "tauri-plugin-process",
+ "tauri-plugin-single-instance",
+ "tauri-plugin-updater",
+ "threemf",
+ "tokio",
+ "windows 0.58.0",
+ "zip 4.6.1",
+]
+
+[[package]]
 name = "new_debug_unreachable"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3568,36 +3598,6 @@ name = "simdutf8"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
-
-[[package]]
-name = "sindricad"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "blake2",
- "flate2",
- "getrandom 0.2.17",
- "glam",
- "hidapi",
- "libc",
- "opencascade",
- "opencascade-sys",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-fs",
- "tauri-plugin-opener",
- "tauri-plugin-process",
- "tauri-plugin-single-instance",
- "tauri-plugin-updater",
- "threemf",
- "tokio",
- "windows 0.58.0",
- "zip 4.6.1",
-]
 
 [[package]]
 name = "siphasher"

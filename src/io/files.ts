@@ -9,6 +9,7 @@ import type { GeometryBackend } from "../geometry/client";
 import type { CadDocument, ExportFormat, Feature, ImportFormat } from "../types";
 import { clearRecovery } from "./recovery";
 import { noteRecent } from "./recentFiles";
+import { DOC_EXT, LEGACY_DOC_EXT, isDocumentExt, stripDocumentExt } from "./documentExt";
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -67,8 +68,8 @@ export async function saveDocumentAs(store: DocumentStore) {
   if (isTauri()) {
     const { save } = await import("@tauri-apps/plugin-dialog");
     const path = await save({
-      filters: [{ name: "SindriCAD Document", extensions: ["sindri"] }],
-      defaultPath: store.filePath ?? `${store.fileName}.sindri`,
+      filters: [{ name: "Neocad Document", extensions: [DOC_EXT, LEGACY_DOC_EXT] }],
+      defaultPath: store.filePath ?? `${store.fileName}.${DOC_EXT}`,
     });
     if (path) {
       const err = await writeContainer(store, path);
@@ -84,7 +85,7 @@ export async function saveDocumentAs(store: DocumentStore) {
     // Plain dev browser: no Tauri, so no container. Geometry lives in the
     // sidecar's blob store either way, so this download is the document only —
     // useful for inspecting a feature tree, NOT a portable file.
-    downloadText(`${store.fileName}.sindri`, store.toJSON());
+    downloadText(`${store.fileName}.${DOC_EXT}`, store.toJSON());
   }
 }
 
@@ -96,14 +97,14 @@ export async function openDocument(store: DocumentStore, geometry: GeometryBacke
       // MCAD-style: Open takes our document AND mesh/CAD files (imported as a
       // body), routed by extension below — so users can just "open" an STL.
       filters: [
-        { name: "All supported", extensions: ["sindri", "json", "stl", "3mf", "step", "stp", "obj", "glb"] },
-        { name: "SindriCAD Document", extensions: ["sindri", "json"] },
+        { name: "All supported", extensions: [DOC_EXT, LEGACY_DOC_EXT, "json", "stl", "3mf", "step", "stp", "obj", "glb"] },
+        { name: "Neocad Document", extensions: [DOC_EXT, LEGACY_DOC_EXT, "json"] },
         { name: "Mesh / CAD", extensions: ["stl", "3mf", "step", "stp", "obj", "glb"] },
       ],
     });
     if (typeof path !== "string") return;
     const ext = path.split(".").pop()?.toLowerCase();
-    if (ext === "sindri" || ext === "json") {
+    if (isDocumentExt(ext)) {
       await openDocumentAtPath(store, path, geometry);
     } else {
       await importPath(store, geometry, path); // a mesh / CAD file → import as a body
@@ -177,7 +178,7 @@ async function migrateInlineGeometry(text: string, geometry: GeometryBackend): P
   }
 }
 
-/** Open a .sindri/.json document at a known path (no dialog) — shared by Open…
+/** Open a document at a known path (no dialog) — shared by Open…
  *  and the welcome screen's recent-files list.
  *
  *  A v5 document is a ZIP and is read by Rust, which also extracts its geometry
@@ -224,8 +225,8 @@ export async function openDocumentAtPath(
   } catch (e) {
     if (looksLikeContainer(text)) {
       await reportError(
-        `${base} was saved by a newer version of SindriCAD, which stores geometry in a ` +
-          `packaged document this build can't read. Update SindriCAD to open it.`,
+        `${base} was saved by a newer version of Neocad, which stores geometry in a ` +
+          `packaged document this build can't read. Update Neocad to open it.`,
       );
       return "newerFormat";
     }
@@ -367,7 +368,7 @@ export async function exportPrintProject(
   let path = opts.path;
   if (!path) {
     const { save } = await import("@tauri-apps/plugin-dialog");
-    const base = store.fileName.replace(/\.sindri$/i, "") || "part";
+    const base = stripDocumentExt(store.fileName) || "part";
     const picked = await save({
       filters: [{ name: "3MF project", extensions: ["3mf"] }],
       defaultPath: `${base}.3mf`,
@@ -556,7 +557,7 @@ async function importPath(store: DocumentStore, geometry: GeometryBackend, path:
     if (res.cancelled) {
       // The user stopped it: say nothing (they know) and add NOTHING to the
       // document. The path is remembered in SESSION state only — a placeholder
-      // feature would persist into the saved .sindri and reference a path that
+      // feature would persist into the saved document and reference a path that
       // may not exist on another machine.
       lastCancelledImport = path;
       return;
@@ -609,7 +610,7 @@ async function importPath(store: DocumentStore, geometry: GeometryBackend, path:
 async function reportError(msg: string) {
   if (isTauri()) {
     const { message } = await import("@tauri-apps/plugin-dialog");
-    await message(msg, { title: "SindriCAD", kind: "error" });
+    await message(msg, { title: "Neocad", kind: "error" });
   } else {
     console.error(msg);
   }
@@ -639,7 +640,7 @@ function uploadText(): Promise<string | null> {
   return new Promise((resolve) => {
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = ".sindri,.json,application/json";
+    input.accept = `.${DOC_EXT},.${LEGACY_DOC_EXT},.json,application/json`;
     input.onchange = () => {
       const file = input.files?.[0];
       if (!file) return resolve(null);

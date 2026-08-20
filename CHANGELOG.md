@@ -1,9 +1,14 @@
 # Changelog
 
-What changed in each SindriCAD build, newest first. Everything under
-**Unreleased** ships in the next rolling beta, and the release notes on the
-[beta release](https://github.com/MakerViking/sindricad/releases/tag/beta) are
+What changed in each build, newest first. Everything under **Unreleased**
+ships in the next rolling beta, and the release notes on the
+[beta release](https://github.com/Paraxdev/neocad/releases/tag/beta) are
 generated from that section.
+
+Entries below the rename still say SindriCAD, and are left that way on
+purpose: this project began as a fork of it, and those entries describe
+builds that really were called that. Rewriting them would misattribute the
+work.
 
 Builds are versioned `0.1.<build number>` and every green `main` produces one, so
 most entries land under Unreleased and stay there until a milestone is worth

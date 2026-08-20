@@ -180,5 +180,5 @@ def run():
             proc.kill()
 
 if __name__ == "__main__":
-    print("SindriCAD full-stack smoke test (real sidecar server)")
+    print("Neocad full-stack smoke test (real sidecar server)")
     sys.exit(run())

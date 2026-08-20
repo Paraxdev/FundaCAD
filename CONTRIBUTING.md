@@ -1,11 +1,11 @@
-# Contributing to SindriCAD
+# Contributing to Neocad
 
-Thanks for your interest in SindriCAD! A few ground rules keep the project healthy
+Thanks for your interest in Neocad! A few ground rules keep the project healthy
 and its licensing clean.
 
 ## License of your contributions
 
-SindriCAD is released under **AGPL-3.0-only** (see [`LICENSE`](LICENSE)). By
+Neocad is released under **AGPL-3.0-only** (see [`LICENSE`](LICENSE)). By
 submitting a contribution (a pull request, patch, or any code or content), you
 agree that:
 
@@ -15,7 +15,7 @@ agree that:
    irrevocable, worldwide, royalty-free right to **relicense your contribution
    under other terms**, including a commercial license.
 
-This dual-licensing grant is what lets SindriCAD stay fully open-source under the
+This dual-licensing grant is what lets Neocad stay fully open-source under the
 AGPL while the maintainer can also offer a commercial license to organizations that
 can't use AGPL software, the revenue that keeps the project maintained. It's the
 same inbound-relicensable model used by projects like GitLab and Qt.

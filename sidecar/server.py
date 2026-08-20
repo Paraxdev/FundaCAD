@@ -1,4 +1,4 @@
-"""SindriCAD geometry sidecar — WebSocket loop + dispatch.
+"""Neocad geometry sidecar — WebSocket loop + dispatch.
 
 Protocol: one JSON request/response per message, matched by `id`.
   rebuild -> tessellated mesh (+ per-tri faceIds) + edge polylines + bbox

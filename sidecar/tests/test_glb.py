@@ -219,7 +219,7 @@ def test_export_job_routes_glb_and_threads_colours():
     assert "error" not in res, res
 
     gdoc, _blob = _read_glb_raw(p)
-    assert [n.get("name") for n in gdoc["nodes"]] == ["SindriCAD", "Body1", "Body2"], gdoc["nodes"]
+    assert [n.get("name") for n in gdoc["nodes"]] == ["Neocad", "Body1", "Body2"], gdoc["nodes"]
     got = [m["pbrMetallicRoughness"]["baseColorFactor"][0] for m in gdoc["materials"]]
     # body1 is unassigned -> slot 0 (white), body2 -> slot 1 (red), both linearised
     assert abs(got[0] - mesh_writers._srgb_to_linear(232)) < 1e-5, got

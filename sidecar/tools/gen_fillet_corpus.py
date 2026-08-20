@@ -6,7 +6,7 @@ clearance bands and replaces the clearance floor with a SEQUENTIAL FEASIBILITY
 ORACLE, so tight-band-but-achievable cases (where the shipped single-call fillet
 fails yet a one-edge-at-a-time application recovers) are admitted and measured.
 
-Each case is a self-contained SindriCAD document: a primitive (box / cylinder) or a
+Each case is a self-contained Neocad document: a primitive (box / cylinder) or a
 simple join/cut boolean of two primitives, followed by ONE fillet or chamfer feature
 (id "op") whose edges are chosen with a legacy queryable selector (axis / all /
 nearest — the forms the shipping frontend actually emits; `ofFace` is NOT used, its

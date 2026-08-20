@@ -10,10 +10,12 @@
 
 import { useDialogStore } from "../stores/dialogs";
 import type { OpenOutcome } from "../io/files";
+import { readSetting } from "./storedSetting";
 
-const SHOW_KEY = "sindri.welcomeOnStartup";
+const SHOW_KEY = "neocad.welcomeOnStartup";
+const LEGACY_SHOW_KEY = "sindri.welcomeOnStartup";
 export function welcomeOnStartup(): boolean {
-  return localStorage.getItem(SHOW_KEY) !== "false";
+  return readSetting(SHOW_KEY, LEGACY_SHOW_KEY) !== "false";
 }
 
 /** The footer checkbox. Split out so the component writes the same key rather

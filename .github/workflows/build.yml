@@ -1,4 +1,4 @@
-# Cross-platform build + bundle for SindriCAD (Tauri 2 + bundled Python sidecar).
+# Cross-platform build + bundle for Neocad (Tauri 2 + bundled Python sidecar).
 #
 # No system OpenCASCADE anywhere: the Rust/OCCT path is behind the off-by-default
 # `rust-geom` feature (see src-tauri/Cargo.toml), and the shipping geometry runs in the
@@ -226,7 +226,7 @@ jobs:
           # damaged and can't be opened" — right-click -> Open is NOT enough for an
           # app with no signature at all, and saying so in the README and release
           # notes is what sent the reporter of #5 to the issue tracker. The command
-          # that works is `xattr -dr com.apple.quarantine /Applications/SindriCAD.app`.
+          # that works is `xattr -dr com.apple.quarantine /Applications/Neocad.app`.
           # Windows unsigned runs with a SmartScreen warning. To SIGN later: add the
           # APPLE_* / Windows signing secrets back here AND append the signing config:
           #   args: --config src-tauri/tauri.bundle.conf.json --config src-tauri/tauri.macos-sign.conf.json
@@ -262,7 +262,7 @@ jobs:
       # Measured: with all 233 bundled system libraries removed, the AppImage starts and
       # leaves no coredump on a host where the shipped one does neither.
       #
-      # usr/lib/SindriCAD holds the Python geometry engine and MUST survive: it is the
+      # usr/lib/<product> holds the Python geometry engine and MUST survive: it is the
       # app, not a system library, and no host provides it.
       - name: Un-bundle the system stack from the AppImage
         if: matrix.platform == 'ubuntu-22.04'
@@ -283,8 +283,13 @@ jobs:
 
           find "$root/usr/lib" -maxdepth 1 -type f -name '*.so*' -delete
           rm -rf "$root/usr/lib/x86_64-linux-gnu"
-          # the geometry engine must still be there, or we just shipped a dead app
-          test -d "$root/usr/lib/SindriCAD/sidecar-runtime"
+          # The geometry engine must still be there, or we just shipped a dead app.
+          # The directory is named after productName, so it is READ from the config
+          # rather than written out here: hardcoding it meant this check silently
+          # named a directory that no longer existed the moment the app was renamed,
+          # and a `test -d` against the wrong path fails the job for the wrong reason.
+          product=$(node -p "require('./src-tauri/tauri.conf.json').productName")
+          test -d "$root/usr/lib/$product/sidecar-runtime"             || { echo "::error::no sidecar-runtime under usr/lib/$product";                  ls -la "$root/usr/lib"; exit 1; }
 
           wget -qO "$work/appimagetool" \
             https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
@@ -413,7 +418,7 @@ jobs:
           else
             echo "WARNING: no CHANGELOG.md, publishing boilerplate notes only"
           fi
-          printf '\n---\n\nThe builds are unsigned for now: Windows shows a SmartScreen warning ("More info", then "Run anyway"); on macOS Gatekeeper may report the app as damaged, which it is not, and `xattr -dr com.apple.quarantine /Applications/SindriCAD.app` clears it. Install notes are in the [README](https://github.com/%s#install). Installed apps update themselves from this release.\n' \
+          printf '\n---\n\nThe builds are unsigned for now: Windows shows a SmartScreen warning ("More info", then "Run anyway"); on macOS Gatekeeper may report the app as damaged, which it is not, and `xattr -dr com.apple.quarantine /Applications/Neocad.app` clears it. Install notes are in the [README](https://github.com/%s#install). Installed apps update themselves from this release.\n' \
             '${{ github.repository }}' >> notes.md
           cat notes.md
 
@@ -429,10 +434,10 @@ jobs:
           # Create only when there is nothing there; otherwise refresh the notes.
           if gh release view beta --repo "$R" >/dev/null 2>&1; then
             gh release edit beta --repo "$R" --prerelease \
-              --title "SindriCAD beta (rolling)" --notes-file notes.md
+              --title "Neocad beta (rolling)" --notes-file notes.md
           else
             gh release create beta --repo "$R" --prerelease \
-              --title "SindriCAD beta (rolling)" --notes-file notes.md
+              --title "Neocad beta (rolling)" --notes-file notes.md
           fi
 
           # Binaries first, latest.json LAST. Ordering is the whole point: the

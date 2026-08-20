@@ -9,6 +9,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { DocumentStore } from "../document/store";
 import type { GeometryBackend } from "../geometry/client";
+import { stripDocumentExt } from "../io/documentExt";
 import { exportPrintProject } from "../io/files";
 import { toast } from "../ui/toast";
 import { filamentMappingDialog, type LogicalSlot } from "./printDialog";
@@ -28,7 +29,7 @@ const isTauri = () => "__TAURI_INTERNALS__" in window;
 /** Stage D.v1: colored project 3MF → staging → OrcaSlicer GUI. */
 export async function openInOrca(store: DocumentStore, geometry: GeometryBackend) {
   if (!isTauri()) return;
-  const stem = store.fileName.replace(/\.sindri$/i, "") || "part";
+  const stem = stripDocumentExt(store.fileName) || "part";
   let stagingPath: string;
   try {
     stagingPath = await invoke<string>("print_staging_path", { name: stem, ext: "3mf" });

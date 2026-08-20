@@ -20,7 +20,7 @@ import { nextDName } from "../params/engine";
 
 // v4 → v5: geometry left the document. An `import` feature used to carry the
 // whole shape inline as base64 ASCII BREP (`brep`); it now carries `geom`, the
-// content hash of the same geometry stored as binary BREP inside the `.sindri`
+// content hash of the same geometry stored as binary BREP inside the document
 // container. On the 356 MiB reference assembly that inline field alone was
 // 541.8 MiB — 4.2x over the websocket frame cap and 6.4x over the 64 MiB
 // embedded-BREP cap re-checked on every rebuild, which is why an assembly that
@@ -30,7 +30,7 @@ import { nextDName } from "../params/engine";
 // rebuilding untouched, and it is rewritten to `geom` when the document is
 // migrated on open. The file itself also changes shape (JSON → ZIP), which is
 // the first migration that is not purely a data rewrite — older builds get an
-// explicit "update SindriCAD" message rather than a JSON syntax error.
+// explicit "update Neocad" message rather than a JSON syntax error.
 
 // v5 → v6: `rectangle.angle` (degrees about its own centre), so a rectangle drawn
 // from three points can be SAVED as a rectangle rather than decomposed into four
@@ -54,7 +54,7 @@ import { nextDName } from "../params/engine";
 // sketch on that plane with it. Nothing about the file looks wrong. The stamp
 // turns that into the "made by a newer version" warning.
 
-/** .sindri file-format version (bump when the on-disk shape changes incompatibly). */
+/** Document file-format version (bump when the on-disk shape changes incompatibly). */
 export const FORMAT_VERSION = 7;
 
 export function migrateDocument(parsed: CadDocument): string[] {
@@ -62,7 +62,7 @@ export function migrateDocument(parsed: CadDocument): string[] {
   if (version > FORMAT_VERSION) {
     // Best effort: load what we understand, but don't rewrite shapes we don't.
     return [
-      "This file was made by a newer version of SindriCAD, unknown data (e.g. parameter expressions) may be lost if you save it here.",
+      "This file was made by a newer version of Neocad, unknown data (e.g. parameter expressions) may be lost if you save it here.",
     ];
   }
 

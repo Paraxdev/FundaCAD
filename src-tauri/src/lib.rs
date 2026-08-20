@@ -1,4 +1,4 @@
-//! SindriCAD Tauri shell entry. Spawns the Python geometry sidecar on startup and
+//! Neocad Tauri shell entry. Spawns the Python geometry sidecar on startup and
 //! kills it on exit. The frontend talks to the sidecar over a localhost
 //! WebSocket directly (not Tauri IPC); Rust only owns the window, native
 //! dialogs, and the sidecar lifecycle.
@@ -16,6 +16,13 @@ mod spacemouse;
 // WebKitGTK only exists on Linux; macOS and Windows use WKWebView and WebView2.
 #[cfg(target_os = "linux")]
 mod webkit;
+
+/// What a saved document is called on disk. New files take the first; the
+/// second is read forever, because every document written before the rename is
+/// still on someone's disk and no upgrade step can reach it. Kept in step with
+/// src/io/documentExt.ts.
+const DOC_EXT: &str = "neocad";
+const LEGACY_DOC_EXT: &str = "sindri";
 
 use sidecar::Sidecar;
 use tauri::{Manager, RunEvent};
@@ -84,7 +91,7 @@ fn slot_file(app: &tauri::AppHandle, slot: &str) -> Result<std::path::PathBuf, S
     if safe.is_empty() {
         return Err("empty recovery slot".into());
     }
-    Ok(recovery_dir(app)?.join(format!("{safe}.sindri")))
+    Ok(recovery_dir(app)?.join(format!("{safe}.{DOC_EXT}")))
 }
 
 #[tauri::command]
@@ -93,7 +100,7 @@ fn slot_file(app: &tauri::AppHandle, slot: &str) -> Result<std::path::PathBuf, S
 // pool; the tmp-write + rename stays atomic either way.
 async fn recovery_write(app: tauri::AppHandle, slot: String, json: String) -> Result<(), String> {
     let path = slot_file(&app, &slot)?;
-    let tmp = path.with_extension("sindri.tmp");
+    let tmp = path.with_extension(concat!("neocad", ".tmp"));
     std::fs::write(&tmp, json).map_err(|e| e.to_string())?;
     std::fs::rename(&tmp, &path).map_err(|e| e.to_string())
 }
@@ -116,8 +123,12 @@ fn recovery_list(app: tauri::AppHandle) -> Result<Vec<(String, u64)>, String> {
     for entry in std::fs::read_dir(&dir).map_err(|e| e.to_string())? {
         let entry = entry.map_err(|e| e.to_string())?;
         let p = entry.path();
-        if p.extension().and_then(|e| e.to_str()) != Some("sindri") {
-            continue;
+        // Both names, because a snapshot written before the rename is exactly
+        // the case recovery exists for: the app crashed, and the next launch is
+        // the one that has to find it.
+        match p.extension().and_then(|e| e.to_str()) {
+            Some(e) if e == DOC_EXT || e == LEGACY_DOC_EXT => {}
+            _ => continue,
         }
         let name = match p.file_stem().and_then(|s| s.to_str()) {
             Some(n) => n.to_string(),
@@ -242,7 +253,7 @@ pub fn run() {
         // instead of starting an app whose sidecar cannot take port 8765.
         // No `fileAssociations` exist, so `argv` carries nothing worth forwarding;
         // if one is ever added, this callback has to hand it to the running
-        // instance or double-clicking a .sindri file will silently do nothing.
+        // instance or double-clicking a document file will silently do nothing.
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             if let Some(w) = app.get_webview_window("main") {
                 let _ = w.unminimize(); // a minimized window would otherwise just blink
@@ -353,7 +364,7 @@ pub fn run() {
             Ok(())
         })
         .build(tauri::generate_context!())
-        .expect("error while building SindriCAD");
+        .expect("error while building Neocad");
 
     app.run(|app_handle, event| {
         if let RunEvent::ExitRequested { .. } | RunEvent::Exit = event {

@@ -26,6 +26,9 @@ enableAutoUnmount(afterEach);
 const $ = (sel: string) => document.querySelector<HTMLElement>(sel);
 
 function open(recents: { path: string; openedAt: number }[] = []) {
+  // Deliberately the PRE-RENAME key: a recent-files list written by an older
+  // build has to keep showing up, and this is the one place that path is
+  // exercised through a real component rather than through readSetting alone.
   localStorage.setItem("sindri.recentFiles", JSON.stringify(recents));
   useDialogStore().bindWelcome({
     onNew: () => {},
@@ -88,6 +91,6 @@ describe("WelcomeModal", () => {
     box.checked = false;
     box.dispatchEvent(new Event("change", { bubbles: true }));
     await nextTick();
-    expect(localStorage.getItem("sindri.welcomeOnStartup")).toBe("false");
+    expect(localStorage.getItem("neocad.welcomeOnStartup")).toBe("false");
   });
 });

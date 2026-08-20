@@ -5,7 +5,7 @@
 // tree walk. The panel tags them; this decides what each filter shows.
 //
 // The house shape for a user setting (ui/theme.ts, icons.ts, units.ts): module
-// state, a validating gate over the untrusted stored value, one `sindricad.*`
+// state, a validating gate over the untrusted stored value, one `neocad.*`
 // key read at load, a listener set. No Vue import, so the headless suite reaches
 // it.
 //
@@ -13,6 +13,8 @@
 // canvas feature, so that row would filter to nothing every time it was picked —
 // a control that appears broken is worse than a control that is absent. It goes
 // in when there is something for it to find.
+
+import { readSetting } from "./storedSetting";
 
 export type BrowserFilter = "all" | "bodies" | "planes" | "sketches";
 
@@ -45,14 +47,15 @@ export function sectionVisible(filter: BrowserFilter, section: BrowserSection): 
   return shown === null || shown.includes(section);
 }
 
-const KEY = "sindricad.browserFilter";
+const KEY = "neocad.browserFilter";
+const LEGACY_KEY = "sindricad.browserFilter";
 
 export function asBrowserFilter(v: unknown): BrowserFilter | null {
   return BROWSER_FILTERS.some((f) => f.id === v) ? (v as BrowserFilter) : null;
 }
 
 function readStored(): BrowserFilter {
-  const raw = typeof localStorage !== "undefined" ? localStorage.getItem(KEY) : null;
+  const raw = readSetting(KEY, LEGACY_KEY);
   return asBrowserFilter(raw) ?? "all";
 }
 

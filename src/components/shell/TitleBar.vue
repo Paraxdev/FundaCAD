@@ -62,7 +62,7 @@ function onPackInput(ev: Event) {
 
 <template>
   <header id="titlebar">
-    <span class="brand"><img :src="brandLockup" alt="SindriCAD" /></span>
+    <span class="brand"><img :src="brandLockup" alt="Neocad" /></span>
     <MenuBar :menus="menus" />
     <button
       id="undo-btn"

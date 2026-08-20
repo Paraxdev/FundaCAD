@@ -81,7 +81,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
           <div class="welcome-section">Recent</div>
           <div class="welcome-recents">
             <!-- no esc(): interpolation escapes, and a second pass would render
-                 a file called "Bracket & Plate.sindri" as "Bracket &amp; Plate". -->
+                 a file called "Bracket & Plate.neocad" as "Bracket &amp; Plate". -->
             <button
               v-for="r in recents"
               :key="r.path"

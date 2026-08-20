@@ -4,10 +4,13 @@
 // in the dialog/inspector are divided by the factor, typed values multiplied
 // back to mm. Angles are always degrees and never converted.
 
+import { readSetting } from "./storedSetting";
+
 export type Unit = "mm" | "cm" | "in";
 
 const FACTOR: Record<Unit, number> = { mm: 1, cm: 10, in: 25.4 };
-const KEY = "sindricad.unit";
+const KEY = "neocad.unit";
+const LEGACY_KEY = "sindricad.unit";
 
 let current: Unit = readStored();
 const listeners = new Set<() => void>();
@@ -22,7 +25,7 @@ export function asUnit(v: unknown): Unit | null {
 }
 
 function readStored(): Unit {
-  const raw = typeof localStorage !== "undefined" ? localStorage.getItem(KEY) : null;
+  const raw = readSetting(KEY, LEGACY_KEY);
   return asUnit(raw) ?? "mm";
 }
 

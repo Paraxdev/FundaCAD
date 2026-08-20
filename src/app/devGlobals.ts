@@ -40,7 +40,7 @@ export function installDevGlobals(e: Engine): void {
     beginRename: (id: string) => useBrowserStore().beginRename(id),
   };
   // DEV-only handle for driving the app from outside (demo capture, e2e).
-  w.__sindri = {
+  w.__neocad = {
     store: e.store,
     viewport: e.viewport,
     sketch: e.sketch,

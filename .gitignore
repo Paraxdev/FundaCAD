@@ -60,7 +60,7 @@ credentials.*
 
 # --- agent / editor session artifacts -------------------------------------
 # This is a public repo: these carry a username, a home-directory layout, or
-# tooling config that has nothing to do with SindriCAD. scripts/check-repo-hygiene.sh
+# tooling config that has nothing to do with Neocad. scripts/check-repo-hygiene.sh
 # enforces this in CI, because .gitignore alone says nothing about a path that is
 # ALREADY tracked (which is how .claude/settings.json got in).
 .claude/

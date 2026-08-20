@@ -180,7 +180,7 @@ def variant_project_mmuseg():
  xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02"
  xmlns:slic3rpe="http://schemas.slic3r.org/3mf/2017/06"
  xmlns:BambuStudio="http://schemas.bambulab.com/package/2021">
- <metadata name="Application">SindriCAD</metadata>
+ <metadata name="Application">Neocad</metadata>
  <metadata name="BambuStudio:3mfVersion">1</metadata>
  <resources>
   <m:basematerials id="1">

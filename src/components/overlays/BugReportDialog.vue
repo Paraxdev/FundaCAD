@@ -31,7 +31,7 @@ const desc = useTemplateRef<HTMLTextAreaElement>("desc");
 // its own, and a second pass would show the entities.
 const preview = computed(() =>
   [
-    `SindriCAD ${version.value} · ${navigator.userAgent.slice(0, 80)}`,
+    `Neocad ${version.value} · ${navigator.userAgent.slice(0, 80)}`,
     `geometry engine connected: ${connected}`,
     `recent events (${crumbs.length}):`,
     ...crumbs.slice(-5).map((c) => `  ${c}`),

@@ -1,4 +1,4 @@
-# SindriCAD Improvement Audit — 2026-07-10
+# Neocad Improvement Audit — 2026-07-10
 
 > **Implementation status (same day):** everything in this report except the items below was implemented in three orchestrated waves on top of `df3886d` (uncommitted; all gates green: tsc+vite, cargo build + `cargo test --lib` 7/7, sidecar smoke/geomstore/selector suites, vitest 25 pass / 1 known skip). Also landed beyond this report: boolean no-op guards generalized to Combine and Sweep (sweep now routes through `_boolean_into_bodies`).
 > **Still open, deliberately:** edge-line batching (§2.1 second half — still one draw call per edge); sidecar auto-respawn after crash (event + toast only; respawn waits on the ephemeral-port/token-refresh follow-up); `rust-geom` in required CI (manual workflow_dispatch job only — hosted runners lack OCCT 7.9); half-integer pattern divergence (documented vitest skip); live interactive QA of the Wave-3 refactors (gates cannot drive the real viewport — needs a user smoke-test).

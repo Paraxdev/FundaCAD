@@ -466,7 +466,7 @@ export type Feature =
       format: "stl" | "3mf" | "step" | "obj" | "brep" | "glb";
       name: string;
       // Content hash of this body's geometry in the durable blob store, carried
-      // inside the `.sindri` container. Replaced an inline base64 ASCII BREP:
+      // inside the document container. Replaced an inline base64 ASCII BREP:
       // on the 356 MiB reference assembly that field alone was 541.8 MiB, which
       // is why a large assembly could not be opened at all.
       geom?: string;

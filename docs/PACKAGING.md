@@ -1,4 +1,4 @@
-# Packaging SindriCAD
+# Packaging Neocad
 
 > **UPDATED (2026-07): no system OpenCASCADE is needed to build or ship.** The
 > Rust/OCCT path is now behind the off-by-default `rust-geom` Cargo feature, so the
@@ -13,7 +13,7 @@
 > **The OCCT sections below are LEGACY** — they apply only to building the optional
 > `rust-geom` spike (`cargo build --features rust-geom`), not to shipping.
 
-SindriCAD is a [Tauri 2](https://v2.tauri.app) desktop app:
+Neocad is a [Tauri 2](https://v2.tauri.app) desktop app:
 
 - **Frontend** — TypeScript + Vite, built with `npm run build` (Node 22) into `dist/`.
 - **Backend** — Rust (`src-tauri/`); the default build has no OCCT dependency (the

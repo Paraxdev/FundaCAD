@@ -4,6 +4,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { readSetting } from "../ui/storedSetting";
 
 export type PrinterKind = "MoonrakerU1" | "Moonraker";
 
@@ -112,9 +113,10 @@ export function onPrinterCameraOffline(fn: (id: string) => void): Promise<Unlist
 
 // --- active-printer selection (display concern → localStorage) ----------------
 
-const ACTIVE_KEY = "sindri.activePrinter";
+const ACTIVE_KEY = "neocad.activePrinter";
+const LEGACY_ACTIVE_KEY = "sindri.activePrinter";
 export function activePrinterId(): string {
-  return localStorage.getItem(ACTIVE_KEY) || "u1";
+  return readSetting(ACTIVE_KEY, LEGACY_ACTIVE_KEY) || "u1";
 }
 export function setActivePrinterId(id: string) {
   localStorage.setItem(ACTIVE_KEY, id);

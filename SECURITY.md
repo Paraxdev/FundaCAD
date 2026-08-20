@@ -17,7 +17,7 @@ In scope:
 - the desktop app: Tauri shell (Rust), webview frontend (TypeScript), bundled Python geometry sidecar
 - the localhost sidecar WebSocket (token-gated, bound to 127.0.0.1)
 - the signed update pipeline (release artifacts and `latest.json`)
-- document parsing: `.sindri` files and imported STL/3MF/STEP/OBJ
+- document parsing: `.neocad` and `.sindri` files, and imported STL/3MF/STEP/OBJ
 - the printers you configure on your own LAN
 
 Neocad has no accounts and no backend. It makes no network calls of its own except the update check and the printers you point it at, so there is no hosted service in scope.

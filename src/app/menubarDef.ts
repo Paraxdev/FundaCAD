@@ -88,7 +88,7 @@ export function buildMenubar(e: Engine): MenuDef[] {
         { label: "Issue Tracker", onClick: () => void openExternal(ISSUES_URL) },
         { separator: true, label: "" },
         { label: "Check for Updates…", onClick: () => void checkForUpdates(true) },
-        { label: "About SindriCAD", onClick: () => void showAbout() },
+        { label: "About Neocad", onClick: () => void showAbout() },
       ],
     },
   ];

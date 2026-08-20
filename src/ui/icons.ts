@@ -13,6 +13,8 @@
 // pack cheap to write — a variant redraws only the marks whose weight it wants to
 // change, so a half-finished pack is legitimate rather than a screen full of holes.
 
+import { readSetting } from "./storedSetting";
+
 /** A named, self-contained icon table. `paths` maps a semantic icon name to the
  *  inner SVG markup drawn inside the shared 24×24 stroke wrapper. */
 export interface IconPack {
@@ -242,11 +244,12 @@ export function resolveIconPaths(
 // --- the active pack, as a user setting --------------------------------------
 //
 // Persisted the way every other display preference in this app is (ui/units.ts,
-// ui/welcome.ts, io/recentFiles.ts): a `sindricad.*` localStorage key read once
+// ui/welcome.ts, io/recentFiles.ts): a `neocad.*` localStorage key read once
 // at module load, plus a listener set so the live UI re-renders instead of
 // waiting for a reload.
 
-const KEY = "sindricad.iconPack";
+const KEY = "neocad.iconPack";
+const LEGACY_KEY = "sindricad.iconPack";
 
 /** Narrow an untrusted string — a stored setting, a `<select>` value — to a
  *  registered pack id, or null. Every boundary that can set the active pack goes
@@ -257,7 +260,7 @@ export function asIconPackId(v: unknown): string | null {
 }
 
 function readStored(): string {
-  const raw = typeof localStorage !== "undefined" ? localStorage.getItem(KEY) : null;
+  const raw = readSetting(KEY, LEGACY_KEY);
   return asIconPackId(raw) ?? DEFAULT_PACK_ID;
 }
 

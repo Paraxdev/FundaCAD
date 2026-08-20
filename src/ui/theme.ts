@@ -16,6 +16,8 @@
 // already themed before this module runs, and a failure here degrades to the
 // default palette rather than to an unstyled page.
 
+import { readSetting } from "./storedSetting";
+
 export interface Theme {
   id: string;
   label: string;
@@ -40,7 +42,8 @@ export const THEMES: Theme[] = [
  *  no script. */
 export const DEFAULT_THEME_ID = "concrete";
 
-const KEY = "sindricad.theme";
+const KEY = "neocad.theme";
+const LEGACY_KEY = "sindricad.theme";
 
 /** Narrow an untrusted string — a stored setting, a `<select>` value, a URL
  *  parameter — to a known theme id, or null. Every boundary that can set the
@@ -52,8 +55,7 @@ export function asThemeId(v: unknown): string | null {
 }
 
 function readStored(): string {
-  const raw = typeof localStorage !== "undefined" ? localStorage.getItem(KEY) : null;
-  return asThemeId(raw) ?? DEFAULT_THEME_ID;
+  return asThemeId(readSetting(KEY, LEGACY_KEY)) ?? DEFAULT_THEME_ID;
 }
 
 let activeId = readStored();

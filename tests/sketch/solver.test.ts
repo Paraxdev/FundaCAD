@@ -1,6 +1,6 @@
 // The 2D constraint solver's WASM warm-up must never become an app-level error.
 //
-// Field report, SindriCAD 0.1.73 on Windows (bug eec3752a): every startup showed
+// Field report, build 0.1.73 on Windows (bug eec3752a): every startup showed
 // "Something went wrong — check the console for details" and named nothing. The
 // breadcrumb behind it was an unhandledrejection carrying a Content Security
 // Policy violation — that WebView2 refused to compile the module, and V8 reports

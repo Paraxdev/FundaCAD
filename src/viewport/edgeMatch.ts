@@ -46,7 +46,7 @@ export function polylineMid(points: Vec3[]): Vec3 | undefined {
 
 /** The pre-fix convention, kept ONLY so documents saved before it still re-match
  *  their edges when a fillet/chamfer is reopened for editing. Selector points
- *  live in the .sindri file, so old files carry old-convention points forever;
+ *  live in the document file, so old files carry old-convention points forever;
  *  matching against both is what stops an existing fillet losing its ghosts.
  *  Never build a NEW selector from this. */
 function legacyPolylineMid(points: Vec3[]): Vec3 | undefined {

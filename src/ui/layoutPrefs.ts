@@ -3,7 +3,7 @@
 //
 // The house shape for a user setting (ui/theme.ts, icons.ts, units.ts,
 // toolRail.ts): module state, a validating gate over the untrusted stored value,
-// one `sindricad.*` key read at load, and a listener set so live surfaces
+// one `neocad.*` key read at load, and a listener set so live surfaces
 // re-render. No Vue import — that is what keeps the headless *.test.ts suite
 // able to reach it.
 //
@@ -15,6 +15,8 @@
 // components keep their element ids, because every rule in styles/_layout.scss
 // is id-scoped to them and the e2e suite selects on them. What changes is a
 // modifier attribute on the shell, and CSS does the rest.
+
+import { readSetting } from "./storedSetting";
 
 export type RibbonSide = "top" | "left";
 export type HistorySide = "bottom" | "right";
@@ -31,7 +33,8 @@ export const DEFAULT_LAYOUT: LayoutPrefs = { ribbon: "top", history: "bottom" };
 const RIBBON_SIDES: RibbonSide[] = ["top", "left"];
 const HISTORY_SIDES: HistorySide[] = ["bottom", "right"];
 
-const KEY = "sindricad.layout";
+const KEY = "neocad.layout";
+const LEGACY_KEY = "sindricad.layout";
 
 export function asRibbonSide(v: unknown): RibbonSide | null {
   return RIBBON_SIDES.includes(v as RibbonSide) ? (v as RibbonSide) : null;
@@ -55,7 +58,7 @@ export function asLayoutPrefs(v: unknown): LayoutPrefs {
 
 function readStored(): LayoutPrefs {
   try {
-    const raw = typeof localStorage !== "undefined" ? localStorage.getItem(KEY) : null;
+    const raw = readSetting(KEY, LEGACY_KEY);
     return raw ? asLayoutPrefs(JSON.parse(raw)) : { ...DEFAULT_LAYOUT };
   } catch {
     // Unparseable JSON is treated as no setting at all: the shell opens in its

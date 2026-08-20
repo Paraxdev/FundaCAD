@@ -1,4 +1,4 @@
-//! End-to-end check of the Rust<->Python seam for the `.sindri` container.
+//! End-to-end check of the Rust<->Python seam for the document container.
 //!
 //! Everything else is verified on one side of the boundary: `container.rs`'s unit
 //! tests round-trip synthetic bytes, and the sidecar's `test_blob_rebuild.py`
@@ -23,7 +23,7 @@ fn sidecar_python() -> Option<PathBuf> {
 }
 
 fn tmpdir(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("sindri_seam_{tag}_{}", std::process::id()));
+    let d = std::env::temp_dir().join(format!("neocad_seam_{tag}_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
     std::fs::create_dir_all(&d).unwrap();
     d
@@ -78,13 +78,13 @@ fn a_python_blob_survives_the_container_and_rebuilds() {
     );
     let mut map = BTreeMap::new();
     map.insert(hash.clone(), blob);
-    let dest = dir.join("part.sindri");
-    sindricad_lib::container::write_container(&dest, &doc, &map, &BTreeMap::new(), "seam-test")
+    let dest = dir.join("part.neocad");
+    neocad_lib::container::write_container(&dest, &doc, &map, &BTreeMap::new(), "seam-test")
         .expect("write_container failed");
 
     // 3. Rust opens it somewhere that has never seen this geometry.
     let (got_doc, manifest) =
-        sindricad_lib::container::read_container(&dest, &blobs_b, None).expect("read_container");
+        neocad_lib::container::read_container(&dest, &blobs_b, None).expect("read_container");
     assert_eq!(got_doc, doc, "document did not survive the round trip");
     assert_eq!(manifest.blobs.len(), 1);
     assert!(blobs_b.join(format!("{hash}.bbrep")).exists());

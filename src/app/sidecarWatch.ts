@@ -21,8 +21,8 @@ export function installSidecarDiedToast(): void {
     const cause = p && typeof p.cause === "string" && p.cause ? p.cause : "";
     const msg =
       p && p.kind === "port_in_use"
-        ? `SindriCAD could not start its geometry engine: ${cause}. Another copy of SindriCAD may still be running. Close it and open SindriCAD again.`
-        : `The geometry engine crashed${cause ? ` (${cause})` : ""}. Save your work, then restart SindriCAD.`;
+        ? `Neocad could not start its geometry engine: ${cause}. Another copy of Neocad may still be running. Close it and open Neocad again.`
+        : `The geometry engine crashed${cause ? ` (${cause})` : ""}. Save your work, then restart Neocad.`;
     toast(msg, {
       kind: "error",
       timeout: 60000,

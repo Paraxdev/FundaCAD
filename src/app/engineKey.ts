@@ -1,7 +1,7 @@
 import { inject, type InjectionKey } from "vue";
 import type { Engine } from "./engine";
 
-export const ENGINE: InjectionKey<Engine> = Symbol("sindri.engine");
+export const ENGINE: InjectionKey<Engine> = Symbol("neocad.engine");
 
 /** The engine is provided at the app root and is markRaw'd — it is a graph of
  *  Three.js objects, the document store and ten tool classes, none of which may

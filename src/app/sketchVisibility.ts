@@ -2,7 +2,7 @@ import type { Engine } from "./engine";
 
 /** Sketch visibility, MCAD-style: a sketch consumed by a feature hides by
  *  default so the solid's edges stay clear; toggle from the browser tree. The
- *  explicit overrides live in the store so they persist with the .sindri file. */
+ *  explicit overrides live in the store so they persist with the document. */
 export function createSketchVisibility(
   e: Engine,
 ): Pick<Engine, "isSketchConsumed" | "isSketchVisible"> {

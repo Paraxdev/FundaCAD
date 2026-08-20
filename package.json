@@ -1,7 +1,7 @@
 {
-  "name": "sindricad",
+  "name": "neocad",
   "version": "0.1.0",
-  "description": "SindriCAD — a parametric CAD app driving build123d",
+  "description": "Neocad, a parametric CAD app driving build123d",
   "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {
