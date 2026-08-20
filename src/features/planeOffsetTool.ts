@@ -85,7 +85,7 @@ export class PlaneOffsetTool {
     if (this.grabbing) {
       const proj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.anchor, this.axis);
       const raw = this.grabValue + (proj - this.grabProj);
-      const stepped = snap(raw, this.viewport.snapStep(this.anchor));
+      const stepped = snap(raw, this.viewport.snapStep(this.anchor, e.shiftKey));
       if (stepped === this.value) return;
       this.value = stepped;
       this.dim.updateFromCursor({ offset: Math.abs(this.value) });

@@ -101,7 +101,7 @@ export class FaceOffsetTool {
     if (this.grabbing) {
       const proj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.anchor, this.axis);
       const raw = this.grabValue + (proj - this.grabProj);
-      const stepped = snap(raw, this.viewport.snapStep(this.anchor));
+      const stepped = snap(raw, this.viewport.snapStep(this.anchor, e.shiftKey));
       if (stepped === this.value) return; // same step — don't re-trigger an OCCT rebuild
       this.value = stepped;
       this.dim.updateFromCursor({ distance: Math.abs(this.value) });

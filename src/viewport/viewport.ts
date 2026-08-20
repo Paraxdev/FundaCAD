@@ -82,7 +82,7 @@ import { remapSelection } from "./selectionMemo";
 import { cylinderFromFace, radialAt, solidInsideCylinder } from "../features/planeMath";
 import type { RoundFace } from "../features/radialDrag";
 import type { Plane3, PlaneDef, RebuildResult, Selector, Vec3 } from "../types";
-import { niceStep } from "../ui/units";
+import { dragStep } from "./dragStep";
 import { faceSketchPlane } from "../sketch/sketchView";
 
 /** Shallow equality for the flat id→hex paint maps. Cheap enough to run on every
@@ -2471,10 +2471,11 @@ export class Viewport {
     return (2 * Math.tan((pc.fov * Math.PI) / 180 / 2) * dist) / rect.height;
   }
 
-  /** A clean drag/cursor snap step (nice 1/2/5 mm) for the current zoom at a world
-   *  point, so manipulator + sketch values read 5/1/0.5/0.1 mm, not 0.3425. */
-  snapStep(at: THREE.Vector3): number {
-    return niceStep(this.pixelWorldSize(at) * 8); // ~8px granularity
+  /** A clean drag snap step (nice 1/2/5 mm) for the current zoom at a world
+   *  point, so manipulator values read 5/1/0.5/0.1 mm, not 0.3425. `fine` is the
+   *  Shift modifier. See viewport/dragStep.ts for how the number is chosen. */
+  snapStep(at: THREE.Vector3, fine = false): number {
+    return dragStep(this.pixelWorldSize(at), fine);
   }
 
   private resize() {

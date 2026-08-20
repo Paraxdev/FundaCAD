@@ -782,7 +782,7 @@ export class EdgeFeatureTool {
         grabSigned: this.grabSigned,
         grabProj: this.grabProj,
         proj: this.swipeProj(e.clientX, e.clientY),
-        step: this.viewport.snapStep(this.anchor),
+        step: this.viewport.snapStep(this.anchor, e.shiftKey),
         limit: this.limit(),
       });
       let at = treatmentAt(this.positiveKind, signed);

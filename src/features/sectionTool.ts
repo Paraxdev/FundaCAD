@@ -243,7 +243,7 @@ export class SectionTool {
     if (this.grabbing) {
       const proj = this.dragProj(e.clientX, e.clientY);
       const raw = this.grabOffset + (proj - this.grabProj);
-      const stepped = snap(raw, this.viewport.snapStep(this.centre()));
+      const stepped = snap(raw, this.viewport.snapStep(this.centre(), e.shiftKey));
       if (stepped === this.offset) return;
       this.offset = stepped;
       this.pushPlane();

@@ -137,9 +137,10 @@ export class PressPullTool {
     }
     if (this.grabbing) {
       const proj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.anchor, this.axis);
-      // snap the drag to 0.1mm steps (MCAD-style); type a value for finer control
+      // Snapped to the zoom's own lattice (viewport/dragStep.ts) — 0.1mm on a
+      // fitted hand-sized part, finer as you wheel in, finer again with Shift.
       const raw = this.grabValue + (proj - this.grabProj);
-      const stepped = snap(raw, this.viewport.snapStep(this.anchor));
+      const stepped = snap(raw, this.viewport.snapStep(this.anchor, e.shiftKey));
       if (stepped === this.value) return; // same step — don't re-trigger an OCCT rebuild
       this.value = stepped;
       this.dim.updateFromCursor({ distance: this.readout() });

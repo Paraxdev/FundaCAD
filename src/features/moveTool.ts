@@ -101,7 +101,7 @@ export class MoveTool {
       const axis = ax.dir;
       const proj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.anchor, axis);
       const raw = this.grabVal + (proj - this.grabProj);
-      const stepped = snap(raw, this.viewport.snapStep(this.anchor));
+      const stepped = snap(raw, this.viewport.snapStep(this.anchor, e.shiftKey));
       if (stepped === this.comp(this.grabAxis)) return;
       this.setComp(this.grabAxis, stepped);
       this.dim.updateFromCursor({ move: stepped });
