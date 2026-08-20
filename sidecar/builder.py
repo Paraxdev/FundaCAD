@@ -107,6 +107,7 @@ from geom_select import (
     REL_DRIFT,
 )
 import texture
+from blend_overlap import folds_over_itself
 from conic_blend import (
     PROFILE_EPS,
     ConicNotApplicable,
@@ -2105,6 +2106,33 @@ def _blend_failure_message(label, body, unresolved, one_edge_at, blend_size, err
     )
 
 
+def _refuse_folded_blend(body, new_shape):
+    """Refuse a blend that built surface on top of surface, and say what it did.
+
+    The kernel reports success here. The solid it returns is closed, valid and
+    tolerance-tight, and the only thing wrong with it is that a patch of the
+    model is covered twice, which the depth buffer cannot resolve and which
+    therefore reaches the user as flickering triangles rather than as an error.
+    See blend_overlap.py for the measurement and for why it is scoped to the
+    faces the blend created.
+
+    Refusing is the honest answer rather than the convenient one: there is no
+    smaller version of this result that is right, and a shape that draws as a
+    flicker is not a shape the user asked for."""
+    if not folds_over_itself(body["shape"], new_shape):
+        return
+    # No operation name in here. Every path that shows this already puts one in
+    # front, so naming it again gives "Fillet failed: Fillet folded over
+    # itself", which spends the one line a toast has on saying it twice.
+    raise ValueError(
+        f"made surface that folds back over itself on {body['name']}, because at "
+        "this size the blend runs past the face it was laid on and doubles back "
+        "over the one beside it, so a patch of the model is covered twice and "
+        "draws as flickering triangles. Try a different size, or blend this edge "
+        "before the one next to it."
+    )
+
+
 def _blend_edges(f, ctx, label, combined, one_edge_at, blend_size):
     """Shared fillet/chamfer body: blend every selected edge, per owning body.
 
@@ -2158,6 +2186,7 @@ def _blend_edges(f, ctx, label, combined, one_edge_at, blend_size):
                 raise ValueError(_blend_failure_message(
                     label, body, unresolved, one_edge_at, blend_size, combined_err
                 )) from combined_err
+        _refuse_folded_blend(body, new_shape)
         staged.append((body, new_shape))
     for body, shape in staged:
         body["shape"] = shape
