@@ -5,10 +5,11 @@
 import * as THREE from "three";
 import type { Selector } from "../types";
 import type { ModelView } from "./render";
-import { edgeObjects, faceIdOfHit, visibleBodyMeshes } from "./render";
+import { bodyOfFace, edgeObjects, faceIdOfHit, visibleBodyMeshes } from "./render";
 import type { BodyEdges, EdgeRef } from "./edgeLines";
 import { edgeSelectorFrom } from "./edgeMatch";
 import { flushRaycastIndex } from "./raycastIndex";
+import { BAND_CAP_EXTENT_PX, ScreenExtent, edgeBandPx, sampleIndices } from "./edgeBand";
 
 export interface EdgeHit {
   kind: "edge";
@@ -97,7 +98,12 @@ export class Picker {
     // edge only when on the line (or there's no face under the cursor at all),
     // and never when that line is round the back of the body
     const through = occludedEdge(this.edgeDepth, fHit?.distance ?? null, modelScale(view));
-    if (edge && !through && (this.edgeScreenDist <= EDGE_NEAR_PX || !face)) return edge;
+    // The band shrinks with the face under the cursor, so a small or
+    // shallowly-angled face keeps an interior to click. See edgeBand.ts.
+    const band = edgeBandPx(
+      face && fHit ? faceScreenExtentPx(view, face.faceId, camera, rect) : null,
+    );
+    if (edge && !through && (this.edgeScreenDist <= band || !face)) return edge;
     return face;
   }
 
@@ -192,6 +198,52 @@ export function occludedEdge(
   return edgeDist > faceDist + Math.max(1e-6, s * EDGE_DEPTH_FRACTION);
 }
 
+/** How many triangles of a face to look at. Generous, because the samples are
+ *  spread and the early exit fires long before this on anything large: it is a
+ *  ceiling for the pathological case, not a typical cost. One hex-textured face
+ *  in this app owns over 50,000 triangles. */
+const FACE_SAMPLE_BUDGET = 256;
+
+/** The smaller on-screen side of a face, in px, or null if it cannot be
+ *  measured.
+ *
+ *  Reads the precomputed faceId -> triangle map rather than re-deriving one, and
+ *  SAMPLES across it rather than taking a prefix: see sampleIndices for why that
+ *  distinction decides whether a large face measures as large. */
+function faceScreenExtentPx(
+  view: ModelView,
+  faceId: number,
+  camera: THREE.Camera,
+  rect: DOMRect,
+): number | null {
+  const body = bodyOfFace(view, faceId);
+  const tris = body?.faceTriangles.get(faceId);
+  if (!body || !tris || tris.length === 0) return null;
+  const geom = body.mesh.geometry;
+  const index = geom.getIndex();
+  const pos = geom.getAttribute("position");
+  if (!index || !pos) return null;
+
+  const world = body.mesh.matrixWorld;
+  const box = new ScreenExtent();
+  const p = new THREE.Vector3();
+  const halfW = rect.width / 2;
+  const halfH = rect.height / 2;
+  for (const t of sampleIndices(tris.length, FACE_SAMPLE_BUDGET)) {
+    const tri = tris[t];
+    if (tri === undefined) continue;
+    for (let k = 0; k < 3; k++) {
+      const v = index.getX(tri * 3 + k);
+      p.fromBufferAttribute(pos as THREE.BufferAttribute, v).applyMatrix4(world).project(camera);
+      box.add((p.x + 1) * halfW, (1 - p.y) * halfH);
+    }
+    // Past the cap the band is the plain constant whatever else this face does,
+    // so more measurement cannot change the answer.
+    if (box.min >= BAND_CAP_EXTENT_PX) return box.min;
+  }
+  return box.measured ? box.min : null;
+}
+
 /** The model's overall size, for the tolerance above. Zero for an empty view,
  *  which occludedEdge reads as "use the absolute floor". */
 function modelScale(view: ModelView): number {
@@ -203,13 +255,10 @@ function modelScale(view: ModelView): number {
 // gives a comfortable ~13px grab radius. Candidates are then narrowed by screen
 // distance (see pickEdge), so a wide value stays precise.
 const EDGE_PICK_THRESHOLD = 26;
-// In general selection, only treat a click as an edge when the cursor is within
-// this many screen px of the edge line; otherwise a face under the cursor wins.
-// Kept TIGHT: on an edge-dense model (faceted imports) a generous radius put
-// most of every face inside some edge's halo, so faces only highlighted in
-// "sweet spots" between edges. 3 px = you're visibly ON the line. Fillet/
-// Chamfer (pickEdgeAt) ignore this and keep the wide grab radius.
-const EDGE_NEAR_PX = 3;
+// The edge-vs-face band lives in edgeBand.ts: it is no longer one number, but
+// a fraction of the face being aimed at, capped at EDGE_NEAR_PX so ordinary
+// faces pick exactly as before. Fillet/Chamfer (pickEdgeAt) ignore it entirely
+// and keep the wide grab radius.
 
 function faceSelector(normal: THREE.Vector3, hit: THREE.Vector3): Selector {
   const n = normal.clone().normalize();

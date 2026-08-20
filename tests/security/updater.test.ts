@@ -57,8 +57,10 @@ describe("updater", () => {
     // been emptied, which would disable verification rather than fail it.
     const key = conf.plugins.updater.pubkey;
     expect(key.length).toBeGreaterThan(40);
+    // atob rather than Buffer: this project's tsconfig has no node types, and a
+    // test that does not typecheck is one vue-tsc reports instead of the code.
     expect(
-      Buffer.from(key, "base64").toString("utf8"),
+      atob(key),
       "the updater pubkey is not a minisign public key",
     ).toMatch(/minisign public key/);
   });
