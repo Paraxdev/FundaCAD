@@ -30,11 +30,30 @@ export const GRID_MAJOR_EVERY = 5;
 const MAX_CELLS = 400;
 
 /** Minor-line spacing in mm for the current zoom, never finer than `minStep`
- *  (the snap lattice — pass 0 when snapping is off and any spacing is honest). */
+ *  (pass 0 for no floor, which is what both callers do now). */
 export function gridStep(worldPerPixel: number, minStep: number): number {
   const rough = worldPerPixel * GRID_CELL_PX;
   const nice = rough > 0 && Number.isFinite(rough) ? niceStep(rough) : 1;
   return minStep > 0 && Number.isFinite(minStep) ? Math.max(nice, minStep) : nice;
+}
+
+/** A snap lattice finer than this is smaller than a cursor can aim at, and at
+ *  an extreme zoom `niceStep` will happily return one. */
+export const MIN_SNAP_STEP = 0.01;
+
+/** The lattice the cursor snaps to: the one that is DRAWN, at this zoom.
+ *
+ *  It used to be a fixed 5mm while the drawn grid was adaptive. Zoom out and the
+ *  grid drew 20mm cells while the cursor still caught on 5mm points that had no
+ *  line under them; zoom in and 5mm was the finest placement available however
+ *  close you got. A visible grid is a promise about where things will land, and
+ *  only one number can keep it.
+ *
+ *  Deliberately the same call the drawing does, exported so it is one function
+ *  and not two that agree today. */
+export function snapLatticeStep(worldPerPixel: number): number {
+  const step = gridStep(worldPerPixel, 0);
+  return Number.isFinite(step) && step > 0 ? Math.max(step, MIN_SNAP_STEP) : MIN_SNAP_STEP;
 }
 
 /** Brightness at distance `d` from the fade centre: 1 at the centre, 0 at

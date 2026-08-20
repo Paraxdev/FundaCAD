@@ -47,7 +47,7 @@ import { ConstraintTools, CONSTRAINT_TOOLS, type ConstraintHost } from "./constr
 import { PatternFlow, PATTERN_TOOLS, ENTITY_PATTERNS, type PatternHost } from "./patternFlow";
 import { ProjectPanel } from "./projectPanel";
 import { sketchEscapeAction } from "./escapeLayers";
-import { SketchPlaneGrid } from "./planeGrid";
+import { SketchPlaneGrid, snapLatticeStep } from "./planeGrid";
 import { sketchLockHolds } from "./sketchView";
 
 export type SketchTool =
@@ -114,8 +114,6 @@ const MODIFY_TOOLS = new Set<SketchTool>([
   "dimension",
   ...CONSTRAINT_TOOLS,
 ]);
-
-const GRID_STEP = 5;
 
 // Map planegcs conflict ids back to constraint indices. Implicit ids (rect
 // edges `<id>~h0`, the drag pin) decode to null and are skipped.
@@ -716,7 +714,7 @@ export class SketchMode {
       this.gridFocus.x,
       this.gridFocus.y,
       this.viewport.pixelWorldSize(this.plane.origin),
-      this.gridSnap ? GRID_STEP : 0,
+      0, // no floor: the snap lattice follows the drawn one now, not the reverse
     );
     if (rebuilt) this.viewport.requestRender();
   }
@@ -2848,9 +2846,15 @@ export class SketchMode {
       p2d,
       this.candidates, // cached; rebuilt only when entities change
       (q) => this.viewport.projectToScreen(this.plane.to3D(q.x, q.y)),
-      this.gridSnap ? GRID_STEP : 0,
+      this.gridSnap ? this.snapStep() : 0,
     );
     return { p: res.point, kind: res.kind, world: this.plane.to3D(res.point.x, res.point.y) };
+  }
+
+  /** The grid spacing currently on screen, which is what the cursor snaps to.
+   *  Measured at the plane origin, the same place the grid is drawn from. */
+  private snapStep(): number {
+    return snapLatticeStep(this.viewport.pixelWorldSize(this.plane.origin));
   }
 
   private showSnap(hit: { kind: SnapKind; world: THREE.Vector3 } | null) {

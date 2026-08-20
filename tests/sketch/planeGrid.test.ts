@@ -5,6 +5,8 @@ import {
   gridFalloff,
   gridSegments,
   gridStep,
+  MIN_SNAP_STEP,
+  snapLatticeStep,
 } from "../../src/sketch/planeGrid";
 
 describe("gridStep", () => {
@@ -14,14 +16,14 @@ describe("gridStep", () => {
     expect(gridStep(1 / GRID_CELL_PX, 0)).toBe(1);
   });
 
-  it("never subdivides finer than the snap lattice", () => {
-    // A line you can see but cannot snap to is a lie: zoomed right in, the cells
-    // stop halving and just get bigger on screen.
+  it("honours an explicit floor when one is given", () => {
+    // The floor is no longer used by either caller (the snap lattice follows the
+    // drawn one now, see snapLatticeStep), but the parameter still means this.
     expect(gridStep(0.001, 5)).toBe(5);
     expect(gridStep(0.02, 5)).toBe(5); // 1.28 rough → 1, floored back to 5
   });
 
-  it("lets the lattice go finer when snapping is off", () => {
+  it("goes finer as you zoom in when nothing floors it", () => {
     expect(gridStep(0.001, 0)).toBeLessThan(1);
   });
 
@@ -33,6 +35,50 @@ describe("gridStep", () => {
     expect(gridStep(0, 0)).toBe(1);
     expect(gridStep(NaN, 0)).toBe(1);
     expect(gridStep(0.1, NaN)).toBe(5);
+  });
+});
+
+describe("snapLatticeStep", () => {
+  // The rule: you snap to the lines you can see. It used to be a fixed 5mm while
+  // the drawn grid was adaptive, which broke the promise in both directions --
+  // zoomed out the cursor caught on 5mm points with no line under them, and
+  // zoomed in 5mm was the finest placement available however close you got.
+
+  it("is exactly the spacing that gets drawn", () => {
+    // The whole property, stated over a range that spans four decades of zoom.
+    for (const wpp of [0.002, 0.01, 0.05, 0.1, 0.4, 1, 4, 20]) {
+      expect(snapLatticeStep(wpp), `at ${wpp} mm/px`).toBe(gridStep(wpp, 0));
+    }
+  });
+
+  it("would have disagreed with the old fixed lattice", () => {
+    // Both directions of the defect, so this cannot pass by accident.
+    expect(snapLatticeStep(1)).toBeGreaterThan(5);      // zoomed out: 50mm cells
+    expect(snapLatticeStep(0.002)).toBeLessThan(5);     // zoomed in: sub-mm cells
+  });
+
+  it("never offers a lattice finer than a cursor can aim at", () => {
+    // An extreme but VALID zoom. niceStep will happily answer 1e-8 here.
+    expect(snapLatticeStep(1e-9)).toBe(MIN_SNAP_STEP);
+  });
+
+  it("falls back to a sane lattice on a scale that means nothing", () => {
+    // Not the floor: a 0.01mm lattice for an unknown scale would be an
+    // effectively free cursor. gridStep's own 1mm answer is the better one, and
+    // this is the same fallback the DRAWN grid takes, which is the point.
+    for (const bad of [0, NaN, -1, Infinity]) {
+      expect(snapLatticeStep(bad), `scale ${bad}`).toBe(gridStep(bad, 0));
+      expect(snapLatticeStep(bad)).toBe(1);
+    }
+  });
+
+  it("never goes backwards as you zoom out", () => {
+    let prev = 0;
+    for (let e = -4; e <= 3; e += 0.25) {
+      const step = snapLatticeStep(Math.pow(10, e));
+      expect(step).toBeGreaterThanOrEqual(prev);
+      prev = step;
+    }
   });
 });
 
