@@ -1,17 +1,19 @@
 import { saveDocument, saveDocumentAs, exportModel, exportPrintProject, importModel } from "../io/files";
 import { openInOrca, sendToPrinter } from "../print/printFlow";
 import { activePrinterId } from "../print/printerClient";
-import { publishToTinkerAtlas } from "../tinkeratlas/publish";
-import { openSignInDialog, signOutFlow } from "../tinkeratlas/account";
-import { currentAccount } from "../tinkeratlas/client";
 import { getSpaceMouseMode, setSpaceMouseMode } from "../input/spacemouse";
 import { toggleShortcutHUD } from "../input/shortcuts";
 import { checkForUpdates, showAbout } from "../ui/updates";
 import { useDialogStore } from "../stores/dialogs";
+import { openExternal } from "../ui/welcome";
 import type { MenuDef } from "../ui/menu";
 import type { Engine } from "./engine";
 
-/** The File / Edit / View / TinkerAtlas / Help tree.
+/** Where a bug report goes. The reporter puts the report on the clipboard and
+ *  says to paste it into a new issue, so the app has to be able to say where. */
+const ISSUES_URL = "https://github.com/Paraxdev/neocad/issues";
+
+/** The File / Edit / View / Help tree.
  *
  *  `disabled` and `checked` are THUNKS, not values: Menubar re-evaluates them
  *  every time a menu opens, so "Undo" greys out correctly without anything
@@ -79,20 +81,11 @@ export function buildMenubar(e: Engine): MenuDef[] {
       ],
     },
     {
-      label: "TinkerAtlas",
-      items: [
-        { label: "Welcome Screen", onClick: () => e.ui.welcome.open() },
-        { separator: true, label: "" },
-        { label: "Publish to TinkerAtlas…", onClick: () => void publishToTinkerAtlas(e.store, e.geometry, e.viewport) },
-        { separator: true, label: "" },
-        { label: "Sign in…", disabled: () => !!currentAccount(), onClick: () => void openSignInDialog() },
-        { label: "Sign out", disabled: () => !currentAccount(), onClick: () => void signOutFlow() },
-      ],
-    },
-    {
       label: "Help",
       items: [
         { label: "Keyboard Shortcuts", shortcut: "?", onClick: () => toggleShortcutHUD() },
+        { label: "Welcome Screen", onClick: () => e.ui.welcome.open() },
+        { label: "Issue Tracker", onClick: () => void openExternal(ISSUES_URL) },
         { separator: true, label: "" },
         { label: "Check for Updates…", onClick: () => void checkForUpdates(true) },
         { label: "About SindriCAD", onClick: () => void showAbout() },

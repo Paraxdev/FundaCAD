@@ -136,7 +136,7 @@ Working:
   extrude depends on (f1) did not build"* instead of `extrude failed (KeyError)`,
   which pointed at the wrong feature. Same for revolve.
 
-### FIXED: sticky breadcrumbs were truncated away before upload
+### FIXED (mechanism since removed): sticky breadcrumbs were truncated away before upload
 
 `breadcrumbs.ts` keeps "sticky facts" (the HID device inventory) OUTSIDE the
 20-slot ring so a startup capture survives later activity — but
@@ -144,6 +144,10 @@ Working:
 facts are PREPENDED, so they were dropped as soon as the session got busy: the
 mechanism was defeated one layer down, costing the privacy exposure of collecting
 the inventory while delivering none of its diagnostic value.
+
+> The Rust uploader described here no longer exists: the bug reporter copies to
+> the clipboard and nothing is sent anywhere. Kept as the record of why
+> `breadcrumbs.ts` still separates sticky facts from the ring.
 
 Now `trim_breadcrumbs()` keeps every sticky fact (bounded at 24) plus the last 20
 ordinary crumbs. The discriminator is `crumb()`'s `"HH:MM:SS "` prefix, which

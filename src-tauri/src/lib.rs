@@ -13,7 +13,6 @@ mod printer;
 mod sidecar;
 mod slicer;
 mod spacemouse;
-mod tinkeratlas;
 // WebKitGTK only exists on Linux; macOS and Windows use WKWebView and WebView2.
 #[cfg(target_os = "linux")]
 mod webkit;
@@ -216,7 +215,7 @@ fn watch_frontend_load(app: tauri::AppHandle) {
                 .to_string(),
             "[ui] Either the document failed to load, or a script threw while loading it."
                 .to_string(),
-            "[ui] Please report this log at https://github.com/MakerViking/sindricad/issues"
+            "[ui] Please report this log at https://github.com/Paraxdev/neocad/issues"
                 .to_string(),
         ];
         // Through the sidecar so the warning reaches sidecar.log, which is the
@@ -295,15 +294,6 @@ pub fn run() {
         slicer::print_staging_path,
         slicer::slicer_open,
         slicer::slicer_project_settings,
-        tinkeratlas::ta_account,
-        tinkeratlas::ta_sign_in,
-        tinkeratlas::ta_browser_sign_in,
-        tinkeratlas::ta_sign_out,
-        tinkeratlas::ta_ping,
-        tinkeratlas::ta_staging_path,
-        tinkeratlas::ta_publish,
-        tinkeratlas::ta_avatar,
-        tinkeratlas::ta_bug_report,
         spacemouse::spacemouse_inventory
     ]);
     #[cfg(not(feature = "rust-geom"))]
@@ -336,15 +326,6 @@ pub fn run() {
         slicer::print_staging_path,
         slicer::slicer_open,
         slicer::slicer_project_settings,
-        tinkeratlas::ta_account,
-        tinkeratlas::ta_sign_in,
-        tinkeratlas::ta_browser_sign_in,
-        tinkeratlas::ta_sign_out,
-        tinkeratlas::ta_ping,
-        tinkeratlas::ta_staging_path,
-        tinkeratlas::ta_publish,
-        tinkeratlas::ta_avatar,
-        tinkeratlas::ta_bug_report,
         spacemouse::spacemouse_inventory
     ]);
 

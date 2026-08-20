@@ -1,7 +1,7 @@
 <script setup lang="ts">
-// The bug-report form. Everything about what a report CONTAINS — payload
-// assembly, the open-sketch snapshot, the clipboard fallback — is in
-// ui/bugReporter.ts; this is the form and the "what will be sent" preview.
+// The bug-report form. Everything about what a report CONTAINS — the text,
+// the open-sketch snapshot, the clipboard write — is in ui/bugReporter.ts; this
+// is the form and the "what will be copied" preview.
 
 import { computed, onMounted, onUnmounted, ref, useTemplateRef } from "vue";
 import { useDialogStore } from "../../stores/dialogs";
@@ -18,10 +18,9 @@ useModalGate();
 const close = () => { dialogs.bugReport = false; };
 
 const description = ref("");
-const includeLog = ref(true);
 const includeDocument = ref(false);
 const version = ref("…");
-const sending = ref(false);
+const copying = ref(false);
 
 // Snapshotted at open, not at send: see BugReportForm.
 const { connected, crumbs } = bugContext(deps);
@@ -41,25 +40,24 @@ const preview = computed(() =>
   ].join("\n"),
 );
 
-async function send() {
+async function copy() {
   const text = description.value.trim();
   if (!text) {
     desc.value?.focus();
     return;
   }
-  if (sending.value) return;
-  sending.value = true;
+  if (copying.value) return;
+  copying.value = true;
   const ok = await submitBugReport(deps, {
     description: text,
-    includeLog: includeLog.value,
     includeDocument: includeDocument.value,
     version: version.value,
     connected,
     crumbs,
   });
-  sending.value = false;
-  // A failed submit leaves the dialog up so the report can be retried or
-  // edited; the clipboard copy submitBugReport made is a backstop, not an exit.
+  copying.value = false;
+  // A refused clipboard leaves the dialog up rather than closing over text the
+  // user cannot get back.
   if (ok) close();
 }
 
@@ -95,20 +93,16 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
           placeholder="What happened? What did you expect?"
         ></textarea>
         <label class="bug-check">
-          <input v-model="includeLog" type="checkbox" class="bug-log" />
-          Include geometry-engine log (recommended, usernames are removed)
-        </label>
-        <label class="bug-check">
           <input v-model="includeDocument" type="checkbox" class="bug-doc" />
           Include current document (contains your design)
         </label>
         <details class="bug-preview">
-          <summary>What will be sent</summary>
+          <summary>What will be copied</summary>
           <pre>{{ preview }}</pre>
         </details>
         <div class="choice-row">
-          <button class="choice-btn bug-send" :disabled="sending" @click="send()">
-            <span>Send report</span>
+          <button class="choice-btn bug-send" :disabled="copying" @click="copy()">
+            <span>Copy report</span>
           </button>
           <button class="choice-btn bug-cancel" @click="close()"><span>Cancel</span></button>
         </div>

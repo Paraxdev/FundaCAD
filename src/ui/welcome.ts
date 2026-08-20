@@ -1,17 +1,15 @@
-// Welcome screen — opens at startup (unless turned off) and from the
-// TinkerAtlas menu.
+// Welcome screen: opens at startup (unless turned off) and from the Help menu.
 //
 // Facade over stores/dialogs.ts, rendered by
-// components/overlays/WelcomeModal.vue. Every exported signature is unchanged:
-// app/engine.ts still does `new WelcomeScreen(callbacks)` and app/menubarDef.ts
-// still calls `.open()`. What moved is the DOM — including the iframe sandbox
-// token list and the postMessage origin gate, which are copied into the
-// component verbatim because they are the app's only guards on the one piece of
-// remote content the webview embeds.
+// components/overlays/WelcomeModal.vue.
+//
+// It used to embed a remote page in an iframe, which made the welcome screen
+// the one piece of remote content the webview loaded and the app's startup
+// dependent on someone else's server being up. It is local-only now: New, Open,
+// and the recent files.
 
 import { useDialogStore } from "../stores/dialogs";
 import type { OpenOutcome } from "../io/files";
-import { currentAccount } from "../tinkeratlas/client";
 
 const SHOW_KEY = "sindri.welcomeOnStartup";
 export function welcomeOnStartup(): boolean {
@@ -40,8 +38,6 @@ export interface WelcomeCallbacks {
   onNew: () => void;
   onOpen: () => void;
   onOpenPath: (path: string) => Promise<OpenOutcome>;
-  onSignIn: () => void;
-  onSignOut: () => void;
 }
 
 /** Kept as a class so app/engine.ts's construction site and the two `.open()`
@@ -58,20 +54,4 @@ export class WelcomeScreen {
   close(): void {
     useDialogStore().welcome = false;
   }
-}
-
-/** Warm the account cache from disk at startup (Tauri only, never throws). */
-export async function warmAccount(): Promise<void> {
-  if (!isTauri()) return;
-  try {
-    const { taAccount } = await import("../tinkeratlas/client");
-    await taAccount();
-  } catch {
-    // cache stays signed-out; the welcome screen just shows "Sign in"
-  }
-}
-
-/** True when the signed-in account row should offer publish etc. */
-export function signedIn(): boolean {
-  return currentAccount() !== null;
 }

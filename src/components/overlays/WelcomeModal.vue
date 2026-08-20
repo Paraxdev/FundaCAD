@@ -1,27 +1,20 @@
 <script setup lang="ts">
-// Welcome screen — opens at startup (unless turned off) and from the
-// TinkerAtlas menu. Left column: local actions (New / Open / recent files) and
-// the TinkerAtlas account row. Right pane: the remote
-// tinkeratlas.com/sindricad/welcome page in an iframe — the ONLY remote content
-// the webview embeds (CSP frame-src allows exactly that origin; connect-src
-// stays localhost-only, so reachability is probed through Rust's ta_ping).
+// Welcome screen: opens at startup (unless turned off) and from the Help menu.
+// New, Open, and the recent files.
+//
+// The right-hand pane used to be a remote page in a cross-origin iframe, which
+// made this the one place the webview loaded someone else's content and put a
+// third-party server on the startup path: unreachable meant a "service is down"
+// panel on first launch. Everything here is local now, and the CSP no longer
+// needs a frame-src at all.
 
-import { onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
+import { onMounted, onUnmounted, ref, watch } from "vue";
 import { useDialogStore } from "../../stores/dialogs";
 import { useModalGate } from "../../composables/useModalGate";
-import { openExternal, welcomeOnStartup, setWelcomeOnStartup } from "../../ui/welcome";
+import { welcomeOnStartup, setWelcomeOnStartup } from "../../ui/welcome";
 import { forgetRecent, getRecentFiles, type RecentFile } from "../../io/recentFiles";
 import ModalFrame from "./ModalFrame.vue";
-import logoUrl from "../../../assets/brand/sindricad-lockup-app.svg";
-import {
-  TA_WELCOME_URL,
-  onAccountChange,
-  taAvatar,
-  taPing,
-  type TaUser,
-} from "../../tinkeratlas/client";
-
-const isTauri = () => "__TAURI_INTERNALS__" in window;
+import logoUrl from "../../../assets/brand/neocad-lockup-app.svg";
 
 const dialogs = useDialogStore();
 // Non-null whenever this component is rendered: App.vue gates it on the same
@@ -33,20 +26,6 @@ const close = () => { dialogs.welcome = false; };
 // pushModal/popModal, tied to mount rather than to open()/close(). See
 // useModalGate — this is the one that must not be got wrong.
 useModalGate();
-
-// --- iframe → app link opening (cross-repo contract) -------------------------
-// The embedded page can't open windows (the Tauri shell blocks new-window
-// requests), so its links post {type:"open-url", url} to the parent. Trust
-// gate: the message must come from the welcome page's own origin and the URL
-// must lead back into that origin — anything else is dropped.
-function onMessage(e: MessageEvent): void {
-  const welcomeOrigin = new URL(TA_WELCOME_URL).origin;
-  if (e.origin !== welcomeOrigin) return;
-  const data = e.data as { type?: string; url?: string } | null;
-  if (!data || data.type !== "open-url" || typeof data.url !== "string") return;
-  if (data.url !== welcomeOrigin && !data.url.startsWith(`${welcomeOrigin}/`)) return;
-  void openExternal(data.url);
-}
 
 function onKey(e: KeyboardEvent): void {
   if (e.key === "Escape") {
@@ -73,51 +52,18 @@ async function openRecent(path: string) {
   // the user finds the file again after updating.
 }
 
-// --- account row — kept live via the client's account cache ---
-const user = shallowRef<TaUser | null>(null);
-const avatar = ref<string | null>(null);
-let unsubAccount: (() => void) | null = null;
-
-// --- right pane: probe first, then commit to the frame ---
-// A cross-origin iframe never reports load failures, so reachability is probed
-// natively (Rust) before the frame is created at all.
-const remote = ref<"probing" | "frame" | "offline">(isTauri() ? "probing" : "frame");
-async function probe() {
-  remote.value = "probing";
-  remote.value = (await taPing()) ? "frame" : "offline";
-}
-
 // --- footer ---
 const showOnStartup = ref(welcomeOnStartup());
 watch(showOnStartup, setWelcomeOnStartup);
 
-onMounted(() => {
-  window.addEventListener("message", onMessage);
-  window.addEventListener("keydown", onKey, true);
-  unsubAccount = onAccountChange((u) => {
-    user.value = u;
-    avatar.value = null;
-    if (u && isTauri()) {
-      void taAvatar().then((dataUrl) => {
-        if (dataUrl) avatar.value = dataUrl;
-      });
-    }
-  });
-  if (isTauri()) void probe();
-});
-
-onUnmounted(() => {
-  window.removeEventListener("message", onMessage);
-  window.removeEventListener("keydown", onKey, true);
-  unsubAccount?.();
-  unsubAccount = null;
-});
+onMounted(() => window.addEventListener("keydown", onKey, true));
+onUnmounted(() => window.removeEventListener("keydown", onKey, true));
 </script>
 
 <template>
   <ModalFrame panel-class="welcome-panel" @close="close()">
     <template #title>
-      <img :src="logoUrl" alt="SindriCAD" class="welcome-logo" />
+      <img :src="logoUrl" alt="Neocad" class="welcome-logo" />
     </template>
 
     <div class="modal-body welcome-body">
@@ -148,36 +94,6 @@ onUnmounted(() => {
             </button>
           </div>
         </template>
-
-        <div class="welcome-account">
-          <button v-if="!user" class="choice-btn" @click="cb.onSignIn()">
-            <span>Sign in with TinkerAtlas</span>
-          </button>
-          <div v-else class="welcome-user">
-            <img class="welcome-avatar" alt="" :src="avatar ?? undefined" />
-            <span>{{ user.display_name || user.username }}</span>
-            <button class="welcome-signout" @click="cb.onSignOut()">Sign out</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="welcome-remote">
-        <!-- The sandbox token list is a security boundary, not a style choice:
-             the page runs with its own (cross-)origin; no popups, no
-             top-navigation. Keep it exactly as it is. -->
-        <iframe
-          v-if="remote === 'frame'"
-          class="welcome-frame"
-          :src="TA_WELCOME_URL"
-          sandbox="allow-scripts allow-same-origin allow-forms"
-        ></iframe>
-        <div v-else-if="remote === 'probing'" class="welcome-offline">
-          <p>Connecting to TinkerAtlas…</p>
-        </div>
-        <div v-else class="welcome-offline">
-          <p>TinkerAtlas is unreachable, you're offline or the service is down.</p>
-          <button class="choice-btn" @click="probe()"><span>Retry</span></button>
-        </div>
       </div>
     </div>
 

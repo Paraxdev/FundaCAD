@@ -1,4 +1,4 @@
-// The welcome screen's three load-bearing details.
+// The welcome screen's load-bearing details.
 //
 //   1. `.modal-close` still exists. e2e/assembly_tree_e2e.cjs — the CI script —
 //      dismisses the startup modal by clicking it, and if the button is gone
@@ -7,31 +7,19 @@
 //      esc() on every one; interpolation escapes on its own, so a leftover
 //      esc() would render a file called "Bracket & Plate" as "Bracket &amp;
 //      Plate" — a bug you only see with the right file on the recents list.
-//   3. The iframe sandbox token list. It and the postMessage origin gate are
-//      the app's only guards on the one piece of remote content the webview
-//      embeds (CSP frame-src is the third). Widening it is a real
-//      vulnerability in a privileged Tauri webview, so it is pinned here.
+//   3. It embeds NO remote content. The right half used to be a cross-origin
+//      iframe, which made this screen the app's only remote-content surface and
+//      its sandbox token list a real security boundary in a privileged webview.
+//      The frame is gone; this pins that it stays gone, because re-adding one
+//      would silently reopen that boundary.
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { nextTick } from "vue";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { useModalStore } from "../../../src/stores/modals";
 import { useDialogStore } from "../../../src/stores/dialogs";
 import WelcomeModal from "../../../src/components/overlays/WelcomeModal.vue";
-
-// happy-dom really does fetch an <iframe src>, and the real URL is
-// tinkeratlas.com. Point it at about:blank so the suite stays offline — the
-// attribute under test is the sandbox list, not the address.
-vi.mock("../../../src/tinkeratlas/client", () => ({
-  TA_WELCOME_URL: "about:blank",
-  onAccountChange: (fn: (u: null) => void) => {
-    fn(null);
-    return () => {};
-  },
-  taAvatar: async () => null,
-  taPing: async () => false,
-}));
 
 enableAutoUnmount(afterEach);
 
@@ -43,8 +31,6 @@ function open(recents: { path: string; openedAt: number }[] = []) {
     onNew: () => {},
     onOpen: () => {},
     onOpenPath: async () => "ok",
-    onSignIn: () => {},
-    onSignOut: () => {},
   });
   return mount(WelcomeModal, { attachTo: document.body });
 }
@@ -71,12 +57,11 @@ describe("WelcomeModal", () => {
     expect($(".welcome-recent")!.getAttribute("title")).toBe("C:/work/Bracket & Plate.sindri");
   });
 
-  it("sandboxes the embedded TinkerAtlas page with exactly the agreed tokens", () => {
+  it("embeds no remote content", () => {
     open();
-    // Outside Tauri there is no Rust to ask for reachability, so the frame goes
-    // up best-effort — which is what makes it assertable here.
-    const frame = document.querySelector("iframe.welcome-frame")!;
-    expect(frame.getAttribute("sandbox")).toBe("allow-scripts allow-same-origin allow-forms");
+    // happy-dom really does fetch an <iframe src>, so a frame reappearing here
+    // would also start dialling out from the test suite.
+    expect(document.querySelector("iframe")).toBeNull();
   });
 
   it("gates global shortcuts for exactly its own lifetime", async () => {

@@ -1,10 +1,12 @@
 // In-app bug reporter: a floating bug button (bottom-right) opening a small
-// report dialog. Sends description + auto-collected diagnostics through the
-// native ta_bug_report command (webview never dials out; redaction happens in
-// Rust before anything leaves the machine). Works with the sidecar DEAD and
-// signed out — that's the primary use case. On ANY failed submit (network,
-// rejection, endpoint not deployed yet) the report is offered to the
-// clipboard so it is never lost.
+// report dialog. It gathers a description plus the diagnostics that are hard to
+// ask a reporter for by hand (scene stats, breadcrumbs, optionally the
+// document) and puts the lot on the clipboard, ready to paste into an issue.
+//
+// It used to POST this to a hosted endpoint. Nothing leaves the machine now: no
+// account, no network, and no server that has to be up for the button to work.
+// The clipboard was already the fallback path for every failed submit, so this
+// is the path that was always the reliable one.
 //
 // The button is components/overlays/BugReportButton.vue and the dialog is
 // BugReportDialog.vue. What stays here is everything that is NOT markup: what a
@@ -15,13 +17,10 @@ import type { DocumentStore } from "../document/store";
 import type { GeometryBackend } from "../geometry/client";
 import { toast } from "./toast";
 import { breadcrumbs } from "../diagnostics/breadcrumbs";
-import { taBugReport, asTaError } from "../tinkeratlas/client";
 import { useDialogStore } from "../stores/dialogs";
 import type { Viewport } from "../viewport/viewport";
 import type { SketchMode } from "../sketch/sketchMode";
 import type { Feature } from "../types";
-
-const isTauri = () => "__TAURI_INTERNALS__" in window;
 
 export interface BugReportDeps {
   store: DocumentStore;
@@ -33,7 +32,6 @@ export interface BugReportDeps {
 /** What the dialog is willing to send, as the user has ticked it. */
 export interface BugReportForm {
   description: string;
-  includeLog: boolean;
   includeDocument: boolean;
   version: string;
   /** Both snapshotted when the dialog opened — the crumbs so that filling the
@@ -87,14 +85,16 @@ function openSketchCrumb(store: DocumentStore, live: Feature | null): string | n
     `${ents} entities, ${cons} constraints`;
 }
 
-async function copyFallback(
+/** The report, as pasteable text. */
+function reportText(
   description: string,
   version: string,
   connected: boolean,
   crumbs: string[],
-): Promise<boolean> {
-  const text = [
-    `SindriCAD bug report`,
+  documentJson: string | null,
+): string {
+  return [
+    `Neocad bug report`,
     `version: ${version} · ${navigator.userAgent.slice(0, 80)}`,
     `geometry engine connected: ${connected}`,
     ``,
@@ -102,60 +102,39 @@ async function copyFallback(
     ``,
     `recent events:`,
     ...crumbs.map((c) => `  ${c}`),
+    ...(documentJson ? [``, `document:`, documentJson] : []),
   ].join("\n");
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
-/** Send the report (or copy it, outside Tauri). Resolves true when the dialog
- *  should close.
- *
- *  A FAILED submit deliberately leaves the dialog open: the clipboard copy is a
- *  fallback, not a substitute, and the user may want to retry or edit. */
+/** Put the report on the clipboard. Resolves true when the dialog should close,
+ *  which is every case except a clipboard the browser would not give us: there
+ *  the dialog stays open so the text is not silently lost. */
 export async function submitBugReport(deps: BugReportDeps, form: BugReportForm): Promise<boolean> {
   const { store, sketch } = deps;
   const live = sketch.snapshotFeature();
   const sketchCrumb = openSketchCrumb(store, live);
-  // prepended, not appended: the server caps the breadcrumb list, and the
-  // same reasoning that puts scene stats first applies here. Used by the
-  // clipboard fallback too, so an offline report keeps the context.
+  // prepended, not appended: the same reasoning that puts scene stats first
+  // applies here, and a reader skims the top of a pasted report.
   const crumbList = sketchCrumb ? [sketchCrumb, ...form.crumbs] : form.crumbs;
   const connected = form.connected;
-  const payload = {
-    description: form.description,
-    appVersion: form.version,
-    sidecarConnected: connected,
-    includeLog: form.includeLog,
-    breadcrumbs: crumbList,
-    ...(form.includeDocument ? { documentJson: documentWithOpenSketch(store, live) } : {}),
-  };
-  if (!isTauri()) {
-    await copyFallback(form.description, form.version, connected, crumbList);
-    return true;
-  }
+  const text = reportText(
+    form.description,
+    form.version,
+    connected,
+    crumbList,
+    form.includeDocument ? documentWithOpenSketch(store, live) : null,
+  );
   try {
-    const res = await taBugReport(payload);
-    toast(
-      res.deduplicated
-        ? "Thanks, this matches a known report; the existing one was updated."
-        : "Bug report sent. Thank you!",
-      { kind: "info" },
-    );
+    await navigator.clipboard.writeText(text);
+    toast("Bug report copied. Paste it into a new issue on the tracker.", { kind: "info" });
     return true;
-  } catch (e) {
-    // ANY failure (unreachable, rejected, endpoint missing): never lose
-    // the report — offer the clipboard path.
-    const te = asTaError(e);
-    const copied = await copyFallback(form.description, form.version, connected, crumbList);
-    toast(
-      `Couldn't send the report${te ? `: ${te.message}` : ""}.` +
-        (copied ? " A copy is on your clipboard, paste it in the SindriCAD Discord." : ""),
-      { kind: "error", timeout: 10000 },
-    );
+  } catch {
+    // Refused clipboard (no permission, no secure context). Leave the dialog
+    // open rather than closing over text the user cannot get back.
+    toast("Could not reach the clipboard, so the report was not copied.", {
+      kind: "error",
+      timeout: 10000,
+    });
     return false;
   }
 }

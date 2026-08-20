@@ -1,17 +1,15 @@
 /* ---- welcome screen ---- */
+/* One column. This was a 1150x720 two-column panel whose right half was a
+   remote page in an iframe; with only the local actions and the recent files
+   left, that much glass around a short list read as a loading failure. */
 .welcome-panel {
-  width: min(1150px, 94vw);
-  height: min(720px, 90vh);
+  width: min(460px, 92vw);
+  max-height: min(620px, 88vh);
 }
 .welcome-body {
   flex: 1;
-  display: grid;
-  grid-template-columns: 260px 1fr;
-  /* The one seam in this screen that separates two unrelated things -- a local
-     file list and a remote web view -- so it gets a wider rung than any gap
-     inside either column. */
-  gap: var(--s-5);
-  min-height: 0; /* let the iframe pane shrink instead of overflowing */
+  display: flex;
+  min-height: 0;
 }
 .welcome-left {
   display: flex;
@@ -71,61 +69,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.welcome-account {
-  margin-top: auto;
-  padding-top: var(--s-4);
-  border-top: 1px solid var(--line, #262a31);
-}
-.welcome-account .choice-btn {
-  width: 100%;
-}
-.welcome-user {
-  display: flex;
-  align-items: center;
-  gap: var(--s-3);
-  font-size: 12px;
-}
-.welcome-avatar {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--raised, #22262e);
-  object-fit: cover;
-}
-.welcome-signout {
-  margin-left: auto;
-  background: transparent;
-  border: none;
-  color: var(--text-dim, #9aa3af);
-  font-size: 11px;
-  cursor: pointer;
-}
-.welcome-signout:hover {
-  color: var(--text, #e6e8ec);
-}
-.welcome-remote {
-  min-height: 0;
-  border: 1px solid var(--line, #262a31);
-  border-radius: var(--r-sm, 6px);
-  overflow: hidden;
-  background: #0b0d10;
-}
-.welcome-frame {
-  width: 100%;
-  height: 100%;
-  border: 0;
-  display: block;
-}
-.welcome-offline {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--s-4);
-  color: var(--text-dim, #9aa3af);
-  font-size: 13px;
-}
 .welcome-foot {
   display: flex;
   /* Same inset as .modal-foot: this panel IS a .modal-panel, and its footer
@@ -136,103 +79,9 @@
 .welcome-startup {
   display: flex;
   align-items: center;
-  /* Checkbox-to-label, as in .sm-inv and .ta-publish-public. */
+  /* Checkbox-to-label, as in .sm-inv. */
   gap: var(--s-2);
   font-size: 12px;
   color: var(--text-dim, #9aa3af);
   cursor: pointer;
-}
-
-/* ---- TinkerAtlas sign-in ---- */
-.ta-signin {
-  width: min(420px, 92vw);
-}
-.ta-signin-hint {
-  margin: 0 0 var(--s-4);
-  font-size: 12px;
-  color: var(--text-dim, #9aa3af);
-}
-.ta-signin .choice-btn {
-  width: 100%;
-  /* Stack rhythm inside the small dialogs: --s-3 between controls, --s-4 after
-     a paragraph. The two used to be 8 and 10 with no rule behind which. */
-  margin-bottom: var(--s-3);
-}
-.ta-signin .choice-row .choice-btn {
-  margin-bottom: 0;
-}
-.ta-signin-input {
-  width: 100%;
-  box-sizing: border-box;
-  background: var(--raised, #22262e);
-  border: 1px solid var(--line-strong, #323843);
-  border-radius: var(--r-sm, 6px);
-  color: var(--text, #e6e8ec);
-  /* Field size, as in the inspector -- this was the roomiest of the four
-     spellings of an input the survey turned up. */
-  padding: var(--s-2) var(--s-3);
-  font-size: 12px;
-  font-family: monospace;
-}
-.ta-signin-error {
-  min-height: 16px;
-  margin: var(--s-2) 0 var(--s-1);
-  font-size: 11px;
-  color: var(--danger, #ff6b6b);
-}
-
-/* ---- TinkerAtlas publish ---- */
-.ta-publish {
-  width: min(460px, 92vw);
-}
-.ta-publish .ta-signin-input {
-  margin-bottom: var(--s-3);
-  font-family: inherit;
-}
-.ta-publish-desc {
-  resize: vertical;
-}
-.ta-publish-public {
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
-  font-size: 12px;
-  color: var(--text-dim, #9aa3af);
-  margin: var(--s-0) 0 var(--s-2);
-  cursor: pointer;
-}
-
-/* browser sign-in flow additions */
-.ta-signin-alt {
-  background: transparent;
-  border: none;
-  color: var(--text-dim, #9aa3af);
-  font-size: 11px;
-  text-decoration: underline;
-  cursor: pointer;
-  padding: var(--s-0) 0 var(--s-3);
-}
-.ta-signin-alt:hover {
-  color: var(--text, #e6e8ec);
-}
-.ta-signin-tokenrow {
-  display: flex;
-  gap: var(--s-3);
-  margin-bottom: var(--s-3);
-}
-.ta-signin-tokenrow .ta-signin-input {
-  flex: 1;
-  margin: 0;
-}
-.ta-signin-tokenrow .choice-btn {
-  width: auto;
-  margin: 0;
-  white-space: nowrap;
-}
-.ta-signin-waiting {
-  padding: var(--s-3) 0 var(--s-1);
-  font-size: 13px;
-}
-.ta-signin-waiting p {
-  margin: 0 0 var(--s-3);
 }

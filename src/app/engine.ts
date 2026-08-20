@@ -46,10 +46,9 @@ import { activePrinterId } from "../print/printerClient";
 import { useRibbonStore } from "../stores/ribbon";
 import { useCommandPaletteStore } from "../stores/commandPalette";
 import { SpaceMouseSettings } from "../ui/spaceMouseSettings";
-import { WelcomeScreen, welcomeOnStartup, warmAccount } from "../ui/welcome";
+import { WelcomeScreen, welcomeOnStartup } from "../ui/welcome";
 import { scheduleStartupUpdateCheck } from "../ui/updates";
 import { openDocumentAtPath } from "../io/files";
-import { openSignInDialog, signOutFlow } from "../tinkeratlas/account";
 
 import { installSidecarDiedToast } from "./sidecarWatch";
 import { installSpaceMouse } from "./spaceMouseSetup";
@@ -303,8 +302,6 @@ export function mountUi(e: Engine): void {
       if (e.sketch.active) e.sketch.cancel(); // same guard as openDoc
       return openDocumentAtPath(e.store, path, e.geometry);
     },
-    onSignIn: () => void openSignInDialog(),
-    onSignOut: () => void signOutFlow(),
   });
 
   e.starters = createFeatureStarters({
@@ -365,9 +362,7 @@ export function mountUi(e: Engine): void {
   // (The menubar is components/shell/MenuBar.vue now — TitleBar.vue calls
   // buildMenubar(engine) itself, so there is nothing to construct here.)
 
-  // warm the TinkerAtlas identity cache from disk (offline-safe), then show the
-  // welcome screen unless the user turned it off (its footer checkbox).
-  void warmAccount();
+  // show the welcome screen unless the user turned it off (its footer checkbox)
   if (welcomeOnStartup()) e.ui.welcome.open();
   scheduleStartupUpdateCheck();
 

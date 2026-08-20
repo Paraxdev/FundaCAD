@@ -10,7 +10,7 @@
     "updater:default",
     {
       "identifier": "opener:allow-open-url",
-      "allow": [{ "url": "https://tinkeratlas.com/*" }, { "url": "http://localhost:3000/*" }]
+      "allow": [{ "url": "https://github.com/Paraxdev/neocad/*" }]
     },
     "fs:allow-read-text-file",
     "fs:allow-write-text-file",

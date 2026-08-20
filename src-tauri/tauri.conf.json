@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "SindriCAD",
+  "productName": "Neocad",
   "version": "0.1.0",
-  "identifier": "dev.sindricad.app",
+  "identifier": "dev.neocad.app",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:5173",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "SindriCAD",
+        "title": "Neocad",
         "width": 1280,
         "height": 800,
         "minWidth": 800,
@@ -20,8 +20,8 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost data: blob:; connect-src 'self' ipc: http://ipc.localhost ws://127.0.0.1:8765 http://127.0.0.1:8765; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; frame-src https://tinkeratlas.com",
-      "devCsp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost data: blob:; connect-src 'self' ipc: http://ipc.localhost ws://127.0.0.1:8765 http://127.0.0.1:8765; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; frame-src https://tinkeratlas.com http://localhost:3000"
+      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost data: blob:; connect-src 'self' ipc: http://ipc.localhost ws://127.0.0.1:8765 http://127.0.0.1:8765; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; frame-src 'none'",
+      "devCsp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost data: blob:; connect-src 'self' ipc: http://ipc.localhost ws://127.0.0.1:8765 http://127.0.0.1:8765; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; frame-src 'none'"
     }
   },
   "bundle": {
@@ -29,7 +29,7 @@
     "targets": "all",
     "category": "DeveloperTool",
     "shortDescription": "Parametric CAD",
-    "longDescription": "SindriCAD, a parametric CAD app for 3D printing.",
+    "longDescription": "Neocad, a parametric CAD app for 3D printing.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -40,13 +40,13 @@
     "linux": {
       "deb": {
         "files": {
-          "/usr/lib/udev/rules.d/99-sindricad-spacemouse.rules": "../packaging/99-spacemouse.rules"
+          "/usr/lib/udev/rules.d/99-neocad-spacemouse.rules": "../packaging/99-spacemouse.rules"
         },
         "postInstallScript": "scripts/postinstall.sh"
       },
       "rpm": {
         "files": {
-          "/usr/lib/udev/rules.d/99-sindricad-spacemouse.rules": "../packaging/99-spacemouse.rules"
+          "/usr/lib/udev/rules.d/99-neocad-spacemouse.rules": "../packaging/99-spacemouse.rules"
         },
         "postInstallScript": "scripts/postinstall.sh"
       }
@@ -56,7 +56,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDUwMkY3MDMzN0E1RUREMUYKUldRZjNWNTZNM0F2VU81ZU9YLzBPdDV6UVdkVklPOWg1S01zdU1lWitDMGR6aFg1cmJoZnYrMWIK",
       "endpoints": [
-        "https://github.com/MakerViking/sindricad/releases/download/beta/latest.json"
+        "https://github.com/Paraxdev/neocad/releases/download/beta/latest.json"
       ]
     }
   }

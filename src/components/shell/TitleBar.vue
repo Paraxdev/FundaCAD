@@ -9,7 +9,7 @@ import { iconPacks, getIconPack, setIconPack, asIconPackId, onIconPackChange } f
 import { buildMenubar } from "../../app/menubarDef";
 import Icon from "./Icon.vue";
 import MenuBar from "./MenuBar.vue";
-import brandLockup from "../../../assets/brand/sindricad-lockup-app.svg";
+import brandLockup from "../../../assets/brand/neocad-lockup-app.svg";
 
 const engine = useEngine();
 const ui = useUiStore();

@@ -18,7 +18,7 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
-# system-browser opener for TinkerAtlas links (capability-scoped to tinkeratlas.com).
+# system-browser opener for the handful of outbound links (docs, the tracker).
 tauri-plugin-opener = "2"
 # One app instance only. Two instances each spawn a sidecar, and the second one
 # cannot bind 127.0.0.1:8765, so it dies and the user is told the geometry engine
@@ -31,16 +31,17 @@ hidapi = "2"
 getrandom = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-# Printer device layer (printer.rs): LAN Moonraker HTTP client (plain HTTP).
-# rustls-tls is for the TinkerAtlas layer (tinkeratlas.rs) — pure-Rust TLS with
-# bundled webpki roots, so no system OpenSSL and cross-platform builds stay clean.
-reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls"] }
-# cover screenshots cross Tauri IPC as base64 strings (a JSON Vec<u8> would be
-# pathological at ~1 MB); tinkeratlas.rs decodes/encodes with this.
+# Printer device layer (printer.rs): LAN Moonraker HTTP client. No TLS backend
+# is selected because there is nothing to secure: base_url() builds `http://`
+# only, and valid_host() rejects a host carrying a scheme. The pure-Rust
+# rustls-tls that used to be here existed for a hosted-service layer that is
+# gone; carrying a TLS stack no call site can reach is just build time.
+reqwest = { version = "0.12", default-features = false, features = ["json", "multipart"] }
+# G-code and thumbnails cross Tauri IPC as base64 strings (a JSON Vec<u8> would
+# be pathological at ~1 MB); container.rs and printer.rs decode/encode with this.
 base64 = "0.22"
 # explicit for the status-monitor task's sleep; tauri already runs the tokio rt.
-# net/io-util: the one-shot loopback listener for browser sign-in (tinkeratlas.rs).
-tokio = { version = "1", features = ["time", "net", "io-util"] }
+tokio = { version = "1", features = ["time"] }
 # --- Rust/OCCT geometry spike (opt-in only) ---------------------------------
 # These four crates are used ONLY by src-tauri/src/geom.rs (the experimental
 # in-Rust OCCT geometry path, VITE_GEOM=rust). They are `optional` and behind the

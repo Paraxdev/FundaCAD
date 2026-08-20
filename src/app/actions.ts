@@ -1,6 +1,5 @@
 import { saveDocument, saveDocumentAs, exportModel, exportPrintProject, importModel } from "../io/files";
 import { openInOrca, sendToPrinter } from "../print/printFlow";
-import { publishToTinkerAtlas } from "../tinkeratlas/publish";
 import { openParamsDialog } from "../ui/paramsDialog";
 import { toggleShortcutHUD } from "../input/shortcuts";
 import { choose } from "../ui/choice";
@@ -113,9 +112,6 @@ export function createActions(e: Engine): (action: string) => void {
         break;
       case "welcome":
         e.ui.welcome.open();
-        break;
-      case "ta-publish":
-        void publishToTinkerAtlas(e.store, e.geometry, e.viewport);
         break;
       case "revolve":
         void e.starters.startRevolve();
