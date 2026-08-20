@@ -48,6 +48,7 @@ import { PatternFlow, PATTERN_TOOLS, ENTITY_PATTERNS, type PatternHost } from ".
 import { ProjectPanel } from "./projectPanel";
 import { sketchEscapeAction } from "./escapeLayers";
 import { SketchPlaneGrid, snapLatticeStep } from "./planeGrid";
+import { inferLineDirection } from "./inferLine";
 import { sketchLockHolds } from "./sketchView";
 
 export type SketchTool =
@@ -2806,17 +2807,19 @@ export class SketchMode {
     this.onState?.();
   }
 
-  /** If a freshly drawn line sits within a few degrees of horizontal/vertical,
-   *  snap it exactly and record the constraint (mainstream MCAD's auto-constrain). */
+  /** Record horizontal/vertical on a freshly drawn line (mainstream MCAD's
+   *  auto-constrain). The grid decides when it can; otherwise a few degrees of
+   *  tolerance does. See inferLine.ts for why the order matters. */
   private inferLineConstraint(e: ResolvedEntity) {
     if (e.type !== "line") return;
-    const ang = (Math.atan2(e.y2 - e.y1, e.x2 - e.x1) * 180) / Math.PI;
-    const norm = ((ang % 180) + 180) % 180; // 0..180
-    const TOL = 3;
-    if (Math.min(norm, 180 - norm) <= TOL) {
+    const dir = inferLineDirection(
+      e.x1, e.y1, e.x2, e.y2,
+      this.gridSnap ? this.snapStep() : 0,
+    );
+    if (dir === "horizontal") {
       e.y2 = e.y1; // exactly horizontal
       this.constraints.push({ type: "horizontal", line: e.id });
-    } else if (Math.abs(norm - 90) <= TOL) {
+    } else if (dir === "vertical") {
       e.x2 = e.x1; // exactly vertical
       this.constraints.push({ type: "vertical", line: e.id });
     }
