@@ -55,13 +55,39 @@ function render(fake: ReturnType<typeof makeEngine>, featureId: string): VueWrap
 
 /** Every row as [label, unit, value]. The unit is a chip beside the value and
  *  NOT part of the label: a label is a name, and "Radius mm | 5in" reads as a
- *  contradiction. */
+ *  contradiction.
+ *
+ *  A row is not always a text box any more — a fixed choice is a <select> and a
+ *  switch is a checkbox — so this reads whichever control the row has rather
+ *  than assuming. A row with no control at all is a row that renders nothing,
+ *  which is worth failing on rather than skipping. */
 const rows = (w: VueWrapper) =>
-  w.findAll(".param-row").map((r) => [
-    r.find("label").text(),
-    r.find(".dim-unit").exists() ? r.find(".dim-unit").text() : "",
-    r.find("input").element.value,
-  ]);
+  w.findAll(".param-row").map((r) => {
+    const sel = r.find("select");
+    const box = r.find("input[type=checkbox]");
+    const value = sel.exists()
+      ? (sel.element as HTMLSelectElement).value
+      : box.exists()
+        ? String((box.element as HTMLInputElement).checked)
+        : (r.find("input").element as HTMLInputElement).value;
+    return [
+      r.find("label").text(),
+      r.find(".dim-unit").exists() ? r.find(".dim-unit").text() : "",
+      value,
+    ];
+  });
+
+/** Just the labels, in the order the panel puts them. */
+const labels = (w: VueWrapper) =>
+  w.findAll(".param-row label").map((l) => l.text());
+
+/** Pick `value` in the <select> of the row labelled `label`. */
+async function choose(w: VueWrapper, label: string, value: string) {
+  const row = w.findAll(".param-row").find((r) => r.find("label").text() === label)!;
+  const sel = row.find("select");
+  (sel.element as HTMLSelectElement).value = value;
+  await sel.trigger("change");
+}
 
 /** Commit `text` into the row whose label starts with `label`. */
 async function commit(w: VueWrapper, label: string, text: string) {
@@ -194,5 +220,96 @@ describe("FeatureProperties", () => {
   it("renders nothing for a feature with no numeric fields", () => {
     const fake = makeEngine({ parameters: {}, features: [{ id: "d1", type: "deleteFace" } as Feature] });
     expect(rows(render(fake, "d1"))).toEqual([]);
+  });
+
+  // --- the rows that are not numbers ---------------------------------------
+  //
+  // Every fact about a feature that is a CHOICE used to be settable once, at
+  // the moment the feature was made, and never again: the panel could only
+  // render numbers, so a texture created as a knurl stayed a knurl and an
+  // extrude's boolean was whatever the tool had decided.
+
+  it("offers a feature's fixed choices, not just its numbers", () => {
+    const fake = makeEngine({ parameters: {}, features: [EXTRUDE] });
+    expect(rows(render(fake, "e1"))).toContainEqual(["Operation", "", "new"]);
+  });
+
+  it("writes a chosen option straight onto the feature", async () => {
+    const fake = makeEngine({ parameters: {}, features: [EXTRUDE] });
+    await choose(render(fake, "e1"), "Operation", "cut");
+    expect(fake.updates).toEqual([{ id: "e1", patch: { operation: "cut" } }]);
+  });
+
+  it("shows the builder's default for a choice the feature does not carry", () => {
+    // Most of these fields are optional, and a feature saved before one existed
+    // has none. An empty dropdown would then be claiming the operation is unset
+    // when the rebuild is about to pick one.
+    const fake = makeEngine({
+      parameters: {},
+      features: [{ id: "l1", type: "loft", sketches: ["s1", "s2"] } as unknown as Feature],
+    });
+    expect(rows(render(fake, "l1"))).toContainEqual(["Operation", "", "new"]);
+  });
+
+  it("puts the choices above the numbers they govern", () => {
+    // A texture's pattern decides whether Angle and Seed are there at all, so a
+    // reader who met the numbers first would be reading upward.
+    const fake = makeEngine({
+      parameters: {},
+      features: [{ id: "t1", type: "texture", kind: "knurl", depth: 0.4, scale: 2 } as unknown as Feature],
+    });
+    const l = labels(render(fake, "t1"));
+    expect(l.indexOf("Pattern")).toBe(0);
+    expect(l.indexOf("Pattern")).toBeLessThan(l.indexOf("Depth"));
+  });
+
+  it("gives a switch to a field that is on or off", async () => {
+    const fake = makeEngine({
+      parameters: {},
+      features: [{ id: "t1", type: "texture", kind: "image", depth: 0.4, scale: 2 } as unknown as Feature],
+    });
+    const w = render(fake, "t1");
+    expect(rows(w)).toContainEqual(["Invert heights", "", "false"]);
+    const box = w.findAll(".param-row").find((r) => r.find("label").text() === "Invert heights")!
+      .find("input[type=checkbox]");
+    (box.element as HTMLInputElement).checked = true;
+    await box.trigger("change");
+    expect(fake.updates).toEqual([{ id: "t1", patch: { invert: true } }]);
+  });
+
+  it("hides a row the chosen pattern will never read", () => {
+    // The defect this rule exists for: the panel offered Seed and Angle on every
+    // texture. A knurl reads no seed — the sidecar ignores it — so turning that
+    // row did nothing and nothing said why.
+    const knurl = makeEngine({
+      parameters: {},
+      features: [{ id: "t1", type: "texture", kind: "knurl", depth: 0.4, scale: 2, seed: 1, angle: 0 } as unknown as Feature],
+    });
+    const l = labels(render(knurl, "t1"));
+    expect(l).toContain("Angle");
+    expect(l).not.toContain("Seed");
+
+    const noise = makeEngine({
+      parameters: {},
+      features: [{ id: "t1", type: "texture", kind: "noise", depth: 0.4, scale: 2, seed: 1, angle: 0 } as unknown as Feature],
+    });
+    const n = labels(render(noise, "t1"));
+    expect(n).toContain("Seed");
+    expect(n).not.toContain("Angle");
+  });
+
+  it("renames the shape slider to what it currently does", () => {
+    // The same number is a flat LAND width on a faceted surface and a crispness
+    // on a smooth one. Calling both "Sharpness" describes neither.
+    const facet = makeEngine({
+      parameters: {},
+      features: [{ id: "t1", type: "texture", kind: "knurl", profile: "facet", depth: 0.4, scale: 2, sharpness: 0.5 } as unknown as Feature],
+    });
+    expect(labels(render(facet, "t1"))).toContain("Land");
+    const round = makeEngine({
+      parameters: {},
+      features: [{ id: "t1", type: "texture", kind: "knurl", profile: "round", depth: 0.4, scale: 2, sharpness: 0.5 } as unknown as Feature],
+    });
+    expect(labels(render(round, "t1"))).toContain("Sharp");
   });
 });

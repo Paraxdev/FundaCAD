@@ -8,6 +8,17 @@
 // re-serialises one entity), and two copies of that would drift the moment a
 // field type was added.
 //
+// Three kinds of row, in the order a form reads best: the CHOICES first, then
+// the switches, then the numbers. A choice usually decides which numbers are
+// even there — pick a texture pattern and the Angle and Seed rows appear or go
+// — so putting it under the fields it governs would have the reader working
+// upward. The numbers come last because they are the long tail.
+//
+// Everything a row can be is declared in document/numFields.ts and
+// document/optionFields.ts, never here. That is what keeps the two surfaces
+// that render this component, and the tool panel that creates the feature in
+// the first place, describing the same feature the same way.
+//
 // The title is the caller's business, the history heads it with the feature
 // name and the timeline already has the chip you clicked.
 
@@ -15,12 +26,22 @@ import { ref } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useDocValue } from "../../app/useDoc";
 import ValidatedRow from "./ValidatedRow.vue";
+import ChoiceRow from "./ChoiceRow.vue";
+import ToggleRow from "./ToggleRow.vue";
 import { round, isPlainNumber } from "../../ui/units";
 import { commonUnits, toUnit, tryParseMeasure, unitById, type Dim, type Measured, type UnitDef } from "../../ui/measure";
 import { contextMenu } from "../../ui/menu";
 import { resolveEntities, toSketchEntity } from "../../sketch/resolve";
 import { entityDims } from "../../sketch/entityDims";
 import { FEATURE_NUM_FIELDS as NUM_FIELDS, type FieldKind } from "../../document/numFields";
+import {
+  FEATURE_CHOICE_FIELDS,
+  FEATURE_TOGGLE_FIELDS,
+  choiceValue,
+  fieldApplies,
+  sharpnessLabel,
+  toggleValue,
+} from "../../document/optionFields";
 import type { Feature, Num, ParamTarget } from "../../types";
 
 const props = defineProps<{ featureId: string; unit: string }>();
@@ -141,12 +162,43 @@ function commitSketchDim(row: { key: string; index: number; field: string }, raw
 // raw read, so without the version dependency a value committed from anywhere
 // else, a drag handle or a parameter commit landing off the promise chain, never
 // reached the panel.
+// --- the fixed choices, and the switches ---------------------------------
+// Written straight onto the feature: unlike a value row there is no expression
+// path and no unit to reinterpret, so `updateFeature` IS the whole commit.
+
+const choiceRows = useDocValue((doc) => {
+  const f = doc.features.find((x) => x.id === props.featureId);
+  if (!f) return [];
+  const values = f as unknown as Record<string, unknown>;
+  return (FEATURE_CHOICE_FIELDS[f.type] ?? [])
+    .filter((c) => fieldApplies(f.type, c.field, values))
+    .map((c) => ({ ...c, current: choiceValue(f, c) }));
+});
+
+const toggleRows = useDocValue((doc) => {
+  const f = doc.features.find((x) => x.id === props.featureId);
+  if (!f) return [];
+  const values = f as unknown as Record<string, unknown>;
+  return (FEATURE_TOGGLE_FIELDS[f.type] ?? [])
+    .filter((t) => fieldApplies(f.type, t.field, values))
+    .map((t) => ({ ...t, current: toggleValue(f, t) }));
+});
+
+function setOption(field: string, value: string | boolean) {
+  store.updateFeature(props.featureId, { [field]: value } as unknown as Partial<Feature>);
+}
+
 const featureRows = useDocValue((doc) => {
   const f = doc.features.find((x) => x.id === props.featureId);
   if (!f || f.type === "sketch") return [];
   const fields = NUM_FIELDS[f.type];
   if (!fields) return [];
-  return fields.map(([field, label, kind]) => {
+  const values = f as unknown as Record<string, unknown>;
+  // A row for a field this feature will never read is a control with nothing on
+  // the other end of it: turn the Seed on a knurl and the model does not move,
+  // and nothing says why. The rule lives with the field inventory so the tool
+  // that creates the feature and the rows that edit it hide the same ones.
+  return fields.filter(([field]) => fieldApplies(f.type, field, values)).map(([field, label, kind]) => {
     const cur = (f as unknown as Record<string, Num | undefined>)[field];
     const target: ParamTarget = { kind: "feature", feature: f.id, field };
     const bound = store.boundExpr(target);
@@ -161,7 +213,12 @@ const featureRows = useDocValue((doc) => {
     const fx = bound && store.isParamBound(target);
     return {
       key: field,
-      label,
+      // One label is not a constant: a texture's shape slider is a flat LAND
+      // width on a faceted surface and a crispness on a smooth one, and calling
+      // both "Sharpness" describes neither.
+      label: f.type === "texture" && field === "sharpness"
+        ? sharpnessLabel(values["profile"]).text
+        : label,
       // An expression is written in CANONICAL units so a file evaluates the
       // same on every machine, which is a fact about it and not a display
       // choice, so the chip states it and is not offered as a picker.
@@ -216,6 +273,22 @@ function commitField(
 </script>
 
 <template>
+  <ChoiceRow
+    v-for="c in choiceRows"
+    :key="`c:${c.field}`"
+    :label="c.label"
+    :value="c.current"
+    :options="c.options"
+    :row-title="c.title"
+    :commit="(v) => setOption(c.field, v)"
+  />
+  <ToggleRow
+    v-for="t in toggleRows"
+    :key="`t:${t.field}`"
+    :label="t.label"
+    :value="t.current"
+    :commit="(v) => setOption(t.field, v)"
+  />
   <ValidatedRow
     v-for="r in sketchRows"
     :key="r.key"

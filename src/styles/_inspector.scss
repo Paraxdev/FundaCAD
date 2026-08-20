@@ -77,6 +77,81 @@
   border-color: #ff6b6b;
   box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.18);
 }
+/* A value that is one of a fixed set. Same box as .param-row input — same
+   padding, same border, same focus ring — because the two sit interleaved in
+   one column and a dropdown that read as a different KIND of control would
+   break the line down the middle of the panel. */
+.param-select {
+  background: var(--panel-2);
+  border: 1px solid var(--line-strong);
+  color: var(--text);
+  border-radius: var(--r-sm);
+  padding: var(--s-2) var(--s-3);
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease);
+}
+.param-select:hover {
+  border-color: #3d4452;
+}
+.param-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--bg);
+  box-shadow: 0 0 0 3px var(--accent-tint);
+}
+
+/* A value that is on or off. The checkbox itself stays in the document rather
+   than being display:none'd, so it keeps its keyboard behaviour and its label
+   association; it is only moved out from under the drawn switch. */
+.param-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+.param-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: pointer;
+}
+.param-switch .track {
+  width: 30px;
+  height: 17px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  border: 1px solid var(--line-strong);
+  display: inline-flex;
+  align-items: center;
+  padding: 1px;
+  transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+}
+.param-switch .knob {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  transition: transform var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
+}
+.param-switch input:checked + .track {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.param-switch input:checked + .track .knob {
+  transform: translateX(13px);
+  background: #fff;
+}
+.param-switch input:focus-visible + .track {
+  box-shadow: 0 0 0 3px var(--accent-tint);
+}
+
 /* field driven by a non-literal expression (Fusion's fx: convention) */
 .fx-row label::before {
   content: "fx:";

@@ -8,6 +8,17 @@
 // parameter at all) and one fixed bug (Direction applies to every kind, not
 // just the lattice ones).
 
+import {
+  ANGLE_KINDS, SEED_KINDS, TEXTURE_KINDS, fieldApplies, sharpnessLabel,
+} from "../document/optionFields";
+
+// Re-exported rather than redefined: these are facts about the texture FEATURE,
+// so they live with the rest of the feature's field inventory and are shared
+// with the value rows that edit one after it is committed. Two copies of "which
+// kinds have an angle" is exactly how the tool panel and the value rows would
+// come to disagree about the same texture.
+export { ANGLE_KINDS, SEED_KINDS, sharpnessLabel };
+
 export type TextureKind = "knurl" | "hex" | "waves" | "ribs" | "voronoi" | "noise" | "image";
 export type TextureMode = "faces" | "body";
 
@@ -27,21 +38,8 @@ export interface TextureValues {
   colorSlot?: number; // palette slot for a two-tone inlay; undefined = body color
 }
 
-export const KIND_OPTIONS: [TextureKind, string][] = [
-  ["knurl", "Knurl"],
-  ["hex", "Hex"],
-  ["waves", "Waves"],
-  ["ribs", "Ribs"],
-  ["voronoi", "Voronoi"],
-  ["noise", "Noise (Perlin)"],
-  ["image", "Image Heightmap"],
-];
-// kinds that show angle/sharpness (a lattice/wave orientation + crispness make
-// sense for all of these; voronoi/noise use a seed instead of an orientation,
-// and image has neither). Exported so textureTool.ts can trim the feature JSON
-// to the fields that actually apply to the chosen kind.
-export const ANGLE_KINDS = new Set<TextureKind>(["knurl", "hex", "waves", "ribs"]);
-export const SEED_KINDS = new Set<TextureKind>(["voronoi", "noise"]);
+export const KIND_OPTIONS: [TextureKind, string][] =
+  TEXTURE_KINDS.map((o) => [o.value as TextureKind, o.label]);
 
 export function basename(path: string): string {
   return path.split(/[\\/]/).pop() ?? path;
@@ -110,21 +108,11 @@ export function toTextureValues(f: TextureForm): TextureValues {
  *  Gating it behind ANGLE_KINDS left noise/voronoi/image able only to GROW the
  *  part — changing its dimensions instead of texturing the surface it sits on. */
 export function textureRows(f: Pick<TextureForm, "kind" | "profile">) {
+  const applies = (field: string) => fieldApplies("texture", field, f);
   return {
-    angle: ANGLE_KINDS.has(f.kind),
-    seed: SEED_KINDS.has(f.kind),
-    image: f.kind === "image",
-    // The same slider means different things per profile, so it says which —
-    // and for one combination it means nothing at all, so it goes away rather
-    // than sitting there dead: a FACETED wave is a fixed 8-join sine polyline
-    // with no shape parameter (sidecar `_wave_levels` explains why). Under
-    // `round`, waves is a real sine and sharpness still crisps it.
-    sharpness: ANGLE_KINDS.has(f.kind) && !(f.profile === "facet" && f.kind === "waves"),
+    angle: applies("angle"),
+    seed: applies("seed"),
+    image: applies("imagePath"),
+    sharpness: applies("sharpness"),
   };
-}
-
-export function sharpnessLabel(profile: TextureValues["profile"]): { text: string; title: string } {
-  return profile === "facet"
-    ? { text: "Land", title: "Flat land on the crests: 0 = pure V-groove peaks, 1 = wide flat tops" }
-    : { text: "Sharp", title: "Crispness of the smooth profile" };
 }
