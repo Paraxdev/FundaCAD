@@ -102,6 +102,10 @@ export function sameStringMap(
   return true;
 }
 
+/** (0,0,0), kept once. Read every frame to size the origin arrows, and a fresh
+ *  Vector3 per frame for a constant is litter in the hot path. Never written. */
+const WORLD_ORIGIN = new THREE.Vector3(0, 0, 0);
+
 export class Viewport {
   readonly scene: SceneBundle;
   readonly rig: CameraRig;
@@ -2622,6 +2626,10 @@ export class Viewport {
         // keep the ground grid spacing/extent matched to the current zoom + pan
         const t = this.rig.controls.getTarget(this.scratchTarget);
         this.scene.grid.update(t.x, t.y, this.pixelWorldSize(t), this.targetGridZ);
+        // ...and the origin arrows to a constant size on screen. Measured AT THE
+        // ORIGIN rather than at the camera target, because that is where they
+        // are drawn and a perspective pixel is a different size at each depth.
+        this.scene.triad.update(this.pixelWorldSize(WORLD_ORIGIN), this.modelDiagonal());
         this.scene.renderer.render(this.scene.scene, this.rig.active);
         this.cube.render(this.rig.active); // draw the ViewCube overlay in the corner
         this.fps.frame();

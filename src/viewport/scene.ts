@@ -5,6 +5,7 @@
 import * as THREE from "three";
 import { stickyFact } from "../diagnostics/breadcrumbs";
 import { niceStep } from "../ui/units";
+import { glyphWorldScale } from "./gizmoScale";
 
 export interface SceneBundle {
   renderer: THREE.WebGLRenderer;
@@ -12,6 +13,7 @@ export interface SceneBundle {
   modelGroup: THREE.Group; // rebuilt geometry lives here
   planes: Record<"XY" | "XZ" | "YZ", THREE.Mesh>;
   grid: AdaptiveGrid;
+  triad: OriginTriad;
 }
 
 /** A ground grid (XY plane) whose spacing snaps to nice 1/2/5×10ⁿ mm values and
@@ -120,7 +122,7 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
   const grid = new AdaptiveGrid(scene);
 
   // axes: X red, Y green, Z blue
-  scene.add(originTriad());
+  const triad = new OriginTriad(scene);
 
   // --- sketch planes (semi-transparent, toggled per active sketch) ---
   // Coloured by their NORMAL axis, which is the convention the triad above is
@@ -141,7 +143,7 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
   const modelGroup = new THREE.Group();
   scene.add(modelGroup);
 
-  return { renderer, scene, modelGroup, planes, grid };
+  return { renderer, scene, modelGroup, planes, grid, triad };
 }
 
 /** The one axis-to-colour table in the scene. RGB for XYZ is the convention
@@ -149,37 +151,125 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
  *  recoloured the axes would be lying about which one is which. */
 const AXIS_COLOR = { x: 0xff5a5a, y: 0x46d97a, z: 0x4d8dff } as const;
 
-/** The world origin: three real arrows.
+/** The origin arrows' arm length, in SCREEN PIXELS.
+ *
+ *  Pixels, not millimetres, and that is the whole point of this number. The arms
+ *  were 20mm: a fixed size in the world is only ever the right size at one zoom,
+ *  and measured on a fitted 6mm block those 20mm arms came out 1253px long with
+ *  263px arrowheads, on a 900px canvas. Zooming in made it worse in proportion,
+ *  reaching 82,000px at the bottom of the zoom range.
+ *
+ *  88px sits between the two things it is read against: a little shorter than
+ *  the ViewCube in the opposite corner, about twice the drag handle. */
+export const TRIAD_LENGTH_PX = 88;
+
+/** How far the arrows may be shrunk when the model itself is small on screen.
+ *
+ *  Lower than a handle's floor, because the two fail differently: a handle
+ *  shrunk past aiming is unusable, while a marker only has to stay visible, and
+ *  at 0.3 of 88px it is still 26px with a readable head. */
+export const MIN_TRIAD_SCALE = 0.3;
+
+/** Proportions of the arrow, as fractions of its length, so the shape stays
+ *  itself at every size and one constant above sets how big it is. */
+const HEAD_FRACTION = 0.21;
+const SHAFT_RADIUS_FRACTION = 0.017;
+const HEAD_RADIUS_FRACTION = 0.055;
+
+/** How strongly the part of an arrow that is INSIDE the model still shows.
+ *
+ *  Not a flourish, a consequence. At 20mm the arrows escaped every small part by
+ *  brute length; at 88px they no longer do, and a primitive box is centred on
+ *  the origin, so the first thing the new size did was make the origin marker
+ *  vanish completely inside a 6mm block. Faint is the answer that keeps both
+ *  facts: full strength where the arrow is genuinely in front, a ghost where it
+ *  is buried, so the origin is always findable and still reads as being behind
+ *  something. */
+const OCCLUDED_OPACITY = 0.28;
+
+/** Drawn after the model (which sits at 0) so the ghost pass can paint over it,
+ *  and the solid pass after the ghost so it wins wherever it is really visible.
+ *  Below the manipulators at 998-999: an origin marker must never cover the
+ *  handle the user is dragging. */
+const GHOST_ORDER = 1;
+const SOLID_ORDER = 2;
+
+/** The world origin: three real arrows, held at a constant size on screen.
  *
  *  This was a stock THREE.AxesHelper, which is three LineSegments, and a line is
  *  one device pixel however close the camera gets. Three thin strands crossing at
  *  a point read as a scratch on the grid rather than as the origin, and there is
- *  no head to say which end is positive. A shaft and a cone say both. */
-function originTriad(len = 20): THREE.Group {
-  const g = new THREE.Group();
-  const HEAD = 4.2;
-  const dirs: [THREE.Vector3, number][] = [
-    [new THREE.Vector3(1, 0, 0), AXIS_COLOR.x],
-    [new THREE.Vector3(0, 1, 0), AXIS_COLOR.y],
-    [new THREE.Vector3(0, 0, 1), AXIS_COLOR.z],
-  ];
-  for (const [dir, color] of dirs) {
-    // Unlit on purpose. An axis marker states a fact, and a Lambert surface
-    // would hand half of it to wherever the key light happens to be, so the
-    // "red" axis would read differently on each side of the scene.
-    const mat = new THREE.MeshBasicMaterial({ color });
-    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, len - HEAD, 10), mat);
-    shaft.position.y = (len - HEAD) / 2;
-    const head = new THREE.Mesh(new THREE.ConeGeometry(1.1, HEAD, 14), mat);
-    head.position.y = len - HEAD / 2;
-    // Built along +Y (which is how three's cylinders and cones are born) and
-    // turned onto the axis, so all three come from one description.
-    const arm = new THREE.Group();
-    arm.add(shaft, head);
-    arm.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
-    g.add(arm);
+ *  no head to say which end is positive. A shaft and a cone say both.
+ *
+ *  Modelled in PIXELS and scaled by the world size of a pixel every frame, the
+ *  same way every manipulator in features/ already is. Class rather than a bare
+ *  Group for the same reason AdaptiveGrid above is one: it has to be told the
+ *  zoom on every frame that draws, and an object that needs updating should own
+ *  the method that does it. */
+export class OriginTriad {
+  readonly group = new THREE.Group();
+  private materials: THREE.Material[] = [];
+  private geometries: THREE.BufferGeometry[] = [];
+
+  constructor(scene: THREE.Scene) {
+    const len = TRIAD_LENGTH_PX;
+    const head = len * HEAD_FRACTION;
+    const dirs: [THREE.Vector3, number][] = [
+      [new THREE.Vector3(1, 0, 0), AXIS_COLOR.x],
+      [new THREE.Vector3(0, 1, 0), AXIS_COLOR.y],
+      [new THREE.Vector3(0, 0, 1), AXIS_COLOR.z],
+    ];
+    const shaftGeo = new THREE.CylinderGeometry(
+      len * SHAFT_RADIUS_FRACTION, len * SHAFT_RADIUS_FRACTION, len - head, 10);
+    const coneGeo = new THREE.ConeGeometry(len * HEAD_RADIUS_FRACTION, head, 14);
+    this.geometries.push(shaftGeo, coneGeo);
+    for (const [dir, color] of dirs) {
+      // Unlit on purpose. An axis marker states a fact, and a Lambert surface
+      // would hand half of it to wherever the key light happens to be, so the
+      // "red" axis would read differently on each side of the scene.
+      const solid = new THREE.MeshBasicMaterial({ color });
+      const ghost = new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: OCCLUDED_OPACITY,
+        depthTest: false,
+        depthWrite: false,
+      });
+      this.materials.push(solid, ghost);
+      // Built along +Y (which is how three's cylinders and cones are born) and
+      // turned onto the axis, so all three come from one description. Both
+      // passes share ONE geometry per part: they are the same arrow drawn twice,
+      // and two copies of it could drift.
+      const arm = new THREE.Group();
+      for (const mat of [ghost, solid]) {
+        const order = mat === ghost ? GHOST_ORDER : SOLID_ORDER;
+        const shaft = new THREE.Mesh(shaftGeo, mat);
+        shaft.position.y = (len - head) / 2;
+        shaft.renderOrder = order;
+        const cone = new THREE.Mesh(coneGeo, mat);
+        cone.position.y = len - head / 2;
+        cone.renderOrder = order;
+        arm.add(shaft, cone);
+      }
+      arm.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+      this.group.add(arm);
+    }
+    scene.add(this.group);
   }
-  return g;
+
+  /** `pixelWorldSize` is the world size of one screen pixel AT THE ORIGIN, which
+   *  is where this is drawn — measuring it anywhere else would size the arrows
+   *  for a place they are not. */
+  update(pixelWorldSize: number | null, modelDiagonal: number | null) {
+    this.group.scale.setScalar(
+      glyphWorldScale(TRIAD_LENGTH_PX, modelDiagonal, pixelWorldSize, MIN_TRIAD_SCALE),
+    );
+  }
+
+  dispose() {
+    for (const g of this.geometries) g.dispose();
+    for (const m of this.materials) m.dispose();
+  }
 }
 
 function makePlane(color: number, kind: "XY" | "XZ" | "YZ"): THREE.Mesh {

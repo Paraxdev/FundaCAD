@@ -6,6 +6,7 @@
 
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
+import { GLYPH_MODEL_FRACTION, glyphScale } from "../viewport/gizmoScale";
 import { themeColor } from "../viewport/themeColors";
 
 /** Signed distance along `dir` (unit) of the closest point on the axis
@@ -298,8 +299,10 @@ export const HANDLE_LENGTH = 45;
 const GRAB_HEAD = 17;
 const GRAB_STEM = 11;
 
-/** Most of the model's on-screen size the handle may occupy. */
-export const HANDLE_MODEL_FRACTION = 0.45;
+/** Most of the model's on-screen size the handle may occupy. Lives in
+ *  viewport/gizmoScale.ts now, because the origin arrows are sized by the same
+ *  rule and two copies of a rule drift. */
+export const HANDLE_MODEL_FRACTION = GLYPH_MODEL_FRACTION;
 
 /** How far the handle may be shrunk before it stops being a target worth
  *  aiming at. At 0.45 of a 45-unit glyph it is still ~20px with a ~7px grab
@@ -319,12 +322,7 @@ export function handleScale(
   modelDiagonal: number | null,
   pixelWorldSize: number | null,
 ): number {
-  if (modelDiagonal == null || !Number.isFinite(modelDiagonal) || modelDiagonal <= 0) return 1;
-  if (pixelWorldSize == null || !Number.isFinite(pixelWorldSize) || pixelWorldSize <= 0) return 1;
-  const modelPx = modelDiagonal / pixelWorldSize;
-  if (!Number.isFinite(modelPx) || modelPx <= 0) return 1;
-  const allowed = modelPx * HANDLE_MODEL_FRACTION;
-  return Math.max(MIN_HANDLE_SCALE, Math.min(1, allowed / HANDLE_LENGTH));
+  return glyphScale(HANDLE_LENGTH, modelDiagonal, pixelWorldSize, MIN_HANDLE_SCALE);
 }
 
 /** How far the drawn handle reaches from its anchor along its axis, in SCREEN
