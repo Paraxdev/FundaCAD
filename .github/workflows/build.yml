@@ -311,7 +311,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: sindricad-${{ matrix.platform }}
+          name: neocad-${{ matrix.platform }}
           if-no-files-found: warn
           path: |
             src-tauri/target/release/bundle/**/*.AppImage
@@ -424,6 +424,23 @@ jobs:
 
           R='${{ github.repository }}'
           SHA='${{ github.sha }}'
+
+          # Refuse to publish while the updater still trusts UPSTREAM's minisign
+          # key. Releases are signed with TAURI_SIGNING_PRIVATE_KEY, which this
+          # project holds; installed copies verify against the pubkey baked into
+          # tauri.conf.json, which is still the one inherited at the fork. They do
+          # not match, so every installed copy would silently stop updating and
+          # nothing in the build would say so. tests/security/updater.test.ts has
+          # how to generate a keypair and what to replace.
+          UPSTREAM_PUBKEY='dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDUwMkY3MDMzN0E1RUREMUYKUldRZjNWNTZNM0F2VU81ZU9YLzBPdDV6UVdkVklPOWg1S01zdU1lWitDMGR6aFg1cmJoZnYrMWIK'
+          pubkey=$(node -p "require('./src-tauri/tauri.conf.json').plugins.updater.pubkey")
+          if [ "$pubkey" = "$UPSTREAM_PUBKEY" ]; then
+            echo "::error::The updater pubkey in tauri.conf.json is still upstream's."
+            echo "::error::Publishing now would ship a build that can never update itself."
+            echo "::error::Generate a keypair (npm run tauri signer generate), set the"
+            echo "::error::TAURI_SIGNING_PRIVATE_KEY secret, and replace the pubkey."
+            exit 1
+          fi
 
           # Move the rolling tag onto this commit (create it if it is missing).
           # Moving beats delete+recreate: the tag never stops existing, so the
