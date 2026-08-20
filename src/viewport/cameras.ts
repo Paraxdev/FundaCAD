@@ -5,6 +5,7 @@
 import * as THREE from "three";
 import CameraControls from "camera-controls";
 import { frameRotation, pivotShift, viewQuaternion } from "./orbitPivot";
+import { anchorDolly } from "./zoomAnchor";
 
 CameraControls.install({ THREE });
 
@@ -327,30 +328,20 @@ export function createCameraRig(
         }
         controls.zoomTo(newZoom, false);
       } else if (pivot) {
-        // Dolly at the CURSOR'S DEPTH, but strictly along the view axis. Scaling
-        // about the raw cursor point also slides the camera sideways, and in
-        // perspective any lateral camera move re-angles the model — one wheel click
-        // visibly tilted a straight-on view. Projecting the pivot onto the view
-        // axis keeps the viewing angle exactly fixed while zoom speed still tracks
-        // the surface under the cursor. Clamp the final distance to MIN_PERSP_DIST
-        // so it can't cross the near plane.
-        const cam = controls.getPosition(new THREE.Vector3());
-        const target = controls.getTarget(new THREE.Vector3());
-        const dist = cam.distanceTo(target);
-        let ff = f;
-        if (dist * ff < MIN_PERSP_DIST) {
-          if (dist <= MIN_PERSP_DIST) return; // already as close as we allow
-          ff = MIN_PERSP_DIST / dist; // land exactly at the limit this step
-        }
-        const forward = target.clone().sub(cam).normalize();
-        const depth = pivot.clone().sub(cam).dot(forward);
-        // cursor point at/behind the camera (degenerate raycast) → dolly to target
-        const axisPivot =
-          depth > MIN_PERSP_DIST
-            ? cam.clone().add(forward.multiplyScalar(depth))
-            : target.clone();
-        const nc = axisPivot.clone().add(cam.sub(axisPivot).multiplyScalar(ff));
-        const nt = axisPivot.clone().add(target.sub(axisPivot).multiplyScalar(ff));
+        // Dolly TOWARD THE CURSOR, by scaling camera and target about the cursor
+        // point together. See zoomAnchor.ts for why that pins the point under the
+        // cursor, and why projecting it onto the view axis first — which is what
+        // this did until the point under the cursor was measured over a long
+        // zoom — loses it within a handful of notches.
+        const next = anchorDolly(
+          controls.getPosition(new THREE.Vector3()),
+          controls.getTarget(new THREE.Vector3()),
+          pivot,
+          f,
+          MIN_PERSP_DIST,
+        );
+        if (!next) return; // already as close as we allow
+        const { position: nc, target: nt } = next;
         controls.setLookAt(nc.x, nc.y, nc.z, nt.x, nt.y, nt.z, false);
       } else {
         // no pivot (programmatic): plain dolly toward the orbit target
