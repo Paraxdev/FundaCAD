@@ -28,6 +28,7 @@ import {
   onLayoutPrefsChange,
   setLayoutPref,
 } from "../../ui/layoutPrefs";
+import { featureFlags, onFeatureFlagsChange, setFeatureFlag } from "../../ui/featureFlags";
 
 const dialogs = useDialogStore();
 const close = () => { dialogs.preferences = false; };
@@ -40,6 +41,7 @@ const theme = ref(getTheme());
 const pack = ref(getIconPack());
 const unit = ref(getUnit());
 const layout = ref(layoutPrefs());
+const flags = ref(featureFlags());
 
 const stops: (() => void)[] = [];
 onMounted(() => {
@@ -48,6 +50,7 @@ onMounted(() => {
     onIconPackChange(() => { pack.value = getIconPack(); }),
     onUnitChange(() => { unit.value = getUnit(); }),
     onLayoutPrefsChange(() => { layout.value = layoutPrefs(); }),
+    onFeatureFlagsChange(() => { flags.value = featureFlags(); }),
   );
 });
 onUnmounted(() => { for (const stop of stops) stop(); });
@@ -61,6 +64,9 @@ function onPack(ev: Event) { const v = asIconPackId(value(ev)); if (v) setIconPa
 function onUnit(ev: Event) { const v = asUnit(value(ev)); if (v) setUnit(v); }
 function onRibbon(ev: Event) { const v = asRibbonSide(value(ev)); if (v) setLayoutPref("ribbon", v); }
 function onHistory(ev: Event) { const v = asHistorySide(value(ev)); if (v) setLayoutPref("history", v); }
+function onMultiColor(ev: Event) {
+  setFeatureFlag("multiColor", (ev.target as HTMLInputElement).checked);
+}
 </script>
 
 <template>
@@ -107,6 +113,28 @@ function onHistory(ev: Event) { const v = asHistorySide(value(ev)); if (v) setLa
         </select>
       </label>
       <div class="sm-hint">Changes apply straight away and are remembered.</div>
+
+      <div class="sm-section">Features</div>
+      <label class="prefs-row">
+        <span class="prefs-label">Multi-material</span>
+        <span class="param-switch">
+          <input
+            id="prefs-multicolor"
+            type="checkbox"
+            :checked="flags.multiColor"
+            @change="onMultiColor"
+          />
+          <span class="track"><span class="knob"></span></span>
+        </span>
+      </label>
+      <div class="sm-hint">
+        Off by default. Turns on the filament palette, per-body and texture
+        colours, and the toolhead mapping a multi-colour print asks for. All of
+        it answers to a printer with more than one head, so on a single-material
+        machine it is a set of controls with nothing on the other end. Nothing in
+        a saved document is lost while it is off, so anything already assigned
+        comes back when it is turned on again.
+      </div>
     </div>
 
     <div class="modal-foot">

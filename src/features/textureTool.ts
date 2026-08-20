@@ -14,6 +14,7 @@ import type { DocumentStore } from "../document/store";
 import type { Feature, Num, Selector } from "../types";
 import { TexturePanel, ANGLE_KINDS, SEED_KINDS, type TextureMode, type TextureValues } from "./texturePanel";
 import { setPrompt } from "../ui/prompt";
+import { multiColorEnabled } from "../ui/featureFlags";
 
 // Warm texture ticks are ~10-70ms sidecar-side (geometry-skeleton cache), so a
 // short debounce keeps scrubbing responsive while still coalescing keystrokes.
@@ -205,7 +206,18 @@ export class TextureTool {
 
   private openPanel(editing: boolean) {
     this.panel.show(
-      { editing, mode: this.mode, summary: this.currentSummary(), initial: this.values, palette: this.store.colorPalette },
+      {
+        editing,
+        mode: this.mode,
+        summary: this.currentSummary(),
+        initial: this.values,
+        // Empty when multi-material is off, which is already how the panel says
+        // "there is no inlay colour to choose" — a document with no bodies has
+        // passed it an empty palette since the row existed. Gating it HERE
+        // rather than in the panel keeps the decision at the one place that
+        // knows what a palette is for.
+        palette: multiColorEnabled() ? this.store.colorPalette : [],
+      },
       {
         onCommit: (v) => { this.values = v; this.commit(); },
         onCancel: () => this.cancel(),

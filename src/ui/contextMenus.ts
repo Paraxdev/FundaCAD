@@ -8,7 +8,7 @@ import type { DocumentStore } from "../document/store";
 import type { Viewport } from "../viewport/viewport";
 import type { SketchMode } from "../sketch/sketchMode";
 import type { MeasureTool } from "../features/measureTool";
-import { bodyColorMenuItems } from "./browserTree";
+import { bodyColorMenu } from "./browserTree";
 import { useBrowserStore } from "../stores/browser";
 import { contextMenu, type CtxItem } from "./menu";
 import { isInspectorEditable } from "../document/numFields";
@@ -151,7 +151,7 @@ export function createContextMenus(deps: ContextMenusDeps) {
       { label: "Show all bodies", shortcut: keyHint("show-all-bodies"), onClick: () => handleAction("show-all-bodies") },
       { separator: true, label: "" },
       { label: "Rename…", onClick: () => useBrowserStore().beginRename(bodyId) },
-      { label: "Color", children: bodyColorMenuItems(store, bodyId) },
+      ...bodyColorMenu(store, bodyId),
       { separator: true, label: "" },
       { label: "Remove body", danger: true, onClick: unlessBusy(() => store.removeBody(bodyId)) },
     ]);

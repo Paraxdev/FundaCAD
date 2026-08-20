@@ -8,10 +8,26 @@
 
 import type { DocumentStore } from "../document/store";
 import type { CtxItem } from "./menu";
+import { multiColorEnabled } from "./featureFlags";
 
-/** Palette → menu items for assigning a body's color slot. Shared by the
- *  browser-tree row menu and the viewport's right-click body menu so the two
- *  surfaces can't drift (swatch chips, current slot disabled). */
+/** The "Color" entry for a body's menu, or NOTHING when multi-material is off.
+ *
+ *  A list to be spread rather than an item to be placed, because the two states
+ *  are "an entry with a submenu" and "no entry at all". Returning an item whose
+ *  submenu happened to be empty would leave both call sites showing a Color menu
+ *  that opens onto nothing, which is the one outcome neither wants — and it
+ *  would leave the decision duplicated at both of them.
+ *
+ *  Shared by the browser-tree row menu and the viewport's right-click body menu
+ *  so the two surfaces can't drift. */
+export function bodyColorMenu(store: DocumentStore, bodyId: string): CtxItem[] {
+  if (!multiColorEnabled()) return [];
+  return [{ label: "Color", children: bodyColorMenuItems(store, bodyId) }];
+}
+
+/** Palette → menu items for assigning a body's color slot. Exported for the
+ *  test that pins the swatches and the disabled current slot; call sites want
+ *  `bodyColorMenu` above, which knows when there should be no menu. */
 export function bodyColorMenuItems(store: DocumentStore, bodyId: string): CtxItem[] {
   const slot = store.bodyColorSlot(bodyId);
   return [

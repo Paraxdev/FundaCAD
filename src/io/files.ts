@@ -10,6 +10,7 @@ import type { CadDocument, ExportFormat, Feature, ImportFormat } from "../types"
 import { clearRecovery } from "./recovery";
 import { noteRecent } from "./recentFiles";
 import { DOC_EXT, LEGACY_DOC_EXT, isDocumentExt, stripDocumentExt } from "./documentExt";
+import { multiColorEnabled } from "../ui/featureFlags";
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -412,8 +413,13 @@ export async function exportPrintProject(
  *  extruder 1). Fire-and-forget and bounded to 1.5s client-side (the shared
  *  Rust HTTP client has a 10s timeout — a warning arriving that late is worse
  *  than none): unreachable/slow/unconfigured printer → silently no warning.
- *  Never blocks or fails the export itself. */
+ *  Never blocks or fails the export itself.
+ *
+ *  Silent with multi-material off. Every sentence it can produce is about
+ *  toolheads and slot assignments — "3 bodies are unassigned (defaulting to
+ *  slot 1)" is a warning about a choice the user was never offered. */
 async function warnUnloadedFilaments(store: DocumentStore, bodyIds: string[]) {
+  if (!multiColorEnabled()) return;
   try {
     const { activePrinterId, printerFilaments } = await import("../print/printerClient");
     const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), 1500));
@@ -596,7 +602,12 @@ async function importPath(store: DocumentStore, geometry: GeometryBackend, path:
   // exist until the rebuild runs, and its id is positional, so wait for the
   // build and find the bodies this feature owns via faceOwners. setBodyColorSlot
   // is a display-only overlay write, so this adds no second undo step.
-  if (res.color === undefined) return;
+  //
+  // Skipped when multi-material is off. This one WRITES, unlike the rest of the
+  // gated surfaces, and a slot assigned behind a hidden palette would be an
+  // edit the user cannot see, cannot undo from any visible control, and would
+  // meet later as a colour they never chose.
+  if (res.color === undefined || !multiColorEnabled()) return;
   const slot = nearestPaletteSlot(res.color, store.colorPalette);
   if (slot === null) return;
   await store.rebuildNow();

@@ -28,13 +28,14 @@ import InlineLabel from "./InlineLabel.vue";
 import TreeFolder from "./TreeFolder.vue";
 import TreeRow from "./TreeRow.vue";
 import {
-  bodyColorMenuItems, buildAssemblyGroups, collectBodyIds, type AsmGroup,
+  bodyColorMenu, buildAssemblyGroups, collectBodyIds, type AsmGroup,
 } from "../../ui/browserTree";
 import {
   BROWSER_FILTERS, asBrowserFilter, getBrowserFilter, onBrowserFilterChange,
   sectionVisible, setBrowserFilter, type BrowserSection,
 } from "../../ui/browserFilter";
 import type { CtxItem } from "../../ui/menu";
+import { multiColorEnabled, onFeatureFlagsChange } from "../../ui/featureFlags";
 import type { CadDocument, Feature, Plane3 } from "../../types";
 
 const engine = useEngine();
@@ -180,6 +181,13 @@ const bodyAncestors = useDocValue((doc) => {
  *  the palette code below because the node list gates a whole section on it. */
 const printerOnline = ref<boolean | null>(null);
 
+/** Multi-material, mirrored into a ref so the node list re-runs when it is
+ *  toggled. The module is deliberately Vue-free (that is what lets the headless
+ *  suite import it), so nothing tracks it without this. */
+const multiColor = ref(multiColorEnabled());
+const stopFlags = onFeatureFlagsChange(() => { multiColor.value = multiColorEnabled(); });
+onUnmounted(stopFlags);
+
 /** The whole panel, as a flat list.
  *
  *  Reads docVersion (through useDocValue), buildVersion and the view tick
@@ -257,7 +265,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
   // no printer it was four fixed rows of nothing, permanently at the top of the
   // browser, so it waits for one — the same rule the Images filter follows, that
   // a control which cannot do its job is worse present than absent.
-  if (bodies.length && show("palette") && printerOnline.value === true) {
+  if (bodies.length && show("palette") && multiColor.value && printerOnline.value === true) {
     const collapsed = browser.isCollapsed("Palette");
     out.push({ kind: "palette-head", k: "palette", count: store.colorPalette.length, collapsed });
     if (!collapsed) {
@@ -271,7 +279,9 @@ const nodes = useDocValue((doc): TreeNode[] => {
   }
 
   const bodyRow = (b: { id: string; name: string }, depth: number): RowNode => {
-    const slot = store.bodyColorSlot(b.id);
+    // The swatch is the slot assignment made visible, so it goes with the rest
+    // of the feature. The assignment itself stays in the document either way.
+    const slot = multiColor.value ? store.bodyColorSlot(b.id) : undefined;
     const chip = slot != null ? store.colorPalette[slot]?.color : undefined;
     return {
       kind: "row",
@@ -285,7 +295,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
       visible: store.isBodyVisible(b.id),
       activate: (e: MouseEvent) => selectBody(b.id, e.ctrlKey || e.metaKey),
       toggleVis: () => toggleBodyVis(b.id),
-      extraMenu: [{ label: "Color", children: bodyColorMenuItems(store, b.id) }],
+      extraMenu: bodyColorMenu(store, b.id),
       rename: (name: string) => store.setBodyName(b.id, name),
       remove: () => store.removeBody(b.id),
       title: "Click to select (Ctrl+click adds) · double-click to rename · right-click for Color / Rename / Delete · eye to show/hide",

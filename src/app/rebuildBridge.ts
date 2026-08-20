@@ -2,6 +2,7 @@ import { toast } from "../ui/toast";
 import { logError } from "../ui/logStore";
 import { FEATURE_META } from "../ui/featureMeta";
 import { ambiguousDiagFor } from "../features/repickReference";
+import { multiColorEnabled, onFeatureFlagsChange } from "../ui/featureFlags";
 import type { Engine } from "./engine";
 
 /** Rebuild pipeline -> viewport. The one place a build result becomes pixels. */
@@ -12,8 +13,14 @@ export function installRebuildBridge(e: Engine): void {
   // again while chunks land.
   let pendingFit = true;
 
-  // resolve each body's assigned palette slot to a hex color for the viewport.
+  // Resolve each body's assigned palette slot to a hex color for the viewport.
+  //
+  // Empty when multi-material is off, which is the whole of what "off" means
+  // here: the assignments stay in the document, they are still saved and still
+  // exported, and the bodies simply render in the material they would have had
+  // if nobody had ever assigned one.
   function computeBodyPaint(bodies = e.store.buildState.result?.bodies): Record<string, string> {
+    if (!multiColorEnabled()) return {};
     const pal = e.store.colorPalette;
     const out: Record<string, string> = {};
     for (const b of bodies ?? []) {
@@ -26,6 +33,7 @@ export function installRebuildBridge(e: Engine): void {
   // two-tone texture inlays: per-face palette overrides (global face id → hex),
   // from the sidecar's textureColorSlots (dense per-body face array, sparse key).
   function computeTexturePaint(): Record<number, string> {
+    if (!multiColorEnabled()) return {};
     const pal = e.store.colorPalette;
     const out: Record<number, string> = {};
     for (const b of e.store.buildState.result?.bodies ?? []) {
@@ -38,6 +46,16 @@ export function installRebuildBridge(e: Engine): void {
     }
     return out;
   }
+
+  // Toggling multi-material has to repaint what is already on screen. Both
+  // setters are no-ops when the map has not changed, so this costs nothing on
+  // any other flag; without it the colours would hang about until the next
+  // rebuild, which on a finished model is never.
+  onFeatureFlagsChange(() => {
+    e.viewport.setBodyPaint(computeBodyPaint());
+    e.viewport.setTexturePaint(computeTexturePaint());
+    e.viewport.requestRender();
+  });
 
   // Failed-commit visibility: a feature that errors in the rebuild leaves the
   // model looking UNCHANGED (its body keeps the old mesh), so without an active

@@ -23,6 +23,7 @@ import { mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import BrowserPane from "../../../src/components/shell/BrowserPane.vue";
 import { ENGINE } from "../../../src/app/engineKey";
+import { setFeatureFlag } from "../../../src/ui/featureFlags";
 import type { Engine } from "../../../src/app/engine";
 import type { CadDocument, Feature } from "../../../src/types";
 
@@ -32,6 +33,7 @@ function makeEngine(doc: CadDocument, bodies: { id: string; name: string; nodeRe
   const docVersion = ref(0);
   const buildVersion = ref(0);
   const hidden = new Set<string>();
+  const slots = new Map<string, number>();
   const store = {
     get document() { return doc; },
     buildState: {
@@ -47,12 +49,17 @@ function makeEngine(doc: CadDocument, bodies: { id: string; name: string; nodeRe
       buildVersion.value++;
     },
     bodyName: () => undefined,
-    bodyColorSlot: () => undefined,
-    setBodyColorSlot: () => {},
+    bodyColorSlot: (id: string) => slots.get(id),
+    setBodyColorSlot: (id: string, slot: number | null) => {
+      if (slot == null) slots.delete(id);
+      else slots.set(id, slot);
+      buildVersion.value++;
+    },
   };
   return {
     docVersion,
     buildVersion,
+    store,
     /** Edit in place — identity is preserved on purpose. */
     edit(fn: (d: CadDocument) => void) { fn(doc); docVersion.value++; },
     engine: {
@@ -83,11 +90,17 @@ vi.mock("../../../src/print/printerClient", () => ({
   asPrinterError: (e: unknown) => e,
 }));
 
-/** Render with a printer on the other end, and wait for the probe to land. The
- *  probe is a dynamic import followed by an awaited call, so it settles over
- *  several microtasks; nextTick drains one each time round. */
+/** Render with a printer on the other end AND multi-material turned on, then
+ *  wait for the probe to land. The probe is a dynamic import followed by an
+ *  awaited call, so it settles over several microtasks; nextTick drains one each
+ *  time round.
+ *
+ *  The flag is part of the setup because the palette needs both: it is a set of
+ *  toolheads, so it wants a machine, and it is the multi-material feature, which
+ *  ships off. "Off" is a case of its own below, not a state these reach into. */
 async function renderWithPrinter(fake: ReturnType<typeof makeEngine>): Promise<VueWrapper> {
   (window as unknown as Record<string, unknown>)["__TAURI_INTERNALS__"] = {};
+  setFeatureFlag("multiColor", true);
   const w = render(fake);
   for (let i = 0; i < 20 && !w.find(".pal-dot").exists(); i++) await nextTick();
   return w;
@@ -95,6 +108,7 @@ async function renderWithPrinter(fake: ReturnType<typeof makeEngine>): Promise<V
 
 afterEach(() => {
   delete (window as unknown as Record<string, unknown>)["__TAURI_INTERNALS__"];
+  setFeatureFlag("multiColor", false);
   vi.useRealTimers();
 });
 
@@ -280,6 +294,36 @@ describe("BrowserPane", () => {
     // ...and the bodies it colours are still there, so this is the palette
     // being absent rather than the section it rides with failing to render.
     expect(panel(w).some((r) => r.text === "Body1")).toBe(true);
+  });
+
+  it("shows no palette while multi-material is off, printer or no printer", async () => {
+    // The default. A palette is four toolhead slots, and on a single-material
+    // machine there is nothing for them to name — so the whole section is
+    // absent rather than present and inert. The printer IS answering here and
+    // the filter is "all", so the flag is the only thing holding it back.
+    const fake = makeEngine({ parameters: {}, features: [sketch("s1")] }, [{ id: "b1", name: "Body1" }]);
+    (window as unknown as Record<string, unknown>)["__TAURI_INTERNALS__"] = {};
+    const w = render(fake);
+    for (let i = 0; i < 20; i++) await nextTick();
+    expect(w.find(".pal-dot").exists()).toBe(false);
+    expect(panel(w).map((r) => r.text)).not.toContain("Palette1");
+    // The bodies it would have coloured are untouched, so this is the palette
+    // being absent and not the section it rides with failing to render.
+    expect(panel(w).some((r) => r.text === "Body1")).toBe(true);
+  });
+
+  it("gives a body no colour swatch and no Color menu while it is off", async () => {
+    // The assignment stays in the document — this is about what is offered, not
+    // about what is stored.
+    const fake = makeEngine({ parameters: {}, features: [] }, [{ id: "b1", name: "Body1" }]);
+    fake.store.setBodyColorSlot("b1", 0);
+    const w = render(fake);
+    await nextTick();
+    expect(w.find(".tree-swatch").exists()).toBe(false);
+
+    setFeatureFlag("multiColor", true);
+    await nextTick();
+    expect(w.find(".tree-swatch").exists()).toBe(true);
   });
 
   it("hides every body under an assembly node from its eye", async () => {
