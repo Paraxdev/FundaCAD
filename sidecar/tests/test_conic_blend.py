@@ -23,6 +23,7 @@ import _bootstrap  # noqa: F401  (puts sidecar/ on sys.path)
 import math
 
 from OCP.BRep import BRep_Tool
+from OCP.BRepAdaptor import BRepAdaptor_Curve
 from OCP.BRepCheck import BRepCheck_Analyzer
 from OCP.BRepFilletAPI import BRepFilletAPI_MakeFillet
 from OCP.BRepMesh import BRepMesh_IncrementalMesh
@@ -123,6 +124,55 @@ def drifting_corner():
                _edge_between(b, (0, 0, h), (0, w, h))], 5.354428830336606
 
 
+CUBE = 20.0
+CUBE_R = 4.0
+
+
+def cube_top():
+    """A cube and the four edges of its top face — the plainest model there is.
+
+    Extrude a cube, fillet the top face. OCCT does not put a corner patch at
+    these corners: it runs each tube the full length and MITRES the four of them
+    against each other, so every corner seam is a boundary that is a whole
+    section on neither side. That is the one shape of boundary the reweight
+    identity does not carry, and it is reachable in two clicks.
+    """
+    b = BRepPrimAPI_MakeBox(CUBE, CUBE, CUBE).Shape()
+    top = []
+    for e in _sub(b, TopAbs_EDGE):
+        edge = TopoDS.Edge_s(e)
+        ends = [BRep_Tool.Pnt_s(v) for v in (TopExp.FirstVertex_s(edge),
+                                             TopExp.LastVertex_s(edge))]
+        if all(abs(p.Z() - CUBE) < 1e-9 for p in ends):
+            top.append(edge)
+    assert len(top) == 4, f"expected 4 top edges, found {len(top)}"
+    return b, top
+
+
+def max_edge_tolerance(shape):
+    """The widest tolerance sleeve any edge of this shape carries.
+
+    BRepCheck_Analyzer asking "is this valid" is not the same question: it asks
+    whether the curves agree WITHIN their stored tolerance, and SameParameter is
+    free to widen that tolerance until they do. A shape can pass that check and
+    still render as a wobbling edge, because the mesher may wander anywhere
+    inside the sleeve. So measure the sleeve.
+    """
+    return max(BRep_Tool.Tolerance_s(TopoDS.Edge_s(e))
+               for e in _sub(shape, TopAbs_EDGE))
+
+
+def _edge_from_to(shape, p, q, tol=1e-6):
+    for e in _sub(shape, TopAbs_EDGE):
+        edge = TopoDS.Edge_s(e)
+        ends = [BRep_Tool.Pnt_s(v) for v in (TopExp.FirstVertex_s(edge),
+                                             TopExp.LastVertex_s(edge))]
+        for a, z in (ends, ends[::-1]):
+            if a.Distance(gp_Pnt(*p)) < tol and z.Distance(gp_Pnt(*q)) < tol:
+                return edge
+    return None
+
+
 CASES = []
 
 
@@ -131,12 +181,14 @@ def _cases():
         return CASES
     b = box()
     cyl = BRepPrimAPI_MakeCylinder(12.0, 25.0).Shape()
+    cube, top = cube_top()
     CASES.extend([
         ("one edge (tube)", b, [box_edges(b)[0]], 4.0),
         ("corner (tubes + sphere patch)", b, corner_edges(b), 4.0),
         ("all 12 edges", b, box_edges(b), 3.0),
         ("cylinder rim (torus blend)", cyl, [TopoDS.Edge_s(
             _sub(cyl, TopAbs_EDGE)[0])], 3.0),
+        ("top face of a cube (mitred corners)", cube, top, CUBE_R),
     ])
     drift_solid, drift_edges, drift_r = drifting_corner()
     CASES.append(("corner off the lattice", drift_solid, drift_edges, drift_r))
@@ -259,6 +311,57 @@ def test_rebuilds_through_a_real_document():
           f"0 -> {24000 - vols[0]:.2f}, +0.6 -> {24000 - vols[0.6]:.2f})")
 
 
+def test_a_mitred_corner_keeps_its_seam():
+    """Fillet the top face of a cube and slide the profile: the corner seams must
+    stay put, and stay crisp.
+
+    The reported defect, and the reason it needs its own test rather than a line
+    in the sweep above. Every profile here produced a solid that BRepCheck called
+    valid, so nothing in this suite could see it. What had actually happened:
+
+    Each corner seam is shared by two blend faces, and pass 2 rebuilt it from one
+    of them on the assumption that the two agree. They do agree for a seam that is
+    a whole SECTION — it moves inside its own plane, so both pcurves still
+    describe it — but a mitre seam runs ACROSS the sections and has no such
+    property. At profile 0.9 the two faces' ideas of the seam diverged by 2.7mm on
+    a 4mm blend, whereupon SameParameter widened the edge's tolerance to 0.38mm so
+    that both fitted inside it. Valid, and visibly bent, because a tolerance that
+    wide lets the mesher put the edge anywhere in a 0.38mm sleeve.
+
+    Both ENDS of a mitre seam sit on poles no reweight moves, so they agree
+    exactly at both ends and diverge only in between: the endpoint check that
+    guards the other rebuild path cannot see this by construction.
+
+    Two assertions, because they fail independently. The tolerance is what the
+    mesher acts on. The symmetry is what "the edge is distorted" means: on a cube,
+    the seam at the corner over the origin lies in the plane x = y, at every
+    profile, because the two blends meeting there are mirror images.
+    """
+    cube, top = cube_top()
+    seam_from = (0.0, 0.0, CUBE - CUBE_R)
+    seam_to = (CUBE_R, CUBE_R, CUBE)
+
+    for p in (-0.9, -0.6, -0.3, 0.0, 0.3, 0.6, 0.8, 0.9, 0.937, 0.95, 0.99):
+        out = conic_blend(cube, top, CUBE_R, p)
+        assert BRepCheck_Analyzer(out).IsValid(), f"profile {p}: invalid"
+
+        sleeve = max_edge_tolerance(out)
+        assert sleeve < CUBE_R * 1e-4, (
+            f"profile {p}: an edge needs a {sleeve:.4g}mm tolerance on a "
+            f"{CUBE_R}mm blend, which is a licence for the mesher to wander")
+
+        seam = _edge_from_to(out, seam_from, seam_to, tol=CUBE_R * 1e-3)
+        assert seam is not None, f"profile {p}: the corner seam is gone"
+        ad = BRepAdaptor_Curve(seam)
+        a, z = ad.FirstParameter(), ad.LastParameter()
+        off = max(abs(ad.Value(a + (z - a) * i / 24).X()
+                      - ad.Value(a + (z - a) * i / 24).Y()) for i in range(25))
+        assert off < CUBE_R * 1e-4, (
+            f"profile {p}: the corner seam leaves its mirror plane by {off:.4g}mm, "
+            f"so the two blends meeting there no longer agree where the edge is")
+    print("mitred corner seams stay on the mirror plane and stay crisp OK")
+
+
 def test_a_refused_profile_does_not_read_as_a_failed_fillet():
     """A blend outside the conic family must reach the user saying so, not
     wearing the generic "Fillet failed on Body1" jacket _blend_edges puts on
@@ -309,6 +412,7 @@ if __name__ == "__main__":
     test_zero_profile_is_the_plain_fillet()
     test_extremes_reach_chamfer_and_sharp()
     test_valid_and_monotone_across_the_range()
+    test_a_mitred_corner_keeps_its_seam()
     test_rebuilds_through_a_real_document()
     test_a_refused_profile_does_not_read_as_a_failed_fillet()
     print("\nall conic blend tests passed")
