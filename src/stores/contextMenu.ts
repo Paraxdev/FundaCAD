@@ -16,6 +16,15 @@ export interface CtxItem {
   checked?: boolean;
   swatch?: string; // small color chip before the label (palette flyouts)
   children?: CtxItem[]; // one-level flyout submenu, opens on hover
+  /** Called as the pointer enters (true) and leaves (false) this row.
+   *
+   *  For a menu whose entries name things that are ON SCREEN: the ambiguous-edge
+   *  chooser lights the edge each row refers to, so which is which is answered
+   *  by looking at the model rather than by reading two similar sentences. The
+   *  host guarantees the trailing `false` — closing the menu while a row is
+   *  hovered fires it, because a preview left lit by a menu that no longer
+   *  exists is a highlight nothing can clear. */
+  onHover?: (hovering: boolean) => void;
 }
 
 /** The one shared right-click menu — viewport, timeline, browser tree, sketch

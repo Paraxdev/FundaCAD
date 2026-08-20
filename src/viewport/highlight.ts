@@ -12,6 +12,10 @@ import type { EdgeRef } from "./edgeLines";
 
 const EDGE_BASE = new THREE.Color(0x1b1f24);
 const HOVER = new THREE.Color(0xffd089); // pale hot amber (under cursor)
+/** Exported so the over-drawn emphasis line (viewport/edgeEmphasis.ts) is the
+ *  same colour as the tint it reinforces — two hover colours would read as two
+ *  different states. */
+export const EDGE_HOVER_COLOR = HOVER.getHex();
 // molten amber for SELECTED (the Forge accent) — distinct from the paler hover
 // and the muted-ember "pickable" emphasis; reads as forged/locked-in.
 const SELECT = new THREE.Color(0xff7a3c);

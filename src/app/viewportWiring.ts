@@ -1,11 +1,17 @@
 import * as THREE from "three";
 import { setPrompt } from "../ui/prompt";
-import { dismissContextMenu } from "../ui/menu";
+import { contextMenu, dismissContextMenu } from "../ui/menu";
+import { FEATURE_META } from "../ui/featureMeta";
+import { bodyRowLabel, distinguish, dominantOwner, edgeChoiceLabel } from "../ui/edgeChoice";
+import { ambiguousCandidates } from "../viewport/edgeTies";
 import { useBrowserStore } from "../stores/browser";
 import { edgeNudgePlacement } from "../features/edgeNudge";
 import { faceNudgePlacement } from "../features/faceNudge";
 import { regionNudgePlacement } from "../features/regionNudge";
 import type { Engine } from "./engine";
+
+/** How far the ambiguous-edge menu sits off the click, px. */
+const AMBIGUOUS_MENU_OFFSET = 16;
 
 /** Viewport callbacks and the two Escape listeners that clear its selections.
  *
@@ -35,6 +41,88 @@ export function installViewportWiring(e: Engine): void {
   // gates it — an active tool (or sketch mode, which has its own canvas menu)
   // owns the gesture.
   // -------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
+  // A click that landed on two edges at once.
+  //
+  // Two bodies that meet share a boundary, and each keeps its own edge there —
+  // same curve, same pixels. The picker ranks by distance from the cursor, which
+  // is a tie, so the winner was whichever the raycaster reported first: stable
+  // within a session, arbitrary between them, and impossible to override. Click
+  // the seam between two extrusions and you got one of them with no way to say
+  // which.
+  //
+  // So it asks. The menu is the ordinary right-click menu, which already knows
+  // how to place itself, dismiss on Escape or an outside click, and stay on
+  // screen near an edge — and hovering a row lights the edge it names, so which
+  // is which is answered by looking at the model rather than by reading two
+  // similar sentences.
+  e.viewport.onAmbiguousEdge = (cands, at, mods) => {
+    if (e.toolBusy()) return false;
+    const bodies = e.store.buildState.result?.bodies ?? [];
+    const featureName = (id: string | null) => {
+      if (!id) return null;
+      const f = e.store.document.features.find((x) => x.id === id);
+      if (!f) return null;
+      // `name` is optional and only present on some members of the union, so it
+      // is read off the record rather than the narrowed type.
+      const named = (f as { name?: string }).name;
+      return named || (FEATURE_META[f.type as keyof typeof FEATURE_META]?.label ?? f.type);
+    };
+    const rows = cands.map((c) => {
+      const index = bodies.findIndex((b) => b.id === c.edge.body);
+      const body = index >= 0 ? bodies[index] : undefined;
+      const name = c.edge.body ? (e.store.bodyName(c.edge.body) ?? body?.name ?? null) : null;
+      return { cand: c, index, name, feature: featureName(dominantOwner(body?.faceOwners)) };
+    });
+    // Two boxes are both called "Box", so the name alone cannot separate the
+    // rows. Number them by their place in the BODY LIST, which is the browser's
+    // order, so "Box 2" means the same thing in both places.
+    const shared = new Map<string, number>();
+    for (const r of rows) if (r.name) shared.set(r.name, (shared.get(r.name) ?? 0) + 1);
+    // distinguish() is the last resort under that: two edges of ONE body still
+    // read alike, and edgeTies would drop the choice rather than offer it.
+    const labels = distinguish(rows.map((r) =>
+      edgeChoiceLabel(
+        bodyRowLabel(r.name, r.index, (shared.get(r.name ?? "") ?? 0) > 1),
+        r.feature,
+        r.name,
+      )));
+    const choices = ambiguousCandidates(
+      rows.map((r, i) => ({ ...r, label: labels[i] ?? "Edge", screenDist: r.cand.screenDist })),
+    );
+    if (choices.length < 2) return false; // nothing worth asking — take the nearest
+
+    // Offset off the cursor, unlike every other menu the app pops. This one is
+    // asking about geometry AT the cursor, and opening its top-left corner
+    // exactly there covered the edges it was asking about. A small diagonal
+    // nudge cannot clear a line running in every direction at once, but it
+    // reliably clears the pixel that was clicked, and the over-drawn emphasis
+    // does the rest.
+    contextMenu(at.x + AMBIGUOUS_MENU_OFFSET, at.y + AMBIGUOUS_MENU_OFFSET, choices.map((c) => ({
+      label: c.label,
+      // Both: the tint says "this is the hovered edge" in the model's own
+      // vocabulary, and the over-drawn line makes it visible past the menu,
+      // which by construction opens right on top of the edges in question.
+      //
+      // KNOWN LIMIT, and not an oversight: where the two edges are EXACTLY
+      // coincident — two bodies meeting along one line, the commonest reason
+      // this menu opens at all — both previews draw the same pixels and only
+      // the label separates them. Which is why the label is the part that
+      // decides whether the menu opens (viewport/edgeTies.ts) rather than the
+      // geometry. Distinguishing them on screen would mean lighting the whole
+      // owning BODY, which is a bigger claim than a hover should make.
+      onHover: (on: boolean) => {
+        e.viewport.hoverEdge(on ? c.cand.edge : null);
+        e.viewport.emphasiseEdge(on ? c.cand.edge : null);
+      },
+      onClick: () => {
+        e.viewport.emphasiseEdge(null); // the choice is made; the pointer is gone
+        e.viewport.applyPick(c.cand, mods);
+      },
+    })));
+    return true;
+  };
+
   e.viewport.shouldOpenContextMenu = () => !e.toolBusy();
   e.viewport.onContextClick = (x, y) => e.menus.openCanvasMenu(x, y);
 

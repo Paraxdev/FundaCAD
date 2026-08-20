@@ -69,8 +69,24 @@ async function openSub(i: number) {
   subPlaced.value = true;
 }
 
+// --- row hover, for menus whose entries name something on screen ------------
+//
+// Tracked here rather than left to pointerenter/pointerleave alone, because the
+// leave does not always come: clicking a row, pressing Escape, or a pointerdown
+// outside all close the menu while the pointer is still over it, and each would
+// strand the preview lit with nothing left to turn it off.
+let hovered: CtxItem | null = null;
+
+function setHover(it: CtxItem | null) {
+  if (hovered === it) return;
+  hovered?.onHover?.(false);
+  hovered = it;
+  it?.onHover?.(true);
+}
+
 function activate(it: CtxItem) {
   if (it.disabled || it.separator) return;
+  setHover(null);
   s.close();
   it.onClick?.();
 }
@@ -100,6 +116,7 @@ watch(
   async () => {
     unbind();
     closeSub();
+    setHover(null);
     if (!s.open) return;
     placed.value = false;
     pos.value = { x: s.x, y: s.y };
@@ -130,6 +147,7 @@ watch(
     if (!isOpen) {
       unbind();
       closeSub();
+      setHover(null);
     }
   },
 );
@@ -137,6 +155,7 @@ watch(
 onUnmounted(() => {
   unbind();
   cancelSubClose();
+  setHover(null);
 });
 </script>
 
@@ -159,7 +178,8 @@ onUnmounted(() => {
           :ref="(el) => { if (el) rootRows[i] = el as HTMLElement; }"
           class="ctx-item"
           :class="{ danger: it.danger, disabled: it.disabled }"
-          @pointerenter="it.disabled ? undefined : (it.children ? openSub(i) : scheduleSubClose())"
+          @pointerenter="it.disabled ? undefined : (setHover(it), it.children ? openSub(i) : scheduleSubClose())"
+          @pointerleave="setHover(null)"
           @click="it.children && !it.disabled ? openSub(i) : activate(it)"
         >
           <span v-if="hasChecks" class="ctx-check">

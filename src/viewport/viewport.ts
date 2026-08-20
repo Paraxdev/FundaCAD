@@ -38,7 +38,8 @@ import { pickFacePlaneAt } from "../features/facePlanePick";
 import { FpsMeter } from "./fpsMeter";
 import { sceneStats } from "../diagnostics/sceneStats";
 import { makeZebraMaterial, buildCurvatureCombs } from "./overlays";
-import { Picker, type Hit, type EdgeHit } from "./picking";
+import { Picker, occludedEdge, type EdgeCandidate, type Hit, type EdgeHit, type PickMods } from "./picking";
+import { EdgeEmphasis } from "./edgeEmphasis";
 import { ViewCube, FACE_VIEWS } from "./viewCube";
 import { setPrompt } from "../ui/prompt";
 import type { DocumentStore } from "../document/store";
@@ -73,7 +74,7 @@ const EDGE_PICKABLE = new THREE.Color(0xd98a4a); // muted ember "selectable" edg
 // wrong anyway, since part boundaries are what you want to see.
 const FLUSH_SEAM_MAX_EDGES = 20_000;
 
-import { Highlighter } from "./highlight";
+import { Highlighter, EDGE_HOVER_COLOR } from "./highlight";
 import { ProgressiveModel } from "./progressive";
 import { nearestEdgeByMid, midMatchTol, edgeSelectorFrom, polylineMid } from "./edgeMatch";
 import { mergeScope, pickScope, type ScopeDecision, type ScopeView } from "./pickScope";
@@ -127,6 +128,11 @@ export class Viewport {
   private targetGridZ = 0;
   private clock = new THREE.Clock();
   private resolution = new THREE.Vector2();
+  /** The over-drawn wide line that makes ONE edge unmistakable — the hover
+   *  tint on its own is a colour swap on a 1.6px line and is not enough to see,
+   *  least of all under the menu that asks which edge you meant. Created lazily
+   *  on first use, because most sessions never need it. */
+  private emphasis: EdgeEmphasis | null = null;
   // persistent construction/datum planes (translucent quads, click to select)
   private datumGroup = new THREE.Group();
   private datumQuads: THREE.Mesh[] = [];
@@ -151,6 +157,15 @@ export class Viewport {
   regionPickAt: ((clientX: number, clientY: number, additive: boolean) => boolean) | null = null;
   regionHoverAt: ((clientX: number, clientY: number) => boolean) | null = null;
   onBodySelectionChange: (() => void) | null = null; // fired when the body selection changes
+  // An edge click that landed on more than one edge at once — two bodies meeting
+  // put their shared boundary in the same pixels, and the runner-up is not a
+  // worse answer but the other half of a question. The app decides how to ask
+  // (it owns the menu, and the body/feature names the entries are labelled
+  // with); returning true means it took the click and the viewport must not
+  // select anything itself. See viewport/edgeTies.ts for when this fires at all.
+  onAmbiguousEdge:
+    | ((cands: EdgeCandidate[], at: { x: number; y: number }, mods: PickMods) => boolean)
+    | null = null;
   // "faces" = pick faces/edges (default); "bodies" = pick whole bodies (to move).
   private selectionMode: "faces" | "bodies" = "faces";
   suspendPicking = false;
@@ -491,19 +506,40 @@ export class Viewport {
     // halves of that is deliberate — "add this edge" and "add ONLY this edge"
     // are the same intent, and asking for the second with a second key would
     // mean holding two of them to build an exact set one edge at a time.
-    const add = e.ctrlKey || e.metaKey || e.shiftKey;
+    const mods: PickMods = { additive: e.ctrlKey || e.metaKey || e.shiftKey, exact: e.shiftKey };
+    // Two edges in the same pixels is a question, not a pick. Asked BEFORE the
+    // selection is touched, so declining the menu leaves everything exactly as
+    // it was rather than having cleared it on the way in.
+    if (hit?.kind === "edge" && this.onAmbiguousEdge && this.model) {
+      const cands = this.pickableEdgeCandidates(e.clientX, e.clientY, rect);
+      if (cands.length > 1 && this.onAmbiguousEdge(cands, { x: e.clientX, y: e.clientY }, mods)) {
+        return;
+      }
+    }
+    this.applyPick(hit, mods);
+  }
+
+  /** Apply a pick to the selection — the ONE path a click takes.
+   *
+   *  Factored out so the ambiguous-edge chooser can run it verbatim rather than
+   *  reproduce it. A menu entry that selected an edge slightly differently from a
+   *  click on the same edge would be a second selection path, and the difference
+   *  would surface as the tangent-chain scope or the additive rule quietly not
+   *  applying when the pick came from the menu.
+   */
+  applyPick(hit: Hit | null, mods: PickMods) {
     if (this.highlighter) {
-      if (!add) {
+      if (!mods.additive) {
         this.highlighter.clearSelection();
         this.edgeScope = { scope: "chain", reason: "tangent" }; // a replaced selection carries nothing over
       }
       if (hit?.kind === "edge") {
         this.highlighter.toggleSelectEdge(hit.edge);
-        this.noteEdgePickScope(hit.edge, e.shiftKey, add);
+        this.noteEdgePickScope(hit.edge, mods.exact, mods.additive);
       } else if (hit?.kind === "face") this.highlighter.toggleSelectFace(hit.faceId);
       this.requestRender();
     }
-    this.onHit?.(hit, e.shiftKey);
+    this.onHit?.(hit, mods.exact);
     this.onSelectionChange?.();
   }
 
@@ -1992,6 +2028,40 @@ export class Viewport {
   }
 
   /** Hover-highlight a specific edge line (or clear with null). */
+  /** Every edge under (x, y) that is not round the back of the body, nearest
+   *  the cursor first.
+   *
+   *  The occlusion filter is the same rule pick() applies to the winner, run per
+   *  candidate: an edge behind the surface the cursor is over cannot have been
+   *  aimed at, and offering it in a menu would be offering to select through the
+   *  model. */
+  pickableEdgeCandidates(clientX: number, clientY: number, rect: DOMRect): EdgeCandidate[] {
+    if (!this.model) return [];
+    const cands = this.picker.pickEdgeCandidates(clientX, clientY, rect, this.rig.active, this.model);
+    const faceDist = this.picker.faceDepthAt(this.rig.active, this.model);
+    const scale = this.modelDiagonal() ?? 0;
+    return cands.filter((c) => !occludedEdge(c.depth, faceDist, scale));
+  }
+
+  /** Draw one edge emphasised, over everything, or clear it with null.
+   *
+   *  Separate from hoverEdge because it is a stronger statement made for a
+   *  different reason: hover follows the pointer over the model, this follows a
+   *  MENU ROW naming an edge that may be underneath that menu. */
+  emphasiseEdge(line: EdgeRef | null) {
+    if (!line) {
+      this.emphasis?.hide();
+      this.requestRender();
+      return;
+    }
+    if (!this.emphasis) {
+      this.emphasis = new EdgeEmphasis(this.resolution, EDGE_HOVER_COLOR);
+      this.addToScene(this.emphasis.object);
+    }
+    this.emphasis.show(line.points);
+    this.requestRender();
+  }
+
   hoverEdge(line: EdgeRef | null) {
     this.highlighter?.clearHover();
     if (line) this.highlighter?.hoverEdge(line);
@@ -2490,6 +2560,7 @@ export class Viewport {
     // radius by the device pixel ratio.)
     this.resolution.set(w, h);
     setEdgeResolution(this.model, this.resolution);
+    this.emphasis?.setResolution(this.resolution);
     // Keep the model framed while the user hasn't taken over the camera. This is
     // what corrects an off-centre first fit once the canvas size finally settles
     // (the actual cause of "the model renders in the corner and I can't aim at

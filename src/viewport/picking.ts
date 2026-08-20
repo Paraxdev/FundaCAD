@@ -29,6 +29,31 @@ export interface FaceHit {
 
 export type Hit = EdgeHit | FaceHit;
 
+/** What the modifier keys meant, once, so every consumer reads the same rule.
+ *
+ *  `additive` and `exact` are not the same flag even though Shift sets both:
+ *  Ctrl adds without meaning "no tangent chain", and reducing the pair to one
+ *  boolean at the call site is how the two came to disagree. */
+export interface PickMods {
+  /** Ctrl / Cmd / Shift: add to the selection instead of replacing it. */
+  additive: boolean;
+  /** Shift on an EDGE: exactly this one, no tangent chain (see pickScope.ts). */
+  exact: boolean;
+}
+
+/** One edge the cursor could have meant, with how far off it landed.
+ *
+ *  pickEdge answers "which edge" and throws the runners-up away; this keeps
+ *  them, because when two edges are the same distance from the cursor the
+ *  runner-up is not a worse answer, it is the other half of a question. See
+ *  viewport/edgeTies.ts. */
+export interface EdgeCandidate extends EdgeHit {
+  /** distance from the cursor to this edge, in screen px */
+  screenDist: number;
+  /** ray distance, so a caller can drop the ones behind the surface */
+  depth: number;
+}
+
 export class Picker {
   private raycaster = new THREE.Raycaster();
   private ndc = new THREE.Vector2();
@@ -107,6 +132,19 @@ export class Picker {
     return face;
   }
 
+  /** Ray distance to the visible surface under the last-picked point, or null
+   *  when the ray misses the model entirely.
+   *
+   *  Reads the ndc set by the last pickEdge / pickEdgeCandidates rather than
+   *  taking coordinates of its own, so a caller cannot accidentally ask about a
+   *  different pixel than the one it just gathered candidates for. With no face
+   *  there is nothing to be occluded BY, which is a real case: picking an edge
+   *  against empty space has to keep working. */
+  faceDepthAt(camera: THREE.Camera, view: ModelView): number | null {
+    this.raycaster.setFromCamera(this.ndc, camera);
+    return this.raycaster.intersectObjects(visibleBodyMeshes(view), false)[0]?.distance ?? null;
+  }
+
   /** Edge-only pick. Returns a precise single-edge (by:nearest) selector — used
    *  by fillet/chamfer where you want exactly the edge you clicked, not its
    *  whole axis group. Also sets this.ndc for a follow-up face pick. */
@@ -117,15 +155,39 @@ export class Picker {
     camera: THREE.Camera,
     view: ModelView,
   ): EdgeHit | null {
+    const cands = this.pickEdgeCandidates(clientX, clientY, rect, camera, view);
+    const best = cands[0];
+    if (!best) return null;
+    // Deliberately the whole candidate minus its ranking fields: every existing
+    // caller wants an EdgeHit and must not start depending on the distance.
+    return { kind: "edge", edge: best.edge, selector: best.selector };
+  }
+
+  /** Every edge the cursor could have meant, nearest first in SCREEN space.
+   *
+   *  Screen space rather than depth: the raycaster sorts by distance from the
+   *  camera, which would rank a front edge above one the cursor is visually
+   *  sitting on. Among edges you can see, "nearest the pointer" is the question
+   *  being asked.
+   *
+   *  Distinct EDGES, not raycast hits. One edge is many line segments and a wide
+   *  threshold catches several of them, so the raw hit list is mostly the same
+   *  edge over and over; a chooser built on that would offer the same entry six
+   *  times. Each edge keeps its own closest approach. */
+  pickEdgeCandidates(
+    clientX: number,
+    clientY: number,
+    rect: DOMRect,
+    camera: THREE.Camera,
+    view: ModelView,
+  ): EdgeCandidate[] {
     this.ndc.set(
       ((clientX - rect.left) / rect.width) * 2 - 1,
       -((clientY - rect.top) / rect.height) * 2 + 1,
     );
     this.raycaster.setFromCamera(this.ndc, camera);
     // Wide candidate threshold (three.js Line2 threshold is ~0.5× screen px, so
-    // this is a forgiving grab radius). We then choose the edge nearest the
-    // cursor IN SCREEN SPACE — the raycaster sorts by camera depth, which would
-    // otherwise grab a front edge that's visually farther from the cursor.
+    // this is a forgiving grab radius).
     this.raycaster.params.Line2 = { threshold: EDGE_PICK_THRESHOLD };
     (this.raycaster as any).camera = camera;
     // NOTE: each LineMaterial's .resolution is kept in sync by
@@ -134,30 +196,35 @@ export class Picker {
     // skip hidden lines (flush-seam-hidden contact rims, hidden bodies) — the
     // raycaster tests invisible objects too, which would give ghost edge picks
     const eHits = this.raycaster.intersectObjects(this.edgeTargets(view), false);
-    if (!eHits.length) return null;
+    this.edgeScreenDist = Infinity;
+    this.edgeDepth = Infinity;
+    if (!eHits.length) return [];
 
-    let best = eHits[0];
-    if (!best) return null;
-    let bestD = Infinity;
+    const byEdge = new Map<EdgeRef, EdgeCandidate>();
     for (const h of eHits) {
+      // three reports the instance (segment) index as `faceIndex` on a
+      // LineSegments2 hit; the owning BodyEdges maps it back to the edge.
+      const draw = h.object.userData.edges as BodyEdges | undefined;
+      const edge = draw?.refAtSegment(h.faceIndex ?? -1);
+      if (!edge) continue;
       const p = (h as any).pointOnLine ?? h.point;
       this.scratch.copy(p).project(camera);
       const sx = (this.scratch.x * 0.5 + 0.5) * rect.width + rect.left;
       const sy = (-this.scratch.y * 0.5 + 0.5) * rect.height + rect.top;
       const d = Math.hypot(sx - clientX, sy - clientY);
-      if (d < bestD) { bestD = d; best = h; }
+      const seen = byEdge.get(edge);
+      if (seen && seen.screenDist <= d) continue;
+      const selector = seen?.selector ?? edgeSelectorFrom({ points: edge.points, body: edge.body });
+      if (!selector) continue;
+      byEdge.set(edge, { kind: "edge", edge, selector, screenDist: d, depth: h.distance });
     }
-    this.edgeScreenDist = bestD; // used by pick() to decide edge vs face
-    this.edgeDepth = best.distance; //  "     "     "  to reject an edge behind it
-
-    // three reports the instance (segment) index as `faceIndex` on a
-    // LineSegments2 hit; the owning BodyEdges maps it back to the edge.
-    const draw = best.object.userData.edges as BodyEdges | undefined;
-    const edge = draw?.refAtSegment(best.faceIndex ?? -1);
-    if (!edge) return null;
-    const selector = edgeSelectorFrom({ points: edge.points, body: edge.body });
-    if (!selector) return null;
-    return { kind: "edge", edge, selector };
+    const out = [...byEdge.values()].sort((a, b) => a.screenDist - b.screenDist);
+    const best = out[0];
+    if (best) {
+      this.edgeScreenDist = best.screenDist; // used by pick() to decide edge vs face
+      this.edgeDepth = best.depth; //  "     "     "  to reject an edge behind it
+    }
+    return out;
   }
 }
 
