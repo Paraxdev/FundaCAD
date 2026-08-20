@@ -28,11 +28,11 @@ has authorized it).
 
 ## Development
 
-See the **Dev quickstart** in [`README.md`](README.md). Before opening a PR:
+See **Build** in [`README.md`](README.md). Before opening a PR:
 
 - `npm run build` (TypeScript + Vite) must pass.
-- From `sidecar/`, `uv run python test_smoke.py` (geometry) and `uv run python
-  test_ws.py` (transport) must pass.
+- From `sidecar/`, `uv run python tests/test_smoke.py` (geometry) and `uv run
+  python tests/test_ws.py` (transport) must pass.
 - Keep geometry in the Python sidecar; the frontend owns the document and viewport.
 - Reference geometry by **queryable selectors** (axis / normal / nearest-point),
   never by topology index, so references survive edits that renumber topology.
