@@ -35,23 +35,23 @@ export interface ValueBounds {
  *  has asked for no feature at all". */
 export const MIN_EDGE_VALUE = 0.001;
 
-/** How much of the model's bounding-box diagonal a dragged value may reach,
- *  when nothing better is known.
+/** How much of the model's bounding-box diagonal a dragged value may reach.
  *
- *  A blend can never exceed roughly half the shortest side of the faces it
- *  joins, and for a cube of side s the diagonal is s·√3 — so s/2 is ≈0.29 of
- *  the diagonal. A quarter is comfortably inside that for anything box-ish and
- *  still far larger than a sane fillet, which is the point: the clamp exists to
- *  stop a flick of the mouse from running the number to 10⁴ mm and firing a
- *  string of doomed OCCT rebuilds, not to second-guess the user. Typed values
- *  are deliberately NOT clamped by it.
+ *  A runaway guard, not a judgement. It exists to stop a flick of the mouse from
+ *  running the number to 10⁴ mm and firing a string of doomed rebuilds; the
+ *  KERNEL decides what actually builds, and blendCeiling below carries that
+ *  answer back into the drag. Half the diagonal is past a full round on a cube
+ *  (s/2 ≈ 0.29 of s·√3), so nothing a blend can legitimately reach is behind it.
  *
- *  It is a FALLBACK now, not the rule. One number for the whole document is
- *  wrong in both directions at once — far too generous on the rim of a thin
- *  plate, needlessly tight on a chunky part — so when the selection's own
- *  neighbourhood can be measured (features/blendClearance.ts) that measurement
- *  wins. This stands in only when it cannot be. */
-export const MAX_DIAGONAL_FRACTION = 0.25;
+ *  It used to be a quarter, and it used to be replaced outright by the measured
+ *  neighbourhood clearance (features/blendClearance.ts), which made that
+ *  measurement a WALL. A distance to the nearest neighbouring edge cannot decide
+ *  what OCCT will build — its own module says so — and used that way it stopped
+ *  a drag at 0.11 mm on a part that blends happily at twenty times that. The
+ *  clearance now sizes the OPENING value only, which is the job it can do.
+ *
+ *  Typed values are deliberately not clamped by any of this. */
+export const MAX_DIAGONAL_FRACTION = 0.5;
 
 export function treatmentField(kind: EdgeTreatment): TreatmentField {
   return kind === "fillet" ? { name: "radius", label: "R" } : { name: "distance", label: "D" };
@@ -68,19 +68,8 @@ export function treatmentLabel(kind: EdgeTreatment): string {
 
 /** How far a dragged value may travel from the origin, in mm — the same cap on
  *  BOTH sides, since a chamfer that overruns the face is no more buildable than
- *  a fillet that does. Infinity when the document has no geometry to measure.
- *
- *  `localLimit` is what the picked edges' own neighbourhood permits
- *  (blendClearance.clearanceLimit), and it REPLACES the diagonal fraction rather
- *  than being combined with it. Combining would keep the failure it was brought
- *  in to fix: on a thin plate the diagonal fraction is the larger of the two, so
- *  a min() would help, but on a chunky part it is the smaller, and a min() would
- *  go on refusing the fillets that were being refused. Once the neighbourhood
- *  has actually been measured, the crude stand-in has nothing left to add. */
-export function dragLimit(modelDiagonal: number | null, localLimit?: number | null): number {
-  if (localLimit != null && Number.isFinite(localLimit) && localLimit > 0) {
-    return Math.max(MIN_EDGE_VALUE, localLimit);
-  }
+ *  a fillet that does. Infinity when the document has no geometry to measure. */
+export function dragLimit(modelDiagonal: number | null): number {
   if (modelDiagonal == null || !(modelDiagonal > 0) || !Number.isFinite(modelDiagonal)) {
     return Infinity;
   }
@@ -90,8 +79,71 @@ export function dragLimit(modelDiagonal: number | null, localLimit?: number | nu
 /** Bounds for a value the user is free to choose outright (a typed one, or one
  *  carried across a Tab flip): anything the kernel might build, floored at the
  *  smallest visible blend. */
-export function valueBounds(modelDiagonal: number | null, localLimit?: number | null): ValueBounds {
-  return { min: MIN_EDGE_VALUE, max: dragLimit(modelDiagonal, localLimit) };
+export function valueBounds(modelDiagonal: number | null): ValueBounds {
+  return { min: MIN_EDGE_VALUE, max: dragLimit(modelDiagonal) };
+}
+
+/** What the kernel has said about size so far, during ONE gesture on ONE set of
+ *  edges. Reset whenever either of those changes. */
+export interface BlendRange {
+  /** the largest size seen to build that is below every refusal, or null */
+  built: number | null;
+  /** the smallest size the kernel refused, or null */
+  refused: number | null;
+  /** some size built at all — the evidence that SIZE is what decides here */
+  anyBuilt: boolean;
+}
+
+export const EMPTY_BLEND_RANGE: BlendRange = { built: null, refused: null, anyBuilt: false };
+
+/** Fold one kernel answer into the range.
+ *
+ *  A refusal is the later word about `value` than any success at the same size,
+ *  so it drops a `built` that has caught up with it. That case is real, not
+ *  defensive: rebuilds coalesce, so a build begun at the previous size lands
+ *  while the drag is already showing the next one, and both get recorded against
+ *  it. Left in, the wall would sit exactly ON the refused size — the drag parked
+ *  on a value that shows no blend, which is the behaviour all of this replaces.
+ *
+ *  `anyBuilt` never comes back off, because it answers a different question: not
+ *  "how big" but "is size what decides here at all". */
+export function noteBlendOutcome(range: BlendRange, value: number, built: boolean): BlendRange {
+  if (!Number.isFinite(value) || value <= 0) return range;
+  if (!built) {
+    const refused = range.refused == null ? value : Math.min(range.refused, value);
+    return {
+      built: range.built != null && range.built >= refused ? null : range.built,
+      refused,
+      anyBuilt: range.anyBuilt,
+    };
+  }
+  const below = range.refused == null || value < range.refused;
+  return {
+    built: below ? Math.max(range.built ?? 0, value) : range.built,
+    refused: range.refused,
+    anyBuilt: true,
+  };
+}
+
+/** The wall the kernel itself has put in front of the drag. Infinity while
+ *  nothing has been refused: until then there is no measured wall and the
+ *  runaway guard is the only bound.
+ *
+ *  The wall sits one `step` BELOW the refusal, not on it — one step down is the
+ *  largest size the drag can hold that is actually there. A `built` above that
+ *  raises it back: a refusal can describe a size the drag has already left. */
+export function blendCeiling(range: BlendRange, step: number): number {
+  const { built, refused, anyBuilt } = range;
+  if (refused == null || !Number.isFinite(refused) || refused <= 0) return Infinity;
+  // Nothing has built at any size, so nothing says SIZE is what is wrong. Plenty
+  // of blends fail identically however small they get — a tangent edge has no
+  // corner to cut, a chain with nowhere to end fails the same at a twentieth of
+  // the value — and walling the drag off a refusal like that would invent a
+  // limit out of a failure that has none in it.
+  if (!anyBuilt) return Infinity;
+  const back = Number.isFinite(step) && step > 0 ? step : MIN_EDGE_VALUE;
+  const wall = Math.max(MIN_EDGE_VALUE, refused - back);
+  return built != null && Number.isFinite(built) && built > wall ? built : wall;
 }
 
 export function clampValue(v: number, bounds: ValueBounds): number {
@@ -172,9 +224,18 @@ export function switchTreatment(
  *  starts by grabbing the handle opens at 0 instead: there the drag itself is
  *  the value, measured from where you pressed.)
  *
- *  A 2 mm fillet / 1 mm chamfer is the familiar MCAD default, but on a model
- *  small enough that those overflow the drag bounds it is clamped — a default
- *  nobody can build is worse than a small one. */
-export function seedValue(kind: EdgeTreatment, bounds: ValueBounds): number {
-  return clampValue(kind === "fillet" ? 2 : 1, bounds);
+ *  A 2 mm fillet / 1 mm chamfer is the familiar MCAD default, held down to what
+ *  the picked edges' own neighbourhood plausibly holds (blendClearance.ts) and
+ *  then to the drag bounds — a default nobody can build is worse than a small
+ *  one. This is the whole of the clearance measurement's job: it is a good guess
+ *  at where to open, and it was never able to be the wall it used to be. */
+export function seedValue(
+  kind: EdgeTreatment,
+  bounds: ValueBounds,
+  localLimit?: number | null,
+): number {
+  const want = kind === "fillet" ? 2 : 1;
+  const local =
+    localLimit != null && Number.isFinite(localLimit) && localLimit > 0 ? localLimit : Infinity;
+  return clampValue(Math.min(want, local), bounds);
 }

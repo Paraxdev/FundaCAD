@@ -6,6 +6,9 @@ import {
   dragLimit,
   otherTreatment,
   scrubSigned,
+  blendCeiling,
+  EMPTY_BLEND_RANGE,
+  noteBlendOutcome,
   seedValue,
   switchTreatment,
   treatmentAt,
@@ -54,24 +57,82 @@ describe("dragLimit", () => {
     expect(dragLimit(0.0001)).toBeGreaterThanOrEqual(MIN_EDGE_VALUE);
   });
 
-  it("lets a measured neighbourhood override the diagonal in BOTH directions", () => {
-    // The two halves of the same complaint. On a thin plate the diagonal is far
-    // too generous (35mm of travel on a 2mm rim); on a chunky part it is too
-    // tight and refuses fillets that build. A min() of the two would only ever
-    // fix the first, which is why the local measure replaces rather than joins.
-    expect(dragLimit(141, 1)).toBeCloseTo(1); // tighter than 141 * 0.25
-    expect(dragLimit(346, 100)).toBeCloseTo(100); // looser than 346 * 0.25
+  it("leaves room for a full round on a cube", () => {
+    // The reported complaint is a drag that stops far short of what the kernel
+    // will build. A 40mm cube rounds to a 20mm sphere at the limit, and its
+    // diagonal is 69.3 — so anything under 0.29 of the diagonal cannot reach a
+    // shape the kernel would have made.
+    expect(dragLimit(Math.sqrt(3) * 40)).toBeGreaterThanOrEqual(20);
+  });
+});
+
+describe("noteBlendOutcome", () => {
+  const fold = (steps: [number, boolean][]) =>
+    steps.reduce((r, [v, ok]) => noteBlendOutcome(r, v, ok), EMPTY_BLEND_RANGE);
+
+  it("records the largest size that built and the smallest that did not", () => {
+    expect(fold([[1, true], [2, true], [4, false], [5, false]])).toEqual({
+      built: 2, refused: 4, anyBuilt: true,
+    });
   });
 
-  it("falls back to the diagonal when the neighbourhood could not be measured", () => {
-    // null is "not measured", and it must not read as "measured: no limit" —
-    // that would drop the clamp entirely and let a flick of the mouse run the
-    // value to 10^4 mm.
-    expect(dragLimit(100, null)).toBeCloseTo(100 * MAX_DIAGONAL_FRACTION);
-    expect(dragLimit(100, undefined)).toBeCloseTo(100 * MAX_DIAGONAL_FRACTION);
-    expect(dragLimit(100, 0)).toBeCloseTo(100 * MAX_DIAGONAL_FRACTION);
-    expect(dragLimit(100, Number.NaN)).toBeCloseTo(100 * MAX_DIAGONAL_FRACTION);
-    expect(dragLimit(100, Infinity)).toBeCloseTo(100 * MAX_DIAGONAL_FRACTION);
+  it("lets a refusal drop a success recorded at the same size", () => {
+    // The measured case: a rebuild begun at the previous size lands while the
+    // drag already shows the next one, so 2.2 was recorded as BOTH built and
+    // refused and the wall came to rest exactly on a size that shows no blend.
+    const r = fold([[2.2, true], [2.2, false]]);
+    expect(r.refused).toBe(2.2);
+    expect(r.built).toBeNull();
+    expect(r.anyBuilt).toBe(true); // it still knows size is what decides here
+    expect(blendCeiling(r, 0.1)).toBeCloseTo(2.1);
+  });
+
+  it("does not let a late success climb back over a refusal", () => {
+    expect(fold([[1, true], [3, false], [4, true]]).built).toBe(1);
+  });
+
+  it("ignores a value that is not a size", () => {
+    expect(noteBlendOutcome(EMPTY_BLEND_RANGE, 0, false)).toBe(EMPTY_BLEND_RANGE);
+    expect(noteBlendOutcome(EMPTY_BLEND_RANGE, Number.NaN, true)).toBe(EMPTY_BLEND_RANGE);
+  });
+});
+
+describe("blendCeiling", () => {
+  const range = (built: number | null, refused: number | null, anyBuilt = built != null) => ({
+    built, refused, anyBuilt,
+  });
+
+  it("does not exist until the kernel has refused something", () => {
+    expect(blendCeiling(EMPTY_BLEND_RANGE, 0.5)).toBe(Infinity);
+    expect(blendCeiling(range(3, null), 0.5)).toBe(Infinity);
+  });
+
+  it("stops one step BELOW the size that was refused", () => {
+    // Stopping ON it parks the drag where the model shows no blend at all —
+    // the "jumps back and says failed" state this replaces.
+    expect(blendCeiling(range(2.5, 3), 0.5)).toBeCloseTo(2.5);
+    expect(blendCeiling(range(1, 3), 0.5)).toBeCloseTo(2.5);
+  });
+
+  it("keeps a larger size that DID build", () => {
+    // Rebuilds coalesce during a fast drag, so a refusal can describe a size the
+    // drag has already left behind. A measured success outranks it.
+    expect(blendCeiling(range(6, 3), 0.5)).toBeCloseTo(6);
+  });
+
+  it("invents no wall from a refusal that has no size in it", () => {
+    // Measured on the reported document: the boundary of an existing round is a
+    // tangent edge, refused at 0.5mm exactly as at 8mm. Nothing built at any
+    // size, so nothing says size is the problem — walling the drag at the seed
+    // value would be the arbitrary limit this whole change is about.
+    expect(blendCeiling(range(null, 2, false), 0.1)).toBe(Infinity);
+  });
+
+  it("never falls below the smallest blend worth committing", () => {
+    // A step far larger than the refusal would put the wall below zero.
+    expect(blendCeiling(range(0.0005, 0.2), 5)).toBe(MIN_EDGE_VALUE);
+    expect(blendCeiling(range(null, 3, true), Number.NaN)).toBeCloseTo(3 - MIN_EDGE_VALUE);
+    expect(blendCeiling(range(null, 3, true), 0)).toBeCloseTo(3 - MIN_EDGE_VALUE);
   });
 });
 
@@ -84,14 +145,6 @@ describe("valueBounds", () => {
   it("never produces max < min", () => {
     const b = valueBounds(1e-9);
     expect(b.max).toBeGreaterThanOrEqual(b.min);
-    // ...including when the neighbourhood measures smaller than the smallest
-    // blend worth committing, which a sliver of a face genuinely can.
-    const local = valueBounds(100, 1e-9);
-    expect(local.max).toBeGreaterThanOrEqual(local.min);
-  });
-
-  it("carries the local limit through to a typed value's bounds too", () => {
-    expect(valueBounds(141, 1).max).toBeCloseTo(1);
   });
 });
 
@@ -220,5 +273,17 @@ describe("seedValue", () => {
     // A default nobody can build is worse than a small one: it would open the
     // gesture on a preview that fails before the user has touched anything.
     expect(seedValue("fillet", { min: 0.05, max: 0.5 })).toBe(0.5);
+  });
+
+  it("opens inside what the neighbourhood measured, without being walled by it", () => {
+    // The clearance's whole remaining job. It picks a plausible OPENING value...
+    const roomy = { min: 0.1, max: 100 };
+    expect(seedValue("fillet", roomy, 0.4)).toBeCloseTo(0.4);
+    // ...and a roomy measurement never inflates the familiar default.
+    expect(seedValue("fillet", roomy, 50)).toBe(2);
+    // Not measured stays not measured.
+    expect(seedValue("fillet", roomy, null)).toBe(2);
+    expect(seedValue("fillet", roomy, 0)).toBe(2);
+    expect(seedValue("fillet", roomy, Number.NaN)).toBe(2);
   });
 });

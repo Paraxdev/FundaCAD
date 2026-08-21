@@ -45,12 +45,15 @@ import { fmtLength } from "../ui/units";
 import { ProfileArc } from "./profileArc";
 import {
   clampProfile,
-  describeProfile,
   formatProfile,
   isPlainProfile,
 } from "./profileArcMath";
 import {
+  blendCeiling,
   clampValue,
+  EMPTY_BLEND_RANGE,
+  noteBlendOutcome,
+  type BlendRange,
   dragLimit,
   MIN_EDGE_VALUE,
   otherTreatment,
@@ -227,13 +230,35 @@ export class EdgeFeatureTool {
     return swipeOffsetPx(o, edgeDir, along(this.axis), { x: clientX, y: clientY }) * px;
   }
 
+  /** The largest size the sidecar has built during this gesture, and the
+   *  smallest it has refused. The drag's real wall — see blendCeiling.
+   *
+   *  Reset whenever the question changes: a different treatment or a different
+   *  set of member edges is a different question, and carrying an answer across
+   *  would pin the new one to the old one's limit. */
+  private range: BlendRange = EMPTY_BLEND_RANGE;
+  /** a preview has been pushed, so the next completed build is about it. Without
+   *  this a rebuild already in flight when the tool armed would be read as the
+   *  seed value building, and the seed would become the wall. */
+  private previewPushed = false;
+
+  private forgetBuildRange() {
+    this.range = EMPTY_BLEND_RANGE;
+  }
+
   /** How far the drag may travel either side of the origin. */
   private limit(): number {
-    return dragLimit(this.modelDiagonal(), this.clearanceLimitMm);
+    return Math.min(dragLimit(this.modelDiagonal()), blendCeiling(this.range, this.dragStep()));
+  }
+
+  /** The snap granularity the drag is currently moving in — the ceiling steps
+   *  back by one of these, so it has to be the same number scrubSigned uses. */
+  private dragStep(): number {
+    return this.viewport.snapStep(this.anchor, false);
   }
 
   private bounds(): ValueBounds {
-    return valueBounds(this.modelDiagonal(), this.clearanceLimitMm);
+    return valueBounds(this.modelDiagonal());
   }
 
   /** `opts` is the direct-manipulation entry (features/edgeNudge.ts): the user
@@ -295,10 +320,7 @@ export class EdgeFeatureTool {
       });
       if (opts?.grabAt) this.grabHandle(opts.grabAt.x, opts.grabAt.y);
     } else {
-      setPrompt(
-        `Select an edge to ${kind}, Ctrl-click adds a tangent chain, Shift-click adds a single edge, ` +
-          `or select a face to ${kind} every edge around it`,
-      );
+      setPrompt(`Click an edge to ${kind} · Ctrl-click a chain · Shift-click one · or pick a face`);
     }
   }
 
@@ -368,7 +390,7 @@ export class EdgeFeatureTool {
     el.addEventListener("pointerdown", this.boundDown, true);
     el.addEventListener("pointerup", this.boundUp);
     window.addEventListener("keydown", this.boundKey, true);
-    setPrompt("Rolling back to edit… (later features are hidden while editing)");
+    setPrompt("Rolling back to edit…");
 
     // Roll the model to just before the feature; the NEXT completed build shows
     // the sharp member edges, which we snapshot as ghosts before pushing the
@@ -396,8 +418,25 @@ export class EdgeFeatureTool {
         this.pushPreview();
         return;
       }
+      this.noteBuildOutcome(s.result);
       this.recolorGhostsFromDiagnostics(s.result.diagnostics);
     });
+  }
+
+  /** Record what the kernel just said about the size on screen, so the drag can
+   *  stop where the geometry does instead of where a guess did.
+   *
+   *  Attributed to the CURRENT value rather than to the one that was pushed:
+   *  nothing correlates a reply with the request that caused it, and the tool
+   *  only pushes on a change of step, so during a drag the two are the same
+   *  value. A fast fling can outrun that and record a wall lower than the truth;
+   *  blendCeiling raises it again from the first larger size that does build,
+   *  and a typed value ignores the wall entirely. */
+  private noteBuildOutcome(result: import("../types").RebuildResult) {
+    if (this.phase !== "drag" || this.neutral || !this.previewPushed) return;
+    const failed = (result.featureErrors ?? []).some((e) => e.feature_id === this.previewId)
+      || result.featureError?.feature_id === this.previewId;
+    this.range = noteBlendOutcome(this.range, this.value, !failed);
   }
 
   /** Match each saved selector to a rendered sharp edge and build its ghost.
@@ -632,14 +671,12 @@ export class EdgeFeatureTool {
     const bounds = typed ? { min: MIN_EDGE_VALUE, max: Infinity } : this.bounds();
     const next = switchTreatment(this.kind, this.value, bounds);
     if (this.paramBlocked(next.kind)) {
-      setPrompt(
-        `Can't switch: this feature's ${treatmentField(next.kind).name} is driven by a parameter, ` +
-          `change it under this feature in the history · Esc to cancel`,
-      );
+      setPrompt(`This feature's ${treatmentField(next.kind).name} is driven by a parameter, change it in the history`);
       return;
     }
     this.kind = next.kind;
     this.positiveKind = otherTreatment(this.positiveKind);
+    this.forgetBuildRange(); // a chamfer's limit is not a fillet's
     // At the origin there is nothing to re-label but the treatment itself:
     // switchTreatment's clamp would otherwise conjure a 0.001 mm feature out of
     // a gesture deliberately sitting on "none".
@@ -665,44 +702,27 @@ export class EdgeFeatureTool {
   private promptForPhase() {
     const n = this.currentSelectors().length;
     if (!n) {
-      setPrompt("No edges selected, click an edge to add one · Esc to cancel");
+      setPrompt("Click an edge · Esc");
       return;
     }
     if (this.neutral) {
-      // The one state with no preview to explain itself: say which way each
-      // treatment lies, and that staying here is how you back out.
-      setPrompt(
-        `Nothing applied, drag the handle out for a ${this.positiveKind}, ` +
-          `the other way for a ${otherTreatment(this.positiveKind)} · ` +
-          `let go here to cancel`,
-      );
+      setPrompt(`Drag out for a ${this.positiveKind}, back for a ${otherTreatment(this.positiveKind)} · release to cancel`);
       return;
     }
     if (this.previewFailed) {
-      // The red ghosts say WHICH edge; this says what to do about it. Without
-      // it a too-large radius just looks like the drag stopped working.
-      setPrompt(
-        `${treatmentLabel(this.kind)} ${fmtLength(this.value)} won't build on the red edge${n === 1 ? "" : "s"} — ` +
-          `drag smaller, Tab to try a ${otherTreatment(this.kind)}, or Esc to cancel`,
-      );
+      // The red ghosts say WHICH edge; this says what to do about it.
+      setPrompt(`${fmtLength(this.value)} won't build here · drag smaller · Tab · Esc`);
       return;
     }
-    const verb = this.editId ? "Editing" : "Creating";
-    const apply = this.editId ? "apply" : "commit";
     // The profile only earns a mention on a fillet, and only says its number
     // once it is off the circular default — otherwise it is noise on the one
     // line the user reads mid-drag.
     const prof =
-      this.kind === "fillet"
-        ? isPlainProfile(this.profile)
-          ? " · drag the arc to reshape the section"
-          : ` · profile ${formatProfile(this.profile)} (${describeProfile(this.profile)})`
+      this.kind === "fillet" && !isPlainProfile(this.profile)
+        ? ` · profile ${formatProfile(this.profile)}`
         : "";
     setPrompt(
-      `${verb} ${this.kind}: ${n} edge${n === 1 ? "" : "s"} · drag the handle or type a ${this.field.name} · ` +
-        `drag back past zero (or Tab) for a ${otherTreatment(this.kind)}${prof} · ` +
-        `Enter or click empty space to ${apply} · Esc to cancel` +
-        (this.editId ? " (later features are hidden while editing)" : ""),
+      `${treatmentLabel(this.kind)}, ${n} edge${n === 1 ? "" : "s"} · drag or type a ${this.field.name}${prof} · Tab · Enter · Esc`,
     );
   }
 
@@ -720,9 +740,11 @@ export class EdgeFeatureTool {
       if (this.editId) this.store.setEditPreview(null);
       else this.store.setPreview(null);
       this.previewFailed = false; // nothing previewing, nothing to have failed
+      this.previewPushed = false;
       return;
     }
     const feature = this.buildFeature();
+    this.previewPushed = true;
     if (this.editId) this.store.setEditPreview(feature);
     else this.store.setPreview(feature);
   }
@@ -804,6 +826,7 @@ export class EdgeFeatureTool {
       // than flickering as the cursor crosses.
       if (!this.neutral && at.kind !== this.kind) {
         this.kind = at.kind;
+        this.forgetBuildRange(); // a chamfer's limit is not a fillet's
         this.mountInput();
       } else {
         this.dim.updateFromCursor({ [this.field.name]: this.value });
@@ -930,7 +953,7 @@ export class EdgeFeatureTool {
         // nothing at all, so put the default value up — the tool the user just
         // opened should have something to show and adjust.
         if (this.neutral) {
-          this.setValue(seedValue(this.kind, this.bounds()));
+          this.setValue(seedValue(this.kind, this.bounds(), this.clearanceLimitMm));
           this.dim.updateFromCursor({ [this.field.name]: this.value });
           this.pushPreview();
         }
@@ -1001,7 +1024,7 @@ export class EdgeFeatureTool {
     this.positiveKind = this.kind;
     // Both need the anchor (the snap step and the model bounds are read at it),
     // hence here rather than at the top.
-    this.setValue(opts?.fromZero ? 0 : seedValue(this.kind, this.bounds()));
+    this.setValue(opts?.fromZero ? 0 : seedValue(this.kind, this.bounds(), this.clearanceLimitMm));
     this.previewId = this.store.nextId();
     // keep edges emphasized: more edges can be clicked into the set mid-drag
     this.viewport.clearHover();
@@ -1130,6 +1153,7 @@ export class EdgeFeatureTool {
     // Before pushPreview, while the displayed model is still the one the blend
     // would be applied to (see measureClearance).
     this.measureClearance();
+    this.forgetBuildRange(); // a different set of edges is a different limit
     this.pushPreview(); // clears itself back to the bare model at zero members
     this.promptForPhase();
   }
@@ -1161,7 +1185,7 @@ export class EdgeFeatureTool {
     // origin on purpose, and that means "don't do this after all".
     if (this.neutral) return this.cancel();
     if (this.currentSelectors().length === 0) {
-      setPrompt("No edges selected, click an edge to add one · Esc to cancel");
+      setPrompt("Click an edge · Esc");
       return; // deleting is an explicit timeline action, not an implicit empty commit
     }
     const feature = this.buildFeature();
@@ -1211,6 +1235,8 @@ export class EdgeFeatureTool {
     this.grabbing = false;
     this.fluentGrab = false;
     this.previewFailed = false;
+    this.previewPushed = false;
+    this.forgetBuildRange();
     this.hovering = false;
     this.signed = 0;
     this.grabSigned = 0;
