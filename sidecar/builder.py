@@ -89,6 +89,7 @@ from build123d import (
 )
 
 import face_plane
+import pick_fuzz
 from geom_select import (
     resolve_edges,
     resolve_faces,
@@ -3294,7 +3295,8 @@ def _env_sig():
             # spot: the code is right, the output is not, and a restart does not
             # help because the checkpoints are on disk.
             for name in ("builder.py", "geom_select.py", "tessellate.py",
-                         "face_plane.py", "conic_blend.py", "selector_tuning.json"):
+                         "face_plane.py", "conic_blend.py", "pick_fuzz.py",
+                         "selector_tuning.json"):
                 try:
                     with open(os.path.join(here, name), "rb") as fh:
                         h.update(fh.read())
@@ -4801,6 +4803,35 @@ def _noop_eps(ref):
     return max(1e-6, 1e-4 * (ref or 0.0))
 
 
+def _shape_extent(*shapes):
+    """How far from the origin these shapes reach — the magnitude pick_fuzz
+    scales its tolerance by.
+
+    A COARSE box on purpose (BRepBndLib.Add_s walks control points), not
+    `bbox_of`'s exact one: this feeds an order-of-magnitude tolerance, and the
+    exact walk is AddOptimal_s, measured at 95.5 s over the reference assembly's
+    bodies. A control-point box reads a few percent large on curved geometry,
+    which moves the fuzz by a few percent and nothing else.
+    """
+    from OCP.Bnd import Bnd_Box
+    from OCP.BRepBndLib import BRepBndLib
+
+    box = Bnd_Box()
+    for s in shapes:
+        for t in s if isinstance(s, (list, tuple)) else [s]:
+            w = getattr(t, "wrapped", None)
+            if w is None:
+                continue
+            try:
+                BRepBndLib.Add_s(w, box)
+            except Exception:
+                pass  # a shape we cannot box just doesn't vote on the extent
+    if box.IsVoid():
+        return None
+    lo, hi = box.CornerMin(), box.CornerMax()
+    return max(abs(v) for v in (lo.X(), lo.Y(), lo.Z(), hi.X(), hi.Y(), hi.Z()))
+
+
 def _serial_bool(base, tool, kind):
     """A boolean (kind = "fuse" | "cut" | "common") forced SERIAL.
 
@@ -4811,7 +4842,14 @@ def _serial_bool(base, tool, kind):
     UnifySameDomain clean and result shape as build123d, so it's a drop-in for the
     operators. `base`/`tool` must already be Compound/Solid (have `.wrapped`);
     `tool` may be a LIST of shapes — one N-tool boolean beats a chained per-tool
-    loop, which redoes the whole op + clean per step (O(n²))."""
+    loop, which redoes the whole op + clean per step (O(n²)).
+
+    Runs with a FUZZY VALUE, sized by pick_fuzz — see that module for why. Short
+    version: the tool was built from numbers read off the rendered mesh, which is
+    single precision, so a profile sketched ON a face is a fraction of an ulp off
+    it and OCCT sees two planes where the user meant one. Left exact, a cut from
+    such a sketch removes the right volume and still leaves the hole sealed by a
+    membrane a nanometre thick, which draws as a filled-in flickering disc."""
     from OCP.BRepAlgoAPI import BRepAlgoAPI_Fuse, BRepAlgoAPI_Cut, BRepAlgoAPI_Common
     from OCP.TopTools import TopTools_ListOfShape
     from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
@@ -4824,6 +4862,7 @@ def _serial_bool(base, tool, kind):
     op.SetArguments(la)
     op.SetTools(lb)
     op.SetRunParallel(False)
+    op.SetFuzzyValue(pick_fuzz.pick_fuzz(_shape_extent(base, tool)))
     op.Build()
     shape = op.Shape()
     up = ShapeUpgrade_UnifySameDomain(shape, True, True, True)
