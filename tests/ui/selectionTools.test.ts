@@ -9,12 +9,9 @@ import { describe, it, expect } from "vitest";
 import { TOOL_CAPABILITIES, TOOL_IDS } from "../../src/features/toolCapabilities";
 import { allCommands } from "../../src/ui/commands";
 import { iconPaths } from "../../src/ui/icons";
-import { MAX_PIE_ITEMS } from "../../src/ui/pieMath";
 import {
-  TOOLBAR_MAX,
   primaryKind,
   selectionOffers,
-  selectionPie,
   toolbarOffers,
   type ToolOffer,
 } from "../../src/ui/selectionTools";
@@ -99,16 +96,15 @@ describe("what a selection offers", () => {
     // The toolbar's whole disappearing act rests on this being empty rather
     // than on the component remembering to check.
     expect(selectionOffers({})).toEqual([]);
-    expect(selectionPie(0, 0, {}, () => {})).toBeNull();
+    expect(toolbarOffers({})).toEqual([]);
   });
 });
 
 describe("shown versus live", () => {
-  it("keeps Loft in the wheel with one profile, and dims it", () => {
-    // Filtering it out instead would slide Revolve and Sweep into different
-    // slots the moment a second profile was picked — the exact muscle-memory
-    // break the fixed slots exist to prevent. Dim also answers "why can't I
-    // loft this", which silence does not.
+  it("keeps Loft in the offer with one profile, and marks it not runnable", () => {
+    // The offer is what CAN act on this kind of thing, which is the honest
+    // answer for a menu: "Loft is here and it is grey because you have picked
+    // one profile" beats silence. The bar filters on `enabled` itself.
     const one = selectionOffers({ "sketch-region": 1 });
     const loft = one.find((o) => o.tool === "loft");
     expect(loft).toBeDefined();
@@ -116,42 +112,40 @@ describe("shown versus live", () => {
     expect(one.find((o) => o.tool === "extrude")!.enabled).toBe(true);
 
     const two = selectionOffers({ "sketch-region": 2 });
-    expect(two.map((o) => o.tool)).toEqual(one.map((o) => o.tool)); // same wheel...
+    expect(two.map((o) => o.tool)).toEqual(one.map((o) => o.tool)); // same list...
     expect(two.find((o) => o.tool === "loft")!.enabled).toBe(true); // ...just live now
   });
 
-  it("keeps the pie's identity and order fixed as the count changes", () => {
-    const a = selectionPie(0, 0, { face: 1 }, () => {})!;
-    const b = selectionPie(0, 0, { face: 9 }, () => {})!;
-    expect(a.id).toBe(b.id);
-    expect(a.items.map((i) => i.label)).toEqual(b.items.map((i) => i.label));
-    expect(a.items.length).toBeLessThanOrEqual(MAX_PIE_ITEMS);
+  it("does not change the offer as the count changes", () => {
+    const a = selectionOffers({ face: 1 });
+    const b = selectionOffers({ face: 9 });
+    expect(a.map((o) => o.tool)).toEqual(b.map((o) => o.tool));
   });
 });
 
 describe("the toolbar's cut", () => {
-  it("shows only what can run, and no more than fits over the model", () => {
+  it("shows only what can run", () => {
     const bar = toolbarOffers({ "sketch-region": 1 });
     expect(bar.every((o) => o.enabled)).toBe(true);
-    expect(bar.length).toBeLessThanOrEqual(TOOLBAR_MAX);
     expect(labels(bar)).not.toContain("loft");
   });
 
-  it("leaves the destructive one to the pie", () => {
-    // Delete Face is last in the capability table's preference order, so the
-    // cap drops it without anybody special-casing it — and a destructive verb
-    // one stray click from the cursor, floating over the part, is exactly what
-    // a hover toolbar should not carry.
-    expect(labels(toolbarOffers({ face: 1 }))).not.toContain("delete-face");
-    expect(selectionPie(0, 0, { face: 1 }, () => {})!.items.map((i) => i.label)).toContain(
-      "Delete Face",
-    );
+  it("carries every other live offer, uncapped", () => {
+    // CONTROL on the line above: the cut has to be `enabled`, not a count. A
+    // face feeds more tools than the bar's old five-button cap allowed, and
+    // every one of them but the excluded verb has to be on it now that no pie
+    // holds the overflow.
+    const live = selectionOffers({ face: 2 }).filter((o) => o.enabled && o.tool !== "delete-face");
+    expect(live.length).toBeGreaterThan(4);
+    expect(labels(toolbarOffers({ face: 2 }))).toEqual(labels(live));
   });
 
-  it("runs the offer it was clicked on", () => {
-    const ran: string[] = [];
-    const pie = selectionPie(0, 0, { edge: 1 }, (o) => ran.push(o.tool))!;
-    pie.items[0]?.onPick?.();
-    expect(ran).toEqual(["fillet"]);
+  it("does not carry the destructive verb", () => {
+    // A hover bar is a button-sized piece of the part you are looking at, so a
+    // stray click lands on geometry. "Remove this face and heal the solid" is
+    // not something to keep there — it stays on Del and in the right-click
+    // menu. It is still in the OFFER, which is what a menu ranks from.
+    expect(labels(toolbarOffers({ face: 1 }))).not.toContain("delete-face");
+    expect(labels(selectionOffers({ face: 1 }))).toContain("delete-face");
   });
 });

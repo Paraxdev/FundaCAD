@@ -2,8 +2,6 @@ import { installKeymap } from "../input/keymap";
 import { isEditableTarget } from "../ui/focus";
 import { saveDocument, saveDocumentAs, exportModel } from "../io/files";
 import { SKETCH_TOOLS } from "./actionTables";
-import { currentPie, dismissPie, openPie } from "../ui/pieMenu";
-import { viewPie } from "../ui/viewPie";
 import { logError, toggleConsole } from "../ui/logStore";
 import { useDialogStore } from "../stores/dialogs";
 import type { Engine } from "./engine";
@@ -45,43 +43,13 @@ export function installKeyboard(e: Engine): void {
     }
   });
 
-  // The orientation wheel, on backquote. Squaring up the view is the most
-  // repeated non-modelling action in the app and every existing route to it —
-  // the cube's faces, the Look submenu, the palette — asks you to find a target
-  // and hit it. A pie asks for a direction instead, which is a wrist movement
-  // and needs no aim once it is learned.
+  // The console, on Ctrl+`. Backquote alone used to open an orientation wheel;
+  // that pie is gone, and every view it offered is still one click away on the
+  // view cube, the Look submenu and the command palette.
   //
-  // Backquote rather than a letter because every letter worth having is a tool,
-  // and because it is the key this gesture already lives on for anyone who has
-  // met a pie menu before. It is deliberately live mid-sketch: looking at the
-  // part from somewhere else is not an edit, and refusing it there would make
-  // the wheel feel like a mode rather than a camera.
-  //
-  // Opened at the pointer, so the flick starts where the hand already is. The
-  // position is tracked here rather than read from the viewport because the
-  // wheel works over the whole window, including the panes.
-  let lastPointer = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
-  window.addEventListener(
-    "pointermove",
-    (ev) => {
-      lastPointer = { x: ev.clientX, y: ev.clientY };
-    },
-    { passive: true, capture: true },
-  );
-  window.addEventListener("keydown", (ev) => {
-    if (ev.key !== "`" && ev.code !== "Backquote") return;
-    if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
-    if (isEditableTarget(ev.target)) return;
-    if (currentPie()) return dismissPie(); // a second press closes it
-    ev.preventDefault();
-    openPie(viewPie(lastPointer.x, lastPointer.y, e.viewport));
-  });
-
-  // The console, on Ctrl+` — next to the wheel on backquote, and the pairing is
-  // deliberate: both are things you reach for without wanting to leave what you
-  // are doing. Live inside text fields too, unlike most shortcuts, because the
-  // moment you most want the full error text is while you are typing a value
-  // into the box that just refused one.
+  // Live inside text fields too, unlike most shortcuts, because the moment you
+  // most want the full error text is while you are typing a value into the box
+  // that just refused one.
   window.addEventListener("keydown", (ev) => {
     if (!(ev.ctrlKey || ev.metaKey)) return;
     if (ev.key !== "`" && ev.code !== "Backquote") return;

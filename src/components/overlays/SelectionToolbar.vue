@@ -23,8 +23,7 @@ import { computed, onMounted, onUnmounted, ref, shallowRef } from "vue";
 import * as THREE from "three";
 import Icon from "../shell/Icon.vue";
 import { useEngine } from "../../app/engineKey";
-import { openPie } from "../../ui/pieMenu";
-import { selectionPie, toolbarOffers, type ToolOffer } from "../../ui/selectionTools";
+import { toolbarOffers, type ToolOffer } from "../../ui/selectionTools";
 import type { SelectionCounts } from "../../features/toolCapabilities";
 import { handlePlacement } from "../../features/edgeNudge";
 import { regionAnchor } from "../../features/regionNudge";
@@ -218,24 +217,6 @@ function run(o: ToolOffer) {
   else if (o.tool === "delete-face") engine.deleteSelectedFace();
 }
 
-/** The rest of the offer, as a pie centred on the button.
- *
- *  On pointerDOWN, not click, and that is the whole point: press it and flick
- *  in a direction and you never see the menu, which is the gesture a pie is
- *  for. Press and let go without moving and it stays up to be clicked — the
- *  release rule in ui/pieMath decides which of the two happened, so neither
- *  this component nor the user has to declare it up front. */
-function openMore(e: PointerEvent) {
-  if (e.button !== 0) return;
-  const btn = e.currentTarget as HTMLElement;
-  // Touch and pen capture the pointer on the element that was pressed, which
-  // would send every move to the button instead of to the window — the same
-  // release the (now removed) tool rail performed before its own hold gesture.
-  if (btn.hasPointerCapture?.(e.pointerId)) btn.releasePointerCapture(e.pointerId);
-  e.preventDefault();
-  const req = selectionPie(e.clientX, e.clientY, counts.value, run);
-  if (req) openPie(req);
-}
 </script>
 
 <template>
@@ -260,18 +241,6 @@ function openMore(e: PointerEvent) {
         @click="run(o)"
       >
         <Icon :name="o.iconName" :size="18" />
-      </button>
-      <span class="seltool-sep"></span>
-      <button
-        type="button"
-        class="seltool-btn seltool-more"
-        data-tool="__pie"
-        title="All tools for this selection, press and flick, or click"
-        aria-label="All tools for this selection"
-        aria-haspopup="menu"
-        @pointerdown="openMore"
-      >
-        <Icon name="boltCircle" :size="18" />
       </button>
     </div>
   </Teleport>

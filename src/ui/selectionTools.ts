@@ -1,6 +1,6 @@
-// What to OFFER for the current selection — the one answer both the floating
-// selection toolbar and the selection pie render. Two surfaces each deriving it
-// their own way means Fillet on the toolbar but not in the pie.
+// What to OFFER for the current selection — the one answer the floating
+// selection toolbar renders, and the one the right-click menu ranks its model
+// entries by.
 //
 // Built from ONE kind of the selection, ranked, not from the union: Extrude-the-
 // profile and Press/Pull-the-face are different operations on different geometry,
@@ -9,11 +9,10 @@
 // which drag handle to mount, and the two MUST agree — the handle on the geometry
 // and the toolbar above it are one affordance seen twice.
 //
-// Membership comes from the selection's KIND, enablement from its COUNT. A profile
-// always offers Extrude, Revolve, Sweep and Loft in that order, with Loft dim until
-// a second profile joins; that is what keeps the pie's slots fixed and makes "why
-// can't I loft this" visible rather than absent. The toolbar has no slots to
-// protect and shows only the live ones.
+// Membership comes from the selection's KIND, enablement from its COUNT, and the
+// two are kept apart because they answer different questions: selectionOffers()
+// says what this kind of thing can feed at all, which is the honest answer for a
+// menu, while the toolbar shows only what would run right now.
 
 import {
   TOOL_CAPABILITIES,
@@ -24,20 +23,18 @@ import {
   type ToolId,
 } from "../features/toolCapabilities";
 import { keyHint } from "../input/shortcuts";
-import { MAX_PIE_ITEMS } from "./pieMath";
-import type { PieRequest } from "./pieMenu";
 
 /** Which kind wins when a selection holds several. See the header — this is
  *  app/viewportWiring.ts's drag-handle ranking, and it may not drift from it.
  *
  *  Bodies come last rather than not at all: body selection is a separate mode
  *  (press 2), so in practice it never competes with the other three, and
- *  leaving it off would mean a two-body selection offering nothing while
- *  Combine sits one keystroke away. */
+ *  leaving it off would mean a two-body selection offering nothing while the
+ *  booleans sit one keystroke away. */
 export const KIND_RANK: readonly EntityKind[] = ["edge", "sketch-region", "face", "body"];
 
-/** Human name for the kind, for the toolbar's and the pie's title. Singular —
- *  callers that have a count add the plural. */
+/** Human name for the kind, for a title or a prompt. Singular — callers that
+ *  have a count add the plural. */
 export const KIND_LABEL: Record<EntityKind, string> = {
   edge: "edge",
   face: "face",
@@ -131,53 +128,25 @@ export function selectionOffers(sel: SelectionCounts): ToolOffer[] {
   }));
 }
 
-/** How many buttons the floating toolbar shows before it stops being a toolbar.
+/** Verbs the hover bar does not carry however applicable they are.
  *
- *  Five, because it hovers over the model: every button is a button-sized piece
- *  of the part you are looking at. A face selection currently produces six
- *  offers, so the sixth — Delete Face, the destructive one, last in the
- *  capability table's preference order — is reachable only through the pie or
- *  the right-click menu. That is the right one to push behind a second gesture,
- *  and it falls out of the ordering rather than being special-cased. */
-export const TOOLBAR_MAX = 5;
+ *  One, and it is destructive. The bar floats over the part, a button-sized
+ *  piece of the thing you are looking at, so a stray click lands on geometry
+ *  rather than on chrome — which is a poor place to keep "remove this face and
+ *  heal the solid". It stays on Del and in the right-click menu.
+ *
+ *  A named rule rather than the count that used to produce it. The bar stopped
+ *  at five buttons because a pie carried the overflow, and Delete Face fell off
+ *  the end only because it happens to sort last; with the pie gone the cap has
+ *  nothing behind it, and "the sixth offer is dropped" would have quietly
+ *  become "whichever offer is sixth is dropped". */
+const BAR_EXCLUDED: ReadonlySet<ToolId> = new Set<ToolId>(["delete-face"]);
 
-/** What the floating toolbar shows: the live offers, capped. */
+/** What the floating toolbar shows: every live offer it is willing to carry.
+ *
+ *  Uncapped. The cap existed because the pie held what the bar trimmed, and
+ *  without it a capped bar would put a verb behind a right-click and nothing
+ *  else. */
 export function toolbarOffers(sel: SelectionCounts): ToolOffer[] {
-  return selectionOffers(sel)
-    .filter((o) => o.enabled)
-    .slice(0, TOOLBAR_MAX);
-}
-
-/** The selection pie: everything the toolbar trimmed, plus what is not yet
- *  runnable, at fixed angles. Null when nothing is selected.
- *
- *  `run` receives the offer rather than an action string so the one actionless
- *  tool stays the caller's problem to answer explicitly — a signature of
- *  (action: string) would have forced a fake id through it. */
-export function selectionPie(
-  x: number,
-  y: number,
-  sel: SelectionCounts,
-  run: (offer: ToolOffer) => void,
-): PieRequest | null {
-  const kind = primaryKind(sel);
-  if (!kind) return null;
-  const n = primaryCount(sel);
-  const offers = selectionOffers(sel).slice(0, MAX_PIE_ITEMS);
-  return {
-    // Identity is the KIND, never the count: a face pie must be the same wheel
-    // whether one face or nine are selected, or the muscle memory is worth
-    // nothing.
-    id: `selection:${kind}`,
-    title: `${n} ${KIND_LABEL[kind]}${n === 1 ? "" : "s"}`,
-    x,
-    y,
-    items: offers.map((o) => ({
-      label: o.label,
-      iconName: o.iconName,
-      hint: o.hint,
-      disabled: !o.enabled,
-      onPick: () => run(o),
-    })),
-  };
+  return selectionOffers(sel).filter((o) => o.enabled && !BAR_EXCLUDED.has(o.tool));
 }

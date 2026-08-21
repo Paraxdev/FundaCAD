@@ -1,0 +1,57 @@
+/* ============================================================================
+   Selection toolbar — the tools that can act on what is currently selected,
+   parked next to it.
+
+   Put the choice where the user is already looking, instead of making them
+   travel to a fixed strip of chrome. This file used to hold a pie menu on the
+   same idea; the bar is what is left, and it carries the whole offer now rather
+   than five of it with the rest behind a wheel.
+   ============================================================================ */
+
+.seltools {
+  position: fixed;
+  z-index: 180; /* under the dimension input (200), which belongs to a live tool */
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  padding: var(--s-1);
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line-strong);
+  background: var(--panel-2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+          backdrop-filter: blur(14px) saturate(1.3);
+  box-shadow: var(--shadow-3);
+  /* Centred on the anchor horizontally and lifted clear of it, so the bar sits
+     beside the selection rather than on top of the thing it describes. */
+  transform: translate(-50%, -50%);
+  animation: pop-in var(--t-fast) var(--ease);
+}
+
+.seltool-btn {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid transparent;
+  background: none;
+  /* Explicit, because these hold an <svg stroke="currentColor"> and a <button>
+     does NOT inherit colour — it falls back to the UA's `buttontext`, which on
+     a dark surface draws the icon as an empty box. The same trap the heads-up
+     dimension input's confirm/cancel marks fell into. */
+  color: var(--text);
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease);
+}
+.seltool-btn:hover {
+  background: var(--accent-tint);
+  border-color: var(--accent);
+  color: var(--accent-hot);
+}
+.seltool-btn:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-tint);
+}
