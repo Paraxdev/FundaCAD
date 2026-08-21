@@ -156,7 +156,7 @@ export class SectionTool {
     el.addEventListener("pointermove", this.boundPickMove);
     el.addEventListener("pointerdown", this.boundPickDown, true);
     window.addEventListener("keydown", this.boundPickKey, true);
-    setPrompt("Section: click a face or a construction plane to cut along · Esc to cancel");
+    setPrompt("Click a face or plane to cut along · Esc");
   }
 
   private endPick() {

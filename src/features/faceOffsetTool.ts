@@ -89,7 +89,7 @@ export class FaceOffsetTool {
 
     const pre = this.viewport.selectedFacesForPressPull();
     if (pre) this.beginDrag(pre.selectors, pre.faceIds, pre.anchor, pre.normal, pre.bodyId);
-    else setPrompt(`Select a face to ${LABEL[mode]} (Ctrl+click adds more)`);
+    else setPrompt(`Click a face to ${LABEL[mode].toLowerCase()} · Ctrl-click adds more`);
   }
 
   private onMove(e: PointerEvent) {
@@ -174,7 +174,7 @@ export class FaceOffsetTool {
   private prompt() {
     const n = this.faces.length > 1 ? `${this.faces.length} faces, ` : "";
     const sym = this.mode === "thicken" ? ` · S = symmetric${this.symmetric ? " (on)" : ""}` : "";
-    setPrompt(`${n}drag the handle or type a distance${sym} · click empty space to commit · Esc to cancel`);
+    setPrompt(`${n}drag or type a distance${sym} · click to commit · Esc`);
   }
 
   private beginDrag(
@@ -272,13 +272,13 @@ export class FaceOffsetTool {
     if (this.phase !== "drag") return this.cancel();
     const v = this.dim.getValue("distance");
     if (v == null && this.dim.isUserDriven("distance")) {
-      setPrompt("Can't read that number, fix the value, or Esc to cancel");
+      setPrompt("That number can't be read · Esc");
       return;
     }
     if (v != null && this.dim.isUserDriven("distance")) this.value = v;
     if (Math.abs(this.value) < 1e-3) {
       // keep the tool alive: silently cancelling reads as "nothing happened"
-      setPrompt("Nothing to commit, drag the handle or type a distance first");
+      setPrompt("Nothing to commit yet");
       return;
     }
     const feature = this.buildFeature();

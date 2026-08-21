@@ -75,7 +75,7 @@ export class PlaneOffsetTool {
     this.dim.position(s.x, s.y);
     this.dim.updateFromCursor({ offset: 0 });
     setPrompt(
-      "Drag the arrow to set the offset · type a value · Enter to sketch on the plane · Esc to cancel",
+      "Drag or type an offset · Enter to sketch on it · Esc",
     );
     this.raf = requestAnimationFrame(this.boundTick);
     this.updateGhost();

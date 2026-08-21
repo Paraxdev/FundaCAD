@@ -110,7 +110,7 @@ export class PressPullTool {
       this.beginDrag(pre.selectors, pre.faceIds, pre.anchor, pre.normal, pre.bodyId, pre.round);
       if (opts?.grabAt) this.grabHandle(opts.grabAt.x, opts.grabAt.y);
     } else {
-      setPrompt("Select a face to Press/Pull (Ctrl+click adds more)");
+      setPrompt("Click a face · Ctrl-click adds more");
     }
   }
 
@@ -174,7 +174,7 @@ export class PressPullTool {
         this.upTo = hit.selector;
         this.commitUpTo();
       } else {
-        setPrompt("Pick the face to extrude UP TO (any face, any body) · Esc to go back");
+        setPrompt("Click the face to stop at · Esc");
       }
       return;
     }
@@ -188,7 +188,7 @@ export class PressPullTool {
         this.faces.push(hit.selector);
         this.faceIds.push(hit.faceId);
         this.refreshPreview();
-        setPrompt(`${this.faces.length} faces, drag or type a distance · click to commit · Esc to cancel`);
+        setPrompt(`${this.faces.length} faces · drag or type a distance · click to commit · Esc`);
       }
       return;
     }
@@ -257,7 +257,7 @@ export class PressPullTool {
         // active let Enter commit a plain distance mid-target-pick)
         this.dim.show([{ name: "distance", label: "D", kind: "length" }], () => this.commit(), () => this.cancel());
         this.dim.updateFromCursor({ distance: Math.abs(this.value) });
-        setPrompt("Drag the arrow · type a value · click another face = extrude up to it · click empty space to commit · Esc to cancel");
+        setPrompt("Drag or type a value · click a face to stop at it · click to commit · Esc");
         return;
       }
       this.cancel();
@@ -267,7 +267,7 @@ export class PressPullTool {
       this.pickingTarget = true;
       this.dim.hide(); // Enter must not commit a plain distance while picking
       this.viewport.clearPressPullGhost();
-      setPrompt("Click the face to extrude UP TO (any face, any body) · Esc to go back");
+      setPrompt("Click the face to stop at · Esc");
     }
   }
 
@@ -294,8 +294,8 @@ export class PressPullTool {
     this.dim.updateFromCursor({ distance: this.readout() });
     setPrompt(
       round
-        ? `Drag to resize · type a diameter · under ${collapseDiameter(round.radius).toFixed(2)}mm removes it · click empty space to commit · Esc to cancel`
-        : "Drag the arrow · type a value (negative = cut) · click ANOTHER face = extrude up to it · click empty space to commit · Esc to cancel",
+        ? `Drag or type a diameter · under ${collapseDiameter(round.radius).toFixed(2)}mm removes it · Esc`
+        : "Drag or type a value, negative cuts · click a face to stop at it · Esc",
     );
     this.raf = requestAnimationFrame(this.boundTick);
   }
@@ -356,11 +356,11 @@ export class PressPullTool {
     // readout dropping to 0 and the prompt saying so is what carries it instead.
     if (this.round && radialDrag(this.round.radius, this.value, this.round.solidInside).mode === "remove") {
       this.viewport.clearPressPullGhost();
-      setPrompt("Release to REMOVE this face · drag back to keep resizing · Esc to cancel");
+      setPrompt("Release to remove this face · drag back to keep it · Esc");
       return;
     }
     if (this.round) {
-      setPrompt(`Drag to resize · type a diameter · under ${collapseDiameter(this.round.radius).toFixed(2)}mm removes it · click empty space to commit · Esc to cancel`);
+      setPrompt(`Drag or type a diameter · under ${collapseDiameter(this.round.radius).toFixed(2)}mm removes it · Esc`);
     }
     this.viewport.setPressPullGhost(this.faceIds, this.value, this.round);
   }
@@ -411,7 +411,7 @@ export class PressPullTool {
     if (v == null && this.dim.isUserDriven("distance")) {
       // the field holds unparseable text — committing the stale drag value
       // instead would be a silent wrong-number surprise
-      setPrompt("Can't read that number, fix the value, or Esc to cancel");
+      setPrompt("That number can't be read · Esc");
       return;
     }
     // Typed sign wins (out = +, cut = −) — but ONLY when the user actually
@@ -421,7 +421,7 @@ export class PressPullTool {
     if (v != null && this.dim.isUserDriven("distance")) this.value = this.fromReadout(v);
     if (Math.abs(this.value) < 1e-3) {
       // keep the tool alive: silently cancelling here read as "nothing happened"
-      setPrompt(this.round ? "Nothing to commit, the diameter is unchanged" : "Nothing to commit, drag the handle or type a distance first");
+      setPrompt(this.round ? "The diameter is unchanged" : "Nothing to commit yet");
       return;
     }
     const feature = this.buildFeature();

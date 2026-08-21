@@ -26,7 +26,7 @@ export function installSpaceMouse(viewport: Viewport): void {
   void listen<{ name: string; detail: string }>("spacemouse:blocked", (e) => {
     console.warn("SpaceMouse blocked:", e.payload.detail);
     toast(
-      `Found "${e.payload.name}" but can't read it, see the SpaceMouse section of the README (Linux needs a one-time udev rule; a running spacenavd/3Dconnexion driver also holds the device)`,
+      `Found "${e.payload.name}" but can't read it, see the SpaceMouse section of the README`,
       { kind: "error", timeout: 15000 },
     );
   });

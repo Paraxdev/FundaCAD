@@ -52,7 +52,7 @@ export class MeasureTool {
     el.addEventListener("pointermove", this.boundMove, true);
     window.addEventListener("keydown", this.boundKey, true);
     this.update();
-    setPrompt("Measure: click a face or edge · click a second to measure between them · Esc to exit");
+    setPrompt("Click a face or edge, then a second one · Esc");
   }
 
   /** Start measuring with the first probe already picked (right-click →
@@ -65,7 +65,7 @@ export class MeasureTool {
     this.probes.push(probe);
     this.highlight();
     this.update();
-    setPrompt("Measure: click a second face or edge for the distance · Esc to exit");
+    setPrompt("Click a second face or edge · Esc");
   }
 
   private onMove(e: PointerEvent) {

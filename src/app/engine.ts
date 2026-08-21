@@ -203,7 +203,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   // owns it) and patch the live entities instead
   e.store.onProjectionsApplied = (updates) => e.sketch.syncProjectedCurves(updates);
   e.store.onParamSolveIssue = (id) =>
-    toast(`Sketch ${id}: dimensions could not be satisfied after the parameter change, geometry left unchanged`);
+    toast(`Sketch ${id}: dimensions can't be satisfied, geometry left unchanged`);
   // Sidecar owns fonts: glyph outlines arrive async via tessellateText; repaint the
   // right surface (active sketch or committed overlay) when they land.
   setTextBackend(e.geometry, () => {

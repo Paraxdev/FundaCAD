@@ -370,7 +370,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     if (toolBusy()) return;
     const bodies = store.buildState.result?.bodies ?? [];
     if (bodies.length < 2) {
-      setStatus("Combine: needs at least two bodies, model or import another", "");
+      setStatus("Combine needs two bodies", "");
       return;
     }
     const op = await choose<"join" | "cut" | "intersect">("Combine bodies", [
@@ -453,7 +453,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       return;
     }
     store.addFeature({ id: store.nextId(), type: "cleanUp" } as Feature);
-    setStatus("Clean Up added, bodies unified + debris collapsed from here on", "");
+    setStatus("Clean Up added, bodies unified from here on", "");
   }
 
   // Scale: resize the active body about the origin (handy for fixing the units of
@@ -787,7 +787,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       }
     }
     if (overlay.regions.length === 0) {
-      setStatus("Extrude: select a face, or create a sketch with a closed profile first", "");
+      setStatus("Extrude needs a face or a closed sketch profile", "");
       return;
     }
     extrude.start(extrudeDone);

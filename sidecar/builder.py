@@ -2050,10 +2050,9 @@ def _refuse_smooth_edges(shape, edges, label):
     else:
         which = f"{len(smooth)} of the {len(edges)} selected edges are already smooth"
     raise ValueError(
-        f"can't {label.lower()} here — {which}: the faces meet tangentially, so "
-        "there is no corner to cut and no smaller value will help. It is most "
-        "likely the edge of a round that is already there — select the rounded "
-        "FACE and delete it if you want the sharp edge back."
+        f"can't {label.lower()} here — {which}. The faces meet tangentially, so "
+        "there is no corner to cut and no smaller value will help. To get the "
+        "sharp edge back, delete the rounded face."
     )
 
 
@@ -2099,11 +2098,9 @@ def _blend_failure_message(label, body, unresolved, one_edge_at, blend_size, err
              else f"{len(unresolved)} of the selected edges")
     return (
         f"can't {label.lower()} {which} on {body['name']} at ANY size — it fails "
-        f"the same way at {blend_size * SIZE_PROBE_FRACTION:g}mm as at "
-        f"{blend_size:g}mm, so the value is not what is wrong. The blend has "
-        "nowhere to end: the edge runs into a neighbouring face at a corner the "
-        "kernel cannot close. Try selecting the neighbouring edges into the same "
-        f"{label.lower()} so it has a corner to turn, or blend those first."
+        f"the same at {blend_size * SIZE_PROBE_FRACTION:g}mm as at {blend_size:g}mm. "
+        "The blend has nowhere to end: add the neighbouring edges to it, or blend "
+        "those first."
     )
 
 
@@ -2126,11 +2123,9 @@ def _refuse_folded_blend(body, new_shape):
     # front, so naming it again gives "Fillet failed: Fillet folded over
     # itself", which spends the one line a toast has on saying it twice.
     raise ValueError(
-        f"made surface that folds back over itself on {body['name']}, because at "
-        "this size the blend runs past the face it was laid on and doubles back "
-        "over the one beside it, so a patch of the model is covered twice and "
-        "draws as flickering triangles. Try a different size, or blend this edge "
-        "before the one next to it."
+        f"made surface that folds back over itself on {body['name']} — at this "
+        "size the blend runs past its own face and covers the model twice. Try a "
+        "different size, or blend this edge before the one next to it."
     )
 
 
@@ -5605,9 +5600,8 @@ def _sweep_press_pull(part, face, d):
 
 
 _SWEEP_REFUSAL = (
-    "can't press/pull this face — its surface is freeform and wraps around, so "
-    "there is no one direction to push it in. Push a neighbouring flat or round "
-    "face, or edit the sketch this shape was built from."
+    "can't press/pull this face — it is freeform and wraps around, so there is "
+    "no one direction to push it in. Try a neighbouring face instead."
 )
 
 

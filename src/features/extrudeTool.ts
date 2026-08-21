@@ -95,7 +95,7 @@ export class ExtrudeTool {
       this.beginDrag();
       if (opts?.grabAt) this.grabHandle(opts.grabAt.x, opts.grabAt.y);
     } else {
-      setPrompt("Select a profile to extrude · Ctrl-click adds areas · Enter to confirm");
+      setPrompt("Click a profile · Ctrl-click adds areas · Enter");
     }
   }
 
@@ -164,9 +164,7 @@ export class ExtrudeTool {
     if (this.selected.length) {
       this.beginDrag();
     } else {
-      setPrompt(
-        "Editing extrude: its areas were not found (sketch changed?), select a profile · Esc to cancel",
-      );
+      setPrompt("Its areas are gone, click a profile · Esc");
     }
     return true;
   }
@@ -273,15 +271,10 @@ export class ExtrudeTool {
       // or commit. (Seeding the abs value would silently drop a cut's sign the
       // moment getValue is read back — the DimInput abs-display trap.)
       this.dim.seed("distance", this.distance);
-      setPrompt(
-        "Editing extrude: Ctrl-click areas to add/remove · type a value + Enter · " +
-          "click to commit · Esc to cancel (later features are hidden while editing)",
-      );
+      setPrompt("Ctrl-click areas · drag or type a value · click to apply · Esc");
     } else {
       this.distance = 10;
-      setPrompt(
-        "Move to set depth · type a value + Enter · negative = cut · click to commit · Esc to cancel",
-      );
+      setPrompt("Drag or type a depth, negative cuts · click to commit · Esc");
     }
     this.positionDim();
     this.updatePreview();
@@ -428,7 +421,7 @@ export class ExtrudeTool {
       if (!chosen) {
         // modal dismissed — the tool is STILL ALIVE; say so instead of leaving
         // the user staring at an unchanged screen ("nothing happened")
-        setPrompt("Extrude not committed, Enter or the confirm button to choose an operation · Esc to cancel");
+        setPrompt("Pick an operation to commit · Enter · Esc");
         return;
       }
       op = chosen;

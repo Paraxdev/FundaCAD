@@ -213,7 +213,7 @@ export class PatternFlow {
     }
     this.host.dim().show(this.patternDimDefs(pat.type), () => this.commit());
     this.host.dim().updateFromCursor(cur);
-    setPrompt("Edit the pattern, drag/type to change · click to commit · Delete to remove · Esc to keep");
+    setPrompt("Drag or type to change · click to commit · Delete removes · Esc");
     this.host.refreshActive();
     this.host.onState();
   }

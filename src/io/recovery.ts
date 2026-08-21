@@ -63,7 +63,7 @@ export function installAutosave(store: DocumentStore) {
       failCount++;
       if (failCount >= 3 && !warned) {
         warned = true;
-        toast("Autosave keeps failing, your unsaved work may not be recoverable if the app crashes", {
+        toast("Autosave keeps failing, unsaved work may not be recoverable", {
           kind: "error",
           timeout: 8000,
         });
@@ -125,7 +125,7 @@ export async function checkRecovery(store: DocumentStore) {
     );
     if (pick === "recover") {
       store.load(JSON.stringify(env.doc));
-      toast("Recovered unsaved work, use Save As to store it where you want", { kind: "info", timeout: 8000 });
+      toast("Recovered unsaved work, use Save As to keep it", { kind: "info", timeout: 8000 });
     } else if (pick === "discard") {
       await invoke("recovery_clear", { slot });
     }

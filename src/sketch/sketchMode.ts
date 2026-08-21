@@ -703,7 +703,7 @@ export class SketchMode {
     this.viewport.setSketchFlat(false);
     if (this.releaseAnnounced) return;
     this.releaseAnnounced = true;
-    toast("View unlocked, orbit freely. Everything you draw still lands on the sketch plane. (Look At re-squares it.)");
+    toast("View unlocked. Drawing still lands on the sketch plane; Look At re-squares it.");
   }
 
   /** Re-arm the lock and re-baseline it. Called by anything that deliberately
@@ -757,7 +757,7 @@ export class SketchMode {
     const drivenable = isPlacedDim(c);
     const driven = drivenable && (this.referenceMode || forceDriven);
     if (this.referenceMode && !drivenable) {
-      toast("A line length / circle diameter can't be a reference dimension yet, created as driving.");
+      toast("Lengths and diameters can't be reference dimensions yet, made this one driving");
     }
     // The forced case, said out loud. With Reference Dim OFF the user has asked
     // for a driving dimension and is getting a reference one, and until now that
@@ -767,7 +767,7 @@ export class SketchMode {
     // over-constrained. The pick-time hint says so too, but that scrolls past
     // while the eye is on the geometry.
     if (driven && forceDriven && !this.referenceMode) {
-      toast("Both sides of this dimension are projected geometry, which can't move, so it was created as a reference dimension.");
+      toast("Both sides are projected geometry and can't move, so this is a reference dimension");
     }
     const out = driven ? ({ ...c, driven: true } as SketchConstraint) : c;
     this.setDrivingDimension(out);
@@ -857,7 +857,7 @@ export class SketchMode {
     if (!this.directDimToast) {
       this.directDimToast = true;
       toast(
-        "Without the constraint solver, a length or diameter is applied to the shape directly and is not kept as a live dimension. It will drive the geometry properly once the solver runs.",
+        "The solver is not running, so this value is applied to the shape rather than kept as a live dimension",
         { timeout: 12000 },
       );
     }
@@ -3323,7 +3323,7 @@ export class SketchMode {
       () => this.commitOffset(),
       () => this.cancelOffset(),
     );
-    setPrompt("Offset: move to pick the side, or type a distance · click / Enter to apply · Esc to cancel");
+    setPrompt("Move to pick the side, or type a distance · Enter · Esc");
   }
 
   /** The offset result for the current pick, honouring Chain Selection. Chain

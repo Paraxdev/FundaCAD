@@ -81,9 +81,7 @@ export class MoveTool {
     const s = this.viewport.projectToScreen(this.anchor);
     this.dim.position(s.x, s.y);
     this.dim.updateFromCursor({ move: 0 });
-    setPrompt(
-      "Drag an axis arrow to move the selected bodies · type a value · Enter to commit · Esc to cancel",
-    );
+    setPrompt("Drag an axis arrow, or type a value · Enter · Esc");
     this.raf = requestAnimationFrame(this.boundTick);
   }
 
