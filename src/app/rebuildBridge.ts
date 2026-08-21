@@ -1,6 +1,6 @@
 import { toast } from "../ui/toast";
 import { logError } from "../ui/logStore";
-import { FEATURE_META } from "../ui/featureMeta";
+import { featureMeta } from "../ui/featureMeta";
 import { ambiguousDiagFor } from "../features/repickReference";
 import { multiColorEnabled, onFeatureFlagsChange } from "../ui/featureFlags";
 import type { Engine } from "./engine";
@@ -160,7 +160,7 @@ export function installRebuildBridge(e: Engine): void {
         for (const err of errs) {
           if (!err.feature_id || prevErrorIds.has(err.feature_id)) continue;
           const f = e.store.document.features.find((x) => x.id === err.feature_id);
-          const label = f ? (FEATURE_META[f.type as keyof typeof FEATURE_META]?.label ?? f.type) : err.feature_id;
+          const label = f ? featureMeta(f).label : err.feature_id;
           const id = err.feature_id;
           // An ambiguous saved reference is the one failure the user can actually
           // fix from here, so offer the repair instead of a bare "Show". These are

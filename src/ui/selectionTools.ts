@@ -89,7 +89,9 @@ const TOOL_ICON: Record<ToolId, string> = {
   texture: "texture",
   "delete-face": "deleteFace",
   move: "move",
-  combine: "combine",
+  "boolean-union": "booleanUnion",
+  "boolean-subtract": "booleanSubtract",
+  "boolean-intersect": "booleanIntersect",
   measure: "measure",
   shell: "shell",
   draft: "draft",
@@ -114,7 +116,7 @@ export function selectionOffers(sel: SelectionCounts): ToolOffer[] {
   const kind = primaryKind(sel);
   if (!kind) return [];
   // applicableTools() is the authority on "can this run": it is what applies
-  // each tool's own minimum (Combine needs two bodies, Loft two profiles), and
+  // each tool's own minimum (a boolean needs two bodies, Loft two profiles), and
   // re-deriving that from the counts here is exactly the duplication this file
   // exists to avoid.
   const live = new Set(applicableTools(sel));

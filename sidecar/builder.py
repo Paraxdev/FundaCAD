@@ -7,7 +7,7 @@ engine.
 The model is **multi-body**: the rebuild keeps an ordered list of named bodies
 with an "active" body (the last one created/edited). Most features operate on the
 active body — so a document with no body-splitting ops behaves exactly like the
-old single-body code. Import adds a body; Split can produce two; Combine fuses
+old single-body code. Import adds a body; Split can produce two; a union fuses
 bodies together. The merged shape (a Compound of all bodies) is what gets
 tessellated, measured and exported, so every downstream consumer stays uniform.
 
@@ -1653,7 +1653,7 @@ def _datum_face_plane(f, ctx):
     this that sketches are placed on.
 
     Resolution is GLOBAL across bodies, for the reason recorded on
-    _handle_delete_face: body ids are positional, so an upstream split or combine
+    _handle_delete_face: body ids are positional, so an upstream split or boolean
     renumbers them and a body-scoped nearest match would silently re-aim the
     datum at some distant face on the wrong piece.
 
@@ -2301,7 +2301,7 @@ def _handle_delete_face(f, ctx):
     # Remove the picked face(s) and heal the solid (defeaturing) — deletes
     # an imported chamfer/fillet or a protrusion, where there's no feature
     # to remove. Parametric: the face selector re-resolves each rebuild.
-    # Body ids are POSITIONAL — an upstream split/combine renumbers them,
+    # Body ids are POSITIONAL — an upstream split/boolean renumbers them,
     # silently re-aiming a saved deleteFace at the wrong piece (its nearest
     # match is then some distant face; the delete fails or worse). So
     # nearest-point picks resolve GLOBALLY: the face nearest the recorded
@@ -2391,7 +2391,7 @@ def _revolve_axis(f, ctx):
     Re-resolving is what makes a picked edge a reference rather than a note about
     where an edge used to be. Resolution is GLOBAL across bodies for the reason
     recorded on _datum_face_plane: body ids are positional, so an upstream split
-    or combine renumbers them and a body-scoped match would silently re-aim the
+    or boolean renumbers them and a body-scoped match would silently re-aim the
     revolve at some distant edge on the wrong piece.
 
     An edge that stops resolving is not an error. The axis falls back to the
@@ -2936,8 +2936,8 @@ def _handle_split(f, ctx):
     _do_split(f, ctx.bodies, ctx.find_body, ctx.active, ctx.new_body, ctx.datums)
 
 
-def _handle_combine(f, ctx):
-    _do_combine(f, ctx.bodies, ctx.find_body, diag=ctx.diagnostics)
+def _handle_boolean(f, ctx):
+    _do_boolean(f, ctx.bodies, ctx.find_body, diag=ctx.diagnostics)
 
 
 def _handle_remove_body(f, ctx):
@@ -2988,7 +2988,7 @@ _FEATURE_HANDLERS = {
     "scale": _handle_scale,
     "move": _handle_move,
     "split": _handle_split,
-    "combine": _handle_combine,
+    "boolean": _handle_boolean,
     "removeBody": _handle_remove_body,
 }
 
@@ -3584,7 +3584,7 @@ def _body_fingerprint(shape):
 
 def _blob_key(chain_key, body_id):
     """One feature can modify SEVERAL bodies (extrude-cut across overlapping
-    bodies, combine): the chain key alone would collide their blobs and the
+    bodies, boolean): the chain key alone would collide their blobs and the
     dedup skip in put_blob would silently keep only the first one written
     (caught by the restore fingerprint guard). Mix the body id in."""
     return hashlib.blake2b(
@@ -4879,8 +4879,8 @@ def _noop_eps(ref):
     "the boolean did nothing": an absolute floor plus a 0.01% relative slice,
     mirroring the tolerances used by _unify_body / cleanup elsewhere in this
     file. The ONE definition every boolean no-op guard shares
-    (_boolean_into_bodies for extrude/revolve/loft/sweep, _do_combine for
-    Combine) — tune it here, never inline a copy."""
+    (_boolean_into_bodies for extrude/revolve/loft/sweep, _do_boolean for the
+    three body booleans) — tune it here, never inline a copy."""
     return max(1e-6, 1e-4 * (ref or 0.0))
 
 
@@ -4991,7 +4991,7 @@ def _boolean_into_bodies(bodies, solid, op, new_body, hidden=frozenset()):
                 and _bbox_overlap(b["shape"], solid)):
             hits.append(b)
     # a change smaller than this counts as "nothing happened" — shared by every
-    # boolean guard site (here and _do_combine) so the tolerance convention
+    # boolean guard site (here and _do_boolean) so the tolerance convention
     # can't drift between features.
     eps = _noop_eps
 
@@ -5174,7 +5174,7 @@ def _retarget_delete_faces(named, bodies, sels, diag, fid):
     Nearest-point selectors resolve across ALL bodies: the face closest to the
     recorded pick point wins, wherever it lives. This keeps the app's core
     invariant (geometry by geometric selector, never index) honest for the BODY
-    reference too — body ids are positional, so an upstream split/combine
+    reference too — body ids are positional, so an upstream split/boolean
     renumbers them and the named body can quietly become a different piece of
     the part; the delete's nearest match on that wrong piece is then some
     distant face and the heal fails (measured: one inserted split turned all 9
@@ -5249,80 +5249,101 @@ def _retarget_delete_faces(named, bodies, sels, diag, fid):
     return target, faces
 
 
-def _do_combine(f, bodies, find_body, diag=None):
-    """Boolean-combine bodies: join (+), cut (-) or intersect (&). The target body
-    is modified in place; tool bodies are consumed unless keepTools is set.
+# The document's word for each boolean -> the kernel's. The frontend writes
+# union/subtract/intersect, which is what the three commands are called; OCCT
+# calls the same three fuse/cut/common.
+#
+# The v8 spellings are accepted too. document/migrate.ts rewrites `combine`
+# features on load so the app never sends them, but a document does not have to
+# arrive through the app — a fixture, a script, a hand-written test — and a
+# three-entry dict is cheaper than a class of input that opens and will not
+# build.
+_BOOL_KINDS = {
+    "union": "fuse",
+    "subtract": "cut",
+    "intersect": "common",
+    "join": "fuse",
+    "cut": "cut",
+}
+
+
+def _do_boolean(f, bodies, find_body, diag=None):
+    """A boolean between bodies: union (+), subtract (-) or intersect (&). The
+    target body is modified in place; tool bodies are consumed unless
+    keepOriginals is set.
 
     Dangling references are NON-FATAL: if the target — or every tool — has already
-    been consumed by an earlier combine (or renumbered away by an upstream edit;
-    body ids are positional), the combine becomes a no-op recorded in `diag` rather
-    than halting the whole rebuild. Re-joining a body an earlier combine already
+    been consumed by an earlier boolean (or renumbered away by an upstream edit;
+    body ids are positional), the feature becomes a no-op recorded in `diag` rather
+    than halting the whole rebuild. Re-uniting a body an earlier union already
     merged is geometrically idempotent, so skipping a stale duplicate yields the
-    intended result; for cut/intersect, doing nothing is the safe fallback over
+    intended result; for subtract/intersect, doing nothing is the safe fallback over
     cutting the wrong body. A malformed operation is still a hard error."""
     op = f["operation"]
-    if op not in ("join", "cut", "intersect"):
-        raise ValueError(f"unknown combine operation: {op}")
+    kind = _BOOL_KINDS.get(op)
+    if kind is None:
+        raise ValueError(f"unknown boolean operation: {op}")
+    label = {"fuse": "Union", "cut": "Subtract", "common": "Intersect"}[kind]
     target = find_body(f["target"]) if f.get("target") else (bodies[0] if bodies else None)
     if target is None:
-        _skip_feature(diag, f, "combine", "target body already consumed or missing")
+        _skip_feature(diag, f, "boolean", "target body already consumed or missing")
         return
     tool_ids = f.get("tools") or [b["id"] for b in bodies if b["id"] != target["id"]]
     tools = [t for t in (find_body(tid) for tid in tool_ids) if t is not None and t["id"] != target["id"]]
     if not tools:
-        _skip_feature(diag, f, "combine", "tool bodies already consumed or missing")
+        _skip_feature(diag, f, "boolean", "tool bodies already consumed or missing")
         return
 
     shape = target["shape"]
     before_vol = _try_vol(shape)
-    # _serial_bool, not build123d's +/-/&: a Combine tool is often a compound
-    # of MANY disjoint solids (explode:false import, multi-region extrude) —
+    # _serial_bool, not build123d's +/-/&: a tool body is often a compound of
+    # MANY disjoint solids (explode:false import, multi-region extrude) —
     # exactly the shape class where OCCT's parallel BOP is ~5x slower than
     # serial (see _serial_bool). Same UnifySameDomain clean, same result.
-    kind = {"join": "fuse", "cut": "cut", "intersect": "common"}[op]
     for t in tools:
         shape = _serial_bool(_as_compound(shape), _as_compound(t["shape"]), kind)
     # No-op / destructive guards, same volume-eps convention as
-    # _boolean_into_bodies. Only the SILENT failure modes raise: a Cut that
+    # _boolean_into_bodies. Only the SILENT failure modes raise: a subtract that
     # removed nothing still consumes the tools (the user loses bodies and gains
-    # nothing), and an Intersect that empties the target destroys it outright.
-    # Join-with-embedded-tool and Intersect-inside-tool are NOT guarded — their
+    # nothing), and an intersect that empties the target destroys it outright.
+    # Union-with-embedded-tool and intersect-inside-tool are NOT guarded — their
     # volume is unchanged but they visibly absorb the tool bodies, which is a
     # legitimate, observable operation (unlike extrude, nothing here is silent).
     # Volume-read failures skip the guard (never raise a misleading no-op error).
     after_vol = _try_vol(shape)
     if before_vol is not None and after_vol is not None:
         guard_eps = _noop_eps(before_vol)
-        if op == "cut" and after_vol >= before_vol - guard_eps:
+        if kind == "cut" and after_vol >= before_vol - guard_eps:
             raise ValueError(
-                "Combine (Cut) removed nothing — no tool body overlaps the target."
+                f"{label} removed nothing — no tool body overlaps the one being kept."
             )
-        # ...and the mirror-image silent failure: a Cut that removes EVERYTHING.
-        # Cutting a body with an identical coincident one left a body of volume
-        # 0.0 and no error at all, so the browser tree gained a phantom body that
-        # cannot be seen, selected meaningfully, or printed (docs/EDGE-CASES.md
-        # §3). Same class as the no-op above — the user loses their body and is
-        # told nothing.
-        if op == "cut" and after_vol < guard_eps:
+        # ...and the mirror-image silent failure: a subtract that removes
+        # EVERYTHING. Cutting a body with an identical coincident one left a body
+        # of volume 0.0 and no error at all, so the browser tree gained a phantom
+        # body that cannot be seen, selected meaningfully, or printed
+        # (docs/EDGE-CASES.md §3). Same class as the no-op above — the user loses
+        # their body and is told nothing.
+        if kind == "cut" and after_vol < guard_eps:
             raise ValueError(
-                "Combine (Cut) would remove the whole target body — the tools "
-                "cover all of it."
+                f"{label} would remove the whole body — the tools cover all of it."
             )
-        if op == "intersect" and after_vol < guard_eps:
+        if kind == "common" and after_vol < guard_eps:
             raise ValueError(
-                "Combine (Intersect) would leave the target empty — the tools "
-                "don't overlap it."
+                f"{label} would leave nothing — the tools don't overlap the body."
             )
-    # A join of ragged/facet-heritage bodies GLUES solids instead of merging
-    # them: the "combined" body stays a compound of pieces sharing interior
+    # A union of ragged/facet-heritage bodies GLUES solids instead of merging
+    # them: the "united" body stays a compound of pieces sharing interior
     # walls, with coincident skins and a visible seam at every contact — the
     # boolean-rot class the cleanUp feature repairs after the fact. Repair it
-    # AT THE SOURCE so a Combine yields one true solid. _unify_body is a fast
+    # AT THE SOURCE so a union yields one true solid. _unify_body is a fast
     # no-op on clean results and hard-validated (any doubt → unchanged), and
-    # replayed history heals existing combines on the next rebuild.
-    target["shape"] = _unify_body(shape) if op == "join" else shape
+    # replayed history heals existing unions on the next rebuild.
+    target["shape"] = _unify_body(shape) if kind == "fuse" else shape
 
-    if not f.get("keepTools"):
+    # keepOriginals leaves the tool bodies in the model, which is what makes one
+    # body usable as a cutter more than once. `keepTools` is the pre-v9 spelling,
+    # read for the same reason the pre-v9 operation names are.
+    if not (f.get("keepOriginals") or f.get("keepTools")):
         consumed = {t["id"] for t in tools}
         bodies[:] = [b for b in bodies if b["id"] not in consumed]
 

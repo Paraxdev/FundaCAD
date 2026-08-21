@@ -33,6 +33,7 @@
 //     dropdown over it could only offer the three and would silently discard a
 //     placement the moment it was used.
 
+import { BOOLEAN_COMMANDS } from "../features/booleanOps";
 import type { Feature, FeatureType } from "../types";
 
 /** The seven texture patterns, read off the feature union rather than spelled
@@ -76,6 +77,11 @@ const BOOLEAN_OPS: ChoiceOption[] = [
   { value: "intersect", label: "Intersect" },
 ];
 
+/** Union / Subtract / Intersect, off the same inventory the three commands and
+ *  the three ribbon buttons read, so a feature can never be shown a word its
+ *  command does not use. */
+const BOOLEAN_KINDS: ChoiceOption[] = BOOLEAN_COMMANDS.map((c) => ({ value: c.op, label: c.label }));
+
 const AXES: ChoiceOption[] = [
   { value: "X", label: "X" },
   { value: "Y", label: "Y" },
@@ -112,6 +118,11 @@ export const SEED_KINDS: ReadonlySet<TextureKind> =
   new Set<TextureKind>(["voronoi", "noise"]);
 
 export const FEATURE_CHOICE_FIELDS: Partial<Record<FeatureType, ChoiceField[]>> = {
+  // Three commands make the feature, and the row edits it afterwards. Nothing
+  // asks which boolean you want, so this is the only place the answer is ever
+  // typed by hand — which is exactly what the row is for: changing your mind
+  // should not mean deleting the feature and re-picking the bodies.
+  boolean: [{ field: "operation", label: "Operation", options: BOOLEAN_KINDS, fallback: "union" }],
   extrude: [{ field: "operation", label: "Operation", options: BOOLEAN_OPS, fallback: "new" }],
   revolve: [
     { field: "operation", label: "Operation", options: BOOLEAN_OPS, fallback: "new" },
@@ -171,6 +182,12 @@ export const FEATURE_CHOICE_FIELDS: Partial<Record<FeatureType, ChoiceField[]>> 
 };
 
 export const FEATURE_TOGGLE_FIELDS: Partial<Record<FeatureType, ToggleField[]>> = {
+  // A boolean CONSUMES its tool bodies by default: the two circles go in and one
+  // shape comes out, which is what the operation means and what leaves a browser
+  // tree you can read. Off by default for that reason, and on when the same body
+  // is a cutter more than once — a bolt hole punched through three plates should
+  // not need three copies of the bolt.
+  boolean: [{ field: "keepOriginals", label: "Keep originals", fallback: false }],
   thicken: [{ field: "symmetric", label: "Symmetric", fallback: false }],
   texture: [{ field: "invert", label: "Invert heights", fallback: false }],
 };

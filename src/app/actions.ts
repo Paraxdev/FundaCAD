@@ -4,6 +4,7 @@ import { openParamsDialog } from "../ui/paramsDialog";
 import { toggleShortcutHUD } from "../input/shortcuts";
 import { choose } from "../ui/choice";
 import { SKETCH_TOOLS, SKETCH_MODIFY, NON_REPEATABLE } from "./actionTables";
+import { booleanOpOfAction } from "../features/booleanOps";
 import { useUiStore } from "../stores/ui";
 import { useSketchPaletteStore } from "../stores/sketchPalette";
 import type { Engine } from "./engine";
@@ -58,6 +59,12 @@ export function createActions(e: Engine): (action: string) => void {
     // a 3D modeling command finishes the active sketch first (mainstream MCAD behavior)
     if (e.sketch.active) e.sketch.finish(true);
 
+    // The three booleans are one starter taking the operation as an argument, so
+    // they are dispatched from the inventory rather than as three switch arms
+    // that would differ only in a string (features/booleanOps.ts).
+    const boolOp = booleanOpOfAction(action);
+    if (boolOp) return void e.starters.startBoolean(boolOp);
+
     switch (action) {
       case "sketch":
         e.starters.startSketch();
@@ -82,9 +89,6 @@ export function createActions(e: Engine): (action: string) => void {
         break;
       case "split":
         void e.starters.startSplit();
-        break;
-      case "combine":
-        void e.starters.startCombine();
         break;
       case "datum-plane":
         e.starters.createDatumPlane();

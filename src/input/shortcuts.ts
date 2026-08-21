@@ -9,6 +9,15 @@ import { useUiStore } from "../stores/ui";
 export interface Shortcut {
   key: string; // normalized lowercase key ("b", "home", "f6", "?")
   shift?: boolean;
+  /** Ctrl (or Cmd) must be held.
+   *
+   *  Only the booleans use it, and they use it because the three single letters
+   *  that name them — U, B, I — are already Clean Up, Chamfer and Measure, and a
+   *  family of three commands wants three keys that read as a family rather than
+   *  whichever letters happened to be free. Everything else here is bare: a
+   *  modeling app's tool keys are meant to be hit one-handed while the other
+   *  hand is on the mouse. */
+  ctrl?: boolean;
   action: string; // action id fed to main's handleAction (or a special-cased id)
   context: "model" | "sketch" | "global";
   label: string;
@@ -24,7 +33,9 @@ export const SHORTCUTS: Shortcut[] = [
   { key: "m", action: "move", context: "model", label: "Move" },
   { key: "i", action: "measure", context: "model", label: "Measure" },
   { key: "k", action: "split", context: "model", label: "Split Body" },
-  { key: "j", action: "combine", context: "model", label: "Combine (join)" },
+  { key: "u", ctrl: true, action: "boolean-union", context: "model", label: "Union" },
+  { key: "b", ctrl: true, action: "boolean-subtract", context: "model", label: "Subtract" },
+  { key: "i", ctrl: true, action: "boolean-intersect", context: "model", label: "Intersect" },
   { key: "u", action: "clean-up", context: "model", label: "Clean Up" },
   { key: "o", action: "offset-plane", context: "model", label: "Offset Plane" },
   { key: "h", action: "hide-selected", context: "model", label: "Hide selected bodies" },
@@ -57,12 +68,20 @@ export const SHORTCUTS: Shortcut[] = [
   { key: "?", action: "shortcut-help", context: "global", label: "Shortcut help" },
 ];
 
-/** first key hint for an action ("Shift+H", "Home"), for menus/palette. */
+/** How a shortcut is written for a human ("Shift+H", "Ctrl+U", "Home").
+ *
+ *  One formatter, used by keyHint below and by the `?` HUD, because those two
+ *  drifting is exactly the failure this file exists to prevent: a cheat sheet
+ *  that advertises a key nothing binds. */
+export function formatShortcut(s: Shortcut): string {
+  const k = s.key.length === 1 ? s.key.toUpperCase() : s.key.charAt(0).toUpperCase() + s.key.slice(1);
+  return `${s.ctrl ? "Ctrl+" : ""}${s.shift ? "Shift+" : ""}${k}`;
+}
+
+/** first key hint for an action ("Shift+H", "Ctrl+U", "Home"), for menus/palette. */
 export function keyHint(action: string): string | undefined {
   const s = SHORTCUTS.find((x) => x.action === action);
-  if (!s) return undefined;
-  const k = s.key.length === 1 ? s.key.toUpperCase() : s.key.charAt(0).toUpperCase() + s.key.slice(1);
-  return s.shift ? `Shift+${k}` : k;
+  return s ? formatShortcut(s) : undefined;
 }
 
 /** Resolve a keydown to an action for the current context (sketch keys win
@@ -71,10 +90,15 @@ export function resolveShortcut(
   key: string,
   shift: boolean,
   context: "model" | "sketch",
+  ctrl = false,
 ): string | null {
   const k = key.toLowerCase();
   for (const s of SHORTCUTS) {
-    if (s.key !== k || !!s.shift !== shift) continue;
+    // Every flag is compared, including the absent ones. A bare "b" must not
+    // resolve to Ctrl+B's action and Ctrl+B must not resolve to bare B's: the
+    // two are different commands, and the pair that would collide here is
+    // Chamfer and Subtract.
+    if (s.key !== k || !!s.shift !== shift || !!s.ctrl !== ctrl) continue;
     if (s.context === "global" || s.context === context) return s.action;
   }
   return null;
@@ -92,7 +116,7 @@ export interface HudGroup {
 
 /** Pure: the HUD's content. Exported so it is unit-testable without a DOM. */
 export function shortcutHudGroups(): HudGroup[] {
-  const fmt = (s: Shortcut) => (s.shift ? `Shift+${s.key.toUpperCase()}` : s.key.toUpperCase());
+  const fmt = formatShortcut;
   const byContext = (ctx: Shortcut["context"]) =>
     SHORTCUTS.filter((s) => s.context === ctx).map((s) => ({ key: fmt(s), label: s.label }));
   return [

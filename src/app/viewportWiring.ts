@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { setPrompt } from "../ui/prompt";
 import { contextMenu, dismissContextMenu } from "../ui/menu";
-import { FEATURE_META } from "../ui/featureMeta";
+import { featureMeta } from "../ui/featureMeta";
 import { bodyRowLabel, distinguish, dominantOwner, edgeChoiceLabel } from "../ui/edgeChoice";
 import { ambiguousCandidates } from "../viewport/edgeTies";
 import { useBrowserStore } from "../stores/browser";
@@ -66,7 +66,7 @@ export function installViewportWiring(e: Engine): void {
       // `name` is optional and only present on some members of the union, so it
       // is read off the record rather than the narrowed type.
       const named = (f as { name?: string }).name;
-      return named || (FEATURE_META[f.type as keyof typeof FEATURE_META]?.label ?? f.type);
+      return named || featureMeta(f).label;
     };
     const rows = cands.map((c) => {
       const index = bodies.findIndex((b) => b.id === c.edge.body);

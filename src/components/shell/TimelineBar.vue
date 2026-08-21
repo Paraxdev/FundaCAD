@@ -10,7 +10,7 @@ import { useEngine } from "../../app/engineKey";
 import { useDocValue, useBuildValue } from "../../app/useDoc";
 import { useSelectionStore } from "../../stores/selection";
 import { useTimelineStore } from "../../stores/timeline";
-import { FEATURE_META } from "../../ui/featureMeta";
+import { featureMeta } from "../../ui/featureMeta";
 import Icon from "./Icon.vue";
 import { contextMenu } from "../../ui/menu";
 import { buildProgress, CANCEL_DELAY_MS } from "../../ui/buildProgress";
@@ -101,7 +101,7 @@ const floatingFeature = computed(() =>
 const propsTitle = computed(() => {
   const id = floatingFeature.value;
   const f = id ? features.value.find((x) => x.id === id) : null;
-  return f ? f.name || metaFor(f.type).label : "";
+  return f ? f.name || metaFor(f).label : "";
 });
 
 watch(() => [selection.featureId, features.value.length] as const, () => void measureProps(), {
@@ -188,17 +188,19 @@ async function cancelBusy() {
 const showEmpty = computed(() => features.value.length === 0 && !building.value && !busy.value.active);
 
 // --- chips ---------------------------------------------------------------
-function metaFor(type: string) {
-  // Unknown feature types must render, not crash: a document from a newer
-  // version with a type this build doesn't know would otherwise throw
-  // mid-render and make File→Open silently do nothing.
-  return FEATURE_META[type as keyof typeof FEATURE_META] ?? { icon: "dot", label: type };
+// The whole feature, not just its type: a boolean is named after the operation
+// it performs (ui/featureMeta.ts), so a chip that read only the type would give
+// three different commands one word. Unknown types still render rather than
+// crash — a document from a newer version would otherwise throw mid-draw and
+// make File→Open silently do nothing.
+function metaFor(f: { type: string; operation?: unknown }) {
+  return featureMeta(f);
 }
 
 function chipTitle(f: { id: string; type: string }, i: number) {
   const err = errors.value.get(f.id);
   return (
-    `${i + 1} · ${metaFor(f.type).label}` +
+    `${i + 1} · ${metaFor(f).label}` +
     // A plain-text word, not a warning sign: this is a `title` attribute, and
     // the browser draws it in the OS tooltip font where a symbol lands as
     // whatever fallback glyph — or tofu — that font happens to carry.
@@ -377,10 +379,10 @@ function openMenu(e: MouseEvent, id: string, i: number) {
                 @dragleave="dropTarget = null"
                 @drop="onDrop(f.id, i, $event)"
               >
-                <span class="glyph"><Icon :name="metaFor(f.type).icon" :size="18" /></span>
+                <span class="glyph"><Icon :name="metaFor(f).icon" :size="18" /></span>
                 <!-- Shown only in the side arrangement, where there is width for
                      it: a vertical column of unlabelled icons is unreadable. -->
-                <span class="t-name">{{ f.name || metaFor(f.type).label }}</span>
+                <span class="t-name">{{ f.name || metaFor(f).label }}</span>
               </div>
               <!-- The feature's own values, under the chip you clicked. The
                    point of putting them HERE rather than in a docked panel is

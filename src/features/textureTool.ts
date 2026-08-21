@@ -450,7 +450,7 @@ export class TextureTool {
     this.lastBodyIds = [];
     this.rebuildLanded = false;
     // consumed members would dangle in the next tool's selection (same reason
-    // Combine clears it after consuming the tool bodies) — clear both kinds.
+    // a boolean clears it after consuming the tool bodies) — clear both kinds.
     this.viewport.clearSelection();
     this.viewport.setSelectedBodies([]);
     this.active = false;

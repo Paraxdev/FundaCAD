@@ -1,5 +1,5 @@
 // Tool-starter functions: the ~20 "start a modeling tool" entry points (Sketch,
-// Extrude, Fillet, Chamfer, Split, Combine, Revolve, Loft, Sweep, Primitive,
+// Extrude, Fillet, Chamfer, Split, the booleans, Revolve, Loft, Sweep, Primitive,
 // Shell, Draft, Pattern, Scale, Move, Press/Pull…) plus the interactive
 // plane/face pickers they share. Each closes over the same large set of
 // singletons/state owned by main.ts, passed in once via createFeatureStarters.
@@ -10,6 +10,7 @@ import type { SketchOverlay, WorldRegion } from "../sketch/overlay";
 import type { SketchMode, SketchTool } from "../sketch/sketchMode";
 import { SketchPlane } from "../sketch/plane";
 import { axisFromEdge } from "./planeMath";
+import { BOOLEAN_LABEL, type BooleanOp } from "./booleanOps";
 import type { ExtrudeTool } from "./extrudeTool";
 import type { EdgeFeatureTool } from "./edgeFeatureTool";
 import type { PressPullTool } from "./pressPullTool";
@@ -364,27 +365,23 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     store.addFeature({ id: store.nextId(), type: "split", planeId, keep, bodies: ids, groupSides: true } as Feature);
   }
 
-  // Combine: boolean-join/cut/intersect bodies. With exactly two bodies the first
-  // is the (kept) target and the second the tool; with more, you pick the target
-  // and the tool body so cut/intersect direction is unambiguous.
-  async function startCombine() {
+  // Union / Subtract / Intersect: one starter, three commands. The operation is
+  // an ARGUMENT here rather than a question, because each command already knows
+  // which boolean it is — that is the whole difference from the single Combine
+  // command it replaces, which opened on a dialog before it would look at the
+  // selection.
+  //
+  // With bodies already selected it runs on them: the FIRST is the kept target
+  // and the rest are tools, which is what makes the direction of a subtract
+  // unambiguous without asking. With none selected it falls back to picking the
+  // target (when there is more than one candidate) and a checklist of tools.
+  async function startBoolean(op: BooleanOp) {
     if (toolBusy()) return;
     const bodies = store.buildState.result?.bodies ?? [];
     if (bodies.length < 2) {
-      setStatus("Combine needs two bodies", "");
+      setStatus(`${BOOLEAN_LABEL[op]} needs two bodies`, "");
       return;
     }
-    const op = await choose<"join" | "cut" | "intersect">("Combine bodies", [
-      { value: "join", label: "Join", hint: "union" },
-      { value: "cut", label: "Cut", hint: "subtract" },
-      { value: "intersect", label: "Intersect", hint: "overlap" },
-    ]);
-    if (!op) return;
-
-    // If the user already multi-selected bodies (Ctrl+click in the tree/viewport),
-    // combine those directly: the first is the kept target, the rest are tools —
-    // no dialogs. Otherwise fall back to picking a target (when ambiguous) and a
-    // multi-select checklist of tool bodies.
     const pre = viewport.getSelectedBodies().filter((id) => bodies.some((b) => b.id === id));
     let target: string;
     let tools: string[];
@@ -394,13 +391,13 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       target = first;
       tools = pre.slice(1);
     } else {
-      // ONE selected body (e.g. right-click → "Combine with…") is the kept target;
-      // with none, pick a target when ambiguous. Tools come from the checklist.
+      // ONE selected body (a right-click on it, say) is the kept target; with
+      // none, pick a target when it is ambiguous. Tools come from the checklist.
       const t0 = pre[0] ?? bodies[0]?.id;
       if (t0 === undefined) return;
       target = t0;
       if (!pre.length && bodies.length > 2) {
-        const t = await chooseBody("Target body (kept)", bodies);
+        const t = await chooseBody("Body to keep", bodies);
         if (!t) return;
         target = t;
       }
@@ -408,9 +405,9 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       if (candidates.length > 1) {
         const { chooseMulti } = await import("../ui/choice");
         const picked = await chooseMulti<string>(
-          "Tool bodies (combined into the target)",
+          `Bodies to ${BOOLEAN_LABEL[op].toLowerCase()} with`,
           candidates.map((b) => ({ value: b.id, label: store.bodyName(b.id) ?? b.name })),
-          { min: 1, confirmLabel: "Combine" },
+          { min: 1, confirmLabel: BOOLEAN_LABEL[op] },
         );
         if (!picked) return;
         tools = picked;
@@ -419,7 +416,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       }
     }
     viewport.setSelectedBodies([]); // consumed tools would dangle; clear the selection
-    store.addFeature({ id: store.nextId(), type: "combine", operation: op, target, tools } as Feature);
+    store.addFeature({ id: store.nextId(), type: "boolean", operation: op, target, tools } as Feature);
   }
 
   /** Pick one body by name from the rebuild's body list (returns its id). Labels use
@@ -444,7 +441,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   // Clean Up: repair boolean rot on all bodies at this point in the timeline —
   // unify glued/overlapping solids, then collapse facet debris (slivers +
   // near-coplanar staircases). Booleans on ragged imports re-manufacture debris,
-  // so run it again after a heavy Press/Pull / Combine session to keep Delete
+  // so run it again after a heavy Press/Pull or boolean session to keep Delete
   // Face and downstream booleans reliable. Best-effort in the sidecar: a body it
   // can't confidently clean passes through unchanged.
   function startCleanUp() {
@@ -870,7 +867,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     offsetPlaneFromFace,
     startSplit,
     startCutByPlane,
-    startCombine,
+    startBoolean,
     startSimplifyMesh,
     startCleanUp,
     startScale,

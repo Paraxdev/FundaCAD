@@ -216,7 +216,7 @@ def test_every_diagnostic_shape_is_json_safe():
         {"feature_id": "c", "kind": "edgeOpFailed", "resolved": 2, "confidence": 0.0,
          "lossy": True, "reason": "per-edge", "failed": [{"mid": [1.0, 2.0, 3.0]}]},
         # builder._skip_feature
-        {"feature_id": "d", "kind": "combine", "resolved": 0, "confidence": 0.0,
+        {"feature_id": "d", "kind": "boolean", "resolved": 0, "confidence": 0.0,
          "lossy": True, "reason": "target body already consumed or missing"},
         # texture.py
         {"feature_id": "e", "kind": "texture", "resolved": 1234, "confidence": 0.5,

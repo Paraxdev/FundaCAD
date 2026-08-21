@@ -9,7 +9,7 @@ import { computed, ref } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useDocValue } from "../../app/useDoc";
 import { usePanelsStore } from "../../stores/panels";
-import { FEATURE_META } from "../../ui/featureMeta";
+import { featureMeta } from "../../ui/featureMeta";
 import { getUnit, toDisplay, round } from "../../ui/units";
 import FloatingPanel from "./FloatingPanel.vue";
 import ValidatedInput from "../shell/ValidatedInput.vue";
@@ -55,7 +55,7 @@ function formatValue(def: ParamDef): string {
 function targetLabel(doc: CadDocument, t: ParamTarget): string {
   const featureName = (id: string) => {
     const f = doc.features.find((x) => x.id === id);
-    return f ? `${FEATURE_META[f.type]?.label ?? f.type} ${id}` : id;
+    return f ? `${featureMeta(f).label} ${id}` : id;
   };
   switch (t.kind) {
     case "feature":

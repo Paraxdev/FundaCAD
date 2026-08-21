@@ -146,47 +146,83 @@ def test_split():
     print(f"  split OK: both→2 bodies, top→1 body vol {part.volume:.0f}")
 
 
-def test_combine():
-    """Two overlapping boxes combined via join / cut / intersect."""
+def test_boolean():
+    """Two overlapping boxes through union / subtract / intersect."""
     _s1, a = _box(1, 20, 20, 20)
     _s2, b = _box(2, 10, 10, 20)  # smaller box, fully inside A's footprint
-    base = {"parameters": {}, "features": a + b}  # body1 (big) + body2 (small)
     results = {}
-    for op in ("join", "cut", "intersect"):
+    for op in ("union", "subtract", "intersect"):
         doc = {"parameters": {}, "features": a + b + [
-            {"id": "cb", "type": "combine", "operation": op, "target": "body1", "tools": ["body2"]}
+            {"id": "cb", "type": "boolean", "operation": op, "target": "body1", "tools": ["body2"]}
         ]}
         part, err, bodies = rebuild(doc)
         assert not err, f"{op}: {err}"
         assert len(bodies) == 1, f"{op}: tool body should be consumed, got {len(bodies)} bodies"
         results[op] = part.volume
-    # big=8000, small=2000 inside it: join=8000, cut=6000, intersect=2000
+    # big=8000, small=2000 inside it: union=8000, subtract=6000, intersect=2000
     assert abs(results["intersect"] - 2000) < 200, results
-    assert abs(results["cut"] - 6000) < 200, results
-    assert results["join"] > results["cut"], results
-    print(f"  combine OK: join {results['join']:.0f}, cut {results['cut']:.0f}, "
+    assert abs(results["subtract"] - 6000) < 200, results
+    assert results["union"] > results["subtract"], results
+    print(f"  boolean OK: union {results['union']:.0f}, subtract {results['subtract']:.0f}, "
           f"intersect {results['intersect']:.0f}")
 
 
-def test_combine_dangling_ref():
-    """A combine whose tool/target was already consumed by an earlier combine is a
+def test_boolean_keep_originals():
+    """keepOriginals leaves the tool body in the model, which is what makes one
+    body usable as a cutter more than once."""
+    _s1, a = _box(1, 20, 20, 20)
+    _s2, b = _box(2, 10, 10, 20)
+    doc = {"parameters": {}, "features": a + b + [
+        {"id": "cb", "type": "boolean", "operation": "subtract",
+         "target": "body1", "tools": ["body2"], "keepOriginals": True}
+    ]}
+    _p, err, bodies = rebuild(doc)
+    assert not err, err
+    # The cut happened AND the cutter survived. Either half alone would pass for
+    # the wrong reason: a boolean that silently did nothing also leaves two
+    # bodies, and one that consumed the tool also cuts.
+    assert len(bodies) == 2, f"the tool body should survive, got {len(bodies)}"
+    vols = sorted(round(x["shape"].volume) for x in bodies)
+    assert vols == [2000, 6000], vols
+    print("  boolean keepOriginals OK: cut applied, cutter kept")
+
+
+def test_boolean_reads_the_pre_v9_spelling():
+    """A document written before the three commands existed still builds.
+
+    document/migrate.ts rewrites `combine` on load so the app never sends one,
+    but a fixture or a script is not the app, and an input that opens and will
+    not build is worse than a three-entry alias table."""
+    _s1, a = _box(1, 20, 20, 20)
+    _s2, b = _box(2, 10, 10, 20)
+    doc = {"parameters": {}, "features": a + b + [
+        {"id": "cb", "type": "boolean", "operation": "cut", "target": "body1", "tools": ["body2"]}
+    ]}
+    part, err, bodies = rebuild(doc)
+    assert not err, err
+    assert len(bodies) == 1 and abs(part.volume - 6000) < 200, part.volume
+    print("  boolean legacy spelling OK: the old word still subtracts")
+
+
+def test_boolean_dangling_ref():
+    """A boolean whose tool/target was already consumed by an earlier one is a
     NON-FATAL no-op recorded in diagnostics (not a build-halting error) — so a
     stale duplicate (positional-id drift) can't nuke the whole downstream timeline."""
     _s1, a = _box(1, 20, 20, 20)
     _s2, b = _box(2, 10, 10, 20)
-    cb1 = {"id": "cb1", "type": "combine", "operation": "join", "target": "body1", "tools": ["body2"]}
-    cb2 = {"id": "cb2", "type": "combine", "operation": "join", "target": "body1", "tools": ["body2"]}  # body2 already gone
+    cb1 = {"id": "cb1", "type": "boolean", "operation": "union", "target": "body1", "tools": ["body2"]}
+    cb2 = {"id": "cb2", "type": "boolean", "operation": "union", "target": "body1", "tools": ["body2"]}  # body2 already gone
     diag = []
     part, err, bodies = rebuild({"parameters": {}, "features": a + b + [cb1, cb2]}, diagnostics=diag)
-    assert not err, f"dangling combine should not error, got {err}"
-    assert len(bodies) == 1, f"expected 1 body after join, got {len(bodies)}"
-    skips = [d for d in diag if d.get("kind") == "combine" and d.get("feature_id") == "cb2"]
-    assert skips and skips[0]["lossy"], f"cb2 should be recorded as a skipped combine, got {diag}"
+    assert not err, f"dangling boolean should not error, got {err}"
+    assert len(bodies) == 1, f"expected 1 body after union, got {len(bodies)}"
+    skips = [d for d in diag if d.get("kind") == "boolean" and d.get("feature_id") == "cb2"]
+    assert skips and skips[0]["lossy"], f"cb2 should be recorded as a skipped boolean, got {diag}"
     # a dangling target is handled too (target consumed → no-op, no error)
-    cb3 = {"id": "cb3", "type": "combine", "operation": "join", "target": "body2", "tools": ["body1"]}
+    cb3 = {"id": "cb3", "type": "boolean", "operation": "union", "target": "body2", "tools": ["body1"]}
     part2, err2, _ = rebuild({"parameters": {}, "features": a + b + [cb1, cb3]}, diagnostics=None)
-    assert not err2, f"dangling-target combine should not error, got {err2}"
-    print(f"  combine dangling-ref OK: cb2 skipped via diagnostics, no build halt")
+    assert not err2, f"dangling-target boolean should not error, got {err2}"
+    print(f"  boolean dangling-ref OK: cb2 skipped via diagnostics, no build halt")
 
 
 def test_datum_and_bodies_tessellation():
@@ -380,7 +416,7 @@ def test_presspull_upto():
         {"id": "b1", "type": "box", "length": 20, "width": 20, "height": 10},  # body1 z-5..5
         {"id": "b2", "type": "box", "length": 8, "width": 8, "height": 10},    # body2 z-5..5
         {"id": "mv", "type": "move", "dx": 0, "dy": 0, "dz": 10, "rx": 0, "ry": 0, "rz": 0, "bodies": ["body2"]},
-        {"id": "cb", "type": "combine", "operation": "join", "target": "body1", "tools": ["body2"]},
+        {"id": "cb", "type": "boolean", "operation": "union", "target": "body1", "tools": ["body2"]},
         {"id": "pp", "type": "press-pull", "operation": "join", "distance": 0,
          "face": {"kind": "face", "by": "nearest", "point": [-8, -8, 5]},   # the low top step
          "upTo": {"kind": "face", "by": "nearest", "point": [0, 0, 15]}},   # extrude up to the high top
@@ -467,7 +503,7 @@ def test_primitives():
     part, err, bodies = rebuild(doc)
     assert not err, err
     assert len(bodies) == 2, f"box + cylinder = 2 bodies, got {len(bodies)}"
-    doc["features"].append({"id": "cb", "type": "combine", "operation": "cut", "target": "body1", "tools": ["body2"]})
+    doc["features"].append({"id": "cb", "type": "boolean", "operation": "subtract", "target": "body1", "tools": ["body2"]})
     part, err, bodies = rebuild(doc)
     assert not err, err
     assert len(bodies) == 1
@@ -728,28 +764,28 @@ def test_fillet_failure_diagnostics():
           "happy path emits none")
 
 
-def test_boolean_guards_combine_sweep():
-    """The extrude no-op guards also cover the OTHER boolean sites: a Combine Cut
-    whose tools don't touch the target, and a Combine Intersect that would empty
-    it, raise instead of silently consuming the tools; Sweep now routes through
+def test_boolean_guards_bodies_and_sweep():
+    """The extrude no-op guards also cover the OTHER boolean sites: a Subtract
+    whose tools don't touch the target, and an Intersect that would empty it,
+    raise instead of silently consuming the tools; Sweep now routes through
     _boolean_into_bodies, so a sweep Cut that reaches no body is flagged too.
-    Join with an embedded tool stays legal (it visibly absorbs the tool body --
-    see test_combine), and a sweep Join with nothing to hit still makes a new
+    Union with an embedded tool stays legal (it visibly absorbs the tool body --
+    see test_boolean), and a sweep Join with nothing to hit still makes a new
     body."""
     _s1, a = _box(1, 20, 20, 20)          # body1 at origin, vol 8000
     _s2, b = _box(2, 10, 10, 10, x=100)   # body2 far away, vol 1000
 
-    for op, needle in (("cut", "removed nothing"),
-                       ("intersect", "leave the target empty")):
+    for op, needle in (("subtract", "removed nothing"),
+                       ("intersect", "would leave nothing")):
         doc = {"parameters": {}, "features": a + b + [
-            {"id": "cb", "type": "combine", "operation": op,
+            {"id": "cb", "type": "boolean", "operation": op,
              "target": "body1", "tools": ["body2"]}]}
         _p, err, bodies = rebuild(doc)
         assert err and err[0]["feature_id"] == "cb", \
-            f"combine {op} disjoint should flag a feature error, got {err}"
+            f"boolean {op} disjoint should flag a feature error, got {err}"
         assert needle in err[0]["message"], err[0]["message"]
         assert len(bodies) == 2, \
-            f"failed combine {op} must consume nothing, got {len(bodies)} bodies"
+            f"failed boolean {op} must consume nothing, got {len(bodies)} bodies"
         vols = sorted(round(x["shape"].volume) for x in bodies)
         assert vols == [1000, 8000], vols
 
@@ -774,7 +810,7 @@ def test_boolean_guards_combine_sweep():
     _p, err, bodies = rebuild(doc)
     assert not err, f"sweep join with nothing to hit should fall back to a new body: {err}"
     assert len(bodies) == 2, f"expected the pipe as a second body, got {len(bodies)}"
-    print("  boolean guards OK: combine cut/intersect disjoint flagged (tools kept); "
+    print("  boolean guards OK: subtract/intersect disjoint flagged (tools kept); "
           "sweep cut-nothing flagged, join falls back to new body")
 
 
@@ -1267,7 +1303,7 @@ def test_unify_body():
     b = Box(10, 10, 10)
     assert _unify_body(b) is b, "clean box must pass through untouched"
 
-    # the rot combines bake into ragged bodies: two interpenetrating boxes
+    # the rot booleans bake into ragged bodies: two interpenetrating boxes
     # (union 1500, naive sum 2000) + an inside-out duplicate inside the first
     a = Box(10, 10, 10)
     c = Pos(5, 0, 0) * Box(10, 10, 10)
@@ -1399,7 +1435,7 @@ def test_presspull_upto_exact():
         {"id": "b2", "type": "box", "length": 10, "width": 20, "height": 10},
         {"id": "mv", "type": "move", "dx": 0, "dy": 0, "dz": 10,
          "rx": 0, "ry": 0, "rz": 0, "bodies": ["body2"]},  # boss z 5..15
-        {"id": "cb", "type": "combine", "operation": "join", "target": "body1", "tools": ["body2"]},
+        {"id": "cb", "type": "boolean", "operation": "union", "target": "body1", "tools": ["body2"]},
         {"id": "pp", "type": "press-pull",
          "face": {"kind": "face", "by": "nearest", "point": [0, 0, 15]},  # boss top
          "distance": -1, "operation": "cut", "body": "body1",
@@ -1596,8 +1632,10 @@ if __name__ == "__main__":
     test_import_roundtrip()
     test_split()
     test_split_groups_disconnected()
-    test_combine()
-    test_combine_dangling_ref()
+    test_boolean()
+    test_boolean_keep_originals()
+    test_boolean_reads_the_pre_v9_spelling()
+    test_boolean_dangling_ref()
     test_datum_and_bodies_tessellation()
     test_datum_offset_and_split_by_id()
     test_split_all_and_move_bodies()
@@ -1634,7 +1672,7 @@ if __name__ == "__main__":
     test_sweep()
     test_revolve_loft_operation()
     test_loft_profiles_keeps_holes_as_tube()
-    test_boolean_guards_combine_sweep()
+    test_boolean_guards_bodies_and_sweep()
     test_fillet_failure_diagnostics()
     test_scale_and_move()
     test_multibody_import_and_guards()

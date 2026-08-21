@@ -85,8 +85,25 @@ import { nextDName } from "../params/engine";
 // under its saved point. Nothing in the file records which was meant — the point
 // is all there ever was — so those features open smaller and are re-dragged.
 
+// v8 -> v9: `combine` becomes `boolean`, and this is the first migration since
+// v1 that REWRITES features rather than adding a field.
+//
+// One command that asked which boolean it was performing became three commands
+// that each already know — the same trade the extrude commit made. The feature
+// follows the commands: `operation` is spelled union/subtract/intersect (the
+// words on the three buttons) rather than join/cut/intersect, and `keepTools`
+// becomes `keepOriginals`, which is what the switch in Properties calls it.
+//
+// The rewrite is total and loss-free — every old operation has exactly one new
+// spelling, and no v8 document can carry a `boolean` for the migration to
+// collide with — so a v8 file opens as the same model it was saved as. What it
+// cannot do is go back: an older build reading a v9 file finds a feature type it
+// has never heard of, which its rebuild raises on. That is the stamp's job, and
+// it is a better failure than the alternative, since a silently skipped boolean
+// leaves the tool bodies sitting inside the part looking like geometry.
+
 /** Document file-format version (bump when the on-disk shape changes incompatibly). */
-export const FORMAT_VERSION = 8;
+export const FORMAT_VERSION = 9;
 
 export function migrateDocument(parsed: CadDocument): string[] {
   const version = parsed.version ?? 1;
@@ -100,6 +117,25 @@ export function migrateDocument(parsed: CadDocument): string[] {
   const features = parsed.features ?? [];
   const params = parsed.parameters ?? {};
   const defs: Record<string, ParamDef> = parsed.paramDefs ?? {};
+
+  // --- v8: combine → boolean ---
+  // Positional, so it runs before anything that reads a feature's type. The
+  // operation names are the three commands' own words; keepTools is the switch's.
+  if (version < 9) {
+    const OPS: Record<string, string> = { join: "union", cut: "subtract", intersect: "intersect" };
+    for (const f of features) {
+      const raw = f as unknown as Record<string, unknown>;
+      if (raw["type"] !== "combine") continue;
+      raw["type"] = "boolean";
+      raw["operation"] = OPS[String(raw["operation"])] ?? "union";
+      if (raw["keepTools"] !== undefined) {
+        // Omit-when-false discipline, the same one the writers keep: a switch
+        // left off is an absent field, not a stored `false`.
+        if (raw["keepTools"]) raw["keepOriginals"] = true;
+        delete raw["keepTools"];
+      }
+    }
+  }
 
   // --- v1: polygon.angle radians → degrees ---
   if (version < 2) {

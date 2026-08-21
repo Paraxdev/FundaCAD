@@ -3,6 +3,9 @@
 // component so ui/commands.ts can build the command list from the same tables
 // without pulling in a Vue component.
 
+import { BOOLEAN_COMMANDS } from "../features/booleanOps";
+import { keyHint } from "../input/shortcuts";
+
 export type RibbonContext = "model" | "sketch";
 
 interface ToolItem {
@@ -65,13 +68,29 @@ export const MODEL: Group[] = [
           { action: "pattern", label: "Pattern", iconName: "pattern" },
         ],
       },
+      // The three booleans are a family and share a split button. Split Body is
+      // not one of them — it cuts ONE body into pieces with a plane, where a
+      // boolean is two bodies meeting — and it used to be filed under Combine
+      // purely because both change how many bodies there are. It stands on its
+      // own now.
       {
-        label: "Combine",
-        children: [
-          { action: "combine", label: "Combine", iconName: "combine", key: "J" },
-          { action: "split", label: "Split Body", iconName: "split", key: "K" },
-        ],
+        label: "Boolean",
+        // The hint is READ from the keymap rather than written again. Every
+        // other row here spells its own key, which is a promise this table
+        // cannot keep on its own — and the booleans are the first rows whose key
+        // carries a modifier, so a hand-written "U" would advertise a binding
+        // that does nothing.
+        children: BOOLEAN_COMMANDS.map((c) => {
+          const key = keyHint(c.action);
+          return {
+            action: c.action,
+            label: c.label,
+            iconName: c.iconName,
+            ...(key !== undefined ? { key } : {}),
+          };
+        }),
       },
+      { action: "split", label: "Split Body", iconName: "split", key: "K" },
       {
         label: "Shell",
         children: [

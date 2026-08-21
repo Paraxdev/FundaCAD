@@ -52,11 +52,11 @@ async def main(token):
         r = await rebuild(ws, [sketch_rect("s", 20, 20), {"id": "e", "type": "extrude", "sketch": "s", "distance": 10, "operation": "new"}])
         check("extrude", r["ok"] and nbodies(r) == 1, f"verts={len(r['result']['bodies'][0]['positions'])//3}")
 
-        # primitives + combine cut (cylinder through box)
+        # primitives + a subtract (cylinder through box)
         feats = [{"id": "bx", "type": "box", "length": 20, "width": 20, "height": 20},
                  {"id": "cy", "type": "cylinder", "radius": 5, "height": 30},
-                 {"id": "cb", "type": "combine", "operation": "cut", "target": "body1", "tools": ["body2"]}]
-        r = await rebuild(ws, feats); check("primitives+combine cut", r["ok"] and nbodies(r) == 1)
+                 {"id": "cb", "type": "boolean", "operation": "subtract", "target": "body1", "tools": ["body2"]}]
+        r = await rebuild(ws, feats); check("primitives+subtract", r["ok"] and nbodies(r) == 1)
 
         # split both
         r = await rebuild(ws, [sketch_rect("s", 20, 20), {"id": "e", "type": "extrude", "sketch": "s", "distance": 20, "operation": "new"},
@@ -108,11 +108,11 @@ async def main(token):
             geom = r["result"]["geom"]
             r = await rebuild(ws, [{"id": "im", "type": "import", "format": "stl", "name": "box", "geom": geom}])
             check("rebuild imported body", r["ok"] and nbodies(r) == 1)
-            # combine an imported body with a primitive (cut a hole in the import)
+            # subtract a primitive from an imported body (a hole in the import)
             r = await rebuild(ws, [{"id": "im", "type": "import", "format": "stl", "name": "box", "geom": geom},
                                    {"id": "cy", "type": "cylinder", "radius": 4, "height": 40},
-                                   {"id": "cb", "type": "combine", "operation": "cut"}])
-            check("import + combine cut", r["ok"] and nbodies(r) == 1)
+                                   {"id": "cb", "type": "boolean", "operation": "subtract"}])
+            check("import + subtract", r["ok"] and nbodies(r) == 1)
 
             # v4 -> v5 migration, over the real socket. Build a pre-container
             # feature (inline base64 ASCII BREP) the way every saved document

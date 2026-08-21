@@ -102,11 +102,12 @@ describe("migrateDocument", () => {
     // v5 moved geometry OUT of the document (inline base64 `brep` -> the `geom`
     // content hash carried in the container); v6 added `rectangle.angle`; v7
     // added `datumPlane.face`; v8 re-read `extrude.regions` as the area under
-    // the point rather than the whole profile. A v3 document still passes
-    // through migrateDocument untouched by any of them: `brep` is still READ, an
-    // absent angle already means 0, an absent face reference already means the
-    // datum keeps the plane it was given, and v8 rewrites no data at all.
-    expect(FORMAT_VERSION).toBe(8);
+    // the point rather than the whole profile; v9 rewrote `combine` features as
+    // `boolean`. A v3 document still passes through migrateDocument untouched by
+    // any of them: `brep` is still READ, an absent angle already means 0, an
+    // absent face reference already means the datum keeps the plane it was
+    // given, v8 rewrites no data at all, and this document has no combine in it.
+    expect(FORMAT_VERSION).toBe(9);
     const doc = v1({
       version: 3,
       features: [{ id: "f1", type: "sketch", plane: "XY", entities: [
@@ -170,6 +171,62 @@ describe("migrateDocument", () => {
     });
     const before = JSON.stringify(doc);
     expect(migrateDocument(doc)).toEqual([]);
+    expect(JSON.stringify(doc)).toBe(before);
+  });
+  it("v8 rewrites a combine as the boolean it always was", () => {
+    // The first migration since v1 that rewrites features rather than adding a
+    // field, so it is the first one where getting it wrong changes the model
+    // rather than losing an option: a combine that does not become a boolean is
+    // an unknown feature type, and an unknown feature type is a rebuild error
+    // where a part used to be.
+    // `combine` is not in the Feature union any more — that is the point of the
+    // migration — so the fixture is cast in, the way a file read off disk is.
+    const doc = v1({
+      version: 8,
+      features: [
+        { id: "c1", type: "combine", operation: "join", target: "body1", tools: ["body2"] },
+        { id: "c2", type: "combine", operation: "cut", target: "body1", tools: ["body3"], keepTools: true },
+        { id: "c3", type: "combine", operation: "intersect", target: "body1", tools: ["body4"], keepTools: false },
+      ] as unknown as CadDocument["features"],
+    });
+    expect(migrateDocument(doc)).toEqual([]);
+    const [a, b, c] = doc.features as unknown as Record<string, unknown>[];
+
+    expect(a!["type"]).toBe("boolean");
+    expect(a!["operation"]).toBe("union");
+    // Everything that is not the operation survives: the bodies are the whole
+    // content of the feature, and a boolean that came through pointing at
+    // nothing would be a silent no-op rather than a visible failure.
+    expect(a!["target"]).toBe("body1");
+    expect(a!["tools"]).toEqual(["body2"]);
+
+    expect(b!["operation"]).toBe("subtract");
+    expect(b!["keepOriginals"]).toBe(true);
+    expect("keepTools" in b!).toBe(false); // renamed, not duplicated
+
+    expect(c!["operation"]).toBe("intersect");
+    // Omit-when-false, the discipline every writer keeps: a switch left off is
+    // an absent field. Written as `false` it would show up in every byte
+    // comparison of a document that never touched the switch.
+    expect("keepOriginals" in c!).toBe(false);
+    expect("keepTools" in c!).toBe(false);
+  });
+
+  it("leaves a v9 boolean alone, so a second open cannot rewrite it again", () => {
+    // The rewrite is keyed on the stamp, and this is what stops it being keyed
+    // on the DATA: a boolean already carrying `keepOriginals` must not be walked
+    // a second time. Idempotence is not optional here — migrateDocument runs on
+    // every load, and this document is what the previous test produced.
+    const doc = v1({
+      version: 9,
+      features: [
+        { id: "c1", type: "boolean", operation: "subtract", target: "body1", tools: ["body2"], keepOriginals: true },
+      ],
+    });
+    const before = JSON.stringify(doc);
+    expect(migrateDocument(doc)).toEqual([]);
+    expect(JSON.stringify(doc)).toBe(before);
+    migrateDocument(doc);
     expect(JSON.stringify(doc)).toBe(before);
   });
 });

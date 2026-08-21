@@ -81,9 +81,32 @@ const FORGE_PATHS: Record<string, string> = {
   chamfer: `<path d="M4 20V12l8-8h8" fill="none"/>`,
   mirror: `<line x1="12" y1="3" x2="12" y2="21" stroke-dasharray="2 2"/><path d="M9 7L4 12l5 5z"/><path d="M15 7l5 5-5 5z"/>`,
   presspull: `<path d="M4 16l6-3 8 3-6 3z" fill="none"/><path d="M10 13V4m0 0l-3 3m3-3l3 3"/>`,
-  // body ops: split a body by a plane; boolean-combine bodies
+  // body ops: split a body by a plane; the three booleans.
+  //
+  // The booleans are one drawing seen three ways — the same two circles at the
+  // same centres, with the RESULT shaded. That is the whole distinction between
+  // them, so drawing three unrelated marks would hide the only thing the user
+  // needs to read. The outlines are stroked on top of the shading so the tool
+  // bodies stay visible in every one of them, including the two where most of
+  // the drawing is not the result.
+  //
+  // Each shaded region is ONE path with the fill rule doing the work, not two
+  // overlapping filled circles: overlapping fills double their opacity in the
+  // lens, which would make the union's middle read as a third region.
+  //
+  // The shading is nearly opaque, and it has to be. These are drawn at 18px on
+  // the hover bar, where the three sit side by side and are told apart ONLY by
+  // which part is filled — at a polite 30% the blob, the crescent and the lens
+  // were three grey smudges.
   split: `<rect x="4" y="7" width="16" height="10" rx="0.5"/><line x1="12" y1="3" x2="12" y2="21" stroke-dasharray="2 2"/>`,
-  combine: `<circle cx="9.5" cy="12" r="6"/><circle cx="14.5" cy="12" r="6"/>`,
+  // Both circles, wound the same way, nonzero: the lens has winding 2 and is
+  // still simply inside, so the union shades evenly.
+  booleanUnion: `<path d="M3.5 12a6 6 0 1 0 12 0a6 6 0 1 0-12 0M8.5 12a6 6 0 1 0 12 0a6 6 0 1 0-12 0" fill="currentColor" fill-opacity="0.85" stroke="none"/><circle cx="9.5" cy="12" r="6"/><circle cx="14.5" cy="12" r="6"/>`,
+  // The left circle with the lens as a hole (evenodd): the target minus the
+  // tool, which is what "subtract" means and which way round it goes.
+  booleanSubtract: `<path d="M3.5 12a6 6 0 1 0 12 0a6 6 0 1 0-12 0M12 6.546A6 6 0 0 1 12 17.454A6 6 0 0 1 12 6.546Z" fill="currentColor" fill-opacity="0.85" fill-rule="evenodd" stroke="none"/><circle cx="9.5" cy="12" r="6"/><circle cx="14.5" cy="12" r="6"/>`,
+  // The lens alone.
+  booleanIntersect: `<path d="M12 6.546A6 6 0 0 1 12 17.454A6 6 0 0 1 12 6.546Z" fill="currentColor" fill-opacity="0.85" stroke="none"/><circle cx="9.5" cy="12" r="6"/><circle cx="14.5" cy="12" r="6"/>`,
   shell: `<rect x="4" y="4" width="16" height="16" rx="1"/><rect x="8" y="8" width="8" height="8" rx="0.5" stroke-dasharray="2 2"/>`,
   draft: `<path d="M7 20l4-16h2l4 16z" fill="none"/><line x1="5" y1="20" x2="19" y2="20"/>`,
   offsetFace: `<rect x="4" y="8" width="12" height="12" rx="1"/><path d="M8 4h12v12" stroke-dasharray="2 2"/><line x1="16" y1="8" x2="20" y2="4"/>`,
@@ -206,7 +229,7 @@ export const ANVIL_PACK: IconPack = {
     dot: `<circle cx="12" cy="12" r="5.5" fill="currentColor"/>`,
     warning: `<path d="M12 3.5L21.5 20H2.5z" fill="currentColor" fill-opacity="0.28"/><line x1="12" y1="9.5" x2="12" y2="14" stroke-width="2.2"/><circle cx="12" cy="17" r="1.3" fill="currentColor"/>`,
     body: `<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z" fill="currentColor" fill-opacity="0.22"/><path d="M4 7.5l8 4.5 8-4.5"/><line x1="12" y1="12" x2="12" y2="21"/>`,
-    plane: `<path d="M3 9l9-4 9 4-9 4z" fill="currentColor" fill-opacity="0.3"/>`,
+    plane: `<path d="M3 9l9-4 9 4-9 4z" fill="currentColor" fill-opacity="0.85"/>`,
     skipStart: `<path d="M18 5.5v13L8 12z" fill="currentColor"/><line x1="6" y1="5.5" x2="6" y2="18.5" stroke-width="2.4"/>`,
     stepBack: `<path d="M15.5 5.5v13L6.5 12z" fill="currentColor"/>`,
     stepForward: `<path d="M8.5 5.5v13l9-6.5z" fill="currentColor"/>`,

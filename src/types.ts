@@ -526,11 +526,21 @@ export type Feature =
   // `bodies` cuts every listed body (used for "cut all visible bodies"). The
   // cutting plane is either an inline `plane` or `planeId` (a datum plane by id).
   | { id: string; type: "split"; plane?: PlaneSpec; planeId?: string; keep: "top" | "bottom" | "both"; body?: string; bodies?: string[]; groupSides?: boolean }
-  // Boolean-combine bodies. The target is modified in place; tool bodies are
-  // consumed unless keepTools. Omitted target/tools default to "all bodies".
-  | { id: string; type: "combine"; operation: "join" | "cut" | "intersect"; target?: string; tools?: string[]; keepTools?: boolean }
+  // A boolean between bodies: union, subtract or intersect. The target is
+  // modified in place; tool bodies are consumed unless keepOriginals. Omitted
+  // target/tools default to "all bodies".
+  //
+  // Three commands rather than one command with a mode, which is why `operation`
+  // is not asked for anywhere: Union, Subtract and Intersect each start a
+  // feature already carrying their own answer. It stays an editable field
+  // because changing your mind about which boolean you wanted should not mean
+  // deleting the feature and re-picking the bodies.
+  //
+  // `keepOriginals` leaves the tool bodies in the model instead of consuming
+  // them, which is what makes one body usable as a cutter more than once.
+  | { id: string; type: "boolean"; operation: "union" | "subtract" | "intersect"; target?: string; tools?: string[]; keepOriginals?: boolean }
   // Primitive bodies (centered at the origin). Each creates a new body; edit the
-  // dimensions in the inspector. Handy as boolean tool bodies for Combine.
+  // dimensions in the inspector. Handy as boolean tool bodies.
   | { id: string; type: "box"; length: Num; width: Num; height: Num }
   | { id: string; type: "cylinder"; radius: Num; height: Num }
   | { id: string; type: "sphere"; radius: Num }
@@ -686,12 +696,12 @@ export interface CadDocument {
 // `diagnostics` behaves exactly as before.
 export interface ResolveDiag {
   feature_id?: string;
-  // "combine" = a dangling-reference combine skipped (no-op);
+  // "boolean" = a dangling-reference boolean skipped (no-op);
   // "edgeOpFailed" = a fillet/chamfer failed and `failed` names the edges the
   // sidecar's per-edge probe blamed (or ALL members when only the combination
   // fails), so the UI can paint exactly those edges red.
-  kind: "edge" | "face" | "combine" | "edgeOpFailed";
-  resolved: number; // how many entities matched (0 for a skipped combine)
+  kind: "edge" | "face" | "boolean" | "edgeOpFailed";
+  resolved: number; // how many entities matched (0 for a skipped boolean)
   confidence: number; // 0..1 — margin to the runner-up candidate (1 = lone clear winner)
   lossy: boolean; // a marginal / drift-path match was taken (or a feature was skipped)
   reason?: string;

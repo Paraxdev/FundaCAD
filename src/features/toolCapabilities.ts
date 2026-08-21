@@ -51,7 +51,9 @@ export type ToolId =
   | "texture"
   | "delete-face"
   | "move"
-  | "combine"
+  | "boolean-union"
+  | "boolean-subtract"
+  | "boolean-intersect"
   | "measure"
   | "shell"
   | "draft"
@@ -69,9 +71,9 @@ export interface ToolCapability {
   consumes: readonly EntityKind[];
   source: EntitySource;
   /** How many entities of a consumed kind the tool needs before it can run.
-   *  Defaults to 1; Combine needs two bodies to boolean and Loft two profiles to
-   *  sweep between, and offering either off a single pick is an offer that
-   *  cannot be taken. */
+   *  Defaults to 1; a boolean needs two bodies and Loft two profiles to sweep
+   *  between, and offering either off a single pick is an offer that cannot be
+   *  taken. */
   min?: number;
 }
 
@@ -98,7 +100,14 @@ export const TOOL_CAPABILITIES: Record<ToolId, ToolCapability> = {
   // wrong, which is the only question this table exists to answer.
   "delete-face": { label: "Delete Face", consumes: ["face"], source: "selection" },
   move: { label: "Move", consumes: ["body"], source: "selection" },
-  combine: { label: "Combine", consumes: ["body"], source: "selection", min: 2 },
+  // The three booleans, each a command in its own right. One "Combine" entry
+  // that opened a dialog would put a two-body selection one click from a
+  // question instead of one click from an answer, which is the whole reason
+  // there are three of them (features/booleanOps.ts). The FIRST selected body is
+  // the one kept, so Subtract has a direction without asking for one.
+  "boolean-union": { label: "Union", consumes: ["body"], source: "selection", min: 2 },
+  "boolean-subtract": { label: "Subtract", consumes: ["body"], source: "selection", min: 2 },
+  "boolean-intersect": { label: "Intersect", consumes: ["body"], source: "selection", min: 2 },
   // --- tools that run their own pick; the ambient selection is not consumed ---
   measure: { label: "Measure", consumes: ["face", "edge"], source: "pick" },
   shell: { label: "Shell", consumes: ["face"], source: "pick" },

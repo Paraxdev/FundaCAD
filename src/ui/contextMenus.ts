@@ -13,7 +13,8 @@ import { useBrowserStore } from "../stores/browser";
 import { contextMenu, type CtxItem } from "./menu";
 import { isInspectorEditable } from "../document/numFields";
 import { allCommands } from "./commands";
-import { FEATURE_META } from "./featureMeta";
+import { featureMeta } from "./featureMeta";
+import { BOOLEAN_COMMANDS } from "../features/booleanOps";
 import { keyHint } from "../input/shortcuts";
 import type { Feature, PlaneDef } from "../types";
 import type { EdgeHit, FaceHit } from "../viewport/picking";
@@ -108,7 +109,7 @@ export function createContextMenus(deps: ContextMenusDeps) {
     const bodyId = viewport.faceIdToBodyId(hit.faceId);
     const ownerId = featureForFace(hit.faceId);
     const owner = ownerId ? store.document.features.find((f) => f.id === ownerId) : undefined;
-    const ownerLabel = owner ? (FEATURE_META[owner.type as keyof typeof FEATURE_META]?.label ?? owner.type) : "";
+    const ownerLabel = owner ? featureMeta(owner).label : "";
     const items: CtxItem[] = [
       { label: "Press/Pull face", shortcut: keyHint("presspull"), onClick: unlessBusy(() => { viewport.selectOnlyFace(hit.faceId); handleAction("presspull"); }) },
       { label: "Sketch on this face", shortcut: keyHint("sketch"), disabled: !plane, onClick: unlessBusy(() => { if (plane) sketch.enter(plane, store); }) },
@@ -143,7 +144,14 @@ export function createContextMenus(deps: ContextMenusDeps) {
     contextMenu(x, y, [
       // routed through handleAction so "Repeat <command>" records them
       { label: "Move", shortcut: keyHint("move"), onClick: unlessBusy(() => handleAction("move")) },
-      { label: "Combine with…", shortcut: keyHint("combine"), onClick: unlessBusy(() => handleAction("combine")) },
+      // All three, not one entry that opens a dialog: the whole point of
+      // splitting Combine up is that a body you have right-clicked is one click
+      // from the boolean you want.
+      ...BOOLEAN_COMMANDS.map((c) => ({
+        label: `${c.label} with…`,
+        shortcut: keyHint(c.action),
+        onClick: unlessBusy(() => handleAction(c.action)),
+      })),
       { label: "Properties", onClick: unlessBusy(() => handleAction("properties")) },
       { separator: true, label: "" },
       { label: "Hide body", onClick: () => hideBody(bodyId) },

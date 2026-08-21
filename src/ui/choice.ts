@@ -1,6 +1,6 @@
 // A tiny modal chooser: title + a row of buttons, returns the picked value (or
 // null on Esc / backdrop click). Used for small one-shot decisions like the
-// Split keep-mode or the Combine boolean operation, where a full dialog/tool
+// Split's keep-mode or Section's axis, where a full dialog/tool
 // would be overkill. Resolves once.
 //
 // Facade over stores/modals.ts, rendered by components/overlays/ModalHost.vue.
@@ -17,7 +17,7 @@ export type { ChoiceOption };
 
 // Module-level modal-open counter: true for the lifetime of any open choose()/
 // chooseMulti(). toolBusy() ORs this in so a global shortcut (e.g. "e" ->
-// Extrude) can't fire underneath an awaiting modal (Mirror, Split, Combine,
+// Extrude) can't fire underneath an awaiting modal (Mirror, Split,
 // Revolve, Sweep, Primitive, Pattern, Section axis-pick, ...).
 export function isChoiceOpen(): boolean {
   return useModalStore().depth > 0;
@@ -52,9 +52,9 @@ export function choose<T extends string>(
   });
 }
 
-/** A multi-select variant of `choose`: a checkbox list + Combine/Cancel buttons.
+/** A multi-select variant of `choose`: a checkbox list + confirm/Cancel buttons.
  *  Returns the checked values (>= `min`), or null on cancel/Esc. Used where the
- *  data model takes several items (e.g. Combine's tool bodies). */
+ *  data model takes several items (e.g. a boolean's tool bodies). */
 export function chooseMulti<T extends string>(
   title: string,
   options: ChoiceOption<T>[],
