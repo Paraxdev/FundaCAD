@@ -369,6 +369,12 @@ export type SketchPattern =
 export type Plane3 = "XY" | "XZ" | "YZ";
 export type Axis3 = "X" | "Y" | "Z";
 
+// An axis of revolution: one of the three world axes, or an arbitrary line in
+// world mm. The line form is what a picked EDGE resolves to — see revolve's
+// `axisEdge` for why the resolved value is written down beside the reference.
+export type AxisLine = { origin: [number, number, number]; dir: [number, number, number] };
+export type AxisSpec = Axis3 | AxisLine;
+
 // an arbitrary plane (e.g. derived from a face or an offset): origin + x axis +
 // normal, all in world mm. The in-plane Y axis is normal × xdir.
 export type PlaneDef = {
@@ -431,7 +437,15 @@ export type Feature =
   // points, one per selected area, resolved against the same split arrangement. It
   // used to be absent and the whole sketch was always spun, which threw away a
   // selection the tool had already read — the same defect extrude had.
-  | { id: string; type: "revolve"; sketch: string; axis: Axis3; angle: Num; operation?: "new" | "join" | "cut" | "intersect"; regions?: [number, number, number][] }
+  // `axisEdge` (optional) is a by-selector reference to a model EDGE, and takes
+  // precedence over `axis` on rebuild: the sidecar re-resolves it every time, so
+  // the revolve FOLLOWS the edge it was aimed at instead of freezing that edge's
+  // numbers. `axis` stays populated with the RESOLVED line as a cache, the same
+  // arrangement datumPlane.face uses and for the same two reasons: every frontend
+  // consumer keeps working without resolving anything, and an edge that stops
+  // resolving leaves the revolve where the user last saw it rather than failing
+  // the feature and taking the body with it.
+  | { id: string; type: "revolve"; sketch: string; axis: AxisSpec; axisEdge?: Selector; angle: Num; operation?: "new" | "join" | "cut" | "intersect"; regions?: [number, number, number][] }
   // Loft blends through 2+ profiles in order. `profiles` (Fusion flow) lofts the
   // SELECTED profile regions across sketches — each carries its sketch id + a 3D
   // interior anchor (a ring keeps its hole → a tube). `sketches` is the legacy

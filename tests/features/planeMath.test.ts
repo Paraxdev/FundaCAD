@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { Vec3 } from "../../src/types";
 import {
+  axisFromEdge,
   axisFromNormals,
   cylinderFromFace,
   fitCircle2D,
@@ -293,5 +294,46 @@ describe("planeFromPickedFace", () => {
     const points: Vec3[] = [[0, 0, 0], [1, 0, 0.3], [2, 0, 1.4], [3, 0, 3.9]];
     const normals: Vec3[] = [[0, 0, 1], [0, 0.3, 1], [0, 0.9, 1], [0, 2, 1]];
     expect(planeFromPickedFace(points, normals, [1, 0, 0.3], [0, 0.3, 1])).toBeNull();
+  });
+});
+
+describe("axisFromEdge", () => {
+  const near = (a: number, b: number) => expect(a).toBeCloseTo(b, 9);
+
+  it("reads the line off a two-point edge", () => {
+    const ax = axisFromEdge([[1, 2, 3], [1, 2, 9]]);
+    expect(ax).not.toBeNull();
+    near(ax!.origin[2], 3);
+    near(ax!.dir[2], 1);
+    near(ax!.dir[0], 0);
+  });
+
+  it("accepts a straight edge tessellated into many collinear samples", () => {
+    const pts: Vec3[] = [];
+    for (let i = 0; i <= 8; i++) pts.push([i, 2 * i, -i]);
+    expect(axisFromEdge(pts)).not.toBeNull();
+  });
+
+  it("refuses an arc, which is not a line and cannot be an axis", () => {
+    const pts: Vec3[] = [];
+    for (let i = 0; i <= 12; i++) {
+      const t = (i / 12) * (Math.PI / 2);
+      pts.push([Math.cos(t) * 10, Math.sin(t) * 10, 0]);
+    }
+    expect(axisFromEdge(pts)).toBeNull();
+  });
+
+  it("refuses a bulge far below what an arc would give but above the tolerance", () => {
+    // The control for the test above: a 90° arc bulges by 0.29 of its chord, so
+    // rejecting one proves nothing about where the line actually is. This bulges
+    // by 1e-3 of the chord, ten times the tolerance and invisible on screen.
+    expect(axisFromEdge([[0, 0, 0], [50, 0.1, 0], [100, 0, 0]])).toBeNull();
+    expect(axisFromEdge([[0, 0, 0], [50, 1e-3, 0], [100, 0, 0]])).not.toBeNull();
+  });
+
+  it("has no answer for a zero-length edge or a single point", () => {
+    expect(axisFromEdge([[1, 1, 1], [1, 1, 1]])).toBeNull();
+    expect(axisFromEdge([[1, 1, 1]])).toBeNull();
+    expect(axisFromEdge([])).toBeNull();
   });
 });

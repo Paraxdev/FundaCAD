@@ -2343,7 +2343,7 @@ def _handle_revolve(f, ctx):
     if angle == 0:
         raise ValueError("Revolve: angle must not be 0 — nothing would be swept")
     try:
-        solid = revolve(sk, axis=AXES[f.get("axis", "Z")], revolution_arc=angle)
+        solid = revolve(sk, axis=_revolve_axis(f, ctx), revolution_arc=angle)
     except Exception as ex:
         # OCCT reports a profile that straddles the axis as a bare
         # `StdFail_NotDone` ("BRep_API: command not done"), which tells the user
@@ -2355,6 +2355,52 @@ def _handle_revolve(f, ctx):
             f"(it may touch the axis, but not cross it). [{type(ex).__name__}]"
         )
     _boolean_into_bodies(ctx.bodies, solid, f.get("operation", "new"), ctx.new_body, ctx.hidden_bodies)
+
+
+def _revolve_axis(f, ctx):
+    """The axis to spin about: one of the three world axes, an arbitrary line, or
+    the line of the EDGE the revolve was aimed at, re-resolved against the bodies
+    as they stand now.
+
+    Re-resolving is what makes a picked edge a reference rather than a note about
+    where an edge used to be. Resolution is GLOBAL across bodies for the reason
+    recorded on _datum_face_plane: body ids are positional, so an upstream split
+    or combine renumbers them and a body-scoped match would silently re-aim the
+    revolve at some distant edge on the wrong piece.
+
+    An edge that stops resolving is not an error. The axis falls back to the
+    cached line — where the user last saw it — because the alternative is a
+    failed feature and a body that disappears with it. So is an edge that is no
+    longer straight: an axis is a line, and a curve cannot be one.
+    """
+    axis = f.get("axis", "Z")
+    sel = f.get("axisEdge")
+    if sel:
+        found = None
+        for b in getattr(ctx, "bodies", None) or []:
+            shape = b.get("shape")
+            if shape is None:
+                continue
+            try:
+                edges = resolve_edges(shape, sel, getattr(ctx, "diagnostics", None), f.get("id"))
+            except Exception:
+                continue
+            for e in edges or []:
+                if e is not None and _edge_curve(e) == "line":
+                    found = e
+                    break
+            if found is not None:
+                break
+        if found is not None:
+            a, d = _edge_mid(found), _edge_dir(found)
+            return Axis((a.X, a.Y, a.Z), (d.X, d.Y, d.Z))
+    if isinstance(axis, dict):
+        o, d = axis.get("origin") or [0, 0, 0], axis.get("dir") or [0, 0, 1]
+        try:
+            return Axis(tuple(float(v) for v in o), tuple(float(v) for v in d))
+        except Exception:
+            return AXES["Z"]
+    return AXES.get(axis, AXES["Z"])
 
 
 def _handle_loft(f, ctx):

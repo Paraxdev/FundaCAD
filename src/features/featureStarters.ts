@@ -6,9 +6,10 @@
 import type * as THREE from "three";
 import type { DocumentStore } from "../document/store";
 import type { Viewport } from "../viewport/viewport";
-import type { SketchOverlay } from "../sketch/overlay";
+import type { SketchOverlay, WorldRegion } from "../sketch/overlay";
 import type { SketchMode, SketchTool } from "../sketch/sketchMode";
 import { SketchPlane } from "../sketch/plane";
+import { axisFromEdge } from "./planeMath";
 import type { ExtrudeTool } from "./extrudeTool";
 import type { EdgeFeatureTool } from "./edgeFeatureTool";
 import type { PressPullTool } from "./pressPullTool";
@@ -19,7 +20,7 @@ import type { TextureTool } from "./textureTool";
 import { pickPlaneTarget, planeSpecOf, type FacePlanePick } from "./facePlanePick";
 import { choose } from "../ui/choice";
 import { setPrompt } from "../ui/prompt";
-import type { Feature, PlaneDef, PlaneSpec, Selector, Vec3 } from "../types";
+import type { AxisSpec, Feature, PlaneDef, PlaneSpec, Selector, Vec3 } from "../types";
 import { findSelectorAt, replaceSelectorAt } from "./repickReference";
 
 export interface FeatureStartersDeps {
@@ -537,17 +538,51 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     // single sketch. Spinning them silently as if they had been part of it is how
     // the whole-sketch fallback used to go wrong; drop them instead.
     const areas = picked.filter((r) => r.sketchId === wr.sketchId);
-    const axis = await choose<"X" | "Y" | "Z">("Revolve around axis", [
+    const axis = await choose<"X" | "Y" | "Z" | "edge">("Revolve around", [
       { value: "X", label: "X axis" },
       { value: "Y", label: "Y axis" },
       { value: "Z", label: "Z axis" },
+      { value: "edge", label: "An edge", hint: "pick one on the model" },
     ]);
     if (!axis) return;
+    // The axis is a WORLD axis or a line on the model, and only the second needs
+    // a pick, so the pick happens here rather than being a mode of the tool. It
+    // is asynchronous where the rest of this is not: the edge is picked in the
+    // viewport, after this call has returned, so the feature is written from
+    // inside the callback.
+    if (axis === "edge") {
+      const finish = async (sel: Selector, points: readonly Vec3[]) => {
+        const line = axisFromEdge(points);
+        if (!line) {
+          setStatus("An axis has to be a straight edge", "");
+          return;
+        }
+        const operation = await chooseSolidOperation("Revolve, operation");
+        if (!operation) return;
+        addRevolve(wr, areas, line, operation, sel);
+      };
+      pickEdgeInteractive("Click a straight edge to spin around · Esc", (sel, pts) => void finish(sel, pts));
+      return;
+    }
     const operation = await chooseSolidOperation("Revolve, operation");
     if (!operation) return;
+    addRevolve(wr, areas, axis, operation);
+  }
+
+  /** Write the revolve. `axisEdge` present means `axis` is the resolved line kept
+   *  as a cache beside the reference, not the axis of record — see the Feature
+   *  type for why both are stored. */
+  function addRevolve(
+    wr: WorldRegion,
+    areas: readonly WorldRegion[],
+    axis: AxisSpec,
+    operation: "new" | "join" | "cut",
+    axisEdge?: Selector,
+  ) {
     store.addFeature({
       id: store.nextId(), type: "revolve", sketch: wr.sketchId, axis, angle: 360, operation,
       regions: areas.map((r) => [r.interior3D.x, r.interior3D.y, r.interior3D.z]),
+      ...(axisEdge ? { axisEdge } : {}),
     } as Feature);
   }
 
@@ -648,8 +683,12 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
 
   // One-shot EDGE picker, the twin of pickFaceInteractive above. Every model edge
   // lights up, the one under the cursor highlights, and a click returns its
-  // selector.
-  function pickEdgeInteractive(promptText: string, onPick: (sel: Selector) => void) {
+  // selector — and its polyline, for callers that have to write down what the
+  // edge WAS as well as how to find it again (revolve's axis cache).
+  function pickEdgeInteractive(
+    promptText: string,
+    onPick: (sel: Selector, points: readonly Vec3[]) => void,
+  ) {
     if (toolBusy()) return;
     if (!hasBody()) {
       setStatus("Create or import a body first", "");
@@ -667,7 +706,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       e.preventDefault();
       e.stopImmediatePropagation();
       cleanup();
-      requestAnimationFrame(() => onPick(hit.selector));
+      const pts = hit.edge.points.map((q) => [q[0], q[1], q[2]] as Vec3);
+      requestAnimationFrame(() => onPick(hit.selector, pts));
     };
     const onEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape") cleanup();

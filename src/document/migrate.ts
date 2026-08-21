@@ -67,6 +67,13 @@ import { nextDName } from "../params/engine";
 // that plane. Absent still means the whole sketch, which is what an older file
 // meant and what one without a selection still means.
 //
+// `revolve.axisEdge` is the third: a by-selector reference to a model edge, so a
+// revolve can turn about a feature of the part instead of only about X, Y or Z.
+// `axis` widens with it, from one of those three names to either a name or a
+// resolved {origin, dir} line, and holds what the edge resolved to. An older
+// build reads that object where it expects a name and falls back to Z — the
+// wrong axis, silently — which is the stamp's job again.
+//
 // Stamped even though nothing is rewritten, because the two builds disagree about
 // geometry rather than about data. An older build opening a v8 file joins or cuts
 // with the WHOLE profile where the file means one half of it — a hole that eats

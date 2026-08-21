@@ -346,3 +346,47 @@ export function planeFromPickedFace(
   const def = cyl && tangentPlaneOnCylinder(cyl, at, faceNormal);
   return def ? { kind: "tangent", def } : null;
 }
+
+/** How far a sample may sit off the chord between an edge's ends, as a fraction
+ *  of that chord's length, and still count as a straight edge.
+ *
+ *  Relative because it has to mean the same thing on a 2mm rib and a 2m spar.
+ *  A straight B-rep edge tessellates to its two endpoints and nothing between,
+ *  so the residual is numerical for a line and enormous for anything else: even
+ *  a 90° arc bulges by 0.29 of its chord. Nothing needs this to be tight. */
+export const STRAIGHT_EDGE_FRACTION = 1e-4;
+
+export interface EdgeAxis {
+  origin: Vec3;
+  dir: Vec3;
+}
+
+/** The axis a picked edge stands for, or null when the edge is not a straight
+ *  line and therefore is not one.
+ *
+ *  An axis of revolution is a LINE, so a circle or a spline cannot be one, and
+ *  refusing here is the difference between a message at pick time and a feature
+ *  that fails on the next rebuild with the kernel's own account of why.
+ *
+ *  `points` is the edge's tessellated polyline as the viewport holds it. The
+ *  direction is end to end rather than fitted, because for a straight edge the
+ *  two endpoints ARE the edge and a fit over collinear samples answers the same
+ *  thing less directly. Which way it points is arbitrary and does not matter:
+ *  the axis of a revolve is a line, not a ray, and the revolve's own angle sign
+ *  decides the direction of travel. */
+export function axisFromEdge(points: readonly Vec3[]): EdgeAxis | null {
+  const a = points[0];
+  const b = points[points.length - 1];
+  if (!a || !b || points.length < 2) return null;
+  const dir = unit(sub(b, a));
+  if (!dir) return null;
+  const chord = length(sub(b, a));
+  const tol = chord * STRAIGHT_EDGE_FRACTION;
+  for (const p of points) {
+    // distance from p to the infinite line through a along dir
+    const v = sub(p, a);
+    const off = sub(v, scale(dir, dot(v, dir)));
+    if (!(length(off) <= tol)) return null;
+  }
+  return { origin: a, dir };
+}
