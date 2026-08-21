@@ -2718,7 +2718,24 @@ def _handle_offset_face(f, ctx):
         (fc, _clamp_cylinder(fc, d) if fc.geom_type == GeomType.CYLINDER else _clamp_planar(act["shape"], fc, d))
         for fc in faces
     ]
-    act["shape"] = _offset_faces(act["shape"], pairs)
+    try:
+        act["shape"] = _offset_faces(act["shape"], pairs)
+        return
+    except Exception:
+        pass
+    # One BRepOffset pass over the whole body is the good answer when it runs:
+    # adjacent offsets close against each other. When it does not run it refuses
+    # every face at once, including ones that move fine on their own, so retry
+    # face by face through the press/pull primitive.
+    #
+    # Re-resolved against the EVOLVING shape rather than reusing `faces` — each
+    # move renumbers the topology, and a Face object from the shape before it is
+    # a reference into a solid that no longer exists.
+    shape = act["shape"]
+    for sel in (f["faces"] if isinstance(f["faces"], list) else [f["faces"]]):
+        for fc in resolve_faces(shape, sel, diag=ctx.diagnostics, feature_id=f.get("id")):
+            shape = _press_pull(shape, fc, d)
+    act["shape"] = shape
 
 
 def _handle_thicken(f, ctx):
@@ -5453,6 +5470,14 @@ def _press_pull(part, face, d, clamp=True):
         try:
             return _offset_face(part, face, dd)
         except Exception:
+            pass
+        # Thicken the ONE face before falling back to the sweep. The sweep is a
+        # linear prism and has nothing to travel along on a face that closes on
+        # itself, so a hole — the commonest curved face there is — reached the
+        # refusal below whenever the whole-body offset would not run.
+        try:
+            return _thicken_press_pull(part, face, dd)
+        except Exception:
             return _sweep_press_pull(part, face, dd)
     return _sweep_press_pull(part, face, d)
 
@@ -5602,6 +5627,55 @@ def _solid_volume(shape):
 def _offset_face(part, face, d):
     """Single-face convenience wrapper over _offset_faces (curved Press/Pull)."""
     return _offset_faces(part, [(face, d)])
+
+
+def _thicken_press_pull(part, face, d):
+    """Move a face by THICKENING it into a slab and booleaning the slab in.
+
+    _offset_faces rebuilds the WHOLE body, so a face it could move perfectly well
+    is refused because some other face of the same solid defeats BRepOffset.
+    Measured on the reported document: two bores in a body carrying six blend
+    surfaces could not be resized by any amount, in either direction.
+
+    This asks a smaller question. Thicken the one face by |d| along its own
+    normal, then fuse (d > 0, the body grows across the face's front) or cut
+    (d < 0). On a bore the slab is the annulus between r and r ∓ |d|, so the hole
+    changes radius by exactly d — measured 2.2124 → 1.2124 at d = +1.
+
+    Unlike _sweep_press_pull the slab follows the SURFACE, which is what lets it
+    take a face that wraps round on itself; a linear prism has no direction to
+    travel along there, and that refusal is what a hole used to land in.
+
+    OCCT returns the slab REVERSED for one sign of the offset — a solid of
+    negative volume — and fusing that erases the body (measured: 44082 mm³ → 0).
+    Normalising the orientation is not tidying, it is the difference between the
+    right answer and an empty document."""
+    from OCP.BRepCheck import BRepCheck_Analyzer
+    from OCP.BRepOffset import BRepOffset_MakeOffset, BRepOffset_Mode
+    from OCP.GeomAbs import GeomAbs_JoinType
+
+    mk = BRepOffset_MakeOffset()
+    mk.Initialize(
+        face.wrapped, d, 1e-4, BRepOffset_Mode.BRepOffset_Skin,
+        False, False, GeomAbs_JoinType.GeomAbs_Intersection, True,
+    )
+    mk.MakeThickSolid()
+    if not mk.IsDone():
+        raise ValueError("can't offset this face by that amount")
+    slab = _wrap_topods(mk.Shape())
+    if slab is None:
+        raise ValueError("can't offset this face by that amount")
+    if _solid_volume(slab) < 0:
+        slab = _wrap_topods(mk.Shape().Reversed())
+        if slab is None:
+            raise ValueError("can't offset this face by that amount")
+    out = (part + slab) if d > 0 else (part - slab)
+    before, after = _solid_volume(part), _solid_volume(out)
+    if not BRepCheck_Analyzer(out.wrapped).IsValid() or after <= 0 or (after > before) != (d > 0):
+        raise ValueError(
+            "that offset ran past what this surface can hold — try a smaller amount"
+        )
+    return out
 
 
 def _offset_faces(part, pairs):
