@@ -63,6 +63,19 @@ const CONSTRUCTION_MAT = new THREE.LineDashedMaterial({
   gapSize: 1.0,
   depthTest: true,
 });
+// alignment guides: the snap marker's amber, dashed and dimmed. The dash is
+// short and the gap long so a guide reads as an aid rather than as a drawn line
+// even when it runs the width of the screen.
+const GUIDE_DASH_PX = 5;
+const GUIDE_GAP_PX = 5;
+const GUIDE_MAT = new THREE.LineDashedMaterial({
+  color: 0xffaa33,
+  dashSize: 1.2, // replaced per call with the pixel-sized pair (see setGuides)
+  gapSize: 1.2,
+  transparent: true,
+  opacity: 0.55,
+  depthTest: true,
+});
 // projected reference geometry: purple (linked/fixed, Fusion-style); a stale
 // projection (source no longer resolves — last shape kept) tints amber
 const PROJECTED_COLOR = 0xb07fe8;
@@ -99,6 +112,7 @@ export class SketchOverlay {
   private activeFills = new THREE.Group(); // profile fills for the active (hidden) sketch
   private activeSketch = new THREE.Group(); // active sketch's committed curves
   private previewGroup = new THREE.Group(); // the rubber-band, rebuilt per move
+  private guideGroup = new THREE.Group(); // alignment guides, rebuilt per move
   private snapMarker: THREE.Mesh;
   private planeCache = new Map<string, SketchPlane>();
   regions: WorldRegion[] = []; // committed-sketch regions
@@ -115,6 +129,7 @@ export class SketchOverlay {
       this.activeFills,
       this.activeSketch,
       this.previewGroup,
+      this.guideGroup,
     );
     this.group.renderOrder = 10;
 
@@ -432,6 +447,41 @@ export class SketchOverlay {
   setPreview(objects: THREE.Object3D[]) {
     this.clearGroup(this.previewGroup);
     for (const o of objects) this.previewGroup.add(o);
+  }
+
+  /** Alignment guides: a dashed line from each anchor the cursor lined up with
+   *  to where the cursor now is (2D sketch mm, on `plane`). Pass [] to clear.
+   *
+   *  Drawn dashed and in the snap marker's own amber, because that is what it
+   *  is: the guide and the marker are one answer, and a solid line in a curve
+   *  colour would read as geometry that had been drawn. */
+  setGuides(
+    segments: readonly (readonly [THREE.Vector2, THREE.Vector2])[],
+    plane: SketchPlane,
+    pixelWorldSize = 0,
+  ) {
+    this.clearGroup(this.guideGroup);
+    // Dash length in PIXELS, not millimetres. A guide runs from an anchor to the
+    // cursor, so its length is whatever the user's hand made it, and a dash
+    // fixed in world units is a solid line at one zoom and a row of dots at the
+    // next. The material is module-shared, so this is two assignments rather
+    // than an allocation per pointer move.
+    if (pixelWorldSize > 0 && Number.isFinite(pixelWorldSize)) {
+      GUIDE_MAT.dashSize = pixelWorldSize * GUIDE_DASH_PX;
+      GUIDE_MAT.gapSize = pixelWorldSize * GUIDE_GAP_PX;
+    }
+    for (const [a, b] of segments) {
+      const line = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([
+          plane.to3D(a.x, a.y),
+          plane.to3D(b.x, b.y),
+        ]),
+        GUIDE_MAT,
+      );
+      line.computeLineDistances(); // required for dashing
+      line.renderOrder = 14; // over the sketch's own curves, under the snap marker
+      this.guideGroup.add(line);
+    }
   }
 
   setSnap(world: THREE.Vector3 | null, _kind: SnapKind = "free", camera?: THREE.Camera) {

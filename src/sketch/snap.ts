@@ -14,8 +14,7 @@ export type SnapKind =
   | "endpoint"
   | "midpoint"
   | "center"
-  | "on-x"
-  | "on-y";
+  | "align";
 
 export interface SnapCandidate {
   p: THREE.Vector2;
@@ -23,9 +22,20 @@ export interface SnapCandidate {
   priority: number; // higher wins
 }
 
+/** One alignment guide: the anchor the cursor lined up WITH, and which of that
+ *  anchor's coordinates the cursor adopted. `axis: "x"` means the cursor took
+ *  the anchor's x, i.e. it is standing on the anchor's vertical line. */
+export interface SnapGuide {
+  from: THREE.Vector2;
+  axis: "x" | "y";
+}
+
 export interface SnapResult {
   point: THREE.Vector2;
   kind: SnapKind;
+  /** The anchors this result lined up with, for drawing the guides. Empty for
+   *  every kind but "align". */
+  guides: SnapGuide[];
 }
 
 export function snap(
@@ -36,8 +46,18 @@ export function snap(
   pixelTol = 10,
 ): SnapResult {
   const rawScreen = toScreen(raw);
+  const screenGap = (p: THREE.Vector2) => {
+    const s = toScreen(p);
+    return Math.hypot(s.x - rawScreen.x, s.y - rawScreen.y);
+  };
   let best: SnapCandidate | null = null;
   let bestD = pixelTol;
+  // Nearest anchor sharing the cursor's row / column — the alignment pass. Both
+  // are gathered in this one loop rather than in a second walk of the candidates,
+  // which on a large sketch is the difference between one projection per
+  // candidate and three.
+  let alignX: { c: SnapCandidate; d: number } | null = null;
+  let alignY: { c: SnapCandidate; d: number } | null = null;
 
   for (const c of candidates) {
     const s = toScreen(c.p);
@@ -53,11 +73,46 @@ export function snap(
         bestD = d;
       }
     }
+    // Measured to the point that has the ANCHOR's x and the CURSOR's y, as a
+    // full screen distance — the same construction the grid fallback uses below,
+    // and for the same reason: the tolerance has to be the same reach at every
+    // zoom, and with Lock to Plane off a sketch axis is neither screen axis.
+    const dx = screenGap(new THREE.Vector2(c.p.x, raw.y));
+    if (dx <= pixelTol && (!alignX || dx < alignX.d)) alignX = { c, d: dx };
+    const dy = screenGap(new THREE.Vector2(raw.x, c.p.y));
+    if (dy <= pixelTol && (!alignY || dy < alignY.d)) alignY = { c, d: dy };
   }
 
-  if (best) return { point: best.p.clone(), kind: best.kind };
+  if (best) return { point: best.p.clone(), kind: best.kind, guides: [] };
 
-  if (gridStep <= 0) return { point: raw.clone(), kind: "free" }; // grid snap off
+  // ALIGNMENT, above the grid and below a point.
+  //
+  // Above the grid because a guide is a statement about the drawing — "level
+  // with that hole", "centred on this face" — and the lattice is only ever the
+  // fallback for having nothing better to say. Below a point because when the
+  // cursor is ON an anchor, that anchor is the answer and a line through it is
+  // not needed.
+  if (alignX || alignY) {
+    // Both axes from the SAME anchor means the cursor is diagonally near it but
+    // outside the round tolerance the point pass used. Snapping to it is right;
+    // reporting it as an alignment with two zero-length guides is not.
+    if (alignX && alignY && alignX.c === alignY.c) {
+      return { point: alignX.c.p.clone(), kind: alignX.c.kind, guides: [] };
+    }
+    const guides: SnapGuide[] = [];
+    if (alignX) guides.push({ from: alignX.c.p.clone(), axis: "x" });
+    if (alignY) guides.push({ from: alignY.c.p.clone(), axis: "y" });
+    return {
+      point: new THREE.Vector2(
+        alignX ? alignX.c.p.x : raw.x,
+        alignY ? alignY.c.p.y : raw.y,
+      ),
+      kind: "align",
+      guides,
+    };
+  }
+
+  if (gridStep <= 0) return { point: raw.clone(), kind: "free", guides: [] }; // grid snap off
 
   // Grid fallback (always available, lowest priority). Each axis is tested on
   // its OWN, which is the whole of it: this rounded both axes and then measured
@@ -70,20 +125,21 @@ export function snap(
   const gx = Math.round(raw.x / gridStep) * gridStep;
   const gy = Math.round(raw.y / gridStep) * gridStep;
   // Measured as a full SCREEN distance to the axis-snapped point rather than as
-  // a difference in screen x or y. The tolerance is in pixels so that it is the
-  // same reach at every zoom, and the sketch plane can sit at any angle on
-  // screen when Lock to Plane is off, where a sketch axis is neither.
-  const screenGap = (p: THREE.Vector2) => {
-    const s = toScreen(p);
-    return Math.hypot(s.x - rawScreen.x, s.y - rawScreen.y);
-  };
+  // a difference in screen x or y (see screenGap above). The tolerance is in
+  // pixels so that it is the same reach at every zoom, and the sketch plane can
+  // sit at any angle on screen when Lock to Plane is off, where a sketch axis is
+  // neither.
   const onX = screenGap(new THREE.Vector2(gx, raw.y)) <= pixelTol;
   const onY = screenGap(new THREE.Vector2(raw.x, gy)) <= pixelTol;
   if (onX || onY) {
-    return { point: new THREE.Vector2(onX ? gx : raw.x, onY ? gy : raw.y), kind: "grid" };
+    return {
+      point: new THREE.Vector2(onX ? gx : raw.x, onY ? gy : raw.y),
+      kind: "grid",
+      guides: [],
+    };
   }
 
-  return { point: raw.clone(), kind: "free" };
+  return { point: raw.clone(), kind: "free", guides: [] };
 }
 
 /** snap candidates from resolved sketch entities (numbers, not params) */

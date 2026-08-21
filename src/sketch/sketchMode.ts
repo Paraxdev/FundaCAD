@@ -35,10 +35,11 @@ import { SolverUnavailable } from "./solver";
 import { resolveRealEntities, toSketchEntity } from "./resolve";
 import { applyDrivingDimsDirect } from "./directDims";
 import { expandPattern, translated, rotated, scaled } from "./pattern";
-import { candidatesFromEntities, snap, type SnapKind, type SnapCandidate } from "./snap";
+import { candidatesFromEntities, snap, type SnapGuide, type SnapKind, type SnapCandidate } from "./snap";
 import type { ResolvedEntity } from "./snap";
 import { detectRegions, rectCorners, rectFromThreePoints } from "./region";
 import { planeFootprint } from "./faceFootprint";
+import { footprintAnchors } from "./anchors";
 import { setSpaceMouseOrbitLocked } from "../input/spacemouse";
 import { setPrompt } from "../ui/prompt";
 import { toast } from "../ui/toast";
@@ -146,6 +147,12 @@ function fpClose(a: EdgeFingerprint, b: EdgeFingerprint): boolean {
 // active entity list (so it repaints through the normal render path) but is never
 // committed — filtered out at serialization and dropped on tool switch/cancel.
 const TEXT_PREVIEW_ID = "__textpreview__";
+
+// The cross marking a face anchor (the centre of the face, and of each hole in
+// it). A dimmed cousin of the sketch curve blue: near enough to read as "a thing
+// you can snap to", far enough from CURVE_COLOR that it is never mistaken for
+// geometry that has been drawn.
+const FACE_ANCHOR_COLOR = 0x4a6a94;
 
 export class SketchMode {
   active = false;
@@ -630,7 +637,10 @@ export class SketchMode {
       this.editingId ?? "__active__",
       [...this.entities, ...derived],
     );
-    this.candidates = candidatesFromEntities([...this.entities, ...derived]);
+    this.candidates = [
+      ...candidatesFromEntities([...this.entities, ...derived]),
+      ...this.faceAnchorCandidates(),
+    ];
     // an in-progress dimension holds entity REFERENCES, and a solve replaces
     // every entity object — re-read the picks off the fresh list
     if (this.dimPicks.length) this.refreshDimPlan();
@@ -2844,14 +2854,19 @@ export class SketchMode {
     if (!world) return null;
     const p2d = this.plane.to2D(world);
     // Hold Ctrl to suppress snapping for fine placement (raw cursor position).
-    if (noSnap) return { p: p2d, kind: "free" as SnapKind, world };
+    if (noSnap) return { p: p2d, kind: "free" as SnapKind, world, guides: [] as SnapGuide[] };
     const res = snap(
       p2d,
       this.candidates, // cached; rebuilt only when entities change
       (q) => this.viewport.projectToScreen(this.plane.to3D(q.x, q.y)),
       this.gridSnap ? this.snapStep() : 0,
     );
-    return { p: res.point, kind: res.kind, world: this.plane.to3D(res.point.x, res.point.y) };
+    return {
+      p: res.point,
+      kind: res.kind,
+      world: this.plane.to3D(res.point.x, res.point.y),
+      guides: res.guides,
+    };
   }
 
   /** The grid spacing currently on screen, which is what the cursor snaps to.
@@ -2860,7 +2875,19 @@ export class SketchMode {
     return snapLatticeStep(this.viewport.pixelWorldSize(this.plane.origin));
   }
 
-  private showSnap(hit: { kind: SnapKind; world: THREE.Vector3 } | null) {
+  private showSnap(
+    hit: { kind: SnapKind; world: THREE.Vector3; p?: THREE.Vector2; guides?: SnapGuide[] } | null,
+  ) {
+    // The guides go up or down with the snap itself: a line left standing after
+    // the cursor has moved off the row it named is a claim about where the next
+    // click will land, and it would be a false one.
+    this.overlay.setGuides(
+      hit?.p && hit.guides?.length
+        ? hit.guides.map((g) => [g.from, hit.p!] as const)
+        : [],
+      this.plane,
+      this.viewport.pixelWorldSize(this.plane.origin),
+    );
     if (!hit || hit.kind === "free") {
       this.overlay.setSnap(null);
       return;
@@ -2911,7 +2938,41 @@ export class SketchMode {
       this.cdims = [];
     }
     if (derived.length) objs.push(...curveObjects(derived, this.plane, this.activeColor()));
+    objs.push(...this.faceAnchorMarkers());
     return objs;
+  }
+
+  /** Snap targets the FACE contributes: its own centre and the centre of every
+   *  hole through it.
+   *
+   *  Priority 70 — under a placed point (110), an endpoint (100) and a midpoint
+   *  (80), over a projected polyline's interior samples (60). The face is
+   *  scenery you are drawing on top of, so anything you actually drew wins where
+   *  the two land in the same place; but it is exact model geometry, so it
+   *  outranks a tessellation sample.
+   *
+   *  Derived from `this.footprint`, which enter() computes once per session
+   *  because the body under an open sketch cannot change. */
+  private faceAnchorCandidates(): SnapCandidate[] {
+    return footprintAnchors(this.footprint).map((p) => ({
+      p,
+      kind: "center" as SnapKind,
+      priority: 70,
+    }));
+  }
+
+  /** A small cross on each face anchor, so the target is visible before the
+   *  cursor is near enough to snap to it. Same glyph the sketch's own points and
+   *  circle centres wear, drawn dimmer: it marks somewhere you can aim, not
+   *  something in the sketch. */
+  private faceAnchorMarkers(): THREE.Object3D[] {
+    const pts = footprintAnchors(this.footprint);
+    if (!pts.length) return [];
+    return curveObjects(
+      pts.map((p, i) => ({ type: "point" as const, id: `__face${i}`, x: p.x, y: p.y })),
+      this.plane,
+      FACE_ANCHOR_COLOR,
+    );
   }
 
   private entityCurve(e: ResolvedEntity): THREE.Object3D {

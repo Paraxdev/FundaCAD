@@ -136,3 +136,89 @@ describe("candidatesFromEntities — projected reference geometry", () => {
     expect(poly.filter((x) => x.priority === 60)).toHaveLength(2); // sample vertices
   });
 });
+
+// Alignment guides: lining the cursor up with an anchor it is NOT on.
+//
+// The gesture the user described is "move away from a point and see a line
+// telling you that you are still level with it", which is what makes a
+// symmetrical layout something you draw rather than something you compute. It
+// sits between the two rules that were already there: over the grid, because a
+// guide says something about the drawing while the lattice is only the fallback,
+// and under a point, because when the cursor is ON an anchor that anchor is the
+// answer.
+describe("snap alignment guides", () => {
+  const hole: SnapCandidate = { p: v(40, 25), kind: "center", priority: 70 };
+  const corner: SnapCandidate = { p: v(-10, 90), kind: "endpoint", priority: 100 };
+
+  it("adopts the anchor's x when the cursor is level with it in x", () => {
+    // 3px off the anchor's column and 100 units away along it: nowhere near the
+    // anchor itself, squarely on its vertical line.
+    const r = snap(v(43, 125), [hole], screen, 0, 10);
+    expect(r.kind).toBe("align");
+    expect(r.point.x).toBe(40);
+    expect(r.point.y).toBe(125); // and free along the guide
+    expect(r.guides).toEqual([{ from: hole.p, axis: "x" }]);
+  });
+
+  it("adopts the anchor's y the same way", () => {
+    const r = snap(v(-60, 27), [hole], screen, 0, 10);
+    expect(r.kind).toBe("align");
+    expect(r.point.x).toBe(-60);
+    expect(r.point.y).toBe(25);
+    expect(r.guides.map((g) => g.axis)).toEqual(["y"]);
+  });
+
+  it("lands on the crossing of two anchors' guides", () => {
+    // The symmetry case: level with one hole, in line with a far corner. Both
+    // guides are reported, because both are why the point is where it is.
+    const r = snap(v(-7, 23), [hole, corner], screen, 0, 10);
+    expect(r.kind).toBe("align");
+    expect(r.point.x).toBe(-10); // the corner's column
+    expect(r.point.y).toBe(25); // the hole's row
+    expect(r.guides).toHaveLength(2);
+    expect(r.guides.map((g) => g.axis).sort()).toEqual(["x", "y"]);
+  });
+
+  it("beats the grid", () => {
+    // On the anchor's column AND within reach of a lattice line. Without the
+    // ordering the lattice would answer, and the guide the user was following
+    // would vanish the moment it crossed one.
+    const r = snap(v(42, 123), [hole], screen, 100, 10);
+    expect(r.kind).toBe("align");
+    expect(r.point.x).toBe(40);
+  });
+
+  it("loses to a point snap, and reports no guides when it does", () => {
+    const r = snap(v(41, 26), [hole], screen, 0, 10);
+    expect(r.kind).toBe("center");
+    expect(r.point.x).toBe(40);
+    expect(r.point.y).toBe(25);
+    expect(r.guides).toEqual([]);
+  });
+
+  it("does not draw two zero-length guides through one anchor", () => {
+    // 8 and 8 is inside tolerance on each axis but 11.3 away as a point, so the
+    // point pass misses and BOTH alignment axes fire off the same anchor. The
+    // right answer is still the anchor — reported as itself, with no guides,
+    // rather than as an alignment with two lines of no length.
+    const r = snap(v(48, 33), [hole], screen, 0, 10);
+    expect(r.kind).toBe("center");
+    expect(r.point.x).toBe(40);
+    expect(r.point.y).toBe(25);
+    expect(r.guides).toEqual([]);
+  });
+
+  it("takes the NEAREST anchor on each axis", () => {
+    const near: SnapCandidate = { p: v(41, 0), kind: "endpoint", priority: 100 };
+    const far: SnapCandidate = { p: v(35, 0), kind: "endpoint", priority: 100 };
+    const r = snap(v(43, 400), [far, near], screen, 0, 10);
+    expect(r.point.x).toBe(41);
+  });
+
+  it("stays out of the way when nothing lines up", () => {
+    const r = snap(v(200, 200), [hole], screen, 0, 10);
+    expect(r.kind).toBe("free");
+    expect(r.guides).toEqual([]);
+  });
+});
+
