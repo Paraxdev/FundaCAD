@@ -634,15 +634,60 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     window.addEventListener("keydown", onEsc, true);
   }
 
+  // One-shot EDGE picker, the twin of pickFaceInteractive above. Every model edge
+  // lights up, the one under the cursor highlights, and a click returns its
+  // selector.
+  function pickEdgeInteractive(promptText: string, onPick: (sel: Selector) => void) {
+    if (toolBusy()) return;
+    if (!hasBody()) {
+      setStatus("Create or import a body first", "");
+      return;
+    }
+    viewport.suspendPicking = true;
+    viewport.emphasizeEdges(true);
+    setPrompt(promptText);
+    const onMove = (e: PointerEvent) =>
+      viewport.hoverEdge(viewport.pickEdgeAt(e.clientX, e.clientY)?.edge ?? null);
+    const onDown = (e: PointerEvent) => {
+      if (e.button !== 0) return;
+      const hit = viewport.pickEdgeAt(e.clientX, e.clientY);
+      if (!hit) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      cleanup();
+      requestAnimationFrame(() => onPick(hit.selector));
+    };
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") cleanup();
+    };
+    const cleanup = () => {
+      viewport.suspendPicking = false;
+      viewport.emphasizeEdges(false);
+      viewport.hoverEdge(null);
+      canvas.removeEventListener("pointermove", onMove);
+      canvas.removeEventListener("pointerdown", onDown, true);
+      window.removeEventListener("keydown", onEsc, true);
+      setPrompt(null);
+    };
+    canvas.addEventListener("pointermove", onMove);
+    canvas.addEventListener("pointerdown", onDown, true);
+    window.addEventListener("keydown", onEsc, true);
+  }
+
   // Repair an ambiguous saved reference: the rebuild refused to guess between two
-  // equally-close faces, so ask the user which one they meant and swap that ONE
+  // equally-close candidates, so ask which one was meant and swap that ONE
   // selector. Everything else about the feature is left alone.
+  //
+  // `kind` is the sidecar's own word for what went ambiguous, and it decides what
+  // is picked. This used to pick a face unconditionally, so repairing a fillet
+  // put a FACE selector into its `edges` field, where the resolver read the face's
+  // pick point as an edge point and rounded whichever edge sat nearest it.
   //
   // Only the selector the sidecar named is touched — located by its stored point,
   // not by index (see repickReference.ts). If it can't be found the feature has
   // moved on since the failed build (already re-picked, or edited), which is not
   // an error: say so and do nothing rather than "repairing" the wrong reference.
-  function repickReference(featureId: string, at: readonly number[]) {
+  function repickReference(featureId: string, at: readonly number[], kind?: string) {
     const feature = store.document.features.find((f) => f.id === featureId);
     if (!feature) return;
     const site = findSelectorAt(feature, at);
@@ -650,7 +695,9 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       setStatus("That reference has already changed, nothing to re-pick", "");
       return;
     }
-    pickFaceInteractive("Pick the face this feature should use · Esc to cancel", (sel) => {
+    const wantsEdge = kind === "edge";
+    const pick = wantsEdge ? pickEdgeInteractive : pickFaceInteractive;
+    pick(`Pick the ${wantsEdge ? "edge" : "face"} to use · Esc`, (sel) => {
       // Re-read the feature: the pick is async, and the doc may have moved under
       // us (undo, another edit). Re-locating also re-validates the site.
       const cur = store.document.features.find((f) => f.id === featureId);

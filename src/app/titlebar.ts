@@ -31,7 +31,7 @@ export function installTitlebar(e: Engine): void {
     canRepick: (id) => !!ambiguousDiagFor(e.store.buildState.result?.diagnostics, id),
     onRepick: (id) => {
       const amb = ambiguousDiagFor(e.store.buildState.result?.diagnostics, id);
-      if (amb?.at) e.starters.repickReference(id, amb.at);
+      if (amb?.at) e.starters.repickReference(id, amb.at, amb.kind);
     },
   });
 }

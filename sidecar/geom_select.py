@@ -468,6 +468,20 @@ def _nearest_one(cands, dist_of, key_fn, describe, kind, sel, diag, feature_id):
     cands = list(cands)
     if not cands:
         raise ValueError(f"no {kind} to select from")
+    # Collapse candidates that no pick could tell apart. Two entities sharing a
+    # canonical key sit in the same place at the same size, so the refusal below
+    # — "re-pick, the saved reference no longer identifies one" — asks for
+    # something that cannot exist: any pick finding one finds the other.
+    #
+    # Not hypothetical. Two prisms that meet at a single corner fuse into a body
+    # carrying that corner's edge TWICE (measured on the reported document: one
+    # duplicated key, an edge against itself at 2.140mm vs 2.140mm), and every
+    # blend on that body died on it. Deduping BEFORE the margin is measured is
+    # what makes the runner-up the nearest genuinely different entity.
+    unique = {}
+    for c in cands:
+        unique.setdefault(key_fn(c), c)
+    cands = list(unique.values())
     scored = sorted(((dist_of(c), c) for c in cands), key=lambda t: t[0])
     best_d, best = scored[0]
     runner = scored[1][0] if len(scored) > 1 else math.inf
@@ -501,8 +515,7 @@ def _nearest_one(cands, dist_of, key_fn, describe, kind, sel, diag, feature_id):
     raise ValueError(
         f"ambiguous {kind} reference at ({where}): "
         + " and ".join(described)
-        + f" are equally close ({best_d:.3f}mm vs {runner:.3f}mm) — re-pick the {kind}, "
-        f"the saved reference no longer identifies one"
+        + f" are equally close ({best_d:.3f}mm vs {runner:.3f}mm) — re-pick the {kind}"
     )
 
 
@@ -536,6 +549,20 @@ def resolve_edges(part, sel, diag=None, feature_id=None):
             for e in resolve_edges(part, s, diag, feature_id):
                 seen.setdefault(_edge_dedup_key(e), e)
         return list(seen.values())
+
+    # A FACE selector in an edge field means "the edges around that face" — the
+    # `ofFace` intent, arriving by point-pick rather than by fingerprint. It gets
+    # here two ways: a fillet seeded from a selected face, and the re-pick repair,
+    # which used to hand back a face selector whatever kind had gone ambiguous.
+    # Falling through to the by:"nearest" branch below read the face's pick point
+    # as an EDGE point and rounded whichever edge happened to be closest to it —
+    # 2.14mm away on the reported document, an edge nobody had selected.
+    if sel.get("kind") == "face":
+        out = {}
+        for f in resolve_faces(part, sel, diag, feature_id):
+            for e in f.edges():
+                out.setdefault(_edge_dedup_key(e), e)
+        return list(out.values())
 
     by = sel.get("by")
     if by == "axis":
