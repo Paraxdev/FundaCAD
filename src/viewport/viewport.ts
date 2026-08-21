@@ -449,22 +449,27 @@ export class Viewport {
     }
     if (this.pickSuppressed) return;
     if (this.selectionMode === "bodies") return; // no face hover while picking bodies
-    if (!this.model || !this.highlighter) return;
+    // NO MODEL IS NOT NO TARGETS, and this is where hover used to stop. A
+    // document holding one sketch and no extrude has no solid at all, so
+    // rebuildBridge calls clearModel() and `model` is null — while the sketch's
+    // profile areas are still there and a click on one still selects it
+    // (handleClick raycasts the model only `if (this.model)` and asks
+    // regionPickAt either way). Hover asking a stricter question than the click
+    // it advertises is the whole defect: measured on a rectangle sketched on XY
+    // with nothing extruded, the fill under the cursor stayed at its resting
+    // 0.18 opacity, so the one signal that says "this is pickable" never fired,
+    // and the area read as dead until you clicked it anyway.
     const rect = this.canvas.getBoundingClientRect();
-    const hit = this.picker.pick(
-      e.clientX,
-      e.clientY,
-      rect,
-      this.rig.active,
-      this.model,
-    );
-    this.highlighter.clearHover();
+    const hit = this.model
+      ? this.picker.pick(e.clientX, e.clientY, rect, this.rig.active, this.model)
+      : null;
+    this.highlighter?.clearHover();
     this.requestRender();
-    if (hit?.kind === "edge") { this.highlighter.hoverEdge(hit.edge); this.regionHoverAt?.(-1, -1); return; }
+    if (hit?.kind === "edge") { this.highlighter?.hoverEdge(hit.edge); this.regionHoverAt?.(-1, -1); return; }
     // Sketch has PRIORITY over the body: hover a visible sketch's region if one is
     // under the cursor; only fall back to the solid face when no region is there.
     if (this.regionHoverAt?.(e.clientX, e.clientY)) return;
-    if (hit?.kind === "face") { this.highlighter.hoverFace(hit.faceId); return; }
+    if (hit?.kind === "face") { this.highlighter?.hoverFace(hit.faceId); return; }
   }
 
   private handleClick(e: PointerEvent) {
@@ -1650,12 +1655,32 @@ export class Viewport {
   }
 
   clearModel() {
-    if (!this.model) return;
-    for (const b of this.model.bodies) this.scene.modelGroup.remove(b.mesh);
-    for (const d of edgeObjects(this.model)) this.scene.modelGroup.remove(d.object);
-    disposeModel(this.model);
-    this.model = null;
-    this.highlighter = null;
+    // A STREAM ENDS HERE TOO, and this is the only path that ends it this way:
+    // `streaming` is otherwise cleared in setModel, and rebuildBridge routes a
+    // reply whose mesh is empty to clearModel INSTEAD of setModel. Left set,
+    // `streaming` keeps pickSuppressed true for good — every hover and every
+    // click in the viewport is dropped, faces, edges, sketch areas and datum
+    // planes alike, with nothing on screen to say why.
+    //
+    // "A reply with no geometry" is not an exotic case: it is every document
+    // with no solid in it. Sketch a rectangle and don't extrude it yet; open a
+    // new document while a model is on screen. Both stream a `begin` chunk (the
+    // manifest arrives before any body does, empty or not), then land here.
+    // Measured on the first: the profile area under the cursor never lit, and
+    // the click that should have selected it did nothing — while the same
+    // click, with the geometry engine down so no chunk ever arrived, selected
+    // it fine. Runs before the early return because the reply is authoritative
+    // whether or not a partial view was ever adopted; abortProgressiveModel is
+    // a no-op when no stream is open, and disposes what the stream built when
+    // one is (so the block below correctly finds no model left to free).
+    this.abortProgressiveModel();
+    if (this.model) {
+      for (const b of this.model.bodies) this.scene.modelGroup.remove(b.mesh);
+      for (const d of edgeObjects(this.model)) this.scene.modelGroup.remove(d.object);
+      disposeModel(this.model);
+      this.model = null;
+      this.highlighter = null;
+    }
     this.targetGridZ = 0; // no model → grid back on the world XY plane
     this.savedMats.clear(); // materials died with the model
     this.ghostMeshes = []; // ...as did the meshes the ghosts hung off
