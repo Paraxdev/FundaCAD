@@ -5,7 +5,7 @@
 import * as THREE from "three";
 import CameraControls from "camera-controls";
 import { frameRotation, pivotShift, viewQuaternion } from "./orbitPivot";
-import { anchorDolly } from "./zoomAnchor";
+import { anchorDolly, orthoZoomStep } from "./zoomAnchor";
 import { MIN_PERSP_DIST, NEAR_AT_REST, perspNear } from "./clipPlanes";
 
 CameraControls.install({ THREE });
@@ -307,7 +307,11 @@ export function createCameraRig(
         // each same-frame step recomputes k against a stale value (over-trucks
         // the cursor tracking and drops all but one step of zoom).
         const curZoom = pendingOrthoZoom ?? ortho.zoom;
-        const newZoom = Math.max(1e-4, curZoom / f);
+        // The zoom and the truck come from ONE call, against the controls' own
+        // limits — see orthoZoomStep for what happened when they came from two.
+        const { zoom: newZoom, truck: k } = orthoZoomStep(
+          curZoom, f, controls.minZoom, controls.maxZoom,
+        );
         pendingOrthoZoom = newZoom;
         if (pivot) {
           // keep the cursor point fixed on screen: TRUCK camera and target together
@@ -317,7 +321,6 @@ export function createCameraRig(
           // both endpoints by the same delta keeps the view direction bit-exact.
           const target = controls.getTarget(new THREE.Vector3());
           const pos = controls.getPosition(new THREE.Vector3());
-          const k = 1 - curZoom / newZoom;
           const dx = (pivot.x - target.x) * k;
           const dy = (pivot.y - target.y) * k;
           const dz = (pivot.z - target.z) * k;

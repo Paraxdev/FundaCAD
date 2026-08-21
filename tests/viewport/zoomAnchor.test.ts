@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { anchorDolly } from "../../src/viewport/zoomAnchor";
+import { anchorDolly, ORTHO_ZOOM_FLOOR, orthoZoomStep } from "../../src/viewport/zoomAnchor";
 
 const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 const MIN = 0.5;
@@ -117,5 +117,80 @@ describe("anchorDolly", () => {
     expect(out).not.toBeNull();
     expect(out!.target.distanceTo(v(0, 0, 0))).toBeLessThan(1e-9);
     expect(out!.position.z).toBeCloseTo(80, 9);
+  });
+});
+
+// The orthographic half of the same claim. There the wheel does not move the
+// camera along the view axis at all: it changes camera.zoom and TRUCKS both
+// endpoints sideways to keep the cursor point still. The two have to be derived
+// from one number, and that number has to be the one the controls will apply.
+describe("orthoZoomStep", () => {
+  const MIN_ZOOM = 0.01; // camera-controls' own default, which is what bit
+  const step = (cur: number, f: number) => orthoZoomStep(cur, f, MIN_ZOOM, Infinity);
+
+  it("zooms and trucks together on an ordinary notch", () => {
+    const out = step(1, 1.5);
+    expect(out.zoom).toBeCloseTo(1 / 1.5, 12);
+    // truck = 1 - old/new, so zooming OUT pushes away from the cursor
+    expect(out.truck).toBeCloseTo(1 - 1.5, 12);
+  });
+
+  it("moves NOTHING once the zoom is at its stop", () => {
+    // The reported bug. At the limit the zoom cannot change, so the truck must
+    // be exactly zero — not merely small, since it is applied every notch and a
+    // user who cannot zoom out keeps scrolling.
+    const out = step(MIN_ZOOM, 4);
+    expect(out.zoom).toBe(MIN_ZOOM);
+    expect(out.truck).toBe(0);
+  });
+
+  it("never lets the truck run away past the stop", () => {
+    // What it did before: `truck` was computed from an unclamped zoom, so past
+    // the limit it went negative and GREW, sliding the view further every
+    // notch. Wheel twenty notches out from the stop and the total displacement
+    // has to be zero.
+    let zoom = MIN_ZOOM;
+    let slid = 0;
+    for (let i = 0; i < 20; i++) {
+      const out = step(zoom, 1.6);
+      slid += Math.abs(out.truck);
+      zoom = out.zoom;
+    }
+    expect(zoom).toBe(MIN_ZOOM);
+    expect(slid).toBe(0);
+  });
+
+  it("lands exactly on the stop from above, and trucks only that far", () => {
+    const out = step(MIN_ZOOM * 1.2, 10); // asks for far past the limit
+    expect(out.zoom).toBe(MIN_ZOOM);
+    // the truck matches the zoom that was really applied (1.2x), not the 10x asked
+    expect(out.truck).toBeCloseTo(1 - 1.2, 12);
+  });
+
+  it("honours a maximum too", () => {
+    const out = orthoZoomStep(50, 0.1, MIN_ZOOM, 100);
+    expect(out.zoom).toBe(100);
+    expect(out.truck).toBeCloseTo(1 - 0.5, 12);
+    const stuck = orthoZoomStep(100, 0.5, MIN_ZOOM, 100);
+    expect(stuck.zoom).toBe(100);
+    expect(stuck.truck).toBe(0);
+  });
+
+  it("keeps its own floor when the controls have none", () => {
+    expect(orthoZoomStep(1, 1e9, 0, Infinity).zoom).toBe(ORTHO_ZOOM_FLOOR);
+    expect(orthoZoomStep(1, 1e9, Number.NaN, Number.NaN).zoom).toBe(ORTHO_ZOOM_FLOOR);
+  });
+
+  it("returns a usable zoom and no truck for nonsense input", () => {
+    // A zoom of 0 or NaN reaching the camera is a blank viewport, and a NaN
+    // truck is a camera position that never recovers.
+    for (const cur of [0, -1, Number.NaN, Infinity]) {
+      for (const f of [0, -1, Number.NaN, Infinity]) {
+        const out = orthoZoomStep(cur, f, MIN_ZOOM, Infinity);
+        expect(Number.isFinite(out.zoom)).toBe(true);
+        expect(out.zoom).toBeGreaterThan(0);
+        expect(Number.isFinite(out.truck)).toBe(true);
+      }
+    }
   });
 });

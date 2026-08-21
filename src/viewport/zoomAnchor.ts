@@ -74,3 +74,51 @@ export function anchorDolly(
     target: anchor.clone().add(target.clone().sub(anchor).multiplyScalar(f)),
   };
 }
+
+/** Absolute floor on the orthographic zoom, whatever the controls allow. At the
+ *  100mm base frustum this is a ten-metre view; below it the numbers stop
+ *  meaning anything for a part. */
+export const ORTHO_ZOOM_FLOOR = 1e-4;
+
+export interface OrthoZoom {
+  /** The zoom to apply. Already inside the limits the controls will enforce, so
+   *  it is what the camera will actually end up with. */
+  zoom: number;
+  /** How far to move camera and target toward the cursor point, as a fraction
+   *  of the offset from the target to it. Exactly 0 when the zoom did not
+   *  change, which is the whole reason this returns both together. */
+  truck: number;
+}
+
+/** One notch of orthographic wheel zoom: the new zoom, and the truck that keeps
+ *  the point under the cursor under the cursor.
+ *
+ *  The two MUST be computed from the same number, and the number has to be the
+ *  one the camera will really wear. Orthographic zoom has a hard stop
+ *  (camera-controls clamps to its own minZoom, 0.01 by default), and a caller
+ *  that clamped to a floor of its own below that one got a truck derived from a
+ *  zoom nothing would apply: past the stop, `1 - current/zoom` went negative and
+ *  kept growing, so every further notch slid the view sideways while the zoom
+ *  itself never moved again. Measured by wheeling out at a fixed cursor, the
+ *  camera walked from x=60 to x=4697 with the zoom reading 0.01 throughout —
+ *  scrolling that leaves the part behind instead of showing more of it.
+ *
+ *  `factor` > 1 zooms out. `minZoom`/`maxZoom` are the controls' own limits.
+ */
+export function orthoZoomStep(
+  current: number,
+  factor: number,
+  minZoom: number,
+  maxZoom: number,
+): OrthoZoom {
+  const lo = Math.max(
+    ORTHO_ZOOM_FLOOR,
+    Number.isFinite(minZoom) && minZoom > 0 ? minZoom : ORTHO_ZOOM_FLOOR,
+  );
+  const hi = Number.isFinite(maxZoom) && maxZoom > lo ? maxZoom : Infinity;
+  if (!Number.isFinite(current) || current <= 0 || !Number.isFinite(factor) || factor <= 0) {
+    return { zoom: Math.min(hi, Math.max(lo, 1)), truck: 0 };
+  }
+  const zoom = Math.min(hi, Math.max(lo, current / factor));
+  return { zoom, truck: 1 - current / zoom };
+}
