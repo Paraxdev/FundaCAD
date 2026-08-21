@@ -54,8 +54,32 @@ import { nextDName } from "../params/engine";
 // sketch on that plane with it. Nothing about the file looks wrong. The stamp
 // turns that into the "made by a newer version" warning.
 
+// v7 -> v8: `revolve.regions`, plus a change of MEANING that needs no new field.
+//
+// The meaning first. `extrude.regions` (and `loft.profiles[].region`) is an
+// interior point, and it used to select the whole profile it landed in; it now
+// selects the AREA of that profile the point is actually in, cut where the model
+// under the sketch ends, which is what the overlay has drawn and hit-tested since
+// profiles started splitting at the face edge they cross.
+//
+// `revolve.regions` is the same selection, newly written down. Revolve read the
+// picked profile and stored only its sketch, so the builder spun everything on
+// that plane. Absent still means the whole sketch, which is what an older file
+// meant and what one without a selection still means.
+//
+// Stamped even though nothing is rewritten, because the two builds disagree about
+// geometry rather than about data. An older build opening a v8 file joins or cuts
+// with the WHOLE profile where the file means one half of it — a hole that eats
+// the part it was drawn on, and nothing in the file looks wrong. The stamp turns
+// that into the "made by a newer version" warning.
+//
+// The change runs the other way too, and cannot be migrated: a pre-v8 file whose
+// profile crossed the edge of its face extruded whole, and now extrudes the piece
+// under its saved point. Nothing in the file records which was meant — the point
+// is all there ever was — so those features open smaller and are re-dragged.
+
 /** Document file-format version (bump when the on-disk shape changes incompatibly). */
-export const FORMAT_VERSION = 7;
+export const FORMAT_VERSION = 8;
 
 export function migrateDocument(parsed: CadDocument): string[] {
   const version = parsed.version ?? 1;

@@ -101,11 +101,12 @@ describe("migrateDocument", () => {
     // Pins the current format so a version bump has to come past these tests.
     // v5 moved geometry OUT of the document (inline base64 `brep` -> the `geom`
     // content hash carried in the container); v6 added `rectangle.angle`; v7
-    // added `datumPlane.face`. A v3 document still passes through
-    // migrateDocument untouched by any of them: `brep` is still READ, an absent
-    // angle already means 0, and an absent face reference already means the
-    // datum keeps the plane it was given.
-    expect(FORMAT_VERSION).toBe(7);
+    // added `datumPlane.face`; v8 re-read `extrude.regions` as the area under
+    // the point rather than the whole profile. A v3 document still passes
+    // through migrateDocument untouched by any of them: `brep` is still READ, an
+    // absent angle already means 0, an absent face reference already means the
+    // datum keeps the plane it was given, and v8 rewrites no data at all.
+    expect(FORMAT_VERSION).toBe(8);
     const doc = v1({
       version: 3,
       features: [{ id: "f1", type: "sketch", plane: "XY", entities: [

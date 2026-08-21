@@ -108,6 +108,7 @@ from geom_select import (
     REL_DRIFT,
 )
 import texture
+from face_footprint import split_profile_cells
 from blend_overlap import folds_over_itself
 from conic_blend import (
     PROFILE_EPS,
@@ -1760,21 +1761,9 @@ def _handle_extrude(f, ctx):
     pts = f.get("regions")
     if not pts and f.get("region"):
         pts = [f["region"]]
-    if pts:
-        # precompute cell bboxes ONCE (region picking is per-point)
-        cells = [(fc, fc.bounding_box()) for fc in entry["faces"]]
-        sel = []
-        for p in pts:
-            rf = _region_face_at(cells, Vector(*p))
-            if rf is not None:
-                sel.append(rf)
-        if not sel:
-            raise ValueError("no profile found under the selected area")
-        target = sel[0]
-        for s in sel[1:]:
-            target = target + s
-    else:
-        target = sk  # whole sketch
+    target = _region_target(pts, entry, ctx)
+    if target is None:
+        target = sk  # nothing selected: the whole sketch
     solid = extrude(target, amount=ctx.val(f["distance"]))
     # Captured-visibility semantics: an extrude that carries
     # `hiddenBodies` uses THAT set (participants decided at feature
@@ -2339,7 +2328,15 @@ def _handle_mirror(f, ctx):
 
 def _handle_revolve(f, ctx):
     entry = _require_sketch(ctx, f.get("sketch"), "revolve")
-    sk = entry["sketch"]
+    # The selected areas, the same way extrude reads them (_region_cells says how
+    # they are cut). Absent means the whole sketch, which is what every revolve
+    # saved before the tool started recording its selection means — and what it
+    # did with a selection, which is the bug.
+    sk = _region_target(f.get("regions"), entry, ctx)
+    if sk is None:
+        sk = entry["sketch"]
+    if sk is None:
+        raise ValueError("sketch has no closed profile to revolve")
     angle = ctx.val(f.get("angle", 360))
     # A zero-degree revolve swept nothing yet still produced a body, so the
     # timeline showed a healthy feature that had done nothing at all.
@@ -2373,7 +2370,7 @@ def _handle_loft(f, ctx):
             entry = ctx.sketches.get(pr["sketch"])
             if entry is None or not entry.get("faces"):
                 raise ValueError("a loft profile's sketch has no closed area")
-            cells = [(fc, fc.bounding_box()) for fc in entry["faces"]]
+            cells = _region_cells(entry, ctx)
             rf = _region_face_at(cells, Vector(*pr["region"]))
             if rf is None:
                 raise ValueError("no profile found under a selected loft area")
@@ -4959,6 +4956,15 @@ def _boolean_into_bodies(bodies, solid, op, new_body, hidden=frozenset()):
             before = _try_vol(b["shape"])
             newshape = _serial_bool(_as_compound(b["shape"]), solid, "cut")
             after = _try_vol(newshape)
+            # A cut that consumes a whole body leaves nothing to select, nothing
+            # to see and nothing in the timeline saying where it went — the body
+            # is simply gone at the next repaint. Say so, the same way Intersect
+            # already does, and leave the model as it was.
+            if before is not None and after is not None and after < eps(before):
+                raise ValueError(
+                    f"Cut would remove all of {b.get('name') or 'this body'}. "
+                    "Shorten it, or select a smaller area."
+                )
             results.append((b, newshape))
             if before is not None and after is not None:
                 measured = True
@@ -6238,9 +6244,12 @@ def _build_sketch(f, val, datums=None):
         if _wrapped_or_none(sk) is None:
             sk = Compound(list(sk))
     else:
-        return {"sketch": None, "faces": [], "wire": path_wire}
+        return {"sketch": None, "faces": [], "wire": path_wire, "plane": plane}
 
-    return {"sketch": sk, "faces": located_faces, "wire": path_wire}
+    # `plane` rides along for _region_cells: a consuming feature has to cut these
+    # cells where the model under them ends, and needs to know which plane that
+    # model has to lie in.
+    return {"sketch": sk, "faces": located_faces, "wire": path_wire, "plane": plane}
 
 
 def _path_wire(edges, plane):
@@ -6257,6 +6266,57 @@ def _path_wire(edges, plane):
         return None
     longest = max(wires, key=lambda w: w.length)
     return plane * longest
+
+
+def _region_cells(entry, ctx):
+    """The (face, bbox) pairs a saved region point picks from, cut where the model
+    under the sketch ends.
+
+    A sketch drawn on a face routinely runs off it, and the two halves are
+    separate areas on screen — the part with material behind it can cut into the
+    body or add flush to it, the overhanging part has nothing behind it and can
+    only add. `_build_sketch` cannot know that: it sees the sketch alone. So a
+    feature naming the overhang by its interior point resolved it to the whole
+    profile, and joined or cut the half the user had deliberately not selected.
+    See face_footprint.py, and src/sketch/faceFootprint.ts for the same rule on
+    the frontend, which is where those areas come from in the first place.
+
+    The bboxes are precomputed once here because region picking runs per selected
+    point (see _region_face_at) — and the split runs once for the same reason.
+    """
+    faces = entry.get("faces") or []
+    plane = entry.get("plane")
+    shapes = [b["shape"] for b in ctx.bodies if b.get("shape") is not None]
+    if plane is not None and shapes and faces:
+        progress_tick()
+        model = shapes[0] if len(shapes) == 1 else Compound(list(shapes))
+        faces = split_profile_cells(
+            faces, plane.origin, plane.z_dir, shapes, _bbox_diag(model), tick=progress_tick
+        )
+    return [(fc, fc.bounding_box()) for fc in faces]
+
+
+def _region_target(pts, entry, ctx):
+    """The profile a feature's selected areas add up to, or None when it selected
+    none (the caller then falls back to the whole sketch).
+
+    A ring keeps its hole and several areas union, which is why this combines
+    faces rather than handing back a list.
+    """
+    if not pts:
+        return None
+    cells = _region_cells(entry, ctx)
+    sel = []
+    for p in pts:
+        rf = _region_face_at(cells, Vector(*p))
+        if rf is not None:
+            sel.append(rf)
+    if not sel:
+        raise ValueError("no profile found under the selected area")
+    target = sel[0]
+    for s in sel[1:]:
+        target = target + s
+    return target
 
 
 def _region_face_at(cells, P):

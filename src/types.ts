@@ -427,7 +427,11 @@ export type Feature =
   // in the builder (old behavior was a silent overwrite of the active body's
   // shape — this is the data-loss bug the field fixes, so old docs now get a
   // separate body instead, not a resurrected overwrite).
-  | { id: string; type: "revolve"; sketch: string; axis: Axis3; angle: Num; operation?: "new" | "join" | "cut" | "intersect" }
+  // `regions` names the profile AREAS to spin, exactly as extrude's does: interior
+  // points, one per selected area, resolved against the same split arrangement. It
+  // used to be absent and the whole sketch was always spun, which threw away a
+  // selection the tool had already read — the same defect extrude had.
+  | { id: string; type: "revolve"; sketch: string; axis: Axis3; angle: Num; operation?: "new" | "join" | "cut" | "intersect"; regions?: [number, number, number][] }
   // Loft blends through 2+ profiles in order. `profiles` (Fusion flow) lofts the
   // SELECTED profile regions across sketches — each carries its sketch id + a 3D
   // interior anchor (a ring keeps its hole → a tube). `sketches` is the legacy

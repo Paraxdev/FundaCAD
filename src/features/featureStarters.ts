@@ -517,17 +517,26 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     ]);
   }
 
-  // Revolve: spin a sketch profile around the X/Y/Z axis (defaults to a full 360°;
-  // edit the angle in the value rows for a partial revolve). Uses the selected
-  // profile area, or the only one if the sketch has just a single profile.
+  // Revolve: spin the selected sketch profiles around the X/Y/Z axis (defaults to a
+  // full 360°; edit the angle in the value rows for a partial revolve). Falls back
+  // to the only profile when the sketch has just one.
   async function startRevolve() {
     if (toolBusy()) return;
-    const regions = overlay.selectedRegions();
-    const wr = regions[0] ?? (overlay.regions.length === 1 ? overlay.regions[0] : null);
+    const selected = overlay.selectedRegions();
+    const picked = selected.length
+      ? selected
+      : overlay.regions.length === 1 && overlay.regions[0]
+        ? [overlay.regions[0]]
+        : [];
+    const wr = picked[0];
     if (!wr) {
       setStatus("Revolve: select a sketch profile to revolve first", "");
       return;
     }
+    // Areas from OTHER sketches cannot join this one revolve — a feature names a
+    // single sketch. Spinning them silently as if they had been part of it is how
+    // the whole-sketch fallback used to go wrong; drop them instead.
+    const areas = picked.filter((r) => r.sketchId === wr.sketchId);
     const axis = await choose<"X" | "Y" | "Z">("Revolve around axis", [
       { value: "X", label: "X axis" },
       { value: "Y", label: "Y axis" },
@@ -536,7 +545,10 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     if (!axis) return;
     const operation = await chooseSolidOperation("Revolve, operation");
     if (!operation) return;
-    store.addFeature({ id: store.nextId(), type: "revolve", sketch: wr.sketchId, axis, angle: 360, operation } as Feature);
+    store.addFeature({
+      id: store.nextId(), type: "revolve", sketch: wr.sketchId, axis, angle: 360, operation,
+      regions: areas.map((r) => [r.interior3D.x, r.interior3D.y, r.interior3D.z]),
+    } as Feature);
   }
 
   // Loft: interactive Fusion-style tool — click profiles in order, the loft

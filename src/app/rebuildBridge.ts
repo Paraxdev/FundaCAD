@@ -113,6 +113,24 @@ export function installRebuildBridge(e: Engine): void {
       } else {
         e.viewport.clearModel();
       }
+      // Re-split the committed profiles against the model that just landed.
+      //
+      // A profile drawn across the edge of its face picks as two areas, and the
+      // boundary between them comes from the model (sketch/faceFootprint.ts).
+      // The overlay is otherwise rebuilt from onDocChange, which fires BEFORE the
+      // build it triggered — so it split against the previous model, and on a
+      // freshly opened document against no model at all. Every profile there came
+      // out whole, which is the one state in which the split cannot be seen to be
+      // missing: it looks exactly like a profile that does not cross anything.
+      //
+      // Gated on there being regions to re-split, so a document with no sketch
+      // shown pays nothing; on the sketch editor being closed, which owns its own
+      // profiles while it is open; and on no tool running, because a tool holds
+      // the WorldRegion objects it was armed with and rebuilding them underneath
+      // it would leave it dragging a profile that no longer exists.
+      if (!e.sketch.active && !e.toolBusy() && e.overlay.regions.length) {
+        e.overlay.update(e.store.document);
+      }
       // Failed-edge red paint (fillet/chamfer edgeOpFailed diagnostics). Runs for
       // BOTH committed and preview builds (a just-toggled bad edge should turn
       // red live), unlike the toast gate below. The sidecar's prefix cache
