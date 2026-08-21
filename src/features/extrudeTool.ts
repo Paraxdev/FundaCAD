@@ -3,9 +3,16 @@
 // arrow manipulator + numeric box). Areas can be pre-selected in the sketch or
 // picked here: plain click picks one and starts the depth drag, Ctrl-click adds
 // more (Enter to confirm the set). A ring (annulus) area previews/extrudes as a
-// tube; selecting several areas unions them. Operation auto-selects: New Body when
-// nothing exists, otherwise Cut when the profile pushes into an existing body and
-// Join when it pulls away (both overridable in the commit dialog).
+// tube; selecting several areas unions them.
+//
+// The operation is DECIDED, never asked: New Body when nothing exists, Cut when
+// the profile pushes into existing material, Join when it pulls away from it — a
+// profile drawn on a face and pulled off it is the common case, and it joins. The
+// commit used to stop on a four-way modal to have that answer confirmed, which
+// put a decision in front of every extrude in order to change the few where the
+// guess is wrong. The prompt names the operation while you drag instead, and
+// Properties edits it afterwards (document/optionFields.ts has carried the row
+// for a while), so the answer is both visible before and changeable after.
 
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
@@ -17,10 +24,10 @@ import { DimInput } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
 import { axisDragDistance, fluentRelease } from "./manipulator";
 import { regionAnchor } from "./regionNudge";
-import { choose } from "../ui/choice";
+import { OP_WORD, plannedOperation, type ExtrudeOp } from "./extrudeOperation";
 
 type Phase = "pick" | "drag";
-type Op = "new" | "join" | "cut" | "intersect";
+type Op = ExtrudeOp;
 
 export class ExtrudeTool {
   active = false;
@@ -37,7 +44,7 @@ export class ExtrudeTool {
 
   // --- edit mode (re-opening a committed extrude) ---
   private editId: string | null = null; // committed feature id being edited
-  private editOp: Op | null = null; // saved operation (pre-sorted first in the modal)
+  private editOp: Op | null = null; // saved operation — an edit keeps it rather than re-guessing
   private editHiddenBodies: string[] | undefined; // participants captured at creation — KEPT
   /** while editing, this sketch is forced visible so its regions exist
    *  (consumed sketches hide by default) — main.ts's isSketchVisible honors it. */
@@ -223,7 +230,7 @@ export class ExtrudeTool {
       if (!additive && this.selected.length) this.beginDrag();
     } else {
       e.preventDefault();
-      void this.commit();
+      this.commit();
     }
   }
 
@@ -239,11 +246,11 @@ export class ExtrudeTool {
       meaningful: Math.abs(this.distance) >= 1e-3,
     });
     // Cleared BEFORE dispatching, not in cleanup: commit() can decline and
-    // leave the tool alive (the operation chooser was dismissed), and a stale
-    // flag would then make the NEXT release of any click re-run this decision
-    // on a gesture that ended long ago.
+    // leave the tool alive (a zero depth is ignored rather than committed), and
+    // a stale flag would then make the NEXT release of any click re-run this
+    // decision on a gesture that ended long ago.
     this.fluentGrab = false;
-    if (release === "commit") return void this.commit();
+    if (release === "commit") return this.commit();
     if (release === "cancel") return this.cancel();
     // Stayed armed: a press that never travelled is the way IN to the full
     // tool. The depth keeps tracking relative to where the arrow was taken
@@ -263,7 +270,7 @@ export class ExtrudeTool {
   private beginDrag() {
     this.phase = "drag";
     this.overlay.setHoverRegion(null);
-    this.dim.show([{ name: "distance", label: "D" }], () => void this.commit(), () => this.cancel());
+    this.dim.show([{ name: "distance", label: "D" }], () => this.commit(), () => this.cancel());
     if (this.editId) {
       // seed the SIGNED saved distance and lock the field (userDriven): extrude's
       // onMove free-tracks the cursor and would clobber the seed on the first
@@ -271,11 +278,12 @@ export class ExtrudeTool {
       // or commit. (Seeding the abs value would silently drop a cut's sign the
       // moment getValue is read back — the DimInput abs-display trap.)
       this.dim.seed("distance", this.distance);
-      setPrompt("Ctrl-click areas · drag or type a value · click to apply · Esc");
     } else {
       this.distance = 10;
-      setPrompt("Drag or type a depth, negative cuts · click to commit · Esc");
     }
+    this.shownOp = null;
+    this.promptKey = "";
+    this.refreshPrompt();
     this.positionDim();
     this.updatePreview();
   }
@@ -308,6 +316,7 @@ export class ExtrudeTool {
 
   private updatePreview() {
     if (!this.selected.length) return;
+    this.refreshPrompt();
     const sign = this.distance >= 0 ? 1 : -1;
     const depth = Math.abs(this.distance);
     const cut = sign < 0;
@@ -357,9 +366,10 @@ export class ExtrudeTool {
     }
   }
 
-  // Default operation: New Body when the doc has no solid yet, else Cut/Join by
-  // whether the extrude direction pushes INTO existing material or away from it
-  // (a face pushed inward reads as Cut, pulled outward as Join — MCAD parity).
+  // Does the extrude direction push INTO existing material? One of the four facts
+  // features/extrudeOperation.ts reads, and the only one that needs the scene: it
+  // steps each area's interior a hair along the direction and asks the model.
+  //
   // This replaced a pure drag-SIGN guess, which defaulted "push a face through the
   // model" to Join and silently no-op'd (the union was already inside the body).
   private entersSolid(): boolean {
@@ -374,15 +384,50 @@ export class ExtrudeTool {
     return inside * 2 > this.selected.length; // majority of selected areas
   }
 
-  private currentOperation(): Op {
-    const hasSolid = (this.store.buildState.result?.mesh.positions.length ?? 0) > 0;
-    if (!hasSolid) return "new";
-    return this.entersSolid() ? "cut" : "join";
+  /** The situation the rules in features/extrudeOperation.ts read, measured off
+   *  the live model and the live selection. Everything the commit modal used to
+   *  pre-sort its list by, gathered in one place. */
+  private plannedOperation(): Op {
+    return plannedOperation({
+      savedOperation: this.editId ? this.editOp : null,
+      hasSolid: (this.store.buildState.result?.mesh.positions.length ?? 0) > 0,
+      entersSolid: this.entersSolid(),
+      allGlyphs: this.selected.length > 0 && this.selected.every((wr) => wr.entityId !== undefined),
+    });
   }
 
-  private committing = false;
-  private async commit() {
-    if (this.committing) return;
+  /** The operation, on the prompt line, following the drag across zero.
+   *
+   *  This is what replaced the commit dialog. The dialog's one honest job was
+   *  saying which boolean you were about to get; a line that says so while you
+   *  are still dragging does that job without stopping the gesture to do it.
+   *
+   *  Gated on the two things the answer can turn on — which side of zero the
+   *  depth is, and how many areas are selected — because this runs on every
+   *  pointermove and plannedOperation() casts a ray through the whole model per
+   *  selected area. Nothing else moves during a drag: the model and the areas
+   *  are fixed, and the depth's MAGNITUDE cannot change which boolean is meant.
+   *  A dropped frame of a stale word is not a risk here; a raycast per area per
+   *  move on an imported assembly is. */
+  private shownOp: Op | null = null;
+  private promptKey = "";
+  private refreshPrompt() {
+    if (this.phase !== "drag") return;
+    const key = `${this.distance >= 0 ? "+" : "-"}${this.selected.length}`;
+    if (key === this.promptKey) return;
+    this.promptKey = key;
+    const op = this.plannedOperation();
+    if (op === this.shownOp) return;
+    this.shownOp = op;
+    const word = OP_WORD[op];
+    setPrompt(
+      this.editId
+        ? `${word} · Ctrl-click areas · drag or type a value · click to apply · Esc`
+        : `${word} · drag or type a depth, negative cuts · click to commit · Esc`,
+    );
+  }
+
+  private commit() {
     if (!this.selected.length) return this.cancel();
     const v = this.dim.getValue("distance");
     // GATE on isUserDriven: while dragging, the field displays |distance| —
@@ -391,45 +436,7 @@ export class ExtrudeTool {
     // Typed values (userDriven) carry their own sign and win.
     if (v != null && this.dim.isUserDriven("distance")) this.distance = v;
     if (Math.abs(this.distance) < 1e-3) return; // ignore zero
-    let op = this.currentOperation();
-    // when a body already exists, let the user state the operation (MCAD-style):
-    // New Body avoids any boolean (and the kernel crash on hard geometry).
-    const hasSolid = (this.store.buildState.result?.mesh.positions.length ?? 0) > 0;
-    if (hasSolid) {
-      this.committing = true;
-      // in edit mode the SAVED operation is the presumptive choice; otherwise
-      // the direction-derived guess is.
-      let guess = this.editId ? (this.editOp ?? op) : op;
-      // All-glyph profile (sketch text): a flush emboss on a body direction-
-      // guesses "join", but joined text can never print in its own color — bias
-      // the default to New Body so the two-tone path is one Enter away. Cut
-      // (engraving) guesses stay untouched.
-      const isTextProfile = this.selected.every((wr) => wr.entityId !== undefined);
-      if (!this.editId && isTextProfile && guess === "join") guess = "new";
-      // op === "cut" ⇔ the extrude direction enters solid (currentOperation).
-      // Flag whichever op would then do nothing, so the choice is informed.
-      const into = op === "cut";
-      const opts: { value: Op; label: string; hint: string }[] = [
-        { value: "join", label: "Join", hint: into ? "likely no effect (profile is inside)" : "merge" },
-        { value: "cut", label: "Cut", hint: into ? "remove" : "nothing to cut here" },
-        { value: "new", label: "New Body", hint: isTextProfile ? "separate, assign its own print color" : "separate" },
-        { value: "intersect", label: "Intersect", hint: "keep overlap" },
-      ];
-      opts.sort((a, b) => (a.value === guess ? -1 : b.value === guess ? 1 : 0)); // default first
-      const chosen = await choose<Op>("Extrude, operation", opts);
-      this.committing = false;
-      if (!chosen) {
-        // modal dismissed — the tool is STILL ALIVE; say so instead of leaving
-        // the user staring at an unchanged screen ("nothing happened")
-        setPrompt("Pick an operation to commit · Enter · Esc");
-        return;
-      }
-      op = chosen;
-    } else if (this.editId && this.editOp) {
-      // rolled-back model has no solid (this WAS the first solid) — keep the
-      // saved operation rather than silently rewriting it to "new".
-      op = this.editOp;
-    }
+    const op = this.plannedOperation();
     const first = this.selected[0];
     if (!first) return;
     const hiddenBodies = this.editId ? this.editHiddenBodies : this.store.hiddenBodyIds();
