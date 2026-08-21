@@ -218,3 +218,66 @@ silent no-op class as `revolve angle:0` and `pattern count:0`.
 - Families still untouched: import/export round trips, projected geometry, text
   entities, multi-body selector survival under patterns, `cleanUp`,
   `projectGeometry`.
+
+---
+
+## Round 3 — chasing a reported spiky blend, 2026-08-21
+
+A drag that ran past a blend's limit and was then flipped to a chamfer was
+reported as producing "a spikey thing". Two findings, one a defect and one
+emphatically not.
+
+### FIXED: the "no size will help" refusal lied whenever the drag ran far enough
+
+A blend the kernel refuses is retried once, smaller, to tell an ordinary too-big
+radius apart from a blend that cannot terminate at any size. The retry size was
+a twentieth of the REQUESTED one, and a twentieth of a huge value is still huge.
+
+Measured on a 60x6x20 wedge whose tip blends at 2mm and fails at 5mm: asked for
+61mm, the probe tried 3.05mm, which fails as well, and the refusal announced that
+no size would help while 2mm builds perfectly. The message was at its most
+misleading exactly when the user was furthest from a value that works — which a
+drag reaches in a fraction of a second, and which is how the reported one was
+reached.
+
+The probe is now capped against the BODY as well, at a thousandth of its
+diagonal: a blend nobody would ask for and every buildable edge accepts, so a
+failure there is a failure of geometry rather than of size. Covered by
+`tests/test_blend_refusal.py`, in both directions.
+
+### CONFIRMED CORRECT (do not "fix"): the conic blend at a high profile
+
+No spike was found. Swept a 6mm blend on a 40x40x12 block's corner edge across
+the whole profile range and measured the section directly, as the distance from
+the corner apex to the blend surface:
+
+| profile | apex → surface | should be |
+|---|---|---|
+| -0.99 | 4.2129 | 4.2426 (the chamfer's chord) |
+| 0.000 | 2.4853 | 2.4853 (the circular fillet) |
+| 0.990 | 0.0592 | → 0 (the sharp corner) |
+
+Monotone across the range, exact at both reference points. The surface is where
+it is supposed to be at every profile, and the rendered mesh agrees: the material
+it removes falls smoothly to 0.215 mm³ at profile 0.99, and the mesher emits MORE
+triangles for the harder surface (388 against 214), not fewer.
+
+**What does break is the kernel's VOLUME INTEGRAL, from about profile 0.90.** It
+reports 715 mm³ removed at 0.99 where the mesh measures 0.215 — an impossible
+answer, since it exceeds the whole r×r corner square. The parameterisation piles
+up against the section's end poles (the same effect PROFILE_LIMIT was set from,
+measured there at the NEGATIVE end), and BRepGProp integrates it badly.
+
+Consequences, none of them worth lowering the limit for, since the shape and the
+render are both right:
+
+- The Properties readout's volume and mass are up to ~4% low on a body carrying
+  such a blend.
+- The boolean no-op guards in `_boolean_into_bodies` measure volume, so their
+  tolerances are being applied to a biased number on those bodies. Both sides of
+  each comparison carry the same bias, which is why nothing has been seen to
+  misfire, but it is not a guarantee.
+
+OPEN, deliberately: lowering the positive end of `PROFILE_LIMIT` to ~0.90 would
+fix the readout by deleting the sharpest tenth of a slider that works.
+

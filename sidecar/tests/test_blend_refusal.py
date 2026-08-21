@@ -70,6 +70,29 @@ def test_size_probe_says_yes_when_the_radius_is_the_problem():
     print(f"probe at {2.0 * SIZE_PROBE_FRACTION}mm builds -> size is the problem OK")
 
 
+def test_a_huge_request_does_not_make_the_probe_lie():
+    """A twentieth of a HUGE value is still huge.
+
+    The probe used to be a fraction of the REQUESTED size and nothing else, so a
+    drag that ran far past the limit probed past it too, and the refusal
+    announced that no size would help while a small one built perfectly. The
+    message was at its most misleading exactly when the user was furthest from a
+    value that works — which a drag reaches in a fraction of a second.
+
+    CONTROL: the same rim at 2.0mm, where the probe is genuinely small, must
+    still come back True and must NOT be dragged down by this cap.
+    """
+    shape = _boss_on_a_plate()
+    rim = _cap_rim(shape)
+    fillet(rim, radius=1.5)          # a size that builds, so "ANY size" would be false
+    assert _size_would_help(shape, rim, _one_edge_at, 200.0) is True
+    msg = _blend_failure_message("Fillet", {"name": "Body1", "shape": shape}, rim,
+                                 _one_edge_at, 200.0, "Failed creating a fillet")
+    assert "ANY size" not in msg, msg
+    assert _size_would_help(shape, rim, _one_edge_at, 2.0) is True
+    print("a 200mm request still probes small enough to find the 1.5mm that builds OK")
+
+
 def test_the_message_passes_OCCTs_own_words_through_when_size_would_help():
     """The one case where "try a smaller value" is worth repeating. Inventing a
     friendlier sentence here would be worse than OCCT's, because OCCT is right."""
@@ -121,6 +144,7 @@ if __name__ == "__main__":
     try:
         test_the_partial_rim_is_a_real_size_limit()
         test_size_probe_says_yes_when_the_radius_is_the_problem()
+        test_a_huge_request_does_not_make_the_probe_lie()
         test_the_message_passes_OCCTs_own_words_through_when_size_would_help()
         test_the_message_refuses_by_name_when_no_size_would_help()
         test_a_large_selection_is_not_probed()

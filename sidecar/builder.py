@@ -2050,6 +2050,31 @@ def _refuse_smooth_edges(shape, edges, label):
 # wrong.
 SIZE_PROBE_FRACTION = 0.05
 
+# ...but a twentieth of a HUGE value is still huge, and that made the probe lie.
+# Measured on a 60x6x20 wedge whose tip blends at 2mm and not at 5mm: asked for
+# 61mm, the probe tried 3.05mm, which also fails, and the refusal announced that
+# no size would help — while 2mm builds. A drag that has run well past the limit
+# produces exactly that, so the message was at its most misleading precisely when
+# the user was furthest from a value that works.
+#
+# The probe is therefore also capped against the BODY, which is the scale a blend
+# is actually small or large relative to. A thousandth of the body's diagonal is
+# a blend nobody would ask for and every buildable edge accepts, so a failure
+# there is a failure of geometry rather than of size.
+SIZE_PROBE_BODY_FRACTION = 1e-3
+
+
+def _size_probe(shape, blend_size):
+    """The size to retry a failed blend at, or None when there is nothing to try."""
+    if not blend_size or blend_size <= 0:
+        return None
+    small = blend_size * SIZE_PROBE_FRACTION
+    try:
+        small = min(small, _bbox_diag(shape) * SIZE_PROBE_BODY_FRACTION)
+    except Exception:
+        pass
+    return small if small > 0 else None
+
 
 def _size_would_help(shape, edges, one_edge_at, blend_size):
     """Does a much SMALLER blend build where this one didn't?
@@ -2065,9 +2090,9 @@ def _size_would_help(shape, edges, one_edge_at, blend_size):
 
     One extra kernel attempt, only ever on the failure path.
     """
-    if not blend_size or blend_size <= 0 or len(edges) > 8:
+    small = _size_probe(shape, blend_size)
+    if small is None or len(edges) > 8:
         return None
-    small = blend_size * SIZE_PROBE_FRACTION
     for e in edges:
         try:
             one_edge_at(shape, e, small)
@@ -2079,6 +2104,7 @@ def _size_would_help(shape, edges, one_edge_at, blend_size):
 def _blend_failure_message(label, body, unresolved, one_edge_at, blend_size, err):
     """What to actually tell the user about a blend the kernel would not build."""
     helps = _size_would_help(body["shape"], unresolved, one_edge_at, blend_size)
+    probed = _size_probe(body["shape"], blend_size)
     if helps is not False:
         # Either a smaller size did build, or there were too many edges to probe.
         # OCCT's own sentence is the honest one here.
@@ -2087,7 +2113,7 @@ def _blend_failure_message(label, body, unresolved, one_edge_at, blend_size, err
              else f"{len(unresolved)} of the selected edges")
     return (
         f"can't {label.lower()} {which} on {body['name']} at ANY size — it fails "
-        f"the same at {blend_size * SIZE_PROBE_FRACTION:g}mm as at {blend_size:g}mm. "
+        f"the same at {probed:g}mm as at {blend_size:g}mm. "
         "The blend has nowhere to end: add the neighbouring edges to it, or blend "
         "those first."
     )
