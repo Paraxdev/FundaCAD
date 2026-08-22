@@ -148,3 +148,32 @@ export function sketchLockHolds(entryScale: number, scale: number): boolean {
   if (!(scale > 0) || !Number.isFinite(scale)) return true;
   return scale <= entryScale * VIEW_RELEASE_FACTOR;
 }
+
+/** How far off square the view may drift before a sketch that is NOT locked to
+ *  its plane gives up the flat projection, in degrees.
+ *
+ *  Wide enough that the small parallax of a fit or a pan does not trip it,
+ *  narrow enough that a deliberate orbit does on the first few pixels. */
+export const SQUARE_TOL_DEG = 8;
+
+/** Is the camera still looking straight down this plane?
+ *
+ *  With "Lock to Plane" off, entering a sketch still squares the view and still
+ *  forces the flat (orthographic) projection, because that is what makes drawing
+ *  precise. Both are wrong the moment you turn away to see where the sketch sits
+ *  on the part: held flat, an off-axis model is a silhouette with no depth. So
+ *  the projection follows the view rather than the mode, and this is the test.
+ *
+ *  Sign-blind: looking at the plane from behind is just as square as looking at
+ *  it from in front, and which side you are on is settled at entry
+ *  (viewport/viewFlight.viewSideNormal) rather than re-litigated every frame. */
+export function viewSquareToPlane(
+  viewDir: Vec3,
+  normal: Vec3,
+  tolDeg: number = SQUARE_TOL_DEG,
+): boolean {
+  const d = unit(viewDir);
+  const n = unit(normal);
+  if (!d || !n) return true; // nothing to measure: assume it still holds
+  return Math.abs(dot(d, n)) >= Math.cos((tolDeg * Math.PI) / 180);
+}

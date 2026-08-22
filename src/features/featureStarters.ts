@@ -210,19 +210,25 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
    *
    *  The face selection is dropped on the way in. It has been CONSUMED: leaving
    *  it lit would put a stale press/pull offer behind the sketch and leave the
-   *  face selected — and therefore re-consumable — when the sketch closes. */
+   *  face selected — and therefore re-consumable — when the sketch closes.
+   *
+   *  Dropped, but not forgotten: the face is lit for the session by its own
+   *  overlay (viewport.showSketchFace), so "which face am I drawing on?" has an
+   *  answer on screen without the selection being live behind it. */
   function startSketch(tool?: SketchTool) {
     if (!toolBusy()) {
       const face = viewport.selectedFaceSketchPlane();
       if (face) {
         viewport.clearSelection();
-        sketch.enter(face, store);
+        sketch.enter(face.plane, store);
+        viewport.showSketchFace(face.faceId);
         if (tool) sketch.setTool(tool);
         return;
       }
     }
-    pickPlaneInteractive("Select a plane or a face to sketch on · a round face gives its tangent plane", (spec) => {
+    pickPlaneInteractive("Select a plane or a face to sketch on · a round face gives its tangent plane", (spec, face) => {
       sketch.enter(spec, store);
+      if (face) viewport.showSketchFace(face.faceId);
       if (tool) sketch.setTool(tool);
     });
   }

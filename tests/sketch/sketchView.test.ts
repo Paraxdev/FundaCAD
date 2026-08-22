@@ -3,6 +3,8 @@ import {
   faceSketchPlane,
   outwardNormal,
   sketchLockHolds,
+  SQUARE_TOL_DEG,
+  viewSquareToPlane,
   sketchXdir,
   sketchYdir,
   VIEW_RELEASE_FACTOR,
@@ -171,5 +173,45 @@ describe("sketchLockHolds", () => {
     expect(sketchLockHolds(NaN, 500)).toBe(true);
     expect(sketchLockHolds(100, NaN)).toBe(true);
     expect(sketchLockHolds(100, 0)).toBe(true);
+  });
+});
+
+describe("viewSquareToPlane", () => {
+  const up = [0, 0, 1] as const;
+
+  it("holds when looking straight down the plane", () => {
+    expect(viewSquareToPlane([0, 0, -1], up)).toBe(true);
+  });
+
+  it("holds looking straight down it from BEHIND", () => {
+    // Which side you are on is settled once, at entry (viewFlight.viewSideNormal).
+    // Re-litigating it every frame would drop the flat projection the instant a
+    // sketch was opened from the back of its plane.
+    expect(viewSquareToPlane([0, 0, 1], up)).toBe(true);
+  });
+
+  it("lets go once the view has genuinely turned away", () => {
+    const off = (deg: number) => {
+      const r = (deg * Math.PI) / 180;
+      return [Math.sin(r), 0, -Math.cos(r)] as const;
+    };
+    expect(viewSquareToPlane(off(SQUARE_TOL_DEG - 2), up)).toBe(true);
+    expect(viewSquareToPlane(off(SQUARE_TOL_DEG + 2), up)).toBe(false);
+    expect(viewSquareToPlane(off(60), up)).toBe(false);
+  });
+
+  it("is edge-on at 90 degrees, which is as far off square as it gets", () => {
+    expect(viewSquareToPlane([1, 0, 0], up)).toBe(false);
+  });
+
+  it("does not care about magnitude", () => {
+    expect(viewSquareToPlane([0, 0, -400], [0, 0, 0.001])).toBe(true);
+  });
+
+  it("assumes it still holds when there is nothing to measure", () => {
+    // A zero view direction means the camera is at its own target — a transient
+    // during a fit. Dropping the projection on it would flicker.
+    expect(viewSquareToPlane([0, 0, 0], up)).toBe(true);
+    expect(viewSquareToPlane([0, 0, -1], [0, 0, 0])).toBe(true);
   });
 });

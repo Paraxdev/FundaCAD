@@ -50,7 +50,7 @@ import { ProjectPanel } from "./projectPanel";
 import { sketchEscapeAction } from "./escapeLayers";
 import { SketchPlaneGrid, snapLatticeStep } from "./planeGrid";
 import { inferLineDirection } from "./inferLine";
-import { sketchLockHolds } from "./sketchView";
+import { sketchLockHolds, viewSquareToPlane } from "./sketchView";
 
 export type SketchTool =
   | "select"
@@ -291,7 +291,7 @@ export class SketchMode {
   private textBoxStart: THREE.Vector2 | null = null;
   private textBoxEnd: THREE.Vector2 | null = null;
   private textBoxScreen: { x: number; y: number } | null = null;
-  private viewLocked = true; // the palette's "Lock to Plane" preference
+  private viewLocked = false; // the palette's "Lock to Plane" preference (off by default)
   // --- the sketch view's soft lock -------------------------------------------
   // "Lock to Plane" used to mean a hard lock for the whole session: squared to
   // the plane, orthographic, orbit disabled, full stop. That is right while you
@@ -676,18 +676,33 @@ export class SketchMode {
     if (!this.active) return;
     const scale = this.viewport.rig.viewScale();
     if (this.entryScale == null) {
-      // First frame of the session. enterSketchView's camera move is queued
-      // inside camera-controls and only commits on its next update(), which the
-      // viewport's own loop — registered a frame earlier, so it runs first —
-      // has just done. Reading it here reads the settled sketch view; reading it
-      // in enter() would have read the view we came FROM.
+      // First frames of the session. The entry flight is still in the air, and
+      // mid-flight the camera is nowhere in particular — baselining off it would
+      // measure the view we came FROM (or a point on the way), and every later
+      // "have we drifted?" comparison would be against that.
+      if (this.viewport.rig.isFlying()) return;
       this.entryScale = scale;
       return;
     }
     this.updateGrid();
-    if (this.viewLocked && !this.lockReleased && !sketchLockHolds(this.entryScale, scale)) {
-      this.releaseView();
-    }
+    if (this.lockReleased) return;
+    // Two ways to stop being square to the plane, one per mode. LOCKED: you
+    // cannot orbit, so the only way out is to zoom back far enough that you are
+    // plainly looking at the part rather than at what you are drawing. UNLOCKED:
+    // you can just turn, and the flat projection has to go with you or the model
+    // behind the sketch stays a depthless silhouette.
+    const drifted = this.viewLocked
+      ? !sketchLockHolds(this.entryScale, scale)
+      : !viewSquareToPlane(this.viewDir(), this.plane.n.toArray() as [number, number, number]);
+    if (drifted) this.releaseView();
+  }
+
+  /** Which way the camera is pointing, as a plain tuple for sketchView. */
+  private viewDir(): [number, number, number] {
+    const c = this.viewport.rig.controls;
+    const eye = c.getPosition(new THREE.Vector3());
+    const at = c.getTarget(new THREE.Vector3());
+    return [at.x - eye.x, at.y - eye.y, at.z - eye.z];
   }
 
   /** The view has pulled back far enough that holding it square to the plane is
@@ -697,11 +712,15 @@ export class SketchMode {
    *  from an angle that suits it. The sketch itself does not change — the plane,
    *  the snapping and every placement still go through the plane raycast. */
   private releaseView() {
+    const wasLocked = this.viewLocked;
     this.lockReleased = true;
     this.viewport.rig.setOrbitLocked(false);
     setSpaceMouseOrbitLocked(false);
     this.viewport.setSketchFlat(false);
-    if (this.releaseAnnounced) return;
+    // Only ANNOUNCE a release when something was actually holding the view. With
+    // the lock off — the default — turning away is the ordinary thing to do and
+    // being told about it every time would be noise.
+    if (!wasLocked || this.releaseAnnounced) return;
     this.releaseAnnounced = true;
     toast("View unlocked. Drawing still lands on the sketch plane; Look At re-squares it.");
   }
@@ -810,8 +829,11 @@ export class SketchMode {
     if (this.viewLocked) {
       this.viewport.rig.setOrbitLocked(true);
       setSpaceMouseOrbitLocked(true);
-      this.viewport.setSketchFlat(true);
     }
+    // The flat projection comes back either way, and it comes back when the
+    // flight LANDS (enterSketchView's onArrive) rather than now — forcing ortho
+    // while the camera is still travelling runs the whole trip through a
+    // parallel projection and throws away the dolly.
   }
 
   /** Apply an edited dimension value (mm) to an entity. Line length and circle

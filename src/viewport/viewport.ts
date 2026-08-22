@@ -85,6 +85,8 @@ import type { RoundFace } from "../features/radialDrag";
 import type { Plane3, PlaneDef, RebuildResult, Selector, Vec3 } from "../types";
 import { dragStep } from "./dragStep";
 import { faceSketchPlane } from "../sketch/sketchView";
+import { viewSideNormal } from "./viewFlight";
+import { themeColor } from "./themeColors";
 
 /** Shallow equality for the flat id→hex paint maps. Cheap enough to run on every
  *  build (microseconds at 3,000 entries) and it saves a full GPU colour upload
@@ -271,16 +273,16 @@ export class Viewport {
       this.dragMoved = false;
       this.downPos = { x: e.clientX, y: e.clientY };
     });
-    // Middle-drag is orbit. Choose what it turns about NOW, from where the
+    // Right-drag is orbit. Choose what it turns about NOW, from where the
     // cursor is, rather than leaving it wherever a pan or a zoom happened to
     // park the orbit target. Released on the window because a drag that ends
     // off the canvas still ends, and clearing it is what returns every other
     // gesture to the library's own behaviour.
     c.addEventListener("pointerdown", (e) => {
-      if (e.button === 1) this.rig.setOrbitPivot(this.orbitPivotAt(e.clientX, e.clientY));
+      if (e.button === 2) this.rig.setOrbitPivot(this.orbitPivotAt(e.clientX, e.clientY));
     });
     window.addEventListener("pointerup", (e) => {
-      if (e.button === 1) this.rig.setOrbitPivot(null);
+      if (e.button === 2) this.rig.setOrbitPivot(null);
     });
     c.addEventListener("pointermove", (e) => {
       if (
@@ -314,8 +316,8 @@ export class Viewport {
       this.handleClick(e);
     });
     // Right-click → onContextClick, but ONLY on a click (press + release
-    // without movement) — right-DRAG is camera pan (mouseButtons.right =
-    // TRUCK). WebKit fires `contextmenu` while the button is still down: the
+    // without movement) — right-DRAG is camera orbit (mouseButtons.right =
+    // ROTATE). WebKit fires `contextmenu` while the button is still down: the
     // click then waits for the release; a platform that fires it after the
     // release delivers immediately. Same shape as the left-click guard above.
     let rightDown: { x: number; y: number } | null = null;
@@ -1176,7 +1178,7 @@ export class Viewport {
    *
    *  Curved faces are rejected rather than flattened — a sketch on a mean plane
    *  through a cylinder wall is geometry the user did not ask for. */
-  selectedFaceSketchPlane(): PlaneDef | null {
+  selectedFaceSketchPlane(): { plane: PlaneDef; faceId: number } | null {
     if (!this.highlighter || !this.model) return null;
     const faceId = this.highlighter.getSelectedFaces()[0];
     if (faceId === undefined) return null;
@@ -1194,7 +1196,83 @@ export class Viewport {
         if (Math.abs(n.dot(v) - d0) > tol) return null;
       }
     }
-    return faceSketchPlane([n.x, n.y, n.z], [c.x, c.y, c.z]);
+    return { plane: faceSketchPlane([n.x, n.y, n.z], [c.x, c.y, c.z]), faceId };
+  }
+
+  // --- the face a sketch is being drawn on -----------------------------------
+  //
+  // A sketch started from a selected face used to drop that selection on the way
+  // in and show nothing in its place, so the one question you ask constantly
+  // while drawing — "which face am I on?" — had no answer on screen. The model
+  // is dimmed to a quarter opacity for the session, which rules out tinting the
+  // face in place: a tint at 25% is not a signal. This is its own surface, drawn
+  // over the dimmed part in the accent colour, plus its outline.
+  //
+  // Not the selection. The selection was CONSUMED by starting the sketch, and
+  // leaving it lit would put a live press/pull offer behind the sketch and hand
+  // back a re-consumable face when the session closed.
+  private sketchFace: THREE.Group | null = null;
+
+  /** Light the face this sketch sits on, or clear it with null. */
+  showSketchFace(faceId: number | null) {
+    if (this.sketchFace) {
+      this.scene.scene.remove(this.sketchFace);
+      for (const c of this.sketchFace.children) {
+        const o = c as THREE.Mesh | THREE.LineSegments;
+        o.geometry.dispose();
+        (o.material as THREE.Material).dispose();
+      }
+      this.sketchFace = null;
+    }
+    const tris = faceId == null ? [] : this.faceTriangles(faceId);
+    if (!tris.length) {
+      this.requestRender();
+      return;
+    }
+    const pos = new Float32Array(tris.length * 9);
+    let i = 0;
+    for (const t of tris) {
+      for (const v of [t.a, t.b, t.c]) {
+        pos[i++] = v.x;
+        pos[i++] = v.y;
+        pos[i++] = v.z;
+      }
+    }
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    const accent = themeColor("--accent", 0xff7a3c);
+    const group = new THREE.Group();
+    group.renderOrder = 2; // over the dimmed model, under the sketch's own glyphs
+    // polygonOffset rather than a geometric lift along the normal: the face is
+    // coplanar with the sketch plane by construction, and any lift big enough to
+    // beat z-fighting is also big enough to be visible as a floating skin at a
+    // grazing angle.
+    const fill = new THREE.Mesh(
+      geom,
+      new THREE.MeshBasicMaterial({
+        color: accent,
+        transparent: true,
+        opacity: 0.16,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        polygonOffset: true,
+        polygonOffsetFactor: -4,
+        polygonOffsetUnits: -4,
+      }),
+    );
+    group.add(fill);
+    // The outline is what actually reads. A flat face's triangles are coplanar,
+    // so a threshold angle leaves exactly the boundary and none of the
+    // tessellation running through the middle of it.
+    const outline = new THREE.LineSegments(
+      new THREE.EdgesGeometry(geom, 1),
+      new THREE.LineBasicMaterial({ color: accent, transparent: true, opacity: 0.85, depthTest: false }),
+    );
+    outline.renderOrder = 3;
+    group.add(outline);
+    this.sketchFace = group;
+    this.scene.scene.add(group);
+    this.requestRender();
   }
 
   /** Start drawing a chunked reply as it arrives. `manifest` names every body,
@@ -1313,6 +1391,11 @@ export class Viewport {
       this.progressive.finish();
       this.streaming = false;
     }
+    // Face ids are a property of THIS tessellation, so the sketch-face overlay
+    // is stale the moment a real rebuild lands — and a stale one is worse than
+    // none: it keeps drawing the old surface at the old place with nothing left
+    // to explain it. (An eye toggle returns above and never reaches here.)
+    this.showSketchFace(null);
     this.lastResult = result;
     const bodyMeta = result.bodies ?? [];
     const bodyIds = new Set(bodyMeta.map((b) => b.id));
@@ -2490,6 +2573,18 @@ export class Viewport {
   }
 
   enterSketchView(origin: THREE.Vector3, normal: THREE.Vector3, up: THREE.Vector3) {
+    // Arrive on the side of the plane you are ALREADY on. A plane's normal is a
+    // property of the plane, so following it blindly sent the camera through the
+    // part to look at the base XY plane from above whenever you happened to be
+    // underneath it — a flight to the far side of a sketch you were already
+    // looking straight at. viewport/viewFlight.viewSideNormal picks the sign.
+    const eye = this.rig.controls.getPosition(new THREE.Vector3());
+    const side = viewSideNormal(
+      [normal.x, normal.y, normal.z],
+      [eye.x, eye.y, eye.z],
+      [origin.x, origin.y, origin.z],
+    );
+    const n = new THREE.Vector3(side[0], side[1], side[2]).normalize();
     // Straighten to the NEAREST square orientation: the view is always squared
     // to the sketch axes, but among the four cardinal in-plane rotations pick
     // the one closest to the camera's current visual up — entering a sketch
@@ -2497,7 +2592,6 @@ export class Viewport {
     // (which could be 90°/180° off and forced Q/E view-rolling to fix it).
     const camUp = new THREE.Vector3().setFromMatrixColumn(
       this.rig.active.matrixWorld, 1);
-    const n = normal.clone().normalize();
     const v = up.clone().normalize();
     const u = new THREE.Vector3().crossVectors(n, v).normalize();
     let bestUp = v;
@@ -2506,8 +2600,14 @@ export class Viewport {
       const d = cand.dot(camUp);
       if (d > bestDot) { bestDot = d; bestUp = cand; }
     }
-    this.rig.lookAtPlane(origin, normal, bestUp);
-    this.setSketchFlat(true);
+    // Flat AFTER the flight, not before: forcing ortho up front would run the
+    // whole trip through a parallel projection, where the dolly to the sketch's
+    // standoff distance is invisible and the turn is the only thing that moves.
+    // Perspective on the way in, flat once there.
+    this.rig.lookAtPlane(origin, n, bestUp, {
+      animate: true,
+      onArrive: () => this.setSketchFlat(true),
+    });
     this.scene.grid.group.visible = false; // hide the world ground grid; only the sketch grid shows
     this.setModelDimmed(true);
     this.requestRender();
@@ -2533,6 +2633,7 @@ export class Viewport {
     this.requestRender();
   }
   exitSketchView() {
+    this.showSketchFace(null);
     this.setSketchFlat(false);
     this.scene.grid.group.visible = true;
     this.rig.restoreUp();

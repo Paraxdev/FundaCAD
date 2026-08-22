@@ -1,11 +1,17 @@
 // Cameras + navigation. Perspective and Orthographic kept in parallel; toggle
-// preserves apparent zoom. camera-controls (yomotsu) with a MCAD-style mouse
-// map: middle = orbit, right = pan, wheel = zoom; Shift+middle = pan.
+// preserves apparent zoom. camera-controls (yomotsu) with the mouse map the hand
+// already knows: right = orbit, middle = pan, wheel = zoom; Shift+right = pan.
+//
+// Right orbits and middle pans, rather than the other way round, because the
+// button you hold for most of a session should be the one your hand rests on.
+// Middle-drag then reads as "shove the drawing about", which is what it is: in a
+// sketch the pan IS moving the sketch under the cursor, and the orbit is off.
 
 import * as THREE from "three";
 import CameraControls from "camera-controls";
 import { frameRotation, pivotShift, viewQuaternion } from "./orbitPivot";
 import { anchorDolly, orthoZoomStep } from "./zoomAnchor";
+import { ease, flightSeconds, worthFlying } from "./viewFlight";
 import { MIN_PERSP_DIST, NEAR_AT_REST, perspNear } from "./clipPlanes";
 
 CameraControls.install({ THREE });
@@ -52,7 +58,7 @@ export interface CameraRig {
    *  along with the camera, so vertical orbit passes straight over the top —
    *  3Dconnexion-style free rotation, upside down included. */
   tumble(az: number, pol: number): void;
-  /** Lock out mouse orbit (sketch "lock to plane"); middle-drag pans instead. */
+  /** Lock out mouse orbit (sketch "lock to plane"); right-drag pans instead. */
   setOrbitLocked(locked: boolean): void;
   /** Orbit about this world point rather than about the orbit target, until it
    *  is cleared with null. The library still aims the camera at its own target,
@@ -62,11 +68,22 @@ export interface CameraRig {
    *  zoom-to-cursor has left the target sitting well off it. See
    *  viewport/orbitPivot.ts for why a shift is all it takes. */
   setOrbitPivot(pivot: THREE.Vector3 | null): void;
+  /** Square the camera to a plane: up = `up`, looking down -`normal`.
+   *
+   *  `opts.animate` flies there over a few hundred milliseconds instead of
+   *  cutting; `opts.onArrive` runs when it lands (immediately when it snapped),
+   *  which is where anything that must not happen mid-flight belongs — forcing
+   *  the flat projection, baselining the sketch lock. */
   lookAtPlane(
     origin: THREE.Vector3,
     normal: THREE.Vector3,
     up: THREE.Vector3,
+    opts?: { animate?: boolean; onArrive?: () => void },
   ): void;
+  /** True while a lookAtPlane flight is in the air. Input is off for the
+   *  duration, and anything measuring the framing (the sketch lock's baseline)
+   *  has to wait for it — mid-flight the camera is nowhere in particular. */
+  isFlying(): boolean;
   restoreUp(): void;
 }
 
@@ -106,6 +123,18 @@ export function createCameraRig(
   let mode: ProjectionMode = "auto";
   let rollAngle = 0; // persistent view bank (radians), re-applied each update()
   let orbitLocked = false; // sketch "lock to plane": disable mouse orbit
+  // The lookAtPlane flight, while one is in the air. Driven by update(), not by
+  // camera-controls: its own transitions abort on any input, and a sketch view
+  // stranded halfway is an oblique plane you then draw on. Ours holds input off
+  // and lands on the exact numbers a snap would have written.
+  let flight: {
+    t: number; // seconds elapsed
+    dur: number;
+    eye0: THREE.Vector3; tgt0: THREE.Vector3; q0: THREE.Quaternion;
+    eye1: THREE.Vector3; tgt1: THREE.Vector3; q1: THREE.Quaternion;
+    up1: THREE.Vector3;
+    onArrive: (() => void) | null;
+  } | null = null;
   // ortho zoom queued this frame but not yet applied by controls.update() —
   // lets same-frame wheel bursts chain correctly (see zoomBy).
   let pendingOrthoZoom: number | null = null;
@@ -120,16 +149,17 @@ export function createCameraRig(
   // unreliable in the WebKitGTK webview, and an absolute dolly/zoom is robust.
   const A = CameraControls.ACTION;
   controls.mouseButtons.left = A.NONE; // left reserved for selection
-  controls.mouseButtons.middle = A.ROTATE;
-  controls.mouseButtons.right = A.TRUCK;
+  controls.mouseButtons.middle = A.TRUCK;
+  controls.mouseButtons.right = A.ROTATE;
   controls.mouseButtons.wheel = A.NONE;
 
-  // Shift+middle => pan (swap orbit<->truck on the middle button)
+  // Shift+right => pan (swap orbit<->truck on the orbit button). Middle is
+  // already the pan, so the modifier stays on the button it modifies.
   window.addEventListener("keydown", (e) => {
-    if (e.key === "Shift" && !orbitLocked) controls.mouseButtons.middle = A.TRUCK;
+    if (e.key === "Shift" && !orbitLocked) controls.mouseButtons.right = A.TRUCK;
   });
   window.addEventListener("keyup", (e) => {
-    if (e.key === "Shift" && !orbitLocked) controls.mouseButtons.middle = A.ROTATE;
+    if (e.key === "Shift" && !orbitLocked) controls.mouseButtons.right = A.ROTATE;
   });
 
   controls.dollyToCursor = true;
@@ -242,6 +272,65 @@ export function createCameraRig(
     lastTarget.copy(tgt);
   }
 
+  // --- the lookAtPlane flight ------------------------------------------------
+
+  const flightMat = new THREE.Matrix4();
+  /** The camera orientation that looks from `eye` at `target` with this up. */
+  function orientation(eye: THREE.Vector3, target: THREE.Vector3, up: THREE.Vector3): THREE.Quaternion {
+    flightMat.lookAt(eye, target, up);
+    return new THREE.Quaternion().setFromRotationMatrix(flightMat);
+  }
+
+  const flightUp = new THREE.Vector3();
+  const flightEye = new THREE.Vector3();
+  const flightTgt = new THREE.Vector3();
+
+  /** Put the camera exactly where the flight was going, hand input back, and
+   *  tell whoever asked. Called on the last frame AND by anything that has to
+   *  end a flight early, so "arrived" and "gave up" leave identical state —
+   *  there is no half-way pose the rest of the app can observe. */
+  function landFlight() {
+    const f = flight;
+    if (!f) return;
+    flight = null;
+    persp.up.copy(f.up1);
+    ortho.up.copy(f.up1);
+    controls.updateCameraUp();
+    controls.setLookAt(f.eye1.x, f.eye1.y, f.eye1.z, f.tgt1.x, f.tgt1.y, f.tgt1.z, false);
+    controls.enabled = true;
+    f.onArrive?.();
+  }
+
+  /** Advance one frame. Returns true when it moved the camera (so the caller
+   *  keeps rendering). */
+  function stepFlight(dt: number): boolean {
+    const f = flight;
+    if (!f) return false;
+    f.t += dt;
+    if (f.t >= f.dur) {
+      landFlight();
+      return true;
+    }
+    const s = ease(f.t / f.dur);
+    // Orientation by slerp, position by lerp. Interpolating the up-vector
+    // directly would collapse on the 180° case — entering a sketch from the far
+    // side asks for exactly that — and the two ups are then antiparallel with no
+    // shortest arc between them. The quaternion has one.
+    const q = f.q0.clone().slerp(f.q1, s);
+    flightUp.set(0, 1, 0).applyQuaternion(q).normalize();
+    flightEye.copy(f.eye0).lerp(f.eye1, s);
+    flightTgt.copy(f.tgt0).lerp(f.tgt1, s);
+    persp.up.copy(flightUp);
+    ortho.up.copy(flightUp);
+    controls.updateCameraUp();
+    controls.setLookAt(
+      flightEye.x, flightEye.y, flightEye.z,
+      flightTgt.x, flightTgt.y, flightTgt.z,
+      false,
+    );
+    return true;
+  }
+
   const rig: CameraRig = {
     controls,
     get active() {
@@ -269,10 +358,15 @@ export function createCameraRig(
     },
     update(dt: number) {
       pendingOrthoZoom = null; // camera.zoom is authoritative again after this update
+      // The flight writes the goal, then controls.update() below commits it in
+      // the same frame. Ahead of correctOrbitPivot because a flight is not a
+      // drag and has no pivot to correct — reading one would measure the
+      // flight's own rotation and shift the rig by it.
+      const flew = stepFlight(dt);
       // BEFORE the update, so this frame damps toward the corrected goal rather
       // than toward one it will have to be pulled back from next frame.
-      correctOrbitPivot();
-      const moved = controls.update(dt);
+      if (!flew) correctOrbitPivot();
+      const moved = controls.update(dt) || flew;
       // The near plane follows the camera in, so a deep zoom cannot push the
       // surface being inspected behind it. See viewport/clipPlanes.ts; at every
       // ordinary distance this writes back the number that was already there.
@@ -300,6 +394,10 @@ export function createCameraRig(
       return controls.distance * Math.tan((FOV * Math.PI) / 360);
     },
     zoomBy(factor: number, pivot?: THREE.Vector3) {
+      // A wheel event during a flight would write a goal the flight overwrites
+      // on the next frame — a visible stutter for no effect. Input is off for a
+      // few hundred milliseconds; the wheel is part of the input.
+      if (flight) return;
       const f = Math.max(0.1, Math.min(10, factor));
       if (usingOrtho) {
         // ortho.zoom only commits at the next controls.update(); fast wheels
@@ -445,30 +543,56 @@ export function createCameraRig(
         true,
       );
     },
-    lookAtPlane(origin, normal, up) {
+    lookAtPlane(origin, normal, up, opts) {
       rollAngle = 0;
+      // A flight already in the air is abandoned where it stands, not landed:
+      // the destination it was carrying has just been superseded, and putting
+      // the camera there first would show a pose nobody asked for.
+      flight = null;
+      controls.enabled = true;
       // Square the camera to a sketch plane: up = sketch +Y, look down -normal.
-      // INSTANT (no transition): camera-controls aborts animated transitions on
-      // any user input — a SpaceMouse twitch or an eager first click used to
-      // strand the sketch view mid-flight at an oblique angle, which silently
-      // ruined "draw exactly on the plane" precision. A snap is deterministic.
-      persp.up.copy(up);
-      ortho.up.copy(up);
-      controls.updateCameraUp();
       const dist = Math.max(controls.distance, 120);
       const eye = origin.clone().addScaledVector(normal, dist);
-      controls.setLookAt(
-        eye.x,
-        eye.y,
-        eye.z,
-        origin.x,
-        origin.y,
-        origin.z,
-        false,
-      );
+      const from = controls.getPosition(new THREE.Vector3());
+      const fromTgt = controls.getTarget(new THREE.Vector3());
+      const q0 = orientation(from, fromTgt, active.up);
+      const q1 = orientation(eye, origin, up);
+      // The turn as an angle, so the duration can be proportional to it.
+      const turn = 2 * Math.acos(Math.min(1, Math.abs(q0.dot(q1))));
+      const reach = from.distanceTo(fromTgt);
+      const zoomRatio = reach > 1e-6 ? dist / reach : 1;
+      const land = () => {
+        persp.up.copy(up);
+        ortho.up.copy(up);
+        controls.updateCameraUp();
+        controls.setLookAt(eye.x, eye.y, eye.z, origin.x, origin.y, origin.z, false);
+        opts?.onArrive?.();
+      };
+      if (!opts?.animate || !worthFlying(turn, zoomRatio)) {
+        land();
+        return;
+      }
+      // Input off for the duration. This is the whole reason the flight can be
+      // trusted where camera-controls' own transition could not: nothing can
+      // interrupt it, so it lands on the numbers `land()` would have written
+      // and the sketch plane is square to the pixel.
+      controls.enabled = false;
+      flight = {
+        t: 0,
+        dur: flightSeconds(turn, zoomRatio),
+        eye0: from, tgt0: fromTgt, q0,
+        eye1: eye, tgt1: origin.clone(), q1,
+        up1: up.clone(),
+        onArrive: opts?.onArrive ?? null,
+      };
+    },
+    isFlying() {
+      return flight !== null;
     },
     restoreUp() {
       rollAngle = 0;
+      flight = null;
+      controls.enabled = true;
       // Re-seat the orbit AFTER changing up: updateCameraUp() only rebuilds the
       // internal up-basis — the stored spherical state still encodes the OLD
       // basis, so without setPosition the same numbers decode to a different
@@ -530,8 +654,10 @@ export function createCameraRig(
     },
     setOrbitLocked(locked) {
       orbitLocked = locked;
-      // middle-drag pans while locked (no orbit); restore orbit on unlock
-      controls.mouseButtons.middle = locked ? A.TRUCK : A.ROTATE;
+      // right-drag pans while locked (no orbit); restore orbit on unlock. Middle
+      // is the pan either way, so a locked sketch simply has two pan buttons
+      // rather than one button that changed meaning.
+      controls.mouseButtons.right = locked ? A.TRUCK : A.ROTATE;
     },
     setOrbitPivot(p) {
       orbitPivot = p ? p.clone() : null;
