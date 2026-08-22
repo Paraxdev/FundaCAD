@@ -15,6 +15,13 @@
 // Pressing Edit hands the whole gesture to features/targetEditTool, which rolls
 // the model back to before this feature so the geometry it consumed is on screen
 // to be clicked. Nothing about that lives here.
+//
+// Except for one shape. A PROFILE area is an interior point on a sketch plane,
+// and the generic editor picks on the solid — there is nothing there for it to
+// click. Those rows open the feature's own tool instead, which already rolls the
+// model back, already forces the consumed sketch visible, and already restores
+// the saved areas for Ctrl-click to add to. Same button, same meaning, a
+// different picker behind it.
 
 import { computed } from "vue";
 import { useEngine } from "../../app/engineKey";
@@ -51,6 +58,10 @@ function edit() {
   // one is open — which is the right answer: two rollbacks at once is not a
   // state the document has.
   if (engine.toolBusy()) return;
+  if (props.target.shape === "regionPoint") {
+    engine.editFeature(props.featureId);
+    return;
+  }
   engine.tools.targetEdit.start(props.featureId, props.target);
 }
 </script>

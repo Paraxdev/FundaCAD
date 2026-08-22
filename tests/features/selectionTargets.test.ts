@@ -198,3 +198,61 @@ describe("what the row says", () => {
     expect(describeTarget(field("fillet", "edges"), 0)).toBe("nothing selected");
   });
 });
+
+describe("profile targets", () => {
+  it("gives an extrude the row for the half that was never shown", () => {
+    const t = targetsOf("extrude")[0]!;
+    expect(t.label).toBe("Profile");
+    expect(t.shape).toBe("regionPoint");
+  });
+
+  it("counts profile areas in the word the picker uses", () => {
+    const t = targetsOf("extrude")[0]!;
+    expect(describeTarget(t, 1)).toBe("1 area");
+    expect(describeTarget(t, 3)).toBe("3 areas");
+  });
+
+  it("says what an extrude with no areas actually does", () => {
+    // Not "0 areas": an extrude that names none takes the WHOLE sketch, which
+    // is the opposite statement.
+    expect(describeTarget(targetsOf("extrude")[0]!, 0)).toBe("the whole sketch");
+  });
+
+  it("reads the plural field, and falls back to the legacy singular", () => {
+    const t = targetsOf("extrude")[0]!;
+    const many = { id: "e", type: "extrude", sketch: "s", distance: 5, operation: "new",
+      regions: [[0, 0, 0], [10, 0, 0]] } as unknown as Feature;
+    const one = { id: "e", type: "extrude", sketch: "s", distance: 5, operation: "new",
+      region: [4, 4, 0] } as unknown as Feature;
+    expect(readTarget(many, t)).toHaveLength(2);
+    expect(readTarget(one, t)).toEqual([[4, 4, 0]]);
+  });
+
+  it("does not read one profile point as three areas", () => {
+    // A point IS an array, so the obvious `Array.isArray(val) ? val : [val]`
+    // spreads the legacy singular into its coordinates and reports "3 areas"
+    // over an extrude that uses one.
+    const t = targetsOf("extrude")[0]!;
+    const one = { id: "e", type: "extrude", sketch: "s", distance: 5, operation: "new",
+      region: [4, 4, 0] } as unknown as Feature;
+    expect(readTarget(one, t)).toHaveLength(1);
+    expect(describeTarget(t, readTarget(one, t).length)).toBe("1 area");
+  });
+
+  it("compares profile points by position, like a picked selector", () => {
+    expect(sameEntry([1, 2, 3], [1, 2, 3])).toBe(true);
+    expect(sameEntry([1, 2, 3], [1, 2, 3.00001])).toBe(true);
+    expect(sameEntry([1, 2, 3], [1, 2, 9])).toBe(false);
+  });
+
+  it("never confuses a profile point with a body id or a selector", () => {
+    expect(sameEntry([0, 0, 0], "body1")).toBe(false);
+    expect(sameEntry([0, 0, 0], { kind: "edge", by: "nearest", point: [0, 0, 0] })).toBe(false);
+  });
+
+  it("leaves loft out, because its profiles are pairs and not points", () => {
+    // A row reporting "3 areas" while dropping which sketch each came from is a
+    // row that cannot be written back.
+    expect(targetsOf("loft")).toHaveLength(0);
+  });
+});

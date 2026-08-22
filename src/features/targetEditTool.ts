@@ -113,6 +113,11 @@ export class TargetEditTool {
    *  feature is gone or another tool owns the screen. */
   start(featureId: string, target: TargetField, onDone?: (committed: boolean) => void): boolean {
     if (this.active) return false;
+    // This editor picks on the SOLID. A profile area is an interior point on a
+    // sketch plane and there is nothing here that can click one, so refusing is
+    // the honest answer — the row for such a target opens the feature's own tool
+    // instead (features/selectionTargets says why).
+    if (target.shape === "regionPoint") return false;
     const f = this.store.document.features.find((x) => x.id === featureId);
     if (!f) return false;
 
@@ -232,11 +237,12 @@ export class TargetEditTool {
     // The entry IS a selector, so the Hit is assembled from it rather than
     // re-derived: hoverEntity wants a full hit, and minting a second selector
     // for the same geometry is a second chance to name something else.
-    if (found.kind === "edge" && typeof entry !== "string") {
-      this.viewport.hoverEntity({ kind: "edge", edge: found.edge, selector: entry });
-    } else if (found.kind === "face" && typeof entry !== "string") {
-      const p = pointOf(entry);
-      if (p) this.viewport.hoverEntity({ kind: "face", faceId: found.faceId, selector: entry, point: p });
+    const sel = selectorOf(entry);
+    if (found.kind === "edge" && sel) {
+      this.viewport.hoverEntity({ kind: "edge", edge: found.edge, selector: sel });
+    } else if (found.kind === "face" && sel) {
+      const p = pointOf(sel);
+      if (p) this.viewport.hoverEntity({ kind: "face", faceId: found.faceId, selector: sel, point: p });
     }
     // A body has no hover form of its own; it is already painted as selected.
   }
@@ -334,8 +340,9 @@ export class TargetEditTool {
       const known = (this.store.buildState.result?.bodies ?? []).some((b) => b.id === entry);
       return known ? { kind: "body", id: entry } : null;
     }
-    if (typeof entry === "string") return null;
-    const p = pointOf(entry);
+    const sel = selectorOf(entry);
+    if (!sel) return null;
+    const p = pointOf(sel);
     if (!p) return null; // by:"all", by:"axis", a v2 fingerprint — no single spot
     if (t.kind === "edge") {
       const edge = this.viewport.edgeLineByMid(p);
@@ -389,4 +396,12 @@ export function editingTarget(tool: TargetEditTool): { id: string; field: string
   const id = tool.editingId;
   const f = tool.field;
   return id && f ? { id, field: f.field } : null;
+}
+
+/** The entry as a Selector, or null when it is one of the other two shapes.
+ *  A body id is a string and a profile point is an array, so the narrowing is a
+ *  pair of checks rather than a cast. */
+function selectorOf(entry: TargetEntry): Selector | null {
+  if (typeof entry === "string" || Array.isArray(entry)) return null;
+  return entry;
 }

@@ -228,10 +228,44 @@ export class ExtrudeTool {
       // plain click picks one area and goes straight to depth; Ctrl-click keeps
       // accumulating (Enter confirms the set)
       if (!additive && this.selected.length) this.beginDrag();
-    } else {
-      e.preventDefault();
-      this.commit();
+      return;
     }
+    e.preventDefault();
+    // Ctrl-click keeps changing WHICH areas, even once the depth is being set.
+    // The prompt has said "Ctrl-click areas" for as long as the edit flow has
+    // existed and the tool did not honour it: every click in the drag phase
+    // committed, the modified one included — so re-opening an extrude to fix
+    // the areas it caught ended the moment you tried to.
+    if (e.ctrlKey || e.metaKey || e.shiftKey) {
+      const r = this.regionUnder(e.clientX, e.clientY);
+      // A modifier click on empty space is not a commit either: it is a miss,
+      // and committing on a miss is how a correction becomes a mistake.
+      if (!r) return;
+      this.overlay.toggleRegionSelection(r, true);
+      this.selected = this.overlay.selectedRegions();
+      if (!this.selected.length) {
+        // Every area taken off. There is nothing to extrude and nothing for the
+        // arrow to hang from, so drop back to picking rather than hold a drag
+        // over an empty set.
+        this.phase = "pick";
+        this.dim.hide();
+        this.disposePreviewGeom();
+        this.previewKey = "";
+        // The arrow too: updatePreview early-returns on an empty set, so left
+        // alone it would hang in the air pointing out of nothing.
+        if (this.arrow) {
+          this.viewport.removeFromScene(this.arrow);
+          this.arrow.dispose();
+          this.arrow = null;
+        }
+        setPrompt("Click a profile area · Esc");
+        return;
+      }
+      this.positionDim();
+      this.updatePreview();
+      return;
+    }
+    this.commit();
   }
 
   /** Only the fluent gesture ends on a release. Every other entry keeps the

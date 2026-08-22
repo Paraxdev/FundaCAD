@@ -23,9 +23,12 @@
 //   * a BODY ID (`tools`, `bodies`, `target`) is positional and does not
 //     survive much of anything, which is a fact about the document rather than
 //     about this module.
-//   * a PROFILE POINT (`extrude.regions` and friends) belongs to the sketch
-//     overlay rather than to the solid, and is picked on a different surface. It
-//     is deliberately NOT here yet — see the note at the bottom.
+//   * a PROFILE POINT (`extrude.regions`, `revolve.regions`) belongs to the
+//     sketch overlay rather than to the solid: an interior point on a plane,
+//     resolved against a sketch that has already been consumed and hidden. It is
+//     in the table but NOT editable by the generic editor, which picks on the
+//     solid and has nothing to offer here. Its Edit re-opens the feature's own
+//     tool, which already shows the sketch and already takes the picks.
 //
 // Pure. No store, no viewport, no Vue: everything here is a function of a
 // feature object, which is what lets the whole inventory be tested without a
@@ -33,11 +36,14 @@
 
 import type { Feature, FeatureType, Selector } from "../types";
 
-/** What a target holds, one entry at a time. */
-export type TargetKind = "edge" | "face" | "body";
+/** What a target holds, one entry at a time. "area" is a closed region of a
+ *  sketch — the word the extrude prompts already use for the thing you click. */
+export type TargetKind = "edge" | "face" | "body" | "area";
 
-/** How the entries are stored, which decides who can resolve them. */
-export type TargetShape = "selector" | "bodyId";
+/** How the entries are stored, which decides WHO can resolve them — and, for
+ *  `regionPoint`, who cannot: the generic editor picks edges, faces and bodies
+ *  off the solid, and a profile area is on neither. */
+export type TargetShape = "selector" | "bodyId" | "regionPoint";
 
 export interface TargetField {
   /** The document field. */
@@ -111,6 +117,19 @@ export const FEATURE_TARGETS: Partial<Record<FeatureType, readonly TargetField[]
     field: "bodies", label: "Bodies", kind: "body", shape: "bodyId", arity: "many",
     whenEmpty: "the active body", alsoReads: "body",
   }],
+  // The half of an extrude that was never shown. It is the FIRST thing about the
+  // feature — which areas of the sketch became solid — and until now the panel
+  // opened on "Distance" as though the profile were settled at creation and
+  // beyond discussion. Empty is legal and means the whole sketch, which is a
+  // different statement from "no areas" and has to be spelled out.
+  extrude: [{
+    field: "regions", label: "Profile", kind: "area", shape: "regionPoint",
+    arity: "many", whenEmpty: "the whole sketch", alsoReads: "region",
+  }],
+  revolve: [{
+    field: "regions", label: "Profile", kind: "area", shape: "regionPoint",
+    arity: "many", whenEmpty: "the whole sketch",
+  }],
 };
 
 /** The targets this feature has, or an empty list. */
@@ -118,8 +137,9 @@ export function targetsOf(type: string): readonly TargetField[] {
   return FEATURE_TARGETS[type as FeatureType] ?? [];
 }
 
-/** One entry of a target: a selector, or a body id. */
-export type TargetEntry = Selector | string;
+/** One entry of a target: a selector, a body id, or a profile point. The three
+ *  shapes, one per line. */
+export type TargetEntry = Selector | string | [number, number, number];
 
 /** Everything in the target, always as an array however it is stored.
  *
@@ -137,8 +157,20 @@ export function readTarget(feature: Feature, t: TargetField): TargetEntry[] {
     ? fallback
     : raw;
   if (val === undefined || val === null) return [];
-  const arr = Array.isArray(val) ? val : [val];
+  const arr = isOneEntry(val, t) ? [val] : Array.isArray(val) ? val : [val];
   return arr.filter((v): v is TargetEntry => v !== null && v !== undefined) as TargetEntry[];
+}
+
+/** Is this stored value ONE entry rather than a list of them?
+ *
+ *  Only ever true for a profile point, and that is the whole reason it exists: a
+ *  point is itself an array, so `Array.isArray` cannot tell `[4, 4, 0]` (one
+ *  area) from `[[4, 4, 0]]` (a list holding one). Read the wrong way, the
+ *  legacy singular `extrude.region` came back as THREE areas — a row saying
+ *  "3 areas" over an extrude with one. Look at what is inside instead: numbers
+ *  mean the value is the point. */
+function isOneEntry(val: unknown, t: TargetField): boolean {
+  return t.shape === "regionPoint" && Array.isArray(val) && typeof val[0] === "number";
 }
 
 /** The patch that sets this target to `entries`, in the shape the field is
@@ -171,6 +203,7 @@ const PLURAL: Record<TargetKind, string> = {
   edge: "edges",
   face: "faces",
   body: "bodies",
+  area: "areas",
 };
 
 /** What the row says in place of a count: "4 edges", "1 body", or the field's
@@ -191,15 +224,23 @@ export function describeTarget(t: TargetField, count: number): string {
  *  picked one at a time, so an exact match is the only honest test. */
 export function sameEntry(a: TargetEntry, b: TargetEntry): boolean {
   if (typeof a === "string" || typeof b === "string") return a === b;
+  // A profile point IS its point, so it compares the same way a picked
+  // selector's does — same tolerance, same reason.
+  if (Array.isArray(a) || Array.isArray(b)) {
+    return Array.isArray(a) && Array.isArray(b) && samePoint(a, b);
+  }
   const pa = pointOf(a);
   const pb = pointOf(b);
-  if (pa && pb) {
-    // Well below any real modelling distance, above the 6-decimal rounding the
-    // sidecar applies to a point it hands back.
-    return pa.every((v, i) => Math.abs(v - (pb[i] ?? NaN)) <= 1e-4);
-  }
+  if (pa && pb) return samePoint(pa, pb);
   if (pa || pb) return false;
   return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/** Two picked points naming the same thing. The tolerance is well below any
+ *  real modelling distance and above the 6-decimal rounding the sidecar applies
+ *  to a point it hands back. */
+function samePoint(a: readonly number[], b: readonly number[]): boolean {
+  return a.every((v, i) => Math.abs(v - (b[i] ?? NaN)) <= 1e-4);
 }
 
 /** The world point a picked selector carries, or null for the forms that name
@@ -223,12 +264,18 @@ export function pointOf(sel: Selector): [number, number, number] | null {
 // does not have, so the axis stays with the pick flow that mints both together
 // (featureStarters.startRevolve).
 //
-// PROFILES are not here for a different reason. `extrude.regions`,
-// `revolve.regions` and `loft.profiles[].region` are interior POINTS on a
-// sketch plane, resolved
-// against the sketch overlay and the model under it rather than against the
-// solid's own edges and faces. Editing one means showing a sketch that has
-// already been consumed and hidden, and picking on a surface that is not the
-// part. That is a second picker, not a third column in this table, and adding a
-// row here that opened an editor which could not pick anything would be worse
-// than the row not being there.
+// LOFT'S PROFILES are the one profile target still missing, and the reason is
+// the shape rather than the picking. `extrude.regions` and `revolve.regions` are
+// flat arrays of points, which readTarget can hand back and a count can be taken
+// of; `loft.profiles` is an array of {sketch, region} PAIRS, and a row that
+// reported "3 areas" while silently dropping which sketch each came from would
+// be a row that cannot be written back. Reading it needs a per-field accessor,
+// which is a change to the shape of this table rather than another entry in it.
+//
+// The two profile rows that ARE here do not use the generic editor. A profile
+// area is an interior point on a sketch plane, resolved against the overlay
+// rather than the solid, and editing one means showing a sketch that has already
+// been consumed and hidden — which the feature's own tool already does
+// (features/extrudeTool.startEdit rolls the model back, forces the sketch
+// visible and restores the saved areas). The row opens THAT, rather than an
+// editor that would have nothing to pick.
