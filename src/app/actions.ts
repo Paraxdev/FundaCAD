@@ -144,8 +144,11 @@ export function createActions(e: Engine): (action: string) => void {
       case "texture":
         e.starters.startTexture();
         break;
-      case "pattern":
-        void e.starters.startPattern();
+      case "pattern-linear":
+        e.starters.startPattern("linear");
+        break;
+      case "pattern-circular":
+        e.starters.startPattern("circular");
         break;
       case "simplify-mesh":
         e.starters.startSimplifyMesh();

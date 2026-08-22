@@ -65,7 +65,12 @@ export const MODEL: Group[] = [
           { action: "move", label: "Move", iconName: "move", key: "M" },
           { action: "scale", label: "Scale", iconName: "scale" },
           { action: "mirror", label: "Mirror", iconName: "mirror" },
-          { action: "pattern", label: "Pattern", iconName: "pattern" },
+          // Two entries, not one that asks. Linear and circular are different
+          // gestures — pull an arrow along an axis, or sweep around one — so
+          // the choice belongs on the button rather than in a dialog the
+          // button raises.
+          { action: "pattern-linear", label: "Linear Pattern", iconName: "patternLinear" },
+          { action: "pattern-circular", label: "Circular Pattern", iconName: "patternCircular" },
         ],
       },
       // The three booleans are a family and share a split button. Split Body is

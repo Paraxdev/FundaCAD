@@ -36,6 +36,10 @@ const FORGE_PATHS: Record<string, string> = {
   text: `<path d="M4 6 H20 M12 6 V19" fill="none"/>`,
   slot: `<path d="M8 8 A 4 4 0 0 0 8 16 L16 16 A 4 4 0 0 0 16 8 Z"/>`,
   patternRect: `<rect x="3" y="3" width="6" height="6" rx="1"/><rect x="15" y="3" width="6" height="6" rx="1"/><rect x="3" y="15" width="6" height="6" rx="1"/><rect x="15" y="15" width="6" height="6" rx="1"/>`,
+  // Four cells strung along one direction, with the arrow that says WHICH —
+  // the grid icon next door is the same squares with no direction in them, and
+  // the difference between the two features is exactly that arrow.
+  patternLinear: `<rect x="2.5" y="9" width="5" height="6" rx="1"/><rect x="9.5" y="9" width="5" height="6" rx="1"/><rect x="16.5" y="9" width="5" height="6" rx="1"/><path d="M3 5.5h16M16.5 3l2.5 2.5l-2.5 2.5"/>`,
   patternCircular: `<circle cx="12" cy="4" r="2.4"/><circle cx="19" cy="9" r="2.4"/><circle cx="16.5" cy="18" r="2.4"/><circle cx="7.5" cy="18" r="2.4"/><circle cx="5" cy="9" r="2.4"/>`,
   boltCircle: `<circle cx="12" cy="12" r="9" fill="none"/><circle cx="12" cy="3.5" r="1.8" fill="currentColor"/><circle cx="19.4" cy="8.3" r="1.8" fill="currentColor"/><circle cx="19.4" cy="15.7" r="1.8" fill="currentColor"/><circle cx="12" cy="20.5" r="1.8" fill="currentColor"/><circle cx="4.6" cy="15.7" r="1.8" fill="currentColor"/><circle cx="4.6" cy="8.3" r="1.8" fill="currentColor"/>`,
   hexHoles: `<circle cx="12" cy="6" r="2" fill="currentColor"/><circle cx="6.8" cy="9" r="2" fill="currentColor"/><circle cx="17.2" cy="9" r="2" fill="currentColor"/><circle cx="6.8" cy="15" r="2" fill="currentColor"/><circle cx="17.2" cy="15" r="2" fill="currentColor"/><circle cx="12" cy="18" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/>`,

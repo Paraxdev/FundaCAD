@@ -825,6 +825,23 @@ export class Viewport {
     return out;
   }
 
+  /** The world bounding box of the given bodies, or null when none of them are
+   *  in the current model. How big the thing being patterned IS — the natural
+   *  first spacing for a repeat is one span, where the copies just touch. */
+  bodiesBox(ids: readonly string[]): THREE.Box3 | null {
+    if (!this.model) return null;
+    const set = new Set(ids);
+    const bodies = this.model.bodies.filter((b) => set.has(b.id));
+    if (!bodies.length) return null;
+    const box = new THREE.Box3();
+    for (const b of bodies) {
+      b.mesh.geometry.computeBoundingBox();
+      const bb = b.mesh.geometry.boundingBox;
+      if (bb) box.union(bb.clone().applyMatrix4(b.mesh.matrixWorld));
+    }
+    return box.isEmpty() ? null : box;
+  }
+
   /** True if (clientX,clientY) is over the ViewCube corner — so a right-click
    *  there belongs to the cube, not the model. */
   cubeHitsRegion(clientX: number, clientY: number): boolean {
@@ -2534,6 +2551,75 @@ export class Viewport {
     for (const e of this.moveGhost.edges) e.object.position.copy(offset);
     this.requestRender();
   }
+  // --- Pattern ghosts: translucent copies of a body, one per pattern cell -----
+  //
+  // The copies share the source body's geometry buffers — a ghost is a second
+  // draw of the same vertices, so twenty of them cost twenty draw calls and no
+  // memory. Rebuilt only when the SET changes (a different body, a different
+  // count); a drag that only moves the copies rewrites matrices.
+  //
+  // Ghosts rather than a live rebuild, for the same reason the move ghost
+  // exists: a pattern is a rigid repeat, its copies are known exactly on this
+  // side, and asking the kernel to union twenty solids per frame of a drag would
+  // make the drag unusable to show something the drag already knows.
+  private ghosts: { key: string; copies: THREE.Group[] } | null = null;
+  private patternGhostMat: THREE.MeshBasicMaterial | null = null;
+
+  setPatternGhost(bodyIds: readonly string[], matrices: readonly THREE.Matrix4[]) {
+    const key = `${bodyIds.join(",")}|${matrices.length}`;
+    if (!this.ghosts || this.ghosts.key !== key) {
+      this.clearPatternGhost();
+      if (!this.model || !bodyIds.length || !matrices.length) return;
+      const sel = new Set(bodyIds);
+      const src = this.model.bodies.filter((b) => sel.has(b.id));
+      if (!src.length) return;
+      this.patternGhostMat ??= new THREE.MeshBasicMaterial({
+        color: themeColor("--accent", 0xff7a3c),
+        transparent: true,
+        opacity: 0.3,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+      const copies: THREE.Group[] = [];
+      // Copy 0 is the original and is already on screen: ghosting it would only
+      // tint the body you can see. The matrices still include it, so the indices
+      // line up with the pattern's own numbering.
+      for (let i = 1; i < matrices.length; i++) {
+        const g = new THREE.Group();
+        g.matrixAutoUpdate = false;
+        for (const b of src) g.add(new THREE.Mesh(b.mesh.geometry, this.patternGhostMat));
+        g.renderOrder = 1;
+        copies.push(g);
+        this.addToScene(g);
+      }
+      this.ghosts = { key, copies };
+    }
+    for (let i = 0; i < this.ghosts.copies.length; i++) {
+      const g = this.ghosts.copies[i];
+      const m = matrices[i + 1];
+      if (g && m) {
+        g.matrix.copy(m);
+        g.updateMatrixWorld(true);
+      }
+    }
+    this.requestRender();
+  }
+
+  clearPatternGhost() {
+    if (this.ghosts) {
+      for (const g of this.ghosts.copies) {
+        this.removeFromScene(g);
+        // The geometry belongs to the body and the material is shared; disposing
+        // either here would blank the model the ghosts were copied from.
+        g.clear();
+      }
+      this.ghosts = null;
+    }
+    this.patternGhostMat?.dispose();
+    this.patternGhostMat = null;
+    this.requestRender();
+  }
+
   endBodyMoveGhost(restore: boolean) {
     if (!this.moveGhost || !this.model) {
       this.moveGhost = null;

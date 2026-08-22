@@ -33,6 +33,7 @@ import { PressPullTool } from "../features/pressPullTool";
 import { FaceOffsetTool } from "../features/faceOffsetTool";
 import { LoftTool } from "../features/loftTool";
 import { MoveTool } from "../features/moveTool";
+import { PatternTool } from "../features/patternTool";
 import { MeasureTool } from "../features/measureTool";
 import { SectionTool } from "../features/sectionTool";
 import { PlaneOffsetTool } from "../features/planeOffsetTool";
@@ -77,6 +78,7 @@ export interface EngineTools {
   faceOffset: FaceOffsetTool;
   loft: LoftTool;
   move: MoveTool;
+  pattern: PatternTool;
   measure: MeasureTool;
   section: SectionTool;
   planeOffset: PlaneOffsetTool;
@@ -221,6 +223,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
     faceOffset: new FaceOffsetTool(e.viewport, e.store),
     loft: new LoftTool(e.viewport, e.overlay, e.store),
     move: new MoveTool(e.viewport, e.store),
+    pattern: new PatternTool(e.viewport, e.store),
     measure: new MeasureTool(e.viewport),
     // Both deps are late-bound through `e` for the usual reason, and both are
     // load-bearing: without `toolBusy` the section's handle and its bare F/G keys
@@ -317,6 +320,7 @@ export function mountUi(e: Engine): void {
     pressPull: e.tools.pressPull,
     loftTool: e.tools.loft,
     moveTool: e.tools.move,
+    patternTool: e.tools.pattern,
     planeOffset: e.tools.planeOffset,
     texture: e.tools.texture,
     canvas: e.canvas,

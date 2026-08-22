@@ -105,6 +105,8 @@ export const FEATURE_TARGETS: Partial<Record<FeatureType, readonly TargetField[]
     whenEmpty: "the active body",
   }],
   removeBody: [{ field: "bodies", label: "Bodies", kind: "body", shape: "bodyId", arity: "many" }],
+  patternLinear: [{ field: "bodies", label: "Bodies", kind: "body", shape: "bodyId", arity: "many", whenEmpty: "the active body" }],
+  patternCircular: [{ field: "bodies", label: "Bodies", kind: "body", shape: "bodyId", arity: "many", whenEmpty: "the active body" }],
   split: [{
     field: "bodies", label: "Bodies", kind: "body", shape: "bodyId", arity: "many",
     whenEmpty: "the active body", alsoReads: "body",

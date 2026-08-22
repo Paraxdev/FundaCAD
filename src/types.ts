@@ -558,9 +558,16 @@ export type Feature =
   | { id: string; type: "thicken"; faces?: Selector | Selector[]; thickness: Num; symmetric?: boolean; operation?: "join" | "new"; body?: string }
   // Taper the selected faces by an angle about a neutral plane (pull axis).
   | { id: string; type: "draft"; faces: Selector | Selector[]; angle: Num; axis: Axis3 }
-  // Replicate the active body on a grid / around an axis (copies are unioned).
+  // Replicate a body on a grid, along an axis, or around one (copies are
+  // unioned). `bodies` absent = the active body, as everywhere else.
+  //
+  // Linear is not the grid with countY:1. The grid is two spacings and no
+  // direction; linear is one spacing along an axis you chose, which is the shape
+  // of the gesture — pick the axis, drag the arrow, set the count — and the
+  // shape of the row you edit afterwards.
   | { id: string; type: "patternRect"; countX: Num; countY: Num; spacingX: Num; spacingY: Num }
-  | { id: string; type: "patternCircular"; count: Num; angle: Num; axis: Axis3 }
+  | { id: string; type: "patternLinear"; count: Num; spacing: Num; axis: Axis3; bodies?: string[] }
+  | { id: string; type: "patternCircular"; count: Num; angle: Num; axis: Axis3; bodies?: string[] }
   // Merge near-coplanar facets of an imported mesh (angular tolerance, degrees):
   // recovers planar faces / reduces facet count. Coarsens curved regions.
   | { id: string; type: "simplifyMesh"; tolerance: Num }

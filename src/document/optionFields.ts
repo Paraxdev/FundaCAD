@@ -145,6 +145,7 @@ export const FEATURE_CHOICE_FIELDS: Partial<Record<FeatureType, ChoiceField[]>> 
   }],
   mirror: [{ field: "plane", label: "Plane", options: PLANES, fallback: "XY" }],
   draft: [{ field: "axis", label: "Pull axis", options: AXES, fallback: "Z" }],
+  patternLinear: [{ field: "axis", label: "Direction", options: AXES, fallback: "X" }],
   patternCircular: [{ field: "axis", label: "Axis", options: AXES, fallback: "Z" }],
   texture: [
     {

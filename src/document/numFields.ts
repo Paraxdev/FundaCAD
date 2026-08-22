@@ -31,6 +31,7 @@ export const FEATURE_NUM_FIELDS: Partial<Record<Feature["type"], [string, string
   thicken: [["thickness", "Thickness", "length"]],
   draft: [["angle", "Angle", "angle"]],
   patternRect: [["countX", "Count X", "count"], ["countY", "Count Y", "count"], ["spacingX", "Spacing X", "length"], ["spacingY", "Spacing Y", "length"]],
+  patternLinear: [["count", "Count", "count"], ["spacing", "Spacing", "length"]],
   patternCircular: [["count", "Count", "count"], ["angle", "Angle", "angle"]],
   simplifyMesh: [["tolerance", "Angle tol", "angle"]],
   cleanUp: [["tolerance", "Tolerance", "length"]],

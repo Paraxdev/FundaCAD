@@ -2883,13 +2883,42 @@ def _handle_pattern_rect(f, ctx):
     )
 
 
-def _handle_pattern_circular(f, ctx):
-    act = ctx.require_active("Pattern")
+def _pattern_targets(f, ctx, label):
+    """The bodies a pattern acts on: the listed ones, or the active body.
+
+    Mirrors _handle_move. A stale id is a no-op with a diagnostic, not a hard
+    error — an upstream split or removal renumbers bodies, and a pattern that
+    refuses to build at all because one of its three targets went away takes the
+    other two down with it."""
+    ids = f.get("bodies")
+    if not ids:
+        return [ctx.require_active(label)]
+    out = []
+    for bid in ids:
+        tgt = ctx.find_body(bid)
+        if tgt is None:
+            _skip_feature(ctx.diagnostics, f, f["type"], "target body already consumed or missing")
+            continue
+        out.append(tgt)
+    return out
+
+
+def _handle_pattern_linear(f, ctx):
     n = ctx.val(f["count"])
     _require_positive("Pattern", count=n)
-    act["shape"] = _pattern_circular(
-        act["shape"], n, ctx.val(f.get("angle", 360)), f.get("axis", "Z")
-    )
+    spacing = ctx.val(f.get("spacing", 0))
+    axis = f.get("axis", "X")
+    for tgt in _pattern_targets(f, ctx, "Pattern"):
+        tgt["shape"] = _pattern_linear(tgt["shape"], n, spacing, axis)
+
+
+def _handle_pattern_circular(f, ctx):
+    n = ctx.val(f["count"])
+    _require_positive("Pattern", count=n)
+    angle = ctx.val(f.get("angle", 360))
+    axis = f.get("axis", "Z")
+    for tgt in _pattern_targets(f, ctx, "Pattern"):
+        tgt["shape"] = _pattern_circular(tgt["shape"], n, angle, axis)
 
 
 def _handle_simplify_mesh(f, ctx):
@@ -2983,6 +3012,7 @@ _FEATURE_HANDLERS = {
     "draft": _handle_draft,
     "texture": _handle_texture,
     "patternRect": _handle_pattern_rect,
+    "patternLinear": _handle_pattern_linear,
     "patternCircular": _handle_pattern_circular,
     "simplifyMesh": _handle_simplify_mesh,
     "scale": _handle_scale,
@@ -5443,6 +5473,22 @@ def _pattern_rect(shape, nx, ny, dx, dy):
     """Replicate a body on an nx×ny grid (spacing dx, dy) and union the copies."""
     nx, ny = max(1, int(round(nx))), max(1, int(round(ny)))
     return _fuse_pattern_cells([Pos(i * dx, j * dy, 0) * shape for i in range(nx) for j in range(ny)])
+
+
+def _pattern_linear(shape, count, spacing, axis):
+    """Replicate a body `count` times at `spacing` mm along a global axis and
+    union the copies. Copy 0 is the original, so a count of 3 at 20 mm reaches
+    40 mm — mirrors src/features/patternMath.linearOffsets."""
+    count = max(1, int(round(count)))
+    # A disjoint body is a ShapeList; Pos (Location.__mul__) takes one Shape.
+    # Same normalisation _handle_move makes, for the same reason.
+    if shape is not None and _wrapped_or_none(shape) is None:
+        shape = Compound(list(shape))
+    off = {"X": (1, 0, 0), "Y": (0, 1, 0)}.get(axis, (0, 0, 1))
+    return _fuse_pattern_cells(
+        [Pos(i * spacing * off[0], i * spacing * off[1], i * spacing * off[2]) * shape
+         for i in range(count)]
+    )
 
 
 def _pattern_circular(shape, count, total_angle, axis):

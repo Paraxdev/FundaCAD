@@ -21,7 +21,7 @@ export function createToolBusy(e: Engine): Pick<Engine, "toolBusy" | "hasBody"> 
       const t = e.tools;
       return (
         e.sketch.active || t.extrude.active || t.edgeFeature.active || t.pressPull.active ||
-        t.faceOffset.active || t.loft.active || t.planeOffset.active || t.move.active ||
+        t.faceOffset.active || t.loft.active || t.planeOffset.active || t.move.active || t.pattern.active ||
         t.measure.active || t.section.picking || t.texture.active || t.targetEdit.active ||
         e.planePick || isChoiceOpen()
       );

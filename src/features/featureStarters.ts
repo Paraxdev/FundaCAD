@@ -16,6 +16,7 @@ import type { EdgeFeatureTool } from "./edgeFeatureTool";
 import type { PressPullTool } from "./pressPullTool";
 import type { LoftTool } from "./loftTool";
 import type { MoveTool } from "./moveTool";
+import type { PatternKind, PatternTool } from "./patternTool";
 import type { PlaneOffsetTool } from "./planeOffsetTool";
 import type { TextureTool } from "./textureTool";
 import { pickPlaneTarget, planeSpecOf, type FacePlanePick } from "./facePlanePick";
@@ -34,6 +35,7 @@ export interface FeatureStartersDeps {
   pressPull: PressPullTool;
   loftTool: LoftTool;
   moveTool: MoveTool;
+  patternTool: PatternTool;
   planeOffset: PlaneOffsetTool;
   texture: TextureTool;
   canvas: HTMLCanvasElement;
@@ -58,6 +60,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     pressPull,
     loftTool,
     moveTool,
+    patternTool,
     planeOffset,
     texture,
     canvas,
@@ -796,25 +799,35 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     texture.start((id) => { noteCommitted(id); if (id) selectFeature(id); });
   }
 
-  // Pattern: replicate the active body — rectangular grid or circular array. Edit
-  // counts / spacing / angle in the value rows.
-  async function startPattern() {
+  // Pattern: repeat the selected bodies along an axis or around one, set up in
+  // the viewport. It used to ask which kind in a modal and then drop a feature
+  // with invented numbers into the timeline for the value rows to correct —
+  // which is the whole gesture done twice, in the wrong order, with none of it
+  // where the geometry is.
+  //
+  // Which kind is still a decision, and it is still made before the tool opens:
+  // linear and circular are different gestures (pull an arrow vs sweep around
+  // one), not two settings of the same one. But it is made by pressing the
+  // button you meant, not by answering a dialog the button raised.
+  function startPattern(kind: PatternKind) {
     if (toolBusy()) return;
     if (!hasBody()) {
       setStatus("Pattern: create or import a body first", "");
       return;
     }
-    const kind = await choose<"rect" | "circular">("Pattern type", [
-      { value: "rect", label: "Rectangular", hint: "grid" },
-      { value: "circular", label: "Circular", hint: "around axis" },
-    ]);
-    if (!kind) return;
-    const id = store.nextId();
-    if (kind === "rect") {
-      store.addFeature({ id, type: "patternRect", countX: 3, countY: 1, spacingX: 30, spacingY: 30 } as Feature);
-    } else {
-      store.addFeature({ id, type: "patternCircular", count: 4, angle: 360, axis: "Z" } as Feature);
+    // Same rule as Move: the selection if there is one, otherwise the active
+    // body — which is what the kernel patterns when the feature names no bodies.
+    const built = store.buildState.result?.bodies ?? [];
+    let ids = viewport.getSelectedBodies();
+    if (!ids.length && built.length) {
+      const last = built[built.length - 1];
+      if (last) ids = [last.id];
     }
+    if (!ids.length) {
+      setStatus("Pattern: select a body first (Select: Bodies)", "");
+      return;
+    }
+    patternTool.start(kind, ids, (id) => { noteCommitted(id); if (id) selectFeature(id); });
   }
 
   const extrudeDone = (id: string | null) => { noteCommitted(id); if (id) selectFeature(id); };

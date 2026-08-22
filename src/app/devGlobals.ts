@@ -51,6 +51,7 @@ export function installDevGlobals(e: Engine): void {
     selectFeature: (id: string | null) => e.selectFeature(id),
     extrude: e.tools.extrude,
     targetEdit: e.tools.targetEdit,
+    pattern: e.tools.pattern,
     overlay: e.overlay,
     toolBusy: () => e.toolBusy(),
     // The one formula every datum surface goes through: the drawn quad, "sketch
@@ -73,6 +74,7 @@ export function installDevGlobals(e: Engine): void {
       loft: e.tools.loft.active,
       planeOffset: e.tools.planeOffset.active,
       move: e.tools.move.active,
+      pattern: e.tools.pattern.active,
       measure: e.tools.measure.active,
       section: e.tools.section.active,
       texture: e.tools.texture.active,

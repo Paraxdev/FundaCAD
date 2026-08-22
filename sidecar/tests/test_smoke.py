@@ -100,6 +100,111 @@ def _box(idx, w, h, depth, x=0, y=0, op="new"):
     ]
 
 
+def test_pattern_linear_and_circular():
+    """Both body patterns, against the volume they must produce.
+
+    Volume is the test worth writing here: a pattern that placed its copies on
+    top of each other, or one that ran (count) spacings instead of (count-1),
+    fuses into a single solid of the wrong size and looks perfectly healthy in
+    the timeline either way.
+    """
+    # 20x20x20 at the origin. Copies 30 apart are disjoint, so N copies is N
+    # times the volume — no overlap to argue about.
+    _s, a = _box(1, 20, 20, 20)
+    doc = {"parameters": {}, "features": a + [
+        {"id": "pl", "type": "patternLinear", "count": 4, "spacing": 30, "axis": "X"}
+    ]}
+    part, err, bodies = rebuild(doc)
+    assert not err, err
+    assert abs(part.volume - 4 * 8000) < 200, part.volume
+    # ...and it must REACH 3 spacings, not 4: copy 0 is the original.
+    bb = part.bounding_box()
+    span = bb.max.X - bb.min.X
+    assert abs(span - (20 + 3 * 30)) < 0.5, span
+
+    # The default axis is X, and Z runs the other way — the same document with a
+    # different axis must produce a differently-shaped solid, or `axis` is being
+    # ignored (which a volume check alone would not notice).
+    doc["features"][-1]["axis"] = "Z"
+    part_z, err, _b = rebuild(doc)
+    assert not err, err
+    bz = part_z.bounding_box()
+    assert abs((bz.max.Z - bz.min.Z) - (20 + 3 * 30)) < 0.5, bz
+    assert abs((bz.max.X - bz.min.X) - 20) < 0.5, bz
+
+    # Circular, off-axis so the copies are disjoint: 6 around a full circle.
+    _s2, c = _box(2, 10, 10, 10, x=40)
+    doc2 = {"parameters": {}, "features": c + [
+        {"id": "pc", "type": "patternCircular", "count": 6, "angle": 360, "axis": "Z"}
+    ]}
+    part2, err2, _b2 = rebuild(doc2)
+    assert not err2, err2
+    assert abs(part2.volume - 6 * 1000) < 100, part2.volume
+
+    # A FULL circle divides by the count, so 6 copies means 6 — not 6 with the
+    # last one landing on the first. Six disjoint copies is exactly what the
+    # volume above proves; this pins the partial-sweep rule beside it, where the
+    # division is by the gaps and the last copy lands ON the end angle.
+    doc2["features"][-1]["angle"] = 180
+    part3, err3, _b3 = rebuild(doc2)
+    assert not err3, err3
+    assert abs(part3.volume - 6 * 1000) < 100, part3.volume
+    b3 = part3.bounding_box()
+    # 180 degrees over 6 copies puts the last at 180: mirrored to x = -40.
+    assert b3.min.X < -40, b3
+    print(f"  pattern linear/circular OK: {part.volume:.0f}, {part2.volume:.0f}")
+
+
+def test_pattern_names_its_bodies():
+    """A pattern can name WHICH bodies it repeats, like move does.
+
+    Without it every pattern silently takes the last body built, so patterning
+    the first of two required reordering the timeline.
+    """
+    _s1, a = _box(1, 20, 20, 20)
+    _s2, b = _box(2, 10, 10, 10, x=100)
+    doc = {"parameters": {}, "features": a + b + [
+        {"id": "pl", "type": "patternLinear", "count": 3, "spacing": 40,
+         "axis": "X", "bodies": ["body1"]}
+    ]}
+    # Summed per body: the merged `part` of a multi-body build reports the last
+    # body's volume alone, so reading it here would measure the body the pattern
+    # did NOT touch and pass whatever happened to the one it did.
+    vol = lambda bs: sum(x["shape"].volume for x in bs)
+    _p, err, bodies = rebuild(doc)
+    assert not err, err
+    # body1 tripled (24000) + body2 untouched (1000).
+    assert abs(vol(bodies) - (3 * 8000 + 1000)) < 200, vol(bodies)
+
+    # CONTROL: the same document naming the OTHER body must come out different.
+    doc["features"][-1]["bodies"] = ["body2"]
+    _p2, err2, b2 = rebuild(doc)
+    assert not err2, err2
+    assert abs(vol(b2) - (8000 + 3 * 1000)) < 200, vol(b2)
+
+    # A stale id is a no-op with a diagnostic, not a failed build — an upstream
+    # split renumbers bodies, and a pattern that refuses to build at all would
+    # take the rest of the timeline down with it.
+    doc["features"][-1]["bodies"] = ["body9"]
+    _p3, err3, b3 = rebuild(doc)
+    assert not err3, err3
+    assert abs(vol(b3) - 9000) < 200, vol(b3)
+    print("  pattern bodies OK")
+
+
+def test_pattern_count_guards():
+    """Count 0 is an error, not a silent no-op with a healthy-looking feature."""
+    _s, a = _box(1, 20, 20, 20)
+    for feat in (
+        {"id": "pl", "type": "patternLinear", "count": 0, "spacing": 30, "axis": "X"},
+        {"id": "pc", "type": "patternCircular", "count": 0, "angle": 360, "axis": "Z"},
+    ):
+        doc = {"parameters": {}, "features": a + [feat]}
+        _p, err, _b = rebuild(doc)
+        assert err, f"{feat['type']}: count 0 built without complaint"
+    print("  pattern count guards OK")
+
+
 def test_import_roundtrip():
     """Export a box to STL/STEP, import_geometry it, and rebuild a document with an
     `import` feature — the imported body must survive the BREP round-trip."""
@@ -1678,4 +1783,7 @@ if __name__ == "__main__":
     test_multibody_import_and_guards()
     test_interference()
     test_remove_body()
+    test_pattern_linear_and_circular()
+    test_pattern_names_its_bodies()
+    test_pattern_count_guards()
     print("ALL PASS")

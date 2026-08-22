@@ -44,6 +44,7 @@ export const FEATURE_META: Record<FeatureType, FeatureMeta> = {
   thicken: { icon: "thicken", label: "Thicken" },
   draft: { icon: "draft", label: "Draft" },
   patternRect: { icon: "patternRect", label: "Rect Pattern" },
+  patternLinear: { icon: "patternLinear", label: "Linear Pattern" },
   patternCircular: { icon: "patternCircular", label: "Circular Pattern" },
   simplifyMesh: { icon: "simplifyMesh", label: "Simplify Mesh" },
   cleanUp: { icon: "cleanUp", label: "Clean Up" },
