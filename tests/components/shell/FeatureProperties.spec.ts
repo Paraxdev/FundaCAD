@@ -38,11 +38,21 @@ function makeEngine(doc: CadDocument) {
     setTargetValue: (t: { field: string }, value: number) => { values.push({ field: t.field, value }); },
     setTargetExpr: (t: { field: string }, raw: string) => { exprs.push({ field: t.field, raw }); return null; },
   };
+  // The selection row asks whether the editor is open on it, and offers to open
+  // it. Neither is exercised here — this spec is about the write path for values
+  // — but a row that throws while rendering takes every other row down with it,
+  // which is exactly what an absent `tools` did.
+  const targetEdit = { active: false, editingId: null, field: null, start: () => true };
   return {
     updates,
     values,
     exprs,
-    engine: { store, bridge: { docVersion, buildVersion } } as unknown as Engine,
+    engine: {
+      store,
+      bridge: { docVersion, buildVersion },
+      tools: { targetEdit },
+      toolBusy: () => false,
+    } as unknown as Engine,
   };
 }
 
@@ -57,19 +67,23 @@ function render(fake: ReturnType<typeof makeEngine>, featureId: string): VueWrap
  *  NOT part of the label: a label is a name, and "Radius mm | 5in" reads as a
  *  contradiction.
  *
- *  A row is not always a text box any more — a fixed choice is a <select> and a
- *  switch is a checkbox — so this reads whichever control the row has rather
- *  than assuming. A row with no control at all is a row that renders nothing,
- *  which is worth failing on rather than skipping. */
+ *  A row is not always a text box — a fixed choice is a <select>, a switch is a
+ *  checkbox, and a SELECTION row has no control at all, only the summary of what
+ *  the feature acts on and a button that opens the editor. This reads whichever
+ *  the row has. A row with none of them is a row that renders nothing, which is
+ *  worth failing on rather than skipping. */
 const rows = (w: VueWrapper) =>
   w.findAll(".param-row").map((r) => {
     const sel = r.find("select");
     const box = r.find("input[type=checkbox]");
+    const count = r.find(".target-count");
     const value = sel.exists()
       ? (sel.element as HTMLSelectElement).value
       : box.exists()
         ? String((box.element as HTMLInputElement).checked)
-        : (r.find("input").element as HTMLInputElement).value;
+        : count.exists()
+          ? count.text()
+          : (r.find("input").element as HTMLInputElement).value;
     return [
       r.find("label").text(),
       r.find(".dim-unit").exists() ? r.find(".dim-unit").text() : "",
@@ -124,7 +138,13 @@ describe("FeatureProperties", () => {
       parameters: {},
       features: [{ id: "f1", type: "fillet", radius: 2, profile: 0.5 } as unknown as Feature],
     });
-    expect(rows(render(fake, "f1"))).toEqual([["Radius", "mm", "2"], ["Profile", "", "0.5"]]);
+    expect(rows(render(fake, "f1"))).toEqual([
+      // What the fillet is applied to leads: it is the other half of the
+      // feature, and the half that used to be invisible once committed.
+      ["Edges", "", "nothing selected"],
+      ["Radius", "mm", "2"],
+      ["Profile", "", "0.5"],
+    ]);
   });
 
   it("writes a sketch dimension back through the ONE entity it belongs to", async () => {
@@ -217,9 +237,35 @@ describe("FeatureProperties", () => {
     expect(w.find("input").classes()).toContain("input-error");
   });
 
-  it("renders nothing for a feature with no numeric fields", () => {
+  it("renders nothing but the selection for a feature with no numeric fields", () => {
+    // Delete Face has no values at all. It is still a verb applied to geometry,
+    // so the one row it does have is the face it removes.
     const fake = makeEngine({ parameters: {}, features: [{ id: "d1", type: "deleteFace" } as Feature] });
-    expect(rows(render(fake, "d1"))).toEqual([]);
+    expect(rows(render(fake, "d1"))).toEqual([["Face", "", "nothing selected"]]);
+  });
+
+  it("shows the selection a feature actually carries, counted", () => {
+    const fake = makeEngine({
+      parameters: {},
+      features: [{
+        id: "f1", type: "fillet", radius: 2,
+        edges: [
+          { kind: "edge", by: "nearest", point: [0, 0, 0] },
+          { kind: "edge", by: "nearest", point: [1, 0, 0] },
+        ],
+      } as unknown as Feature],
+    });
+    expect(rows(render(fake, "f1"))).toContainEqual(["Edges", "", "2 edges"]);
+  });
+
+  it("says what an empty selection MEANS where empty means something", () => {
+    // "0 faces" and "sealed hollow" are opposite answers about the same part,
+    // and a count alone cannot tell them apart.
+    const fake = makeEngine({
+      parameters: {},
+      features: [{ id: "sh", type: "shell", thickness: 2 } as unknown as Feature],
+    });
+    expect(rows(render(fake, "sh"))).toContainEqual(["Faces to open", "", "sealed hollow"]);
   });
 
   // --- the rows that are not numbers ---------------------------------------
@@ -259,8 +305,10 @@ describe("FeatureProperties", () => {
       features: [{ id: "t1", type: "texture", kind: "knurl", depth: 0.4, scale: 2 } as unknown as Feature],
     });
     const l = labels(render(fake, "t1"));
-    expect(l.indexOf("Pattern")).toBe(0);
+    // The selection leads the whole panel, then the choices, then the numbers.
+    expect(l.indexOf("Faces")).toBe(0);
     expect(l.indexOf("Pattern")).toBeLessThan(l.indexOf("Depth"));
+    expect(l.indexOf("Faces")).toBeLessThan(l.indexOf("Pattern"));
   });
 
   it("gives a switch to a field that is on or off", async () => {

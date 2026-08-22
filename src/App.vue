@@ -6,6 +6,7 @@ import ModalHost from "./components/overlays/ModalHost.vue";
 import PrintStatusPill from "./components/overlays/PrintStatusPill.vue";
 import ShortcutHud from "./components/overlays/ShortcutHud.vue";
 import ContextMenuHost from "./components/overlays/ContextMenuHost.vue";
+import TargetEditPanel from "./components/overlays/TargetEditPanel.vue";
 import ConsolePanel from "./components/overlays/ConsolePanel.vue";
 import SelectionToolbar from "./components/overlays/SelectionToolbar.vue";
 import CommandPalette from "./components/overlays/CommandPalette.vue";
@@ -69,6 +70,7 @@ const toolPanels = useToolPanelStore();
   <ShortcutHud />
   <ContextMenuHost />
   <ConsolePanel />
+  <TargetEditPanel />
   <SelectionToolbar />
   <CommandPalette />
 

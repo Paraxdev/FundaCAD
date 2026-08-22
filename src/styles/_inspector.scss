@@ -288,3 +288,51 @@
   padding: var(--s-3) var(--s-2);
   text-align: left;
 }
+
+/* --- what a feature is applied to ------------------------------------------
+   The geometry half of a feature, shown in the same row rhythm as the values
+   beside it: it is one more thing about the feature, not a section of its own.
+   The count sits where a number would and the button where a unit chip would,
+   so a column of mixed rows still scans as one column. */
+.target-value {
+  justify-content: space-between;
+}
+.target-count {
+  font-size: 12px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* An empty target usually MEANS something ("sealed hollow", "the whole body"),
+   so it is stated rather than dimmed away — just quieter than a count. */
+.target-empty {
+  color: var(--text-dim);
+  font-style: italic;
+}
+.target-edit {
+  flex: 0 0 auto;
+  padding: 2px var(--s-2);
+  font: inherit;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: none;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+}
+.target-edit:hover:not(:disabled) {
+  color: var(--accent-hot);
+  border-color: var(--accent);
+}
+.target-edit:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-tint);
+}
+.target-edit:disabled {
+  color: var(--accent);
+  border-color: var(--accent);
+  cursor: default;
+}

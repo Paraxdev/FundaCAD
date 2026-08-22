@@ -182,6 +182,10 @@ const FORGE_PATHS: Record<string, string> = {
 
   // --- general chrome ------------------------------------------------------
   close: `<path d="M6 6l12 12M18 6L6 18"/>`,
+  // "Take this one out of the set". A ring rather than a bare stroke: a lone
+  // minus at 14px on a list row reads as a separator, and a separator is not
+  // something you press.
+  minus: `<circle cx="12" cy="12" r="8.5"/><line x1="8" y1="12" x2="16" y2="12"/>`,
   // A dot, for "unsaved" and for a feature type this build has never heard of
   dot: `<circle cx="12" cy="12" r="4" fill="currentColor"/>`,
   warning: `<path d="M12 3.5L21.5 20H2.5z"/><line x1="12" y1="9.5" x2="12" y2="14"/><circle cx="12" cy="17" r="1.05" fill="currentColor"/>`,

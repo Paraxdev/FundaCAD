@@ -1,0 +1,189 @@
+/* ============================================================================
+   Selection editor — the list of what a feature is applied to, open while the
+   viewport is armed to add and remove entries.
+
+   Parked, not floating. Every other overlay in the app follows the geometry it
+   describes (the hover bar, the drag handle, the dimension box); this one must
+   NOT, because the geometry it describes is exactly what you are about to click.
+   A panel that moved to sit over the next edge you wanted would be a panel that
+   ate the gesture it exists to collect.
+
+   Absolute inside #viewport rather than fixed to the window, which is what makes
+   "top-left" mean the top-left of the 3D VIEW in every arrangement of the shell.
+   The browser pane, the ribbon and the history strip each move between layouts;
+   a window-anchored panel sits on top of one of them in some arrangement. Top-
+   left is the corner nothing else uses: the prompt is centred, the view pill and
+   the feature's own values are bottom-left, the readout is bottom-right.
+   ============================================================================ */
+
+.tgt-panel {
+  position: absolute;
+  left: var(--s-4);
+  top: var(--s-4);
+  z-index: 20; /* over the view pill and the readout, which are 15 */
+  width: 208px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-3);
+  border-radius: var(--r-md);
+  border: 1px solid var(--line-strong);
+  background: var(--panel-2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+          backdrop-filter: blur(14px) saturate(1.3);
+  box-shadow: var(--shadow-3);
+  animation: pop-in var(--t-fast) var(--ease);
+}
+
+.tgt-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.tgt-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tgt-sub {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.tgt-fieldrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+.tgt-field {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.tgt-clear {
+  padding: 2px var(--s-2);
+  font: inherit;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: none;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.tgt-clear:hover:not(:disabled) {
+  color: var(--accent-hot);
+  border-color: var(--accent);
+}
+.tgt-clear:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Scrolls rather than growing: a face set on an imported mesh runs to dozens,
+   and a panel taller than the window is one with no Done button on it. */
+.tgt-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tgt-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  padding: var(--s-1) var(--s-2);
+  border-radius: var(--r-sm);
+  border: 1px solid transparent;
+  font-size: 12px;
+  color: var(--text);
+}
+/* The row lights up with the geometry it names, so the pairing is visible from
+   either end — point at the row, the edge glows; point at the edge, you can see
+   which row it is. */
+.tgt-item:hover {
+  background: var(--accent-tint);
+  border-color: var(--accent);
+}
+/* An entry this build cannot place on screen. Kept and carried through the
+   commit — the sidecar resolves these better than the viewport does — so it is
+   marked rather than hidden, because a set of four that displayed as three would
+   lose one on the next Done. */
+.tgt-unresolved .tgt-label {
+  color: var(--text-mute);
+  font-style: italic;
+}
+.tgt-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tgt-remove {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  /* Explicit, because this holds an <svg stroke="currentColor"> and a <button>
+     does NOT inherit colour — it falls back to the UA's `buttontext`, which on a
+     dark surface draws the mark as an empty box. */
+  color: var(--text-mute);
+  cursor: pointer;
+}
+.tgt-remove:hover {
+  color: var(--danger, #e5484d);
+}
+
+.tgt-none {
+  padding: var(--s-2);
+  font-size: 12px;
+  color: var(--text-mute);
+  font-style: italic;
+}
+
+.tgt-actions {
+  display: flex;
+  gap: var(--s-2);
+}
+.tgt-actions button {
+  flex: 1 1 0;
+  padding: var(--s-2);
+  font: inherit;
+  font-size: 12px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.tgt-done {
+  color: #fff;
+  background: var(--accent);
+  border: 1px solid var(--accent);
+}
+.tgt-done:hover {
+  background: var(--accent-hot);
+  border-color: var(--accent-hot);
+}
+.tgt-cancel {
+  color: var(--text-dim);
+  background: none;
+  border: 1px solid var(--line-strong);
+}
+.tgt-cancel:hover {
+  color: var(--text);
+  border-color: var(--text-dim);
+}

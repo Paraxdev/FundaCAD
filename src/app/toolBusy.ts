@@ -22,7 +22,8 @@ export function createToolBusy(e: Engine): Pick<Engine, "toolBusy" | "hasBody"> 
       return (
         e.sketch.active || t.extrude.active || t.edgeFeature.active || t.pressPull.active ||
         t.faceOffset.active || t.loft.active || t.planeOffset.active || t.move.active ||
-        t.measure.active || t.section.picking || t.texture.active || e.planePick || isChoiceOpen()
+        t.measure.active || t.section.picking || t.texture.active || t.targetEdit.active ||
+        e.planePick || isChoiceOpen()
       );
     },
     // True when the current rebuild produced a solid body (something to modify).

@@ -27,6 +27,7 @@ import { crumb } from "../diagnostics/breadcrumbs";
 
 import { ExtrudeTool } from "../features/extrudeTool";
 import { EdgeFeatureTool } from "../features/edgeFeatureTool";
+import { TargetEditTool } from "../features/targetEditTool";
 import { SelectionNudge } from "../features/selectionNudge";
 import { PressPullTool } from "../features/pressPullTool";
 import { FaceOffsetTool } from "../features/faceOffsetTool";
@@ -71,6 +72,7 @@ import type { Feature, PlaneDef } from "../types";
 export interface EngineTools {
   extrude: ExtrudeTool;
   edgeFeature: EdgeFeatureTool;
+  targetEdit: TargetEditTool;
   pressPull: PressPullTool;
   faceOffset: FaceOffsetTool;
   loft: LoftTool;
@@ -214,6 +216,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   e.tools = {
     extrude: new ExtrudeTool(e.viewport, e.overlay, e.store),
     edgeFeature: new EdgeFeatureTool(e.viewport, e.store),
+    targetEdit: new TargetEditTool(e.viewport, e.store),
     pressPull: new PressPullTool(e.viewport, e.store),
     faceOffset: new FaceOffsetTool(e.viewport, e.store),
     loft: new LoftTool(e.viewport, e.overlay, e.store),

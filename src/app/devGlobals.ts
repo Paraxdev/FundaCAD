@@ -45,7 +45,12 @@ export function installDevGlobals(e: Engine): void {
     viewport: e.viewport,
     sketch: e.sketch,
     handleAction: (a: string) => e.handleAction(a),
+    // Which feature the panels are showing. A harness that wants to open a
+    // feature's Properties has to say WHICH, and the timeline chip that normally
+    // does it is a click on a scrolling strip.
+    selectFeature: (id: string | null) => e.selectFeature(id),
     extrude: e.tools.extrude,
+    targetEdit: e.tools.targetEdit,
     overlay: e.overlay,
     toolBusy: () => e.toolBusy(),
     // The one formula every datum surface goes through: the drawn quad, "sketch
@@ -71,6 +76,7 @@ export function installDevGlobals(e: Engine): void {
       measure: e.tools.measure.active,
       section: e.tools.section.active,
       texture: e.tools.texture.active,
+      targetEdit: e.tools.targetEdit.active,
       planePick: e.planePick,
       choice: isChoiceOpen(),
     }),

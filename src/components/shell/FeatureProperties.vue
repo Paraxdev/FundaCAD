@@ -8,11 +8,16 @@
 // re-serialises one entity), and two copies of that would drift the moment a
 // field type was added.
 //
-// Three kinds of row, in the order a form reads best: the CHOICES first, then
-// the switches, then the numbers. A choice usually decides which numbers are
-// even there — pick a texture pattern and the Angle and Seed rows appear or go
-// — so putting it under the fields it governs would have the reader working
-// upward. The numbers come last because they are the long tail.
+// Four kinds of row, in the order a form reads best: what the feature is APPLIED
+// TO first, then the CHOICES, then the switches, then the numbers. A choice
+// usually decides which numbers are even there — pick a texture pattern and the
+// Angle and Seed rows appear or go — so putting it under the fields it governs
+// would have the reader working upward. The numbers come last because they are
+// the long tail.
+//
+// The selection leads because it is the half of a feature that was missing. A
+// fillet is a set of edges and a radius; the radius has been editable since these
+// rows existed and the set was write-only, picked once and then invisible.
 //
 // Everything a row can be is declared in document/numFields.ts and
 // document/optionFields.ts, never here. That is what keeps the two surfaces
@@ -28,6 +33,7 @@ import { useDocValue } from "../../app/useDoc";
 import ValidatedRow from "./ValidatedRow.vue";
 import ChoiceRow from "./ChoiceRow.vue";
 import ToggleRow from "./ToggleRow.vue";
+import SelectionTargetRow from "./SelectionTargetRow.vue";
 import { round, isPlainNumber } from "../../ui/units";
 import { commonUnits, toUnit, tryParseMeasure, unitById, type Dim, type Measured, type UnitDef } from "../../ui/measure";
 import { contextMenu } from "../../ui/menu";
@@ -42,6 +48,7 @@ import {
   sharpnessLabel,
   toggleValue,
 } from "../../document/optionFields";
+import { targetsOf } from "../../features/selectionTargets";
 import type { Feature, Num, ParamTarget } from "../../types";
 
 const props = defineProps<{ featureId: string; unit: string }>();
@@ -50,6 +57,14 @@ const engine = useEngine();
 const store = engine.store;
 
 const feature = useDocValue((doc) => doc.features.find((f) => f.id === props.featureId) ?? null);
+
+// What this feature is applied to. Declared in features/selectionTargets.ts, so
+// a feature with no editable selection — a primitive, a scale — simply has no
+// rows here rather than an empty heading.
+const targetRows = useDocValue((doc) => {
+  const f = doc.features.find((x) => x.id === props.featureId);
+  return f ? targetsOf(f.type) : [];
+});
 
 // --- what each row is SHOWING its value in ---------------------------------
 // Per row rather than per panel, and the same contract the heads-up dimension
@@ -273,6 +288,12 @@ function commitField(
 </script>
 
 <template>
+  <SelectionTargetRow
+    v-for="t in targetRows"
+    :key="`s:${t.field}`"
+    :feature-id="featureId"
+    :target="t"
+  />
   <ChoiceRow
     v-for="c in choiceRows"
     :key="`c:${c.field}`"
