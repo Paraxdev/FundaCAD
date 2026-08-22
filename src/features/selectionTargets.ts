@@ -209,9 +209,21 @@ export function pointOf(sel: Selector): [number, number, number] | null {
   return p as [number, number, number];
 }
 
-// PROFILES are not in the table yet, and their absence is deliberate rather
-// than an oversight. `extrude.regions`, `revolve.regions` and
-// `loft.profiles[].region` are interior POINTS on a sketch plane, resolved
+// Two absences, both deliberate.
+//
+// REVOLVE'S AXIS EDGE is a selector like any other, and it is left out because
+// it does not stand alone: `revolve.axis` is written beside it as the RESOLVED
+// line, a cache the sidecar falls back to when the edge stops resolving and
+// older builds read instead of the reference. Writing a new `axisEdge` through
+// the generic editor would leave that cache describing the OLD edge — harmless
+// while the new one resolves, and quietly wrong the moment it stops. Keeping the
+// pair in step needs the edge's geometry, which is exactly what a pure module
+// does not have, so the axis stays with the pick flow that mints both together
+// (featureStarters.startRevolve).
+//
+// PROFILES are not here for a different reason. `extrude.regions`,
+// `revolve.regions` and `loft.profiles[].region` are interior POINTS on a
+// sketch plane, resolved
 // against the sketch overlay and the model under it rather than against the
 // solid's own edges and faces. Editing one means showing a sketch that has
 // already been consumed and hidden, and picking on a surface that is not the
