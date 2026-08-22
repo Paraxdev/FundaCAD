@@ -412,3 +412,50 @@ describe("rectFromThreePoints", () => {
     expect(rectFromThreePoints(v(0, 0), v(10, 0), v(4, 0))).toBeNull(); // c on the edge
   });
 });
+
+describe("detectRegions — every closed primitive is a profile, not just the two", () => {
+  // Field bug: a slot drew fine and highlighted nothing. A slot and a polygon
+  // are closed curves with no free endpoints, so the chain tracer has nothing to
+  // join them to; only the entities the fast path names as loops of their own
+  // ever became regions, and that list was rectangle + circle.
+  const slot = (id: string, x1: number, y1: number, x2: number, y2: number, width: number): ResolvedEntity =>
+    ({ type: "slot", id, x1, y1, x2, y2, width });
+  const poly = (id: string, x: number, y: number, radius: number, sides: number): ResolvedEntity =>
+    ({ type: "polygon", id, x, y, radius, sides, angle: 0 });
+
+  it("a slot is one region, and the point between its arc centres is in it", () => {
+    const regions = detectRegions("s1", [slot("s", -10, 0, 10, 0, 8)]);
+    expect(regions).toHaveLength(1);
+    const r = regions[0]!;
+    expect(r.holes).toHaveLength(0);
+    expect(pointInRegion(new THREE.Vector2(0, 0), r)).toBe(true);
+    // the cap ends reach past the centres by the half width...
+    expect(pointInRegion(new THREE.Vector2(13.5, 0), r)).toBe(true);
+    // ...but not beyond, or the outline is not the one being drawn
+    expect(pointInRegion(new THREE.Vector2(15, 0), r)).toBe(false);
+    // and the corner of the bounding box is outside a rounded end
+    expect(pointInRegion(new THREE.Vector2(13.5, 3.9), r)).toBe(false);
+  });
+
+  it("a polygon is one region", () => {
+    const regions = detectRegions("s1", [poly("p", 0, 0, 10, 6)]);
+    expect(regions).toHaveLength(1);
+    expect(pointInRegion(new THREE.Vector2(0, 0), regions[0]!)).toBe(true);
+  });
+
+  it("a slot inside a rectangle cuts a hole in it, like a circle does", () => {
+    const regions = detectRegions("s1", [rect("r1", 0, 0, 60, 40), slot("s", -8, 0, 8, 0, 6)]);
+    expect(regions).toHaveLength(2);
+    const ring = regions.find((r) => r.holes.length > 0)!;
+    expect(ring).toBeDefined();
+    expect(pointInRegion(new THREE.Vector2(0, 0), ring)).toBe(false);
+    expect(pointInRegion(new THREE.Vector2(25, 15), ring)).toBe(true);
+  });
+
+  it("construction geometry is still reference-only", () => {
+    // The rule that must survive the widening: a construction slot is not a
+    // profile, or every centreline turns into an extrudable area.
+    const c: ResolvedEntity = { ...slot("s", -10, 0, 10, 0, 8), construction: true } as ResolvedEntity;
+    expect(detectRegions("s1", [c])).toHaveLength(0);
+  });
+});

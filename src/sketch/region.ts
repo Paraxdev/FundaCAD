@@ -211,6 +211,18 @@ export function slotOutline(x1: number, y1: number, x2: number, y2: number, w: n
   return out;
 }
 
+/** Does this curve come back to where it started? Such an entity bounds an area
+ *  by itself, and no amount of chaining can change that either way.
+ *
+ *  Three distinct vertices plus the repeat is the minimum: below that there is
+ *  no area to bound, and a zero-length line would otherwise read as a loop. */
+function isClosedPolyline(pts: readonly THREE.Vector2[]): boolean {
+  const first = pts[0];
+  const last = pts[pts.length - 1];
+  if (!first || !last || pts.length < 4) return false;
+  return Math.abs(first.x - last.x) <= EPS && Math.abs(first.y - last.y) <= EPS;
+}
+
 export function detectRegions(
   sketchId: string,
   allEntities: ResolvedEntity[],
@@ -223,12 +235,17 @@ export function detectRegions(
   // are their own filled meshes (overlay), never part of line/arc region detection.
   const entities = allEntities.filter((e) => !e.construction && e.type !== "text");
 
-  // Per-entity polyline segments + bbox, for cheap crossing detection and tracing.
+  // Per-entity polyline, segments + bbox, for cheap crossing detection and
+  // tracing. The polyline is sampled ONCE here and everything below reads it,
+  // so what is picked is what is drawn.
   const perEntity = entities.map((e) => {
-    const segs = entitySegments(e).map(
-      ([a, b]) => ({ x1: a.x, y1: a.y, x2: b.x, y2: b.y }) as Seg,
-    );
-    return { e, segs, box: segsBBox(segs) };
+    const pts = entityPolyline(e);
+    const segs: Seg[] = [];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i], b = pts[i + 1];
+      if (a && b) segs.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y });
+    }
+    return { e, pts, segs, box: segsBBox(segs) };
   });
 
   // 1. collect every closed loop. Do any two entities' curves actually CROSS at
@@ -243,23 +260,21 @@ export function detectRegions(
     // mirrors the sidecar's OCCT arrangement (builder.py _subdivide_faces).
     loops = traceLoops(planarize(perEntity));
   } else {
-    // Fast path (unchanged for non-crossing sketches): rectangles + circles are
-    // their own loops; free line/arc/spline geometry is chained into closed loops
-    // by shared endpoints.
+    // Fast path (non-crossing sketches): a curve that comes back to where it
+    // started is a loop in its own right, and everything else is chained into
+    // closed loops by shared endpoints.
+    //
+    // Asking the POLYLINE rather than naming the types is the point. The list
+    // used to be rectangle + circle, which silently left a slot and a polygon
+    // out of both halves: closed curves have no free endpoints, so the chain
+    // tracer can never help them, and they drew perfectly while highlighting
+    // nothing and offering no area to extrude.
     loops = [];
-    for (const { e } of perEntity) {
-      if (e.type === "rectangle") loops.push(rectCorners(e.x, e.y, e.width, e.height, e.angle));
-      else if (e.type === "circle") loops.push(circleLoop(e.x, e.y, e.radius));
-      // a projected CIRCLE is a closed loop of its own, like a native circle —
-      // its polyline has no free endpoints for the chain tracer to join
-      else if (e.type === "projected" && e.curve.kind === "circle")
-        loops.push(circleLoop(e.curve.x, e.curve.y, e.curve.r));
-    }
     const free: Seg[] = [];
-    for (const { e, segs } of perEntity)
-      if (e.type === "line" || e.type === "arc" || e.type === "spline" ||
-          (e.type === "projected" && e.curve.kind !== "circle"))
-        free.push(...segs);
+    for (const { pts, segs } of perEntity) {
+      if (isClosedPolyline(pts)) loops.push(pts.slice(0, -1)); // drop the repeat
+      else free.push(...segs);
+    }
     loops.push(...traceLoops(free));
   }
 
