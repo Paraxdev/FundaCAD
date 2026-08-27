@@ -162,6 +162,9 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   e.setStatus = (text, cls) => useUiStore().setStatus(text, cls);
 
   e.viewport = new Viewport(canvas);
+  // The grid spacing follows the zoom, so what one square is worth is a fact
+  // about the view that only the view knows and only the chrome can show.
+  e.viewport.onGridStep = (mm) => { useUiStore().gridStepMm = mm; };
 
   e.geometry = import.meta.env.VITE_GEOM === "rust" ? new TauriGeometry() : new Geometry();
   void e.geometry.init(); // fetch the per-launch sidecar auth token + open the socket

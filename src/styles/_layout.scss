@@ -67,6 +67,26 @@
   box-shadow: var(--shadow-pill);
   z-index: 15;
 }
+/* What one grid square is worth, stacked directly above the frame-rate readout
+   and wearing its clothes: the two are the same kind of thing, a fact about the
+   view rather than a control on it, and one corner is where you learn to look
+   for them. The offset is the fps readout's own height plus a rung. */
+.gridscale {
+  position: absolute;
+  right: var(--s-4);
+  bottom: calc(var(--s-4) + 24px);
+  padding: var(--s-0) var(--s-3);
+  font: 11px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums; /* digits stop twitching as the zoom changes */
+  color: var(--text-mute);
+  background: rgba(22, 24, 29, 0.55);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  cursor: default;
+  user-select: none;
+  z-index: 15;
+}
+
 /* Frame-rate readout, viewport bottom-right. Deliberately quiet: it is a
    diagnostic you glance at, not a control. It DOES take pointer events, because
    a `title` tooltip never fires on a pointer-events:none element — that is the

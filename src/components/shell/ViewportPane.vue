@@ -4,6 +4,7 @@ import { useEngine } from "../../app/engineKey";
 import ViewControls from "./ViewControls.vue";
 import PromptBanner from "./PromptBanner.vue";
 import FpsReadout from "./FpsReadout.vue";
+import GridReadout from "./GridReadout.vue";
 import SketchPalette from "./SketchPalette.vue";
 
 const engine = useEngine();
@@ -18,8 +19,8 @@ const host = useTemplateRef<HTMLDivElement>("host");
 //     ResizeObserver, so the size self-corrects on the frame it is inserted.
 //
 // prepend, not append: #canvas has to be the first child so the absolutely
-// positioned overlays below it (.palette, #prompt, #viewcontrols, .fps) paint
-// on top.
+// positioned overlays below it (.palette, #prompt, #viewcontrols, .gridscale,
+// .fps) paint on top.
 onMounted(() => host.value!.prepend(engine.canvas));
 </script>
 
@@ -28,6 +29,7 @@ onMounted(() => host.value!.prepend(engine.canvas));
     <SketchPalette />
     <PromptBanner />
     <ViewControls />
+    <GridReadout />
     <FpsReadout />
   </div>
 </template>

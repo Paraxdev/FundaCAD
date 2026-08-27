@@ -34,7 +34,7 @@ import ValidatedRow from "./ValidatedRow.vue";
 import ChoiceRow from "./ChoiceRow.vue";
 import ToggleRow from "./ToggleRow.vue";
 import SelectionTargetRow from "./SelectionTargetRow.vue";
-import { round, isPlainNumber } from "../../ui/units";
+import { displayRound, isPlainNumber } from "../../ui/units";
 import { commonUnits, toUnit, tryParseMeasure, unitById, type Dim, type Measured, type UnitDef } from "../../ui/measure";
 import { contextMenu } from "../../ui/menu";
 import { resolveEntities, toSketchEntity } from "../../sketch/resolve";
@@ -223,7 +223,7 @@ const featureRows = useDocValue((doc) => {
     const shown = bound
       ? bound.expr
       : typeof cur === "number"
-        ? String(u ? toUnit(cur, u) : round(cur))
+        ? String(u ? toUnit(cur, u) : displayRound(cur))
         : (cur ?? "");
     const fx = bound && store.isParamBound(target);
     return {
@@ -243,7 +243,7 @@ const featureRows = useDocValue((doc) => {
       target,
       kind,
       rowClass: fx ? "fx-row" : undefined,
-      rowTitle: fx && bound ? `${bound.name} = ${bound.expr} = ${round(bound.value)}` : undefined,
+      rowTitle: fx && bound ? `${bound.name} = ${bound.expr} = ${displayRound(bound.value)}` : undefined,
     };
   });
 });

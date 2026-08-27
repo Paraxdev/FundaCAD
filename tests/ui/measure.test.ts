@@ -9,6 +9,7 @@ import { describe, it, expect } from "vitest";
 import {
   commonUnits,
   formatMeasure,
+  roundForDisplay,
   measureError,
   normalise,
   parseMeasure,
@@ -211,6 +212,62 @@ describe("showing one back", () => {
 
   it("does not show float fuzz", () => {
     expect(formatMeasure(0.1 + 0.2, MM)).toBe("0.3 mm");
+  });
+});
+
+describe("roundForDisplay", () => {
+  // It used to be six places, flat, which is where "24.098723" in a diameter
+  // field came from. The rule is two, and one exception.
+
+  it("stops showing the solver's arithmetic", () => {
+    expect(roundForDisplay(24.098723)).toBe(24.1);
+    expect(roundForDisplay(20.039856)).toBe(20.04);
+    expect(roundForDisplay(8.363363)).toBe(8.36);
+  });
+
+  it("leaves a number somebody CHOSE alone", () => {
+    // Three places is the signature of a decision: it is what a field accepts
+    // and what a drag lands on (viewport/dragStep.ts quantises to a nice
+    // 1/2/5 step). Blunting 1.375 to 1.38 would be destroying information.
+    for (const v of [1.375, 0.125, 2.5, 6.746, 40, 0.05, -3.125]) {
+      expect(roundForDisplay(v), `${v}`).toBe(v);
+    }
+  });
+
+  it("recognises a chosen number through a subtraction", () => {
+    // The control that stops the exception above from being useless: a sketch
+    // reports a length by subtracting two chosen coordinates, and floats do not
+    // land on the answer exactly.
+    const width = 10.123 - 3.377;
+    expect(width).not.toBe(6.746); // the whole reason the tolerance is there
+    expect(roundForDisplay(width)).toBe(6.746);
+  });
+
+  it("does not erase a value that lives below two places", () => {
+    // Two places under 1mm is not rounding, it is deletion: 0.0523 would come
+    // back as 0.05 and 0.0012 as nothing at all. Three significant digits.
+    expect(roundForDisplay(0.0523841)).toBe(0.0524);
+    expect(roundForDisplay(0.00123456)).toBe(0.00123);
+    expect(roundForDisplay(0.39370078)).toBe(0.394);
+    expect(roundForDisplay(0.0001234)).not.toBe(0);
+  });
+
+  it("still kills float fuzz, which is what six places was for", () => {
+    expect(roundForDisplay(0.1 + 0.2)).toBe(0.3);
+    expect(roundForDisplay(0.30000000000000004)).toBe(0.3);
+  });
+
+  it("passes a number that is not one straight through", () => {
+    expect(roundForDisplay(0)).toBe(0);
+    expect(Number.isNaN(roundForDisplay(NaN))).toBe(true);
+    expect(roundForDisplay(Infinity)).toBe(Infinity);
+  });
+
+  it("never grows a value it rounds", () => {
+    // A displayed length is read off a part. It may be blunt; it may not drift.
+    for (const v of [24.098723, 0.0523841, 1.375, 0.39370078, 133.7]) {
+      expect(Math.abs(roundForDisplay(v) - v), `${v}`).toBeLessThanOrEqual(Math.max(0.005, Math.abs(v) * 0.005));
+    }
   });
 });
 

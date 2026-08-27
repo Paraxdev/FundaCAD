@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
   GRID_CELL_PX,
+  GRID_COVER,
   GRID_MAJOR_EVERY,
-  gridFalloff,
-  gridSegments,
+  gridLines,
+  gridReach,
   gridStep,
   MIN_SNAP_STEP,
   snapLatticeStep,
@@ -82,122 +83,152 @@ describe("snapLatticeStep", () => {
   });
 });
 
-describe("gridFalloff", () => {
-  it("is full brightness at the centre and dark at the radius", () => {
-    expect(gridFalloff(0, 100)).toBe(1);
-    expect(gridFalloff(100, 100)).toBe(0);
-    expect(gridFalloff(1000, 100)).toBe(0);
+describe("gridReach", () => {
+  // The whole reason the lattice stopped fading: how far it has to run is a
+  // question about the VIEWPORT, and the viewport can answer it.
+
+  it("covers more than the corner of the screen", () => {
+    // Half a diagonal reaches the corners of a view seen flat on. Anything less
+    // than that and the grid ends inside the window.
+    const wpp = 0.1;
+    const diag = 2000;
+    expect(gridReach(wpp, diag)).toBeGreaterThan((wpp * diag) / 2);
   });
 
-  it("decreases all the way out", () => {
-    let prev = Infinity;
-    for (let d = 0; d <= 100; d += 5) {
-      const s = gridFalloff(d, 100);
-      expect(s).toBeLessThan(prev);
-      prev = s;
+  it("is the same number of SCREENFULS at every zoom", () => {
+    // The property that makes it a rule rather than a constant: doubling the
+    // world each pixel covers doubles the reach, so the grid looks identical.
+    for (const wpp of [0.001, 0.01, 0.1, 1, 10]) {
+      expect(gridReach(wpp * 2, 1500) / gridReach(wpp, 1500)).toBeCloseTo(2, 9);
     }
   });
 
-  it("arrives at zero flat, so there is no rim", () => {
-    // The whole point of the shape: a linear ramp would still be at 5% one step
-    // before the end and then stop, which reads as an edge.
-    expect(gridFalloff(95, 100)).toBeLessThan(0.02);
+  it("is GRID_COVER diagonals, stated once", () => {
+    expect(gridReach(0.25, 1600)).toBeCloseTo(0.25 * 1600 * GRID_COVER, 9);
   });
 
-  it("holds its brightness where you are actually drawing", () => {
-    expect(gridFalloff(20, 100)).toBeGreaterThan(0.9);
-  });
-
-  it("returns nothing for a degenerate radius", () => {
-    expect(gridFalloff(1, 0)).toBe(0);
-    expect(gridFalloff(1, NaN)).toBe(0);
-    expect(gridFalloff(NaN, 100)).toBe(0);
+  it("asks for nothing on a scale that means nothing", () => {
+    for (const bad of [0, -1, NaN, Infinity]) expect(gridReach(bad, 1600)).toBe(0);
+    expect(gridReach(0.1, 0)).toBe(0);
   });
 });
 
-describe("gridSegments", () => {
-  const seg = (g: ReturnType<typeof gridSegments>, i: number) => ({
-    x1: g.xy[i * 4]!, y1: g.xy[i * 4 + 1]!, x2: g.xy[i * 4 + 2]!, y2: g.xy[i * 4 + 3]!,
-    s1: g.shade[i * 2]!, s2: g.shade[i * 2 + 1]!, major: g.major[i]!,
+describe("gridLines", () => {
+  const all = (g: ReturnType<typeof gridLines>) => [...g.minor, ...g.major];
+  const lineCount = (g: ReturnType<typeof gridLines>) => all(g).length / 4;
+  const line = (xy: number[], i: number) => ({
+    x1: xy[i * 4]!, y1: xy[i * 4 + 1]!, x2: xy[i * 4 + 2]!, y2: xy[i * 4 + 3]!,
   });
-  const count = (g: ReturnType<typeof gridSegments>) => g.major.length;
 
-  it("emits two vertices and one major flag per segment", () => {
-    const g = gridSegments(0, 0, 5, 45);
-    expect(g.xy.length).toBe(count(g) * 4);
-    expect(g.shade.length).toBe(count(g) * 2);
+  it("emits four numbers per line and nothing else", () => {
+    const g = gridLines(0, 0, 5, 100);
+    expect(g.minor.length % 4).toBe(0);
+    expect(g.major.length % 4).toBe(0);
+    expect(lineCount(g)).toBeGreaterThan(10);
+  });
+
+  it("runs each line the WHOLE way across, not cell by cell", () => {
+    // This is what dropping the fade bought, and it is the reason the lattice
+    // can afford to be a screenful wide: a fade has to vary along a line, so it
+    // needs one segment per cell crossed; a uniform line needs one, full stop.
+    const g = gridLines(0, 0, 5, 100);
+    for (let i = 0; i < lineCount(g); i++) {
+      const l = line(all(g), i);
+      // The full span of the lattice, every time: 100 either side of the centre
+      // and never a cell's worth of it.
+      expect(Math.hypot(l.x2 - l.x1, l.y2 - l.y1)).toBeGreaterThanOrEqual(200);
+    }
   });
 
   it("puts every line on an absolute multiple of the step", () => {
     // Not on offsets from the centre: that is what pins the major lines to the
-    // sketch origin and to round coordinates as the centre wanders.
-    const g = gridSegments(37, -14, 5, 45);
-    for (let i = 0; i < count(g); i++) {
-      const s = seg(g, i);
-      const onLattice = s.x1 === s.x2 ? s.x1 : s.y1;
+    // sketch origin and to round coordinates as the view wanders.
+    const g = gridLines(37, -14, 5, 100);
+    for (let i = 0; i < lineCount(g); i++) {
+      const l = line(all(g), i);
+      const onLattice = l.x1 === l.x2 ? l.x1 : l.y1;
       expect(onLattice % 5).toBeCloseTo(0, 9);
     }
   });
 
   it("marks every Nth line major, counted from the origin", () => {
-    const g = gridSegments(0, 0, 5, 45);
-    for (let i = 0; i < count(g); i++) {
-      const s = seg(g, i);
-      const idx = (s.x1 === s.x2 ? s.x1 : s.y1) / 5;
-      expect(s.major).toBe(idx % GRID_MAJOR_EVERY === 0);
+    const g = gridLines(0, 0, 5, 100);
+    for (const [xy, wantMajor] of [[g.major, true], [g.minor, false]] as const) {
+      for (let i = 0; i < xy.length / 4; i++) {
+        const l = line(xy, i);
+        const idx = (l.x1 === l.x2 ? l.x1 : l.y1) / 5;
+        expect(Math.abs(idx % GRID_MAJOR_EVERY) === 0).toBe(wantMajor);
+      }
     }
   });
 
-  it("keeps the major lines on the origin when the centre moves off it", () => {
-    // The fade centre follows the cursor; the LATTICE must not follow it, or the
-    // bright lines would drift off the round coordinates they are there to mark.
-    const g = gridSegments(123, 77, 5, 45);
-    for (let i = 0; i < count(g); i++) {
-      const s = seg(g, i);
-      const idx = (s.x1 === s.x2 ? s.x1 : s.y1) / 5;
-      expect(s.major).toBe(Math.abs(idx % GRID_MAJOR_EVERY) === 0);
+  it("keeps the major lines on the origin when the view moves off it", () => {
+    const g = gridLines(123, 77, 5, 100);
+    for (let i = 0; i < g.major.length / 4; i++) {
+      const l = line(g.major, i);
+      const idx = (l.x1 === l.x2 ? l.x1 : l.y1) / 5;
+      expect(Math.abs(idx % GRID_MAJOR_EVERY)).toBe(0);
     }
   });
 
-  it("drops what the fade has already extinguished", () => {
-    // This is also what rounds the lattice into a disc instead of a square: the
-    // corners of the bounding box are past the radius, so they never exist.
-    const g = gridSegments(0, 0, 5, 45);
-    for (let i = 0; i < count(g); i++) {
-      const s = seg(g, i);
-      expect(s.s1 + s.s2).toBeGreaterThan(0);
-      expect(Math.max(s.s1, s.s2)).toBeLessThanOrEqual(1);
+  it("puts both ends of every line OUTSIDE what was asked for", () => {
+    // The control on "infinite": the reach is the viewport, so a line that
+    // stopped inside it would be a line whose end you can see. There is no
+    // interior edge to find, in either axis, from any centre.
+    for (const [cx, cy] of [[0, 0], [123, -77], [-4.2, 9.9]] as const) {
+      const g = gridLines(cx, cy, 5, 100);
+      expect(lineCount(g)).toBeGreaterThan(0);
+      for (let i = 0; i < lineCount(g); i++) {
+        const l = line(all(g), i);
+        if (l.x1 === l.x2) {
+          expect(Math.min(l.y1, l.y2)).toBeLessThanOrEqual(cy - 100);
+          expect(Math.max(l.y1, l.y2)).toBeGreaterThanOrEqual(cy + 100);
+        } else {
+          expect(Math.min(l.x1, l.x2)).toBeLessThanOrEqual(cx - 100);
+          expect(Math.max(l.x1, l.x2)).toBeGreaterThanOrEqual(cx + 100);
+        }
+      }
     }
-    // corner of the square that a naive lattice would have drawn
-    const far = Math.hypot(45, 45);
-    expect(gridFalloff(far, 45)).toBe(0);
   });
 
-  it("fades ALONG a line, not just between lines", () => {
-    // Each line is cut at every crossing precisely so its far end can go dark
-    // while its middle stays bright. One segment per line would give the whole
-    // line one shade and a hard border.
-    const g = gridSegments(0, 0, 5, 45);
-    const shades = new Set(g.shade);
-    expect(shades.size).toBeGreaterThan(5);
+  it("covers the square it was asked for in both directions", () => {
+    // The other half of the same promise: not just long lines, but lines on
+    // every lattice multiple across the whole reach.
+    const g = gridLines(0, 0, 5, 100);
+    const vertical = new Set<number>();
+    const horizontal = new Set<number>();
+    for (let i = 0; i < lineCount(g); i++) {
+      const l = line(all(g), i);
+      (l.x1 === l.x2 ? vertical : horizontal).add(l.x1 === l.x2 ? l.x1 : l.y1);
+    }
+    for (const set of [vertical, horizontal]) {
+      expect(Math.min(...set)).toBeLessThanOrEqual(-100);
+      expect(Math.max(...set)).toBeGreaterThanOrEqual(100);
+      expect(set.size).toBe(41); // -100..100 by 5, inclusive
+    }
   });
 
-  it("is centred: the brightest segment sits at the centre", () => {
-    const g = gridSegments(0, 0, 5, 45);
-    let best = -1;
-    let bestD = Infinity;
-    for (let i = 0; i < count(g); i++) {
-      const s = seg(g, i);
-      const d = Math.hypot((s.x1 + s.x2) / 2, (s.y1 + s.y2) / 2);
-      if (d < bestD) { bestD = d; best = i; }
+  it("follows the centre it is given", () => {
+    // The disc it replaced never moved off the sketch origin, so panning away
+    // left you drawing on nothing.
+    const away = gridLines(1000, 1000, 5, 100);
+    expect(away.minor.length + away.major.length).toBeGreaterThan(0);
+    for (let i = 0; i < lineCount(away); i++) {
+      const l = line(all(away), i);
+      const onLattice = l.x1 === l.x2 ? l.x1 : l.y1;
+      expect(Math.abs(onLattice - 1000)).toBeLessThanOrEqual(105);
     }
-    expect(Math.max(seg(g, best).s1, seg(g, best).s2)).toBeCloseTo(1, 1);
   });
 
   it("returns nothing rather than looping forever on bad input", () => {
-    expect(gridSegments(0, 0, 0, 45).major).toHaveLength(0);
-    expect(gridSegments(0, 0, 5, 0).major).toHaveLength(0);
-    expect(gridSegments(NaN, 0, 5, 45).major).toHaveLength(0);
-    expect(gridSegments(0, 0, 1e-6, 1e6).major).toHaveLength(0); // past the cell cap
+    for (const g of [
+      gridLines(0, 0, 0, 100),
+      gridLines(0, 0, 5, 0),
+      gridLines(NaN, 0, 5, 100),
+      gridLines(0, 0, 1e-6, 1e6), // past the per-axis line cap
+    ]) {
+      expect(g.minor).toHaveLength(0);
+      expect(g.major).toHaveLength(0);
+    }
   });
 });

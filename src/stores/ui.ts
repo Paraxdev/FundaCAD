@@ -30,6 +30,13 @@ export const useUiStore = defineStore("ui", () => {
   // --- SOLID / SKETCH context tab ---
   const sketchActive = ref(false);
 
+  // --- what one grid square is worth at the current zoom, in mm ---
+  // The grid rescales as you zoom, which means the lines are a ruler whose
+  // markings keep changing, and a ruler with no number on it is decoration.
+  // Written by the viewport (ground grid) and by sketch mode (sketch lattice,
+  // which is also where the cursor snaps); only one of the two is ever drawn.
+  const gridStepMm = ref(0);
+
   // --- view-control pill labels ---
   // Projection cycles Auto -> Persp -> Ortho; the label is the CURRENT mode.
   const projLabel = ref("Auto");
@@ -43,6 +50,7 @@ export const useUiStore = defineStore("ui", () => {
     docName, dirty,
     canUndo, canRedo,
     sketchActive,
+    gridStepMm,
     projLabel, selMode,
     shortcutHudOpen,
   };

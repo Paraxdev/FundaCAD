@@ -5,6 +5,12 @@
 // back to mm. Angles are always degrees and never converted.
 
 import { readSetting } from "./storedSetting";
+// THE display-precision rule. It lives in ui/measure, next to the parser that
+// reads the numbers back in, and is re-exported here under the name the display
+// side calls it by: almost everything that shows a number already imports from
+// ui/units, and a second import path is how two rules start.
+import { roundForDisplay as displayRound } from "./measure";
+export { displayRound };
 
 export type Unit = "mm" | "cm" | "in";
 
@@ -61,9 +67,13 @@ export function fromDisplay(v: number): number {
 
 /** mm -> rounded display string with the unit suffix (e.g. "40 mm") */
 export function fmtLength(mm: number): string {
-  return `${round(toDisplay(mm))} ${current}`;
+  return `${displayRound(toDisplay(mm))} ${current}`;
 }
 
+/** Quantise for STORAGE: a thousandth, which is `snap()`'s lattice floor and the
+ *  finest a drag can land on (viewport/dragStep.ts). Not the same question as
+ *  how many decimals to SHOW — that one is `displayRound`, and mixing them is
+ *  how a panel ends up reading 24.098723. */
 export function round(v: number): number {
   return Math.round(v * 1000) / 1000;
 }
@@ -93,7 +103,7 @@ import { tryParseMeasure, unitById } from "./measure";
 
 /** numeric value to show in a field: angles stay in degrees, lengths convert */
 export function displayValue(mm: number, kind: FieldKind = "length"): number {
-  return kind === "length" ? round(toDisplay(mm)) : round(mm); // angle/count: raw
+  return kind === "length" ? displayRound(toDisplay(mm)) : displayRound(mm); // angle/count: raw
 }
 
 /** Parse a typed field back to mm (length) or degrees (angle); null if invalid.

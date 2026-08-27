@@ -48,7 +48,7 @@ import { ConstraintTools, CONSTRAINT_TOOLS, type ConstraintHost } from "./constr
 import { PatternFlow, PATTERN_TOOLS, ENTITY_PATTERNS, type PatternHost } from "./patternFlow";
 import { ProjectPanel } from "./projectPanel";
 import { sketchEscapeAction } from "./escapeLayers";
-import { SketchPlaneGrid, snapLatticeStep } from "./planeGrid";
+import { gridReach, gridStep, SketchPlaneGrid, snapLatticeStep } from "./planeGrid";
 import { inferLineDirection } from "./inferLine";
 import { sketchLockHolds, viewSquareToPlane } from "./sketchView";
 
@@ -267,7 +267,11 @@ export class SketchMode {
   /** Where the grid's fade is centred, in sketch mm — the cursor, so the lattice
    *  is densest under the point you are about to place, and the sketch origin
    *  before the pointer has moved. */
+  /** Scratch for the lattice centre and the camera target it comes from, so the
+   *  per-frame grid update allocates nothing. Written by updateGrid(); read by
+   *  nobody else. */
   private gridFocus = new THREE.Vector2();
+  private gridTarget = new THREE.Vector3();
   // Sketch Palette options
   private gridVisible = true;
   private gridSnap = true;
@@ -439,7 +443,7 @@ export class SketchMode {
     this.entryScale = null; // re-baselined on the first tick, once the camera lands
     this.lockReleased = false;
     this.releaseAnnounced = false;
-    this.gridFocus.set(0, 0); // the sketch origin, until the pointer says otherwise
+    this.gridFocus.set(0, 0); // scratch; updateGrid() writes the camera target into it
     this.addGrid();
     if (!this.raf) this.raf = requestAnimationFrame(this.boundTick);
 
@@ -735,15 +739,30 @@ export class SketchMode {
   }
 
   private updateGrid() {
+    const mmPerPx = this.viewport.pixelWorldSize(this.plane.origin);
+    // The DRAWN spacing, and reported whether or not it is actually painted: the
+    // readout names the grid, so it has to say what a square of it is worth, and
+    // it is worth that with the grid switched off too. Not snapLatticeStep,
+    // which is the same number until it hits MIN_SNAP_STEP and then stops — past
+    // that the cursor is coarser than the lines, and reporting the cursor's
+    // figure would put a number on screen that no square on it measures.
+    this.viewport.reportGridStep(gridStep(mmPerPx, 0));
     const grid = this.grid;
     if (!grid || !this.gridVisible) return;
+    // The lattice is built around what the camera is LOOKING AT, dropped onto
+    // the sketch plane. It used to be built around the sketch origin, which is
+    // where a fading disc has to sit if it is only nine cells wide; the grid now
+    // reaches past the viewport in every direction, so it has to follow the pan
+    // or you would draw your way off the end of it.
+    const focus = this.plane.to2D(this.viewport.cameraTarget(this.gridTarget), this.gridFocus);
     // Floored at the snap step so every drawn line is a line the cursor catches
     // on; free to go finer when snapping is off (see planeGrid.gridStep).
     const rebuilt = grid.update(
       this.plane,
-      this.gridFocus.x,
-      this.gridFocus.y,
-      this.viewport.pixelWorldSize(this.plane.origin),
+      focus.x,
+      focus.y,
+      mmPerPx,
+      gridReach(mmPerPx, this.viewport.viewDiagonalPx()),
       0, // no floor: the snap lattice follows the drawn one now, not the reverse
     );
     if (rebuilt) this.viewport.requestRender();

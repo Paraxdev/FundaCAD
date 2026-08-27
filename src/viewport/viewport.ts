@@ -2757,6 +2757,36 @@ export class Viewport {
     return (2 * Math.tan((pc.fov * Math.PI) / 180 / 2) * dist) / rect.height;
   }
 
+  /** Notified when the spacing of the grid on screen changes, in mm. The
+   *  viewport does not know what shows it; the shell hangs a readout off this.
+   *  Fires only on a real change, so it is safe to call every frame. */
+  onGridStep: ((mm: number) => void) | null = null;
+  private gridStepMm = 0;
+
+  /** Say what one grid cell is worth right now. Called by the render loop with
+   *  the ground grid's spacing and by SketchMode with the sketch plane lattice's
+   *  — only one of the two is ever on screen, and in a sketch it is also where
+   *  the cursor snaps, so it is the number worth reporting either way. */
+  reportGridStep(mm: number) {
+    if (!(mm > 0) || mm === this.gridStepMm) return;
+    this.gridStepMm = mm;
+    this.onGridStep?.(mm);
+  }
+
+  /** The viewport's diagonal in CSS pixels: the span anything that has to cover
+   *  the whole view, corner to corner, is measured against. In the same units
+   *  pixelWorldSize() answers in, so the two multiply. */
+  viewDiagonalPx(): number {
+    const rect = this.canvas.getBoundingClientRect();
+    return Math.hypot(Math.max(1, rect.width), Math.max(1, rect.height));
+  }
+
+  /** Where the camera is pointed, in world space — the centre of what is on
+   *  screen, and so the centre anything view-sized should be built around. */
+  cameraTarget(out = new THREE.Vector3()): THREE.Vector3 {
+    return this.rig.controls.getTarget(out);
+  }
+
   /** A clean drag snap step (nice 1/2/5 mm) for the current zoom at a world
    *  point, so manipulator values read 5/1/0.5/0.1 mm, not 0.3425. `fine` is the
    *  Shift modifier. See viewport/dragStep.ts for how the number is chosen. */
@@ -2837,7 +2867,10 @@ export class Viewport {
       if (moved || this.needsRender || this.lingerFrames > 0) {
         // keep the ground grid spacing/extent matched to the current zoom + pan
         const t = this.rig.controls.getTarget(this.scratchTarget);
-        this.scene.grid.update(t.x, t.y, this.pixelWorldSize(t), this.targetGridZ);
+        this.scene.grid.update(t.x, t.y, this.pixelWorldSize(t), this.viewDiagonalPx(), this.targetGridZ);
+        // Only while the ground grid is the one being drawn: inside a sketch it
+        // is hidden and SketchMode reports the plane lattice instead.
+        if (this.scene.grid.group.visible) this.reportGridStep(this.scene.grid.step);
         // ...and the origin arrows to a constant size on screen. Measured AT THE
         // ORIGIN rather than at the camera target, because that is where they
         // are drawn and a perspective pixel is a different size at each depth.

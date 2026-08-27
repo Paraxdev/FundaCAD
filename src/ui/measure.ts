@@ -303,11 +303,36 @@ export function measureError(raw: string, displayUnit: UnitDef | null, params: R
 
 // --- showing one back --------------------------------------------------------
 
-/** Round for display without turning 0.30000000000000004 into a decision the
- *  user has to read. Six places is past any tolerance the kernel works to and
- *  short of where doubles start lying. */
+/** How many decimals a value is worth SHOWING at, and the one thing that earns
+ *  more of them.
+ *
+ *  It used to be six, on the reasoning that six is past any tolerance the kernel
+ *  works to and short of where doubles start lying. Both halves are true and the
+ *  conclusion was still wrong: a field reading `24.098723` is not more precise
+ *  than one reading `24.1`, it is less legible, and the four digits nobody asked
+ *  for are the solver's arithmetic, not a decision anyone made.
+ *
+ *  So two places, and the exception that makes two places safe: a value that is
+ *  ALREADY a three-decimal number is left alone. That is the signature of a
+ *  number somebody chose — typed into a field, or landed on by a drag, which
+ *  quantises to a nice 1/2/5 step (viewport/dragStep.ts) and so never arrives at
+ *  1.375 by accident. Blunting those to 1.38 would be destroying information;
+ *  blunting 24.098723 is discarding noise. Within float fuzz, because the length
+ *  a sketch reports is usually a SUBTRACTION of two chosen numbers and
+ *  10.123 - 3.377 does not land on 6.746 exactly.
+ *
+ *  Under 1mm two places is no longer rounding but erasure — 0.0523 would come
+ *  back as 0.05 and 0.0012 as nothing at all — so below there the rule switches
+ *  to three significant digits, still stopping at six places. */
 export function roundForDisplay(v: number): number {
-  return Math.round(v * 1e6) / 1e6;
+  if (!Number.isFinite(v)) return v;
+  const chosen = Math.round(v * 1e3) / 1e3;
+  if (Math.abs(v - chosen) <= 1e-9 * Math.max(1, Math.abs(v))) return chosen;
+  const a = Math.abs(v);
+  if (a >= 1) return Math.round(v * 100) / 100;
+  const dp = Math.min(6, 2 + Math.ceil(-Math.log10(a)));
+  const f = Math.pow(10, dp);
+  return Math.round(v * f) / f;
 }
 
 /** Canonical value → the number to put in a field showing `unit`. */

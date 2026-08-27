@@ -16,6 +16,38 @@ export interface SceneBundle {
   triad: OriginTriad;
 }
 
+/** How many minor cells the ground grid spans, for a viewport `diagonalPx`
+ *  across at `worldPerPixel` and `cell` mm per cell.
+ *
+ *  It was a flat 100. A constant cannot be right here, because the thing it has
+ *  to cover is measured in pixels and the cell is too: a hundred 64px cells is
+ *  6400px of grid, which is five screens on a laptop and barely two on a wide
+ *  monitor. The same build ran out at one size and paid for lattice nobody could
+ *  see at the other. Sized from the view it cannot do either.
+ *
+ *  Rounded up to a whole number of MAJOR cells, because the two GridHelpers are
+ *  built from the same span and the major one divides it by five. */
+export function groundGridCells(worldPerPixel: number, diagonalPx: number, cell: number): number {
+  const want = worldPerPixel * diagonalPx * GROUND_COVER / cell;
+  const cells = Number.isFinite(want) && want > 0 ? Math.ceil(want) : MIN_GROUND_CELLS;
+  const clamped = Math.min(Math.max(cells, MIN_GROUND_CELLS), MAX_GROUND_CELLS);
+  return Math.ceil(clamped / 5) * 5;
+}
+
+/** Diagonals of the viewport the ground grid runs, either side of the view
+ *  centre. Six diagonals across is well past what a flat-on view can show, which
+ *  is the margin the grazing views need: a ground plane is usually looked at
+ *  from a low angle, and there the far half of it is compressed into the top of
+ *  the frame and a lattice that stops has its edge drawn right across the view.
+ *
+ *  Deliberately more generous than the sketch plane's (planeGrid.GRID_COVER),
+ *  which is looked at square on and has nowhere to run to. */
+const GROUND_COVER = 3;
+/** Never fewer than this, so a degenerate scale still leaves a grid to orient
+ *  by, and never more, so one cannot cost a frame. */
+const MIN_GROUND_CELLS = 40;
+const MAX_GROUND_CELLS = 600;
+
 /** A ground grid (XY plane) whose spacing snaps to nice 1/2/5×10ⁿ mm values and
  *  rescales with zoom, recentred on the camera target so it always fills the view
  *  with round-number lines. Two layers: dim minor + brighter major (every 5th). */
@@ -31,24 +63,26 @@ export class AdaptiveGrid {
   }
 
   /** worldPerPixel = world mm covered by one screen pixel at the target.
-   *  gridZ = the height the grid sits at (the model's floor, or 0 when empty). */
-  update(targetX: number, targetY: number, worldPerPixel: number, gridZ = 0) {
+   *  diagonalPx = the viewport's own diagonal, which is what decides how far the
+   *  lattice has to run. gridZ = the height the grid sits at (the model's floor,
+   *  or 0 when empty). */
+  update(targetX: number, targetY: number, worldPerPixel: number, diagonalPx: number, gridZ = 0) {
     this.group.position.z = gridZ; // track the model floor every frame, even if x/y/cell are cached
     const cell = niceStep(worldPerPixel * 64); // ~64px minor cells
     const majorCell = cell * 5;
     const cx = Math.round(targetX / majorCell) * majorCell;
     const cy = Math.round(targetY / majorCell) * majorCell;
-    const k = `${cell}:${cx}:${cy}`;
+    const cells = groundGridCells(worldPerPixel, diagonalPx, cell);
+    const k = `${cell}:${cx}:${cy}:${cells}`;
     if (k === this.key) return;
     this.key = k;
     this.step = cell;
-    this.rebuild(cell);
+    this.rebuild(cell, cells);
     this.group.position.set(cx, cy, gridZ);
   }
 
-  private rebuild(cell: number) {
+  private rebuild(cell: number, cells: number) {
     this.dispose();
-    const cells = 100; // extent = cell*100 (covers several screens)
     // center-line color == grid color so GridHelper draws no misplaced axes
     // (the world AxesHelper shows the real origin axes).
     this.minor = new THREE.GridHelper(cell * cells, cells, 0x23272e, 0x23272e);

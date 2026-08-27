@@ -10,7 +10,7 @@ import { useEngine } from "../../app/engineKey";
 import { useDocValue } from "../../app/useDoc";
 import { usePanelsStore } from "../../stores/panels";
 import { featureMeta } from "../../ui/featureMeta";
-import { getUnit, toDisplay, round } from "../../ui/units";
+import { getUnit, toDisplay, displayRound } from "../../ui/units";
 import FloatingPanel from "./FloatingPanel.vue";
 import ValidatedInput from "../shell/ValidatedInput.vue";
 import type { CadDocument, ParamDef, ParamTarget, ParamUnit } from "../../types";
@@ -46,9 +46,9 @@ const userRows = computed(() => rows.value.filter((r) => !r.def.target));
 const modelRows = computed(() => rows.value.filter((r) => r.def.target));
 
 function formatValue(def: ParamDef): string {
-  if (def.unit === "mm") return `${round(toDisplay(def.value))} ${getUnit()}`;
-  if (def.unit === "deg") return `${round(def.value)}°`;
-  return String(round(def.value));
+  if (def.unit === "mm") return `${displayRound(toDisplay(def.value))} ${getUnit()}`;
+  if (def.unit === "deg") return `${displayRound(def.value)}°`;
+  return String(displayRound(def.value));
 }
 
 /** Human label for what a model parameter drives. */

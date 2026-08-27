@@ -1,8 +1,8 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect } from "vitest";
 import * as THREE from "three";
 import {
-  constraintDims, dimensionSegments, entityDims, lineOperand, lineRimPoints,
-  staggeredDefaults,
+  constraintDims, dimensionSegments, diameterDim, entityDims, linearDim, lineOperand, lineRimPoints,
+  setDimPixelScale, staggeredDefaults,
   pointRimPoints, rimGap, rimGapPoints, rimNesting,
 } from "../../src/sketch/entityDims";
 import type { ResolvedEntity } from "../../src/sketch/snap";
@@ -466,5 +466,95 @@ describe("constraint dim placement", () => {
     const a: ResolvedEntity = { type: "arc", id: "a", x1: 8, y1: 0, x2: -8, y2: 0, mx: 0, my: 8 };
     const [d] = constraintDims([a], [{ type: "diameter", circle: "a", value: 16 }]);
     expect(d!.place).toBeUndefined();
+  });
+});
+
+describe("dimension furniture at a scale", () => {
+  // A dimension's stand-off and its arrowheads used to be world millimetres with
+  // a floor: at least 3mm of stand-off, at least a 1.4mm arrowhead. On a 0.2mm
+  // slot that is a full-size annotation wrapped around a speck, with the two
+  // arrowheads meeting somewhere past the extension lines.
+
+  const V = (x: number, y: number) => new THREE.Vector2(x, y);
+  const UP = V(0, 1);
+  /** The longest of the five polylines linearDim draws, which is always the
+   *  dimension line itself, and the arrowheads that sit on its ends. */
+  const parts = (a: THREE.Vector2, b: THREE.Vector2) => {
+    const d = linearDim(a, b, UP, a.distanceTo(b));
+    const len = (l: [THREE.Vector2, THREE.Vector2]) => l[0].distanceTo(l[1]);
+    return {
+      standOff: len(d.lines[0]!),
+      dimLine: len(d.lines[2]!),
+      // An arrowhead is drawn as two barbs from the tip; the head's LENGTH is
+      // the barb projected back along the line.
+      arrow: Math.abs(d.lines[3]![1].x - d.lines[3]![0].x),
+    };
+  };
+
+  afterEach(() => setDimPixelScale(0));
+
+  it("keeps the furniture a constant size on screen", () => {
+    // The property the pixel floors were reaching for and missed: the same
+    // dimension, seen at the same zoom, is drawn the same whatever it measures.
+    setDimPixelScale(0.01); // 0.01 mm per pixel
+    const small = parts(V(0, 0), V(2, 0));
+    const large = parts(V(0, 0), V(200, 0));
+    expect(small.standOff).toBeCloseTo(large.standOff, 9);
+    expect(small.arrow).toBeCloseTo(large.arrow, 9);
+  });
+
+  it("scales with the zoom, so it is constant in PIXELS and not in mm", () => {
+    setDimPixelScale(0.01);
+    const near = parts(V(0, 0), V(20, 0));
+    setDimPixelScale(0.02);
+    const far = parts(V(0, 0), V(20, 0));
+    expect(far.standOff / near.standOff).toBeCloseTo(2, 6);
+    expect(far.arrow / near.arrow).toBeCloseTo(2, 6);
+  });
+
+  it("does not wrap a 0.2mm feature in a 3mm annotation", () => {
+    // The reported defect, as a number. At a zoom where 0.2mm is a readable
+    // 30px, the old floors gave a 3mm stand-off (fifteen times the feature) and
+    // a 1.4mm arrowhead (seven times it).
+    setDimPixelScale(0.2 / 30);
+    const d = parts(V(0, 0), V(0.2, 0));
+    expect(d.standOff).toBeLessThan(0.2);
+    expect(d.arrow).toBeLessThan(0.2);
+  });
+
+  it("never lets two arrowheads eat their own dimension line", () => {
+    // Zoomed out far enough that a 7px arrowhead is longer than what it points
+    // at. Something has to give, and it is the arrowhead.
+    setDimPixelScale(1);
+    for (const span of [0.2, 1, 3, 7, 40]) {
+      const d = parts(V(0, 0), V(span, 0));
+      expect(d.arrow * 2, `span ${span}`).toBeLessThan(d.dimLine);
+    }
+  });
+
+  it("shortens the arrowhead only when the span is the smaller number", () => {
+    setDimPixelScale(0.05); // a 7px head is 0.35mm
+    const roomy = parts(V(0, 0), V(50, 0));
+    const tight = parts(V(0, 0), V(0.6, 0));
+    expect(roomy.arrow).toBeCloseTo(0.35, 6);
+    expect(tight.arrow).toBeLessThan(roomy.arrow);
+    expect(tight.arrow).toBeCloseTo(0.6 * 0.3, 6);
+  });
+
+  it("holds a diameter's two heads inside the diameter", () => {
+    setDimPixelScale(1); // a 7px head against a 1mm circle
+    const d = diameterDim(0, 0, 0.5, null);
+    const barb = d.lines[1]!;
+    expect(Math.abs(barb[1].x - barb[0].x) * 2).toBeLessThan(1);
+  });
+
+  it("still draws something when nothing has said what the zoom is", () => {
+    // The value rows call in here and never render a line, so mmPerPx is 0 for
+    // them. That must not collapse the geometry to a point.
+    setDimPixelScale(0);
+    const d = parts(V(0, 0), V(20, 0));
+    expect(d.standOff).toBeGreaterThan(0);
+    expect(d.arrow).toBeGreaterThan(0);
+    expect(d.arrow * 2).toBeLessThan(d.dimLine);
   });
 });

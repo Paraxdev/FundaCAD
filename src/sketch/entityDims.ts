@@ -44,8 +44,47 @@ export function setDimPixelScale(scale: number) {
 }
 const LABEL_CLEAR_PX = 18; // ≳ the rendered badge height
 
+// The rest of a dimension's FURNITURE — how far the dimension line stands off,
+// how long an arrowhead is — is also a screen quantity, and used not to be.
+//
+// It was written in millimetres with a floor: a 3mm minimum stand-off and a
+// 1.4mm minimum arrowhead. On anything hand-sized those read fine. On a 0.2mm
+// slot they are the drawing: the stand-off is fifteen times the feature, the two
+// arrowheads are seven times it each and meet somewhere past the extension
+// lines, and what you see is a huge annotation with a speck in the middle of it.
+// The floors were there for the opposite case — a dimension whose furniture had
+// shrunk to nothing — so both ends of the problem are the same missing idea,
+// which is that furniture is drawn for the EYE and the eye reads pixels.
+//
+// So both are constants on screen. A dimension then looks the same at every
+// zoom, which is the point of it, and the only thing left that can vary with the
+// model is the one bound below that stops an arrowhead eating its own line.
+const OFFSET_PX = 20; // stand-off of the dimension line from what it measures
+const ARROW_PX = 7; // arrowhead length
+/** No arrowhead may take more than this share of the span it points along.
+ *  Two of them plus a readable stub of dimension line is the whole budget, and
+ *  past about a third each they meet in the middle and there is no line left. */
+const ARROW_SHARE = 0.3;
+
+/** `n` screen pixels in sketch mm, or `fallback` when nothing has told us the
+ *  scale — the value rows call into here too and never draw a line. */
+function px(n: number, fallback: number): number {
+  return mmPerPx > 0 ? n * mmPerPx : fallback;
+}
+
 function dimOffset(worldOff: number): number {
   return Math.max(worldOff, LABEL_CLEAR_PX * mmPerPx);
+}
+
+/** Where a dimension line sits when the user has not placed it. */
+function defaultOffset(value: number): number {
+  return px(OFFSET_PX, clamp(value * 0.16, 3, 12));
+}
+
+/** Arrowhead length for a dimension spanning `span` mm: a constant on screen,
+ *  shortened when the span itself is the smaller number. */
+function arrowSize(span: number): number {
+  return Math.min(px(ARROW_PX, clamp(span * 0.08, 1.4, 4)), Math.max(span, 0) * ARROW_SHARE);
 }
 
 /** arrowhead (a small "V") at `tip`, opening back along `dir` */
@@ -68,12 +107,15 @@ function arrow(tip: V, dir: V, size: number): [V, V][] {
 export function linearDim(
   a: V, b: V, offDir: V, value: number, offOverride?: number,
 ): { labelPos: V; lines: [V, V][]; place: V } {
-  const off = dimOffset(offOverride === undefined ? clamp(value * 0.16, 3, 12) : Math.abs(offOverride));
+  const off = dimOffset(offOverride === undefined ? defaultOffset(value) : Math.abs(offOverride));
   const dirOff = offOverride !== undefined && offOverride < 0 ? offDir.clone().negate() : offDir;
   const da = a.clone().add(dirOff.clone().multiplyScalar(off));
   const db = b.clone().add(dirOff.clone().multiplyScalar(off));
   const dir = db.clone().sub(da).normalize();
-  const aSize = clamp(value * 0.08, 1.4, 4);
+  // Measured along the DIMENSION LINE, not from `value`: an angled dimension of
+  // an angled segment reads its length off the projection, and it is the drawn
+  // line the arrowheads have to fit inside.
+  const aSize = arrowSize(da.distanceTo(db));
   const lines: [V, V][] = [
     [a.clone(), da.clone()], // extension lines
     [b.clone(), db.clone()],
@@ -120,11 +162,11 @@ export function diameterDim(
 ): { labelPos: V; lines: [V, V][]; place: V } {
   const c = v(cx, cy);
   const len = place ? place.length() : 0;
-  const off = place && len > 1e-9 ? place.clone() : v(0, dimOffset(clamp(r * 0.25, 2, 6)));
+  const off = place && len > 1e-9 ? place.clone() : v(0, dimOffset(px(OFFSET_PX, clamp(r * 0.25, 2, 6))));
   // unplaced: the chord stays horizontal (the label floats above it); placed:
   // the chord follows the placement direction
   const u = place && len > 1e-9 ? off.clone().divideScalar(len) : v(1, 0);
-  const aSize = clamp(r * 0.16, 1.4, 4);
+  const aSize = arrowSize(2 * r); // the two heads share the diameter between them
   const tail = c.clone().addScaledVector(u, -r);
   const tip = c.clone().addScaledVector(u, r);
   // leader: when the label sits outside the rim, run the line out to it

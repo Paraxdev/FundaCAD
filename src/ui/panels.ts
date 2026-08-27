@@ -10,7 +10,7 @@
 import type { DocumentStore } from "../document/store";
 import type { Viewport } from "../viewport/viewport";
 import type { GeometryBackend } from "../geometry/client";
-import { getUnit, toDisplay, round } from "./units";
+import { getUnit, toDisplay, displayRound } from "./units";
 import { usePanelsStore, type PanelRow, type ClashRow } from "../stores/panels";
 
 export interface PanelsDeps {
@@ -38,19 +38,19 @@ export function createPanels(deps: PanelsDeps) {
     const f = toDisplay(1);
     const cm3 = p.volume / 1000; // mm³ → cm³ (mass at 1 g/cm³ baseline)
     const rows: PanelRow[] = [
-      { k: "Volume", v: `${round(p.volume * f * f * f)} ${unit}³` },
-      { k: "Surface area", v: `${round(p.area * f * f)} ${unit}²` },
-      { k: "Mass (≈1 g/cm³)", v: `${round(cm3)} g` },
+      { k: "Volume", v: `${displayRound(p.volume * f * f * f)} ${unit}³` },
+      { k: "Surface area", v: `${displayRound(p.area * f * f)} ${unit}²` },
+      { k: "Mass (≈1 g/cm³)", v: `${displayRound(cm3)} g` },
       {
         k: "Center of mass",
-        v: `${round(toDisplay(p.com.x))}, ${round(toDisplay(p.com.y))}, ${round(toDisplay(p.com.z))}`,
+        v: `${displayRound(toDisplay(p.com.x))}, ${displayRound(toDisplay(p.com.y))}, ${displayRound(toDisplay(p.com.z))}`,
       },
       {
         k: "Bounding box",
         v:
-          `${round(toDisplay(p.bbox.max.x - p.bbox.min.x))} × ` +
-          `${round(toDisplay(p.bbox.max.y - p.bbox.min.y))} × ` +
-          `${round(toDisplay(p.bbox.max.z - p.bbox.min.z))} ${unit}`,
+          `${displayRound(toDisplay(p.bbox.max.x - p.bbox.min.x))} × ` +
+          `${displayRound(toDisplay(p.bbox.max.y - p.bbox.min.y))} × ` +
+          `${displayRound(toDisplay(p.bbox.max.z - p.bbox.min.z))} ${unit}`,
       },
     ];
     panels.showProperties({
@@ -84,7 +84,7 @@ export function createPanels(deps: PanelsDeps) {
     const f = toDisplay(1);
     const clashes: ClashRow[] = pairs.map((p) => ({
       k: `${p.aName} ∩ ${p.bName}`,
-      v: `${round(p.volume * f * f * f)} ${unit}³`,
+      v: `${displayRound(p.volume * f * f * f)} ${unit}³`,
       a: p.a,
       b: p.b,
     }));
