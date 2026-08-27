@@ -27,17 +27,22 @@ from OCP.BRepAdaptor import BRepAdaptor_Curve
 from OCP.BRepCheck import BRepCheck_Analyzer
 from OCP.BRepFilletAPI import BRepFilletAPI_MakeFillet
 from OCP.BRepMesh import BRepMesh_IncrementalMesh
-from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeCylinder
+from OCP.BRepBuilderAPI import (BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace,
+                                BRepBuilderAPI_MakeWire)
+from OCP.BRepPrimAPI import (BRepPrimAPI_MakeBox, BRepPrimAPI_MakeCylinder,
+                             BRepPrimAPI_MakePrism)
+from OCP.GC import GC_MakeArcOfCircle
+from OCP.GeomConvert import GeomConvert
 from OCP.BRepTools import BRepTools
 from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE, TopAbs_REVERSED, TopAbs_VERTEX
 from OCP.TopExp import TopExp
 from OCP.TopLoc import TopLoc_Location
 from OCP.TopoDS import TopoDS
-from OCP.gp import gp_Pnt
+from OCP.gp import gp_Pnt, gp_Vec
 from OCP.TopTools import TopTools_IndexedDataMapOfShapeListOfShape
 
 from conic_blend import (
-    PROFILE_LIMIT, _sub, clamp_profile, conic_blend, weight_scale,
+    PROFILE_LIMIT, _blend_faces, _sub, clamp_profile, conic_blend, weight_scale,
 )
 
 
@@ -149,6 +154,65 @@ def cube_top():
             top.append(edge)
     assert len(top) == 4, f"expected 4 top edges, found {len(top)}"
     return b, top
+
+
+SLOT_W = 5.0
+SLOT_HALF = 8.0
+SLOT_H = 10.0
+SLOT_R = 2.0
+
+
+def slot_rim():
+    """A slot-shaped prism and one straight edge of its top rim.
+
+    The rim is a tangent chain — two straight runs closed by two round ends —
+    so blending any one of its edges blends the whole loop, and the blends meet
+    at seams that are a whole SECTION on both sides. Ordinary geometry: it is
+    what a slot extrudes to.
+
+    The one deliberate arrangement is that the ends are handed over as BSPLINE
+    curves rather than circles, geometry unchanged. That is what decides which
+    kind of surface OCCT gives each blend, and with it the case this exercises:
+    a plain cylinder along the straight run meeting a BSpline around the end.
+    Both are the same quarter-circle section, and only the cylinder's has to be
+    converted to poles to be reweighted — which reparameterises it, so the two
+    faces reach the same point of their shared section at different parameters.
+    """
+    a = gp_Pnt(-SLOT_HALF, -SLOT_W, 0)
+    b = gp_Pnt(SLOT_HALF, -SLOT_W, 0)
+    c = gp_Pnt(SLOT_HALF, SLOT_W, 0)
+    d = gp_Pnt(-SLOT_HALF, SLOT_W, 0)
+
+    def end(p, mid, q):
+        return BRepBuilderAPI_MakeEdge(GeomConvert.CurveToBSplineCurve_s(
+            GC_MakeArcOfCircle(p, mid, q).Value())).Edge()
+
+    w = BRepBuilderAPI_MakeWire(BRepBuilderAPI_MakeEdge(a, b).Edge(),
+                                end(b, gp_Pnt(SLOT_HALF + SLOT_W, 0, 0), c),
+                                BRepBuilderAPI_MakeEdge(c, d).Edge())
+    w.Add(end(d, gp_Pnt(-SLOT_HALF - SLOT_W, 0, 0), a))
+    solid = BRepPrimAPI_MakePrism(
+        BRepBuilderAPI_MakeFace(w.Wire()).Face(), gp_Vec(0, 0, SLOT_H)).Shape()
+    for e in _sub(solid, TopAbs_EDGE):
+        edge = TopoDS.Edge_s(e)
+        ends = [BRep_Tool.Pnt_s(v) for v in (TopExp.FirstVertex_s(edge),
+                                             TopExp.LastVertex_s(edge))]
+        if (all(abs(p.Z() - SLOT_H) < 1e-9 for p in ends)
+                and abs(ends[0].Y() - ends[1].Y()) < 1e-9):
+            return solid, edge
+    raise AssertionError("no straight top-rim edge on the slot prism")
+
+
+def blend_surface_kinds(solid, edges, radius):
+    """What OCCT built each blend face on, by class name."""
+    mk = BRepFilletAPI_MakeFillet(solid)
+    for e in edges:
+        mk.Add(radius, e)
+    mk.Build()
+    assert mk.IsDone(), "the plain fillet this rests on did not build"
+    return [BRep_Tool.Surface_s(f).DynamicType().Name()
+            for f in _blend_faces(solid, mk, mk.Shape())]
+
 
 
 def max_edge_tolerance(shape):
@@ -515,12 +579,68 @@ def test_a_refused_profile_does_not_read_as_a_failed_fillet():
     print("conic refusal keeps its own message OK")
 
 
+def test_a_tangent_chain_of_two_kinds_of_blend():
+    """A slot's rim, where a cylinder blend and a BSpline blend meet.
+
+    Field report: a fillet that builds perfectly at profile 0 is refused the
+    moment a profile is put on it, saying the two blends at that corner "lie in
+    the same plane". They do — because they are the same SECTION, seen from both
+    sides, which is the one case that needs no re-solving at all.
+
+    What sent it there is that the two faces no longer answer to the same
+    parameter. Only the analytic one has to be converted to poles to be
+    reweighted, and no rational quadratic carries a cylinder's angle
+    parameterisation, so the conversion moves the point at a given (u, v). The
+    two sides then measure 0.02mm apart on a 1.3mm blend while describing the
+    very same arc, and a plain tangent seam is taken for a mitre.
+
+    CONTROLS:
+      * the blend really is of two kinds. If OCCT ever builds both the same way
+        the case has evaporated, and this test has to say so rather than pass.
+      * the tolerance sleeve is measured, not assumed. The seam's 3D curve is
+        rebuilt from one side and SameParameter reconciles the other; that is
+        only sound because the two sides describe the same curve, and a sleeve
+        that had blown out to the 0.02mm above is exactly what it would look
+        like if they did not.
+      * profile 0 still reproduces the plain fillet here, and removal stays
+        monotone, so "it builds" cannot pass for "it builds the right thing".
+    """
+    solid, edge = slot_rim()
+    kinds = blend_surface_kinds(solid, [edge], SLOT_R)
+    assert len(kinds) == 4, f"expected the whole rim to blend, got {kinds}"
+    assert any(k == "Geom_BSplineSurface" for k in kinds), kinds
+    assert any(k != "Geom_BSplineSurface" for k in kinds), (
+        f"no analytic blend face here, so nothing is being tested: {kinds}")
+
+    plain = conic_blend(solid, [edge], SLOT_R, 0.0)
+    base, flat = mesh_volume(solid), mesh_volume(plain)
+    assert base - flat > 0, "the plain fillet removed nothing"
+    sleeve = max_edge_tolerance(plain)
+
+    prev = None
+    for p in (-0.9, -0.5, 0.0, 0.5, 0.9):
+        out = conic_blend(solid, [edge], SLOT_R, p)
+        assert BRepCheck_Analyzer(out).IsValid(), f"invalid at profile {p}"
+        tol = max_edge_tolerance(out)
+        assert tol < max(sleeve, 1e-5) * 10, (
+            f"profile {p} widened the tolerance sleeve to {tol:.3g}mm, which is "
+            "the mesher being given room to wander")
+        removed = base - mesh_volume(out)
+        assert removed > -1e-6, f"negative removal at profile {p}"
+        if prev is not None:
+            assert removed < prev + 1e-3, f"not monotone at profile {p}"
+        prev = removed
+    print(f"slot rim (cylinder blend meets BSpline blend) OK: {kinds.count('Geom_BSplineSurface')}"
+          f" of 4 faces BSpline, sleeve {sleeve:.2g}mm")
+
+
 if __name__ == "__main__":
     test_weight_scale_anchors()
     test_zero_profile_is_the_plain_fillet()
     test_extremes_reach_chamfer_and_sharp()
     test_valid_and_monotone_across_the_range()
     test_a_mitred_corner_keeps_its_seam()
+    test_a_tangent_chain_of_two_kinds_of_blend()
     test_the_slider_stops_where_the_mesh_still_holds()
     test_rebuilds_through_a_real_document()
     test_a_refused_profile_does_not_read_as_a_failed_fillet()

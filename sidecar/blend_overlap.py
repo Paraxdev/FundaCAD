@@ -20,8 +20,10 @@ where it ran, so surface doubled among its own new faces is that blend's doing
 and nobody else's, which settles attribution without any comparison to what came
 before. They are tessellated and each triangle asked whether its centre lies
 within a micron of a triangle of another of them, pointing the same way (or
-exactly opposite, which contests the depth buffer just as hard). The area that
-does is the answer.
+exactly opposite, which contests the depth buffer just as hard), AND whether the
+face it is accused of really is that near — a chord may sit as far from its own
+surface as the deflection, and beyond that a crossing is news about the mesh
+rather than about the model. The area that does is the answer.
 
 WHY THE DISTANCE IS TO THE TRIANGLE AND NOT TO ITS PLANE. Every fillet on a
 model ends in a tangent junction, where two faces lie in each other's planes
@@ -43,7 +45,8 @@ screen: it costs about ten milliseconds on the faces one blend makes.
 """
 
 from OCP.BRep import BRep_Builder, BRep_Tool
-from OCP.BRepBuilderAPI import BRepBuilderAPI_Copy
+from OCP.BRepBuilderAPI import BRepBuilderAPI_Copy, BRepBuilderAPI_MakeVertex
+from OCP.BRepExtrema import BRepExtrema_DistShapeShape
 from OCP.BRepMesh import BRepMesh_IncrementalMesh
 from OCP.BRepTools import BRepTools
 from OCP.TopAbs import TopAbs_FACE
@@ -51,6 +54,7 @@ from OCP.TopExp import TopExp_Explorer
 from OCP.TopLoc import TopLoc_Location
 from OCP.TopoDS import TopoDS, TopoDS_Compound
 from OCP.TopTools import TopTools_MapOfShape
+from OCP.gp import gp_Pnt
 
 # How close two pieces of surface have to be before a depth buffer stops telling
 # them apart. A micron is what it resolves at an ordinary camera distance with
@@ -102,7 +106,11 @@ def new_faces(before, after):
     between the two shapes, so IsSame separates what the operation made from
     what it merely carried through. A conic blend rebuilds more of the solid
     than a plain one does and so reports more new faces, which costs a little
-    more to check and is not wrong."""
+    more to check and is not wrong.
+
+    Re-trimmed faces belong here as much as brand-new ones do. The reported fold
+    is a new blend lying on the TORUS of an older one, which the new blend only
+    re-trimmed — drop those and the guard has nothing left to catch."""
     old = TopTools_MapOfShape()
     for f in faces_of(before):
         old.Add(f)
@@ -213,6 +221,32 @@ def _point_to_triangle(q, tri):
     return abs(sum(n[i] * ap[i] for i in range(3))) / ln
 
 
+def _near_the_face(point, face):
+    """Is `point` as near the FACE as a triangle is entitled to claim it is?
+
+    A triangle is a CHORD, and a chord may sit as far from the surface it stands
+    for as the deflection it was meshed at. Two chords crossing therefore says
+    nothing finer than that about the surfaces underneath. Measured on a sound
+    conic blend: one triangle passed within a micron of another whose face was
+    0.1737mm away — over the deflection, on a surface the mesher handles badly
+    (see PROFILE_LIMIT in conic_blend.py) — and that one triangle carried three
+    times the area it takes to convict.
+
+    So the mesh proposes and this bounds what the proposal can mean. The
+    deflection is the bound because it is what the triangles promised. On the
+    reported fold every doubled point sits inside it, from 0.004mm to 0.061mm,
+    which is what a chord crossing a face it really does lie against looks like.
+
+    Anything that cannot be measured is not near. A guard that read "could not
+    tell" as "broken" would refuse sound work invisibly."""
+    try:
+        d = BRepExtrema_DistShapeShape(
+            BRepBuilderAPI_MakeVertex(gp_Pnt(*point)).Vertex(), face)
+        return d.IsDone() and d.Value() <= MEASURE_DEFLECTION_MM
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def doubled_area(faces):
     """How much of these faces' area lies on another one of them, in mm2.
 
@@ -225,7 +259,12 @@ def doubled_area(faces):
     the distance is to the triangle rather than to its plane: two faces that
     merely meet smoothly lie in each other's planes along the join and pull
     apart quadratically away from it, so no centre on one lands ON a triangle of
-    the other."""
+    the other.
+
+    The triangles only ever PROPOSE. What a proposal is allowed to mean is
+    bounded by the face itself — see `_near_the_face` — because a chord that
+    crosses a face its own surface is nowhere near is evidence about the mesh
+    and not about the model."""
     tris = _triangles(faces)
     if not tris:
         return 0.0
@@ -254,7 +293,8 @@ def doubled_area(faces):
                             continue
                         if abs(sum(ni[k] * nj[k] for k in range(3))) < PARALLEL_DOT:
                             continue
-                        if _point_to_triangle(ci, ptsj) <= COINCIDENT_MM:
+                        if (_point_to_triangle(ci, ptsj) <= COINCIDENT_MM
+                                and _near_the_face(ci, faces[fj])):
                             hit = True
                             break
         if hit:

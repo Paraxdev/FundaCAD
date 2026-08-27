@@ -41,6 +41,15 @@ a tangency rail (an arc END pole, which does not move) or a whole section (which
 moves inside its own plane, so its pcurve still describes it). Two other kinds
 exist, and they are not the same problem.
 
+One thing does NOT survive the conversion, and it is not a boundary: the
+parameterisation of a blend face OCCT built analytically. A straight edge
+between two planes gets a plain cylinder, whose u is an ANGLE, and no rational
+quadratic carries that, so converting one to poles moves the point at a given
+(u, v) — 0.02mm on a 1.3mm blend. The face is still the same set of points and
+its boundaries are still whole isolines, so the shape it produces is right; what
+goes wrong is COMPARING it to a neighbour at the same parameter, which is how
+the two kinds below are told apart. Hence `_holds_its_section`.
+
 A MITRE SEAM is where OCCT runs two blends the full length of their edges and
 trims them against each other instead of inserting a corner patch — which is
 what it does for the four top edges of a box, so it is two clicks away. Such a
@@ -334,6 +343,38 @@ def _arc_of(bs, along_u, uv):
     return bs.VIso(uv.Y()) if along_u else bs.UIso(uv.X())
 
 
+def _holds_its_section(edge, face, dirs, samples=12):
+    """Does this edge run along ONE section of the face, holding the other
+    parameter fixed?
+
+    The exact form of the question `_sides_agree` asks approximately. A section
+    moves inside its own plane when the weights change, so a pcurve that never
+    leaves one section still describes its edge afterwards; a MITRE seam crosses
+    the sections and its pcurve goes stale. Which of the two it is, is written in
+    the pcurve: the held parameter is either constant or it is not.
+
+    Worth asking separately because the approximate form can say no to a seam
+    that is a section on both sides. Where OCCT builds one blend analytically and
+    the next along the same tangent chain as a BSpline — a cylinder and a spline
+    surface meeting at the rim of a slot — converting the cylinder to poles
+    reparameterises it, and the two faces then reach the same point of their
+    shared section at different parameters. Sampling them against each other
+    measures 0.02mm on a 1.3mm blend and calls a plain tangent seam a mitre.
+
+    Two arc directions is a spherical corner patch, where no single parameter is
+    held and there is no section to speak of. `_sides_agree` decides those.
+    """
+    if len(dirs) != 1:
+        return False
+    ad = BRepAdaptor_Curve2d(edge, face)
+    lo, hi = ad.FirstParameter(), ad.LastParameter()
+    u0, u1, v0, v1 = BRepTools.UVBounds_s(face)
+    held = (lambda p: p.Y()) if dirs[0] else (lambda p: p.X())
+    span = (v1 - v0) if dirs[0] else (u1 - u0)
+    vals = [held(ad.Value(lo + (hi - lo) * i / samples)) for i in range(samples + 1)]
+    return max(vals) - min(vals) <= max(abs(span), TOL) * 1e-9
+
+
 def _sides_agree(edge, sides, samples=12):
     """Do both blend faces still describe this shared edge the same way?
 
@@ -345,12 +386,21 @@ def _sides_agree(edge, sides, samples=12):
     instead of being one. Then the stale pcurve names a point that is not on the
     other face at all, and the two sides part company by millimetres.
 
-    So test the claim instead of assuming it.
+    So test the claim instead of assuming it — and then, if the sampling says no,
+    ask the pcurves outright whether each stays inside one section. Sampling
+    compares the two sides at the same edge parameter, which is one assumption
+    too many: two faces can hold the same section and still run along it at
+    different speeds (see `_holds_its_section`). The 3D curve is rebuilt from one
+    side and SameParameter reconciles the other, which is a reparameterisation of
+    a curve both sides agree on rather than the millimetres a mitre would need.
     """
-    (fa, ba), (fb, bb) = sides[0], sides[1]
+    (fa, ba, da), (fb, bb, db) = sides[0], sides[1]
     scale = max(_extent(ba), _extent(bb))
-    return all(p.Distance(q) <= scale * 1e-7 for p, q in
-               zip(_trace(edge, fa, ba, samples), _trace(edge, fb, bb, samples)))
+    if all(p.Distance(q) <= scale * 1e-7 for p, q in
+           zip(_trace(edge, fa, ba, samples), _trace(edge, fb, bb, samples))):
+        return True
+    return (_holds_its_section(edge, fa, da, samples)
+            and _holds_its_section(edge, fb, db, samples))
 
 
 def _extent(bs):
@@ -655,7 +705,7 @@ def conic_blend(sharp, edges, radius, profile):
     for edge, sides in stale:
         face, bs, _ = sides[0]
         reshape2.Replace(edge, _rebuild_edge(edge, face, bs)
-                         if len(sides) < 2 or _sides_agree(edge, [s[:2] for s in sides])
+                         if len(sides) < 2 or _sides_agree(edge, sides)
                          else _reseam(edge, sides))
     out = reshape2.Apply(out)
 

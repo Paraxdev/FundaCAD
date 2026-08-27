@@ -29,7 +29,12 @@ import traceback
 
 from build123d import Solid
 
-from blend_overlap import FOLD_AREA_MM2, doubled_area, folds_over_itself, new_faces
+import blend_overlap
+from blend_overlap import (
+    COINCIDENT_MM, FOLD_AREA_MM2, MEASURE_DEFLECTION_MM, doubled_area,
+    folds_over_itself, new_faces,
+)
+from conic_blend import conic_blend
 
 BORE = 1.2862      # the bore's radius, from the reported document
 BLEND = 0.357      # the round on its top rim, likewise
@@ -116,6 +121,104 @@ def test_ordinary_blends_are_untouched():
     print("plain box fillets, all twelve edges, and a 200mm part all allowed OK")
 
 
+# A slot-shaped boss on a plate, and the round on the rim where it stands up.
+# From the reported document, reduced to the two numbers that matter: the boss is
+# narrower than the blend is wide, so the blend wraps its ends tightly and the
+# mesher has a hard surface to chord.
+BOSS_W = 1.3967
+BOSS_H = 1.801
+BOSS_HALF = 6.0
+BOSS_R = 1.28
+
+
+def _slot_boss():
+    plate = Solid.make_box(40, 40, 10).translate((-20, -20, 0))
+    boss = Solid.make_box(2 * BOSS_HALF, BOSS_W, BOSS_H).translate(
+        (-BOSS_HALF, -BOSS_W / 2, 10))
+    for x in (-BOSS_HALF, BOSS_HALF):
+        boss = boss + Solid.make_cylinder(BOSS_W / 2, BOSS_H).translate((x, 0, 10))
+    solid = plate + boss
+    rim = [e for e in solid.edges()
+           if abs(e.position_at(0.5).Z - 10) < 1e-9
+           and abs(abs(e.position_at(0.5).Y) - BOSS_W / 2) < 1e-9
+           and abs(e.position_at(0.5).X) < 1e-9]
+    assert rim, "no rim edge on the slot boss"
+    return solid.wrapped, rim[0].wrapped
+
+
+def test_a_coarse_chord_is_not_evidence_about_the_surfaces():
+    """A sound blend the triangles accuse and the faces acquit.
+
+    The triangles are coarse on purpose, and a coarse triangle is a CHORD: it can
+    sit a long way inside the surface it stands for, and two chords can cross
+    while their surfaces stay far apart. On this blend at a positive profile —
+    where the mesher has the hardest time, see PROFILE_LIMIT in conic_blend.py —
+    four triangles pass within a micron of a face, and every one of those faces
+    is a fifth of a millimetre away.
+
+    A fifth of a millimetre is not a depth-buffer problem. It is 200 times the
+    distance the guard tests for, and the blend under it is perfectly sound: the
+    refusal cost a real fillet on a real document, which is how this was found.
+
+    CONTROLS:
+      * the mesh really does propose it. Neutralise the bound and the same shape
+        measures more than it takes to convict, so this is the bound working and
+        not the proposal having quietly gone away.
+      * the accused faces are measured, not assumed apart: what makes the verdict
+        wrong is a number, and the number is in the test.
+    """
+    solid, edge = _slot_boss()
+    after = conic_blend(solid, [edge], BOSS_R, 0.7)
+    fresh = new_faces(solid, after)
+
+    unbounded = _measure_without_the_bound(fresh)
+    assert unbounded > FOLD_AREA_MM2, (
+        f"the mesh no longer proposes anything here ({unbounded:.4f} mm2), so this "
+        "shape has stopped being the case it was written for")
+    gaps = _accused_gaps(fresh)
+    assert gaps, "the proposals vanished between the two passes"
+    assert min(gaps) > MEASURE_DEFLECTION_MM, (
+        f"the accused faces are {min(gaps):.4f}mm apart, inside the deflection the "
+        "triangles promised — the mesh is entitled to that claim and this is no "
+        "longer a false one")
+
+    area = doubled_area(fresh)
+    assert area == 0.0, f"a sound blend measured {area:.4f} mm2 of doubled surface"
+    assert not folds_over_itself(solid, after)
+    print(f"coarse chords acquitted OK: mesh said {unbounded:.4f} mm2 where the "
+          f"faces are {min(gaps):.4f}mm apart")
+
+
+def _measure_without_the_bound(fresh):
+    """What the triangles alone say, which is what this guard used to go on."""
+    real = blend_overlap._near_the_face
+    blend_overlap._near_the_face = lambda *_a: True
+    try:
+        return doubled_area(fresh)
+    finally:
+        blend_overlap._near_the_face = real
+
+
+def _accused_gaps(fresh):
+    """How far each accused point really is from the face it is accused of."""
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeVertex
+    from OCP.BRepExtrema import BRepExtrema_DistShapeShape
+    from OCP.gp import gp_Pnt
+    from blend_overlap import PARALLEL_DOT, _point_to_triangle, _triangles
+    tris = _triangles(fresh)
+    out = []
+    for fi, ci, ni, _ai, _pts in tris:
+        for fj, _cj, nj, _aj, ptsj in tris:
+            if fj == fi or abs(sum(ni[k] * nj[k] for k in range(3))) < PARALLEL_DOT:
+                continue
+            if _point_to_triangle(ci, ptsj) > COINCIDENT_MM:
+                continue
+            out.append(BRepExtrema_DistShapeShape(
+                BRepBuilderAPI_MakeVertex(gp_Pnt(*ci)).Vertex(), fresh[fj]).Value())
+            break
+    return out
+
+
 def test_nothing_new_is_not_a_fold():
     """An operation that changed no faces cannot have folded any. Reached when a
     blend resolves to nothing to do, and it must be cheap and quiet."""
@@ -130,6 +233,7 @@ if __name__ == "__main__":
         test_the_reported_shape_is_refused()
         test_the_same_fillet_with_ground_to_sit_on_is_allowed()
         test_a_tangent_junction_is_not_a_fold()
+        test_a_coarse_chord_is_not_evidence_about_the_surfaces()
         test_ordinary_blends_are_untouched()
         test_nothing_new_is_not_a_fold()
         print("\nall blend-overlap tests passed")
