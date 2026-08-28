@@ -25,6 +25,18 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **The beta release publishes even when there is no signing key.** The build
+  that assembles the release used to stop outright unless the in-app updater's
+  signing key was set up, so nothing was published at all: no installers, no
+  download page, nothing to install. The installers do not need that key, and
+  they are what people actually download.
+
+  It now publishes them either way, and holds back only the update manifest,
+  which is the one thing an unsigned build must not put out: a manifest points
+  installed copies at bundles they would then refuse. The release notes say
+  which of the two builds it is, so "does this update itself?" has an answer on
+  the page rather than in a build log.
+
 - **Model size is no longer a hard limit on what you can open.** Until now the
   finished geometry had to reach the 3D view as one piece, and there was a
   ceiling on how big that piece could be — about 128 MB. The 356 MB reference
@@ -217,6 +229,22 @@ This file starts on 2026-08-03. For anything before that, see the
   resolve, so this shows up as a smaller file rather than a visibly coarser part.
 
 ### Fixed
+
+- **A slot cut into a face now removes material instead of nothing.** A closed
+  sketch loop is pushed along the direction its own outline faces, and that
+  direction comes from the direction the outline is drawn in. Slots are built
+  right-hand side first, which makes them run the opposite way round from every
+  other shape, so a slot was extruded out of the back of the plane it was drawn
+  on. On a base plane through the origin the part is on both sides of the
+  sketch, so the wrong direction still cut something and nothing looked amiss.
+  On a face, where the material is on one side only, the same slot cut nothing
+  at all and said so with "Cut removed nothing", which reads as a problem with
+  the sketch rather than with its direction.
+
+  A row of vent slots in the wall of a housing is the ordinary case, and it did
+  not work. Any hand-drawn closed outline traced clockwise had the same
+  problem, and now does not either: an outline is turned to face its own plane
+  before anything is built from it.
 
 - **An empty document now shows the grid and the origin instead of nothing.**
   With no geometry to frame, the view was pointed away from the scene entirely,
