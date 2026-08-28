@@ -103,6 +103,13 @@ import { viewSideNormal } from "./viewFlight";
 import { themeColor } from "./themeColors";
 import { AreaBox } from "./areaBox";
 import {
+  pickPoint,
+  polylineMidpoint3,
+  POINT_SNAP_PX,
+  type ModelPointKind,
+  type PointCandidate,
+} from "./pointSnap";
+import {
   dragBox,
   faceInBox,
   isAreaDrag,
@@ -825,6 +832,53 @@ export class Viewport {
     this.showAreaBox();
     return true;
   }
+
+  // ---- aiming at a point on the model --------------------------------------
+
+  /** The point on the model the cursor means: a corner, the middle of an edge,
+   *  the centre of a face, or failing all of those the bare surface under it.
+   *  Null when the cursor is over nothing at all.
+   *
+   *  Only edge ENDS and MIDDLES are offered, not the samples in between: a
+   *  tessellated edge carries dozens of those and they are places the mesher
+   *  chose rather than places the model has. Two or three candidates per edge
+   *  also keeps this cheap enough to run on every pointer move, which it does.
+   *
+   *  The ranking, and the pixel reach, live in pointSnap.ts with their tests. */
+  pointAt(clientX: number, clientY: number): { p: THREE.Vector3; kind: ModelPointKind } | null {
+    if (!this.model) return null;
+    const cands: PointCandidate[] = [];
+    for (const e of this.model.edges) {
+      if (!e.draw.object.visible) continue;
+      const pts = e.points;
+      const first = pts[0];
+      const last = pts[pts.length - 1];
+      if (first) cands.push({ p: [first[0], first[1], first[2]], kind: "vertex" });
+      if (last) cands.push({ p: [last[0], last[1], last[2]], kind: "vertex" });
+      const mid = polylineMidpoint3(pts);
+      if (mid) cands.push({ p: mid, kind: "midpoint" });
+    }
+    // The face under the cursor contributes its own centre and, as the last
+    // resort, the exact spot the ray struck it.
+    const hit = this.pickFaceForPressPull(clientX, clientY);
+    if (hit) {
+      const c = this.faceCentroidWorld(hit.faceId);
+      cands.push({ p: [c.x, c.y, c.z], kind: "center" });
+      cands.push({ p: [hit.anchor.x, hit.anchor.y, hit.anchor.z], kind: "surface" });
+    }
+    const best = pickPoint(
+      cands,
+      (q) => {
+        const s = this.projectToScreen(this.pointScratch.set(q[0], q[1], q[2]));
+        return Number.isFinite(s.x) && Number.isFinite(s.y) ? s : null;
+      },
+      { x: clientX, y: clientY },
+      POINT_SNAP_PX,
+    );
+    return best ? { p: new THREE.Vector3(best.p[0], best.p[1], best.p[2]), kind: best.kind } : null;
+  }
+
+  private pointScratch = new THREE.Vector3();
 
   /** Take what the box covers. `additive` keeps what was already selected. */
   selectInBox(rect: ScreenRect, mode: AreaMode, additive: boolean) {

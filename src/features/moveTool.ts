@@ -14,6 +14,13 @@
 //
 // The preview and the committed feature are built from the SAME six numbers, so
 // they cannot disagree about what the drag meant.
+//
+// The gizmo's ORIGIN is draggable, and snaps to the model — a corner, the middle
+// of an edge, the centre of a face. That is what turns "rotate this" into
+// "rotate this about that corner", which is the only form of the request anyone
+// actually has. Dragging it never moves the part: the translation absorbs the
+// change of pivot exactly (see `setPivot`), so the origin is a statement about
+// the NEXT drag and not itself an edit.
 
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
@@ -58,10 +65,17 @@ const RING_TUBE = 2.4;
 /** How wide the invisible band a ring is grabbed by is, in gizmo units. The
  *  drawn tube is 2.4 and nobody can reliably hit a 2px torus in 3D. */
 const RING_GRAB = 8;
+/** The draggable origin, in gizmo units. Small enough that it never covers the
+ *  arrows' own root and large enough to grab. */
+const ORIGIN_R = 5.5;
+/** Lit while the origin is sitting on a point the model actually has, rather
+ *  than wherever the cursor was. The one thing the handle has to say. */
+const SNAPPED = 0x64d2ff;
+const ORIGIN_IDLE = 0xdfe6ee;
 
 /** Which handle a press landed on. Two families, so they can be hit-tested
  *  separately and a ring behind an arrow can never steal the arrow's press. */
-type Grab = { kind: "axis" | "ring"; index: number } | null;
+type Grab = { kind: "axis" | "ring" | "origin"; index: number } | null;
 
 export class MoveTool {
   active = false;
@@ -76,6 +90,9 @@ export class MoveTool {
   private gizmo: THREE.Group | null = null;
   private arrows: { group: THREE.Group; mat: THREE.MeshBasicMaterial; axis: number }[] = [];
   private rings: { mesh: THREE.Mesh; grab: THREE.Mesh; mat: THREE.MeshBasicMaterial; axis: number }[] = [];
+  private origin: { mesh: THREE.Mesh; mat: THREE.MeshBasicMaterial } | null = null;
+  /** the origin is sitting on real model geometry, not on empty space */
+  private pivotSnapped = false;
   private hover: Grab = null;
   private grab: Grab = null;
   /** the handle a typed value retargets: the last one actually dragged */
@@ -142,7 +159,9 @@ export class MoveTool {
     const s = this.viewport.projectToScreen(this.anchor);
     this.dim.position(s.x, s.y);
     this.dim.updateFromCursor({ move: 0, turn: 0 });
-    setPrompt("Drag an arrow to slide, a ring to turn, or type a value · Enter · Esc");
+    setPrompt(
+      "Drag an arrow to slide, a ring to turn, the centre to move what it turns about · Enter · Esc",
+    );
     this.raf = requestAnimationFrame(this.boundTick);
   }
 
@@ -188,6 +207,28 @@ export class MoveTool {
     this.refreshPreview();
   }
 
+  /** Move what the gizmo turns about, WITHOUT moving the selection.
+   *
+   *  `where` is a point in the scene as it stands, so it is on the ghost rather
+   *  than on the original body: the pivot is stored in the body's own
+   *  coordinates, which is what the feature's rotation is applied in, so the
+   *  point has to come back through the current transform first.
+   *
+   *  Then the translation absorbs the change. The feature's translation carries
+   *  the pivot correction (c - R·c); swapping c for c' and adding the difference
+   *  back into t leaves the composed transform bit for bit what it was, which is
+   *  the promise this handle makes — the part does not twitch when you decide
+   *  where to turn it from. */
+  private setPivot(where: THREE.Vector3) {
+    const before = this.values();
+    const inv = moveMatrix(before).invert();
+    const next = where.clone().applyMatrix4(inv);
+    const spinOld = this.anchor.clone().applyQuaternion(this.rot);
+    const spinNew = next.clone().applyQuaternion(this.rot);
+    this.t.add(this.anchor).sub(spinOld).sub(next).add(spinNew);
+    this.anchor.copy(next);
+  }
+
   private onMove(e: PointerEvent) {
     const g = this.grab;
     if (g?.kind === "axis") {
@@ -200,6 +241,17 @@ export class MoveTool {
       this.setComp(g.index, stepped);
       this.dim.updateFromCursor({ move: stepped });
       this.refreshPreview();
+      return;
+    }
+    if (g?.kind === "origin") {
+      const hit = this.viewport.pointAt(e.clientX, e.clientY);
+      // Off the model entirely: slide the origin in the plane facing the
+      // camera through where it already is, so it still follows the cursor
+      // instead of sticking. It is a pivot, not a constraint — putting it in
+      // mid-air is a legitimate thing to want.
+      const at = hit?.p ?? this.freePivotPoint(e.clientX, e.clientY);
+      this.pivotSnapped = !!hit && hit.kind !== "surface";
+      if (at) this.setPivot(at);
       return;
     }
     if (g?.kind === "ring") {
@@ -221,7 +273,9 @@ export class MoveTool {
     this.downPos = { x: e.clientX, y: e.clientY };
     const hit = this.hitHandle(e.clientX, e.clientY);
     if (!hit) return;
-    if (hit.kind === "ring") {
+    if (hit.kind === "origin") {
+      // nothing to seed: the origin follows the cursor from the first move
+    } else if (hit.kind === "ring") {
       const start = this.ringAngle(hit.index, e.clientX, e.clientY);
       if (start === null) return; // edge-on: leave the press alone
       this.grabAngle = start;
@@ -254,6 +308,15 @@ export class MoveTool {
     if (!moved && !this.hitHandle(e.clientX, e.clientY)) this.commit();
   }
 
+  /** Where the cursor is, in the plane through the gizmo that faces the camera.
+   *  The fallback when the pointer is over no geometry at all. */
+  private freePivotPoint(clientX: number, clientY: number): THREE.Vector3 | null {
+    const at = this.anchor.clone().applyMatrix4(moveMatrix(this.values()));
+    const n = this.viewport.camera.getWorldDirection(new THREE.Vector3());
+    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(n, at);
+    return this.viewport.screenToPlane(clientX, clientY, plane);
+  }
+
   private onKey(e: KeyboardEvent) {
     if (e.key === "Escape") this.cancel();
   }
@@ -271,7 +334,7 @@ export class MoveTool {
     // still slide the bodies along world X — a handle pointing one way and
     // acting another. The rings stay world-aligned for the same reason.
     this.gizmo.scale.setScalar(k);
-    const lit = (kind: "axis" | "ring", i: number) =>
+    const lit = (kind: NonNullable<Grab>["kind"], i: number) =>
       (this.grab ? this.grab.kind === kind && this.grab.index === i
         : this.hover?.kind === kind && this.hover.index === i);
     for (const a of this.arrows) {
@@ -281,6 +344,10 @@ export class MoveTool {
     for (const r of this.rings) {
       const ax = AXES[r.axis];
       if (ax) r.mat.color.set(lit("ring", r.axis) ? HOT : ax.color);
+    }
+    if (this.origin) {
+      const hot = lit("origin", 0);
+      this.origin.mat.color.set(hot ? HOT : this.pivotSnapped ? SNAPPED : ORIGIN_IDLE);
     }
     const s = this.viewport.projectToScreen(pos);
     this.dim.position(s.x, s.y);
@@ -380,6 +447,15 @@ export class MoveTool {
       g.add(ring, grab);
       this.rings.push({ mesh: ring, grab, mat: rmat, axis: i });
     }
+    const omat = new THREE.MeshBasicMaterial({
+      color: ORIGIN_IDLE, depthTest: false, depthWrite: false,
+    });
+    const dot = new THREE.Mesh(new THREE.SphereGeometry(ORIGIN_R, 20, 14), omat);
+    dot.renderOrder = 1000; // over the arrows' roots, which meet here
+    dot.userData.origin = true;
+    g.add(dot);
+    this.origin = { mesh: dot, mat: omat };
+
     g.renderOrder = 999;
     this.gizmo = g;
     this.viewport.addToScene(g);
@@ -394,6 +470,12 @@ export class MoveTool {
   private hitHandle(x: number, y: number): Grab {
     if (!this.gizmo) return null;
     const ray = this.viewport.rayFrom(x, y);
+    // The origin is tested first and wins outright: it sits where all three
+    // arrows meet, so anything else tested before it would take every press
+    // aimed at the middle of the gizmo.
+    if (this.origin && ray.intersectObject(this.origin.mesh, false).length) {
+      return { kind: "origin", index: 0 };
+    }
     const arrowParts: THREE.Object3D[] = [];
     for (const a of this.arrows) arrowParts.push(...a.group.children);
     const onArrow = ray.intersectObjects(arrowParts, false)[0];
@@ -411,7 +493,10 @@ export class MoveTool {
     if (!this.active) return;
     this.applyTyped();
     const v = this.values();
-    const moved = this.t.lengthSq() > 1e-9;
+    // Measured on the composed transform, not on `t`: moving the pivot rewrites
+    // t to keep the transform unchanged, so a session that only repositioned
+    // the origin has a non-zero t and has not moved anything.
+    const moved = Math.hypot(v.dx, v.dy, v.dz) > 1e-9;
     const turned = Math.abs(v.rx) + Math.abs(v.ry) + Math.abs(v.rz) > 1e-9;
     if (!moved && !turned) return this.cancel(); // nothing happened
     const feature = this.buildFeature();
@@ -452,6 +537,11 @@ export class MoveTool {
         (r.grab.material as THREE.Material).dispose();
         r.mat.dispose();
       }
+      if (this.origin) {
+        this.origin.mesh.geometry.dispose();
+        this.origin.mat.dispose();
+        this.origin = null;
+      }
       this.gizmo = null;
       this.arrows = [];
       this.rings = [];
@@ -463,6 +553,7 @@ export class MoveTool {
     this.t.set(0, 0, 0);
     this.rot.identity();
     this.ringDeg = 0;
+    this.pivotSnapped = false;
     setPrompt(null);
   }
 }
