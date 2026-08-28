@@ -37,6 +37,7 @@ import { PatternTool } from "../features/patternTool";
 import { MeasureTool } from "../features/measureTool";
 import { SectionTool } from "../features/sectionTool";
 import { PlaneOffsetTool } from "../features/planeOffsetTool";
+import { RevolvePitchTool } from "../features/revolvePitchTool";
 import { TextureTool } from "../features/textureTool";
 import { createFeatureStarters } from "../features/featureStarters";
 import { createContextMenus } from "../ui/contextMenus";
@@ -82,6 +83,7 @@ export interface EngineTools {
   measure: MeasureTool;
   section: SectionTool;
   planeOffset: PlaneOffsetTool;
+  revolvePitch: RevolvePitchTool;
   texture: TextureTool;
 }
 
@@ -245,6 +247,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
       },
     }),
     planeOffset: new PlaneOffsetTool(e.viewport),
+    revolvePitch: new RevolvePitchTool(e.viewport, e.store, e.overlay),
     texture: new TextureTool(e.viewport, e.store),
   };
 

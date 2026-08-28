@@ -94,6 +94,13 @@ export function createSelection(
       case "extrude":
         if (!e.tools.extrude.startEdit(id, done)) e.setStatus(VALUES_IN_HISTORY, "");
         break;
+      case "revolve":
+        // The arrow sets the PITCH, which is the one value on a revolve that
+        // is a distance on the model rather than a number about it. It stands
+        // down for a revolve whose profile was never recorded or whose pitch a
+        // parameter drives, and those fall through to the rows as before.
+        if (!e.tools.revolvePitch.startEdit(id, done)) e.setStatus(VALUES_IN_HISTORY, "");
+        break;
       case "texture":
         if (!e.tools.texture.startEdit(id, done)) e.setStatus(VALUES_IN_HISTORY, "");
         break;

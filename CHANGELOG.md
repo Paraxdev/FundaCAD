@@ -44,6 +44,19 @@ This file starts on 2026-08-03. For anything before that, see the
   A section that merely touches the surface meets it edge on, and that is the one
   case a union genuinely cannot resolve.
 
+- **The pitch has an arrow on the model, not just a field in a panel.** Edit a
+  revolve (double click it, or Edit from its context menu) and the thread's path
+  is drawn as a dashed helix with a handle at the far end of it. Pull the handle
+  up the axis and the helix stretches; let go and the thread is built. Pitch and
+  Angle sit in a box beside it, so a number off a spec can still be typed.
+
+  The handle moves the END of the sweep and writes the PITCH, which are different
+  numbers: ten turns rise ten times the pitch, so dragging the end 15mm sets 1.5.
+  Dragging past a full turn will not go below a climb the section can fit
+  through, because that thread cannot be built, so the arrow simply stops there.
+  A typed pitch is left exactly as typed and refused with a reason if it will not
+  work, since quietly rewriting a deliberate number is worse than explaining it.
+
 - **The beta release publishes even when there is no signing key.** The build
   that assembles the release used to stop outright unless the in-app updater's
   signing key was set up, so nothing was published at all: no installers, no

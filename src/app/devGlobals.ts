@@ -49,10 +49,15 @@ export function installDevGlobals(e: Engine): void {
     // feature's Properties has to say WHICH, and the timeline chip that normally
     // does it is a click on a scrolling strip.
     selectFeature: (id: string | null) => e.selectFeature(id),
+    // Selecting a feature opens its values; EDITING it opens whatever
+    // manipulator that feature has. They are different doors and a harness that
+    // wants the second one cannot get there through the first.
+    editFeature: (id: string) => e.editFeature(id),
     extrude: e.tools.extrude,
     move: e.tools.move,
     targetEdit: e.tools.targetEdit,
     pattern: e.tools.pattern,
+    revolvePitch: e.tools.revolvePitch,
     overlay: e.overlay,
     toolBusy: () => e.toolBusy(),
     // The one formula every datum surface goes through: the drawn quad, "sketch
@@ -80,6 +85,7 @@ export function installDevGlobals(e: Engine): void {
       section: e.tools.section.active,
       texture: e.tools.texture.active,
       targetEdit: e.tools.targetEdit.active,
+      revolvePitch: e.tools.revolvePitch.active,
       planePick: e.planePick,
       choice: isChoiceOpen(),
     }),

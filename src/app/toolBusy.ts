@@ -23,6 +23,7 @@ export function createToolBusy(e: Engine): Pick<Engine, "toolBusy" | "hasBody"> 
         e.sketch.active || t.extrude.active || t.edgeFeature.active || t.pressPull.active ||
         t.faceOffset.active || t.loft.active || t.planeOffset.active || t.move.active || t.pattern.active ||
         t.measure.active || t.section.picking || t.texture.active || t.targetEdit.active ||
+        t.revolvePitch.active ||
         e.planePick || isChoiceOpen()
       );
     },
