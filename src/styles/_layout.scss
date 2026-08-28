@@ -71,6 +71,26 @@
    and wearing its clothes: the two are the same kind of thing, a fact about the
    view rather than a control on it, and one corner is where you learn to look
    for them. The offset is the fps readout's own height plus a rung. */
+/* The area-selection rubber band. Fixed, not absolute: it is placed from
+   client coordinates (the viewport works in those throughout) and it is
+   appended to <body>, so an absolutely-positioned one would be offset by
+   whatever the nearest positioned ancestor happened to be.
+
+   The two verdicts are dressed differently, and they have to be, because the
+   difference is only useful while the drag is still running: a solid edge
+   takes what is wholly inside, a dashed one takes anything it touches. */
+.areabox {
+  position: fixed;
+  z-index: 40;
+  pointer-events: none;
+  border: 1px solid var(--accent);
+  background: rgba(122, 162, 247, 0.10);
+}
+.areabox.crossing {
+  border-style: dashed;
+  background: rgba(122, 162, 247, 0.06);
+}
+
 .gridscale {
   position: absolute;
   right: var(--s-4);

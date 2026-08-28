@@ -138,6 +138,22 @@ export class Highlighter {
     }
   }
 
+  /** Add to the selection without the toggle. A box drag over a region that
+   *  overlaps what is already selected must ADD, not un-select the overlap —
+   *  toggling would make the second sweep of a two-sweep selection eat the
+   *  first one's result. */
+  selectEdge(line: EdgeRef) {
+    if (!this.selectedEdges.has(line)) this.toggleSelectEdge(line);
+  }
+
+  selectFace(faceId: number) {
+    if (!this.selectedFaces.has(faceId)) this.toggleSelectFace(faceId);
+  }
+
+  selectBody(bodyId: string) {
+    if (!this.selectedBodies.has(bodyId)) this.toggleSelectBody(bodyId);
+  }
+
   /** the currently selected edge lines (for pre-selected fillet/chamfer). */
   getSelectedEdges(): EdgeRef[] {
     return [...this.selectedEdges];

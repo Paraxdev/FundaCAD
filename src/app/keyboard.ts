@@ -29,6 +29,15 @@ export function installKeyboard(e: Engine): void {
     () => (e.sketch.active ? "sketch" : "model"),
   );
 
+  // Tab, while an area box is open, cycles what that box will take. Registered
+  // here rather than in the keymap because it only exists during a drag — the
+  // rest of the time Tab is the browser's own focus key and must stay that.
+  window.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Tab" || ev.ctrlKey || ev.metaKey || ev.altKey) return;
+    if (!e.viewport.cycleAreaFilter()) return;
+    ev.preventDefault();
+  });
+
   // delete: a selected FACE → remove it and heal the solid (defeature — works on
   // imported geometry, where there's no feature to delete); otherwise delete the
   // selected timeline feature.

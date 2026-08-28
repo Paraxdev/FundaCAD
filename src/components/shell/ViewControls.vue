@@ -32,6 +32,12 @@ const VIEWS = [
       @click="engine.handleAction('persp')"
     >{{ ui.projLabel }}</button>
     <button
+      id="xray"
+      title="See through the model, so a selection box reaches what is behind (X)"
+      :class="{ active: ui.xray }"
+      @click="engine.handleAction('toggle-xray')"
+    >X-ray</button>
+    <button
       id="selmode"
       title="Toggle selecting Faces / whole Bodies"
       :class="{ active: ui.selMode === 'bodies' }"

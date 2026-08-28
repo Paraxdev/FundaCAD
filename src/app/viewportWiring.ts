@@ -4,6 +4,7 @@ import { contextMenu, dismissContextMenu } from "../ui/menu";
 import { featureMeta } from "../ui/featureMeta";
 import { bodyRowLabel, distinguish, dominantOwner, edgeChoiceLabel } from "../ui/edgeChoice";
 import { ambiguousCandidates } from "../viewport/edgeTies";
+import { areaFilterLabel } from "../viewport/areaSelect";
 import { useBrowserStore } from "../stores/browser";
 import { edgeNudgePlacement } from "../features/edgeNudge";
 import { faceNudgePlacement } from "../features/faceNudge";
@@ -125,6 +126,21 @@ export function installViewportWiring(e: Engine): void {
 
   e.viewport.shouldOpenContextMenu = () => !e.toolBusy();
   e.viewport.onContextClick = (x, y) => e.menus.openCanvasMenu(x, y);
+
+  // A left drag over empty canvas is an area selection — but only when nothing
+  // else owns the pointer. Every 3D tool drags a handle with the same button,
+  // and a sketch has its own gesture for everything.
+  e.viewport.canAreaSelect = () => !e.toolBusy() && !e.sketch.active;
+  // The direction of the drag decides the verdict, and it decides it while the
+  // drag is still running, so it has to be said while the drag is still
+  // running. Restores whatever the selection prompt was on release.
+  e.viewport.onAreaDrag = (mode) => {
+    if (mode === null) { e.viewport.onSelectionChange?.(); return; }
+    const takes = areaFilterLabel(e.viewport.areaTakes);
+    setPrompt(mode === "window"
+      ? `Taking ${takes} fully inside the box, drag left to take anything it touches · Tab filters`
+      : `Taking ${takes} the box touches, drag right to take only what is fully inside · Tab filters`);
+  };
 
   // A context menu holds targets captured at open time (faceId, edge line, body
   // id) — a completed rebuild renumbers topology and replaces the mesh, and any

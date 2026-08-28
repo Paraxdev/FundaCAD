@@ -83,6 +83,11 @@ const SKETCH_DIM_EDGE_OPACITY = 0.5;
  *  a light source. */
 const SKETCH_FACE_LIFT = 0.14;
 
+/** How much of the model survives see-through. Lower than the sketch's dimming,
+ *  because the point is the far side rather than the near one: at 0.55 the
+ *  front face of a block still buries what is behind it. */
+const XRAY_OPACITY = 0.35;
+
 import { Highlighter, EDGE_HOVER_COLOR } from "./highlight";
 import { ProgressiveModel } from "./progressive";
 import { nearestEdgeByMid, midMatchTol, edgeSelectorFrom, polylineMid } from "./edgeMatch";
@@ -96,6 +101,16 @@ import { dragStep } from "./dragStep";
 import { faceSketchPlane } from "../sketch/sketchView";
 import { viewSideNormal } from "./viewFlight";
 import { themeColor } from "./themeColors";
+import { AreaBox } from "./areaBox";
+import {
+  dragBox,
+  faceInBox,
+  isAreaDrag,
+  polylineInBox,
+  type AreaFilter,
+  type AreaMode,
+  type ScreenRect,
+} from "./areaSelect";
 
 /** Shallow equality for the flat id→hex paint maps. Cheap enough to run on every
  *  build (microseconds at 3,000 entries) and it saves a full GPU colour upload
@@ -159,6 +174,10 @@ export class Viewport {
 
   onHit: ((hit: Hit | null, shiftKey: boolean) => void) | null = null;
   onSelectionChange: (() => void) | null = null; // fired when edge/face selection changes
+  /** An area box is being dragged (with which verdict), or has just ended
+   *  (null). For the prompt, which is the only thing that can say what the
+   *  direction of the drag has decided. */
+  onAreaDrag: ((mode: AreaMode | null) => void) | null = null;
   onPickDatum: ((id: string) => void) | null = null; // fired when a datum plane quad is clicked
   // Right-click context menu: fires only on a genuine right-CLICK (press +
   // release without movement — right-drag is camera pan). `shouldOpenContextMenu`
@@ -281,6 +300,13 @@ export class Viewport {
       if (e.button !== 0) return;
       this.dragMoved = false;
       this.downPos = { x: e.clientX, y: e.clientY };
+      // The left button is bound to nothing on the camera (cameras.ts reserves
+      // it for selection), so a left DRAG was the one gesture in the viewport
+      // that did nothing at all. Shift is already the additive modifier for a
+      // click, and it means the same thing here.
+      this.areaDown = (this.canAreaSelect?.() ?? true)
+        ? { x: e.clientX, y: e.clientY, additive: e.shiftKey }
+        : null;
     });
     // Right-drag is orbit. Choose what it turns about NOW, from where the
     // cursor is, rather than leaving it wherever a pan or a zoom happened to
@@ -300,6 +326,11 @@ export class Viewport {
       ) {
         this.dragMoved = true;
       }
+      const down = this.areaDown;
+      if (down && (e.buttons & 1) && isAreaDrag(down.x, down.y, e.clientX, e.clientY)) {
+        this.areaAt = { x: e.clientX, y: e.clientY };
+        this.showAreaBox();
+      }
       // Unconditional (not just when handleHover's own hover-paint fires below):
       // the ViewCube (not one of our owned files) also hover-highlights off this
       // same canvas's pointermove, with no callback into the Viewport — so a cube
@@ -313,6 +344,18 @@ export class Viewport {
       // the cursor actually ended up, so the face under it lights straight away
       // instead of waiting for the next mouse twitch.
       if (e.buttons === 0) this.queueHover(e);
+      const down = this.areaDown;
+      this.areaDown = null;
+      this.areaAt = null;
+      if (this.areaBox.visible) {
+        this.areaBox.hide();
+        this.onAreaDrag?.(null);
+        if (down && e.button === 0) {
+          const { rect, mode } = dragBox(down.x, down.y, e.clientX, e.clientY);
+          this.selectInBox(rect, mode, down.additive);
+        }
+        return; // a box is not also a click
+      }
       if (e.button !== 0 || this.dragMoved) return;
       // 1) a click landing on the ViewCube corner orients the view (and never
       //    falls through to model picking).
@@ -584,6 +627,231 @@ export class Viewport {
   }
   get selecting(): "faces" | "bodies" {
     return this.selectionMode;
+  }
+
+  // ---- area selection ------------------------------------------------------
+  //
+  // Drag a box over the model and take what is in it. See areaSelect.ts for
+  // which direction means which verdict; this is the part that needs a camera.
+  //
+  // What "in it" means depends on one more thing the box cannot know: whether
+  // the far side of the model counts. It does not, unless see-through is on —
+  // otherwise the first crossing box thrown over a closed part would take every
+  // face it has, including the six you cannot see, and the count in the prompt
+  // would be the only clue. So a triangle is considered only when it FACES the
+  // camera, which is exactly the geometry a closed solid shows you, and X lifts
+  // that (see setXray).
+  //
+  // KNOWN LIMIT, recorded rather than papered over: facing is not occlusion. A
+  // front face of the body BEHIND is still taken by a crossing box, because
+  // nothing here knows what is in front of it. Doing that properly means an id
+  // buffer, not a cleverer test.
+
+  /** Set by the app to withhold the gesture while a tool owns the pointer. */
+  canAreaSelect: (() => boolean) | null = null;
+  private areaAt: { x: number; y: number } | null = null;
+  private areaDown: { x: number; y: number; additive: boolean } | null = null;
+  private areaBox = new AreaBox();
+  /** What a box is allowed to take. Cycled with Tab WHILE the box is being
+   *  dragged, which is the only moment the answer is worth anything, and kept
+   *  afterwards, because someone who wanted edges once usually wants them
+   *  again. A box over a filleted corner otherwise hands back the four faces
+   *  around the edges you were after, and the fillet then has to be told which
+   *  of the two selections you meant. */
+  private areaFilter: AreaFilter = "all";
+  private xray = false;
+  /** Fires when see-through is switched, so the chrome can say it is on. */
+  onXrayChange: ((on: boolean) => void) | null = null;
+
+  get seeThrough(): boolean {
+    return this.xray;
+  }
+
+  get areaTakes(): AreaFilter {
+    return this.areaFilter;
+  }
+
+  /** See-through: the model goes translucent and stops hiding its own far side
+   *  from an area selection.
+   *
+   *  Both halves are one statement. Making it translucent without letting a box
+   *  reach what is now visible would be decoration; letting a box reach through
+   *  an opaque part would take geometry with nothing on screen to say why. */
+  setXray(on: boolean) {
+    if (this.xray === on) return;
+    this.xray = on;
+    this.applyXrayMaterials();
+    this.onXrayChange?.(on);
+    this.requestRender();
+  }
+
+  toggleXray() {
+    this.setXray(!this.xray);
+  }
+
+  /** Re-apply see-through to the CURRENT bodies. Called again after a rebuild,
+   *  which hands back new materials that know nothing about it. */
+  private applyXrayMaterials() {
+    if (!this.model) return;
+    for (const b of this.model.bodies) {
+      const mat = b.mesh.material as THREE.MeshStandardMaterial;
+      mat.transparent = this.xray;
+      mat.opacity = this.xray ? XRAY_OPACITY : 1;
+      mat.depthWrite = !this.xray;
+    }
+  }
+
+  /** Everything the box takes, in the terms the selection is kept in. */
+  private collectInBox(rect: ScreenRect, mode: AreaMode): {
+    faces: number[];
+    edges: EdgeRef[];
+    bodies: string[];
+  } {
+    const out = { faces: [] as number[], edges: [] as EdgeRef[], bodies: [] as string[] };
+    if (!this.model) return out;
+    const view = this.canvas.getBoundingClientRect();
+    const cam = this.rig.active;
+    cam.updateMatrixWorld();
+    const vp = new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+    const ortho = (cam as THREE.OrthographicCamera).isOrthographicCamera === true;
+    const camDir = cam.getWorldDirection(new THREE.Vector3());
+    const camPos = cam.position;
+
+    const tri: number[] = [0, 0, 0, 0, 0, 0];
+    const a = new THREE.Vector3();
+    const b = new THREE.Vector3();
+    const c = new THREE.Vector3();
+    const ab = new THREE.Vector3();
+    const ac = new THREE.Vector3();
+    const nrm = new THREE.Vector3();
+    const look = new THREE.Vector3();
+
+    for (const body of this.model.bodies) {
+      if (!body.mesh.visible) continue;
+      const geom = body.mesh.geometry;
+      const pos = geom.getAttribute("position");
+      const index = geom.getIndex();
+      if (!pos || !index) continue;
+      const count = pos.count;
+      // One projection per VERTEX, not per triangle: a closed solid references
+      // each of its vertices from several triangles, and the matrix multiply is
+      // the expensive half of all this.
+      const sx = new Float64Array(count);
+      const sy = new Float64Array(count);
+      const wx = new Float64Array(count);
+      const wy = new Float64Array(count);
+      const wz = new Float64Array(count);
+      const p = new THREE.Vector4();
+      for (let i = 0; i < count; i++) {
+        p.set(pos.getX(i), pos.getY(i), pos.getZ(i), 1).applyMatrix4(body.mesh.matrixWorld);
+        wx[i] = p.x; wy[i] = p.y; wz[i] = p.z;
+        p.applyMatrix4(vp);
+        // w <= 0 is behind the camera; the divide would fold such a point back
+        // into view. NaN is how areaSelect is told "no opinion", and it answers
+        // no to both verdicts.
+        if (!(p.w > 0)) { sx[i] = NaN; sy[i] = NaN; continue; }
+        sx[i] = view.left + ((p.x / p.w) * 0.5 + 0.5) * view.width;
+        sy[i] = view.top + ((-p.y / p.w) * 0.5 + 0.5) * view.height;
+      }
+
+      for (const [faceId, tris] of body.faceTriangles) {
+        const facing: number[][] = [];
+        for (const t of tris) {
+          const i0 = index.getX(t * 3);
+          const i1 = index.getX(t * 3 + 1);
+          const i2 = index.getX(t * 3 + 2);
+          if (!this.xray) {
+            a.set(wx[i0] as number, wy[i0] as number, wz[i0] as number);
+            b.set(wx[i1] as number, wy[i1] as number, wz[i1] as number);
+            c.set(wx[i2] as number, wy[i2] as number, wz[i2] as number);
+            ab.subVectors(b, a);
+            ac.subVectors(c, a);
+            nrm.crossVectors(ab, ac);
+            look.copy(ortho ? camDir : a.sub(camPos));
+            if (nrm.dot(look) >= 0) continue; // pointing away: the far side
+          }
+          tri[0] = sx[i0] as number; tri[1] = sy[i0] as number;
+          tri[2] = sx[i1] as number; tri[3] = sy[i1] as number;
+          tri[4] = sx[i2] as number; tri[5] = sy[i2] as number;
+          facing.push(tri.slice());
+        }
+        if (faceInBox(facing, rect, mode)) {
+          out.faces.push(faceId);
+          if (!out.bodies.includes(body.id)) out.bodies.push(body.id);
+        }
+      }
+    }
+
+    // Edges are already world coordinates and already polylines, so they are
+    // projected straight rather than through a mesh. They are never culled by
+    // facing: an edge is a boundary, and the one on the silhouette belongs to a
+    // face pointing away as much as to the one pointing at you.
+    const flat: number[] = [];
+    const q = new THREE.Vector4();
+    for (const e of this.model.edges) {
+      if (!e.draw.object.visible) continue;
+      flat.length = 0;
+      let usable = true;
+      for (const pt of e.points) {
+        q.set(pt[0], pt[1], pt[2], 1).applyMatrix4(vp);
+        if (!(q.w > 0)) { usable = false; break; }
+        flat.push(
+          view.left + ((q.x / q.w) * 0.5 + 0.5) * view.width,
+          view.top + ((-q.y / q.w) * 0.5 + 0.5) * view.height,
+        );
+      }
+      if (usable && polylineInBox(flat, rect, mode)) out.edges.push(e);
+    }
+    return out;
+  }
+
+  /** Redraw the band at the current pointer position and re-announce what it
+   *  will take. Shared by the drag and by Tab, so the two can never disagree
+   *  about which box is on screen. */
+  private showAreaBox() {
+    const down = this.areaDown;
+    const at = this.areaAt;
+    if (!down || !at) return;
+    const { rect, mode } = dragBox(down.x, down.y, at.x, at.y);
+    this.areaBox.show(rect.x0, rect.y0, rect.x1, rect.y1, mode);
+    this.onAreaDrag?.(mode);
+  }
+
+  /** Cycle what an in-flight box takes. No-op when no box is open, so Tab keeps
+   *  whatever meaning it has everywhere else. */
+  cycleAreaFilter(): boolean {
+    if (!this.areaBox.visible) return false;
+    this.areaFilter = this.areaFilter === "all" ? "faces" : this.areaFilter === "faces" ? "edges" : "all";
+    this.showAreaBox();
+    return true;
+  }
+
+  /** Take what the box covers. `additive` keeps what was already selected. */
+  selectInBox(rect: ScreenRect, mode: AreaMode, additive: boolean) {
+    const h = this.highlighter;
+    if (!h || !this.model) return;
+    const got = this.collectInBox(rect, mode);
+    if (this.selectionMode === "bodies") {
+      if (!additive) h.clearBodySelection();
+      for (const id of got.bodies) h.selectBody(id);
+      this.onBodySelectionChange?.();
+    } else {
+      if (!additive) {
+        h.clearSelection();
+        this.edgeScope = { scope: "chain", reason: "tangent" };
+      }
+      if (this.areaFilter !== "edges") for (const f of got.faces) h.selectFace(f);
+      if (this.areaFilter !== "faces") for (const e of got.edges) h.selectEdge(e);
+      // Exactly what the box covered, however many that is. A box is an
+      // explicit statement about extent, so letting a later fillet widen it to
+      // tangent chains would hand back edges the user drew a rectangle around
+      // the OUTSIDE of.
+      if (got.edges.length && this.areaFilter !== "faces") {
+        this.edgeScope = { scope: "single", reason: "shift" };
+      }
+      this.onSelectionChange?.();
+    }
+    this.requestRender();
   }
 
   /** which body owns a triangle's B-rep faceId (null if none). */
@@ -1528,6 +1796,9 @@ export class Viewport {
     // have just had their clipping reset by resetBodyAppearance), and the ghost
     // meshes went with the meshes they were parented to.
     if (this.section) this.applySection();
+    // A rebuild hands back fresh materials that know nothing about see-through,
+    // so it is re-applied here rather than only where it is switched.
+    if (this.xray) this.applyXrayMaterials();
     if (fit) this.rig.fit(this.model.box, true);
   }
 

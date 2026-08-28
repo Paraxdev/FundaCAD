@@ -165,6 +165,10 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   // The grid spacing follows the zoom, so what one square is worth is a fact
   // about the view that only the view knows and only the chrome can show.
   e.viewport.onGridStep = (mm) => { useUiStore().gridStepMm = mm; };
+  // See-through has no other tell once the model happens to be see-through for
+  // another reason (a sketch dims it too), so the view bar's button is what
+  // says which mode you are in.
+  e.viewport.onXrayChange = (on) => { useUiStore().xray = on; };
 
   e.geometry = import.meta.env.VITE_GEOM === "rust" ? new TauriGeometry() : new Geometry();
   void e.geometry.init(); // fetch the per-launch sidecar auth token + open the socket

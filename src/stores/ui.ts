@@ -41,6 +41,10 @@ export const useUiStore = defineStore("ui", () => {
   // Projection cycles Auto -> Persp -> Ortho; the label is the CURRENT mode.
   const projLabel = ref("Auto");
   const selMode = ref<"faces" | "bodies">("faces");
+  /** See-through is on: the model is translucent and an area box reaches what
+   *  is behind it. A mode with no control on screen is a mode people turn on by
+   *  accident and cannot find again, so the view bar carries a lit button. */
+  const xray = ref(false);
 
   // --- the `?` keyboard cheat sheet ---
   const shortcutHudOpen = ref(false);
@@ -51,7 +55,7 @@ export const useUiStore = defineStore("ui", () => {
     canUndo, canRedo,
     sketchActive,
     gridStepMm,
-    projLabel, selMode,
+    projLabel, selMode, xray,
     shortcutHudOpen,
   };
 });

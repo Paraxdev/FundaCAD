@@ -280,6 +280,10 @@ export function createActions(e: Engine): (action: string) => void {
         ui.selMode = mode;
         break;
       }
+      case "toggle-xray": {
+        e.viewport.toggleXray();
+        break;
+      }
       case "hide-selected": {
         const ids = e.viewport.getSelectedBodies();
         if (!ids.length) {

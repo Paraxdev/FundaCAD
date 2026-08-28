@@ -45,7 +45,7 @@ export const NON_REPEATABLE = new Set([
   "print-export", "print-orca", "print-send", "welcome", "ta-publish",
   "undo", "redo", "compute-all", "shortcut-help", "finish", "palette",
   "fit", "iso", "top", "front", "right", "persp",
-  "selmode", "selmode-faces", "selmode-bodies",
+  "selmode", "selmode-faces", "selmode-bodies", "toggle-xray",
   "hide-selected", "show-all-bodies",
 ]);
 

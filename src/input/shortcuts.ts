@@ -42,6 +42,7 @@ export const SHORTCUTS: Shortcut[] = [
   { key: "h", shift: true, action: "show-all-bodies", context: "model", label: "Show all bodies" },
   { key: "1", action: "selmode-faces", context: "model", label: "Select faces" },
   { key: "2", action: "selmode-bodies", context: "model", label: "Select bodies" },
+  { key: "x", action: "toggle-xray", context: "model", label: "See through (select what is behind)" },
   // --- sketch context ---
   { key: "l", action: "line", context: "sketch", label: "Line" },
   { key: "c", action: "circle", context: "sketch", label: "Circle" },
@@ -132,6 +133,11 @@ export function shortcutHudGroups(): HudGroup[] {
         { key: "Ctrl+N / Ctrl+O / Ctrl+E", label: "New / Open / Export" },
         { key: "Del", label: "Delete face (heal) / feature" },
         { key: "Esc", label: "Cancel / clear selection" },
+        // A gesture rather than a key, and the only place anyone would look
+        // for it is here.
+        { key: "Drag", label: "Box select: right takes what is inside, left takes what it touches" },
+        { key: "Shift+Drag", label: "Box select, adding to what is selected" },
+        { key: "Tab", label: "While boxing: take everything / faces / edges" },
       ],
     },
   ];
