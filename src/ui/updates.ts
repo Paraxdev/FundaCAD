@@ -70,7 +70,13 @@ export async function checkForUpdates(interactive: boolean): Promise<void> {
   } catch (err) {
     console.error("[updates] check/install failed:", err);
     if (interactive) {
-      toast(`Update check failed: ${err instanceof Error ? err.message : String(err)}`, { kind: "error" });
+      // The commonest cause is not a fault at all: a build published without a
+      // signing key carries no latest.json, so the feed is a 404 and the plugin
+      // reports it the same way it reports a broken network. Saying what to do
+      // instead covers both, without guessing which one happened from the text
+      // of an error message.
+      const why = err instanceof Error ? err.message : String(err);
+      toast(`Could not check for updates. Download the newest build from the releases page. (${why})`, { kind: "error" });
     }
   }
 }

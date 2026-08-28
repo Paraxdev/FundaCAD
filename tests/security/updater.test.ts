@@ -22,8 +22,11 @@
 // half into tauri.conf.json.
 //
 // So the "is it still upstream's key" gate lives in the RELEASE job rather than
-// here: it has to stop a publish, and a test that fails on every ordinary run is
-// a test everyone learns to skip past. What is checked here is the invariant
+// here, and a test that fails on every ordinary run is a test everyone learns to
+// skip past. That gate no longer stops the publish, because the installers are
+// fine and are what people download; it withholds latest.json, so the feed is
+// empty rather than full of bundles no install can verify, and the release notes
+// say the build does not update itself. What is checked here is the invariant
 // that makes the stale key survivable in the meantime, which is that updates
 // only ever come from a repository we control.
 

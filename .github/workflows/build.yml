@@ -194,16 +194,27 @@ jobs:
       #
       # On a normal push the key is present, this is a no-op, and updater artifacts stay
       # signed -- the in-app updater and the `release` job's latest.json depend on that.
-      - name: Disable updater artifacts when there is no signing key
+      - name: Disable updater artifacts when they could not be trusted
         shell: bash
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
-          if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then
-            echo "signing key present -- updater artifacts stay enabled"
+          # Upstream's minisign public key, as inherited at the fork point. See
+          # tests/security/updater.test.ts.
+          UPSTREAM_PUBKEY='dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDUwMkY3MDMzN0E1RUREMUYKUldRZjNWNTZNM0F2VU81ZU9YLzBPdDV6UVdkVklPOWg1S01zdU1lWitDMGR6aFg1cmJoZnYrMWIK'
+          pubkey=$(node -p "require('./src-tauri/tauri.conf.json').plugins.updater.pubkey")
+          why=""
+          [ -n "$TAURI_SIGNING_PRIVATE_KEY" ] || why="there is no signing key (expected on Dependabot PRs)"
+          # A signature made with a key whose public half is NOT the one baked
+          # into the app is worse than no signature at all: the build looks
+          # shippable, and every installed copy rejects the update with nothing
+          # said here. Same treatment as a missing key.
+          [ "$pubkey" != "$UPSTREAM_PUBKEY" ] || why="the updater pubkey is still upstream's, so nothing we sign would verify"
+          if [ -z "$why" ]; then
+            echo "signing key present and the pubkey is ours -- updater artifacts stay enabled"
             exit 0
           fi
-          echo "::warning::No updater signing key (expected on Dependabot PRs) -- bundling WITHOUT updater artifacts; this build is not shippable."
+          echo "::warning::No updater artifacts: $why. The installers still build and are still shippable; they just do not update themselves."
           node -e "const fs=require('fs');const f='src-tauri/tauri.bundle.conf.json';const j=JSON.parse(fs.readFileSync(f));j.bundle.createUpdaterArtifacts=false;fs.writeFileSync(f,JSON.stringify(j,null,2)+'\n')"
 
       # --- build + bundle. The bundle-only config ships sidecar-runtime/ as a resource
@@ -348,7 +359,13 @@ jobs:
       # needs out of the repo is the changelog it builds release notes from.
       - uses: actions/checkout@v4
         with:
-          sparse-checkout: CHANGELOG.md
+          # CHANGELOG.md for the notes, tauri.conf.json for the updater pubkey
+          # the manifest gate below reads. Leaving the config out made that gate
+          # fail on a missing file, under `set -euo pipefail`, which reads as a
+          # publish failure rather than as a missing checkout path.
+          sparse-checkout: |
+            CHANGELOG.md
+            src-tauri/tauri.conf.json
           sparse-checkout-cone-mode: false
 
       - uses: actions/download-artifact@v4
@@ -391,6 +408,34 @@ jobs:
           # real on 2026-08-05. Everything below updates in place instead, so a
           # release always exists and a retry repairs rather than destroys.
 
+          # Whether latest.json may be published. Installed copies verify an
+          # update against the minisign pubkey baked into tauri.conf.json, and
+          # while that is still the one inherited at the fork, nothing this
+          # project can sign will verify against it.
+          #
+          # This used to FAIL the job, which was too blunt: it withheld the
+          # installers too, and the installers are fine — they are what people
+          # actually download. What must not be published is a manifest that
+          # points installed copies at bundles they will reject, or one with no
+          # platforms in it at all, which is what an unsigned build produces.
+          # So the release goes out either way and only the manifest is held
+          # back, with the notes saying which of the two builds this is.
+          #
+          # tests/security/updater.test.ts has how to generate a keypair and
+          # what to replace to turn updates back on.
+          UPSTREAM_PUBKEY='dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDUwMkY3MDMzN0E1RUREMUYKUldRZjNWNTZNM0F2VU81ZU9YLzBPdDV6UVdkVklPOWg1S01zdU1lWitDMGR6aFg1cmJoZnYrMWIK'
+          pubkey=$(node -p "require('./src-tauri/tauri.conf.json').plugins.updater.pubkey")
+          platforms=$(jq '.platforms | length' latest.json)
+          if [ "$pubkey" = "$UPSTREAM_PUBKEY" ]; then
+            echo "::warning::The updater pubkey in tauri.conf.json is still upstream's, so no update this project signs could verify. Publishing the installers WITHOUT latest.json: this build does not update itself."
+            SELF_UPDATES=no
+          elif [ "$platforms" -eq 0 ]; then
+            echo "::warning::latest.json has no platforms in it (nothing was signed). Publishing the installers without it."
+            SELF_UPDATES=no
+          else
+            SELF_UPDATES=yes
+          fi
+
           # Release notes: boilerplate, plus a section of CHANGELOG.md (every line
           # after a "## " heading, up to the next one). "### " subheads survive
           # because the pattern requires a space in the third column.
@@ -418,29 +463,16 @@ jobs:
           else
             echo "WARNING: no CHANGELOG.md, publishing boilerplate notes only"
           fi
-          printf '\n---\n\nThe builds are unsigned for now: Windows shows a SmartScreen warning ("More info", then "Run anyway"); on macOS Gatekeeper may report the app as damaged, which it is not, and `xattr -dr com.apple.quarantine /Applications/Neocad.app` clears it. Install notes are in the [README](https://github.com/%s#install). Installed apps update themselves from this release.\n' \
+          printf '\n---\n\nThe builds are unsigned for now: Windows shows a SmartScreen warning ("More info", then "Run anyway"); on macOS Gatekeeper may report the app as damaged, which it is not, and `xattr -dr com.apple.quarantine /Applications/Neocad.app` clears it. Install notes are in the [README](https://github.com/%s#install).\n' \
             '${{ github.repository }}' >> notes.md
-          cat notes.md
+          if [ "$SELF_UPDATES" = yes ]; then
+            printf '\nInstalled apps update themselves from this release.\n' >> notes.md
+          else
+            printf '\nThis build does not update itself: the in-app updater needs a signing key this project does not have yet, so download a new installer from this page when you want a newer build.\n' >> notes.md
+          fi
 
           R='${{ github.repository }}'
           SHA='${{ github.sha }}'
-
-          # Refuse to publish while the updater still trusts UPSTREAM's minisign
-          # key. Releases are signed with TAURI_SIGNING_PRIVATE_KEY, which this
-          # project holds; installed copies verify against the pubkey baked into
-          # tauri.conf.json, which is still the one inherited at the fork. They do
-          # not match, so every installed copy would silently stop updating and
-          # nothing in the build would say so. tests/security/updater.test.ts has
-          # how to generate a keypair and what to replace.
-          UPSTREAM_PUBKEY='dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDUwMkY3MDMzN0E1RUREMUYKUldRZjNWNTZNM0F2VU81ZU9YLzBPdDV6UVdkVklPOWg1S01zdU1lWitDMGR6aFg1cmJoZnYrMWIK'
-          pubkey=$(node -p "require('./src-tauri/tauri.conf.json').plugins.updater.pubkey")
-          if [ "$pubkey" = "$UPSTREAM_PUBKEY" ]; then
-            echo "::error::The updater pubkey in tauri.conf.json is still upstream's."
-            echo "::error::Publishing now would ship a build that can never update itself."
-            echo "::error::Generate a keypair (npm run tauri signer generate), set the"
-            echo "::error::TAURI_SIGNING_PRIVATE_KEY secret, and replace the pubkey."
-            exit 1
-          fi
 
           # Move the rolling tag onto this commit (create it if it is missing).
           # Moving beats delete+recreate: the tag never stops existing, so the
@@ -462,7 +494,11 @@ jobs:
           # on the release always names files that exist. It only starts pointing
           # at this build once every binary of this build is up.
           gh release upload beta --repo "$R" --clobber $files
-          gh release upload beta --repo "$R" --clobber latest.json
+          if [ "$SELF_UPDATES" = yes ]; then
+            gh release upload beta --repo "$R" --clobber latest.json
+          else
+            echo "latest.json withheld (see the warning above); the installers above are complete"
+          fi
 
           # Only now retire assets from older builds. Their filenames carry the
           # version, so they do not get clobbered by name and would otherwise pile
