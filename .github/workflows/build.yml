@@ -617,6 +617,17 @@ jobs:
         with:
           workspaces: src-tauri -> target
 
-      - name: cargo check --features rust-geom (expected to fail without OCCT >= 7.9)
+      # A PROBE, not a gate. The rust-geom path needs OCCT >= 7.9, which no
+      # runner image ships yet, so this is expected to fail and the point of it
+      # is to notice the day it stops failing. It ran red on the first dispatch
+      # that ever reached it and painted the whole run red with it, which would
+      # make every future publish look broken. Report the outcome, exit 0 either
+      # way, and let the build/test/e2e jobs be the ones that can fail a run.
+      - name: cargo check --features rust-geom (probe, expected to fail until OCCT 7.9 is available)
         working-directory: src-tauri
-        run: cargo check --features rust-geom
+        run: |
+          if cargo check --features rust-geom; then
+            echo "::notice title=rust-geom::the rust geometry path now COMPILES here. Time to gate it."
+          else
+            echo "::notice title=rust-geom::rust-geom still does not build here (OCCT >= 7.9 unavailable). Probe only, not a failure."
+          fi
