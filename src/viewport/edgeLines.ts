@@ -246,7 +246,11 @@ export class BodyEdges {
 
   /** Restore build-time appearance on a REUSED body (see resetBodyAppearance). */
   resetAppearance() {
+    // The whole pose, not only the position: the move ghost carries rotation
+    // and scale now (see render.resetBodyAppearance).
     this.object.position.set(0, 0, 0);
+    this.object.quaternion.identity();
+    this.object.scale.set(1, 1, 1);
     this.material.clippingPlanes = null;
     this.material.transparent = false;
     this.material.opacity = 1;

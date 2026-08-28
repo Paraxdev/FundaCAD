@@ -35,7 +35,7 @@ export const FEATURE_NUM_FIELDS: Partial<Record<Feature["type"], [string, string
   patternCircular: [["count", "Count", "count"], ["angle", "Angle", "angle"]],
   simplifyMesh: [["tolerance", "Angle tol", "angle"]],
   cleanUp: [["tolerance", "Tolerance", "length"]],
-  scale: [["factor", "Factor", "count"]],
+  scale: [["factor", "Factor", "count"], ["sx", "X factor", "count"], ["sy", "Y factor", "count"], ["sz", "Z factor", "count"]],
   move: [["dx", "Move X", "length"], ["dy", "Move Y", "length"], ["dz", "Move Z", "length"], ["rx", "Rotate X", "angle"], ["ry", "Rotate Y", "angle"], ["rz", "Rotate Z", "angle"]],
   texture: [["depth", "Depth", "length"], ["scale", "Scale", "length"], ["angle", "Angle", "angle"], ["offset", "Offset", "length"], ["sharpness", "Sharpness", "count"], ["boundaryInset", "Edge blend", "length"], ["seed", "Seed", "count"]],
 };

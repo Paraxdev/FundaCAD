@@ -2927,14 +2927,64 @@ def _handle_simplify_mesh(f, ctx):
 
 
 def _handle_scale(f, ctx):
-    act = ctx.require_active("Scale")
+    """Resize bodies, uniformly or per axis, about a chosen point.
+
+    `factor` is the whole of the old feature and still the default for every
+    axis, so a document written before this reads the same. `sx`/`sy`/`sz`
+    override it one axis at a time — that is what a gizmo handle dragged along
+    one arrow means, and build123d carries it through to a GTransform.
+
+    `about` is the point the resize holds still. Absent, build123d scales about
+    each object's OWN LOCATION — the world origin for a body as built, and
+    wherever a `move` put it afterwards — which is exactly what this feature did
+    before, so a document without one stays where it was. The gizmo always sends
+    a point, because "grow this from that corner" is the request people have and
+    "grow this about wherever the body's location happens to sit" is not one
+    anybody could aim.
+    """
+    from OCP.BRepTools import BRepTools
+
+    ids = f.get("bodies")
+    targets = [ctx.find_body(b) for b in ids] if ids else [ctx.require_active("Scale")]
     factor = ctx.val(f.get("factor", 1))
-    # A factor of 0 collapses the solid to a point; OCCT reports that as
-    # Standard_ConstructionError. Negative factors DO work (mirror through the
-    # origin) and are left alone.
-    if factor == 0:
-        raise ValueError("Scale: factor must not be 0 — it would collapse the body to a point")
-    act["shape"] = scale(act["shape"], by=factor)
+    axes = tuple(
+        ctx.val(f[k]) if f.get(k) is not None else factor for k in ("sx", "sy", "sz")
+    )
+    # A factor of 0 collapses the solid — to a point uniformly, to a flat sheet
+    # on one axis; OCCT reports either as Standard_ConstructionError. Negative
+    # factors DO work (a mirror through the point) and are left alone.
+    for name, v in zip(("factor", "sx", "sy", "sz"), (factor,) + axes):
+        if v == 0:
+            raise ValueError(
+                f"Scale: {name} must not be 0 — it would collapse the body flat"
+            )
+    about = f.get("about")
+    by = factor if axes == (factor, factor, factor) else axes
+    for tgt in targets:
+        if tgt is None:
+            # stale id (an upstream body removal renumbered it) — a legitimate
+            # no-op, the same way move treats one, not a hard error
+            _skip_feature(ctx.diagnostics, f, "scale", "target body already consumed or missing")
+            continue
+        kw = {"about": Vector(*about)} if about else {}
+        out = scale(tgt["shape"], by=by, **kw)
+        # Drop whatever triangulation the faces are carrying.
+        #
+        # A body that has been drawn once comes back out of the per-body cache
+        # still holding the tessellator's mesh, and a non-uniform scale goes
+        # through BRepBuilderAPI_GTransform, which returns correct GEOMETRY with
+        # that mesh still attached and no longer describing it. Everything
+        # downstream reads the mesh. Measured on a 20mm cube stretched 2x in x
+        # about a corner: the kernel had it at -10..30 and the reply carried
+        # -20..20, so the part on screen was not the part in the document, and
+        # nothing anywhere raised.
+        #
+        # Cleaning costs a re-mesh the tessellator was going to do anyway, and
+        # it is done on every path rather than only the non-uniform one so the
+        # rule is simply "a scaled body leaves here with no mesh on it".
+        if out.wrapped is not None:
+            BRepTools.Clean_s(out.wrapped)
+        tgt["shape"] = out
 
 
 def _handle_move(f, ctx):

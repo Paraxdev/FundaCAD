@@ -475,9 +475,15 @@ export function bodyOfFace(view: ModelView, faceId: number): BodyMesh | undefine
  *  zebra-stripe shader material is swapped in/out by Viewport.applyZebra(),
  *  never touched here). */
 export function resetBodyAppearance(body: BodyMesh) {
-  // clear any leftover move-ghost translation: a reused (etag-unchanged) body
-  // must sit at the origin — its vertices already encode its true position.
+  // Clear any leftover move-ghost POSE: a reused (etag-unchanged) body must sit
+  // at the origin unrotated and unscaled — its vertices already encode its true
+  // position, and the rebuild has just re-encoded them. Position alone was
+  // enough while the ghost could only translate; the gizmo now turns and
+  // resizes through the same ghost, and a leftover quaternion on a reused body
+  // draws the part twice-rotated with nothing on screen to say why.
   body.mesh.position.set(0, 0, 0);
+  body.mesh.quaternion.identity();
+  body.mesh.scale.set(1, 1, 1);
   body.mesh.updateMatrixWorld();
   if (body.mesh.material instanceof THREE.MeshStandardMaterial) {
     const mat = body.mesh.material;

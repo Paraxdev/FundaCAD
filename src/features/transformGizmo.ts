@@ -126,6 +126,28 @@ export function moveMatrix(v: MoveValues): THREE.Matrix4 {
   return m;
 }
 
+/** A resize by `s` per axis that holds `pivot` still.
+ *
+ *  The gizmo's whole transform is this, then the move: T . R . scaleAbout. That
+ *  order is not a choice — it is the order the two FEATURES are applied in, a
+ *  `scale` written before a `move` in the timeline — and the preview has to be
+ *  built the same way round or it agrees with the rebuild only while one of the
+ *  two is the identity. */
+export function scaleAbout(pivot: THREE.Vector3, s: THREE.Vector3): THREE.Matrix4 {
+  return new THREE.Matrix4()
+    .makeTranslation(pivot.x, pivot.y, pivot.z)
+    .multiply(new THREE.Matrix4().makeScale(s.x, s.y, s.z))
+    .multiply(new THREE.Matrix4().makeTranslation(-pivot.x, -pivot.y, -pivot.z));
+}
+
+/** The smallest a resize handle may take an axis down to.
+ *
+ *  Not zero, which collapses the solid flat and which the kernel refuses; and
+ *  not negative, which is a mirror rather than a resize and which the preview's
+ *  matrix decomposition cannot represent. A drag that would go past this stops
+ *  here instead of failing on commit. */
+export const MIN_SCALE = 0.01;
+
 /** Is this rotation axis too close to the line of sight to drag against?
  *
  *  Looking straight down a rotation axis is the GOOD case — the ring faces you

@@ -14,6 +14,7 @@ import {
   moveMatrix,
   ringDragDegenerate,
   rotationFrame,
+  scaleAbout,
   snapDegrees,
 } from "../../src/features/transformGizmo";
 
@@ -145,5 +146,43 @@ describe("ringDragDegenerate", () => {
     expect(ringDragDegenerate(0)).toBe(true); // the ring is a line on screen
     expect(ringDragDegenerate(-0.02)).toBe(true);
     expect(ringDragDegenerate(-1)).toBe(false); // down the axis, from the far side
+  });
+});
+
+describe("scaleAbout", () => {
+  it("holds the pivot still", () => {
+    const pivot = v(100, -10, -10);
+    const m = scaleAbout(pivot, v(2, 2, 2));
+    expect(pivot.clone().applyMatrix4(m).distanceTo(pivot)).toBeLessThan(1e-9);
+    // and a point 20mm out along x lands 40mm out
+    expect(v(120, -10, -10).applyMatrix4(m).x).toBeCloseTo(140, 9);
+    // CONTROL: a bare scale matrix does NOT hold it, which is the whole point.
+    const bare = new THREE.Matrix4().makeScale(2, 2, 2);
+    expect(pivot.clone().applyMatrix4(bare).distanceTo(pivot)).toBeGreaterThan(100);
+  });
+
+  it("takes one axis at a time", () => {
+    const m = scaleAbout(ZERO, v(3, 1, 1));
+    const p = v(2, 2, 2).applyMatrix4(m);
+    expect([p.x, p.y, p.z]).toEqual([6, 2, 2]);
+  });
+
+  it("composes with the move in the order the features are applied", () => {
+    // The gizmo previews T . R . scaleAbout, and the document holds a `scale`
+    // written BEFORE a `move`. A preview built the other way round agrees only
+    // while one of the two is the identity, so the control is a case where
+    // both are doing something.
+    const pivot = v(50, 0, 0);
+    const rot = qAbout(v(0, 0, 1), 90);
+    const s = v(2, 1, 1);
+    const right = moveMatrix(composeMove(pivot, rot, ZERO)).multiply(scaleAbout(pivot, s));
+    const wrong = scaleAbout(pivot, s).multiply(moveMatrix(composeMove(pivot, rot, ZERO)));
+    const p = v(70, 10, 0);
+    // resize x about 50 first: (70,10) -> (90,10); then a quarter turn about
+    // (50,0): (90,10) -> (40, 40)
+    const got = p.clone().applyMatrix4(right);
+    expect(got.x).toBeCloseTo(40, 9);
+    expect(got.y).toBeCloseTo(40, 9);
+    expect(p.clone().applyMatrix4(wrong).distanceTo(got)).toBeGreaterThan(1);
   });
 });

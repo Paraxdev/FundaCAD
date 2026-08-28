@@ -572,7 +572,10 @@ export type Feature =
   // recovers planar faces / reduces facet count. Coarsens curved regions.
   | { id: string; type: "simplifyMesh"; tolerance: Num }
   // Scale the active body uniformly about the origin (factor; 1 = unchanged).
-  | { id: string; type: "scale"; factor: Num }
+  // `factor` scales every axis; sx/sy/sz override it one axis at a time (the
+  // gizmo's per-axis handles). `about` is the point held still — absent means
+  // the world origin, which is what the feature meant before it had one.
+  | { id: string; type: "scale"; factor: Num; sx?: Num; sy?: Num; sz?: Num; about?: Vec3; bodies?: string[] }
   // Move the active body — or the bodies listed in `bodies` (multi-select) —:
   // translate (dx,dy,dz mm) + rotate (rx,ry,rz degrees, about origin).
   | { id: string; type: "move"; dx: Num; dy: Num; dz: Num; rx: Num; ry: Num; rz: Num; bodies?: string[] }

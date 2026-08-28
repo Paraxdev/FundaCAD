@@ -15,6 +15,12 @@
 // The preview and the committed feature are built from the SAME six numbers, so
 // they cannot disagree about what the drag meant.
 //
+// A cube at each arrow's tip RESIZES along that axis, about the same origin the
+// rings turn about. It commits a second feature (a `scale`, written before the
+// `move`), and the preview composes the two in that same order, because they are
+// applied in that order on rebuild and a preview built the other way round
+// agrees only while one of them is the identity.
+//
 // The gizmo's ORIGIN is draggable, and snaps to the model — a corner, the middle
 // of an edge, the centre of a face. That is what turns "rotate this" into
 // "rotate this about that corner", which is the only form of the request anyone
@@ -37,7 +43,9 @@ import {
   moveMatrix,
   ringDragDegenerate,
   rotationFrame,
+  scaleAbout,
   snapDegrees,
+  MIN_SCALE,
   ROTATE_SNAP_DEG,
 } from "./transformGizmo";
 
@@ -72,10 +80,17 @@ const ORIGIN_R = 5.5;
  *  than wherever the cursor was. The one thing the handle has to say. */
 const SNAPPED = 0x64d2ff;
 const ORIGIN_IDLE = 0xdfe6ee;
+/** The resize cube, past the arrowhead so the two never share a pixel. */
+const SCALE_BOX = 9;
+const SCALE_AT = ARROW_SHAFT + ARROW_HEAD + 11;
+/** How far the value fields sit off the gizmo's centre, in SCREEN pixels.
+ *  Clear of the outermost handle, so the boxes never cover the thing they are
+ *  reporting on. */
+const FIELDS_OFFSET_PX = SCALE_AT + 18;
 
 /** Which handle a press landed on. Two families, so they can be hit-tested
  *  separately and a ring behind an arrow can never steal the arrow's press. */
-type Grab = { kind: "axis" | "ring" | "origin"; index: number } | null;
+type Grab = { kind: "axis" | "ring" | "origin" | "size"; index: number } | null;
 
 export class MoveTool {
   active = false;
@@ -90,6 +105,11 @@ export class MoveTool {
   private gizmo: THREE.Group | null = null;
   private arrows: { group: THREE.Group; mat: THREE.MeshBasicMaterial; axis: number }[] = [];
   private rings: { mesh: THREE.Mesh; grab: THREE.Mesh; mat: THREE.MeshBasicMaterial; axis: number }[] = [];
+  private cubes: { mesh: THREE.Mesh; mat: THREE.MeshBasicMaterial; axis: number }[] = [];
+  /** per-axis resize about `anchor`, 1 meaning untouched */
+  private scl = new THREE.Vector3(1, 1, 1);
+  private grabScale = 1;
+  private scaleId = "";
   private origin: { mesh: THREE.Mesh; mat: THREE.MeshBasicMaterial } | null = null;
   /** the origin is sitting on real model geometry, not on empty space */
   private pivotSnapped = false;
@@ -138,6 +158,8 @@ export class MoveTool {
     this.ringDeg = 0;
     this.last = null;
     this.previewId = this.store.nextId();
+    this.scaleId = "";
+    this.scl.set(1, 1, 1);
     this.anchor.copy(this.viewport.bodiesCentroid(bodies));
     this.viewport.beginBodyMoveGhost(bodies); // live transform during drag (no rebuild)
     this.viewport.suspendPicking = true;
@@ -152,15 +174,16 @@ export class MoveTool {
       [
         { name: "move", label: "Move", kind: "length" },
         { name: "turn", label: "Angle", kind: "angle" },
+        { name: "size", label: "Scale", kind: "count" },
       ],
       () => this.commit(),
       () => this.cancel(),
     );
     const s = this.viewport.projectToScreen(this.anchor);
-    this.dim.position(s.x, s.y);
-    this.dim.updateFromCursor({ move: 0, turn: 0 });
+    this.dim.position(s.x + FIELDS_OFFSET_PX, s.y);
+    this.dim.updateFromCursor({ move: 0, turn: 0, size: 1 });
     setPrompt(
-      "Drag an arrow to slide, a ring to turn, the centre to move what it turns about · Enter · Esc",
+      "Drag an arrow to slide, a ring to turn, a cube to resize, the centre to move what those act about · Enter · Esc",
     );
     this.raf = requestAnimationFrame(this.boundTick);
   }
@@ -254,6 +277,18 @@ export class MoveTool {
       if (at) this.setPivot(at);
       return;
     }
+    if (g?.kind === "size") {
+      const ax = AXES[g.index];
+      if (!ax) return;
+      const proj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.anchor, ax.dir);
+      // Ratio, not difference: the handle sits a fixed number of PIXELS out
+      // from the origin, so how far it started from the pivot in millimetres
+      // depends on the zoom. A difference would resize by an amount that
+      // changed with how far in you were.
+      if (Math.abs(this.grabProj) < 1e-9) return;
+      this.applySize(g.index, this.grabScale * (proj / this.grabProj));
+      return;
+    }
     if (g?.kind === "ring") {
       const now = this.ringAngle(g.index, e.clientX, e.clientY);
       if (now === null) return; // the view went edge-on mid-drag; hold the value
@@ -275,6 +310,12 @@ export class MoveTool {
     if (!hit) return;
     if (hit.kind === "origin") {
       // nothing to seed: the origin follows the cursor from the first move
+    } else if (hit.kind === "size") {
+      const ax = AXES[hit.index];
+      if (!ax) return;
+      this.grabScale = this.scl.getComponent(hit.index);
+      this.grabProj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.anchor, ax.dir);
+      this.dim.updateFromCursor({ size: this.grabScale });
     } else if (hit.kind === "ring") {
       const start = this.ringAngle(hit.index, e.clientX, e.clientY);
       if (start === null) return; // edge-on: leave the press alone
@@ -311,7 +352,7 @@ export class MoveTool {
   /** Where the cursor is, in the plane through the gizmo that faces the camera.
    *  The fallback when the pointer is over no geometry at all. */
   private freePivotPoint(clientX: number, clientY: number): THREE.Vector3 | null {
-    const at = this.anchor.clone().applyMatrix4(moveMatrix(this.values()));
+    const at = this.anchor.clone().applyMatrix4(this.transform());
     const n = this.viewport.camera.getWorldDirection(new THREE.Vector3());
     const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(n, at);
     return this.viewport.screenToPlane(clientX, clientY, plane);
@@ -326,7 +367,7 @@ export class MoveTool {
     // The gizmo sits where the selection now is: the anchor carried through the
     // same transform the bodies are under. It has to, or turning the part
     // leaves the rings behind on the original centroid.
-    const pos = this.anchor.clone().applyMatrix4(moveMatrix(this.values()));
+    const pos = this.anchor.clone().applyMatrix4(this.transform());
     const k = this.viewport.pixelWorldSize(pos);
     this.gizmo.position.copy(pos);
     // Deliberately NOT turned with the selection. dx/dy/dz are world axes and
@@ -345,12 +386,16 @@ export class MoveTool {
       const ax = AXES[r.axis];
       if (ax) r.mat.color.set(lit("ring", r.axis) ? HOT : ax.color);
     }
+    for (const c of this.cubes) {
+      const ax = AXES[c.axis];
+      if (ax) c.mat.color.set(lit("size", c.axis) ? HOT : ax.color);
+    }
     if (this.origin) {
       const hot = lit("origin", 0);
       this.origin.mat.color.set(hot ? HOT : this.pivotSnapped ? SNAPPED : ORIGIN_IDLE);
     }
     const s = this.viewport.projectToScreen(pos);
-    this.dim.position(s.x, s.y);
+    this.dim.position(s.x + FIELDS_OFFSET_PX, s.y);
     this.applyTyped();
     this.raf = requestAnimationFrame(this.boundTick);
   }
@@ -374,6 +419,13 @@ export class MoveTool {
     if (l.kind === "ring" && this.dim.isUserDriven("turn")) {
       const v = this.dim.getValue("turn");
       if (v != null && Math.abs(v - this.ringDeg) > 1e-6) this.applyRing(l.index, v);
+      return;
+    }
+    if (l.kind === "size" && this.dim.isUserDriven("size")) {
+      const v = this.dim.getValue("size");
+      if (v != null && Math.abs(v - this.scl.getComponent(l.index)) > 1e-6) {
+        this.applySize(l.index, v);
+      }
     }
   }
 
@@ -383,11 +435,31 @@ export class MoveTool {
     return composeMove(this.anchor, this.rot, this.t);
   }
 
+  /** The whole gizmo as one matrix, in the order the two features are applied:
+   *  the resize first, then the move. */
+  private transform(): THREE.Matrix4 {
+    return moveMatrix(this.values()).multiply(scaleAbout(this.anchor, this.scl));
+  }
+
+  private resized(): boolean {
+    return Math.abs(this.scl.x - 1) + Math.abs(this.scl.y - 1) + Math.abs(this.scl.z - 1) > 1e-9;
+  }
+
+  /** Resize along one axis. `f` is the factor for that axis alone; the other
+   *  two are left where they are, which is what dragging ONE cube means. */
+  private applySize(axis: number, f: number) {
+    const v = Math.max(MIN_SCALE, f);
+    if (Math.abs(this.scl.getComponent(axis) - v) < 1e-9) return;
+    this.scl.setComponent(axis, v);
+    this.dim.updateFromCursor({ size: v });
+    this.refreshPreview();
+  }
+
   /** Instant ghost: transform the moved bodies' mesh + edges in place (no
    *  sidecar round-trip, so the drag is snappy). The real `move` is committed
    *  on release. */
   private refreshPreview() {
-    this.viewport.setBodyMoveTransform(moveMatrix(this.values()));
+    this.viewport.setBodyMoveTransform(this.transform());
   }
 
   private buildFeature(): Feature {
@@ -402,6 +474,23 @@ export class MoveTool {
       rx: r(v.rx),
       ry: r(v.ry),
       rz: r(v.rz),
+      ...(this.bodies.length ? { bodies: this.bodies } : {}),
+    };
+  }
+
+  private buildScale(): Feature {
+    const r = (n: number) => Math.round(n * 1e6) / 1e6;
+    if (!this.scaleId) this.scaleId = this.store.nextId();
+    return {
+      id: this.scaleId,
+      type: "scale",
+      factor: 1,
+      sx: r(this.scl.x),
+      sy: r(this.scl.y),
+      sz: r(this.scl.z),
+      // The point the gizmo was sitting on, not the body's own location: a
+      // resize has to hold still the thing the user aimed at.
+      about: [r(this.anchor.x), r(this.anchor.y), r(this.anchor.z)],
       ...(this.bodies.length ? { bodies: this.bodies } : {}),
     };
   }
@@ -446,6 +535,18 @@ export class MoveTool {
       grab.userData.ring = i;
       g.add(ring, grab);
       this.rings.push({ mesh: ring, grab, mat: rmat, axis: i });
+
+      const cmat = new THREE.MeshBasicMaterial({
+        color: a.color, depthTest: false, depthWrite: false,
+      });
+      const cube = new THREE.Mesh(
+        new THREE.BoxGeometry(SCALE_BOX, SCALE_BOX, SCALE_BOX), cmat,
+      );
+      cube.position.copy(a.dir).multiplyScalar(SCALE_AT);
+      cube.renderOrder = 999;
+      cube.userData.size = i;
+      g.add(cube);
+      this.cubes.push({ mesh: cube, mat: cmat, axis: i });
     }
     const omat = new THREE.MeshBasicMaterial({
       color: ORIGIN_IDLE, depthTest: false, depthWrite: false,
@@ -484,6 +585,8 @@ export class MoveTool {
       while (o && o.userData.axis === undefined) o = o.parent;
       if (o) return { kind: "axis", index: o.userData.axis as number };
     }
+    const onCube = ray.intersectObjects(this.cubes.map((c) => c.mesh), false)[0];
+    if (onCube) return { kind: "size", index: onCube.object.userData.size as number };
     const onRing = ray.intersectObjects(this.rings.map((r) => r.grab), false)[0];
     if (onRing) return { kind: "ring", index: onRing.object.userData.ring as number };
     return null;
@@ -498,13 +601,20 @@ export class MoveTool {
     // the origin has a non-zero t and has not moved anything.
     const moved = Math.hypot(v.dx, v.dy, v.dz) > 1e-9;
     const turned = Math.abs(v.rx) + Math.abs(v.ry) + Math.abs(v.rz) > 1e-9;
-    if (!moved && !turned) return this.cancel(); // nothing happened
-    const feature = this.buildFeature();
+    const sized = this.resized();
+    if (!moved && !turned && !sized) return this.cancel(); // nothing happened
+    const scaleFeature = sized ? this.buildScale() : null;
+    const feature = moved || turned ? this.buildFeature() : null;
     this.viewport.endBodyMoveGhost(false); // keep the ghost pose; the rebuild replaces it
-    this.store.addFeature(feature);
+    // The resize goes in FIRST, which is the order the preview composed them
+    // in: it holds the origin still, so the move that follows still turns about
+    // the same point.
+    if (scaleFeature) this.store.addFeature(scaleFeature);
+    if (feature) this.store.addFeature(feature);
     const done = this.onDone;
+    const id = feature?.id ?? scaleFeature?.id ?? null;
     this.cleanup();
-    done?.(feature.id);
+    done?.(id);
   }
 
   cancel() {
@@ -542,9 +652,14 @@ export class MoveTool {
         this.origin.mat.dispose();
         this.origin = null;
       }
+      for (const c of this.cubes) {
+        c.mesh.geometry.dispose();
+        c.mat.dispose();
+      }
       this.gizmo = null;
       this.arrows = [];
       this.rings = [];
+      this.cubes = [];
     }
     this.viewport.suspendPicking = false;
     this.active = false;
@@ -553,6 +668,7 @@ export class MoveTool {
     this.t.set(0, 0, 0);
     this.rot.identity();
     this.ringDeg = 0;
+    this.scl.set(1, 1, 1);
     this.pivotSnapped = false;
     setPrompt(null);
   }
