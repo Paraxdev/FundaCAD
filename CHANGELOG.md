@@ -25,6 +25,25 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **Revolve can climb while it turns, which is how you make a thread.** Draw the
+  thread's cross section in a plane through the axis, set **Pitch** to the
+  thread's pitch, and wind **Angle** past 360 for as many turns as the thread is
+  long: 3600 for ten turns. Join it to a shank or Cut it out of a bore, whichever
+  the thread is. Nothing else about the feature changes, and a revolve with no
+  pitch is the flat revolve it always was.
+
+  Pitch is how far one full turn rises, not how far the whole revolve does, so it
+  is the number printed on the thread's spec and it stays right however many
+  turns are wound on. A negative pitch runs the thread the other way down the
+  axis, independently of which way the angle turns.
+
+  Two things it refuses, rather than building quietly and wrongly: a section
+  taller along the axis than one turn's climb, where every turn would eat the one
+  before, and a section centred on the axis, which gives the climb no side to
+  start from. Draw the section so it reaches a little way INTO the part it joins.
+  A section that merely touches the surface meets it edge on, and that is the one
+  case a union genuinely cannot resolve.
+
 - **The beta release publishes even when there is no signing key.** The build
   that assembles the release used to stop outright unless the in-app updater's
   signing key was set up, so nothing was published at all: no installers, no
@@ -229,6 +248,14 @@ This file starts on 2026-08-03. For anything before that, see the
   resolve, so this shows up as a smaller file rather than a visibly coarser part.
 
 ### Fixed
+
+- **A Join that comes back smaller than it started now says what went wrong.**
+  A union cannot remove material, so when the result is smaller than the body
+  was, the boolean itself has failed, and the reason is almost always that the
+  two shapes meet along a surface instead of crossing one another. That case was
+  caught, but reported as "the profile is already inside the body", which is the
+  one explanation a shrinking union cannot have. It now names the real cause and
+  says to move the profile so it reaches into the body.
 
 - **A slot cut into a face now removes material instead of nothing.** A closed
   sketch loop is pushed along the direction its own outline faces, and that

@@ -16,6 +16,8 @@ API notes (verified against build123d 0.11.1, dual-compatible back to 0.10.x):
   - fillet(edges, radius=...)              radius kwarg
   - chamfer(edges, length=...)             length kwarg (NOT distance)
   - revolve(sketch, axis=..., revolution_arc=...)   degrees, default 360
+    (a revolve with a `pitch` climbs instead, and is swept by
+    BRepOffsetAPI_MakePipeShell, not by `revolve` — see _screw_revolve)
   - mirror(obj, about=Plane)               about defaults to Plane.XZ
   - loft(sections)                         iterable of sketches/faces
   - split(obj, bisect_by=Plane, keep=Keep.TOP|BOTTOM|BOTH)   cut by a plane
@@ -2368,8 +2370,26 @@ def _handle_revolve(f, ctx):
     # timeline showed a healthy feature that had done nothing at all.
     if angle == 0:
         raise ValueError("Revolve: angle must not be 0 — nothing would be swept")
+    pitch = ctx.val(f.get("pitch", 0) or 0)
+    axis = _revolve_axis(f, ctx)
+    if pitch:
+        _boolean_into_bodies(
+            ctx.bodies, _screw_revolve(sk, axis, angle, pitch),
+            f.get("operation", "new"), ctx.new_body, ctx.hidden_bodies)
+        return
+    # Past a full turn a flat revolve only re-sweeps ground it has already
+    # covered. OCCT wraps such an arc back onto the same solid by itself
+    # (measured: 360, 720 and 1080 all give the identical shape), so clamping
+    # here changes no result — it states the intent where the value is read,
+    # instead of leaving a document that says 1080 and a body that means 360.
+    # Winding on is only meaningful once there is a pitch to separate one turn
+    # from the next, and the branch above owns that case.
+    if angle > 360:
+        angle = 360
+    elif angle < -360:
+        angle = -360
     try:
-        solid = revolve(sk, axis=_revolve_axis(f, ctx), revolution_arc=angle)
+        solid = revolve(sk, axis=axis, revolution_arc=angle)
     except Exception as ex:
         # OCCT reports a profile that straddles the axis as a bare
         # `StdFail_NotDone` ("BRep_API: command not done"), which tells the user
@@ -2381,6 +2401,114 @@ def _handle_revolve(f, ctx):
             f"(it may touch the axis, but not cross it). [{type(ex).__name__}]"
         )
     _boolean_into_bodies(ctx.bodies, solid, f.get("operation", "new"), ctx.new_body, ctx.hidden_bodies)
+
+
+def _screw_revolve(profile, axis, angle, pitch):
+    """A revolve that climbs the axis while it turns: one turn rises `pitch`.
+
+    This is the whole of thread cutting. Draw the thread's cross section in a
+    plane through the axis, give it the thread's pitch, wind the angle past 360
+    for as many turns as the thread is long, and Join it to the shank or Cut it
+    out of the bore. Nothing else about the feature changes, which is the point:
+    a thread is a revolve that does not close on itself.
+
+    Built as a pipe sweep along a helix, with the binormal PINNED to the axis
+    direction. That pin is what makes it a revolve rather than a pipe: with a
+    fixed binormal, OCCT builds each section's frame from the tangent and that
+    direction, so the section's plane always contains the axis. It stays a
+    meridian section all the way round, exactly as a revolve's does, instead of
+    tipping to stay square to the helix (which is what Frenet framing does, and
+    which would thin the profile by the cosine of the helix angle).
+
+    The motion from the profile's own position to any point of the sweep is then
+    a pure screw: rotate about the axis, rise along it. So the spine's RADIUS is
+    free and cancels out (verified: a spine at r=0.3 and one at the profile's own
+    radius give the same volume and the same bounding box to 1e-6). Its start
+    DIRECTION does not cancel: the profile is carried from wherever the spine
+    starts, so a spine that starts a quarter turn away lifts the whole result by
+    a quarter of the pitch. The spine is therefore built on the meridian the
+    profile is already on, which leaves the first section exactly where it was
+    drawn.
+
+    The volume is a Pappus identity and is what the tests measure: the axial
+    travel shears the section within its own plane, which adds nothing, so a
+    section of area A whose centroid sits at radius r sweeps A * r * angle
+    (radians) no matter what the pitch is.
+    """
+    from OCP.BRepOffsetAPI import BRepOffsetAPI_MakePipeShell
+    from OCP.gp import gp_Dir
+
+    D = Vector(*axis.direction).normalized()
+    O = Vector(*axis.position)
+
+    faces = list(profile.faces()) if hasattr(profile, "faces") else [profile]
+    if not faces:
+        raise ValueError("Revolve: no closed profile to sweep")
+
+    # Consecutive turns run into each other when the section is taller along the
+    # axis than one turn's climb. OCCT builds that happily and hands back a
+    # self-intersecting solid that measures as if nothing were wrong, so the
+    # first sign of it would be a boolean failing much later, somewhere else.
+    # One turn has no neighbour to hit, hence the angle test.
+    if abs(angle) > 360:
+        local = Plane(origin=tuple(O), z_dir=tuple(D)).to_local_coords(
+            Compound(faces) if len(faces) > 1 else faces[0])
+        bb = local.bounding_box()
+        tall = bb.max.Z - bb.min.Z
+        if tall > abs(pitch) + 1e-7:
+            raise ValueError(
+                f"Revolve: the profile is {tall:.4g} mm tall along the axis but "
+                f"climbs only {abs(pitch):.4g} mm each turn, so every turn would "
+                "run into the one before. Raise the pitch, or draw a shorter "
+                "profile, or stay within one turn."
+            )
+
+    turns = angle / 360.0
+    rise = turns * pitch
+
+    out = None
+    for face in faces:
+        progress_tick()
+        rel = face.center() - O
+        axial = rel.dot(D)
+        radial = rel - D * axial
+        r = radial.length
+        if r < 1e-6:
+            raise ValueError(
+                "Revolve: a climbing revolve needs a profile that sits off to "
+                "one side of the axis. This one is centred on it, so there is "
+                "no direction for it to start from."
+            )
+        # `lefthand` and the flipped normal between them cover all four sign
+        # pairs: the sweep turns the way the angle says, and rises the way the
+        # pitch says, independently. Both are checked in the orientation tests.
+        helix = Edge.make_helix(
+            pitch=abs(pitch), height=abs(rise), radius=r,
+            center=(0, 0, 0), normal=(0, 0, 1), lefthand=(pitch < 0))
+        frame = Plane(origin=tuple(O + D * axial), x_dir=tuple(radial.normalized()),
+                      z_dir=tuple(D if rise >= 0 else -D))
+        path = frame * helix
+        spine = path if isinstance(path, Wire) else Wire(path.edges())
+
+        def swept(wire, _spine=spine):
+            mps = BRepOffsetAPI_MakePipeShell(_spine.wrapped)
+            mps.SetMode(gp_Dir(*tuple(D)))
+            mps.Add(wire.wrapped, False, False)
+            mps.Build()
+            if not mps.IsDone():
+                raise ValueError(
+                    "Revolve: the climbing sweep failed. A profile that is very "
+                    "close to the axis, or a pitch far larger than the profile, "
+                    "can make a surface that crosses itself."
+                )
+            mps.MakeSolid()
+            return Solid(mps.Shape())
+
+        solid = swept(face.outer_wire())
+        for hole in face.inner_wires():
+            solid = solid - swept(hole)
+        out = solid if out is None else out + solid
+    return _as_compound(out)
 
 
 def _revolve_axis(f, ctx):
@@ -5088,6 +5216,22 @@ def _boolean_into_bodies(bodies, solid, op, new_body, hidden=frozenset()):
         merged_vol, hit_vol = _try_vol(merged), _sum_hit_vol(hits)
         if merged_vol is not None and hit_vol is not None \
                 and merged_vol <= hit_vol + eps(prism_vol):
+            # LESS than was there before is a different diagnosis. Nothing a
+            # union can legitimately do removes material, so the fuse itself came
+            # back wrong, and the usual reason is that the two shapes meet along a
+            # surface rather than crossing one another: a thread whose root sits
+            # exactly on the shank it is wound onto, a boss landing exactly on the
+            # plane it was drawn from. Measured on such a thread, the fuse of a
+            # 942 mm3 shank and a 168 mm3 thread came back as 56 mm3. Telling that
+            # user the profile is "already inside the body" sends them to look in
+            # entirely the wrong place.
+            if merged_vol < hit_vol - eps(hit_vol):
+                raise ValueError(
+                    "Join failed: the result came out smaller than the body it "
+                    "started from. That usually means the two shapes touch along "
+                    "a surface instead of overlapping. Move the profile so it "
+                    "reaches a little way into the body."
+                )
             raise ValueError(
                 "Join added no material — the profile is already inside the body. "
                 "Did you mean Cut?"

@@ -445,7 +445,13 @@ export type Feature =
   // consumer keeps working without resolving anything, and an edge that stops
   // resolving leaves the revolve where the user last saw it rather than failing
   // the feature and taking the body with it.
-  | { id: string; type: "revolve"; sketch: string; axis: AxisSpec; axisEdge?: Selector; angle: Num; operation?: "new" | "join" | "cut" | "intersect"; regions?: [number, number, number][] }
+  // `pitch` (optional, mm per full turn) makes the revolve CLIMB the axis while
+  // it turns, which is how a thread is made: draw the thread's cross section in
+  // a plane through the axis, set the pitch from the thread's spec, and wind the
+  // angle past 360 for as many turns as it is long. Absent or 0 is the flat
+  // revolve, unchanged, and then an angle over 360 is clamped to one turn
+  // because a flat revolve has already covered that ground.
+  | { id: string; type: "revolve"; sketch: string; axis: AxisSpec; axisEdge?: Selector; angle: Num; pitch?: Num; operation?: "new" | "join" | "cut" | "intersect"; regions?: [number, number, number][] }
   // Loft blends through 2+ profiles in order. `profiles` (Fusion flow) lofts the
   // SELECTED profile regions across sketches — each carries its sketch id + a 3D
   // interior anchor (a ring keeps its hole → a tube). `sketches` is the legacy

@@ -21,7 +21,10 @@ export const FEATURE_NUM_FIELDS: Partial<Record<Feature["type"], [string, string
   fillet: [["radius", "Radius", "length"], ["profile", "Profile", "count"]],
   chamfer: [["distance", "Length", "length"]],
   "press-pull": [["distance", "Distance", "length"]],
-  revolve: [["angle", "Angle", "angle"]],
+  // Pitch is how far one full turn climbs, not how far the whole revolve does,
+  // so a thread's pitch is typed straight off its spec and stays right however
+  // many turns are wound on. Empty means no climb: the flat revolve.
+  revolve: [["angle", "Angle", "angle"], ["pitch", "Pitch", "length"]],
   datumPlane: [["offset", "Offset", "length"]],
   box: [["length", "Length", "length"], ["width", "Width", "length"], ["height", "Height", "length"]],
   cylinder: [["radius", "Radius", "length"], ["height", "Height", "length"]],
