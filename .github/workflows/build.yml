@@ -318,6 +318,93 @@ jobs:
             echo "::warning::no signing key, AppImage left unsigned (not shippable)"
           fi
 
+      # A PORTABLE Windows build: unzip anywhere, run Neocad.exe, no installer
+      # and no admin rights. An installer is a poor fit for a machine you do not
+      # administer, or for keeping several builds side by side to compare them.
+      #
+      # Its contents are EXTRACTED FROM THE MSI rather than assembled by hand. A
+      # hand-built tree would be a second and silently drifting opinion about
+      # what the app consists of: the exe and whichever resources were current on
+      # the day it was written. `msiexec /a` performs an administrative install,
+      # which unpacks the package's payload without installing it, so the folder
+      # is by construction the same file set a real install lays down.
+      #
+      # Portable means no installer, not no traces: preferences and recent files
+      # still live in the user profile, as they do for an installed copy. The
+      # readme inside the zip says so rather than leaving it to be discovered.
+      - name: Portable zip (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $msi = Get-ChildItem src-tauri/target/release/bundle/msi -Filter *.msi | Select-Object -First 1
+          if (-not $msi) { throw "no .msi was produced, so there is nothing to unpack" }
+
+          $stage = Join-Path $PWD "portable-stage"
+          $log = Join-Path $PWD "msi-extract.log"
+          $proc = Start-Process msiexec -Wait -PassThru -ArgumentList @(
+            "/a", "`"$($msi.FullName)`"", "/qn", "TARGETDIR=`"$stage`"", "/l*v", "`"$log`"")
+          if ($proc.ExitCode -ne 0) {
+            if (Test-Path $log) { Get-Content $log -Tail 60 }
+            throw "msiexec /a failed with $($proc.ExitCode)"
+          }
+
+          # An administrative install drops a copy of the package itself beside
+          # the payload. Nobody wants an installer inside the portable zip.
+          Get-ChildItem $stage -Filter *.msi | Remove-Item -Force
+
+          $exe = Get-ChildItem $stage -Recurse -Filter Neocad.exe | Select-Object -First 1
+          if (-not $exe) { throw "no Neocad.exe in the unpacked payload" }
+          $root = $exe.Directory.FullName
+
+          # The geometry engine IS the app, not an extra. A zip with the exe and
+          # no interpreter starts, opens a window, and can never build anything.
+          if (-not (Test-Path (Join-Path $root "sidecar-runtime/python/python.exe"))) {
+            Get-ChildItem $root | Select-Object -ExpandProperty Name
+            throw "no bundled Python at sidecar-runtime/python/python.exe"
+          }
+
+          $version = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          $out = Join-Path $PWD "src-tauri/target/release/bundle/portable"
+          $pack = Join-Path $out "pack"
+          $folder = Join-Path $pack "Neocad"
+          New-Item -ItemType Directory -Force -Path $pack | Out-Null
+          Copy-Item $root $folder -Recurse
+
+          # An ARRAY, not a here-string: a here-string's closing marker has to sit
+          # at column 0, and every line of this script is indented by the YAML
+          # block it lives in.
+          Set-Content -Path (Join-Path $folder "README.txt") -Encoding utf8 -Value @(
+            "Neocad $version, portable build",
+            "",
+            "Run Neocad.exe. There is nothing to install and no admin rights are",
+            "needed. Move or copy this folder wherever you like, a USB stick",
+            "included, and it goes on working.",
+            "",
+            "The first run shows a SmartScreen warning, Windows protected your PC.",
+            "Choose More info, then Run anyway. The build is not code signed, and",
+            "that is what SmartScreen is reporting.",
+            "",
+            "Needs the Microsoft Edge WebView2 runtime, which Windows 11 and an",
+            "up to date Windows 10 already have. If no window ever appears, get it",
+            "from https://developer.microsoft.com/microsoft-edge/webview2/",
+            "",
+            "Portable means no installer, not no traces: preferences and recent",
+            "files are kept in your user profile, the same as an installed copy.",
+            "",
+            "This build does not update itself. Newer ones are at",
+            "https://github.com/Paraxdev/neocad/releases/tag/beta"
+          )
+
+          $zip = Join-Path $out "Neocad_${version}_x64_portable.zip"
+          # .NET rather than Compress-Archive: the payload is a few thousand files
+          # and several hundred megabytes, which Compress-Archive walks one
+          # pipeline object at a time.
+          [System.IO.Compression.ZipFile]::CreateFromDirectory(
+            $pack, $zip, [System.IO.Compression.CompressionLevel]::Optimal, $false)
+          Remove-Item $pack -Recurse -Force
+          Write-Host "portable zip: $zip ($([math]::Round((Get-Item $zip).Length / 1MB, 1)) MB)"
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         if: always()
@@ -333,6 +420,7 @@ jobs:
             src-tauri/target/release/bundle/**/*.msi
             src-tauri/target/release/bundle/**/*.exe
             src-tauri/target/release/bundle/**/*.app.tar.gz
+            src-tauri/target/release/bundle/**/*_portable.zip
             src-tauri/target/release/bundle/**/*.sig
 
   # Rolling "beta" pre-release: every green main build replaces the installers on
@@ -410,6 +498,7 @@ jobs:
           # No spaces in Tauri bundle filenames, so plain word-splitting is safe here.
           files=$(find dist -type f \( -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' \
             -o -name '*.dmg' -o -name '*.msi' -o -name '*setup.exe' \
+            -o -name '*_portable.zip' \
             -o -name '*.app.tar.gz' -o -name '*.sig' \))
           # Deliberately NOT `gh release delete ... --cleanup-tag` first. That left a
           # window with no release at all — and since the delete came BEFORE the

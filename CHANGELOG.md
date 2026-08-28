@@ -25,6 +25,19 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **Windows has a portable build.** `Neocad_<version>_x64_portable.zip` on the
+  release page: unzip it wherever you like and run `Neocad.exe`. Nothing is
+  installed, no admin rights are asked for, and several builds can sit beside
+  each other, which an installer cannot do. It carries the same files the
+  installer lays down, geometry engine included, so the only thing it needs from
+  the machine is the WebView2 runtime that Windows 11 and an up-to-date Windows
+  10 already have.
+
+  The zip is unpacked FROM the installer rather than assembled separately, so it
+  cannot quietly come to hold a different set of files than the installed build.
+  Portable means no installer, not no traces: preferences and recent files stay
+  in your user profile either way, and the readme inside the zip says so.
+
 - **Revolve can climb while it turns, which is how you make a thread.** Draw the
   thread's cross section in a plane through the axis, set **Pitch** to the
   thread's pitch, and wind **Angle** past 360 for as many turns as the thread is

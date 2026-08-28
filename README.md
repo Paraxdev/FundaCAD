@@ -41,12 +41,21 @@ the goal is it to make this a personalized version of a CAD with features I like
 
 Prebuilt installers for Windows, macOS (Apple Silicon) and Linux are on the
 [beta release](https://github.com/Paraxdev/neocad/releases/tag/beta), rebuilt
-from `main` on every green build. An installed copy updates itself from there.
+from `main` on every green build. These builds do not update themselves, so come
+back to that page for a newer one.
+
+On Windows there is also a **portable zip** (`…_x64_portable.zip`). Unzip it
+anywhere and run `Neocad.exe`: no installer, no admin rights, and several builds
+can sit side by side. It carries the same files the installer lays down,
+including the Python geometry engine, so it needs nothing else beyond the
+WebView2 runtime that Windows 11 and an up-to-date Windows 10 already have.
+Portable means no installer rather than no traces: preferences still live in
+your user profile.
 
 The builds are **not code signed**, so each OS says so in its own way:
 
 - **Windows** — SmartScreen shows "Windows protected your PC". Choose **More
-  info**, then **Run anyway**.
+  info**, then **Run anyway**. The portable build says it too, on first run.
 - **macOS** — Gatekeeper may report the app as damaged. It is not; that is what
   an unsigned app looks like to a current macOS. Clear the quarantine flag once,
   after moving it to Applications:
@@ -54,8 +63,7 @@ The builds are **not code signed**, so each OS says so in its own way:
   xattr -dr com.apple.quarantine /Applications/Neocad.app
   ```
 - **Linux** — the AppImage needs `chmod +x` and nothing else. The `.deb` and
-  `.rpm` install normally, and update through your package manager rather than
-  in-app.
+  `.rpm` install normally.
 
 ## Build
 
