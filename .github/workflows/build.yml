@@ -318,7 +318,7 @@ jobs:
             echo "::warning::no signing key, AppImage left unsigned (not shippable)"
           fi
 
-      # A PORTABLE Windows build: unzip anywhere, run Neocad.exe, no installer
+      # A PORTABLE Windows build: unzip anywhere, run neocad.exe, no installer
       # and no admin rights. An installer is a poor fit for a machine you do not
       # administer, or for keeping several builds side by side to compare them.
       #
@@ -353,8 +353,8 @@ jobs:
           # the payload. Nobody wants an installer inside the portable zip.
           Get-ChildItem $stage -Filter *.msi | Remove-Item -Force
 
-          $exe = Get-ChildItem $stage -Recurse -Filter Neocad.exe | Select-Object -First 1
-          if (-not $exe) { throw "no Neocad.exe in the unpacked payload" }
+          $exe = Get-ChildItem $stage -Recurse -Filter neocad.exe | Select-Object -First 1
+          if (-not $exe) { throw "no neocad.exe in the unpacked payload" }
           $root = $exe.Directory.FullName
 
           # The geometry engine IS the app, not an extra. A zip with the exe and
@@ -377,7 +377,7 @@ jobs:
           Set-Content -Path (Join-Path $folder "README.txt") -Encoding utf8 -Value @(
             "Neocad $version, portable build",
             "",
-            "Run Neocad.exe. There is nothing to install and no admin rights are",
+            "Run neocad.exe. There is nothing to install and no admin rights are",
             "needed. Move or copy this folder wherever you like, a USB stick",
             "included, and it goes on working.",
             "",

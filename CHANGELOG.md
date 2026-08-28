@@ -26,12 +26,19 @@ This file starts on 2026-08-03. For anything before that, see the
 ### Added
 
 - **Windows has a portable build.** `Neocad_<version>_x64_portable.zip` on the
-  release page: unzip it wherever you like and run `Neocad.exe`. Nothing is
+  release page: unzip it wherever you like and run `neocad.exe`. Nothing is
   installed, no admin rights are asked for, and several builds can sit beside
   each other, which an installer cannot do. It carries the same files the
   installer lays down, geometry engine included, so the only thing it needs from
   the machine is the WebView2 runtime that Windows 11 and an up-to-date Windows
   10 already have.
+
+  The zip drops one thing the installer keeps: a tree of editor autocompletion
+  stubs that arrives with the geometry engine's dependencies and that a headless
+  engine never reads. It held every one of the payload's longest file paths, and
+  Windows still refuses to create a path over 260 characters, so unzipping into
+  anything but a short folder failed. Both staging scripts drop it now, so the
+  installed build and the zip stay the same set of files.
 
   The zip is unpacked FROM the installer rather than assembled separately, so it
   cannot quietly come to hold a different set of files than the installed build.

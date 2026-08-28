@@ -45,7 +45,7 @@ from `main` on every green build. These builds do not update themselves, so come
 back to that page for a newer one.
 
 On Windows there is also a **portable zip** (`…_x64_portable.zip`). Unzip it
-anywhere and run `Neocad.exe`: no installer, no admin rights, and several builds
+anywhere and run `neocad.exe`: no installer, no admin rights, and several builds
 can sit side by side. It carries the same files the installer lays down,
 including the Python geometry engine, so it needs nothing else beyond the
 WebView2 runtime that Windows 11 and an up-to-date Windows 10 already have.

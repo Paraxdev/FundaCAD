@@ -36,6 +36,14 @@ uv pip install --python $py --target (Join-Path $out "site-packages") -r $reqs
 Get-ChildItem -Path (Join-Path $out "site-packages") -Filter "vtk*" -ErrorAction SilentlyContinue |
   Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 
+# 3b. jedi's editor stub tree. Mirrors the same step in build-sidecar-runtime.sh
+#     — see there for why it is safe to drop. It matters most HERE: this is the
+#     tree the Windows portable zip is cut from, and jedi/third_party holds every
+#     one of its longest paths, which is what makes unzipping into anything but a
+#     short folder fail against the 260-character limit.
+Remove-Item -Recurse -Force -ErrorAction SilentlyContinue `
+  (Join-Path $out "site-packages\jedi\third_party")
+
 # 4. sidecar sources + precompile (read-only bundle: no .pyc writes at import time).
 #    Mirrors the filter in build-sidecar-runtime.sh. Keep these two in step: they
 #    are the same step for different OSes, and a filter applied to only one
