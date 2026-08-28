@@ -330,7 +330,7 @@ def _t_join_L(rng):
         {"id": "b2", "type": "box", "length": L, "width": W, "height": H},
         {"id": "mv", "type": "move", "dx": dx, "dy": dy, "dz": 0,
          "rx": 0, "ry": 0, "rz": 0, "bodies": ["body2"]},
-        {"id": "cb", "type": "combine", "operation": "join",
+        {"id": "cb", "type": "boolean", "operation": "join",
          "target": "body1", "tools": ["body2"]},
     ]
     return feats, {"kind": "edge", "by": "axis", "axis": "Z"}, False, min(L, W, H)
@@ -347,7 +347,7 @@ def _t_cut_pocket(rng):
         {"id": "b2", "type": "box", "length": L2, "width": W2, "height": H2},
         {"id": "mv", "type": "move", "dx": 0, "dy": 0, "dz": round(H / 2, 3),
          "rx": 0, "ry": 0, "rz": 0, "bodies": ["body2"]},
-        {"id": "cb", "type": "combine", "operation": "cut",
+        {"id": "cb", "type": "boolean", "operation": "cut",
          "target": "body1", "tools": ["body2"]},
     ]
     return feats, {"kind": "edge", "by": "axis", "axis": "Z"}, False, min(L2, W2, H2)

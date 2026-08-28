@@ -36,7 +36,7 @@ _MAX_WS = 128 * 1024 * 1024
 # credit for a transform that did nothing. Single source of truth, imported by
 # both harnesses so the two can't drift.
 DELTA_UNITS = frozenset(
-    {"patternRect", "patternCircular", "scale", "move", "removeBody", "mirror"}
+    {"patternRect", "patternCircular", "patternLinear", "scale", "move", "removeBody", "mirror"}
 )
 
 

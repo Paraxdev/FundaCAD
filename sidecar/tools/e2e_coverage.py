@@ -279,6 +279,17 @@ async def check_pattern_rect(ws):
     register("patternRect", "delta_volume", 6 * pre, post, pre=pre)
 
 
+async def check_pattern_linear(ws):
+    # The last op with no real-server check. Spacing is well clear of the box, so
+    # the copies cannot touch and the total is exactly count x one box: an
+    # overlap, or a copy that never appeared, both show up as a volume miss.
+    base = [_box("b", 4, 4, 4)]
+    pre = _total_volume(await _rebuild(ws, base))
+    post = _total_volume(await _rebuild(ws, base + [
+        {"id": "pl", "type": "patternLinear", "count": 3, "spacing": 10, "axis": "X"}]))
+    register("patternLinear", "delta_volume", 3 * pre, post, pre=pre)
+
+
 async def check_pattern_circular(ws):
     base = [_box("b", 2, 2, 2), {"id": "mv", "type": "move", "dx": 20}]
     pre = _total_volume(await _rebuild(ws, base))
@@ -413,17 +424,17 @@ async def check_sketch(ws):
     register("sketch", "bbox", [-6, -4, 0, 6, 4, 5], _flat_bbox(r))
 
 
-async def check_combine(ws):
+async def check_boolean(ws):
     # two 20-cubes, the second shoved +10 in x, then joined:
     # 8000 + 8000 - 4000 of overlap. A join that merely grouped the two bodies
     # without fusing them would read 16000 here.
     r = await _rebuild(ws, [
         _box("b1", 20, 20, 20), _box("b2", 20, 20, 20),
         {"id": "mv", "type": "move", "dx": 10},
-        {"id": "cb", "type": "combine", "operation": "join",
+        {"id": "cb", "type": "boolean", "operation": "join",
          "target": "body1", "tools": ["body2"]}])
-    register("combine", "volume", 12000.0, _total_volume(r))
-    register("combine", "bodies_eq", 1, _nbodies(r))
+    register("boolean", "volume", 12000.0, _total_volume(r))
+    register("boolean", "bodies_eq", 1, _nbodies(r))
 
 
 async def check_press_pull(ws):
@@ -569,11 +580,11 @@ async def check_datum_split(ws):
 EXPLICIT_CHECKS = [
     check_box, check_cylinder, check_sphere, check_extrude, check_revolve,
     check_loft, check_shell, check_mirror, check_pattern_rect,
-    check_pattern_circular, check_scale, check_move, check_remove_body,
+    check_pattern_linear, check_pattern_circular, check_scale, check_move, check_remove_body,
     check_compute_all, check_interference, check_export,
     check_fillet, check_chamfer, check_draft, check_sweep, check_simplify_mesh,
     check_datum_split,
-    check_sketch, check_combine, check_press_pull, check_offset_face,
+    check_sketch, check_boolean, check_press_pull, check_offset_face,
     check_thicken, check_delete_face, check_texture, check_project_geometry,
     check_migrate_geometry,
 ]

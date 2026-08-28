@@ -29,6 +29,12 @@ import sys
 _SIDECAR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _SIDECAR)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# APPENDED, not inserted: run_selector_tests() imports test_selector_v2 by name
+# and it lives in sidecar/tests/. Without this the import raised, the guardrail
+# read tests_pass 0.0, and the gate that consumes it failed on every run while
+# the test itself passed when anyone ran it by hand. At the END of the path so a
+# file in tests/ can never shadow a real module.
+sys.path.append(os.path.join(_SIDECAR, "tests"))
 
 import geom_select as gs  # noqa: E402
 from gen_selector_corpus import build_part, entity_key  # noqa: E402
