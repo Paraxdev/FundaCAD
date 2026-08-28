@@ -590,7 +590,7 @@ onUnmounted(() => root.value?.removeEventListener("wheel", onWheel));
       <!-- The palette head keeps its own markup: a connection dot and the sync
            button sit where a folder's eye would, and its label deliberately has
            no .tree-label class (the e2e panel dump reads that). -->
-      <div v-else-if="n.kind === 'palette-head'" class="tree-folder" @click="browser.toggle('Palette')">
+      <div v-else-if="n.kind === 'palette-head'" class="tree-folder" :aria-expanded="!n.collapsed" @click="browser.toggle('Palette')">
         <span class="tree-caret"><Icon :name="n.collapsed ? 'caretRight' : 'caretDown'" :size="11" /></span>
         <span class="feature-icon"><Icon name="filament" :size="14" /></span>
         <span>Palette</span>

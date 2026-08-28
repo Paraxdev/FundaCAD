@@ -34,7 +34,10 @@ const style = computed(() =>
 </script>
 
 <template>
-  <div class="tree-folder" :style="style" @click="$emit('toggle')">
+  <!-- aria-expanded is the disclosure state a screen reader announces, and it is
+       also the only place that state is legible from outside: the caret is an
+       icon, so its element carries no text to read it off. -->
+  <div class="tree-folder" :style="style" :aria-expanded="!collapsed" @click="$emit('toggle')">
     <span class="tree-caret"><Icon :name="collapsed ? 'caretRight' : 'caretDown'" :size="11" /></span>
     <span class="feature-icon"><Icon :name="icon" :size="14" /></span>
     <span class="tree-label">{{ label }}</span>

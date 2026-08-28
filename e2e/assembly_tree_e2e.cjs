@@ -73,15 +73,21 @@ const check = (name, ok, detail) => {
       kind: el.className.includes("tree-folder") ? "folder" : "row",
       text: el.querySelector(".tree-label")?.textContent ?? el.textContent?.trim() ?? "",
       indent: parseInt(getComputedStyle(el).paddingLeft) || 0,
-      caret: el.querySelector(".tree-caret")?.textContent ?? "",
+      // The caret is an icon, so it carries no text to read a state off. The
+      // folder's own aria-expanded is the state, and is what a screen reader
+      // gets too. (This used to read the caret's textContent, back when the
+      // caret was a "\u25b8" glyph. Once it became an Icon that read "", every
+      // folder looked collapsed, nothing here ever clicked one open, and six
+      // checks failed on a panel that was working perfectly.)
+      open: el.getAttribute("aria-expanded") === "true",
     })));
 
   // --- 1. collapsed by default ---------------------------------------------
   await page.screenshot({ path: `${OUT}/1-collapsed.png` });
   let rows = await panel();
   const robot = rows.find((r) => r.text === "Robot");
-  check("the assembly root appears in the Browser", !!robot, robot && `caret ${robot.caret}`);
-  check("assembly nodes start COLLAPSED", !!robot && robot.caret === "▸");
+  check("the assembly root appears in the Browser", !!robot, robot && `open ${robot.open}`);
+  check("assembly nodes start COLLAPSED", !!robot && !robot.open);
   check("no part rows are painted while collapsed",
     !rows.some((r) => r.kind === "row" && ["MCU", "Chassis"].includes(r.text)),
     `${rows.filter((r) => r.kind === "row").length} rows total`);
@@ -94,7 +100,7 @@ const check = (name, ok, detail) => {
       const clicked = await page.evaluate((want) => {
         for (const el of document.querySelectorAll("#browser .tree-folder")) {
           if (el.querySelector(".tree-label")?.textContent === want &&
-              el.querySelector(".tree-caret")?.textContent === "\u25b8") { el.click(); return true; }
+              el.getAttribute("aria-expanded") === "false") { el.click(); return true; }
         }
         return false;
       }, label);
@@ -105,7 +111,7 @@ const check = (name, ok, detail) => {
   await page.screenshot({ path: `${OUT}/2-expanded.png` });
   rows = await panel();
   console.log("\nexpanded panel:");
-  for (const r of rows) console.log(`   ${" ".repeat(Math.max(0, (r.indent - 8) / 2))}${r.kind === "folder" ? "▸" : "·"} ${r.text}  (indent ${r.indent})`);
+  for (const r of rows) console.log(`   ${" ".repeat(Math.max(0, (r.indent - 8) / 2))}${r.kind === "folder" ? (r.open ? "▾" : "▸") : "·"} ${r.text}  (indent ${r.indent})`);
 
   check("the file's own names are shown verbatim",
     rows.some((r) => r.text === "Header (x2)"), "looking for 'Header (x2)'");
