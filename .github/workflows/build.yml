@@ -344,7 +344,18 @@ jobs:
   # Job-level concurrency serializes racing main pushes.
   release:
     needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # A manual run of main publishes too. Push events do not currently start a
+    # run in this repository at all — the workflow is active, Actions are
+    # enabled and allowed, there is no ruleset and no branch protection, and a
+    # workflow_dispatch starts immediately, but 11 commits pushed to main
+    # produced no run. Until that is settled, "publish the beta" has to be a
+    # button someone can press, or a green build can never reach anyone.
+    #
+    # Still main only: the ref check is what keeps a dispatch of some other
+    # branch from replacing the release, and it is unchanged.
+    if: >-
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      && github.ref == 'refs/heads/main'
     runs-on: ubuntu-22.04
     permissions:
       contents: write
