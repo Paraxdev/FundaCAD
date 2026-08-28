@@ -2832,12 +2832,34 @@ export class Viewport {
     this.moveGhost = { bodies, edges };
   }
   setBodyMoveOffset(offset: THREE.Vector3) {
+    this.setBodyMoveTransform(new THREE.Matrix4().makeTranslation(offset.x, offset.y, offset.z));
+  }
+
+  /** The ghost under a FULL transform, so the gizmo's rotation is previewed the
+   *  same way its translation always was.
+   *
+   *  Decomposed onto the objects rather than assigned as a matrix, because the
+   *  mesh and its edges keep matrixAutoUpdate on and would overwrite one. The
+   *  scale component is carried too: an assembly imported at a non-unit scale
+   *  has it in matrixWorld already, and dropping it here would make the ghost
+   *  the wrong size for exactly those documents. */
+  setBodyMoveTransform(m: THREE.Matrix4) {
     if (!this.moveGhost || !this.model) return;
+    const pos = new THREE.Vector3();
+    const quat = new THREE.Quaternion();
+    const scl = new THREE.Vector3();
+    m.decompose(pos, quat, scl);
     for (const b of this.moveGhost.bodies) {
-      b.mesh.position.copy(offset);
+      b.mesh.position.copy(pos);
+      b.mesh.quaternion.copy(quat);
+      b.mesh.scale.copy(scl);
       b.mesh.updateMatrixWorld();
     }
-    for (const e of this.moveGhost.edges) e.object.position.copy(offset);
+    for (const e of this.moveGhost.edges) {
+      e.object.position.copy(pos);
+      e.object.quaternion.copy(quat);
+      e.object.scale.copy(scl);
+    }
     this.requestRender();
   }
   // --- Pattern ghosts: translucent copies of a body, one per pattern cell -----
@@ -2917,9 +2939,15 @@ export class Viewport {
     if (restore) {
       for (const b of this.moveGhost.bodies) {
         b.mesh.position.set(0, 0, 0);
+        b.mesh.quaternion.identity();
+        b.mesh.scale.set(1, 1, 1);
         b.mesh.updateMatrixWorld();
       }
-      for (const e of this.moveGhost.edges) e.object.position.set(0, 0, 0);
+      for (const e of this.moveGhost.edges) {
+        e.object.position.set(0, 0, 0);
+        e.object.quaternion.identity();
+        e.object.scale.set(1, 1, 1);
+      }
       this.requestRender();
     }
     this.moveGhost = null;

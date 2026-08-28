@@ -50,6 +50,7 @@ export function installDevGlobals(e: Engine): void {
     // does it is a click on a scrolling strip.
     selectFeature: (id: string | null) => e.selectFeature(id),
     extrude: e.tools.extrude,
+    move: e.tools.move,
     targetEdit: e.tools.targetEdit,
     pattern: e.tools.pattern,
     overlay: e.overlay,
