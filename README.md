@@ -7,6 +7,16 @@ STEP/STL/3MF. The UI is Vue 3 + Three.js running in a Tauri window; all geometry
 lives in a Python sidecar on build123d / OpenCASCADE, which the app talks to over
 a localhost WebSocket.
 
+## Discression
+This project heavily or exclusively uses AI to generate code and tests.
+do NOT expect this software to be enterprise grade but it does allow very fast itteration.
+you may use AI for feature requests or even forking and creating your own.
+this code open to the public and free forever.
+
+human input is made for decisions, guiding and real usage by me.
+the goal is it to make this a personalized version of a CAD with features I like and would love to have.
+
+
 <p align="center">
   <img src="assets/readme/ui-overview.png" width="1000">
 </p>
