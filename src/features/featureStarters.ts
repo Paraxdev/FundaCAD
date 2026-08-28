@@ -9,7 +9,7 @@ import type { Viewport } from "../viewport/viewport";
 import type { SketchOverlay, WorldRegion } from "../sketch/overlay";
 import type { SketchMode, SketchTool } from "../sketch/sketchMode";
 import { SketchPlane } from "../sketch/plane";
-import { axisFromEdge } from "./planeMath";
+import { axisFromEdge, midPlane, planeThroughPoints } from "./planeMath";
 import { BOOLEAN_LABEL, type BooleanOp } from "./booleanOps";
 import type { ExtrudeTool } from "./extrudeTool";
 import type { EdgeFeatureTool } from "./edgeFeatureTool";
@@ -283,6 +283,126 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
         selectFeature(id);
       });
     });
+  }
+
+  /** A plane spec as the resolved triple every construction below works in.
+   *  `PlaneSpec` is either a named base plane or a def already; SketchPlane is
+   *  the one place that knows how to turn the first into the second. */
+  function asDef(spec: PlaneSpec): PlaneDef {
+    const sp = new SketchPlane(spec);
+    return {
+      origin: [sp.origin.x, sp.origin.y, sp.origin.z],
+      normal: [sp.n.x, sp.n.y, sp.n.z],
+      xdir: [sp.u.x, sp.u.y, sp.u.z],
+    };
+  }
+
+  // Midplane: pick two planes or faces, get the plane between them.
+  //
+  // It is the plane symmetry is made of, and without it "halfway between these
+  // two walls" was a measurement, an offset plane at half of it, and no link
+  // back to either wall afterwards. See planeMath.midPlane for what "between"
+  // means when the two are not parallel.
+  //
+  // KNOWN LIMIT, the same one a datum built off a construction quad has: the
+  // result is a RESOLVED plane, so it does not follow either face if something
+  // upstream moves them. A datum keeps one face reference and this has two, so
+  // following would need a shape the document does not have.
+  function createMidplane() {
+    pickPlaneInteractive("Select the first plane or face for the midplane", (a) => {
+      // Next frame, like the pick's own commit: the first pick's click must not
+      // arrive at the second pick's listeners.
+      requestAnimationFrame(() => {
+        pickPlaneInteractive("Select the second plane or face", (b) => {
+          const def = midPlane(asDef(a), asDef(b));
+          if (!def) {
+            setStatus("Midplane: those two faces name no plane between them", "");
+            return;
+          }
+          const id = store.nextId();
+          store.addFeature({ id, type: "datumPlane", plane: def, name: "Midplane" } as Feature);
+          selectFeature(id);
+        });
+      });
+    });
+  }
+
+  // Plane through three points: the only way to reach a plane that no face of
+  // the part lies in — through three holes, three corners of a casting, a rib
+  // and two bosses. Points come from the same snap the gizmo's origin uses
+  // (viewport.pointAt), so a corner and the middle of an edge are aimable
+  // rather than approximate.
+  function createPlaneThroughPoints() {
+    pickPointsInteractive(3, "Select three points for the plane", (pts) => {
+      const [a, b, c] = pts;
+      const def = a && b && c ? planeThroughPoints(a, b, c) : null;
+      if (!def) {
+        setStatus("Plane through points: those three points lie in a line", "");
+        return;
+      }
+      const id = store.nextId();
+      store.addFeature({ id, type: "datumPlane", plane: def, name: "Plane" } as Feature);
+      selectFeature(id);
+    });
+  }
+
+  /** Collect `n` points on the model, snapping to what it actually has.
+   *
+   *  Every point taken so far is drawn, and so is the one under the cursor, so
+   *  the pick is visible rather than remembered — three clicks with no feedback
+   *  is a gesture nobody can recover from a mistake in. Escape drops the last
+   *  point, and drops the whole pick when there is none left, which is the same
+   *  stack Escape means everywhere else in the app. */
+  function pickPointsInteractive(
+    n: number,
+    promptText: string,
+    onDone: (pts: Vec3[]) => void,
+  ) {
+    if (toolBusy()) return;
+    setPlanePick(true);
+    viewport.suspendPicking = true;
+    const taken: Vec3[] = [];
+    const say = () => setPrompt(`${promptText} · ${taken.length} of ${n} · Esc`);
+    say();
+    const draw = (live: Vec3 | null) => viewport.setPickMarkers(taken, live);
+    draw(null);
+    const canvas = viewport.domElement;
+    const onMove = (e: PointerEvent) => {
+      const hit = viewport.pointAt(e.clientX, e.clientY);
+      draw(hit ? [hit.p.x, hit.p.y, hit.p.z] : null);
+    };
+    const onDown = (e: PointerEvent) => {
+      if (e.button !== 0) return;
+      const hit = viewport.pointAt(e.clientX, e.clientY);
+      if (!hit) return; // over nothing: stay in the pick rather than take a guess
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      taken.push([hit.p.x, hit.p.y, hit.p.z]);
+      draw(null);
+      if (taken.length < n) { say(); return; }
+      const pts = taken.slice();
+      cleanup();
+      requestAnimationFrame(() => onDone(pts));
+    };
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (taken.length) { taken.pop(); draw(null); say(); return; }
+      cleanup();
+    };
+    const cleanup = () => {
+      pendingPickCleanup = null;
+      setPlanePick(false);
+      viewport.suspendPicking = false;
+      viewport.setPickMarkers([], null);
+      canvas.removeEventListener("pointermove", onMove);
+      canvas.removeEventListener("pointerdown", onDown, true);
+      window.removeEventListener("keydown", onEsc, true);
+      setPrompt(null);
+    };
+    pendingPickCleanup = cleanup;
+    canvas.addEventListener("pointermove", onMove);
+    canvas.addEventListener("pointerdown", onDown, true);
+    window.addEventListener("keydown", onEsc, true);
   }
 
   // Right-click → "Offset plane from face": same as Datum Plane but the source is
@@ -883,6 +1003,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     startSketch,
     offsetPlane,
     createDatumPlane,
+    createMidplane,
+    createPlaneThroughPoints,
     offsetPlaneFromFace,
     startSplit,
     startCutByPlane,

@@ -6,8 +6,10 @@ import {
   cylinderFromFace,
   fitCircle2D,
   isPlanarFace,
+  midPlane,
   planeFromPickedFace,
   planeFromPointNormal,
+  planeThroughPoints,
   planeXDir,
   radialAt,
   solidInsideCylinder,
@@ -335,5 +337,135 @@ describe("axisFromEdge", () => {
     expect(axisFromEdge([[1, 1, 1], [1, 1, 1]])).toBeNull();
     expect(axisFromEdge([[1, 1, 1]])).toBeNull();
     expect(axisFromEdge([])).toBeNull();
+  });
+});
+
+// --- planes built from geometry rather than from one face -----------------
+
+const plane = (origin: Vec3, normal: Vec3) => {
+  const p = planeFromPointNormal(origin, normal);
+  if (!p) throw new Error("bad test plane");
+  return p;
+};
+/** signed distance of a point from a plane */
+const off = (p: { origin: Vec3; normal: Vec3 }, q: Vec3) =>
+  p.normal[0] * (q[0] - p.origin[0])
+  + p.normal[1] * (q[1] - p.origin[1])
+  + p.normal[2] * (q[2] - p.origin[2]);
+
+describe("planeThroughPoints", () => {
+  it("passes through all three, whichever way they were picked", () => {
+    const a: Vec3 = [3, 1, 0];
+    const b: Vec3 = [9, 2, 4];
+    const c: Vec3 = [1, 8, -2];
+    for (const [p, q, r] of [[a, b, c], [c, a, b], [b, c, a]] as const) {
+      const pl = planeThroughPoints(p, q, r)!;
+      expect(pl, `${p}/${q}/${r}`).not.toBeNull();
+      for (const pt of [a, b, c]) expect(Math.abs(off(pl, pt))).toBeLessThan(1e-9);
+    }
+  });
+
+  it("refuses three points in a line", () => {
+    // They name a pencil of planes, not a plane. Answering with whichever one
+    // the arithmetic fell out at would put a sketch at an angle nobody chose.
+    expect(planeThroughPoints([0, 0, 0], [1, 1, 1], [2, 2, 2])).toBeNull();
+    expect(planeThroughPoints([5, 5, 5], [5, 5, 5], [1, 2, 3])).toBeNull();
+  });
+
+  it("still answers for three nearly-collinear points", () => {
+    // A pick of three corners along a long thin rib. Ill-conditioned is not the
+    // same as degenerate, and refusing it would refuse a legitimate pick.
+    const pl = planeThroughPoints([0, 0, 0], [100, 0, 0], [50, 0.001, 0])!;
+    expect(pl).not.toBeNull();
+    expect(Math.abs(Math.abs(pl.normal[2]) - 1)).toBeLessThan(1e-6);
+  });
+});
+
+describe("midPlane", () => {
+  it("sits halfway between two parallel planes", () => {
+    // The symmetry plane of a 20mm plate whose faces are at z=0 and z=20.
+    const m = midPlane(plane([0, 0, 0], [0, 0, 1]), plane([0, 0, 20], [0, 0, 1]))!;
+    expect(off(m, [0, 0, 10])).toBeCloseTo(0, 9);
+    expect(Math.abs(m.normal[2])).toBeCloseTo(1, 9);
+  });
+
+  it("does not care which way the two faces point", () => {
+    // TWO FACING WALLS have opposing normals, which is the commonest way anyone
+    // picks a pair. Without bringing them onto one side first the "halfway"
+    // lands on one of the walls instead of between them.
+    const m = midPlane(plane([0, 0, 0], [0, 0, 1]), plane([0, 0, 20], [0, 0, -1]))!;
+    expect(off(m, [0, 0, 10])).toBeCloseTo(0, 9);
+    // CONTROL: naive averaging of the two normals gives (0,0,0) — no plane at
+    // all — and naive "halfway between the origins along a's normal" is only
+    // right by luck here, so the check that matters is the one above.
+    expect(m.normal.map((n) => Math.abs(n))).toEqual([0, 0, 1]);
+  });
+
+  it("measures between the PLANES, not between two origins on them", () => {
+    // b's origin is 300mm off to the side. Halfway between the origins would be
+    // a plane through (150, 0, 10) tilted nowhere near right.
+    const m = midPlane(plane([0, 0, 0], [0, 0, 1]), plane([300, 400, 20], [0, 0, 1]))!;
+    expect(off(m, [0, 0, 10])).toBeCloseTo(0, 9);
+    expect(off(m, [999, -999, 10])).toBeCloseTo(0, 9);
+  });
+
+  it("bisects the shallow angle where two planes meet", () => {
+    // A right angle between z=0 and x=0. The bisector runs at 45 degrees and
+    // contains the y axis, which is where the two planes cross.
+    const m = midPlane(plane([0, 0, 0], [0, 0, 1]), plane([0, 0, 0], [1, 0, 0]))!;
+    expect(Math.abs(off(m, [0, 5, 0]))).toBeLessThan(1e-9); // holds the shared line
+    expect(Math.abs(off(m, [1, 0, 1]))).toBeLessThan(1e-9); // and the 45 degree ray
+    // CONTROL: the OTHER bisector (through (1,0,-1)) is at right angles to this
+    // one and is not what "between them" means.
+    expect(Math.abs(off(m, [1, 0, -1]))).toBeGreaterThan(1);
+  });
+
+  it("is the ridge plane of a roof, not a horizontal one", () => {
+    // THE case that separates the two candidate bisectors, and the reason the
+    // normals are used as given rather than folded onto one side. Two slopes
+    // leaning 30 degrees left and right: the plane between them is the vertical
+    // one through the ridge.
+    const s = Math.sin(Math.PI / 6);
+    const c = Math.cos(Math.PI / 6);
+    const m = midPlane(plane([0, 0, 0], [-s, 0, c]), plane([0, 0, 0], [s, 0, c]))!;
+    expect(Math.abs(m.normal[0])).toBeCloseTo(1, 9); // vertical plane x = 0
+    expect(Math.abs(off(m, [0, 7, 12]))).toBeLessThan(1e-9);
+    // CONTROL: the other bisector — the average of the two normals — is the
+    // horizontal plane z = 0, which bisects nothing anyone asked about.
+    expect(Math.abs(off(m, [4, 0, 0]))).toBeGreaterThan(1);
+  });
+
+  it("bisects the taper of a wedge-shaped plate", () => {
+    // Two faces 10 degrees off parallel, pointing away from each other as a
+    // plate's do. The answer has to be nearly parallel to both, not the plane
+    // perpendicular to them through the far-off apex.
+    const t = (10 * Math.PI) / 180;
+    const m = midPlane(
+      plane([0, 0, 5], [0, 0, 1]),
+      plane([0, 0, 0], [Math.sin(t), 0, -Math.cos(t)]),
+    )!;
+    expect(Math.abs(m.normal[2])).toBeGreaterThan(0.99);
+  });
+
+  it("finds the shared line even when the planes' origins are far apart", () => {
+    const a = plane([0, 0, 0], [0, 0, 1]);
+    const b = plane([50, 0, 0], [1, 0, 0]); // x = 50
+    const m = midPlane(a, b)!;
+    // the planes meet along the line x=50, z=0
+    for (const y of [-20, 0, 33]) expect(Math.abs(off(m, [50, y, 0]))).toBeLessThan(1e-9);
+  });
+
+  it("gives a plane and itself back unchanged", () => {
+    const a = plane([1, 2, 3], [0, 1, 0]);
+    const m = midPlane(a, a)!;
+    expect(off(m, a.origin)).toBeCloseTo(0, 9);
+    expect(Math.abs(m.normal[1])).toBeCloseTo(1, 9);
+  });
+
+  it("has nothing to say about a degenerate plane", () => {
+    expect(midPlane(
+      { origin: [0, 0, 0], normal: [0, 0, 0], xdir: [1, 0, 0] },
+      plane([0, 0, 1], [0, 0, 1]),
+    )).toBeNull();
   });
 });

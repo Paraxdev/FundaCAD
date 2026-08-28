@@ -93,6 +93,12 @@ export function createActions(e: Engine): (action: string) => void {
       case "datum-plane":
         e.starters.createDatumPlane();
         break;
+      case "midplane":
+        e.starters.createMidplane();
+        break;
+      case "plane-points":
+        e.starters.createPlaneThroughPoints();
+        break;
       case "import":
         void importModel(e.store, e.geometry);
         break;

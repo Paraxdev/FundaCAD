@@ -113,7 +113,14 @@ export const MODEL: Group[] = [
     label: "CONSTRUCT",
     items: [
       { action: "offset-plane", label: "Offset Plane", iconName: "offsetPlane", key: "O" },
-      { action: "datum-plane", label: "Datum Plane", iconName: "datumPlane" },
+      {
+        label: "Plane",
+        children: [
+          { action: "datum-plane", label: "Datum Plane", iconName: "datumPlane" },
+          { action: "midplane", label: "Midplane", iconName: "midplane" },
+          { action: "plane-points", label: "Plane, 3 Pts", iconName: "planePoints" },
+        ],
+      },
     ],
   },
   {

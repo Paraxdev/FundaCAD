@@ -127,6 +127,10 @@ const FORGE_PATHS: Record<string, string> = {
   // insert / construct
   import: `<path d="M12 3v11m0 0l-4-4m4 4l4-4"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/>`,
   datumPlane: `<path d="M3 9l9-4 9 4-9 4z"/><line x1="12" y1="13" x2="12" y2="20"/><circle cx="12" cy="20" r="1.4" fill="currentColor"/>`,
+  // Two parallel plates with the plane between them drawn through the middle.
+  midplane: `<path d="M3 7l9-3 9 3-9 3z"/><path d="M3 18l9-3 9 3-9 3z"/><line x1="3" y1="12.5" x2="21" y2="12.5" stroke-dasharray="3 2"/>`,
+  // Three points with the plane they name laid through them.
+  planePoints: `<path d="M3 10l9-4 9 4-9 4z"/><circle cx="6.5" cy="10" r="1.5" fill="currentColor"/><circle cx="17.5" cy="10" r="1.5" fill="currentColor"/><circle cx="12" cy="13.4" r="1.5" fill="currentColor"/>`,
   primitive: `<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5"/><line x1="12" y1="12" x2="12" y2="21"/>`,
 
   // file / general

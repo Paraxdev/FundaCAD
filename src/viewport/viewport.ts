@@ -880,6 +880,55 @@ export class Viewport {
 
   private pointScratch = new THREE.Vector3();
 
+  // Points a pick has taken so far, plus the one under the cursor.
+  //
+  // Three clicks with nothing on screen between them is a gesture nobody can
+  // recover from a mistake in — you cannot see which corner you took, so you
+  // cannot see that you took the wrong one. Drawn over the model (depthTest
+  // off) because a point ON a surface z-fights with it by definition, and
+  // scaled per frame so the dots are the same size at every zoom.
+  private pickMarks: THREE.Group | null = null;
+  private pickMarkMat: THREE.MeshBasicMaterial | null = null;
+  private liveMarkMat: THREE.MeshBasicMaterial | null = null;
+
+  /** `taken` are committed picks; `live` is the one the cursor is over, drawn
+   *  in the hover colour. Pass an empty list and null to clear. */
+  setPickMarkers(taken: readonly Vec3[], live: Vec3 | null) {
+    if (this.pickMarks) {
+      this.scene.scene.remove(this.pickMarks);
+      for (const c of this.pickMarks.children) (c as THREE.Mesh).geometry.dispose();
+      this.pickMarks = null;
+    }
+    if (!taken.length && !live) {
+      this.pickMarkMat?.dispose();
+      this.liveMarkMat?.dispose();
+      this.pickMarkMat = this.liveMarkMat = null;
+      this.requestRender();
+      return;
+    }
+    this.pickMarkMat ??= new THREE.MeshBasicMaterial({
+      color: themeColor("--accent", 0xff7a3c), depthTest: false, depthWrite: false,
+    });
+    this.liveMarkMat ??= new THREE.MeshBasicMaterial({
+      color: 0x64d2ff, depthTest: false, depthWrite: false,
+    });
+    const group = new THREE.Group();
+    group.renderOrder = 998;
+    const at = new THREE.Vector3();
+    const add = (p: Vec3, mat: THREE.MeshBasicMaterial, r: number) => {
+      at.set(p[0], p[1], p[2]);
+      const m = new THREE.Mesh(new THREE.SphereGeometry(this.pixelWorldSize(at) * r, 16, 12), mat);
+      m.position.copy(at);
+      m.renderOrder = 998;
+      group.add(m);
+    };
+    for (const p of taken) add(p, this.pickMarkMat, 4.5);
+    if (live) add(live, this.liveMarkMat, 5.5);
+    this.pickMarks = group;
+    this.scene.scene.add(group);
+    this.requestRender();
+  }
+
   /** Take what the box covers. `additive` keeps what was already selected. */
   selectInBox(rect: ScreenRect, mode: AreaMode, additive: boolean) {
     const h = this.highlighter;

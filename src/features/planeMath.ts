@@ -390,3 +390,82 @@ export function axisFromEdge(points: readonly Vec3[]): EdgeAxis | null {
   }
   return { origin: a, dir };
 }
+
+// --- planes made from geometry rather than from one face ------------------
+//
+// A datum plane could only ever be "this face, offset". The two constructions
+// people reach for after that are a plane THROUGH THREE POINTS — the plane a
+// pick of three corners means, and the only way to get at a plane that no face
+// lies in — and a MIDPLANE, which is what symmetry is made of and which is
+// otherwise a measurement plus an offset plus the hope that nothing upstream
+// moves.
+//
+// Both produce the same resolved PlaneDef a face-derived datum does, so
+// everything downstream (sketching, splitting, offsetting) already works on
+// them and the sidecar needs to know nothing new.
+
+/** The plane through three points, or null when they are collinear (or two of
+ *  them are the same point) and so name no plane at all.
+ *
+ *  Not tolerance-based on purpose: three points that are nearly collinear DO
+ *  name a plane, just an ill-conditioned one, and refusing it would refuse a
+ *  legitimate pick of three corners along a long thin rib. `unit` already
+ *  refuses the genuinely degenerate case, where the cross product is zero. */
+export function planeThroughPoints(a: Vec3, b: Vec3, c: Vec3): PlaneDef | null {
+  return planeFromPointNormal(a, cross(sub(b, a), sub(c, a)));
+}
+
+/** How parallel two normals must be to count as parallel planes. cos(0.05°) —
+ *  well inside anything a kernel emits for two faces that were built parallel,
+ *  and far outside the angle at which the bisector construction below becomes
+ *  ill-conditioned. Compared as |dot|, because two faces of a plate point AWAY
+ *  from each other and are just as parallel for this purpose. */
+const PARALLEL_DOT = 0.9999996;
+
+/** The plane halfway between two planes.
+ *
+ *  Both cases are one idea: the locus of points the same distance OUT OF THE
+ *  MATERIAL of each face, measuring each along its own outward normal. That is
+ *  what makes it the symmetry plane rather than merely a plane between two
+ *  others, and it is why the normals are used exactly as given rather than
+ *  flipped onto one side first.
+ *
+ *  PARALLEL planes (which includes the ordinary case of two faces of a plate,
+ *  whose normals point in OPPOSITE directions) give a plane parallel to both,
+ *  halfway along the normal. The gap is measured from a's plane to b's, not
+ *  between two origins, which may sit anywhere on their planes and usually do.
+ *
+ *  PLANES THAT MEET give the bisector through their intersection line, and
+ *  which of the two perpendicular bisectors it is falls straight out of the
+ *  same rule: d_a = d_b has normal (na - nb). Worth checking against a case,
+ *  because the other one is equally plausible-looking and wrong — the two
+ *  slopes of a roof have normals leaning left and right, and (na - nb) is the
+ *  vertical plane through the ridge while (na + nb) is a horizontal plane that
+ *  bisects nothing.
+ *
+ *  Null when either plane is degenerate. A plane and itself is parallel to
+ *  itself and comes back unchanged, which is the right answer rather than a
+ *  special case.
+ */
+export function midPlane(a: PlaneDef, b: PlaneDef): PlaneDef | null {
+  const na = unit(a.normal);
+  const nb = unit(b.normal);
+  if (!na || !nb) return null;
+
+  if (Math.abs(dot(na, nb)) >= PARALLEL_DOT) {
+    // Along a's own normal, so the answer is the same whether b's points the
+    // same way or the opposite way.
+    const gap = dot(na, sub(b.origin, a.origin));
+    return planeFromPointNormal(add(a.origin, scale(na, gap / 2)), na);
+  }
+
+  const n = unit(sub(na, nb));
+  if (!n) return null; // only possible for equal normals, handled above
+  // A point on both planes, and therefore on the bisector: leave a's origin
+  // along the steepest in-plane direction toward b, which is b's normal with
+  // a's component taken out.
+  const inA = unit(sub(nb, scale(na, dot(nb, na))));
+  if (!inA) return null;
+  const t = dot(nb, sub(b.origin, a.origin)) / dot(nb, inA);
+  return planeFromPointNormal(add(a.origin, scale(inA, t)), n);
+}
