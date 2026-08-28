@@ -6611,7 +6611,19 @@ def _subdivide_faces(edges, plane):
 
 
 def _faces_from_edges(edges):
-    """Assemble line/arc edges into faces from their closed loops."""
+    """Assemble line/arc edges into faces from their closed loops.
+
+    The faces come back facing +Z, which is the sketch plane's own normal in the
+    2D local space every caller works in. A face inherits its orientation from
+    the direction its wire happens to run, and a loop wound clockwise therefore
+    produces a face pointing the other way — which an extrude then follows,
+    pushing the profile out of the BACK of the plane it was drawn on. Every
+    primitive is wound anticlockwise by construction, so this only ever bit the
+    free-form branch: a hand-drawn polyline traced clockwise, and a `slot`,
+    whose edges are emitted right-side-first and so are clockwise EVERY time.
+    That is why a slot on a base plane looked fine and the same slot on a face
+    cut nothing — the wrong direction still reaches a body centred on the
+    origin."""
     if not edges:
         return []
     try:
@@ -6628,8 +6640,20 @@ def _faces_from_edges(edges):
             continue
         face = _face_from_wire(w)
         if face is not None:
-            out.append(face)
+            out.append(_facing_up(face))
     return out
+
+
+def _facing_up(face):
+    """`face` if it already points along +Z, otherwise the same face reversed."""
+    from OCP.TopoDS import TopoDS
+
+    try:
+        if face.normal_at().Z >= 0:
+            return face
+        return Face(TopoDS.Face_s(face.wrapped.Reversed()))
+    except Exception:
+        return face  # a surface with no normal to read stays as it is
 
 
 def _face_from_wire(w):
