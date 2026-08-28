@@ -11,6 +11,42 @@ a localhost WebSocket.
   <img src="assets/readme/ui-overview.png" width="1000">
 </p>
 
+## What it looks like
+
+
+<p align="center">
+  <img src="assets/readme/sketch-on-face.png" width="900">
+</p>
+
+<p align="center">
+  <img src="assets/readme/transform-gizmo.png" width="900">
+</p>
+
+
+<p align="center">
+  <img src="assets/readme/area-select.png" width="900">
+</p>
+
+## Install
+
+Prebuilt installers for Windows, macOS (Apple Silicon) and Linux are on the
+[beta release](https://github.com/Paraxdev/neocad/releases/tag/beta), rebuilt
+from `main` on every green build. An installed copy updates itself from there.
+
+The builds are **not code signed**, so each OS says so in its own way:
+
+- **Windows** — SmartScreen shows "Windows protected your PC". Choose **More
+  info**, then **Run anyway**.
+- **macOS** — Gatekeeper may report the app as damaged. It is not; that is what
+  an unsigned app looks like to a current macOS. Clear the quarantine flag once,
+  after moving it to Applications:
+  ```bash
+  xattr -dr com.apple.quarantine /Applications/Neocad.app
+  ```
+- **Linux** — the AppImage needs `chmod +x` and nothing else. The `.deb` and
+  `.rpm` install normally, and update through your package manager rather than
+  in-app.
+
 ## Build
 
 Needs [Node](https://nodejs.org), [Rust](https://rustup.rs) (for the Tauri
