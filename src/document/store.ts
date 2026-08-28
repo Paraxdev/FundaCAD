@@ -875,8 +875,13 @@ export class DocumentStore {
    *  temporarily hidden for the duration of the edit (the tool's prompt says
    *  so). Never recorded in undo; commit goes through replaceFeature. */
   private editPreview: { id: string; feature: Feature | null } | null = null;
-  beginEditPreview(id: string) {
-    this.editPreview = { id, feature: null };
+  /** `feature` is what to build IN THE EDITED FEATURE'S PLACE from the first
+   *  frame. Omit it for a tool that wants the model as it stood before the
+   *  feature (extrude picks its profiles against that); pass the feature itself
+   *  for one that only wants to vary its numbers, which then opens on the model
+   *  the user is already looking at rather than flashing it away and back. */
+  beginEditPreview(id: string, feature: Feature | null = null) {
+    this.editPreview = { id, feature };
     this.scheduleRebuild(true);
   }
   setEditPreview(feature: Feature | null) {

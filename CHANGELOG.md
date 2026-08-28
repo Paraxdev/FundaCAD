@@ -190,6 +190,20 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Changed
 
+- **Revolve asks for its axis by having you point at one.** Starting a revolve
+  used to put up a list reading "X axis / Y axis / Z axis / an edge", in front of
+  a viewport that was already drawing three labelled arrows at the origin, and
+  answering "an edge" then asked the same question a second time in the viewport.
+  Now the arrows are the control: hover lights the one under the cursor, click it
+  to spin about it, or click any straight edge on the model instead. The arms
+  carry an undrawn hit sleeve about a fingertip wide, because a shaft a pixel and
+  a half across is not something anyone can aim at.
+
+- **A revolve is a new body unless you say otherwise.** The second modal, asking
+  New Body / Join / Cut before anything had been drawn, is gone. Nearly every
+  revolve is a new body, and the Operation row on the feature changes it in one
+  click afterwards, with the result on screen to look at while deciding.
+
 - **A very large assembly opens about 40% faster.** Opening the 356 MB,
   3,000-part reference assembly for the first time went from roughly five
   minutes to under three, measured end to end on the same machine. Two things
@@ -274,6 +288,14 @@ This file starts on 2026-08-03. For anything before that, see the
   resolve, so this shows up as a smaller file rather than a visibly coarser part.
 
 ### Fixed
+
+- **Typing an angle at a climbing revolve now changes the revolve.** With the
+  pitch arrow open, typing 600 into the angle box redrew the dashed helix and
+  left the model as the 360 it was built as, so the number said one thing and the
+  shape said another. A typed value now rebuilds the feature in place once the
+  typing settles, so the thread on screen is the thread the boxes describe. The
+  document is still only written when you press Enter, and dragging the arrow
+  still previews with the dashed line rather than a rebuild per frame.
 
 - **A Join that comes back smaller than it started now says what went wrong.**
   A union cannot remove material, so when the result is smaller than the body

@@ -6,6 +6,8 @@ import * as THREE from "three";
 import { stickyFact } from "../diagnostics/breadcrumbs";
 import { niceStep } from "../ui/units";
 import { glyphWorldScale } from "./gizmoScale";
+import { EDGE_HOVER_COLOR } from "./highlight";
+import type { Axis3 } from "../types";
 
 export interface SceneBundle {
   renderer: THREE.WebGLRenderer;
@@ -209,6 +211,10 @@ export const MIN_TRIAD_SCALE = 0.3;
 const HEAD_FRACTION = 0.21;
 const SHAFT_RADIUS_FRACTION = 0.017;
 const HEAD_RADIUS_FRACTION = 0.055;
+/** The arm's HIT radius, which is not its drawn one. A shaft a pixel and a
+ *  half wide is a fine thing to look at and a poor thing to aim at, so each
+ *  arm carries an undrawn sleeve about a fingertip across. */
+const SLEEVE_RADIUS_FRACTION = 0.075;
 
 /** How strongly the part of an arrow that is INSIDE the model still shows.
  *
@@ -242,22 +248,34 @@ const SOLID_ORDER = 2;
  *  the method that does it. */
 export class OriginTriad {
   readonly group = new THREE.Group();
+  /** The three arms, each tagged with the axis it stands for. A tool that asks
+   *  "which axis was clicked" raycasts these and reads `userData.axis`, rather
+   *  than deducing the answer from the order they were added in. */
+  readonly arms: THREE.Object3D[] = [];
   private materials: THREE.Material[] = [];
   private geometries: THREE.BufferGeometry[] = [];
+  private repaint: ((hot: boolean) => void)[] = [];
 
   constructor(scene: THREE.Scene) {
     const len = TRIAD_LENGTH_PX;
     const head = len * HEAD_FRACTION;
-    const dirs: [THREE.Vector3, number][] = [
-      [new THREE.Vector3(1, 0, 0), AXIS_COLOR.x],
-      [new THREE.Vector3(0, 1, 0), AXIS_COLOR.y],
-      [new THREE.Vector3(0, 0, 1), AXIS_COLOR.z],
+    const dirs: [THREE.Vector3, number, Axis3][] = [
+      [new THREE.Vector3(1, 0, 0), AXIS_COLOR.x, "X"],
+      [new THREE.Vector3(0, 1, 0), AXIS_COLOR.y, "Y"],
+      [new THREE.Vector3(0, 0, 1), AXIS_COLOR.z, "Z"],
     ];
     const shaftGeo = new THREE.CylinderGeometry(
       len * SHAFT_RADIUS_FRACTION, len * SHAFT_RADIUS_FRACTION, len - head, 10);
     const coneGeo = new THREE.ConeGeometry(len * HEAD_RADIUS_FRACTION, head, 14);
-    this.geometries.push(shaftGeo, coneGeo);
-    for (const [dir, color] of dirs) {
+    const sleeveGeo = new THREE.CylinderGeometry(
+      len * SLEEVE_RADIUS_FRACTION, len * SLEEVE_RADIUS_FRACTION, len, 8);
+    this.geometries.push(shaftGeo, coneGeo, sleeveGeo);
+    // Never drawn, always hit. `material.visible` keeps the sleeve out of the
+    // render list while leaving it in the raycast, which `object.visible` would
+    // not: this widens the target without widening the arrow.
+    const sleeveMat = new THREE.MeshBasicMaterial({ visible: false });
+    this.materials.push(sleeveMat);
+    for (const [dir, color, axis] of dirs) {
       // Unlit on purpose. An axis marker states a fact, and a Lambert surface
       // would hand half of it to wherever the key light happens to be, so the
       // "red" axis would read differently on each side of the scene.
@@ -285,10 +303,27 @@ export class OriginTriad {
         cone.renderOrder = order;
         arm.add(shaft, cone);
       }
+      const sleeve = new THREE.Mesh(sleeveGeo, sleeveMat);
+      sleeve.position.y = len / 2;
+      arm.add(sleeve);
       arm.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+      arm.userData.axis = axis;
       this.group.add(arm);
+      this.arms.push(arm);
+      this.repaint.push((hot) => {
+        solid.color.setHex(hot ? EDGE_HOVER_COLOR : color);
+        ghost.color.setHex(hot ? EDGE_HOVER_COLOR : color);
+      });
     }
     scene.add(this.group);
+  }
+
+  /** Light the arm standing for `axis`, or put all three back to their own
+   *  colours. It borrows the colour an edge takes under the cursor, because an
+   *  arrow and an edge are the two things an axis can be picked from and the
+   *  two should answer a hover the same way. */
+  highlight(axis: Axis3 | null) {
+    this.arms.forEach((arm, i) => this.repaint[i]?.(arm.userData.axis === axis));
   }
 
   /** `pixelWorldSize` is the world size of one screen pixel AT THE ORIGIN, which

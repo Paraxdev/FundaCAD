@@ -16,6 +16,14 @@
 // dozen turns is a real sweep through the kernel and a rebuild per frame would
 // make the drag lurch; the dashed helix is the same curve the sidecar sweeps
 // along, so it says exactly where the geometry is going.
+//
+// A TYPED value is not a drag, though, and used to get the drag's treatment: the
+// box read 600 degrees, the dashed line ran round twice, and the solid underneath
+// went on being the 360 it was built as. Two things on screen said different
+// numbers and the shaded one is the one that gets believed. So a value that is
+// typed goes through the store's edit preview once the typing settles — the real
+// feature, rebuilt by the sidecar, in the timeline position it will occupy. A
+// preview is not an undo step, so the value box stays the thing that commits.
 
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
@@ -31,6 +39,12 @@ import { axisDragDistance, createDragHandle, type DragHandle } from "./manipulat
 import { clampDragPitch, pitchFromRise, revolveAxis, riseOf, screwPath } from "./screwMath";
 
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
+
+/** How long a typed field has to stand still before the sidecar is asked to
+ *  build it. Long enough that typing "600" is one rebuild rather than three
+ *  (of which "6" and "60" are sweeps nobody wants), short enough to read as
+ *  the model answering the keystroke. */
+const TYPED_PREVIEW_MS = 350;
 
 type Revolve = Extract<Feature, { type: "revolve" }>;
 
@@ -66,6 +80,11 @@ export class RevolvePitchTool {
 
   private dim = new DimInput();
   private onDone: ((id: string | null) => void) | null = null;
+  /** Set once a typed value has opened the store's edit preview. Opened LAZILY,
+   *  because opening it rebuilds: a gesture that only ever drags the arrow
+   *  should not pay for a round trip it never looks at. */
+  private previewing = false;
+  private previewTimer = 0;
 
   private boundMove: (e: PointerEvent) => void;
   private boundDown: (e: PointerEvent) => void;
@@ -303,7 +322,39 @@ export class RevolvePitchTool {
       this.pitch = p;
       changed = true;
     }
-    if (changed) this.refresh();
+    if (changed) {
+      this.refresh();
+      this.schedulePreview();
+    }
+  }
+
+  // --- live preview ----------------------------------------------------------
+
+  /** Ask for a rebuild once the typing has settled. Restarting the timer on
+   *  every change is what makes a number typed digit by digit build once. */
+  private schedulePreview() {
+    if (this.previewTimer) clearTimeout(this.previewTimer);
+    this.previewTimer = window.setTimeout(() => {
+      this.previewTimer = 0;
+      this.pushPreview();
+    }, TYPED_PREVIEW_MS);
+  }
+
+  /** Build the revolve as the boxes currently read it, in its own place in the
+   *  timeline. The feature is taken from the document each time rather than
+   *  cached, so anything else that changed about it (its areas, its operation)
+   *  is carried along instead of being reverted by the preview. */
+  private pushPreview() {
+    if (!this.active || !this.id) return;
+    const f = this.store.document.features.find((x) => x.id === this.id);
+    if (!f || f.type !== "revolve") return;
+    const next = { ...f, angle: this.angle, pitch: this.pitch || undefined } as Feature;
+    if (this.previewing) {
+      this.store.setEditPreview(next);
+    } else {
+      this.previewing = true;
+      this.store.beginEditPreview(this.id, next);
+    }
   }
 
   // --- scene -----------------------------------------------------------------
@@ -342,7 +393,9 @@ export class RevolvePitchTool {
     const id = this.id;
     const { pitch, angle } = this;
     const done = this.onDone;
-    this.cleanup();
+    // false: the write below schedules the rebuild, and closing the preview with
+    // its own would build the pre-commit model for one frame on the way past.
+    this.cleanup(false);
     // A pitch of zero is the flat revolve, and the field is dropped rather than
     // written as 0 so a revolve that never climbed reads exactly as it did
     // before this tool was ever opened on it.
@@ -355,11 +408,11 @@ export class RevolvePitchTool {
 
   cancel() {
     const done = this.onDone;
-    this.cleanup();
+    this.cleanup(true);
     done?.(null);
   }
 
-  private cleanup() {
+  private cleanup(rebuild = true) {
     const el = this.viewport.domElement;
     el.removeEventListener("pointermove", this.boundMove);
     el.removeEventListener("pointerdown", this.boundDown, true);
@@ -368,6 +421,12 @@ export class RevolvePitchTool {
     el.style.cursor = "default";
     if (this.raf) cancelAnimationFrame(this.raf);
     this.raf = 0;
+    if (this.previewTimer) clearTimeout(this.previewTimer);
+    this.previewTimer = 0;
+    if (this.previewing) {
+      this.previewing = false;
+      this.store.endEditPreview(rebuild);
+    }
     this.dim.hide();
     if (this.gizmo) {
       this.viewport.removeFromScene(this.gizmo);

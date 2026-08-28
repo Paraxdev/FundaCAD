@@ -22,7 +22,7 @@ import type { TextureTool } from "./textureTool";
 import { pickPlaneTarget, planeSpecOf, type FacePlanePick } from "./facePlanePick";
 import { choose } from "../ui/choice";
 import { setPrompt } from "../ui/prompt";
-import type { AxisSpec, Feature, PlaneDef, PlaneSpec, Selector, Vec3 } from "../types";
+import type { Axis3, AxisSpec, Feature, PlaneDef, PlaneSpec, Selector, Vec3 } from "../types";
 import { findSelectorAt, replaceSelectorAt } from "./repickReference";
 
 export interface FeatureStartersDeps {
@@ -633,21 +633,18 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     store.addFeature({ id: store.nextId(), type: "mirror", plane } as Feature);
   }
 
-  // Revolve/Loft boolean into the active body (New/Join/Cut) the same way extrude
-  // does, instead of the old silent overwrite of the active body's shape — so ask
-  // upfront, same as the extrude op modal, just without the no-op-guess sorting.
-  async function chooseSolidOperation(title: string): Promise<"new" | "join" | "cut" | null> {
-    return choose<"new" | "join" | "cut">(title, [
-      { value: "new", label: "New Body", hint: "separate" },
-      { value: "join", label: "Join", hint: "merge" },
-      { value: "cut", label: "Cut", hint: "remove" },
-    ]);
-  }
-
-  // Revolve: spin the selected sketch profiles around the X/Y/Z axis (defaults to a
-  // full 360°; edit the angle in the value rows for a partial revolve). Falls back
-  // to the only profile when the sketch has just one.
-  async function startRevolve() {
+  // Revolve: spin the selected sketch profiles around an axis POINTED AT in the
+  // viewport, into a new body, all the way round. Falls back to the only profile
+  // when the sketch has just one.
+  //
+  // The two questions this used to ask first are both answered by defaults that
+  // stay editable. The operation is New Body, which is what nearly every revolve
+  // is and what the Operation row on the feature can change in one click. The
+  // angle is a full turn, which the Angle row and the pitch arrow can change. A
+  // modal that has to be dismissed before anything appears asks the user to
+  // decide with nothing yet to look at; a default they can see and correct does
+  // not.
+  function startRevolve() {
     if (toolBusy()) return;
     const selected = overlay.selectedRegions();
     const picked = selected.length
@@ -664,35 +661,84 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     // single sketch. Spinning them silently as if they had been part of it is how
     // the whole-sketch fallback used to go wrong; drop them instead.
     const areas = picked.filter((r) => r.sketchId === wr.sketchId);
-    const axis = await choose<"X" | "Y" | "Z" | "edge">("Revolve around", [
-      { value: "X", label: "X axis" },
-      { value: "Y", label: "Y axis" },
-      { value: "Z", label: "Z axis" },
-      { value: "edge", label: "An edge", hint: "pick one on the model" },
-    ]);
-    if (!axis) return;
-    // The axis is a WORLD axis or a line on the model, and only the second needs
-    // a pick, so the pick happens here rather than being a mode of the tool. It
-    // is asynchronous where the rest of this is not: the edge is picked in the
-    // viewport, after this call has returned, so the feature is written from
-    // inside the callback.
-    if (axis === "edge") {
-      const finish = async (sel: Selector, points: readonly Vec3[]) => {
-        const line = axisFromEdge(points);
-        if (!line) {
-          setStatus("An axis has to be a straight edge", "");
-          return;
-        }
-        const operation = await chooseSolidOperation("Revolve, operation");
-        if (!operation) return;
-        addRevolve(wr, areas, line, operation, sel);
-      };
-      pickEdgeInteractive("Click a straight edge to spin around · Esc", (sel, pts) => void finish(sel, pts));
-      return;
-    }
-    const operation = await chooseSolidOperation("Revolve, operation");
-    if (!operation) return;
-    addRevolve(wr, areas, axis, operation);
+    pickAxisInteractive((axis, edge) => addRevolve(wr, areas, axis, "new", edge));
+  }
+
+  /** Point at the line to spin about: one of the three arrows at the origin, or
+   *  a straight edge on the model.
+   *
+   *  This was a list reading "X axis / Y axis / Z axis / an edge", put up in front
+   *  of a viewport that was already drawing three labelled arrows — and answering
+   *  "an edge" then asked the same question again, in the viewport, where it could
+   *  have been asked once. The arrows ARE the drawing of this question, so they
+   *  are the control. Hovering lights the one under the cursor in the colour an
+   *  edge takes under the cursor, because the two are the same act.
+   *
+   *  Unlike pickEdgeInteractive this does not require a body. The first revolve in
+   *  a document has nothing to pick an edge from, and the origin arrows are drawn
+   *  whether or not anything has been built yet. */
+  function pickAxisInteractive(onPick: (axis: AxisSpec, edge?: Selector) => void) {
+    if (toolBusy()) return;
+    const triad = viewport.scene.triad;
+    // The hit lands on a shaft, a head or the arm's undrawn hit sleeve, so walk
+    // up to whichever ancestor carries the tag rather than assuming a depth.
+    const axisAt = (x: number, y: number): Axis3 | null => {
+      const hit = viewport.rayFrom(x, y).intersectObjects(triad.arms, true)[0];
+      for (let o: THREE.Object3D | null = hit?.object ?? null; o; o = o.parent) {
+        const a = o.userData?.axis;
+        if (a === "X" || a === "Y" || a === "Z") return a;
+      }
+      return null;
+    };
+    viewport.suspendPicking = true;
+    viewport.emphasizeEdges(true);
+    setPrompt(
+      "Click an axis arrow at the origin, or a straight edge on the model, to spin around. Esc cancels.",
+    );
+    const onMove = (e: PointerEvent) => {
+      // An arrow wins over an edge behind it. The arrows are small, deliberately
+      // aimed at, and drawn in front of everything; an edge that happens to lie
+      // under one is not what the cursor is on.
+      const axis = axisAt(e.clientX, e.clientY);
+      triad.highlight(axis);
+      viewport.hoverEdge(axis ? null : (viewport.pickEdgeAt(e.clientX, e.clientY)?.edge ?? null));
+    };
+    const onDown = (e: PointerEvent) => {
+      if (e.button !== 0) return;
+      const axis = axisAt(e.clientX, e.clientY);
+      const hit = axis ? null : viewport.pickEdgeAt(e.clientX, e.clientY);
+      if (!axis && !hit) return; // a click on empty space is a miss, not a cancel
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      cleanup();
+      if (axis) {
+        requestAnimationFrame(() => onPick(axis));
+        return;
+      }
+      const pts = hit!.edge.points.map((q) => [q[0], q[1], q[2]] as Vec3);
+      const line = axisFromEdge(pts);
+      if (!line) {
+        setStatus("An axis has to be a straight edge", "");
+        return;
+      }
+      requestAnimationFrame(() => onPick(line, hit!.selector));
+    };
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") cleanup();
+    };
+    const cleanup = () => {
+      viewport.suspendPicking = false;
+      viewport.emphasizeEdges(false);
+      viewport.hoverEdge(null);
+      triad.highlight(null);
+      canvas.removeEventListener("pointermove", onMove);
+      canvas.removeEventListener("pointerdown", onDown, true);
+      window.removeEventListener("keydown", onEsc, true);
+      setPrompt(null);
+    };
+    canvas.addEventListener("pointermove", onMove);
+    canvas.addEventListener("pointerdown", onDown, true);
+    window.addEventListener("keydown", onEsc, true);
   }
 
   /** Write the revolve. `axisEdge` present means `axis` is the resolved line kept
