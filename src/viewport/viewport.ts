@@ -74,6 +74,15 @@ const EDGE_PICKABLE = new THREE.Color(0xd98a4a); // muted ember "selectable" edg
 // wrong anyway, since part boundaries are what you want to see.
 const FLUSH_SEAM_MAX_EDGES = 20_000;
 
+/** How much of the model is left standing while a sketch is open on it, and how
+ *  much of its edges. Both were far lower; see setModelDimmed. */
+const SKETCH_DIM_OPACITY = 0.55;
+const SKETCH_DIM_EDGE_OPACITY = 0.5;
+/** How far the face being sketched ON is lifted back ABOVE the rest, as added
+ *  white. Small: the job is to separate it from its neighbours, not to make it
+ *  a light source. */
+const SKETCH_FACE_LIFT = 0.14;
+
 import { Highlighter, EDGE_HOVER_COLOR } from "./highlight";
 import { ProgressiveModel } from "./progressive";
 import { nearestEdgeByMid, midMatchTol, edgeSelectorFrom, polylineMid } from "./edgeMatch";
@@ -1264,12 +1273,21 @@ export class Viewport {
     // coplanar with the sketch plane by construction, and any lift big enough to
     // beat z-fighting is also big enough to be visible as a floating skin at a
     // grazing angle.
+    //
+    // The fill LIGHTENS rather than tints. An accent wash at 0.16 over a body
+    // held at 0.25 made the face and the part it belongs to one coloured ghost,
+    // and the accent was doing two jobs at once — "this face" and "this is the
+    // sketch" — on a surface where the second is never in doubt. Adding white
+    // can only brighten what is behind it, so the face comes out a lighter
+    // shade of the same material and the identity is carried by the outline,
+    // which is still the accent.
     const fill = new THREE.Mesh(
       geom,
       new THREE.MeshBasicMaterial({
-        color: accent,
+        color: 0xffffff,
         transparent: true,
-        opacity: 0.16,
+        opacity: SKETCH_FACE_LIFT,
+        blending: THREE.AdditiveBlending,
         depthWrite: false,
         side: THREE.DoubleSide,
         polygonOffset: true,
@@ -2729,16 +2747,29 @@ export class Viewport {
   private sketchPrevMode: ProjectionMode = "auto";
   private sketchOrtho = false; // currently in the sketch's forced flat (ortho) view
 
+  /** How much of the model survives while a sketch is open on it.
+   *
+   *  It was a quarter, which is not "dimmed" but "gone": the part you are
+   *  sketching a feature ONTO is the only thing that says whether the profile is
+   *  in the right place, and at 0.25 over a dark background a 24mm block reads
+   *  as a smudge. Two thirds leaves it plainly a solid and still plainly not the
+   *  thing being edited — the sketch's own curves are drawn at full strength over
+   *  it, and the face being drawn on is lifted back up past normal
+   *  (showSketchFace), so the three read as three.
+   *
+   *  depthWrite stays off while dimmed, and that is load-bearing rather than
+   *  incidental: it is what lets the plane's grid draw THROUGH the body, so the
+   *  lattice you are placing points on is legible where the part covers it. */
   setModelDimmed(on: boolean) {
     if (!this.model) return;
     for (const b of this.model.bodies) {
       const mat = b.mesh.material as THREE.MeshStandardMaterial;
       mat.transparent = on;
-      mat.opacity = on ? 0.25 : 1;
+      mat.opacity = on ? SKETCH_DIM_OPACITY : 1;
       mat.depthWrite = !on;
     }
     for (const d of edgeObjects(this.model)) {
-      d.material.opacity = on ? 0.3 : 1;
+      d.material.opacity = on ? SKETCH_DIM_EDGE_OPACITY : 1;
       d.material.transparent = true;
     }
     this.requestRender();

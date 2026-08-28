@@ -116,3 +116,115 @@ export function footprintAnchors(
   }
   return out;
 }
+
+// --- the edge of the face itself ---------------------------------------
+//
+// The centre answers "in the middle of this face". The two things people reach
+// for next are its CORNERS and the middle of each SIDE — "level with that
+// corner", "centred on this edge" — and neither had anything to aim at, so both
+// were arithmetic.
+//
+// Taken from the plane's edges BEFORE they are chained into loops
+// (faceFootprint.planeEdgePolys), because a B-rep edge already knows where it
+// starts and stops. Recovering the same thing from a chained loop means judging
+// turn angles, and a 90-degree arc tessellated into four samples turns 22 degrees
+// at each of them: indistinguishable from a real corner by any threshold that
+// does not also throw real corners away.
+
+/** Two boundary points closer than this, relative to the outline's own size,
+ *  are the same corner. Relative so it means the same on a 2mm tab and a 2m
+ *  panel; a shared corner arrives twice, once from each edge that ends there,
+ *  and the two copies are the same point up to the rounding the wire applied. */
+const SAME_CORNER_FRACTION = 1e-6;
+
+/** True when a polyline comes back to where it started — a whole circle or
+ *  closed spline, arriving as ONE edge.
+ *
+ *  Such an edge has no corners: the point where its ends meet is the surface's
+ *  seam, which is a fact about how the kernel parameterised it and not about the
+ *  shape. Offering it as an anchor would put a snap target at three o'clock on
+ *  every hole for no reason anyone could see. */
+export function isClosedPoly(poly: readonly THREE.Vector2[], tol: number): boolean {
+  const a = poly[0];
+  const b = poly[poly.length - 1];
+  return !!a && !!b && poly.length > 2 && a.distanceTo(b) <= tol;
+}
+
+/** The point half way along a polyline BY ARC LENGTH, so a curved side's
+ *  midpoint sits on the curve rather than on the chord. Null for a polyline
+ *  with no length. */
+export function polylineMidpoint(poly: readonly THREE.Vector2[]): THREE.Vector2 | null {
+  if (poly.length < 2) return null;
+  let total = 0;
+  for (let i = 1; i < poly.length; i++) {
+    const d = poly[i]!.distanceTo(poly[i - 1]!);
+    if (!Number.isFinite(d)) return null;
+    total += d;
+  }
+  if (!(total > 0)) return null;
+  let run = 0;
+  for (let i = 1; i < poly.length; i++) {
+    const a = poly[i - 1]!;
+    const b = poly[i]!;
+    const seg = a.distanceTo(b);
+    if (run + seg >= total / 2) {
+      const t = seg > 0 ? (total / 2 - run) / seg : 0;
+      return a.clone().lerp(b, t);
+    }
+    run += seg;
+  }
+  return poly[poly.length - 1]!.clone();
+}
+
+/** The scale the corner tolerance is measured against: the diagonal of
+ *  everything in the plane. Zero (a single point, or nothing) leaves the
+ *  tolerance at its floor rather than collapsing it to exact equality. */
+function outlineScale(polys: readonly (readonly THREE.Vector2[])[]): number {
+  let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+  for (const poly of polys) {
+    for (const p of poly) {
+      if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
+      minx = Math.min(minx, p.x); maxx = Math.max(maxx, p.x);
+      miny = Math.min(miny, p.y); maxy = Math.max(maxy, p.y);
+    }
+  }
+  if (!Number.isFinite(minx) || !Number.isFinite(miny)) return 0;
+  return Math.hypot(maxx - minx, maxy - miny);
+}
+
+export interface BoundaryAnchors {
+  /** where two boundary edges meet */
+  corners: THREE.Vector2[];
+  /** the middle of each boundary edge */
+  sides: THREE.Vector2[];
+}
+
+/** The corners and the side midpoints of the model's outline on a sketch plane.
+ *
+ *  `polys` is one polyline per in-plane B-rep edge, un-chained. Corners are
+ *  deduplicated (a corner belongs to two edges and arrives twice); side
+ *  midpoints are not, because two edges with the same midpoint are two edges
+ *  lying on top of each other, which is a fact about the model rather than
+ *  something to hide.
+ */
+export function boundaryAnchors(
+  polys: readonly (readonly THREE.Vector2[])[],
+): BoundaryAnchors {
+  const tol = Math.max(1e-9, outlineScale(polys) * SAME_CORNER_FRACTION);
+  const corners: THREE.Vector2[] = [];
+  const sides: THREE.Vector2[] = [];
+  const addCorner = (p: THREE.Vector2 | undefined) => {
+    if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) return;
+    for (const q of corners) if (q.distanceTo(p) <= tol) return;
+    corners.push(p.clone());
+  };
+  for (const poly of polys) {
+    if (poly.length < 2) continue;
+    if (isClosedPoly(poly, tol)) continue;
+    addCorner(poly[0]);
+    addCorner(poly[poly.length - 1]);
+    const mid = polylineMidpoint(poly);
+    if (mid) sides.push(mid);
+  }
+  return { corners, sides };
+}

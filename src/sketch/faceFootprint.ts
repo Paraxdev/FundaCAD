@@ -56,14 +56,16 @@ export function edgeLiesInPlane(
   return true;
 }
 
-/** The model's outline on this sketch plane, as closed loops in sketch 2D mm —
- *  ready to hand to detectRegions as its footprint.
+/** The model's edges that lie in this sketch plane, each one still its own 2D
+ *  polyline — before they are chained into loops.
  *
- *  Empty when the plane has no model in it, which is the ordinary case for a
- *  sketch on a datum plane. Callers must pass an empty result through as
- *  "no footprint" rather than as "an empty face", or every profile on a datum
- *  plane would read as unsupported. */
-export function planeFootprint(
+ *  Chaining is what the region detector needs and it is also what destroys the
+ *  one thing an anchor wants: where one B-rep edge ends and the next begins. A
+ *  loop is a bag of points, so "the corners of this face" becomes a guess about
+ *  turn angles that a finely tessellated arc can fool; kept as edges, a corner
+ *  is simply an endpoint and the middle of a side is simply a midpoint. Both
+ *  callers walk the model once, from here. */
+export function planeEdgePolys(
   edges: readonly FootprintEdge[],
   plane: SketchPlane,
   modelScale: number,
@@ -80,8 +82,29 @@ export function planeFootprint(
     }
     if (poly.length >= 2) flat.push(poly);
   }
+  return flat;
+}
+
+/** The model's outline on this sketch plane, as closed loops in sketch 2D mm —
+ *  ready to hand to detectRegions as its footprint.
+ *
+ *  Empty when the plane has no model in it, which is the ordinary case for a
+ *  sketch on a datum plane. Callers must pass an empty result through as
+ *  "no footprint" rather than as "an empty face", or every profile on a datum
+ *  plane would read as unsupported. */
+export function planeFootprint(
+  edges: readonly FootprintEdge[],
+  plane: SketchPlane,
+  modelScale: number,
+): THREE.Vector2[][] {
+  return loopsFromEdgePolys(planeEdgePolys(edges, plane, modelScale));
+}
+
+/** The chaining half on its own, for a caller that already has the edges and
+ *  wants both answers out of one walk of the model. */
+export function loopsFromEdgePolys(flat: readonly THREE.Vector2[][]): THREE.Vector2[][] {
   if (!flat.length) return [];
-  return chainLoops(flat);
+  return chainLoops(flat as THREE.Vector2[][]);
 }
 
 /** Where a cache gets the model from. Supplier functions rather than a viewport,

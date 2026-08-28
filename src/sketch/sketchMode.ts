@@ -38,8 +38,8 @@ import { expandPattern, translated, rotated, scaled } from "./pattern";
 import { candidatesFromEntities, snap, type SnapGuide, type SnapKind, type SnapCandidate } from "./snap";
 import type { ResolvedEntity } from "./snap";
 import { detectRegions, rectCorners, rectFromThreePoints } from "./region";
-import { planeFootprint } from "./faceFootprint";
-import { footprintAnchors } from "./anchors";
+import { loopsFromEdgePolys, planeEdgePolys } from "./faceFootprint";
+import { boundaryAnchors, footprintAnchors } from "./anchors";
 import { setSpaceMouseOrbitLocked } from "../input/spacemouse";
 import { setPrompt } from "../ui/prompt";
 import { toast } from "../ui/toast";
@@ -166,6 +166,9 @@ export class SketchMode {
    *  profile that runs off the face split there. Empty on a datum plane. */
 
   private footprint: THREE.Vector2[][] = [];
+  /** The same edges, UN-chained — one polyline each, which is what tells a
+   *  corner from a point part way along an arc. See anchors.boundaryAnchors. */
+  private footprintEdges: THREE.Vector2[][] = [];
   private entities: ResolvedEntity[] = [];
   private candidates: SnapCandidate[] = []; // cached; rebuilt when entities change
   private base: THREE.Vector2 | null = null; // pending first point
@@ -405,11 +408,15 @@ export class SketchMode {
     // and the body under it cannot change while the sketch is open — nothing is
     // applied to the model until commit — so re-deriving this on every keystroke
     // would walk every edge of the body for an answer that cannot have moved.
-    this.footprint = planeFootprint(
+    // One walk of the model's edges, two results: the chained loops the region
+    // detector needs, and the edges themselves, which is where the corner and
+    // side anchors come from.
+    this.footprintEdges = planeEdgePolys(
       this.viewport.visibleEdgeLines(),
       this.plane,
       this.viewport.modelDiagonal() ?? 0,
     );
+    this.footprint = loopsFromEdgePolys(this.footprintEdges);
     this.history.reset(); // fresh history per session (armed once entities load)
     if (!this.fonts.length) void fetchFonts().then((f) => { this.fonts = f; });
 
@@ -2983,23 +2990,32 @@ export class SketchMode {
     return objs;
   }
 
-  /** Snap targets the FACE contributes: its own centre and the centre of every
-   *  hole through it.
+  /** Snap targets the FACE contributes: its centre, the centre of every hole
+   *  through it, its corners, and the middle of each of its sides.
    *
-   *  Priority 70 — under a placed point (110), an endpoint (100) and a midpoint
-   *  (80), over a projected polyline's interior samples (60). The face is
-   *  scenery you are drawing on top of, so anything you actually drew wins where
-   *  the two land in the same place; but it is exact model geometry, so it
+   *  Priorities 70-76 — under a placed point (110), an endpoint (100) and a
+   *  midpoint (80), over a projected polyline's interior samples (60). The face
+   *  is scenery you are drawing on top of, so anything you actually drew wins
+   *  where the two land in the same place; but it is exact model geometry, so it
    *  outranks a tessellation sample.
    *
-   *  Derived from `this.footprint`, which enter() computes once per session
-   *  because the body under an open sketch cannot change. */
+   *  Derived from the footprint enter() computes once per session, because the
+   *  body under an open sketch cannot change. */
   private faceAnchorCandidates(): SnapCandidate[] {
-    return footprintAnchors(this.footprint).map((p) => ({
+    const out: SnapCandidate[] = footprintAnchors(this.footprint).map((p) => ({
       p,
       kind: "center" as SnapKind,
       priority: 70,
     }));
+    // The face's own corners and the middle of each of its sides. Ranked among
+    // themselves the way the sketch's are — a corner is an endpoint, a side
+    // midpoint is a midpoint — but the whole family stays under the sketch's
+    // own 80, so a line you drew across the face still wins where its midpoint
+    // lands on the face's.
+    const { corners, sides } = boundaryAnchors(this.footprintEdges);
+    for (const p of corners) out.push({ p, kind: "endpoint", priority: 76 });
+    for (const p of sides) out.push({ p, kind: "midpoint", priority: 72 });
+    return out;
   }
 
   /** A small cross on each face anchor, so the target is visible before the
@@ -3007,7 +3023,8 @@ export class SketchMode {
    *  circle centres wear, drawn dimmer: it marks somewhere you can aim, not
    *  something in the sketch. */
   private faceAnchorMarkers(): THREE.Object3D[] {
-    const pts = footprintAnchors(this.footprint);
+    const { corners, sides } = boundaryAnchors(this.footprintEdges);
+    const pts = [...footprintAnchors(this.footprint), ...corners, ...sides];
     if (!pts.length) return [];
     return curveObjects(
       pts.map((p, i) => ({ type: "point" as const, id: `__face${i}`, x: p.x, y: p.y })),

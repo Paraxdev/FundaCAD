@@ -7,9 +7,12 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import {
+  boundaryAnchors,
   footprintAnchors,
+  isClosedPoly,
   isDegenerateLoop,
   loopCentroid,
+  polylineMidpoint,
   signedArea2,
 } from "../../src/sketch/anchors";
 
@@ -109,5 +112,126 @@ describe("footprintAnchors", () => {
     // A sketch on a datum plane. The face anchors have to be absent, not a
     // point at the origin, which is already the thing the report is about.
     expect(footprintAnchors([])).toEqual([]);
+  });
+});
+
+// --- the edge of the face --------------------------------------------------
+//
+// "Centred on this face" was a gesture; "level with that corner" and "centred
+// on this side" were arithmetic. These pin the anchors the face's OUTLINE
+// contributes, which arrive as one polyline per B-rep edge in the plane.
+
+const arc = (cx: number, cy: number, r: number, a0: number, a1: number, n = 16) =>
+  Array.from({ length: n + 1 }, (_, i) => {
+    const t = a0 + ((a1 - a0) * i) / n;
+    return v(cx + r * Math.cos(t), cy + r * Math.sin(t));
+  });
+
+/** the four sides of an axis-aligned rectangle, as separate edges */
+const rectEdges = (cx: number, cy: number, w: number, h: number) => {
+  const c = rect(cx, cy, w, h);
+  return c.map((p, i) => [p, c[(i + 1) % 4]!]);
+};
+
+describe("polylineMidpoint", () => {
+  it("is half way along the CURVE, not half way along the chord", () => {
+    // The middle of a curved side is the point you would put a hole at. On a
+    // quarter circle the chord midpoint sits a sagitta inside the material —
+    // 0.29 r on a 90 degree arc, which on a 20mm fillet is 5.9mm of daylight.
+    const quarter = arc(0, 0, 10, 0, Math.PI / 2, 32);
+    const mid = polylineMidpoint(quarter)!;
+    expect(mid.length()).toBeCloseTo(10, 2); // on the arc
+    const a = quarter[0]!;
+    const b = quarter[quarter.length - 1]!;
+    const chordMid = a.clone().add(b).multiplyScalar(0.5);
+    // CONTROL: the chord midpoint is NOT on the arc, so the two answers differ
+    // by an amount that matters.
+    expect(chordMid.length()).toBeLessThan(9);
+    expect(mid.distanceTo(chordMid)).toBeGreaterThan(1);
+  });
+
+  it("is the middle of a straight side", () => {
+    expect(polylineMidpoint([v(0, 0), v(10, 0)])!.x).toBeCloseTo(5, 9);
+    // and unaffected by how densely that side happens to be sampled
+    const dense = [v(0, 0), v(1, 0), v(2, 0), v(9, 0), v(10, 0)];
+    expect(polylineMidpoint(dense)!.x).toBeCloseTo(5, 9);
+  });
+
+  it("has no answer for a polyline with no length", () => {
+    expect(polylineMidpoint([v(3, 3), v(3, 3)])).toBeNull();
+    expect(polylineMidpoint([v(3, 3)])).toBeNull();
+    expect(polylineMidpoint([])).toBeNull();
+  });
+});
+
+describe("boundaryAnchors", () => {
+  it("gives a rectangular face four corners and four side middles", () => {
+    const { corners, sides } = boundaryAnchors(rectEdges(0, 0, 40, 20));
+    expect(corners).toHaveLength(4);
+    expect(sides).toHaveLength(4);
+    const cs = corners.map((p) => [p.x, p.y].join()).sort();
+    expect(cs).toEqual(["-20,-10", "-20,10", "20,-10", "20,10"].sort());
+    const ms = sides.map((p) => [p.x, p.y].join()).sort();
+    expect(ms).toEqual(["-20,0", "0,-10", "0,10", "20,0"].sort());
+  });
+
+  it("counts a shared corner once", () => {
+    // Every corner belongs to two edges and therefore arrives twice. Four
+    // anchors, not eight: two snap targets in the same place are one target
+    // that costs twice as much to consider.
+    const { corners } = boundaryAnchors(rectEdges(5, 5, 10, 10));
+    expect(corners).toHaveLength(4);
+  });
+
+  it("offers no corner at a circle's seam", () => {
+    // A hole arrives as ONE closed edge whose ends meet at the seam, which is
+    // where the kernel happened to start parameterising it. A corner there
+    // would put a snap target at three o'clock on every hole in the part, for a
+    // reason nothing on screen could explain. Its centre is an anchor already
+    // (footprintAnchors); this is about not inventing a second one.
+    const hole = circle(3, 4, 5, 48);
+    const { corners, sides } = boundaryAnchors([[...hole, hole[0]!]]);
+    expect(corners).toEqual([]);
+    expect(sides).toEqual([]);
+    // CONTROL: the same samples as an OPEN arc are a real side, and do get one.
+    const open = boundaryAnchors([hole]);
+    expect(open.corners.length).toBeGreaterThan(0);
+    expect(open.sides).toHaveLength(1);
+  });
+
+  it("puts a rounded corner's anchors on the arc, not where the corner was", () => {
+    // A filleted rectangle: the sharp corner is gone, so nothing may claim it
+    // is still there. What the face has instead is the arc's two ends and its
+    // middle, all of which are on the material.
+    const r = 4;
+    const round = arc(16 - r, 8 - r, r, 0, Math.PI / 2, 12);
+    const side = [v(-16, 8), v(16 - r, 8)];
+    const { corners, sides } = boundaryAnchors([round, side]);
+    for (const p of [...corners, ...sides]) {
+      expect(Math.hypot(p.x, p.y), `${p.x},${p.y}`).toBeLessThan(18);
+      // CONTROL: the vanished sharp corner is at (16, 8) and nothing is there.
+      expect(p.distanceTo(v(16, 8))).toBeGreaterThan(0.5);
+    }
+    expect(sides).toHaveLength(2);
+  });
+
+  it("gives nothing for a plane with no model in it", () => {
+    expect(boundaryAnchors([])).toEqual({ corners: [], sides: [] });
+    expect(boundaryAnchors([[v(1, 1)]])).toEqual({ corners: [], sides: [] });
+  });
+
+  it("survives a degenerate edge without inventing a point", () => {
+    const { corners, sides } = boundaryAnchors([[v(2, 2), v(2, 2)]]);
+    expect(corners).toHaveLength(1); // it IS a point on the model
+    expect(sides).toEqual([]); // but it has no middle
+  });
+});
+
+describe("isClosedPoly", () => {
+  it("needs more than two points to be a loop", () => {
+    // An edge drawn out and back is not a circle; without this a two-point
+    // degenerate edge would read as closed and lose its corner.
+    expect(isClosedPoly([v(0, 0), v(0, 0)], 1e-9)).toBe(false);
+    expect(isClosedPoly([v(0, 0), v(1, 0), v(0, 0)], 1e-9)).toBe(true);
   });
 });
