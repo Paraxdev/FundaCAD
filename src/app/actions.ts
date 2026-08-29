@@ -33,6 +33,19 @@ export function createActions(e: Engine): (action: string) => void {
     e.tools.faceOffset.start(mode, (id) => { if (id) e.selectFeature(id); });
   }
 
+  // Draft (swing a face over to a taper) and Thread (a climbing revolve cut into
+  // a round face) are the same shape of command as the two above: pick a face,
+  // size the result on the model, commit. They differ only in which tool runs,
+  // so they share the body/busy guard rather than repeating it.
+  function startFaceTool(which: "draft" | "thread") {
+    if (e.toolBusy()) return;
+    if (!e.hasBody()) {
+      e.setStatus("Create or import a body first", "");
+      return;
+    }
+    e.tools[which].start((id) => { if (id) e.selectFeature(id); });
+  }
+
   return function handleAction(action: string) {
     if (!NON_REPEATABLE.has(action)) e.lastAction = action; // for "Repeat <command>"
     // sketch CREATE tools: switch tool while sketching, else start a sketch with it
@@ -145,7 +158,10 @@ export function createActions(e: Engine): (action: string) => void {
         startFaceOffset("thicken");
         break;
       case "draft":
-        e.starters.startDraft();
+        startFaceTool("draft");
+        break;
+      case "thread":
+        startFaceTool("thread");
         break;
       case "texture":
         e.starters.startTexture();

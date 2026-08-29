@@ -792,6 +792,23 @@ export class DocumentStore {
     }, true);
   }
 
+  /** Several features as ONE edit: they land together, in order, at the rollback
+   *  marker, and one undo takes all of them back out.
+   *
+   *  A tool whose result is genuinely more than one feature needs this. Thread is
+   *  a profile sketch plus the climbing revolve that sweeps it, and two
+   *  addFeature calls would leave Ctrl+Z removing the revolve and stranding a
+   *  sketch nobody drew. */
+  addFeatures(features: Feature[], bindings?: SketchBinding[]) {
+    if (!features.length) return;
+    const at = this.rollbackIndex;
+    if (this.rollback !== null && at <= this.rollback) this.rollback += features.length;
+    this.mutate((d) => {
+      d.features.splice(at, 0, ...features);
+      this.applyBindings(d, bindings);
+    }, true);
+  }
+
   /** NOTE: a numeric field bound to a parameter is re-asserted by the recompute
    *  in mutate() — a patch that writes such a field simply won't stick. Route
    *  numeric edits through setTargetValue/setTargetExpr (drag-tool isBound

@@ -12,7 +12,7 @@ import CameraControls from "camera-controls";
 import { frameRotation, pivotShift, viewQuaternion } from "./orbitPivot";
 import { anchorDolly, orthoZoomStep } from "./zoomAnchor";
 import { ease, flightSeconds, worthFlying } from "./viewFlight";
-import { MIN_PERSP_DIST, NEAR_AT_REST, perspNear } from "./clipPlanes";
+import { MIN_PERSP_DIST, NEAR_AT_REST, orthoDepth, perspFar, perspNear } from "./clipPlanes";
 
 CameraControls.install({ THREE });
 
@@ -368,12 +368,25 @@ export function createCameraRig(
       if (!flew) correctOrbitPivot();
       const moved = controls.update(dt) || flew;
       // The near plane follows the camera in, so a deep zoom cannot push the
-      // surface being inspected behind it. See viewport/clipPlanes.ts; at every
-      // ordinary distance this writes back the number that was already there.
+      // surface being inspected behind it, and the far plane follows it out, so
+      // a zoom-out cannot push the ground grid (whose reach tracks the same
+      // zoom) behind it. See viewport/clipPlanes.ts; at every ordinary distance
+      // the near write-back is the number that was already there.
       const near = perspNear(controls.distance);
-      if (persp.near !== near) {
+      const far = perspFar(controls.distance);
+      if (persp.near !== near || persp.far !== far) {
         persp.near = near;
+        persp.far = far;
         persp.updateProjectionMatrix();
+      }
+      // Orthographic depth is linear and symmetric about the camera (it keeps a
+      // negative near so geometry behind the eye still draws), so one half-depth
+      // sets both ends.
+      const depth = orthoDepth(rig.viewScale());
+      if (ortho.far !== depth) {
+        ortho.near = -depth;
+        ortho.far = depth;
+        ortho.updateProjectionMatrix();
       }
       const swapped = applyAutoProjection();
       // Apply the persistent roll AFTER camera-controls positions the camera.

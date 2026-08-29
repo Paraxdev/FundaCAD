@@ -61,3 +61,60 @@ export function perspNear(distance: number): number {
   if (!(distance > 0) || !Number.isFinite(distance)) return NEAR_AT_REST;
   return Math.min(NEAR_AT_REST, Math.max(NEAR_FLOOR, distance * NEAR_FRACTION));
 }
+
+// The FAR plane has to follow the camera OUT for the same reason near follows it
+// in, and this end was the one that actually broke.
+//
+// The ground grid is adaptive: its cell tracks the zoom and it runs three
+// viewport diagonals either side of the view centre (viewport/scene.ts), so
+// zooming out to a 200mm cell already puts its far corner 8m away and a 500mm
+// cell puts it 17.5m away. Far was a flat 10000mm. Past a ~200mm grid step the
+// lattice therefore ran through the far plane and was cut off along a line
+// across the middle of the view; a couple of notches further out and the whole
+// grid — and any part sitting on it — was behind far and the viewport went
+// black. Measured on the running app: step 200mm at distance 2813mm reaches
+// 8000mm, step 1000mm at 13054mm reaches 37500mm.
+//
+// Tying far to the pivot distance fixes both ends of that at once, because the
+// grid's own reach is proportional to the same distance (both come from
+// mm-per-pixel), so one ratio covers every zoom.
+//
+// The cost is depth precision, which is a function of far/near, and near stops
+// growing at 0.1mm — so past about 1.25m out the ratio does grow with the
+// distance. That is the right trade here: the extra range is only ever handed
+// out at zooms where the PART is a couple of pixels across and what needs
+// resolving is the ground lattice, which writes no depth at all
+// (scene.AdaptiveGrid sets depthWrite = false). Every view where depth
+// precision is something a user can see keeps the same near/far pair it always
+// had — see the first two tests in viewport/farPlane.test.ts.
+
+/** Far plane for any ordinary view, and the floor this never goes below — a
+ *  close-up must still be able to see the far side of a large part. */
+export const FAR_AT_REST = 10000;
+
+/** Far sits this many pivot distances out. The grid needs a shade under 4
+ *  (37500/13054 at the extreme measured above); double it so an orbited,
+ *  grazing view — where the far corner of the lattice is further away than the
+ *  centre of it — has room too. */
+export const FAR_FACTOR = 8;
+
+/** Where to put the far plane with the camera this far from its pivot. */
+export function perspFar(distance: number): number {
+  if (!(distance > 0) || !Number.isFinite(distance)) return FAR_AT_REST;
+  return Math.max(FAR_AT_REST, distance * FAR_FACTOR);
+}
+
+/** Half-depths of the orthographic frustum, from half the visible view height.
+ *
+ *  Orthographic was previously left alone on the grounds that its depth
+ *  precision does not vary with zoom — true, and beside the point: its range was
+ *  the same fixed ±10000, so a zoomed-out sketch clipped its own grid exactly
+ *  the way perspective did. Depth is linear here, so the range can be generous:
+ *  the lattice reaches about nine half-heights at the far end, and 30 leaves the
+ *  same margin for a view looked at from an angle. */
+export const ORTHO_DEPTH_FACTOR = 30;
+
+export function orthoDepth(halfHeight: number): number {
+  if (!(halfHeight > 0) || !Number.isFinite(halfHeight)) return FAR_AT_REST;
+  return Math.max(FAR_AT_REST, halfHeight * ORTHO_DEPTH_FACTOR);
+}

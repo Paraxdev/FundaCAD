@@ -58,6 +58,8 @@ export function installDevGlobals(e: Engine): void {
     targetEdit: e.tools.targetEdit,
     pattern: e.tools.pattern,
     revolvePitch: e.tools.revolvePitch,
+    draft: e.tools.draft,
+    thread: e.tools.thread,
     overlay: e.overlay,
     toolBusy: () => e.toolBusy(),
     // The one formula every datum surface goes through: the drawn quad, "sketch
@@ -77,6 +79,8 @@ export function installDevGlobals(e: Engine): void {
       edgeFeature: e.tools.edgeFeature.active,
       pressPull: e.tools.pressPull.active,
       faceOffset: e.tools.faceOffset.active,
+      draft: e.tools.draft.active,
+      thread: e.tools.thread.active,
       loft: e.tools.loft.active,
       planeOffset: e.tools.planeOffset.active,
       move: e.tools.move.active,

@@ -97,6 +97,7 @@ const TOOL_ICON: Record<ToolId, string> = {
   draft: "draft",
   "offset-face": "offsetFace",
   thicken: "thicken",
+  thread: "thread",
 };
 
 /** The tools whose id is NOT an action string.

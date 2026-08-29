@@ -58,7 +58,8 @@ export type ToolId =
   | "shell"
   | "draft"
   | "offset-face"
-  | "thicken";
+  | "thicken"
+  | "thread";
 
 export interface ToolCapability {
   /** Human name, for prompts and menus. */
@@ -114,6 +115,11 @@ export const TOOL_CAPABILITIES: Record<ToolId, ToolCapability> = {
   draft: { label: "Draft", consumes: ["face"], source: "pick" },
   "offset-face": { label: "Offset Face", consumes: ["face"], source: "pick" },
   thicken: { label: "Thicken", consumes: ["face"], source: "pick" },
+  // Thread takes a ROUND face specifically; the table has no kind for "a face
+  // that happens to be a cylinder", and inventing one to describe a single
+  // tool's refusal would be describing the tool, not the selection. The tool
+  // says so itself when the face it is handed is flat.
+  thread: { label: "Thread", consumes: ["face"], source: "pick" },
 };
 
 /** Every tool id, in inventory order. */

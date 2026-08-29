@@ -3,7 +3,7 @@
 // Shell, Draft, Pattern, Scale, Move, Press/Pull…) plus the interactive
 // plane/face pickers they share. Each closes over the same large set of
 // singletons/state owned by main.ts, passed in once via createFeatureStarters.
-import type * as THREE from "three";
+import * as THREE from "three";
 import type { DocumentStore } from "../document/store";
 import type { Viewport } from "../viewport/viewport";
 import type { SketchOverlay, WorldRegion } from "../sketch/overlay";
@@ -21,6 +21,7 @@ import type { PlaneOffsetTool } from "./planeOffsetTool";
 import type { TextureTool } from "./textureTool";
 import { pickPlaneTarget, planeSpecOf, type FacePlanePick } from "./facePlanePick";
 import { choose } from "../ui/choice";
+import { pointInRegion } from "../sketch/region";
 import { setPrompt } from "../ui/prompt";
 import type { Axis3, AxisSpec, Feature, PlaneDef, PlaneSpec, Selector, Vec3 } from "../types";
 import { findSelectorAt, replaceSelectorAt } from "./repickReference";
@@ -592,6 +593,10 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       return;
     }
     store.addFeature({ id: store.nextId(), type: "scale", factor: 1 } as Feature);
+    // Factor 1 is a visual no-op by design (the value row is where you set it),
+    // which means a silent add looks exactly like the tool doing nothing. Say so,
+    // the way Clean Up does.
+    setStatus("Scale added — set the factor in the value rows", "");
   }
 
   // Move: translate / rotate the active body. Defaults to no-op — set the offsets
@@ -644,6 +649,65 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   // modal that has to be dismissed before anything appears asks the user to
   // decide with nothing yet to look at; a default they can see and correct does
   // not.
+  /** One-shot sketch-PROFILE picker: the closed areas of every visible sketch are
+   *  live, the one under the cursor highlights, and a click returns it.
+   *
+   *  The twin of pickFaceInteractive, and it exists because Revolve and Sweep used
+   *  to refuse to start without a pre-selection: "select a sketch profile to
+   *  revolve first" is a dead end for anyone who reached for the tool before the
+   *  profile, which — since the tool is the thing on the ribbon and the profile is
+   *  a region of a sketch nobody has been told is clickable — is most people the
+   *  first time. Loft never had that problem because it asks in the viewport, so
+   *  ask the same way. The hit test is Loft's (features/loftTool.ts regionUnder):
+   *  front-most region whose material, holes excluded, is under the cursor. */
+  function pickRegionInteractive(promptText: string, onPick: (wr: WorldRegion) => void) {
+    if (toolBusy()) return;
+    const scratch = new THREE.Vector3();
+    const regionUnder = (cx: number, cy: number): WorldRegion | null => {
+      const ray = viewport.rayFrom(cx, cy).ray;
+      let best: WorldRegion | null = null;
+      let bestDist = Infinity;
+      for (const wr of overlay.regions) {
+        if (!ray.intersectPlane(wr.plane.plane, scratch)) continue;
+        if (!pointInRegion(wr.plane.to2D(scratch), wr.region)) continue;
+        const d = ray.origin.distanceToSquared(scratch);
+        if (d < bestDist) { bestDist = d; best = wr; }
+      }
+      return best;
+    };
+    viewport.suspendPicking = true;
+    setPrompt(promptText);
+    const onMove = (e: PointerEvent) => {
+      const wr = regionUnder(e.clientX, e.clientY);
+      overlay.setHoverRegion(wr);
+      canvas.style.cursor = wr ? "pointer" : "default";
+    };
+    const onDown = (e: PointerEvent) => {
+      if (e.button !== 0) return;
+      const wr = regionUnder(e.clientX, e.clientY);
+      if (!wr) return; // a click on empty space is a miss, not a cancel
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      cleanup();
+      requestAnimationFrame(() => onPick(wr));
+    };
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") cleanup();
+    };
+    const cleanup = () => {
+      viewport.suspendPicking = false;
+      overlay.setHoverRegion(null);
+      canvas.style.cursor = "default";
+      canvas.removeEventListener("pointermove", onMove);
+      canvas.removeEventListener("pointerdown", onDown, true);
+      window.removeEventListener("keydown", onEsc, true);
+      setPrompt(null);
+    };
+    canvas.addEventListener("pointermove", onMove);
+    canvas.addEventListener("pointerdown", onDown, true);
+    window.addEventListener("keydown", onEsc, true);
+  }
+
   function startRevolve() {
     if (toolBusy()) return;
     const selected = overlay.selectedRegions();
@@ -654,9 +718,21 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
         : [];
     const wr = picked[0];
     if (!wr) {
-      setStatus("Revolve: select a sketch profile to revolve first", "");
+      if (!overlay.regions.length) {
+        setStatus("Revolve needs a closed sketch profile — draw one first", "");
+        return;
+      }
+      // More than one profile is showing and none is selected. Ask in the
+      // viewport, where the answer is, rather than refusing.
+      pickRegionInteractive("Click the profile to revolve · Esc", (r) => revolveFrom([r]));
       return;
     }
+    revolveFrom(picked);
+  }
+
+  function revolveFrom(picked: readonly WorldRegion[]) {
+    const wr = picked[0];
+    if (!wr) return;
     // Areas from OTHER sketches cannot join this one revolve — a feature names a
     // single sketch. Spinning them silently as if they had been part of it is how
     // the whole-sketch fallback used to go wrong; drop them instead.
@@ -773,9 +849,17 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     const regions = overlay.selectedRegions();
     const wr = regions[0] ?? (overlay.regions.length === 1 ? overlay.regions[0] : null);
     if (!wr) {
-      setStatus("Sweep: select a profile sketch region first", "");
+      if (!overlay.regions.length) {
+        setStatus("Sweep needs a closed profile sketch — draw one first", "");
+        return;
+      }
+      pickRegionInteractive("Click the profile to sweep · Esc", (r) => void sweepFrom(r));
       return;
     }
+    await sweepFrom(wr);
+  }
+
+  async function sweepFrom(wr: WorldRegion) {
     const all = store.document.features.filter((f) => f.type === "sketch");
     const candidates = all.filter((f) => f.id !== wr.sketchId);
     if (candidates.length === 0) {
@@ -945,12 +1029,6 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
 
   // Draft: pick a face to taper by 5° about the body's base (pull +Z; edit the
   // angle in the value rows).
-  function startDraft() {
-    pickFaceInteractive("Select a face to draft · Esc to cancel", (faces) => {
-      store.addFeature({ id: store.nextId(), type: "draft", faces, angle: 5, axis: "Z" } as Feature);
-    });
-  }
-
   // Texture: printed surface texture (knurl/hex/waves/ribs/voronoi/noise/image
   // heightmap) over selected faces or a whole body. No pick-then-drag gesture
   // like Shell/Draft — it rides the ambient selection with a docked panel
@@ -1065,7 +1143,6 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     startSweep,
     startPrimitive,
     startShell,
-    startDraft,
     startTexture,
     startPattern,
     startExtrude,

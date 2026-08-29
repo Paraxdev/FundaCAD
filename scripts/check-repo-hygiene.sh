@@ -21,10 +21,12 @@ forbidden='
 .claude/
 .fable/
 .cursor/
+.emergent/
 .aider*
 handoff.md
 CLAUDE.md
 AGENTS.md
+memory/
 .vscode/
 .idea/
 .DS_Store

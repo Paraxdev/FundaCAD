@@ -56,6 +56,8 @@ import { openDocumentAtPath } from "../io/files";
 import { installSidecarDiedToast } from "./sidecarWatch";
 import { installSpaceMouse } from "./spaceMouseSetup";
 import { createSelection } from "./selection";
+import { DraftTool } from "../features/draftTool";
+import { ThreadTool } from "../features/threadTool";
 import { createToolBusy } from "./toolBusy";
 import { createDocumentActions } from "./documentActions";
 import { createDatumPlanes } from "./datumPlanes";
@@ -77,6 +79,8 @@ export interface EngineTools {
   targetEdit: TargetEditTool;
   pressPull: PressPullTool;
   faceOffset: FaceOffsetTool;
+  draft: DraftTool;
+  thread: ThreadTool;
   loft: LoftTool;
   move: MoveTool;
   pattern: PatternTool;
@@ -230,6 +234,8 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
     targetEdit: new TargetEditTool(e.viewport, e.store),
     pressPull: new PressPullTool(e.viewport, e.store),
     faceOffset: new FaceOffsetTool(e.viewport, e.store),
+    draft: new DraftTool(e.viewport, e.store),
+    thread: new ThreadTool(e.viewport, e.store),
     loft: new LoftTool(e.viewport, e.overlay, e.store),
     move: new MoveTool(e.viewport, e.store),
     pattern: new PatternTool(e.viewport, e.store),
@@ -402,4 +408,5 @@ export function mountUi(e: Engine): void {
     if (!connected) e.setStatus("connecting to sidecar…", "error");
     else void e.store.rebuildNow();
   });
+
 }

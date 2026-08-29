@@ -153,6 +153,10 @@ const TEXT_PREVIEW_ID = "__textpreview__";
 // you can snap to", far enough from CURVE_COLOR that it is never mistaken for
 // geometry that has been drawn.
 const FACE_ANCHOR_COLOR = 0x4a6a94;
+/** How far mm-per-pixel may drift before the annotation furniture is rebuilt at
+ *  the new zoom. See updateAnnotationScale. */
+const DIM_SCALE_TOL = 1.05;
+
 
 export class SketchMode {
   active = false;
@@ -696,6 +700,7 @@ export class SketchMode {
       return;
     }
     this.updateGrid();
+    this.updateAnnotationScale();
     if (this.lockReleased) return;
     // Two ways to stop being square to the plane, one per mode. LOCKED: you
     // cannot orbit, so the only way out is to zoom back far enough that you are
@@ -743,6 +748,36 @@ export class SketchMode {
     this.viewport.enterSketchView(this.plane.origin, this.plane.n, this.plane.v);
     this.lockReleased = false;
     this.entryScale = null; // re-measured on the next tick, from the new framing
+  }
+
+  /** A dimension's FURNITURE — arrowhead length, stand-off, label clearance — is
+   *  a screen quantity built into world-space geometry (see entityDims.px), so
+   *  the mm-per-pixel it was built at has to be the CURRENT one.
+   *
+   *  It was set once per refreshActive(), i.e. only when the entity list
+   *  changed. Zoom or pan after that and the annotations kept the size they were
+   *  drawn at: a sketch entered close and then pulled back grew arrowheads that
+   *  read as gigantic against the geometry they belonged to, and one entered far
+   *  out and zoomed into lost its arrowheads entirely. Neither corrected itself
+   *  until the next edit.
+   *
+   *  Rebuilt on a 5% change rather than every frame: 5% of an arrowhead is a
+   *  third of a pixel, so nothing visibly lags, and a continuous wheel-zoom
+   *  costs about one rebuild per notch instead of one per frame. */
+  private dimScaleSeen = 0;
+  private updateAnnotationScale() {
+    const mmPerPx = this.viewport.pixelWorldSize(this.plane.origin);
+    if (!(mmPerPx > 0) || !Number.isFinite(mmPerPx)) return;
+    const last = this.dimScaleSeen;
+    if (last > 0 && mmPerPx > last / DIM_SCALE_TOL && mmPerPx < last * DIM_SCALE_TOL) return;
+    this.dimScaleSeen = mmPerPx;
+    setDimPixelScale(mmPerPx);
+    // Deliberately NOT refreshActive(): that bumps entityVersion (cancelling any
+    // in-flight constraint solve) and re-derives regions and snap candidates,
+    // none of which depend on the zoom. Only the annotation geometry does.
+    this.overlay.setActiveSketch(this.activeCurves(this.derivedEntities()));
+    if (this.dimsVisible) this.dims.show(this.entities, this.plane, this.constraintDimExtras());
+    this.viewport.requestRender();
   }
 
   private updateGrid() {

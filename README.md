@@ -98,3 +98,10 @@ The sidecar prints `TOKEN <t>` on its first line and refuses connections without
 it, so open `http://localhost:5173/?token=<t>`. Without it the viewport connects,
 is refused, and silently never builds anything. A sidecar started this way also
 outlives its shell, so kill it by hand or it keeps port 8765.
+
+## Docs
+
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — how the three processes fit together
+- [`docs/PROTOCOL.md`](docs/PROTOCOL.md) — the WebSocket the frontend and sidecar speak
+- [`docs/PACKAGING.md`](docs/PACKAGING.md) — how the bundled Python runtime is built
+- [`docs/EDGE-CASES.md`](docs/EDGE-CASES.md) / [`docs/IMPROVEMENT-AUDIT.md`](docs/IMPROVEMENT-AUDIT.md) — known rough edges

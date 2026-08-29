@@ -9,6 +9,10 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+    // The sidecar's uv venv is ~800MB of Python files that Vite never serves.
+    // Watching it wastes inotify handles and, on a container with a modest
+    // fs.inotify.max_user_watches, crashes the dev server with ENOSPC.
+    watch: { ignored: ["**/sidecar/.venv/**", "**/src-tauri/target/**", "**/third_party/**"] },
   },
   // Tauri builds for a specific target; keep the chunk modern.
   build: {
