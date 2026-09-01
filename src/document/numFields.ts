@@ -163,6 +163,44 @@ export function coerceForField(field: string, value: number): number {
 /** Write an evaluated parameter value into its target field. Returns the
  *  affected sketch id (for the re-solve cascade) or null when the target is
  *  gone or the value didn't change. Non-finite values are never written. */
+/** Which feature a target lives in. Every kind of target is inside exactly one:
+ *  a constraint, an entity and a pattern are all parts of a sketch. */
+export function targetFeatureId(target: ParamTarget): string {
+  return target.kind === "feature" ? target.feature : target.sketch;
+}
+
+/** A COPY of the feature `target` lives in, with `value` written into it.
+ *
+ *  For a LIVE PREVIEW: the store can rebuild a candidate feature in the timeline
+ *  position it will occupy without touching the document or the undo stack
+ *  (beginEditPreview), and to do that it needs the feature it would build. This
+ *  is how a panel gets one without a speculative mutate and an undo entry per
+ *  keystroke.
+ *
+ *  The clone is of the ONE feature, not of the document: the rest is passed
+ *  through by reference, so previewing a radius on a hundred-feature part costs
+ *  a copy of the fillet rather than a copy of the part.
+ *
+ *  Null when the target no longer resolves, the value is not finite, or writing
+ *  it would change nothing — all three of which a caller reads the same way, as
+ *  "there is nothing here worth building".
+ */
+export function featureWithTarget(
+  doc: CadDocument,
+  target: ParamTarget,
+  value: number,
+): Feature | null {
+  const id = targetFeatureId(target);
+  const src = doc.features.find((f) => f.id === id);
+  if (!src) return null;
+  const copy = structuredClone(src);
+  const view: CadDocument = {
+    ...doc,
+    features: doc.features.map((f) => (f.id === id ? copy : f)),
+  };
+  return writeTarget(view, target, value) ? copy : null;
+}
+
 export function writeTarget(doc: CadDocument, target: ParamTarget, value: number): { sketch?: string } | null {
   if (!Number.isFinite(value)) return null;
   const rt = resolveTarget(doc, target);

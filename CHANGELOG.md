@@ -23,6 +23,16 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ## Unreleased
 
+### Added
+
+- **A value typed into Properties shows its result before you commit it.** Type
+  1600 into a revolve's angle, stop, and the part turns 1600 degrees while the
+  box still has focus; press Enter to keep it, or leave the field and it goes
+  back to what the document says. The real feature, rebuilt by the sidecar in
+  the timeline position it will occupy, not a drawn approximation of it. A
+  preview is not an undo step, so Enter is still what commits. Fields driven by
+  an expression are unchanged and still answer on Enter.
+
 ### Changed
 
 - **The app is called FundaCAD.** Neocad is a brand somebody else holds, so the

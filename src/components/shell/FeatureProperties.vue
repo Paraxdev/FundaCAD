@@ -39,7 +39,7 @@ import { commonUnits, toUnit, tryParseMeasure, unitById, type Dim, type Measured
 import { contextMenu } from "../../ui/menu";
 import { resolveEntities, toSketchEntity } from "../../sketch/resolve";
 import { entityDims } from "../../sketch/entityDims";
-import { FEATURE_NUM_FIELDS as NUM_FIELDS, type FieldKind } from "../../document/numFields";
+import { FEATURE_NUM_FIELDS as NUM_FIELDS, featureWithTarget, type FieldKind } from "../../document/numFields";
 import {
   FEATURE_CHOICE_FIELDS,
   FEATURE_TOGGLE_FIELDS,
@@ -264,6 +264,73 @@ const featureRows = useDocValue((doc) => {
  *  gets a first look now, and only claims text that names a unit, so a bare
  *  "2+3" still means 3mm more than 2mm rather than 2+3 of whatever this row
  *  happens to be showing. */
+/** The canonical number `raw` names, or null when it does not name one.
+ *
+ *  The same reading `commitField` does, minus the expression engine: an
+ *  expression commits on a promise chain through the params engine and can
+ *  create a named parameter, neither of which belongs on a keystroke. A field
+ *  driven by an expression therefore has no live preview and still answers on
+ *  Enter, which is the behaviour it had.
+ */
+function previewNumber(row: { key: string; kind: FieldKind }, raw: string): number | null {
+  const u = unitOf(row.key, row.kind);
+  if (isPlainNumber(raw)) return Number(raw.trim()) * (u?.factor ?? 1);
+  const m = u ? measure(raw, u, u.dim) : null;
+  return m && typeof m !== "string" && m.unit ? m.value : null;
+}
+
+/** Show what the typed number would build, without committing it.
+ *
+ *  A value box that only answers on Enter is a value box you have to guess at:
+ *  type 1600 into a revolve's angle, watch nothing move, and the only way to
+ *  find out whether that was the number you meant is to commit it, look, undo
+ *  and try again. The drag handles have shown their result live since they
+ *  existed; this is the same feature reaching the panel the handles are the
+ *  alternative to.
+ *
+ *  Through the store's edit preview, so what is on screen is the REAL feature
+ *  rebuilt by the sidecar in the timeline position it will occupy — not a
+ *  drawn approximation of it, which would be a second thing to keep in step and
+ *  would go on looking right when the kernel had already refused. A preview is
+ *  not an undo step, so Enter is still what commits.
+ *
+ *  Nonsense is ignored rather than flagged. Half-typed text is nonsense most of
+ *  the time it is looked at ("1", "16", "16m"), and the error path is `commit`,
+ *  which is what the user asked for by pressing Enter.
+ */
+function previewField(
+  row: { key: string; target: ParamTarget; kind: FieldKind },
+  raw: string,
+) {
+  const v = previewNumber(row, raw);
+  if (v === null) return;
+  const next = featureWithTarget(store.document, row.target, v);
+  if (!next) return; // unresolvable, or the same value it already holds
+  if (previewOpenFor === next.id) {
+    store.setEditPreview(next);
+  } else {
+    if (previewOpenFor !== null) store.endEditPreview(false); // a different row
+    previewOpenFor = next.id;
+    store.beginEditPreview(next.id, next);
+  }
+}
+
+/** The feature id this panel opened a preview on, so a second keystroke updates
+ *  that preview instead of opening another. */
+let previewOpenFor: string | null = null;
+
+/** Put the model back to what the document says.
+ *
+ *  `committing` suppresses the rebuild, because the commit landing a line later
+ *  schedules one of its own: without that, every Enter paid for the part twice
+ *  and the second build was of the state it was already leaving.
+ */
+function endPreview(committing: boolean) {
+  if (previewOpenFor === null) return;
+  previewOpenFor = null;
+  store.endEditPreview(!committing);
+}
+
 function commitField(
   row: { key: string; target: ParamTarget; kind: FieldKind },
   raw: string,
@@ -331,5 +398,7 @@ function commitField(
     :row-title="r.rowTitle"
     hint="a value with any unit (2mm, 1 inch, 1/2&quot;), a parameter, or an expression"
     :commit="(raw) => commitField(r, raw)"
+    :preview="(raw) => previewField(r, raw)"
+    :preview-end="endPreview"
   />
 </template>

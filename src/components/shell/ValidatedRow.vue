@@ -29,6 +29,10 @@ const props = defineProps<{
    *  caption instead of a button: a value can only be re-shown in another unit
    *  when it is a number, and an expression is neither. */
   pickUnit?: ((x: number, y: number) => void) | undefined;
+  /** Show what the typed text would do, without committing it. See
+   *  ValidatedInput; passed straight through. */
+  preview?: ((raw: string) => void) | undefined;
+  previewEnd?: ((committing: boolean) => void) | undefined;
 }>();
 
 function onPickUnit(e: MouseEvent) {
@@ -41,7 +45,13 @@ function onPickUnit(e: MouseEvent) {
   <div class="param-row" :class="rowClass" :title="rowTitle">
     <label>{{ label }}</label>
     <div class="param-value">
-      <ValidatedInput :value="value" :commit="commit" :hint="hint" />
+      <ValidatedInput
+        :value="value"
+        :commit="commit"
+        :hint="hint"
+        :preview="preview"
+        :preview-end="previewEnd"
+      />
       <button
         v-if="unit && pickUnit"
         type="button"
