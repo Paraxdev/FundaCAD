@@ -25,6 +25,53 @@ export function diagnosisOf(i: number, conflict: Set<number>, over: Set<number>)
   return conflict.has(i) ? "conflict" : over.has(i) ? "over" : null;
 }
 
+/** The name, symbol and operands of a constraint — THE table, shared by the
+ *  glyph badges and the list so a constraint cannot be called one thing on the
+ *  canvas and another in the panel. Operand ids may be compound rectangle-edge
+ *  ids (`<rectId>~<k>`); entityLabel decodes those. */
+export function constraintFace(c: SketchConstraint): {
+  symbol: string;
+  name: string;
+  operands: string[];
+} {
+  switch (c.type) {
+    case "horizontal": return { symbol: "H", name: "Horizontal", operands: [c.line] };
+    case "vertical": return { symbol: "V", name: "Vertical", operands: [c.line] };
+    case "parallel": return { symbol: "∥", name: "Parallel", operands: [c.l1, c.l2] };
+    case "perpendicular": return { symbol: "⊥", name: "Perpendicular", operands: [c.l1, c.l2] };
+    case "collinear": return { symbol: "—", name: "Collinear", operands: [c.l1, c.l2] };
+    case "equal": return { symbol: "=", name: "Equal", operands: [c.l1, c.l2] };
+    case "equalRadius": return { symbol: "=", name: "Equal radius", operands: [c.a, c.b] };
+    case "tangent": return { symbol: "T", name: "Tangent", operands: [c.line, c.circle] };
+    case "tangent2": return { symbol: "T", name: "Tangent", operands: [c.a, c.b] };
+    case "coincident": return { symbol: "⊙", name: "Coincident", operands: [c.e1, c.e2] };
+    case "concentric": return { symbol: "◎", name: "Concentric", operands: [c.c1, c.c2] };
+    case "midpoint": return { symbol: "M", name: "Midpoint", operands: [c.e, c.line] };
+    case "symmetric": return { symbol: "⋈", name: "Symmetric", operands: [c.e1, c.e2, c.line] };
+    // "F", not an anchor. Every other symbol in this set is a letter or a
+    // mathematical operator that the UI font draws itself — one emoji among
+    // them came out in full colour, at a different weight, from whatever
+    // fallback the platform reached for, and jumped a pixel or two off the
+    // baseline its neighbours share. A letter matches the alphabet the rest of
+    // the set already speaks.
+    case "fix": return { symbol: "F", name: "Fixed", operands: [c.e] };
+    // The dimensional constraints have no glyph — they ARE their badge on the
+    // canvas — but a list that showed only the geometric half would be lying
+    // about what is holding the sketch.
+    case "distance": return { symbol: "↔", name: "Length", operands: [c.line] };
+    case "diameter": return { symbol: "⌀", name: "Diameter", operands: [c.circle] };
+    case "radius": return { symbol: "R", name: "Radius", operands: [c.e] };
+    case "angle": return { symbol: "∠", name: "Angle", operands: [c.l1, c.l2] };
+    case "p2pDistance": return { symbol: "↔", name: "Distance", operands: [c.e1, c.e2] };
+    case "p2lDistance": return { symbol: "↔", name: "Distance to line", operands: [c.e, c.line] };
+    case "radialGap": return { symbol: "↔", name: "Radial gap", operands: [c.inner, c.outer] };
+    case "c2cDistance": return { symbol: "↔", name: "Rim to rim", operands: [c.c1, c.c2] };
+    case "c2lDistance": return { symbol: "↔", name: "Rim to line", operands: [c.circle, c.line] };
+    case "p2cDistance": return { symbol: "↔", name: "Point to rim", operands: [c.e, c.circle] };
+    default: return { symbol: "?", name: (c as { type: string }).type, operands: [] };
+  }
+}
+
 /** representative point of an entity for glyph placement */
 function entCenter(e: ResolvedEntity): THREE.Vector2 {
   switch (e.type) {
@@ -58,26 +105,20 @@ export function constraintGlyphs(ents: ResolvedEntity[], constraints: SketchCons
 
   constraints.forEach((c, i) => {
     switch (c.type) {
-      case "horizontal": push(i, "H", center(c.line)); break;
-      case "vertical": push(i, "V", center(c.line)); break;
-      case "parallel": push(i, "∥", center(c.l1)); break;
-      case "perpendicular": push(i, "⊥", center(c.l1)); break;
-      case "collinear": push(i, "—", mid2(center(c.l1), center(c.l2))); break;
-      case "equal": push(i, "=", center(c.l1)); break;
-      case "equalRadius": push(i, "=", center(c.a)); break;
-      case "tangent": push(i, "T", mid2(center(c.line), center(c.circle))); break;
-      case "tangent2": push(i, "T", mid2(center(c.a), center(c.b))); break;
-      case "coincident": push(i, "⊙", refPos(c.e1, c.p1)); break;
-      case "concentric": push(i, "◎", center(c.c1)); break;
-      case "midpoint": push(i, "M", center(c.line)); break;
-      case "symmetric": push(i, "⋈", center(c.line)); break;
-      // "F", not an anchor. Every other badge in this set is a letter or a
-      // mathematical operator that the UI font draws itself — one emoji among
-      // them came out in full colour, at a different weight, from whatever
-      // fallback the platform reached for, and jumped a pixel or two off the
-      // baseline its neighbours share. A letter matches the alphabet the rest
-      // of the set already speaks.
-      case "fix": push(i, "F", refPos(c.e, c.p)); break;
+      case "horizontal": push(i, constraintFace(c).symbol, center(c.line)); break;
+      case "vertical": push(i, constraintFace(c).symbol, center(c.line)); break;
+      case "parallel": push(i, constraintFace(c).symbol, center(c.l1)); break;
+      case "perpendicular": push(i, constraintFace(c).symbol, center(c.l1)); break;
+      case "collinear": push(i, constraintFace(c).symbol, mid2(center(c.l1), center(c.l2))); break;
+      case "equal": push(i, constraintFace(c).symbol, center(c.l1)); break;
+      case "equalRadius": push(i, constraintFace(c).symbol, center(c.a)); break;
+      case "tangent": push(i, constraintFace(c).symbol, mid2(center(c.line), center(c.circle))); break;
+      case "tangent2": push(i, constraintFace(c).symbol, mid2(center(c.a), center(c.b))); break;
+      case "coincident": push(i, constraintFace(c).symbol, refPos(c.e1, c.p1)); break;
+      case "concentric": push(i, constraintFace(c).symbol, center(c.c1)); break;
+      case "midpoint": push(i, constraintFace(c).symbol, center(c.line)); break;
+      case "symmetric": push(i, constraintFace(c).symbol, center(c.line)); break;
+      case "fix": push(i, constraintFace(c).symbol, refPos(c.e, c.p)); break;
       // distance/diameter/p2pDistance/p2lDistance/radius/angle render as dimensions
       default: break;
     }

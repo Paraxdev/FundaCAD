@@ -133,3 +133,34 @@ describe("onLattice", () => {
     expect(onLattice(NaN, 5)).toBe(false);
   });
 });
+
+// The closing segment of a chain is drawn at whatever angle is left between the
+// two ends already placed, so the 3 degree guess would be reading an intent
+// nobody had. It used to be skipped outright instead, which is why a closed
+// thread profile came out of the sketcher with no constraint on it anywhere
+// even though its last segment was exactly vertical. SketchMode passes a
+// tolerance of 0 there: no guessing, both exact rules still on.
+describe("inferLineDirection with the guess switched off (tolDeg 0)", () => {
+  it("records an exactly vertical closing segment", () => {
+    expect(inferLineDirection(20, 5, 20, 0, 0, 0)).toBe("vertical");
+  });
+
+  it("records an exactly horizontal one", () => {
+    expect(inferLineDirection(0, 3, 17.3, 3, 0, 0)).toBe("horizontal");
+  });
+
+  // THE CONTROL. A segment that merely LOOKS vertical is the case the skip
+  // existed to protect, and it still gets nothing.
+  it("says nothing about one that is only nearly on an axis", () => {
+    expect(inferLineDirection(20, 5, 20.2, 0, 0, 0)).toBeNull(); // 2.3 degrees off
+    expect(inferLineDirection(20, 5, 20.2, 0, 0)).toBe("vertical"); // inside the default 3
+  });
+
+  it("still lets the lattice answer, which was never a guess", () => {
+    // Both ends on a 5mm grid, same x: exact, and reported whatever the
+    // tolerance is, because no tolerance was consulted to get there.
+    expect(inferLineDirection(10, 15, 10, 0, 5, 0)).toBe("vertical");
+    // ...and a deliberate diagonal between two lattice points still says nothing.
+    expect(inferLineDirection(0, 0, 200, 5, 5, 0)).toBeNull();
+  });
+});

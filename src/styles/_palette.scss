@@ -12,6 +12,16 @@
   box-shadow: var(--shadow-3);
   padding: var(--s-4);
   z-index: 20;
+  /* The card grew a list, and a list has no length limit — a sketch can carry a
+     hundred relations. Cap the card at the viewport it is docked inside and let
+     the ONE scrollable part take the shortfall; everything above it is a fixed
+     set of controls that must not be squeezed. */
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100% - var(--s-4) * 2);
+}
+.palette > * {
+  flex: none;
 }
 .palette-title {
   font-size: 10px;
@@ -75,6 +85,136 @@
   height: 15px;
   cursor: pointer;
 }
+/* ---- relations list ---- */
+/* A second section inside the card, so it needs the rule above it to breathe
+   away from the last toggle rather than sitting on top of it. */
+.palette-section-gap {
+  margin-top: var(--s-4);
+}
+.rel-summary {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-dim);
+  margin-bottom: var(--s-2);
+}
+.rel-summary.conflict {
+  color: var(--error);
+}
+.rel-empty {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-mute);
+}
+.rel-list {
+  list-style: none;
+  padding: 0;
+  /* Same bleed as .palette-row, so a row's hover fill lines up with the toggles
+     above it and the text stays flush with the card's own padding. */
+  margin: 0 calc(-1 * var(--s-3));
+  /* About eight rows at a comfortable height, fewer on a short viewport: the
+     list is the only part of the card allowed to give ground. min-height 0 is
+     what lets a flex item shrink below its content at all. */
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 216px;
+  overflow-y: auto;
+}
+.rel-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease);
+}
+.rel-row:hover {
+  background: var(--raised);
+}
+/* The badge, deliberately the same 16px square with the same accent border the
+   canvas glyph wears — the panel is naming the thing you can see on the
+   drawing, and it should look like the thing. */
+.rel-sym {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--accent);
+  border-radius: var(--r-sm);
+  color: var(--accent);
+  font-size: 10px;
+  line-height: 1;
+}
+.rel-row.conflict .rel-sym { border-color: #ff4444; color: #ff4444; }
+.rel-row.over .rel-sym { border-color: #e0a020; color: #e0a020; }
+/* Implied relations are real and load-bearing but nobody drew them, so they
+   read as scenery: dimmed, dashed, and without a delete button. */
+.rel-row.implied .rel-sym {
+  border-style: dashed;
+  border-color: var(--text-mute);
+  color: var(--text-mute);
+}
+.rel-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.rel-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.rel-name {
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rel-row.implied .rel-name {
+  color: var(--text-dim);
+}
+.rel-value {
+  flex: none;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+.rel-detail {
+  font-size: 10.5px;
+  color: var(--text-mute);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Kept out of the flow until the row is hovered, rather than hidden: a column
+   of crosses down the side of the list turns a reference into a control panel,
+   and the one you want is always the one under the cursor. */
+.rel-del {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-mute);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  visibility: hidden;
+}
+.rel-row:hover .rel-del {
+  visibility: visible;
+}
+.rel-del:hover {
+  color: var(--error);
+}
+
 .palette-btn {
   width: 100%;
   margin-bottom: var(--s-3);

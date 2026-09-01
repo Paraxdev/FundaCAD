@@ -45,6 +45,14 @@ export function onLattice(v: number, step: number): boolean {
  *
  *  `step` is the live snap lattice, or 0 when grid snapping is off, in which
  *  case the angular guess is the only rule available.
+ *
+ *  `tolDeg` of 0 switches the GUESS off while leaving both exact rules on: the
+ *  lattice branch above, and a line that is precisely on an axis. That is the
+ *  right setting for a line whose direction the user did not choose — the
+ *  closing segment of a chain, which is whatever is left between two ends
+ *  already placed. Reading intent into a nearly-vertical one would be inventing
+ *  it; refusing to record an exactly vertical one leaves a closed profile
+ *  carrying nothing at all.
  */
 export function inferLineDirection(
   x1: number,

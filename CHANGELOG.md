@@ -25,6 +25,28 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **The Sketch Palette lists what is holding the sketch.** A Relations section
+  under the toggles, showing every constraint on the open sketch, what it acts
+  on, and its driving value where it has one. Hovering a row lights that
+  geometry on the drawing, which is how you tell which two lines "Line 1 and
+  Line 3" means; clicking selects them; the cross on the hovered row deletes
+  the constraint. Above the list is the degrees-of-freedom count, so "fully
+  defined" is a thing you can read rather than a shade of white you have to
+  notice. The glyphs on the canvas answer "what is holding this line", and they
+  are still there, on the same Show Constraints toggle. The list answers "what
+  is holding this sketch", which is the question people actually ask, and no
+  glyph pinned to geometry can answer it, because a glyph you cannot find looks
+  exactly like a glyph that is not there.
+
+  It also lists the relations nobody drew. Two endpoints at the same position
+  compile to one point in the solver, so a chain drawn end to end is genuinely
+  joined with no constraint recorded anywhere: the corner holds, and there is
+  nothing in the file, on the canvas or in the timeline to say so. Those appear
+  as implied, dimmed and dashed and with no delete button, because there is no
+  record to delete. Writing coincident constraints for them instead would be
+  redundant with the merge, and redundant is exactly what the over-defined
+  warning is for.
+
 - **Windows has a portable build.** `Neocad_<version>_x64_portable.zip` on the
   release page: unzip it wherever you like and run `neocad.exe`. Nothing is
   installed, no admin rights are asked for, and several builds can sit beside
@@ -295,6 +317,29 @@ This file starts on 2026-08-03. For anything before that, see the
   resolve, so this shows up as a smaller file rather than a visibly coarser part.
 
 ### Fixed
+
+- **A drawn line ends where the cursor snapped, to the last digit.** A line's
+  endpoint was rebuilt from its own length and angle when it was committed, even
+  when neither had been typed, so every point the cursor caught on took a round
+  trip out to polar and back, through a division by 180, a multiplication by pi
+  and two trigonometric functions. It came back a few parts in a million out: a
+  corner placed exactly on a grid intersection was stored as 5.999995816. The
+  sketcher's exact reasoning all sits downstream of that. The lattice test
+  allows a millionth and rejected it, so the grid half of the
+  horizontal/vertical auto-constrain never fired on a drawn line at all and the
+  three-degree guess had been carrying the whole feature on its own. Typed
+  values are still reconstructed, because a number the user typed is the one
+  that has to come true.
+
+- **The last segment of a closed profile can carry a constraint now.** Closing a
+  chain skipped the horizontal/vertical inference outright, on the good grounds
+  that the closing segment's direction is not chosen, it is whatever is left
+  between the two ends already placed, and guessing an intent from it invents
+  one. Exactly on an axis is not a guess though, and the skip was the reason a
+  closed thread profile came out of the sketcher with no constraint on it
+  anywhere while its last segment stood perfectly vertical. It gets the exact
+  rules and not the guess: on the lattice, or precisely on an axis, and nothing
+  otherwise.
 
 - **A point that lines up with a corner now lands on the grid too.** A guide
   answers one coordinate and the lattice answers either, and the two were never

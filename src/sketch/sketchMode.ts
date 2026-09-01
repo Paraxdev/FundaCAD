@@ -16,6 +16,7 @@ import { fetchFonts } from "./textCache";
 import { isEditableTarget } from "../ui/focus";
 import { SketchDimensions, type ExtraDim } from "./sketchDimensions";
 import { SketchGlyphs } from "./sketchGlyphs";
+import { RelationsPanel } from "./relationsPanel";
 import { constraintGlyphs, diagnosisOf } from "./glyphs";
 import { entityDims, constraintDims, dimRefPoints, curveKind, linearDim, setDimPixelScale, staggeredDefaults, type DimField, type ConstraintDim } from "./entityDims";
 import {
@@ -49,7 +50,7 @@ import { PatternFlow, PATTERN_TOOLS, ENTITY_PATTERNS, type PatternHost } from ".
 import { ProjectPanel } from "./projectPanel";
 import { sketchEscapeAction } from "./escapeLayers";
 import { gridReach, gridStep, SketchPlaneGrid, snapLatticeStep } from "./planeGrid";
-import { inferLineDirection } from "./inferLine";
+import { INFER_TOL_DEG, inferLineDirection } from "./inferLine";
 import { sketchLockHolds, viewSquareToPlane } from "./sketchView";
 
 export type SketchTool =
@@ -187,6 +188,11 @@ export class SketchMode {
   private polygonSides = 6; // n for the polygon tool
   private filletFirst: number | null = null; // first line picked for a sketch fillet
   private selected = new Set<string>(); // selected entity ids (select tool)
+  /** The Relations list in the Sketch Palette. */
+  private relations = new RelationsPanel();
+  /** Entity ids lit by the relations row under the cursor. Display only: it
+   *  never reaches the document, the solver or the undo history. */
+  private relHover = new Set<string>();
   private constraints: SketchConstraint[] = []; // persistent constraints (solved)
   private patterns: SketchPattern[] = []; // associative pattern definitions
   private lastDof = -1;
@@ -366,6 +372,9 @@ export class SketchMode {
     this.glyphs = new SketchGlyphs(viewport);
     this.glyphs.onDelete = (i) => this.deleteConstraint(i);
     this.glyphs.onOverlapPick = (e) => this.labelOverlapSelect(e);
+    this.relations.onDelete = (i) => this.deleteConstraint(i);
+    this.relations.onHover = (ids) => this.setRelationHover(ids);
+    this.relations.onSelect = (ids) => this.selectFromRelation(ids);
     this.boundDown = (e) => this.onPointerDown(e);
     this.boundMove = (e) => this.onPointerMove(e);
     this.boundUp = (e) => this.endDrag(e.pointerId);
@@ -550,6 +559,8 @@ export class SketchMode {
     this.dim.hide();
     this.dims.hide();
     this.glyphs.hide();
+    this.relations.hide();
+    this.relHover.clear();
     this.textPanel.hide();
     this.projectPanel.hide();
     // The prompt is a transient like the rest of these, and was the one thing
@@ -677,6 +688,13 @@ export class SketchMode {
     else this.dims.hide();
     if (this.glyphsVisible) this.glyphs.show(constraintGlyphs(this.entities, this.constraints), this.plane, this.conflictIdx, this.overIdx);
     else this.glyphs.hide();
+    // The list, from the same four inputs the badges take. refreshActive is the
+    // choke point every constraint change and every finished solve passes
+    // through, which is why it goes here rather than at each of those sites.
+    this.relations.show(
+      this.entities, this.constraints, this.conflictIdx, this.overIdx,
+      this.lastDof, this.conflict,
+    );
     // On-demand renderer: a keyboard-driven repaint (e.g. async text glyphs landing
     // via redraw()) fires no pointer event, so force a frame or it won't draw until
     // the next mouse move.
@@ -906,7 +924,33 @@ export class SketchMode {
   }
   setConstraintsVisible(on: boolean) {
     this.glyphsVisible = on;
+    this.relations.setVisible(on);
     this.refreshActive();
+  }
+
+  /** Light the geometry a relations row names. There is no other way to tell
+   *  WHICH two lines "Line 1 and Line 3" means without counting them.
+   *
+   *  Rebuilds the curves only, deliberately: refreshActive() would bump
+   *  entityVersion and cancel any in-flight solve, and re-derive regions, snap
+   *  candidates and every dimension label, none of which a hover changes. */
+  private setRelationHover(ids: string[] | null) {
+    const next = new Set(ids ?? []);
+    if (next.size === this.relHover.size && [...next].every((id) => this.relHover.has(id))) return;
+    this.relHover = next;
+    this.overlay.setActiveSketch(this.activeCurves(this.derivedEntities()));
+    this.viewport.requestRender();
+  }
+
+  /** Clicking a relations row selects what it acts on. Arming select first is
+   *  the point rather than a side effect: the click is an inspection, and a
+   *  selection made under a drawing tool is thrown away by that tool's next
+   *  click. Order matters, because setTool clears the selection. */
+  private selectFromRelation(ids: string[]) {
+    if (this.tool !== "select") this.setTool("select");
+    this.selected = new Set(ids.filter((id) => this.entities.some((e) => e.id === id)));
+    this.refreshActive();
+    this.onState?.();
   }
   /** Delete the constraint at `cIndex` (clicked its glyph) and re-solve. */
   private deleteConstraint(cIndex: number) {
@@ -2908,10 +2952,28 @@ export class SketchMode {
     // line
     let len = a.distanceTo(cursor);
     let ang = (Math.atan2(cursor.y - a.y, cursor.x - a.x) * 180) / Math.PI;
-    if (this.dim.isUserDriven("length")) len = this.dim.getValue("length") ?? len;
-    if (this.dim.isUserDriven("angle")) ang = this.dim.getValue("angle") ?? ang;
+    const typedLen = this.dim.isUserDriven("length");
+    const typedAng = this.dim.isUserDriven("angle");
+    if (typedLen) len = this.dim.getValue("length") ?? len;
+    if (typedAng) ang = this.dim.getValue("angle") ?? ang;
     const ar = (ang * Math.PI) / 180;
-    const end = new THREE.Vector2(a.x + Math.cos(ar) * len, a.y + Math.sin(ar) * len);
+    // THE SNAPPED POINT, unless a typed length or angle overrides it.
+    //
+    // This rebuilt the endpoint from (length, angle) unconditionally, which
+    // sends every point the cursor snapped to on a round trip out to polar and
+    // back — through a division by 180, a multiplication by pi and two
+    // trigonometric functions — and lands it a few parts in a million from
+    // where it started. A corner placed exactly on a grid intersection was
+    // committed at 5.999995816, and the whole of the sketcher's exact
+    // reasoning is downstream of that: onLattice() allows a millionth and
+    // rejected it, so the grid branch of the horizontal/vertical inference
+    // never fired for a drawn line and the three-degree GUESS was carrying the
+    // entire feature. Typed values still have to be reconstructed, because the
+    // number the user typed is the one that has to come true rather than the
+    // one the cursor happened to be at.
+    const end = typedLen || typedAng
+      ? new THREE.Vector2(a.x + Math.cos(ar) * len, a.y + Math.sin(ar) * len)
+      : cursor.clone();
     const ent: ResolvedEntity = { type: "line", id: "", x1: a.x, y1: a.y, x2: end.x, y2: end.y };
     const dims: Record<string, number> = { length: len, angle: ang };
     return { dims, preview: this.entityCurve(ent), entity: ent };
@@ -2927,8 +2989,16 @@ export class SketchMode {
       const end = new THREE.Vector2(entity.x2, entity.y2);
       // clicked back on the start point → close the loop and end the chain
       const closing = this.chainStart != null && end.distanceTo(this.chainStart) < 1e-3;
-      // auto-infer horizontal/vertical (skip the closing seg + typed angles)
-      if (!closing && !this.dim.isUserDriven("angle")) this.inferLineConstraint(entity);
+      // Auto-infer horizontal/vertical. The closing segment gets the same
+      // look with the GUESS switched off: its direction was not chosen, it is
+      // whatever is left between the two ends already placed, so three degrees
+      // of tolerance there would be inventing an intent nobody had. Exactly on
+      // an axis is not a guess, and skipping the segment outright was leaving a
+      // closed profile with no constraint on it anywhere. A typed angle is the
+      // user having said it already, and still wins over both.
+      if (!this.dim.isUserDriven("angle")) {
+        this.inferLineConstraint(entity, closing ? 0 : INFER_TOL_DEG);
+      }
       if (closing) {
         this.base = null;
         this.chainStart = null;
@@ -2950,11 +3020,12 @@ export class SketchMode {
   /** Record horizontal/vertical on a freshly drawn line (mainstream MCAD's
    *  auto-constrain). The grid decides when it can; otherwise a few degrees of
    *  tolerance does. See inferLine.ts for why the order matters. */
-  private inferLineConstraint(e: ResolvedEntity) {
+  private inferLineConstraint(e: ResolvedEntity, tolDeg = INFER_TOL_DEG) {
     if (e.type !== "line") return;
     const dir = inferLineDirection(
       e.x1, e.y1, e.x2, e.y2,
       this.gridSnap ? this.snapStep() : 0,
+      tolDeg,
     );
     if (dir === "horizontal") {
       e.y2 = e.y1; // exactly horizontal
@@ -3080,11 +3151,17 @@ export class SketchMode {
 
   private activeCurves(derived: ResolvedEntity[]): THREE.Object3D[] {
     const objs: THREE.Object3D[] = [];
-    if (this.selected.size) {
-      const normal = this.entities.filter((e) => !this.selected.has(e.id));
-      const chosen = this.entities.filter((e) => this.selected.has(e.id));
+    const lit = this.relHover;
+    if (this.selected.size || lit.size) {
+      // Three layers, and the hover is on top: it is transient and answers a
+      // question being asked right now, so it wins over a selection that may
+      // have been sitting there since before the panel was opened.
+      const normal = this.entities.filter((e) => !this.selected.has(e.id) && !lit.has(e.id));
+      const chosen = this.entities.filter((e) => this.selected.has(e.id) && !lit.has(e.id));
+      const hovered = this.entities.filter((e) => lit.has(e.id));
       if (normal.length) objs.push(...curveObjects(normal, this.plane, this.activeColor()));
       if (chosen.length) objs.push(...curveObjects(chosen, this.plane, SELECT_COLOR, true));
+      if (hovered.length) objs.push(...curveObjects(hovered, this.plane, PREVIEW_COLOR, true));
     } else {
       objs.push(...curveObjects(this.entities, this.plane, this.activeColor()));
     }
