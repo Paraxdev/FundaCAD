@@ -85,6 +85,12 @@ function onClick(e: MouseEvent, g: GlyphItem) {
   }
   s.glyphHooks?.del(g.cIndex);
 }
+
+/** Same as the dimension layer: a constraint badge that has taken the pointer
+ *  has also taken the wheel, and hands it back to the viewport. */
+function onWheel(e: WheelEvent) {
+  s.glyphViewport?.forwardWheel(e);
+}
 </script>
 
 <template>
@@ -93,7 +99,11 @@ function onClick(e: MouseEvent, g: GlyphItem) {
        containing block. Inside #app's grid it would inherit a stacking context
        and land behind the canvas. -->
   <Teleport to="body">
-    <div class="sketch-glyphs" :class="{ 'glyphs-passive': s.glyphsPassive }">
+    <div
+      class="sketch-glyphs"
+      :class="{ 'glyphs-passive': s.glyphsPassive }"
+      @wheel="onWheel"
+    >
       <div
         v-for="(g, i) in s.glyphItems"
         :key="i"

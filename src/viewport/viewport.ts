@@ -421,19 +421,41 @@ export class Viewport {
     // Explicit wheel zoom for BOTH projections (camera-controls' built-in wheel
     // DOLLY didn't zoom in perspective under WebKitGTK). deltaMode-normalized so
     // line/page-mode wheels (some webviews) still produce a sensible step.
-    c.addEventListener(
-      "wheel",
-      (e) => {
-        e.preventDefault();
-        const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 100 : 1; // lines/pages -> px
-        const dy = Math.max(-240, Math.min(240, e.deltaY * unit));
-        this.userMovedCamera = true;
-        // zoom toward what's under the cursor (MCAD-style), not the orbit centre
-        this.rig.zoomBy(Math.pow(1.0016, dy), this.cursorWorldPoint(e.clientX, e.clientY));
-        this.requestRender();
-      },
-      { passive: false },
-    );
+    c.addEventListener("wheel", (e) => this.wheelZoom(e), { passive: false });
+  }
+
+  /** One wheel notch, wherever it was caught. */
+  private wheelZoom(e: WheelEvent) {
+    e.preventDefault();
+    const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 100 : 1; // lines/pages -> px
+    const dy = Math.max(-240, Math.min(240, e.deltaY * unit));
+    this.userMovedCamera = true;
+    // zoom toward what's under the cursor (MCAD-style), not the orbit centre
+    this.rig.zoomBy(Math.pow(1.0016, dy), this.cursorWorldPoint(e.clientX, e.clientY));
+    this.requestRender();
+  }
+
+  /** A wheel notch that landed on an overlay covering the canvas.
+   *
+   *  The sketch's annotation layers are full-screen fixed elements whose LABELS
+   *  take pointer events, because a dimension badge is a click target: that is
+   *  how a dimension is edited or deleted. Taking the pointer also takes the
+   *  wheel, and the wheel listener is on the canvas, so with the cursor over a
+   *  badge a wheel notch went nowhere — the view simply did not zoom, with no
+   *  cursor change or any other sign to say why.
+   *
+   *  Badges are not a rare thing to be under. They are placed a fixed 18 screen
+   *  pixels clear of the geometry they measure (entityDims.LABEL_CLEAR_PX), so
+   *  on a small profile they are most of what is on the screen, and the closer
+   *  you zoom the more of it they cover: the moment you most want the wheel is
+   *  the moment it is most likely to be swallowed.
+   *
+   *  So an overlay that has taken one hands it back. Deliberately explicit — two
+   *  call sites, both layers that cover the canvas — rather than a document-level
+   *  capture listener, which would also have to tell a badge from the panel
+   *  scrollbars and lists that are supposed to keep their own wheel. */
+  forwardWheel(e: WheelEvent) {
+    this.wheelZoom(e);
   }
 
   /** What a mouse orbit should turn about: the model surface under the cursor,

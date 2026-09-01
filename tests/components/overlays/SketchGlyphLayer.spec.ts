@@ -21,9 +21,11 @@ enableAutoUnmount(afterEach);
 const plane = {
   to3D: (x: number, y: number, out: THREE.Vector3) => out.set(x, y, 0),
 } as unknown as SketchPlane;
+const forwardWheel = vi.fn();
 const viewport = {
   camera: new THREE.PerspectiveCamera(),
   projectToScreen: () => ({ x: 0, y: 0 }),
+  forwardWheel,
 } as unknown as Viewport;
 
 const glyph = (cIndex: number, label = "⊥"): ConstraintGlyph =>
@@ -33,6 +35,7 @@ const badges = () => document.querySelectorAll<HTMLElement>(".sketch-glyph");
 
 describe("SketchGlyphLayer", () => {
   beforeEach(() => {
+    forwardWheel.mockClear();
     setActivePinia(createPinia());
     document.body.innerHTML = "";
   });
@@ -120,5 +123,18 @@ describe("SketchGlyphLayer", () => {
     await nextTick();
     expect(badges()).toHaveLength(0);
     expect(useSketchAnnotationStore().glyphPlane).toBeNull();
+  });
+
+  // Same reason as the dimension layer: a badge that takes the pointer also
+  // takes the wheel, and the viewport's wheel listener is on the canvas. On the
+  // CONTAINER, so a notch over a passive badge is caught too.
+  it("hands a wheel notch back to the viewport", async () => {
+    mount(SketchGlyphLayer, { attachTo: document.body });
+    const g = new SketchGlyphs(viewport);
+    g.show([glyph(0)], plane, new Set(), new Set());
+    await nextTick();
+    badges()[0]!.dispatchEvent(new WheelEvent("wheel", { deltaY: -120, bubbles: true }));
+    expect(forwardWheel).toHaveBeenCalledTimes(1);
+    expect((forwardWheel.mock.calls[0]![0] as WheelEvent).deltaY).toBe(-120);
   });
 });

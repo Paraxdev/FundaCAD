@@ -280,13 +280,29 @@ function onEditBlur() {
   // expression visible only while focused
   if (!editError.value) revert();
 }
+
+/** A wheel notch that landed on this layer instead of the canvas.
+ *
+ *  The badges take pointer events so they can be clicked and dragged, which
+ *  also takes the wheel; the viewport's wheel listener is on the canvas, so
+ *  a notch over a badge used to do nothing at all. Bound on the CONTAINER
+ *  rather than on each badge, so it catches the ones that are `pointer-events:
+ *  none` in a drawing tool too, where the label is still drawn over the
+ *  geometry and the wheel still has to get through. */
+function onWheel(e: WheelEvent) {
+  s.dimViewport?.forwardWheel(e);
+}
 </script>
 
 <template>
   <!-- Teleported to body, where the class appended itself: .sketch-dims is
        `position: fixed; inset: 0` and must not inherit a stacking context. -->
   <Teleport to="body">
-    <div class="sketch-dims" :class="{ 'dims-passive': s.dimsPassive }">
+    <div
+      class="sketch-dims"
+      :class="{ 'dims-passive': s.dimsPassive }"
+      @wheel="onWheel"
+    >
       <div
         v-for="(l, i) in s.dimItems"
         :key="i"

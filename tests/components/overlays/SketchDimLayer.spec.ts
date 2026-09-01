@@ -36,9 +36,11 @@ enableAutoUnmount(afterEach);
 const plane = {
   to3D: (x: number, y: number, out: THREE.Vector3) => out.set(x, y, 0),
 } as unknown as SketchPlane;
+const forwardWheel = vi.fn();
 const viewport = {
   camera: new THREE.PerspectiveCamera(),
   projectToScreen: () => ({ x: 0, y: 0 }),
+  forwardWheel,
 } as unknown as Viewport;
 
 function extra(over: Partial<ExtraDim> = {}): ExtraDim {
@@ -53,6 +55,7 @@ const labels = () => document.querySelectorAll<HTMLElement>(".sketch-dim");
 
 describe("SketchDimLayer", () => {
   beforeEach(() => {
+    forwardWheel.mockClear();
     setActivePinia(createPinia());
     document.body.innerHTML = "";
   });
@@ -286,5 +289,34 @@ describe("SketchDimLayer", () => {
     expect(labels()[0]!.textContent).toBe("40 mm");
     expect(onGlobalKey).not.toHaveBeenCalled();
     document.removeEventListener("keydown", onGlobalKey);
+  });
+
+  // A badge takes pointer events so it can be clicked, dragged and edited, and
+  // the viewport's own wheel listener is on the CANVAS. With the cursor over a
+  // badge the wheel therefore reached nothing, and the view did not zoom — on a
+  // small profile, where the badges cover most of the drawing, that is the
+  // normal case rather than the corner one. The layer hands the notch back.
+  //
+  // Asserted on the CONTAINER, which is where the listener has to be: in a
+  // drawing tool the badges are `pointer-events: none` (dims-passive) and the
+  // notch never touches one, but the layer is still stretched over the canvas.
+  it("hands a wheel notch back to the viewport", async () => {
+    mount(SketchDimLayer, { attachTo: document.body });
+    const d = dims();
+    d.show([], plane, [extra()]);
+    await nextTick();
+    const layer = document.querySelector<HTMLElement>(".sketch-dims")!;
+    layer.dispatchEvent(new WheelEvent("wheel", { deltaY: -120, bubbles: true }));
+    expect(forwardWheel).toHaveBeenCalledTimes(1);
+    expect((forwardWheel.mock.calls[0]![0] as WheelEvent).deltaY).toBe(-120);
+  });
+
+  it("hands one back that bubbled up off a badge", async () => {
+    mount(SketchDimLayer, { attachTo: document.body });
+    const d = dims();
+    d.show([], plane, [extra()]);
+    await nextTick();
+    labels()[0]!.dispatchEvent(new WheelEvent("wheel", { deltaY: 120, bubbles: true }));
+    expect(forwardWheel).toHaveBeenCalledTimes(1);
   });
 });
