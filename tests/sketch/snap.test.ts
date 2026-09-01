@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import * as THREE from "three";
-import { snap, candidatesFromEntities, type SnapCandidate } from "../../src/sketch/snap";
+import { snap, candidatesFromEntities, showsSnapMarker, type SnapCandidate } from "../../src/sketch/snap";
 
 const v = (x: number, y: number) => new THREE.Vector2(x, y);
 const screen = (p: THREE.Vector2) => ({ x: p.x, y: p.y }); // 1px = 1 unit for the test
@@ -222,3 +222,77 @@ describe("snap alignment guides", () => {
   });
 });
 
+// A guide answers one coordinate. The lattice answers either. They were never
+// asked in the same breath: alignment returned as soon as it had anything, so
+// the axis it had nothing to say about kept the raw cursor value even with a
+// grid line a fraction of a pixel away.
+//
+// This is what a user's own file looked like afterwards. A thread profile drawn
+// on a 1mm grid closed on a vertex at x = 20 exactly (the guide up the first
+// vertex's column) and y = 5.007223063281328 — seven microns off a line that
+// was on screen at the time, and enough to leave the sketch reading 5.01.
+describe("snap alignment composed with the grid", () => {
+  const anchor: SnapCandidate = { p: v(20, 0), kind: "endpoint", priority: 100 };
+  // Roughly the zoom in the screenshot: a 1mm cell about 88 pixels across, so
+  // the 10px tolerance reaches about 0.11mm. Everything below is in mm.
+  const MM_PER_PX = 0.0113;
+  const at = (p: THREE.Vector2) => ({ x: p.x / MM_PER_PX, y: p.y / MM_PER_PX });
+
+  it("takes the guide's x and the lattice's y", () => {
+    const r = snap(v(20.03, 5.05), [anchor], at, 1, 10);
+    expect(r.kind).toBe("align");
+    expect(r.point.x).toBe(20); // the anchor's column
+    expect(r.point.y).toBe(5); // the grid row it was already sitting on
+    expect(r.guides).toHaveLength(1);
+    expect(r.guides[0]!.axis).toBe("x");
+  });
+
+  // THE CONTROL. The grid is only allowed to answer an axis it is actually near,
+  // and if this passed by rounding everything in sight the case above would
+  // prove nothing.
+  it("leaves the free axis raw when no grid line is within reach", () => {
+    const r = snap(v(20.03, 5.4), [anchor], at, 1, 10); // 0.4mm ~= 35px from y = 5
+    expect(r.kind).toBe("align");
+    expect(r.point.x).toBe(20);
+    expect(r.point.y).toBe(5.4);
+  });
+
+  it("leaves the free axis raw with grid snapping switched off", () => {
+    const r = snap(v(20.03, 5.05), [anchor], at, 0, 10);
+    expect(r.kind).toBe("align");
+    expect(r.point.x).toBe(20);
+    expect(r.point.y).toBe(5.05);
+  });
+
+  it("still lets the guide win the axis they both answer", () => {
+    // The anchor's column is 20; the nearest grid line is 20 too, but the guide
+    // is what the user is following and what the drawn line reports.
+    const r = snap(v(20.03, 5.05), [anchor], at, 1, 10);
+    expect(r.guides.map((g) => g.axis)).toEqual(["x"]);
+  });
+});
+
+
+// The marker is a statement about where the next click will PUT something. With
+// the select tool armed there is no next placement, and a ring left standing on
+// a grid intersection is a promise nothing is going to keep.
+describe("showsSnapMarker", () => {
+  it("marks every kind of snap while a drawing tool is armed", () => {
+    for (const k of ["grid", "align", "endpoint", "midpoint", "center"] as const) {
+      expect(showsSnapMarker("line", k)).toBe(true);
+    }
+  });
+
+  it("marks only real geometry anchors under the select tool", () => {
+    expect(showsSnapMarker("select", "endpoint")).toBe(true);
+    expect(showsSnapMarker("select", "midpoint")).toBe(true);
+    expect(showsSnapMarker("select", "center")).toBe(true);
+    expect(showsSnapMarker("select", "grid")).toBe(false);
+    expect(showsSnapMarker("select", "align")).toBe(false);
+  });
+
+  it("never marks a free cursor, whatever is armed", () => {
+    expect(showsSnapMarker("select", "free")).toBe(false);
+    expect(showsSnapMarker("line", "free")).toBe(false);
+  });
+});

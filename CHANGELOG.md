@@ -296,6 +296,45 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Fixed
 
+- **A point that lines up with a corner now lands on the grid too.** A guide
+  answers one coordinate and the lattice answers either, and the two were never
+  asked in the same breath: alignment returned as soon as it had anything to
+  say, so the axis it had nothing to say about kept the raw cursor value even
+  with a grid line a fraction of a pixel away. A thread profile drawn on a 1mm
+  grid closed on a vertex at x = 20 exactly, up the first vertex's column, and
+  y = 5.007223063281328, seven microns off a line that was on screen at the
+  time and enough to leave the sketch reading 5.01. Both mechanisms were already
+  per-axis; they compose now.
+
+- **The snap ring stays the size of a snap ring.** It is a screen-sized marker
+  held as world geometry, and its size was written only when the pointer moved,
+  so any zoom that arrived without one, a wheel notch, the SpaceMouse, the
+  ViewCube, left it at the millimetres it had. Wheeling in on the point it was
+  standing on inflated it with everything else: fourteen notches took it from 6
+  pixels across to 44, an orange disc sitting over the drawing. It follows the
+  camera now, like the grid and the annotations around it. It also goes down
+  when the pointer leaves the canvas, rather than staying where the cursor
+  happened to exit.
+
+- **No snap ring on empty grid while you are just looking.** With the select
+  tool armed there is nothing to place, so a ring on a bare grid intersection
+  or an alignment line was advertising a position that no click was going to
+  put anything at. Under select it now marks only anchors on real geometry, an
+  endpoint, a midpoint, a centre, which are the things a click there grabs.
+  Every drawing tool still gets the whole lattice.
+
+- **Sketch annotations are sized for where you are looking, not for the plane's
+  origin.** A grid cell, an arrowhead, a dimension's stand-off are pixel
+  quantities baked into world geometry, and the mm-per-pixel used to bake them
+  was measured at the sketch plane's origin. Under an orthographic camera that
+  is as good as anywhere; while a sketch is square to the screen the camera IS
+  orthographic, which is why it never showed. Orbit out of the plane and the rig
+  turns perspective, where mm-per-pixel falls off with distance, and a profile
+  drawn 20mm out from its plane's origin was having its furniture sized for a
+  point 20mm behind it, measured at better than 2x wrong on a mild orbit and
+  worse the closer you get. It measures at the camera target now, which is what
+  the model's own ground grid has always done.
+
 - **Typing an angle at a climbing revolve now changes the revolve.** With the
   pitch arrow open, typing 600 into the angle box redrew the dashed helix and
   left the model as the 360 it was built as, so the number said one thing and the

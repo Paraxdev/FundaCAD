@@ -85,6 +85,36 @@ export function snap(
 
   if (best) return { point: best.p.clone(), kind: best.kind, guides: [] };
 
+  // THE GRID'S ANSWER, ONE AXIS AT A TIME.
+  //
+  // Each axis is tested on its OWN, which is the whole of it: this rounded both
+  // axes and then measured one distance to the resulting corner, so the cursor
+  // had to be within tolerance of a lattice POINT in both axes at once.
+  // Anywhere along a grid line but between two intersections, nothing snapped,
+  // which is exactly what "drawing freely does not snap to the grid" describes.
+  // Snapping the axes separately makes an intersection the case where both
+  // fire, so the old behaviour survives as a special case rather than as a
+  // second rule.
+  //
+  // Measured as a full SCREEN distance to the axis-snapped point rather than as
+  // a difference in screen x or y (see screenGap above). The tolerance is in
+  // pixels so that it is the same reach at every zoom, and the sketch plane can
+  // sit at any angle on screen when Lock to Plane is off, where a sketch axis is
+  // neither.
+  //
+  // Computed BEFORE the alignment result is assembled, because alignment can
+  // answer one axis and leave the other free, and in that case the grid is
+  // still the best thing there is to say about the other one.
+  const gridAxis = (): { x: number | null; y: number | null } => {
+    if (gridStep <= 0) return { x: null, y: null }; // grid snap off
+    const gx = Math.round(raw.x / gridStep) * gridStep;
+    const gy = Math.round(raw.y / gridStep) * gridStep;
+    return {
+      x: screenGap(new THREE.Vector2(gx, raw.y)) <= pixelTol ? gx : null,
+      y: screenGap(new THREE.Vector2(raw.x, gy)) <= pixelTol ? gy : null,
+    };
+  };
+
   // ALIGNMENT, above the grid and below a point.
   //
   // Above the grid because a guide is a statement about the drawing — "level
@@ -102,44 +132,54 @@ export function snap(
     const guides: SnapGuide[] = [];
     if (alignX) guides.push({ from: alignX.c.p.clone(), axis: "x" });
     if (alignY) guides.push({ from: alignY.c.p.clone(), axis: "y" });
+    // The axis alignment did NOT answer still gets the grid's answer. A guide
+    // and the lattice are two different statements about two different
+    // coordinates, and there is no reason taking one should throw the other
+    // away — but it did: alignment returned before the grid was ever consulted,
+    // so a point that lined up with an existing corner kept a raw, unrounded
+    // coordinate in the other axis. That is where a vertex reading 20.0000 by
+    // 5.0072 comes from, on a 1mm grid, seven microns off a line the user could
+    // see. Both mechanisms were already per-axis; this is only letting them
+    // compose.
+    const g = gridAxis();
     return {
       point: new THREE.Vector2(
-        alignX ? alignX.c.p.x : raw.x,
-        alignY ? alignY.c.p.y : raw.y,
+        alignX ? alignX.c.p.x : (g.x ?? raw.x),
+        alignY ? alignY.c.p.y : (g.y ?? raw.y),
       ),
       kind: "align",
       guides,
     };
   }
 
-  if (gridStep <= 0) return { point: raw.clone(), kind: "free", guides: [] }; // grid snap off
-
-  // Grid fallback (always available, lowest priority). Each axis is tested on
-  // its OWN, which is the whole of it: this rounded both axes and then measured
-  // one distance to the resulting corner, so the cursor had to be within
-  // tolerance of a lattice POINT in both axes at once. Anywhere along a grid
-  // line but between two intersections, nothing snapped, which is exactly what
-  // "drawing freely does not snap to the grid" describes. Snapping the axes
-  // separately makes an intersection the case where both fire, so the old
-  // behaviour survives as a special case rather than as a second rule.
-  const gx = Math.round(raw.x / gridStep) * gridStep;
-  const gy = Math.round(raw.y / gridStep) * gridStep;
-  // Measured as a full SCREEN distance to the axis-snapped point rather than as
-  // a difference in screen x or y (see screenGap above). The tolerance is in
-  // pixels so that it is the same reach at every zoom, and the sketch plane can
-  // sit at any angle on screen when Lock to Plane is off, where a sketch axis is
-  // neither.
-  const onX = screenGap(new THREE.Vector2(gx, raw.y)) <= pixelTol;
-  const onY = screenGap(new THREE.Vector2(raw.x, gy)) <= pixelTol;
-  if (onX || onY) {
+  const g = gridAxis();
+  if (g.x !== null || g.y !== null) {
     return {
-      point: new THREE.Vector2(onX ? gx : raw.x, onY ? gy : raw.y),
+      point: new THREE.Vector2(g.x ?? raw.x, g.y ?? raw.y),
       kind: "grid",
       guides: [],
     };
   }
 
   return { point: raw.clone(), kind: "free", guides: [] };
+}
+
+/** Whether the snap marker comes up for this kind of snap, given the armed tool.
+ *
+ *  With the select tool armed there is nothing to place, so a marker on a bare
+ *  grid intersection or an alignment line advertises a position that no click is
+ *  going to put anything at. What is still worth marking there is an anchor on
+ *  real geometry — an endpoint, a midpoint, a centre — because those ARE what a
+ *  click grabs and drags. Every other tool is placing a point and wants the
+ *  whole lattice.
+ *
+ *  Here rather than in SketchMode because it is a rule about snapping and
+ *  nothing else, and this is the file the rest of those live in and get tested
+ *  in. */
+export function showsSnapMarker(tool: string, kind: SnapKind): boolean {
+  if (kind === "free") return false;
+  if (tool !== "select") return true;
+  return kind === "endpoint" || kind === "midpoint" || kind === "center";
 }
 
 /** snap candidates from resolved sketch entities (numbers, not params) */

@@ -35,7 +35,7 @@ import { SolverUnavailable } from "./solver";
 import { resolveRealEntities, toSketchEntity } from "./resolve";
 import { applyDrivingDimsDirect } from "./directDims";
 import { expandPattern, translated, rotated, scaled } from "./pattern";
-import { candidatesFromEntities, snap, type SnapGuide, type SnapKind, type SnapCandidate } from "./snap";
+import { candidatesFromEntities, showsSnapMarker, snap, type SnapGuide, type SnapKind, type SnapCandidate } from "./snap";
 import type { ResolvedEntity } from "./snap";
 import { detectRegions, rectCorners, rectFromThreePoints } from "./region";
 import { loopsFromEdgePolys, planeEdgePolys } from "./faceFootprint";
@@ -156,6 +156,9 @@ const FACE_ANCHOR_COLOR = 0x4a6a94;
 /** How far mm-per-pixel may drift before the annotation furniture is rebuilt at
  *  the new zoom. See updateAnnotationScale. */
 const DIM_SCALE_TOL = 1.05;
+/** Outer radius of the snap ring, in screen pixels. The mesh is a unit ring
+ *  (overlay.ts), so this doubles as the scale factor per mm-per-pixel. */
+const SNAP_MARKER_PX = 6;
 
 
 export class SketchMode {
@@ -279,6 +282,9 @@ export class SketchMode {
    *  nobody else. */
   private gridFocus = new THREE.Vector2();
   private gridTarget = new THREE.Vector3();
+  /** Scratch for planeMmPerPx(), which runs on the same per-frame path. */
+  private scaleAt = new THREE.Vector3();
+  private scaleAt2 = new THREE.Vector2();
   // Sketch Palette options
   private gridVisible = true;
   private gridSnap = true;
@@ -327,6 +333,7 @@ export class SketchMode {
   private boundUp: (e: PointerEvent) => void;
   private boundKey: (e: KeyboardEvent) => void;
   private boundContext: (e: MouseEvent) => void;
+  private boundLeave: () => void;
   private boundTick: () => void;
   // collaborators: the constraint-tool click flows and the pattern placement/edit
   // flow, each operating on a live accessor into this SketchMode (see their
@@ -364,6 +371,10 @@ export class SketchMode {
     this.boundUp = (e) => this.endDrag(e.pointerId);
     this.boundKey = (e) => this.onKey(e);
     this.boundContext = (e) => this.onContextMenu(e);
+    // A snap marker is a statement about where the CURSOR is. With the cursor
+    // off the canvas there is no such place, and one left standing where the
+    // pointer happened to exit reads as a mark on the drawing.
+    this.boundLeave = () => this.showSnap(null);
     this.boundTick = () => this.tick();
     const constraintHost: ConstraintHost = {
       tool: () => this.tool,
@@ -463,6 +474,7 @@ export class SketchMode {
     el.addEventListener("pointermove", this.boundMove);
     el.addEventListener("pointerup", this.boundUp);
     el.addEventListener("contextmenu", this.boundContext);
+    el.addEventListener("pointerleave", this.boundLeave);
     window.addEventListener("keydown", this.boundKey, true);
 
     this.overlay.update(store.document, this.editingId ?? "__active__");
@@ -525,6 +537,7 @@ export class SketchMode {
     el.removeEventListener("pointermove", this.boundMove);
     el.removeEventListener("pointerup", this.boundUp);
     el.removeEventListener("contextmenu", this.boundContext);
+    el.removeEventListener("pointerleave", this.boundLeave);
     window.removeEventListener("keydown", this.boundKey, true);
     if (this.raf) cancelAnimationFrame(this.raf);
     this.raf = 0;
@@ -548,6 +561,7 @@ export class SketchMode {
     this.viewport.hoverEntity(null); // drop any Project-tool 3D hover highlight
     this.overlay.setPreview([]);
     this.overlay.setSnap(null);
+    this.snapWorld = null;
     this.removeGrid();
     this.viewport.exitSketchView();
     this.viewport.rig.setOrbitLocked(false); // restore free orbit in model mode
@@ -634,7 +648,7 @@ export class SketchMode {
     this.entityVersion++; // bump guards in-flight constraint solves against staleness
     // current zoom → mm-per-pixel, so dimension badges keep screen clearance
     // from the geometry they label (they're click targets in the select tool)
-    setDimPixelScale(this.viewport.pixelWorldSize(this.plane.origin));
+    setDimPixelScale(this.planeMmPerPx());
     const derived = this.derivedEntities(); // computed once, shared below
     this.overlay.setActiveSketch(this.activeCurves(derived));
     // profile-area fills for the active sketch (hidden from overlay.update),
@@ -701,6 +715,7 @@ export class SketchMode {
     }
     this.updateGrid();
     this.updateAnnotationScale();
+    this.updateSnapScale();
     if (this.lockReleased) return;
     // Two ways to stop being square to the plane, one per mode. LOCKED: you
     // cannot orbit, so the only way out is to zoom back far enough that you are
@@ -766,7 +781,7 @@ export class SketchMode {
    *  costs about one rebuild per notch instead of one per frame. */
   private dimScaleSeen = 0;
   private updateAnnotationScale() {
-    const mmPerPx = this.viewport.pixelWorldSize(this.plane.origin);
+    const mmPerPx = this.planeMmPerPx();
     if (!(mmPerPx > 0) || !Number.isFinite(mmPerPx)) return;
     const last = this.dimScaleSeen;
     if (last > 0 && mmPerPx > last / DIM_SCALE_TOL && mmPerPx < last * DIM_SCALE_TOL) return;
@@ -780,8 +795,40 @@ export class SketchMode {
     this.viewport.requestRender();
   }
 
+  /** Millimetres to a screen pixel WHERE THE USER IS LOOKING: the camera target
+   *  dropped onto the sketch plane.
+   *
+   *  Everything the sketch draws for the EYE rather than for the model — the
+   *  grid's spacing, an arrowhead, a dimension's stand-off, the snap marker —
+   *  is a pixel quantity baked into world geometry, and so needs a mm-per-pixel
+   *  to bake it at. That figure used to be taken at the plane's ORIGIN.
+   *
+   *  Under an orthographic camera the origin is as good as anywhere, because
+   *  mm-per-pixel is then the same number everywhere in the scene. And while a
+   *  sketch is square to the screen the camera IS orthographic, which is why
+   *  this never showed up: orbit out of the plane and the rig turns perspective
+   *  ("Perspective with Ortho Faces", cameras.ts), where mm-per-pixel is a
+   *  question about a POINT and the answer falls off with distance. A thread
+   *  profile drawn 20mm out from the origin of the plane it sits on, and then
+   *  zoomed into and turned, was having its furniture sized for a point 20mm
+   *  behind it — measured at better than 2x wrong on a mild orbit, and worse
+   *  the closer you get, which is the state you are in when you are looking at
+   *  a 5mm triangle.
+   *
+   *  The model's own ground grid already measures at the camera target
+   *  (viewport.ts); this is the sketch saying the same thing. In orthographic
+   *  it is a strict no-op, because pixelWorldSize ignores the point it is
+   *  given. */
+  private planeMmPerPx(): number {
+    const at = this.plane.to2D(this.viewport.cameraTarget(this.scaleAt), this.scaleAt2);
+    const mm = this.viewport.pixelWorldSize(this.plane.to3D(at.x, at.y, this.scaleAt));
+    // A camera target behind the eye, or a degenerate frustum, would poison
+    // every size on screen. The origin is the fallback it used to be.
+    return mm > 0 && Number.isFinite(mm) ? mm : this.viewport.pixelWorldSize(this.plane.origin);
+  }
+
   private updateGrid() {
-    const mmPerPx = this.viewport.pixelWorldSize(this.plane.origin);
+    const mmPerPx = this.planeMmPerPx();
     // The DRAWN spacing, and reported whether or not it is actually painted: the
     // readout names the grid, so it has to say what a square of it is worth, and
     // it is worth that with the grid switched off too. Not snapLatticeStep,
@@ -983,7 +1030,7 @@ export class SketchMode {
   ): THREE.Vector2 | null {
     const e = this.entities[index];
     if (!e || !isBadgeEntity(e)) return null; // not a badge-bearing type
-    const p = clampPlace(ox, oy, this.viewport.pixelWorldSize(this.plane.origin));
+    const p = clampPlace(ox, oy, this.planeMmPerPx());
     const next = { ...dimPlaceOf(e) };
     if (p) next[field] = p;
     else delete next[field];
@@ -1004,7 +1051,7 @@ export class SketchMode {
   private commitConstraintPlace(cIndex: number, ox: number, oy: number, done: boolean): THREE.Vector2 | null {
     const c = this.constraints[cIndex];
     if (!c || !isPlacedDim(c)) return null;
-    const p = clampPlace(ox, oy, this.viewport.pixelWorldSize(this.plane.origin));
+    const p = clampPlace(ox, oy, this.planeMmPerPx());
     const { place: _dropped, ...rest } = c;
     this.constraints[cIndex] = (p ? { ...c, place: p } : rest) as SketchConstraint;
     return this.afterPlaceDrag(done, () => this.cdims.find((d) => d.cIndex === cIndex)?.labelPos ?? null);
@@ -2347,7 +2394,7 @@ export class SketchMode {
     }
     const anchor = this.dimPlan.labelAnchor();
     this.dimPlace = anchor
-      ? clampPlace(p.x - anchor.x, p.y - anchor.y, this.viewport.pixelWorldSize(this.plane.origin))
+      ? clampPlace(p.x - anchor.x, p.y - anchor.y, this.planeMmPerPx())
       : null; // distance/diameter render through entityDims — no place slot
     this.dimPlaced = true; // NOT `dimPlace != null` — that is null for those two
     this.positionDimBox(ev);
@@ -2955,7 +3002,7 @@ export class SketchMode {
   /** The grid spacing currently on screen, which is what the cursor snaps to.
    *  Measured at the plane origin, the same place the grid is drawn from. */
   private snapStep(): number {
-    return snapLatticeStep(this.viewport.pixelWorldSize(this.plane.origin));
+    return snapLatticeStep(this.planeMmPerPx());
   }
 
   private showSnap(
@@ -2969,14 +3016,41 @@ export class SketchMode {
         ? hit.guides.map((g) => [g.from, hit.p!] as const)
         : [],
       this.plane,
-      this.viewport.pixelWorldSize(this.plane.origin),
+      this.planeMmPerPx(),
     );
-    if (!hit || hit.kind === "free") {
+    if (!hit || !showsSnapMarker(this.tool, hit.kind)) {
       this.overlay.setSnap(null);
+      this.snapWorld = null;
       return;
     }
     this.overlay.setSnap(hit.world, hit.kind, this.viewport.camera);
-    this.overlay.setSnapScale(this.viewport.pixelWorldSize(hit.world) * 6);
+    this.snapWorld = hit.world.clone();
+    this.snapScaleSeen = 0; // a new point: size it now rather than next frame
+    this.updateSnapScale();
+  }
+
+  /** Keep the snap ring a constant size on screen.
+   *
+   *  Its scale was written only when the pointer moved, and it is a SCREEN
+   *  quantity held as world geometry, so any zoom that did not come with a
+   *  pointer move left it at the millimetres it had. Wheel in on the point it
+   *  was standing on and it grew with everything else: fourteen notches took it
+   *  from 6 pixels across to 44, an orange donut sitting over the drawing with
+   *  nothing left to say. It follows the camera now, like the grid and the
+   *  annotations it sits among, and on the same 5% band, so a wheel-zoom costs
+   *  about one write per notch. */
+  private snapWorld: THREE.Vector3 | null = null;
+  private snapScaleSeen = 0;
+  private updateSnapScale() {
+    const at = this.snapWorld;
+    if (!at) return;
+    const mm = this.viewport.pixelWorldSize(at);
+    if (!(mm > 0) || !Number.isFinite(mm)) return;
+    const last = this.snapScaleSeen;
+    if (last > 0 && mm > last / DIM_SCALE_TOL && mm < last * DIM_SCALE_TOL) return;
+    this.snapScaleSeen = mm;
+    this.overlay.setSnapScale(mm * SNAP_MARKER_PX);
+    this.viewport.requestRender();
   }
 
   /** MCAD-style state color: over-constrained/conflict = red, fully
@@ -3077,7 +3151,7 @@ export class SketchMode {
 
   // --- modify tools: trim + fillet -------------------------------------
   private pickTol(): number {
-    return this.viewport.pixelWorldSize(this.plane.origin) * 9;
+    return this.planeMmPerPx() * 9;
   }
   /** raw (unsnapped) cursor point on the sketch plane */
   private planePoint(e: MouseEvent): THREE.Vector2 | null {
