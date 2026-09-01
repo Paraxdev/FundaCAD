@@ -1,6 +1,6 @@
 # Architecture
 
-Neocad is three processes cooperating over one connection: a Tauri (Rust) shell, a
+FundaCAD is three processes cooperating over one connection: a Tauri (Rust) shell, a
 TypeScript frontend running in that shell's webview, and a Python geometry sidecar.
 
 ```
@@ -27,9 +27,9 @@ TypeScript frontend running in that shell's webview, and a Python geometry sidec
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-Neocad owns the document, the feature tree, the UI, and the print pipeline.
+FundaCAD owns the document, the feature tree, the UI, and the print pipeline.
 [build123d](https://github.com/gumyr/build123d) on top of OpenCASCADE owns the geometry
-kernel itself; Neocad does not reimplement one.
+kernel itself; FundaCAD does not reimplement one.
 
 ## Hard invariants
 

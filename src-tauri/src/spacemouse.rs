@@ -14,7 +14,7 @@
 //! Install: copy to `/etc/udev/rules.d/`, then
 //! `sudo udevadm control --reload && sudo udevadm trigger`, then replug. If
 //! `spacenavd` or the 3Dconnexion driver is running it may already hold the
-//! device — stop it to let Neocad read it directly.
+//! device — stop it to let FundaCAD read it directly.
 //!
 //! Set SINDRICAD_SPACEMOUSE_DEBUG=1 to log raw reports for tuning.
 

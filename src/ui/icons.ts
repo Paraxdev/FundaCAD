@@ -280,12 +280,12 @@ export function resolveIconPaths(
 // --- the active pack, as a user setting --------------------------------------
 //
 // Persisted the way every other display preference in this app is (ui/units.ts,
-// ui/welcome.ts, io/recentFiles.ts): a `neocad.*` localStorage key read once
+// ui/welcome.ts, io/recentFiles.ts): a `fundacad.*` localStorage key read once
 // at module load, plus a listener set so the live UI re-renders instead of
 // waiting for a reload.
 
-const KEY = "neocad.iconPack";
-const LEGACY_KEY = "sindricad.iconPack";
+const KEY = "fundacad.iconPack";
+const LEGACY_KEYS = ["neocad.iconPack", "sindricad.iconPack"];
 
 /** Narrow an untrusted string — a stored setting, a `<select>` value — to a
  *  registered pack id, or null. Every boundary that can set the active pack goes
@@ -296,7 +296,7 @@ export function asIconPackId(v: unknown): string | null {
 }
 
 function readStored(): string {
-  const raw = readSetting(KEY, LEGACY_KEY);
+  const raw = readSetting(KEY, ...LEGACY_KEYS);
   return asIconPackId(raw) ?? DEFAULT_PACK_ID;
 }
 

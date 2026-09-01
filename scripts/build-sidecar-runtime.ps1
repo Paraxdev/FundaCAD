@@ -1,5 +1,5 @@
 # Windows equivalent of scripts/build-sidecar-runtime.sh: build a relocatable,
-# self-contained Python runtime for the Neocad geometry sidecar and stage it for
+# self-contained Python runtime for the FundaCAD geometry sidecar and stage it for
 # Tauri's bundle.resources. See the .sh for the full rationale (locked deps, novtk,
 # copied-not-symlinked interpreter, packages in a sibling site-packages/ on PYTHONPATH).
 #

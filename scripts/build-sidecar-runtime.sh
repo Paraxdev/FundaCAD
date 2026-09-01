@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build a self-contained, RELOCATABLE Python runtime for the Neocad geometry
+# Build a self-contained, RELOCATABLE Python runtime for the FundaCAD geometry
 # sidecar, for bundling into the app (Tauri bundle.resources). Used by local bundle
 # builds and CI. Bash covers Linux + macOS; the CI Windows leg runs the equivalent uv
 # commands in PowerShell.

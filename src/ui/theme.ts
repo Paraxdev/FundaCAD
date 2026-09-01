@@ -31,6 +31,7 @@ export interface Theme {
  *  listed here without a block applies an attribute that matches no rule and so
  *  silently leaves the previous palette on screen. */
 export const THEMES: Theme[] = [
+  { id: "apollo", label: "Apollo", mode: "dark" },
   { id: "concrete", label: "Concrete", mode: "dark" },
   { id: "forge", label: "Forge", mode: "dark" },
   { id: "slate", label: "Slate", mode: "dark" },
@@ -40,10 +41,10 @@ export const THEMES: Theme[] = [
 
 /** The palette on :root, so it needs no attribute and survives a cold load with
  *  no script. */
-export const DEFAULT_THEME_ID = "concrete";
+export const DEFAULT_THEME_ID = "apollo";
 
-const KEY = "neocad.theme";
-const LEGACY_KEY = "sindricad.theme";
+const KEY = "fundacad.theme";
+const LEGACY_KEYS = ["neocad.theme", "sindricad.theme"];
 
 /** Narrow an untrusted string — a stored setting, a `<select>` value, a URL
  *  parameter — to a known theme id, or null. Every boundary that can set the
@@ -55,7 +56,7 @@ export function asThemeId(v: unknown): string | null {
 }
 
 function readStored(): string {
-  return asThemeId(readSetting(KEY, LEGACY_KEY)) ?? DEFAULT_THEME_ID;
+  return asThemeId(readSetting(KEY, ...LEGACY_KEYS)) ?? DEFAULT_THEME_ID;
 }
 
 let activeId = readStored();

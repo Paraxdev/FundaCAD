@@ -1174,6 +1174,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "fundacad"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "blake2",
+ "flate2",
+ "getrandom 0.2.17",
+ "glam",
+ "hidapi",
+ "libc",
+ "opencascade",
+ "opencascade-sys",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-fs",
+ "tauri-plugin-opener",
+ "tauri-plugin-process",
+ "tauri-plugin-single-instance",
+ "tauri-plugin-updater",
+ "threemf",
+ "tokio",
+ "windows 0.58.0",
+ "zip 4.6.1",
+]
+
+[[package]]
 name = "futures-channel"
 version = "0.3.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2274,36 +2304,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee6cda3051665f1fb8d9e08fc35c96d5a244fb1be711a03b71118828afc9a873"
 dependencies = [
  "jni-sys 0.3.1",
-]
-
-[[package]]
-name = "neocad"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "blake2",
- "flate2",
- "getrandom 0.2.17",
- "glam",
- "hidapi",
- "libc",
- "opencascade",
- "opencascade-sys",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-fs",
- "tauri-plugin-opener",
- "tauri-plugin-process",
- "tauri-plugin-single-instance",
- "tauri-plugin-updater",
- "threemf",
- "tokio",
- "windows 0.58.0",
- "zip 4.6.1",
 ]
 
 [[package]]

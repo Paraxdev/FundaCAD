@@ -113,10 +113,10 @@ export function onPrinterCameraOffline(fn: (id: string) => void): Promise<Unlist
 
 // --- active-printer selection (display concern → localStorage) ----------------
 
-const ACTIVE_KEY = "neocad.activePrinter";
-const LEGACY_ACTIVE_KEY = "sindri.activePrinter";
+const ACTIVE_KEY = "fundacad.activePrinter";
+const LEGACY_ACTIVE_KEYS = ["neocad.activePrinter", "sindri.activePrinter"];
 export function activePrinterId(): string {
-  return readSetting(ACTIVE_KEY, LEGACY_ACTIVE_KEY) || "u1";
+  return readSetting(ACTIVE_KEY, ...LEGACY_ACTIVE_KEYS) || "u1";
 }
 export function setActivePrinterId(id: string) {
   localStorage.setItem(ACTIVE_KEY, id);

@@ -339,8 +339,8 @@ pub fn read_manifest(path: &Path) -> Result<Manifest, String> {
 
     if manifest.container > CONTAINER_VERSION {
         return Err(format!(
-            "This document uses a newer Neocad container format (v{}). \
-             Update Neocad to open it.",
+            "This document uses a newer FundaCAD container format (v{}). \
+             Update FundaCAD to open it.",
             manifest.container
         ));
     }
@@ -540,7 +540,7 @@ mod tests {
     use super::*;
 
     fn tmpdir(tag: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("neocad_container_{tag}_{}", uuid_hex()));
+        let d = std::env::temp_dir().join(format!("fundacad_container_{tag}_{}", uuid_hex()));
         std::fs::create_dir_all(&d).unwrap();
         d
     }
@@ -560,7 +560,7 @@ mod tests {
     #[test]
     fn hash_matches_python() {
         assert_eq!(hash_bytes(b""), "cae66941d9efbd404e4d88758ea67670");
-        assert_eq!(hash_bytes(b"neocad"), "a5cd9cd47e9fdc7c387d6b6784d8027a");
+        assert_eq!(hash_bytes(b"fundacad"), "5648909c8c0ccf6096c0e672255e68a0");
         assert_eq!(
             hash_bytes(&[0x00u8, 0xff].repeat(8)),
             "2a7271a37f134cb3bfb8ff7e507e0da7"
@@ -584,7 +584,7 @@ mod tests {
         meshes.insert("deadbeef-t0".to_string(), blob(&dir, "m.bin", b"MESHDATA".repeat(1000).as_slice()));
 
         let doc = format!(r#"{{"version":5,"features":[{{"type":"import","geom":"{ha}"}}]}}"#);
-        let dest = dir.join("part.neocad");
+        let dest = dir.join("part.funda");
         write_container(&dest, &doc, &blobs, &meshes, "test").unwrap();
 
         assert!(looks_like_container(&dest), "written file is a zip");
@@ -641,10 +641,10 @@ mod tests {
         let h = hash_bytes(&data);
         let mut blobs = BTreeMap::new();
         blobs.insert(h.clone(), blob(&dir, "d.bin", &data));
-        let good = dir.join("ok.neocad");
+        let good = dir.join("ok.funda");
         write_container(&good, r#"{"version":5}"#, &blobs, &BTreeMap::new(), "t").unwrap();
 
-        let tampered = dir.join("bad.neocad");
+        let tampered = dir.join("bad.funda");
         {
             let mut zin = zip::ZipArchive::new(File::open(&good).unwrap()).unwrap();
             let mut zout = zip::ZipWriter::new(File::create(&tampered).unwrap());
@@ -679,11 +679,11 @@ mod tests {
         let data = vec![3u8; 50_000];
         let mut blobs = BTreeMap::new();
         blobs.insert(hash_bytes(&data), blob(&dir, "d.bin", &data));
-        let good = dir.join("ok.neocad");
+        let good = dir.join("ok.funda");
         write_container(&good, r#"{"version":5}"#, &blobs, &BTreeMap::new(), "t").unwrap();
 
         let whole = std::fs::read(&good).unwrap();
-        let trunc = dir.join("trunc.neocad");
+        let trunc = dir.join("trunc.funda");
         std::fs::write(&trunc, &whole[..whole.len() / 2]).unwrap();
 
         assert!(read_container(&trunc, &dir.join("blobs"), None).is_err());
@@ -697,7 +697,7 @@ mod tests {
         let dir = tmpdir("slip");
         let data = b"payload".repeat(100);
         let h = hash_bytes(&data);
-        let evil = dir.join("evil.neocad");
+        let evil = dir.join("evil.funda");
         {
             let mut z = zip::ZipWriter::new(File::create(&evil).unwrap());
             let opts = SimpleFileOptions::default();
@@ -739,7 +739,7 @@ mod tests {
     #[test]
     fn a_failed_write_leaves_the_previous_file_intact() {
         let dir = tmpdir("atomic");
-        let dest = dir.join("part.neocad");
+        let dest = dir.join("part.funda");
         std::fs::write(&dest, b"PREVIOUS GOOD FILE").unwrap();
 
         let mut blobs = BTreeMap::new();
@@ -759,7 +759,7 @@ mod tests {
     #[test]
     fn a_newer_container_version_says_so_plainly() {
         let dir = tmpdir("newer");
-        let p = dir.join("newer.neocad");
+        let p = dir.join("newer.funda");
         {
             let mut z = zip::ZipWriter::new(File::create(&p).unwrap());
             z.start_file(MANIFEST_NAME, SimpleFileOptions::default()).unwrap();
@@ -772,14 +772,14 @@ mod tests {
             z.finish().unwrap();
         }
         let err = read_manifest(&p).unwrap_err();
-        assert!(err.contains("Update Neocad"), "unexpected message: {err}");
+        assert!(err.contains("Update FundaCAD"), "unexpected message: {err}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn a_legacy_plain_json_document_is_not_mistaken_for_a_container() {
         let dir = tmpdir("legacy");
-        let p = dir.join("legacy.neocad");
+        let p = dir.join("legacy.funda");
         std::fs::write(&p, br#"{"version": 4, "features": []}"#).unwrap();
         assert!(!looks_like_container(&p));
         assert!(read_manifest(&p).is_err());

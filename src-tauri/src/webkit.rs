@@ -164,7 +164,7 @@ mod tests {
     /// is not enough — we look for the version files the real driver writes.
     #[test]
     fn the_probe_matches_the_paths_the_nvidia_driver_actually_writes() {
-        let tmp = std::env::temp_dir().join("neocad-webkit-probe-test");
+        let tmp = std::env::temp_dir().join("fundacad-webkit-probe-test");
         let _ = std::fs::remove_dir_all(&tmp);
 
         std::fs::create_dir_all(tmp.join("sys/module/nvidia")).unwrap();

@@ -475,7 +475,7 @@ fn merge_body(part: Option<Shape>, s: Shape) -> Shape {
 // Selector resolution (ports sidecar/geom_select.py).
 //
 // References are property descriptors re-resolved against `part` every rebuild —
-// never stored indices. This is Neocad's topological-naming mitigation.
+// never stored indices. This is FundaCAD's topological-naming mitigation.
 // ---------------------------------------------------------------------------
 
 // --- selector-v2 scoring tolerances & weights (mirror geom_select.py) ---------

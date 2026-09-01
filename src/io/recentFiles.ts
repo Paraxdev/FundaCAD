@@ -1,11 +1,11 @@
 // Recent-files list for the welcome screen. Display concern → localStorage
-// (same convention as neocad.activePrinter); paths are not secrets. Newest
+// (same convention as fundacad.activePrinter); paths are not secrets. Newest
 // first, deduped by path, capped.
 
 import { readSetting } from "../ui/storedSetting";
 
-const KEY = "neocad.recentFiles";
-const LEGACY_KEY = "sindri.recentFiles";
+const KEY = "fundacad.recentFiles";
+const LEGACY_KEYS = ["neocad.recentFiles", "sindri.recentFiles"];
 const MAX = 10;
 
 export interface RecentFile {
@@ -15,7 +15,7 @@ export interface RecentFile {
 
 export function getRecentFiles(): RecentFile[] {
   try {
-    const list = JSON.parse(readSetting(KEY, LEGACY_KEY) ?? "[]");
+    const list = JSON.parse(readSetting(KEY, ...LEGACY_KEYS) ?? "[]");
     if (!Array.isArray(list)) return [];
     return list.filter(
       (r): r is RecentFile => !!r && typeof r.path === "string" && typeof r.openedAt === "number",

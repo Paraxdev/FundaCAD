@@ -15,8 +15,8 @@ export { displayRound };
 export type Unit = "mm" | "cm" | "in";
 
 const FACTOR: Record<Unit, number> = { mm: 1, cm: 10, in: 25.4 };
-const KEY = "neocad.unit";
-const LEGACY_KEY = "sindricad.unit";
+const KEY = "fundacad.unit";
+const LEGACY_KEYS = ["neocad.unit", "sindricad.unit"];
 
 let current: Unit = readStored();
 const listeners = new Set<() => void>();
@@ -31,7 +31,7 @@ export function asUnit(v: unknown): Unit | null {
 }
 
 function readStored(): Unit {
-  const raw = readSetting(KEY, LEGACY_KEY);
+  const raw = readSetting(KEY, ...LEGACY_KEYS);
   return asUnit(raw) ?? "mm";
 }
 

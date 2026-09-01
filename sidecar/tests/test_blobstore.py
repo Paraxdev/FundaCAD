@@ -25,7 +25,7 @@ FAILED = []
 # blake2b, digest_size=16. MUST match container.rs::tests::hash_matches_python.
 SHARED_VECTORS = [
     (b"", "cae66941d9efbd404e4d88758ea67670"),
-    (b"neocad", "a5cd9cd47e9fdc7c387d6b6784d8027a"),
+    (b"fundacad", "5648909c8c0ccf6096c0e672255e68a0"),
     (b"\x00\xff" * 8, "2a7271a37f134cb3bfb8ff7e507e0da7"),
 ]
 

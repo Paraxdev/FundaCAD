@@ -1,5 +1,5 @@
 #!/bin/sh
-# Install the Neocad SpaceMouse hidraw udev rule and apply it to the currently
+# Install the FundaCAD SpaceMouse hidraw udev rule and apply it to the currently
 # connected 3Dconnexion device — no replug/reboot needed. Run with sudo:
 #   sudo sh packaging/setup-spacemouse.sh
 set -e

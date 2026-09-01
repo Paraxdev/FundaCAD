@@ -1,11 +1,17 @@
 /* ============================================================================
-   Neocad, "CONCRETE", the default
+   FundaCAD, "APOLLO", the default
    ============================================================================
 
-   Flat grey, square corners, visible structure. The chrome is meant to read as
-   panels butted against each other rather than as cards floating on a page:
-   nothing is rounded, nothing glows, and every edge that separates two things
-   is a line you can see.
+   Square corners, visible structure, and the Apollo palette
+   (lospec.com/palette-list/apollo). The chrome is meant to read as panels
+   butted against each other rather than as cards floating on a page: nothing is
+   rounded, nothing glows, and every edge that separates two things is a line
+   you can see.
+
+   Apollo is a 46-colour pixel-art palette, which is far more than a UI needs,
+   and taking colours out of it at random is how a palette stops looking like
+   one. Each token below therefore names WHICH of its ramps it came from and
+   why, so a colour added later can be argued with rather than guessed at.
 
    The SHAPE lives here and is shared by every theme — radii, the spacing ramp,
    borders, shadows and motion. Only the PALETTE varies (_themes.scss). That
@@ -24,40 +30,50 @@
   color-scheme: dark;
 
   /* --- surfaces (dark → light, back → front) ---
-     Neutral grey throughout: no blue cast, no gradient. The steps are close
-     together on purpose — structure is carried by the BORDERS here, not by
-     luminance, so a panel does not need to glow to be a panel. */
-  --bg: #0f0f0f;          /* app background, deepest */
-  --panel: #181818;       /* docked panels (browser/inspector/ribbon/timeline) */
-  --panel-2: #1e1e1e;     /* nested surfaces, inputs, popups */
-  --raised: #272727;      /* hover / raised interactive surface */
-  --raised-2: #353535;    /* pressed / stronger hover */
+     The palette's own neutral ramp, in order: #090a14 #10141f #151d28 #202e37
+     #394a50. They carry a slight blue cast rather than being true grey, which
+     is what keeps a five-step ramp this close together readable as five steps.
+     Structure is still carried by the BORDERS, as in every theme here. */
+  --bg: #090a14;          /* app background, deepest */
+  --panel: #10141f;       /* docked panels (browser/inspector/ribbon/timeline) */
+  --panel-2: #151d28;     /* nested surfaces, inputs, popups */
+  --raised: #202e37;      /* hover / raised interactive surface */
+  --raised-2: #394a50;    /* pressed / stronger hover */
 
   /* --- borders ---
-     Both rungs are lifted well clear of their surfaces. The old --line was 4%
-     off the panel it sat on, which is a seam you infer rather than see; the
-     whole look depends on the opposite. */
-  --line: #2f2f2f;        /* divider — visible, not a hairline */
-  --line-strong: #384149; /* stronger border (focusable controls, popups) */
+     From the BLUE ramp, not the neutral one. The neutral rungs are already
+     spoken for by the five surfaces above, so a divider taken from them would
+     be one of those surfaces and read as a seam between two panels rather than
+     as a line. The blues are the coolest thing in the palette and sit a clear
+     step off every surface they can land on. */
+  --line: #253a5e;        /* divider — visible, not a hairline */
+  --line-strong: #3c5e8b; /* stronger border (focusable controls, popups) */
 
   /* --- text --- */
-  --text: #dddddd;        /* primary */
-  --text-dim: #bababa;    /* secondary / labels */
-  --text-mute: #6f7a82;   /* tertiary / hints */
+  --text: #ebede9;        /* primary */
+  --text-dim: #a8b5b2;    /* secondary / labels */
+  --text-mute: #819796;   /* tertiary / hints */
 
-  /* --- accent: one cool blue, used sparingly --- */
-  --accent: #4ca5e0;
-  --accent-hot: #9fccea;
-  --accent-tint: rgba(76, 165, 224, 0.14);
-  --accent-tint-2: rgba(76, 165, 224, 0.24);
-  --accent-glow: rgba(76, 165, 224, 0.35);
-  --on-accent: #0f0f0f;   /* text on a filled accent surface */
+  /* --- accent: the palette's signature blue ---
+     #73bed3 rather than the darker #4f8fba below it. The accent is what a
+     selected edge, a dimension and a manipulator handle are drawn in, over
+     shaded geometry as often as over chrome, so it has to hold up against a lit
+     face as well as against a panel. */
+  --accent: #73bed3;
+  --accent-hot: #a4dddb;
+  --accent-tint: rgba(115, 190, 211, 0.14);
+  --accent-tint-2: rgba(115, 190, 211, 0.24);
+  --accent-glow: rgba(115, 190, 211, 0.35);
+  --on-accent: #090a14;   /* text on a filled accent surface */
 
-  /* --- semantic --- */
-  --ok: #bbef6e;
-  --warn: #f0c674;
-  --error: #fc4e4e;
-  --error-tint: rgba(252, 78, 78, 0.14);
+  /* --- semantic ---
+     Green, amber and red from the palette's own families. The red is #cf573c
+     and not the deeper #a53030: an error is the one colour that must be legible
+     at a glance on the darkest surface here, and #a53030 on #090a14 is not. */
+  --ok: #a8ca58;
+  --warn: #de9e41;
+  --error: #cf573c;
+  --error-tint: rgba(207, 87, 60, 0.14);
 
   /* legacy alias (kept so any stray reference still resolves) */
   --accent-blue: var(--accent);

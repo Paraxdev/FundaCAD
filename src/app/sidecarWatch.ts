@@ -21,8 +21,8 @@ export function installSidecarDiedToast(): void {
     const cause = p && typeof p.cause === "string" && p.cause ? p.cause : "";
     const msg =
       p && p.kind === "port_in_use"
-        ? `Neocad could not start its geometry engine: ${cause}. Another copy of Neocad may still be running. Close it and open Neocad again.`
-        : `The geometry engine crashed${cause ? ` (${cause})` : ""}. Save your work, then restart Neocad.`;
+        ? `FundaCAD could not start its geometry engine: ${cause}. Another copy of FundaCAD may still be running. Close it and open FundaCAD again.`
+        : `The geometry engine crashed${cause ? ` (${cause})` : ""}. Save your work, then restart FundaCAD.`;
     toast(msg, {
       kind: "error",
       timeout: 60000,

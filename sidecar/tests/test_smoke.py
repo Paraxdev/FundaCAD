@@ -1730,7 +1730,7 @@ def test_face_selector_on_concentric_cylinders():
 
 
 if __name__ == "__main__":
-    print("Neocad sidecar smoke test")
+    print("FundaCAD sidecar smoke test")
     test_rebuild()
     test_error_naming()
     test_exports()

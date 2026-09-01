@@ -5,7 +5,7 @@
 // tree walk. The panel tags them; this decides what each filter shows.
 //
 // The house shape for a user setting (ui/theme.ts, icons.ts, units.ts): module
-// state, a validating gate over the untrusted stored value, one `neocad.*`
+// state, a validating gate over the untrusted stored value, one `fundacad.*`
 // key read at load, a listener set. No Vue import, so the headless suite reaches
 // it.
 //
@@ -47,15 +47,15 @@ export function sectionVisible(filter: BrowserFilter, section: BrowserSection): 
   return shown === null || shown.includes(section);
 }
 
-const KEY = "neocad.browserFilter";
-const LEGACY_KEY = "sindricad.browserFilter";
+const KEY = "fundacad.browserFilter";
+const LEGACY_KEYS = ["neocad.browserFilter", "sindricad.browserFilter"];
 
 export function asBrowserFilter(v: unknown): BrowserFilter | null {
   return BROWSER_FILTERS.some((f) => f.id === v) ? (v as BrowserFilter) : null;
 }
 
 function readStored(): BrowserFilter {
-  const raw = readSetting(KEY, LEGACY_KEY);
+  const raw = readSetting(KEY, ...LEGACY_KEYS);
   return asBrowserFilter(raw) ?? "all";
 }
 

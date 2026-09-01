@@ -91,6 +91,6 @@ describe("WelcomeModal", () => {
     box.checked = false;
     box.dispatchEvent(new Event("change", { bubbles: true }));
     await nextTick();
-    expect(localStorage.getItem("neocad.welcomeOnStartup")).toBe("false");
+    expect(localStorage.getItem("fundacad.welcomeOnStartup")).toBe("false");
   });
 });

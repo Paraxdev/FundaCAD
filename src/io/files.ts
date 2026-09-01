@@ -9,7 +9,7 @@ import type { GeometryBackend } from "../geometry/client";
 import type { CadDocument, ExportFormat, Feature, ImportFormat } from "../types";
 import { clearRecovery } from "./recovery";
 import { noteRecent } from "./recentFiles";
-import { DOC_EXT, LEGACY_DOC_EXT, isDocumentExt, stripDocumentExt } from "./documentExt";
+import { DOC_EXT, LEGACY_DOC_EXTS, isDocumentExt, stripDocumentExt } from "./documentExt";
 import { multiColorEnabled } from "../ui/featureFlags";
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;
@@ -69,7 +69,7 @@ export async function saveDocumentAs(store: DocumentStore) {
   if (isTauri()) {
     const { save } = await import("@tauri-apps/plugin-dialog");
     const path = await save({
-      filters: [{ name: "Neocad Document", extensions: [DOC_EXT, LEGACY_DOC_EXT] }],
+      filters: [{ name: "FundaCAD Document", extensions: [DOC_EXT, ...LEGACY_DOC_EXTS] }],
       defaultPath: store.filePath ?? `${store.fileName}.${DOC_EXT}`,
     });
     if (path) {
@@ -98,8 +98,8 @@ export async function openDocument(store: DocumentStore, geometry: GeometryBacke
       // MCAD-style: Open takes our document AND mesh/CAD files (imported as a
       // body), routed by extension below — so users can just "open" an STL.
       filters: [
-        { name: "All supported", extensions: [DOC_EXT, LEGACY_DOC_EXT, "json", "stl", "3mf", "step", "stp", "obj", "glb"] },
-        { name: "Neocad Document", extensions: [DOC_EXT, LEGACY_DOC_EXT, "json"] },
+        { name: "All supported", extensions: [DOC_EXT, ...LEGACY_DOC_EXTS, "json", "stl", "3mf", "step", "stp", "obj", "glb"] },
+        { name: "FundaCAD Document", extensions: [DOC_EXT, ...LEGACY_DOC_EXTS, "json"] },
         { name: "Mesh / CAD", extensions: ["stl", "3mf", "step", "stp", "obj", "glb"] },
       ],
     });
@@ -226,8 +226,8 @@ export async function openDocumentAtPath(
   } catch (e) {
     if (looksLikeContainer(text)) {
       await reportError(
-        `${base} was saved by a newer version of Neocad, which stores geometry in a ` +
-          `packaged document this build can't read. Update Neocad to open it.`,
+        `${base} was saved by a newer version of FundaCAD, which stores geometry in a ` +
+          `packaged document this build can't read. Update FundaCAD to open it.`,
       );
       return "newerFormat";
     }
@@ -621,7 +621,7 @@ async function importPath(store: DocumentStore, geometry: GeometryBackend, path:
 async function reportError(msg: string) {
   if (isTauri()) {
     const { message } = await import("@tauri-apps/plugin-dialog");
-    await message(msg, { title: "Neocad", kind: "error" });
+    await message(msg, { title: "FundaCAD", kind: "error" });
   } else {
     console.error(msg);
   }
@@ -651,7 +651,7 @@ function uploadText(): Promise<string | null> {
   return new Promise((resolve) => {
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = `.${DOC_EXT},.${LEGACY_DOC_EXT},.json,application/json`;
+    input.accept = [DOC_EXT, ...LEGACY_DOC_EXTS].map((e) => `.${e}`).join(",") + ",.json,application/json";
     input.onchange = () => {
       const file = input.files?.[0];
       if (!file) return resolve(null);

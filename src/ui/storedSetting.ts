@@ -1,4 +1,4 @@
-// Reading a user setting that has been stored under two different names.
+// Reading a user setting that has been stored under more than one name.
 //
 // The settings modules (theme, icons, units, layoutPrefs, browserFilter,
 // welcome, recentFiles, printerClient, spacemouse) each keep one localStorage
@@ -17,23 +17,34 @@
 // with no error anywhere — and one helper is one thing to get right and one
 // thing to test.
 
-/** The stored value for `key`, migrating a value found under `legacy`.
+/** The stored value for `key`, migrating a value found under an older name.
  *
- *  Returns null when neither name holds anything, which every caller already
- *  treats as "use the default". Safe where `localStorage` does not exist, which
- *  is how the headless suites reach these modules.
+ *  VARIADIC because there has now been more than one rename, and a chain has to
+ *  reach all the way back: someone who last opened the app two names ago has
+ *  their theme under the oldest key and nothing at all under the newer two, and
+ *  a single fallback would look one step behind and give up. Tried newest
+ *  first, which is also the order they should be passed in — the first one that
+ *  holds anything wins, so a stale value from three names ago cannot outrank a
+ *  fresher one.
+ *
+ *  Returns null when no name holds anything, which every caller already treats
+ *  as "use the default". Safe where `localStorage` does not exist, which is how
+ *  the headless suites reach these modules.
  */
-export function readSetting(key: string, legacy: string): string | null {
+export function readSetting(key: string, ...legacy: string[]): string | null {
   if (typeof localStorage === "undefined") return null;
   const current = localStorage.getItem(key);
   if (current !== null) return current;
-  const old = localStorage.getItem(legacy);
-  if (old === null) return null;
-  try {
-    localStorage.setItem(key, old);
-  } catch {
-    // A full or blocked store still has the value in hand; the copy is an
-    // optimisation, not the point.
+  for (const name of legacy) {
+    const old = localStorage.getItem(name);
+    if (old === null) continue;
+    try {
+      localStorage.setItem(key, old);
+    } catch {
+      // A full or blocked store still has the value in hand; the copy is an
+      // optimisation, not the point.
+    }
+    return old;
   }
-  return old;
+  return null;
 }

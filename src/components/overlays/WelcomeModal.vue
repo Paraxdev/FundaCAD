@@ -14,7 +14,7 @@ import { useModalGate } from "../../composables/useModalGate";
 import { welcomeOnStartup, setWelcomeOnStartup } from "../../ui/welcome";
 import { forgetRecent, getRecentFiles, type RecentFile } from "../../io/recentFiles";
 import ModalFrame from "./ModalFrame.vue";
-import logoUrl from "../../../assets/brand/neocad-lockup-app.svg";
+import logoUrl from "../../../assets/brand/fundacad-lockup-app.svg";
 
 const dialogs = useDialogStore();
 // Non-null whenever this component is rendered: App.vue gates it on the same
@@ -63,7 +63,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
 <template>
   <ModalFrame panel-class="welcome-panel" @close="close()">
     <template #title>
-      <img :src="logoUrl" alt="Neocad" class="welcome-logo" />
+      <img :src="logoUrl" alt="FundaCAD" class="welcome-logo" />
     </template>
 
     <div class="modal-body welcome-body">
@@ -81,7 +81,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
           <div class="welcome-section">Recent</div>
           <div class="welcome-recents">
             <!-- no esc(): interpolation escapes, and a second pass would render
-                 a file called "Bracket & Plate.neocad" as "Bracket &amp; Plate". -->
+                 a file called "Bracket & Plate.funda" as "Bracket &amp; Plate". -->
             <button
               v-for="r in recents"
               :key="r.path"

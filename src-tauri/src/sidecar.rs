@@ -323,7 +323,7 @@ impl Sidecar {
                 // self-identifying header: field logs get pasted without context
                 let _ = writeln!(
                     f,
-                    "Neocad {} ({} {})",
+                    "FundaCAD {} ({} {})",
                     app.package_info().version,
                     std::env::consts::OS,
                     std::env::consts::ARCH
@@ -644,7 +644,7 @@ mod tests {
     struct TmpDir(PathBuf);
     impl TmpDir {
         fn new(label: &str) -> Self {
-            let dir = std::env::temp_dir().join(format!("neocad-test-{label}-{}", std::process::id()));
+            let dir = std::env::temp_dir().join(format!("fundacad-test-{label}-{}", std::process::id()));
             let _ = std::fs::remove_dir_all(&dir);
             std::fs::create_dir_all(&dir).expect("create tmp fixture dir");
             TmpDir(dir)

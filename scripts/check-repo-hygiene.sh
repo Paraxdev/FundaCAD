@@ -2,7 +2,7 @@
 # Repo hygiene: fail if files that belong to a developer's machine or to an AI
 # agent's session have been committed. This is a PUBLIC repo, so "it's only
 # clutter" still means publishing a username, a home-directory layout, or tooling
-# config that has nothing to do with Neocad.
+# config that has nothing to do with FundaCAD.
 #
 # .gitignore alone is not enough: it only stops NEW untracked matches, and says
 # nothing about a path that is already tracked (which is how .claude/settings.json
@@ -32,6 +32,7 @@ memory/
 .DS_Store
 evals/
 norn/
+test_reports/
 '
 
 echo "checking tracked paths…"
@@ -55,7 +56,7 @@ done
 # with vendored code. Add to this list only for files that are genuinely
 # synthetic or already public.
 echo "checking for tracked CAD models…"
-models=$(git ls-files -- '*.neocad' '*.sindri' '*.3mf' '*.stl' '*.step' '*.stp' 2>/dev/null \
+models=$(git ls-files -- '*.funda' '*.neocad' '*.sindri' '*.3mf' '*.stl' '*.step' '*.stp' 2>/dev/null \
   | grep -vE '^(sidecar/tools/bench/textured_box\.sindri$|sidecar/fixtures/asm_[a-z_]+\.step$|third_party/)' || true)
 if [ -n "$models" ]; then
   note "tracked CAD model — is this a real part in a public repo?:"
@@ -79,18 +80,22 @@ fi
 
 # --- former product names -----------------------------------------------------
 # Product NAMES only, not the lowercase identifiers. Several of those are kept on
-# purpose and are not drift: the `.sindri` extension is still opened
-# (src/io/documentExt.ts), the pre-rename localStorage keys are still read
+# purpose and are not drift: the `.sindri` and `.neocad` extensions are still
+# opened (src/io/documentExt.ts), the pre-rename localStorage keys are still read
 # (src/ui/storedSetting.ts), and the SINDRI_* environment variables and the
 # on-disk data directory are unchanged because renaming them would orphan
 # geometry and break existing scripts for nothing a user can see.
+#
+# `Neocad` joins the list with the second rename. It is a real brand held by
+# someone else, which is why the app is not called it any more, so a stray one
+# in a shipped string or a doc is the thing this check exists to catch.
 #
 # This script is excluded from its own scan: it necessarily contains the strings
 # it looks for. CHANGELOG.md is excluded because it is inherited release history,
 # and those entries describe builds that really were called that. README.md is
 # excluded because it names the upstream project as attribution.
 echo "checking for former product names…"
-old=$(git grep -In -e 'Verxa' -e 'SindriCAD' -- . \
+old=$(git grep -In -e 'Verxa' -e 'SindriCAD' -e 'Neocad' -- . \
   ':(exclude)third_party/**' ':(exclude)scripts/check-repo-hygiene.sh' \
   ':(exclude)CHANGELOG.md' ':(exclude)README.md' 2>/dev/null || true)
 if [ -n "$old" ]; then

@@ -240,7 +240,7 @@ const ZOOM = Number(process.env.ZOOM || 1);
     // Close whatever feature panel the last commit left open, and park the
     // cursor off the model: a hover highlight left under it reads as a
     // selection nobody made.
-    await page.evaluate(() => window.__neocad.selectFeature(null));
+    await page.evaluate(() => window.__fundacad.selectFeature(null));
     await page.mouse.move(1540, 880);
     await page.waitForTimeout(300);
     await page.screenshot({ path: path.join(OUT, `${name}.png`) });
@@ -329,7 +329,7 @@ const ZOOM = Number(process.env.ZOOM || 1);
   await page.evaluate(() => window.viewport.setStandardView("iso"));
   await page.waitForTimeout(1400);
   await shot("sketch-on-face");
-  await page.evaluate(() => window.__neocad.handleAction("finish"));
+  await page.evaluate(() => window.__fundacad.handleAction("finish"));
   await page.waitForTimeout(1500);
   await clearSelection();
   await frame();

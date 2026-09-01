@@ -76,14 +76,14 @@ const DEFAULTS: SpaceMouseConfig = {
 const V1_PAN_DEFAULT = 0.00006;
 const V1_ZOOM_DEFAULT = 0.0001;
 
-const KEY = "neocad.spacemouse.config";
-const LEGACY_KEY = "sindricad.spacemouse.config";
+const KEY = "fundacad.spacemouse.config";
+const LEGACY_KEYS = ["neocad.spacemouse.config", "sindricad.spacemouse.config"];
 const LEGACY_MODE_KEY = "sindricad.spacemouse.mode";
 
 function loadConfig(): SpaceMouseConfig {
   const cfg: SpaceMouseConfig = structuredClone(DEFAULTS);
   try {
-    const raw = readSetting(KEY, LEGACY_KEY);
+    const raw = readSetting(KEY, ...LEGACY_KEYS);
     if (raw) {
       const saved = JSON.parse(raw) as Partial<SpaceMouseConfig>;
       const savedBind = saved.bind;

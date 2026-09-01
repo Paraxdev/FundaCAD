@@ -124,7 +124,7 @@ export class SolverUnavailable extends Error {
     super(
       /content security policy|unsafe-eval|code generation/i.test(detail)
         ? "The 2D constraint solver could not start: this build's security policy blocks the "
-          + "code it needs to initialise. That is a bug in Neocad, not a problem with your "
+          + "code it needs to initialise. That is a bug in FundaCAD, not a problem with your "
           + "system, so updating your webview or graphics drivers will not help. Sketching "
           + "still works, but without constraints, dimensions or point dragging."
         : `The 2D constraint solver could not start: ${detail}`,

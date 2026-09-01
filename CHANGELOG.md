@@ -2,13 +2,13 @@
 
 What changed in each build, newest first. Everything under **Unreleased**
 ships in the next rolling beta, and the release notes on the
-[beta release](https://github.com/Paraxdev/neocad/releases/tag/beta) are
+[beta release](https://github.com/Paraxdev/fundacad/releases/tag/beta) are
 generated from that section.
 
-Entries below the rename still say SindriCAD, and are left that way on
-purpose: this project began as a fork of it, and those entries describe
-builds that really were called that. Rewriting them would misattribute the
-work.
+Older entries still say SindriCAD or Neocad, and are left that way on
+purpose: this project began as a fork of the first, shipped for a while under
+the second, and those entries describe builds that really were called that.
+Rewriting them would misattribute the work and misdate the name.
 
 Builds are versioned `0.1.<build number>` and every green `main` produces one, so
 most entries land under Unreleased and stay there until a milestone is worth
@@ -22,6 +22,30 @@ This file starts on 2026-08-03. For anything before that, see the
 [commit history](https://github.com/MakerViking/sindricad/commits/main).
 
 ## Unreleased
+
+### Changed
+
+- **The app is called FundaCAD.** Neocad is a brand somebody else holds, so the
+  product name, the window title, the wordmark, the installer, the bundle
+  identifier `dev.fundacad.app` and the repository have all moved. New documents
+  save as `.funda`.
+
+  Nothing you already have stops working. `.neocad` and `.sindri` both keep
+  opening, permanently and by design: there is no upgrade step that can reach a
+  file already sitting on someone's disk, so a name dropped from the read list
+  is that person's work refusing to open. Opening a `.neocad` and saving over it
+  keeps the `.neocad`; only Save As offers the new name. Every stored setting —
+  theme, units, layout, recent files, the SpaceMouse map — is carried forward
+  from its old key, and now through a chain of names rather than a single
+  fallback, so a value last written two names ago is still found.
+
+  The bundle identifier changing means an installer treats this as a new
+  application rather than as an upgrade of the old one.
+
+- **The default palette is Apollo** (lospec.com/palette-list/apollo). The
+  previous grey palette is still there under Theme as "Concrete", along with
+  Forge, Slate, Moss and Paper. Shape is untouched: a theme here has only ever
+  been a repaint.
 
 ### Added
 

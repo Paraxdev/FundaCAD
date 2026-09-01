@@ -36,7 +36,7 @@ export async function appVersion(): Promise<string> {
 /** Help → About: the one place to read off which version is running. */
 export async function showAbout(): Promise<void> {
   const { listModal } = await import("./choice");
-  await listModal("About Neocad", [`Version ${await appVersion()}`]);
+  await listModal("About FundaCAD", [`Version ${await appVersion()}`]);
 }
 
 /** Check the beta feed and prompt to install when an update exists. An available
@@ -51,7 +51,7 @@ export async function checkForUpdates(interactive: boolean): Promise<void> {
     const { check } = await import("@tauri-apps/plugin-updater");
     const update = await check();
     if (!update) {
-      if (interactive) toast(`Neocad ${await appVersion()} is up to date.`);
+      if (interactive) toast(`FundaCAD ${await appVersion()} is up to date.`);
       return;
     }
     const pick = await choose(`Update ${update.version} is available`, [

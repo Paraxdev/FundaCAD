@@ -22,11 +22,57 @@
    drift out of step with the chrome around it.
    ============================================================================ */
 
-/* --- CONCRETE: the default. Flat neutral grey, one cool blue. --------------
-   Defined on :root in _tokens.scss rather than [data-theme="concrete"] so the
-   app is themed before any script runs — no flash of an unstyled palette on a
-   cold load, and the stylesheet stands on its own if the theme module never
+/* --- APOLLO: the default. The lospec palette of that name. -----------------
+   Defined on :root in _tokens.scss rather than [data-theme="apollo"] so the app
+   is themed before any script runs — no flash of an unstyled palette on a cold
+   load, and the stylesheet stands on its own if the theme module never
    initialises. */
+
+/* --- CONCRETE: flat neutral grey, one cool blue. ---------------------------
+   Was the default and lived on :root; it is a named theme now, so the palette
+   is written out here in full rather than inherited. */
+:root[data-theme="concrete"] {
+  color-scheme: dark;
+
+  /* --- surfaces (dark → light, back → front) ---
+     Neutral grey throughout: no blue cast, no gradient. The steps are close
+     together on purpose — structure is carried by the BORDERS here, not by
+     luminance, so a panel does not need to glow to be a panel. */
+  --bg: #0f0f0f;          /* app background, deepest */
+  --panel: #181818;       /* docked panels (browser/inspector/ribbon/timeline) */
+  --panel-2: #1e1e1e;     /* nested surfaces, inputs, popups */
+  --raised: #272727;      /* hover / raised interactive surface */
+  --raised-2: #353535;    /* pressed / stronger hover */
+
+  /* --- borders ---
+     Both rungs are lifted well clear of their surfaces. The old --line was 4%
+     off the panel it sat on, which is a seam you infer rather than see; the
+     whole look depends on the opposite. */
+  --line: #2f2f2f;        /* divider — visible, not a hairline */
+  --line-strong: #384149; /* stronger border (focusable controls, popups) */
+
+  /* --- text --- */
+  --text: #dddddd;        /* primary */
+  --text-dim: #bababa;    /* secondary / labels */
+  --text-mute: #6f7a82;   /* tertiary / hints */
+
+  /* --- accent: one cool blue, used sparingly --- */
+  --accent: #4ca5e0;
+  --accent-hot: #9fccea;
+  --accent-tint: rgba(76, 165, 224, 0.14);
+  --accent-tint-2: rgba(76, 165, 224, 0.24);
+  --accent-glow: rgba(76, 165, 224, 0.35);
+  --on-accent: #0f0f0f;   /* text on a filled accent surface */
+
+  /* --- semantic --- */
+  --ok: #bbef6e;
+  --warn: #f0c674;
+  --error: #fc4e4e;
+  --error-tint: rgba(252, 78, 78, 0.14);
+
+  /* legacy alias (kept so any stray reference still resolves) */
+  --accent-blue: var(--accent);
+}
 
 /* --- FORGE: deep graphite, a single molten-amber accent. -------------------
    Was the default and lived on :root; it is a named theme now, so the palette

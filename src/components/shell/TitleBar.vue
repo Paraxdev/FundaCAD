@@ -9,7 +9,7 @@ import { iconPacks, getIconPack, setIconPack, asIconPackId, onIconPackChange } f
 import { buildMenubar } from "../../app/menubarDef";
 import Icon from "./Icon.vue";
 import MenuBar from "./MenuBar.vue";
-import brandLockup from "../../../assets/brand/neocad-lockup-app.svg";
+import brandLockup from "../../../assets/brand/fundacad-lockup-app.svg";
 
 const engine = useEngine();
 const ui = useUiStore();
@@ -62,7 +62,7 @@ function onPackInput(ev: Event) {
 
 <template>
   <header id="titlebar">
-    <span class="brand"><img :src="brandLockup" alt="Neocad" /></span>
+    <span class="brand"><img :src="brandLockup" alt="FundaCAD" /></span>
     <MenuBar :menus="menus" />
     <button
       id="undo-btn"

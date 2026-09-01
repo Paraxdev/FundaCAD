@@ -90,7 +90,7 @@ describe("SolverUnavailable", () => {
     // It may MENTION a webview or drivers, but only to say they are not it.
     expect(e.message).not.toMatch(/WebView2 Runtime|should fix it|Updating the/i);
     expect(e.message).toMatch(/security policy/i);
-    expect(e.message).toMatch(/bug in Neocad/);
+    expect(e.message).toMatch(/bug in FundaCAD/);
     expect(e.message).toMatch(/will not help/);
     // and it still says what the user can and cannot do meanwhile
     expect(e.message).toMatch(/Sketching still works/);

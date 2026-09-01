@@ -3,7 +3,7 @@
 //
 // The house shape for a user setting (ui/theme.ts, icons.ts, units.ts,
 // toolRail.ts): module state, a validating gate over the untrusted stored value,
-// one `neocad.*` key read at load, and a listener set so live surfaces
+// one `fundacad.*` key read at load, and a listener set so live surfaces
 // re-render. No Vue import — that is what keeps the headless *.test.ts suite
 // able to reach it.
 //
@@ -33,8 +33,8 @@ export const DEFAULT_LAYOUT: LayoutPrefs = { ribbon: "top", history: "bottom" };
 const RIBBON_SIDES: RibbonSide[] = ["top", "left"];
 const HISTORY_SIDES: HistorySide[] = ["bottom", "right"];
 
-const KEY = "neocad.layout";
-const LEGACY_KEY = "sindricad.layout";
+const KEY = "fundacad.layout";
+const LEGACY_KEYS = ["neocad.layout", "sindricad.layout"];
 
 export function asRibbonSide(v: unknown): RibbonSide | null {
   return RIBBON_SIDES.includes(v as RibbonSide) ? (v as RibbonSide) : null;
@@ -58,7 +58,7 @@ export function asLayoutPrefs(v: unknown): LayoutPrefs {
 
 function readStored(): LayoutPrefs {
   try {
-    const raw = readSetting(KEY, LEGACY_KEY);
+    const raw = readSetting(KEY, ...LEGACY_KEYS);
     return raw ? asLayoutPrefs(JSON.parse(raw)) : { ...DEFAULT_LAYOUT };
   } catch {
     // Unparseable JSON is treated as no setting at all: the shell opens in its

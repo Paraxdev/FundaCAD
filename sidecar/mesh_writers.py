@@ -70,7 +70,7 @@ def write_plain_3mf(positions, indices, path):
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<model unit="millimeter" xml:lang="en-US"'
         ' xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">\n'
-        ' <metadata name="Application">Neocad</metadata>\n'
+        ' <metadata name="Application">FundaCAD</metadata>\n'
         ' <resources><object id="1" type="model">'
     )
     tail = (
@@ -169,7 +169,7 @@ _CHUNK_JSON = 0x4E4F534A      # 'JSON'
 _CHUNK_BIN = 0x004E4942       # 'BIN\0'
 
 
-def write_glb(meshes, path, generator="Neocad"):
+def write_glb(meshes, path, generator="FundaCAD"):
     """Write a binary glTF 2.0 (.glb).
 
     meshes : [{"name": str, "positions": flat xyz floats, "indices": flat ints,
@@ -234,7 +234,7 @@ def write_glb(meshes, path, generator="Neocad"):
 
     # node 0 is the Z-up->Y-up root; every body hangs off it
     child_ids = list(range(1, len(nodes) + 1))
-    nodes.insert(0, {"name": "Neocad", "matrix": _ROOT_MATRIX,
+    nodes.insert(0, {"name": "FundaCAD", "matrix": _ROOT_MATRIX,
                      "children": child_ids})
 
     doc = {

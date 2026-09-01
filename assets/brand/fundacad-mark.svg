@@ -1,7 +1,7 @@
-<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Neocad">
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="FundaCAD">
   <!-- The lockup's mark on its own, squared, for use as a favicon and a window
        icon. Same three faces and the same accent (#4ca5e0, styles/_tokens.scss)
-       as neocad-lockup-app.svg, so the tab and the title bar cannot drift apart:
+       as fundacad-lockup-app.svg, so the tab and the title bar cannot drift apart:
        if one is restyled the other has to be too, and this comment is where that
        is said.
 

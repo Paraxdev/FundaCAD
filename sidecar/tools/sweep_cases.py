@@ -1,4 +1,4 @@
-"""Edge-case sweep for the Neocad geometry sidecar.
+"""Edge-case sweep for the FundaCAD geometry sidecar.
 
 Runs ONE case per invocation, by name, and prints a single JSON line. The runner
 (sweep_run.py) invokes this in a SUBPROCESS per case, because the failure mode we

@@ -7,7 +7,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { readSetting } from "../../src/ui/storedSetting";
 
-const NEW = "neocad.thing";
+const NEW = "fundacad.thing";
+const MID = "neocad.thing";   // the name in between the two renames
 const OLD = "sindricad.thing";
 
 describe("readSetting", () => {
@@ -53,5 +54,34 @@ describe("readSetting", () => {
     // fallbacks that use || would silently promote that to the default.
     localStorage.setItem(OLD, "");
     expect(readSetting(NEW, OLD)).toBe("");
+  });
+
+  // A SECOND rename put a third name in the chain, and someone who last opened
+  // the app two names ago has their value under the oldest of the three and
+  // nothing at all under the middle one. A single fallback looked one step back
+  // and gave up, which is the same silent reset the helper exists to prevent.
+  describe("a chain of more than one old name", () => {
+    it("reaches past a gap to the oldest name that holds anything", () => {
+      localStorage.setItem(OLD, "paper");
+      expect(readSetting(NEW, MID, OLD)).toBe("paper");
+      expect(localStorage.getItem(NEW)).toBe("paper");
+    });
+
+    it("prefers the newer of two old names", () => {
+      localStorage.setItem(MID, "slate");
+      localStorage.setItem(OLD, "paper");
+      expect(readSetting(NEW, MID, OLD)).toBe("slate");
+    });
+
+    it("still lets the current name win over every old one", () => {
+      localStorage.setItem(NEW, "moss");
+      localStorage.setItem(MID, "slate");
+      localStorage.setItem(OLD, "paper");
+      expect(readSetting(NEW, MID, OLD)).toBe("moss");
+    });
+
+    it("returns null when no name in the chain holds anything", () => {
+      expect(readSetting(NEW, MID, OLD)).toBeNull();
+    });
   });
 });

@@ -94,7 +94,7 @@ function reportText(
   documentJson: string | null,
 ): string {
   return [
-    `Neocad bug report`,
+    `FundaCAD bug report`,
     `version: ${version} · ${navigator.userAgent.slice(0, 80)}`,
     `geometry engine connected: ${connected}`,
     ``,

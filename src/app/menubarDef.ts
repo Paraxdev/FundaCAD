@@ -11,7 +11,7 @@ import type { Engine } from "./engine";
 
 /** Where a bug report goes. The reporter puts the report on the clipboard and
  *  says to paste it into a new issue, so the app has to be able to say where. */
-const ISSUES_URL = "https://github.com/Paraxdev/neocad/issues";
+const ISSUES_URL = "https://github.com/Paraxdev/fundacad/issues";
 
 /** The File / Edit / View / Help tree.
  *
@@ -88,7 +88,7 @@ export function buildMenubar(e: Engine): MenuDef[] {
         { label: "Issue Tracker", onClick: () => void openExternal(ISSUES_URL) },
         { separator: true, label: "" },
         { label: "Check for Updates…", onClick: () => void checkForUpdates(true) },
-        { label: "About Neocad", onClick: () => void showAbout() },
+        { label: "About FundaCAD", onClick: () => void showAbout() },
       ],
     },
   ];

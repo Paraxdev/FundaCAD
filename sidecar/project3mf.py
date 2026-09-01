@@ -8,7 +8,7 @@ Metadata/model_settings.config plus a filament_colour array in
 Metadata/project_settings.config. Objects also carry plain m:basematerials so the
 file still renders colored in generic 3MF viewers.
 
-Indexing convention (easy to get wrong): Neocad palette slots and the
+Indexing convention (easy to get wrong): FundaCAD palette slots and the
 project_settings filament_colour array are 0-based; the model_settings "extruder"
 metadata is 1-based. A body with no palette assignment goes to extruder 1.
 """
@@ -197,7 +197,7 @@ def write_project_3mf(bodies, path, palette, body_colors, body_names, settings,
             ' xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"'
             ' xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02"'
             f' xmlns:BambuStudio="{_BBS_NS}">\n'
-            ' <metadata name="Application">Neocad</metadata>\n'
+            ' <metadata name="Application">FundaCAD</metadata>\n'
             ' <metadata name="BambuStudio:3mfVersion">1</metadata>\n'
             f" <resources>{basematerials}"
         )

@@ -50,7 +50,7 @@ describe("updater", () => {
     // being an inconvenience.
     for (const url of conf.plugins.updater.endpoints) {
       expect(new URL(url).origin, `updater endpoint ${url}`).toBe("https://github.com");
-      expect(new URL(url).pathname.startsWith("/Paraxdev/neocad/"), `updater endpoint ${url}`)
+      expect(new URL(url).pathname.startsWith("/Paraxdev/fundacad/"), `updater endpoint ${url}`)
         .toBe(true);
     }
   });

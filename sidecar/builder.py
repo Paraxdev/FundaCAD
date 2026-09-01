@@ -198,7 +198,7 @@ def _shape_to_blob(shape):
     except Exception as e:  # noqa: BLE001
         raise ValueError(
             f"could not store the imported geometry ({e}). Check free disk space "
-            "and permissions on the Neocad data directory."
+            "and permissions on the FundaCAD data directory."
         ) from e
 
 
@@ -776,7 +776,7 @@ def _wrap_topods(topods):
     return Shape.cast(topods)
 
 
-# Import guards. Neocad imports CLEAN / prismatic models as editable B-rep
+# Import guards. FundaCAD imports CLEAN / prismatic models as editable B-rep
 # bodies (one B-rep face per mesh triangle). That's great for CAD-exported meshes
 # but explodes on dense organic/scanned models — so we refuse those up front with
 # a clear message rather than letting OCCT grind into the job timeout.
@@ -1172,7 +1172,7 @@ def _sew_mesh_file(path):
         raise ValueError(
             f"This mesh is curved/organic ({nn:,} distinct facet directions — a clean "
             f"CAD part has a few hundred at most), so it cannot reduce to an editable "
-            f"model. Neocad edits prismatic CAD models; import a STEP or a "
+            f"model. FundaCAD edits prismatic CAD models; import a STEP or a "
             f"flat-faced part."
         )
     shapes = Mesher().read(path)
@@ -1188,7 +1188,7 @@ def _sew_mesh_file(path):
     if nf > MAX_IMPORT_FACES:
         raise ValueError(
             f"This mesh didn't reduce to a clean editable model ({nf:,} faces — a "
-            f"curved/organic surface stays faceted). Neocad edits prismatic CAD "
+            f"curved/organic surface stays faceted). FundaCAD edits prismatic CAD "
             f"models; import a STEP or a flat-faced part."
         )
     return shape

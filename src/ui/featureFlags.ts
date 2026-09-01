@@ -8,7 +8,7 @@
 //
 // The house shape for a user setting (ui/theme.ts, icons.ts, units.ts,
 // layoutPrefs.ts): module state, a validating gate over the untrusted stored
-// value, one `neocad.*` key read at load, and a listener set so live surfaces
+// value, one `fundacad.*` key read at load, and a listener set so live surfaces
 // re-render. No Vue import — that is what keeps the headless *.test.ts suite
 // able to reach it.
 //
@@ -38,8 +38,8 @@ export interface FeatureFlags {
 /** Everything off. A flag defaults on only once it stops being optional. */
 export const DEFAULT_FLAGS: FeatureFlags = { multiColor: false };
 
-const KEY = "neocad.features";
-const LEGACY_KEY = "sindricad.features";
+const KEY = "fundacad.features";
+const LEGACY_KEYS = ["neocad.features", "sindricad.features"];
 
 /** Narrow untrusted JSON to a complete FeatureFlags, field by field. */
 export function asFeatureFlags(v: unknown): FeatureFlags {
@@ -52,7 +52,7 @@ export function asFeatureFlags(v: unknown): FeatureFlags {
 
 function readStored(): FeatureFlags {
   try {
-    const raw = readSetting(KEY, LEGACY_KEY);
+    const raw = readSetting(KEY, ...LEGACY_KEYS);
     return raw ? asFeatureFlags(JSON.parse(raw)) : { ...DEFAULT_FLAGS };
   } catch {
     // Unparseable JSON is treated as no setting at all. Failing closed is the

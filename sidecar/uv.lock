@@ -849,7 +849,7 @@ wheels = [
 ]
 
 [[package]]
-name = "sindricad-sidecar"
+name = "fundacad-sidecar"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

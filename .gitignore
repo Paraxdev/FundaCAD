@@ -30,6 +30,8 @@ green-select.png
 # scripts/check-repo-hygiene.sh backstops this by failing CI if a model is ever
 # actually tracked (gitignore says nothing about `git add -f`, or a path already
 # tracked before the rule existed).
+*.funda
+*.neocad
 *.sindri
 *.step
 *.stl
@@ -60,9 +62,10 @@ credentials.*
 
 # --- agent / editor session artifacts -------------------------------------
 # This is a public repo: these carry a username, a home-directory layout, or
-# tooling config that has nothing to do with Neocad. scripts/check-repo-hygiene.sh
+# tooling config that has nothing to do with FundaCAD. scripts/check-repo-hygiene.sh
 # enforces this in CI, because .gitignore alone says nothing about a path that is
 # ALREADY tracked (which is how .claude/settings.json got in).
+test_reports/
 .claude/
 .fable/
 .cursor/

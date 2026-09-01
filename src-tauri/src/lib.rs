@@ -1,4 +1,4 @@
-//! Neocad Tauri shell entry. Spawns the Python geometry sidecar on startup and
+//! FundaCAD Tauri shell entry. Spawns the Python geometry sidecar on startup and
 //! kills it on exit. The frontend talks to the sidecar over a localhost
 //! WebSocket directly (not Tauri IPC); Rust only owns the window, native
 //! dialogs, and the sidecar lifecycle.
@@ -21,8 +21,10 @@ mod webkit;
 /// second is read forever, because every document written before the rename is
 /// still on someone's disk and no upgrade step can reach it. Kept in step with
 /// src/io/documentExt.ts.
-const DOC_EXT: &str = "neocad";
-const LEGACY_DOC_EXT: &str = "sindri";
+const DOC_EXT: &str = "funda";
+/// Every extension a document was saved as before, read forever. Kept in step
+/// with LEGACY_DOC_EXTS in src/io/documentExt.ts.
+const LEGACY_DOC_EXTS: [&str; 2] = ["neocad", "sindri"];
 
 use sidecar::Sidecar;
 use tauri::{Manager, RunEvent};
@@ -100,7 +102,7 @@ fn slot_file(app: &tauri::AppHandle, slot: &str) -> Result<std::path::PathBuf, S
 // pool; the tmp-write + rename stays atomic either way.
 async fn recovery_write(app: tauri::AppHandle, slot: String, json: String) -> Result<(), String> {
     let path = slot_file(&app, &slot)?;
-    let tmp = path.with_extension(concat!("neocad", ".tmp"));
+    let tmp = path.with_extension(concat!("funda", ".tmp"));
     std::fs::write(&tmp, json).map_err(|e| e.to_string())?;
     std::fs::rename(&tmp, &path).map_err(|e| e.to_string())
 }
@@ -127,7 +129,7 @@ fn recovery_list(app: tauri::AppHandle) -> Result<Vec<(String, u64)>, String> {
         // the case recovery exists for: the app crashed, and the next launch is
         // the one that has to find it.
         match p.extension().and_then(|e| e.to_str()) {
-            Some(e) if e == DOC_EXT || e == LEGACY_DOC_EXT => {}
+            Some(e) if e == DOC_EXT || LEGACY_DOC_EXTS.contains(&e) => {}
             _ => continue,
         }
         let name = match p.file_stem().and_then(|s| s.to_str()) {
@@ -226,7 +228,7 @@ fn watch_frontend_load(app: tauri::AppHandle) {
                 .to_string(),
             "[ui] Either the document failed to load, or a script threw while loading it."
                 .to_string(),
-            "[ui] Please report this log at https://github.com/Paraxdev/neocad/issues"
+            "[ui] Please report this log at https://github.com/Paraxdev/fundacad/issues"
                 .to_string(),
         ];
         // Through the sidecar so the warning reaches sidecar.log, which is the
@@ -364,7 +366,7 @@ pub fn run() {
             Ok(())
         })
         .build(tauri::generate_context!())
-        .expect("error while building Neocad");
+        .expect("error while building FundaCAD");
 
     app.run(|app_handle, event| {
         if let RunEvent::ExitRequested { .. } | RunEvent::Exit = event {

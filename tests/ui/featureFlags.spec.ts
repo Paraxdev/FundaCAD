@@ -3,7 +3,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const KEY = "neocad.features";
+const KEY = "fundacad.features";
 const LEGACY_KEY = "sindricad.features";
 
 /** Each case wants the module re-read from a fresh localStorage, and the value

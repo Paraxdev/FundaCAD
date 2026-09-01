@@ -1,7 +1,7 @@
 {
-  "name": "neocad",
+  "name": "fundacad",
   "version": "0.1.0",
-  "description": "Neocad, a parametric CAD app driving build123d",
+  "description": "FundaCAD, a parametric CAD app driving build123d",
   "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {
