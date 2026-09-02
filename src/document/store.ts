@@ -188,7 +188,14 @@ export class DocumentStore {
     { overlay: this.bodyNames },
     { overlay: this.bodyColors, mapValue: (v) => Number(v) },
   ];
-  private preview: Feature | null = null; // un-committed feature shown live (fillet/chamfer drag); never recorded in undo
+  /** Un-committed features shown live (a fillet drag, a thread being sized).
+   *  Never recorded in undo.
+   *
+   *  A LIST, because not every effect is one feature. A thread is honestly two —
+   *  the meridian profile as a sketch and the climbing revolve that sweeps it —
+   *  and a slot that held one could only preview half of it, which for a thread
+   *  is the half with no geometry in it. */
+  private preview: Feature[] | null = null;
   private rebuildTimer: number | null = null;
   private rebuilding = false; // a rebuild round-trip is in flight
   private rebuildQueued = false; // a newer rebuild was requested while one was in flight
@@ -874,8 +881,8 @@ export class DocumentStore {
    *  dirty. Pass null to clear it (reverts to the committed model). Rebuilds
    *  immediately and coalesces in-flight requests so a drag stays live (no
    *  debounce wait) without flooding OCCT. */
-  setPreview(feature: Feature | null) {
-    this.preview = feature;
+  setPreview(feature: Feature | Feature[] | null) {
+    this.preview = feature === null ? null : Array.isArray(feature) ? feature : [feature];
     this.scheduleRebuild(true);
   }
   /** true while an un-committed live-preview feature is appended to rebuilds
@@ -928,9 +935,14 @@ export class DocumentStore {
    *  makes the box strobe on every value the user passes through. */
   get previewError(): string | null {
     if (this.build.building) return null;
-    const id = this.editPreview?.id ?? this.preview?.id ?? null;
-    if (id === null) return null;
-    return this.build.errorFeatureId === id ? this.build.errorMessage : null;
+    const failed = this.build.errorFeatureId;
+    if (failed === null) return null;
+    // Any of the previewed features. A thread's sketch and its revolve are one
+    // gesture to the user, so a refusal of either belongs on the same boxes.
+    const own = this.editPreview
+      ? [this.editPreview.id]
+      : (this.preview ?? []).map((f) => f.id);
+    return own.includes(failed) ? this.build.errorMessage : null;
   }
   /** reorder: move feature `id` to position `toIndex` in the timeline. */
   moveFeature(id: string, toIndex: number) {
@@ -1233,7 +1245,7 @@ export class DocumentStore {
       if (idx >= 0) features = features.slice(0, idx);
       if (this.editPreview.feature) features.push(this.editPreview.feature);
     }
-    if (this.preview) features.push(this.preview);
+    if (this.preview) features.push(...this.preview);
     // Body visibility travels with the rebuild so the sidecar can keep hidden
     // bodies out of extrude booleans (a hidden body is protected from edits).
     const bodyVisibility = this.bodyVis.size ? Object.fromEntries(this.bodyVis.entries()) : undefined;

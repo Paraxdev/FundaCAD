@@ -25,6 +25,15 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **Sizing a thread shows the thread.** It used to show nothing at all: you
+  picked a face, a number moved in a box, and the thread appeared when you
+  pressed Enter. Now the curve the groove will be cut along is drawn while the
+  hand moves, from the same arithmetic the sidecar sweeps along, and the real cut
+  arrives once the value settles. Two registers rather than one because a twenty
+  turn thread is a real sweep through the kernel: rebuilding it every frame would
+  make the drag lurch, and drawing only the curve would leave you guessing
+  whether a groove that coarse can be cut at all.
+
 - **A previewed value that cannot be built says so, where you are typing it.**
   Live previews ask the sidecar to build a value before it is committed, and the
   sidecar sometimes refuses: a thread whose turns would run into each other, a
