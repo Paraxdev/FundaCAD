@@ -121,6 +121,14 @@ let suppressClick = false;
 
 function onDown(e: PointerEvent, i: number, l: DimItem) {
   e.stopPropagation();
+  // Primary button only. A badge sits ON the geometry it labels — a line's
+  // length badge lands at the midpoint, exactly where a user aims to right-click
+  // that line — and overlapPick REPLACES the selection with the single entity
+  // under the cursor. So an unguarded right press ate a two-entity selection
+  // before its constraint menu was ever built, and rebuilt the badge out from
+  // under its own contextmenu handler. A secondary press selects nothing, starts
+  // no drag, and leaves this element alive for the menu; middle-drag stays pan.
+  if (e.button !== 0) return;
   suppressClick = false;
   l.suppressEdit = s.dimHooks?.overlapPick(e) ?? false;
   // overlapPick rebuilds every label when geometry claims the pick, so the

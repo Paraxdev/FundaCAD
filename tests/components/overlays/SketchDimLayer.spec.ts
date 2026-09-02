@@ -115,6 +115,34 @@ describe("SketchDimLayer", () => {
     expect(isReactive(store.dimPlane)).toBe(false);
   });
 
+  // --- which button ---------------------------------------------------------
+  it("leaves the selection alone for a right press on a badge", async () => {
+    // A badge sits ON the geometry it labels: a line's length badge lands at the
+    // midpoint, which is exactly where a user aims to right-click that line. The
+    // press ran overlapPick, which REPLACES the whole selection with the single
+    // entity under the cursor, so a two-line selection was eaten before its
+    // Parallel/Perpendicular menu was ever built.
+    mount(SketchDimLayer, { attachTo: document.body });
+    dims().show([], plane, [extra()]);
+    await nextTick();
+
+    const overlapPick = vi.fn(() => false);
+    const store = useSketchAnnotationStore();
+    store.dimHooks = { overlapPick, planePoint: () => null, labelMenu: () => {} };
+    store.dimSelected = -1;
+
+    const badge = labels()[0]!;
+    badge.dispatchEvent(new PointerEvent("pointerdown", { button: 2, bubbles: true }));
+    expect(overlapPick).not.toHaveBeenCalled();
+    expect(store.dimSelected).toBe(-1);
+
+    // THE CONTROL: the same press on the primary button does all of it, so the
+    // guard is about the button and not about the badge being unreachable.
+    badge.dispatchEvent(new PointerEvent("pointerdown", { button: 0, bubbles: true }));
+    expect(overlapPick).toHaveBeenCalledTimes(1);
+    expect(store.dimSelected).toBe(0);
+  });
+
   // --- presentation --------------------------------------------------------
   it("marks up driven, formula-bound and solver-flagged labels", async () => {
     mount(SketchDimLayer, { attachTo: document.body });
