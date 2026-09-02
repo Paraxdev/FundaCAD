@@ -85,7 +85,9 @@ def test_a_pitch_makes_the_revolve_climb():
 
 def test_the_volume_is_the_screw_pappus_identity():
     """Pitch changes the shape but never the volume: the climb is a shear."""
-    for angle, pitch in [(360, 1.5), (1080, 1.5), (180, 1.5), (655, 1.2), (3600, 1.0)]:
+    # Every pitch here clears the section's own height, so nothing is trimmed;
+    # the touching case has its own test below, and its own arithmetic.
+    for angle, pitch in [(360, 1.5), (1080, 1.5), (180, 1.5), (655, 1.2), (3600, 1.4)]:
         v = swept(angle, pitch).volume
         want = pappus(angle)
         assert abs(v - want) / want < 1e-5, (angle, pitch, v, want)
@@ -220,18 +222,19 @@ def test_a_thread_joins_to_its_shank():
     print(PASS, f"a ten turn thread joins its shank, adding {added:.1f} mm3")
 
 
-def test_a_thread_that_only_touches_its_shank_says_so():
-    """The failure a thread walks into first, and the reason the test above
-    draws its section overlapping.
+def test_a_thread_whose_root_sits_on_the_shank_still_joins():
+    """A section whose root sits EXACTLY on the shank, so the two meet along a
+    surface instead of crossing one another.
 
-    A section whose root sits EXACTLY on the shank meets it tangentially, and
-    OCCT's fuse of the two comes back as 56mm3 where the shank alone was 942.
-    The volume guard always caught that, but it reported the one cause a
-    shrinking union cannot have, "the profile is already inside the body", and
-    sent the reader looking at the wrong end of the model.
+    This used to come back as 56mm3 where the shank alone was 942, and was
+    refused. The tangency was never the cause: the same thread was ALSO wound at
+    a pitch equal to its own section height, so its turns met in a line, and it
+    is that pinch the fuse choked on (see the clearance test below). With the
+    turns given their hair of room the tangential join is ordinary work, and both
+    threads below now land within a per cent of the material they carry.
 
-    The control is 0.3mm: the same thread with its root reaching that far into
-    the shank joins without complaint.
+    The control is 0.3mm: a root reaching that far INTO the shank is the case
+    that always worked, and it must still measure the same way.
     """
     def thread_at(root):
         prof = {"id": "f1", "type": "sketch", "plane": "XZ", "entities": [
@@ -242,14 +245,58 @@ def test_a_thread_that_only_touches_its_shank_says_so():
                  "x": 0, "y": 0, "z": 0, "operation": "new"}
         return build(rev(3600, 1.0, operation="join", regions=[]), base=(shank, prof))
 
-    errs, _ = thread_at(5.0)
-    assert len(errs) == 1, errs
-    assert "touch along a surface" in errs[0].get("message", ""), errs
+    bare = math.pi * 25 * 12
+    for root, added in ((5.0, 167.0), (4.7, 128.0)):
+        errs, bodies = thread_at(root)
+        assert errs == [], (root, errs)
+        got = bodies[-1]["shape"].volume - bare
+        assert abs(got - added) / added < 0.01, (root, got, added)
+        assert bodies[-1]["shape"].is_valid, root
+    print(PASS, "a thread rooted exactly on its shank joins, and so does one that bites in")
 
-    errs, bodies = thread_at(4.7)
+
+def test_turns_that_meet_exactly_are_given_a_hair_of_clearance():
+    """The thread everyone actually draws: crest landing on root, no flat left
+    between one turn and the next.
+
+    It is also the one section a B-rep kernel cannot use. Two crests meeting
+    touch along a LINE, so the solid is non-manifold; BRepCheck calls it valid
+    and every boolean against it then quietly does nothing. Measured on the
+    document that reported this, a cut that should have taken 610.4 mm3 out of a
+    block took 0.410.
+
+    So the crest is stopped a hair short of the root, and the measurement is the
+    thing that was broken: the thread is subtracted from a cylinder that swallows
+    it whole, and what comes off is the thread.
+
+    Two controls. The clearance is BOUNDED — the section may lose the hair and
+    nothing more, which is what fails if the trim is ever applied twice or in the
+    wrong direction. And the refusal above still stands: a section genuinely
+    taller than its climb is refused, not quietly shrunk to fit.
+    """
+    clear = 1e-3  # _turn_clearance(1.0)
+
+    errs, bodies = build(rev(1080, T))
     assert errs == [], errs
-    assert bodies[-1]["shape"].volume > math.pi * 25 * 12, bodies[-1]["shape"].volume
-    print(PASS, "a thread that only touches its shank is refused for the right reason")
+    thread = bodies[-1]["shape"]
+    assert thread.is_valid, "a thread with touching turns is not a valid solid"
+
+    # the section lost the clearance along the axis and NOTHING across it
+    want = pappus(1080) * (T - clear) / T
+    assert abs(thread.volume - want) / want < 1e-4, (thread.volume, want)
+    assert thread.volume < pappus(1080), (thread.volume, pappus(1080))
+
+    # ...and the whole point: it can be cut with
+    block = {"id": "b1", "type": "cylinder", "radius": 12.0, "height": 10.0,
+             "x": 0, "y": 0, "z": 0, "operation": "new"}
+    cut = {"id": "fb", "type": "boolean", "operation": "subtract",
+           "target": "body1", "tools": ["body2"]}
+    errs, bodies = build(rev(1080, T), cut, base=(block, SKETCH))
+    assert errs == [], errs
+    bare = math.pi * 144 * 10
+    removed = bare - bodies[-1]["shape"].volume
+    assert abs(removed - thread.volume) / thread.volume < 0.01, (removed, thread.volume)
+    print(PASS, f"turns that meet are cleared by {clear}mm, and {removed:.1f} mm3 cuts")
 
 
 def main():

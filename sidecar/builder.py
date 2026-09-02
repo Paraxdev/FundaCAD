@@ -2403,6 +2403,35 @@ def _handle_revolve(f, ctx):
     _boolean_into_bodies(ctx.bodies, solid, f.get("operation", "new"), ctx.new_body, ctx.hidden_bodies)
 
 
+def _turn_clearance(tall):
+    """How much room one turn of a screw revolve must leave the next.
+
+    Absolute at small sizes so a 0.2 mm thread is not scaled away, proportional
+    above 10 mm so a coarse thread gets a clearance in the same ratio."""
+    return max(1e-3, 1e-4 * tall)
+
+
+def _axial_scale(shape, factor, direction, hold):
+    """Scale `shape` by `factor` along `direction` only, holding the plane whose
+    axial coordinate (measured along `direction` from the world origin) is
+    `hold`. Every dimension across the axis is left exactly as drawn.
+
+    A true non-uniform scale, so a profile keeps its vertex count: no offset, no
+    slivers, nothing for the sweep to choke on."""
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_GTransform
+    from OCP.gp import gp_GTrsf, gp_Mat, gp_XYZ
+
+    d = Vector(*direction).normalized()
+    k = factor - 1.0
+    # I + k * d d^T — the identity across the axis, `factor` along it.
+    m = gp_Mat(*[1.0 * (i == j) + k * d.to_tuple()[i] * d.to_tuple()[j]
+                 for i in range(3) for j in range(3)])
+    g = gp_GTrsf()
+    g.SetVectorialPart(m)
+    g.SetTranslationPart(gp_XYZ(*tuple(d * (-k * hold))))
+    return _wrap_topods(BRepBuilderAPI_GTransform(shape.wrapped, g, True).Shape())
+
+
 def _screw_revolve(profile, axis, angle, pitch):
     """A revolve that climbs the axis while it turns: one turn rises `pitch`.
 
@@ -2455,13 +2484,36 @@ def _screw_revolve(profile, axis, angle, pitch):
             Compound(faces) if len(faces) > 1 else faces[0])
         bb = local.bounding_box()
         tall = bb.max.Z - bb.min.Z
-        if tall > abs(pitch) + 1e-7:
+        clear = _turn_clearance(tall)
+        if tall > abs(pitch) + clear:
             raise ValueError(
                 f"Revolve: the profile is {tall:.4g} mm tall along the axis but "
                 f"climbs only {abs(pitch):.4g} mm each turn, so every turn would "
                 "run into the one before. Raise the pitch, or draw a shorter "
                 "profile, or stay within one turn."
             )
+        # A profile as tall as the climb is the thread everyone actually draws:
+        # crest lands on root, no flat between the turns. It is also the one
+        # shape a B-rep kernel cannot use. A V section meeting the next V section
+        # touches along a LINE, so the solid is non-manifold — BRepCheck calls it
+        # valid and every boolean against it then quietly does nothing (measured:
+        # cutting a block that should lose 610.4 mm3 lost 0.410).
+        #
+        # Welding the turns is the intuitive repair and it does not work: the
+        # overlap between two crests is a lens whose width vanishes with its
+        # height, so no amount of it gives OCCT a real intersection to find
+        # (per-turn sweeps fused at 1e-3..5e-2 of overlap all came back with
+        # NEGATIVE volume). Clearance does work, and by a lot: stop the crest a
+        # hair short of the next root and the sweep stays one clean five-faced
+        # solid that cuts to within 0.06% of the hand-computed answer.
+        #
+        # 1e-3 mm is ten times the measured floor (below 1e-4 mm the booleans go
+        # back to doing nothing) and a thousandth of a printed layer, so the
+        # thread it makes is the thread that was drawn.
+        if tall > abs(pitch) - clear:
+            faces = [_axial_scale(f, (abs(pitch) - clear) / tall,
+                                  D, O.dot(D) + (bb.min.Z + bb.max.Z) / 2)
+                     for f in faces]
 
     turns = angle / 360.0
     rise = turns * pitch
