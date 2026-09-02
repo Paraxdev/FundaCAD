@@ -86,6 +86,135 @@ export function clampDragPitch(pitch: number, minPitch: number, angleDeg: number
   return Math.abs(pitch) < minPitch ? minPitch * Math.sign(pitch) : pitch;
 }
 
+/** The most turns one drag may reach.
+ *
+ *  Not the kernel's limit — OCCT will sweep a hundred turns and take its time
+ *  doing it. It is a limit on what a HAND can mean: the arrow travels one turn
+ *  per trip round the model, so twenty is already a long gesture, and past that
+ *  a flick that overshoots costs a rebuild measured in seconds. A spring with
+ *  more turns than this is typed, and a typed angle goes through unclamped. */
+export const MAX_DRAG_TURNS = 20;
+
+/** The smallest sweep a drag may come to rest on, in degrees. Zero is not a
+ *  revolve at all, and the snap step can land exactly on it. Small enough that
+ *  dragging back through it and out the other side reverses the sweep without
+ *  catching on anything. */
+export const MIN_DRAG_ANGLE = 1;
+
+/** Continue a turn past the +/-180 seam.
+ *
+ *  A cursor's angle about the axis is only ever known to within a full turn, so
+ *  a drag that goes all the way round reads +179, then -179, and the sweep
+ *  unwinds a whole circle at the moment it should have completed one. This picks
+ *  the multiple of 360 that puts `raw` nearest `prev` — right for any hand that
+ *  moves less than half a turn between two frames, and a hand moving faster than
+ *  that was not aiming at anything in particular.
+ *
+ *  The move gizmo's rings do NOT need this: they measure from the grab point
+ *  afresh every frame and so are capped at half a turn by construction. That is
+ *  correct for a rotation, where more than half a turn is better expressed the
+ *  short way round, and wrong for a thread, where ten turns is an ordinary
+ *  answer and the turns are the thing being counted. */
+export function unwrapTurn(prev: number, raw: number): number {
+  if (!Number.isFinite(raw)) return prev;
+  if (!Number.isFinite(prev)) return raw;
+  return raw + 360 * Math.round((prev - raw) / 360);
+}
+
+/** Hold a DRAGGED angle to what can actually be built.
+ *
+ *  The other half of clampDragPitch, and the same rule read from the far end.
+ *  Past a full turn, a climb shorter than the profile is tall makes each turn
+ *  run into the one before; OCCT builds that quite happily and hands back a
+ *  self-intersecting solid, so the sidecar refuses it outright. The pitch arrow
+ *  stops at the shortest climb that clears one turn of the last; the angle arrow
+ *  stops at the last turn that clears, which for a pitch too small — a flat
+ *  revolve very much included — is exactly one.
+ *
+ *  That wall is the point rather than a guard rail. A hand pulling the sweep
+ *  round meets it at the turn where the geometry would begin to collide, so the
+ *  limit is found by feel, at the moment of asking for it, instead of being read
+ *  off an error afterwards.
+ *
+ *  `minPitch` of 0 means the profile could not be measured and clamps nothing
+ *  but the far cap. Only for the drag: a typed angle goes through and is refused
+ *  with a reason, the same asymmetry clampDragPitch keeps. */
+export function clampDragAngle(deg: number, pitch: number, minPitch: number): number {
+  if (!Number.isFinite(deg)) return MIN_DRAG_ANGLE;
+  // A revolve that does not climb at all is capped at one turn whatever the
+  // profile measured, because the second turn re-sweeps the solid the first one
+  // made: there is nothing past 360 to find, so the arrow should not travel
+  // there. That is true without measuring anything, which is why it is checked
+  // separately from the collision rule below.
+  const flat = Math.abs(pitch) < 1e-9;
+  const collides = minPitch > 0 && Math.abs(pitch) < minPitch;
+  const cap = 360 * (flat || collides ? 1 : MAX_DRAG_TURNS);
+  // `deg < 0` rather than Math.sign, which answers 0 for 0 and would send an
+  // angle dragged exactly onto zero out as zero however hard it is clamped.
+  const sign = deg < 0 ? -1 : 1;
+  return sign * Math.min(cap, Math.max(MIN_DRAG_ANGLE, Math.abs(deg)));
+}
+
+/** How many degrees of the sweep circle make an arrow `px` screen pixels long.
+ *
+ *  Constant SCREEN length, like every other handle, because the arrow has to
+ *  stay grabbable on a 200mm flange and on a 2mm thread alike and those differ
+ *  by two orders of magnitude in what a pixel is worth in degrees.
+ *
+ *  Capped, because a small radius or a far zoom would otherwise wrap the arrow
+ *  round the axis and back — which reads as a ring, a thing you turn to no
+ *  particular end, rather than as a direction the sweep is already going. */
+export function arcSpanDeg(
+  radius: number,
+  mmPerPx: number,
+  px: number,
+  maxDeg = MAX_ARC_DEG,
+): number {
+  if (!(radius > 1e-9) || !(mmPerPx > 0) || !Number.isFinite(px)) return maxDeg;
+  return Math.min(maxDeg, (Math.abs(px * mmPerPx) / radius) * (180 / Math.PI));
+}
+
+/** The widest the angle arrow may open, in degrees. See arcSpanDeg. */
+export const MAX_ARC_DEG = 70;
+
+/** A short run of the sweep's OWN circle, continuing forward from where the
+ *  sweep currently ends: the track the angle arrow rides.
+ *
+ *  At the real radius, in the real plane, climbing at the real pitch — not flat
+ *  against the screen. The whole claim the arrow makes is "your sweep goes this
+ *  way, round here", and a screen-flat arc standing beside the part would be a
+ *  widget that happened to be nearby. Climbing matters for the same reason: on a
+ *  thread the arrow leaves the last point of the helix along it, rather than
+ *  stepping off onto a flat circle the geometry never travels.
+ *
+ *  `spanDeg` is signed by the caller so the arrow points the way MORE turning
+ *  goes, which on a left-hand sweep is the other way round. Empty for the same
+ *  inputs screwPath refuses, so the two are offered and withheld together. */
+export function sweepArc(
+  at: Vec3,
+  axis: { origin: Vec3; dir: Vec3 },
+  angleDeg: number,
+  pitch: number,
+  spanDeg: number,
+  segments = 12,
+): Vec3[] {
+  const dir = unit(axis.dir);
+  if (!dir) return [];
+  const rel = sub(at, axis.origin);
+  const axial = dot(rel, dir);
+  const radial = sub(rel, mul(dir, axial));
+  if (len(radial) < 1e-9) return [];
+  const base = add(axis.origin, mul(dir, axial));
+  const perTurn = pitch / 360; // rise per DEGREE, so the arc climbs as the helix does
+  const n = Math.max(2, Math.floor(segments));
+  const out: Vec3[] = [];
+  for (let i = 0; i <= n; i++) {
+    const deg = angleDeg + (spanDeg * i) / n;
+    out.push(add(add(base, mul(dir, perTurn * deg)), rotate(radial, dir, (deg * Math.PI) / 180)));
+  }
+  return out;
+}
+
 /** Rotate `v` about the unit axis `k` by `rad` (Rodrigues). */
 function rotate(v: Vec3, k: Vec3, rad: number): Vec3 {
   const c = Math.cos(rad);

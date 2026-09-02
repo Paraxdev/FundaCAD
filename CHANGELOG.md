@@ -25,6 +25,20 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **A revolve's sweep is dragged round a curved arrow.** It rides the sweep's own
+  circle, at the real radius and in the real plane, and continues from where the
+  helix ends: pull it round and the turns pile up, which is how 3600 degrees
+  becomes an answer you arrive at rather than one you type. It sits beside the
+  straight arrow that sets the pitch, at right angles to it, so neither needs a
+  label. Both are still typed into the same two boxes.
+- **The curved arrow stops where the geometry would.** Past a full turn, a climb
+  shorter than the profile is tall makes each turn run into the last, and the
+  sidecar refuses that build. The arrow meets a wall exactly there instead, so
+  the limit is found by feel while you ask for it rather than read off an error
+  afterwards. Pulling the other way, back below a turn, keeps working. A revolve
+  that does not climb at all stops at one turn, since the second would re-sweep
+  the solid the first one made.
+
 - **A value typed into Properties shows its result before you commit it.** Type
   1600 into a revolve's angle, stop, and the part turns 1600 degrees while the
   box still has focus; press Enter to keep it, or leave the field and it goes
@@ -32,6 +46,17 @@ This file starts on 2026-08-03. For anything before that, see the
   the timeline position it will occupy, not a drawn approximation of it. A
   preview is not an undo step, so Enter is still what commits. Fields driven by
   an expression are unchanged and still answer on Enter.
+
+### Fixed
+
+- **A dragged handle can no longer disagree with the number beside it.** Typing
+  in one of a tool's value boxes freezes it against the cursor, which is what
+  stops a moving hand from overwriting a number you meant. A deliberate drag on
+  the handle that owns that field now takes it back, so the geometry and the
+  readout cannot say two different things.
+- **A revolve's pitch arrow stays readable when you look down its axis.** That is
+  not an odd view of a thread, it is the view that shows the turns, and the
+  arrow collapsed to a blob with no length to read or aim at.
 
 ### Changed
 

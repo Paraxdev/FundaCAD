@@ -331,6 +331,23 @@ export class DimInput {
     this.sizeToContent(f);
   }
 
+  /** A DRAG takes a field back from the keyboard.
+   *
+   *  Typing freezes a field against cursor tracking, and `seed` freezes it from
+   *  the start, which is what stops a hand that happens to be moving from
+   *  overwriting a value somebody meant. A deliberate drag on the handle that
+   *  OWNS the field is the exception `seed` already promises in as many words:
+   *  it is every bit as explicit as typing and it is more recent, so the box
+   *  follows it.
+   *
+   *  Without this the handle moves, the geometry follows, and the number beside
+   *  it goes on reading what was typed a moment ago, which is the one
+   *  arrangement where the user has no way to tell which of the two is true. */
+  takeOver(name: string) {
+    const f = this.fields.find((x) => x.def.name === name);
+    if (f) f.userDriven = false;
+  }
+
   isUserDriven(name: string): boolean {
     const f = this.fields.find((x) => x.def.name === name);
     return !!f && f.userDriven;
