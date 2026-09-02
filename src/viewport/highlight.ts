@@ -32,6 +32,7 @@ function paint(e: EdgeRef, color: THREE.Color) {
 export class Highlighter {
   private hoveredEdge: EdgeRef | null = null;
   private hoveredFace: number | null = null;
+  private hoveredBody: string | null = null;
   private selectedEdges = new Set<EdgeRef>();
   private selectedFaces = new Set<number>();
   private selectedBodies = new Set<string>();
@@ -185,6 +186,20 @@ export class Highlighter {
     }
   }
 
+  /** Light the body under the cursor, for a tool that is asking WHICH body.
+   *
+   *  Same precedence as the face and edge hovers: a body that is already
+   *  selected keeps the selected colour, because the answer to "is this one
+   *  already taken" has to survive the cursor passing over it. */
+  hoverBody(bodyId: string | null) {
+    if (this.hoveredBody === bodyId) return;
+    if (this.hoveredBody !== null && !this.selectedBodies.has(this.hoveredBody)) {
+      this.restoreBody(this.hoveredBody);
+    }
+    this.hoveredBody = bodyId;
+    if (bodyId !== null && !this.selectedBodies.has(bodyId)) this.paintBody(bodyId, HOVER);
+  }
+
   /** select exactly this body (clearing any other body selection). */
   selectOnlyBody(bodyId: string) {
     this.clearBodySelection();
@@ -198,6 +213,10 @@ export class Highlighter {
   clearBodySelection() {
     for (const id of this.selectedBodies) this.restoreBody(id);
     this.selectedBodies.clear();
+    // The hover was suppressed while the body was selected, so re-apply it or
+    // the body under the cursor comes back to base colour and stays there until
+    // the pointer moves off it and back.
+    if (this.hoveredBody !== null) this.paintBody(this.hoveredBody, HOVER);
   }
 
   /** paint every vertex of the body's own (already-isolated) buffer. A body's

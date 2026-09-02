@@ -519,6 +519,12 @@ export class Viewport {
       this.highlighter?.clearHover();
       return;
     }
+    // Judged HERE, not when the deferred pass runs. The pass is a frame later,
+    // and a tool that hands the pointer back between the two — every "click the
+    // body / the face / the edge" step does, once per step — had its last
+    // suppressed move land as a hover on the model it was just released from:
+    // one face of the body left painted amber under the next step's prompt.
+    if (this.pickSuppressed) return;
     this.hoverPending = e;
     if (this.hoverRaf) return;
     this.hoverRaf = requestAnimationFrame(() => {
@@ -1223,6 +1229,13 @@ export class Viewport {
    *  to 41fps on a hex cylinder whose committed mesh renders at 60. */
   getSelectedFaceIds(): number[] {
     return this.highlighter?.getSelectedFaces() ?? [];
+  }
+
+  /** Light the body under the cursor while a tool is asking which body. */
+  hoverBody(bodyId: string | null) {
+    if (!this.highlighter) return;
+    this.highlighter.hoverBody(bodyId);
+    this.requestRender();
   }
 
   /** set the body selection from outside (e.g. the browser tree). */

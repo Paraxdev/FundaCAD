@@ -505,7 +505,22 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   // and the rest are tools, which is what makes the direction of a subtract
   // unambiguous without asking. With none selected it falls back to picking the
   // target (when there is more than one candidate) and a checklist of tools.
-  async function startBoolean(op: BooleanOp) {
+  /** Union / Subtract / Intersect.
+   *
+   *  Two clicks in the viewport: the body to KEEP, then the body to do it with.
+   *  The order is the operation — for a subtract the first body is the one left
+   *  standing and the second is the one that goes away — so it has to be asked
+   *  in that order, out loud, with the prompt saying which answer it wants. It
+   *  used to be a body-selection gesture followed by a modal list of names, and
+   *  a list of names is the wrong place to answer "which of these two solids":
+   *  the answer is in the viewport, and so is the question.
+   *
+   *  A selection made beforehand is still honoured, because that gesture is the
+   *  only way to give ONE boolean more than one tool body: two or more selected
+   *  bodies commit straight away, first kept and the rest consumed. One selected
+   *  body answers the first question and the tool asks the second.
+   */
+  function startBoolean(op: BooleanOp) {
     if (toolBusy()) return;
     const bodies = store.buildState.result?.bodies ?? [];
     if (bodies.length < 2) {
@@ -513,40 +528,98 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       return;
     }
     const pre = viewport.getSelectedBodies().filter((id) => bodies.some((b) => b.id === id));
-    let target: string;
-    let tools: string[];
     if (pre.length >= 2) {
-      const first = pre[0];
+      const [first, ...rest] = pre;
       if (first === undefined) return;
-      target = first;
-      tools = pre.slice(1);
-    } else {
-      // ONE selected body (a right-click on it, say) is the kept target; with
-      // none, pick a target when it is ambiguous. Tools come from the checklist.
-      const t0 = pre[0] ?? bodies[0]?.id;
-      if (t0 === undefined) return;
-      target = t0;
-      if (!pre.length && bodies.length > 2) {
-        const t = await chooseBody("Body to keep", bodies);
-        if (!t) return;
-        target = t;
-      }
-      const candidates = bodies.filter((b) => b.id !== target);
-      if (candidates.length > 1) {
-        const { chooseMulti } = await import("../ui/choice");
-        const picked = await chooseMulti<string>(
-          `Bodies to ${BOOLEAN_LABEL[op].toLowerCase()} with`,
-          candidates.map((b) => ({ value: b.id, label: store.bodyName(b.id) ?? b.name })),
-          { min: 1, confirmLabel: BOOLEAN_LABEL[op] },
-        );
-        if (!picked) return;
-        tools = picked;
-      } else {
-        tools = candidates.map((b) => b.id);
-      }
+      commitBoolean(op, first, rest);
+      return;
     }
+
+    const verb = BOOLEAN_LABEL[op].toLowerCase();
+    // Asked even when only one candidate is left. Two bodies is the ordinary
+    // case, and having the second one taken automatically means a single click
+    // makes a body disappear — the same gesture that, one body later, does not.
+    // A step that is always there is a step you can learn.
+    const withTarget = (target: string) => {
+      pickBodyInteractive(
+        `Click the body to ${verb} with · Esc cancels`,
+        [target], // clicking the kept body again is a miss, not a boolean with itself
+        (tool) => commitBoolean(op, target, [tool]),
+      );
+    };
+
+    const only = pre[0];
+    if (only !== undefined) {
+      withTarget(only);
+      return;
+    }
+    pickBodyInteractive(
+      op === "subtract"
+        ? "Click the body to keep · Esc cancels"
+        : `Click the first body to ${verb} · Esc cancels`,
+      [],
+      withTarget,
+    );
+  }
+
+  function commitBoolean(op: BooleanOp, target: string, tools: string[]) {
     viewport.setSelectedBodies([]); // consumed tools would dangle; clear the selection
-    store.addFeature({ id: store.nextId(), type: "boolean", operation: op, target, tools } as Feature);
+    store.addFeature(
+      { id: store.nextId(), type: "boolean", operation: op, target, tools } as Feature,
+    );
+  }
+
+  /** Point at a body on the model. The same shape as pickRegionInteractive and
+   *  pickAxisInteractive: suspend ordinary picking, light what is under the
+   *  cursor, take a left click, and treat empty space as a miss rather than a
+   *  cancel — so a click that lands beside the part does not throw away the
+   *  half-finished operation.
+   *
+   *  `exclude` are bodies already spoken for by this operation. They stay
+   *  clickable-looking but do not light and do not answer, because a body that
+   *  vanished from the model while it was being pointed at would be a worse
+   *  answer to "why did nothing happen" than one that simply does not respond. */
+  function pickBodyInteractive(
+    promptText: string,
+    exclude: readonly string[],
+    onPick: (bodyId: string) => void,
+  ) {
+    if (toolBusy()) return;
+    const bodyUnder = (cx: number, cy: number): string | null => {
+      const id = viewport.bodyIdAt(cx, cy);
+      return id && !exclude.includes(id) ? id : null;
+    };
+    viewport.suspendPicking = true;
+    setPrompt(promptText);
+    const onMove = (e: PointerEvent) => {
+      const id = bodyUnder(e.clientX, e.clientY);
+      viewport.hoverBody(id);
+      canvas.style.cursor = id ? "pointer" : "default";
+    };
+    const onDown = (e: PointerEvent) => {
+      if (e.button !== 0) return;
+      const id = bodyUnder(e.clientX, e.clientY);
+      if (!id) return; // a click on empty space is a miss, not a cancel
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      cleanup();
+      requestAnimationFrame(() => onPick(id));
+    };
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") cleanup();
+    };
+    const cleanup = () => {
+      viewport.suspendPicking = false;
+      viewport.hoverBody(null);
+      canvas.style.cursor = "default";
+      canvas.removeEventListener("pointermove", onMove);
+      canvas.removeEventListener("pointerdown", onDown, true);
+      window.removeEventListener("keydown", onEsc, true);
+      setPrompt(null);
+    };
+    canvas.addEventListener("pointermove", onMove);
+    canvas.addEventListener("pointerdown", onDown, true);
+    window.addEventListener("keydown", onEsc, true);
   }
 
   /** Pick one body by name from the rebuild's body list (returns its id). Labels use
