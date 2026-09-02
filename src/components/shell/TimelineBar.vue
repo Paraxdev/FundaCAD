@@ -15,7 +15,7 @@ import Icon from "./Icon.vue";
 import { contextMenu } from "../../ui/menu";
 import { buildProgress, CANCEL_DELAY_MS } from "../../ui/buildProgress";
 import { gapIndexIn } from "../../ui/trackGaps";
-import { anchorAbove } from "../../ui/propsAnchor";
+import { anchorPanel } from "../../ui/propsAnchor";
 import { layoutPrefs, onLayoutPrefsChange } from "../../ui/layoutPrefs";
 import { getUnit, onUnitChange } from "../../ui/units";
 import FeatureProperties from "./FeatureProperties.vue";
@@ -27,6 +27,8 @@ const timeline = useTimelineStore();
 
 const scroller = useTemplateRef<HTMLElement>("scroller");
 const track = useTemplateRef<HTMLElement>("track");
+// The strip itself, which is what the floating values panel rests on.
+const shell = useTemplateRef<HTMLElement>("shell");
 
 // `name` rides along for the side arrangement, where each chip is a full-width
 // row and a column of unlabelled icons would be unreadable.
@@ -56,7 +58,10 @@ onUnmounted(() => { for (const stop of stops) stop(); });
 // Teleported to the body and positioned in window coordinates, because
 // #timeline is `overflow: hidden` with a scroller inside it and anything
 // positioned within the strip is clipped at its top edge. The arithmetic is
-// ui/propsAnchor.ts; measuring the chip is the part that has to be here.
+// ui/propsAnchor.ts; measuring the strip is the part that has to be here.
+//
+// ONE berth, whichever feature is selected: see propsAnchor.ts for why the
+// panel stopped following its chip along the strip.
 
 /** Wide enough for a label and its value side by side, and no wider: this
  *  hangs over the model. */
@@ -67,20 +72,16 @@ const floatAt = ref<{ left: number; bottom: number } | null>(null);
 async function measureProps() {
   await nextTick();
   const id = selection.featureId;
-  if (inFlowProps.value || !id) {
+  const strip = shell.value?.getBoundingClientRect();
+  // No selection, no strip to rest on, or the feature is gone (deleted, or
+  // rolled out of the built set) — there is nothing to show and a panel left at
+  // the last coordinates would be showing the last feature's values.
+  if (inFlowProps.value || !id || !strip || !features.value.some((f) => f.id === id)) {
     floatAt.value = null;
     return;
   }
-  const el = track.value?.querySelector<HTMLElement>(`.timeline-node[data-id="${CSS.escape(id)}"]`);
-  if (!el) {
-    // The chip is gone (deleted, or rolled out of the built set). Nothing to
-    // anchor to, and a panel left at the last coordinates would be pointing at
-    // whatever slid into that spot.
-    floatAt.value = null;
-    return;
-  }
-  floatAt.value = anchorAbove(
-    el.getBoundingClientRect(),
+  floatAt.value = anchorPanel(
+    strip,
     { width: window.innerWidth, height: window.innerHeight },
     PROPS_WIDTH,
     8,
@@ -333,7 +334,7 @@ function openMenu(e: MouseEvent, id: string, i: number) {
 </script>
 
 <template>
-  <footer id="timeline" class="timeline-shell">
+  <footer id="timeline" ref="shell" class="timeline-shell">
     <div class="timeline-transport">
       <button class="tl-btn" title="Roll back to the start" :disabled="rollback <= 0" @click="store.setRollback(0)"><Icon name="skipStart" /></button>
       <button class="tl-btn" title="Step one feature back" :disabled="rollback <= 0" @click="store.setRollback(Math.max(0, rollback, 1))"><Icon name="stepBack" /></button>

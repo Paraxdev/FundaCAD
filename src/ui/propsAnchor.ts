@@ -6,11 +6,20 @@
 // them in the flow, indented under the chip. The bottom strip is 52px of chrome
 // with a horizontal scroller inside it, so there the panel has to float ABOVE
 // the strip, which means fixed coordinates, which means arithmetic worth
-// separating from the component that measures the chip.
+// separating from the component that measures it.
 //
 // Fixed rather than absolute is forced: #timeline is `overflow: hidden` and
 // .timeline-scroll scrolls inside it, so anything positioned within the strip
 // is clipped at its top edge. The panel is teleported to the body instead.
+//
+// The panel used to FOLLOW its chip along the strip, on the argument that the
+// chip's column is what tied the values to the operation they belong to. That
+// argument does not survive a long history: the strip scrolls, so the column
+// moves under a panel that is being typed into, two chips a few pixels apart
+// throw the panel across the window, and near the left edge it lands over the
+// view controls and has to be lifted off them. The panel keeps ONE berth now
+// and only its contents change — which is the same thing every docked inspector
+// in every other tool does, and for the same reason.
 
 export interface Rect {
   left: number;
@@ -23,14 +32,14 @@ export interface Viewport {
   height: number;
 }
 
-/** `left` and `bottom` for a `position: fixed` panel resting `gap` px above
- *  `chip`, left-aligned with it and held inside the window.
+/** `left` and `bottom` for a `position: fixed` panel parked against the right
+ *  edge of the window, resting `gap` px above `strip`.
  *
- *  Clamped on BOTH sides rather than just the right: the history can be
- *  scrolled so the selected chip is partly off the left edge, and a panel that
- *  followed it there would have its labels outside the window with no way to
- *  scroll them back. `margin` is the same breathing room the panel keeps from
- *  the right edge, so a chip at either extreme parks the panel symmetrically.
+ *  Right rather than left because the left is spoken for twice over: the
+ *  browser tree runs down it, and the view-control pill sits at the bottom of
+ *  the viewport there. The right edge is empty in every arrangement the layout
+ *  offers, so the panel can hold one place without ever being lifted, nudged or
+ *  clamped in normal use.
  *
  *  `bottom` is measured from the bottom of the window because that is the axis
  *  the panel grows along: it is anchored to the strip and gets taller upward as
@@ -38,16 +47,13 @@ export interface Viewport {
  *  height change.
  *
  *  `over` is a rect the panel must not cover, given as the union of whatever
- *  furniture floats above the strip. The view-control pill is the case that
- *  forced it: it sits at the bottom-left of the viewport and the history's first
- *  chips sit at the bottom-left of the window, so the two are in the same column
- *  by construction and the panel landed across ISO / Top / Front for as long as
- *  a feature was selected. Lifting over it keeps the panel in its chip's column,
- *  which is the part of the anchoring that carries meaning, and gives up only
- *  the height. Horizontal overlap is the test, so a chip further along the strip
- *  than the pill reaches still opens tight against the strip. */
-export function anchorAbove(
-  chip: Rect,
+ *  furniture floats above the strip. It cannot fire at any ordinary window size
+ *  now that the berth is on the far side from the pill — but a window narrow
+ *  enough puts the two back in the same column, and the panel would land across
+ *  ISO / Top / Front again. Horizontal overlap is the test, so furniture the
+ *  panel is already clear of costs it no height. */
+export function anchorPanel(
+  strip: Rect,
   view: Viewport,
   panelWidth: number,
   gap = 8,
@@ -56,8 +62,8 @@ export function anchorAbove(
 ): { left: number; bottom: number } {
   const widest = Math.max(0, view.width - margin * 2);
   const w = Math.min(panelWidth, widest);
-  const left = Math.min(Math.max(margin, chip.left), Math.max(margin, view.width - margin - w));
-  let top = chip.top;
+  const left = Math.max(margin, view.width - margin - w);
+  let top = strip.top;
   // Strictly-less comparisons on both sides: two rects that merely touch at an
   // edge are not overlapping, and treating them as though they were would lift
   // the panel over a pill it was already clear of.
