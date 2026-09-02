@@ -7,6 +7,7 @@
 // fields are shown/parsed in the user's display unit, angles always in degrees.
 
 import { iconElement } from "../ui/icons";
+import { onPreviewError } from "../ui/previewError";
 import { getUnit, parseField } from "../ui/units";
 import { commonUnits, toUnit, tryParseMeasure, unitById, type UnitDef } from "../ui/measure";
 
@@ -42,6 +43,12 @@ export class DimInput {
   private onCommit: ((values: Record<string, number>) => void) | null = null;
   private onCancel: (() => void) | null = null;
   private active = false;
+  /** The kernel's refusal of what the boxes currently say, drawn under them.
+   *  Its own element rather than a title attribute: a tooltip needs a hover the
+   *  hand cannot spare mid-drag, and the whole point is that the answer be
+   *  where the eye already is. */
+  private problem: HTMLDivElement | null = null;
+  private unsubscribeError: (() => void) | null = null;
 
   constructor() {
     this.root = document.createElement("div");
@@ -216,6 +223,12 @@ export class DimInput {
     // too, or the field silently never holds focus and typing/Tab do nothing.
     this.focus();
     requestAnimationFrame(() => this.focus());
+    // Subscribed per showing, not once for the life of the box: a tool that
+    // opens while a previous preview is still refused would otherwise inherit
+    // the last tool's complaint. onPreviewError fires immediately, so a box
+    // that opens onto an already-failing preview shows it rather than waiting
+    // for a build that may never be asked for.
+    this.unsubscribeError = onPreviewError((m) => this.setProblem(m));
   }
 
   /** Focus + select the first field. show() calls it; tools whose flow keeps
@@ -348,6 +361,30 @@ export class DimInput {
     if (f) f.userDriven = false;
   }
 
+  /** Say that what the boxes read cannot be built, or take it back.
+   *
+   *  Every field turns, not just one, because the sidecar refuses a FEATURE and
+   *  not a field: "the profile is 3 mm tall but climbs only 1 mm each turn" is
+   *  about the pitch and the angle together, and reddening whichever box was
+   *  touched last would point at the wrong number half the time. The user is the
+   *  one who knows which of the two they would rather move. */
+  private setProblem(message: string | null) {
+    if (!this.active) return;
+    if (!message) {
+      this.problem?.remove();
+      this.problem = null;
+      this.root.classList.remove("dim-bad");
+      return;
+    }
+    this.root.classList.add("dim-bad");
+    if (!this.problem) {
+      this.problem = document.createElement("div");
+      this.problem.className = "dim-problem";
+      this.root.appendChild(this.problem);
+    }
+    this.problem.textContent = message;
+  }
+
   isUserDriven(name: string): boolean {
     const f = this.fields.find((x) => x.def.name === name);
     return !!f && f.userDriven;
@@ -394,6 +431,10 @@ export class DimInput {
   hide() {
     this.active = false;
     this.closeUnitMenu();
+    this.unsubscribeError?.();
+    this.unsubscribeError = null;
+    this.problem = null; // innerHTML below takes the element with it
+    this.root.classList.remove("dim-bad");
     this.root.style.display = "none";
     this.root.innerHTML = "";
     this.fields = [];

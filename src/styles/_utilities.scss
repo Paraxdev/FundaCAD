@@ -74,9 +74,49 @@ button.finish:hover {
 .dim-input {
   position: fixed;
   display: flex;
+  /* Wraps so a kernel refusal can take a full line of its own under the row.
+     Nothing else in the cluster ever wraps: the fields are a few characters
+     each and the buttons are fixed. */
+  flex-wrap: wrap;
   gap: var(--s-1);
   z-index: 200;
   pointer-events: auto;
+}
+/* The sidecar's own sentence about why the value on screen cannot be built,
+   under the boxes that hold it.
+   
+   Here rather than in the status bar, which is where it used to go and is at the
+   far edge of the window from a cursor that is mid-drag. And not a tooltip: a
+   tooltip needs a hover the hand cannot spare while it is holding a handle.
+   
+   Wide enough for a real sentence. These messages name the measurement that is
+   wrong and the one it is wrong against, which is what makes them worth showing
+   at all, and truncating one to fit leaves the half that says "cannot". */
+.dim-problem {
+  flex-basis: 100%;
+  max-width: 264px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--error);
+  background: var(--panel);
+  border: 1px solid var(--error);
+  border-radius: var(--r-sm);
+  padding: var(--s-1) var(--s-2);
+  box-shadow: var(--shadow-2);
+}
+/* Every field turns, not the one last touched. The kernel refuses a FEATURE:
+   "3 mm tall but climbs only 1 mm each turn" is about the pitch and the angle
+   together, and the user is the one who knows which of the two they would
+   rather move. */
+.dim-bad .dim-field {
+  border-color: var(--error);
+  background: var(--error-tint);
+}
+.dim-bad .dim-field input {
+  color: var(--error);
 }
 /* One row: NAME [value] UNIT. The name and the unit are chrome at the ends and
    the value is the thing, which is why they are on one line rather than the

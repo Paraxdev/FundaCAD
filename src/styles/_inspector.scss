@@ -336,3 +336,32 @@
   border-color: var(--accent);
   cursor: default;
 }
+
+/* The kernel's refusal of a value being previewed, under the row that holds it.
+   Only ever present while the field is being typed in: it arrives when a
+   preview build settles badly and goes when the value changes or the field is
+   left, so it never becomes a permanent piece of panel furniture.
+
+   Full width of the row rather than tucked in the value column: these sentences
+   name the measurement that is wrong and the one it is wrong against, which is
+   the half worth reading, and the value column is where the width runs out. */
+.param-row .param-problem {
+  grid-column: 1 / -1;
+  margin: var(--s-1) 0 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--error);
+}
+
+/* A value the KERNEL refused, as opposed to one the parser did.
+   
+   Its own class rather than a change to .input-error, which every panel uses for
+   a value that failed to parse. Those two want different weight: a parse error
+   is the user's half-finished text and the number is still theirs to fix, so the
+   border marks it and the digits stay readable. A kernel refusal is about the
+   number itself, so the number is what turns. */
+.param-row input.input-problem {
+  border-color: var(--error);
+  color: var(--error);
+  box-shadow: 0 0 0 3px var(--error-tint);
+}

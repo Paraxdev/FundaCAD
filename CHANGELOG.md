@@ -25,6 +25,22 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **A previewed value that cannot be built says so, where you are typing it.**
+  Live previews ask the sidecar to build a value before it is committed, and the
+  sidecar sometimes refuses: a thread whose turns would run into each other, a
+  fillet larger than the edge it sits on. That answer used to go nowhere you were
+  looking, so the model went on showing the last thing that did build while the
+  boxes read the number that did not. The measures now turn red and carry the
+  kernel's own sentence, which names the measurement that is wrong and what to
+  change, in the heads-up box for a drag and under the row for a typed value. It
+  goes the moment the value becomes buildable again. Every tool that previews
+  gets this, not just the one it was built for.
+- **A model that is not what the values say is withdrawn to a ghost.** The shape
+  and the position stay legible, so a drag through an unbuildable range does not
+  take the part away and back several times a second, but the claim that it is
+  your part does not. Fainter than see-through, which is a working mode rather
+  than a warning.
+
 - **A revolve's sweep is dragged round a curved arrow.** It rides the sweep's own
   circle, at the real radius and in the real plane, and continues from where the
   helix ends: pull it round and the turns pile up, which is how 3600 degrees

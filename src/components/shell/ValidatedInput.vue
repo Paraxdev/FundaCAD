@@ -17,6 +17,12 @@ const props = defineProps<{
   commit: (raw: string) => string | null;
   /** Tooltip while there is no error; the error replaces it when there is one. */
   hint?: string | undefined;
+  /** A refusal from OUTSIDE the box: the kernel could not build what the value
+   *  currently says. Kept apart from the local `error`, which is a parse failure
+   *  the user caused by pressing Enter, because this one arrives unasked while
+   *  they are still typing and must not be cleared by the next keystroke — the
+   *  keystroke schedules another preview, and that build is what withdraws it. */
+  problem?: string | null | undefined;
   placeholder?: string | undefined;
   /** Show what the typed text WOULD do, without committing it.
    *
@@ -123,8 +129,8 @@ watch(
     ref="el"
     v-model="draft"
     type="text"
-    :class="{ 'input-error': !!error }"
-    :title="error ?? hint"
+    :class="{ 'input-error': !!error || !!problem, 'input-problem': !!problem }"
+    :title="error ?? problem ?? hint"
     :placeholder="placeholder"
     @input="error = null; settling = false; schedulePreview()"
     @change="onChange"

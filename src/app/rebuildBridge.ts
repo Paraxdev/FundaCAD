@@ -4,6 +4,7 @@ import { featureMeta } from "../ui/featureMeta";
 import { ambiguousDiagFor } from "../features/repickReference";
 import { multiColorEnabled, onFeatureFlagsChange } from "../ui/featureFlags";
 import type { Engine } from "./engine";
+import { setPreviewError } from "../ui/previewError";
 
 /** Rebuild pipeline -> viewport. The one place a build result becomes pixels. */
 export function installRebuildBridge(e: Engine): void {
@@ -186,6 +187,18 @@ export function installRebuildBridge(e: Engine): void {
       }
     }
     e.syncDatumPlanes();
+    // The one writer of the preview-refusal channel. It sits beside the toast
+    // gate above rather than inside it: that gate SUPPRESSES a preview's
+    // failures, deliberately, because a drag through a bad range would emit a
+    // toast a frame. Suppressing them left the user with nothing at all, which
+    // is what this carries to the box they are actually typing in.
+    const refused = e.store.previewError;
+    setPreviewError(refused);
+    // The other half of the same statement: the box says what is wrong, and the
+    // model stops presenting a shape nobody asked for as though it were the
+    // answer. Kept together so the two can never disagree about whether the
+    // value on screen builds.
+    e.viewport.setStaleModel(refused !== null);
     if (s.errorMessage) {
       e.setStatus(`${s.errorFeatureId ?? ""}: ${s.errorMessage}`, "error");
     } else if (!s.building) {

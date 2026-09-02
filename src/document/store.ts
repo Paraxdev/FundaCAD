@@ -914,6 +914,24 @@ export class DocumentStore {
   get editPreviewId(): string | null {
     return this.editPreview?.id ?? null;
   }
+
+  /** The kernel's refusal of the feature being previewed, or null.
+   *
+   *  Read from the same build state the timeline reads, but attributed: a build
+   *  can fail for a feature the user is nowhere near, and telling them their
+   *  pitch is impossible because an unrelated shell failed would be worse than
+   *  saying nothing. So this answers only when the failing feature IS the one
+   *  under the cursor.
+   *
+   *  Null while a build is in flight. A refusal that has not come back yet is
+   *  not a refusal, and flashing the last one back up between frames of a drag
+   *  makes the box strobe on every value the user passes through. */
+  get previewError(): string | null {
+    if (this.build.building) return null;
+    const id = this.editPreview?.id ?? this.preview?.id ?? null;
+    if (id === null) return null;
+    return this.build.errorFeatureId === id ? this.build.errorMessage : null;
+  }
   /** reorder: move feature `id` to position `toIndex` in the timeline. */
   moveFeature(id: string, toIndex: number) {
     this.mutate((d) => {

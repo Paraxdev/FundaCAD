@@ -27,7 +27,7 @@
 // The title is the caller's business, the history heads it with the feature
 // name and the timeline already has the chip you clicked.
 
-import { ref } from "vue";
+import { onUnmounted, ref } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useDocValue } from "../../app/useDoc";
 import ValidatedRow from "./ValidatedRow.vue";
@@ -35,6 +35,7 @@ import ChoiceRow from "./ChoiceRow.vue";
 import ToggleRow from "./ToggleRow.vue";
 import SelectionTargetRow from "./SelectionTargetRow.vue";
 import { displayRound, isPlainNumber } from "../../ui/units";
+import { onPreviewError } from "../../ui/previewError";
 import { commonUnits, toUnit, tryParseMeasure, unitById, type Dim, type Measured, type UnitDef } from "../../ui/measure";
 import { contextMenu } from "../../ui/menu";
 import { resolveEntities, toSketchEntity } from "../../sketch/resolve";
@@ -302,6 +303,7 @@ function previewField(
   row: { key: string; target: ParamTarget; kind: FieldKind },
   raw: string,
 ) {
+  previewProblemRow.value = row.key;
   const v = previewNumber(row, raw);
   if (v === null) return;
   const next = featureWithTarget(store.document, row.target, v);
@@ -319,6 +321,23 @@ function previewField(
  *  that preview instead of opening another. */
 let previewOpenFor: string | null = null;
 
+/** The kernel's refusal of the value being previewed, and the row it belongs to.
+ *
+ *  Held against the ROW key, not the feature, so the sentence lands under the
+ *  box the user is typing in. The refusal itself names a feature, and a feature
+ *  has several rows; putting it under all of them would say the same thing four
+ *  times about a number only one of them can move. */
+const previewProblem = ref<string | null>(null);
+const previewProblemRow = ref<string | null>(null);
+onUnmounted(
+  onPreviewError((m) => {
+    // A refusal only means anything while THIS panel is the thing previewing.
+    // A drag tool's preview refusal belongs in its own heads-up box, and the
+    // panel behind it must not echo it.
+    previewProblem.value = previewOpenFor === null ? null : m;
+  }),
+);
+
 /** Put the model back to what the document says.
  *
  *  `committing` suppresses the rebuild, because the commit landing a line later
@@ -328,6 +347,8 @@ let previewOpenFor: string | null = null;
 function endPreview(committing: boolean) {
   if (previewOpenFor === null) return;
   previewOpenFor = null;
+  previewProblem.value = null;
+  previewProblemRow.value = null;
   store.endEditPreview(!committing);
 }
 
@@ -400,5 +421,6 @@ function commitField(
     :commit="(raw) => commitField(r, raw)"
     :preview="(raw) => previewField(r, raw)"
     :preview-end="endPreview"
+    :problem="previewProblemRow === r.key ? previewProblem : null"
   />
 </template>

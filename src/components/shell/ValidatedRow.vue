@@ -33,6 +33,11 @@ const props = defineProps<{
    *  ValidatedInput; passed straight through. */
   preview?: ((raw: string) => void) | undefined;
   previewEnd?: ((committing: boolean) => void) | undefined;
+  /** Why the previewed value could not be built. Shown as a line under the row
+   *  rather than as a tooltip, for the same reason the heads-up box shows it in
+   *  place: a sentence explaining which measurement is wrong is worth reading,
+   *  and a tooltip is only found by someone who already suspects there is one. */
+  problem?: string | null | undefined;
 }>();
 
 function onPickUnit(e: MouseEvent) {
@@ -51,6 +56,7 @@ function onPickUnit(e: MouseEvent) {
         :hint="hint"
         :preview="preview"
         :preview-end="previewEnd"
+        :problem="problem"
       />
       <button
         v-if="unit && pickUnit"
@@ -65,5 +71,6 @@ function onPickUnit(e: MouseEvent) {
         title="Expressions are written in this unit"
       >{{ unit }}</span>
     </div>
+    <p v-if="problem" class="param-problem">{{ problem }}</p>
   </div>
 </template>

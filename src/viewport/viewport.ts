@@ -87,6 +87,12 @@ const SKETCH_FACE_LIFT = 0.14;
  *  because the point is the far side rather than the near one: at 0.55 the
  *  front face of a block still buries what is behind it. */
 const XRAY_OPACITY = 0.35;
+/** How much of the model is left standing when what is on screen is NOT what
+ *  the values say. Fainter than see-through on purpose: see-through is a working
+ *  mode you can still pick through, and this is the model saying it is not the
+ *  answer. At the same weight the two states would be indistinguishable, and one
+ *  of them means the part is wrong. */
+const STALE_OPACITY = 0.16;
 
 import { Highlighter, EDGE_HOVER_COLOR } from "./highlight";
 import { ProgressiveModel } from "./progressive";
@@ -691,6 +697,8 @@ export class Viewport {
   private xray = false;
   /** Fires when see-through is switched, so the chrome can say it is on. */
   onXrayChange: ((on: boolean) => void) | null = null;
+  /** The mesh on screen is the last one that BUILT, not what the values say. */
+  private stale = false;
 
   get seeThrough(): boolean {
     return this.xray;
@@ -709,7 +717,7 @@ export class Viewport {
   setXray(on: boolean) {
     if (this.xray === on) return;
     this.xray = on;
-    this.applyXrayMaterials();
+    this.applyBodyTransparency();
     this.onXrayChange?.(on);
     this.requestRender();
   }
@@ -718,15 +726,45 @@ export class Viewport {
     this.setXray(!this.xray);
   }
 
-  /** Re-apply see-through to the CURRENT bodies. Called again after a rebuild,
-   *  which hands back new materials that know nothing about it. */
-  private applyXrayMaterials() {
+  /** Withdraw the solid when what is drawn is not what the values say.
+   *
+   *  A preview build the kernel refuses keeps the last good mesh, deliberately:
+   *  blanking the viewport every time a drag passes through an unbuildable value
+   *  would take away the part being worked on, and the spatial reference with
+   *  it, several times a second. But leaving it painted as a finished solid is
+   *  worse than unhelpful, because it is the answer to a question nobody asked
+   *  and it looks exactly like a build that succeeded. Measured: typing a pitch
+   *  the sidecar refuses left a 360 degree ring on screen while the boxes read
+   *  1080 degrees, with nothing anywhere saying which to believe.
+   *
+   *  So the solid is withdrawn and its ghost left standing. The shape and the
+   *  position stay legible; the claim that this is your part does not. What is
+   *  WRONG with it is said on the value box itself (ui/previewError.ts) — this
+   *  half only stops the model from arguing with that. */
+  setStaleModel(on: boolean) {
+    if (this.stale === on) return;
+    this.stale = on;
+    this.applyBodyTransparency();
+    this.requestRender();
+  }
+
+  /** Re-apply see-through and the stale ghost to the CURRENT bodies. Called
+   *  again after a rebuild, which hands back new materials that know nothing
+   *  about either.
+   *
+   *  One function for both, because they are two reasons to make the same
+   *  materials transparent and two functions would each undo the other's work
+   *  on whichever ran second. Stale wins the opacity when both are on: the
+   *  fainter of the two is the one that carries the warning. */
+  private applyBodyTransparency() {
     if (!this.model) return;
+    const ghost = this.xray || this.stale;
+    const opacity = this.stale ? STALE_OPACITY : this.xray ? XRAY_OPACITY : 1;
     for (const b of this.model.bodies) {
       const mat = b.mesh.material as THREE.MeshStandardMaterial;
-      mat.transparent = this.xray;
-      mat.opacity = this.xray ? XRAY_OPACITY : 1;
-      mat.depthWrite = !this.xray;
+      mat.transparent = ghost;
+      mat.opacity = opacity;
+      mat.depthWrite = !ghost;
     }
   }
 
@@ -1921,9 +1959,10 @@ export class Viewport {
     // have just had their clipping reset by resetBodyAppearance), and the ghost
     // meshes went with the meshes they were parented to.
     if (this.section) this.applySection();
-    // A rebuild hands back fresh materials that know nothing about see-through,
-    // so it is re-applied here rather than only where it is switched.
-    if (this.xray) this.applyXrayMaterials();
+    // A rebuild hands back fresh materials that know nothing about see-through
+    // or about the stale ghost, so both are re-applied here rather than only
+    // where they are switched.
+    if (this.xray || this.stale) this.applyBodyTransparency();
     if (fit) this.rig.fit(this.model.box, true);
   }
 

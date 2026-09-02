@@ -7,11 +7,14 @@ import { DocumentStore, prefixFeatures } from "../../src/document/store";
 import type { CadDocument, Feature, RebuildReply } from "../../src/types";
 import type { GeometryBackend } from "../../src/geometry/client";
 
-function stubBackend(rebuilds: CadDocument[]): GeometryBackend {
+function stubBackend(
+  rebuilds: CadDocument[],
+  reply: () => RebuildReply = () => ({ ok: false, error: { message: "stub" } }),
+): GeometryBackend {
   return {
     async rebuild(doc: CadDocument): Promise<RebuildReply> {
       rebuilds.push(doc);
-      return { ok: false, error: { message: "stub" } };
+      return reply();
     },
     async init() {},
     onStatus() { return () => {}; },
@@ -180,5 +183,82 @@ describe("prefixFeatures (Project tool's prefix-document rule)", () => {
   it("edited feature past the rollback marker: the marker still truncates", () => {
     // rolled back to 2, editing s2 (which sits at index 2, outside the build)
     expect(prefixFeatures(feats(), 2, none, "s2").map((f) => f.id)).toEqual(["s1", "e1"]);
+  });
+});
+
+// A preview that the kernel refuses has to say so where the value is being
+// typed, and it has to say it about the RIGHT value. rebuildBridge does not
+// toast a preview's failures (a drag through a bad range would emit one a
+// frame), so this getter is the only thing carrying the answer out.
+describe("previewError", () => {
+  let rebuilds: CadDocument[];
+  let reply: RebuildReply;
+  let store: DocumentStore;
+  beforeEach(() => {
+    vi.useFakeTimers();
+    rebuilds = [];
+    reply = { ok: false, error: { message: "stub" } };
+    store = new DocumentStore(stubBackend(rebuilds, () => reply), doc());
+  });
+  afterEach(() => void vi.useRealTimers());
+
+  const settle = async () => void (await vi.runAllTimersAsync());
+
+  it("is null when nothing is being previewed", async () => {
+    reply = { ok: false, error: { message: "boom", feature_id: "f1" } };
+    await store.rebuildNow();
+    await settle();
+    // The feature failed and the timeline will say so. That is not this
+    // channel's business: nobody is mid-gesture, so there is no box to redden.
+    expect(store.buildState.errorFeatureId).toBe("f1");
+    expect(store.previewError).toBeNull();
+  });
+
+  it("reports the refusal of the feature being previewed", async () => {
+    reply = { ok: false, error: { message: "radius too large", feature_id: "f1" } };
+    store.beginEditPreview("f1", doc().features[2]!);
+    await settle();
+    expect(store.previewError).toBe("radius too large");
+  });
+
+  it("stays silent about a failure somewhere else in the timeline", async () => {
+    // Telling somebody their fillet radius is impossible because an unrelated
+    // chamfer failed would be worse than saying nothing: they would spend the
+    // next minute changing the one number that was never the problem.
+    reply = { ok: false, error: { message: "chamfer too big", feature_id: "c1" } };
+    store.beginEditPreview("f1", doc().features[2]!);
+    await settle();
+    expect(store.previewError).toBeNull();
+  });
+
+  it("says nothing while a build is still in flight", async () => {
+    // A refusal that has not come back yet is not a refusal. Reporting the
+    // previous one between frames of a drag makes the box strobe on every value
+    // the hand passes through.
+    reply = { ok: false, error: { message: "radius too large", feature_id: "f1" } };
+    store.beginEditPreview("f1", doc().features[2]!);
+    await settle();
+    expect(store.previewError).toBe("radius too large");
+    store.setEditPreview(doc().features[2]!);
+    expect(store.buildState.building || store.previewError === null).toBe(true);
+  });
+
+  it("clears when the previewed value builds", async () => {
+    reply = { ok: false, error: { message: "radius too large", feature_id: "f1" } };
+    store.beginEditPreview("f1", doc().features[2]!);
+    await settle();
+    expect(store.previewError).toBe("radius too large");
+    reply = { ok: true, result: { bodies: [], featureErrors: [] } } as unknown as RebuildReply;
+    store.setEditPreview(doc().features[2]!);
+    await settle();
+    expect(store.previewError).toBeNull();
+  });
+
+  it("clears when the preview is closed, even though the build still failed", async () => {
+    reply = { ok: false, error: { message: "radius too large", feature_id: "f1" } };
+    store.beginEditPreview("f1", doc().features[2]!);
+    await settle();
+    store.endEditPreview(false);
+    expect(store.previewError).toBeNull();
   });
 });
