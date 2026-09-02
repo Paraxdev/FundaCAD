@@ -173,6 +173,12 @@
   align-items: center;
   gap: var(--s-3);
 }
+/* A slider whose name does not explain itself carries a line under the whole
+   row — spanning every column, so it reads as prose and not as a fourth cell. */
+.sm-row .sm-srow-hint {
+  grid-column: 1 / -1;
+  margin-top: calc(var(--s-1) * -1);
+}
 .sm-row input[type="range"] {
   width: 100%;
   accent-color: var(--accent, #ff7a3c);

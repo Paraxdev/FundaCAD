@@ -28,6 +28,7 @@ import {
   AXIS_LABELS,
   AXIS_NAMES,
   ACTION_LABELS,
+  filterMotion,
   getLatestMotion,
   getSpaceMouseConfig,
   onSpaceMouseMotion,
@@ -51,18 +52,47 @@ const close = () => { dialogs.spaceMouse = false; };
 const ACTIONS = Object.keys(ACTION_LABELS) as ActionName[];
 
 // --- form state, mirrored out of the persisted config ---
-type SensKey = "panSens" | "zoomSens" | "orbitSens" | "deadzone";
-interface SliderDef { key: SensKey; label: string; min: number; max: number; step: number }
+type SensKey = "panSens" | "zoomSens" | "orbitSens" | "deadzone" | "crossAxis";
+interface SliderDef {
+  key: SensKey;
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+  /** How the number reads beside the slider, when it is not the raw value. */
+  format?: (v: number) => string;
+  /** One line under the row, for a control whose name does not explain it. */
+  hint?: string;
+}
 
 const SLIDERS: SliderDef[] = [
   { key: "panSens", label: "Pan", min: 0, max: 0.000003, step: 0.000003 / 100 },
   { key: "zoomSens", label: "Zoom", min: 0, max: 0.0000035, step: 0.0000035 / 100 },
   { key: "orbitSens", label: "Rotate", min: 0, max: 0.00001, step: 0.00001 / 100 },
   { key: "deadzone", label: "Deadzone", min: 0, max: 200, step: 1 },
+  // Cross-axis filter, shown as a percentage of the strongest axis. 0 turns it
+  // off. Capped at 60: past that a deliberate combined gesture stops working
+  // long before the filter buys anything more.
+  {
+    key: "crossAxis",
+    label: "Cross-axis filter",
+    min: 0,
+    max: 60,
+    step: 1,
+    format: (v) => `${Math.round(v)}%`,
+    hint: "Ignores a weak axis while another axis is much stronger, so a hard tilt doesn't also zoom.",
+  },
 ];
 
+/** The slider's own units, which for the cross-axis filter is a percentage of
+ *  the stored fraction. Kept here so the row and the config never drift. */
+const toSlider = (k: SensKey, v: number) => (k === "crossAxis" ? Math.round(v * 100) : v);
+const fromSlider = (k: SensKey, v: number) => (k === "crossAxis" ? v / 100 : v);
+
 const mode = ref<SpaceMouseConfig["mode"]>("object");
-const sens = ref<Record<SensKey, number>>({ panSens: 0, zoomSens: 0, orbitSens: 0, deadzone: 0 });
+const sens = ref<Record<SensKey, number>>(
+  { panSens: 0, zoomSens: 0, orbitSens: 0, deadzone: 0, crossAxis: 0 },
+);
 // shallowRef and replace-wholesale: the bindings are handed straight back to
 // setSpaceMouseConfig, which merges them into the module-level CONFIG object.
 // A deep ref would put reactive proxies in there.
@@ -71,7 +101,10 @@ const binds = shallowRef<Record<ActionName, AxisBinding>>(structuredClone(getSpa
 function syncFromConfig() {
   const c = getSpaceMouseConfig();
   mode.value = c.mode;
-  sens.value = { panSens: c.panSens, zoomSens: c.zoomSens, orbitSens: c.orbitSens, deadzone: c.deadzone };
+  sens.value = {
+    panSens: c.panSens, zoomSens: c.zoomSens, orbitSens: c.orbitSens,
+    deadzone: c.deadzone, crossAxis: toSlider("crossAxis", c.crossAxis),
+  };
   binds.value = structuredClone(c.bind);
 }
 syncFromConfig();
@@ -84,7 +117,7 @@ function setMode(m: SpaceMouseConfig["mode"]) {
 function setSens(key: SensKey, raw: string) {
   const v = parseFloat(raw);
   sens.value = { ...sens.value, [key]: v };
-  setSpaceMouseConfig({ [key]: v } as Partial<SpaceMouseConfig>);
+  setSpaceMouseConfig({ [key]: fromSlider(key, v) } as Partial<SpaceMouseConfig>);
 }
 
 function applyBind(action: ActionName, patch: Partial<AxisBinding>) {
@@ -117,16 +150,32 @@ function setBar(a: AxisName, el: Element | ComponentPublicInstance | null) {
   else delete bars[a];
 }
 
+// The bar always shows the RAW count the device sent (the Rust side conditions
+// nothing), and its colour says what the app then did with it: muted = under the
+// deadzone, dimmed = the cross-axis filter dropped it because another axis is
+// much stronger, full accent = it is driving the camera.
 function updateBars(m: Motion) {
   const SCALE = 350; // raw axis range is roughly +/-350
+  const cfg = getSpaceMouseConfig();
+  const f = filterMotion(m, cfg);
   for (const a of AXIS_NAMES) {
     const bar = bars[a];
     if (!bar) continue;
     const v = Math.max(-1, Math.min(1, m[a] / SCALE));
     bar.style.width = `${Math.abs(v) * 50}%`;
     bar.style.left = v >= 0 ? "50%" : `${50 - Math.abs(v) * 50}%`;
-    const dead = Math.abs(m[a]) < getSpaceMouseConfig().deadzone;
+    const dead = Math.abs(m[a]) < cfg.deadzone;
+    const suppressed = !dead && f[a] === 0;
     bar.style.background = dead ? "var(--text-mute, #6b7280)" : "var(--accent, #ff7a3c)";
+    bar.style.opacity = suppressed ? "0.35" : "1";
+    const note = suppressed ? `${AXIS_LABELS[a]}: suppressed by the cross-axis filter` : "";
+    if (note) {
+      bar.setAttribute("title", note);
+      bar.setAttribute("aria-label", note);
+    } else {
+      bar.removeAttribute("title");
+      bar.removeAttribute("aria-label");
+    }
   }
 }
 
@@ -212,11 +261,13 @@ function tickTest() {
   const cfg = getSpaceMouseConfig();
   const stale = now - clock > cfg.staleMs;
   const m = stale ? { tx: 0, ty: 0, tz: 0, rx: 0, ry: 0, rz: 0 } : lastMotion;
-  const dz = (v: number) => (Math.abs(v) < cfg.deadzone ? 0 : v);
+  // the SAME conditioning the viewport loop runs, so the preview and the real
+  // view can never disagree about what the puck is saying
+  const f = filterMotion(m, cfg);
   const val = (a: ActionName) => {
     const b = cfg.bind[a];
     if (!b) return 0; // tolerate a missing binding instead of crashing the loop
-    return (b.invert ? -1 : 1) * dz(m[b.src]);
+    return (b.invert ? -1 : 1) * f[b.src];
   };
 
   // Drive the cube with EVERY mapped action so any gesture gives feedback:
@@ -332,7 +383,8 @@ onUnmounted(() => {
             :value="sens[s.key]"
             @input="setSens(s.key, ($event.target as HTMLInputElement).value)"
           />
-          <span class="sm-sval">{{ fmt(sens[s.key]) }}</span>
+          <span class="sm-sval">{{ (s.format ?? fmt)(sens[s.key]) }}</span>
+          <div v-if="s.hint" class="sm-hint sm-srow-hint">{{ s.hint }}</div>
         </div>
 
         <div class="sm-section">Axis mapping</div>
