@@ -23,7 +23,72 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ## Unreleased
 
+### Fixed
+
+- **A thread whose turns meet exactly can be cut with again.** Draw the section
+  as tall as the pitch, so each crest lands on the next root with no flat
+  between them, and the solid pinches to a LINE where the turns meet. OCCT
+  reports that shape as valid and then quietly does nothing with it: subtracting
+  such a thread from a block that should have lost 610.4 mm3 took 0.410, and the
+  refusal that followed, "Subtract removed nothing", pointed at the boolean
+  rather than at the thread. Welding the turns does not fix it, because the
+  overlap between two crests is a lens whose width vanishes with its height and
+  the kernel never gets a real intersection to find. Clearance does: the crest
+  now stops a thousandth of a millimetre short of the root, ten times the
+  measured floor and a thousandth of a printed layer, and the sweep stays one
+  clean five-faced solid that cuts to within 0.06% of the hand-computed answer.
+  A section genuinely TALLER than its climb is still refused, unchanged.
+
+- **The values panel keeps one place.** It followed the history entry it
+  belonged to along the bottom strip, on the argument that the entry's column
+  tied the values to the operation. A long history breaks that argument: the
+  strip scrolls, so the column slides out from under a panel being typed into,
+  two entries a few pixels apart throw the panel across the window, and near the
+  left edge it lands over the view controls and has to be lifted off them. It
+  holds one berth now, against the right edge above the strip, and only its
+  contents change.
+
+- **A right-click on a dimension badge keeps the selection.** A badge sits on
+  the geometry it labels, and a line's length badge lands at the midpoint, which
+  is exactly where a right-click on that line is aimed. The press replaced the
+  whole selection with the single entity under the cursor, so two lines picked
+  for a Parallel or Perpendicular constraint were gone before the menu they were
+  picked for was built. Only the primary button acts. *(Ported from upstream.)*
+
+- **A pointer moved while a tool owns it no longer paints the model a frame
+  later.** Hover was judged when the deferred pass ran rather than when the move
+  arrived, so every "click a body / a face / an edge" step that handed the
+  pointer back left one face of the model painted under the next step's prompt.
+
+- **An imported mesh is judged body by body, and every part of a 3MF is
+  counted.** The face limit was compared against the sum over every body in the
+  file, so a two-object slicer project whose bodies are 1,850 and 1,737 faces was
+  refused at their total, while either part on its own walked in. It is the
+  largest single body now, the refusal names which body, and a separate
+  whole-file backstop still stops a file that is too much to draw at once.
+  Separately, all the triangle counters read only the first .model part, and in
+  the production extension Bambu, Orca and PrusaSlicer write that part is a
+  manifest with no triangles in it at all. *(Ported from upstream.)*
+
+- **A SpaceMouse axis that is only leaking from a stronger one is ignored.** A
+  puck spills a few counts onto its neighbours under a hard deflection, and once
+  that leak clears the absolute deadzone nothing tells it apart from deliberate
+  input, so a hard tilt also zoomed. Any axis below a quarter of the strongest
+  MAPPED axis of the same frame is dropped; the settings preview runs the same
+  filter as the viewport instead of its own copy of the deadzone, a suppressed
+  axis dims in the readout, and the fraction is a slider under Deadzone.
+  *(Ported from upstream.)*
+
 ### Added
+
+- **A boolean asks which body to keep, and then which body to use.** Union,
+  Subtract and Intersect took a body selection made beforehand and, failing
+  that, put up a list of body names. A list of names is the wrong place to
+  answer "which of these two solids": the answer is in the viewport and so is
+  the question. Both are asked there now, in the order the operation reads, with
+  the body under the cursor lit and the one already spoken for excluded. A
+  selection of two or more bodies still commits straight away, because that
+  gesture remains the only way to give one boolean several tool bodies.
 
 - **Sizing a thread shows the thread.** It used to show nothing at all: you
   picked a face, a number moved in a box, and the thread appeared when you
