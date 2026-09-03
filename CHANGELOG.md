@@ -30,6 +30,8 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Fixed
 
+- A threaded bore now picks as one wall. A cylinder's axis is a line, and the kernel is free to write its direction either way along that line: the spool's thread crest came back as eight faces of one bore with seven written downwards and one upwards, and the odd one out was rejected on that alone. Pulling the crest moved seven eighths of a wall. Which side is solid is now measured off the face's real outward normal instead of being inferred from a flag that turns over with the axis, so a bore and the shaft around it are still never joined.
+
 - A wall interrupted by a hairline gap now picks as one wall. A climbing revolve whose profile is as tall as its pitch would have crest meeting root along a line, which is non-manifold and makes every later boolean quietly do nothing, so the sweep stops the crest a hair short of the next root. That hair had no shared edge across it, so the two turns either side of it picked as two faces. A gap no wider than the kernel's own clearance now counts as touching; anything wider was drawn on purpose and still reads as two.
 
 - A revolve's pitch and angle handles can now both be used in one sitting. Letting go of either one used to commit and close the tool, so setting the climb meant reopening the tool to set the turn. A release now stays armed and builds what was dragged, so the second handle aims at the shape the first one made.

@@ -89,6 +89,67 @@ def _on_axis(pa, pb, d):
     return _norm(_cross(off, d)) <= LIN_TOL
 
 
+def _canon_dir(d):
+    """An axis direction with its SIGN normalised away.
+
+    A cylinder's axis is a LINE. The kernel is free to store it pointing either
+    way along that line, and does: the spool's thread crest came back as seven
+    faces with the axis down and one with it up, on the same line, at the same
+    radius, all seven of them one wall. Comparing the stored directions rejected
+    the odd one out and the wall picked in two pieces.
+
+    Sign taken from the first component that is meaningfully non-zero, so the
+    choice is stable for any axis and does not turn over on a rounding wobble."""
+    for c in d:
+        if abs(c) > ANG_TOL:
+            return d if c > 0 else (-d[0], -d[1], -d[2])
+    return d
+
+
+def _outward_at_middle(face):
+    """(point, unit normal) at the face's parametric middle, its own orientation
+    already applied — so this is the direction the MATERIAL side faces, not the
+    direction the underlying surface happens to be parametrised in.
+
+    Returns None when the face has no usable normal there."""
+    from OCP.BRepGProp import BRepGProp_Face
+    from OCP.gp import gp_Pnt, gp_Vec
+
+    props = BRepGProp_Face(face.wrapped)
+    u0, u1, v0, v1 = props.Bounds()
+    pnt, vec = gp_Pnt(), gp_Vec()
+    props.Normal((u0 + u1) / 2.0, (v0 + v1) / 2.0, pnt, vec)
+    n = (vec.X(), vec.Y(), vec.Z())
+    m = _norm(n)
+    if m <= 0.0:
+        return None
+    return ((pnt.X(), pnt.Y(), pnt.Z()), (n[0] / m, n[1] / m, n[2] / m))
+
+
+def _radial_side(face, direction, location):
+    """+1 when the face's outward normal points AWAY from the axis (a shaft),
+    -1 when it points at it (a bore), 0 when it cannot be told.
+
+    This replaces asking whether the FACE is reversed, which is only half the
+    question: a reversed face on an axis stored one way and a forward face on the
+    same axis stored the other way are the same side of the same wall, and the
+    reversed flag alone calls them opposites. Measuring the normal answers the
+    question that was actually being asked — which side is solid — without
+    caring how the surface underneath got written down."""
+    got = _outward_at_middle(face)
+    if got is None:
+        return 0.0
+    point, normal = got
+    rel = _sub(point, location)
+    along = _dot(rel, direction)
+    radial = _sub(rel, tuple(c * along for c in direction))
+    m = _norm(radial)
+    if m <= LIN_TOL:
+        return 0.0
+    radial = (radial[0] / m, radial[1] / m, radial[2] / m)
+    return 1.0 if _dot(normal, radial) > 0.0 else -1.0
+
+
 def surface_of(face):
     """The face's surface as a comparable description, with its own outward side
     baked in, or None when it is a kind this module will not judge.
@@ -117,7 +178,12 @@ def surface_of(face):
     if kind == T.GeomAbs_Cylinder:
         cy = ad.Cylinder()
         ax = cy.Axis()
-        return ("cylinder", xyz(ax.Direction()), xyz(ax.Location()), cy.Radius(), flip)
+        # The axis SIGN is not part of the identity (see _canon_dir) and neither
+        # is the reversed flag on its own (see _radial_side): both are how the
+        # kernel wrote the surface down, not which side of it is solid.
+        d = _canon_dir(xyz(ax.Direction()))
+        loc = xyz(ax.Location())
+        return ("cylinder", d, loc, cy.Radius(), _radial_side(face, d, loc))
     if kind == T.GeomAbs_Cone:
         co = ad.Cone()
         ax = co.Axis()

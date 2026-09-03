@@ -18,10 +18,13 @@ Run: uv run python tests/test_face_bands.py
 
 import _bootstrap  # noqa: F401  (puts sidecar/ on sys.path)
 
+import math
 import sys
 import traceback
 
-from build123d import Box, Compound, Cylinder, Pos, Rot, Sphere
+from build123d import Box, Compound, Cylinder, Face, Pos, Rot, Sphere
+from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
+from OCP.gp import gp_Ax3, gp_Cylinder, gp_Dir, gp_Pnt
 
 import builder
 import face_bands
@@ -253,6 +256,67 @@ def test_the_gap_rule_does_not_reach_across_a_real_gap():
     apart = Compound([Box(10, 10, 4), Pos(11, 0, 0) * Box(10, 10, 4)])
     assert bands(apart) == [], bands(apart)
     print(PASS, "a gap that was drawn stays a gap")
+
+
+def _cyl_strip(z0, z1, axis_up, radius=10.0, reversed_face=False):
+    """One band of a cylinder of `radius` about the Z axis, from z0 to z1.
+
+    `axis_up` chooses which way the AXIS is written down. Both spellings name
+    the same line and the same surface; the kernel picks one and there is no
+    saying which. `reversed_face` flips which side is solid, which is the thing
+    that genuinely differs between a bore and a shaft."""
+    ax = gp_Ax3(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1 if axis_up else -1))
+    # v runs along the axis DIRECTION, so a downward axis needs the range negated
+    v0, v1 = (z0, z1) if axis_up else (-z1, -z0)
+    mk = BRepBuilderAPI_MakeFace(gp_Cylinder(ax, radius), 0.0, 2 * math.pi,
+                                 float(v0), float(v1))
+    f = Face(mk.Face())
+    return Face(f.wrapped.Reversed()) if reversed_face else f
+
+
+def test_a_wall_is_one_wall_however_its_axis_was_written_down():
+    """The spool's thread: eight faces of one bore, seven with the axis written
+    downwards and one upwards.
+
+    A cylinder's axis is a LINE. Which way along it the kernel stores the
+    direction is bookkeeping, not geometry, and the odd face out was rejected on
+    that alone — so the thread crest picked as seven faces plus a stray, and
+    pulling it moved seven eighths of a wall.
+
+    Two strips stacked on one cylinder, one written each way, both solid on the
+    same side. Against the old rule every assertion below fails: with the
+    directions compared as written, the pair never matched at all.
+    """
+    same = Compound([_cyl_strip(0, 5, True), _cyl_strip(5, 10, True)])
+    assert bands(same) == [[0, 1]], bands(same)
+
+    flipped = Compound([_cyl_strip(0, 5, True), _cyl_strip(5, 10, False)])
+    assert bands(flipped) == [[0, 1]], bands(flipped)
+    print(PASS, "one wall stays one wall whichever way its axis was written")
+
+
+def test_the_side_still_decides_when_the_axis_sign_no_longer_does():
+    """The control, and the reason the axis sign could not simply be dropped.
+
+    A bore and the shaft around it are the same cylinder and must never join.
+    That used to be answered by the face's reversed flag, which is only half the
+    question: reversed is relative to the surface's own parametrisation, and that
+    turns over with the axis. So the side is now MEASURED off the real outward
+    normal, and these four pairs are the proof it still separates them —
+    including across the axis spelling, where the old flag would have called two
+    opposite sides equal."""
+    for axis_up in (True, False):
+        one_each_way = Compound([
+            _cyl_strip(0, 5, True, reversed_face=False),
+            _cyl_strip(5, 10, axis_up, reversed_face=True),
+        ])
+        assert bands(one_each_way) == [], (axis_up, bands(one_each_way))
+        other_way = Compound([
+            _cyl_strip(0, 5, True, reversed_face=True),
+            _cyl_strip(5, 10, axis_up, reversed_face=False),
+        ])
+        assert bands(other_way) == [], (axis_up, bands(other_way))
+    print(PASS, "two sides of one cylinder stay two, whichever way the axis reads")
 
 def main():
     failed = 0
