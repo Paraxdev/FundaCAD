@@ -150,6 +150,37 @@ def _radial_side(face, direction, location):
     return 1.0 if _dot(normal, radial) > 0.0 else -1.0
 
 
+def _torus_side(face, direction, location, major):
+    """The cylinder question for a torus: +1 when the face's outward normal
+    points AWAY from the circle the tube is swept along, -1 when it points at
+    it, 0 when it cannot be told.
+
+    Same trap, same answer. A torus is unchanged by writing its axis the other
+    way — it is symmetric about its own plane — so the direction cannot be part
+    of the identity, and the reversed flag cannot carry the side on its own once
+    the direction is normalised away. A fillet on a circular edge is a torus, so
+    this is not a corner case: one split into pieces is the same wall."""
+    got = _outward_at_middle(face)
+    if got is None:
+        return 0.0
+    point, normal = got
+    rel = _sub(point, location)
+    along = _dot(rel, direction)
+    planar = _sub(rel, tuple(c * along for c in direction))
+    m = _norm(planar)
+    if m <= LIN_TOL:
+        return 0.0
+    # the nearest point on the circle the tube rides, and the outward direction
+    # from it — which is what "outside of the tube" means
+    centre = tuple(location[k] + planar[k] * (major / m) for k in range(3))
+    ref = _sub(point, centre)
+    rm = _norm(ref)
+    if rm <= LIN_TOL:
+        return 0.0
+    ref = (ref[0] / rm, ref[1] / rm, ref[2] / rm)
+    return 1.0 if _dot(normal, ref) > 0.0 else -1.0
+
+
 def surface_of(face):
     """The face's surface as a comparable description, with its own outward side
     baked in, or None when it is a kind this module will not judge.
@@ -194,8 +225,12 @@ def surface_of(face):
     if kind == T.GeomAbs_Torus:
         to = ad.Torus()
         ax = to.Axis()
-        return ("torus", xyz(ax.Direction()), xyz(ax.Location()),
-                to.MajorRadius(), to.MinorRadius(), flip)
+        # As for a cylinder: the axis sign is bookkeeping, the side is measured.
+        d = _canon_dir(xyz(ax.Direction()))
+        loc = xyz(ax.Location())
+        major = to.MajorRadius()
+        return ("torus", d, loc, major, to.MinorRadius(),
+                _torus_side(face, d, loc, major))
     return None
 
 

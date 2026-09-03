@@ -24,7 +24,7 @@ import traceback
 
 from build123d import Box, Compound, Cylinder, Face, Pos, Rot, Sphere
 from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
-from OCP.gp import gp_Ax3, gp_Cylinder, gp_Dir, gp_Pnt
+from OCP.gp import gp_Ax3, gp_Cylinder, gp_Dir, gp_Pnt, gp_Torus
 
 import builder
 import face_bands
@@ -274,6 +274,15 @@ def _cyl_strip(z0, z1, axis_up, radius=10.0, reversed_face=False):
     return Face(f.wrapped.Reversed()) if reversed_face else f
 
 
+def _torus_arc(u0, u1, axis_up, major=20.0, minor=4.0, reversed_face=False):
+    """One arc of a torus about the Z axis. A fillet on a circular edge is a
+    torus, so a torus split into pieces is an ordinary thing to have."""
+    ax = gp_Ax3(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1 if axis_up else -1))
+    mk = BRepBuilderAPI_MakeFace(gp_Torus(ax, major, minor), u0, u1, 0.0, 2 * math.pi)
+    f = Face(mk.Face())
+    return Face(f.wrapped.Reversed()) if reversed_face else f
+
+
 def test_a_wall_is_one_wall_however_its_axis_was_written_down():
     """The spool's thread: eight faces of one bore, seven with the axis written
     downwards and one upwards.
@@ -292,6 +301,14 @@ def test_a_wall_is_one_wall_however_its_axis_was_written_down():
 
     flipped = Compound([_cyl_strip(0, 5, True), _cyl_strip(5, 10, False)])
     assert bands(flipped) == [[0, 1]], bands(flipped)
+
+    # A torus has the same trap and is worse off, because writing its axis the
+    # other way leaves the torus itself unchanged — it is symmetric about its
+    # own plane — so the direction cannot be part of the identity at all.
+    t_same = Compound([_torus_arc(0.0, 1.5, True), _torus_arc(1.5, 3.0, True)])
+    assert bands(t_same) == [[0, 1]], bands(t_same)
+    t_flip = Compound([_torus_arc(0.0, 1.5, True), _torus_arc(1.5, 3.0, False)])
+    assert bands(t_flip) == [[0, 1]], bands(t_flip)
     print(PASS, "one wall stays one wall whichever way its axis was written")
 
 
@@ -316,7 +333,12 @@ def test_the_side_still_decides_when_the_axis_sign_no_longer_does():
             _cyl_strip(5, 10, axis_up, reversed_face=False),
         ])
         assert bands(other_way) == [], (axis_up, bands(other_way))
-    print(PASS, "two sides of one cylinder stay two, whichever way the axis reads")
+        # and the same control for the torus: outside of the tube and inside of
+        # it are two walls, however the axis reads
+        t = Compound([_torus_arc(0.0, 1.5, True),
+                      _torus_arc(1.5, 3.0, axis_up, reversed_face=True)])
+        assert bands(t) == [], (axis_up, bands(t))
+    print(PASS, "two sides of one curved wall stay two, whichever way the axis reads")
 
 def main():
     failed = 0
