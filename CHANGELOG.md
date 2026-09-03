@@ -25,6 +25,39 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Fixed
 
+- **A wall the kernel had to store in pieces is picked as one wall.** Cut a
+  helical groove into a shank and what survives between the turns is one region
+  of one cylinder, but a face may not wrap more than once around a periodic
+  surface, so it comes back as one face per turn: seven of them on the spool
+  document. No repair merges them, because there is no single face for them to
+  become. Clicking one and pulling it moved a stripe. A pick now takes the whole
+  run, and the hover shows the run before the click takes it, so a threaded
+  shank moves as the one surface it is. Shift still takes a single piece, the
+  way it already took a single edge out of a tangent chain. Only faces that
+  share an edge AND sit on the same analytic surface, seen from the same side,
+  are ever gathered: a box's opposite walls are the same plane from two sides
+  and a bore is the same cylinder as the shaft around it, and neither joins.
+
+- **A sketch click on a plane turned edge-on is declined instead of landing off
+  the side of the world.** Orbit up over the top of a sketch and the plane rolls
+  away until you are looking along it. The click was still honoured, at a point
+  nowhere near where it was aimed: measured on the XY plane at a 130 mm standoff,
+  a click 90 px above the view centre lands 13.8 mm out square-on, 257 mm out at
+  9 degrees, 12 metres out at a sixteenth of a degree, and 1.35 KILOMETRES out at
+  the orbit's own clamp, where the camera lies exactly in the plane. Past that
+  the ray misses the plane and the click did nothing at all, with nothing said
+  either way. Within 5.7 degrees of edge-on the click is now declined and the
+  reason is said out loud. Every camera above that draws exactly as it did.
+
+- **The move gizmo's arrowheads are the size of every other arrowhead.** They
+  were 20 px long and 14 px across on a 72 px arrow, against the origin triad's
+  18.5 by 9.7 and the edge handle's 9 by 9, and they are the only ones drawn on
+  top of the model rather than off at the world origin. Matched to the triad's
+  in absolute pixels. The arrow is hit-tested against an invisible sleeve now,
+  the way a rotation ring already was, so it is no harder to grab than before,
+  and easier at the tip: the drawn cone tapers to nothing and used to be the
+  hardest part of the arrow to press.
+
 - **A thread whose turns meet exactly can be cut with again.** Draw the section
   as tall as the pitch, so each crest lands on the next root with no flat
   between them, and the solid pinches to a LINE where the turns meet. OCCT
