@@ -20,6 +20,7 @@ import numpy as np
 import websockets
 
 import server
+import wire
 from server import handle, HOST, PORT
 from test_smoke import EXAMPLE
 
@@ -164,11 +165,11 @@ def test_oversized_reply_becomes_an_error():
     """A reply over the frame cap must come back as a NAMED error, not as a frame
     websockets refuses to send (which closes the socket with 1009 and reaches the
     user as the app vanishing mid-rebuild — GH #4's failure mode)."""
-    big = "x" * (server._MAX_FRAME + 1024)
+    big = "x" * (wire._MAX_FRAME + 1024)
     out = json.loads(server._reply_bytes("rq", _one_body_res(name=big), True))
     assert out["ok"] is False, out
     assert "too detailed" in out["error"]["message"], out["error"]
-    assert len(json.dumps(out)) < server._MAX_FRAME, "the error itself must fit"
+    assert len(json.dumps(out)) < wire._MAX_FRAME, "the error itself must fit"
 
     # and a normal reply is still returned intact
     assert isinstance(server._reply_bytes("rq", _one_body_res(), True), (bytes, bytearray))
@@ -273,11 +274,11 @@ async def test_chunked_reply_reassembles_to_the_single_frame_reply():
     single = _decode_binary_frame(server._encode_binary_reply("rq", res))
 
     ws = _FakeWS()
-    server._CHUNK_TARGET_BYTES = 700  # force several chunks on this fixture
+    wire._CHUNK_TARGET_BYTES = 700  # force several chunks on this fixture
     try:
         await server._stream_binary_reply(ws, "rq", res)
     finally:
-        server._CHUNK_TARGET_BYTES = 16 * 1024 * 1024
+        wire._CHUNK_TARGET_BYTES = 16 * 1024 * 1024
     assert len(ws.frames) > 2, f"expected a head + several chunks, got {len(ws.frames)}"
     streamed = _decode_stream(ws.frames)
 
@@ -320,14 +321,14 @@ async def test_every_chunk_stays_under_the_frame_cap():
     rather than allocating 128 MiB in CI."""
     res = _many_body_res(n=8)
     ws = _FakeWS()
-    server._CHUNK_TARGET_BYTES, server._MAX_FRAME = 700, 4096
+    wire._CHUNK_TARGET_BYTES, wire._MAX_FRAME = 700, 4096
     try:
         await server._stream_binary_reply(ws, "rq", res)
         assert len(ws.frames) > 2
         for f in ws.frames:
             assert len(f) < 4096, f"a chunk reached {len(f)} B against a 4096 B cap"
     finally:
-        server._CHUNK_TARGET_BYTES, server._MAX_FRAME = 16 * 1024 * 1024, 128 * 1024 * 1024
+        wire._CHUNK_TARGET_BYTES, wire._MAX_FRAME = 16 * 1024 * 1024, 128 * 1024 * 1024
     print("  per-chunk frame cap OK")
 
 
@@ -381,11 +382,11 @@ async def test_single_oversized_body_aborts_the_stream_by_name():
          "positions": [0.0] * 40000, "indices": [0], "faceIds": [0], "faceCount": 1},
     ]}
     ws = _FakeWS()
-    server._CHUNK_TARGET_BYTES, server._MAX_FRAME = 1024, 8192
+    wire._CHUNK_TARGET_BYTES, wire._MAX_FRAME = 1024, 8192
     try:
         await server._stream_binary_reply(ws, "rq", res)
     finally:
-        server._CHUNK_TARGET_BYTES, server._MAX_FRAME = 16 * 1024 * 1024, 128 * 1024 * 1024
+        wire._CHUNK_TARGET_BYTES, wire._MAX_FRAME = 16 * 1024 * 1024, 128 * 1024 * 1024
 
     last = json.loads(ws.frames[-1])
     assert last["ok"] is False, last
@@ -403,7 +404,7 @@ def test_unchunked_client_still_gets_one_frame():
     assert _decode_binary_frame(single)["result"]["bodies"][0]["id"] == "b0"
     assert "stream" not in _decode_binary_frame(single), "no stream envelope when opted out"
 
-    over = json.loads(server._reply_bytes("rq", _one_body_res(name="x" * (server._MAX_FRAME + 1024)), True))
+    over = json.loads(server._reply_bytes("rq", _one_body_res(name="x" * (wire._MAX_FRAME + 1024)), True))
     assert over["ok"] is False and "too detailed" in over["error"]["message"]
     print("  unchunked back-compat OK")
 
@@ -414,11 +415,11 @@ async def test_cancel_mid_stream_stops_sending():
     reply — after the worker they cancelled has already been killed."""
     res = _many_body_res(n=8)
     ws = _FakeWS()
-    server._CHUNK_TARGET_BYTES = 700
+    wire._CHUNK_TARGET_BYTES = 700
     try:
         await server._stream_binary_reply(ws, "rq", res, lambda: True)
     finally:
-        server._CHUNK_TARGET_BYTES = 16 * 1024 * 1024
+        wire._CHUNK_TARGET_BYTES = 16 * 1024 * 1024
     assert len(ws.frames) == 2, f"expected head + cancel, got {len(ws.frames)}"
     last = json.loads(ws.frames[-1])
     assert last["cancelled"] is True and last["ok"] is False, last
