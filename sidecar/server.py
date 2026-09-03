@@ -250,7 +250,8 @@ def _worker_init(hb=None, hb_idx=None, err_buf=None, mesh=None, mesh_total=None)
                 if hb_idx is not None:
                     hb_idx.value = i
 
-            builder.on_feature_tick = _tick
+            import progress
+            progress.on_feature_tick = _tick
     except BaseException:
         _publish_init_error(err_buf)
         # MUST re-raise: this is what breaks the pool. Swallowing it would leave
@@ -352,7 +353,7 @@ def _export_mesh(b, tol=None):
 
     from tessellate import tessellate
     from texture import resolve_body_textures
-    from builder import progress_tick
+    from progress import progress_tick
 
     # Unlike the viewport twin, this ticks on EVERY tier including a RAM hit,
     # not just the compute path: export walks every body in one uninterrupted
@@ -668,7 +669,8 @@ def _body_payload(b, tolerance, profile):
     import uuid as _uuid
 
     from tessellate import tessellate, edge_polylines_by_body, mesh_bbox
-    from builder import _face_fp, on_feature_tick
+    from builder import _face_fp
+    import progress
     from texture import resolve_body_textures
 
     bid, sh = b["id"], b.get("shape")
@@ -802,11 +804,7 @@ def _body_payload(b, tolerance, profile):
            "profile": profile, "bbox": payload.get("bbox"),
            "etag": _uuid.uuid4().hex, "payload": payload, "texture_key": texture_key}
     _MESH_CACHE[bid] = ent
-    if on_feature_tick is not None:
-        try:
-            on_feature_tick(-1)  # tessellation progress counts as progress
-        except Exception:
-            pass
+    progress.progress_tick()  # tessellation progress counts as progress
     return ent
 
 
@@ -1308,7 +1306,8 @@ def _interference_job(document):
     {"pairs": [...]} — one entry per pair of solids that actually overlap (boolean
     intersection volume above a tiny epsilon), with the overlap volume + bbox so the
     frontend can report and zoom to each clash."""
-    from builder import rebuild_cached, _bbox_pair_overlap, bbox_of, progress_tick
+    from builder import rebuild_cached, _bbox_pair_overlap, bbox_of
+    from progress import progress_tick
 
     # rebuild_cached for the same reason as _export_job: same worker, warm cache
     part, errors, bodies = rebuild_cached(document)

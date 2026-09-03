@@ -27,6 +27,7 @@ os.environ.setdefault("SINDRI_DISK_CACHE", "0")  # the checkpoint test brings it
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import builder  # noqa: E402
+import progress  # noqa: E402
 
 PASS = "  ok"
 N_BODIES = 4
@@ -39,15 +40,15 @@ class _Ticks:
 
     def __enter__(self):
         self.n = 0
-        self._prev = builder.on_feature_tick
-        builder.on_feature_tick = self._count
+        self._prev = progress.on_feature_tick
+        progress.on_feature_tick = self._count
         return self
 
     def _count(self, _index):
         self.n += 1
 
     def __exit__(self, *_exc):
-        builder.on_feature_tick = self._prev
+        progress.on_feature_tick = self._prev
         return False
 
 
@@ -193,28 +194,28 @@ def test_checkpoint_write_ticks_per_body():
 
 def test_tick_hook_is_restored():
     """The counter must not outlive the block that installed it."""
-    before = builder.on_feature_tick
+    before = progress.on_feature_tick
     with _Ticks():
-        assert builder.on_feature_tick is not before
-    assert builder.on_feature_tick is before, "tick hook leaked out of the block"
+        assert progress.on_feature_tick is not before
+    assert progress.on_feature_tick is before, "tick hook leaked out of the block"
     print(f"{PASS} tick hook restored after use")
 
 
 def test_progress_tick_survives_a_broken_hook():
     """A progress frame must never be able to fail the work it reports on."""
-    from builder import progress_tick
+    from progress import progress_tick
 
-    prev = builder.on_feature_tick
+    prev = progress.on_feature_tick
     try:
         def _explode(_i):
             raise RuntimeError("hook is broken")
 
-        builder.on_feature_tick = _explode
+        progress.on_feature_tick = _explode
         progress_tick()  # must not raise
-        builder.on_feature_tick = None
+        progress.on_feature_tick = None
         progress_tick()  # must not raise with no hook installed at all
     finally:
-        builder.on_feature_tick = prev
+        progress.on_feature_tick = prev
     print(f"{PASS} progress_tick swallows a broken hook and a missing one")
 
 

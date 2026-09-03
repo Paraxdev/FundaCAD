@@ -30,6 +30,7 @@ import traceback
 import zipfile
 
 import builder
+import mesh_import
 
 PASS = "  ok"
 
@@ -101,24 +102,24 @@ def test_the_face_limit_is_per_body_with_a_whole_file_backstop():
     message names which body — so the per-body gate is still a gate. And with
     the per-body limit left open, a whole-file limit of 10 refuses it, so the
     backstop is load-bearing rather than decorative."""
-    faces, total = builder.MAX_IMPORT_FACES, builder.MAX_IMPORT_TOTAL_FACES
+    faces, total = mesh_import.MAX_IMPORT_FACES, mesh_import.MAX_IMPORT_TOTAL_FACES
     with tempfile.TemporaryDirectory() as d:
         p = os.path.join(d, "two.stl")
         box_stl(p, [(0.0, 10.0), (40.0, 10.0)])
         try:
-            builder.MAX_IMPORT_FACES, builder.MAX_IMPORT_TOTAL_FACES = 8, 10_000
+            mesh_import.MAX_IMPORT_FACES, mesh_import.MAX_IMPORT_TOTAL_FACES = 8, 10_000
             shape = builder._sew_mesh_file(p)
             per = [len(b.faces()) for b in builder._explode_solids(shape)]
             assert per == [6, 6], per
 
-            builder.MAX_IMPORT_FACES = 4
+            mesh_import.MAX_IMPORT_FACES = 4
             try:
                 builder._sew_mesh_file(p)
                 raise AssertionError("a 6-face body passed a 4-face limit")
             except ValueError as ex:
                 assert "body 1 of 2 has 6 faces" in str(ex), str(ex)
 
-            builder.MAX_IMPORT_FACES, builder.MAX_IMPORT_TOTAL_FACES = 8, 10
+            mesh_import.MAX_IMPORT_FACES, mesh_import.MAX_IMPORT_TOTAL_FACES = 8, 10
             try:
                 builder._sew_mesh_file(p)
                 raise AssertionError("12 faces passed a 10-face whole-file limit")
@@ -126,7 +127,7 @@ def test_the_face_limit_is_per_body_with_a_whole_file_backstop():
                 assert "too much detail" in str(ex), str(ex)
                 assert "12 faces across 2 bodies" in str(ex), str(ex)
         finally:
-            builder.MAX_IMPORT_FACES, builder.MAX_IMPORT_TOTAL_FACES = faces, total
+            mesh_import.MAX_IMPORT_FACES, mesh_import.MAX_IMPORT_TOTAL_FACES = faces, total
     print(PASS, "the face limit is per body, and the whole file has its own")
 
 

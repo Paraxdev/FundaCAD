@@ -24,7 +24,7 @@ os.environ.setdefault("SINDRI_DISK_CACHE", "0")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import sysmem  # noqa: E402
-from builder import _refuse_if_memory_is_short, IMPORT_RSS_PER_FILE_BYTE  # noqa: E402
+from mesh_import import _refuse_if_memory_is_short, IMPORT_RSS_PER_FILE_BYTE  # noqa: E402
 
 PASS = "  ok"
 MIB = 1024 * 1024
@@ -187,7 +187,7 @@ def test_describe_never_raises():
 
 
 def test_brep_formats_get_the_higher_cap():
-    from builder import (MAX_IMPORT_BREP_FILE_BYTES, MAX_IMPORT_FILE_BYTES,
+    from mesh_import import (MAX_IMPORT_BREP_FILE_BYTES, MAX_IMPORT_FILE_BYTES,
                          _import_size_cap)
 
     for fmt in ("step", "stp", "brep"):
@@ -204,7 +204,7 @@ def test_brep_formats_get_the_higher_cap():
 def test_the_reference_assembly_size_is_now_admissible():
     """The 356 MiB reference STEP is the whole point of the cap raise: it was
     refused outright before, at a limit of 256 MiB."""
-    from builder import MAX_IMPORT_FILE_BYTES, _import_size_cap
+    from mesh_import import MAX_IMPORT_FILE_BYTES, _import_size_cap
 
     reference = 356 * MIB
     assert reference > MAX_IMPORT_FILE_BYTES, "the old cap would have admitted it"
@@ -216,17 +216,18 @@ def test_import_geometry_uses_the_cap_for_the_format_it_was_given():
     """The wiring: `fmt` must be lowercased BEFORE the cap is chosen, or "STEP"
     silently takes the mesh cap."""
     import builder
+    import mesh_import
 
     seen = {}
-    real = builder._import_size_cap
-    builder._import_size_cap = lambda f: (seen.setdefault("fmt", f), real(f))[1]
+    real = mesh_import._import_size_cap
+    mesh_import._import_size_cap = lambda f: (seen.setdefault("fmt", f), real(f))[1]
     try:
         try:
             builder.import_geometry("/nonexistent/x.step", "STEP")
         except Exception:  # noqa: BLE001 — only the recorded fmt matters here
             pass
     finally:
-        builder._import_size_cap = real
+        mesh_import._import_size_cap = real
     assert seen.get("fmt") == "step", f"cap chosen for {seen.get('fmt')!r}, not lowercased"
     print(f"{PASS} the cap is chosen from the LOWERCASED format")
 
@@ -239,6 +240,7 @@ def test_import_geometry_refuses_before_it_parses_anything():
     import tempfile
 
     import builder
+    import mesh_import
     import sysmem as _sysmem
 
     real = _sysmem.available_bytes

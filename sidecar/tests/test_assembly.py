@@ -895,7 +895,7 @@ def test_the_import_rebuild_is_not_silent():
     Asserted against the BODY COUNT rather than "non-zero": one tick is what the
     broken version produced, and it would pass any weaker check.
     """
-    import builder
+    import progress
     from builder import import_geometry, rebuild
 
     pay = import_geometry(os.path.join(FIXTURES, "asm_nested.step"), "step")
@@ -904,12 +904,12 @@ def test_the_import_rebuild_is_not_silent():
          "geom": pay["geom"], "nodes": pay["nodes"], "parts": pay["parts"]}]}
 
     ticks = []
-    prev = builder.on_feature_tick
-    builder.on_feature_tick = lambda _i: ticks.append(1)
+    prev = progress.on_feature_tick
+    progress.on_feature_tick = lambda _i: ticks.append(1)
     try:
         _p, err, bodies = rebuild(doc)
     finally:
-        builder.on_feature_tick = prev
+        progress.on_feature_tick = prev
     assert not err, err
     n = len(bodies)
     assert n > 1, n

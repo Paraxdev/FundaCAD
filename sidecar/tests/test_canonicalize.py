@@ -21,7 +21,8 @@ os.environ.setdefault("SINDRI_DISK_CACHE", "0")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import builder  # noqa: E402
-from builder import _canonical_ok  # noqa: E402
+import mesh_import  # noqa: E402
+from mesh_import import _canonical_ok  # noqa: E402
 from build123d import Box, Compound, Cylinder, Sphere  # noqa: E402
 
 PASS = "  ok"
@@ -103,13 +104,13 @@ def test_multi_root_canonicalises_each_root_separately():
     ASSEMBLY path while claiming to measure this one — which is how a test comes
     to pass for the wrong reason."""
     seen = []
-    real = builder._canonicalize
-    builder._canonicalize = lambda s, tol=1e-3: (seen.append(s), real(s, tol))[1]
+    real = mesh_import._canonicalize
+    mesh_import._canonicalize = lambda s, tol=1e-3: (seen.append(s), real(s, tol))[1]
     try:
         roots = [Box(20, 20, 4).wrapped, Box(8, 8, 8).wrapped, Cylinder(3, 9).wrapped]
-        out = builder._canonicalize_roots(roots)
+        out = mesh_import._canonicalize_roots(roots)
     finally:
-        builder._canonicalize = real
+        mesh_import._canonicalize = real
 
     assert len(seen) == len(roots), (
         f"{len(seen)} canonicalise calls for {len(roots)} roots — the whole "
@@ -128,7 +129,7 @@ def test_multi_root_canonicalises_each_root_separately():
 
 def test_multi_root_skips_unwrappable_roots_without_losing_the_rest():
     """A root that will not wrap must not take the whole import down with it."""
-    out = builder._canonicalize_roots([Box(10, 10, 10).wrapped, None])
+    out = mesh_import._canonicalize_roots([Box(10, 10, 10).wrapped, None])
     assert len(out.solids()) == 1, len(out.solids())
     print(f"{PASS} an unwrappable root is skipped, the rest survive")
 
