@@ -224,14 +224,21 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       const face = viewport.selectedFaceSketchPlane();
       if (face) {
         viewport.clearSelection();
-        sketch.enter(face.plane, store);
+        // The anchor rides in on BOTH routes into a sketch, or a sketch started
+        // from a selected face would silently be the one kind that cannot follow
+        // its face.
+        sketch.enter(face.plane, store, undefined, undefined, face.anchor);
         viewport.showSketchFace(face.faceId);
         if (tool) sketch.setTool(tool);
         return;
       }
     }
     pickPlaneInteractive("Select a plane or a face to sketch on · a round face gives its tangent plane", (spec, face) => {
-      sketch.enter(spec, store);
+      // Only a PLANAR face can be followed: a tangent plane on a cylinder is a
+      // different plane at every point, and the pick's own point is what defines
+      // it, so there is nothing for a rebuild to re-derive.
+      sketch.enter(spec, store, undefined, undefined,
+        face && face.kind === "planar" ? { selector: face.selector, at: face.at } : null);
       if (face) viewport.showSketchFace(face.faceId);
       if (tool) sketch.setTool(tool);
     });

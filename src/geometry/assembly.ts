@@ -70,6 +70,7 @@ export interface WireRebuildResult {
   // where each datum plane resolved to, same header, same reason: a datum that
   // follows a face belongs to no body at all
   datumPlanes?: RebuildResult["datumPlanes"];
+  sketchPlanes?: RebuildResult["sketchPlanes"];
   // legacy direct-mesh shape (only when `protocol` is absent)
   mesh?: RebuildResult["mesh"];
   edges?: RebuildResult["edges"];
@@ -236,6 +237,11 @@ export class RebuildAssembly {
       // without this the cached result would be handed back with the previous
       // rebuild's planes in it.
       head.datumPlanes,
+      // Same reasoning as datumPlanes: a face-anchored sketch can move with
+      // every body etag unchanged (the body it follows was not the one that
+      // changed), so without this the cached result would come back carrying
+      // the previous rebuild's sketch placements.
+      head.sketchPlanes,
     ]);
     if (
       sig !== null && sig === lastSig && lastAssembled !== null
@@ -291,6 +297,7 @@ export class RebuildAssembly {
     if (head.featureErrors) out.featureErrors = head.featureErrors;
     if (head.projectionUpdates) out.projectionUpdates = head.projectionUpdates;
     if (head.datumPlanes) out.datumPlanes = head.datumPlanes;
+    if (head.sketchPlanes) out.sketchPlanes = head.sketchPlanes;
 
     const asm = new RebuildAssembly(out, arrays, plan, sig);
     // Stubs are backed by the cache, so they can be filled right now; only full

@@ -282,6 +282,16 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   // than in the SketchOverlay constructor because isSketchVisible is only
   // Object.assign'd onto the engine on the line above.
   e.overlay.sketchVisible = (id) => e.isSketchVisible(id);
+  // Wired here for the same reason as the line above: only the engine can see
+  // the build state, and a sketch that follows a face has to be DRAWN where the
+  // build put it or the curves and the geometry cut from them disagree.
+  e.overlay.resolvedPlanes = () => {
+    const r = e.store.buildState.result;
+    return {
+      ...(r?.sketchPlanes ? { sketchPlanes: r.sketchPlanes } : {}),
+      ...(r?.datumPlanes ? { datumPlanes: r.datumPlanes } : {}),
+    };
+  };
   Object.assign(e, createDatumPlanes(e));
   Object.assign(e, createSelection(e));
   Object.assign(e, createDocumentActions(e));

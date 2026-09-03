@@ -85,10 +85,21 @@ Reply `result` is one of:
     "bodies": [ /* one entry per live body, full payload or "unchanged" stub */ ],
     "bbox": { "min": [x,y,z], "max": [x,y,z] },
     "diagnostics": [ /* selector resolutions worth reporting; see below */ ],
+    "datumPlanes": { "<datumPlane id>": { "origin": [..], "normal": [..], "xdir": [..] } },
+    "sketchPlanes": { "<sketch id>":     { "origin": [..], "normal": [..], "xdir": [..] } },
     "featureError": { "message": "...", "feature_id": "..." },   // optional
     "featureErrors": [ { "message": "...", "feature_id": "..." }, ... ]  // optional
   }
   ```
+
+  `datumPlanes` and `sketchPlanes` say where the build actually PUT each plane, for
+  features anchored to a body face. The feature's own `plane` is the cache written at
+  pick time, and once the face moves the two part company, so a client that draws from
+  the cache draws the sketch at the old position while the geometry cut from it lands
+  at the new one. `datumPlanes` carries every datum and has its `offset` already
+  applied; `sketchPlanes` carries only the sketches that MOVED, so an absent id means
+  the cache is still right. Both are display state and are never written back into the
+  document.
   `featureError`/`featureErrors` are present only when one or more features failed and
   were recorded as no-ops; the geometry that *did* build is still returned (a failing
   feature never blanks the whole model). `featureError` is the most-downstream failure,
@@ -97,10 +108,20 @@ Reply `result` is one of:
   `diagnostics` is omitted when empty, but when present it is **complete for the whole
   document** — an incrementally-resumed rebuild replays the diagnostics of its cached
   prefix rather than reporting only the features it re-ran. Clients may rely on that:
-  the "Re-pick face" repair is offered only when the build carries an `ambiguous
-  nearest pick` entry, so a partial array would silently withdraw a repair path on
-  exactly the documents that need it. (Before 0.1.70 the array *was* partial — a
-  resumed build re-reported every error with zero diagnostics.)
+  the "Re-pick face" repair is offered only when the build carries a repairable entry,
+  so a partial array would silently withdraw a repair path on exactly the documents
+  that need it. (Before 0.1.70 the array *was* partial — a resumed build re-reported
+  every error with zero diagnostics.)
+
+  A diagnostic may carry a machine-readable **`code`** beside its human `reason`:
+  `ambiguousReference` (the selector matched several candidates), `referenceNotFound`
+  (it matched nothing) and `planeTilted` (a face-anchored plane's face is no longer
+  parallel, so the plane kept its cached placement). Adding a code is a pure addition —
+  an unrecognised one must read as "unclassified" — and the prose match on `ambiguous
+  nearest pick` is still honoured, so a sidecar older than the field keeps its repair
+  affordance. The first two are repairable by picking a face; `planeTilted` is not,
+  because the candidate filter is taken against the cached normal and re-picking the
+  same tilted face reproduces the same diagnostic.
 - **Fatal** - nothing built at all: `{ "error": { "message": "...", "feature_id": "..." } }`.
 - **Stalled worker** - one operation ran past the stall timeout (60 s of no build
   progress): the sidecar kills and respawns the geometry worker and returns

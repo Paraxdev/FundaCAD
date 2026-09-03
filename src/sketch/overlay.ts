@@ -8,7 +8,8 @@
 // geometry only and leaves the shared materials intact.
 
 import * as THREE from "three";
-import type { CadDocument, PlaneSpec } from "../types";
+import type { CadDocument, PlaneDef, PlaneSpec } from "../types";
+import { planeOf } from "../document/planeOf";
 import { SketchPlane } from "./plane";
 import { resolveEntities } from "./resolve";
 import {
@@ -157,6 +158,17 @@ export class SketchOverlay {
    *  solid's own edges visible/selectable. */
   sketchVisible: (id: string) => boolean = () => true;
 
+  /** The planes the last rebuild actually USED, for sketches that follow a face
+   *  and for the datums such sketches sit on (see document/planeOf). Injected
+   *  the way sketchVisible is rather than passed to update(), which has several
+   *  call sites and none of which can see the build state. The default is none,
+   *  i.e. every sketch draws at its own cached plane, which is exactly what a
+   *  document with no anchor wants. */
+  resolvedPlanes: () => {
+    sketchPlanes?: Record<string, PlaneDef>;
+    datumPlanes?: Record<string, PlaneDef>;
+  } = () => ({});
+
   /** The model's outline on a sketch plane, so a committed profile that runs off
    *  its face splits there instead of picking as one region — the same cut the
    *  active sketch gets in sketchMode.
@@ -168,6 +180,7 @@ export class SketchOverlay {
 
   /** Rebuild committed sketch curves + region fills from the document. */
   update(doc: CadDocument, hiddenSketchId: string | null = null) {
+    const resolved = this.resolvedPlanes();
     this.clearGroup(this.committed);
     this.clearGroup(this.fills);
     this.regions = [];
@@ -176,7 +189,11 @@ export class SketchOverlay {
       if (f.type !== "sketch") continue;
       if (f.id === hiddenSketchId) continue; // active sketch drawn by the editor
       if (!this.sketchVisible(f.id)) continue; // hidden (e.g. consumed by a feature)
-      const plane = this.planeFor(f.plane);
+      // Where the BUILD put it, not where the pick recorded it. For a sketch
+      // that follows a face those part company the moment anything upstream
+      // moves, and drawing the cache means the curves say one thing while the
+      // geometry cut from them says another.
+      const plane = this.planeFor(planeOf(f, resolved.sketchPlanes, resolved.datumPlanes));
       const ents = resolveEntities(f, doc.parameters);
 
       for (const obj of curveObjects(ents, plane, CURVE_COLOR)) {

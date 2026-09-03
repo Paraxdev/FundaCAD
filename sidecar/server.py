@@ -867,10 +867,12 @@ def _rebuild_job(document, tolerance, known=None):
     diag = []
     proj = []
     datums = {}
+    sketch_planes = {}
     known = known or {}
     t0 = time.monotonic()
     part, errors, bodies = rebuild_cached(
-        document, diagnostics=diag, projections=proj, datums_out=datums
+        document, diagnostics=diag, projections=proj, datums_out=datums,
+        sketch_planes_out=sketch_planes,
     )
     t_rebuild = time.monotonic() - t0
     if errors and part is None and not bodies:
@@ -888,6 +890,8 @@ def _rebuild_job(document, tolerance, known=None):
         # so they ride along on this path too.
         if datums:
             result["datumPlanes"] = datums
+        if sketch_planes:
+            result["sketchPlanes"] = sketch_planes
         return result
 
     live_ids = set()
@@ -957,6 +961,11 @@ def _rebuild_job(document, tolerance, known=None):
     # copy across builds and get its invalidation right.
     if datums:
         result["datumPlanes"] = datums
+    if sketch_planes:
+        # Only the sketches that MOVED. An absent id means the document
+        # cache is still where the build put it, which is what every
+        # frontend reader already falls back to.
+        result["sketchPlanes"] = sketch_planes
     if diag:  # only attach when a selector resolved with low confidence
         result["diagnostics"] = diag
     if proj:  # only attach when the projection refresh found real changes

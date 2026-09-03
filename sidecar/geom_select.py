@@ -131,6 +131,30 @@ def _v(seq):
     return Vector(*seq) if not isinstance(seq, Vector) else seq
 
 
+def _finite3(seq, want=None):
+    """A document-supplied coordinate list, rounded, or None if it is not one.
+
+    Selector points come out of the document file with no schema in front of
+    them, and build123d's Vector SILENTLY collapses non-numeric args to (0,0,0)
+    rather than raising, so an unchecked point does not fail, it relocates.
+    Callers that need a real point must treat None as "no point". `want` pins the
+    length where the caller knows it (3 for a coordinate)."""
+    try:
+        vals = list(seq)
+    except TypeError:
+        return None
+    if want is not None and len(vals) != want:
+        return None
+    out = []
+    for v in vals:
+        if isinstance(v, bool) or not isinstance(v, (int, float)):
+            return None
+        if not math.isfinite(v):
+            return None
+        out.append(round(float(v), 6))
+    return out or None
+
+
 def _dist(a, b):
     return (a - b).length
 
@@ -418,7 +442,8 @@ def _resolve_one(cands, cost_fn, key_fn, nth):
     return best, margin, lossy, ("marginal match" if lossy else None)
 
 
-def _push_diag(diag, feature_id, kind, resolved, confidence, lossy, reason, at=None, candidates=None):
+def _push_diag(diag, feature_id, kind, resolved, confidence, lossy, reason, at=None,
+               candidates=None, code=None):
     if diag is None or not (lossy or confidence < 0.5):
         return
     entry = {
@@ -434,7 +459,19 @@ def _push_diag(diag, feature_id, kind, resolved, confidence, lossy, reason, at=N
     # ambiguous, so it can offer to re-pick that one. Without it the frontend
     # knows a feature failed but not which of its five faces to ask about.
     if at is not None:
-        entry["at"] = [round(float(v), 6) for v in at]
+        pt = _finite3(at, want=3)
+        # A malformed `at` is DROPPED rather than raised on. It comes straight
+        # out of the document, and round(float(v)) on a hand-edited file whose
+        # point holds a string raised right here, which the rebuild handler then
+        # reported as the feature failing — document text in the sidecar's own
+        # voice. Losing the Re-pick button on a reference that is already
+        # unrepairable is the cheaper of the two.
+        if pt is None:
+            entry.pop("at", None)
+        else:
+            entry["at"] = pt
+    if code:
+        entry["code"] = code
     if candidates:
         entry["candidates"] = list(candidates)
     diag.append(entry)
@@ -665,6 +702,201 @@ def _faces_matching(part, fp, diag, feature_id, nth=None):
     _push_diag(diag, feature_id, "face", 1 if best else 0, conf, lossy, reason)
     return [best] if best is not None else []
 
+
+
+# --- face-anchored planes (sketch / datumPlane) ------------------------------
+#
+# The codes a face-anchored plane can report. Flat lowerCamel, matching the
+# shipped ResolveDiag.kind value "edgeOpFailed", and read by
+# features/repickReference.ts to decide whether a pick can repair the reference.
+# Constants at both ends so rewording the prose beside them cannot silently
+# unhook the button.
+CODE_AMBIGUOUS_REFERENCE = "ambiguousReference"  # the selector matched several faces
+CODE_REFERENCE_NOT_FOUND = "referenceNotFound"   # the selector matched nothing
+CODE_PLANE_TILTED = "planeTilted"                # the face is no longer parallel
+
+# How far a face's normal may drift from the cached plane's and still be "the
+# same face": 1 - |dot| <= 1e-3, about 2.6 degrees. A PLANAR face tessellates
+# exactly, so the client's raycast normal is the B-rep normal to float
+# precision; anything past this is a tilt, not drift. SAME-SIGN, with abs only
+# as a last resort: the body's antiparallel face is co-normal too, and admitting
+# it alongside the real one lets the far side win on distance alone.
+PLANE_ANG_TOL = 1e-3
+# mm of slack on a face's plane offset (n . centre) when deciding two co-normal
+# faces are the SAME plane, the coplanar-tie gate below.
+PLANE_COPLANAR_TOL = 1e-3
+
+
+def plane_fallback_reason(code, label, detail=None):
+    """The user-facing sentence for a face-anchored plane that fell back.
+
+    Two of the three share one tail, "stayed at its saved position, re-pick the
+    face", because the user's next action is the same for both. Kept in one
+    function so the wording cannot drift between the places that push it.
+
+    The tilted case does NOT say re-pick, and must not: the candidate filter
+    below is taken against the CACHED plane's normal and a re-pick writes only
+    the selector, so picking the tilted face again reproduces this exact
+    diagnostic. Its repair is a different gesture, so it gets different words,
+    and features/repickReference.ts leaves the button off for it.
+
+    `label` is "Sketch" or "Plane"; it is ours, never document text."""
+    noun = label.lower()
+    stayed = f"{noun} stayed at its saved position. Re-pick the face."
+    if code == CODE_PLANE_TILTED:
+        return (f"{label}: the face this {noun} sits on has tilted, so the {noun} "
+                f"stayed at its saved position. Put it on the face again to "
+                f"follow the new angle.")
+    if code == CODE_AMBIGUOUS_REFERENCE:
+        return (f"{label}: this {noun}'s face reference no longer identifies one "
+                f"face, {detail}. The {stayed}")
+    return f"{label}: the face this {noun} sits on is gone, so the {stayed}"
+
+
+def push_plane_fallback(diag, feature_id, code, label, sel, detail=None):
+    """Record a face-anchored plane falling back to its cached placement.
+
+    `lossy` STAYS FALSE. It means "a best-effort match was taken", and this is
+    the opposite: no match was taken at all. builder._project_source refuses a
+    projection source when any diagnostic in its list is lossy, so a true here
+    would turn an unrelated stale sketch anchor into a failed Project pick.
+    confidence 0.0 is what gets it past _push_diag's head gate.
+
+    `at` is the selector's own stored point, not the geometry, which is how the
+    Re-pick repair finds WHICH selector to replace."""
+    _push_diag(diag, feature_id, "face", 0, 0.0, False,
+               plane_fallback_reason(code, label, detail),
+               at=(sel.get("point") if isinstance(sel, dict) else None), code=code)
+
+
+def resolve_face_on_plane(part, sel, normal, label, diag=None, feature_id=None):
+    """The body face a sketch / datum plane is anchored to, or None, having
+    recorded WHY in `diag`.
+
+    THE CO-NORMAL FILTER IS THE WHOLE FIX. Plain by:"nearest" over every face
+    binds whatever is closest to the stored raycast point, and after exactly the
+    edit this exists to survive, a box's height 10 to 20, the anchored top face
+    has moved away while the SIDE WALL still sits right next to the stored
+    point. Keeping only faces parallel to the cached plane's normal removes
+    every one of those; what is left can only be the face itself, its coplanar
+    halves, or a parallel sibling, and the filter and the metric below are what
+    stop each of those three from being the silent wrong answer.
+
+    NEVER RAISES. The caller is a ROOT feature (a sketch), so a refusal has to
+    come back as "keep the cached plane". `label` only shapes the prose."""
+    planar = [f for f in (part.faces() if part is not None else [])
+              if _face_surface(f) == "plane"]
+    if not planar:
+        # Nothing flat left to sit on: the anchor is GONE (shelled away, replaced
+        # by an import, booleaned out) rather than merely turned. The two get
+        # different words because they need different fixes.
+        push_plane_fallback(diag, feature_id, CODE_REFERENCE_NOT_FOUND, label, sel)
+        return None
+
+    pt = _finite3(sel.get("point"), want=3) if isinstance(sel, dict) else None
+    if pt is None:
+        # A point that is not three finite numbers cannot be believed, and must
+        # not be GUESSED at either: Vector(*args) collapses anything non-numeric
+        # to (0,0,0) without complaint, so the anchor would quietly bind
+        # whichever co-normal face is nearest the world origin, a clear winner
+        # and so not even an ambiguity.
+        push_plane_fallback(diag, feature_id, CODE_REFERENCE_NOT_FOUND, label, sel)
+        return None
+
+    d = _unit(_v(normal))
+    # SAME-SIGN FIRST. `abs` alone keeps the body's FAR SIDE as a candidate, and
+    # the metric below then hands it the anchor the moment it is closer to the
+    # stored point than the anchored face is. The caller flips the resolved
+    # normal back to the cached side afterwards, so the wrong face would come
+    # back as a plausible plane with nothing recorded. The abs pass stays as a
+    # fallback for the case it was written for: a face whose ORIENTATION flipped
+    # under a boolean, where no same-sign face is left.
+    cands = [f for f in planar if _face_normal(f).dot(d) >= 1.0 - PLANE_ANG_TOL]
+    if not cands:
+        cands = [f for f in planar if abs(_face_normal(f).dot(d)) >= 1.0 - PLANE_ANG_TOL]
+    if not cands:
+        push_plane_fallback(diag, feature_id, CODE_PLANE_TILTED, label, sel)
+        return None
+
+    p = _v(pt)
+
+    # The metric is the IN-PLANE distance. The survivors of the filter above are
+    # the face itself, its coplanar halves, and PARALLEL SIBLINGS (a step, a
+    # plate under a boss). Ranked in 3-D a sibling takes the anchor as soon as
+    # the anchored face travels further from the frozen pick point than the
+    # sibling sits from it. The point stays OVER the face it was picked on
+    # however far that face slides ALONG its normal, which is the only motion
+    # this exists to follow, so project it onto each candidate's plane first.
+    def _flat(f):
+        n = _face_normal(f)
+        return p - n * (n.dot(p) - n.dot(_face_centroid(f)))
+
+    # How far a candidate sits from the SAVED plane along the normal. The stored
+    # point was ON the anchored face when it was picked, so d.p IS the cached
+    # plane's offset: zero here means the face never moved.
+    def _travel(f):
+        return abs(d.dot(_face_centroid(f)) - d.dot(p))
+
+    # The same like-for-like fallback resolve_faces' nearest branch uses: a mixed
+    # metric would make the runner-up margin below meaningless.
+    try:
+        for f in cands:
+            f.distance_to(_flat(f))
+
+        def dist_of(f):
+            return f.distance_to(_flat(f))
+    except Exception:
+        def dist_of(f):
+            return _dist(_face_centroid(f), _flat(f))
+
+    # The ambiguity rule is _nearest_one's, deliberately: same NEAREST_TIE_BAND,
+    # same margin-to-the-runner-up definition. Spelled out here rather than
+    # delegated because the gate below has to see the TIED SET, and because a
+    # refusal must return None instead of raising.
+    scored = sorted(((dist_of(f), i) for i, f in enumerate(cands)), key=lambda t: t[0])
+    best_d, best_i = scored[0]
+
+    # THE UNMOVED-FACE OVERRIDE. Two stories explain a winner that contains the
+    # point but sits off the saved plane: the anchored face MOVED there, or a cut
+    # removed the material under the point and this is the floor of that cut.
+    # Prefer the story with the smaller displacement: an unmoved face whose
+    # in-plane gap is SHORTER than the winner's normal travel is the better
+    # explanation. Only an unmoved face can override, never a sibling that both
+    # moved and does not contain the point, and only within the winner's travel,
+    # so a face that merely happens to sit at the saved height elsewhere on the
+    # part cannot steal the anchor.
+    travel = _travel(cands[best_i])
+    if best_d <= PLANE_COPLANAR_TOL and travel > PLANE_COPLANAR_TOL:
+        stayed = [(dd, i) for dd, i in scored
+                  if _travel(cands[i]) <= PLANE_COPLANAR_TOL and dd < travel]
+        if stayed:
+            scored = stayed
+            best_d, best_i = scored[0]
+    runner = scored[1][0] if len(scored) > 1 else math.inf
+    margin = (runner - best_d) / (runner + 1e-9) if math.isfinite(runner) else 1.0
+    if margin >= NEAREST_TIE_BAND:
+        return cands[best_i]
+
+    tied = [cands[i] for dd, i in scored if (dd - best_d) / (runner + 1e-9) < NEAREST_TIE_BAND]
+    # COPLANAR-TIE GATE. A tie between faces that are the SAME PLANE has nothing
+    # to be wrong about: a through-slot splits the anchored face in two and the
+    # stored point lands over the removed slot, so both halves are EXACTLY
+    # equidistant. The plain rule refuses that, and the sketch would go amber on
+    # an edit that did nothing to it. Both halves give an identical plane, so
+    # accept iff every tied face collapses onto one. A tie across DISTINCT planes
+    # (the top and bottom of a thin plate) is a real ambiguity and still refuses.
+    # Do NOT harden this into a cost-margin gate: the split-face tie is exact by
+    # construction, so any margin rule rejects it again. Co-normality is already
+    # guaranteed by the filter above, so comparing the offset along `d` is a
+    # complete same-plane test.
+    off = d.dot(_face_centroid(cands[best_i]))
+    if all(abs(d.dot(_face_centroid(f)) - off) <= PLANE_COPLANAR_TOL for f in tied):
+        return cands[best_i]
+
+    tied.sort(key=_canonical_key_face)  # stable prose across rebuilds
+    push_plane_fallback(diag, feature_id, CODE_AMBIGUOUS_REFERENCE, label, sel,
+                        detail=" and ".join(_describe_face(f) for f in tied[:3]))
+    return None
 
 def _edge_dedup_key(e):
     """De-dup key for a union of edge selectors. Keys on the rounded midpoint AND

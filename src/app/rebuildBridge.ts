@@ -1,7 +1,7 @@
 import { toast } from "../ui/toast";
 import { logError } from "../ui/logStore";
 import { featureMeta } from "../ui/featureMeta";
-import { ambiguousDiagFor } from "../features/repickReference";
+import { repairableDiagFor } from "../features/repickReference";
 import { multiColorEnabled, onFeatureFlagsChange } from "../ui/featureFlags";
 import type { Engine } from "./engine";
 import { setPreviewError } from "../ui/previewError";
@@ -167,7 +167,7 @@ export function installRebuildBridge(e: Engine): void {
           // fix from here, so offer the repair instead of a bare "Show". These are
           // old files whose stored point identifies no single face — without this
           // the toast is a dead end.
-          const amb = ambiguousDiagFor(s.result?.diagnostics, id);
+          const amb = repairableDiagFor(s.result?.diagnostics, id);
           const action = amb?.at
             ? { label: "Re-pick face", onClick: () => e.starters.repickReference(id, amb.at!) }
             : { label: "Show", onClick: () => e.selectFeature(id) };

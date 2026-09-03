@@ -124,14 +124,27 @@ def test_an_unresolvable_face_falls_back_to_the_cache():
 
 
 def test_it_keeps_the_direction_the_user_accepted():
-    # Property 4. Same face, but the cached plane faces DOWN, which is what the
-    # document would hold if the pick had been made from below. The resolved
-    # face's own normal points up; the datum must keep the stored direction, and
-    # must still sit where the face actually is.
-    doc = _doc(25, plane={"origin": [0, 0, PICK_TOP], "normal": [0, 0, -1], "xdir": [1, 0, 0]})
+    # Property 4. The datum reports the direction the document stored, not the
+    # one the freshly resolved face happens to carry, because the normal is the
+    # direction `offset` runs along.
+    #
+    # THE PREMISE IS THE OUTWARD NORMAL, and it used to be the inward one: the
+    # fixture faced the cached plane DOWN on the box's TOP face, on the story
+    # that the pick had been made from below. The app cannot author that
+    # document — sketchView.faceSketchPlane runs every pick through
+    # outwardNormal, so a face pick always stores the normal pointing out of the
+    # solid — and once candidates are filtered by the cached normal (see
+    # geom_select.resolve_face_on_plane) that fixture asks for the top face
+    # while naming the bottom one, which is exactly the far-side confusion the
+    # filter exists to remove. Read as written, the answer it now gets is the
+    # right one. The reachable version of "the face's normal disagrees with the
+    # cache" is an orientation FLIP under a boolean, where no same-facing face
+    # is left at all, and that is tested against the resolver directly in
+    # test_sketch_on_face.py.
+    doc = _doc(25, offset=5.0)
     p = _datum_plane(doc)
-    assert abs(p["origin"][2] - 12.5) < 1e-6, f"did not follow: {p['origin']}"
-    assert p["normal"][2] < 0, f"normal flipped out from under the offset: {p['normal']}"
+    assert abs(p["origin"][2] - 17.5) < 1e-6, f"did not follow: {p['origin']}"
+    assert p["normal"][2] > 0, f"normal flipped out from under the offset: {p['normal']}"
     print("keeps the accepted direction OK")
 
 

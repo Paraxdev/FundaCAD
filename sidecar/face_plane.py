@@ -153,3 +153,31 @@ def agree_with(plane, reference):
         "normal": list(_scale(n, -1)),
         "xdir": list(plane["xdir"]),
     }
+
+
+def with_x_dir(plane, x_hint):
+    """Re-seat `plane` on a SAVED x axis, re-orthogonalised against its normal.
+
+    Only a sketch needs this, and it needs it absolutely. A sketch's entities are
+    stored as (u, v) in the plane's own basis, so the x axis is not decoration:
+    change it and every line in the sketch turns about the normal. plane_x_dir
+    picks the axis from |n.z| against a 0.9 threshold, which is stable for a face
+    that only SLIDES along its normal but jumps a quarter turn the moment a
+    normal drifts across that threshold. Carrying the axis the sketch was drawn
+    in costs nothing when it has not moved and is the whole answer when it has.
+
+    A datum plane deliberately does NOT use this: agree_with explains why its
+    axis is better left alone (a tangent plane's is the cylinder's own).
+
+    Returns `plane` unchanged when the hint is missing, or is parallel to the
+    normal and so leaves nothing in the plane to point along.
+    """
+    if not plane or not x_hint:
+        return plane
+    n = _unit(tuple(plane["normal"]))
+    if n is None:
+        return plane
+    x = _unit(_sub(tuple(x_hint), _scale(n, _dot(n, tuple(x_hint)))))
+    if x is None:
+        return plane
+    return {"origin": list(plane["origin"]), "normal": list(n), "xdir": list(x)}

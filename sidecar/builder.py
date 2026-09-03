@@ -91,6 +91,7 @@ from build123d import (
 )
 
 import face_plane
+import geom_select
 import pick_fuzz
 from geom_select import (
     resolve_edges,
@@ -1719,6 +1720,10 @@ class _RebuildCtx:
     find_body: object
     features: object = None     # the document's feature list (timeline-prefix context for projection sources)
     projections: object = None  # optional list; projection refresh entries append here (like diagnostics)
+    # sketch feature id -> the PlaneSpec the build actually used, for sketches
+    # that follow a face. Only the ones that MOVED: a sketch still sitting on
+    # its cached plane says nothing, and the frontend reads the cache anyway.
+    sketch_planes: dict = None
 
 
 # --- feature handlers ---------------------------------------------------------
@@ -1729,7 +1734,15 @@ class _RebuildCtx:
 
 
 def _handle_sketch(f, ctx):
-    ctx.sketches[f["id"]] = _build_sketch(f, ctx.val, ctx.datums)
+    # A sketch picked on a body face follows that face. Resolved HERE rather than
+    # inside _build_sketch because only the handler has a ctx to resolve against,
+    # and the answer is reported so the overlay and the sketch editor draw where
+    # the build put it: reopening a sketch at the stale cache would re-bake that
+    # cache on the next commit and quietly undo the follow.
+    followed = _face_anchor_plane(f, ctx, "Sketch")
+    if followed is not None and ctx.sketch_planes is not None:
+        ctx.sketch_planes[f["id"]] = followed
+    ctx.sketches[f["id"]] = _build_sketch(f, ctx.val, ctx.datums, plane=followed)
     # Associative projection refresh (opt-in, like diagnostics): re-resolve
     # projected entities against the timeline-prefix state we're sitting on
     # right now (ctx.bodies holds exactly the bodies built BEFORE this sketch).
@@ -1737,87 +1750,117 @@ def _handle_sketch(f, ctx):
         _recompute_projections(f, ctx)
 
 
-def _datum_face_plane(f, ctx):
-    """The plane of the face a datum was made from, re-resolved against the
-    bodies as they stand now, or None when the datum references no face.
+def _face_anchor_plane(f, ctx, label):
+    """The plane of the face a sketch or datum was made from, re-resolved against
+    the bodies as they stand now, or None when the feature references no face.
 
-    This is what makes a datum made from a face a construction plane rather than
-    a note about where a face used to be. The frozen `plane` on the feature stays
-    as a CACHE (the frontend draws the quad from it, and an older build opening
-    the file still places sketches correctly), but once `face` is present it is
-    this that sketches are placed on.
+    This is what makes a sketch or datum placed on a face follow that face rather
+    than record where the face used to be. Grow the box under a sketch from 10 to
+    20 and the sketch stayed at 10: a join then added nothing, which raises, but a
+    CUT carved a sealed cavity inside the part with no error at all. Measured on
+    that document: 40x40x20 came out at 30994.7 mm3 in TWO shells, and the build
+    was green.
+
+    The frozen `plane` stays as a CACHE. The frontend draws from it, an older
+    build opening the file still places the sketch correctly, and it is what the
+    resolution falls back to. Once `face` is present it is this that decides.
 
     Resolution is GLOBAL across bodies, for the reason recorded on
     _handle_delete_face: body ids are positional, so an upstream split or boolean
-    renumbers them and a body-scoped nearest match would silently re-aim the
-    datum at some distant face on the wrong piece.
+    renumbers them and a body-scoped match would silently re-aim the anchor at
+    some distant face on the wrong piece.
 
-    A face that stops resolving is not an error. The datum falls back to its
-    cached plane and stays exactly where the user last saw it, because the
-    alternative is a failed feature that takes every sketch on it down as well.
+    A face that stops resolving is NOT an error. A sketch is a root: raise here
+    and it never registers, every extrude and revolve downstream quietly becomes
+    a no-op, and one drifted reference takes the whole document with it. So doubt
+    falls back to the cached plane, the geometry is exactly what it is today and
+    never worse, and the feature gets an amber chip saying which of the three
+    things went wrong and, where a pick can repair it, a Re-pick button.
     """
     sel = f.get("face")
-    if not sel:
-        return None
     cached = f.get("plane")
     cached = cached if isinstance(cached, dict) else None
-    best = None
+    if not sel or cached is None:
+        return None  # nothing to follow, or nothing to judge candidates against
     # getattr rather than ctx.bodies: _collect_datums replays datum features
-    # against a ctx that carries nothing but the registry, because it exists to
+    # against a ctx carrying nothing but the registry, because it exists to
     # answer "where are this document's planes" without building any geometry.
-    # There is no body to resolve against there, so the datum falls back to its
+    # There is no body to resolve against there, so the anchor falls back to its
     # cache, which is exactly what that caller wants.
-    for b in getattr(ctx, "bodies", None) or []:
-        shape = b.get("shape")
-        if shape is None:
-            continue
-        try:
-            found = resolve_faces(shape, sel, getattr(ctx, "diagnostics", None), f.get("id"))
-        except Exception:
-            continue
-        for face in found:
-            if face is None:
-                continue
-            try:
-                d = face.distance_to(Vector(*sel["point"])) if "point" in sel else 0.0
-            except Exception:
-                d = 0.0
-            if best is None or d < best[0]:
-                best = (d, face)
-    if best is None:
+    shapes = [b["shape"] for b in (getattr(ctx, "bodies", None) or [])
+              if b.get("shape") is not None]
+    if not shapes:
         return None
-    face = best[1]
+    part = _as_compound(shapes) if len(shapes) > 1 else shapes[0]
+    fid = f.get("id")
     at = f.get("at")
-    surface = _face_surface(face)
-    plane = None
-    if surface == "cylinder" and at:
-        # A cylinder has no plane of its own, so the datum is the tangent plane
-        # where the user touched it. Read straight off the analytic surface,
-        # which is exact, rather than fitted from the triangles the frontend had
-        # to work from.
+
+    # Held back rather than pushed. The planar resolver reports "the face is
+    # gone" for a datum anchored to a CYLINDER, which is the wrong question
+    # asked of the right document, so its answer is only committed once the
+    # cylinder arm below has also declined.
+    scratch = []
+    face = geom_select.resolve_face_on_plane(part, sel, cached["normal"], label,
+                                             scratch, fid)
+    if face is not None:
+        plane = face_plane.plane_from_point_normal(
+            _vec3(face.center()), _vec3(_face_normal(face)))
+        # The x axis the sketch was DRAWN in, not one re-derived from the new
+        # normal: the entities are (u, v) in this basis. See face_plane.with_x_dir.
+        plane = face_plane.with_x_dir(plane, cached.get("xdir"))
+        return face_plane.agree_with(plane, cached)
+
+    # A cylinder has no plane of its own, so a datum made from one is the tangent
+    # plane where it was touched, read off the analytic surface (exact) rather
+    # than fitted from the triangles the frontend had to work from. Reached only
+    # when the planar arm found nothing, since a planar anchor never wants this.
+    if at:
+        found = _nearest_cylinder_face(part, sel)
+        if found is not None:
+            try:
+                ax = found._geom_adaptor().Cylinder().Axis()
+                loc, dr = ax.Location(), ax.Direction()
+                plane = face_plane.tangent_plane_on_cylinder(
+                    (loc.X(), loc.Y(), loc.Z()), (dr.X(), dr.Y(), dr.Z()),
+                    float(found.radius), tuple(at), None)
+            except Exception:
+                plane = None
+            if plane is not None:
+                return face_plane.agree_with(plane, cached)
+
+    diag = getattr(ctx, "diagnostics", None)
+    if diag is not None:
+        diag.extend(scratch)
+    return None
+
+
+def _nearest_cylinder_face(part, sel):
+    """The cylindrical face nearest the selector's stored point, or None.
+
+    Plain nearest is right HERE and wrong for a plane, which is why this is a
+    separate few lines rather than a flag on the planar resolver. A tangent datum
+    is defined BY its touch point, so a cylinder that moved out from under that
+    point is genuinely no longer the one that was picked, and picking up whatever
+    is nearest instead is the honest answer, not a silent substitution."""
+    try:
+        pt = Vector(*sel["point"]) if isinstance(sel, dict) and "point" in sel else None
+    except Exception:
+        pt = None
+    best = None
+    for face in part.faces():
+        if _face_surface(face) != "cylinder":
+            continue
         try:
-            ax = face._geom_adaptor().Cylinder().Axis()
-            loc, dr = ax.Location(), ax.Direction()
-            plane = face_plane.tangent_plane_on_cylinder(
-                (loc.X(), loc.Y(), loc.Z()),
-                (dr.X(), dr.Y(), dr.Z()),
-                float(face.radius),
-                tuple(at),
-                None,
-            )
+            d = face.distance_to(pt) if pt is not None else 0.0
         except Exception:
-            plane = None
-    elif surface == "plane":
-        n = _face_normal(face)
-        c = face.center()
-        plane = face_plane.plane_from_point_normal((c.X, c.Y, c.Z), (n.X, n.Y, n.Z))
-    if plane is None:
-        return None
-    # The face's own normal direction is not stable across a rebuild (a boolean
-    # re-manufactures faces, and a cut's new surface is oriented opposite the one
-    # it cut into), and the datum's normal is the direction its offset runs
-    # along. Keep the direction the user accepted at pick time.
-    return face_plane.agree_with(plane, cached)
+            d = 0.0
+        if best is None or d < best[0]:
+            best = (d, face)
+    return best[1] if best else None
+
+
+def _vec3(v):
+    return (v.X, v.Y, v.Z)
 
 
 def _handle_datum_plane(f, ctx):
@@ -1825,7 +1868,7 @@ def _handle_datum_plane(f, ctx):
     # / splits can reference it by id. Validate it resolves here so a
     # bad datum flags at its own feature. `offset` shifts the source
     # plane along its normal; we store the resolved offset plane.
-    followed = _datum_face_plane(f, ctx)
+    followed = _face_anchor_plane(f, ctx, "Plane")
     base = _plane_of(followed or f["plane"], ctx.datums)
     off = f.get("offset") or 0
     origin = base.origin + base.z_dir * off
@@ -2663,7 +2706,7 @@ def _revolve_axis(f, ctx):
 
     Re-resolving is what makes a picked edge a reference rather than a note about
     where an edge used to be. Resolution is GLOBAL across bodies for the reason
-    recorded on _datum_face_plane: body ids are positional, so an upstream split
+    recorded on _face_anchor_plane: body ids are positional, so an upstream split
     or boolean renumbers them and a body-scoped match would silently re-aim the
     revolve at some distant edge on the wrong piece.
 
@@ -3370,7 +3413,7 @@ def _make_val(params):
 
 
 def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist=None,
-            projections=None, datums_out=None):
+            projections=None, datums_out=None, sketch_planes_out=None):
     """Return (part, errors, bodies).
 
     part    : the merged build123d solid/compound of all bodies, or None.
@@ -3392,6 +3435,13 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
               plane on the feature and draws its quad from that cache, so a datum
               that follows a face has to report where the face actually put it or
               the drawn plane and the plane sketches land on drift apart.
+
+    sketch_planes_out : optional dict; filled with the plane the build actually
+              used for every sketch that FOLLOWS a face, keyed by feature id.
+              Same reason as datums_out one paragraph up: the frontend places a
+              sketch from the cache frozen at pick time, and a sketch that has
+              followed its face is no longer there. Only moved sketches appear,
+              so an absent id means "the cache is still right".
 
     projections : optional list; when given, each sketch handler re-resolves its
               projected entities against the prefix state and appends refresh
@@ -3421,6 +3471,7 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
 
     sketches = {}
     datums = {}  # datumPlane feature id -> PlaneSpec (resolved lazily by _plane_of)
+    sketch_planes = {}  # sketch feature id -> the face-followed PlaneSpec it used
     bodies = []  # ordered [{id, name, shape}]
     counter = {"n": 0}
     errors = []
@@ -3468,6 +3519,14 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
             "bodies": [dict(b) for b in bodies],
             "sketches_ref": sketches, "n_sketches": len(sketches),
             "datums": {k: dict(v) for k, v in datums.items()},
+            # The plane each face-anchored sketch actually resolved to. It rides
+            # with the snapshot for the same reason `datums` does, and for one
+            # more: the disk-resume path REPLAYS the prefix's sketches, and a
+            # replay has no bodies to resolve a face against. Without this a
+            # resumed build would rebuild those sketches on their stale cached
+            # plane while a full build put them on the face — the same document
+            # giving two different solids depending on the cache.
+            "sketch_planes": {k: dict(v) for k, v in sketch_planes.items()},
             "n": counter["n"],
             # errors travel with the snapshot: an incremental resume PAST a failed
             # feature must still re-report its error (else the banner would clear
@@ -3495,6 +3554,10 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
             for k in list(sketches.keys())[snap["n_sketches"]:]:
                 del sketches[k]
         datums.clear(); datums.update({k: dict(v) for k, v in snap["datums"].items()})
+        # .get: a checkpoint written before sketches followed faces has no such
+        # key, and degrades to the old behaviour rather than raising.
+        sketch_planes.clear()
+        sketch_planes.update({k: dict(v) for k, v in (snap.get("sketch_planes") or {}).items()})
         counter["n"] = snap["n"]
         err_src = snap["errors_ref"]
         if err_src is not errors:
@@ -3526,7 +3589,8 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
             for f2 in features[:start]:
                 if f2.get("type") == "sketch":
                     try:
-                        sketches[f2["id"]] = _build_sketch(f2, val, datums)
+                        sketches[f2["id"]] = _build_sketch(
+                            f2, val, datums, plane=sketch_planes.get(f2["id"]))
                     except Exception:
                         pass  # its failure is already in the restored errors
 
@@ -3538,6 +3602,7 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
         diagnostics=diagnostics, hidden_bodies=hidden_bodies,
         new_body=new_body, active=active, require_active=require_active,
         find_body=find_body, features=features, projections=projections,
+        sketch_planes=sketch_planes,
     )
 
     for i in range(start, len(features)):
@@ -3594,7 +3659,7 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
         if persist is not None:
             _persist_tick(
                 persist, i, time.monotonic() - t_feat, bodies, datums, errors, counter,
-                diagnostics,
+                diagnostics, sketch_planes,
             )
         if on_feature_tick is not None:
             try:
@@ -3636,6 +3701,8 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
 
     if datums_out is not None:
         datums_out.update(datums)
+    if sketch_planes_out is not None:
+        sketch_planes_out.update(sketch_planes)
 
     return part, errors, out_bodies
 
@@ -3945,7 +4012,8 @@ def _blob_key(chain_key, body_id):
     ).hexdigest()
 
 
-def _persist_tick(persist, i, dt_s, bodies, datums, errors, counter, diagnostics=None):
+def _persist_tick(persist, i, dt_s, bodies, datums, errors, counter, diagnostics=None,
+                  sketch_planes=None):
     """Per-feature bookkeeping for the durable cache: track each body's
     last-modifying chain key (shape-identity comparison, O(bodies)), and drop a
     budget-spaced checkpoint when accumulated replay cost since the last one
@@ -3961,10 +4029,12 @@ def _persist_tick(persist, i, dt_s, bodies, datums, errors, counter, diagnostics
     persist["acc_ms"] += dt_s * 1000.0
     if persist["acc_ms"] < persist.get("budget_ms", 1000.0):
         return
-    _save_checkpoint(persist, i, bodies, datums, errors, counter["n"], diagnostics)
+    _save_checkpoint(persist, i, bodies, datums, errors, counter["n"], diagnostics,
+                     sketch_planes)
 
 
-def _save_checkpoint(persist, i, bodies, datums, errors, counter_n, diagnostics=None):
+def _save_checkpoint(persist, i, bodies, datums, errors, counter_n, diagnostics=None,
+                     sketch_planes=None):
     """Best-effort: a cache write failure must never break a rebuild."""
     try:
         store, keys, mod = persist["store"], persist["keys"], persist["mod"]
@@ -4016,6 +4086,11 @@ def _save_checkpoint(persist, i, bodies, datums, errors, counter_n, diagnostics=
                 textures[b["id"]] = b["_textures"]
         state = json.dumps({
             "datums": datums,
+            # Rides with `datums` for the same reason, and one more: the resume
+            # below REPLAYS the prefix's sketches with no bodies to resolve a
+            # face against, so without this a resumed build would put a
+            # face-anchored sketch back on its stale cached plane.
+            "sketch_planes": sketch_planes or {},
             "errors": errors,
             # diagnostics ride along with errors so a disk resume can re-report
             # BOTH (see _snapshot). Every producer emits plain JSON scalars; if
@@ -4106,6 +4181,8 @@ def _restore_from_disk(store, chain_keys):
             "bodies": bodies,
             "sketches_ref": {}, "n_sketches": 0,  # rebuilt via replay_sketches
             "datums": state["datums"],
+            # .get for the same reason "diagnostics" has one below.
+            "sketch_planes": state.get("sketch_planes", {}),
             "n": state["n"],
             "errors_ref": state["errors"], "n_errors": len(state["errors"]),
             # .get: checkpoints written before diagnostics were persisted have no
@@ -4127,7 +4204,8 @@ def _restore_from_disk(store, chain_keys):
 _RAM_SNAP_WINDOW = int(os.environ.get("SINDRI_RAM_SNAP_WINDOW", "300"))
 
 
-def rebuild_cached(document, diagnostics=None, projections=None, datums_out=None):
+def rebuild_cached(document, diagnostics=None, projections=None, datums_out=None,
+                   sketch_planes_out=None):
     """Incremental rebuild: reuse cached per-feature state for the unchanged document
     PREFIX and re-run only from the first changed feature. Resume sources, deepest
     wins: (1) in-RAM per-feature snapshots from the previous build in this worker,
@@ -4226,7 +4304,7 @@ def rebuild_cached(document, diagnostics=None, projections=None, datums_out=None
     part, errors, bodies = rebuild(
         document, diagnostics=diagnostics, resume=resume,
         snapshots_out=snaps_out, persist=persist, projections=projections,
-        datums_out=datums_out,
+        datums_out=datums_out, sketch_planes_out=sketch_planes_out,
     )
     elapsed = time.monotonic() - t_build
 
@@ -4261,6 +4339,7 @@ def rebuild_cached(document, diagnostics=None, projections=None, datums_out=None
             persist, len(features) - 1, tip["bodies"], tip["datums"],
             tip["errors_ref"][: tip["n_errors"]], tip["n"],
             (tip.get("diags_ref") or [])[: tip["n_diags"]],
+            tip.get("sketch_planes") or {},
         )
     if persist is not None:
         # annotate returned bodies with their content key so the server can key
@@ -6591,7 +6670,7 @@ def list_fonts():
         return {"families": []}
 
 
-def _build_sketch(f, val, datums=None):
+def _build_sketch(f, val, datums=None, plane=None):
     """Build a 2D sketch and locate it onto its plane (algebra mode).
 
     Returns {"sketch": union, "faces": [located per-loop faces]}. The union is the
@@ -6603,7 +6682,10 @@ def _build_sketch(f, val, datums=None):
     segments are assembled into closed wires and turned into faces, so an
     interactively-drawn polyline profile can be extruded like in mainstream MCAD.
     """
-    plane = _plane_of(_sketch_plane_ref(f), datums)
+    # `plane` is the face-anchored placement the handler resolved, when there is
+    # one. Without it the sketch falls back to its own reference, which is a datum
+    # id or the cached spec.
+    plane = _plane_of(plane or _sketch_plane_ref(f), datums)
     faces = []
     edges = []  # free-form line + arc edges, assembled into faces below
     all_edges = []  # EVERY entity's boundary as local edges, for planar subdivision

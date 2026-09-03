@@ -1666,7 +1666,11 @@ export class Viewport {
    *
    *  Curved faces are rejected rather than flattened — a sketch on a mean plane
    *  through a cylinder wall is geometry the user did not ask for. */
-  selectedFaceSketchPlane(): { plane: PlaneDef; faceId: number } | null {
+  selectedFaceSketchPlane(): {
+    plane: PlaneDef;
+    faceId: number;
+    anchor: { selector: Selector; at: [number, number, number] };
+  } | null {
     if (!this.highlighter || !this.model) return null;
     const faceId = this.highlighter.getSelectedFaces()[0];
     if (faceId === undefined) return null;
@@ -1684,7 +1688,22 @@ export class Viewport {
         if (Math.abs(n.dot(v) - d0) > tol) return null;
       }
     }
-    return { plane: faceSketchPlane([n.x, n.y, n.z], [c.x, c.y, c.z]), faceId };
+    return {
+      plane: faceSketchPlane([n.x, n.y, n.z], [c.x, c.y, c.z]),
+      faceId,
+      // What lets a sketch started this way FOLLOW the face, exactly as one
+      // started through the plane picker does. The point is faceCentroidWorld's,
+      // which snaps to a triangle centroid and so lies ON the face by
+      // construction — a plain average of the vertices does not, for an L-shape
+      // or a face with a hole, and the sidecar measures to the face.
+      anchor: {
+        selector: {
+          kind: "face", by: "nearest", point: [c.x, c.y, c.z],
+          ...(this.faceIdToBodyId(faceId) ? { body: this.faceIdToBodyId(faceId)! } : {}),
+        } as Selector,
+        at: [c.x, c.y, c.z] as [number, number, number],
+      },
+    };
   }
 
   // --- the face a sketch is being drawn on -----------------------------------
@@ -2332,6 +2351,13 @@ export class Viewport {
    * why (grid snapping rounds in plane-LOCAL coordinates, so the origin decides
    * where the lattice falls in world space).
    */
+  /** The whole pick, not just its plane: `kind` says whether the face was flat
+   *  or round, and `selector`/`at` are what let a sketch or datum built from it
+   *  FOLLOW that face across a rebuild. */
+  facePlanePick(clientX: number, clientY: number) {
+    return pickFacePlaneAt(this, clientX, clientY);
+  }
+
   pickFacePlane(clientX: number, clientY: number): PlaneDef | null {
     return pickFacePlaneAt(this, clientX, clientY)?.def ?? null;
   }

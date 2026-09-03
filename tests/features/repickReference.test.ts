@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { findSelectorAt, replaceSelectorAt, ambiguousDiagFor } from "../../src/features/repickReference";
+import { findSelectorAt, replaceSelectorAt, repairableDiagFor } from "../../src/features/repickReference";
 import type { Feature, Selector } from "../../src/types";
 
 const near = (p: [number, number, number]): Selector =>
@@ -53,14 +53,14 @@ describe("replaceSelectorAt", () => {
   });
 });
 
-describe("ambiguousDiagFor", () => {
+describe("repairableDiagFor", () => {
   const diags = [
     { feature_id: "f1", reason: "low confidence", kind: "face" },
     { feature_id: "f73", reason: "ambiguous nearest pick", kind: "face", at: [1, 2, 3] as [number, number, number] },
   ];
   it("picks only the ambiguous diagnostic for that feature", () => {
-    expect(ambiguousDiagFor(diags, "f73")?.at).toEqual([1, 2, 3]);
-    expect(ambiguousDiagFor(diags, "f1")).toBeUndefined();
-    expect(ambiguousDiagFor(undefined, "f73")).toBeUndefined();
+    expect(repairableDiagFor(diags, "f73")?.at).toEqual([1, 2, 3]);
+    expect(repairableDiagFor(diags, "f1")).toBeUndefined();
+    expect(repairableDiagFor(undefined, "f73")).toBeUndefined();
   });
 });

@@ -1,4 +1,4 @@
-import { ambiguousDiagFor } from "../features/repickReference";
+import { repairableDiagFor } from "../features/repickReference";
 import { useUiStore } from "../stores/ui";
 import { useTimelineStore } from "../stores/timeline";
 import type { Engine } from "./engine";
@@ -28,9 +28,9 @@ export function installTitlebar(e: Engine): void {
     // Read the diagnostics off the LATEST build each time rather than caching: the
     // menu opens long after the build, and a feature repaired in between must stop
     // offering the repair.
-    canRepick: (id) => !!ambiguousDiagFor(e.store.buildState.result?.diagnostics, id),
+    canRepick: (id) => !!repairableDiagFor(e.store.buildState.result?.diagnostics, id),
     onRepick: (id) => {
-      const amb = ambiguousDiagFor(e.store.buildState.result?.diagnostics, id);
+      const amb = repairableDiagFor(e.store.buildState.result?.diagnostics, id);
       if (amb?.at) e.starters.repickReference(id, amb.at, amb.kind);
     },
   });

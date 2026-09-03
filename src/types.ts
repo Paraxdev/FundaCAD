@@ -393,7 +393,14 @@ export type Feature =
   // cache, so every frontend consumer keeps working without resolving datums —
   // and an older build opening the file still places the sketch correctly.
   // This is what makes an offset plane's distance stay editable after creation.
-  | { id: string; type: "sketch"; plane: PlaneSpec; planeId?: string; entities: SketchEntity[]; constraints?: SketchConstraint[]; patterns?: SketchPattern[]; name?: string }
+  // `face` makes the sketch FOLLOW the body face it was drawn on: the sidecar
+  // re-resolves the selector every rebuild and places the sketch where the face
+  // now is. Without it a sketch on a face is a note about where that face used
+  // to be — raise the box under it and a cut carves a sealed cavity inside the
+  // part with no error at all. `plane` stays populated as the cache the
+  // resolution falls back to, exactly as it does for datumPlane below. `at` is
+  // the point the face was touched at, which is what the resolution ranks by.
+  | { id: string; type: "sketch"; plane: PlaneSpec; planeId?: string; face?: Selector; at?: Vec3; entities: SketchEntity[]; constraints?: SketchConstraint[]; patterns?: SketchPattern[]; name?: string }
   | {
       id: string;
       type: "extrude";
@@ -768,6 +775,13 @@ export interface RebuildResult {
   // `plane` is what an older build reads and what the file records about the
   // pick, and rewriting it every rebuild would dirty documents nobody edited.
   datumPlanes?: Record<string, PlaneDef>;
+  // Where the build actually put each sketch that FOLLOWS a face. Only the ones
+  // that moved: an absent id means the feature's own cached `plane` is still
+  // right, which is what every reader falls back to. Display state like
+  // datumPlanes above, and not written back into the document for the same
+  // reason — the cache records the pick, and rewriting it every rebuild would
+  // dirty documents nobody edited.
+  sketchPlanes?: Record<string, PlaneDef>;
 }
 
 export type RebuildReply =

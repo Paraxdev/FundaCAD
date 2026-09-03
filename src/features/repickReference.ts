@@ -74,12 +74,45 @@ export function replaceSelectorAt(
   return { [site.field]: arr } as Partial<Feature>;
 }
 
-/** The ambiguous-reference diagnostic for a feature, if this build reported one. */
-export function ambiguousDiagFor(
-  diagnostics: { feature_id?: string; reason?: string; at?: [number, number, number]; kind?: string; candidates?: string[] }[] | undefined,
+// The diagnostic codes a face pick can actually clear (geom_select's
+// CODE_* constants).
+//
+// `planeTilted` is deliberately NOT here, and that is a real limitation rather
+// than an oversight: resolve_face_on_plane filters candidate faces by the CACHED
+// plane's normal, and a repair writes only the selector (replaceSelectorAt
+// above, by design — rewriting the plane would re-frame a sketch's 2D entities
+// into a rotated basis and move everything downstream). So re-picking the tilted
+// face on the body that tilted reproduces the identical diagnostic, every time.
+// A button that cannot clear the chip beside it is the dead end this file exists
+// to avoid, and the sidecar's prose for that code says what does work instead.
+const REPAIRABLE_CODES = new Set(["ambiguousReference", "referenceNotFound"]);
+
+/** The repairable-reference diagnostic for a feature, if this build reported one.
+ *
+ *  "Repairable" means the user can fix it by picking a face, which is broader
+ *  than ambiguity: a sketch or datum plane anchored to a face FALLS BACK to its
+ *  cached plane rather than failing the build, and says why — the face is gone,
+ *  or the reference no longer names exactly one face. Both are answered by the
+ *  same gesture, so both get the same button. Without them the "Re-pick the
+ *  face" prose the sidecar writes would have nothing behind it.
+ *
+ *  `at` is still required: it is the stored selector point, and without it
+ *  findSelectorAt cannot say WHICH selector to swap.
+ *
+ *  The prose fallback is DELIBERATE and stays. Matching `reason === "ambiguous
+ *  nearest pick"` across the language boundary is what this used to do, so a
+ *  sidecar older than the `code` field — most commonly server.py run by hand
+ *  from another checkout, which is a routine workflow here — would otherwise
+ *  lose the Re-pick affordance with nothing to explain it. */
+export function repairableDiagFor(
+  diagnostics: { feature_id?: string; reason?: string; code?: string; at?: [number, number, number]; kind?: string; candidates?: string[] }[] | undefined,
   featureId: string,
 ) {
   return (diagnostics ?? []).find(
-    (d) => d.feature_id === featureId && d.reason === "ambiguous nearest pick" && Array.isArray(d.at),
+    (d) =>
+      d.feature_id === featureId &&
+      ((d.code !== undefined && REPAIRABLE_CODES.has(d.code)) ||
+        d.reason === "ambiguous nearest pick") &&
+      Array.isArray(d.at),
   );
 }

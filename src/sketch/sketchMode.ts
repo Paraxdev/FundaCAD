@@ -5,7 +5,7 @@
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore } from "../document/store";
-import type { EdgeFingerprint, Feature, ParamTarget, PlaceOffset, PlaneSpec, ProjectedSource, ProjectionUpdate, SketchConstraint, SketchPattern } from "../types";
+import type { EdgeFingerprint, Feature, ParamTarget, PlaceOffset, PlaneSpec, ProjectedSource, ProjectionUpdate, Selector, SketchConstraint, SketchPattern } from "../types";
 import { applyProjectionUpdate, dimPlaceOf, isBadgeEntity, isPlacedDim } from "../types";
 import { SketchPlane } from "./plane";
 import { SketchOverlay, curveObjects, dimensionLineObjects, CURVE_COLOR, PREVIEW_COLOR, SELECT_COLOR } from "./overlay";
@@ -166,6 +166,8 @@ const SNAP_MARKER_PX = 6;
 export class SketchMode {
   active = false;
   tool: SketchTool = "select";
+  /** The body face this sketch is anchored to, when it was drawn on one. */
+  private face: { selector: Selector; at: [number, number, number] } | null = null;
   onState: (() => void) | null = null; // notify UI (tool/active changed)
 
   private plane = new SketchPlane("XY");
@@ -423,11 +425,21 @@ export class SketchMode {
    *  consumer reads), but the sidecar prefers the id, so editing the datum's
    *  offset later moves this sketch. Without it an offset plane's distance is
    *  baked into the origin and gone. */
-  enter(plane: PlaneSpec, store: DocumentStore, editId?: string, planeId?: string) {
+  enter(
+    plane: PlaneSpec,
+    store: DocumentStore,
+    editId?: string,
+    planeId?: string,
+    face?: { selector: Selector; at: [number, number, number] } | null,
+  ) {
     this.active = true;
     this.editingId = editId ?? null;
     this.plane = this.overlay.planeFor(plane);
     this.planeId = planeId ?? null;
+    // The face this sketch is drawn on, so the sidecar can re-derive the plane
+    // every rebuild instead of the sketch recording where the face used to be.
+    // A sketch on a base plane or on a datum has none, and neither needs one.
+    this.face = face ?? null;
     this.store = store;
     // Once per session, not per edit. The plane is fixed for the whole sketch
     // and the body under it cannot change while the sketch is open — nothing is
@@ -466,6 +478,12 @@ export class SketchMode {
         // keep an existing datum link across a re-edit (the caller only passes
         // planeId when it just created the datum)
         if (f.planeId) this.planeId = f.planeId;
+        // ...and the same for the face anchor: re-editing a sketch must not
+        // strip the reference that makes it follow. The caller passes one only
+        // when the sketch is being CREATED on a face.
+        if (f.face) {
+          this.face = { selector: f.face, at: (f.at ?? [0, 0, 0]) as [number, number, number] };
+        }
         for (const p of this.patterns) notePatternId(p.id); // reserve ids so new ones don't collide
       }
     }
@@ -515,6 +533,7 @@ export class SketchMode {
       type: "sketch",
       plane: this.plane.serialize(),
       ...(this.planeId ? { planeId: this.planeId } : {}),
+      ...(this.face ? { face: this.face.selector, at: this.face.at } : {}),
       entities: this.entities.filter((e) => e.id !== TEXT_PREVIEW_ID).map(toSketchEntity),
       ...(this.constraints.length > 0 ? { constraints: this.constraints.map((c) => ({ ...c })) } : {}),
       ...(this.patterns.length > 0 ? { patterns: this.patterns.map((p) => ({ ...p })) } : {}),

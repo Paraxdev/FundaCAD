@@ -106,13 +106,20 @@ export function createContextMenus(deps: ContextMenusDeps) {
 
   function openFaceMenu(x: number, y: number, hit: FaceHit) {
     const plane = viewport.pickFacePlane(x, y); // null on curved faces
+    // The same anchor the plane picker hands startSketch, so a sketch begun from
+    // the right-click menu follows its face too. Planar only: a tangent plane on
+    // a cylinder is a different plane at every point, so there is nothing for a
+    // rebuild to re-derive.
+    const facePick = viewport.facePlanePick(x, y);
+    const anchor = facePick && facePick.kind === "planar"
+      ? { selector: facePick.selector, at: facePick.at } : null;
     const bodyId = viewport.faceIdToBodyId(hit.faceId);
     const ownerId = featureForFace(hit.faceId);
     const owner = ownerId ? store.document.features.find((f) => f.id === ownerId) : undefined;
     const ownerLabel = owner ? featureMeta(owner).label : "";
     const items: CtxItem[] = [
       { label: "Press/Pull face", shortcut: keyHint("presspull"), onClick: unlessBusy(() => { viewport.selectOnlyFace(hit.faceId); handleAction("presspull"); }) },
-      { label: "Sketch on this face", shortcut: keyHint("sketch"), disabled: !plane, onClick: unlessBusy(() => { if (plane) sketch.enter(plane, store); }) },
+      { label: "Sketch on this face", shortcut: keyHint("sketch"), disabled: !plane, onClick: unlessBusy(() => { if (plane) sketch.enter(plane, store, undefined, undefined, anchor); }) },
       { label: "Measure from here", shortcut: keyHint("measure"), onClick: unlessBusy(() => { setLastAction("measure"); measure.startWith(hit); }) },
       { separator: true, label: "" },
       {

@@ -25,6 +25,37 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Fixed
 
+- **A sketch drawn on a body face follows that face.** It stored only the plane
+  it resolved to, with no memory of the face, so it recorded where the face used
+  to be. Measured: a 40x40 box 10 tall with a circle sketched on its top and cut
+  5 mm down is an open pocket, 14994.7 mm3 in one shell. Raise the box to 20 and
+  the sketch stays at 10, so the cut lands INSIDE the solid: 30994.7 mm3 in TWO
+  shells, a sealed cavity nobody can see, print or select, and the build stays
+  green with no error at all. Lower the box to 5 and the sketch floats above it.
+  A sketch picked on a face now stores that face, the sidecar re-derives the
+  plane every rebuild, and all three heights come out as one clean pocket. The
+  overlay and the sketch editor read the plane the build used, so reopening a
+  sketch cannot re-bake the stale one and undo the follow.
+
+  Datum planes already followed their face, and this fixes them too: the old
+  match was plain nearest, so growing a box from 10 to 20 left the top face and
+  the bottom face exactly equidistant from the saved point and the datum refused
+  as ambiguous. Candidates are filtered to faces facing the way the saved plane
+  did and ranked by IN-PLANE distance, since the point stays over its face
+  however far that face slides along the normal. A side wall can no longer take
+  the anchor, nor a parallel sibling (raising a boss keeps the boss, not the
+  plate under it), nor the floor of a slot cut beneath the point. A face split in
+  two by a slot is accepted rather than called ambiguous, because both halves are
+  the same plane. A tie across two genuinely different planes still refuses.
+
+  It never fails the build. A sketch is a root, so a face that has tilted,
+  vanished or gone ambiguous keeps the cached plane, everything downstream still
+  builds, and the feature reports which of the three happened. The first two
+  offer Re-pick; a tilt does not, and says so, because re-picking the same tilted
+  face would reproduce the same message.
+
+  Documents saved before this carry no face and are untouched.
+
 - **A wall the kernel had to store in pieces is picked as one wall.** Cut a
   helical groove into a shank and what survives between the turns is one region
   of one cylinder, but a face may not wrap more than once around a periodic
