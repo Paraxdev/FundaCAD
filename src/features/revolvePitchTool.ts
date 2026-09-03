@@ -405,7 +405,18 @@ export class RevolvePitchTool {
       this.grabbingAngle = false;
       this.viewport.domElement.style.cursor =
         this.hovering || this.hoveringArc ? "grab" : "default";
-      this.commit();
+      // Letting go of a handle is NOT the end of the gesture. A revolve has two
+      // numbers and a handle each, so committing here shut the tool the moment
+      // the first one was set and the second could not be reached without
+      // reopening: drag the pitch, and the angle arc was already gone.
+      //
+      // So a release stays armed and pushes the drag through the sidecar
+      // instead. That is the other half of it — the drag itself only moves the
+      // dashed helix, because a rebuild per frame lurches, so without a build on
+      // release you would go on aiming the second handle at the shape you
+      // started with. manipulator.fluentRelease already says "stay" for every
+      // gesture begun on a tool's own gizmo; this one was the exception.
+      this.pushPreview();
       return;
     }
     const moved =

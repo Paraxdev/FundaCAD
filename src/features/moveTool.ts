@@ -150,6 +150,9 @@ export class MoveTool {
 
   private dim = new DimInput();
   private onDone: ((id: string | null) => void) | null = null;
+  /** Where a plain click that stood the tool down landed, so the caller can let
+   *  that same click do its ordinary work — usually picking the next body. */
+  onClickThrough: ((x: number, y: number, additive: boolean) => void) | null = null;
 
   private boundMove: (e: PointerEvent) => void;
   private boundDown: (e: PointerEvent) => void;
@@ -361,12 +364,61 @@ export class MoveTool {
     if (this.grab) {
       this.grab = null;
       this.viewport.domElement.style.cursor = this.hover ? "grab" : "default";
+      // Each drag is its own row in the timeline. Writing it here rather than
+      // at the end of the session is what makes an undo undo the LAST nudge
+      // instead of the whole sitting, and what lets the next drag start from
+      // the pose this one produced. The gizmo comes straight back on the
+      // rebuilt body, so from the hand's point of view nothing closed.
+      this.settleDrag();
       return;
     }
     const moved =
       Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
-    // a clean click in empty space (not on a handle) commits
-    if (!moved && !this.hitHandle(e.clientX, e.clientY)) this.commit();
+    // A clean click off the handles ends the session — and then means whatever
+    // it would have meant with no gizmo up. Picking is suspended while the tool
+    // owns the pointer, so the click has to be replayed once it does not.
+    if (!moved && !this.hitHandle(e.clientX, e.clientY)) {
+      const through = this.onClickThrough;
+      const at = { x: e.clientX, y: e.clientY, add: e.ctrlKey || e.metaKey };
+      this.commit();
+      through?.(at.x, at.y, at.add);
+    }
+  }
+
+  /** Write the drag just finished and re-open on the same bodies.
+   *
+   *  The re-open waits for the rebuild, because everything the gizmo is placed
+   *  from — the bodies' centroid, the ghost it drags — is read off the model,
+   *  and the model between addFeature and the build landing is still the old
+   *  one. Re-opening against that would put the gizmo back where the body used
+   *  to be and the next drag would double the move. */
+  private settleDrag() {
+    const ids = this.bodies.slice();
+    const done = this.onDone;
+    const through = this.onClickThrough;
+    const before = this.store.document.features.length;
+    this.commit();
+    if (!ids.length) return;
+    const reopen = () => {
+      if (this.active) return; // something else claimed the tool meanwhile
+      this.start(ids, done ?? (() => {}));
+      this.onClickThrough = through;
+    };
+    // A drag that ended back where it started writes nothing (commit() falls
+    // through to cancel()), so there is no rebuild to wait for.
+    if (this.store.document.features.length === before) return reopen();
+    // Wait for the FALLING edge, not merely for `building === false`: onBuild
+    // replays the current state to a new subscriber, and at this instant the
+    // round-trip may not have been announced yet. Re-opening on that replay
+    // would place the gizmo from the pre-move model and the next drag would
+    // count this one twice.
+    let started = false;
+    const off = this.store.onBuild((s) => {
+      if (s.building) { started = true; return; }
+      if (!started) return;
+      off();
+      reopen();
+    });
   }
 
   /** Where the cursor is, in the plane through the gizmo that faces the camera.

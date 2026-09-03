@@ -183,11 +183,21 @@ export function installViewportWiring(e: Engine): void {
   // once PER BODY on every doc change and every build.
   const browser = useBrowserStore();
   browser.setSelectedBodies(e.viewport.getSelectedBodies());
+  // Picking a body IS reaching for it. The gizmo used to be a second step (M,
+  // or the toolbar), which meant the obvious gesture — click the thing, drag it
+  // — did nothing at all and the prompt had to explain the missing half. So a
+  // body selection opens the move gizmo on it, and the tool hands a plain click
+  // back here so the next click moves the gizmo to the next body (or, over
+  // nothing, puts it away) in one click rather than two.
   e.viewport.onBodySelectionChange = () => {
     browser.setSelectedBodies(e.viewport.getSelectedBodies());
     if (e.toolBusy()) return;
-    const n = e.viewport.getSelectedBodies().length;
-    setPrompt(n ? `${n} bod${n > 1 ? "ies" : "y"} selected, Move (M) to drag · Esc to clear` : null);
+    const ids = e.viewport.getSelectedBodies();
+    if (!ids.length) { setPrompt(null); return; }
+    e.tools.move.onClickThrough = (x, y, additive) => {
+      e.viewport.selectBodyAt(x, y, additive);
+    };
+    e.starters.startMove();
   };
   // Esc clears the body selection while in Bodies mode
   window.addEventListener("keydown", (ev) => {

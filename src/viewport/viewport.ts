@@ -584,16 +584,7 @@ export class Viewport {
 
     // --- Bodies mode: a click selects the WHOLE body under the cursor ---
     if (this.selectionMode === "bodies" && this.model && this.highlighter) {
-      const bodyId = this.bodyIdAt(e.clientX, e.clientY);
-      const add = e.ctrlKey || e.metaKey;
-      if (bodyId) {
-        if (add) this.highlighter.toggleSelectBody(bodyId);
-        else this.highlighter.selectOnlyBody(bodyId);
-      } else if (!add) {
-        this.highlighter.clearBodySelection();
-      }
-      this.onBodySelectionChange?.();
-      this.requestRender();
+      this.selectBodyAt(e.clientX, e.clientY, e.ctrlKey || e.metaKey);
       return;
     }
 
@@ -632,6 +623,29 @@ export class Viewport {
       }
     }
     this.applyPick(hit, mods);
+  }
+
+  /** Bodies mode's pick, on its own so a tool can replay it.
+   *
+   *  The move gizmo suspends picking while it is up, which is right for a drag
+   *  on a handle and wrong for a plain click somewhere else: that click means
+   *  "now this one" (or "now nothing"), and it used to be swallowed. The tool
+   *  stands itself down and calls this with the same coordinates, so one click
+   *  moves the gizmo from one body to the next instead of taking two.
+   *
+   *  Returns whether anything ended up selected. */
+  selectBodyAt(clientX: number, clientY: number, additive = false): boolean {
+    if (!this.model || !this.highlighter) return false;
+    const bodyId = this.bodyIdAt(clientX, clientY);
+    if (bodyId) {
+      if (additive) this.highlighter.toggleSelectBody(bodyId);
+      else this.highlighter.selectOnlyBody(bodyId);
+    } else if (!additive) {
+      this.highlighter.clearBodySelection();
+    }
+    this.onBodySelectionChange?.();
+    this.requestRender();
+    return this.highlighter.getSelectedBodies().length > 0;
   }
 
   /** Apply a pick to the selection — the ONE path a click takes.

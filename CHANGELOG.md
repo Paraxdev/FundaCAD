@@ -23,7 +23,14 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ## Unreleased
 
+### Changed
+
+- Clicking a body now opens the move gizmo on it. Picking a body IS reaching for it, so the obvious gesture — click the thing, drag it — no longer needs a second command first. A plain click elsewhere moves the gizmo to the next body, or puts it away over empty space, in one click rather than two.
+- Each drag of the move gizmo is its own row in the timeline, so an undo takes back the last nudge instead of the whole sitting, and the next drag starts from the pose the last one produced.
+
 ### Fixed
+
+- A revolve's pitch and angle handles can now both be used in one sitting. Letting go of either one used to commit and close the tool, so setting the climb meant reopening the tool to set the turn. A release now stays armed and builds what was dragged, so the second handle aims at the shape the first one made.
 
 - **A sketch drawn on a body face follows that face.** It stored only the plane
   it resolved to, with no memory of the face, so it recorded where the face used
