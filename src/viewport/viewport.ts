@@ -39,6 +39,7 @@ import { FpsMeter } from "./fpsMeter";
 import { sceneStats } from "../diagnostics/sceneStats";
 import { makeZebraMaterial, buildCurvatureCombs } from "./overlays";
 import { Picker, occludedEdge, type EdgeCandidate, type Hit, type EdgeHit, type PickMods } from "./picking";
+import { bandIndex, expandToBand, type BandIndex } from "./faceBands";
 import { EdgeEmphasis } from "./edgeEmphasis";
 import { ViewCube, FACE_VIEWS } from "./viewCube";
 import { setPrompt } from "../ui/prompt";
@@ -152,6 +153,10 @@ export class Viewport {
   private picker = new Picker();
   private highlighter: Highlighter | null = null;
   private model: ModelView | null = null;
+  /** Which faces of the current model are pieces of one surface, keyed by every
+   *  member (faceBands). Rebuilt with the model, since face ids belong to one
+   *  tessellation and mean nothing across two. */
+  private faceBands: BandIndex = new Map();
   /** The RebuildResult behind the current scene, held by IDENTITY so setModel
    *  can recognise a re-emit of the same reply (an eye toggle) and skip
    *  everything but the visibility flags. Never read for its contents. */
@@ -564,7 +569,13 @@ export class Viewport {
     // Sketch has PRIORITY over the body: hover a visible sketch's region if one is
     // under the cursor; only fall back to the solid face when no region is there.
     if (this.regionHoverAt?.(e.clientX, e.clientY)) return;
-    if (hit?.kind === "face") { this.highlighter?.hoverFace(hit.faceId); return; }
+    // The whole run, matching what a click on it will take. Measure and the
+    // pick-one-face tools deliberately keep hovering a single face: they act on
+    // one face and must not promise otherwise.
+    if (hit?.kind === "face") {
+      this.highlighter?.hoverFaceRun(expandToBand(hit.faceId, this.faceBands));
+      return;
+    }
   }
 
   private handleClick(e: PointerEvent) {
@@ -640,7 +651,14 @@ export class Viewport {
       if (hit?.kind === "edge") {
         this.highlighter.toggleSelectEdge(hit.edge);
         this.noteEdgePickScope(hit.edge, mods.exact, mods.additive);
-      } else if (hit?.kind === "face") this.highlighter.toggleSelectFace(hit.faceId);
+      } else if (hit?.kind === "face") {
+        // A face the kernel had to store in pieces is picked as the whole run:
+        // one click on a threaded shank means the shank, not one turn of it.
+        // Shift is `exact` here for the same reason it is on an edge — the way
+        // to take a single piece when the run is not what you meant.
+        const want = mods.exact ? [hit.faceId] : expandToBand(hit.faceId, this.faceBands);
+        for (const f of want) this.highlighter.toggleSelectFace(f);
+      }
       this.requestRender();
     }
     this.onHit?.(hit, mods.exact);
@@ -1877,6 +1895,7 @@ export class Viewport {
     this.showSketchFace(null);
     this.lastResult = result;
     const bodyMeta = result.bodies ?? [];
+    this.faceBands = bandIndex(bodyMeta);
     const bodyIds = new Set(bodyMeta.map((b) => b.id));
     const { byBody, orphans } = groupEdgesByBody(result.edges, bodyIds);
 
@@ -2221,6 +2240,7 @@ export class Viewport {
   }
 
   clearModel() {
+    this.faceBands = new Map();
     // A STREAM ENDS HERE TOO, and this is the only path that ends it this way:
     // `streaming` is otherwise cleared in setModel, and rebuildBridge routes a
     // reply whose mesh is empty to clearModel INSTEAD of setModel. Left set,

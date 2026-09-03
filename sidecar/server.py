@@ -748,6 +748,12 @@ def _body_payload(b, tolerance, profile):
         edges = edge_polylines_by_body([b])
         for e in edges:
             e.pop("id", None)  # ids are assigned client-side after assembly
+        # Runs of faces that are pieces of one surface the kernel could not
+        # store as one, so a pick on one of them takes the whole run. Computed
+        # beside faceOwners because both walk sh.faces() and both belong to the
+        # payload the disk artifact caches (hence the CODE_VERSION bump).
+        import face_bands as _face_bands
+        bands = _face_bands.face_bands(sh)
         payload = {
             "positions": pos, "indices": idx, "faceIds": fids,
             "faceOwners": face_owners, "edges": edges,
@@ -758,6 +764,8 @@ def _body_payload(b, tolerance, profile):
             # loose poles-based box and make the camera jump between runs.
             "bbox": mesh_bbox(sh),
         }
+        if bands:
+            payload["faceBands"] = bands
         if tex_color_slots:
             payload["textureColorSlots"] = tex_color_slots
         if norm_chunks:

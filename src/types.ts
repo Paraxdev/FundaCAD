@@ -745,7 +745,7 @@ export interface RebuildResult {
   // `etag` (when the backend supplies one) is a content fingerprint the render
   // layer diffs to decide whether a body needs rebuilding at all — absent means
   // "always rebuild" (e.g. the in-process Rust backend, which has no etag cache).
-  bodies?: { id: string; name: string; faceStart: number; faceCount: number; faceOwners?: (string | null)[]; textureColorSlots?: (number | null)[]; etag?: string; nodeRef?: string }[];
+  bodies?: { id: string; name: string; faceStart: number; faceCount: number; faceOwners?: (string | null)[]; faceBands?: number[][]; textureColorSlots?: (number | null)[]; etag?: string; nodeRef?: string }[];
   // selector-resolution diagnostics, when any selector resolved with low confidence.
   diagnostics?: ResolveDiag[];
   // set when features failed but the rest of the timeline still built — the

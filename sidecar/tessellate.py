@@ -28,7 +28,8 @@ from OCP.TopLoc import TopLoc_Location
 #   1 -> fixed 24-segment edge polylines, absolute-only surface deflection
 #   2 -> deviation-bounded edge polylines + optional relative surface deflection
 #   3 -> the cached payload carries the body's mesh bbox (see mesh_bbox)
-CODE_VERSION = 3
+#   4 -> the cached payload carries faceBands (see face_bands.py)
+CODE_VERSION = 4
 
 
 def tessellate(shape, tolerance=0.1, angular_tolerance=0.5, textures=None, density_cap=None,
@@ -174,6 +175,7 @@ def tessellate_bodies(bodies, tolerance=0.1, density_cap=None, diag=None):
     face_base = 0
     from builder import _face_fp  # same fingerprint the provenance owner-map uses
     import texture as _texture
+    import face_bands as _face_bands
     for b in bodies:
         sh = b.get("shape")
         if sh is None:
@@ -189,10 +191,15 @@ def tessellate_bodies(bodies, tolerance=0.1, density_cap=None, diag=None):
         # back to the feature that created it — for click-a-face-then-delete.
         owners_map = b.get("owners") or {}
         face_owners = [owners_map.get(_face_fp(face)) for face in sh.faces()]
-        meta.append(
-            {"id": b["id"], "name": b["name"], "faceStart": face_base,
-             "faceCount": n_faces, "faceOwners": face_owners}
-        )
+        entry = {"id": b["id"], "name": b["name"], "faceStart": face_base,
+                 "faceCount": n_faces, "faceOwners": face_owners}
+        # Runs of faces that are pieces of one surface the kernel could not store
+        # as one (face_bands). Sent only when there is a run, since the common
+        # body has none and an empty list on every body is payload for nothing.
+        bands = _face_bands.face_bands(sh)
+        if bands:
+            entry["faceBands"] = bands
+        meta.append(entry)
         face_base += n_faces
     return positions, indices, face_ids, meta
 

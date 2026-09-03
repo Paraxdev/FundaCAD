@@ -29,6 +29,9 @@ export interface WireBodyFull {
   // (plain faces carry the same accumulation the client would compute)
   normals?: F32Wire;
   faceOwners?: (string | null)[];
+  /** Runs of LOCAL face indices that are pieces of one surface (face_bands.py).
+   *  Absent on the ordinary body, which has no run. */
+  faceBands?: number[][];
   textureColorSlots?: (number | null)[];
   edges?: WireEdgeList;
   faceCount?: number;
@@ -340,6 +343,7 @@ export class RebuildAssembly {
     // geometry-side metadata only reachable from the payload
     const m = bodies![i]!;
     if (p.faceOwners !== undefined) m.faceOwners = p.faceOwners;
+    if (p.faceBands !== undefined) m.faceBands = p.faceBands;
     if (p.textureColorSlots !== undefined) m.textureColorSlots = p.textureColorSlots;
 
     if (!this.written[i]) { this.written[i] = true; this.left--; }

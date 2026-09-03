@@ -1,0 +1,209 @@
+"""Which faces of a body are pieces of ONE surface that B-rep cannot store as one.
+
+A helical groove cut into a shank leaves the uncut shank as a helical ribbon.
+That ribbon is a single region of a single cylinder, but a face on a periodic
+surface may not span more than one period, so OCCT hands back one face per turn
+and `ShapeUpgrade_UnifySameDomain` cannot merge them: there is no face for it to
+merge them INTO. Measured on the spool document, seven faces at r=33.541, each a
+full turn, chained end to end. Picking one and pulling it moves a stripe.
+
+So the split survives every repair we run, and the answer has to be selection
+rather than geometry: a pick lands on the whole run, and press-pull, move and
+delete-face all already take a face LIST. What comes out of here is that run.
+
+The rule is deliberately narrow. Two faces join only when they share an edge AND
+sit on the same analytic surface, compared as the surface's own parameters at
+kernel tolerance rather than by rounding a key: pieces of one split carry that
+surface bit-identically, so a tight comparison keeps everything else apart. A
+face whose surface is a spline or a surface of revolution is never joined, since
+two splines can agree everywhere and still be two authored faces, and the cases
+this exists for are all analytic.
+
+Adjacency alone is not enough and neither is the surface alone: a box's two
+opposite walls are the same plane flipped, and a bore and the shaft around it
+are the same cylinder. Both would be wrong to merge, so the ORIENTED surface has
+to match, the face's own outward side and not just the geometry under it.
+
+Kernel-side by necessity, since it reads the B-rep, but the comparison itself is
+plain arithmetic and is tested against hand-built shapes.
+"""
+
+import math
+
+# Two pieces of one split carry the same surface exactly, so these only have to
+# absorb the last bits of a double. A looser tolerance would start merging faces
+# that were authored apart, which is the one thing this must never do.
+LIN_TOL = 1e-7
+ANG_TOL = 1e-9
+
+# Above this many faces a body is a dense import, where every pair of coplanar
+# triangles would join into one enormous run and the run would be the whole
+# skin. Nothing there is a split that repair failed on, it is a mesh, and
+# `_simplify_mesh` is what addresses it, so the work is skipped outright.
+MAX_BAND_FACES = 3000
+
+
+def _dot(a, b):
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+
+
+def _sub(a, b):
+    return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
+
+
+def _cross(a, b):
+    return (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0])
+
+
+def _norm(a):
+    return math.sqrt(_dot(a, a))
+
+
+def _same_dir(a, b):
+    """The same direction, pointing the same way, not merely parallel."""
+    return _dot(a, b) > 1.0 - ANG_TOL
+
+
+def _on_axis(pa, pb, d):
+    """`pa` and `pb` name the same line when the offset between them has nothing
+    across `d`. Two cylinders can carry different origins on one axis."""
+    off = _sub(pa, pb)
+    return _norm(_cross(off, d)) <= LIN_TOL
+
+
+def surface_of(face):
+    """The face's surface as a comparable description, with its own outward side
+    baked in, or None when it is a kind this module will not judge.
+
+    Returned as (kind, ...) where every remaining member is a float or a tuple of
+    floats, so `same_surface` is arithmetic and nothing here holds a kernel
+    handle past the call."""
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.GeomAbs import GeomAbs_SurfaceType as T
+    from OCP.TopAbs import TopAbs_Orientation
+
+    ad = BRepAdaptor_Surface(face.wrapped)
+    kind = ad.GetType()
+    # A REVERSED face uses the other side of the same surface. Folding that into
+    # the description is what keeps a bore apart from the shaft around it.
+    flip = -1.0 if face.wrapped.Orientation() == TopAbs_Orientation.TopAbs_REVERSED else 1.0
+
+    def xyz(p):
+        return (p.X(), p.Y(), p.Z())
+
+    if kind == T.GeomAbs_Plane:
+        pl = ad.Plane()
+        d = xyz(pl.Axis().Direction())
+        n = tuple(c * flip for c in d)
+        return ("plane", n, _dot(n, xyz(pl.Axis().Location())))
+    if kind == T.GeomAbs_Cylinder:
+        cy = ad.Cylinder()
+        ax = cy.Axis()
+        return ("cylinder", xyz(ax.Direction()), xyz(ax.Location()), cy.Radius(), flip)
+    if kind == T.GeomAbs_Cone:
+        co = ad.Cone()
+        ax = co.Axis()
+        return ("cone", xyz(ax.Direction()), xyz(co.Apex()), co.SemiAngle(), flip)
+    if kind == T.GeomAbs_Sphere:
+        sp = ad.Sphere()
+        return ("sphere", xyz(sp.Location()), sp.Radius(), flip)
+    if kind == T.GeomAbs_Torus:
+        to = ad.Torus()
+        ax = to.Axis()
+        return ("torus", xyz(ax.Direction()), xyz(ax.Location()),
+                to.MajorRadius(), to.MinorRadius(), flip)
+    return None
+
+
+def same_surface(a, b):
+    """Do these two descriptions name one surface, seen from the same side?"""
+    if a is None or b is None or a[0] != b[0]:
+        return False
+    kind = a[0]
+    if kind == "plane":
+        return _same_dir(a[1], b[1]) and abs(a[2] - b[2]) <= LIN_TOL
+    if kind == "cylinder":
+        return (a[4] == b[4] and abs(a[3] - b[3]) <= LIN_TOL
+                and _same_dir(a[1], b[1]) and _on_axis(a[2], b[2], a[1]))
+    if kind == "cone":
+        return (a[4] == b[4] and abs(a[3] - b[3]) <= ANG_TOL
+                and _same_dir(a[1], b[1]) and _norm(_sub(a[2], b[2])) <= LIN_TOL)
+    if kind == "sphere":
+        return (a[3] == b[3] and abs(a[2] - b[2]) <= LIN_TOL
+                and _norm(_sub(a[1], b[1])) <= LIN_TOL)
+    if kind == "torus":
+        return (a[5] == b[5] and abs(a[3] - b[3]) <= LIN_TOL
+                and abs(a[4] - b[4]) <= LIN_TOL and _same_dir(a[1], b[1])
+                and _norm(_sub(a[2], b[2])) <= LIN_TOL)
+    return False
+
+
+def _adjacent_pairs(shape, faces):
+    """Every pair of face indices that share an edge, once each."""
+    from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE
+    from OCP.TopExp import TopExp
+    from OCP.TopTools import TopTools_IndexedDataMapOfShapeListOfShape
+
+    # The kernel's own edge -> owning-faces map: shared edges are shared TShapes,
+    # so this is exact where hashing vertex coordinates would only be close.
+    amap = TopTools_IndexedDataMapOfShapeListOfShape()
+    TopExp.MapShapesAndAncestors_s(shape.wrapped, TopAbs_EDGE, TopAbs_FACE, amap)
+    where = {}
+    for i, f in enumerate(faces):
+        where.setdefault(f.wrapped.TShape(), []).append(i)
+    seen = set()
+    for i in range(1, amap.Extent() + 1):
+        owners = []
+        for f in amap.FindFromIndex(i):
+            owners.extend(where.get(f.TShape(), ()))
+        for a in range(len(owners)):
+            for b in range(a + 1, len(owners)):
+                lo, hi = sorted((owners[a], owners[b]))
+                if lo != hi:
+                    seen.add((lo, hi))
+    return seen
+
+
+def face_bands(shape):
+    """The runs of two or more faces that are pieces of one surface.
+
+    Returns a list of sorted face-index lists, indexed the way `shape.faces()` is
+    and ordered by their first member, so the result is stable across calls and
+    can be compared in a test. A shape with nothing split returns []."""
+    try:
+        faces = shape.faces()
+    except Exception:
+        return []
+    if len(faces) < 2 or len(faces) > MAX_BAND_FACES:
+        return []
+    try:
+        pairs = _adjacent_pairs(shape, faces)
+        if not pairs:
+            return []
+        # Only faces that touch something can be in a run, so the surface of a
+        # lone face is never asked for.
+        wanted = {i for pair in pairs for i in pair}
+        surf = {i: surface_of(faces[i]) for i in wanted}
+    except Exception:
+        return []
+
+    parent = list(range(len(faces)))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for lo, hi in pairs:
+        if same_surface(surf.get(lo), surf.get(hi)):
+            a, b = find(lo), find(hi)
+            if a != b:
+                parent[max(a, b)] = min(a, b)
+
+    runs = {}
+    for i in wanted:
+        runs.setdefault(find(i), []).append(i)
+    return sorted((sorted(v) for v in runs.values() if len(v) > 1),
+                  key=lambda v: v[0])

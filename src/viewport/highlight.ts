@@ -31,7 +31,10 @@ function paint(e: EdgeRef, color: THREE.Color) {
 
 export class Highlighter {
   private hoveredEdge: EdgeRef | null = null;
-  private hoveredFace: number | null = null;
+  /** Every face the cursor is over. More than one when the face under the
+   *  cursor is a piece of a run the kernel had to split (faceBands): the hover
+   *  has to show the whole run, or the click that takes it is a surprise. */
+  private hoveredFaces: readonly number[] = [];
   private hoveredBody: string | null = null;
   private selectedEdges = new Set<EdgeRef>();
   private selectedFaces = new Set<number>();
@@ -102,13 +105,24 @@ export class Highlighter {
   }
 
   hoverFace(faceId: number | null) {
-    if (this.hoveredFace === faceId) return;
-    if (this.hoveredFace != null && !this.selectedFaces.has(this.hoveredFace)) {
-      this.restoreFace(this.hoveredFace);
+    this.hoverFaceRun(faceId == null ? [] : [faceId]);
+  }
+
+  /** Hover a whole run of faces at once. `[]` is "nothing hovered". */
+  hoverFaceRun(faceIds: readonly number[]) {
+    const was = this.hoveredFaces;
+    if (was.length === faceIds.length && was.every((f, i) => f === faceIds[i])) return;
+    const now = new Set(faceIds);
+    // Only the faces LEAVING the hover are restored. Repainting the whole run
+    // each time would flicker the members that are staying, and a run can be
+    // most of a body's skin.
+    for (const f of was) {
+      if (!now.has(f) && !this.selectedFaces.has(f)) this.restoreFace(f);
     }
-    this.hoveredFace = faceId;
-    if (faceId != null && !this.selectedFaces.has(faceId)) {
-      this.paintFace(faceId, HOVER);
+    const before = new Set(was);
+    this.hoveredFaces = faceIds;
+    for (const f of faceIds) {
+      if (!before.has(f) && !this.selectedFaces.has(f)) this.paintFace(f, HOVER);
     }
   }
 
