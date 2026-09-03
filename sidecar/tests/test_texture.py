@@ -12,6 +12,8 @@ import numpy as np
 
 import server
 import texture
+import texture_height
+import texture_mesh
 from builder import rebuild
 from tessellate import tessellate
 
@@ -120,7 +122,7 @@ def test_boundary_taper_to_zero_at_edge():
             tris.append((a, b, c))
             tris.append((a, c, d))
 
-    taper, edge_count = texture._boundary_taper(pts_arr, tris, inset_mm=1.0)
+    taper, edge_count = texture_mesh._boundary_taper(pts_arr, tris, inset_mm=1.0)
     for idx in (vid(0, 0), vid(n - 1, 0), vid(0, n - 1), vid(n - 1, n - 1)):
         assert taper[idx] < 1e-9, f"boundary vertex {idx} should taper to exactly 0, got {taper[idx]}"
     center = vid(n // 2, n // 2)
@@ -130,11 +132,11 @@ def test_boundary_taper_to_zero_at_edge():
 
 def test_manifold_check_flags_bad_edge_count():
     good = {(0, 1): 2, (1, 2): 2, (2, 0): 1, (0, 3): 1, (3, 1): 1}  # interior edges=2, boundary=1
-    ok, bad = texture._manifold_check(good)
+    ok, bad = texture_mesh._manifold_check(good)
     assert ok and bad == 0, (ok, bad)
 
     broken = {(0, 1): 3, (1, 2): 2, (2, 0): 1}  # an edge shared by 3 triangles is a bug
-    ok2, bad2 = texture._manifold_check(broken)
+    ok2, bad2 = texture_mesh._manifold_check(broken)
     assert not ok2 and bad2 == 1, (ok2, bad2)
     print(PASS, "manifold check accepts 1/2-shared edges and flags anything else")
 
@@ -339,11 +341,11 @@ def test_knurl_facet_is_min_of_grooves_not_bilinear_product():
     g = np.linspace(0.05, 0.95, 11) * s
     U, V = np.meshgrid(g, g)
     u, v = U.ravel(), V.ravel()
-    facet = texture._height_knurl(u, v, s, 0.0, 0.0, facet=True)
-    product = texture._height_knurl(u, v, s, 0.0, 0.0, facet=False)
-    _, v1 = texture._rotate(u, v, 0.0)
-    _, v2 = texture._rotate(u, v, 90.0)
-    expect = np.minimum(texture._tri_wave(v1, s), texture._tri_wave(v2, s))
+    facet = texture_height._height_knurl(u, v, s, 0.0, 0.0, facet=True)
+    product = texture_height._height_knurl(u, v, s, 0.0, 0.0, facet=False)
+    _, v1 = texture_height._rotate(u, v, 0.0)
+    _, v2 = texture_height._rotate(u, v, 90.0)
+    expect = np.minimum(texture_height._tri_wave(v1, s), texture_height._tri_wave(v2, s))
     assert np.allclose(facet, expect), f"facet knurl should be min-of-grooves, got {facet}"
     assert not np.allclose(facet, product), "facet and round knurl must differ"
     # the product SAGS below the true groove surface everywhere they differ —
@@ -356,18 +358,18 @@ def test_knurl_facet_is_min_of_grooves_not_bilinear_product():
 def test_terrace_quantises_into_flat_levels():
     h = np.linspace(0.0, 1.0, 500)
     for steps in (2, 5, 12):
-        levels = np.unique(np.round(texture._terrace(h, steps), 9))
+        levels = np.unique(np.round(texture_height._terrace(h, steps), 9))
         assert len(levels) == steps, f"{steps} steps should give {steps} levels, got {len(levels)}"
     # the Sharp slider drives the count for the continuous kinds
-    assert texture._steps_from(0.0) == 2
-    assert texture._steps_from(1.0) == 12
+    assert texture_height._steps_from(0.0) == 2
+    assert texture_height._steps_from(1.0) == 12
     print(PASS, "terracing quantises noise/image into exactly N flat levels")
 
 
 def test_trapezoid_land_widens_the_flat_top():
     x = np.linspace(0.0, 2.0, 401)
-    pure_v = texture._trapezoid(x, 2.0, 0.0)
-    landed = texture._trapezoid(x, 2.0, 0.6)
+    pure_v = texture_height._trapezoid(x, 2.0, 0.0)
+    landed = texture_height._trapezoid(x, 2.0, 0.6)
     at_top = lambda h: int(np.sum(h > 0.999))
     assert at_top(pure_v) <= 2, "land=0 is a pure V: only the apex reaches full height"
     assert at_top(landed) > 10, "land>0 must produce a real flat crest"
@@ -389,7 +391,7 @@ def test_hard_edge_keeps_boundary_pinned_but_full_depth_inside():
         for i in range(n - 1):
             a, b, c, d = vid(i, j), vid(i + 1, j), vid(i + 1, j + 1), vid(i, j + 1)
             tris += [(a, b, c), (a, c, d)]
-    taper, _ = texture._boundary_taper(pts_arr, tris, inset_mm=0.0)
+    taper, _ = texture_mesh._boundary_taper(pts_arr, tris, inset_mm=0.0)
     for idx in (vid(0, 0), vid(n - 1, 0), vid(0, n - 1), vid(2, 0)):
         assert taper[idx] == 0.0, f"boundary vertex {idx} must be EXACTLY 0, got {taper[idx]}"
     assert taper[vid(1, 1)] == 1.0, "the first interior sample should be at full depth, not faded"
@@ -484,7 +486,7 @@ def test_boundary_ring_is_dense_enough_to_carry_the_pattern():
     )
     pts = geom["pts"]
     idx = np.asarray(geom["flat_indices"]).reshape(-1, 3)
-    ec = texture._boundary_edges([tuple(t_) for t_ in idx])
+    ec = texture_mesh._boundary_edges([tuple(t_) for t_ in idx])
     bnd = [k for k, n in ec.items() if n == 1]
     seg = [float(np.linalg.norm(pts[a] - pts[b])) for a, b in bnd]
     too_long = [x for x in seg if x > scale / 2.0]

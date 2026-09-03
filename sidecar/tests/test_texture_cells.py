@@ -21,6 +21,8 @@ import _bootstrap  # noqa: F401  (puts sidecar/ on sys.path)
 import numpy as np
 
 import texture
+import texture_height
+import texture_mesh
 from builder import rebuild
 
 from OCP.BRep import BRep_Tool
@@ -102,7 +104,7 @@ def _displaced(face, spec):
 
 
 def _boundary(tris):
-    counts = texture._boundary_edges([tuple(t) for t in tris])
+    counts = texture_mesh._boundary_edges([tuple(t) for t in tris])
     edges = [k for k, n in counts.items() if n == 1]
     ids = np.unique(np.asarray(edges, dtype=np.int64).ravel()) if edges else np.empty(0, np.int64)
     return ids, counts
@@ -113,10 +115,10 @@ def test_trapezoid_has_four_breakpoints_per_period():
     corners per period, not two. Missing the upper pair is what rounded the crest
     off — assert against the field itself, not against the derivation."""
     for land in (0.25, 0.5, 0.98):
-        phases = texture._crease_phases(land)
+        phases = texture_mesh._crease_phases(land)
         assert len(phases) == 4, (land, phases)
         x = np.linspace(0.0, SCALE, 20001)
-        h = texture._trapezoid(x, SCALE, land)
+        h = texture_height._trapezoid(x, SCALE, land)
         # a breakpoint is where the slope changes; find them from the field
         slope = np.round(np.diff(h) / np.diff(x), 6)
         found = x[1:-1][np.abs(np.diff(slope)) > 1e-9] / SCALE
@@ -125,7 +127,7 @@ def test_trapezoid_has_four_breakpoints_per_period():
         want = sorted(round(p, 3) for p in phases)
         assert len(got) == len(want), (land, got, want)
         assert max(abs(a - b) for a, b in zip(got, want)) < 2e-3, (land, got, want)
-    assert texture._crease_phases(0.0) == (0.0, 0.5), "pure V keeps trough+crest only"
+    assert texture_mesh._crease_phases(0.0) == (0.0, 0.5), "pure V keeps trough+crest only"
     print(PASS, "trapezoid turns four corners per period; _crease_phases names all four")
 
 
@@ -152,35 +154,35 @@ def test_faceted_waves_are_a_sine_polyline_not_a_trapezoid():
     u, v = np.meshgrid(np.linspace(0.0, 6.0, 601), np.linspace(0.0, 6.0, 601))
     for sharp in (0.0, 0.5, 1.0):
         for angle in (0.0, 30.0):
-            w = texture._height_waves(u, v, SCALE, angle, sharp, facet=True)
-            r = texture._height_ribs(u, v, SCALE, angle, sharp, facet=True)
+            w = texture_height._height_waves(u, v, SCALE, angle, sharp, facet=True)
+            r = texture_height._height_ribs(u, v, SCALE, angle, sharp, facet=True)
             assert float(np.abs(w - r).max()) > 0.25, \
                 f"waves collapsed onto ribs at sharp={sharp} angle={angle}"
             assert abs(float(w.min())) < 1e-12 and abs(float(w.max()) - 1.0) < 1e-12, \
                 f"waves must span [0,1]: got [{w.min()}, {w.max()}]"
 
     x = np.linspace(0.0, SCALE, 200001)
-    h = texture._facet_wave(x, SCALE)
+    h = texture_height._facet_wave(x, SCALE)
     slope = np.round(np.diff(h) / np.diff(x), 6)
     hits = np.sort(x[1:-1][np.abs(np.diff(slope)) > 1e-9] / SCALE)
     got = []
     for t in hits:  # cluster the numerically-adjacent hits
         if not got or float(t) - got[-1] > 1e-3:
             got.append(float(t))
-    want = sorted(texture._wave_phases())
+    want = sorted(texture_height._wave_phases())
     assert len(got) == len(want), (got, want)
     assert max(abs(a - b) for a, b in zip(got, want)) < 1e-3, (got, want)
 
     # the oracle must actually bite: put the shipped bug back and the collapse
     # has to be what the first assertion catches
-    orig = texture._facet_wave
-    texture._facet_wave = lambda x, period: texture._trapezoid(x, period, 0.5)
+    orig = texture_height._facet_wave
+    texture_height._facet_wave = lambda x, period: texture_height._trapezoid(x, period, 0.5)
     try:
-        w = texture._height_waves(u, v, SCALE, 0.0, 0.5, facet=True)
-        r = texture._height_ribs(u, v, SCALE, 0.0, 0.5, facet=True)
+        w = texture_height._height_waves(u, v, SCALE, 0.0, 0.5, facet=True)
+        r = texture_height._height_ribs(u, v, SCALE, 0.0, 0.5, facet=True)
         collapsed = float(np.abs(w - r).max())
     finally:
-        texture._facet_wave = orig
+        texture_height._facet_wave = orig
     assert collapsed < 1e-12, f"mutation failed to reproduce the bug ({collapsed})"
     print(PASS, "faceted waves is a sine polyline, distinct from ribs, creases as declared")
 
@@ -290,7 +292,7 @@ def test_lattice_meshes_stay_manifold():
             for angle in (0.0, 17.0, 45.0):
                 _P, I = _displaced(face, _spec(kind, sharp, angle))
                 _b, counts = _boundary(I)
-                ok, bad = texture._manifold_check(counts)
+                ok, bad = texture_mesh._manifold_check(counts)
                 assert ok, f"{kind} sharp={sharp} angle={angle}: {bad} non-manifold edge(s)"
     print(PASS, "lattice meshes are manifold across kinds, sharpness and angle")
 
@@ -360,8 +362,8 @@ def _cyl_chart(face, P, spec=None):
     surf = BRepAdaptor_Surface(face.wrapped)
     cyl = surf.Cylinder()
     ax = cyl.Position()
-    period = texture._u_period(spec, SCALE) if spec is not None else SCALE
-    turn = texture._turn_mm(surf, period)
+    period = texture_height._u_period(spec, SCALE) if spec is not None else SCALE
+    turn = texture_mesh._turn_mm(surf, period)
     loc = np.array([ax.Location().X(), ax.Location().Y(), ax.Location().Z()])
     xd = np.array([ax.XDirection().X(), ax.XDirection().Y(), ax.XDirection().Z()])
     yd = np.array([ax.YDirection().X(), ax.YDirection().Y(), ax.YDirection().Z()])
@@ -480,7 +482,7 @@ def test_the_seam_strip_is_exact():
             u, v = g["u_mm"], g["v_mm"]
             I = np.asarray(g["flat_indices"], dtype=np.int64).reshape(-1, 3)
             h = texture.height_field(kind, spec, u, v)
-            turn = texture._turn_mm(surf, texture._u_period(spec, SCALE))
+            turn = texture_mesh._turn_mm(surf, texture_height._u_period(spec, SCALE))
             cu = u[I]
             # unwrap each triangle across the seam; the turn is a whole number
             # of periods, so the shift cannot move the pattern
@@ -591,7 +593,7 @@ def test_the_uv_seam_is_textured_like_any_other_line():
             g = texture._displacement_geometry(
                 face, tri, loc, loc.IsIdentity(), spec, SCALE, SCALE / 4.0, BIG_CAP, flip)
             u, v = g["u_mm"], g["v_mm"]
-            turn = texture._turn_mm(surf, texture._u_period(spec, SCALE))
+            turn = texture_mesh._turn_mm(surf, texture_height._u_period(spec, SCALE))
             ur = (float(u.min()), float(u.max()))
             vr = (float(v.min()), float(v.max()))
 
@@ -626,7 +628,7 @@ def _base_boundary_segments(face):
     for i in range(1, tri.NbTriangles() + 1):
         a, b, c = tri.Triangle(i).Get()
         tris.append((a - 1, b - 1, c - 1))
-    counts = texture._boundary_edges(tris)
+    counts = texture_mesh._boundary_edges(tris)
     seg = [k for k, n in counts.items() if n == 1]
     return pts[[e[0] for e in seg]], pts[[e[1] for e in seg]]
 
