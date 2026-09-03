@@ -43,6 +43,7 @@ import { loopsFromEdgePolys, planeEdgePolys } from "./faceFootprint";
 import { boundaryAnchors, footprintAnchors } from "./anchors";
 import { setSpaceMouseOrbitLocked } from "../input/spacemouse";
 import { setPrompt } from "../ui/prompt";
+import { tooEdgeOn } from "./planeGraze";
 import { toast } from "../ui/toast";
 import { contextMenu, dismissContextMenu, type CtxItem } from "../ui/menu";
 import { ConstraintTools, CONSTRAINT_TOOLS, type ConstraintHost } from "./constraintTools";
@@ -1471,6 +1472,17 @@ export class SketchMode {
     if (this.tool === "project") {
       e.preventDefault();
       void this.projectClick(e);
+      return;
+    }
+    // A click on a plane turned edge-on cannot mean what it looks like it
+    // means, so it is declined here — after Project, which picks 3D geometry in
+    // client coords and does not care which way the plane is facing. Said out
+    // loud: the old behaviour placed the point anyway, hundreds of millimetres
+    // off the side, and a silent refusal would only be a quieter version of the
+    // same puzzle.
+    if (this.planeTooEdgeOn()) {
+      e.preventDefault();
+      setPrompt("The sketch plane is edge-on, turn the view to draw on it");
       return;
     }
     // Dimension takes the RAW plane point, and branches before snapAt's
@@ -3051,6 +3063,7 @@ export class SketchMode {
 
   // --- snapping + rendering ---------------------------------------------
   private snapAt(clientX: number, clientY: number, noSnap = false) {
+    if (this.planeTooEdgeOn()) return null;
     const world = this.viewport.screenToPlane(clientX, clientY, this.plane.plane);
     if (!world) return null;
     const p2d = this.plane.to2D(world);
@@ -3240,8 +3253,21 @@ export class SketchMode {
    *  outside the pointer handlers (e.g. the dimension labels' drag) use it
    *  rather than scaling screen pixels by a mm-per-pixel factor. */
   private planePointAt(clientX: number, clientY: number): THREE.Vector2 | null {
+    // Nothing on a plane turned edge-on can be aimed at: the ray still meets it
+    // and the answer is still exact, but a pixel is worth metres there, so the
+    // point lands off the side of the world. planeGraze has the measurements.
+    // Guarded HERE rather than at each caller because this is the one screen to
+    // plane conversion, and every caller already handles a null.
+    if (this.planeTooEdgeOn()) return null;
     const w = this.viewport.screenToPlane(clientX, clientY, this.plane.plane);
     return w ? this.plane.to2D(w) : null;
+  }
+
+  /** Has the view rolled the sketch plane too far edge-on to draw on? */
+  planeTooEdgeOn(): boolean {
+    const d = this.viewport.viewDirection();
+    const n = this.plane.plane.normal;
+    return tooEdgeOn([d.x, d.y, d.z], [n.x, n.y, n.z]);
   }
   /** hover-highlight the entity under the cursor in red */
   private modifyHover(e: PointerEvent) {

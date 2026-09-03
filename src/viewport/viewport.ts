@@ -3142,6 +3142,14 @@ export class Viewport {
   }
 
   /** unproject screen (client) coords onto a plane; null if no hit */
+  /** The direction the camera is looking, in world space. Read by the sketch's
+   *  edge-on guard, which needs the angle between this and a plane's normal. */
+  viewDirection(): THREE.Vector3 {
+    const cam = this.rig.active;
+    cam.updateMatrixWorld();
+    return cam.getWorldDirection(new THREE.Vector3());
+  }
+
   screenToPlane(
     clientX: number,
     clientY: number,
