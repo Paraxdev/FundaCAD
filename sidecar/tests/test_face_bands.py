@@ -21,7 +21,7 @@ import _bootstrap  # noqa: F401  (puts sidecar/ on sys.path)
 import sys
 import traceback
 
-from build123d import Box, Cylinder, Pos, Rot, Sphere
+from build123d import Box, Compound, Cylinder, Pos, Rot, Sphere
 
 import builder
 import face_bands
@@ -212,6 +212,47 @@ def test_faces_on_one_plane_that_do_not_touch_stay_apart():
     assert bands(shape) == [], bands(shape)
     print(PASS, "faces on one plane that do not touch stay apart")
 
+
+
+def test_a_hairline_gap_counts_as_touching():
+    """Two pieces of one wall with the kernel's own clearance between them.
+
+    A climbing revolve whose profile is as tall as its pitch would have crest
+    meeting root along a LINE, which is non-manifold and makes every later
+    boolean quietly do nothing, so builder._screw_revolve stops the crest a hair
+    short of the next root — max(1e-3, 1e-4 * height). That hair is a real gap
+    with no shared edge across it, and either side of it is one wall to anyone
+    looking at it.
+
+    Two boxes set a hair apart is the same shape stated plainly: four pairs of
+    coplanar walls (top, bottom, and the two sides that run through), each pair
+    one wall interrupted by nothing you could see or print.
+
+    Built as separate solids ON PURPOSE. A face translated from another face
+    keeps its edges' TShapes, so the kernel's edge map would report the two as
+    sharing an edge and the pair would come back joined for the wrong reason —
+    the rule under test would never run.
+    """
+    near = Compound([Box(10, 10, 4), Pos(10 + 5e-4, 0, 0) * Box(10, 10, 4)])
+    got = bands(near)
+    assert len(got) == 4, got
+    for run in got:
+        assert len(run) == 2, got
+
+    # The control, and the whole reason the tolerance is a hair rather than a
+    # judgement: 5 microns is ten times the gap above and must read as two walls.
+    far = Compound([Box(10, 10, 4), Pos(10 + 5e-3, 0, 0) * Box(10, 10, 4)])
+    assert bands(far) == [], bands(far)
+    print(PASS, "a gap the size of the kernel's own clearance still reads as one wall")
+
+
+def test_the_gap_rule_does_not_reach_across_a_real_gap():
+    """A millimetre is not a hairline. The rule exists for a clearance nobody
+    asked for; a gap somebody drew has to survive it, or every pair of coplanar
+    faces in a document ends up one pick."""
+    apart = Compound([Box(10, 10, 4), Pos(11, 0, 0) * Box(10, 10, 4)])
+    assert bands(apart) == [], bands(apart)
+    print(PASS, "a gap that was drawn stays a gap")
 
 def main():
     failed = 0

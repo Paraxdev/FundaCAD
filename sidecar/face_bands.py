@@ -11,13 +11,22 @@ So the split survives every repair we run, and the answer has to be selection
 rather than geometry: a pick lands on the whole run, and press-pull, move and
 delete-face all already take a face LIST. What comes out of here is that run.
 
-The rule is deliberately narrow. Two faces join only when they share an edge AND
-sit on the same analytic surface, compared as the surface's own parameters at
-kernel tolerance rather than by rounding a key: pieces of one split carry that
-surface bit-identically, so a tight comparison keeps everything else apart. A
-face whose surface is a spline or a surface of revolution is never joined, since
-two splines can agree everywhere and still be two authored faces, and the cases
-this exists for are all analytic.
+The rule is deliberately narrow. Two faces join only when they TOUCH and sit on
+the same analytic surface, compared as the surface's own parameters at kernel
+tolerance rather than by rounding a key: pieces of one split carry that surface
+bit-identically, so a tight comparison keeps everything else apart. A face whose
+surface is a spline or a surface of revolution is never joined, since two splines
+can agree everywhere and still be two authored faces, and the cases this exists
+for are all analytic.
+
+"Touch" is a shared edge, or a gap no wider than the one the kernel itself
+inserts. A climbing revolve whose profile is as tall as its pitch would have
+crest meeting root along a LINE, which is non-manifold and makes every later
+boolean quietly do nothing, so builder._screw_revolve stops the crest a hair
+short of the next root. That hair is a real gap with no shared edge across it,
+and the two turns either side of it are one wall to anyone looking at them. The
+tolerance is that same clearance and not a micron more: anything further apart
+than the kernel's own hair was authored apart.
 
 Adjacency alone is not enough and neither is the surface alone: a box's two
 opposite walls are the same plane flipped, and a bore and the shaft around it
@@ -35,6 +44,14 @@ import math
 # that were authored apart, which is the one thing this must never do.
 LIN_TOL = 1e-7
 ANG_TOL = 1e-9
+
+# The gap that may stand in for a shared edge, mirroring _turn_clearance in
+# builder.py: absolute at small sizes so a 0.2 mm thread is not swallowed,
+# proportional above that so a coarse one scales with it. Measured off the body,
+# because this side has no profile to ask, which makes it the more generous of
+# the two — and still a hundredth of a printed layer on a 100 mm part.
+GAP_ABS = 1e-3
+GAP_REL = 1e-4
 
 # Above this many faces a body is a dense import, where every pair of coplanar
 # triangles would join into one enormous run and the run would be the whole
@@ -165,6 +182,84 @@ def _adjacent_pairs(shape, faces):
     return seen
 
 
+def _bucket(desc):
+    """A hashable, deliberately COARSE key for a surface description.
+
+    Only used to keep the near-pair search from being every-face-against-every-
+    face: two faces can only be near-joined if they land in the same bucket, and
+    `same_surface` still decides. Rounded, so a pair separated by the last bits
+    of a double lands together and is judged properly rather than being dropped
+    here."""
+    def flat(x):
+        if isinstance(x, (tuple, list)):
+            for y in x:
+                yield from flat(y)
+        elif isinstance(x, float):
+            yield round(x, 6)
+        else:
+            yield x
+    return tuple(flat(desc))
+
+
+def gap_tolerance(shape):
+    """How wide a gap may still count as touching, for this body."""
+    try:
+        bb = shape.bounding_box()
+        diag = _norm((bb.max.X - bb.min.X, bb.max.Y - bb.min.Y, bb.max.Z - bb.min.Z))
+    except Exception:
+        diag = 0.0
+    return max(GAP_ABS, GAP_REL * diag)
+
+
+def _near_pairs(faces, surf, tol, already):
+    """Same-surface faces that come within `tol` of each other without sharing an
+    edge — the kernel's own clearance standing where an edge would be.
+
+    Bucketed by surface first and screened by bounding box second, so the only
+    pairs that reach the real distance call are ones already known to be on one
+    surface and within a hair of each other. On every shape that has no such
+    pair — which is nearly all of them — this costs one bounding box per face."""
+    from OCP.BRepExtrema import BRepExtrema_DistShapeShape
+
+    buckets = {}
+    for i, d in surf.items():
+        if d is not None:
+            buckets.setdefault(_bucket(d), []).append(i)
+    out = set()
+    for group in buckets.values():
+        if len(group) < 2:
+            continue
+        boxes = {}
+        for i in group:
+            try:
+                boxes[i] = faces[i].bounding_box()
+            except Exception:
+                pass
+        for a in range(len(group)):
+            for b in range(a + 1, len(group)):
+                i, j = group[a], group[b]
+                lo, hi = (i, j) if i < j else (j, i)
+                if (lo, hi) in already:
+                    continue
+                bi, bj = boxes.get(i), boxes.get(j)
+                if bi is None or bj is None:
+                    continue
+                if (bi.min.X > bj.max.X + tol or bj.min.X > bi.max.X + tol
+                        or bi.min.Y > bj.max.Y + tol or bj.min.Y > bi.max.Y + tol
+                        or bi.min.Z > bj.max.Z + tol or bj.min.Z > bi.max.Z + tol):
+                    continue
+                if not same_surface(surf[i], surf[j]):
+                    continue
+                try:
+                    d = BRepExtrema_DistShapeShape(faces[i].wrapped, faces[j].wrapped)
+                    d.Perform()
+                    if d.IsDone() and d.Value() <= tol:
+                        out.add((lo, hi))
+                except Exception:
+                    pass
+    return out
+
+
 def face_bands(shape):
     """The runs of two or more faces that are pieces of one surface.
 
@@ -179,12 +274,14 @@ def face_bands(shape):
         return []
     try:
         pairs = _adjacent_pairs(shape, faces)
+        # Every face, not only the ones an edge already joins: a run separated by
+        # the sweep's own clearance has no shared edge anywhere along it, so the
+        # old shortcut of asking only about edge-joined faces could never see it.
+        surf = {i: surface_of(f) for i, f in enumerate(faces)}
+        pairs = pairs | _near_pairs(faces, surf, gap_tolerance(shape), pairs)
         if not pairs:
             return []
-        # Only faces that touch something can be in a run, so the surface of a
-        # lone face is never asked for.
         wanted = {i for pair in pairs for i in pair}
-        surf = {i: surface_of(faces[i]) for i in wanted}
     except Exception:
         return []
 
