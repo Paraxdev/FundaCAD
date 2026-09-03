@@ -291,19 +291,53 @@ def test_body_fingerprint_carries_topology():
 
 
 def test_env_sig_tracks_tuning():
+    import rebuild_cache
     p = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "selector_tuning.json")
     orig = open(p, "rb").read()
-    builder._ENV_SIG = None
-    s1 = builder._env_sig()
+    rebuild_cache._ENV_SIG = None
+    s1 = rebuild_cache._env_sig()
     try:
         open(p, "wb").write(orig + b"\n")  # byte-level change to the tuning file
-        builder._ENV_SIG = None
-        s2 = builder._env_sig()
+        rebuild_cache._ENV_SIG = None
+        s2 = rebuild_cache._env_sig()
     finally:
         open(p, "wb").write(orig)
-        builder._ENV_SIG = None
+        rebuild_cache._ENV_SIG = None
     assert s1 != s2, "env_sig must change when selector_tuning.json changes (else stale disk resume)"
     print(PASS, "_env_sig invalidates on a selector_tuning.json edit")
+
+
+def test_env_sig_covers_every_geometry_module():
+    """A module builder.py was split into must invalidate the disk cache too.
+
+    _env_sig used to hash a hand-written list of six filenames, which was
+    survivable while builder.py held the whole kernel. It does not any more: the
+    press/pull clamps, the booleans, the blend refusals and the sketch builder
+    each live in their own module now, and a list is one refactor away from
+    leaving one off. Being wrong here is SILENT — the checkpoints are on disk, so
+    a restart does not help and the geometry is simply built by code that no
+    longer exists.
+
+    solid_ops.py is the probe because it was among the last to be split out and
+    is named nowhere in _env_sig. The control is the assertion itself: under the
+    old list this test fails, because appending a byte to solid_ops.py changed
+    nothing about the hash.
+    """
+    import rebuild_cache
+    p = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                     "solid_ops.py")
+    orig = open(p, "rb").read()
+    rebuild_cache._ENV_SIG = None
+    s1 = rebuild_cache._env_sig()
+    try:
+        open(p, "wb").write(orig + b"# a byte the real file does not have")
+        rebuild_cache._ENV_SIG = None
+        s2 = rebuild_cache._env_sig()
+    finally:
+        open(p, "wb").write(orig)
+        rebuild_cache._ENV_SIG = None
+    assert s1 != s2, "editing solid_ops.py left the env signature unchanged"
+    print(PASS, "_env_sig covers a module builder.py was split into")
 
 
 def main():
@@ -315,6 +349,7 @@ def main():
     test_every_diagnostic_shape_is_json_safe()
     test_body_fingerprint_carries_topology()
     test_env_sig_tracks_tuning()
+    test_env_sig_covers_every_geometry_module()
     print("ALL PASS")
 
 
