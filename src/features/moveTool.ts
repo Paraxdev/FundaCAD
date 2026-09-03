@@ -65,9 +65,29 @@ const AXES = [
 // YZ plane, which the X arrow passes through at its centre — so the crossings
 // are two per arrow and both are near the tips, where an arrow is thick enough
 // to read over a ring drawn behind it.
-const ARROW_SHAFT = 52;
-const ARROW_HEAD = 20;
-const ARROW_HEAD_R = 7;
+/** The arrow, and its head at the size every other arrowhead in the app is.
+ *
+ *  The origin triad's head is 18.5px long and 9.7px across (scene.ts: 0.21 and
+ *  0.055 of its 88px arm) and the edge handle's is 9px long and 9px across.
+ *  This one was 20 long and 14 ACROSS, wider than either while sitting on a
+ *  shorter arrow, and it is the only one of the three drawn on top of the model
+ *  rather than off at the world origin — so it was the one that read as
+ *  oversized. Matched to the triad's head in absolute pixels rather than in
+ *  proportion: these are two arrows a user sees side by side, and what has to
+ *  agree between them is how big the heads LOOK, not how each relates to its
+ *  own shaft. */
+const ARROW_LENGTH = 68;
+const ARROW_HEAD = 16;
+const ARROW_HEAD_R = 4.6;
+const ARROW_SHAFT = ARROW_LENGTH - ARROW_HEAD;
+const ARROW_SHAFT_R = 1.6;
+/** How wide the invisible cylinder an arrow is grabbed by is. Same reasoning as
+ *  RING_GRAB below and as the edge handle's own proxies: how big a handle is
+ *  DRAWN and how big it is to aim at are two questions, and slimming the arrow
+ *  must not spend the aiming margin. A uniform cylinder, so the tip is as easy
+ *  to hit as the root — the drawn cone tapers to nothing and used to be the
+ *  hardest part of the arrow to press. */
+const ARROW_GRAB_R = 6.5;
 const RING_RADIUS = 46;
 const RING_TUBE = 2.4;
 /** How wide the invisible band a ring is grabbed by is, in gizmo units. The
@@ -501,12 +521,20 @@ export class MoveTool {
       const a = AXES[i];
       if (!a) continue;
       const mat = new THREE.MeshBasicMaterial({ color: a.color, depthTest: false, depthWrite: false });
-      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 1.8, ARROW_SHAFT, 12), mat);
+      const shaft = new THREE.Mesh(
+        new THREE.CylinderGeometry(ARROW_SHAFT_R, ARROW_SHAFT_R, ARROW_SHAFT, 12), mat);
       shaft.position.y = ARROW_SHAFT / 2;
       const head = new THREE.Mesh(new THREE.ConeGeometry(ARROW_HEAD_R, ARROW_HEAD, 18), mat);
       head.position.y = ARROW_SHAFT + ARROW_HEAD / 2;
+      // Never drawn, always hit: `material.visible` keeps it out of the render
+      // list while leaving it in the raycast, which `object.visible` would not.
+      const sleeve = new THREE.Mesh(
+        new THREE.CylinderGeometry(ARROW_GRAB_R, ARROW_GRAB_R, ARROW_LENGTH, 8),
+        new THREE.MeshBasicMaterial({ visible: false }),
+      );
+      sleeve.position.y = ARROW_LENGTH / 2;
       const arrow = new THREE.Group();
-      arrow.add(shaft, head);
+      arrow.add(shaft, head, sleeve);
       arrow.quaternion.setFromUnitVectors(Y_AXIS, a.dir);
       arrow.renderOrder = 999;
       shaft.renderOrder = 999;
