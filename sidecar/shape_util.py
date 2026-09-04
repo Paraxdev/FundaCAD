@@ -34,6 +34,10 @@ from build123d import (
     import_brep,
 )
 
+# `_list_shapes` is re-exported: an immutable function, so a second name for it
+# cannot go stale. builder.py and defeature.py both reach for it through here.
+from topo_adj import FaceAdjacency, _list_shapes  # noqa: F401
+
 # --- mesh / B-rep import -----------------------------------------------------
 
 
@@ -127,31 +131,6 @@ def _maybe_unify(shape):
     return shape
 
 
-def _list_shapes(lst):
-    """Elements of an OCP shape list WITHOUT draining its Python iterator.
-
-    Exhausting a pybind11-bound OCCT collection costs ~101 us of FIXED cost when
-    StopIteration fires, independent of length, while Extent() is 0.18 us and
-    First()/Last() are 0.55 us together. In a per-EDGE loop that dominates
-    everything else: the same pattern in tessellate.edge_polylines_by_body was
-    11x on the reference assembly, and here it measured 3.2-3.4x on
-    _refacet_clean and 1.66x end-to-end on a 64k-triangle mesh import.
-
-    First() on an EMPTY list raises Standard_NoSuchObject, so the count is
-    checked before either accessor is touched. An edge has one or two adjacent
-    faces in all but non-manifold geometry, so the drain only happens in the >2
-    case. Returns a tuple so callers can iterate it as often as they like for
-    free. (tessellate.py carries its own copy — see the note in its version.)"""
-    n = lst.Extent()
-    if n == 0:
-        return ()
-    if n == 1:
-        return (lst.First(),)
-    if n == 2:
-        return (lst.First(), lst.Last())
-    return tuple(lst)  # non-manifold: rare, and correctness beats the microseconds
-
-
 def _refacet_clean(shape, tol=0.12, debug=False):
     """Collapse facet-import raggedness. STL→B-rep leaves sliver bands and
     near-coplanar "staircase" faces around every real design plane (the planar
@@ -190,33 +169,11 @@ def _refacet_clean(shape, tol=0.12, debug=False):
         return Compound(cleaned_parts)
 
     try:
-        from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE
-        from OCP.TopExp import TopExp, TopExp_Explorer
-        from OCP.TopoDS import TopoDS
-        from OCP.TopTools import (
-            TopTools_IndexedDataMapOfShapeListOfShape,
-            TopTools_IndexedMapOfShape,
-        )
-
         comp = _as_compound(shape)
-        fmap = TopTools_IndexedMapOfShape()
-        TopExp.MapShapes_s(comp.wrapped, TopAbs_FACE, fmap)
-        emap = TopTools_IndexedDataMapOfShapeListOfShape()
-        TopExp.MapShapesAndAncestors_s(comp.wrapped, TopAbs_EDGE, TopAbs_FACE, emap)
-        n = fmap.Extent()
-        faces_by_idx = {i: Face(TopoDS.Face_s(fmap.FindKey(i))) for i in range(1, n + 1)}
-
-        def neighbors(i):
-            out = set()
-            exp = TopExp_Explorer(fmap.FindKey(i), TopAbs_EDGE)
-            while exp.More():
-                if emap.Contains(exp.Current()):
-                    for other in _list_shapes(emap.FindFromKey(exp.Current())):
-                        j = fmap.FindIndex(other)
-                        if j != i:
-                            out.add(j)
-                exp.Next()
-            return out
+        adj = FaceAdjacency(comp)
+        n = adj.extent
+        faces_by_idx = {i: adj.face(i) for i in adj.indices()}
+        neighbors = adj.neighbors
 
         fverts = {
             i: np.array([(v.X, v.Y, v.Z) for v in f.vertices()])
@@ -258,7 +215,7 @@ def _refacet_clean(shape, tol=0.12, debug=False):
         positions, indices, face_ids = _tess.tessellate(comp, 0.5)
         # tessellate() numbers faces by enumerate(comp.faces()) — translate that
         # 0-based order to fmap's 1-based indices instead of assuming they align
-        fid_to_idx = {k: fmap.FindIndex(f.wrapped) for k, f in enumerate(comp.faces())}
+        fid_to_idx = {k: adj.index_of(f) for k, f in enumerate(comp.faces())}
         pos = np.array(positions).reshape(-1, 3)
         tris = np.array(indices).reshape(-1, 3)
         keys = [tuple(np.round(p / 1e-4).astype(np.int64)) for p in pos]
@@ -315,6 +272,8 @@ def _refacet_clean(shape, tol=0.12, debug=False):
         from OCP.gp import gp_Dir, gp_Pln, gp_Pnt
         from OCP.ShapeFix import ShapeFix_Face, ShapeFix_Shape, ShapeFix_Solid
         from OCP.TopAbs import TopAbs_SHELL
+        from OCP.TopExp import TopExp_Explorer
+        from OCP.TopoDS import TopoDS
 
         tri_w = widx[tris]
         region_tris = defaultdict(list)
@@ -418,30 +377,12 @@ def _refacet_clean(shape, tol=0.12, debug=False):
         # face components; SolidFromShell on that is garbage (mixed orientation,
         # nonsense volume). Split faces into edge-connected components and build
         # one solid per component.
-        cmap = TopTools_IndexedMapOfShape()
-        TopExp.MapShapes_s(sewn, TopAbs_FACE, cmap)
-        cemap = TopTools_IndexedDataMapOfShapeListOfShape()
-        TopExp.MapShapesAndAncestors_s(sewn, TopAbs_EDGE, TopAbs_FACE, cemap)
-        unvisited = set(range(1, cmap.Extent() + 1))
+        cadj = FaceAdjacency(sewn)
         solids = []
-        while unvisited:
-            seed = unvisited.pop()
-            compo, queue = [seed], [seed]
-            while queue:
-                k = queue.pop()
-                eexp = TopExp_Explorer(cmap.FindKey(k), TopAbs_EDGE)
-                while eexp.More():
-                    if cemap.Contains(eexp.Current()):
-                        for other in _list_shapes(cemap.FindFromKey(eexp.Current())):
-                            j = cmap.FindIndex(other)
-                            if j in unvisited:
-                                unvisited.discard(j)
-                                compo.append(j)
-                                queue.append(j)
-                    eexp.Next()
+        for compo in cadj.components():
             part_sew = BRepBuilderAPI_Sewing(1.5 * tol)
             for k in compo:
-                part_sew.Add(cmap.FindKey(k))
+                part_sew.Add(cadj.key(k))
             part_sew.Perform()
             sexp = TopExp_Explorer(part_sew.SewedShape(), TopAbs_SHELL)
             while sexp.More():

@@ -32,7 +32,8 @@ from build123d import (
     split,
 )
 
-from shape_util import _as_compound, _list_shapes, _wrap_topods, _wrapped_or_none
+from shape_util import _as_compound, _wrap_topods, _wrapped_or_none
+from topo_adj import FaceAdjacency
 
 def _fp_world(area, cx, cy, cz, loc):
     """Round a LOCAL-frame (area, centre) into the world-frame fingerprint.
@@ -223,52 +224,27 @@ def _expand_blend_chain(shape, seeds, width_factor=4.0, max_faces=64):
     honeycomb wall lattice), not a blend: retrying on that is doomed and slow."""
     from OCP.BRepAdaptor import BRepAdaptor_Surface
     from OCP.GeomAbs import GeomAbs_SurfaceType
-    from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE
-    from OCP.TopExp import TopExp, TopExp_Explorer
     from OCP.TopoDS import TopoDS
-    from OCP.TopTools import (
-        TopTools_IndexedDataMapOfShapeListOfShape,
-        TopTools_IndexedMapOfShape,
-    )
 
-    comp = _as_compound(shape)
-    fmap = TopTools_IndexedMapOfShape()
-    TopExp.MapShapes_s(comp.wrapped, TopAbs_FACE, fmap)
-    emap = TopTools_IndexedDataMapOfShapeListOfShape()
-    TopExp.MapShapesAndAncestors_s(comp.wrapped, TopAbs_EDGE, TopAbs_FACE, emap)
+    adj = FaceAdjacency(_as_compound(shape))
+    face_at = adj.face
 
-    seed_idx = [fmap.FindIndex(s.wrapped) for s in seeds]
+    seed_idx = [adj.index_of(s) for s in seeds]
     seed_idx = [i for i in seed_idx if i > 0]
     if not seed_idx:
         return list(seeds)
 
-    faces_by_idx = {}
-
-    def face_at(i):
-        if i not in faces_by_idx:
-            faces_by_idx[i] = Face(TopoDS.Face_s(fmap.FindKey(i)))
-        return faces_by_idx[i]
-
     neighbors_cache = {}
 
     def neighbors(i):
-        """[(other_face_index, shared_edge_midpoint)] over the face's edges."""
-        if i in neighbors_cache:
-            return neighbors_cache[i]
-        out = []
-        exp = TopExp_Explorer(fmap.FindKey(i), TopAbs_EDGE)
-        while exp.More():
-            edge = exp.Current()
-            if emap.Contains(edge):
-                mid = None
-                for other in _list_shapes(emap.FindFromKey(edge)):
-                    j = fmap.FindIndex(other)
-                    if j != i:
-                        if mid is None:
-                            mid = Edge(TopoDS.Edge_s(edge)).position_at(0.5)
-                        out.append((j, mid))
-            exp.Next()
-        neighbors_cache[i] = out
+        """[(other_face_index, shared_edge_midpoint)] over the face's edges.
+
+        Cached: the chain walk revisits a face once per neighbour that reaches
+        it, and the midpoint costs a curve evaluation each time."""
+        out = neighbors_cache.get(i)
+        if out is None:
+            out = [(j, Edge(TopoDS.Edge_s(e)).position_at(0.5)) for j, e in adj.walk(i)]
+            neighbors_cache[i] = out
         return out
 
     def dihedral(i, j, pt):
@@ -298,7 +274,7 @@ def _expand_blend_chain(shape, seeds, width_factor=4.0, max_faces=64):
         if longest <= 0 or _face_width(f) / longest > BAND_ASPECT_MAX:
             blend_cache[i] = False
             return False
-        t = BRepAdaptor_Surface(TopoDS.Face_s(fmap.FindKey(i))).GetType()
+        t = BRepAdaptor_Surface(adj.key(i)).GetType()
         if t in FILLET_TYPES:
             r = any(dihedral(i, j, pt) < 10.0 for j, pt in neighbors(i))
         elif t == GeomAbs_SurfaceType.GeomAbs_Plane:
@@ -333,30 +309,11 @@ def _expand_blend_chain(shape, seeds, width_factor=4.0, max_faces=64):
 def _wound_boundary(comp, faces):
     """Faces of `comp` adjacent (edge-sharing) to `faces` but not in the set —
     the faces that would border the wound if `faces` were removed."""
-    from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE
-    from OCP.TopExp import TopExp, TopExp_Explorer
-    from OCP.TopoDS import TopoDS
-    from OCP.TopTools import (
-        TopTools_IndexedDataMapOfShapeListOfShape,
-        TopTools_IndexedMapOfShape,
-    )
-
-    fmap = TopTools_IndexedMapOfShape()
-    TopExp.MapShapes_s(comp.wrapped, TopAbs_FACE, fmap)
-    emap = TopTools_IndexedDataMapOfShapeListOfShape()
-    TopExp.MapShapesAndAncestors_s(comp.wrapped, TopAbs_EDGE, TopAbs_FACE, emap)
-    removed = {fmap.FindIndex(x.wrapped) for x in faces}
-    adj = set()
-    for x in faces:
-        exp = TopExp_Explorer(x.wrapped, TopAbs_EDGE)
-        while exp.More():
-            if emap.Contains(exp.Current()):
-                for other in _list_shapes(emap.FindFromKey(exp.Current())):
-                    j = fmap.FindIndex(other)
-                    if j not in removed:
-                        adj.add(j)
-            exp.Next()
-    return [Face(TopoDS.Face_s(fmap.FindKey(j))) for j in adj]
+    adj = FaceAdjacency(comp)
+    removed = {adj.index_of(x) for x in faces}
+    # index 0 means "not a face of comp", which nothing here can be adjacent to
+    ring = {j for i in removed if i > 0 for j, _ in adj.walk(i)} - removed
+    return [adj.face(j) for j in ring]
 
 
 def _tool_fill(shape, targets, feature_faces=None, max_planes=12):

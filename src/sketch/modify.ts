@@ -698,51 +698,6 @@ export function breakAt(
   return ents;
 }
 
-// --- geometric constraints (applied once; a full solver maintains them) ---
-const lineDir = (e: { x1: number; y1: number; x2: number; y2: number }) =>
-  v(e.x2 - e.x1, e.y2 - e.y1).normalize();
-
-export function makeHorizontal(ents: ResolvedEntity[], i: number): ResolvedEntity[] {
-  const e = ents[i];
-  if (!e || e.type !== "line") return ents;
-  const y = (e.y1 + e.y2) / 2;
-  return ents.map((o, j) => (j === i ? { ...e, y1: y, y2: y } : o));
-}
-export function makeVertical(ents: ResolvedEntity[], i: number): ResolvedEntity[] {
-  const e = ents[i];
-  if (!e || e.type !== "line") return ents;
-  const x = (e.x1 + e.x2) / 2;
-  return ents.map((o, j) => (j === i ? { ...e, x1: x, x2: x } : o));
-}
-/** rotate line B about its start to a target direction (keeping its length) */
-function alignLine(ents: ResolvedEntity[], iB: number, dir: THREE.Vector2): ResolvedEntity[] {
-  const B = ents[iB];
-  if (!B || B.type !== "line") return ents;
-  const len = v(B.x2 - B.x1, B.y2 - B.y1).length();
-  const old = lineDir(B);
-  const sign = dir.dot(old) >= 0 ? 1 : -1; // keep B pointing the same general way
-  const d = dir.clone().multiplyScalar(sign * len);
-  return ents.map((o, j) => (j === iB ? { ...B, x2: B.x1 + d.x, y2: B.y1 + d.y } : o));
-}
-export function makeParallel(ents: ResolvedEntity[], iA: number, iB: number): ResolvedEntity[] {
-  const A = ents[iA];
-  if (A?.type !== "line") return ents;
-  return alignLine(ents, iB, lineDir(A));
-}
-export function makePerpendicular(ents: ResolvedEntity[], iA: number, iB: number): ResolvedEntity[] {
-  const A = ents[iA];
-  if (A?.type !== "line") return ents;
-  const d = lineDir(A);
-  return alignLine(ents, iB, v(-d.y, d.x));
-}
-export function makeEqual(ents: ResolvedEntity[], iA: number, iB: number): ResolvedEntity[] {
-  const A = ents[iA], B = ents[iB];
-  if (A?.type !== "line" || B?.type !== "line") return ents;
-  const lenA = v(A.x2 - A.x1, A.y2 - A.y1).length();
-  const d = lineDir(B).multiplyScalar(lenA);
-  return ents.map((o, j) => (j === iB ? { ...B, x2: B.x1 + d.x, y2: B.y1 + d.y } : o));
-}
-
 /** Extend: lengthen the clicked end of a line or arc to the nearest crossing. */
 export function extendLine(
   ents: ResolvedEntity[],
