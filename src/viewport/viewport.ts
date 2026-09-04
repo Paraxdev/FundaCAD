@@ -90,6 +90,7 @@ import { cylinderFromFace, radialAt, solidInsideCylinder } from "../features/pla
 import type { RoundFace } from "../features/radialDrag";
 import type { Plane3, PlaneDef, RebuildResult, Selector, Vec3 } from "../types";
 import { dragStep } from "./dragStep";
+import { groundAnchor } from "./zoomAnchor";
 import { faceSketchPlane } from "../sketch/sketchView";
 import { viewSideNormal } from "./viewFlight";
 import { themeColor } from "./themeColors";
@@ -482,9 +483,16 @@ export class Viewport {
     return hit ? hit.point.clone() : this.model.box.getCenter(new THREE.Vector3());
   }
 
-  /** World point under the cursor for zoom-to-cursor: the model surface hit if the
-   *  cursor is over it, else a point on the cursor ray at the current orbit-target
-   *  distance (so zooming over empty space still tracks the cursor direction). */
+  /** World point under the cursor for zoom-to-cursor: the model surface hit if
+   *  the cursor is over it, else the GROUND PLANE under the cursor, else a point
+   *  on the cursor ray at the current orbit-target distance.
+   *
+   *  The middle case is the one that matters and it used to be missing. A point
+   *  at the target distance is a point on a sphere around the camera, not on any
+   *  surface, so zooming over empty space converged the orbit target onto
+   *  somewhere off the grid plane and walked the camera through it — after which
+   *  the whole lattice is outside the frustum and the viewport is blank. See
+   *  zoomAnchor.groundAnchor. */
   private cursorWorldPoint(clientX: number, clientY: number): THREE.Vector3 {
     const rc = this.rayFrom(clientX, clientY);
     if (this.model) {
@@ -494,6 +502,18 @@ export class Viewport {
     const cam = this.rig.controls.getPosition(new THREE.Vector3());
     const target = this.rig.controls.getTarget(new THREE.Vector3());
     const dist = cam.distanceTo(target);
+    // Only while the ground lattice is the thing being DRAWN. targetGridZ is
+    // where it sits — 0 on an empty document, the model's floor otherwise — so
+    // this aims at the surface actually on screen rather than at the world XY
+    // plane by assumption. Inside a sketch the lattice is the sketch plane's,
+    // which is not horizontal and may be vertical, and aiming at a horizontal
+    // plane there would send the zoom somewhere nobody is looking. The sketch
+    // does not need this anyway: its grid follows the camera target dropped
+    // ONTO its own plane, so a target that leaves the plane costs it nothing.
+    if (this.scene.grid.group.visible) {
+      const ground = groundAnchor(rc.ray.origin, rc.ray.direction, this.targetGridZ, dist);
+      if (ground) return ground.clone();
+    }
     return rc.ray.origin.clone().add(rc.ray.direction.clone().multiplyScalar(dist));
   }
 

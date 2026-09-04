@@ -8,7 +8,13 @@
 
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { anchorDolly, ORTHO_ZOOM_FLOOR, orthoZoomStep } from "../../src/viewport/zoomAnchor";
+import {
+  anchorDolly,
+  GROUND_ANCHOR_REACH,
+  groundAnchor,
+  ORTHO_ZOOM_FLOOR,
+  orthoZoomStep,
+} from "../../src/viewport/zoomAnchor";
 
 const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 const MIN = 0.5;
@@ -124,6 +130,101 @@ describe("anchorDolly", () => {
 // camera along the view axis at all: it changes camera.zoom and TRUCKS both
 // endpoints sideways to keep the cursor point still. The two have to be derived
 // from one number, and that number has to be the one the controls will apply.
+describe("groundAnchor", () => {
+  const dir = (x: number, y: number, z: number) => v(x, y, z).normalize();
+
+  it("finds the point on the plane under the cursor", () => {
+    const got = groundAnchor(v(0, 0, 10), dir(0, 0, -1), 0, 10);
+    expect(got).not.toBeNull();
+    expect(got!.toArray().map((n) => +n.toFixed(6))).toEqual([0, 0, 0]);
+  });
+
+  it("takes the plane wherever it is, not the world XY plane", () => {
+    // the lattice sits on the model's floor, which is rarely z = 0
+    const got = groundAnchor(v(3, 4, 20), dir(0, 0, -1), -7.5, 40);
+    expect(got!.z).toBeCloseTo(-7.5, 9);
+    expect(got!.x).toBeCloseTo(3, 9);
+  });
+
+  it("keeps a zoom over empty space ON the plane, notch after notch", () => {
+    // The property the whole thing exists for. Aim at the ground, dolly toward
+    // it, and the orbit target must still be on the ground twenty notches later
+    // — that is what keeps the grid in the frame at extreme zoom.
+    let cam = v(60, -60, 48);
+    let target = v(0, 0, 0);
+    for (let i = 0; i < 20; i++) {
+      const d = target.clone().sub(cam).normalize();
+      const pivot = groundAnchor(cam, d, 0, cam.distanceTo(target));
+      expect(pivot).not.toBeNull();
+      const next = anchorDolly(cam, target, pivot!, 0.8, 0.02);
+      expect(next).not.toBeNull();
+      cam = next!.position;
+      target = next!.target;
+      expect(Math.abs(target.z)).toBeLessThan(1e-9);
+    }
+    expect(cam.distanceTo(target)).toBeLessThan(2);
+  });
+
+  it("is what the OLD fallback was not", () => {
+    // The control, and the bug in one test. A point on the ray at the current
+    // target distance is on a SPHERE around the camera rather than on any
+    // surface, so zooming toward it walks the orbit target off the plane —
+    // and once the offset is comparable to how much of the world is on screen,
+    // the grid has left the frame. Measured on the running app before the fix:
+    // eight notches put the target 0.38mm below z = 0 with the view 0.44mm
+    // deep, and the viewport went blank while the readout still said
+    // "Grid 0.02 mm".
+    const run = (aim: "ground" | "ray") => {
+      let cam = v(60, -60, 48);
+      let target = v(0, 0, 0);
+      for (let i = 0; i < 20; i++) {
+        const d = target.clone().sub(cam).normalize();
+        const dist = cam.distanceTo(target);
+        const pivot = aim === "ground"
+          ? groundAnchor(cam, d, 0, dist)!
+          : cam.clone().add(d.clone().multiplyScalar(dist * 0.98));
+        const next = anchorDolly(cam, target, pivot, 0.8, 0.02);
+        if (!next) break;
+        cam = next.position;
+        target = next.target;
+      }
+      return { off: Math.abs(target.z), view: cam.distanceTo(target) };
+    };
+    const ray = run("ray");
+    const ground = run("ground");
+    // the old aim drifts off the plane by most of a screenful
+    expect(ray.off / ray.view).toBeGreaterThan(0.5);
+    // the new one does not drift at all
+    expect(ground.off).toBeLessThan(1e-9);
+  });
+
+  it("refuses a ray running along the plane", () => {
+    expect(groundAnchor(v(0, 0, 5), dir(1, 0, 0), 0, 10)).toBeNull();
+    expect(groundAnchor(v(0, 0, 5), dir(1, 0, 1e-9), 0, 10)).toBeNull();
+  });
+
+  it("refuses a ray pointing away from the plane", () => {
+    expect(groundAnchor(v(0, 0, 5), dir(0, 0, 1), 0, 10)).toBeNull();
+  });
+
+  it("refuses a hit out on the horizon", () => {
+    // A grazing view meets the plane thousands of distances away; zooming there
+    // is not what anyone meant by "the point under the cursor".
+    const grazing = dir(1, 0, -0.001);
+    expect(groundAnchor(v(0, 0, 5), grazing, 0, 10)).toBeNull();
+    // and the boundary: just inside the reach is accepted
+    const inside = dir(0, 0, -1);
+    expect(groundAnchor(v(0, 0, 5), inside, 0, 5 / GROUND_ANCHOR_REACH + 1e-6)).not.toBeNull();
+    expect(groundAnchor(v(0, 0, 5), inside, 0, 5 / GROUND_ANCHOR_REACH - 1e-6)).toBeNull();
+  });
+
+  it("refuses nonsense rather than returning a NaN to aim at", () => {
+    expect(groundAnchor(v(0, 0, 5), dir(0, 0, -1), NaN, 10)).toBeNull();
+    expect(groundAnchor(v(0, 0, 5), dir(0, 0, -1), 0, 0)).toBeNull();
+    expect(groundAnchor(v(0, 0, 5), dir(0, 0, -1), 0, -3)).toBeNull();
+  });
+});
+
 describe("orthoZoomStep", () => {
   const MIN_ZOOM = 0.01; // camera-controls' own default, which is what bit
   const step = (cur: number, f: number) => orthoZoomStep(cur, f, MIN_ZOOM, Infinity);

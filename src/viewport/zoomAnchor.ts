@@ -31,6 +31,51 @@ export interface Dolly {
   target: THREE.Vector3;
 }
 
+/** How far along the cursor ray the ground plane may be and still be worth
+ *  aiming at, as a multiple of the current target distance. Past this the view
+ *  is grazing the plane and the "point under the cursor" is out on the horizon,
+ *  which is somewhere nobody meant to zoom to. */
+export const GROUND_ANCHOR_REACH = 20;
+
+/** Where the cursor ray meets the ground plane, or null when that is not a
+ *  sensible place to aim.
+ *
+ *  This is the zoom anchor whenever the cursor is over empty space, and it
+ *  replaces a point on the ray at the current target distance — a point on a
+ *  SPHERE around the camera rather than on any surface. That distinction is not
+ *  academic. Zooming toward it converges the orbit target onto a point off the
+ *  grid plane, so the camera walks steadily toward that plane and eventually
+ *  through it: measured on an empty document, eight notches of wheel put the
+ *  target 0.38mm below z = 0 and the camera 0.07mm below it, at which point the
+ *  entire lattice is behind the eye and the viewport is blank while the readout
+ *  still says "Grid 0.02 mm".
+ *
+ *  Aiming at the plane the grid is drawn on keeps the target on it, so the grid
+ *  stays under the cursor however far in the wheel goes. It is also what the
+ *  user is looking at: over empty space, the ground IS the surface on screen.
+ *
+ *  Returns null for a ray parallel to the plane, one pointing away from it, and
+ *  one whose hit is absurdly far off (see GROUND_ANCHOR_REACH) — the caller
+ *  keeps its old fallback for all three.
+ */
+export function groundAnchor(
+  origin: THREE.Vector3,
+  dir: THREE.Vector3,
+  planeZ: number,
+  targetDist: number,
+  out = new THREE.Vector3(),
+): THREE.Vector3 | null {
+  if (!Number.isFinite(planeZ) || !Number.isFinite(targetDist) || targetDist <= 0) return null;
+  const dz = dir.z;
+  // A ray within about 3 degrees of the plane hits it thousands of distances
+  // away, if at all; the reach test below would refuse those anyway, but the
+  // division comes first and it is the one that can produce an infinity.
+  if (!Number.isFinite(dz) || Math.abs(dz) < 1e-6) return null;
+  const t = (planeZ - origin.z) / dz;
+  if (!(t > 0) || t > targetDist * GROUND_ANCHOR_REACH) return null;
+  return out.copy(dir).multiplyScalar(t).add(origin);
+}
+
 /** Camera and target after one wheel notch of `factor` toward `pivot`.
  *
  *  `null` means the move is refused because the view is already as close as
