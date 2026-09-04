@@ -184,6 +184,43 @@ _reaped_gens: set = set()  # generations WE killed (timeout/stall) — not init 
 _ever_came_up = False  # a worker started successfully at least once this session
 _env_broken = False  # latched: the worker cannot start on this machine
 
+_pool_src = None  # source stamp the CURRENT pool's worker was started from
+
+_SIDECAR_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def _src_stamp(directory=None):
+    """What the worker's copy of this package looked like when it imported it.
+
+    A worker process imports every module in here ONCE, at spawn, and then lives
+    for the rest of the session. Edit a file after that and the code on disk and
+    the code doing the work disagree, silently and indefinitely: the fix is in
+    the file, the failure is still in the process, and nothing anywhere says so.
+    Measured on this repo the day the check was written — a thread that had just
+    been fixed still failed in the running app twenty minutes later, and the only
+    way to tell was to compare a file's mtime against a process's start time.
+
+    So the pool carries a stamp of the sources it was built from, and
+    _pool_available compares it. Size as well as mtime because a coarse
+    filesystem clock can hand two edits the same second.
+
+    Returns None when there is nothing to watch, which is the packaged app: the
+    modules are frozen into the executable, this directory has no .py in it, and
+    the check costs one failed scandir and then nothing.
+    """
+    try:
+        with os.scandir(directory or _SIDECAR_DIR) as it:
+            out = []
+            for e in it:
+                if not e.name.endswith(".py"):
+                    continue
+                st = e.stat()
+                out.append((e.name, st.st_mtime_ns, st.st_size))
+    except OSError:
+        return None
+    return tuple(sorted(out)) or None
+
+
 _INIT_FAIL_MSG = (
     "the geometry engine could not start on this computer — this is an "
     "installation or environment problem, not a problem with your model. "
@@ -1483,9 +1520,12 @@ def _new_pool():
 
     Returns None once _env_broken has latched — see _pool_available(), which is
     what turns that back into a live pool if the failure was transient."""
-    global _pool_gen, _warm
+    global _pool_gen, _warm, _pool_src
     if _env_broken:
         return None
+    # BEFORE the spawn, so a file edited while the worker is starting is caught
+    # on the next request rather than being baked in as if it were already there.
+    _pool_src = _src_stamp()
     _pool_gen += 1
     gen = _pool_gen
     _warm = None
@@ -1617,6 +1657,17 @@ def _pool_available():
     global _pool
     if _env_broken:
         return {"error": {"message": _INIT_FAIL_MSG}}
+    if _pool is not None and _pool_src is not None:
+        now = _src_stamp()
+        if now is not None and now != _pool_src:
+            # The worker is running code this package no longer contains. Retire
+            # it: the next job spawns a worker that imports what is on disk. This
+            # is the same recycle a crash or a stall performs, so the document is
+            # as safe here as it is there — the frontend holds it and resends it.
+            print("sidecar: sources changed, recycling the geometry worker",
+                  file=sys.stderr, flush=True)
+            _kill_pool(_pool)
+            _pool = None
     if _pool is None:
         _pool = _new_pool()
     if _pool is None:
