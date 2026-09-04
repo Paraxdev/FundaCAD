@@ -146,6 +146,22 @@ def polyline_points(poly):
 SECTION_AXES = {"x": (1.0, 0.0, 0.0), "y": (0.0, 1.0, 0.0), "z": (0.0, 0.0, 1.0)}
 
 
+#: Which side of the section plane survives, as True for the high side.
+#:
+#: Generous on purpose, and CLOSED on purpose. The vocabulary used to be
+#: "above"/"over"/"+" against everything else, so `keep: "max"` — which is what
+#: `at`/`min`/`max` elsewhere in this file invites — quietly meant "below", and
+#: the caller was told "keeping max" for a picture that kept the other half. A
+#: view tool that answers a question it was not asked is worse than one that
+#: refuses, because the refusal is visible.
+KEEP_WORDS = {
+    "below": False, "under": False, "min": False, "low": False,
+    "bottom": False, "near": False, "-": False,
+    "above": True, "over": True, "max": True, "high": True,
+    "top": True, "far": True, "+": True,
+}
+
+
 def section_plane(spec, bbox):
     """(normal, offset) for a section request, or None.
 
@@ -168,10 +184,15 @@ def section_plane(spec, bbox):
     if at is None:
         lo, hi = np.asarray(bbox[0], dtype=float), np.asarray(bbox[1], dtype=float)
         at = float(n @ ((lo + hi) / 2.0))
-    keep = str(spec.get("keep", "below")).lower()
+    keep = str(spec.get("keep", "below")).strip().lower()
+    if keep not in KEEP_WORDS:
+        raise ValueError(
+            f"section keep={spec.get('keep')!r} is not a side of the plane. "
+            f"Use one of: {', '.join(sorted(KEEP_WORDS))}."
+        )
     # The kept half is always "n . p <= d"; asking to keep the far side just
     # flips the plane, which keeps the clipper down to one case.
-    return (-n, -float(at)) if keep in ("above", "over", "+") else (n, float(at))
+    return (-n, -float(at)) if KEEP_WORDS[keep] else (n, float(at))
 
 
 def clip_triangle(p0, p1, p2, normal, offset):

@@ -85,7 +85,9 @@ It also flags the two shapes that make later features fail:
 The thing an agent most often needs to see is inside. `view` takes:
 
 - `section: {axis, at, keep}` — cuts the model open. There is no cap on the cut,
-  so you see the inside surfaces, drawn darker than the outside.
+  so you see the inside surfaces, drawn darker than the outside. `keep` says
+  which half survives: `below`/`min`/`near` or `above`/`max`/`far`. A word it does
+  not know is refused, not guessed at.
 - `bodies: [...]` — draw one part of an assembly.
 - `focus: {at, size}` — a window that many millimetres across. A 1.5 mm thread on
   a 200 mm spool is four pixels of a fitted view.

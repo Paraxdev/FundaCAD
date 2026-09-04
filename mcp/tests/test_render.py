@@ -197,6 +197,43 @@ def test_the_default_cut_is_through_the_middle_wherever_the_part_sits():
     assert np.allclose(normal, [0, 0, 1]) and abs(offset - 137) < 1e-9, plane
 
 
+def test_the_two_sides_of_a_cut_are_different_pictures():
+    """The half that survives has to depend on which half was asked for.
+
+    The vocabulary was "above"/"over"/"+" against everything else, so `max` —
+    the word `at`, `min` and `max` elsewhere in this module invite — silently
+    meant `below`. Both sides rendered byte-identical images and the reply said
+    "keeping max" over a picture of the other half. Asserting on the PAIR is
+    what catches that; a test of one side alone passes either way.
+    """
+    box = box_mesh(20, 20, 20)
+    shots = {}
+    for word in ("below", "min", "near", "-", "above", "max", "far", "+"):
+        shots[word] = R.render([box], 160, 160, view="front",
+                               section={"axis": "Y", "at": 0, "keep": word})
+    low = [shots[w] for w in ("below", "min", "near", "-")]
+    high = [shots[w] for w in ("above", "max", "far", "+")]
+    for group, name in ((low, "low"), (high, "high")):
+        for other in group[1:]:
+            assert np.array_equal(group[0], other), f"{name} synonyms disagree"
+    assert not np.array_equal(low[0], high[0]), "both sides drew the same half"
+    print("the two sides of a cut are different pictures OK")
+
+
+def test_a_keep_word_that_is_not_a_side_is_refused():
+    """Guessing is what made the bug above invisible: the picture was wrong and
+    nothing said so. A word this does not know has no safe reading, so it has to
+    stop rather than pick one."""
+    box = box_mesh(20, 20, 20)
+    try:
+        R.render([box], 80, 80, view="front", section={"axis": "Y", "keep": "middle"})
+    except ValueError as ex:
+        assert "middle" in str(ex) and "max" in str(ex), str(ex)
+        print("an unknown keep word is refused OK:", ex)
+        return
+    raise AssertionError("keep='middle' was accepted and quietly given a meaning")
+
+
 def test_clipping_a_triangle_keeps_the_right_area():
     a, b, c = np.array([0.0, 0, 0]), np.array([10.0, 0, 0]), np.array([0.0, 10, 0])
     n, d = np.array([1.0, 0, 0]), 5.0

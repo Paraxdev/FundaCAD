@@ -206,7 +206,10 @@ class Server:
              "section": {"type": "object",
                          "description": "cut the model open to see inside: "
                                         "{axis: X|Y|Z, at: mm (default: the "
-                                        "middle), keep: below|above}"},
+                                        "middle), keep: which half survives, "
+                                        "below|min|near or above|max|far "
+                                        "(default below). Anything else is "
+                                        "refused rather than guessed at.}"},
              "focus": {"type": "object",
                        "description": "look closer: {at: [x,y,z], size: mm} "
                                       "frames a window that many mm across "
@@ -433,9 +436,13 @@ class Server:
         cut = ""
         if args.get("section"):
             sec = args["section"]
+            # The side actually kept, resolved the same way the renderer
+            # resolves it, not the word that was passed in: this line used to
+            # say "keeping max" over a picture that had kept the other half.
+            side = "above" if R.KEEP_WORDS.get(
+                str(sec.get("keep", "below")).strip().lower()) else "below"
             cut = (f", cut on {sec.get('axis', 'X')} at "
-                   f"{sec.get('at', 'the middle')}, keeping "
-                   f"{sec.get('keep', 'below')}")
+                   f"{sec.get('at', 'the middle')}, keeping {side}")
         return {"content": [
             {"type": "text",
              "text": f"{where} view of {', '.join(shown)}, {w}x{h}{cut}"},
