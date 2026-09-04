@@ -34,6 +34,7 @@ import {
   linearOffsets,
   MIN_COUNT,
 } from "./patternMath";
+import { CanvasGesture } from "./canvasGesture";
 
 export type PatternKind = "linear" | "circular";
 
@@ -69,26 +70,23 @@ export class PatternTool {
   private grabRef = 0; // drag origin: a distance (linear) or an angle (circular)
   private downPos = { x: 0, y: 0 };
   private downOnGizmo = false;
-  private raf = 0;
 
   private dim = new DimInput();
   private onDone: ((id: string | null) => void) | null = null;
 
-  private boundMove: (e: PointerEvent) => void;
-  private boundDown: (e: PointerEvent) => void;
-  private boundUp: (e: PointerEvent) => void;
-  private boundKey: (e: KeyboardEvent) => void;
-  private boundTick: () => void;
+  private readonly gesture: CanvasGesture;
 
   constructor(
     private viewport: Viewport,
     private store: DocumentStore,
   ) {
-    this.boundMove = (e) => this.onMove(e);
-    this.boundDown = (e) => this.onDown(e);
-    this.boundUp = (e) => this.onUp(e);
-    this.boundKey = (e) => this.onKey(e);
-    this.boundTick = () => this.tick();
+    this.gesture = new CanvasGesture(viewport.domElement, {
+      move: (e) => this.onMove(e),
+      down: (e) => this.onDown(e),
+      up: (e) => this.onUp(e),
+      key: (e) => this.onKey(e),
+      frame: () => this.tick(),
+    });
   }
 
   start(kind: PatternKind, bodies: string[], onDone: (id: string | null) => void) {
@@ -112,11 +110,7 @@ export class PatternTool {
     this.placeGizmo();
 
     this.viewport.suspendPicking = true;
-    const el = this.viewport.domElement;
-    el.addEventListener("pointermove", this.boundMove);
-    el.addEventListener("pointerdown", this.boundDown, true);
-    el.addEventListener("pointerup", this.boundUp);
-    window.addEventListener("keydown", this.boundKey, true);
+    this.gesture.attach();
 
     this.buildGizmo();
     this.dim.show(
@@ -135,7 +129,7 @@ export class PatternTool {
     this.pushFields();
     this.refreshPrompt();
     this.updateGhosts();
-    this.raf = requestAnimationFrame(this.boundTick);
+    this.gesture.frame();
   }
 
   /** How far the pattern's bodies reach along a direction — the natural first
@@ -371,7 +365,7 @@ export class PatternTool {
     const s = this.viewport.projectToScreen(this.anchor);
     this.dim.position(s.x + 24, s.y + 84);
     this.readFields();
-    this.raf = requestAnimationFrame(this.boundTick);
+    this.gesture.frame();
   }
 
   /** A typed value overrides the drag. Read every frame, because the field has
@@ -444,13 +438,8 @@ export class PatternTool {
 
   private cleanup() {
     const el = this.viewport.domElement;
-    el.removeEventListener("pointermove", this.boundMove);
-    el.removeEventListener("pointerdown", this.boundDown, true);
-    el.removeEventListener("pointerup", this.boundUp);
-    window.removeEventListener("keydown", this.boundKey, true);
+    this.gesture.detach();
     el.style.cursor = "default";
-    if (this.raf) cancelAnimationFrame(this.raf);
-    this.raf = 0;
     this.dim.hide();
     this.viewport.clearPatternGhost();
     if (this.gizmo) {

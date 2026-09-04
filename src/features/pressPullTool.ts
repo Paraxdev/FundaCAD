@@ -24,6 +24,7 @@ import {
   type DragHandle,
 } from "./manipulator";
 import { collapseDiameter, deltaForDiameter, radialDrag, type RoundFace } from "./radialDrag";
+import { CanvasGesture } from "./canvasGesture";
 
 type Phase = "pick" | "drag";
 
@@ -58,26 +59,23 @@ export class PressPullTool {
   private grabProj = 0; // axis projection at grab start
   private downPos = { x: 0, y: 0 };
   private downOnGizmo = false;
-  private raf = 0;
 
   private dim = new DimInput();
   private onDone: ((id: string | null) => void) | null = null;
 
-  private boundMove: (e: PointerEvent) => void;
-  private boundDown: (e: PointerEvent) => void;
-  private boundUp: (e: PointerEvent) => void;
-  private boundKey: (e: KeyboardEvent) => void;
-  private boundTick: () => void;
+  private readonly gesture: CanvasGesture;
 
   constructor(
     private viewport: Viewport,
     private store: DocumentStore,
   ) {
-    this.boundMove = (e) => this.onMove(e);
-    this.boundDown = (e) => this.onDown(e);
-    this.boundUp = (e) => this.onUp(e);
-    this.boundKey = (e) => this.onKey(e);
-    this.boundTick = () => this.tick();
+    this.gesture = new CanvasGesture(viewport.domElement, {
+      move: (e) => this.onMove(e),
+      down: (e) => this.onDown(e),
+      up: (e) => this.onUp(e),
+      key: (e) => this.onKey(e),
+      frame: () => this.tick(),
+    });
   }
 
   /** `opts.grabAt` is the direct-manipulation entry (features/faceNudge.ts):
@@ -100,11 +98,7 @@ export class PressPullTool {
     this.phase = "pick";
     this.onDone = onDone;
     this.viewport.suspendPicking = true; // we drive our own face picking
-    const el = this.viewport.domElement;
-    el.addEventListener("pointermove", this.boundMove);
-    el.addEventListener("pointerdown", this.boundDown, true);
-    el.addEventListener("pointerup", this.boundUp);
-    window.addEventListener("keydown", this.boundKey, true);
+    this.gesture.attach();
 
     if (pre) {
       this.beginDrag(pre.selectors, pre.faceIds, pre.anchor, pre.normal, pre.bodyId, pre.round);
@@ -297,7 +291,7 @@ export class PressPullTool {
         ? `Drag or type a diameter · under ${collapseDiameter(round.radius).toFixed(2)}mm removes it · Esc`
         : "Drag or type a value, negative cuts · click a face to stop at it · Esc",
     );
-    this.raf = requestAnimationFrame(this.boundTick);
+    this.gesture.frame();
   }
 
   /** What the heads-up field shows for the current drag: a DIAMETER on a round
@@ -343,7 +337,7 @@ export class PressPullTool {
           }
         }
       }
-      this.raf = requestAnimationFrame(this.boundTick);
+      this.gesture.frame();
     }
   }
 
@@ -446,14 +440,9 @@ export class PressPullTool {
 
   private cleanup() {
     const el = this.viewport.domElement;
-    el.removeEventListener("pointermove", this.boundMove);
-    el.removeEventListener("pointerdown", this.boundDown, true);
-    el.removeEventListener("pointerup", this.boundUp);
-    window.removeEventListener("keydown", this.boundKey, true);
+    this.gesture.detach();
     el.style.cursor = "default";
     this.viewport.clearPressPullGhost();
-    if (this.raf) cancelAnimationFrame(this.raf);
-    this.raf = 0;
     this.dim.hide();
     this.disposeGizmo();
     this.viewport.clearHover();

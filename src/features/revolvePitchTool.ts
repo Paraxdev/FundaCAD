@@ -74,6 +74,7 @@ import {
   snapDegrees,
 } from "./transformGizmo";
 import { themeColor } from "../viewport/themeColors";
+import { CanvasGesture } from "./canvasGesture";
 
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 
@@ -156,7 +157,6 @@ export class RevolvePitchTool {
   private lastTurn = 0;
   private downPos = { x: 0, y: 0 };
   private downOnGizmo = false;
-  private raf = 0;
 
   private dim = new DimInput();
   private onDone: ((id: string | null) => void) | null = null;
@@ -166,22 +166,20 @@ export class RevolvePitchTool {
   private previewing = false;
   private previewTimer = 0;
 
-  private boundMove: (e: PointerEvent) => void;
-  private boundDown: (e: PointerEvent) => void;
-  private boundUp: (e: PointerEvent) => void;
-  private boundKey: (e: KeyboardEvent) => void;
-  private boundTick: () => void;
+  private readonly gesture: CanvasGesture;
 
   constructor(
     private viewport: Viewport,
     private store: DocumentStore,
     private overlay: SketchOverlay,
   ) {
-    this.boundMove = (e) => this.onMove(e);
-    this.boundDown = (e) => this.onDown(e);
-    this.boundUp = (e) => this.onUp(e);
-    this.boundKey = (e) => this.onKey(e);
-    this.boundTick = () => this.tick();
+    this.gesture = new CanvasGesture(viewport.domElement, {
+      move: (e) => this.onMove(e),
+      down: (e) => this.onDown(e),
+      up: (e) => this.onUp(e),
+      key: (e) => this.onKey(e),
+      frame: () => this.tick(),
+    });
   }
 
   /** Open the arrow on a committed revolve. False sends the caller to the value
@@ -224,11 +222,7 @@ export class RevolvePitchTool {
     this.radius = v3(this.at).sub(this.base).length();
 
     this.viewport.suspendPicking = true;
-    const el = this.viewport.domElement;
-    el.addEventListener("pointermove", this.boundMove);
-    el.addEventListener("pointerdown", this.boundDown, true);
-    el.addEventListener("pointerup", this.boundUp);
-    window.addEventListener("keydown", this.boundKey, true);
+    this.gesture.attach();
 
     this.buildGizmo();
     this.buildHelix();
@@ -251,7 +245,7 @@ export class RevolvePitchTool {
         "Either value can be typed. Enter applies, Esc cancels.",
     );
     this.refresh();
-    this.raf = requestAnimationFrame(this.boundTick);
+    this.gesture.frame();
     return true;
   }
 
@@ -455,7 +449,7 @@ export class RevolvePitchTool {
     const s = this.viewport.projectToScreen(this.anchor);
     this.dim.position(s.x, s.y);
     if (!this.grabbing && !this.grabbingAngle) this.readFields();
-    this.raf = requestAnimationFrame(this.boundTick);
+    this.gesture.frame();
   }
 
   /** Take a typed value once the user has actually typed it. A field only counts
@@ -700,13 +694,8 @@ export class RevolvePitchTool {
 
   private cleanup(rebuild = true) {
     const el = this.viewport.domElement;
-    el.removeEventListener("pointermove", this.boundMove);
-    el.removeEventListener("pointerdown", this.boundDown, true);
-    el.removeEventListener("pointerup", this.boundUp);
-    window.removeEventListener("keydown", this.boundKey, true);
+    this.gesture.detach();
     el.style.cursor = "default";
-    if (this.raf) cancelAnimationFrame(this.raf);
-    this.raf = 0;
     if (this.previewTimer) clearTimeout(this.previewTimer);
     this.previewTimer = 0;
     if (this.previewing) {

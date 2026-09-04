@@ -32,6 +32,7 @@ import {
   sectionCentre,
   sectionFromPlaneDef,
 } from "./sectionMath";
+import { CanvasGesture } from "./canvasGesture";
 
 const AXES: Record<string, Vec3> = {
   X: [1, 0, 0],
@@ -77,7 +78,6 @@ export class SectionTool {
   private grabbing = false;
   private grabOffset = 0;
   private grabProj = 0;
-  private raf = 0;
   /** true while the handle + offset box are stood down for another tool */
   private standing = false;
   private onDone: (() => void) | null = null;
@@ -86,27 +86,28 @@ export class SectionTool {
   private pointV = new THREE.Vector3();
   private axisV = new THREE.Vector3();
 
-  private boundMove: (e: PointerEvent) => void;
-  private boundDown: (e: PointerEvent) => void;
-  private boundUp: (e: PointerEvent) => void;
-  private boundKey: (e: KeyboardEvent) => void;
-  private boundTick: () => void;
-  private boundPickMove: (e: PointerEvent) => void;
-  private boundPickDown: (e: PointerEvent) => void;
-  private boundPickKey: (e: KeyboardEvent) => void;
+  // two gestures, because the tool takes the canvas twice for different
+  // reasons: once to AIM (click a face or plane) and once to DRAG the cut
+  private readonly gesture: CanvasGesture;
+  private readonly pickGesture: CanvasGesture;
 
   constructor(
     private viewport: Viewport,
     private deps: SectionDeps = {},
   ) {
-    this.boundMove = (e) => this.onMove(e);
-    this.boundDown = (e) => this.onDown(e);
-    this.boundUp = (e) => this.onUp(e);
-    this.boundKey = (e) => this.onKey(e);
-    this.boundTick = () => this.tick();
-    this.boundPickMove = (e) => this.onPickMove(e);
-    this.boundPickDown = (e) => this.onPickDown(e);
-    this.boundPickKey = (e) => this.onPickKey(e);
+    this.gesture = new CanvasGesture(viewport.domElement, {
+      move: (e) => this.onMove(e),
+      down: (e) => this.onDown(e),
+      up: (e) => this.onUp(e),
+      key: (e) => this.onKey(e),
+      frame: () => this.tick(),
+    });
+    // no `up`: aiming is a click, and nothing happens on the release
+    this.pickGesture = new CanvasGesture(viewport.domElement, {
+      move: (e) => this.onPickMove(e),
+      down: (e) => this.onPickDown(e),
+      key: (e) => this.onPickKey(e),
+    });
   }
 
   /** Enter cross-section mode. The bare axis letters are the original call shape
@@ -152,10 +153,7 @@ export class SectionTool {
   private beginPick() {
     this.picking = true;
     this.viewport.suspendPicking = true;
-    const el = this.viewport.domElement;
-    el.addEventListener("pointermove", this.boundPickMove);
-    el.addEventListener("pointerdown", this.boundPickDown, true);
-    window.addEventListener("keydown", this.boundPickKey, true);
+    this.pickGesture.attach();
     setPrompt("Click a face or plane to cut along · Esc");
   }
 
@@ -163,10 +161,7 @@ export class SectionTool {
     if (!this.picking) return;
     this.picking = false;
     this.viewport.suspendPicking = false;
-    const el = this.viewport.domElement;
-    el.removeEventListener("pointermove", this.boundPickMove);
-    el.removeEventListener("pointerdown", this.boundPickDown, true);
-    window.removeEventListener("keydown", this.boundPickKey, true);
+    this.pickGesture.detach();
     this.viewport.clearHover();
     setPrompt(null);
   }
@@ -213,16 +208,12 @@ export class SectionTool {
     this.offset = 0;
     this.side = 1;
     this.pushPlane();
-    const el = this.viewport.domElement;
-    el.addEventListener("pointermove", this.boundMove);
-    el.addEventListener("pointerdown", this.boundDown, true);
-    el.addEventListener("pointerup", this.boundUp);
-    window.addEventListener("keydown", this.boundKey, true);
+    this.gesture.attach();
     this.handle = createDragHandle();
     this.gizmo = this.handle.group;
     this.viewport.addToScene(this.gizmo);
     this.showChrome();
-    this.raf = requestAnimationFrame(this.boundTick);
+    this.gesture.frame();
   }
 
   /** Hand the current cut to the viewport, which owns it from here — including
@@ -312,7 +303,7 @@ export class SectionTool {
 
   private tick() {
     if (!this.active || !this.gizmo) return;
-    this.raf = requestAnimationFrame(this.boundTick);
+    this.gesture.frame();
     // Reconcile rather than subscribe: a tool can arm from a shortcut, a menu,
     // the palette or the browser tree, and none of those route through anything
     // this file could listen to. One predicate call per frame, in a state the
@@ -410,13 +401,8 @@ export class SectionTool {
       return;
     }
     const el = this.viewport.domElement;
-    el.removeEventListener("pointermove", this.boundMove);
-    el.removeEventListener("pointerdown", this.boundDown, true);
-    el.removeEventListener("pointerup", this.boundUp);
-    window.removeEventListener("keydown", this.boundKey, true);
+    this.gesture.detach();
     el.style.cursor = "default";
-    if (this.raf) cancelAnimationFrame(this.raf);
-    this.raf = 0;
     this.dim.hide();
     this.viewport.setSectionView(null);
     if (this.gizmo) {

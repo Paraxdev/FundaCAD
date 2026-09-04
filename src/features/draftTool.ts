@@ -18,6 +18,7 @@ import { setPrompt } from "../ui/prompt";
 import { snap } from "../ui/units";
 import { axisDragDistance, createDragHandle, type DragHandle } from "./manipulator";
 import { MAX_DRAFT_DEG, draftAngle, draftDelta, draftLever, pullAxisFor, type Axis3 } from "./draftMath";
+import { CanvasGesture } from "./canvasGesture";
 
 type Phase = "pick" | "drag";
 
@@ -51,26 +52,23 @@ export class DraftTool {
   private grabProj = 0;
   private downPos = { x: 0, y: 0 };
   private downOnGizmo = false;
-  private raf = 0;
 
   private dim = new DimInput();
   private onDone: ((id: string | null) => void) | null = null;
 
-  private boundMove: (e: PointerEvent) => void;
-  private boundDown: (e: PointerEvent) => void;
-  private boundUp: (e: PointerEvent) => void;
-  private boundKey: (e: KeyboardEvent) => void;
-  private boundTick: () => void;
+  private readonly gesture: CanvasGesture;
 
   constructor(
     private viewport: Viewport,
     private store: DocumentStore,
   ) {
-    this.boundMove = (e) => this.onMove(e);
-    this.boundDown = (e) => this.onDown(e);
-    this.boundUp = (e) => this.onUp(e);
-    this.boundKey = (e) => this.onKey(e);
-    this.boundTick = () => this.tick();
+    this.gesture = new CanvasGesture(viewport.domElement, {
+      move: (e) => this.onMove(e),
+      down: (e) => this.onDown(e),
+      up: (e) => this.onUp(e),
+      key: (e) => this.onKey(e),
+      frame: () => this.tick(),
+    });
   }
 
   start(onDone: (id: string | null) => void) {
@@ -79,11 +77,7 @@ export class DraftTool {
     this.phase = "pick";
     this.onDone = onDone;
     this.viewport.suspendPicking = true;
-    const el = this.viewport.domElement;
-    el.addEventListener("pointermove", this.boundMove);
-    el.addEventListener("pointerdown", this.boundDown, true);
-    el.addEventListener("pointerup", this.boundUp);
-    window.addEventListener("keydown", this.boundKey, true);
+    this.gesture.attach();
 
     const pre = this.viewport.selectedFacesForPressPull();
     if (pre) this.beginDrag(pre.selectors, pre.faceIds, pre.anchor, pre.normal, pre.bodyId);
@@ -213,7 +207,7 @@ export class DraftTool {
     this.dim.position(s.x, s.y);
     this.dim.updateFromCursor({ angle: 0 });
     this.prompt();
-    this.raf = requestAnimationFrame(this.boundTick);
+    this.gesture.frame();
   }
 
   /** keep the handle a constant on-screen size, point it the way we're dragging,
@@ -243,7 +237,7 @@ export class DraftTool {
           this.pushPreview();
         }
       }
-      this.raf = requestAnimationFrame(this.boundTick);
+      this.gesture.frame();
     }
   }
 
@@ -300,14 +294,9 @@ export class DraftTool {
 
   private cleanup() {
     const el = this.viewport.domElement;
-    el.removeEventListener("pointermove", this.boundMove);
-    el.removeEventListener("pointerdown", this.boundDown, true);
-    el.removeEventListener("pointerup", this.boundUp);
-    window.removeEventListener("keydown", this.boundKey, true);
+    this.gesture.detach();
     el.style.cursor = "default";
     this.store.setPreview(null);
-    if (this.raf) cancelAnimationFrame(this.raf);
-    this.raf = 0;
     this.dim.hide();
     this.disposeGizmo();
     this.viewport.clearHover();

@@ -48,6 +48,7 @@ import {
   MIN_SCALE,
   ROTATE_SNAP_DEG,
 } from "./transformGizmo";
+import { CanvasGesture } from "./canvasGesture";
 
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 const HOT = 0xffe9a8; // hovered / grabbed handle
@@ -146,7 +147,6 @@ export class MoveTool {
   /** total turn on the grabbed ring, degrees — the value the field shows */
   private ringDeg = 0;
   private downPos = { x: 0, y: 0 };
-  private raf = 0;
 
   private dim = new DimInput();
   private onDone: ((id: string | null) => void) | null = null;
@@ -154,21 +154,19 @@ export class MoveTool {
    *  that same click do its ordinary work — usually picking the next body. */
   onClickThrough: ((x: number, y: number, additive: boolean) => void) | null = null;
 
-  private boundMove: (e: PointerEvent) => void;
-  private boundDown: (e: PointerEvent) => void;
-  private boundUp: (e: PointerEvent) => void;
-  private boundKey: (e: KeyboardEvent) => void;
-  private boundTick: () => void;
+  private readonly gesture: CanvasGesture;
 
   constructor(
     private viewport: Viewport,
     private store: DocumentStore,
   ) {
-    this.boundMove = (e) => this.onMove(e);
-    this.boundDown = (e) => this.onDown(e);
-    this.boundUp = (e) => this.onUp(e);
-    this.boundKey = (e) => this.onKey(e);
-    this.boundTick = () => this.tick();
+    this.gesture = new CanvasGesture(viewport.domElement, {
+      move: (e) => this.onMove(e),
+      down: (e) => this.onDown(e),
+      up: (e) => this.onUp(e),
+      key: (e) => this.onKey(e),
+      frame: () => this.tick(),
+    });
   }
 
   start(bodies: string[], onDone: (id: string | null) => void) {
@@ -186,11 +184,7 @@ export class MoveTool {
     this.anchor.copy(this.viewport.bodiesCentroid(bodies));
     this.viewport.beginBodyMoveGhost(bodies); // live transform during drag (no rebuild)
     this.viewport.suspendPicking = true;
-    const el = this.viewport.domElement;
-    el.addEventListener("pointermove", this.boundMove);
-    el.addEventListener("pointerdown", this.boundDown, true);
-    el.addEventListener("pointerup", this.boundUp);
-    window.addEventListener("keydown", this.boundKey, true);
+    this.gesture.attach();
 
     this.buildGizmo();
     this.dim.show(
@@ -208,7 +202,7 @@ export class MoveTool {
     setPrompt(
       "Drag an arrow to slide, a ring to turn, a cube to resize, the centre to move what those act about · Enter · Esc",
     );
-    this.raf = requestAnimationFrame(this.boundTick);
+    this.gesture.frame();
   }
 
   private comp(i: number): number {
@@ -469,7 +463,7 @@ export class MoveTool {
     const s = this.viewport.projectToScreen(pos);
     this.dim.position(s.x + FIELDS_OFFSET_PX, s.y);
     this.applyTyped();
-    this.raf = requestAnimationFrame(this.boundTick);
+    this.gesture.frame();
   }
 
   /** A typed value retargets the handle most recently dragged.
@@ -707,13 +701,8 @@ export class MoveTool {
   private cleanup() {
     const el = this.viewport.domElement;
     this.viewport.endBodyMoveGhost(false); // no-op if commit/cancel already ended it
-    el.removeEventListener("pointermove", this.boundMove);
-    el.removeEventListener("pointerdown", this.boundDown, true);
-    el.removeEventListener("pointerup", this.boundUp);
-    window.removeEventListener("keydown", this.boundKey, true);
+    this.gesture.detach();
     el.style.cursor = "default";
-    if (this.raf) cancelAnimationFrame(this.raf);
-    this.raf = 0;
     this.dim.hide();
     if (this.gizmo) {
       this.viewport.removeFromScene(this.gizmo);

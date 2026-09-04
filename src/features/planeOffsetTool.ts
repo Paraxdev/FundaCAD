@@ -13,6 +13,7 @@ import { DimInput } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
 import { snap } from "../ui/units";
 import { axisDragDistance, createDragHandle, type DragHandle } from "./manipulator";
+import { CanvasGesture } from "./canvasGesture";
 
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 
@@ -33,23 +34,20 @@ export class PlaneOffsetTool {
   private grabProj = 0;
   private downPos = { x: 0, y: 0 };
   private downOnGizmo = false;
-  private raf = 0;
 
   private dim = new DimInput();
   private onDone: ((def: PlaneDef | null) => void) | null = null;
 
-  private boundMove: (e: PointerEvent) => void;
-  private boundDown: (e: PointerEvent) => void;
-  private boundUp: (e: PointerEvent) => void;
-  private boundKey: (e: KeyboardEvent) => void;
-  private boundTick: () => void;
+  private readonly gesture: CanvasGesture;
 
   constructor(private viewport: Viewport) {
-    this.boundMove = (e) => this.onMove(e);
-    this.boundDown = (e) => this.onDown(e);
-    this.boundUp = (e) => this.onUp(e);
-    this.boundKey = (e) => this.onKey(e);
-    this.boundTick = () => this.tick();
+    this.gesture = new CanvasGesture(viewport.domElement, {
+      move: (e) => this.onMove(e),
+      down: (e) => this.onDown(e),
+      up: (e) => this.onUp(e),
+      key: (e) => this.onKey(e),
+      frame: () => this.tick(),
+    });
   }
 
   start(src: SketchPlane, onDone: (def: PlaneDef | null) => void) {
@@ -62,11 +60,7 @@ export class PlaneOffsetTool {
     this.value = 0;
     this.quat.setFromUnitVectors(Y_AXIS, this.axis);
     this.viewport.suspendPicking = true;
-    const el = this.viewport.domElement;
-    el.addEventListener("pointermove", this.boundMove);
-    el.addEventListener("pointerdown", this.boundDown, true);
-    el.addEventListener("pointerup", this.boundUp);
-    window.addEventListener("keydown", this.boundKey, true);
+    this.gesture.attach();
 
     this.buildGizmo();
     this.buildGhost();
@@ -77,7 +71,7 @@ export class PlaneOffsetTool {
     setPrompt(
       "Drag or type an offset · Enter to sketch on it · Esc",
     );
-    this.raf = requestAnimationFrame(this.boundTick);
+    this.gesture.frame();
     this.updateGhost();
   }
 
@@ -149,7 +143,7 @@ export class PlaneOffsetTool {
         }
       }
     }
-    this.raf = requestAnimationFrame(this.boundTick);
+    this.gesture.frame();
   }
 
   /** translucent quad showing where the offset plane lands */
@@ -212,13 +206,8 @@ export class PlaneOffsetTool {
 
   private cleanup() {
     const el = this.viewport.domElement;
-    el.removeEventListener("pointermove", this.boundMove);
-    el.removeEventListener("pointerdown", this.boundDown, true);
-    el.removeEventListener("pointerup", this.boundUp);
-    window.removeEventListener("keydown", this.boundKey, true);
+    this.gesture.detach();
     el.style.cursor = "default";
-    if (this.raf) cancelAnimationFrame(this.raf);
-    this.raf = 0;
     this.dim.hide();
     if (this.gizmo) {
       this.viewport.removeFromScene(this.gizmo);

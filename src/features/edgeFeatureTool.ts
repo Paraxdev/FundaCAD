@@ -67,6 +67,7 @@ import {
   type EdgeTreatment,
   type ValueBounds,
 } from "./edgeDragMath";
+import { CanvasGesture } from "./canvasGesture";
 
 type Phase = "pick" | "drag";
 type Kind = EdgeTreatment;
@@ -144,26 +145,23 @@ export class EdgeFeatureTool {
   private grabProj = 0; // axis projection at grab start
   private downPos = { x: 0, y: 0 };
   private downOnGizmo = false;
-  private raf = 0;
 
   private dim = new DimInput();
   private onDone: ((id: string | null) => void) | null = null;
 
-  private boundMove: (e: PointerEvent) => void;
-  private boundDown: (e: PointerEvent) => void;
-  private boundUp: (e: PointerEvent) => void;
-  private boundKey: (e: KeyboardEvent) => void;
-  private boundTick: () => void;
+  private readonly gesture: CanvasGesture;
 
   constructor(
     private viewport: Viewport,
     private store: DocumentStore,
   ) {
-    this.boundMove = (e) => this.onMove(e);
-    this.boundDown = (e) => this.onDown(e);
-    this.boundUp = (e) => this.onUp(e);
-    this.boundKey = (e) => this.onKey(e);
-    this.boundTick = () => this.tick();
+    this.gesture = new CanvasGesture(viewport.domElement, {
+      move: (e) => this.onMove(e),
+      down: (e) => this.onDown(e),
+      up: (e) => this.onUp(e),
+      key: (e) => this.onKey(e),
+      frame: () => this.tick(),
+    });
     this.arc = new ProfileArc(viewport);
   }
 
@@ -296,11 +294,7 @@ export class EdgeFeatureTool {
     this.tangent = null;
     this.viewport.suspendPicking = true; // we drive our own edge-only picking
     this.viewport.emphasizeEdges(true); // light up all edges so they're easy to target
-    const el = this.viewport.domElement;
-    el.addEventListener("pointermove", this.boundMove);
-    el.addEventListener("pointerdown", this.boundDown, true);
-    el.addEventListener("pointerup", this.boundUp);
-    window.addEventListener("keydown", this.boundKey, true);
+    this.gesture.attach();
 
     // pre-selection (Ctrl/Shift-click, a selected face, or the selection
     // handle): skip the pick phase and go straight to the drag
@@ -385,11 +379,7 @@ export class EdgeFeatureTool {
 
     this.viewport.suspendPicking = true;
     this.viewport.emphasizeEdges(true); // additions should be easy to see
-    const el = this.viewport.domElement;
-    el.addEventListener("pointermove", this.boundMove);
-    el.addEventListener("pointerdown", this.boundDown, true);
-    el.addEventListener("pointerup", this.boundUp);
-    window.addEventListener("keydown", this.boundKey, true);
+    this.gesture.attach();
     setPrompt("Rolling back to edit…");
 
     // Roll the model to just before the feature; the NEXT completed build shows
@@ -607,7 +597,7 @@ export class EdgeFeatureTool {
     this.buildGizmo();
     this.mountInput();
     this.promptForPhase();
-    if (!this.raf) this.raf = requestAnimationFrame(this.boundTick);
+    this.gesture.frame();
   }
 
   /** (Re)build the heads-up input for the CURRENT treatment. DimInput builds
@@ -1033,7 +1023,7 @@ export class EdgeFeatureTool {
     this.promptForPhase();
     this.pushPreview();
     if (!this.unsubBuild) this.watchBuilds(null); // create mode: failure feedback only
-    this.raf = requestAnimationFrame(this.boundTick);
+    this.gesture.frame();
   }
 
   /** keep the handle a constant on-screen size + oriented, and keep a typed value
@@ -1109,7 +1099,7 @@ export class EdgeFeatureTool {
           if (this.neutral !== wasNeutral) this.promptForPhase();
         }
       }
-      this.raf = requestAnimationFrame(this.boundTick);
+      this.gesture.frame();
     }
   }
 
@@ -1210,13 +1200,8 @@ export class EdgeFeatureTool {
 
   private cleanup() {
     const el = this.viewport.domElement;
-    el.removeEventListener("pointermove", this.boundMove);
-    el.removeEventListener("pointerdown", this.boundDown, true);
-    el.removeEventListener("pointerup", this.boundUp);
-    window.removeEventListener("keydown", this.boundKey, true);
+    this.gesture.detach();
     el.style.cursor = "default";
-    if (this.raf) cancelAnimationFrame(this.raf);
-    this.raf = 0;
     this.dim.hide();
     this.arc.hide();
     this.profile = 0;

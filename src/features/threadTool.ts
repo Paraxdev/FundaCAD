@@ -39,6 +39,7 @@ import { screwPath } from "./screwMath";
 import {
   MIN_THREAD_TURNS, coarsePitchFor, threadAngleDeg, threadProfile, threadTurns,
 } from "./threadMath";
+import { CanvasGesture } from "./canvasGesture";
 
 /** How long the value has to stand still before the kernel is asked to cut it.
  *  Long enough that a drag across a shank is one build rather than fifty, short
@@ -67,7 +68,6 @@ export class ThreadTool {
   private armed = false;
   private grabLength = 0;
   private grabProj = 0;
-  private raf = 0;
   /** The curve the sidecar will sweep the profile along, drawn. */
   private helix: THREE.Line | null = null;
   private previewTimer = 0;
@@ -79,21 +79,19 @@ export class ThreadTool {
   private dim = new DimInput();
   private onDone: ((id: string | null) => void) | null = null;
 
-  private boundMove: (e: PointerEvent) => void;
-  private boundDown: (e: PointerEvent) => void;
-  private boundUp: (e: PointerEvent) => void;
-  private boundKey: (e: KeyboardEvent) => void;
-  private boundTick: () => void;
+  private readonly gesture: CanvasGesture;
 
   constructor(
     private viewport: Viewport,
     private store: DocumentStore,
   ) {
-    this.boundMove = (e) => this.onMove(e);
-    this.boundDown = (e) => this.onDown(e);
-    this.boundUp = (e) => this.onUp(e);
-    this.boundKey = (e) => this.onKey(e);
-    this.boundTick = () => this.tick();
+    this.gesture = new CanvasGesture(viewport.domElement, {
+      move: (e) => this.onMove(e),
+      down: (e) => this.onDown(e),
+      up: (e) => this.onUp(e),
+      key: (e) => this.onKey(e),
+      frame: () => this.tick(),
+    });
   }
 
   start(onDone: (id: string | null) => void) {
@@ -102,11 +100,7 @@ export class ThreadTool {
     this.phase = "pick";
     this.onDone = onDone;
     this.viewport.suspendPicking = true;
-    const el = this.viewport.domElement;
-    el.addEventListener("pointermove", this.boundMove);
-    el.addEventListener("pointerdown", this.boundDown, true);
-    el.addEventListener("pointerup", this.boundUp);
-    window.addEventListener("keydown", this.boundKey, true);
+    this.gesture.attach();
 
     const pre = this.viewport.selectedFacesForPressPull();
     if (pre && pre.round && pre.faceIds.length === 1 && pre.faceIds[0] != null) {
@@ -236,7 +230,7 @@ export class ThreadTool {
     this.dim.position(s.x, s.y);
     this.dim.updateFromCursor({ pitch: this.pitch, length: this.length });
     this.valueChanged();
-    this.raf = requestAnimationFrame(this.boundTick);
+    this.gesture.frame();
   }
 
   /** Redraw the curve the thread runs along, and ask for the real one once the
@@ -319,7 +313,7 @@ export class ThreadTool {
         if (l != null && l > 0 && Math.abs(l - this.length) > 1e-9) { this.length = l; moved = true; }
         if (moved) this.valueChanged();
       }
-      this.raf = requestAnimationFrame(this.boundTick);
+      this.gesture.frame();
     }
   }
 
@@ -381,13 +375,8 @@ export class ThreadTool {
 
   private cleanup() {
     const el = this.viewport.domElement;
-    el.removeEventListener("pointermove", this.boundMove);
-    el.removeEventListener("pointerdown", this.boundDown, true);
-    el.removeEventListener("pointerup", this.boundUp);
-    window.removeEventListener("keydown", this.boundKey, true);
+    this.gesture.detach();
     el.style.cursor = "default";
-    if (this.raf) cancelAnimationFrame(this.raf);
-    this.raf = 0;
     if (this.previewTimer) clearTimeout(this.previewTimer);
     this.previewTimer = 0;
     if (this.previewing) {
