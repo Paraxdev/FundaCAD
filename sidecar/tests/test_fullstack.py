@@ -7,7 +7,13 @@ import _bootstrap  # noqa: F401  (puts sidecar/ on sys.path)
 import asyncio, json, os, subprocess, sys, tempfile, time
 import websockets
 
-HOST, PORT = "127.0.0.1", 8765
+HOST = "127.0.0.1"
+# The port this test's OWN server is told to use, and the one it connects to, so
+# that the two cannot drift apart. It was a bare 8765 on both sides, which is the
+# port the app's sidecar and the MCP server also take: with either of them up, the
+# server this test starts failed to bind, the test connected to THEIR sidecar
+# instead, and the run died on an unauthorized handshake naming neither problem.
+PORT = int(os.environ.get("SINDRI_SIDECAR_PORT") or 8765)
 D = tempfile.mkdtemp()
 _id = [0]
 def nid():
@@ -156,6 +162,7 @@ def run():
     import secrets
     token = secrets.token_urlsafe(16)
     env["SINDRI_SIDECAR_TOKEN"] = token
+    env["SINDRI_SIDECAR_PORT"] = str(PORT)
     proc = subprocess.Popen([sys.executable, "server.py"], cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))) or ".",
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
     try:
