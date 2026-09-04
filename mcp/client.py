@@ -56,7 +56,13 @@ class McpClient:
         if self.env:
             env.update(self.env)
         self.proc = await asyncio.create_subprocess_exec(
-            self.python, self.server, cwd=HERE, env=env,
+            # The CALLER's directory, not this file's. The server resolves a
+            # relative `path` against its own working directory, so launching it
+            # in `mcp/` made `doc_save "part.funda"` land inside the repository
+            # while the person who typed it watched their own directory stay
+            # empty. It does not need to be here: server.py puts its own
+            # directory on sys.path itself.
+            self.python, self.server, cwd=os.getcwd(), env=env,
             stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
             stderr=None,  # inherit: the server's diagnostics belong on OUR stderr
         )

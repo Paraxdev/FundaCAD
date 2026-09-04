@@ -418,6 +418,13 @@ export type Feature =
       // builder falls back to the document's LIVE visibility map (old files
       // keep their exact behavior until re-saved through load-stamping).
       hiddenBodies?: string[];
+      // Which bodies this operation may join/cut/intersect. Absent means every
+      // VISIBLE body the new solid overlaps, which is what dragging a face
+      // across two touching parts means and what building a second part beside
+      // a first one does not. Nothing in the app authors this yet; the sidecar
+      // honours it, and a caller building a multi-body model through the MCP
+      // server sets it to keep an operation off a body it never selected.
+      targets?: string[];
     }
   // `profile` shapes the blend's SECTION without moving where it meets the
   // supporting faces: 0 (or absent) is the circular fillet, -1 flattens it to a
@@ -458,14 +465,14 @@ export type Feature =
   // angle past 360 for as many turns as it is long. Absent or 0 is the flat
   // revolve, unchanged, and then an angle over 360 is clamped to one turn
   // because a flat revolve has already covered that ground.
-  | { id: string; type: "revolve"; sketch: string; axis: AxisSpec; axisEdge?: Selector; angle: Num; pitch?: Num; operation?: "new" | "join" | "cut" | "intersect"; regions?: [number, number, number][] }
+  | { id: string; type: "revolve"; sketch: string; axis: AxisSpec; axisEdge?: Selector; angle: Num; pitch?: Num; operation?: "new" | "join" | "cut" | "intersect"; targets?: string[]; regions?: [number, number, number][] }
   // Loft blends through 2+ profiles in order. `profiles` (Fusion flow) lofts the
   // SELECTED profile regions across sketches — each carries its sketch id + a 3D
   // interior anchor (a ring keeps its hole → a tube). `sketches` is the legacy
   // whole-un-consumed-sketch fallback (ribbon). One of the two is present.
-  | { id: string; type: "loft"; profiles?: { sketch: string; region: [number, number, number] }[]; sketches?: string[]; operation?: "new" | "join" | "cut" | "intersect" }
+  | { id: string; type: "loft"; profiles?: { sketch: string; region: [number, number, number] }[]; sketches?: string[]; operation?: "new" | "join" | "cut" | "intersect"; targets?: string[] }
   // Sweep a closed profile sketch along an open path sketch (a line/arc/spline).
-  | { id: string; type: "sweep"; profile: string; path: string; operation: "new" | "join" | "cut" }
+  | { id: string; type: "sweep"; profile: string; path: string; operation: "new" | "join" | "cut"; targets?: string[] }
   // A persistent construction/datum plane in the timeline. Carries no geometry;
   // sketches and splits reference it by id (resolved to its PlaneSpec on rebuild).
   // `plane` is the source reference and `offset` shifts along its normal (mm), so
@@ -554,9 +561,9 @@ export type Feature =
   | { id: string; type: "boolean"; operation: "union" | "subtract" | "intersect"; target?: string; tools?: string[]; keepOriginals?: boolean }
   // Primitive bodies (centered at the origin). Each creates a new body; edit the
   // dimensions in the inspector. Handy as boolean tool bodies.
-  | { id: string; type: "box"; length: Num; width: Num; height: Num }
-  | { id: string; type: "cylinder"; radius: Num; height: Num }
-  | { id: string; type: "sphere"; radius: Num }
+  | { id: string; type: "box"; length: Num; width: Num; height: Num; operation?: "new" | "join" | "cut" | "intersect"; targets?: string[] }
+  | { id: string; type: "cylinder"; radius: Num; height: Num; operation?: "new" | "join" | "cut" | "intersect"; targets?: string[] }
+  | { id: string; type: "sphere"; radius: Num; operation?: "new" | "join" | "cut" | "intersect"; targets?: string[] }
   // Hollow the active body to a wall thickness, removing the selected faces
   // (none = a fully closed hollow).
   | { id: string; type: "shell"; thickness: Num; faces?: Selector | Selector[] }
@@ -568,7 +575,7 @@ export type Feature =
   // Thicken: give surface geometry a wall. `faces` absent = the whole body,
   // which is how a non-watertight mesh import (a surface body, `solid: false`)
   // becomes real material. `symmetric` grows it both ways about the surface.
-  | { id: string; type: "thicken"; faces?: Selector | Selector[]; thickness: Num; symmetric?: boolean; operation?: "join" | "new"; body?: string }
+  | { id: string; type: "thicken"; faces?: Selector | Selector[]; thickness: Num; symmetric?: boolean; operation?: "join" | "new"; targets?: string[]; body?: string }
   // Taper the selected faces by an angle about a neutral plane (pull axis).
   | { id: string; type: "draft"; faces: Selector | Selector[]; angle: Num; axis: Axis3 }
   // Replicate a body on a grid, along an axis, or around one (copies are

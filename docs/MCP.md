@@ -127,6 +127,13 @@ one-shot calls is not a session — use `--script`, which is either a JSON array
   evaluates expressions in the parameter table and writes plain numbers into
   fields, so `"radius": "hub_d/2"` does not resolve — define a parameter for the
   expression and put its name in the field.
+- **A join or a cut acts on EVERY visible body it overlaps**, not on the nearest
+  one. That is what dragging a face across two touching parts means; it is not
+  what building a second part beside a first one means. Set `targets` — a list of
+  body ids — on any `extrude`, `revolve`, `loft`, `sweep`, `thicken`, `box`,
+  `cylinder` or `sphere` whose operation is not `new`, as soon as more than one
+  body exists. Found by an agent building a two-half spool: an oversized cut tool
+  reached across and took material out of a body it had never named.
 - **A feature can only reference features above it in the timeline.**
 
 ## Layout

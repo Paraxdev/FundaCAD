@@ -466,7 +466,7 @@ def _handle_extrude(f, ctx):
         if "hiddenBodies" in f
         else ctx.hidden_bodies
     )
-    _boolean_into_bodies(ctx.bodies, solid, f.get("operation", "new"), ctx.new_body, hid)
+    _combine(f, ctx, solid, hidden=hid)
 
 
 def _handle_fillet(f, ctx):
@@ -623,9 +623,7 @@ def _handle_revolve(f, ctx):
     pitch = ctx.val(f.get("pitch", 0) or 0)
     axis = _revolve_axis(f, ctx)
     if pitch:
-        _boolean_into_bodies(
-            ctx.bodies, _screw_revolve(sk, axis, angle, pitch),
-            f.get("operation", "new"), ctx.new_body, ctx.hidden_bodies)
+        _combine(f, ctx, _screw_revolve(sk, axis, angle, pitch))
         return
     # Past a full turn a flat revolve only re-sweeps ground it has already
     # covered. OCCT wraps such an arc back onto the same solid by itself
@@ -650,7 +648,7 @@ def _handle_revolve(f, ctx):
             f"revolution ({f.get('axis', 'Z')}). Move it fully to one side "
             f"(it may touch the axis, but not cross it). [{type(ex).__name__}]"
         )
-    _boolean_into_bodies(ctx.bodies, solid, f.get("operation", "new"), ctx.new_body, ctx.hidden_bodies)
+    _combine(f, ctx, solid)
 
 
 def _turn_clearance(tall):
@@ -892,7 +890,7 @@ def _handle_loft(f, ctx):
             "Loft failed to blend these profiles — they may be coincident, "
             f"identical, or too dissimilar to connect. [{type(ex).__name__}]"
         )
-    _boolean_into_bodies(ctx.bodies, solid, f.get("operation", "new"), ctx.new_body, ctx.hidden_bodies)
+    _combine(f, ctx, solid)
 
 
 def _handle_sweep(f, ctx):
@@ -907,7 +905,7 @@ def _handle_sweep(f, ctx):
     # every visible overlapping body, with the loud no-op guards. (Sweep used to
     # inline `act["shape"] + solid` / `- solid` against only the active body —
     # unguarded, and a Cut with no active body silently created a new body.)
-    _boolean_into_bodies(ctx.bodies, solid, f.get("operation", "new"), ctx.new_body, ctx.hidden_bodies)
+    _combine(f, ctx, solid)
 
 
 def _blob_top_children(shape):
@@ -1111,6 +1109,25 @@ def _handle_import(f, ctx):
             ctx.new_body(p, f"{base} {part_no}")
 
 
+def _combine(f, ctx, solid, hidden=None, name=None):
+    """Merge a solid a feature just made into the model, the way `f` asks.
+
+    The one place `operation` and `targets` are read, so the two of them mean
+    the same thing on every feature that creates material rather than on five
+    out of six of them. `name` is the label a primitive wants to keep on the
+    body it makes; a join takes the name of the body it merges into instead,
+    which is why it is passed here and not at the call.
+    """
+    def new_body(shape, body_name=None):
+        return ctx.new_body(shape, body_name or name)
+
+    _boolean_into_bodies(
+        ctx.bodies, solid, f.get("operation", "new"), new_body,
+        ctx.hidden_bodies if hidden is None else hidden,
+        targets=f.get("targets"),
+    )
+
+
 def _require_positive(op, **dims):
     """Reject a non-positive dimension BY NAME, before OCCT ever sees it.
 
@@ -1149,22 +1166,27 @@ def _require_sketch(ctx, sid, op):
     return entry
 
 
+# A primitive creates material like an extrude does, so it goes through
+# `_combine` and honours `operation` and `targets` for the same reason. It used
+# to call `new_body` directly, which made an "operation": "join" on a box a
+# field the builder read past in silence: a separate body appeared, no error was
+# raised, and the only way to find out was to measure the result.
 def _handle_box(f, ctx):
     l, w, h = ctx.val(f["length"]), ctx.val(f["width"]), ctx.val(f["height"])
     _require_positive("Box", length=l, width=w, height=h)
-    ctx.new_body(Box(l, w, h), "Box")
+    _combine(f, ctx, Box(l, w, h), name="Box")
 
 
 def _handle_cylinder(f, ctx):
     r, h = ctx.val(f["radius"]), ctx.val(f["height"])
     _require_positive("Cylinder", radius=r, height=h)
-    ctx.new_body(Cylinder(r, h), "Cylinder")
+    _combine(f, ctx, Cylinder(r, h), name="Cylinder")
 
 
 def _handle_sphere(f, ctx):
     r = ctx.val(f["radius"])
     _require_positive("Sphere", radius=r)
-    ctx.new_body(Sphere(r), "Sphere")
+    _combine(f, ctx, Sphere(r), name="Sphere")
 
 
 def _handle_shell(f, ctx):
@@ -1254,9 +1276,7 @@ def _handle_thicken(f, ctx):
     solid = thicken(faces, amount=t, both=bool(f.get("symmetric")))
     # Default "new": a thickened surface body is its own body. "join" merges it
     # into the solids it touches (thickening a face of an existing part).
-    _boolean_into_bodies(
-        ctx.bodies, solid, f.get("operation", "new"), ctx.new_body, ctx.hidden_bodies
-    )
+    _combine(f, ctx, solid)
 
 
 def _handle_draft(f, ctx):
@@ -1751,6 +1771,27 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
             # ValueErrors are hand-authored for users ("no edge found to
             # fillet", …) — surface them verbatim.
             errors.append({"feature_id": f.get("id"), "message": str(ex)})
+        except KeyError as ex:
+            # A feature missing a required field. This lands here rather than in
+            # the ValueError arm because the handlers index `f` directly, and the
+            # raw KeyError stringifies to the field name in quotes and nothing
+            # else, so it used to surface as "box failed (KeyError)" — the one
+            # word that would have helped, left out. Only claim a missing field
+            # when the key really is absent from the feature; a KeyError raised
+            # anywhere deeper is still an internal failure and says so.
+            key = ex.args[0] if ex.args else None
+            label = f.get("name") or f.get("type") or "feature"
+            if isinstance(key, str) and key not in f:
+                errors.append({
+                    "feature_id": f.get("id"),
+                    "message": f'{label} is missing the field "{key}"',
+                })
+            else:
+                print(f"feature {f.get('id')} ({label}) failed:", file=sys.stderr)
+                traceback.print_exc()
+                errors.append({"feature_id": f.get("id"),
+                               "message": f"{label} failed (KeyError)"})
+
         except Exception as ex:
             # Anything NOT a hand-authored ValueError is an unexpected internal
             # failure (OCCT crash, KeyError, …) — the raw message is meaningless

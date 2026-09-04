@@ -107,6 +107,39 @@ def test_the_message_passes_OCCTs_own_words_through_when_size_would_help():
     print("size-limited refusal keeps the kernel's wording OK")
 
 
+def test_the_kernel_sentence_drops_the_method_nobody_here_can_call():
+    """The pass-through above is only good advice as far as its first comma.
+
+    build123d ends every fillet failure with "or use max_fillet() to find the
+    largest valid fillet radius". That is a method on a build123d Shape, offered
+    to someone whose entire interface is a radius box in a ribbon or a JSON
+    field over a socket. An agent building through MCP followed it and found
+    nothing to call; a user reading a toast has even less. The first half is
+    right and stays.
+
+    The CONTROL comes first: take the sentence from build123d itself rather than
+    from a string in this file, so that if the wording ever changes this test
+    fails instead of quietly guarding text that no longer exists.
+    """
+    shape = _boss_on_a_plate()
+    rim = _cap_rim(shape)
+    try:
+        fillet(rim, radius=2.0)
+        raise AssertionError("2.0mm was expected to exceed what this rim can hold")
+    except AssertionError:
+        raise
+    except Exception as ex:
+        raw = str(ex)
+    assert "max_fillet()" in raw, f"build123d no longer says this: {raw}"
+
+    msg = _blend_failure_message("Fillet", {"name": "Body1", "shape": shape},
+                                 rim, _one_edge_at, 2.0, raw)
+    assert "max_fillet" not in msg, msg
+    assert "try a smaller value" in msg, msg
+    assert "Fillet failed on Body1" in msg, msg
+    print("the uncallable method is dropped, the useful half kept OK:", msg)
+
+
 def test_the_message_refuses_by_name_when_no_size_would_help():
     """The failure this exists for. Nothing may suggest a smaller value, because
     the user has already tried smaller values — that is how they got here."""
@@ -146,6 +179,7 @@ if __name__ == "__main__":
         test_size_probe_says_yes_when_the_radius_is_the_problem()
         test_a_huge_request_does_not_make_the_probe_lie()
         test_the_message_passes_OCCTs_own_words_through_when_size_would_help()
+        test_the_kernel_sentence_drops_the_method_nobody_here_can_call()
         test_the_message_refuses_by_name_when_no_size_would_help()
         test_a_large_selection_is_not_probed()
         print("\nall blend-refusal tests passed")

@@ -11,6 +11,7 @@ _sequential_blend is the other half of that: when a batch refuses, the edges are
 re-tried one at a time so the failure names the edge rather than the feature.
 """
 
+import re
 import math
 
 import font_guard  # noqa: F401  MUST precede build123d — see font_guard.py
@@ -391,6 +392,19 @@ def _size_would_help(shape, edges, one_edge_at, blend_size):
     return True
 
 
+def _kernel_sentence(err):
+    """OCCT's own words, with the part nobody on this side can act on removed.
+
+    build123d ends its fillet failure with "or use max_fillet() to find the
+    largest valid fillet radius". That is a Python method on a build123d Shape,
+    offered to someone whose entire interface is a radius box in a ribbon or a
+    JSON field over a socket. Neither can call it, so the sentence spends its
+    second half sending the reader after a thing that does not exist for them.
+    The first half — try a smaller value — is good advice and stays.
+    """
+    return re.sub(r"[,;]?\s*or use max_fillet\(\)[^.]*", "", str(err)).strip()
+
+
 def _blend_failure_message(label, body, unresolved, one_edge_at, blend_size, err):
     """What to actually tell the user about a blend the kernel would not build."""
     helps = _size_would_help(body["shape"], unresolved, one_edge_at, blend_size)
@@ -398,7 +412,7 @@ def _blend_failure_message(label, body, unresolved, one_edge_at, blend_size, err
     if helps is not False:
         # Either a smaller size did build, or there were too many edges to probe.
         # OCCT's own sentence is the honest one here.
-        return f"{label} failed on {body['name']}: {err}"
+        return f"{label} failed on {body['name']}: {_kernel_sentence(err)}"
     which = ("that edge" if len(unresolved) == 1
              else f"{len(unresolved)} of the selected edges")
     return (

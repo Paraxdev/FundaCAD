@@ -234,7 +234,11 @@ class Server:
         return text("New empty document.")
 
     async def t_doc_open(self, args):
-        path = args["path"]
+        # Absolute from here down. A relative path resolves against the SERVER's
+        # working directory, which an MCP host chooses and which is rarely the
+        # one the caller has in mind, so echoing back what was typed says
+        # nothing about where the file actually is. Say where it is.
+        path = os.path.abspath(args["path"])
         with open(path, "r", encoding="utf-8") as fh:
             doc = json.load(fh)
         if not isinstance(doc, dict) or "features" not in doc:
@@ -254,8 +258,9 @@ class Server:
         path = args.get("path") or self.path
         if not path:
             return failure("No path given and this document has never been saved.")
+        path = os.path.abspath(path)
         M.recompute_parameters(self.doc)
-        parent = os.path.dirname(os.path.abspath(path))
+        parent = os.path.dirname(path)
         if parent and not os.path.isdir(parent):
             return failure(f"No such directory: {parent}")
         with open(path, "w", encoding="utf-8") as fh:

@@ -52,9 +52,26 @@ COMMON = {
         "entirely to use the whole sketch."
     ),
     "operation": (
-        'How the new material joins what is already there: "new" makes a '
+        'How the new material joins what is already there (default "new"): '
+        '"new" makes a '
         'separate body, "join" fuses into the target, "cut" subtracts from it, '
-        '"intersect" keeps only the overlap.'
+        '"intersect" keeps only the overlap.\n'
+        "Without `targets`, a join/cut/intersect acts on EVERY visible body the "
+        "new shape overlaps, not just the nearest one. That is what someone "
+        "dragging a face across two parts means; it is not what building a "
+        "second part beside a first one means. Set `targets` whenever more than "
+        "one body exists."
+    ),
+    "targets": (
+        'Optional list of body ids ["body1", ...] that a join/cut/intersect is '
+        "allowed to touch. Bodies not named are left alone even where the new "
+        "shape passes straight through them. Ignored when `operation` is "
+        '"new". A join that names targets and reaches none of them is an error '
+        "rather than a quietly-created extra body.\n"
+        "Body ids are assigned in creation order AT BUILD TIME, so read them "
+        "back from `build` or `inspect` rather than assuming them, and re-read "
+        "them after a join: a join merges its targets into one body, which "
+        "takes a fresh id."
     ),
 }
 
@@ -64,19 +81,25 @@ FEATURES = {
     # --- primitives -----------------------------------------------------------
     "box": {
         "summary": "An axis-aligned box CENTRED ON THE ORIGIN.",
-        "fields": {"length": "Num, along X", "width": "Num, along Y", "height": "Num, along Z"},
+        "fields": {"length": "Num, along X", "width": "Num, along Y", "height": "Num, along Z",
+                   "operation": COMMON["operation"],
+                   "targets": COMMON["targets"]},
         "example": {"id": "bx1", "type": "box", "length": 40, "width": 30, "height": 10},
         "notes": "Centred, not corner-placed: a 40x30x10 box spans -20..20, -15..15, -5..5.",
     },
     "cylinder": {
         "summary": "A cylinder on the Z axis, CENTRED ON THE ORIGIN.",
-        "fields": {"radius": "Num", "height": "Num, along Z"},
+        "fields": {"radius": "Num", "height": "Num, along Z",
+                   "operation": COMMON["operation"],
+                   "targets": COMMON["targets"]},
         "example": {"id": "cy1", "type": "cylinder", "radius": 8, "height": 60},
         "notes": "Spans -height/2 .. +height/2 in Z. Use a `move` feature to place it.",
     },
     "sphere": {
         "summary": "A sphere centred on the origin.",
-        "fields": {"radius": "Num"},
+        "fields": {"radius": "Num",
+                   "operation": COMMON["operation"],
+                   "targets": COMMON["targets"]},
         "example": {"id": "sp1", "type": "sphere", "radius": 12},
     },
 
@@ -112,6 +135,7 @@ FEATURES = {
             "sketch": "the id of a sketch feature",
             "distance": "Num, signed; negative goes the other way",
             "operation": COMMON["operation"],
+            "targets": COMMON["targets"],
             "regions": "optional; " + COMMON["region"],
             "region": "legacy single-area form of `regions`",
         },
@@ -125,10 +149,17 @@ FEATURES = {
             "sketch": "the id of a sketch feature",
             "axis": "AxisSpec",
             "angle": "Num, degrees. 360 is a full turn",
-            "operation": COMMON["operation"] + ' (default "new")',
+            "operation": COMMON["operation"],
+            "targets": COMMON["targets"],
             "pitch": "optional Num, mm of climb per full turn. With a pitch, an "
                      "`angle` over 360 means more than one turn: a 2mm pitch at "
-                     "1080 degrees climbs 6mm over three turns.",
+                     "1080 degrees climbs 6mm over three turns. The SIGN is the "
+                     "direction of climb along the axis, and a thread that cuts "
+                     "nothing is usually a thread climbing away from the body: "
+                     "try the other sign. A field takes a number or a parameter "
+                     "NAME, so write -2 directly, or define a parameter whose "
+                     "expression is -pitch and name that. \"-pitch\" in the "
+                     "field itself is an expression and is refused.",
             "axisEdge": "optional Selector naming a model edge to spin about; wins over `axis`",
             "regions": "optional; " + COMMON["region"],
         },
@@ -142,7 +173,8 @@ FEATURES = {
     "sweep": {
         "summary": "Sweep a closed profile sketch along an open path sketch.",
         "fields": {"profile": "sketch id (closed)", "path": "sketch id (open)",
-                   "operation": COMMON["operation"]},
+                   "operation": COMMON["operation"],
+                   "targets": COMMON["targets"]},
         "example": {"id": "sw1", "type": "sweep", "profile": "sk1", "path": "sk2",
                     "operation": "new"},
     },
@@ -153,6 +185,7 @@ FEATURES = {
             "profiles": 'alternative: [{"sketch": id, "region": [x,y,z]}, ...] to pick '
                         "one area per sketch (a ring keeps its hole -> a tube)",
             "operation": COMMON["operation"],
+            "targets": COMMON["targets"],
         },
         "example": {"id": "lo1", "type": "loft", "sketches": ["sk1", "sk2"],
                     "operation": "new"},
@@ -227,6 +260,7 @@ FEATURES = {
         "summary": "Give a surface (or a set of faces) a thickness.",
         "fields": {"thickness": "Num", "faces": "optional Selector(s)",
                    "symmetric": "optional bool", "operation": '"join" or "new"',
+                   "targets": COMMON["targets"],
                    "body": "optional body id"},
         "example": {"id": "th1", "type": "thicken", "thickness": 1.2, "operation": "new"},
     },

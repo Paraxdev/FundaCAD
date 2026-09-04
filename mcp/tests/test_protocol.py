@@ -109,6 +109,40 @@ def test_a_document_round_trips_through_a_file():
         assert "bx1" in back[1]["text"]
 
 
+def test_a_RELATIVE_path_lands_where_the_caller_is_standing():
+    """Where does `doc_save "part.funda"` put the file?
+
+    A relative path resolves against the SERVER process's working directory. The
+    client used to start it in `mcp/`, so an agent that ran the client from its
+    own scratch directory and saved a part watched that directory stay empty
+    while the file appeared inside this repository — which it had been told not
+    to write to. Nothing said so: the reply echoed back the relative path it had
+    been given, which is true from every directory and useful from none.
+
+    Two things are asserted, and the second is the one that failed: the file is
+    where the caller stands, and it is NOT next to the server.
+    """
+    here = os.getcwd()
+    with tempfile.TemporaryDirectory() as tmp:
+        os.chdir(tmp)
+        try:
+            rs = drive([
+                ("feature_add", {"feature": {"id": "bx1", "type": "box",
+                                             "length": 4, "width": 4, "height": 4}}),
+                ("doc_save", {"path": "part.funda"}),
+            ])
+        finally:
+            os.chdir(here)
+        assert not rs[-1]["isError"], rs[-1]["text"]
+        landed = os.path.join(tmp, "part.funda")
+        assert os.path.exists(landed), f"not in the caller directory: {os.listdir(tmp)}"
+        # and the reply says WHERE, so a caller never has to go looking
+        assert os.path.abspath(landed) in rs[-1]["text"].replace("/", os.sep), rs[-1]["text"]
+    stray = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                         "part.funda")
+    assert not os.path.exists(stray), f"the server wrote into the repository: {stray}"
+
+
 def test_a_refused_edit_leaves_the_document_alone():
     rs = drive([
         ("feature_add", {"feature": {"id": "bx1", "type": "box", "length": 1,

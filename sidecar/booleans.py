@@ -198,7 +198,8 @@ def _serial_bool(base, tool, kind):
     return Compound(shape)
 
 
-def _boolean_into_bodies(bodies, solid, op, new_body, hidden=frozenset()):
+def _boolean_into_bodies(bodies, solid, op, new_body, hidden=frozenset(),
+                         targets=None):
     """MCAD-style extrude operation: New Body adds a separate body; Join / Cut /
     Intersect boolean the new solid against EVERY VISIBLE body it overlaps — so an
     extrude that bridges two bodies merges both. Join with nothing to act on just
@@ -211,7 +212,16 @@ def _boolean_into_bodies(bodies, solid, op, new_body, hidden=frozenset()):
     measured by volume and, when it changed nothing (or Intersect would empty a
     body), raises ValueError — the rebuild loop records it as a feature error and
     flags the feature red, instead of silently doing nothing. Volume-read failures
-    fall through to the old behavior (never raise a misleading no-op error)."""
+    fall through to the old behavior (never raise a misleading no-op error).
+
+    `targets` narrows the candidate set to the named bodies. Without it the op
+    acts on every visible body the solid overlaps, which is what someone
+    dragging a face across two parts means and what someone building a second
+    part beside a first one does not: measured while an agent built a two-half
+    spool, a deliberately oversized cut tool reached across and took material
+    out of a body that was never selected, with nothing said about it. Naming
+    the targets is also what makes a join to a body OTHER than the ones a
+    generous bounding box happens to touch expressible at all."""
     # Extruding several DISJOINT region faces (e.g. 38 selected honeycomb cells)
     # yields a build123d ShapeList, which has no .bounding_box()/boolean ops —
     # normalize to one Compound so overlap-testing and cut/join/intersect work.
@@ -225,8 +235,19 @@ def _boolean_into_bodies(bodies, solid, op, new_body, hidden=frozenset()):
     # already been spent by the time this loop starts. Unticked, a Join/Cut on a
     # freshly imported assembly is reaped mid-filter and dies with nothing logged.
     # This is still slow; the tick is what lets it finish and report progress.
+    candidates = bodies
+    if targets:
+        want = set(targets)
+        missing = want - {b.get("id") for b in bodies}
+        if missing:
+            raise ValueError(
+                f"no body called {', '.join(sorted(missing))} exists at this point "
+                "in the timeline. Body ids are handed out in creation order when "
+                "the model is built, so check them against the last build."
+            )
+        candidates = [b for b in bodies if b.get("id") in want]
     hits = []
-    for b in bodies:
+    for b in candidates:
         progress_tick()
         if (b.get("shape") is not None
                 and b.get("id") not in hidden
@@ -240,6 +261,15 @@ def _boolean_into_bodies(bodies, solid, op, new_body, hidden=frozenset()):
     prism_vol = _try_vol(solid)
     if op == "join":
         if not hits:
+            if targets:
+                # Without targets a join that meets nothing is the ordinary way
+                # to add a separate body. With them the caller has said which
+                # body to merge into, so quietly making a different one instead
+                # answers a question nobody asked.
+                raise ValueError(
+                    "Join failed: nothing to join to. This feature targets "
+                    f"{', '.join(targets)}, and the new shape does not reach it."
+                )
             new_body(solid)
             return
         merged = solid
