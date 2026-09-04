@@ -771,11 +771,10 @@ def _body_payload(b, tolerance, profile):
             "positions": pos, "indices": idx, "faceIds": fids,
             "faceOwners": face_owners, "edges": edges,
             "faceCount": (max(fids) + 1) if fids else 0,
-            # Computed HERE, while the triangulation tessellate() just built is
-            # still on the shape, and stored in the payload so the disk mesh
-            # artifact carries it too — a cache hit must not fall back to the
-            # loose poles-based box and make the camera jump between runs.
-            "bbox": mesh_bbox(sh),
+            # The box of the vertices just produced, stored in the payload so
+            # the disk mesh artifact carries it too — a cache hit must not fall
+            # back to a different box and make the camera jump between runs.
+            "bbox": mesh_bbox(sh, pos),
         }
         if bands:
             payload["faceBands"] = bands

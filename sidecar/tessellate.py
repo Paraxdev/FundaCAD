@@ -12,6 +12,8 @@ Python loop — single-threaded and GIL-bound. On a 6-sphere union @0.01mm that 
 ~670ms; the parallel path below is ~85ms on a 5900X.)
 """
 
+import numpy as np
+
 from OCP.Bnd import Bnd_Box
 from OCP.BRep import BRep_Tool
 from OCP.BRepBndLib import BRepBndLib
@@ -29,7 +31,9 @@ from OCP.TopLoc import TopLoc_Location
 #   2 -> deviation-bounded edge polylines + optional relative surface deflection
 #   3 -> the cached payload carries the body's mesh bbox (see mesh_bbox)
 #   4 -> the cached payload carries faceBands (see face_bands.py)
-CODE_VERSION = 4
+#   5 -> the mesh bbox is the box of the VERTICES SENT, not BRepBndLib's box of
+#        the triangulation enlarged by the shape's tolerance (see mesh_bbox)
+CODE_VERSION = 5
 
 
 def tessellate(shape, tolerance=0.1, angular_tolerance=0.5, textures=None, density_cap=None,
@@ -558,24 +562,52 @@ def bbox(shape):
     }
 
 
-def mesh_bbox(shape):
+def mesh_bbox(shape, positions=None):
     """Bounding box of the shape's TRIANGULATION — what the viewport actually
     draws — rather than of its exact geometry. For a display bbox this is both
     the cheaper and the more honest number.
 
-    `shape.bounding_box()` runs BRepBndLib.AddOptimal_s, and on a 60mm filleted
-    ring that measures 44.84 ms against 0.053 ms here — 846x, which across the
-    3,071 bodies of a large assembly is ~138 s versus ~0.2 s. It also calls
-    BRepTools.Clean_s, DISCARDING the triangulation tessellate() just built;
-    BRepBndLib.Add_s leaves it in place.
+    Given the `positions` tessellate() just produced, that IS the answer: the box
+    of the vertices about to be sent, one pass over an array that is already in
+    hand, with no OCCT call at all.
 
-    Accuracy on that same ring: exact is +/-30.0, this is +/-30.118 (OCCT adds
-    its gap tolerance), and `bounding_box(optimal=False)` — the obvious cheap
-    alternative — is +/-32.472, i.e. 2.5mm out on a 60mm part. Slightly LARGER
-    than exact is also the safe direction for a camera fit: it never clips.
+    The OCCT route below is the fallback for a body with no triangles. It is a
+    fallback rather than the main path because it is ORDER-DEPENDENT in a way
+    nothing at the call site can see: BRepBndLib.Add_s uses a face's
+    triangulation when there is one and the surface's CONTROL POINTS when there
+    is not, and anything that calls bounding_box() in between quietly removes
+    the triangulation, because build123d's bounding_box runs
+    BRepBndLib.AddOptimal_s, which calls BRepTools.Clean_s.
 
-    Requires a triangulation to be present, so call it AFTER tessellate();
-    without one OCCT falls back to the loose poles-based box."""
+    That is not hypothetical. `face_bands.face_bands()` calls bounding_box() and
+    runs between the tessellation and this box in server._body_payload, so every
+    body has been boxed from its poles since face bands were added. It shows on
+    curved geometry and nowhere else — on a planar solid the poles box IS the
+    exact box. Measured on the body a 1.5mm press/pull produces from a revolved
+    spline:
+
+        exact                            x  -18.283 .. 18.283
+        Add_s, triangulation cleaned     x  -28.627 .. 19.783    10.34mm out
+        Add_s, triangulation present     x  -18.552 .. 18.563     0.28mm out
+        the vertices sent                x  -18.272 .. 18.283     0.03mm out
+
+    This is the camera-fit box, so the part came out a quarter of the frame
+    after a press/pull on a curved face and Fit no longer fitted.
+
+    The vertex box is very slightly SMALLER than exact on a curved surface,
+    because a chord cuts the corner off an arc — by the deflection, so hundredths
+    of a millimetre against the ten above. That is the right direction as well as
+    the small one: what must not be clipped is what is DRAWN, and what is drawn
+    is these vertices.
+
+    `shape.bounding_box()` was never an option for the main path: it runs
+    BRepBndLib.AddOptimal_s, which on a 60mm filleted ring measures 44.84 ms
+    against 0.053 ms here — 846x, or ~138 s versus ~0.2 s across the 3,071
+    bodies of a large assembly — and it calls BRepTools.Clean_s, DISCARDING the
+    triangulation tessellate() has just built."""
+    if positions is not None and len(positions) >= 3:
+        a = np.asarray(positions, dtype=float).reshape(-1, 3)
+        return {"min": a.min(axis=0).tolist(), "max": a.max(axis=0).tolist()}
     bnd = Bnd_Box()
     BRepBndLib.Add_s(shape.wrapped, bnd, True)
     if bnd.IsVoid():

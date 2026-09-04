@@ -426,30 +426,87 @@ async def test_cancel_mid_stream_stops_sending():
     print("  cancel mid-stream OK")
 
 
-def test_mesh_bbox_is_tight_on_curved_geometry():
-    """mesh_bbox must box the TRIANGULATION, not OCCT's poles.
+def test_mesh_bbox_is_the_box_of_the_vertices_sent():
+    """The display bbox is the box of what is DRAWN.
 
-    Curved geometry is the only place the difference shows: on planar solids the
-    poles box IS the exact box, which is why the multi-solid fixture below cannot
-    catch this. Measured on a 60mm ring with a 1mm fillet — exact +/-30.0,
-    triangulation +/-30.118, poles +/-32.472."""
+    Curved geometry is the only place any of this shows: on a planar solid every
+    candidate box is the exact box, which is why the multi-solid fixture below
+    cannot catch it. Measured on a 60mm ring with a 1mm fillet — exact +/-30.0,
+    triangulation +/-30.118, OCCT poles +/-32.472."""
     from build123d import Cylinder, Mode, fillet
     from tessellate import tessellate, mesh_bbox, bbox as exact_bbox_of
 
     ring = fillet((Cylinder(30, 10) - Cylinder(25, 10, mode=Mode.SUBTRACT)).edges(), 1.0)
-    tessellate(ring, 0.008, angular_tolerance=0.35, relative=True, force_remesh=True)
-    got = mesh_bbox(ring)
+    pos, _, _ = tessellate(ring, 0.008, angular_tolerance=0.35, relative=True,
+                           force_remesh=True)
+    got = mesh_bbox(ring, pos)
     # AFTER mesh_bbox: bounding_box() runs BRepTools.Clean_s and drops the
-    # triangulation mesh_bbox needs.
+    # triangulation the fallback path needs.
     exact = exact_bbox_of(ring)
 
-    for i in range(3):
-        assert got["min"][i] <= exact["min"][i] + 1e-9, (i, got, exact)
-        assert got["max"][i] >= exact["max"][i] - 1e-9, (i, got, exact)
-    worst = max(max(exact["min"][i] - got["min"][i], got["max"][i] - exact["max"][i])
-                for i in range(3))
-    assert worst < 0.5, f"box is {worst:.3f}mm loose — poles box, not triangulation?"
+    worst = max(max(abs(got["min"][i] - exact["min"][i]),
+                    abs(got["max"][i] - exact["max"][i])) for i in range(3))
+    assert worst < 0.5, f"box is {worst:.3f}mm out — is it boxing the poles?"
     print(f"  mesh_bbox tight on curved geometry ({worst:.3f}mm)")
+
+
+def test_mesh_bbox_survives_a_press_pull_on_a_curved_face():
+    """The case that made this the vertex box rather than BRepBndLib's.
+
+    Add_s boxes a face's triangulation when there is one and its CONTROL POINTS
+    when there is not, and `face_bands.face_bands()` — which runs between the
+    tessellation and this box in _body_payload — calls bounding_box(), which
+    calls BRepTools.Clean_s, which removes the triangulation. So the real
+    pipeline was boxing poles.
+
+    It shows on curved geometry and nowhere else: on a planar solid the poles box
+    IS the exact box. A press/pull on a curved face is the sharpest version of
+    it, because BRepOffset leaves the offset distance as the shape's tolerance
+    and a revolved surface's seam contributes a pole far outside the solid.
+
+    The control is that same call with the triangulation gone: it must still be
+    metres out, or this test is not measuring the fix."""
+    from build123d import Axis, Plane, Polyline, Spline, make_face, revolve
+    from solid_ops import _press_pull
+    from tessellate import tessellate, mesh_bbox, bbox as exact_bbox_of
+
+    def spool():
+        prof = Plane.XZ * (Spline((10, 0), (16, 6), (11, 14), (18, 20))
+                           + Polyline((18, 20), (8, 20), (8, 0), (10, 0)))
+        body = revolve(make_face(prof), Axis.Z, 360)
+        side = [f for f in body.faces() if str(f.geom_type).endswith("REVOLUTION")][0]
+        return _press_pull(body, side, 1.5)
+
+    def out_by(got, exact):
+        return max(max(abs(got["min"][i] - exact["min"][i]),
+                       abs(got["max"][i] - exact["max"][i])) for i in range(3))
+
+    # the real order: tessellate, then something that cleans the triangulation,
+    # then the box
+    a = spool()
+    pos, _, _ = tessellate(a, 0.1)
+    exact = exact_bbox_of(a)  # AddOptimal_s -> Clean_s, exactly as face_bands does
+    assert out_by(mesh_bbox(a, pos), exact) < 0.2, "the vertex box moved with the shape"
+
+    b = spool()
+    tessellate(b, 0.1)
+    exact_b = exact_bbox_of(b)
+    occt = mesh_bbox(b)  # the control: the same call with nothing left to box
+    assert out_by(occt, exact_b) > 5.0, (
+        f"the poles box is only {out_by(occt, exact_b):.3f}mm out — the control "
+        "has stopped failing, so this test no longer measures anything")
+    print(f"  press/pull bbox: vertices {out_by(mesh_bbox(a, pos), exact):.3f}mm out, "
+          f"poles {out_by(occt, exact_b):.3f}mm out")
+
+
+def test_mesh_bbox_falls_back_when_there_are_no_vertices():
+    """A body with no triangles still has to produce a box rather than None."""
+    from build123d import Box
+    from tessellate import mesh_bbox
+
+    b = Box(20, 10, 4)
+    assert mesh_bbox(b, []) is not None
+    assert mesh_bbox(b, None)["max"][0] > 9.9
 
 
 def test_doc_bbox_covers_the_model_without_the_slow_walk():
@@ -657,7 +714,9 @@ async def main():
     # THIS process, and the socket tests above are supervised by a 60 s stall
     # timer against a worker pool that is created lazily on first use. Running
     # heavy work in the parent first perturbs their timing enough to trip it.
-    test_mesh_bbox_is_tight_on_curved_geometry()
+    test_mesh_bbox_is_the_box_of_the_vertices_sent()
+    test_mesh_bbox_survives_a_press_pull_on_a_curved_face()
+    test_mesh_bbox_falls_back_when_there_are_no_vertices()
     test_doc_bbox_covers_the_model_without_the_slow_walk()
 
     print("WS ALL PASS")
