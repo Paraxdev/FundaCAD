@@ -40,7 +40,10 @@ PY="${PY:-uv run python}"
 # (check_pattern_linear), which was the last op without one. It is an explicit
 # check against a spawned server, not corpus credit, so it is reachable on a
 # clean checkout by construction.
-COVERAGE_FLOOR=33
+# Raised 33 -> 34: the `inspect` op joined the universe and arrived with its own
+# explicit check (check_inspect), which asserts pi*r^2*h against the B-rep
+# volume — a closed form, so it needs no fixture and no tolerance argument.
+COVERAGE_FLOOR=34
 
 # The fillet/chamfer corpus was driven to zero failures by the Norn loop
 # (149/500 -> 0/500, holdout-verified). Any regression is a real one.

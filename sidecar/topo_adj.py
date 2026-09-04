@@ -46,6 +46,26 @@ def _list_shapes(lst):
     return tuple(lst)  # non-manifold: rare, and correctness beats the microseconds
 
 
+def face_wraps(face):
+    """Does this face close on itself in either parameter direction?
+
+    True for the side of a cylinder, a full torus, a 360-degree revolve, a swept
+    tube. It is a topology question about one face — does it have a seam — which
+    is why it lives here beside the rest of them.
+
+    Two callers, and they want it for the same underlying reason. `inspect_model`
+    reports it because a wrapping face is the one a blend refuses; `solid_ops`
+    branches on it because a wrapping face is the one a LINEAR push has no
+    direction for. One rule, so the report and the behaviour cannot disagree."""
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+
+    try:
+        s = BRepAdaptor_Surface(getattr(face, "wrapped", face))
+        return bool(s.IsUClosed() or s.IsVClosed())
+    except Exception:
+        return False
+
+
 class FaceAdjacency:
     """Face-index <-> face, and face -> edge-adjacent faces, for one shape.
 
@@ -119,6 +139,18 @@ class FaceAdjacency:
                     if j != i:
                         yield j, edge
             exp.Next()
+
+    def faces_of_edge(self, edge):
+        """the face indices an edge belongs to, in map order.
+
+        Usually two. ONE means a free boundary; two entries that are the SAME
+        index mean a seam — the edge where a face that wraps 360 degrees closes
+        on itself — and that is not a curiosity, it is the case ChFi3d refuses
+        to blend, so a caller reporting geometry has to be able to say it."""
+        if not self._emap.Contains(getattr(edge, "wrapped", edge)):
+            return []
+        raw = self._emap.FindFromKey(getattr(edge, "wrapped", edge))
+        return [self._fmap.FindIndex(f) for f in _list_shapes(raw)]
 
     def neighbors(self, i):
         """the set of face indices sharing an edge with face `i`"""

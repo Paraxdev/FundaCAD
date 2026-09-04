@@ -577,6 +577,23 @@ async def check_datum_split(ws):
     register("datumPlane", "volume", 2000.0, _total_volume(top))
 
 
+async def check_inspect(ws):
+    # A cylinder r=10 h=20 has an exactly computable volume, and `inspect`
+    # measures it off the B-REP rather than the mesh, so the assertion can be
+    # the closed form and not a tessellated approximation of it.
+    doc = {"parameters": {}, "features": [
+        {"id": "c1", "type": "cylinder", "radius": 10, "height": 20}]}
+    reply = await H.ws_call(ws, "inspect", "c", document=doc)
+    if not reply.get("ok"):
+        print(f"  REFUSE inspect          — op not ok: {reply.get('error')}")
+        return
+    bodies = reply["result"].get("bodies") or []
+    if len(bodies) != 1:
+        print(f"  REFUSE inspect          — {len(bodies)} bodies, expected 1")
+        return
+    register("inspect", "volume", math.pi * 100 * 20, bodies[0].get("volume"))
+
+
 EXPLICIT_CHECKS = [
     check_box, check_cylinder, check_sphere, check_extrude, check_revolve,
     check_loft, check_shell, check_mirror, check_pattern_rect,
@@ -586,7 +603,7 @@ EXPLICIT_CHECKS = [
     check_datum_split,
     check_sketch, check_boolean, check_press_pull, check_offset_face,
     check_thicken, check_delete_face, check_texture, check_project_geometry,
-    check_migrate_geometry,
+    check_migrate_geometry, check_inspect,
 ]
 
 

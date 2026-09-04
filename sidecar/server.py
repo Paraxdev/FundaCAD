@@ -1372,6 +1372,35 @@ def _interference_job(document):
     return {"pairs": pairs}
 
 
+def _inspect_job(document, detail=True, bodies_filter=None, max_faces=None, max_edges=None):
+    """Worker: rebuild + exact B-rep measurements of the live bodies.
+
+    rebuild_cached for the same reason export and interference use it: same
+    worker, warm cache, so asking what the model measures right after building
+    it costs a cache hit rather than a second rebuild.
+
+    Errors are REPORTED, not raised. A document with one red feature still has
+    bodies, and the whole point of this op is to be able to look at what did
+    build and work out why the rest did not."""
+    from builder import rebuild_cached
+    from inspect_model import MAX_EDGES, MAX_FACES, inspect_bodies
+
+    part, errors, bodies = rebuild_cached(document)
+    live = [b for b in bodies if b.get("shape") is not None]
+    if bodies_filter:
+        want = set(bodies_filter)
+        live = [b for b in live if b["id"] in want or b.get("name") in want]
+    return {
+        "bodies": inspect_bodies(
+            live, detail=detail,
+            max_faces=MAX_FACES if max_faces is None else int(max_faces),
+            max_edges=MAX_EDGES if max_edges is None else int(max_edges),
+        ),
+        "errors": [{"message": e["message"], "feature_id": e.get("feature_id")}
+                   for e in (errors or [])],
+    }
+
+
 def _import_job(path, fmt):
     """Worker: read an external geometry file (STL/3MF/STEP/BREP) into an embeddable
     BREP payload. Returns the `import` feature fields or {"error"}."""
@@ -1957,6 +1986,13 @@ async def _dispatch(ws, loop, req, req_id, op):
 
     elif op == "interference":
         res = await _run_stall(loop, _interference_job, req["document"])
+        await ws.send(_reply_for(req_id, res))
+
+    elif op == "inspect":
+        res = await _run_stall(
+            loop, _inspect_job, req["document"], bool(req.get("detail", True)),
+            req.get("bodies"), req.get("maxFaces"), req.get("maxEdges"),
+        )
         await ws.send(_reply_for(req_id, res))
 
     elif op == "import":

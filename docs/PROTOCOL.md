@@ -224,6 +224,57 @@ Reply:
 One entry per pair whose boolean intersection volume exceeds a small epsilon. A cheap
 bounding-box reject skips most pairs before the (crashable) boolean intersection runs.
 
+### `inspect`
+
+Exact B-rep measurements of the document's live bodies. Rebuilds through the same
+warm cache `export` and `interference` use, so asking what a model measures right
+after building it costs a cache hit rather than a second rebuild.
+
+```jsonc
+{ "op": "inspect", "id": "...", "document": { /* CadDocument */ },
+  "detail": true,          // omit the per-face/per-edge lists with false
+  "bodies": ["body1"],     // optional: only these body ids (or names)
+  "maxFaces": 400, "maxEdges": 800 }
+```
+
+Reply:
+```jsonc
+{ "bodies": [ {
+    "id": "body1", "name": "Body1",
+    "volume": 6283.19, "area": 1884.96, "centerOfMass": [x,y,z],
+    "bbox": { "min": [...], "max": [...], "size": [...] },
+    "faceCount": 3, "edgeCount": 3, "solidCount": 1,
+    "faces": [ { "i": 0, "surface": "cylinder", "area": 1256.64,
+                 "centroid": [...], "normal": [...], "point": [...],
+                 "radius": 10.0, "axis": [0,0,1], "wraps": true,
+                 "neighbors": [1,2],
+                 "selector": { "kind":"face", "by":"match", "fp": {...}, "body":"body1" } } ],
+    "edges": [ { "i": 1, "curve": "line", "length": 20.0, "mid": [...], "dir": [...],
+                 "faces": [0,0], "seam": true,
+                 "selector": { "kind":"edge", "by":"match", "fp": {...}, "body":"body1" } } ],
+    "truncated": { "faces": 0, "edges": 0 }   // only when a cap was hit
+  } ],
+  "errors": [ { "message": "...", "feature_id": "..." } ] }
+```
+
+Three fields are not measurements and matter more than the measurements:
+
+- **`selector`** on every face and edge, authored by `geom_select`'s own
+  fingerprint functions. A caller that has never clicked on anything can address
+  the geometry it just read about.
+- **`point`** is the centroid PROJECTED onto the face, so it genuinely lies on it.
+  A washer's flat face has its centroid in the hole, and `by:"nearest"` scores by
+  true point-to-surface distance.
+- **`seam`** on an edge whose two ancestor faces are the SAME face, and `wraps` on
+  a face that closes on itself. Those are exactly the edge a blend refuses and the
+  face a linear press/pull has no direction for.
+
+Failing features are REPORTED in `errors`, not raised: a document with one red
+feature still has bodies, and looking at what did build is the point.
+
+Face indices `i` are positions in the body's `shape.faces()`, the same numbering
+the tessellator and the frontend's face ids use.
+
 ### `import`
 
 Reads an external geometry file (STL / 3MF / STEP / BREP) into an embeddable BREP
