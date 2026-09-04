@@ -24,6 +24,7 @@ from build123d import (
 )
 
 from shape_util import _as_compound, _wrap_topods, _wrapped_or_none
+from topo_adj import face_wraps
 
 def _simplify_mesh(shape, tol_deg):
     """Merge near-coplanar facets of an imported mesh into fewer, larger faces
@@ -247,7 +248,42 @@ def _press_pull(part, face, d, clamp=True):
             return _thicken_press_pull(part, face, dd)
         except Exception:
             return _sweep_press_pull(part, face, dd)
+    # A face that WRAPS closes on itself, so the sweep below has no direction to
+    # travel along: it produces a prism that swallows the body, and the volume
+    # check catches that and refuses. That refusal is what a 360-degree revolve
+    # of a non-analytic profile lands in — the commonest way to make a shape
+    # this kernel cannot describe as a cylinder, cone, sphere or torus.
+    #
+    # Thicken follows the SURFACE, which is the operation such a face actually
+    # wants, and it asks about ONE face rather than rebuilding the body the way
+    # _offset_faces does. Measured, one subprocess per (shape, distance) so a
+    # segfault shows up as an exit code rather than as an exception nobody
+    # catches:
+    #
+    #                       +5    +1.5  +0.5  -0.5   -1.5   -5
+    #   revolved spline     ok    ok    ok    ok     ok     ok      REVOLUTION
+    #   revolved bulge      ok    ok    ok    ok     ok     ok      REVOLUTION
+    #   swept tube          ok    ok    ok    CRASH  CRASH  refused BSPLINE
+    #   lofted tube         ok    ok    ok    ok     ok     ok      BSPLINE
+    #
+    # So a surface of revolution goes both ways and a BSPLINE only outward. The
+    # asymmetry is not a guess about why: it is where the measurement stops, and
+    # the inward BSPLINE case keeps the refusal it already had, which is the one
+    # place an access violation was ever observed. Anything joining this rule
+    # should arrive the same way OFFSETTABLE_CURVED's members did.
+    if _wrapped_thickenable(gt, d) and face_wraps(face):
+        try:
+            return _thicken_press_pull(part, face, d)
+        except Exception:
+            pass
     return _sweep_press_pull(part, face, d)
+
+
+def _wrapped_thickenable(gt, d):
+    """May a wrapping face of this surface type be thickened by this distance?"""
+    if gt == GeomType.REVOLUTION:
+        return True
+    return gt == GeomType.BSPLINE and d > 0
 
 
 def _distance_to_target(src_face, target_pt, target_n):

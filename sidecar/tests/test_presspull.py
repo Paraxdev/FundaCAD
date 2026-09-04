@@ -119,26 +119,98 @@ def test_a_freeform_face_moves_by_sweeping_instead_of_offsetting():
         print(f"  freeform swept {d:+6}mm OK: {v0:.1f} -> {v1:.1f}")
 
 
-def test_a_face_that_wraps_is_refused_rather_than_swallowing_the_body():
-    """The failure a validity check alone does not catch.
+def test_a_wrapping_face_is_thickened_rather_than_swept():
+    """The side of a swept tube closes on itself, so no single direction means
+    anything and a linear prism eats the solid. Measured, before there was
+    anywhere else for it to go: the swept result passes BRepCheck_Analyzer and
+    has volume 0.0 — a perfectly well-formed nothing.
 
-    The side of a swept tube closes on itself, so no single direction means
-    anything and the prism eats the solid. Measured: the result passes
-    BRepCheck_Analyzer and has volume 0.0 — a perfectly well-formed nothing. It
-    is the VOLUME check that refuses it, and this test is here because without it
-    the fallback silently destroys the body it was meant to move."""
+    It now goes to _thicken_press_pull instead, which follows the SURFACE and so
+    needs no direction. The property to hold is the one that always mattered:
+    the body must GROW, not vanish."""
+    from build123d import Face, Spline
+
+    s = Solid.sweep(Face(Wire.make_circle(4)), Spline((0, 0, 0), (4, 0, 10), (0, 0, 20)))
+    f = _one(s, GeomType.BSPLINE)
+    v0 = mesh_volume(s.wrapped)
+    out = _press_pull(s, f, 1.0)
+    assert BRepCheck_Analyzer(out.wrapped).IsValid(), "thickened result is not a valid solid"
+    v1 = mesh_volume(out.wrapped)
+    assert v1 > v0 * 1.05, f"a +1mm push on the wall barely moved it: {v0:.1f} -> {v1:.1f}"
+    print(f"wrapping face thickened OK: {v0:.1f} -> {v1:.1f}")
+
+
+def test_the_sweep_still_refuses_what_it_cannot_do():
+    """The control for the test above, and the reason it is not a regression.
+
+    Thicken is admitted for exactly the (surface type, direction) pairs that
+    were measured not to crash the kernel; everything else still reaches the
+    sweep, and the sweep must still refuse a wrapping face rather than commit a
+    well-formed nothing. Forcing the eligibility test to say no is what proves
+    the guard underneath is still there."""
+    from build123d import Face, Spline
+
+    import solid_ops
+
+    s = Solid.sweep(Face(Wire.make_circle(4)), Spline((0, 0, 0), (4, 0, 10), (0, 0, 20)))
+    f = _one(s, GeomType.BSPLINE)
+    keep = solid_ops._wrapped_thickenable
+    solid_ops._wrapped_thickenable = lambda gt, d: False
+    try:
+        out = _press_pull(s, f, 1.0)
+    except ValueError as ex:
+        assert "wraps" in str(ex), f"refusal should name the reason, got: {ex}"
+        print(f"sweep still refuses a wrapping face OK: {ex}")
+        return
+    finally:
+        solid_ops._wrapped_thickenable = keep
+    raise AssertionError(
+        f"the sweep accepted a wrapping face, leaving volume {mesh_volume(out.wrapped):.1f}")
+
+
+def test_a_wrapping_face_pushed_INWARD_is_still_refused():
+    """Where the measurement stops.
+
+    On a swept tube, thickening the wall INWARD is an access violation in OCCT
+    (exit code 0xC0000005, measured one subprocess per distance at -0.5 and
+    -1.5mm), so a BSPLINE only gets the thicken path outward. A crash takes the
+    worker with it, while a refusal is a sentence, and that asymmetry is what
+    decides this."""
     from build123d import Face, Spline
 
     s = Solid.sweep(Face(Wire.make_circle(4)), Spline((0, 0, 0), (4, 0, 10), (0, 0, 20)))
     f = _one(s, GeomType.BSPLINE)
     try:
-        out = _press_pull(s, f, 1.0)
+        _press_pull(s, f, -1.0)
     except ValueError as ex:
         assert "wraps" in str(ex), f"refusal should name the reason, got: {ex}"
-        print(f"wrapping face refused OK: {ex}")
+        print(f"inward push on a wrapping bspline refused OK: {ex}")
         return
-    raise AssertionError(
-        f"a wrapping face was accepted, leaving volume {mesh_volume(out.wrapped):.1f}")
+    raise AssertionError("an inward push on a wrapping BSPLINE face was accepted — "
+                         "that is the case measured to crash the kernel")
+
+
+def test_a_wrapping_surface_of_revolution_moves_both_ways():
+    """The case that started this: a 360-degree revolve of a profile the kernel
+    cannot call a cylinder, a cone, a sphere or a torus. Its side face wraps, so
+    it used to reach the sweep and be refused — on a shape whose whole point is
+    that you push its wall around.
+
+    Both directions, because unlike the BSPLINE this one was measured safe both
+    ways (revolved spline and revolved bulge, at +-0.5, +-1.5 and +-5mm)."""
+    from build123d import Axis, Plane, Polyline, Spline, make_face, revolve
+
+    prof = Plane.XZ * (Spline((10, 0), (16, 6), (11, 14), (18, 20))
+                       + Polyline((18, 20), (8, 20), (8, 0), (10, 0)))
+    body = revolve(make_face(prof), Axis.Z, 360)
+    side = _one(body, GeomType.REVOLUTION)
+    for d in (1.5, -1.5):
+        v0 = mesh_volume(body.wrapped)
+        out = _press_pull(body, side, d)
+        assert BRepCheck_Analyzer(out.wrapped).IsValid(), f"{d}: invalid solid"
+        v1 = mesh_volume(out.wrapped)
+        assert (v1 > v0) == (d > 0), f"{d}: material moved the wrong way {v0:.1f} -> {v1:.1f}"
+        print(f"  revolved wall {d:+5}mm OK: {v0:.1f} -> {v1:.1f}")
 
 
 def test_the_freeform_path_never_calls_the_offset_that_crashes():
@@ -246,7 +318,10 @@ if __name__ == "__main__":
         test_the_blend_face_of_a_filleted_part()
         test_the_analytic_curved_surfaces()
         test_a_freeform_face_moves_by_sweeping_instead_of_offsetting()
-        test_a_face_that_wraps_is_refused_rather_than_swallowing_the_body()
+        test_a_wrapping_face_is_thickened_rather_than_swept()
+        test_the_sweep_still_refuses_what_it_cannot_do()
+        test_a_wrapping_face_pushed_INWARD_is_still_refused()
+        test_a_wrapping_surface_of_revolution_moves_both_ways()
         test_the_freeform_path_never_calls_the_offset_that_crashes()
         test_the_large_offsets_that_killed_a_worker()
         test_an_impossible_offset_is_refused_not_crashed()

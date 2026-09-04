@@ -300,6 +300,41 @@ def _refuse_smooth_edges(shape, edges, label):
     )
 
 
+def _refuse_seam_edges(shape, edges, label):
+    """Refuse a blend when every selected edge is a SEAM, and say what a seam is.
+
+    A face that wraps all the way round — the side of a cylinder, a cone, a
+    360-degree revolve — closes on itself, and the kernel records that closure
+    as a real topological edge. It is bookkeeping, not geometry: there is no
+    crease there, and both sides of it are the SAME face. ChFi3d needs two
+    different faces to blend between, so it refuses, and what it says is
+    "ChFi3d_Builder:only 2 faces", which describes nothing anyone can act on.
+
+    Only when EVERY selected edge is a seam. A broad selector — by:"axis", which
+    on a cylinder picks up the seam along with the real edges, or by:"all" —
+    routinely includes one, and OCCT blends those groups perfectly well
+    (measured on a cone: by:"all" over a rim and its seam succeeds). Refusing
+    those would break work that has always worked, and the seam in them is not
+    what the user meant to pick anyway."""
+    from topo_adj import FaceAdjacency
+
+    if not edges:
+        return
+    adj = FaceAdjacency(shape)
+    for e in edges:
+        faces = adj.faces_of_edge(e)
+        if not (len(faces) == 2 and faces[0] == faces[1]):
+            return  # at least one real edge in the selection: nothing to say
+    which = ("that edge is a seam" if len(edges) == 1
+             else f"all {len(edges)} selected edges are seams")
+    raise ValueError(
+        f"can't {label.lower()} here — {which}. A seam is the line where a face "
+        "that wraps all the way round meets itself, so both sides of it are the "
+        "same face and there is no corner to cut. Pick the edges where that face "
+        "meets its NEIGHBOURS instead."
+    )
+
+
 # How much smaller the probe below tries. A twentieth is far enough that any
 # genuine clearance problem has gone away; if that fails too, size is not what is
 # wrong.
@@ -424,6 +459,7 @@ def _blend_edges(f, ctx, label, combined, one_edge_at, blend_size):
         edges = resolve_edges(body["shape"], sels, diag=ctx.diagnostics, feature_id=f.get("id"))
         if not edges:
             raise ValueError(f"no edge found to {label.lower()} on {body['name']}")
+        _refuse_seam_edges(body["shape"], edges, label)
         _refuse_smooth_edges(body["shape"], edges, label)
         try:
             new_shape = combined(body["shape"], edges)
