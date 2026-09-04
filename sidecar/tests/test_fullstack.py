@@ -173,7 +173,19 @@ def run():
             print("server never became ready"); return 1
         return asyncio.run(main(token))
     finally:
-        proc.terminate()
+        # The whole TREE, not just the server. The server holds a
+        # ProcessPoolExecutor worker with a loaded OCCT in it, and terminate()
+        # is TerminateProcess on Windows: no atexit, no pool shutdown, so the
+        # worker is orphaned and stays resident. Measured on this machine after
+        # a handful of suite runs: six orphaned workers, each holding its own
+        # copy of the kernel. The app is safe from this (the Rust shell owns a
+        # job object) and so is the MCP server (mcp/winjob.py), but a test
+        # script that spawns a server owns nothing, so it kills the tree.
+        if sys.platform == "win32":
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                           capture_output=True)
+        else:
+            proc.terminate()
         try:
             proc.wait(timeout=5)
         except subprocess.TimeoutExpired:
