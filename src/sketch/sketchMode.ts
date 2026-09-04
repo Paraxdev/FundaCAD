@@ -5,7 +5,7 @@
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore } from "../document/store";
-import type { EdgeFingerprint, Feature, ParamTarget, PlaneSpec, ProjectedSource, ProjectionUpdate, Selector, SketchConstraint, SketchPattern } from "../types";
+import type { Feature, ParamTarget, PlaneSpec, ProjectionUpdate, Selector, SketchConstraint, SketchPattern } from "../types";
 import { applyProjectionUpdate, dimPlaceOf, isBadgeEntity, isPlacedDim } from "../types";
 import { SketchPlane } from "./plane";
 import { SketchOverlay, curveObjects, dimensionLineObjects, CURVE_COLOR, PREVIEW_COLOR, SELECT_COLOR } from "./overlay";
@@ -20,7 +20,7 @@ import { RelationsPanel } from "./relationsPanel";
 import { constraintGlyphs, diagnosisOf } from "./glyphs";
 import { entityDims, constraintDims, dimRefPoints, curveKind, setDimPixelScale, staggeredDefaults, type DimField, type ConstraintDim } from "./entityDims";
 import { clampPlace, pickDimTarget } from "./dimensionTool";
-import { pickEntity, trimEntity, filletCorner, chamferCorner, offsetEntity, offsetChain, signedOffsetAt, breakAt, extendLine, breakLink, PROJECTED_FIXED_MSG, type OffsetResult } from "./modify";
+import { pickEntity, PROJECTED_FIXED_MSG } from "./modify";
 import { newEntityId, newConstraintId, isDimConstraint, notePatternId } from "./id";
 import { SketchHistory, cloneSnapshot, type SketchSnapshot } from "./history";
 import { isPlainNumber, parseField } from "../ui/units";
@@ -31,7 +31,7 @@ import { compileAndSolve, coincKey, constraintIndexOf } from "./sketchSolve";
 import { SolverUnavailable } from "./solver";
 import { resolveRealEntities, toSketchEntity } from "./resolve";
 import { applyDrivingDimsDirect } from "./directDims";
-import { expandPattern, translated, rotated, scaled } from "./pattern";
+import { expandPattern, translated } from "./pattern";
 import { candidatesFromEntities, showsSnapMarker, snap, type SnapGuide, type SnapKind, type SnapCandidate } from "./snap";
 import type { ResolvedEntity } from "./snap";
 import { detectRegions, rectCorners, rectFromThreePoints } from "./region";
@@ -46,6 +46,8 @@ import { ConstraintTools, CONSTRAINT_TOOLS, type ConstraintHost } from "./constr
 import { PatternFlow, PATTERN_TOOLS, ENTITY_PATTERNS, type PatternHost } from "./patternFlow";
 import { DimFlow, type DimHost } from "./dimFlow";
 import { ProjectPanel } from "./projectPanel";
+import { ProjectFlow, type ProjectHost } from "./projectFlow";
+import { ModifyFlow, type ModifyHost } from "./modifyFlow";
 import { sketchEscapeAction } from "./escapeLayers";
 import { gridReach, gridStep, SketchPlaneGrid, snapLatticeStep } from "./planeGrid";
 import { INFER_TOL_DEG, inferLineDirection } from "./inferLine";
@@ -130,18 +132,6 @@ function parseConflictIdx(ids: string[]): Set<number> {
 // Tools that operate on the current multi-selection, so setTool must keep it.
 const KEEPS_SELECTION = new Set<SketchTool>(["mirror", "move", "copy", "rotate", "scale"]);
 
-// Tolerant edge-fingerprint compare for the Project tool's duplicate-pick check.
-// Fingerprints carry unrounded float noise (sidecar-authored), so byte equality
-// is meaningless — same midpoint (within 1e-3 mm), same unoriented tangent, and
-// a matching length when both carry one, is "the same edge".
-function fpClose(a: EdgeFingerprint, b: EdgeFingerprint): boolean {
-  if (Math.hypot(a.mid[0] - b.mid[0], a.mid[1] - b.mid[1], a.mid[2] - b.mid[2]) > 1e-3) return false;
-  const dot = Math.abs(a.dir[0] * b.dir[0] + a.dir[1] * b.dir[1] + a.dir[2] * b.dir[2]);
-  if (dot < 1 - 1e-6) return false;
-  if (a.length != null && b.length != null && Math.abs(a.length - b.length) > 1e-3) return false;
-  return true;
-}
-
 // Sentinel id for the in-progress text tool's live-preview entity: it lives on the
 // active entity list (so it repaints through the normal render path) but is never
 // committed — filtered out at serialization and dropped on tool switch/cancel.
@@ -186,7 +176,6 @@ export class SketchMode {
   private splinePts: THREE.Vector2[] = []; // in-progress spline fit points
   private clickPts: THREE.Vector2[] = []; // accumulated clicks for multi-point primitives (polygon/slot/circle variants)
   private polygonSides = 6; // n for the polygon tool
-  private filletFirst: number | null = null; // first line picked for a sketch fillet
   private selected = new Set<string>(); // selected entity ids (select tool)
   /** The Relations list in the Sketch Palette. */
   private relations = new RelationsPanel();
@@ -244,7 +233,6 @@ export class SketchMode {
   private rightDownAt: { x: number; y: number } | null = null;
   private rightDragged = false;
   // Move/Copy tool: first (base) point picked; the second click sets the offset.
-  private moveBase: THREE.Vector2 | null = null;
   // distance-constraint dims, computed once per refreshActive() in activeCurves()
   // and reused for the clickable labels (constraintDimExtras)
   private cdims: ConstraintDim[] = [];
@@ -283,7 +271,6 @@ export class SketchMode {
   // Project tool: filter chips (edges&faces / sketch curves) + a one-at-a-time
   // in-flight gate so a double-click can't race two projectGeometry calls.
   private readonly projectPanel = new ProjectPanel();
-  private projectBusy = false;
   private fonts: string[] = []; // system fonts for the text tool (loaded on enter)
   // text tool: press-drag defines a box (wrap width); a plain click is a point anchor.
   private textBoxStart: THREE.Vector2 | null = null;
@@ -322,6 +309,8 @@ export class SketchMode {
   private constraintTools: ConstraintTools;
   private patternFlow: PatternFlow;
   private dimFlow: DimFlow;
+  private projectFlow: ProjectFlow;
+  private modifyFlow: ModifyFlow;
 
   constructor(
     private viewport: Viewport,
@@ -366,8 +355,8 @@ export class SketchMode {
       entities: () => this.entities,
       constraints: () => this.constraints,
       pickTol: () => this.pickTol(),
-      getFilletFirst: () => this.filletFirst,
-      setFilletFirst: (v) => { this.filletFirst = v; },
+      getFilletFirst: () => this.modifyFlow.getFilletFirst(),
+      setFilletFirst: (v) => { this.modifyFlow.setFilletFirst(v); },
       requestSolve: () => this.requestSolve(),
       warn: (msg) => toast(msg),
     };
@@ -402,6 +391,38 @@ export class SketchMode {
       onState: () => this.onState?.(),
     };
     this.dimFlow = new DimFlow(dimHost);
+    const projectHost: ProjectHost = {
+      entities: () => this.entities,
+      store: () => this.store,
+      overlay: () => this.overlay,
+      viewport: () => this.viewport,
+      plane: () => this.plane,
+      projectPanel: () => this.projectPanel,
+      editingId: () => this.editingId,
+      active: () => this.active,
+      tool: () => this.tool,
+      pickTol: () => this.pickTol(),
+      planePoint: (e) => this.planePoint(e),
+      refreshActive: () => this.refreshActive(),
+      requestSolve: () => this.requestSolve(),
+      onState: () => this.onState?.(),
+    };
+    this.projectFlow = new ProjectFlow(projectHost);
+    const modifyHost: ModifyHost = {
+      entities: () => this.entities,
+      setEntities: (list) => { this.entities = list; },
+      selected: () => this.selected,
+      setSelected: (ids) => { this.selected = ids; },
+      dim: () => this.dim,
+      overlay: () => this.overlay,
+      plane: () => this.plane,
+      tool: () => this.tool,
+      pickTol: () => this.pickTol(),
+      planePoint: (e) => this.planePoint(e),
+      afterModify: () => this.afterModify(),
+      setDrivingDimension: (c) => this.setDrivingDimension(c),
+    };
+    this.modifyFlow = new ModifyFlow(modifyHost);
     // Filter chip clicks land on the panel, not the canvas, so projectHover
     // doesn't run — clear the other mode's hover feedback explicitly.
     this.projectPanel.onChange = () => {
@@ -623,13 +644,11 @@ export class SketchMode {
     this.arcStart = null;
     this.arcEnd = null;
     this.splinePts = [];
-    this.filletFirst = null;
     this.dragFrom = null;
     this.pendingDrag = null;
     this.moveDrag = null;
     this.dimFlow.resetDimPicks();
-    this.moveBase = null;
-    this.offsetPick = null; // an in-progress offset dies with its tool
+    this.modifyFlow.reset(); // an in-progress fillet/move/offset dies with its tool
     this.dim.hide();
     this.textPanel.hide();
     // Project tool: chips only while it's active; leaving it drops any 3D hover
@@ -1482,7 +1501,7 @@ export class SketchMode {
     // raw client coords, so it branches BEFORE the plane-point conversion.
     if (this.tool === "project") {
       e.preventDefault();
-      void this.projectClick(e);
+      void this.projectFlow.projectClick(e);
       return;
     }
     // A click on a plane turned edge-on cannot mean what it looks like it
@@ -1602,15 +1621,15 @@ export class SketchMode {
     if (this.tool === "centerRectangle") return this.centerRectClick(p);
     if (this.tool === "rectangle3") return this.rect3Click(p);
     if (this.tool === "mirror") return this.mirrorClick(p);
-    if (this.tool === "trim") return this.trimClick(p);
-    if (this.tool === "fillet") return this.filletClick(p);
-    if (this.tool === "chamfer") return this.chamferClick(p);
-    if (this.tool === "move" || this.tool === "copy") return this.moveClick(p);
-    if (this.tool === "rotate") return this.rotateClick(p);
-    if (this.tool === "scale") return this.scaleClick(p);
-    if (this.tool === "offset") return this.offsetClick(p);
-    if (this.tool === "extend") return this.extendClick(p);
-    if (this.tool === "break") return this.breakClick(p);
+    if (this.tool === "trim") return this.modifyFlow.trimClick(p);
+    if (this.tool === "fillet") return this.modifyFlow.filletClick(p);
+    if (this.tool === "chamfer") return this.modifyFlow.chamferClick(p);
+    if (this.tool === "move" || this.tool === "copy") return this.modifyFlow.moveClick(p);
+    if (this.tool === "rotate") return this.modifyFlow.rotateClick(p);
+    if (this.tool === "scale") return this.modifyFlow.scaleClick(p);
+    if (this.tool === "offset") return this.modifyFlow.offsetClick(p);
+    if (this.tool === "extend") return this.modifyFlow.extendClick(p);
+    if (this.tool === "break") return this.modifyFlow.breakClick(p);
     if (CONSTRAINT_TOOLS.has(this.tool)) return this.constraintClick(p);
 
     if (!this.base) {
@@ -2006,7 +2025,7 @@ export class SketchMode {
     // entity patterns replicate the selection — drop projected reference
     // geometry from the sources BEFORE PatternFlow snapshots them
     if (ENTITY_PATTERNS.has(this.tool)) {
-      for (const id of this.warnSelectedProjected()) this.selected.delete(id);
+      for (const id of this.modifyFlow.warnSelectedProjected()) this.selected.delete(id);
     }
     this.patternFlow.click(p);
   }
@@ -2241,7 +2260,7 @@ export class SketchMode {
     const selectedSources = this.entities.filter((e) => this.selected.has(e.id) && e.id !== axis.id);
     // projected geometry is a fixed reference — mirror the rest of the selection
     // (it stays selected; the commit below clears the whole selection anyway)
-    const projected = this.warnSelectedProjected();
+    const projected = this.modifyFlow.warnSelectedProjected();
     const chosen = selectedSources.filter((e) => !projected.has(e.id));
     if (!chosen.length) return; // nothing selected to mirror
     const a = new THREE.Vector2(axis.x1, axis.y1);
@@ -2302,7 +2321,7 @@ export class SketchMode {
       this.rightDragged = true;
     }
     if (this.active && this.tool === "project") {
-      this.projectHover(e);
+      this.projectFlow.projectHover(e);
       return;
     }
     if (this.active && this.tool === "dimension") {
@@ -2310,7 +2329,7 @@ export class SketchMode {
       return;
     }
     if (this.active && MODIFY_TOOLS.has(this.tool)) {
-      this.modifyHover(e);
+      this.modifyFlow.modifyHover(e);
       return;
     }
     if (!this.active || this.tool === "select") {
@@ -2333,7 +2352,7 @@ export class SketchMode {
           if (dx * dx + dy * dy < 16) return; // <4px: still a click, not a move
           // projected geometry never body-drags (fixed reference); disarm so a
           // plain click still selects it in endDrag()
-          if (this.guardProjected(this.entities[md.idx])) {
+          if (this.modifyFlow.guardProjected(this.entities[md.idx])) {
             this.moveDrag = null;
             return;
           }
@@ -2446,16 +2465,16 @@ export class SketchMode {
       // Which rung of the stack this press lands on is decided next door, where
       // the ORDER can be tested without a canvas — see escapeLayers.ts.
       const action = sketchEscapeAction({
-        offsetPick: !!this.offsetPick,
+        offsetPick: this.modifyFlow.offsetting,
         dragging: !!(this.dragFrom || this.moveDrag),
         pendingGeometry:
-          !!this.base || !!this.arcStart || this.filletFirst != null || this.splinePts.length > 0 ||
+          !!this.base || !!this.arcStart || this.modifyFlow.filletArmed || this.splinePts.length > 0 ||
           this.clickPts.length > 0 || this.dimFlow.picking || !!this.dimFlow.plan ||
           this.constraintTools.hasPending(),
         selection: this.selected.size > 0,
         tool: this.tool,
       });
-      if (action === "cancel-offset") { this.cancelOffset(); return; }
+      if (action === "cancel-offset") { this.modifyFlow.cancelOffset(); return; }
       if (action === "cancel-drag") {
         // cancel an in-progress drag: revert geometry to its pre-drag positions
         if (this.dragSnapshot) this.entities = this.dragSnapshot;
@@ -2473,7 +2492,7 @@ export class SketchMode {
         this.chainStart = null;
         this.arcStart = null;
         this.arcEnd = null;
-        this.filletFirst = null;
+        this.modifyFlow.setFilletFirst(null);
         this.splinePts = [];
         this.clickPts = [];
         // in-progress dimension: picks AND an open value box both die here (the
@@ -2869,23 +2888,6 @@ export class SketchMode {
     const n = this.plane.plane.normal;
     return tooEdgeOn([d.x, d.y, d.z], [n.x, n.y, n.z]);
   }
-  /** hover-highlight the entity under the cursor in red */
-  private modifyHover(e: PointerEvent) {
-    // An offset being placed owns the preview: this is the MODIFY_TOOLS hover
-    // branch and it runs on every move, so without this it would overwrite the
-    // offset's live preview with a plain hover highlight one frame later.
-    if (this.offsetPick) { this.offsetMove(e); return; }
-    const p = this.planePoint(e);
-    if (!p) return;
-    const idx = pickEntity(this.entities, p, this.pickTol());
-    const preview: THREE.Object3D[] = [];
-    const first = this.filletFirst != null ? this.entities[this.filletFirst] : undefined;
-    if (first) preview.push(...curveObjects([first], this.plane, 0x33aaff, true));
-    const hit = idx >= 0 ? this.entities[idx] : undefined;
-    if (hit) preview.push(...curveObjects([hit], this.plane, 0xff5555, true));
-    this.overlay.setPreview(preview);
-  }
-
   // --- selection delete (select tool) -----------------------------------
   /** Remove the selected entities, prune now-dangling constraints, then rebuild
    *  + re-solve via the shared modify tail. */
@@ -2907,7 +2909,7 @@ export class SketchMode {
     this.rightDragged = false;
     if (dragged) return;
     if (this.tool === "dimension") { this.openDimensionMenu(e); return; }
-    if (this.tool === "offset") { this.openOffsetMenu(e); return; }
+    if (this.tool === "offset") { this.modifyFlow.openOffsetMenu(e); return; }
     if (this.tool !== "select") return;
     const raw = this.planePoint(e);
     const idx = raw ? pickEntity(this.entities, raw, this.pickTol()) : -1;
@@ -2919,10 +2921,10 @@ export class SketchMode {
     if (!this.selected.size) return; // nothing to act on → let nav handle it
     e.preventDefault();
     const n = this.selected.size;
-    const linked = this.selectedProjectedIds().size;
+    const linked = this.modifyFlow.selectedProjectedIds().size;
     const items: CtxItem[] = [
       ...(linked
-        ? [{ label: linked > 1 ? `Break Link (${linked})` : "Break Link", onClick: () => this.breakSelectedLinks() }]
+        ? [{ label: linked > 1 ? `Break Link (${linked})` : "Break Link", onClick: () => this.modifyFlow.breakSelectedLinks() }]
         : []),
       { label: n > 1 ? `Delete ${n} entities` : "Delete", danger: true, onClick: () => this.deleteSelected() },
     ];
@@ -2970,513 +2972,17 @@ export class SketchMode {
     contextMenu(e.clientX, e.clientY, items);
   }
 
-  /** Fusion's in-command marking menu for the Offset tool: the two things the
-   *  cursor alone can't say — whether to take the whole connected chain, and
-   *  which side to land on when the cursor is nowhere near the curve. */
-  private openOffsetMenu(e: MouseEvent) {
-    e.preventDefault();
-    const pick = this.offsetPick;
-    contextMenu(e.clientX, e.clientY, [
-      {
-        label: "Chain Selection", checked: this.offsetChainMode,
-        onClick: () => {
-          this.offsetChainMode = !this.offsetChainMode;
-          setPrompt(this.offsetChainMode
-            ? "Chain Selection on, the whole connected profile offsets as a unit"
-            : "Chain Selection off, only the clicked curve offsets");
-        },
-      },
-      {
-        label: "Flip", disabled: !pick,
-        onClick: () => { if (pick) pick.side = -pick.side; },
-      },
-      { separator: true, label: "" },
-      { label: "OK", disabled: !pick, onClick: () => { if (pick) this.commitOffset(); } },
-      { label: "Cancel", disabled: !pick, onClick: () => this.cancelOffset() },
-    ]);
-  }
-
   private setDimRoundPref(pref: "radius" | "diameter") {
     this.dimFlow.setRoundPref(pref);
     this.dimFlow.refreshDimPlan();
     const plan = this.dimFlow.plan;
     if (plan) setPrompt(plan.hint);
   }
-
-  /** Break Link (context menu): the selected projected entities become native
-   *  geometry with the SAME ids — attached constraints/dims stay valid, the
-   *  geometry unfreezes, and the associative refresh skips them from now on
-   *  (they are no longer type "projected"). Breaking one member of a
-   *  multi-curve group (a face boundary's siblings) breaks only that member —
-   *  the others stay linked (Fusion behavior). */
-  private breakSelectedLinks() {
-    const ids = this.selectedProjectedIds();
-    if (!ids.size) return;
-    this.entities = breakLink(this.entities, ids);
-    this.afterModify(); // selection stays: the entities still exist, now native
-  }
-  private trimClick(p: THREE.Vector2) {
-    const idx = pickEntity(this.entities, p, this.pickTol());
-    if (idx < 0 || this.guardProjected(this.entities[idx])) return;
-    this.entities = trimEntity(this.entities, idx, p);
-    this.afterModify();
-  }
-  private filletClick(p: THREE.Vector2) {
-    const idx = pickEntity(this.entities, p, this.pickTol());
-    if (this.guardProjected(idx >= 0 ? this.entities[idx] : undefined)) return;
-    if (idx < 0 || this.entities[idx]?.type !== "line") return;
-    if (this.filletFirst == null) {
-      this.filletFirst = idx;
-      return;
-    }
-    if (idx === this.filletFirst) return;
-    const second = idx;
-    const first = this.filletFirst;
-    this.dim.show([{ name: "radius", label: "R", kind: "length" }], () =>
-      this.applyFillet(first, second),
-    );
-  }
-  private applyFillet(iA: number, iB: number) {
-    const r = this.dim.getValue("radius") ?? 2;
-    const res = filletCorner(this.entities, iA, iB, r);
-    if (res) this.entities = res;
-    this.filletFirst = null;
-    this.dim.hide();
-    this.afterModify();
-  }
-  private chamferClick(p: THREE.Vector2) {
-    const idx = pickEntity(this.entities, p, this.pickTol());
-    if (this.guardProjected(idx >= 0 ? this.entities[idx] : undefined)) return;
-    if (idx < 0 || this.entities[idx]?.type !== "line") return;
-    if (this.filletFirst == null) {
-      this.filletFirst = idx;
-      return;
-    }
-    if (idx === this.filletFirst) return;
-    const second = idx;
-    const first = this.filletFirst;
-    this.dim.show([{ name: "distance", label: "D", kind: "length" }], () =>
-      this.applyChamfer(first, second),
-    );
-  }
-  private applyChamfer(iA: number, iB: number) {
-    const d = this.dim.getValue("distance") ?? 2;
-    const res = chamferCorner(this.entities, iA, iB, d);
-    if (res) this.entities = res;
-    this.filletFirst = null;
-    this.dim.hide();
-    this.afterModify();
-  }
-
-  /** Projected geometry is FIXED reference geometry: every modify/transform seam
-   *  calls this and bails with one consistent toast. Delete stays allowed. */
-  private guardProjected(e: ResolvedEntity | undefined): boolean {
-    if (e?.type !== "projected") return false;
-    toast(PROJECTED_FIXED_MSG);
-    return true;
-  }
-
-  /** ids of the currently-selected projected (linked reference) entities. */
-  private selectedProjectedIds(): Set<string> {
-    return new Set(
-      this.entities.filter((e) => e.type === "projected" && this.selected.has(e.id)).map((e) => e.id),
-    );
-  }
-
-  /** The selected projected (linked reference) ids, toasting PROJECTED_FIXED_MSG
-   *  once when any exist — the shared seam for tools that transform the
-   *  selection. Each caller keeps its own retention semantics (deselect /
-   *  keep-selected / skip from copies). */
-  private warnSelectedProjected(): Set<string> {
-    const ids = this.selectedProjectedIds();
-    if (ids.size) toast(PROJECTED_FIXED_MSG);
-    return ids;
-  }
-
-  /** replace each selected entity with map(e) (flattened); others unchanged. Owns
-   *  the selection: it re-selects the transform's output, so a rotate that explodes
-   *  a rectangle into fresh-id lines leaves those lines selected (not a stale id). */
-  private transformSelection(map: (e: ResolvedEntity) => ResolvedEntity[]) {
-    const next: ResolvedEntity[] = [];
-    const sel = new Set<string>();
-    // fixed reference geometry: keep it (and its selection) untouched
-    const projected = this.warnSelectedProjected();
-    for (const e of this.entities) {
-      if (this.selected.has(e.id) && !projected.has(e.id)) {
-        for (const m of map(e)) { next.push(m); sel.add(m.id); }
-      } else {
-        next.push(e);
-        if (projected.has(e.id)) sel.add(e.id);
-      }
-    }
-    this.entities = next;
-    this.selected = sel;
-    this.afterModify();
-  }
-
-  /** keep the id for a single-entity result; give an exploded result (a rotated
-   *  rectangle → 4 lines) fresh ids so nothing collides. */
-  private reid(rot: ResolvedEntity[]): ResolvedEntity[] {
-    return rot.length === 1 ? rot : rot.map((r) => ({ ...r, id: newEntityId() }));
-  }
-
-  /** Move/Copy: click a base point, then a destination — translate the whole
-   *  selection. Move mutates in place; Copy leaves the originals and selects the copies. */
-  private moveClick(p: THREE.Vector2) {
-    if (!this.selected.size) { toast("Select entities first, then Move/Copy"); return; }
-    if (!this.moveBase) { this.moveBase = p.clone(); toast("Click the destination point"); return; }
-    const dx = p.x - this.moveBase.x, dy = p.y - this.moveBase.y;
-    this.moveBase = null;
-    if (this.tool === "copy") {
-      const copies: ResolvedEntity[] = [];
-      const sel = new Set<string>();
-      const projected = this.warnSelectedProjected(); // linked — can't clone the link
-      for (const e of this.entities) {
-        if (!this.selected.has(e.id) || projected.has(e.id)) continue;
-        const id = newEntityId();
-        copies.push(translated(e, dx, dy, id));
-        sel.add(id);
-      }
-      this.entities = [...this.entities, ...copies];
-      this.selected = sel; // leave the copies selected (Fusion-style)
-      this.afterModify();
-    } else {
-      this.transformSelection((e) => [translated(e, dx, dy, e.id)]);
-    }
-  }
-
-  /** Rotate the selection about a clicked center by a typed angle (degrees). */
-  private rotateClick(p: THREE.Vector2) {
-    if (!this.selected.size) { toast("Select entities first, then Rotate"); return; }
-    const cx = p.x, cy = p.y;
-    this.dim.show([{ name: "angle", label: "∠", kind: "angle" }], () => {
-      const ang = ((this.dim.getValue("angle") ?? 0) * Math.PI) / 180;
-      this.dim.hide();
-      this.transformSelection((e) => this.reid(rotated(e, cx, cy, ang, e.id)));
-    });
-    toast("Rotate: type an angle in degrees");
-  }
-
-  /** Scale the selection about a clicked base point by a typed factor. */
-  private scaleClick(p: THREE.Vector2) {
-    if (!this.selected.size) { toast("Select entities first, then Scale"); return; }
-    const cx = p.x, cy = p.y;
-    this.dim.show([{ name: "factor", label: "×", kind: "count" }], () => {
-      const f = this.dim.getValue("factor") ?? 1;
-      this.dim.hide();
-      if (f > 0) this.transformSelection((e) => [scaled(e, cx, cy, f, e.id)]);
-    });
-    toast("Scale: type a factor (e.g. 2 or 0.5)");
-  }
-  /** Offset (Fusion parity), two-phase: click a curve, then move the cursor to
-   *  choose the SIDE and distance — or type one — and click again (or Enter) to
-   *  apply. `side` and `mag` are kept apart on purpose: the box displays the
-   *  magnitude, so folding them into one signed number is how typing a value
-   *  silently flips an inward offset outward (the abs-display trap). */
-  private offsetPick: { idx: number; side: number; mag: number } | null = null;
-  /** Fusion's in-command "Chain Selection" toggle, default ON: offset the whole
-   *  connected chain rather than only the clicked curve. */
-  private offsetChainMode = true;
-
-  private offsetClick(p: THREE.Vector2) {
-    if (this.offsetPick) { this.commitOffset(); return; } // second click applies
-    const idx = pickEntity(this.entities, p, this.pickTol());
-    if (idx < 0) return;
-    const e = this.entities[idx];
-    if (!e || this.guardProjected(e)) return;
-    // Nothing may end in silence here: the user is mid-gesture, and a tool that
-    // does nothing without saying why reads as broken.
-    if (e.type === "text") { toast("Offset doesn't apply to sketch text"); return; }
-    if (e.type === "point") { toast("Offset needs a curve, not a point"); return; }
-    this.offsetPick = { idx, side: 1, mag: 0 };
-    this.dim.show(
-      [{ name: "offset", label: "Offset", kind: "length" }],
-      () => this.commitOffset(),
-      () => this.cancelOffset(),
-    );
-    setPrompt("Move to pick the side, or type a distance · Enter · Esc");
-  }
-
-  /** The offset result for the current pick, honouring Chain Selection. Chain
-   *  first (a connected profile offsets as a unit), falling back to the single
-   *  curve — which is also what a lone curve or a junction lands on. */
-  private offsetResultFor(idx: number, dist: number): OffsetResult | null {
-    if (Math.abs(dist) < 1e-6) return null;
-    return (this.offsetChainMode ? offsetChain(this.entities, idx, dist) : null)
-      ?? offsetEntity(this.entities, idx, dist);
-  }
-
-  /** Live side/distance + preview while the offset is being placed. */
-  private offsetMove(ev: PointerEvent) {
-    const pick = this.offsetPick;
-    const p = this.planePoint(ev);
-    const src = pick ? this.entities[pick.idx] : undefined;
-    if (!pick || !src || !p) return;
-    const signed = signedOffsetAt(src, p);
-    const typed = this.dim.isUserDriven("offset") ? this.dim.getValue("offset") : null;
-    if (typed !== null) {
-      // Once a value is typed, the SIGN the user wrote owns the side — that is
-      // what the minus is FOR, and the old tool worked that way. Previously the
-      // cursor always won, so typing -1 silently offset outward and the minus
-      // looked ignored. Clear the field to hand the side back to the cursor.
-      pick.mag = Math.abs(typed);
-      if (typed !== 0) pick.side = typed < 0 ? -1 : 1;
-    } else if (signed !== null) {
-      if (Math.abs(signed) > 1e-6) pick.side = signed < 0 ? -1 : 1;
-      pick.mag = Math.abs(signed);
-      this.dim.updateFromCursor({ offset: pick.mag });
-    }
-    this.dim.position(ev.clientX, ev.clientY);
-    const res = this.offsetResultFor(pick.idx, pick.side * pick.mag);
-    const added = res ? res.entities.slice(this.entities.length) : [];
-    // keep the source highlighted so it stays obvious what is being offset
-    const preview = [...curveObjects([src], this.plane, 0x33aaff, true)];
-    if (added.length) preview.push(...curveObjects(added, this.plane, PREVIEW_COLOR, true));
-    this.overlay.setPreview(preview);
-  }
-
-  private commitOffset() {
-    const pick = this.offsetPick;
-    if (!pick) return;
-    // An empty box CANCELS. It used to fall back to `?? 1`, so pressing Enter on
-    // an untouched field silently produced a 1 mm offset nobody asked for.
-    if (this.dim.isUserDriven("offset")) {
-      const typed = this.dim.getValue("offset");
-      if (typed === null) { toast("Offset: type a distance, or Esc to cancel"); return; }
-      // same rule as the live preview: a typed sign is the side (see offsetMove)
-      pick.mag = Math.abs(typed);
-      if (typed !== 0) pick.side = typed < 0 ? -1 : 1;
-    }
-    if (pick.mag < 1e-6) { toast("Offset: type a distance, or Esc to cancel"); return; }
-    const res = this.offsetResultFor(pick.idx, pick.side * pick.mag);
-    this.offsetPick = null;
-    this.dim.hide();
-    if (!res) {
-      toast("Offset: that distance collapses the geometry");
-      this.overlay.setPreview([]);
-      return;
-    }
-    this.entities = res.entities;
-    if (res.linked && res.pairs.length) {
-      // the associative link + its single editable dimension
-      this.setDrivingDimension({ type: "offset", pairs: res.pairs, value: pick.side * pick.mag });
-    } else if (!res.linked) {
-      toast("Offset copy created, not linked to the source (this shape type is rigid)");
-    }
-    this.afterModify();
-  }
-
-  private cancelOffset() {
-    this.offsetPick = null;
-    this.dim.hide();
-    this.overlay.setPreview([]);
-    setPrompt("Offset: click a curve to offset");
-  }
-  private extendClick(p: THREE.Vector2) {
-    const idx = pickEntity(this.entities, p, this.pickTol());
-    if (idx < 0 || this.guardProjected(this.entities[idx])) return;
-    const res = extendLine(this.entities, idx, p);
-    if (res) this.entities = res;
-    this.afterModify();
-  }
-  private breakClick(p: THREE.Vector2) {
-    const idx = pickEntity(this.entities, p, this.pickTol());
-    if (idx < 0 || this.guardProjected(this.entities[idx])) return;
-    this.entities = breakAt(this.entities, idx, p);
-    this.afterModify();
-  }
   /** add a persistent geometric constraint and re-solve (the solver maintains
    *  all constraints together, not just the one you applied). Delegates to
    *  ConstraintTools (see constraintTools.ts), which owns the 9 click flows. */
   private constraintClick(p: THREE.Vector2) {
     this.constraintTools.click(p);
-  }
-
-  // --- Project (Fusion-style): click 3D model edges, body faces (→ boundary),
-  // or committed sketch curves; each pick calls the projectGeometry aux-op
-  // against the timeline-PREFIX document (store.projectGeometry truncates) and
-  // lands purple linked "projected" entities in the open sketch immediately. ---
-
-  /** the committed sketch feature `id`, when it is a sketch */
-  private sourceSketch(id: string): Extract<Feature, { type: "sketch" }> | null {
-    const f = this.store?.document.features.find((x) => x.id === id);
-    return f && f.type === "sketch" ? f : null;
-  }
-
-  /** a committed sketch's REAL entity by id, with its owning sketch feature —
-   *  derived pattern copies (ids carry "#") resolve to null: they don't exist
-   *  in the document, so the sidecar could never re-find them. */
-  private committedSource(
-    sketchId: string,
-    entityId: string,
-  ): { sketch: Extract<Feature, { type: "sketch" }>; entity: ResolvedEntity } | null {
-    const sk = this.sourceSketch(sketchId);
-    if (!sk || !this.store) return null;
-    const entity = resolveRealEntities(sk, this.store.document.parameters).find((x) => x.id === entityId);
-    return entity ? { sketch: sk, entity } : null;
-  }
-
-  /** hover feedback for the Project tool: model edge/face highlight in Edges &
-   *  faces AND Body silhouette modes (the model is dimmed 0.25 in sketch view
-   *  but still raycastable; there is no body-level hover in the viewport, so a
-   *  silhouette pick hovers the face/edge that will resolve to its body); a
-   *  committed curve highlight via the preview layer in Sketch curves mode. */
-  private projectHover(e: PointerEvent) {
-    if (this.projectPanel.filter !== "sketchCurves") {
-      this.overlay.setPreview([]);
-      this.viewport.hoverEntity(this.viewport.pickEntity(e.clientX, e.clientY));
-      return;
-    }
-    this.viewport.hoverEntity(null);
-    const hit = this.overlay.committedCurveAt(e.clientX, e.clientY, (w) => this.viewport.projectToScreen(w));
-    const src = hit ? this.committedSource(hit.sketchId, hit.entityId) : null;
-    this.overlay.setPreview(
-      src ? curveObjects([src.entity], this.overlay.planeFor(src.sketch.plane), 0x33aaff, true) : [],
-    );
-    this.viewport.requestRender();
-  }
-
-  /** does an already-placed projected entity carry (a match selector for) this
-   *  edge fingerprint? Tolerant compare — fps carry float noise, never compare
-   *  them byte-for-byte. */
-  private hasProjectedFp(fp: EdgeFingerprint): boolean {
-    return this.entities.some((x) => {
-      if (x.type !== "projected") return false;
-      const s = x.source;
-      if (s.kind !== "edge" && s.kind !== "faceBoundary") return false;
-      return s.sel.kind === "edge" && s.sel.by === "match" && fpClose(s.sel.fp, fp);
-    });
-  }
-
-  /** One Project pick: resolve what's under the cursor into a ProjectedSource,
-   *  run the op, land the returned curves as projected entities. Await-guarded
-   *  by projectBusy so double-clicks can't race two calls. */
-  private async projectClick(e: PointerEvent) {
-    if (this.projectBusy || !this.store) return;
-    let source: ProjectedSource | null = null;
-    if (this.projectPanel.filter === "sketchCurves") {
-      const hit = this.overlay.committedCurveAt(e.clientX, e.clientY, (w) => this.viewport.projectToScreen(w));
-      if (!hit) {
-        // nothing committed under the cursor — the ACTIVE sketch's own entities
-        // are never valid sources (checked second: a projection usually lies
-        // screen-coincident with its source, and the source must stay pickable)
-        const p = this.planePoint(e);
-        if (p && pickEntity(this.entities, p, this.pickTol()) >= 0) toast("Can't project the active sketch's own curves");
-        return;
-      }
-      if (!this.committedSource(hit.sketchId, hit.entityId)) {
-        toast("Pattern copies can't be projected, pick the pattern's source curve");
-        return;
-      }
-      const dup = this.entities.some(
-        (x) =>
-          x.type === "projected" &&
-          x.source.kind === "sketchCurve" &&
-          x.source.sketch === hit.sketchId &&
-          x.source.entity === hit.entityId,
-      );
-      if (dup) {
-        toast("That curve is already projected into this sketch");
-        return;
-      }
-      source = { kind: "sketchCurve", sketch: hit.sketchId, entity: hit.entityId };
-    } else {
-      const hit = this.viewport.pickEntity(e.clientX, e.clientY);
-      if (!hit) return;
-      const body =
-        hit.kind === "edge"
-          ? hit.edge.body
-          : this.viewport.faceIdToBodyId(hit.faceId);
-      if (!body) return;
-      if (this.projectPanel.filter === "silhouette") {
-        // any face/edge hit resolves to its whole BODY — the HLR outline source
-        const dup = this.entities.some(
-          (x) => x.type === "projected" && x.source.kind === "silhouette" && x.source.body === body,
-        );
-        if (dup) {
-          toast("That body's silhouette is already projected into this sketch");
-          return;
-        }
-        source = { kind: "silhouette", body };
-      } else if (hit.kind === "edge") {
-        // NOT hit.selector: the picker's nearest point is the line's mid VERTEX,
-        // which for a 2-point straight edge is an ENDPOINT — a corner shared by
-        // three edges that "nearest" (center-distance) then resolves to the
-        // wrong one. The middle segment's midpoint is on (or near) the curve
-        // and never a corner.
-        const pts = hit.edge.points;
-        const k = Math.max(0, Math.ceil(pts.length / 2) - 1);
-        const a = pts[k]!, b = pts[Math.min(pts.length - 1, k + 1)]!;
-        source = {
-          kind: "edge", body,
-          sel: { kind: "edge", by: "nearest", point: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2] },
-        };
-      } else {
-        // the raycast hit point re-finds exactly the clicked face: it lies ON
-        // the face's material, so by:"nearest" distance is 0 there and > 0 for
-        // every other face. NOT the face centroid (which can fall off the
-        // material — a washer's annular face — and tie with another face), and
-        // NOT the picker's own selector (may be a by:"normal" GROUP hit, too
-        // broad for one face's boundary).
-        source = { kind: "faceBoundary", body, sel: { kind: "face", by: "nearest", point: hit.point } };
-      }
-    }
-
-    this.projectBusy = true;
-    // Session identity: enter() always assigns a fresh entities array, so if the
-    // sketch was finished and a NEW one started while the op was in flight (a
-    // realistic window — cold-cache prefix rebuilds take seconds), the identity
-    // check below rejects the stale reply instead of landing curves computed
-    // against the old sketch's plane and timeline prefix.
-    const session = this.entities;
-    let results;
-    try {
-      results = await this.store.projectGeometry(this.plane.serialize(), [source], this.editingId);
-    } finally {
-      this.projectBusy = false;
-    }
-    if (!this.active || this.tool !== "project" || this.entities !== session) return; // finished/switched/re-entered mid-flight
-    const r = results[0];
-    if (!r) {
-      toast("geometry engine unavailable");
-      return;
-    }
-    if (!r.ok) {
-      toast(r.error ?? "projection failed"); // sidecar message verbatim ("created after this sketch"…)
-      return;
-    }
-    // body-edge duplicates are detected against the returned fingerprints (the
-    // sketch-curve case was pre-checked above — its ids are stable)
-    const fresh = r.curves.filter(({ fp }) => !(fp && this.hasProjectedFp(fp)));
-    const skipped = r.curves.length - fresh.length;
-    if (skipped) toast(skipped === r.curves.length ? "That edge is already projected into this sketch" : `${skipped} already-projected edge${skipped > 1 ? "s" : ""} skipped`);
-    if (!fresh.length) return;
-    // multi-curve picks (a face boundary, a projected rectangle) emit sibling
-    // entities sharing source.group = the FIRST sibling's entity id (stable:
-    // entity ids are birth-stamped and survive edits)
-    const ids = fresh.map(() => newEntityId());
-    const group = ids.length > 1 ? { group: ids[0]! } : {};
-    fresh.forEach(({ fp, curve }, i) => {
-      // NOTE (plan step 4): a faceBoundary source persists with a per-edge
-      // by:"match" sel — the rebuild refresh handler must resolve it via
-      // resolve_edges (not resolve_faces) when it lands.
-      const src: ProjectedSource =
-        source.kind === "sketchCurve"
-          ? // `index: i` is sound because sketch-curve results carry no fps, so
-            // the dedup filter above never drops any — i IS the edge index in
-            // the sidecar's deterministic _entity_edges order (the refresh
-            // handler's authoritative sibling correspondence).
-            { kind: "sketchCurve", sketch: source.sketch, entity: source.entity, ...group, ...(fresh.length > 1 ? { index: i } : {}) }
-          : source.kind === "silhouette"
-            ? // whole-body source: no selector; the refresh re-runs HLR and
-              // re-matches the sibling curves (see _recompute_projections)
-              { kind: "silhouette", body: source.body, ...group }
-            : { kind: source.kind, body: source.body, sel: fp ? { kind: "edge", by: "match", fp } : source.sel, ...group };
-      this.entities.push({ type: "projected", id: ids[i]!, source: src, curve });
-    });
-    this.refreshActive();
-    this.requestSolve();
-    this.onState?.();
   }
 
   /** Drop constraints that reference an entity that no longer exists (or is the
@@ -3676,10 +3182,9 @@ export class SketchMode {
     this.chainStart = null;
     this.arcStart = null;
     this.arcEnd = null;
-    this.filletFirst = null;
     this.splinePts = [];
     this.clickPts = [];
-    this.offsetPick = null;
+    this.modifyFlow.reset();
     this.dim.hide();
     this.overlay.setPreview([]);
     this.refreshActive();
