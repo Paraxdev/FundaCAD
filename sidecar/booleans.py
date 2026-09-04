@@ -126,6 +126,96 @@ def _noop_eps(ref):
     return max(1e-6, 1e-4 * (ref or 0.0))
 
 
+def _in_slices(solid, n):
+    """`solid` chopped into `n` slabs across the axis it reaches furthest along.
+
+    The slabs are the same material as the whole, so a boolean applied to each of
+    them in turn lands on the same answer. What changes is the intersection: each
+    slab hands the kernel a short curve where the whole handed it one long one,
+    and that is the entire repair. See _retried_in_slices for why it is needed.
+
+    Fewer than `n` pieces come back when a plane misses the solid, which is not a
+    failure — the caller only needs more than one.
+    """
+    from build123d import Plane
+
+    bb = solid.bounding_box()
+    span = {"X": bb.max.X - bb.min.X, "Y": bb.max.Y - bb.min.Y,
+            "Z": bb.max.Z - bb.min.Z}
+    axis = max(span, key=span.get)
+    lo = {"X": bb.min.X, "Y": bb.min.Y, "Z": bb.min.Z}[axis]
+    normal = {"X": (1, 0, 0), "Y": (0, 1, 0), "Z": (0, 0, 1)}[axis]
+
+    pieces = [solid]
+    for k in range(1, n):
+        at = lo + span[axis] * k / n
+        plane = Plane(origin=tuple(c * at for c in normal), z_dir=normal)
+        cut = []
+        for piece in pieces:
+            progress_tick()
+            res = split(piece, bisect_by=plane, keep=KEEP["both"])
+            cut += list(res.solids()) if res is not None else [piece]
+        pieces = cut
+    return pieces
+
+
+def _retried_in_slices(shape, tool, kind, accept=None):
+    """The same boolean again with the tool cut into slabs, for the one case
+    where OCCT did nothing at all.
+
+    A long swept tool that runs nearly parallel to the face it meets can defeat
+    the kernel outright: the boolean reports IsDone, raises nothing, and hands
+    the argument straight back. Measured on a three turn thread cut into the bore
+    it belongs in — each solid classifies points inside the other as IN and
+    BRepCheck calls both valid, yet the cut removed 0.0000 of the 505.7 mm3 it
+    should have. The same tool halved removes 505.67, and so does the same tool
+    in four or in six, sliced along any of the three axes. Nothing about the
+    geometry is wrong; the kernel simply cannot carry that one intersection curve
+    from end to end. A fuse fails the same way and worse: the same thread joined
+    to its shank came back either as a disjoint lump (the whole tool volume
+    "added", nothing merged) or, at five turns, 11336 mm3 SMALLER than the shank
+    it started from.
+
+    Two turns of that thread cut and joined correctly, which is why this is a
+    retry and not the ordinary path. It runs only where the alternative was to
+    raise, so the extra booleans are paid for by a feature that was already
+    failing, and a tool that really does miss its target still reaches the same
+    error a moment later.
+
+    `accept` judges a sliced result; without one, any real change in volume
+    counts. A fuse needs its own test because the failure it has to catch is not
+    "nothing changed" — a fuse that merged nothing still reports the whole tool
+    volume as added — so the caller passes the shape of a genuine merge instead.
+
+    Returns the repaired shape, or None when the slices changed nothing either —
+    which is the honest answer that the tool really does not reach.
+    """
+    for n in (2, 4):
+        try:
+            pieces = _in_slices(tool, n)
+        except Exception:
+            return None
+        if len(pieces) < 2:
+            return None
+        out = shape
+        try:
+            for piece in pieces:
+                progress_tick()
+                out = _serial_bool(_as_compound(out), piece, kind)
+        except Exception:
+            continue
+        if accept is not None:
+            if accept(out):
+                return out
+            continue
+        before, after = _try_vol(shape), _try_vol(out)
+        if before is None or after is None:
+            continue
+        if abs(after - before) > _noop_eps(before):
+            return out
+    return None
+
+
 def _shape_extent(*shapes):
     """How far from the origin these shapes reach — the magnitude pick_fuzz
     scales its tolerance by.
@@ -278,28 +368,59 @@ def _boolean_into_bodies(bodies, solid, op, new_body, hidden=frozenset(),
         # No-op guard: the fused volume should exceed what was already there. If it
         # doesn't, the prism sat entirely inside the body and added no material.
         merged_vol, hit_vol = _try_vol(merged), _sum_hit_vol(hits)
-        if merged_vol is not None and hit_vol is not None \
-                and merged_vol <= hit_vol + eps(prism_vol):
-            # LESS than was there before is a different diagnosis. Nothing a
-            # union can legitimately do removes material, so the fuse itself came
-            # back wrong, and the usual reason is that the two shapes meet along a
-            # surface rather than crossing one another: a thread whose root sits
-            # exactly on the shank it is wound onto, a boss landing exactly on the
-            # plane it was drawn from. Measured on such a thread, the fuse of a
-            # 942 mm3 shank and a 168 mm3 thread came back as 56 mm3. Telling that
-            # user the profile is "already inside the body" sends them to look in
-            # entirely the wrong place.
+        if merged_vol is not None and hit_vol is not None:
+            # What a fuse that really merged looks like: more material than the
+            # bodies held on their own, and less than those bodies plus the whole
+            # tool, because the overlap gets counted once instead of twice. Both
+            # ways of falling outside that window are the kernel giving up rather
+            # than the caller being wrong, so both get the sliced retry.
+            def merged_properly(shape, _hv=hit_vol, _pv=prism_vol):
+                v = _try_vol(shape)
+                if v is None or _pv is None:
+                    return False
+                return _hv + eps(_pv) < v < _hv + _pv - eps(_pv)
+
+            def repair():
+                base = _as_compound(hits[0]["shape"])
+                for other in hits[1:]:
+                    base = _serial_bool(base, _as_compound(other["shape"]), "fuse")
+                return _retried_in_slices(base, solid, "fuse",
+                                          accept=merged_properly)
+
             if merged_vol < hit_vol - eps(hit_vol):
+                # LESS than was there before. Nothing a union can legitimately do
+                # removes material, so the fuse itself came back wrong, and the
+                # usual reason is that the two shapes meet along a surface rather
+                # than crossing one another: a thread whose root sits exactly on
+                # the shank it is wound onto, a boss landing exactly on the plane
+                # it was drawn from. Measured on such a thread, the fuse of a
+                # 942 mm3 shank and a 168 mm3 thread came back as 56 mm3. Telling
+                # that user the profile is "already inside the body" sends them
+                # to look in entirely the wrong place.
+                fixed = repair()
+                if fixed is None:
+                    raise ValueError(
+                        "Join failed: the result came out smaller than the body "
+                        "it started from. That usually means the two shapes touch "
+                        "along a surface instead of overlapping. Move the profile "
+                        "so it reaches a little way into the body."
+                    )
+                merged = fixed
+            elif merged_vol <= hit_vol + eps(prism_vol):
                 raise ValueError(
-                    "Join failed: the result came out smaller than the body it "
-                    "started from. That usually means the two shapes touch along "
-                    "a surface instead of overlapping. Move the profile so it "
-                    "reaches a little way into the body."
+                    "Join added no material — the profile is already inside the "
+                    "body. Did you mean Cut?"
                 )
-            raise ValueError(
-                "Join added no material — the profile is already inside the body. "
-                "Did you mean Cut?"
-            )
+            elif (prism_vol is not None
+                    and merged_vol >= hit_vol + prism_vol - eps(prism_vol)):
+                # The whole tool volume arrived and none of it merged, so the two
+                # came out of the fuse as separate lumps wearing one body's name.
+                # A tool that genuinely misses looks identical from here, which is
+                # why this only offers the repair and keeps the original result
+                # when the slices agree that the two really do not meet.
+                fixed = repair()
+                if fixed is not None:
+                    merged = fixed
         name = hits[0]["name"]
         for b in hits:
             bodies.remove(b)
@@ -330,10 +451,20 @@ def _boolean_into_bodies(bodies, solid, op, new_body, hidden=frozenset(),
                 measured = True
                 removed += max(0.0, before - after)
         if not hits or (measured and removed < eps(prism_vol)):
-            raise ValueError(
-                "Cut removed nothing — the extrude doesn't reach any body. "
-                "Drag the other way, or use Join."
-            )
+            # A cut that removed NOTHING is not always a cut that missed: OCCT
+            # hands a long swept tool's argument straight back sometimes, and the
+            # repair is to slice the tool. Try that before blaming the caller.
+            healed = False
+            for i, (b, _stale) in enumerate(results):
+                fixed = _retried_in_slices(b["shape"], solid, "cut")
+                if fixed is not None:
+                    results[i] = (b, fixed)
+                    healed = True
+            if not healed:
+                raise ValueError(
+                    "Cut removed nothing — the extrude doesn't reach any body. "
+                    "Drag the other way, or use Join."
+                )
         for b, newshape in results:
             b["shape"] = newshape
     elif op == "intersect":
