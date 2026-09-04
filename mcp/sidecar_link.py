@@ -30,6 +30,8 @@ import sys
 
 import websockets
 
+from winjob import ProcessJob, kill_tree
+
 #: How long to wait for the spawned sidecar to print LISTENING. A cold start
 #: imports OCP, which is seconds on a warm filesystem and much worse on a cold
 #: one; well past either, and a hang here is reported rather than waited on.
@@ -77,6 +79,11 @@ class SidecarLink:
         self.ws = None
         self._next_id = 0
         self._lock = asyncio.Lock()
+        # Held for the life of this object. On Windows it is what makes the
+        # sidecar and its worker pool die with THIS process however this process
+        # dies — an MCP host kills its servers outright, and a sidecar that
+        # outlives the kill takes its OCCT worker with it. See winjob.py.
+        self._job = ProcessJob()
 
     @classmethod
     def from_env(cls):
@@ -95,6 +102,11 @@ class SidecarLink:
             self.python, "server.py", cwd=sidecar_dir(), env=env,
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
         )
+        # Adopted BEFORE the readiness wait, so the pool it spawns during
+        # start-up is inside the job too. The sidecar's own die-with-parent
+        # covers Linux and macOS and says so; on Windows it relies on the app's
+        # Rust shell putting it in a job, which is a thing only the app does.
+        self._job.adopt(self.proc.pid)
         # Wait for the readiness line rather than polling the port: the sidecar
         # prints LISTENING only once it is actually serving, and a port that is
         # merely bound would let the first request race the accept loop.
@@ -123,6 +135,10 @@ class SidecarLink:
             if self.proc.returncode is None:
                 with contextlib.suppress(Exception):
                     self.proc.kill()
+            # terminate() is TerminateProcess on Windows and runs no cleanup, so
+            # the sidecar never reaps its own worker pool. Sweep the tree; the
+            # job object above covers the case where this code never runs at all.
+            kill_tree(self.proc.pid)
             # Close the transport explicitly. Left open, the proactor loop on
             # Windows finalises it during interpreter shutdown, by which time
             # the pipes are gone, and every run ends in pages of "I/O operation
@@ -134,6 +150,7 @@ class SidecarLink:
                     transport.close()
             self.proc = None
             await asyncio.sleep(0)  # let the loop actually run the close
+        self._job.close()
 
     async def _connect(self):
         if self.ws is not None:

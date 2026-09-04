@@ -37,6 +37,16 @@ Setting `SINDRI_SIDECAR_TOKEN` in the environment switches it to *attaching* to
 whatever is already on `SINDRI_SIDECAR_PORT`, which is the debugging escape
 hatch.
 
+On Windows the sidecar it spawns is put in a job object with
+`KILL_ON_JOB_CLOSE`, so the sidecar and its OCCT worker die with this process
+however this process dies. That is not housekeeping: an MCP host kills its
+servers with `TerminateProcess`, which runs no cleanup, and the sidecar's own
+die-with-parent covers Linux and macOS only — its docstring says Windows is
+"covered by the Rust-side Job Object", which is true of the app and of nothing
+else. Measured without it: 46 orphaned worker processes, after which a fresh
+sidecar could no longer start one and every build failed with "the geometry
+engine could not start on this computer".
+
 ## The tools
 
 | tool | what it is for |
@@ -131,6 +141,7 @@ one-shot calls is not a session — use `--script`, which is either a JSON array
 | `describe.py` | turning an `inspect` report into something worth reading |
 | `schema.py` | the feature reference the agent reads |
 | `client.py` | the client the tests and the command line use |
+| `winjob.py` | the Windows job object that makes the engine die with the server |
 
 `expr.py` and `schema.py` are both ports of things whose authority lives
 elsewhere, so both are pinned by tests: `mcp/tests/test_expr.py` holds the
