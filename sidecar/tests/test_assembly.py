@@ -5,7 +5,7 @@ base64 BREP string, and the assembly tree is recovered by binding manifest row i
 to top-level child i of that blob. That binding is only sound if a flat
 compound's child COUNT and ORDER survive `_shape_to_brep_b64` ->
 `_brep_b64_to_shape` unchanged. Nothing else in the repo demonstrates it: the
-one real blob committed here (src-tauri/1.sindri) holds a single flat compound,
+one real blob committed here (the corpus doc 1) holds a single flat compound,
 and `write(read(x)) != x` byte-wise is already a recorded property of this
 format. So it is asserted here rather than assumed, across three generations,
 against real STEP assemblies rather than a synthetic Compound of boxes.
@@ -179,8 +179,8 @@ def test_migration_preserves_flat_compound_order():
     import builder
 
     root = tempfile.mkdtemp(prefix="migrate_gate_")
-    old = os.environ.get("SINDRI_BLOB_DIR")
-    os.environ["SINDRI_BLOB_DIR"] = root
+    old = os.environ.get("FUNDACAD_BLOB_DIR")
+    os.environ["FUNDACAD_BLOB_DIR"] = root
     blobstore._default = None
     try:
         for name in FIXTURE_NAMES:
@@ -221,9 +221,9 @@ def test_migration_preserves_flat_compound_order():
             print(f"  {name}: {len(expected)} leaves, order stable over 3 migrated generations")
     finally:
         if old is None:
-            os.environ.pop("SINDRI_BLOB_DIR", None)
+            os.environ.pop("FUNDACAD_BLOB_DIR", None)
         else:
-            os.environ["SINDRI_BLOB_DIR"] = old
+            os.environ["FUNDACAD_BLOB_DIR"] = old
         blobstore._default = None
         shutil.rmtree(root, ignore_errors=True)
 
@@ -496,7 +496,7 @@ def test_node_ref_survives_a_disk_checkpoint_resume():
     import geomstore
 
     _payload, doc = _import_doc("asm_multisolid")
-    tmp = tempfile.mkdtemp(prefix="sindri_asm_ckpt_")
+    tmp = tempfile.mkdtemp(prefix="funda_asm_ckpt_")
     orig_store = builder._disk_store
     orig_cache = builder._CACHE
     try:
@@ -628,7 +628,7 @@ def _roundtrip(fixture):
     assert not errors, errors
     tree = export_tree.build_export_tree(doc, bodies, root_name=fixture)
     assert tree is not None, f"{fixture}: no export tree was built"
-    out = os.path.join(tempfile.mkdtemp(prefix="sindri_f_"), f"{fixture}.step")
+    out = os.path.join(tempfile.mkdtemp(prefix="funda_f_"), f"{fixture}.step")
     export(tree, "step", out)
     return read_assembly(src_path), read_assembly(out)
 
@@ -727,7 +727,7 @@ def test_a_modelled_document_exports_its_body_names():
         b["name"] = name
 
     tree = export_tree.build_export_tree(doc, bodies, root_name="Modelled")
-    out = os.path.join(tempfile.mkdtemp(prefix="sindri_f_"), "modelled.step")
+    out = os.path.join(tempfile.mkdtemp(prefix="funda_f_"), "modelled.step")
     export(tree, "step", out)
     names = {n.name for n in read_assembly(out).nodes}
     assert "Base Plate" in names and "Post" in names, f"body names were lost: {names}"
@@ -852,7 +852,7 @@ def test_intact_survives_a_disk_checkpoint_resume():
     bodies = [{"id": out[0]["id"], "name": out[0]["name"],
                "shape": out[0]["shape"], "_intact": True}]
 
-    root = tempfile.mkdtemp(prefix="sindri-intact-")
+    root = tempfile.mkdtemp(prefix="funda-intact-")
     store = None
     try:
         store = geomstore.Store(root)

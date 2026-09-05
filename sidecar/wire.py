@@ -31,7 +31,7 @@ import sysmem
 # Per-request cancel token, bound to the dispatch task's context (see
 # _serialized). _run/_run_stall consult it so a killed worker is reported as a
 # cancellation rather than a crash.
-_CANCEL: contextvars.ContextVar = contextvars.ContextVar("sindri_cancel", default=None)
+_CANCEL: contextvars.ContextVar = contextvars.ContextVar("funda_cancel", default=None)
 
 
 def _cancelled_result():

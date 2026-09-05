@@ -62,7 +62,7 @@ const REPEATS = 7;
   const results = [];
   for (const n of SIZES) {
     for (const kind of ["flat", "tree"]) {
-      const docPath = `${DOCS}/perf_${kind}_${n}.sindri`;
+      const docPath = `${DOCS}/perf_${kind}_${n}.funda`;
       if (!fs.existsSync(docPath)) {
         console.error(
           `missing ${docPath} — generate the benchmark documents first:\n` +

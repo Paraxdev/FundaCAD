@@ -36,7 +36,7 @@ fn py(python: &Path, blobs: &Path, code: &str) -> String {
         .arg("-c")
         .arg(code)
         .current_dir(&sidecar)
-        .env("SINDRI_BLOB_DIR", blobs)
+        .env("FUNDACAD_BLOB_DIR", blobs)
         .output()
         .expect("failed to run the sidecar python");
     assert!(

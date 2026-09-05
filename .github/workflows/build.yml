@@ -671,7 +671,7 @@ jobs:
 
       - name: Start the geometry sidecar and vite
         run: |
-          cd sidecar && SINDRI_SIDECAR_PORT=8765 SINDRI_SIDECAR_TOKEN=citoken \
+          cd sidecar && FUNDACAD_SIDECAR_PORT=8765 FUNDACAD_SIDECAR_TOKEN=citoken \
             uv run python server.py > /tmp/ci_sidecar.log 2>&1 &
           cd "$GITHUB_WORKSPACE" && npx vite --port 5173 > /tmp/ci_vite.log 2>&1 &
           for i in $(seq 1 60); do

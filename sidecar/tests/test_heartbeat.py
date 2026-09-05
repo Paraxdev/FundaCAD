@@ -23,7 +23,7 @@ import shutil
 import sys
 import tempfile
 
-os.environ.setdefault("SINDRI_DISK_CACHE", "0")  # the checkpoint test brings its own store
+os.environ.setdefault("FUNDACAD_DISK_CACHE", "0")  # the checkpoint test brings its own store
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import builder  # noqa: E402
@@ -163,7 +163,7 @@ def test_checkpoint_write_ticks_per_body():
     from builder import _save_checkpoint
 
     live = _live_bodies(_boxes(N_BODIES))
-    root = tempfile.mkdtemp(prefix="sindri-hb-")
+    root = tempfile.mkdtemp(prefix="funda-hb-")
     store = None
     try:
         store = geomstore.Store(root)

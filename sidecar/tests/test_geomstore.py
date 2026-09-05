@@ -237,16 +237,16 @@ def test_cache_budget(store):
     check("budget is stable as the cache grows", abs(after - before) <= 1 << 20)
 
     # Env override wins outright.
-    os.environ["SINDRI_CACHE_MAX_GB"] = "3"
+    os.environ["FUNDACAD_CACHE_MAX_GB"] = "3"
     try:
-        check("SINDRI_CACHE_MAX_GB overrides", store.cache_budget() == 3 * 1024**3)
+        check("FUNDACAD_CACHE_MAX_GB overrides", store.cache_budget() == 3 * 1024**3)
     finally:
-        del os.environ["SINDRI_CACHE_MAX_GB"]
-    os.environ["SINDRI_CACHE_MAX_GB"] = "not-a-number"
+        del os.environ["FUNDACAD_CACHE_MAX_GB"]
+    os.environ["FUNDACAD_CACHE_MAX_GB"] = "not-a-number"
     try:
         check("a junk override falls back to auto", store.cache_budget() == auto)
     finally:
-        del os.environ["SINDRI_CACHE_MAX_GB"]
+        del os.environ["FUNDACAD_CACHE_MAX_GB"]
 
 
 def test_evict_to_budget_spares_checkpoints(store):

@@ -21,7 +21,7 @@ import shutil
 import sys
 import tempfile
 
-os.environ.setdefault("SINDRI_DISK_CACHE", "0")  # these tests exercise the RAM path
+os.environ.setdefault("FUNDACAD_DISK_CACHE", "0")  # these tests exercise the RAM path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import builder  # noqa: E402
@@ -161,7 +161,7 @@ def test_diagnostics_survive_disk_resume():
     both the production functions."""
     import geomstore
 
-    tmp = tempfile.mkdtemp(prefix="sindri_ckpt_test_")
+    tmp = tempfile.mkdtemp(prefix="funda_ckpt_test_")
     orig_store = builder._disk_store
     try:
         store = geomstore.Store(root=tmp)
@@ -246,7 +246,7 @@ def test_textures_survive_disk_resume():
     persisted; this is the one that was missed."""
     import geomstore
 
-    tmp = tempfile.mkdtemp(prefix="sindri_tex_ckpt_")
+    tmp = tempfile.mkdtemp(prefix="funda_tex_ckpt_")
     orig_store = builder._disk_store
     try:
         store = geomstore.Store(root=tmp)

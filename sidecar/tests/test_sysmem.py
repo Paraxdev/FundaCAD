@@ -20,7 +20,7 @@ import os
 import shutil
 import sys
 
-os.environ.setdefault("SINDRI_DISK_CACHE", "0")
+os.environ.setdefault("FUNDACAD_DISK_CACHE", "0")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import sysmem  # noqa: E402
@@ -244,7 +244,7 @@ def test_import_geometry_refuses_before_it_parses_anything():
     import sysmem as _sysmem
 
     real = _sysmem.available_bytes
-    d = tempfile.mkdtemp(prefix="sindri-mem-")
+    d = tempfile.mkdtemp(prefix="funda-mem-")
     try:
         path = os.path.join(d, "junk.step")
         with open(path, "wb") as fh:

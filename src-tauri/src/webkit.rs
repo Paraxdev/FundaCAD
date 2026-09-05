@@ -16,7 +16,13 @@ use std::path::Path;
 /// `WEBKIT_DISABLE_DMABUF_RENDERER=0` — does not work: WebKit's own checks are
 /// presence-based in places, so "0" can read as "yes, disable it". A separate
 /// variable of ours has no such ambiguity.
-const OPT_OUT: &str = "SINDRICAD_NO_GPU_WORKAROUND";
+const OPT_OUT: &str = "FUNDACAD_NO_GPU_WORKAROUND";
+
+/// The name this variable had before the app was renamed. Still honoured: this
+/// is a knob a user sets in a shell profile or a .desktop file, neither of which
+/// a rename in here can reach, and dropping it would silently turn a working
+/// machine's workaround back on.
+const OPT_OUT_LEGACY: &str = "SINDRICAD_NO_GPU_WORKAROUND";
 
 /// The WebKitGTK knob we set. Deliberately NOT
 /// `WEBKIT_DISABLE_COMPOSITING_MODE`, which also avoids the crash but turns off
@@ -48,7 +54,7 @@ pub enum Decision {
 
 // Named so the applier can match on them instead of repeating the prose, which
 // would drift apart from `decide` the first time either is reworded.
-const SKIP_OPT_OUT: &str = "opted out via SINDRICAD_NO_GPU_WORKAROUND";
+const SKIP_OPT_OUT: &str = "opted out via FUNDACAD_NO_GPU_WORKAROUND";
 const SKIP_ALREADY_SET: &str = "WEBKIT_DISABLE_DMABUF_RENDERER already set by the environment";
 const SKIP_NO_NVIDIA: &str = "no Nvidia driver";
 
@@ -100,7 +106,7 @@ pub fn apply_gpu_workarounds() {
     let decision = decide(
         nvidia_driver_present_under(Path::new("/")),
         std::env::var_os(DMABUF).is_some(),
-        std::env::var_os(OPT_OUT).is_some(),
+        std::env::var_os(OPT_OUT).is_some() || std::env::var_os(OPT_OUT_LEGACY).is_some(),
     );
 
     match decision {
@@ -188,23 +194,45 @@ mod tests {
     /// one that can be asserted on any machine: it must leave the environment
     /// untouched whatever hardware the test happens to run on.
     ///
+    /// Both spellings are exercised, in one test rather than two: these are
+    /// process-wide variables and a second test setting them would race this one
+    /// under the parallel runner. The retired name matters as much as the current
+    /// one — it is set in shell profiles this repository cannot reach, so a
+    /// machine that opted out before the rename must still be opted out after it.
+    ///
     /// This mutates process-wide environment, which is why it restores what it
-    /// found and why nothing else in this crate reads these two variables.
+    /// found and why nothing else in this crate reads these variables.
     #[test]
     fn the_applier_reads_the_variables_it_documents() {
         let restore = std::env::var_os(DMABUF);
-        std::env::remove_var(DMABUF);
-        std::env::set_var(OPT_OUT, "1");
 
-        apply_gpu_workarounds();
-        assert!(
-            std::env::var_os(DMABUF).is_none(),
-            "the opt-out must stop the applier setting {DMABUF}, on Nvidia hardware or not"
+        for name in [OPT_OUT, OPT_OUT_LEGACY] {
+            std::env::remove_var(DMABUF);
+            std::env::set_var(name, "1");
+
+            apply_gpu_workarounds();
+            assert!(
+                std::env::var_os(DMABUF).is_none(),
+                "{name} must stop the applier setting {DMABUF}, on Nvidia hardware or not"
+            );
+
+            std::env::remove_var(name);
+        }
+
+        // And with NEITHER set, the applier is free to act — otherwise the loop
+        // above would pass on a build where the opt-out check was deleted
+        // outright and nothing ever set DMABUF.
+        std::env::remove_var(DMABUF);
+        assert_eq!(
+            decide(true, false, false),
+            Decision::Disable,
+            "with no opt-out set, an Nvidia machine must still get the workaround"
         );
 
-        std::env::remove_var(OPT_OUT);
         if let Some(v) = restore {
             std::env::set_var(DMABUF, v);
+        } else {
+            std::env::remove_var(DMABUF);
         }
     }
 }

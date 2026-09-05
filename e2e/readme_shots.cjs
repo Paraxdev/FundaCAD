@@ -261,7 +261,7 @@ const ZOOM = Number(process.env.ZOOM || 1);
   };
 
   await page.goto(URL, { waitUntil: "networkidle" });
-  await page.evaluate(() => localStorage.setItem("sindri.welcomeOnStartup", "false"));
+  await page.evaluate(() => localStorage.setItem("fundacad.welcomeOnStartup", "false"));
   await page.reload({ waitUntil: "networkidle" });
   await page.waitForFunction(() => !!window.store && !!window.viewport && !!window.geometry, null, { timeout: 60000 });
   await page.waitForTimeout(1200);

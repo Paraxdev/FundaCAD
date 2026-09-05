@@ -54,7 +54,7 @@ async function withPrefs(page, prefs) {
   // The welcome screen opens over the whole shell on a fresh profile, which is
   // exactly what we are here to look at. Turn it off the way its own checkbox
   // does, before the first shot.
-  await page.evaluate(() => localStorage.setItem("sindri.welcomeOnStartup", "false"));
+  await page.evaluate(() => localStorage.setItem("fundacad.welcomeOnStartup", "false"));
 
   const shot = async (name) => {
     await page.screenshot({ path: path.join(OUT, `${name}.png`) });
@@ -62,19 +62,19 @@ async function withPrefs(page, prefs) {
   };
 
   // Every arrangement layoutPrefs can produce, plus the two panels that changed.
-  await withPrefs(page, { "sindricad.layout": null, "sindricad.browserFilter": null });
+  await withPrefs(page, { "fundacad.layout": null, "fundacad.browserFilter": null });
   await shot("01-default");
 
-  await withPrefs(page, { "sindricad.layout": JSON.stringify({ ribbon: "left", history: "bottom" }) });
+  await withPrefs(page, { "fundacad.layout": JSON.stringify({ ribbon: "left", history: "bottom" }) });
   await shot("02-ribbon-left");
 
-  await withPrefs(page, { "sindricad.layout": JSON.stringify({ ribbon: "top", history: "right" }) });
+  await withPrefs(page, { "fundacad.layout": JSON.stringify({ ribbon: "top", history: "right" }) });
   await shot("03-history-right");
 
-  await withPrefs(page, { "sindricad.layout": JSON.stringify({ ribbon: "left", history: "right" }) });
+  await withPrefs(page, { "fundacad.layout": JSON.stringify({ ribbon: "left", history: "right" }) });
   await shot("04-both-sides");
 
-  await withPrefs(page, { "sindricad.layout": null });
+  await withPrefs(page, { "fundacad.layout": null });
   await page.evaluate(() => {
     document.querySelector("#browser-filter")?.focus();
   });
@@ -91,7 +91,7 @@ async function withPrefs(page, prefs) {
   // The rest of the run builds a real document, so the layout is chosen HERE,
   // before anything is drawn: withPrefs reloads, and a reload throws the
   // document away.
-  await withPrefs(page, { "sindricad.layout": JSON.stringify({ ribbon: "top", history: "right" }) });
+  await withPrefs(page, { "fundacad.layout": JSON.stringify({ ribbon: "top", history: "right" }) });
 
   // The heads-up field, which needs a sketch but NOT the sidecar: drawing is
   // client-side and only the solid build goes to the kernel.
@@ -150,7 +150,7 @@ async function withPrefs(page, prefs) {
   // checked any other way: it is fixed-positioned from a measured chip rect, so
   // "is it on screen, next to the right chip, and inside the window" is a
   // question only a picture answers.
-  await withPrefs(page, { "sindricad.layout": null });
+  await withPrefs(page, { "fundacad.layout": null });
   await page.getByText("XY plane").click();
   await page.waitForTimeout(700);
   await page.keyboard.press("c");

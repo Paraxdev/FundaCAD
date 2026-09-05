@@ -17,6 +17,7 @@ import hashlib
 import json
 import os
 
+import appenv
 import font_guard  # noqa: F401  MUST precede build123d — see font_guard.py
 
 from progress import progress_tick
@@ -80,10 +81,10 @@ def _env_sig():
     """Hash of everything outside the document that shapes geometry: kernel/library
     versions + the sidecar's own geometry source files. Automatic and conservative —
     any builder change costs one cold rebuild per doc instead of risking stale
-    geometry from a forgotten manual version bump. SINDRI_ENV_SIG overrides for dev."""
+    geometry from a forgotten manual version bump. FUNDACAD_ENV_SIG overrides for dev."""
     global _ENV_SIG
     if _ENV_SIG is None:
-        forced = os.environ.get("SINDRI_ENV_SIG")
+        forced = appenv.get("ENV_SIG")
         if forced:
             _ENV_SIG = forced
         else:
@@ -261,9 +262,9 @@ def _chain_keys_scoped(document, feature_sigs):
 
 
 def _disk_store():
-    """The geomstore singleton, or None when disabled (SINDRI_DISK_CACHE=0) or
+    """The geomstore singleton, or None when disabled (FUNDACAD_DISK_CACHE=0) or
     unavailable. Never raises: the disk cache is advisory by design."""
-    if os.environ.get("SINDRI_DISK_CACHE", "1") == "0":
+    if appenv.get("DISK_CACHE", "1") == "0":
         return None
     try:
         import geomstore
@@ -521,4 +522,4 @@ def _restore_from_disk(store, chain_keys):
 
 # RAM snapshots kept per feature (beyond disk checkpoints); bounds worker memory
 # (~0.2 MB/snapshot measured, so 300 ≈ 60 MB) — a resume below the window falls
-# through to the disk cache. SINDRI_RAM_SNAP_WINDOW overrides for large docs / tight RAM.
+# through to the disk cache. FUNDACAD_RAM_SNAP_WINDOW overrides for large docs / tight RAM.

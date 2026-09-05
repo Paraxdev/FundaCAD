@@ -57,7 +57,7 @@ done
 # synthetic or already public.
 echo "checking for tracked CAD models…"
 models=$(git ls-files -- '*.funda' '*.neocad' '*.sindri' '*.3mf' '*.stl' '*.step' '*.stp' 2>/dev/null \
-  | grep -vE '^(sidecar/tools/bench/textured_box\.sindri$|sidecar/fixtures/asm_[a-z_]+\.step$|third_party/)' || true)
+  | grep -vE '^(sidecar/tools/bench/textured_box\.funda$|sidecar/fixtures/asm_[a-z_]+\.step$|third_party/)' || true)
 if [ -n "$models" ]; then
   note "tracked CAD model — is this a real part in a public repo?:"
   printf '%s\n' "$models" | sed 's/^/    /'
@@ -82,9 +82,12 @@ fi
 # Product NAMES only, not the lowercase identifiers. Several of those are kept on
 # purpose and are not drift: the `.sindri` and `.neocad` extensions are still
 # opened (src/io/documentExt.ts), the pre-rename localStorage keys are still read
-# (src/ui/storedSetting.ts), and the SINDRI_* environment variables and the
-# on-disk data directory are unchanged because renaming them would orphan
-# geometry and break existing scripts for nothing a user can see.
+# (src/ui/storedSetting.ts), the retired `SINDRI_*` / `SINDRICAD_*` environment
+# variables still answer alongside the `FUNDACAD_*` ones (sidecar/appenv.py,
+# src-tauri/src/webkit.rs), and an existing on-disk cache directory under the old
+# name is kept rather than orphaned (appenv.dir_under). Those are compatibility
+# with things outside this repository — a user's shell profile, their saved
+# settings, their cache — not leftovers.
 #
 # `Neocad` joins the list with the second rename. It is a real brand held by
 # someone else, which is why the app is not called it any more, so a stray one

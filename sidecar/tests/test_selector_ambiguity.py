@@ -2,7 +2,7 @@
 
 Regression for the silent wrong-face bug. `by:"nearest"` used to be a bare
 min() over candidates: it always returned a winner, however far away and
-however close the RUNNER-UP was. On 1.sindri feature f73 two faces sat exactly
+however close the RUNNER-UP was. On corpus doc 1, feature f73, two faces sat exactly
 equidistant from the stored point; which one won flipped when an unrelated
 commit perturbed topology, so a press/pull silently pushed a wall instead of the
 face the user clicked, with no error at all.

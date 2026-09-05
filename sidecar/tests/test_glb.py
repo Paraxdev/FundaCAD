@@ -24,7 +24,7 @@ import struct
 import sys
 import tempfile
 
-os.environ.setdefault("SINDRI_DISK_CACHE", "0")
+os.environ.setdefault("FUNDACAD_DISK_CACHE", "0")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np  # noqa: E402

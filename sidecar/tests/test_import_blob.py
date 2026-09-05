@@ -37,7 +37,7 @@ def check(label, cond):
 
 def _import_once(root):
     """Import the fixture in THIS process with the blob store pointed at `root`."""
-    os.environ["SINDRI_BLOB_DIR"] = root
+    os.environ["FUNDACAD_BLOB_DIR"] = root
     import blobstore
 
     blobstore._default = None  # re-read the env
@@ -97,7 +97,7 @@ def test_hash_is_stable_across_processes():
         script = (
             "import os,sys,json;"
             f"sys.path.insert(0,{HERE!r});"
-            f"os.environ['SINDRI_BLOB_DIR']={root!r};"
+            f"os.environ['FUNDACAD_BLOB_DIR']={root!r};"
             "import builder;"
             f"print(json.dumps(builder.import_geometry({FIXTURE!r},'step').get('geom')))"
         )

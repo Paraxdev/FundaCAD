@@ -88,7 +88,7 @@ def _shape_to_blob(shape):
 def _brep_b64_to_shape(b64):
     """Inverse of _shape_to_brep_b64. Validates the decoded blob looks like a real
     OCCT BREP (magic header + sane size) BEFORE handing it to the parser, so a
-    crafted .sindri can't aim a parser fuzz at OCCT in the worker. import_brep
+    crafted .funda can't aim a parser fuzz at OCCT in the worker. import_brep
     needs a real path, so we round the bytes through a temp file."""
     data = base64.b64decode(b64)
     if len(data) > MAX_BREP_BYTES:
@@ -430,7 +430,7 @@ def _drop_debris(shape, debug=False):
 
     try:
         shape = _as_compound(shape)
-        cached = getattr(shape, "_sindri_drop", None)
+        cached = getattr(shape, "_funda_drop", None)
         if cached is not None:
             return cached  # same input object => same output OBJECT (identity
             # matters: the server's mesh cache is keyed by shape identity, and
@@ -458,7 +458,7 @@ def _drop_debris(shape, debug=False):
             return shape
         out = kept[0] if len(kept) == 1 else Compound(kept)
         try:
-            shape._sindri_drop = out
+            shape._funda_drop = out
         except Exception:
             pass
         return out

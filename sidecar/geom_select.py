@@ -485,7 +485,7 @@ def _nearest_one(cands, dist_of, key_fn, describe, kind, sel, diag, feature_id):
 
     A bare `min()` over the candidates cannot fail. It returns the closest entity
     however far away and, the case that actually bit us, however close the
-    RUNNER-UP is. On a real document (1.sindri, feature f73) two faces sat ~2mm
+    RUNNER-UP is. On a real document (corpus doc 1, feature f73) two faces sat ~2mm
     from the stored point; which one won flipped when an unrelated commit
     perturbed topology, so a press/pull silently pushed a wall instead of the
     face the user clicked. Nothing errored, because nothing could.

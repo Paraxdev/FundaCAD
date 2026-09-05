@@ -1,7 +1,7 @@
 """The durable geometry blob store: content-addressed BREP, one file per hash.
 
 This directory is the SEAM between Rust and Python. Rust writes it when opening
-a `.sindri` container (extracting the archive's geometry); the sidecar writes it
+a `.funda` container (extracting the archive's geometry); the sidecar writes it
 at import time, when it first produces a shape's bytes. Both read it.
 
 That works without any locking because **the path is a pure function of the
@@ -31,23 +31,25 @@ import hashlib
 import os
 import uuid
 
+import appenv
+
 _DIGEST_SIZE = 16  # blake2b-128 -> 32 hex chars, matching geomstore's key width
 _SUFFIX = ".bbrep"
 _CHUNK = 1 << 20
 
 
 def default_root():
-    """Where Rust told us the store is. `SINDRI_BLOB_DIR` is set by
+    """Where Rust told us the store is. `FUNDACAD_BLOB_DIR` is set by
     `sidecar.rs::configure_env` from `container.rs::blob_dir`, so the two agree
     exactly. The fallback exists for a bare `python server.py` (tests, probes)
     and is deliberately NOT the geomstore cache root."""
-    env = os.environ.get("SINDRI_BLOB_DIR")
+    env = appenv.get("BLOB_DIR")
     if env:
         return env
     base = os.environ.get("XDG_DATA_HOME") or os.path.join(
         os.path.expanduser("~"), ".local", "share"
     )
-    return os.path.join(base, "sindricad", "blobs")
+    return appenv.dir_under(base, "blobs")
 
 
 def hash_bytes(data):

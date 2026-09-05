@@ -1,12 +1,12 @@
 """Synthetic many-body benchmark documents for large-assembly scale work.
 
-Emits a .sindri whose features are `import{format:"brep"}` bodies — N features,
+Emits a .funda whose features are `import{format:"brep"}` bodies — N features,
 each carrying a compound of K small boxes — mimicking a large imported assembly
 (the shape of document that exposed the sidecar's scale limits: stall-watchdog
 kills on honest work, monolithic replies in the 100+ MB range).
 
 Run with the sidecar venv:
-    .venv/bin/python tools/gen_manybodies.py --features 500 --solids 6 out.sindri
+    .venv/bin/python tools/gen_manybodies.py --features 500 --solids 6 out.funda
 
 The geometry is trivial on purpose: scale problems here are about COUNT
 (features × bodies × payload), not surface complexity.
@@ -52,8 +52,8 @@ def generate(n_features: int, solids_per: int, size: float = 5.0, gap: float = 2
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Generate a many-body benchmark .sindri")
-    ap.add_argument("output", help="output .sindri path")
+    ap = argparse.ArgumentParser(description="Generate a many-body benchmark .funda")
+    ap.add_argument("output", help="output .funda path")
     ap.add_argument("--features", type=int, default=500, help="import features (default 500)")
     ap.add_argument("--solids", type=int, default=6,
                     help="solids per feature (default 6 — bodies after explode = features × solids)")

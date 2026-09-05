@@ -40,6 +40,7 @@ from collections import ChainMap
 from dataclasses import dataclass
 from types import SimpleNamespace
 
+import appenv
 import font_guard  # noqa: F401  MUST precede build123d — see font_guard.py
 
 from build123d import (
@@ -991,7 +992,7 @@ def _blob_to_shape(data):
 
     The magic check is NOT redundant with the blob store's hash verification.
     That hash proves the bytes are the ones the container declared — it does not
-    prove they are benign, because whoever crafted a hostile `.sindri` chose both
+    prove they are benign, because whoever crafted a hostile `.funda` chose both
     the bytes and the declared hash. So the same reasoning as
     `_brep_b64_to_shape` applies: refuse to aim a parser fuzz at OCCT.
 
@@ -1033,7 +1034,7 @@ def _import_shape(f):
         if not b64:
             raise ValueError(
                 "the geometry for this imported body is missing from local storage. "
-                "Open the .sindri file it was saved in, or re-import the original file."
+                "Open the .funda file it was saved in, or re-import the original file."
             )
         # Fall through to the embedded copy, loudly: a miss here means either a
         # wiped store or a document that travelled without its container, and
@@ -1864,7 +1865,7 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
 # (25 s timeout / kernel crash → the pool recreates the worker) this module reloads
 # and the cache is empty, so recovery is a clean full rebuild. Only rebuild_cached()
 # touches it; plain rebuild() (used by export/interference) is unaffected.
-_RAM_SNAP_WINDOW = int(os.environ.get("SINDRI_RAM_SNAP_WINDOW", "300"))
+_RAM_SNAP_WINDOW = int(appenv.get("RAM_SNAP_WINDOW", "300"))
 
 
 def rebuild_cached(document, diagnostics=None, projections=None, datums_out=None,

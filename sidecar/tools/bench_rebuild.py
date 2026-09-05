@@ -1,14 +1,14 @@
 """Cold full-rebuild benchmark + regression gate.
 
 Measures the median wall-clock ms of builder.rebuild() on a sha256-pinned document
-across N FRESH processes (imports excluded, SINDRI_DISK_CACHE=0), and asserts frozen
+across N FRESH processes (imports excluded, FUNDACAD_DISK_CACHE=0), and asserts frozen
 output invariants so a "faster" build that silently drops work or corrupts geometry
 FAILS the gate rather than looking like a win.
 
   # capture the baseline (writes tools/bench/rebuild_baseline.json)
-  sidecar/.venv/bin/python sidecar/tools/bench_rebuild.py --doc src-tauri/5-cleanf.sindri --runs 5 --capture-baseline
+  sidecar/.venv/bin/python sidecar/tools/bench_rebuild.py --doc src-tauri/5-cleanf.funda --runs 5 --capture-baseline
   # measure + gate against the baseline
-  sidecar/.venv/bin/python sidecar/tools/bench_rebuild.py --doc src-tauri/5-cleanf.sindri --runs 5
+  sidecar/.venv/bin/python sidecar/tools/bench_rebuild.py --doc src-tauri/5-cleanf.funda --runs 5
 
 Prints one JSON line. Exit 0 = invariants hold and spread within budget; exit 1 = a
 regression (invariant breach / excessive spread); exit 2 = a run crashed.
@@ -46,7 +46,7 @@ def single_run(doc_path, tessellate_flag=False):
     resolved) after the rebuild — rebuild() itself only validates/stores a
     texture spec, all the displacement cost lands in tessellate(), so a doc
     with texture features is invisible to this benchmark without it."""
-    os.environ["SINDRI_DISK_CACHE"] = "0"
+    os.environ["FUNDACAD_DISK_CACHE"] = "0"
     sys.path.insert(0, SIDECAR)
     import builder
 

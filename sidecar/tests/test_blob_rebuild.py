@@ -40,8 +40,8 @@ class Cold:
     def __enter__(self):
         self.blobs = tempfile.mkdtemp(prefix="rebuild_blobs_")
         self.cache = tempfile.mkdtemp(prefix="rebuild_cache_")
-        self._env = {k: os.environ.get(k) for k in ("SINDRI_BLOB_DIR", "XDG_CACHE_HOME")}
-        os.environ["SINDRI_BLOB_DIR"] = self.blobs
+        self._env = {k: os.environ.get(k) for k in ("FUNDACAD_BLOB_DIR", "XDG_CACHE_HOME")}
+        os.environ["FUNDACAD_BLOB_DIR"] = self.blobs
         os.environ["XDG_CACHE_HOME"] = self.cache
         import blobstore
 
@@ -80,7 +80,7 @@ def test_rebuild_is_cold():
     with Cold() as c:
         import geomstore
 
-        store = geomstore.Store(root=os.path.join(c.cache, "sindricad", "geom"))
+        store = geomstore.Store(root=os.path.join(c.cache, "fundacad", "geom"))
         check("geomstore root is the throwaway cache", c.cache in store.root)
         check("...and holds no checkpoints", store.find_checkpoint(["anything"]) is None)
 
@@ -159,7 +159,7 @@ def test_a_missing_blob_with_no_fallback_is_a_clear_error():
         check("it errored rather than producing a silent empty body",
               bool(errors) and not bodies)
         check("the message says the geometry is missing", "missing" in msg)
-        check("...and tells the user what to do", ".sindri" in msg or "re-import" in msg)
+        check("...and tells the user what to do", ".funda" in msg or "re-import" in msg)
 
 
 def test_tampered_blob_is_refused_before_occt_sees_it():

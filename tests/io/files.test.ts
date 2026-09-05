@@ -46,7 +46,7 @@ describe("extToImportFormat", () => {
   });
 });
 
-// A v5 `.sindri` is a ZIP; builds that predate it must SAY so rather than
+// A v5 document is a ZIP; builds that predate it must SAY so rather than
 // showing a JSON syntax error, and must NOT drop the file from Recent while
 // telling the user to upgrade. `openDocumentAtPath` and the welcome-screen
 // wiring need Tauri + a DOM, neither of which this suite has (see

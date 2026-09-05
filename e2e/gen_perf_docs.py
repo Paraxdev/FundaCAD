@@ -43,7 +43,7 @@ def main():
             f["parts"] = [{"node": 1, "faces": 6} for _ in range(SOLIDS_PER_FEATURE)]
 
         for kind, d in (("flat", flat), ("tree", doc)):
-            path = os.path.join(OUT, f"perf_{kind}_{n_bodies}.sindri")
+            path = os.path.join(OUT, f"perf_{kind}_{n_bodies}.funda")
             with open(path, "w") as fh:
                 json.dump(d, fh)
             print(f"{path}  ({features} features x {SOLIDS_PER_FEATURE} solids)")

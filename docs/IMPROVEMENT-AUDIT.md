@@ -43,7 +43,7 @@ The known Revolve/Loft/Sweep fire-and-forget issue is actually systemic: ~12 `vo
 ### 1.8 Remaining medium stability items
 | Finding | Where | Fix |
 |---|---|---|
-| Corrupt/truncated `.sindri` crashes load with zero feedback | `src/document/store.ts:488` | try/catch around `JSON.parse` → error toast naming the file |
+| Corrupt/truncated `.funda` crashes load with zero feedback | `src/document/store.ts:488` | try/catch around `JSON.parse` → error toast naming the file |
 | Autosave failures logged-and-forgotten — crash-recovery net can silently die | `src/io/recovery.ts:52` | toast after 2-3 consecutive failures |
 | Move/cleanUp silently no-op on stale body ids (unlike Press/Pull, Delete Face, which raise) | `sidecar/builder.py:1345` | raise or push a diag entry like `_do_combine` |
 | Fillet/chamfer on zero resolved edges → raw `IndexError: list index out of range` in the red chip | `sidecar/builder.py:1143` | `if not edges: raise ValueError("no edge found to fillet")` |

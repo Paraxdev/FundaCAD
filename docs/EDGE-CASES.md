@@ -104,7 +104,7 @@ conscious rather than accidental:
 
 ## 5. The press/pull segfault is input-specific, not general — MITIGATED
 
-The `f7` crash in the user's `test4.sindri` (cut of −1.001mm or deeper on a
+The `f7` crash in the user's `test4` document (cut of −1.001mm or deeper on a
 filleted face, exactly at a 1.0mm material boundary) did NOT generalise: synthetic
 through-cuts and cuts landing on a fillet tangency all built cleanly. The trigger
 is a narrower tangency condition than "cut through a fillet", so a general

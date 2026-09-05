@@ -129,7 +129,7 @@ describe("detectRegions — circle-inside-rectangle hole handling", () => {
 
 describe("detectRegions — thin-ring interior anchor (field bug: outer ring selects inner circle)", () => {
   // Two concentric circles with a thin ring (inner_r/outer_r = 0.914 > 0.9), the
-  // exact Test1.sindri geometry. The region's `interior` anchor MUST land in the
+  // exact Test1 document geometry. The region's `interior` anchor MUST land in the
   // ring material — not in the hole. When it fell in the hole (0,0), selecting the
   // ring stored an anchor inside the disk, so the disk highlighted/extruded instead.
   it("the annulus anchor is inside its own material, not the hole", () => {

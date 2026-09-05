@@ -16,7 +16,8 @@
 //! `spacenavd` or the 3Dconnexion driver is running it may already hold the
 //! device — stop it to let FundaCAD read it directly.
 //!
-//! Set SINDRICAD_SPACEMOUSE_DEBUG=1 to log raw reports for tuning.
+//! Set FUNDACAD_SPACEMOUSE_DEBUG=1 to log raw reports for tuning (the old
+//! SINDRICAD_ spelling still works).
 
 use std::thread;
 use std::time::Duration;
@@ -277,7 +278,8 @@ fn proves_multi_axis(dev: &hidapi::HidDevice) -> Proof {
 }
 
 fn stream(app: &AppHandle, last: &mut Option<String>) -> Result<(), Blocked> {
-    let debug = std::env::var("SINDRICAD_SPACEMOUSE_DEBUG").is_ok();
+    let debug = std::env::var("FUNDACAD_SPACEMOUSE_DEBUG").is_ok()
+        || std::env::var("SINDRICAD_SPACEMOUSE_DEBUG").is_ok();
     let api = HidApi::new().map_err(|e| Blocked::Other(e.to_string()))?;
 
     // Rank every interface and take the BEST — not the first vendor match. We do

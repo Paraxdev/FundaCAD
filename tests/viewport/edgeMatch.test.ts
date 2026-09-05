@@ -81,7 +81,7 @@ describe("midMatchTol", () => {
 });
 
 describe("nearestEdgeByMid — legacy selector compatibility", () => {
-  // A .sindri saved before the arc-length fix holds the OLD index-middle point.
+  // A document saved before the arc-length fix holds the OLD index-middle point.
   // Reopening that fillet for editing must still find its edges, or the ghosts
   // silently vanish on every pre-existing document.
   const vertical: { points: Vec3[] } = { points: [[0, 0, 0], [0, 0, 35]] };

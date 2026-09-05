@@ -9,7 +9,7 @@ of checkpoints.
 
 The index is SOFT STATE. Every method degrades a missing / corrupt / short entry to a
 cache MISS — never an exception, never wrong geometry — so a deleted or truncated cache
-only ever costs a rebuild (the `.sindri` portability constraint, §1). A fresh directory
+only ever costs a rebuild (the `.funda` portability constraint, §1). A fresh directory
 scan can always reconstruct what is restorable; the index is only there to make the
 lookup O(1) instead of O(disk).
 
@@ -26,6 +26,7 @@ import sqlite3
 import time
 import uuid
 
+import appenv
 from OCP.BinTools import BinTools, BinTools_FormatVersion
 from OCP.TopoDS import TopoDS_Shape
 
@@ -53,7 +54,7 @@ def _default_root():
     base = os.environ.get("XDG_CACHE_HOME") or os.path.join(
         os.path.expanduser("~"), ".cache"
     )
-    return os.path.join(base, "sindricad", "geom")
+    return appenv.dir_under(base, "geom")
 
 
 def _fsync_dir(path):
@@ -292,9 +293,9 @@ class Store:
         space. Otherwise the budget shrinks as the cache grows, so every sweep
         would evict a little more than the last — a ratchet, not a cap.
 
-        `SINDRI_CACHE_MAX_GB` overrides it outright, for a user with unusual
+        `FUNDACAD_CACHE_MAX_GB` overrides it outright, for a user with unusual
         files or an unusual disk."""
-        env = os.environ.get("SINDRI_CACHE_MAX_GB")
+        env = appenv.get("CACHE_MAX_GB")
         if env:
             try:
                 gb = float(env)

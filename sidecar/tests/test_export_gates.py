@@ -16,7 +16,7 @@ import shutil
 import sys
 import tempfile
 
-os.environ.setdefault("SINDRI_DISK_CACHE", "0")
+os.environ.setdefault("FUNDACAD_DISK_CACHE", "0")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import builder  # noqa: E402
@@ -219,7 +219,7 @@ def test_separate_export_writes_a_directory_and_refuses_to_clobber():
     one file that could not be clobbered."""
     server._EXPORT_MESH_CACHE.clear()
     doc = _box_doc(3)
-    d = tempfile.mkdtemp(prefix="sindri-sep-")
+    d = tempfile.mkdtemp(prefix="funda-sep-")
     try:
         target = os.path.join(d, "parts.step")
         res = server._export_job(doc, "step", target, separate=True)

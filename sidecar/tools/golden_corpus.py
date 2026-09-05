@@ -1,6 +1,6 @@
 """golden_corpus.py — golden-document regression eval for the geometry sidecar.
 
-Rebuilds real `.sindri` documents through a SPAWNED server.py subprocess and
+Rebuilds real saved documents through a SPAWNED server.py subprocess and
 records/compares their build invariants: body count, per-body mesh volume, the
 document bbox, and the list of feature errors. A code change that silently alters
 the geometry a saved document builds is caught here.
@@ -9,7 +9,7 @@ Tolerances are hardcoded literals in THIS file — no config, no env override �
 what "still matches" means can't be loosened from outside.
 
 Usage (run from sidecar/ with .venv/bin/python):
-  python tools/golden_corpus.py --capture ../src-tauri/*.sindri   # append baselines
+  python tools/golden_corpus.py --capture ../src-tauri/*.funda    # append baselines
   python tools/golden_corpus.py --check                           # compare vs golden.json
 
 --capture is APPEND-ONLY: it refuses to modify an entry that already exists.
@@ -34,9 +34,34 @@ BBOX_REL_TOL = 0.001             # ... 0.1% of the recorded bbox diagonal
 REBUILD_TOLERANCE = 0.1          # the app's own viewport tessellation tolerance
 
 
+#: Document extensions, current first. A baseline records the path a document
+#: had WHEN IT WAS CAPTURED, and those paths are not rewritten — a record that
+#: says a measurement was taken against a file called something it never was is
+#: worse than a stale one. The app has been renamed twice, though, and a person
+#: who renamed their documents to match would otherwise find every baseline
+#: reporting "rebuild raised: FileNotFoundError" and no way to tell that from a
+#: real regression. So the extension is the one thing allowed to move.
+DOC_EXTS = (".funda", ".neocad", ".sindri")
+
+
+def resolve_doc(path):
+    """The recorded path, or the same document under a different extension.
+
+    Returns the path that exists; falls back to the recorded one so the caller's
+    error still names what the baseline actually asked for."""
+    if os.path.exists(path):
+        return path
+    stem, ext = os.path.splitext(path)
+    if ext.lower() in DOC_EXTS:
+        for alt in DOC_EXTS:
+            if alt.lower() != ext.lower() and os.path.exists(stem + alt):
+                return stem + alt
+    return path
+
+
 def effective_doc(parsed):
     """Reconstruct the document the FRONTEND actually sends to the sidecar for a
-    saved .sindri file (src/document/store.ts effectiveDoc): features up to the
+    saved document (src/document/store.ts effectiveDoc): features up to the
     rollback marker, minus suppressed ones, with the extrude captured-visibility
     migration applied, carrying parameters + bodyVisibility. Building the raw
     saved feature list instead would rebuild features the app never builds."""
@@ -201,7 +226,7 @@ async def _check():
             for key in sorted(golden):
                 entry = golden[key]
                 try:
-                    parsed = json.load(open(entry["path"]))
+                    parsed = json.load(open(resolve_doc(entry["path"])))
                     doc = effective_doc(parsed)
                     reply = await _rebuild(ws, doc)
                 except Exception as ex:

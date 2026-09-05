@@ -741,7 +741,7 @@ def test_port_in_use_exits_with_its_own_code():
         p = subprocess.run(
             [sys.executable, "server.py"],
             cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            env={**os.environ, "SINDRI_SIDECAR_PORT": str(taken)},
+            env={**os.environ, "FUNDACAD_SIDECAR_PORT": str(taken)},
             capture_output=True, text=True, timeout=180,
         )
     finally:

@@ -97,7 +97,7 @@ function rssMiB(pids) {
 
   const rows = [];
   for (const n of SIZES) {
-    const file = `${DOCS}/perf_tree_${n}.sindri`;
+    const file = `${DOCS}/perf_tree_${n}.funda`;
     if (!fs.existsSync(file)) { console.log(`${n}: no ${file} — run gen_perf_docs.py`); continue; }
     const doc = JSON.parse(fs.readFileSync(file, "utf8"));
     await page.evaluate(async (d) => {

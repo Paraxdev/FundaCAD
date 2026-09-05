@@ -7,14 +7,14 @@ mesh creation, so we write the model XML by hand — which is also the basis for
 production exporter.
 
 Run:  cd sidecar && uv run python spike_color3mf.py
-Then open the three files in /tmp/sindri-color-spike/ in Snapmaker Orca and report
+Then open the three files in /tmp/funda-color-spike/ in Snapmaker Orca and report
 which show the two colors correctly assigned to separate toolheads.
 """
 
 import os
 import zipfile
 
-OUT = "/tmp/sindri-color-spike"
+OUT = "/tmp/funda-color-spike"
 
 CT = """<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">

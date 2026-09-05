@@ -13,7 +13,7 @@ import copy
 import os
 import sys
 
-os.environ.setdefault("SINDRI_DISK_CACHE", "0")  # RAM tier; the disk tier is monkeypatched
+os.environ.setdefault("FUNDACAD_DISK_CACHE", "0")  # RAM tier; the disk tier is monkeypatched
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import builder  # noqa: E402

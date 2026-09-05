@@ -56,7 +56,7 @@ MAX_IMPORT_FACES = 2_000        # after merge: more faces than this = organic/cu
 # measured where the viewport actually starts to hurt, so treat it as a number to
 # revisit with a real measurement, not as a calibrated one.
 MAX_IMPORT_TOTAL_FACES = 20_000
-# Untrusted-input guards (an import path or embedded BREP comes from a .sindri doc
+# Untrusted-input guards (an import path or embedded BREP comes from a .funda doc
 # the user opened, which may be hostile). Caps bound the worst case BEFORE a heavy
 # read/parse, so a crafted file can't OOM the worker or aim a parser fuzz at OCCT.
 MAX_IMPORT_FILE_BYTES = 256 * 1024 * 1024   # reject any import file above this outright

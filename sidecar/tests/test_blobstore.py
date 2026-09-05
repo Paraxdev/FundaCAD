@@ -18,6 +18,7 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import appenv  # noqa: E402
 import blobstore  # noqa: E402
 
 FAILED = []
@@ -119,22 +120,27 @@ def test_rejects_non_hash_names():
 
 
 def test_root_comes_from_rust():
-    """Rust resolves app_data_dir and passes SINDRI_BLOB_DIR; the two MUST agree
+    """Rust resolves app_data_dir and passes FUNDACAD_BLOB_DIR; the two MUST agree
     or each writes a store the other cannot see."""
     print("root resolution")
-    old = os.environ.get("SINDRI_BLOB_DIR")
+    old = os.environ.get("FUNDACAD_BLOB_DIR")
     try:
-        os.environ["SINDRI_BLOB_DIR"] = "/tmp/sindri_blob_env_check"
-        check("SINDRI_BLOB_DIR wins", blobstore.default_root() == "/tmp/sindri_blob_env_check")
-        del os.environ["SINDRI_BLOB_DIR"]
+        os.environ["FUNDACAD_BLOB_DIR"] = "/tmp/funda_blob_env_check"
+        check("FUNDACAD_BLOB_DIR wins", blobstore.default_root() == "/tmp/funda_blob_env_check")
+        del os.environ["FUNDACAD_BLOB_DIR"]
         fallback = blobstore.default_root()
+        # appenv.DIR, not a literal: the fallback keeps an EXISTING directory
+        # under the old name rather than orphaning a cache, so on a machine that
+        # ran an older build this is legitimately "sindricad". What must hold
+        # either way is that it is a DATA dir and not the geomstore's cache root.
         check("fallback is under a data dir, NOT the geomstore cache",
-              "sindricad" in fallback and ".cache" not in fallback)
+              (appenv.DIR in fallback or any(d in fallback for d in appenv.LEGACY_DIRS))
+              and ".cache" not in fallback)
     finally:
         if old is None:
-            os.environ.pop("SINDRI_BLOB_DIR", None)
+            os.environ.pop("FUNDACAD_BLOB_DIR", None)
         else:
-            os.environ["SINDRI_BLOB_DIR"] = old
+            os.environ["FUNDACAD_BLOB_DIR"] = old
 
 
 def test_no_occt_import():
