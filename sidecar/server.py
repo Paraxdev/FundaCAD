@@ -204,9 +204,11 @@ def _src_stamp(directory=None):
     _pool_available compares it. Size as well as mtime because a coarse
     filesystem clock can hand two edits the same second.
 
-    Returns None when there is nothing to watch, which is the packaged app: the
-    modules are frozen into the executable, this directory has no .py in it, and
-    the check costs one failed scandir and then nothing.
+    Returns None when there is nothing here to watch — an unreadable directory,
+    or one with no .py in it. Not the packaged app, which was the first guess and
+    is wrong: the bundle copies sidecar/*.py next to a real interpreter, so the
+    stamp is taken there too. It just never changes, an installed tree being
+    read-only, so the cost is one scandir per job and no recycle ever.
     """
     try:
         with os.scandir(directory or _SIDECAR_DIR) as it:

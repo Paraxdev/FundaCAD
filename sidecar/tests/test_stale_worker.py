@@ -172,9 +172,12 @@ def test_a_second_edit_within_the_filesystem_clock_is_still_seen():
 
 
 def test_a_tree_with_no_python_in_it_is_not_watched():
-    """The packaged app: modules frozen into the executable, no .py on disk. The
-    check has to fall silent there rather than recycle on every request because
-    it can never find what it is looking for."""
+    """A directory with nothing to watch in it has to fall silent rather than
+    recycle on every request because it can never find what it is looking for.
+
+    Not the packaged app, which was the original reason given here and is wrong:
+    the bundle copies sidecar/*.py next to a real interpreter, so it is stamped
+    like any other tree — it simply never changes."""
     _reset()
     with tree() as t:
         for name in os.listdir(t.dir):
