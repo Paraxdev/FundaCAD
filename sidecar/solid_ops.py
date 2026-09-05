@@ -9,6 +9,12 @@ handlers in builder.py, which is what makes this half testable on a bare shape.
 """
 
 import math
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
 
 import font_guard  # noqa: F401  MUST precede build123d — see font_guard.py
 
@@ -23,6 +29,8 @@ from build123d import (
     offset,
 )
 
+import offset_child
+from progress import progress_tick
 from shape_util import _as_compound, _wrap_topods, _wrapped_or_none
 from topo_adj import face_wraps
 
@@ -486,51 +494,96 @@ def _offset_faces(part, pairs):
     offsets, global offset 0). `pairs` is [(face, signed_distance_mm), ...];
     every face is registered before ONE MakeOffsetShape() pass so adjacent
     offsets close against each other instead of fighting over shared edges.
-    Returns a fixed-up Solid."""
-    import OCP.BRepOffset as _bro
-    from OCP.GeomAbs import GeomAbs_JoinType
-    from OCP.TopAbs import TopAbs_ShapeEnum
-    from OCP.TopoDS import TopoDS
-    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeSolid
+    Returns a fixed-up Solid.
 
+    The pass itself runs in a CHILD PROCESS. On the shapes it cannot handle
+    BRepOffset does not fail, it segfaults, so the two fallbacks written around
+    this call had never once run — there is no excepting your way out of an
+    access violation. offset_child.py carries the four-face body that proves it,
+    the reason such a body is ordinary rather than exotic, and what the round
+    trip through BREP turns out to fix on its own.
+
+    A death out there is an exit code here, and this raises ValueError, which is
+    what both callers were already written to recover from: press/pull thickens
+    the one face instead, and Offset Face retries face by face.
+    """
     pairs = [(f, d) for f, d in pairs if abs(d) > 1e-9]
     if not pairs:
         return part
 
-    mk = _bro.BRepOffset_MakeOffset()
-    # GeomAbs_Intersection join is what makes a local single-face offset close up
-    # cleanly against the neighbouring faces (the Arc join fails here).
-    mk.Initialize(
-        part.wrapped,
-        0.0,
-        1e-4,
-        _bro.BRepOffset_Mode.BRepOffset_Skin,
-        False,
-        False,
-        GeomAbs_JoinType.GeomAbs_Intersection,
-        False,
-        False,
-    )
-    for face, d in pairs:
-        mk.SetOffsetOnFace(face.wrapped, d)
-    mk.MakeOffsetShape()
-    if not mk.IsDone():
-        raise ValueError("can't offset this face by that amount")
-    sh = mk.Shape()
-    # the offset yields a Shell; wrap it back into a Solid so downstream booleans,
-    # tessellation and export all see a uniform solid.
-    if sh.ShapeType() == TopAbs_ShapeEnum.TopAbs_SHELL:
-        sh = BRepBuilderAPI_MakeSolid(TopoDS.Shell_s(sh)).Solid()
-    # IsDone() is not the same as "produced a usable solid": BRepOffset reports
-    # success while emitting a shell that self-intersects where the offset ran
-    # past the local curvature. Letting that into the document is worse than
-    # refusing, because it survives until some later boolean fails somewhere the
-    # user cannot connect to what they did. This is the check that lets the type
-    # gate above be dropped — the operation now polices its own result.
-    from OCP.BRepCheck import BRepCheck_Analyzer
+    from OCP.BRep import BRep_Builder
+    from OCP.BRepTools import BRepTools
+    from OCP.TopoDS import TopoDS_Compound, TopoDS_Shape
 
-    if not BRepCheck_Analyzer(sh).IsValid():
-        raise ValueError(
-            "that offset ran past what this surface can hold — try a smaller amount"
-        )
-    return Solid(sh)
+    tmp = tempfile.mkdtemp(prefix="fc-offset-")
+    try:
+        src, dst = os.path.join(tmp, "in.brep"), os.path.join(tmp, "out.brep")
+        # The part FIRST, then the faces in the order their distances go on the
+        # command line. Written as one compound so the faces stay shared with
+        # the part's own — offset_child checks that and refuses if they are not.
+        maker = BRep_Builder()
+        bundle = TopoDS_Compound()
+        maker.MakeCompound(bundle)
+        maker.Add(bundle, part.wrapped)
+        for f, _d in pairs:
+            maker.Add(bundle, f.wrapped)
+        if not BRepTools.Write_s(bundle, src):
+            raise ValueError("can't offset this face by that amount")
+
+        code = _run_offset_child(src, dst, [d for _f, d in pairs])
+        if code == offset_child.INVALID:
+            raise ValueError(
+                "that offset ran past what this surface can hold — try a smaller amount"
+            )
+        if code != offset_child.OK or not os.path.exists(dst):
+            raise ValueError("can't offset this face by that amount")
+
+        out = TopoDS_Shape()
+        if not BRepTools.Read_s(out, dst, BRep_Builder()) or out.IsNull():
+            raise ValueError("can't offset this face by that amount")
+        return Solid(out)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+#: How long one offset may take before it is treated as wedged. Generous: this
+#: is a whole-body rebuild on a shape that may be large, and the cost of being
+#: wrong is a refusal, not a crash.
+_OFFSET_TIMEOUT = 180.0
+
+_OFFSET_CHILD = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             "offset_child.py")
+
+
+def _run_offset_child(src, dst, dists):
+    """Run offset_child.py on this input and hand back its exit code.
+
+    Progress is published while waiting, because the supervisor reaps a worker
+    whose heartbeat STOPS, and from out here a long offset and a wedged one look
+    the same. The timeout is ours rather than the supervisor's for the same
+    reason: a hung child should cost this feature, not the session.
+    """
+    if not sys.executable:
+        raise ValueError("can't offset this face by that amount")
+    cmd = [sys.executable, _OFFSET_CHILD, src, dst] + [repr(float(d)) for d in dists]
+    kwargs = {}
+    if os.name == "nt":
+        kwargs["creationflags"] = 0x08000000  # CREATE_NO_WINDOW: no console flash
+    proc = subprocess.Popen(
+        cmd, cwd=os.path.dirname(_OFFSET_CHILD),
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, **kwargs)
+    deadline = time.monotonic() + _OFFSET_TIMEOUT
+    err = ""
+    while True:
+        try:
+            _out, err = proc.communicate(timeout=0.25)
+            break
+        except subprocess.TimeoutExpired:
+            progress_tick()
+            if time.monotonic() > deadline:
+                proc.kill()
+                proc.communicate()
+                return offset_child.REFUSED
+    if err:
+        print(err.rstrip(), file=sys.stderr, flush=True)
+    return proc.returncode

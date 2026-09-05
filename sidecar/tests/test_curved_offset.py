@@ -81,14 +81,19 @@ def test_press_pull_reaches_the_fallback_when_the_body_offset_will_not_run():
     takes an exotic solid to provoke honestly, so it is failed on purpose here —
     what is under test is that press/pull then lands on the thickened result
     rather than on the sweep's refusal."""
-    real = builder._offset_face
-    builder._offset_face = lambda *a, **k: (_ for _ in ()).throw(
+    import solid_ops
+
+    # solid_ops, not builder: _press_pull lives there and resolves the name
+    # there. Failed on builder, which merely imports the same function, this
+    # made no difference at all and the test passed on the real offset.
+    real = solid_ops._offset_face
+    solid_ops._offset_face = lambda *a, **k: (_ for _ in ()).throw(
         ValueError("can't offset this face by that amount")
     )
     try:
         out = _press_pull(PART, bore(), 1.25)
     finally:
-        builder._offset_face = real
+        solid_ops._offset_face = real
     assert abs(bore_radius_of(out) - (R - 1.25)) < 1e-9, bore_radius_of(out)
     print(PASS, "press/pull resizes the bore even with the body offset refusing")
 

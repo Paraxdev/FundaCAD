@@ -218,23 +218,39 @@ def test_the_freeform_path_never_calls_the_offset_that_crashes():
 
     _offset_faces is replaced with a bomb for the duration: if the freeform
     branch ever grows a "try the offset first" it fails here, loudly, instead of
-    in a user's session as a dead worker."""
+    in a user's session as a dead worker.
+
+    Two things had to be right before this could test anything. The bomb goes
+    into SOLID_OPS, where _press_pull is defined and so where it looks the name
+    up; patched on builder, which imports the same function object, it could
+    never fire. And it raises a BaseException, because the call it guards sits
+    inside `except Exception: pass` — an AssertionError was caught by the very
+    fallback under test and the guard reported success either way. Both are
+    mutation-checked: put BSPLINE into OFFSETTABLE_CURVED and this must fail."""
     import builder
     from build123d import Face, Spline
 
     s = _lofted_freeform()
     f = max((x for x in s.faces() if x.geom_type == GeomType.BSPLINE),
             key=lambda x: x.area)
-    real = builder._offset_faces
+    import solid_ops
+
+    real = solid_ops._offset_faces
+
+    class Reached(BaseException):
+        """Not an Exception: the guarded call is wrapped in `except Exception`,
+        which would swallow the evidence."""
 
     def bomb(*_a, **_k):
-        raise AssertionError("the freeform path reached BRepOffset — this crashes workers")
+        raise Reached("the freeform path reached BRepOffset — this crashes workers")
 
-    builder._offset_faces = bomb
+    solid_ops._offset_faces = bomb
     try:
         builder._press_pull(s, f, 1.0)
+    except Reached as ex:
+        raise AssertionError(str(ex)) from None
     finally:
-        builder._offset_faces = real
+        solid_ops._offset_faces = real
     print("freeform path stays clear of BRepOffset OK")
 
 
