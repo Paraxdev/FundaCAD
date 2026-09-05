@@ -156,6 +156,16 @@ export interface GeometryBackend {
   cancel?(target?: string): Promise<boolean>;
   /** Coarse phase progress for a long op (import). Optional. */
   onOpProgress?(fn: (pct: number, label: string) => void): () => void;
+  /** One live-session op (see sidecar/live_session.py): publish what this window
+   *  has open, collect what an attached assistant has asked for.
+   *
+   *  Deliberately one untyped passthrough rather than five methods. The session
+   *  is a conversation between this window and the sidecar's own state machine,
+   *  not part of the geometry surface every other method here belongs to, and
+   *  the in-process backend has nothing to say about it at all — hence optional.
+   *  Resolves to null when the backend cannot speak it or the call failed, so
+   *  the caller's "no session" path and its "no backend" path are the same one. */
+  session?(op: string, payload?: object): Promise<Record<string, unknown> | null>;
   readonly connected: boolean;
 }
 
@@ -743,6 +753,14 @@ export class Geometry implements GeometryBackend {
     }
   }
 
+  /** See GeometryBackend.session. Answered on the sidecar's READ path, so it
+   *  never queues behind a rebuild — which is the whole reason the host can keep
+   *  publishing while its own build is running. */
+  async session(op: string, payload: object = {}): Promise<Record<string, unknown> | null> {
+    const msg = await this.call<Record<string, unknown>>(op, payload);
+    return msg.ok ? msg.result : null;
+  }
+
   private call<T>(op: string, extra: object, onId?: (id: string) => void): Promise<RawReply<T>> {
     const id = crypto.randomUUID();
     const raw = JSON.stringify({ id, op, ...extra });
@@ -764,7 +782,13 @@ export class Geometry implements GeometryBackend {
       // Recorded only once the call is actually going out: an id set before
       // the refusal above would name a request the sidecar never saw, and
       // cancelling it would silently no-op.
-      if (op !== "cancel" && op !== "ping") this.lastHeavyId = id;
+      //
+      // The exclusions are every op that is NOT a job someone could want to
+      // stop. The live-session ops matter most: they run on a timer, so one
+      // would land between a rebuild starting and the user reaching for Cancel,
+      // and Cancel would then stop a poll and report that it had stopped
+      // something while the build carried on.
+      if (op !== "cancel" && op !== "ping" && !op.startsWith("session_")) this.lastHeavyId = id;
       onId?.(id);
       this.pending.set(id, resolve as Pending);
       if (this.connected) {

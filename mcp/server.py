@@ -21,10 +21,22 @@ What the tools are for, in the order they are meant to be used:
                 question numbers answer
   doc_save      a .funda file the app opens
 
-The state is one document held in this process. It is never the document the
-user has open in the app: this server spawns its own sidecar (see
-sidecar_link.py), so an agent working here cannot disturb a session in progress
-and hands its work back as a file.
+There are two worlds, and `sidecar_link.py` picks between them at start-up:
+
+  PRIVATE     the document is held in this process and nowhere else. This server
+              spawns its own geometry engine, so an agent working here cannot
+              disturb a session in progress, and hands its work back as a file.
+
+  LIVE        the document is the one a running FundaCAD has open. Its engine is
+              found through the session file it publishes (app_session.py), and
+              every tool below reads that document before it runs and offers the
+              result back afterwards (live_link.py). The user watches it happen
+              and can undo any of it.
+
+Which one is in force is `self.live`. Nothing in the tools themselves knows:
+`_call_live` wraps them, so a tool is written once and works either way. That is
+deliberate — a tool that had to remember which world it was in would eventually
+forget, and forgetting means editing the wrong document.
 """
 
 import asyncio
@@ -42,6 +54,7 @@ import describe as D  # noqa: E402
 import model as M  # noqa: E402
 import render as R  # noqa: E402
 import schema as S  # noqa: E402
+from live_link import LiveLink, NoAppOpen, ReadOnlySession, StaleEdit  # noqa: E402
 from sidecar_link import SidecarLink  # noqa: E402
 
 #: The MCP revisions this server knows how to speak. The client names one in
@@ -80,6 +93,30 @@ def text(s):
     return {"content": [{"type": "text", "text": s}]}
 
 
+def _append(result, extra):
+    """Add a line to a tool result without rebuilding its shape."""
+    out = copy.deepcopy(result)
+    blocks = out.get("content") or []
+    if blocks and blocks[-1].get("type") == "text":
+        blocks[-1]["text"] += extra
+    else:
+        blocks.append({"type": "text", "text": extra.strip()})
+    out["content"] = blocks
+    return out
+
+
+def _edit_note(name, args):
+    """What the user sees beside the indicator that an assistant is editing.
+
+    The tool name plus the one argument that identifies what it touched — enough
+    to recognise an edit in a list, short enough for a line of UI. Untrusted only
+    in the sense that the model wrote it; the sidecar caps its length and the app
+    renders it as text.
+    """
+    subject = args.get("id") or args.get("name") or (args.get("feature") or {}).get("type")
+    return f"{name}: {subject}" if subject else name
+
+
 def failure(s):
     return {"content": [{"type": "text", "text": s}], "isError": True}
 
@@ -89,6 +126,10 @@ class Server:
         self.doc = M.new_document()
         self.path = None
         self.link = SidecarLink.from_env()
+        #: Set by `attach` when this server is working on the document a running
+        #: app has open. None means the document here is private, which is what
+        #: every tool below assumed before there was another option.
+        self.live = None
         #: The last successful build's per-body mesh, which is what `view`
         #: draws. Kept rather than re-requested: a render right after a build is
         #: the common case and the mesh is the expensive part of the reply.
@@ -96,6 +137,68 @@ class Server:
         self.built_for = None  # the document signature `self.mesh` belongs to
         self.tools = {}
         self._register()
+
+    #: Prepended to the working-order instructions when this server is driving
+    #: the document a person has open. It is the one thing about this mode a
+    #: model has to know, because it changes what a mistake costs: there is no
+    #: private copy to throw away, and the person is watching.
+    LIVE_INSTRUCTIONS = """YOU ARE WORKING ON A DOCUMENT SOMEONE HAS OPEN IN FUNDACAD, right now, on their
+screen. Every edit you make appears in their window as it happens.
+
+  * Read before you write. Each tool re-reads their document first, so what you
+    saw a moment ago may already have changed.
+  * An edit is refused if they changed the model while you were writing it. That
+    is not an error to retry blindly: read it again and decide again.
+  * `doc_new` and `doc_open` REPLACE what they have open. Do not call either
+    unless you were asked to.
+  * `doc_save` writes their document to a file. It is not how your work reaches
+    them; it is already there.
+
+"""
+
+    def instructions(self):
+        """What the host puts in front of the model. Live mode adds a paragraph
+        rather than replacing the working order, which is just as true either
+        way."""
+        if self.live is None:
+            return S.HOW_TO
+        return self.LIVE_INSTRUCTIONS + S.HOW_TO
+
+    async def attach(self, mode=None):
+        """Decide where the engine comes from, once, at start-up.
+
+        Split out of __init__ because it does IO — it reads the session file and
+        dials the port — and because a test wants a Server with neither.
+        """
+        link, app = await SidecarLink.for_mode(mode, log=log)
+        self.link = link
+        if app is not None:
+            self.live = LiveLink(link)
+            try:
+                await self.live.pull()
+                log(f"[mcp] sharing the open document: {self.live.title or 'untitled'}")
+            except NoAppOpen as ex:
+                # The engine is the app's but the WINDOW is not sharing. That is
+                # the live-editing setting being off, and it is a state to stay
+                # in rather than fail on: the agent still gets the app's engine,
+                # and every tool that needs the document says why it cannot have
+                # it. Failing here would make a setting the user can flip look
+                # like a broken installation.
+                log(f"[mcp] attached to the engine, but not to a document: {ex}")
+        return self
+
+    #: Tools that change the document. Anything here is offered to the app when
+    #: a live session is on; anything not here only reads, and a reader that
+    #: proposed would put a no-op edit and an undo step in front of the user
+    #: every time an agent measured something.
+    MUTATORS = frozenset({
+        "doc_new", "doc_open", "doc_set", "param_set", "param_remove",
+        "feature_add", "feature_update", "feature_remove", "feature_move",
+    })
+
+    #: Tools that need no document at all, so they must not be made to wait for
+    #: one. `schema` in particular is what an agent reads BEFORE anything exists.
+    NO_DOCUMENT = frozenset({"schema"})
 
     # --- the tools ------------------------------------------------------------
 
@@ -478,7 +581,7 @@ class Server:
                 "protocolVersion": version,
                 "capabilities": {"tools": {}, "resources": {}},
                 "serverInfo": SERVER_INFO,
-                "instructions": S.HOW_TO,
+                "instructions": self.instructions(),
             })
         if method in ("notifications/initialized", "notifications/cancelled"):
             return None
@@ -506,6 +609,52 @@ class Server:
             return None
         return _error(mid, -32601, f"unknown method: {method}")
 
+    async def _call_live(self, tool, name, args):
+        """One tool, against the document a running app has open.
+
+        Mirror in, mirror out. The pull before makes the local document the
+        app's, so the tool sees what the user sees rather than whatever this
+        process last built; the push after offers the result, and does not return
+        until the app has taken it. The tools themselves know none of this.
+
+        A tool that fails leaves nothing to offer, which is why the push is
+        after the `isError` check rather than in a `finally`: proposing a
+        half-applied document would put the failure in front of the user as an
+        edit.
+        """
+        try:
+            self.doc = await self.live.pull() or M.new_document()
+            self.doc.setdefault("parameters", {})
+            self.doc.setdefault("paramDefs", {})
+        except NoAppOpen as ex:
+            return failure(f"{ex}")
+
+        # No _invalidate here, deliberately. `t_view` already asks whether the
+        # cached mesh belongs to the document in hand (`built_for !=
+        # _signature(self.doc)`), and that check answers "the user changed it
+        # under us" as well as it answers "we changed it". Dropping the mesh on
+        # every pull would make the ordinary `build` then `view` pair rebuild
+        # twice, which in live mode is every single render.
+        before = copy.deepcopy(self.doc)
+        out = await tool.fn(args)
+
+        if name not in self.MUTATORS or out.get("isError"):
+            return out
+        if self.doc == before:
+            return out  # the tool decided to change nothing; nothing to offer
+
+        try:
+            rev = await self.live.push(self.doc, note=_edit_note(name, args))
+        except (NoAppOpen, ReadOnlySession, StaleEdit, TimeoutError, RuntimeError) as ex:
+            # The local document now holds an edit the app never took. Put it
+            # back, or the next tool would build on a change that does not exist
+            # anywhere else and the agent would have no way to notice. The mesh
+            # cache needs no help: it is keyed on the document's signature, which
+            # this restores along with the document.
+            self.doc = before
+            return failure(f"{ex}")
+        return _append(out, f"\n(applied in FundaCAD, revision {rev})")
+
     async def call_tool(self, name, args):
         """A tool's own failure is a RESULT with isError, not a JSON-RPC error.
 
@@ -518,6 +667,8 @@ class Server:
         if tool is None:
             return failure(f"No tool {name!r}. Have: {', '.join(sorted(self.tools))}")
         try:
+            if self.live is not None and name not in self.NO_DOCUMENT:
+                return await self._call_live(tool, name, args)
             return await tool.fn(args)
         except (M.DocumentError, KeyError, ValueError, TypeError) as ex:
             return failure(f"{type(ex).__name__}: {ex}")
@@ -560,7 +711,7 @@ async def serve(read_line, write, server=None):
     Messages are handled one at a time. MCP allows concurrency, but every tool
     here ends in the sidecar, which serialises heavy work anyway, and an agent
     asking one question at a time is the entire traffic pattern."""
-    server = server or Server()
+    server = server or await Server().attach()
     try:
         while True:
             line = await read_line()
@@ -584,6 +735,8 @@ async def serve(read_line, write, server=None):
             if reply is not None:
                 write(json.dumps(reply))
     finally:
+        if server.live is not None:
+            await server.live.leave()
         await server.link.stop()
 
 
@@ -607,7 +760,16 @@ async def _main():
 
 
 def main():
-    asyncio.run(_main())
+    """The entry point, and the one place a start-up refusal is phrased.
+
+    `FUNDACAD_MCP_MODE=attach` with no app open raises on purpose. A traceback
+    would say the same thing in twenty lines of a log the user may never open,
+    so it is caught and stated once — stderr is what an MCP host shows."""
+    try:
+        asyncio.run(_main())
+    except RuntimeError as ex:
+        log(f"[mcp] {ex}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

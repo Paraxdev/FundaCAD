@@ -91,6 +91,18 @@ EXCLUDED_OPS = {
     # this floor at 23 on one machine and 21 on every other checkout. Covered by
     # test_text.py.
     "tessellateText",
+    # The live session: a state machine, not a shape. Same reasoning as `cancel`
+    # above — there is no geometry to assert a number about, so the only way to
+    # credit them here would be to weaken rule (c), and that gate is the whole
+    # reason this count means anything.
+    #
+    # Covered instead by two suites that run against a real socket:
+    # sidecar/tests/test_live_session.py holds every rule with the clock injected
+    # and no server, and mcp/tests/test_live_session.py drives all five ops
+    # across three real processes — a spawned sidecar, a host loop, and the MCP
+    # server over its own stdio protocol.
+    "session_host", "session_release", "session_state", "session_propose",
+    "session_leave",
 }
 
 # unit -> {"kind","expected","actual","source"} once credited.

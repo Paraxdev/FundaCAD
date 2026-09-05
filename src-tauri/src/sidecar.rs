@@ -30,6 +30,11 @@ use std::os::windows::process::CommandExt;
 pub struct Sidecar {
     pub child: Arc<Mutex<Option<Child>>>,
     pub token: String,
+    /// The app data directory the session file was written into, or None when it
+    /// could not be resolved or written. Held so the exit path removes exactly
+    /// the file this launch created rather than re-deriving the path and racing
+    /// a second instance that has since replaced it.
+    session_dir: Option<std::path::PathBuf>,
     /// The same `sidecar.log` handle the output mirroring writes through.
     /// Anything else that needs to reach a field report has to go through this
     /// handle rather than opening the file again: this one is not in append
@@ -140,11 +145,24 @@ pub struct SidecarDeath {
     pub cause: String,
 }
 
+/// The port out of the sidecar's readiness line, `LISTENING <port>`.
+///
+/// Pure so it can be asserted without spawning anything, and separate because
+/// this is the ONLY place Rust learns the port. `PORT` is env-overridable on the
+/// Python side, so anything that assumed 8765 here would be a second source of
+/// truth that is right until someone sets the variable.
+fn listening_port(line: &str) -> Option<u16> {
+    // The line is mirrored into the log with no prefix, but be tolerant of one:
+    // this reads whatever follows the word, not a fixed column.
+    let rest = line.split("LISTENING").nth(1)?;
+    rest.split_whitespace().next()?.parse().ok()
+}
+
 /// Turn an exit status into something the frontend can phrase.
 ///
 /// `fatal` is the last `FATAL:` line the sidecar wrote to stderr, if any. Using it
 /// verbatim keeps the real port in the message (it is env-overridable via
-/// `SINDRI_SIDECAR_PORT`) instead of hardcoding 8765 into Rust as a fourth copy.
+/// `FUNDACAD_SIDECAR_PORT`) instead of hardcoding 8765 into Rust as a fourth copy.
 fn classify_exit(status: &std::process::ExitStatus, fatal: Option<String>) -> SidecarDeath {
     if status.code() == Some(EXIT_PORT_IN_USE) {
         return SidecarDeath {
@@ -199,7 +217,7 @@ fn describe_exit(status: &std::process::ExitStatus) -> String {
 /// `Child` out of the `Mutex` before terminating it, so an empty slot here means
 /// an intentional shutdown (Drop/exit) — not a crash — and the loop just stops.
 /// Auto-respawn is deliberately NOT implemented: the token/CSP contract (a fresh
-/// per-launch `SINDRI_SIDECAR_TOKEN` the frontend must re-fetch and re-dial with)
+/// per-launch `FUNDACAD_SIDECAR_TOKEN` the frontend must re-fetch and re-dial with)
 /// makes a live respawn non-trivial; revisit once the frontend can rotate tokens
 /// without a full reload.
 ///
@@ -254,7 +272,7 @@ fn spawn_supervisor(
 /// that only misfires on machines nobody here builds on, which is exactly how
 /// the NixOS failure below shipped unnoticed.
 fn configure_env(cmd: &mut Command, rt: &Runtime, token: &str, blobs: Option<&std::path::Path>) {
-    cmd.env("SINDRI_SIDECAR_TOKEN", token) // hand the secret to the sidecar
+    cmd.env("FUNDACAD_SIDECAR_TOKEN", token) // hand the secret to the sidecar
         .env("PYTHONDONTWRITEBYTECODE", "1") // read-only bundle: never write .pyc
         // NixOS, issue #3: `appimage-run` exports PYTHONHOME=<AppDir>/usr, and an
         // INHERITED PYTHONHOME sends the bundled interpreter looking for its
@@ -280,7 +298,7 @@ fn configure_env(cmd: &mut Command, rt: &Runtime, token: &str, blobs: Option<&st
     // server.py`) means "no store" and the sidecar falls back to its own
     // default — never a crash, since geometry can always be re-imported.
     if let Some(dir) = blobs {
-        cmd.env("SINDRI_BLOB_DIR", dir);
+        cmd.env("FUNDACAD_BLOB_DIR", dir);
     }
 }
 
@@ -357,13 +375,40 @@ impl Sidecar {
         // flag on that line, and warn loudly if it never comes (a broken bundled
         // runtime otherwise shows only as the frontend's endless reconnect).
         let ready = Arc::new(AtomicBool::new(false));
+        // Where to tell the outside world we are, once we know. Resolved here
+        // rather than in the thread so `kill` can clear exactly the file this
+        // launch wrote; None when there is no data directory to write into.
+        let session_dir = app.path().app_data_dir().ok();
         if let Some(out) = child.stdout.take() {
             let ready = ready.clone();
             let log = log.clone();
+            let session_dir = session_dir.clone();
+            let session_token = token.clone();
             std::thread::spawn(move || {
                 for line in BufReader::new(out).lines().map_while(Result::ok) {
                     if line.contains("LISTENING") {
                         ready.store(true, Ordering::SeqCst);
+                        // Say how to reach us, now that something is actually
+                        // answering (session_file.rs). Deliberately not at spawn
+                        // time: a file naming a dead port costs every reader a
+                        // connect timeout to learn what a missing file says at
+                        // once. The port comes off this line because the sidecar
+                        // owns it — it is env-overridable, and a second copy in
+                        // Rust would be a copy that can disagree.
+                        if let (Some(dir), Some(port)) = (&session_dir, listening_port(&line)) {
+                            let info = crate::session_file::SessionInfo {
+                                port,
+                                token: session_token.clone(),
+                                pid: std::process::id(),
+                            };
+                            match crate::session_file::write_into(dir, &info) {
+                                Ok(p) => println!("[sidecar] session file {}", p.display()),
+                                // Best-effort: an app that refused to start
+                                // because it could not write a hint file would
+                                // be trading a small problem for the whole one.
+                                Err(e) => eprintln!("[sidecar] no session file: {e}"),
+                            }
+                        }
                     }
                     println!("[sidecar] {line}");
                     if let Some(l) = &log {
@@ -425,6 +470,7 @@ impl Sidecar {
         Ok(Sidecar {
             child,
             token,
+            session_dir,
             log,
             #[cfg(windows)]
             job: Mutex::new(job),
@@ -449,6 +495,11 @@ impl Sidecar {
 
     /// Kill the sidecar and its whole process tree.
     pub fn kill(&self) {
+        // First, so a reader that arrives during the teardown is told there is
+        // no app rather than handed a port that is about to stop answering.
+        if let Some(dir) = &self.session_dir {
+            crate::session_file::remove_from(dir);
+        }
         #[cfg(windows)]
         if let Ok(mut jg) = self.job.lock() {
             if let Some(job) = jg.take() {
@@ -518,6 +569,24 @@ impl Drop for Sidecar {
 mod tests {
     use super::*;
 
+    /// The session file names a port, and this is the only place Rust learns
+    /// one. Getting it wrong points every client at the wrong socket while the
+    /// app looks perfectly healthy, so the parse is pinned rather than assumed.
+    #[test]
+    fn the_readiness_line_is_where_the_port_comes_from() {
+        assert_eq!(listening_port("LISTENING 8765"), Some(8765));
+        assert_eq!(listening_port("LISTENING 8765
+"), Some(8765));
+        // mirrored into the log with a prefix, and with a trailing field one day
+        assert_eq!(listening_port("[sidecar] LISTENING 51234 ready"), Some(51234));
+        // and the control: nothing that is not that line may yield a port, or a
+        // stray mention in a log message would overwrite a good session file
+        assert_eq!(listening_port("waiting for the socket"), None);
+        assert_eq!(listening_port("LISTENING"), None);
+        assert_eq!(listening_port("LISTENING soon"), None);
+        assert_eq!(listening_port("LISTENING 99999"), None, "not a u16");
+    }
+
     /// NixOS issue #3: an inherited PYTHONHOME (appimage-run sets it to the
     /// AppDir prefix) makes the bundled interpreter hunt for its stdlib in the
     /// wrong place and abort with "No module named 'encodings'". It must be
@@ -567,8 +636,8 @@ mod tests {
         let envs: Vec<_> = cmd.get_envs().collect();
         let dir = envs
             .iter()
-            .find(|(n, _)| *n == std::ffi::OsStr::new("SINDRI_BLOB_DIR"))
-            .expect("SINDRI_BLOB_DIR must be passed when a store is resolved");
+            .find(|(n, _)| *n == std::ffi::OsStr::new("FUNDACAD_BLOB_DIR"))
+            .expect("FUNDACAD_BLOB_DIR must be passed when a store is resolved");
         assert_eq!(dir.1, Some(std::ffi::OsStr::new("/data/blobs")));
 
         // ...and omitted entirely when there is none, rather than set to "".
@@ -579,7 +648,7 @@ mod tests {
         assert!(
             !bare
                 .get_envs()
-                .any(|(n, _)| n == std::ffi::OsStr::new("SINDRI_BLOB_DIR")),
+                .any(|(n, _)| n == std::ffi::OsStr::new("FUNDACAD_BLOB_DIR")),
             "no store => the variable must be absent, not empty"
         );
     }

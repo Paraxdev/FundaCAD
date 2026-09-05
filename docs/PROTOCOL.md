@@ -15,10 +15,10 @@ way around.
 The URL carries the per-launch shared secret as a query parameter:
 
 ```
-ws://127.0.0.1:8765/?token=<SINDRI_SIDECAR_TOKEN>
+ws://127.0.0.1:8765/?token=<FUNDACAD_SIDECAR_TOKEN>
 ```
 
-The Rust shell mints `SINDRI_SIDECAR_TOKEN` per launch and hands it to the frontend via
+The Rust shell mints `FUNDACAD_SIDECAR_TOKEN` per launch and hands it to the frontend via
 the `sidecar_token` Tauri command; the frontend fetches it once in `Geometry.init()`
 before opening the socket. A connection missing or misquoting the token, or one whose
 `Origin` header isn't the Tauri webview / dev server, is closed with WebSocket close
@@ -288,6 +288,62 @@ frontend never ships file bytes over the socket.
 Reply: `{ "brep": "...", "name": "...", "solid": true, "faces": [...] }` (the exact
 fields the frontend embeds as an `import` feature), or `{ "error": { "message": "..." } }`.
 Given a longer budget than a normal rebuild (mesh read + B-rep build can run longer).
+
+### `session_*` — the live session
+
+Five ops that share one document between the app window and an outside client
+(the MCP server in `mcp/`). They are answered on the **read path**, never behind
+the heavy-op lock: the window publishes on a loop, and a publish that queued
+behind a rebuild would make the window invisible to an agent for exactly as long
+as the agent's own build took. The rules, and why they are these rules, are in
+`sidecar/live_session.py`.
+
+One **host** (the window) owns the document and is the only thing that may raise
+its revision. Any number of **guests** may read it and propose a replacement.
+The connection is the identity: whoever holds the socket holds the role, and
+losing the socket gives it up.
+
+```jsonc
+// the window, on its loop: publish what is open, collect what has been asked for
+{ "op": "session_host", "id": "...", "document": { /* CadDocument */ },
+  "revision": 12, "title": "spool.funda",
+  "status": { "canEdit": true, "applied": ["p3"], "building": false } }
+// -> { "ok": true, "guests": ["an assistant"], "proposals": [ { "id": "p4",
+//      "name": "an assistant", "note": "feature_add: cylinder",
+//      "baseRevision": 12, "document": { ... } } ] }
+
+// the window, on the way out. Takes the document with it: a document with no
+// host is not one anyone may act on.
+{ "op": "session_release", "id": "..." }          // -> { "ok": true }
+
+// a guest reading. Also its heartbeat, which is why the name is on a READ.
+{ "op": "session_state", "id": "...", "name": "an assistant" }
+// -> { "attached": true, "revision": 12, "title": "...", "status": { ... },
+//      "document": { ... }, "guests": [...] }
+
+// a guest offering an edit
+{ "op": "session_propose", "id": "...", "document": { ... }, "baseRevision": 12,
+  "note": "feature_add: cylinder", "name": "an assistant" }
+// -> { "ok": true, "proposal": "p4", "revision": 12 }
+// -> { "ok": false, "reason": "stale" | "no-host" | "backlog",
+//      "revision": 14, "message": "..." }
+
+{ "op": "session_leave", "id": "..." }            // -> { "ok": true }
+```
+
+A proposal is refused if `baseRevision` is not the current revision. That is the
+rule that stops an agent's edit landing on a model the user has since changed —
+the selector it wrote may now address a different face. Three named reasons
+rather than one failure, because the guest's next move differs for each: give
+up, read again, or wait.
+
+`status` is opaque to the sidecar and is passed through verbatim. The window puts
+`canEdit` in it (so a guest refuses an edit up front instead of waiting out its
+own timeout) and `applied`, the ids of the proposals it has taken — which is the
+acknowledgement a guest waits on. Not "the revision moved", which also moves for
+the user's own edits, and not "the published document equals what I offered",
+which is never true: the window migrates a document on the way in and adds
+`version`, `suppressed` and the visibility overlays on the way back out.
 
 ### `ping`
 

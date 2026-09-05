@@ -16,10 +16,11 @@ In scope:
 
 - the desktop app: Tauri shell (Rust), webview frontend (TypeScript), bundled Python geometry sidecar
 - the localhost sidecar WebSocket (token-gated, bound to 127.0.0.1)
+- the live session: while the app runs it writes its engine's port and token to `session.json` in its per-user app data directory, owner-only, so an AI assistant connected through MCP can join it (`docs/MCP.md`). Holding that token means driving the geometry engine; reaching the DOCUMENT the user has open additionally requires the app's own live-editing setting, which is visible in the window while anyone is attached. Reports about that file's permissions, or about the session rules in `sidecar/live_session.py`, are in scope
 - the signed update pipeline (release artifacts and `latest.json`)
 - document parsing: `.funda` and `.sindri` files, and imported STL/3MF/STEP/OBJ
 - the printers you configure on your own LAN
 
 FundaCAD has no accounts and no backend. It makes no network calls of its own except the update check and the printers you point it at, so there is no hosted service in scope.
 
-Out of scope: vulnerabilities that require an already-compromised machine, and reports from automated scanners without a plausible impact.
+Out of scope: vulnerabilities that require an already-compromised machine, and reports from automated scanners without a plausible impact. That includes another process running as the same user reading `session.json`: a process with that access can already read and rewrite the user's documents directly, so the file grants it nothing it did not have.

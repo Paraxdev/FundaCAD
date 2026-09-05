@@ -70,6 +70,8 @@ import { installKeyboard } from "./keyboard";
 import { installTitlebar } from "./titlebar";
 import { useUiStore } from "../stores/ui";
 import { createDocBridge, type DocBridge } from "./docBridge";
+import { LiveSessionHost } from "../live/liveSession";
+import { liveEditsAllowed, liveSharingEnabled, onLiveEditingChange } from "../ui/liveEditing";
 
 import type { Feature, PlaneDef } from "../types";
 
@@ -102,6 +104,10 @@ export interface Engine {
   viewport: Viewport;
   geometry: GeometryBackend;
   store: DocumentStore;
+  /** Publishes this window's document to an attached assistant, and applies the
+   *  edits it offers. Always constructed; running only while the live-editing
+   *  setting is on. */
+  live: LiveSessionHost;
   overlay: SketchOverlay;
   sketch: SketchMode;
   tools: EngineTools;
@@ -198,6 +204,20 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   // crash-safety: periodic recovery snapshots + restore-on-launch prompt
   installAutosave(e.store);
   void checkRecovery(e.store);
+
+  // Sharing this window's document with an assistant working through MCP. AFTER
+  // the store exists and before anything can edit it, so the very first publish
+  // carries a document rather than a null. Started only if the setting says so,
+  // and stopped and restarted when it changes — the loop holds a subscription to
+  // the store, so leaving it running in "off" would keep counting revisions for
+  // a session nobody is in.
+  e.live = new LiveSessionHost(e.store, e.geometry, liveEditsAllowed);
+  const syncLive = () => {
+    if (liveSharingEnabled()) e.live.start();
+    else void e.live.stop();
+  };
+  syncLive();
+  onLiveEditingChange(syncLive);
 
   e.overlay = new SketchOverlay();
   e.viewport.addToScene(e.overlay.group);

@@ -10,6 +10,7 @@ mod geom;
 // crate consumes it in the app itself.
 pub mod container;
 mod printer;
+pub mod session_file;
 mod sidecar;
 mod slicer;
 mod spacemouse;

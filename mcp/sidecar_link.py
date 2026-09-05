@@ -5,15 +5,20 @@ sidecar the app asks. That is deliberate: a gap an agent hits here is a gap a
 user hits in the viewport, which is the only reason driving the sidecar is
 worth more than calling build123d directly from this process.
 
-The sidecar's port and token are fixed by convention (127.0.0.1:8765, the token
-the Rust shell mints), so a second client cannot simply join the running app's:
-it does not know the token. Both are overridable by environment variable
-though, so this spawns its OWN sidecar on its OWN port with its OWN minted
-token. Two consequences worth stating:
+There are two ways to have an engine, and which one is in force decides what an
+agent can reach:
 
-  * it never competes with the app for the single serialised worker, and
-  * it never touches the document the user has open. An agent working through
-    this is working on ITS copy, and hands back a file.
+  * STANDALONE — spawn one, on a free port, with a token minted here. It never
+    competes with a running app for the worker and it cannot see the document
+    the user has open. An agent working this way works on its own copy and hands
+    back a file.
+  * ATTACHED — join the engine a running FundaCAD already has, by reading the
+    port and token it publishes (app_session.py). The agent then shares the
+    user's engine AND, through the session ops, the document on their screen.
+
+`mode_from_env` picks between them. The default is "attach if an app is open,
+otherwise spawn", because the question an agent is usually asked is about the
+part in front of the person asking.
 
 One connection, reopened on demand. The sidecar serialises heavy ops anyway, so
 there is nothing to gain from more, and a single socket makes cancellation and
@@ -30,7 +35,29 @@ import sys
 
 import websockets
 
+import app_session
 from winjob import ProcessJob, kill_tree
+
+#: The environment-variable names, current first. The sidecar reads the same
+#: three spellings through sidecar/appenv.py; this is the small mirror of it that
+#: keeps mcp/ from importing across into the sidecar package for four lines.
+_PREFIX = "FUNDACAD_"
+_LEGACY_PREFIXES = ("SINDRI_", "SINDRICAD_")
+
+
+def _env(suffix, default=None):
+    for prefix in (_PREFIX,) + _LEGACY_PREFIXES:
+        val = os.environ.get(prefix + suffix)
+        if val is not None:
+            return val
+    return default
+
+
+def _apply_env(env, suffix, value):
+    env[_PREFIX + suffix] = value
+    for prefix in _LEGACY_PREFIXES:
+        env.pop(prefix + suffix, None)
+    return env
 
 #: How long to wait for the spawned sidecar to print LISTENING. A cold start
 #: imports OCP, which is seconds on a warm filesystem and much worse on a cold
@@ -61,14 +88,38 @@ def sidecar_dir():
     return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "sidecar")
 
 
+#: What to do about a running app, from FUNDACAD_MCP_MODE.
+#:
+#: "auto"       attach to a running FundaCAD if there is one, else spawn.
+#: "attach"     attach, or refuse to start. For a host configured to work on the
+#:              open document and nothing else, where quietly falling back to a
+#:              private copy would look like the edits are being ignored.
+#: "standalone" never attach, even with an app open. The old behaviour, kept
+#:              because "do not touch what I have open" is a real requirement.
+MODES = ("auto", "attach", "standalone")
+DEFAULT_MODE = "auto"
+
+
+def mode_from_env(env=None):
+    """The configured mode, and it is deliberately forgiving about spelling.
+
+    An unrecognised value falls back to the default rather than refusing to
+    start: this is read at startup inside an MCP host, where a raised exception
+    reaches the user as "the server exited" with the reason in a log they may
+    never open. The value is echoed on stderr, which is the log they DO see.
+    """
+    env = os.environ if env is None else env
+    raw = (env.get("FUNDACAD_MCP_MODE") or "").strip().lower()
+    return raw if raw in MODES else DEFAULT_MODE
+
+
 class SidecarLink:
     """Spawn (or attach to) one sidecar, and speak to it.
 
-    Attaching is the escape hatch for development: with SINDRI_SIDECAR_TOKEN set
-    in the environment this talks to whatever is already on SINDRI_SIDECAR_PORT
-    instead of starting anything. That is how the probe scripts in this repo
-    already work, and it makes a debugging session one env var rather than a
-    code change."""
+    Constructed with a token, it ATTACHES: it dials that port and starts
+    nothing. `for_mode` is how the server chooses; the environment variables are
+    the escape hatch that came first and still works, and is how the probe
+    scripts in this repository drive a session they can see."""
 
     def __init__(self, python=None, port=None, token=None):
         self.python = python or sys.executable
@@ -87,17 +138,65 @@ class SidecarLink:
 
     @classmethod
     def from_env(cls):
-        tok = os.environ.get("SINDRI_SIDECAR_TOKEN")
+        """A link configured by environment variables alone: the explicit
+        override. Knows nothing about a running app — see `for_mode`."""
+        tok = _env("SIDECAR_TOKEN")
         return cls(python=os.environ.get("FUNDACAD_SIDECAR_PYTHON"),
-                   port=os.environ.get("SINDRI_SIDECAR_PORT"),
+                   port=_env("SIDECAR_PORT"),
                    token=tok)
+
+    @classmethod
+    async def for_mode(cls, mode=None, log=None):
+        """The link this mode asks for, and what it found.
+
+        Returns `(link, app)` where `app` is the running app's `{port, token,
+        pid}` when attached and None when not, so the caller can say which of the
+        two worlds it is in without inferring it from `link.attached` — that flag
+        is also set by the environment override, which is a different thing.
+
+        An explicit token in the environment wins over everything here. Someone
+        who set it is pointing this at a specific engine on purpose, and a
+        discovery step that overrode them would make a debugging session
+        unexplainable.
+        """
+        mode = mode or mode_from_env()
+        say = log or (lambda *_a: None)
+
+        if _env("SIDECAR_TOKEN"):
+            say("[mcp] attaching to the engine named in the environment")
+            return cls.from_env(), None
+
+        if mode != "standalone":
+            app = await app_session.find_running_app()
+            if app is not None:
+                say(f"[mcp] FundaCAD is open (pid {app.get('pid')}) — "
+                    f"attaching to its engine on port {app['port']}")
+                return cls(port=app["port"], token=app["token"]), app
+            if mode == "attach":
+                # Loud, and by request: this mode exists for a host that is meant
+                # to work on the open document, where silently working on a
+                # private copy would look like the edits are being ignored.
+                raise RuntimeError(
+                    "FUNDACAD_MCP_MODE=attach, but no FundaCAD window is running "
+                    "(no live session file, or the engine it names is gone). "
+                    "Open FundaCAD, or use FUNDACAD_MCP_MODE=auto to work on a "
+                    "private copy when it is closed."
+                )
+            say("[mcp] no FundaCAD window is open — starting a private engine")
+        else:
+            say("[mcp] standalone by configuration — starting a private engine")
+        return cls(), None
 
     async def start(self):
         if self.attached or self.proc is not None:
             return
         env = dict(os.environ)
-        env["SINDRI_SIDECAR_PORT"] = str(self.port)
-        env["SINDRI_SIDECAR_TOKEN"] = self.token
+        # Written under the current names only, and the retired spellings cleared
+        # with them: a child handed two names that disagree would pick whichever
+        # its own lookup order preferred, which is not a thing to leave to chance
+        # when one of them is the auth token.
+        _apply_env(env, "SIDECAR_PORT", str(self.port))
+        _apply_env(env, "SIDECAR_TOKEN", self.token)
         self.proc = await asyncio.create_subprocess_exec(
             self.python, "server.py", cwd=sidecar_dir(), env=env,
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,

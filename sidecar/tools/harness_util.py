@@ -68,9 +68,9 @@ class SpawnedServer:
     def __enter__(self):
         self.port = _free_port()
         env = dict(os.environ)
-        env["SINDRI_SIDECAR_PORT"] = str(self.port)
-        env["SINDRI_DISK_CACHE"] = "0"  # deterministic: no persisted geometry
-        env.pop("SINDRI_SIDECAR_TOKEN", None)  # force mint+print of a fresh token
+        env["FUNDACAD_SIDECAR_PORT"] = str(self.port)
+        env["FUNDACAD_DISK_CACHE"] = "0"  # deterministic: no persisted geometry
+        env.pop("FUNDACAD_SIDECAR_TOKEN", None)  # force mint+print of a fresh token
         self.proc = subprocess.Popen(
             [sys.executable, "server.py"],
             cwd=SIDECAR_DIR,
@@ -195,10 +195,16 @@ def parse_feature_handler_keys():
 
 
 def parse_server_ops():
-    """The op strings server.py dispatches — parsed from its `op == "..."`
-    branches AT RUNTIME."""
+    """The op strings server.py dispatches, scraped from its dispatch branches
+    AT RUNTIME.
+
+    The name must look like an identifier. Without that, a COMMENT describing the
+    pattern matches it — which happened, and put a phantom op called "..." in the
+    universe. A phantom is not merely untidy: it is an entry nothing can ever
+    cover, so it sits in the UNCOVERED list forever and trains the reader to
+    ignore that list, which is the one thing this harness needs them to read."""
     src = open(os.path.join(SIDECAR_DIR, "server.py")).read()
-    return set(re.findall(r'op\s*==\s*"([^"]+)"', src))
+    return set(re.findall(r'op\s*==\s*"([A-Za-z_][A-Za-z0-9_]*)"', src))
 
 
 def run(coro):

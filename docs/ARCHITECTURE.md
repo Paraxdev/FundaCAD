@@ -52,7 +52,7 @@ reason, not a quick patch.
    upstream geometry changes; descriptors are re-resolved against the rebuilt shape, so
    a downstream feature keeps landing on the right edge.
 4. **The sidecar port and token are fixed.** `127.0.0.1:8765` plus a per-launch
-   `SINDRI_SIDECAR_TOKEN` shared secret, hardcoded on both sides and in the CSP. The
+   `FUNDACAD_SIDECAR_TOKEN` shared secret, hardcoded on both sides and in the CSP. The
    webview's Content-Security-Policy `connect-src` is deliberately narrow (localhost and
    that one WebSocket) and must never be widened to admit an arbitrary URL.
    A fixed port only works while exactly one app instance exists, so
@@ -63,6 +63,12 @@ reason, not a quick patch.
    Note that this is why the updater restarts through `restart_for_update` rather
    than the process plugin's `relaunch()`: the instance lock has to be dropped
    before the replacement process starts, or the new instance quits on launch.
+   While the app runs it also writes that port and token into `session.json` in
+   its app data directory (`session_file.rs`), removing it on exit, so an outside
+   program can join the session instead of starting a second engine - see
+   `docs/MCP.md`. That file is the one place the token reaches disk; it is written
+   user-only, and reaching the open DOCUMENT through it is gated separately by a
+   setting in the app.
 5. **Display-only state stays in frontend side-maps.** Visibility, display names, and
    palette/body colors are UI state, not model state - they live in `DocumentStore`
    side-maps, not in the `document` sent to the sidecar, and are threaded explicitly

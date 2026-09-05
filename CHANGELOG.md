@@ -23,7 +23,13 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ## Unreleased
 
+### Added
+
+- **An AI assistant can now work on the document you have open, instead of on a copy.** Connected through MCP, its edits appear in the window as it makes them, each one a single undo, and a badge next to the document name says who is connected and what they last did. Before this, an assistant started a geometry engine of its own and handed its work back as a file you had to open, so nothing it did was visible while it did it. Preferences has an Assistants section with three settings: don't share, share read-only, or share and allow edits. It can only ever *offer* an edit — the window decides whether to take it, and refuses one written against a model that has since changed, so an assistant cannot overwrite what you did while it was thinking.
+
 ### Changed
+
+- Two heavy geometry operations from two different clients can no longer run at the same time. The rule that they must not was in place and was enforced per connection, so it held only while exactly one program was ever connected.
 
 - Clicking a body now opens the move gizmo on it. Picking a body IS reaching for it, so the obvious gesture — click the thing, drag it — no longer needs a second command first. A plain click elsewhere moves the gizmo to the next body, or puts it away over empty space, in one click rather than two.
 - Each drag of the move gizmo is its own row in the timeline, so an undo takes back the last nudge instead of the whole sitting, and the next drag starts from the pose the last one produced.

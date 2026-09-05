@@ -29,6 +29,12 @@ import {
   setLayoutPref,
 } from "../../ui/layoutPrefs";
 import { featureFlags, onFeatureFlagsChange, setFeatureFlag } from "../../ui/featureFlags";
+import {
+  asLiveEditingMode,
+  liveEditingMode,
+  onLiveEditingChange,
+  setLiveEditingMode,
+} from "../../ui/liveEditing";
 
 const dialogs = useDialogStore();
 const close = () => { dialogs.preferences = false; };
@@ -42,6 +48,7 @@ const pack = ref(getIconPack());
 const unit = ref(getUnit());
 const layout = ref(layoutPrefs());
 const flags = ref(featureFlags());
+const live = ref(liveEditingMode());
 
 const stops: (() => void)[] = [];
 onMounted(() => {
@@ -51,6 +58,7 @@ onMounted(() => {
     onUnitChange(() => { unit.value = getUnit(); }),
     onLayoutPrefsChange(() => { layout.value = layoutPrefs(); }),
     onFeatureFlagsChange(() => { flags.value = featureFlags(); }),
+    onLiveEditingChange(() => { live.value = liveEditingMode(); }),
   );
 });
 onUnmounted(() => { for (const stop of stops) stop(); });
@@ -67,6 +75,7 @@ function onHistory(ev: Event) { const v = asHistorySide(value(ev)); if (v) setLa
 function onMultiColor(ev: Event) {
   setFeatureFlag("multiColor", (ev.target as HTMLInputElement).checked);
 }
+function onLive(ev: Event) { const v = asLiveEditingMode(value(ev)); if (v) setLiveEditingMode(v); }
 </script>
 
 <template>
@@ -134,6 +143,23 @@ function onMultiColor(ev: Event) {
         machine it is a set of controls with nothing on the other end. Nothing in
         a saved document is lost while it is off, so anything already assigned
         comes back when it is turned on again.
+      </div>
+
+      <div class="sm-section">Assistants</div>
+      <label class="prefs-row">
+        <span class="prefs-label">Live document</span>
+        <select id="prefs-live" :value="live" @change="onLive">
+          <option value="off">Do not share</option>
+          <option value="read">Share, read only</option>
+          <option value="edit">Share, and allow edits</option>
+        </select>
+      </label>
+      <div class="sm-hint">
+        Lets an AI assistant connected through MCP work on the document you have
+        open, instead of on a copy it hands back as a file. Its edits arrive one
+        at a time and each is a single undo, and a badge next to the document
+        name says who is connected and what they last did. Sharing stops the
+        moment this is set to Do not share.
       </div>
     </div>
 

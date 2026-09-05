@@ -47,12 +47,14 @@ import numpy as np
 
 import websockets
 
+import appenv
+import live_session
 import occt_smp
 
 HOST = "127.0.0.1"
 # Env-overridable so a test/benchmark instance can run beside the app's own
 # sidecar without stealing its port.
-PORT = int(os.environ.get("SINDRI_SIDECAR_PORT", "8765"))
+PORT = int(appenv.get("SIDECAR_PORT", "8765"))
 
 # Exit status for "could not bind the port". A contract with the Rust shell:
 # src-tauri/src/sidecar.rs `describe_exit` turns it into a message that names the
@@ -60,7 +62,7 @@ PORT = int(os.environ.get("SINDRI_SIDECAR_PORT", "8765"))
 EXIT_PORT_IN_USE = 3
 
 # WebSocket auth: every connection must carry the per-launch shared secret.
-# Rust sets SINDRI_SIDECAR_TOKEN when it spawns us; a manual `python server.py`
+# Rust sets FUNDACAD_SIDECAR_TOKEN when it spawns us; a manual `python server.py`
 # (no env) mints one and prints `TOKEN <t>` on stdout so a prober can read it
 # and append ?token=. There is NO open mode — the token is always required,
 # which is what keeps a foreign local process or a DNS-rebinding web page from
@@ -81,7 +83,7 @@ ALLOWED_ORIGINS = {
 }
 # Headless/browser e2e harnesses run vite on a side port; let the launcher
 # (which already controls the token) extend the allowlist explicitly.
-ALLOWED_ORIGINS |= {o for o in os.environ.get("SINDRI_EXTRA_ORIGINS", "").split(",") if o}
+ALLOWED_ORIGINS |= {o for o in appenv.get("EXTRA_ORIGINS", "").split(",") if o}
 
 # Per-peer-IP concurrent-connection cap. The sidecar is bound to 127.0.0.1, so
 # every connection shares that address and this is effectively a global cap on
@@ -285,7 +287,7 @@ def _worker_init(hb=None, hb_idx=None, err_buf=None, mesh=None, mesh_total=None)
         # checkpoint manifests, and no manifest ever references a mesh key, so
         # meshes/ grew without bound — measured at 3.2 GB. The budget is sized
         # from FREE DISK (see Store.cache_budget), because $XDG_CACHE_HOME is the
-        # user's home partition on most laptops; SINDRI_CACHE_MAX_GB overrides.
+        # user's home partition on most laptops; FUNDACAD_CACHE_MAX_GB overrides.
         # Meshes are evicted first and checkpoints only as a last resort, so a
         # normal-sized document never loses a checkpoint to this.
         try:
@@ -1332,7 +1334,7 @@ def _migrate_geometry_job(items):
 
     IN THE WORKER, deliberately. This parses geometry that came out of a file the
     user opened, and `builder._brep_b64_to_shape` exists precisely so a crafted
-    `.sindri` cannot aim a parser fuzz at OCCT — doing it in the parent would put
+    `.funda` cannot aim a parser fuzz at OCCT — doing it in the parent would put
     that fuzz one segfault away from taking the whole sidecar down instead of a
     disposable worker.
 
@@ -1978,7 +1980,7 @@ def _authorized(request) -> bool:
 
 
 def _mint_token() -> str:
-    """Manual `python server.py` (no SINDRI_SIDECAR_TOKEN env): mint one and
+    """Manual `python server.py` (no FUNDACAD_SIDECAR_TOKEN env): mint one and
     print it on stdout so a prober can read it and append ?token=… to its URL."""
     t = secrets.token_urlsafe(32)
     print(f"TOKEN {t}", flush=True)
@@ -2131,6 +2133,73 @@ async def _dispatch(ws, loop, req, req_id, op):
         await ws.send(_err(req_id, f"unknown op: {op}"))
 
 
+#: The one heavy job at a time. See handle() for why it is not per connection.
+#: Created at import: an asyncio.Lock binds to no loop until it is awaited, so a
+#: module-level one is safe and there is only ever the one serve() loop anyway.
+_JOB_LOCK = asyncio.Lock()
+
+#: The one shared document a running app and an outside agent both work on.
+#: Process-wide, like the pool: there is one engine here and one app driving it.
+#: See live_session.py for the rules; this file only carries them to the wire.
+_LIVE = live_session.LiveSession()
+
+#: Ops the live session answers. Named here rather than matched inline so
+#: handle() can route them without knowing what any of them do.
+_SESSION_OPS = frozenset({
+    "session_host", "session_release", "session_state", "session_propose",
+    "session_leave",
+})
+
+
+def _session_reply(ws, req, req_id, op):
+    """One live-session op, answered from the request that carried it.
+
+    These run on the READ path, never behind the heavy lock, and that is not an
+    optimisation. The host publishes its document on a loop; if that queued
+    behind a rebuild, the app would stop answering an agent for exactly as long
+    as the agent's own build took, and the agent would read "no app" and start a
+    second engine. Every one of them is a dict update — no geometry, no worker,
+    nothing that can block.
+
+    The connection is the identity. A host that loses its socket stops being the
+    host, and a guest that reconnects is a new guest, which is what both of those
+    events actually mean.
+    """
+    who = _conn_id(ws)
+    if op == "session_host":
+        res = _LIVE.publish(who, req.get("document"), req.get("revision") or 0,
+                            req.get("title"), req.get("status"))
+    elif op == "session_release":
+        res = _LIVE.release(who)
+    elif op == "session_state":
+        res = _LIVE.state(who, req.get("name"))
+    elif op == "session_propose":
+        res = _LIVE.propose(who, req.get("document"), req.get("baseRevision") or 0,
+                            req.get("note"), req.get("name"))
+    # Spelled out rather than left as a bare `else`, because the coverage harness
+    # builds its universe by scraping this file for equality tests against a
+    # quoted op name: an op that only ever appears inside a set is an op nothing
+    # measures.
+    elif op == "session_leave":
+        res = _LIVE.leave(who)
+    else:
+        # Unreachable: handle() routes only _SESSION_OPS here, and this is the
+        # branch that says so if the two ever fall out of step.
+        return _err(req_id, f"unknown session op: {op}")
+    return _ok(req_id, res)
+
+
+def _conn_id(ws):
+    """A stable name for one websocket connection.
+
+    id() of the object, which is unique among LIVE objects and is exactly the
+    lifetime wanted: it names this connection for as long as it exists and is
+    meaningless afterwards, which is what "the host is whoever is still on the
+    socket" means. Never leaves this process.
+    """
+    return f"c{id(ws):x}"
+
+
 async def _serialized(ws, loop, req, req_id, op, lock, running):
     """One heavy op, serialized against its peers, with a cancel token bound to
     this task's context so _run/_run_stall can see it."""
@@ -2201,7 +2270,14 @@ async def handle(ws):
         # Heavy ops stay STRICTLY serialized (the shared heartbeat counter and
         # the rebuild cache both assume one job at a time) — the lock preserves
         # that, while dispatching as tasks keeps the read loop free.
-        lock = asyncio.Lock()
+        #
+        # PROCESS-WIDE, not per connection. It was per connection while the app
+        # was the only client that ever ran a heavy op, and that held right up
+        # until a second one did: two connections meant two locks, and the
+        # invariant the comment above states — one job at a time — was enforced
+        # against nobody. There has always been a second client available (the
+        # attach-by-token escape hatch), and the live session makes one ordinary.
+        lock = _JOB_LOCK
         running: dict = {"id": None, "token": None}
         async for raw in ws:
             try:
@@ -2222,6 +2298,10 @@ async def handle(ws):
                     await ws.send(_ok(req_id, {"cancelled": hit}))
                     continue
 
+                if op in _SESSION_OPS:
+                    await ws.send(_session_reply(ws, req, req_id, op))
+                    continue
+
                 task = asyncio.create_task(
                     _serialized(ws, loop, req, req_id, op, lock, running)
                 )
@@ -2230,6 +2310,13 @@ async def handle(ws):
     finally:
         for t in list(tasks):
             t.cancel()
+        # Whoever this was, they are gone. A host that keeps hosting after its
+        # socket closed would leave an agent editing a document no window has
+        # open, and a guest that keeps its lease would keep the app polling fast
+        # for nothing.
+        who = _conn_id(ws)
+        _LIVE.release(who)
+        _LIVE.leave(who)
         if peer is not None:
             _ip_conns[peer] = _ip_conns.get(peer, 0) - 1
             if _ip_conns[peer] <= 0:
@@ -2239,7 +2326,7 @@ async def handle(ws):
 async def main():
     global _pool, _mp_ctx, _TOKEN, _HB, _HB_IDX, _INIT_ERR, _HB_MESH, _HB_MESH_TOTAL
     _die_with_parent()
-    _TOKEN = os.environ.get("SINDRI_SIDECAR_TOKEN") or _mint_token()
+    _TOKEN = appenv.get("SIDECAR_TOKEN") or _mint_token()
     _mp_ctx = mp.get_context("spawn")
     _HB = _mp_ctx.Value("Q", 0)  # heartbeat: bumped by the worker per feature
     _HB_IDX = _mp_ctx.Value("q", -1)  # which feature is building (-1 = meshing)

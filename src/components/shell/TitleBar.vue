@@ -9,6 +9,7 @@ import { iconPacks, getIconPack, setIconPack, asIconPackId, onIconPackChange } f
 import { buildMenubar } from "../../app/menubarDef";
 import Icon from "./Icon.vue";
 import MenuBar from "./MenuBar.vue";
+import LiveSessionPill from "./LiveSessionPill.vue";
 import brandLockup from "../../../assets/brand/fundacad-lockup-app.svg";
 
 const engine = useEngine();
@@ -88,6 +89,10 @@ function onPackInput(ev: Event) {
            reads as the name having changed. -->
       <Icon v-if="ui.dirty" name="dot" :size="8" class="dirty-dot" />{{ ui.docName }}
     </span>
+    <!-- Beside the document name, because what it is saying is about THIS
+         document: someone else is in it. It renders nothing at all unless an
+         assistant is actually attached. -->
+    <LiveSessionPill />
     <div class="spacer"></div>
     <label class="units" title="Display units (geometry is stored in mm)">
       Units

@@ -25,17 +25,66 @@ whole point of the design: a gap an agent hits here is a gap a user hits in the
 viewport, which is what makes driving the sidecar worth more than calling
 build123d from this process.
 
-It spawns **its own** sidecar on its own port with its own minted token
-(`SINDRI_SIDECAR_PORT` and `SINDRI_SIDECAR_TOKEN` already exist for this). Two
-consequences worth knowing:
+There are two worlds it can be in.
 
-- it never competes with a running app for the single serialised worker;
-- it never touches the document the user has open. An agent working through MCP
-  works on its own copy and hands the result back as a `.funda` file.
+**Live** — it joins the engine a running FundaCAD already has, and works on the
+document that window has open. Edits appear on screen as they are made, each one
+a single undo. This is the default when a window is open.
 
-Setting `SINDRI_SIDECAR_TOKEN` in the environment switches it to *attaching* to
-whatever is already on `SINDRI_SIDECAR_PORT`, which is the debugging escape
-hatch.
+**Private** — it spawns its own sidecar on its own port with its own minted
+token. It never competes with a running app for the serialised worker and never
+touches what the user has open; an agent working this way works on its own copy
+and hands the result back as a `.funda` file. This is what it does when no
+window is open, and the only thing it did before live sessions existed.
+
+### Choosing
+
+`FUNDACAD_MCP_MODE` takes:
+
+| value | what it does |
+| --- | --- |
+| `auto` (default) | live if a window is open, private if not |
+| `attach` | live, or refuse to start. For a host meant to work on the open document and nothing else, where falling back quietly would look like the edits are being ignored |
+| `standalone` | private, always, even with a window open |
+
+An explicit `FUNDACAD_SIDECAR_TOKEN` in the environment beats all three: someone
+who sets it is pointing this at a specific engine on purpose, and it is how the
+probe scripts in this repository drive a session they can watch. (The retired
+`SINDRI_` and `SINDRICAD_` spellings still answer, for a shell profile no rename
+in here can reach.)
+
+### How it finds a running window
+
+A running app writes `session.json` into its app data directory naming its
+engine's port and token, and removes it on the way out
+(`src-tauri/src/session_file.rs`). `mcp/app_session.py` reads it and then does
+the thing that actually settles the question: dials that port with that token and
+pings. The file is a hint — it survives a crash — so a stale one costs one
+connect and is then ignored.
+
+The token being on disk is a real change and is documented where it is written.
+It is written user-only, so anything that can read it can already read the user's
+documents directly; what makes the reach into the OPEN document acceptable is
+that it is visible and revocable, not that it is small.
+
+### The window's half
+
+Sharing is a setting in FundaCAD's Preferences, under **Assistants**:
+
+- **Do not share** — nothing is published; an agent falls back to a private copy.
+- **Share, read only** — an agent can read and measure, and its edits are refused
+  by name rather than by timing out.
+- **Share, and allow edits** (the default) — edits are applied through the
+  document store, one undo step each.
+
+While an assistant is attached, a badge next to the document name says who it is
+and what it last did, and clicking it opens that setting.
+
+The rules live in `sidecar/live_session.py`: one HOST (the window, which owns the
+document and is the only thing that may raise its revision) and any number of
+GUESTS (which may read and PROPOSE, never write). A proposal names the revision
+it was written against and is refused if the document has moved on, so an agent
+cannot overwrite what a person did while it was thinking.
 
 On Windows the sidecar it spawns is put in a job object with
 `KILL_ON_JOB_CLOSE`, so the sidecar and its OCCT worker die with this process
