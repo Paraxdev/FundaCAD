@@ -8,7 +8,7 @@
 // The axis→action mapping is DATA-DRIVEN and user-configurable (each camera
 // action binds to one of the six raw axes, with invert + sensitivity), because
 // which physical axis is which differs per device/orientation. The 3D-Mouse
-// Settings screen (src/ui/spaceMouseSettings.ts) edits this live with a raw-axis
+// Settings screen (components/overlays/SpaceMouseModal.vue) edits this live with a raw-axis
 // readout + a test cube; the config persists to localStorage.
 
 import { listen } from "@tauri-apps/api/event";
@@ -209,12 +209,13 @@ export function getSpaceMouseMode(): "object" | "camera" {
   return CONFIG.mode;
 }
 
-// Sketch "lock to plane": suppress orbit + roll (keep pan + zoom) so the puck
-// can't tilt the view off the sketch plane.
-let orbitLocked = false;
-export function setSpaceMouseOrbitLocked(locked: boolean) {
-  orbitLocked = locked;
-}
+// Sketch "lock to plane" — suppress orbit + roll (keep pan + zoom) so the puck
+// cannot tilt the view off the sketch plane — is read off the rig in the loop
+// below rather than pushed here by sketch mode. Sketch mode sets the same lock
+// on the rig one line earlier either way, so this asks the thing that already
+// knows instead of being a second copy that has to be kept in step. It also
+// means sketching does not have to import the 3D mouse to say something about
+// the camera.
 
 export function setSpaceMouseMode(mode: "object" | "camera") {
   CONFIG.mode = mode;
@@ -232,27 +233,44 @@ export function onSpaceMouseMotion(fn: (m: Motion) => void): () => void {
   return () => motionListeners.delete(fn);
 }
 
+/** Start listening to the device and driving the view.
+ *
+ *  Returns a teardown. It has one, and the teardown has to actually stop the
+ *  frame loop, because the 3D mouse is a capability that can be turned off
+ *  while the app is running: a loop still reading a stale motion vector and
+ *  calling controls.truck() every frame is not "off", it is a view that drifts
+ *  for reasons nobody can find. Calling it twice is safe. */
 export async function initSpaceMouse(
   viewport: Viewport,
   onButton: (pressedMask: number) => void,
-): Promise<void> {
-  if (!("__TAURI_INTERNALS__" in window)) return; // native desktop app only
+): Promise<() => void> {
+  if (!("__TAURI_INTERNALS__" in window)) return () => {}; // native desktop app only
 
   let motion: Motion = ZERO;
   let lastEvent = 0;
   let prevMask = 0;
+  let stopped = false;
 
-  await listen<Motion>("spacemouse:motion", (e) => {
+  const unlisten: (() => void)[] = [];
+  unlisten.push(await listen<Motion>("spacemouse:motion", (e) => {
     motion = e.payload;
     latest = e.payload;
     lastEvent = performance.now();
     for (const fn of motionListeners) fn(e.payload);
-  });
-  await listen<{ mask: number }>("spacemouse:button", (e) => {
+  }));
+  unlisten.push(await listen<{ mask: number }>("spacemouse:button", (e) => {
     const pressed = e.payload.mask & ~prevMask; // rising edge only
     prevMask = e.payload.mask;
     if (pressed) onButton(pressed);
-  });
+  }));
+
+  // Between the await above and the first frame below, the caller may already
+  // have torn this down. Checking here as well as in the loop means a teardown
+  // that lands in that window still takes effect.
+  if (stopped) {
+    for (const off of unlisten) off();
+    return () => {};
+  }
 
   /** signed value of the raw axis a binding points at (0 if unbound) */
   const val = (b: AxisBinding | undefined, f: Motion) =>
@@ -260,6 +278,7 @@ export async function initSpaceMouse(
   let last = performance.now();
 
   const loop = () => {
+    if (stopped) return; // do NOT re-schedule: this is what "off" means
     requestAnimationFrame(loop);
     const now = performance.now();
     const dt = Math.min(50, now - last);
@@ -291,8 +310,9 @@ export async function initSpaceMouse(
     // exp(-z): positive axis kept as zoom-IN (old dolly(+z)); zoomBy(>1) = out
     if (z) viewport.rig.zoomBy(Math.exp(-z * CONFIG.zoomSens * dt));
 
+    const locked = viewport.rig.orbitLocked();
     const az = val(b.orbitAz, m), pol = val(b.orbitPolar, m);
-    if (!orbitLocked && (az || pol)) {
+    if (!locked && (az || pol)) {
       // rig.tumble, NOT controls.rotate: camera-controls clamps vertical orbit
       // just short of the poles every frame, so rotate() hard-stops at the top.
       // tumble() rotates the orbit up-vector along with the camera — free
@@ -301,7 +321,17 @@ export async function initSpaceMouse(
     }
 
     const roll = val(b.roll, m);
-    if (!orbitLocked && roll) viewport.rig.roll(modeSign * roll * CONFIG.orbitSens * dt);
+    if (!locked && roll) viewport.rig.roll(modeSign * roll * CONFIG.orbitSens * dt);
   };
   requestAnimationFrame(loop);
+
+  return () => {
+    stopped = true;
+    for (const off of unlisten) off();
+    unlisten.length = 0;
+    // The last thing the device said, cleared. Anything reading getLatestMotion()
+    // after this (the settings readout, the test cube) should see a device at
+    // rest rather than whatever it was doing when it was switched off.
+    latest = ZERO;
+  };
 }

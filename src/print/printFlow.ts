@@ -12,7 +12,7 @@ import type { GeometryBackend } from "../geometry/client";
 import { stripDocumentExt } from "../io/documentExt";
 import { exportPrintProject } from "../io/files";
 import { toast } from "../ui/toast";
-import { multiColorEnabled } from "../ui/featureFlags";
+import { multiMaterialEnabled } from "../plugins/registry";
 import { filamentMappingDialog, type LogicalSlot } from "./printDialog";
 import {
   activePrinterId,
@@ -49,7 +49,7 @@ export async function openInOrca(store: DocumentStore, geometry: GeometryBackend
       // were given, but the Orca preset is built for the machine the user
       // actually has, and asking for four is what makes Orca open a
       // toolchanger preset on a single-head printer.
-      filamentCount: multiColorEnabled() ? store.colorPalette.length : 1,
+      filamentCount: multiMaterialEnabled() ? store.colorPalette.length : 1,
     });
   } catch (e) {
     console.warn("slicer_project_settings failed, falling back to minimal settings:", e);
@@ -77,7 +77,7 @@ export async function openInOrca(store: DocumentStore, geometry: GeometryBackend
 function usedSlots(store: DocumentStore): LogicalSlot[] {
   const palette = store.colorPalette as { name: string; color: string; material?: string }[];
   const used = new Set<number>();
-  if (multiColorEnabled()) {
+  if (multiMaterialEnabled()) {
     for (const v of Object.values(store.bodyColorsMap())) used.add(v);
   }
   if (store.buildState.result?.bodies?.length) used.add(0); // unassigned → extruder 1

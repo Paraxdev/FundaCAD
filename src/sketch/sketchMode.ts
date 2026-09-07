@@ -37,7 +37,6 @@ import type { ResolvedEntity } from "./snap";
 import { detectRegions, rectCorners, rectFromThreePoints } from "./region";
 import { loopsFromEdgePolys, planeEdgePolys } from "./faceFootprint";
 import { boundaryAnchors, footprintAnchors } from "./anchors";
-import { setSpaceMouseOrbitLocked } from "../input/spacemouse";
 import { setPrompt } from "../ui/prompt";
 import { tooEdgeOn } from "./planeGraze";
 import { toast } from "../ui/toast";
@@ -609,7 +608,6 @@ export class SketchMode {
     this.removeGrid();
     this.viewport.exitSketchView();
     this.viewport.rig.setOrbitLocked(false); // restore free orbit in model mode
-    setSpaceMouseOrbitLocked(false);
     this.viewport.suspendPicking = false;
     this.active = false;
     this.base = null;
@@ -795,7 +793,6 @@ export class SketchMode {
     const wasLocked = this.viewLocked;
     this.lockReleased = true;
     this.viewport.rig.setOrbitLocked(false);
-    setSpaceMouseOrbitLocked(false);
     this.viewport.setSketchFlat(false);
     // Only ANNOUNCE a release when something was actually holding the view. With
     // the lock off — the default — turning away is the ordinary thing to do and
@@ -1002,7 +999,6 @@ export class SketchMode {
     // back square with the lock still disarmed and drift straight off again.
     if (on) this.squareToPlane();
     this.viewport.rig.setOrbitLocked(on);
-    setSpaceMouseOrbitLocked(on);
   }
   /** re-square the camera to the active sketch plane (palette "Look At").
    *  This is the recovery the release toast points at, so it re-arms the lock
@@ -1011,7 +1007,6 @@ export class SketchMode {
     this.squareToPlane();
     if (this.viewLocked) {
       this.viewport.rig.setOrbitLocked(true);
-      setSpaceMouseOrbitLocked(true);
     }
     // The flat projection comes back either way, and it comes back when the
     // flight LANDS (enterSketchView's onArrive) rather than now — forcing ortho

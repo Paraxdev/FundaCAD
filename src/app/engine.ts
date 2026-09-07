@@ -43,18 +43,15 @@ import { createFeatureStarters } from "../features/featureStarters";
 import { createContextMenus } from "../ui/contextMenus";
 import { createPanels } from "../ui/panels";
 import { createBugReporter } from "../ui/bugReporter";
-import { setPrinterPillClick } from "../print/printStatusLine";
-import { activePrinterId } from "../print/printerClient";
 
 import { useRibbonStore } from "../stores/ribbon";
 import { useCommandPaletteStore } from "../stores/commandPalette";
-import { SpaceMouseSettings } from "../ui/spaceMouseSettings";
 import { WelcomeScreen, welcomeOnStartup } from "../ui/welcome";
 import { scheduleStartupUpdateCheck } from "../ui/updates";
 import { openDocumentAtPath } from "../io/files";
 
 import { installSidecarDiedToast } from "./sidecarWatch";
-import { installSpaceMouse } from "./spaceMouseSetup";
+import { activateBuiltins } from "../plugins/activate";
 import { createSelection } from "./selection";
 import { DraftTool } from "../features/draftTool";
 import { ThreadTool } from "../features/threadTool";
@@ -95,7 +92,6 @@ export interface EngineTools {
 
 export interface EngineUi {
   welcome: WelcomeScreen;
-  spaceMouseSettings: SpaceMouseSettings;
   panels: ReturnType<typeof createPanels>;
 }
 
@@ -290,8 +286,6 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
     if (!ok) crumb("[solver] constraint solver unavailable, sketching without constraints");
   });
 
-  installSpaceMouse(e.viewport);
-
   // --- predicates the UI wiring below depends on ---
   Object.assign(e, createToolBusy(e));
   Object.assign(e, createSketchVisibility(e));
@@ -346,7 +340,6 @@ export function mountUi(e: Engine): void {
     }
   });
 
-  e.ui.spaceMouseSettings = new SpaceMouseSettings();
   e.ui.welcome = new WelcomeScreen({
     onNew: () => void e.newDocument(),
     onOpen: () => void e.openDoc(),
@@ -431,8 +424,10 @@ export function mountUi(e: Engine): void {
     viewport: e.viewport,
     sketch: e.sketch,
   }); // floating bug icon, bottom-right
-  // clicking the live print-progress pill opens the camera on the active printer.
-  setPrinterPillClick(() => void e.ui.panels.showCameraPanel(activePrinterId()));
+  // Whatever capabilities are turned on, started here and restarted whenever
+  // that set changes. The engine deliberately does not know which ones exist:
+  // see plugins/activate.ts.
+  activateBuiltins(e);
 
   e.geometry.onStatus((connected) => {
     if (!connected) e.setStatus("connecting to sidecar…", "error");

@@ -60,6 +60,14 @@ export interface CameraRig {
   tumble(az: number, pol: number): void;
   /** Lock out mouse orbit (sketch "lock to plane"); right-drag pans instead. */
   setOrbitLocked(locked: boolean): void;
+  /** Whether that lock is on.
+   *
+   *  Readable because the mouse is not the only thing that can orbit. A 3D
+   *  mouse has to obey the same lock, and it used to be told separately, which
+   *  made sketch mode import the 3D-mouse module to say something the rig
+   *  already knew. Two places holding one fact is two places to forget to
+   *  update; this is the one that was set first. */
+  orbitLocked(): boolean;
   /** Orbit about this world point rather than about the orbit target, until it
    *  is cleared with null. The library still aims the camera at its own target,
    *  so the target is still what sits at the centre of the screen; what this
@@ -664,6 +672,9 @@ export function createCameraRig(
         target.z,
         false,
       );
+    },
+    orbitLocked() {
+      return orbitLocked;
     },
     setOrbitLocked(locked) {
       orbitLocked = locked;

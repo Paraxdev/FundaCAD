@@ -3,6 +3,7 @@
 // component so ui/commands.ts can build the command list from the same tables
 // without pulling in a Vue component.
 
+import { printingEnabled } from "../plugins/registry";
 import { BOOLEAN_COMMANDS } from "../features/booleanOps";
 import { keyHint } from "../input/shortcuts";
 
@@ -160,6 +161,28 @@ export const MODEL: Group[] = [
     ],
   },
 ];
+
+/** Actions that only exist while the printer connection is running.
+ *
+ *  "Print Project" is deliberately NOT one of them: it writes a 3MF, which is a
+ *  file format, and a file format is not a printer. The two below need a slicer
+ *  installed or a machine on the network. */
+const PRINTING_ACTIONS = new Set(["print-orca", "print-send"]);
+
+/** The model ribbon as it should be drawn right now.
+ *
+ *  MODEL above stays the full definition, because it is also the answer to
+ *  "what actions exist"; this is the answer to "what can be reached", and the
+ *  two are different questions the moment a capability can be turned off. The
+ *  group is filtered rather than dropped: with the printer off it still holds
+ *  the export, so nothing has to handle an empty group. */
+export function modelGroups(): Group[] {
+  if (printingEnabled()) return MODEL;
+  return MODEL.map((g) => ({
+    ...g,
+    items: g.items.filter((it) => !("action" in it && PRINTING_ACTIONS.has(it.action))),
+  })).filter((g) => g.items.length > 0);
+}
 
 export const SKETCH: Group[] = [
   {

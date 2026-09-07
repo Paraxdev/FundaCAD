@@ -28,6 +28,7 @@ export const GRANTS = [
   "files.write",
   "network",
   "printer.control",
+  "device.input",
   "ui.panel",
   "process.spawn",
 ] as const;
@@ -36,8 +37,17 @@ export type Grant = (typeof GRANTS)[number];
 
 /** Where the plugin's code runs. The kind decides how much of the sandbox is
  *  the operating system's word and how much is ours, which is the difference
- *  the install screen has to tell the truth about. */
-export const PLUGIN_KINDS = ["process", "panel", "compute"] as const;
+ *  the install screen has to tell the truth about.
+ *
+ *  `builtin` is the honest name for a capability that ships inside the app and
+ *  is only turned on and off: its code is the app's own code, with the app's
+ *  own reach, and nothing sandboxes it. It is here rather than kept in a
+ *  separate system because the question a person is answering is the same one
+ *  ("what does this thing touch?"), and two vocabularies for one question
+ *  produce two screens that describe the same reach differently. What it must
+ *  never do is borrow the language of enforcement, which is `sandboxNote`'s
+ *  job. */
+export const PLUGIN_KINDS = ["builtin", "process", "panel", "compute"] as const;
 export type PluginKind = (typeof PLUGIN_KINDS)[number];
 
 interface GrantCopy {
@@ -66,6 +76,10 @@ const COPY: Record<Grant, GrantCopy> = {
   "printer.control": {
     can: "Send jobs to your printer and read its status",
     cannot: "Touch your printer",
+  },
+  "device.input": {
+    can: "Read the 3D mouse or other input device you have plugged in",
+    cannot: "Read any device you plug in",
   },
   "ui.panel": { can: "Add a panel to the window" },
   "process.spawn": {
@@ -186,6 +200,12 @@ export function describeGrants(manifest: PluginManifest): { can: string[]; canno
  *  implied otherwise would be trading on trust it has not earned. */
 export function sandboxNote(kind: PluginKind): string {
   switch (kind) {
+    case "builtin":
+      // The bluntest of the four, deliberately. Everything else on this screen
+      // reads like a permission, and for a built-in it is a description. The
+      // sentence exists so that difference cannot be missed by someone who
+      // learned what the screen means from the other entries.
+      return "This one is part of FundaCAD itself and ships with it. The list above is what it uses, not a limit placed on it, and turning it off stops it running rather than taking anything away.";
     case "process":
       return "This one runs as a normal program on your computer, so the list above is what it can reach through FundaCAD, not a cage around it. Install it only if you trust where it came from.";
     case "panel":

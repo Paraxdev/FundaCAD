@@ -35,7 +35,7 @@ import {
   sectionVisible, setBrowserFilter, type BrowserSection,
 } from "../../ui/browserFilter";
 import type { CtxItem } from "../../ui/menu";
-import { multiColorEnabled, onFeatureFlagsChange } from "../../ui/featureFlags";
+import { multiMaterialEnabled, onPluginChange, printingEnabled } from "../../plugins/registry";
 import type { CadDocument, Feature, Plane3 } from "../../types";
 
 const engine = useEngine();
@@ -184,8 +184,8 @@ const printerOnline = ref<boolean | null>(null);
 /** Multi-material, mirrored into a ref so the node list re-runs when it is
  *  toggled. The module is deliberately Vue-free (that is what lets the headless
  *  suite import it), so nothing tracks it without this. */
-const multiColor = ref(multiColorEnabled());
-const stopFlags = onFeatureFlagsChange(() => { multiColor.value = multiColorEnabled(); });
+const multiColor = ref(multiMaterialEnabled());
+const stopFlags = onPluginChange(() => { multiColor.value = multiMaterialEnabled(); });
 onUnmounted(stopFlags);
 
 /** The whole panel, as a flat list.
@@ -418,6 +418,11 @@ let pollTimer: number | null = null;
 
 function armPrinterChecks() {
   if (!("__TAURI_INTERNALS__" in window)) return;
+  // Nothing here is worth doing without the printer capability: the probe would
+  // load the printer client this capability exists to keep out of the bundle,
+  // and the poll would go on asking a machine about its filament every thirty
+  // seconds on behalf of a feature that is switched off.
+  if (!printingEnabled()) return;
   if (!probedOnce) {
     probedOnce = true;
     void (async () => {

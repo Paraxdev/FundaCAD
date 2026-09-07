@@ -8,7 +8,7 @@
 
 import type { DocumentStore } from "../document/store";
 import type { CtxItem } from "./menu";
-import { multiColorEnabled } from "./featureFlags";
+import { multiMaterialEnabled } from "../plugins/registry";
 
 /** The "Color" entry for a body's menu, or NOTHING when multi-material is off.
  *
@@ -21,7 +21,7 @@ import { multiColorEnabled } from "./featureFlags";
  *  Shared by the browser-tree row menu and the viewport's right-click body menu
  *  so the two surfaces can't drift. */
 export function bodyColorMenu(store: DocumentStore, bodyId: string): CtxItem[] {
-  if (!multiColorEnabled()) return [];
+  if (!multiMaterialEnabled()) return [];
   return [{ label: "Color", children: bodyColorMenuItems(store, bodyId) }];
 }
 

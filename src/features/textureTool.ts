@@ -14,7 +14,7 @@ import type { DocumentStore } from "../document/store";
 import type { Feature, Num, Selector } from "../types";
 import { TexturePanel, ANGLE_KINDS, SEED_KINDS, type TextureMode, type TextureValues } from "./texturePanel";
 import { setPrompt } from "../ui/prompt";
-import { multiColorEnabled } from "../ui/featureFlags";
+import { multiMaterialEnabled } from "../plugins/registry";
 
 // Warm texture ticks are ~10-70ms sidecar-side (geometry-skeleton cache), so a
 // short debounce keeps scrubbing responsive while still coalescing keystrokes.
@@ -216,7 +216,7 @@ export class TextureTool {
         // passed it an empty palette since the row existed. Gating it HERE
         // rather than in the panel keeps the decision at the one place that
         // knows what a palette is for.
-        palette: multiColorEnabled() ? this.store.colorPalette : [],
+        palette: multiMaterialEnabled() ? this.store.colorPalette : [],
       },
       {
         onCommit: (v) => { this.values = v; this.commit(); },

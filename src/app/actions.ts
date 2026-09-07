@@ -1,5 +1,4 @@
 import { saveDocument, saveDocumentAs, exportModel, exportPrintProject, importModel } from "../io/files";
-import { openInOrca, sendToPrinter } from "../print/printFlow";
 import { openParamsDialog } from "../ui/paramsDialog";
 import { toggleShortcutHUD } from "../input/shortcuts";
 import { choose } from "../ui/choice";
@@ -127,11 +126,14 @@ export function createActions(e: Engine): (action: string) => void {
       case "print-export":
         void exportPrintProject(e.store, e.geometry);
         break;
+      // Imported when used. The printer client and the slicer bridge are a
+      // chunk of their own, and this file is reached on every keystroke through
+      // the command palette.
       case "print-orca":
-        void openInOrca(e.store, e.geometry);
+        void import("../print/printFlow").then((m) => m.openInOrca(e.store, e.geometry));
         break;
       case "print-send":
-        void sendToPrinter(e.store, e.geometry);
+        void import("../print/printFlow").then((m) => m.sendToPrinter(e.store, e.geometry));
         break;
       case "welcome":
         e.ui.welcome.open();

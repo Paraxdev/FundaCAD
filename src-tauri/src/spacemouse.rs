@@ -19,6 +19,8 @@
 //! Set FUNDACAD_SPACEMOUSE_DEBUG=1 to log raw reports for tuning (the old
 //! SINDRICAD_ spelling still works).
 
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
 
@@ -172,9 +174,53 @@ struct Buttons {
     mask: u32,
 }
 
+/// Whether the reader should be running. Written by the commands below,
+/// read by the thread between reports.
+static WANTED: AtomicBool = AtomicBool::new(false);
+/// Whether a reader thread exists. Separate from WANTED because the two answer
+/// different questions and a thread takes a moment to notice it has been
+/// stopped; conflating them is how you end up with two readers on one device.
+static ALIVE: Mutex<bool> = Mutex::new(false);
+
+fn alive() -> std::sync::MutexGuard<'static, bool> {
+    ALIVE.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Start reading the device, if the 3D mouse capability is turned on.
+///
+/// The frontend calls this rather than `setup` starting it unconditionally.
+/// A capability that is off must not hold the user's HID device open: on Linux
+/// opening it can be the thing that stops another program using it, and "the
+/// app is not reading your 3D mouse" has to be true at the device, not only in
+/// a listener that ignores the events.
+///
+/// Idempotent. A second call while a reader is alive does nothing, which is
+/// what lets the frontend call it on every start without tracking whether it
+/// already has.
+#[tauri::command]
+pub fn spacemouse_start(app: AppHandle) {
+    WANTED.store(true, Ordering::SeqCst);
+    let mut is_alive = alive();
+    if *is_alive {
+        return;
+    }
+    *is_alive = true;
+    drop(is_alive);
+    start(app);
+}
+
+/// Stop reading and let go of the device. Takes effect within about a second:
+/// the read below has a one-second timeout and the flag is checked each time
+/// around.
+#[tauri::command]
+pub fn spacemouse_stop() {
+    WANTED.store(false, Ordering::SeqCst);
+}
+
 /// Spawn a background thread that connects to the first 3Dconnexion device and
-/// streams events. Reconnects (every 3s) if the device is missing/unplugged.
-pub fn start(app: AppHandle) {
+/// streams events. Reconnects (every 3s) if the device is missing/unplugged,
+/// and returns when the capability is turned off.
+fn start(app: AppHandle) {
     thread::spawn(move || {
         // Emit the "plugged in but unreadable" warning at most ONCE per run. The
         // loop below retries every 3s forever, and this used to be an eprintln!
@@ -183,7 +229,7 @@ pub fn start(app: AppHandle) {
         let mut warned = false;
         // The HID inventory is published whenever it CHANGES — see stream().
         let mut last_inventory: Option<String> = None;
-        loop {
+        while WANTED.load(Ordering::SeqCst) {
             match stream(&app, &mut last_inventory) {
                 Ok(()) => warned = false, // clean disconnect: a later failure is news again
                 Err(Blocked::NoDevice) => {} // nothing plugged in — normal, stay quiet
@@ -196,8 +242,27 @@ pub fn start(app: AppHandle) {
                 }
                 Err(Blocked::Other(e)) => eprintln!("[spacemouse] {e}"),
             }
-            thread::sleep(Duration::from_secs(3));
+            // The retry wait, in slices, so turning the capability off is felt
+            // in a fraction of a second rather than after three of them.
+            for _ in 0..30 {
+                if !WANTED.load(Ordering::SeqCst) {
+                    break;
+                }
+                thread::sleep(Duration::from_millis(100));
+            }
         }
+        // Taken before the flag is cleared, and re-checked under it. Without
+        // that, a start arriving while this thread was winding down would find
+        // ALIVE still true, decline to spawn, and then watch this thread clear
+        // it: the capability would be on with nothing reading the device.
+        let mut is_alive = alive();
+        if WANTED.load(Ordering::SeqCst) {
+            drop(is_alive);
+            start(app);
+            return;
+        }
+        *is_alive = false;
+        eprintln!("[spacemouse] reader stopped");
     });
 }
 
@@ -374,6 +439,9 @@ fn stream(app: &AppHandle, last: &mut Option<String>) -> Result<(), Blocked> {
     let mut r = [0f32; 3];
     let mut buf = [0u8; 64];
     loop {
+        if !WANTED.load(Ordering::SeqCst) {
+            return Ok(()); // turned off: close the device and let the thread end
+        }
         // A read failure after a successful open is an unplug or a transport
         // hiccup, not a permissions problem — reconnect quietly.
         let n = dev

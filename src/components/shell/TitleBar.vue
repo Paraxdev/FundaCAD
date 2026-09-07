@@ -7,6 +7,7 @@ import { getUnit, setUnit, asUnit, onUnitChange, type Unit } from "../../ui/unit
 import { THEMES, getTheme, setTheme, asThemeId, onThemeChange } from "../../ui/theme";
 import { iconPacks, getIconPack, setIconPack, asIconPackId, onIconPackChange } from "../../ui/icons";
 import { buildMenubar } from "../../app/menubarDef";
+import { onPluginChange } from "../../plugins/registry";
 import Icon from "./Icon.vue";
 import MenuBar from "./MenuBar.vue";
 import LiveSessionPill from "./LiveSessionPill.vue";
@@ -15,11 +16,19 @@ import brandLockup from "../../../assets/brand/fundacad-lockup-app.svg";
 const engine = useEngine();
 const ui = useUiStore();
 
-// Built once. The tree is static; everything dynamic about it (Undo greying
-// out, the SpaceMouse mode checkmarks, Sign in/out) is a thunk that MenuBar
-// re-evaluates each time a menu opens. markRaw because every onClick closes
-// over the raw engine.
-const menus = markRaw(buildMenubar(engine));
+// Rebuilt only when the set of capabilities changes. Everything dynamic WITHIN
+// the tree (Undo greying out, the 3D-mouse mode checkmarks) is a thunk MenuBar
+// re-evaluates each time a menu opens, so this does not need to be reactive for
+// those. What a thunk cannot express is a row that should not exist at all, and
+// a menu left with no rows: turning the printer connection off has to take its
+// three File entries with it, and turning the 3D mouse off has to take the
+// whole View menu. markRaw because every onClick closes over the raw engine.
+const menus = ref(markRaw(buildMenubar(engine)));
+let offPlugins: (() => void) | null = null;
+onMounted(() => {
+  offPlugins = onPluginChange(() => { menus.value = markRaw(buildMenubar(engine)); });
+});
+onUnmounted(() => offPlugins?.());
 
 // units.ts is a module-level observable with its own listener set and a
 // localStorage backing. Rather than move that state into Pinia (it is read

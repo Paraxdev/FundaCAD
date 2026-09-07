@@ -10,7 +10,7 @@ import type { CadDocument, ExportFormat, Feature, ImportFormat } from "../types"
 import { clearRecovery } from "./recovery";
 import { noteRecent } from "./recentFiles";
 import { DOC_EXT, LEGACY_DOC_EXTS, isDocumentExt, stripDocumentExt } from "./documentExt";
-import { multiColorEnabled } from "../ui/featureFlags";
+import { multiMaterialEnabled } from "../plugins/registry";
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -419,7 +419,7 @@ export async function exportPrintProject(
  *  toolheads and slot assignments — "3 bodies are unassigned (defaulting to
  *  slot 1)" is a warning about a choice the user was never offered. */
 async function warnUnloadedFilaments(store: DocumentStore, bodyIds: string[]) {
-  if (!multiColorEnabled()) return;
+  if (!multiMaterialEnabled()) return;
   try {
     const { activePrinterId, printerFilaments } = await import("../print/printerClient");
     const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), 1500));
@@ -607,7 +607,7 @@ async function importPath(store: DocumentStore, geometry: GeometryBackend, path:
   // gated surfaces, and a slot assigned behind a hidden palette would be an
   // edit the user cannot see, cannot undo from any visible control, and would
   // meet later as a colour they never chose.
-  if (res.color === undefined || !multiColorEnabled()) return;
+  if (res.color === undefined || !multiMaterialEnabled()) return;
   const slot = nearestPaletteSlot(res.color, store.colorPalette);
   if (slot === null) return;
   await store.rebuildNow();
