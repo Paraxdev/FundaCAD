@@ -20,10 +20,16 @@ import { pluginEnabled, setPluginEnabled } from "../../../src/plugins/registry";
 enableAutoUnmount(afterEach);
 
 const consent = ".plug-consent";
+// Selected by identity rather than by position. An earlier version of this file
+// indexed into `.plug-row`, and adding a row to the screen silently pointed
+// every assertion at the wrong plugin, which is a way for a test about consent
+// to keep passing while testing nothing.
+const row = (w: ReturnType<typeof mount>, id: string) => w.get(`[data-plugin="${id}"]`);
 /** the rows for the app's own capabilities, in registry order */
-const builtinRows = (w: ReturnType<typeof mount>) => w.findAll(".plug-row").slice(0, 3);
+const builtinRows = (w: ReturnType<typeof mount>) =>
+  ["multi-material", "printing", "spacemouse"].map((id) => row(w, id));
 /** the row for the one thing that is downloaded */
-const downloadRow = (w: ReturnType<typeof mount>) => w.findAll(".plug-row")[3]!;
+const downloadRow = (w: ReturnType<typeof mount>) => row(w, "mcp");
 
 beforeEach(() => {
   localStorage.clear();

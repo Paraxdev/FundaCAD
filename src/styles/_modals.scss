@@ -343,6 +343,34 @@
   justify-content: flex-end;
   gap: var(--s-2);
 }
+/* The row that takes a link or opens a file picker. Wraps rather than
+   scrolling: a URL field that has to be scrolled to read is a URL field whose
+   host is off screen, which is the one part of it that has to be read. */
+.plug-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  width: 100%;
+}
+.plug-url {
+  flex: 1 1 240px;
+  min-width: 0;
+  padding: var(--s-2);
+  border: 1px solid var(--line, #2a2f3a);
+  border-radius: 6px;
+  background: var(--panel-2, #1c1f26);
+  color: var(--text, #e6e8ec);
+  font: inherit;
+  font-size: 12px;
+}
+/* Where a bundle came from, above the two lists rather than below them. It is
+   the half of the question a person can actually judge, and a note underneath
+   an argument is a note read after the decision. */
+.plug-origin {
+  font-size: 12px;
+  color: var(--text, #e6e8ec);
+}
 .plug-setup {
   display: flex;
   flex-direction: column;

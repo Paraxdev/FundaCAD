@@ -9,10 +9,12 @@ off: the printer connection, the 3D mouse, and multi-material. Off means the
 code is never loaded, the menus and ribbon entries are gone, and on the Rust
 side the 3D-mouse reader never opens the device.
 
-**Downloaded.** Plugins that arrive from this project's releases and are agreed
-to before they are fetched. The first is the MCP server (`docs/MCP.md`), which
-was already a separate process talking a defined protocol; it just was not
-called a plugin yet.
+**Installed.** Plugins that arrive from somewhere, and are agreed to before
+they run. From this project's releases, from any HTTPS URL, or from a zip
+already on the disk; once installed those are the same kind of thing, and the
+screen says which it was. The first is the MCP server (`docs/MCP.md`), which was
+already a separate process talking a defined protocol; it just was not called a
+plugin yet.
 
 ## The promise
 
@@ -142,34 +144,84 @@ not be a toggle.
 
 ## Where a plugin comes from
 
-An official plugin is an asset on this repository's own releases, published by
-the release job alongside the installers. There is no index and no served
-catalogue: the plugins a build offers are compiled into that build
-(`src/plugins/index.ts`), and Rust refuses any download URL outside
-`https://github.com/Paraxdev/fundacad/releases/download/`
-(`src-tauri/src/plugins/bundle.rs`). A document whose only job is to be trusted
-is a document that can lie; not having one is cheaper than defending it.
+Three routes in, and they differ only in where the manifest is read from.
+
+1. **A suggestion we ship.** The short list compiled into the build
+   (`src/plugins/index.ts`). Its manifest is known before anything is fetched,
+   so there is nothing to download in order to decide.
+2. **A URL.** Any HTTPS URL. The only account of what the bundle wants is
+   inside the bundle, so it is fetched and unpacked to be read, and only then
+   described on a screen.
+3. **A zip on disk.** Read the same way, through the same pipeline.
+
+There is no index and no served catalogue, and there will not be one: a
+document whose only job is to be believed is a document that can lie, and the
+suggestions cost nothing to carry in the build.
+
+**Any HTTPS URL is a widening, and a deliberate one.** The check used to admit
+only this repository's releases. That was never the thing making a plugin safe
+— the grants it declared and the sandbox its kind runs in are — and an origin
+allowlist containing only ourselves is not a permission model, it is a
+distribution monopoly wearing one. What survives is the part that was always
+doing the work: `allowed_bundle_url` insists on HTTPS and on an authority that
+means what it reads, refusing userinfo (`https://github.com@evil.example.com/…`
+resolves nowhere near GitHub), non-numeric ports, whitespace, control
+characters and anything that is not a host.
+
+HTTPS is the non-negotiable half. Over plain HTTP the bytes are whatever the
+network decided they should be, and the digest check, the manifest comparison
+and the extractor would all then run faithfully against an attacker's archive.
+It is also what makes the origin on the consent screen worth showing: with TLS,
+the host in the URL is the host that answered. **Every redirect hop is checked
+too**, not just the URL that was typed — otherwise an approved host could
+answer `302` to plain HTTP and the check would have secured one request out of
+two.
+
+**"Official" is a label, not a permission.** `is_official_url` answers only
+whether we published it. It is decided in Rust from the URL the bytes actually
+came from, stored on the record, and shown on the row. It skips no screen,
+grants nothing, and a bundle claiming it in its own manifest is ignored — a
+bundle claiming to be ours is precisely the one that must not be believed for
+saying so.
 
 The download happens in Rust rather than the webview. The content security
 policy names the loopback engine and nothing else, and widening it so a
-`fetch()` could reach the releases host would open that host to every script in
-the window for the sake of one download.
+`fetch()` could reach an arbitrary host would open every host to every script
+in the window for the sake of one download.
 
 ## Installing, step by step
 
-1. The screen renders the built-in entry's permissions. Nothing is downloaded
-   until it is answered.
-2. Fetch over HTTPS from the releases host. This is where authenticity comes
-   from. A `sha256` may be passed and is enforced when it is, but a build
-   cannot carry the digest of an asset republished after it shipped, so the
-   digest of what arrived is recorded rather than demanded.
+**Reading first, for anything not already described.** The consent screen has to
+say what a plugin asks for before it is installed, and for a bundle nobody has
+seen, the only account of that is inside it. So `plugin_inspect_url` /
+`plugin_inspect_file` fetch or read it, unpack it into a scratch directory, read
+one file, and delete the directory again. Fetching is not running: nothing is
+executed, nothing is left behind, nothing is recorded as installed, and the
+extractor's refusals all apply exactly as they do on the real thing, because it
+is the same function.
+
+The digest of what was read comes back and is passed down as a pin when the
+install happens. The install is a second fetch, and between the two the asset
+could change; without the pin the screen would have described one bundle while
+another was installed.
+
+Then, for all three routes:
+
+1. The screen renders the manifest's permissions, and the origin. Nothing is
+   installed until it is answered.
+2. Fetch over HTTPS, or read the file. A `sha256` is enforced when given, and
+   the inspect step gives one. A build cannot carry the digest of an asset
+   republished after it shipped, so for a suggestion installed without an
+   inspect, the digest of what arrived is recorded rather than demanded.
 3. Unpack into `<app data>/plugins/.staging-<id>/`. Every entry that would
    escape that directory is refused: `..`, absolute paths, drive letters,
    backslashes, symlinks, and archives over the entry-count or unpacked-size
    limits.
 4. Read the bundle's own `plugin.json` and compare kind, grants and hosts
    against what the screen showed. A mismatch is refused **by name** and the
-   staging directory is deleted.
+   staging directory is deleted. This is the step a local file does not get to
+   skip: if picking a file bypassed it, picking a file would be the way around
+   the consent screen.
 5. Only then does the staging directory become `<app data>/plugins/<id>/`.
 
 A failure at any step leaves whatever was installed before exactly as it was.
@@ -178,6 +230,22 @@ A failure at any step leaves whatever was installed before exactly as it was.
 settings key, so deleting the directory really does uninstall it. A directory
 with no readable record is not reported as installed: nobody has a record of
 agreeing to whatever is in there.
+
+## The screen
+
+Preferences ▸ Plugins is driven by **what is installed**, not by what shipped.
+A plugin from our releases, from a URL somebody was given, and from a zip on
+disk are all the same kind of row once installed; the suggestions appear
+underneath as things not installed yet, which is all they are.
+
+The origin is shown for anything we did not publish, and only then — a label on
+every row is a label nobody reads. It sits above the two permission lists rather
+than below them, because it is the half of the question a person can actually
+judge, and a note underneath an argument is a note read after the decision.
+
+A row whose record will not parse is not described at all. `installedManifest`
+returns null and the screen says so plainly, because a row that cannot be
+described accurately must not be described reassuringly.
 
 ## The broker: one door
 
@@ -299,7 +367,7 @@ and the `process` sentence on the install screen says so.
 | `src/plugins/builtin/*.ts` | one activation module per capability |
 | `src/plugins/index.ts` | the plugins this build offers, and the bridge to Rust |
 | `src/components/overlays/PluginsSection.vue` | Preferences ▸ Plugins |
-| `src-tauri/src/plugins/mod.rs` | the commands: list, install, remove, python runtime |
+| `src-tauri/src/plugins/mod.rs` | the commands: list, inspect, install, remove, python runtime |
 | `src-tauri/src/plugins/bundle.rs` | the refusals, split out so they can be tested |
 | `scripts/build-plugin-mcp.py` | packaging, run by the release job |
 
@@ -324,16 +392,14 @@ npx vitest run tests/plugins tests/components/overlays/PluginsSection.spec.ts
 
 ## What comes next
 
-1. A dynamic registry: what is installed drives the list, rather than the set
-   compiled into the build. Install from a URL and from a local zip, with the
-   origin shown on the screen that asks. The prefix check in `bundle.rs` was
-   never the security boundary, the grants and the sandbox are; it was a
-   provenance claim, so "official" becomes a property of being on this
-   project's releases rather than of being installable at all.
-2. The Worker runner, and with it `compute` plugins in TypeScript and in Rust.
-3. MCP onto the broker, so it is a plugin in fact and not only in the
+1. The Worker runner, and with it `compute` plugins in TypeScript and in Rust.
+   This is the one that makes `compute` in the kinds table true rather than
+   planned.
+2. MCP onto the broker, so it is a plugin in fact and not only in the
    Preferences list.
-4. Panel plugins. Note that the policy currently forbids frames outright, and
+3. Panel plugins. Note that the policy currently forbids frames outright, and
    changing that is load-bearing for their sandbox rather than incidental.
-5. OS sandboxing for process plugins, per platform.
-6. Third-party publishing: signing, revocation, and a publisher who is not us.
+4. OS sandboxing for process plugins, per platform.
+5. Signing and revocation. Installing from anywhere is now possible, which
+   makes "this build of this plugin is the one its author published" a question
+   worth being able to answer, rather than a nicety.
