@@ -21,11 +21,18 @@ use sha2::{Digest, Sha256};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
-/// A bundle URL arrives from the webview, so it is not trusted to be a URL we
-/// would have chosen. Everything must sit under the releases host for this
-/// repository: without this, "install this plugin" is a request to download and
-/// unpack an arbitrary URL, which is a considerably more interesting feature
-/// than the one being built.
+/// Where this project's own plugins are published.
+///
+/// This is a PROVENANCE claim and not a security boundary, and the difference
+/// is worth being exact about because this constant used to be both. A bundle
+/// from here was published by whoever can publish this repository's releases; a
+/// bundle from anywhere else was not. That is all it says. What a plugin may
+/// then do is decided by the grants it declared and the sandbox its kind runs
+/// in, neither of which knows or cares where the bytes came from.
+///
+/// Keeping the two apart is what lets a third party publish a plugin at all,
+/// which was the point: an origin allowlist that only ever admits us is not a
+/// permission model, it is a distribution monopoly wearing one.
 pub const BUNDLE_PREFIX: &str = "https://github.com/Paraxdev/fundacad/releases/download/";
 
 /// Caps. A plugin is source, not a runtime: the interpreter it runs on is
@@ -62,21 +69,95 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
     hex_of(&h.finalize())
 }
 
-pub fn allowed_bundle_url(url: &str) -> bool {
-    // A prefix test only works because the prefix ends at a path separator and
-    // the rest is checked for traversal below. `https://github.com/Paraxdev/`
-    // as a prefix would also match `https://github.com/Paraxdev.evil.com/`.
+/// Whether a URL is one of this project's own release assets.
+///
+/// Used to LABEL a plugin, never to permit one. The prefix test works only
+/// because the prefix ends at a path separator: `https://github.com/Paraxdev/`
+/// as a prefix would also match `https://github.com/Paraxdev.evil.com/`.
+pub fn is_official_url(url: &str) -> bool {
     if !url.starts_with(BUNDLE_PREFIX) {
         return false;
     }
     let tail = &url[BUNDLE_PREFIX.len()..];
-    // `..` climbs back out of the prefix at fetch time; `@` reaches a different
-    // host through userinfo; a second scheme is a redirect written by hand.
-    !tail.is_empty()
-        && !tail.contains("..")
-        && !tail.contains('@')
-        && !tail.contains("://")
-        && !tail.contains('\\')
+    // `..` climbs back out of the prefix at fetch time, which would let an
+    // "official" label be worn by an asset somewhere else on the host.
+    !tail.is_empty() && !tail.contains("..") && !tail.contains('@') && !tail.contains("://")
+}
+
+/// Whether a URL may be fetched at all.
+///
+/// A bundle URL arrives from the webview, so it is not trusted to be a URL we
+/// would have chosen. What is enforced here is the transport and the shape, not
+/// the host: HTTPS, a host that is a host, and nothing in the authority that
+/// makes the address mean something other than it reads.
+///
+/// HTTPS IS NOT NEGOTIABLE, and it is the one thing this function is really
+/// for. Over plain HTTP the bytes are whatever the network decided they should
+/// be, and every check downstream — the digest, the manifest comparison, the
+/// extractor — would then be run faithfully against an attacker's archive. It
+/// is also what makes the origin shown on the consent screen worth showing:
+/// with TLS the host in the URL is the host that answered.
+///
+/// WHAT IS NOT CHECKED, deliberately: whether the host is one we like. Private
+/// and loopback addresses are allowed, because a self-hosted plugin server on a
+/// company network is a legitimate thing to install from and this is a desktop
+/// app fetching on a person's own behalf, not a server following a link it was
+/// handed.
+pub fn allowed_bundle_url(url: &str) -> bool {
+    const SCHEME: &str = "https://";
+    if !url.starts_with(SCHEME) {
+        return false;
+    }
+    // No spaces, no controls, anywhere. A URL containing either is one whose
+    // reading depends on which parser you ask, and the parser that matters is
+    // the one at the other end rather than this one.
+    if url.chars().any(|c| c.is_whitespace() || c.is_control()) {
+        return false;
+    }
+    if url.contains('\\') {
+        return false;
+    }
+
+    let rest = &url[SCHEME.len()..];
+    let authority = match rest.find(['/', '?', '#']) {
+        Some(i) => &rest[..i],
+        None => rest,
+    };
+    if authority.is_empty() {
+        return false;
+    }
+    // Userinfo, refused early and by name. REDUNDANT TODAY: `@` is not in the
+    // host character set below, so removing this line changes no answer, which
+    // was checked rather than assumed. It stays because the charset is the sort
+    // of thing that gets loosened one character at a time — for an underscore,
+    // for an IDN — and this is the refusal that must not be loosened with it.
+    if authority.contains('@') {
+        return false;
+    }
+
+    // Strip a port and check what is left is a plausible host. This is the
+    // check that actually stops `https://github.com@evil.example.com/x.zip`,
+    // which reads as GitHub to a person and resolves somewhere else: the
+    // consent screen shows this string, so a URL that reads as one host and
+    // reaches another is the thing that must not get past.
+    //
+    // Bracketed IPv6 is not accepted: it is not needed to reach a plugin
+    // server, and admitting a second address syntax here means a second one to
+    // be wrong about.
+    let host = match authority.rsplit_once(':') {
+        Some((h, port)) => {
+            if port.is_empty() || !port.chars().all(|c| c.is_ascii_digit()) {
+                return false;
+            }
+            h
+        }
+        None => authority,
+    };
+    if host.is_empty() || host.starts_with('.') || host.ends_with('.') || host.contains("..") {
+        return false;
+    }
+    host.chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
 }
 
 /// The path an archive entry may be written to, relative to the plugin
@@ -305,20 +386,72 @@ mod tests {
     }
 
     #[test]
-    fn a_bundle_url_must_be_this_repositorys_releases_over_https() {
+    fn a_bundle_url_must_be_https_and_name_a_host() {
         for bad in [
-            "http://github.com/Paraxdev/fundacad/releases/download/beta/x.zip",
-            "https://github.com/someone/else/releases/download/beta/x.zip",
-            "https://evil.example.com/x.zip",
-            "https://github.com/Paraxdev/fundacad/releases/download/../../../x.zip",
-            "https://github.com/Paraxdev/fundacad/releases/download/beta@evil.com/x.zip",
-            "https://github.com/Paraxdev/fundacad/releases/download/",
+            // The transport. Everything downstream would run faithfully against
+            // whatever the network substituted.
+            "http://example.com/x.zip",
+            "ftp://example.com/x.zip",
+            "file:///etc/passwd",
+            "javascript:alert(1)",
+            "https:/example.com/x.zip",
+            // No host at all.
+            "https://",
+            "https:///x.zip",
+            // Userinfo: reads as github.com, resolves to evil.example.com, and
+            // the consent screen would have shown the first one.
+            "https://github.com@evil.example.com/x.zip",
+            "https://user:pass@evil.example.com/x.zip",
+            // A host that is not a host.
+            "https://exa mple.com/x.zip",
+            "https://ex\u{7f}ample.com/x.zip",
+            "https://.example.com/x.zip",
+            "https://example..com/x.zip",
+            "https://example.com./x.zip",
+            "https://example.com:notaport/x.zip",
+            "https://example.com:/x.zip",
+            "https://exa_mple.com/x.zip",
+            "https://example.com\\evil.com/x.zip",
         ] {
-            assert!(!allowed_bundle_url(bad), "an outside URL was allowed: {bad}");
+            assert!(!allowed_bundle_url(bad), "a bad URL was allowed: {bad}");
         }
-        assert!(allowed_bundle_url(
+
+        // The control. Every refusal above is worth nothing unless ordinary
+        // URLs — ours, someone else's, a self-hosted one on a port — go
+        // through, which is the whole reason the host is no longer checked.
+        for good in [
+            "https://github.com/Paraxdev/fundacad/releases/download/beta/plugin-mcp.zip",
+            "https://github.com/someone/else/releases/download/v1/plugin-x.zip",
+            "https://plugins.example.com/a/b/c.zip",
+            "https://plugins.example.com:8443/c.zip",
+            "https://127.0.0.1:8443/c.zip",
+            "https://example.com/x.zip?token=abc",
+        ] {
+            assert!(allowed_bundle_url(good), "a fine URL was refused: {good}");
+        }
+    }
+
+    #[test]
+    fn official_is_a_label_and_not_a_permission() {
+        assert!(is_official_url(
             "https://github.com/Paraxdev/fundacad/releases/download/beta/plugin-mcp.zip"
         ));
+        for not_ours in [
+            "https://github.com/someone/else/releases/download/beta/x.zip",
+            "https://plugins.example.com/x.zip",
+            "http://github.com/Paraxdev/fundacad/releases/download/beta/x.zip",
+            "https://github.com/Paraxdev/fundacad/releases/download/",
+            "https://github.com/Paraxdev/fundacad/releases/download/../../../x.zip",
+            "https://github.com/Paraxdev/fundacad/releases/download/beta@evil.com/x.zip",
+        ] {
+            assert!(!is_official_url(not_ours), "wrongly ours: {not_ours}");
+        }
+
+        // The two answer different questions, and this is the case that shows
+        // it: a perfectly installable bundle that is not ours.
+        let third_party = "https://plugins.example.com/x.zip";
+        assert!(allowed_bundle_url(third_party));
+        assert!(!is_official_url(third_party));
     }
 
     #[test]
