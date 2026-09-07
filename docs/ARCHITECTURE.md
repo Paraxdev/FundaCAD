@@ -27,11 +27,15 @@ TypeScript frontend running in that shell's webview, and a Python geometry sidec
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-Optional pieces live outside all three. A plugin is downloaded on demand into
-the per-user app data directory, declares what it wants to reach before it is
-installed, and is held to that declaration when the bundle is unpacked; the MCP
-server is the first one. `docs/PLUGINS.md` has the permission model, and why
-the download happens in Rust rather than the webview.
+Optional pieces live outside all three, in two forms. A downloaded plugin
+arrives in the per-user app data directory, declares what it wants to reach
+before it is installed, and is held to that declaration when the bundle is
+unpacked; the MCP server is the first one. A built-in capability ships inside
+the app but is loaded only when it is turned on: the printer connection, the 3D
+mouse and multi-material are each behind a dynamic import, and a test fails if
+anything in the core reaches for one statically. `docs/PLUGINS.md` has the
+permission model, what "off" is guaranteed to mean, and why the download happens
+in Rust rather than the webview.
 
 FundaCAD owns the document, the feature tree, the UI, and the print pipeline.
 [build123d](https://github.com/gumyr/build123d) on top of OpenCASCADE owns the geometry

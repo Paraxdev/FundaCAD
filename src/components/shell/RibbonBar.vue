@@ -5,7 +5,8 @@
 
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, useTemplateRef, watch } from "vue";
 import { useRibbonStore } from "../../stores/ribbon";
-import { MODEL, SKETCH, PRIORITY, PINNED, leavesOf } from "../../ui/ribbonDefs";
+import { modelGroups, SKETCH, PRIORITY, PINNED, leavesOf } from "../../ui/ribbonDefs";
+import { onPluginChange } from "../../plugins/registry";
 import type { Group, Item, RibbonContext, ToolItem } from "../../ui/ribbonDefs";
 import Icon from "./Icon.vue";
 import RibbonPopup from "./RibbonPopup.vue";
@@ -32,9 +33,19 @@ const FINISH_GROUP: Group = {
   items: [{ action: "finish", label: "Finish Sketch", iconName: "check", kind: "finish" }],
 };
 
-const groups = computed<Group[]>(() =>
-  ribbon.context === "sketch" ? [...SKETCH, PALETTE_GROUP, FINISH_GROUP] : MODEL,
-);
+// Bumped when a capability is turned on or off, so the model ribbon redraws
+// without the toggle having to know the ribbon exists. The plugin registry is
+// deliberately Vue-free, which is what lets the headless suite reach it, so a
+// mirror ref is how its changes become reactive here.
+const pluginTick = ref(0);
+let offPlugins: (() => void) | null = null;
+onMounted(() => { offPlugins = onPluginChange(() => pluginTick.value++); });
+onUnmounted(() => offPlugins?.());
+
+const groups = computed<Group[]>(() => {
+  pluginTick.value; // dependency
+  return ribbon.context === "sketch" ? [...SKETCH, PALETTE_GROUP, FINISH_GROUP] : modelGroups();
+});
 
 const priorityOf = (label: string) => (PINNED.has(label) ? Infinity : (PRIORITY[label] ?? 50));
 

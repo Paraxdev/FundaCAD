@@ -2,7 +2,7 @@ import { toast } from "../ui/toast";
 import { logError } from "../ui/logStore";
 import { featureMeta } from "../ui/featureMeta";
 import { repairableDiagFor } from "../features/repickReference";
-import { multiColorEnabled, onFeatureFlagsChange } from "../ui/featureFlags";
+import { multiMaterialEnabled, onPluginChange } from "../plugins/registry";
 import type { Engine } from "./engine";
 import { setPreviewError } from "../ui/previewError";
 
@@ -21,7 +21,7 @@ export function installRebuildBridge(e: Engine): void {
   // exported, and the bodies simply render in the material they would have had
   // if nobody had ever assigned one.
   function computeBodyPaint(bodies = e.store.buildState.result?.bodies): Record<string, string> {
-    if (!multiColorEnabled()) return {};
+    if (!multiMaterialEnabled()) return {};
     const pal = e.store.colorPalette;
     const out: Record<string, string> = {};
     for (const b of bodies ?? []) {
@@ -34,7 +34,7 @@ export function installRebuildBridge(e: Engine): void {
   // two-tone texture inlays: per-face palette overrides (global face id → hex),
   // from the sidecar's textureColorSlots (dense per-body face array, sparse key).
   function computeTexturePaint(): Record<number, string> {
-    if (!multiColorEnabled()) return {};
+    if (!multiMaterialEnabled()) return {};
     const pal = e.store.colorPalette;
     const out: Record<number, string> = {};
     for (const b of e.store.buildState.result?.bodies ?? []) {
@@ -52,7 +52,7 @@ export function installRebuildBridge(e: Engine): void {
   // setters are no-ops when the map has not changed, so this costs nothing on
   // any other flag; without it the colours would hang about until the next
   // rebuild, which on a finished model is never.
-  onFeatureFlagsChange(() => {
+  onPluginChange(() => {
     e.viewport.setBodyPaint(computeBodyPaint());
     e.viewport.setTexturePaint(computeTexturePaint());
     e.viewport.requestRender();

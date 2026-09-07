@@ -1,11 +1,18 @@
 # Plugins
 
-Optional pieces of the app, downloaded on demand, each one holding a permission
-it declared before anyone agreed to install it. Preferences ▸ Plugins is the
-whole user-facing surface.
+Optional pieces of the app, each one declaring what it reaches before it does
+any reaching. Preferences ▸ Plugins is the whole user-facing surface, and it has
+two halves.
 
-The first one is the MCP server (`docs/MCP.md`), which was already a separate
-process talking a defined protocol. It just was not called a plugin yet.
+**In the app.** Capabilities that ship inside FundaCAD and are turned on and
+off: the printer connection, the 3D mouse, and multi-material. Off means the
+code is never loaded, the menus and ribbon entries are gone, and on the Rust
+side the 3D-mouse reader never opens the device.
+
+**Downloaded.** Plugins that arrive from this project's releases and are agreed
+to before they are fetched. The first is the MCP server (`docs/MCP.md`), which
+was already a separate process talking a defined protocol; it just was not
+called a plugin yet.
 
 ## The promise
 
@@ -21,16 +28,24 @@ place.
 
 ## What a plugin is
 
-Three kinds, differing only in where the code runs. They share one permission
-vocabulary.
+Four kinds, differing in where the code runs and therefore in what, if
+anything, contains it. They share one permission vocabulary.
 
 | kind | where it runs | sandboxed by |
 | --- | --- | --- |
+| `builtin` | inside the app, as the app | *nothing, and it does not pretend otherwise* |
 | `process` | its own OS process, stdio | *nothing yet, and the install screen says so* |
 | `panel` | an opaque-origin iframe, `default-src 'none'` | the browser |
 | `compute` | a Worker with no fetch, no DOM | the browser |
 
-Only `process` exists today, because MCP is one.
+`builtin` and `process` exist today. A built-in is the app's own code and gets
+no boundary at all; what it gets is a description, on the same screen and in the
+same words as everything else, and a switch that really stops it. Putting it in
+the same vocabulary rather than a separate "features" checkbox is deliberate:
+the question a person is answering is the same one, and two vocabularies for
+one question produce two screens that describe the same reach differently. What
+a built-in must never do is borrow the language of enforcement, which is what
+`sandboxNote("builtin")` exists to prevent.
 
 **A process plugin is not in a cage, and pretending otherwise would be worse
 than not claiming it.** A separate process runs as the user; the OS boundary
@@ -57,6 +72,7 @@ that is no.
 | `files.write` | Save files where you tell it to |
 | `network` | Connect to *(the hosts it names)* |
 | `printer.control` | Send jobs to your printer and read its status |
+| `device.input` | Read the 3D mouse or other input device you have plugged in |
 | `ui.panel` | Add a panel to the window |
 | `process.spawn` | Start other programs on your computer |
 
@@ -69,6 +85,60 @@ did not. The second is the one worth reading, and it is generated from the same
 table, so the reassuring half cannot go stale while the alarming half stays
 current. Hand-written reassurance goes stale silently and in the direction that
 hurts.
+
+## The three built-in capabilities
+
+| id | what it is | asks for | on by default |
+| --- | --- | --- | --- |
+| `printing` | printers on your network, and opening a model in a slicer | `document.read`, `files.write`, `printer.control`, `process.spawn` | yes |
+| `spacemouse` | navigating and moving with a 3D mouse | `device.input`, `document.read`, `document.write` | yes |
+| `multi-material` | filament slots, per body and per texture colour | `document.read`, `document.write` | no |
+
+The two that were always in the app default to on. An upgrade that silently
+removed a working printer connection would be a regression wearing the word
+"plugin"; multi-material was already off and stays off.
+
+Some of the grant choices are worth stating, because the tempting answer is the
+wrong one in each case:
+
+- **`printing` claims `process.spawn`.** Opening a model in a slicer starts
+  another program on the machine, and that is the most consequential thing
+  anything in this app does on the user's behalf.
+- **`printing` does not claim `network`.** It reaches printers configured in
+  this app, over the local network. "Connect to the internet" would be a worse
+  description rather than a more cautious one.
+- **`spacemouse` claims `document.write`.** Its object mode moves the selected
+  body, and a move is an edit. Omitting it because the edit arrives through a
+  knob rather than a dialog would be describing the input device instead of the
+  effect.
+- **`spacemouse` does not claim `process.spawn`**, and neither does the MCP
+  plugin. A vocabulary whose grants are claimed whenever they are technically
+  defensible is one where every screen looks the same.
+
+### What "off" actually means
+
+Not a hidden menu. Each capability's code is behind a dynamic `import()`, so the
+bundler gives it a chunk of its own and a capability that is off is never
+fetched, never parsed and never run. Turning one off while the app is running
+takes effect immediately: `activate()` returns a teardown, and the frame loop,
+the event listeners and the Rust-side device handle all go with it.
+
+`tests/plugins/coreIndependence.test.ts` is what keeps this true. It reads every
+file under `src/` and fails if anything outside a capability's own files
+statically imports one of them, because a single convenient `import` would put
+the code back in the bundle everyone downloads while the switch went on saying
+it was off.
+
+Multi-material is the exception and is not in the loader: it has no listeners,
+no device and no process, only gates read where the work happens (the document
+store, the browser tree, the exporters), so there is nothing to hand a teardown
+for. Its code is not separately chunked, and this document should not imply it
+is.
+
+Whatever a capability owns in the document survives being turned off. Slot
+assignments are saved, loaded and exported exactly as before, so turning
+multi-material back on finds the work still there. A toggle that ate data would
+not be a toggle.
 
 ## Where a plugin comes from
 
@@ -114,6 +184,9 @@ agreeing to whatever is in there.
 | file | what it holds |
 | --- | --- |
 | `src/plugins/manifest.ts` | the vocabulary, the parser, the two lists, the promise |
+| `src/plugins/registry.ts` | the built-in capabilities, and which are on |
+| `src/plugins/activate.ts` | starting and stopping them, by dynamic import |
+| `src/plugins/builtin/*.ts` | one activation module per capability |
 | `src/plugins/index.ts` | the plugins this build offers, and the bridge to Rust |
 | `src/components/overlays/PluginsSection.vue` | Preferences ▸ Plugins |
 | `src-tauri/src/plugins/mod.rs` | the commands: list, install, remove, python runtime |

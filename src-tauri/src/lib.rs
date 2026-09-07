@@ -313,7 +313,9 @@ pub fn run() {
         plugins::plugin_install,
         plugins::plugin_remove,
         plugins::plugin_python,
-        spacemouse::spacemouse_inventory
+        spacemouse::spacemouse_inventory,
+        spacemouse::spacemouse_start,
+        spacemouse::spacemouse_stop
     ]);
     #[cfg(not(feature = "rust-geom"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
@@ -349,7 +351,9 @@ pub fn run() {
         plugins::plugin_install,
         plugins::plugin_remove,
         plugins::plugin_python,
-        spacemouse::spacemouse_inventory
+        spacemouse::spacemouse_inventory,
+        spacemouse::spacemouse_start,
+        spacemouse::spacemouse_stop
     ]);
 
     let app = builder
@@ -363,9 +367,12 @@ pub fn run() {
                 }
                 Err(e) => eprintln!("failed to spawn sidecar: {e}"),
             }
-            // stream 3Dconnexion SpaceMouse events to the frontend (best-effort:
-            // no-op if no device / no permission — see spacemouse.rs)
-            spacemouse::start(app.handle().clone());
+            // The 3D-mouse reader is NOT started here any more. It is a
+            // capability the user can turn off (Preferences, Plugins), and one
+            // that is off must not hold the HID device open. The frontend
+            // starts it with spacemouse_start once it has its listeners up,
+            // which also removes the old race where the reader published its
+            // inventory before anything was listening.
             // LAST, so the sidecar is already managed and the warning can reach
             // sidecar.log. Started here rather than before the builder because
             // the clock should run from the window existing, not from process

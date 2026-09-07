@@ -5,7 +5,7 @@
 // can never advertise a key the keymap doesn't actually bind (it used to claim
 // Fit was on "F" while F ran Fillet).
 
-import { MODEL, SKETCH, leavesOf, type Group } from "./ribbonDefs";
+import { modelGroups, SKETCH, leavesOf, type Group } from "./ribbonDefs";
 import { keyHint } from "../input/shortcuts";
 
 export interface Command {
@@ -66,5 +66,8 @@ function fromGroups(groups: Group[], context: "model" | "sketch"): Command[] {
 
 /** Every command (model + sketch + global), for the palette to search. */
 export function allCommands(): Command[] {
-  return [...fromGroups(MODEL, "model"), ...fromGroups(SKETCH, "sketch"), ...GLOBAL];
+  // modelGroups() rather than MODEL: the palette is a way of reaching an
+  // action without knowing where its button is, so an action whose button is
+  // gone because its capability is off must not still be reachable here.
+  return [...fromGroups(modelGroups(), "model"), ...fromGroups(SKETCH, "sketch"), ...GLOBAL];
 }

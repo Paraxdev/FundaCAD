@@ -23,7 +23,7 @@ import { mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import BrowserPane from "../../../src/components/shell/BrowserPane.vue";
 import { ENGINE } from "../../../src/app/engineKey";
-import { setFeatureFlag } from "../../../src/ui/featureFlags";
+import { setPluginEnabled } from "../../../src/plugins/registry";
 import type { Engine } from "../../../src/app/engine";
 import type { CadDocument, Feature } from "../../../src/types";
 
@@ -100,7 +100,7 @@ vi.mock("../../../src/print/printerClient", () => ({
  *  ships off. "Off" is a case of its own below, not a state these reach into. */
 async function renderWithPrinter(fake: ReturnType<typeof makeEngine>): Promise<VueWrapper> {
   (window as unknown as Record<string, unknown>)["__TAURI_INTERNALS__"] = {};
-  setFeatureFlag("multiColor", true);
+  setPluginEnabled("multi-material", true);
   const w = render(fake);
   for (let i = 0; i < 20 && !w.find(".pal-dot").exists(); i++) await nextTick();
   return w;
@@ -108,7 +108,7 @@ async function renderWithPrinter(fake: ReturnType<typeof makeEngine>): Promise<V
 
 afterEach(() => {
   delete (window as unknown as Record<string, unknown>)["__TAURI_INTERNALS__"];
-  setFeatureFlag("multiColor", false);
+  setPluginEnabled("multi-material", false);
   vi.useRealTimers();
 });
 
@@ -321,7 +321,7 @@ describe("BrowserPane", () => {
     await nextTick();
     expect(w.find(".tree-swatch").exists()).toBe(false);
 
-    setFeatureFlag("multiColor", true);
+    setPluginEnabled("multi-material", true);
     await nextTick();
     expect(w.find(".tree-swatch").exists()).toBe(true);
   });

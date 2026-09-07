@@ -3,7 +3,6 @@ import TitleBar from "./components/shell/TitleBar.vue";
 import ViewportPane from "./components/shell/ViewportPane.vue";
 import ToastStack from "./components/overlays/ToastStack.vue";
 import ModalHost from "./components/overlays/ModalHost.vue";
-import PrintStatusPill from "./components/overlays/PrintStatusPill.vue";
 import ShortcutHud from "./components/overlays/ShortcutHud.vue";
 import ContextMenuHost from "./components/overlays/ContextMenuHost.vue";
 import TargetEditPanel from "./components/overlays/TargetEditPanel.vue";
@@ -16,25 +15,52 @@ import BrowserPane from "./components/shell/BrowserPane.vue";
 import PropertiesPanel from "./components/overlays/PropertiesPanel.vue";
 import InterferencePanel from "./components/overlays/InterferencePanel.vue";
 import OverhangPanel from "./components/overlays/OverhangPanel.vue";
-import CameraPanel from "./components/overlays/CameraPanel.vue";
 import ParamsDialog from "./components/overlays/ParamsDialog.vue";
 import WelcomeModal from "./components/overlays/WelcomeModal.vue";
-import SpaceMouseModal from "./components/overlays/SpaceMouseModal.vue";
 import PreferencesDialog from "./components/overlays/PreferencesDialog.vue";
 import BugReportButton from "./components/overlays/BugReportButton.vue";
 import BugReportDialog from "./components/overlays/BugReportDialog.vue";
-import FilamentMappingDialog from "./components/overlays/FilamentMappingDialog.vue";
 import SketchDimLayer from "./components/overlays/SketchDimLayer.vue";
 import SketchGlyphLayer from "./components/overlays/SketchGlyphLayer.vue";
 import TextToolPanel from "./components/overlays/TextToolPanel.vue";
 import ProjectFilterBar from "./components/overlays/ProjectFilterBar.vue";
 import TextureToolPanel from "./components/overlays/TextureToolPanel.vue";
 import MeasureReadout from "./components/overlays/MeasureReadout.vue";
+import { defineAsyncComponent, onMounted, onUnmounted, ref } from "vue";
 import { useDialogStore } from "./stores/dialogs";
 import { useToolPanelStore } from "./stores/toolPanels";
+import { multiMaterialEnabled, onPluginChange, printingEnabled, spaceMouseEnabled } from "./plugins/registry";
 
 const dialogs = useDialogStore();
 const toolPanels = useToolPanelStore();
+
+// The overlays a capability owns, fetched when that capability first needs to
+// draw something. Async rather than imported at the top for the same reason
+// plugins/activate.ts loads its modules dynamically: a machine with no printer
+// should not download, parse and instantiate a camera view and a filament
+// mapping dialog to render a window that will never show either.
+//
+// Every one of these is already behind a v-if, so "when it first needs to draw"
+// is a moment that may never come.
+const PrintStatusPill = defineAsyncComponent(() => import("./components/overlays/PrintStatusPill.vue"));
+const CameraPanel = defineAsyncComponent(() => import("./components/overlays/CameraPanel.vue"));
+const SpaceMouseModal = defineAsyncComponent(() => import("./components/overlays/SpaceMouseModal.vue"));
+const FilamentMappingDialog = defineAsyncComponent(() => import("./components/overlays/FilamentMappingDialog.vue"));
+
+// The registry is deliberately Vue-free, which is what lets the headless suite
+// import it, so its changes reach the template through mirrors.
+const printing = ref(printingEnabled());
+const spaceMouse = ref(spaceMouseEnabled());
+const multiMaterial = ref(multiMaterialEnabled());
+let offPlugins: (() => void) | null = null;
+onMounted(() => {
+  offPlugins = onPluginChange(() => {
+    printing.value = printingEnabled();
+    spaceMouse.value = spaceMouseEnabled();
+    multiMaterial.value = multiMaterialEnabled();
+  });
+});
+onUnmounted(() => offPlugins?.());
 </script>
 
 <template>
@@ -66,7 +92,7 @@ const toolPanels = useToolPanelStore();
        from #app's grid. -->
   <ToastStack />
   <ModalHost />
-  <PrintStatusPill />
+  <PrintStatusPill v-if="printing" />
   <ShortcutHud />
   <ContextMenuHost />
   <ConsolePanel />
@@ -79,7 +105,7 @@ const toolPanels = useToolPanelStore();
   <PropertiesPanel />
   <InterferencePanel />
   <OverhangPanel />
-  <CameraPanel />
+  <CameraPanel v-if="printing" />
   <ParamsDialog />
   <MeasureReadout />
 
@@ -101,9 +127,9 @@ const toolPanels = useToolPanelStore();
        leak a count (composables/useModalGate.ts). They are independent because
        they genuinely stack — the welcome screen opens sign-in over itself. -->
   <WelcomeModal v-if="dialogs.welcome && dialogs.welcomeCallbacks" />
-  <SpaceMouseModal v-if="dialogs.spaceMouse" />
+  <SpaceMouseModal v-if="spaceMouse && dialogs.spaceMouse" />
   <PreferencesDialog v-if="dialogs.preferences" />
-  <FilamentMappingDialog v-if="dialogs.filament" :req="dialogs.filament" />
+  <FilamentMappingDialog v-if="printing && multiMaterial && dialogs.filament" :req="dialogs.filament" />
   <BugReportButton />
   <BugReportDialog v-if="dialogs.bugReport && dialogs.bugDeps" />
 </template>

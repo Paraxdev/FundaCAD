@@ -1,19 +1,32 @@
 <script setup lang="ts">
-// The Plugins section of Preferences: what can be installed, what is installed,
-// and the screen that has to be answered in between.
+// The Plugins section of Preferences: what the app can do that it does not have
+// to, what is on, and what each one reaches.
 //
-// A section rather than a dialog of its own. The consent screen is inline for
-// the same reason: a dialog opened on top of a dialog is a dialog people
-// dismiss without reading, and this is the one screen in the app where reading
-// is the entire point.
+// Two lists, and the difference between them is the honest part. The built-in
+// capabilities are the app's own code and are only turned on and off; a
+// downloaded plugin is somebody else's code and has to be agreed to before it
+// arrives. They share a screen because the question a person is answering is
+// the same one, and they share the two-column description because that question
+// deserves the same answer either way. What they do not share is the language
+// of enforcement: sandboxNote() says which is which, in the entry's own words.
 //
-// It renders two lists, not one. What the plugin asked for, and what it did
-// not. Both come off the same table in plugins/manifest.ts, so the reassuring
-// half cannot quietly go stale while the alarming half stays current, and a
-// modest plugin looks different from a greedy one at a glance.
+// The consent screen is inline rather than a second modal. A dialog opened on
+// top of a dialog is a dialog people dismiss without reading, and this is the
+// one screen in the app where reading is the entire point.
+//
+// It renders what the plugin asked for AND what it did not. Both come off the
+// same table in plugins/manifest.ts, so the reassuring half cannot quietly go
+// stale while the alarming half stays current, and a modest plugin looks
+// different from a greedy one at a glance.
 
-import { onMounted, ref } from "vue";
-import { describeGrants, sandboxNote } from "../../plugins/manifest";
+import { onMounted, onUnmounted, ref } from "vue";
+import { describeGrants, sandboxNote, type PluginManifest } from "../../plugins/manifest";
+import {
+  builtinPlugins,
+  onPluginChange,
+  pluginEnabled,
+  setPluginEnabled,
+} from "../../plugins/registry";
 import {
   installPlugin,
   installedPlugins,
@@ -26,15 +39,39 @@ import {
 } from "../../plugins";
 import { toast } from "../../ui/toast";
 
+const builtins = builtinPlugins();
 const offered = officialPlugins();
 
 const installed = ref<InstalledPlugin[]>([]);
-/** the id whose consent screen is open, at most one */
-const asking = ref("");
+/** the id whose permission list is open, at most one */
+const showing = ref("");
 /** the id being installed or removed, so its buttons can say so */
 const busy = ref("");
 /** id to the launch config, once someone has asked to see it */
 const setup = ref<Record<string, string>>({});
+
+// The registry is deliberately Vue-free, which is what lets the headless suite
+// import it, so its state reaches the template through a mirror.
+const on = ref<Record<string, boolean>>({});
+const readState = () => {
+  const next: Record<string, boolean> = {};
+  for (const b of builtins) next[b.manifest.id] = pluginEnabled(b.manifest.id);
+  on.value = next;
+};
+readState();
+let offPlugins: (() => void) | null = null;
+onMounted(() => { offPlugins = onPluginChange(readState); });
+onUnmounted(() => offPlugins?.());
+
+function toggle(manifest: PluginManifest, ev: Event) {
+  const wanted = (ev.target as HTMLInputElement).checked;
+  setPluginEnabled(manifest.id, wanted);
+  // Turning something on shows what it reaches, without having been asked to.
+  // Nobody is consenting here, the code is already in the app; but somebody
+  // switching a capability on for the first time should not have to go looking
+  // for what they switched on.
+  if (wanted) showing.value = manifest.id;
+}
 
 const record = (id: string) => installed.value.find((r) => r.id === id);
 const setupFor = (id: string) => setup.value[id] ?? "";
@@ -54,7 +91,7 @@ async function accept(plugin: OfficialPlugin) {
   busy.value = plugin.manifest.id;
   try {
     await installPlugin(plugin);
-    asking.value = "";
+    showing.value = "";
     await refresh();
     toast(`${plugin.manifest.name} is installed.`);
   } catch (err) {
@@ -105,7 +142,54 @@ async function copy(text: string) {
 </script>
 
 <template>
-  <div class="sm-section">Plugins</div>
+  <div class="sm-section">In the app</div>
+  <div class="sm-hint">
+    Parts of FundaCAD you can turn off. Off means it does not run: its buttons
+    and panels are gone, and nothing it owns is loaded or connected to.
+  </div>
+
+  <div v-for="b in builtins" :key="b.manifest.id" class="plug-row">
+    <div class="plug-head">
+      <div>
+        <div class="plug-name">{{ b.manifest.name }}</div>
+        <div class="plug-summary">{{ b.manifest.summary }}</div>
+      </div>
+      <span class="param-switch">
+        <input
+          :id="`prefs-plugin-${b.manifest.id}`"
+          type="checkbox"
+          :checked="on[b.manifest.id]"
+          @change="toggle(b.manifest, $event)"
+        />
+        <span class="track"><span class="knob"></span></span>
+      </span>
+    </div>
+    <div class="plug-state">
+      <button
+        class="plug-link"
+        @click="showing = showing === b.manifest.id ? '' : b.manifest.id"
+      >
+        {{ showing === b.manifest.id ? "Hide what it uses" : "What it uses" }}
+      </button>
+    </div>
+    <div v-if="showing === b.manifest.id" class="plug-consent">
+      <div class="plug-can">
+        <div class="plug-listhead">It uses</div>
+        <ul>
+          <li v-for="line in describeGrants(b.manifest).can" :key="line">{{ line }}</li>
+        </ul>
+      </div>
+      <div class="plug-cannot">
+        <div class="plug-listhead">It does not</div>
+        <ul>
+          <li v-for="line in describeGrants(b.manifest).cannot" :key="line">{{ line }}</li>
+        </ul>
+      </div>
+      <div class="sm-hint">{{ sandboxNote(b.manifest.kind) }}</div>
+    </div>
+  </div>
+
+  <div class="sm-section">Plugins you download</div>
   <div class="sm-hint">
     Optional downloads, none of them installed to begin with. Official ones come
     from this project's own releases. Every plugin says up front what it wants
@@ -127,9 +211,9 @@ async function copy(text: string) {
         {{ busy === p.manifest.id ? "Removing…" : "Remove" }}
       </button>
       <button
-        v-else-if="asking !== p.manifest.id"
+        v-else-if="showing !== p.manifest.id"
         class="btn btn-primary"
-        @click="asking = p.manifest.id"
+        @click="showing = p.manifest.id"
       >
         Install
       </button>
@@ -150,7 +234,7 @@ async function copy(text: string) {
       <button class="btn" @click="copy(setupFor(p.manifest.id))">Copy</button>
     </div>
 
-    <div v-if="asking === p.manifest.id" class="plug-consent">
+    <div v-if="showing === p.manifest.id && !record(p.manifest.id)" class="plug-consent">
       <div class="plug-can">
         <div class="plug-listhead">{{ p.manifest.name }} will be able to</div>
         <ul>
@@ -165,7 +249,7 @@ async function copy(text: string) {
       </div>
       <div class="sm-hint">{{ sandboxNote(p.manifest.kind) }}</div>
       <div class="plug-actions">
-        <button class="btn" :disabled="busy === p.manifest.id" @click="asking = ''">
+        <button class="btn" :disabled="busy === p.manifest.id" @click="showing = ''">
           Cancel
         </button>
         <button
