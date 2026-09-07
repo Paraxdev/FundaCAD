@@ -121,6 +121,23 @@ fn pick_runtime(resource_dir: Option<PathBuf>, manifest_dir: &Path) -> std::io::
     ))
 }
 
+/// The interpreter a Python plugin should be launched on, and the packages that
+/// go with it. Same runtime the geometry engine uses, because that is the whole
+/// reason a plugin written in Python can be a 300 kB download: the interpreter
+/// and its dependency tree are already installed.
+///
+/// Not a `Runtime` across the module boundary: `script` is the sidecar's own
+/// entry point and a plugin has its own. `cwd` does come along, because it is
+/// the directory the engine lives in, and a plugin that wants to start a
+/// private engine has no other way to find it once it is installed away from
+/// this repository's layout.
+pub(crate) fn python_runtime(
+    app: &AppHandle,
+) -> std::io::Result<(PathBuf, Option<PathBuf>, PathBuf)> {
+    let rt = resolve_runtime(app)?;
+    Ok((rt.python, rt.pythonpath, rt.cwd))
+}
+
 fn resolve_runtime(app: &AppHandle) -> std::io::Result<Runtime> {
     let resource_dir = app.path().resource_dir().ok();
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));

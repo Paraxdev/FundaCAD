@@ -18,6 +18,42 @@ It runs on the sidecar's own virtual environment because everything it needs is
 already a sidecar dependency: `websockets` for the link, `numpy` for the
 renderer, `pillow` for the PNG.
 
+## Without a clone: installing it as a plugin
+
+That command line needs this repository on disk. For someone who has an
+installer instead, the same server is the app's first plugin: **Preferences ▸
+Plugins ▸ MCP server ▸ Install**. It is not shipped in the bundle and nothing
+downloads it until the install screen has been answered.
+
+The screen lists what it will be able to do (read and change the document, use
+the geometry engine, read and save files you choose) and what it will not (use
+the internet, control your printer, start other programs). It also says that a
+process plugin runs as a normal program on the machine, which is true and is
+the reason the list is worth reading rather than dismissing. See
+`docs/PLUGINS.md`.
+
+Once installed, **How to connect it** produces the block to paste into an MCP
+host's settings, pointing at the interpreter the app already installed:
+
+```json
+{ "mcpServers": { "fundacad": {
+    "command": "<the app's bundled python>",
+    "args": ["<app data>/plugins/mcp/server.py"],
+    "env": {
+      "PYTHONPATH": "<the app's bundled site-packages>",
+      "FUNDACAD_SIDECAR_DIR": "<the app's geometry engine sources>" } } } }
+```
+
+`FUNDACAD_SIDECAR_DIR` is what a standalone session needs to find an engine to
+spawn. From a checkout `sidecar_link.py` looks for a sibling `sidecar/`
+directory; an installed plugin lives under the app data directory and has no
+sibling, so the app hands the path over. An override naming a directory that is
+not there is ignored rather than believed, so a wrong setting reads as "no
+engine" and not as a `FileNotFoundError` from deep inside a spawn.
+
+The plugin is not a replacement for the clone: `.mcp.json` above is how this
+repository's own sessions run, and that stays.
+
 ## What it talks to
 
 It drives the **sidecar**, the same geometry engine the app drives. That is the
@@ -200,6 +236,7 @@ one-shot calls is not a session — use `--script`, which is either a JSON array
 | `schema.py` | the feature reference the agent reads |
 | `client.py` | the client the tests and the command line use |
 | `winjob.py` | the Windows job object that makes the engine die with the server |
+| `plugin.json` | what it declares when installed as a plugin (`docs/PLUGINS.md`) |
 
 `expr.py` and `schema.py` are both ports of things whose authority lives
 elsewhere, so both are pinned by tests: `mcp/tests/test_expr.py` holds the

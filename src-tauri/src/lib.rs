@@ -10,6 +10,7 @@ mod geom;
 // crate consumes it in the app itself.
 pub mod container;
 mod printer;
+pub mod plugins;
 pub mod session_file;
 mod sidecar;
 mod slicer;
@@ -308,6 +309,10 @@ pub fn run() {
         slicer::print_staging_path,
         slicer::slicer_open,
         slicer::slicer_project_settings,
+        plugins::plugin_list,
+        plugins::plugin_install,
+        plugins::plugin_remove,
+        plugins::plugin_python,
         spacemouse::spacemouse_inventory
     ]);
     #[cfg(not(feature = "rust-geom"))]
@@ -340,6 +345,10 @@ pub fn run() {
         slicer::print_staging_path,
         slicer::slicer_open,
         slicer::slicer_project_settings,
+        plugins::plugin_list,
+        plugins::plugin_install,
+        plugins::plugin_remove,
+        plugins::plugin_python,
         spacemouse::spacemouse_inventory
     ]);
 

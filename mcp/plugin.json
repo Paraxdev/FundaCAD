@@ -1,0 +1,14 @@
+{
+  "id": "mcp",
+  "name": "MCP server",
+  "version": "0.1.0",
+  "kind": "process",
+  "summary": "Lets an AI assistant build, measure and edit models here.",
+  "grants": [
+    "document.read",
+    "document.write",
+    "geometry.build",
+    "files.read",
+    "files.write"
+  ]
+}

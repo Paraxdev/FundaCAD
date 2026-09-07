@@ -469,11 +469,23 @@ jobs:
           sparse-checkout: |
             CHANGELOG.md
             src-tauri/tauri.conf.json
+            mcp
+            scripts/build-plugin-mcp.py
           sparse-checkout-cone-mode: false
 
       - uses: actions/download-artifact@v4
         with:
           path: dist
+
+      # The plugin bundle is built here rather than in the platform matrix: it
+      # is a zip of Python sources with nothing compiled in it, so one copy
+      # serves every platform, and building it three times would only raise the
+      # question of which one got published.
+      - name: Package the MCP plugin
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/build-plugin-mcp.py .
 
       - name: Assemble latest.json
         shell: bash
@@ -504,6 +516,11 @@ jobs:
             -o -name '*.dmg' -o -name '*.msi' -o -name '*setup.exe' \
             -o -name '*_portable.zip' \
             -o -name '*.app.tar.gz' -o -name '*.sig' \))
+          # Appended rather than found: it is beside the workflow, not under
+          # dist/, and being in $files is also what keeps the retention sweep at
+          # the end of this step from deleting it as an asset from an older
+          # build.
+          files="$files plugin-mcp.zip"
           # Deliberately NOT `gh release delete ... --cleanup-tag` first. That left a
           # window with no release at all — and since the delete came BEFORE the
           # asset upload, the window was however long ~2GB takes to push, during
