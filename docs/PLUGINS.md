@@ -179,11 +179,121 @@ settings key, so deleting the directory really does uninstall it. A directory
 with no readable record is not reported as installed: nobody has a record of
 agreeing to whatever is in there.
 
+## The broker: one door
+
+Everything a plugin does to the app goes through one function, and the grant
+check happens there. The value of that is not that the check is clever, it is
+three lines, but that there is exactly one of it. A permission model with two
+entry points has two, and the second one is the one nobody audits.
+
+**The vocabulary is the MCP server's tool names, unchanged.** Sixteen ops:
+`schema`, the five `doc_*`, the two `param_*`, the four `feature_*`, `build`,
+`inspect`, `view`, `export`. That server already speaks a defined protocol over
+a token-gated socket and already has a schema for each of these. A second
+vocabulary here would need a translation table, and a translation table is a
+place for the two halves to disagree about what `feature_move` means. There is
+one vocabulary and MCP is a transport for it.
+
+**An op names every grant it needs, not the most interesting one.** An earlier
+sketch had one grant per op, which reads well and is false: `doc_open` reads a
+file AND replaces the open document, `export` needs three, and the one-grant
+version would have let a plugin holding only `geometry.build` call `build` and
+read the open document's body sizes back out of the answer. `build`, `inspect`,
+`view` and `export` all carry `document.read` for exactly that reason.
+
+**An op that is not in the table is refused**, exactly as an unknown grant is
+refused at parse. A broker that passed through what it did not recognise would
+have a hole shaped like every op added after it was written.
+
+**Nothing throws at a plugin.** A refusal is a value with a reason in it, and a
+host that throws is caught and becomes one: an exception crossing out of
+untrusted code into the app's stack is a plugin's bug becoming the app's crash.
+`callOrThrow` is the plugin's own opt-in for code that would rather write
+straight lines, and it exists because the version a plugin author writes
+otherwise is `(await b.call(op)).value`, which reads `undefined` off a refusal
+and fails ten lines later as a TypeError naming neither the op nor the missing
+grant.
+
+`tests/plugins/broker.test.ts` reads the op list out of `mcp/server.py` rather
+than restating it. Two copies of a list drift: someone adds a tool there, nobody
+adds a row here, and the new tool is either unreachable or reachable without a
+permission.
+
+## Testing a plugin
+
+A plugin is handed a broker and nothing else, so what a plugin's tests need
+injected is one host, not a mock of every part of the app.
+
+```ts
+const app = testBroker({ grants: ["document.write"] });
+await app.callOrThrow("feature_add", { feature: { type: "box", x: 40 } });
+expect(app.host.document().features).toHaveLength(1);
+```
+
+No Tauri, no webview, no geometry process, no window.
+`tests/plugins/exampleUse.test.ts` is that written out as a plugin author would
+write it, run as a test so it cannot rot.
+
+**The document ops are real.** Parameters and the timeline are plain data with
+rules over them, so the double runs those rules: ids are assigned the way the
+app assigns them (checked against `mcp/model.py`, so the two cannot drift), a
+bad edit is refused before anything is written, and a plugin that adds a feature
+and reads the document back sees it.
+
+**The four that need the kernel refuse rather than pretend.** `build`,
+`inspect`, `view` and `export` need OCCT in a separate process, which a unit
+test does not have. They are answered from `answers`, which the test supplies,
+and the default refusal names the option to set. A canned bounding box would let
+a plugin's test pass while the plugin's arithmetic was wrong, and it would pass
+forever, because nothing in the test ever touched a solid.
+
+The narrower grant set is worth using in a plugin's own tests, not just the
+default: the second case every plugin should have is that it fails honestly when
+it does not hold what it asked for, which is the case an author otherwise never
+runs and a user eventually does, having turned something off.
+
+## Languages, and what runs them
+
+A plugin's language is a compiler choice, not an architecture. There are **two
+runners**, and the kind decides which.
+
+| written in | compiles to | runs in | kind |
+| --- | --- | --- | --- |
+| TypeScript | JavaScript | a Worker | `compute` |
+| Rust | WebAssembly | a Worker | `compute` |
+| Python | nothing | its own process | `process` |
+
+**Rust means `wasm32`, not a native library.** A dynamic library loaded into the
+app process is not a sandbox that needs tightening, it is the absence of a
+boundary: it gets the whole address space and the user's full privileges. Rust
+also has no stable ABI, so a plugin built against a different compiler version
+can corrupt memory rather than fail to load, and a native-code loader breaks
+macOS notarisation and the hardened runtime. WebAssembly gives one artefact for
+all three platforms instead of a per-plugin build matrix.
+
+The size argument runs the opposite way from the obvious one. Embedding a wasm
+runtime in Rust would add tens of megabytes to the installer to duplicate an
+engine already in the process: the webview has a JIT'd one, and the policy in
+`src-tauri/tauri.conf.json` already permits instantiating it.
+
+**Python reuses what exists.** The app already ships an interpreter and hands it
+out (`plugin_python`), already speaks a token-gated protocol on loopback, and
+`sidecar/live_session.py` already implements the mediation a permission model
+needs: one host owns the document, guests propose replacements against a
+revision and cannot install one. A Python plugin is a guest. A second Python
+runner would be a second thing to be wrong.
+
+What Python does not get is a claim of containment. A process runs as the user,
+and the `process` sentence on the install screen says so.
+
 ## Where the code is
 
 | file | what it holds |
 | --- | --- |
-| `src/plugins/manifest.ts` | the vocabulary, the parser, the two lists, the promise |
+| `src/plugins/manifest.ts` | the grant vocabulary, the parser, the two lists, the promise |
+| `src/plugins/broker/ops.ts` | the op vocabulary: what each needs, and why |
+| `src/plugins/broker/broker.ts` | the door: check, then dispatch, and never throw at a plugin |
+| `src/plugins/broker/testing.ts` | the app a plugin's tests are handed |
 | `src/plugins/registry.ts` | the built-in capabilities, and which are on |
 | `src/plugins/activate.ts` | starting and stopping them, by dynamic import |
 | `src/plugins/builtin/*.ts` | one activation module per capability |
@@ -214,11 +324,16 @@ npx vitest run tests/plugins tests/components/overlays/PluginsSection.spec.ts
 
 ## What comes next
 
-1. A broker: one door, one grant check, every op belonging to exactly one
-   grant, with an exhaustiveness test whose control is an op deliberately left
-   out of the table. MCP moves onto it, so it is a plugin in fact and not only
-   in the Preferences list.
-2. Panel plugins, and the first one built on them.
-3. Compute plugins, which is also the answer to "can I script this".
-4. OS sandboxing for process plugins, per platform.
-5. Third-party publishing: signing, revocation, and a publisher who is not us.
+1. A dynamic registry: what is installed drives the list, rather than the set
+   compiled into the build. Install from a URL and from a local zip, with the
+   origin shown on the screen that asks. The prefix check in `bundle.rs` was
+   never the security boundary, the grants and the sandbox are; it was a
+   provenance claim, so "official" becomes a property of being on this
+   project's releases rather than of being installable at all.
+2. The Worker runner, and with it `compute` plugins in TypeScript and in Rust.
+3. MCP onto the broker, so it is a plugin in fact and not only in the
+   Preferences list.
+4. Panel plugins. Note that the policy currently forbids frames outright, and
+   changing that is load-bearing for their sandbox rather than incidental.
+5. OS sandboxing for process plugins, per platform.
+6. Third-party publishing: signing, revocation, and a publisher who is not us.
