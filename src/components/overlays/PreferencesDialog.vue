@@ -18,6 +18,7 @@ import { onMounted, onUnmounted, ref } from "vue";
 import { useDialogStore } from "../../stores/dialogs";
 import { useModalGate } from "../../composables/useModalGate";
 import ModalFrame from "./ModalFrame.vue";
+import PluginsSection from "./PluginsSection.vue";
 import { THEMES, asThemeId, getTheme, onThemeChange, setTheme } from "../../ui/theme";
 import { asIconPackId, getIconPack, iconPacks, onIconPackChange, setIconPack } from "../../ui/icons";
 import { asUnit, getUnit, onUnitChange, setUnit } from "../../ui/units";
@@ -161,6 +162,7 @@ function onLive(ev: Event) { const v = asLiveEditingMode(value(ev)); if (v) setL
         name says who is connected and what they last did. Sharing stops the
         moment this is set to Do not share.
       </div>
+      <PluginsSection />
     </div>
 
     <div class="modal-foot">

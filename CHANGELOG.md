@@ -25,6 +25,10 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **Plugins: optional parts of the app you download when you want them, and not before.** Preferences has a Plugins section. Each one says up front what it will be able to reach, and the screen shows two lists: what it asked for, and what it did not. Nothing is downloaded until that screen is answered, and a bundle that arrives asking for more than the screen showed is refused and deleted rather than installed. Downloads come from this project's own releases and nowhere else. A plugin that runs as its own program says so on the same screen, because the permissions describe what it can reach through the app, not a cage around it.
+
+- **The MCP server is the first plugin**, so an assistant can drive the app without a copy of the source. Installing it produces the settings block to paste into the assistant, pointing at the Python the app already installed. Nothing changes for anyone running it from a checkout.
+
 - **An AI assistant can now work on the document you have open, instead of on a copy.** Connected through MCP, its edits appear in the window as it makes them, each one a single undo, and a badge next to the document name says who is connected and what they last did. Before this, an assistant started a geometry engine of its own and handed its work back as a file you had to open, so nothing it did was visible while it did it. Preferences has an Assistants section with three settings: don't share, share read-only, or share and allow edits. It can only ever *offer* an edit — the window decides whether to take it, and refuses one written against a model that has since changed, so an assistant cannot overwrite what you did while it was thinking.
 
 ### Changed

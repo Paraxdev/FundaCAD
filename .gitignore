@@ -75,3 +75,8 @@ handoff.md
 CLAUDE.md
 AGENTS.md
 memory/
+
+# Plugin bundles built by scripts/build-plugin-mcp.py. The release job builds
+# its own copy and attaches it to the beta release; a local one is a scratch
+# file for testing an install.
+dist-plugins/

@@ -277,6 +277,94 @@
   color: var(--text-dim, #9aa3af);
 }
 
+/* --- Preferences, Plugins section ---
+   A plugin row is a name, one line about it, and one button. When an install is
+   being decided, two lists open underneath. The consent block is set in from
+   the left and boxed because it is a question rather than more settings: it has
+   to read as something that stopped and is waiting for an answer. */
+.plug-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-2) 0;
+  border-top: 1px solid var(--line, #2a2f3a);
+}
+.plug-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+.plug-name {
+  font-size: 13px;
+  color: var(--text, #e6e8ec);
+}
+.plug-summary,
+.plug-state {
+  font-size: 11px;
+  color: var(--text-dim, #9aa3af);
+}
+.plug-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--accent, #ff7a3c);
+  cursor: pointer;
+}
+.plug-consent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-3);
+  border: 1px solid var(--line, #2a2f3a);
+  border-radius: 6px;
+  background: var(--panel-2, #1c1f26);
+}
+.plug-listhead {
+  font-size: 11px;
+  color: var(--text-mute, #6b7280);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+.plug-consent ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: var(--text, #e6e8ec);
+}
+/* The "will not" list is deliberately quieter than the "will" list. It is there
+   so the first list can be judged against something, not to be read twice. */
+.plug-cannot ul {
+  color: var(--text-dim, #9aa3af);
+}
+.plug-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s-2);
+}
+.plug-setup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  align-items: flex-start;
+}
+.plug-config {
+  margin: 0;
+  width: 100%;
+  max-height: 200px;
+  overflow: auto;
+  padding: var(--s-2);
+  border: 1px solid var(--line, #2a2f3a);
+  border-radius: 6px;
+  background: var(--panel-2, #1c1f26);
+  color: var(--text, #e6e8ec);
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 11px;
+  white-space: pre;
+  user-select: text;
+}
+
 /* --- small modal chooser (Split keep-mode, Section axis) --- */
 .choice-backdrop {
   position: fixed;

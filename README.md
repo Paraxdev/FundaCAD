@@ -105,4 +105,5 @@ outlives its shell, so kill it by hand or it keeps port 8765.
 - [`docs/PROTOCOL.md`](docs/PROTOCOL.md) — the WebSocket the frontend and sidecar speak
 - [`docs/PACKAGING.md`](docs/PACKAGING.md) — how the bundled Python runtime is built
 - [`docs/MCP.md`](docs/MCP.md) — the MCP server another model builds, measures and looks at parts through
+- [`docs/PLUGINS.md`](docs/PLUGINS.md) — optional parts of the app, what they may reach, and how that is asked
 - [`docs/EDGE-CASES.md`](docs/EDGE-CASES.md) / [`docs/IMPROVEMENT-AUDIT.md`](docs/IMPROVEMENT-AUDIT.md) — known rough edges

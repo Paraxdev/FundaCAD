@@ -85,6 +85,21 @@ def _free_port():
 
 
 def sidecar_dir():
+    """Where server.py and the rest of the geometry engine live.
+
+    Next to this file's parent in a source checkout, which is the layout every
+    dev session and every test uses. INSTALLED AS A PLUGIN there is no such
+    sibling: the plugin is a few hundred kB of Python under the app's data
+    directory and the engine it wants is inside the installed app, wherever the
+    installer put that. So the app hands the path over in the environment when
+    it writes the launch command, and this reads it.
+
+    Checked for existence rather than trusted, because an override naming a
+    directory that is not there would otherwise turn "no engine" into a
+    FileNotFoundError from Popen with no hint of which setting caused it."""
+    override = _env("SIDECAR_DIR")
+    if override and os.path.isdir(override):
+        return override
     return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "sidecar")
 
 
