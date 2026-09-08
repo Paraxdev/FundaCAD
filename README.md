@@ -10,8 +10,8 @@ timeline of features, so you can go back to any one of them, change it, and the
 model rebuilds from there.
 
 
-started as a fork of [SindriCAD](https://github.com/MakerViking/sindricad) and
-has diverged a quite a lot since, under the same AGPL-3.0 licence.
+It started as a fork of [SindriCAD](https://github.com/MakerViking/sindricad) and
+has diverged quite a lot since, under the same AGPL-3.0 licence.
 
 
 ## Disclosure  
