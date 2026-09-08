@@ -17,7 +17,6 @@
 
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
-import { contribute } from "../../src/plugins/contrib";
 import {
   getSpaceMouseMode,
   initSpaceMouse,
@@ -26,10 +25,8 @@ import {
 } from "./spacemouse";
 import { openSettings } from "./state";
 import SettingsHost from "./SettingsHost.vue";
-import { stickyFact } from "../../src/diagnostics/breadcrumbs";
-import { toast } from "../../src/ui/toast";
-import type { Engine } from "../../src/app/engine";
-import type { Viewport } from "../../src/viewport/viewport";
+import { contribute, stickyFact, toast } from "fundacad";
+import type { Engine, Viewport } from "fundacad";
 
 type Inventory = { picked: string | null; seen: string[]; note?: string | null };
 

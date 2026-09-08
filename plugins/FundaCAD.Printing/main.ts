@@ -19,7 +19,6 @@
 // on a machine with the capability switched off, because plugins/activate.ts
 // only ever imports this file, and only when it is on.
 
-import { contribute } from "../../src/plugins/contrib";
 import { activePrinterId, printerProbe, printerFilaments, asPrinterError } from "./printerClient";
 import { setPrinterPillClick } from "./printStatusLine";
 import { exportPrintProject } from "./exportProject";
@@ -27,8 +26,8 @@ import { showCamera } from "./state";
 import PrintStatusPill from "./PrintStatusPill.vue";
 import CameraPanel from "./CameraPanel.vue";
 import FilamentMappingHost from "./FilamentMappingHost.vue";
-import type { DocumentStore } from "../../src/document/store";
-import type { Engine } from "../../src/app/engine";
+import { choose, contribute, toast } from "fundacad";
+import type { DocumentStore, Engine } from "fundacad";
 
 const ID = "FundaCAD.Printing";
 
@@ -138,7 +137,6 @@ function filamentSource() {
 
     async sync(store: DocumentStore): Promise<boolean> {
       if (!("__TAURI_INTERNALS__" in window)) return false;
-      const { toast } = await import("../../src/ui/toast");
       let filaments;
       try {
         filaments = await printerFilaments(activePrinterId());
@@ -166,7 +164,6 @@ function filamentSource() {
       }
 
       if (!store.paletteIsDefault()) {
-        const { choose } = await import("../../src/ui/choice");
         const cur = store.colorPalette;
         const diff = proposed
           .map((p, i) =>

@@ -7,13 +7,10 @@
 //                  send). In-app slicing (model→gcode) is a later round.
 
 import { invoke } from "@tauri-apps/api/core";
-import type { DocumentStore } from "../../src/document/store";
-import type { GeometryBackend } from "../../src/geometry/client";
-import { stripDocumentExt } from "../../src/io/documentExt";
 import { exportPrintProject } from "./exportProject";
-import { toast } from "../../src/ui/toast";
-import { contributedPalette } from "../../src/plugins/contrib";
 import { filamentMappingDialog, type LogicalSlot } from "./printDialog";
+import { contributedPalette, stripDocumentExt, toast } from "fundacad";
+import type { DocumentStore, GeometryBackend } from "fundacad";
 import {
   activePrinterId,
   asPrinterError,

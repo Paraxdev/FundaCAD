@@ -22,10 +22,10 @@
 // Python" case, and the difference is not preference: it is whether the answer
 // has to arrive within a frame.
 
-import { contribute } from "../../src/plugins/contrib";
 import { bodyColorMenu, nearestPaletteSlot, paintFrom } from "./palette";
 import PaletteSection from "./PaletteSection.vue";
-import type { Engine } from "../../src/app/engine";
+import { contribute } from "fundacad";
+import type { Engine } from "fundacad";
 
 const ID = "FundaCAD.MultiColor";
 
