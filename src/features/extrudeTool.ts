@@ -26,6 +26,20 @@ import { axisDragDistance, fluentRelease } from "./manipulator";
 import { regionAnchor } from "./regionNudge";
 import { OP_WORD, plannedOperation, type ExtrudeOp } from "./extrudeOperation";
 
+/** How far off the arrow a press still counts as grabbing it, in pixels. The
+ *  shared handle's stem proxy is 11px for the same reason (manipulator.ts):
+ *  aiming at drawn geometry a pixel or two wide is not an affordance. */
+const GRAB_PX = 12;
+
+/** The lathe axis every cylinder in three.js is built around, so a proxy can be
+ *  aimed with one setFromUnitVectors instead of a matrix. */
+const Y_AXIS = new THREE.Vector3(0, 1, 0);
+
+/** The shortest grab target worth offering, in pixels. A depth near zero draws
+ *  a stub of an arrow, and that is exactly when somebody wants to take hold of
+ *  it and pull, so the target does not shrink with it. */
+const MIN_GRAB_PX = 26;
+
 type Phase = "pick" | "drag";
 type Op = ExtrudeOp;
 
@@ -42,6 +56,18 @@ export class ExtrudeTool {
   private previewMat: THREE.MeshStandardMaterial | null = null;
   private previewKey = ""; // depth+sign+selection of the built preview geometry
   private arrow: THREE.ArrowHelper | null = null;
+  /** Invisible cylinder along the arrow, the thing the cursor actually hits.
+   *  The arrow's own geometry is a 1px line and a small cone, which is not a
+   *  target anyone can aim at; manipulator.ts makes the same point about the
+   *  shared handle and solves it the same way. Unit-sized and scaled per move,
+   *  so its grab radius stays a constant number of PIXELS at any zoom. */
+  private grabProxy: THREE.Mesh | null = null;
+  private hovering = false;
+  private grabbing = false;
+  /** The distance at the moment the arrow was taken hold of. The drag is
+   *  relative to it, so grabbing an existing 40 mm extrude does not snap it to
+   *  wherever the cursor happens to project. */
+  private grabValue = 0;
   private dim = new DimInput();
   private hitScratch = new THREE.Vector3();
   private onDone: ((id: string | null) => void) | null = null;
@@ -194,6 +220,26 @@ export class ExtrudeTool {
     if (!first) return;
     const plane = first.plane;
     const anchor = this.anchor();
+    if (this.grabbing) {
+      // A deliberate drag on the arrow outranks a typed value. That is the
+      // exception DimInput.seed documents in as many words and takeOver()
+      // exists for. Without it, re-opening an extrude to lengthen it by hand
+      // was impossible: the seed locks the field, the lock stops cursor
+      // tracking, and the arrow drawn right there did nothing at all.
+      const proj = axisDragDistance(this.viewport, e.clientX, e.clientY, anchor, plane.n);
+      this.distance = this.grabValue + (proj - (this.grabProj ?? proj));
+      this.dim.takeOver("distance");
+      this.dim.updateFromCursor({ distance: Math.abs(this.distance) });
+      this.positionDim(anchor);
+      this.updatePreview();
+      return;
+    }
+    // Not dragging, but the arrow is a target: say so, or the only affordance
+    // is that the depth happens to follow the cursor.
+    this.hovering = this.hitGizmo(e.clientX, e.clientY);
+    const cur = this.viewport.domElement.style.cursor;
+    if (this.hovering) this.viewport.domElement.style.cursor = "grab";
+    else if (cur === "grab") this.viewport.domElement.style.cursor = "default";
     if (!this.dim.isUserDriven("distance")) {
       const proj = axisDragDistance(this.viewport, e.clientX, e.clientY, anchor, plane.n);
       // Relative once the handle has been grabbed, absolute otherwise, see
@@ -237,6 +283,22 @@ export class ExtrudeTool {
       return;
     }
     e.preventDefault();
+    // Taking hold of the arrow, tested before the modifier and commit branches
+    // below: a press on the handle is the start of a drag and never a commit,
+    // and a tool whose handle committed on contact could not be used at all.
+    const grabFirst = this.selected[0];
+    if (!e.ctrlKey && !e.metaKey && !e.shiftKey && grabFirst
+        && this.hitGizmo(e.clientX, e.clientY)) {
+      e.stopImmediatePropagation(); // don't orbit while dragging the handle
+      this.grabbing = true;
+      this.grabValue = this.distance;
+      this.downPos = { x: e.clientX, y: e.clientY };
+      this.grabProj = axisDragDistance(
+        this.viewport, e.clientX, e.clientY, this.anchor(), grabFirst.plane.n,
+      );
+      this.viewport.domElement.style.cursor = "grabbing";
+      return;
+    }
     // Ctrl-click keeps changing WHICH areas, even once the depth is being set.
     // The prompt has said "Ctrl-click areas" for as long as the edit flow has
     // existed and the tool did not honour it: every click in the drag phase
@@ -264,6 +326,7 @@ export class ExtrudeTool {
           this.arrow.dispose();
           this.arrow = null;
         }
+        this.disposeGrabProxy(); // it hung off the arrow, and there is none now
         setPrompt("Click a profile area · Esc");
         return;
       }
@@ -278,7 +341,20 @@ export class ExtrudeTool {
    *  free-track-then-click flow, where a pointerup is just the tail of the
    *  click that onDown already handled. */
   private onUp(e: PointerEvent) {
-    if (e.button !== 0 || !this.fluentGrab || this.phase !== "drag") return;
+    if (e.button !== 0 || this.phase !== "drag") return;
+    if (this.grabbing) {
+      this.grabbing = false;
+      this.viewport.domElement.style.cursor = this.hovering ? "grab" : "default";
+      // A press that never travelled is the click it looks like, and a click in
+      // this tool's drag phase commits, wherever it lands. Without this the
+      // arrow would be the one place on screen where clicking to accept the
+      // depth silently did nothing, which is worse than not being grabbable.
+      const moved = Math.abs(e.clientX - this.downPos.x) > 3
+        || Math.abs(e.clientY - this.downPos.y) > 3;
+      if (!moved) this.commit();
+      return;
+    }
+    if (!this.fluentGrab) return;
     const release = fluentRelease({
       fluent: true,
       moved: Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3,
@@ -349,9 +425,13 @@ export class ExtrudeTool {
     if (this.editId) {
       // seed the SIGNED saved distance and lock the field (userDriven): extrude's
       // onMove free-tracks the cursor and would clobber the seed on the first
-      // move otherwise. Cursor-scrub is deliberately off in edit mode, retype
-      // or commit. (Seeding the abs value would silently drop a cut's sign the
-      // moment getValue is read back, the DimInput abs-display trap.)
+      // move otherwise. So FREE tracking is off in edit mode, a hand that
+      // happens to be moving must not rewrite a saved depth. Dragging the arrow
+      // still works and outranks the seed, see onMove's grab branch: that is a
+      // deliberate gesture on the handle that owns the field, which is the
+      // exception DimInput.seed promises and takeOver() performs. (Seeding the
+      // abs value would silently drop a cut's sign the moment getValue is read
+      // back, the DimInput abs-display trap.)
       this.dim.seed("distance", this.distance);
     } else {
       this.distance = 10;
@@ -448,12 +528,59 @@ export class ExtrudeTool {
     const len = Math.max(this.symmetric ? depth * 2 : depth, 1);
     if (!this.arrow) {
       this.arrow = new THREE.ArrowHelper(dir, tail, len, 0xffd24a, 6, 3);
+      // Drawn THROUGH the model, like every other manipulator in the app (see
+      // createDragHandle). An extrude that pushes into material puts its own
+      // arrow inside the solid, and a depth-tested arrow is then invisible for
+      // the whole of the gesture that needs it: the control disappears exactly
+      // when the operation is a cut.
+      // ArrowHelper types its parts' material as Material | Material[]; both are
+      // built as a single LineBasicMaterial/MeshBasicMaterial and never an array.
+      for (const m of [this.arrow.line.material, this.arrow.cone.material]) {
+        const mat = m as THREE.Material;
+        mat.depthTest = false;
+        mat.depthWrite = false;
+      }
+      this.arrow.line.renderOrder = 999;
+      this.arrow.cone.renderOrder = 999;
       this.viewport.addToScene(this.arrow);
     } else {
       this.arrow.position.copy(tail);
       this.arrow.setDirection(dir);
       this.arrow.setLength(len, 6, 3);
     }
+
+    // The grab target. A unit cylinder scaled per update, so its radius is a
+    // constant number of pixels however far the camera is: a world-sized proxy
+    // would be un-hittable zoomed out and would swallow the viewport zoomed in.
+    if (!this.grabProxy) {
+      this.grabProxy = new THREE.Mesh(
+        new THREE.CylinderGeometry(1, 1, 1, 8),
+        new THREE.MeshBasicMaterial({ visible: false, depthTest: false }),
+      );
+      this.viewport.addToScene(this.grabProxy);
+    }
+    const px = this.viewport.pixelWorldSize(anchor);
+    const span = Math.max(len, px * MIN_GRAB_PX);
+    this.grabProxy.position.copy(tail).addScaledVector(dir, span / 2);
+    this.grabProxy.quaternion.setFromUnitVectors(Y_AXIS, dir);
+    this.grabProxy.scale.set(px * GRAB_PX, span, px * GRAB_PX);
+  }
+
+  private disposeGrabProxy() {
+    if (!this.grabProxy) return;
+    this.viewport.removeFromScene(this.grabProxy);
+    this.grabProxy.geometry.dispose();
+    (this.grabProxy.material as THREE.Material).dispose();
+    this.grabProxy = null;
+  }
+
+  /** Is the cursor on the arrow? Tested against the invisible proxy, never the
+   *  drawn geometry. Three's raycaster tests layers rather than `visible`, so an
+   *  invisible mesh is still a hit target, which is what manipulator.ts relies
+   *  on for the shared handle. */
+  private hitGizmo(x: number, y: number): boolean {
+    if (!this.grabProxy || this.phase !== "drag") return false;
+    return this.viewport.rayFrom(x, y).intersectObject(this.grabProxy, false).length > 0;
   }
 
   // Does the extrude direction push INTO existing material? One of the four facts
@@ -600,6 +727,9 @@ export class ExtrudeTool {
       this.arrow.dispose();
       this.arrow = null;
     }
+    this.disposeGrabProxy();
+    this.hovering = false;
+    this.grabbing = false;
     this.overlay.setHoverRegion(null);
     this.viewport.suspendPicking = false;
     this.active = false;
