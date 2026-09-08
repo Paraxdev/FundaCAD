@@ -1,7 +1,7 @@
 // Shared math and glyphs for the interactive 3D manipulators (extrude, fillet,
 // chamfer, press-pull): cursor ray -> signed scalar along a drag axis, plus the
 // handle you grab to do it. Shared, not copied, because the passive selection
-// handle hands its gesture to the fillet/chamfer tool mid-press — the two must
+// handle hands its gesture to the fillet/chamfer tool mid-press, the two must
 // be provably the same handle.
 
 import * as THREE from "three";
@@ -11,7 +11,7 @@ import { themeColor } from "../viewport/themeColors";
 
 /** Signed distance along `dir` (unit) of the closest point on the axis
  *  (through `origin`) to the cursor `ray`. Ill-conditioned when the camera
- *  looks down the axis — use axisDragDistance for interactive drags. */
+ *  looks down the axis, use axisDragDistance for interactive drags. */
 export function distanceAlongAxis(
   ray: THREE.Ray,
   origin: THREE.Vector3,
@@ -86,7 +86,7 @@ export function orientOutward(
  *  at the camera.
  *
  *  Shared because the passive handle and the armed tool must agree to the last
- *  digit — both are computed inside the SAME pointerdown, and a hair of
+ *  digit, both are computed inside the SAME pointerdown, and a hair of
  *  difference makes the handle jump as the user commits. */
 export function edgeHandleAxis(
   viewport: Viewport,
@@ -111,7 +111,7 @@ export function edgeHandleAxis(
  *
  *  Must stay RIGHT-handed. The obvious `up = fwd x right` spelling has
  *  determinant -1, and setFromRotationMatrix on a reflection returns a non-unit
- *  quaternion for an unrelated rotation — Object3D then applies it as a tilt and
+ *  quaternion for an unrelated rotation, Object3D then applies it as a tilt and
  *  a shrink, which is how the profile arc shipped drawn edge-on. Hit tests also
  *  read screen angles with atan2 about +Y, so a mirrored basis would send the
  *  knob one way round its track while the cursor is read the other. */
@@ -174,12 +174,12 @@ export type FluentRelease = "commit" | "cancel" | "stay";
 
 /** Releasing the handle: commit, throw the gesture away, or stay armed.
  *
- *  A gesture begun on the PASSIVE selection handle is one press and ends done —
+ *  A gesture begun on the PASSIVE selection handle is one press and ends done,
  *  leaving the tool armed would strand the user in a mode they never opted into.
  *  A gesture begun on the tool's own gizmo keeps its explicit commit.
  *
  *  `moved`: a press that never travelled must not commit a default value, so it
- *  stays armed — which doubles as the way in to the full tool.
+ *  stays armed, which doubles as the way in to the full tool.
  *  `meaningful`: a drag that ended back at zero cancels, because staying armed
  *  would strand exactly the user who was backing out. */
 export function fluentRelease(opts: {
@@ -207,7 +207,7 @@ export const HANDLE_HOT = 0xff9a5c;
 /** `--error`, for a push that removes material rather than adding it */
 export const HANDLE_CUT = 0xff5c5c;
 /** `--bg`: the app's deepest surface, so the blob keeps its shape against a
- *  light face — and stays an outline rather than a halo under a light theme. */
+ *  light face, and stays an outline rather than a halo under a light theme. */
 const HANDLE_OUTLINE = 0x0e0f12;
 
 function idleColor() {
@@ -229,7 +229,7 @@ export interface DragHandle {
   /** Repaint. Omitted fields keep their current value. */
   paint(opts: { hot?: boolean; tone?: HandleTone; opacity?: number }): void;
   /** Free GPU resources. Removing the group from the scene stays the caller's
-   *  job — only it knows which scene that is. */
+   *  job, only it knows which scene that is. */
   dispose(): void;
 }
 
@@ -283,14 +283,14 @@ function outset(profile: [number, number][], k: number): [number, number][] {
   });
 }
 
-/** The drawn glyph's height in its own units — the profile's last y. Read by
+/** The drawn glyph's height in its own units, the profile's last y. Read by
  *  handleScale, so retuning the profile retunes the size cap with it. */
 export const HANDLE_LENGTH = 45;
 
 /** How far off the axis a press still counts as grabbing the handle, in pixels.
  *
- *  The old handle was hit-tested against its own geometry — a 1.6px shaft or a 5px
- *  cone — which is why it took careful aim. These proxies never draw; Three's
+ *  The old handle was hit-tested against its own geometry, a 1.6px shaft or a 5px
+ *  cone, which is why it took careful aim. These proxies never draw; Three's
  *  raycaster tests layers, not `visible`, so an invisible mesh is still pickable
  *  (locked down by a test, since the affordance rests on it).
  *
@@ -330,8 +330,8 @@ export function handleScale(
  *
  *  Everything that has to stand clear of the handle needs this number, and the
  *  only alternative is a constant guessed from a screenshot. The selection
- *  toolbar carried exactly that guess — 64px, with a comment saying the two
- *  "must not overlap" — and measured on a fitted 40mm box the bar's bottom edge
+ *  toolbar carried exactly that guess, 64px, with a comment saying the two
+ *  "must not overlap", and measured on a fitted 40mm box the bar's bottom edge
  *  and the handle's top landed on the same pixel: no clearance at all, so the
  *  arrow read as a stalk hanging off the toolbar rather than as a control
  *  standing on the face. */
@@ -352,7 +352,7 @@ export function createDragHandle(tone: HandleTone = "idle"): DragHandle {
 
   // Lit, not flat: the scene's key/fill/hemisphere lights are what make this
   // read as a rounded body rather than a silhouette. The emissive floor keeps it
-  // legible when the lights are behind it — and doubles as the "molten" of the
+  // legible when the lights are behind it, and doubles as the "molten" of the
   // theme's molten amber.
   const body = new THREE.MeshLambertMaterial({
     color: idleColor(),

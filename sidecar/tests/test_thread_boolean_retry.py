@@ -11,7 +11,7 @@ came back either as two separate lumps wearing one body's name or, at five turns
 
 Cutting the tool into slabs fixes it, and that is what booleans._retried_in_slices
 does. The tests below pin the repaired answer against a SECOND, independent way of
-getting it — the same thread swept one turn at a time and applied turn by turn —
+getting it, the same thread swept one turn at a time and applied turn by turn,
 so a wrong repair fails rather than a merely different one passing.
 
 The two turn thread is the control that matters most: it never needed the repair
@@ -133,7 +133,7 @@ def test_a_three_turn_thread_cuts_the_bore_it_is_drawn_in():
     reference = plain - turn_by_turn(tube(), internal, 3, 2.85)
     assert abs(removed - reference) < 0.5, (
         f"repaired cut removed {removed:.3f}, one turn at a time removed "
-        f"{reference:.3f} — those must be the same thread")
+        f"{reference:.3f}, those must be the same thread")
     assert solids == 1, f"a cut must not leave the bore in pieces: {solids}"
     print(f"three turn cut removed {removed:.2f} mm3, "
           f"turn by turn {reference:.2f} OK")
@@ -180,7 +180,7 @@ def test_five_turns_does_not_come_back_smaller_than_the_shank():
 
 def test_a_cut_that_really_misses_still_says_so():
     """The control that keeps the repair honest. Slicing a tool that genuinely
-    reaches nothing must not turn silence into a phantom success — the feature
+    reaches nothing must not turn silence into a phantom success, the feature
     still has to fail, with the message that was always right."""
     _part, errors, _bodies = rebuild(doc(
         tube(),

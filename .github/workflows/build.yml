@@ -22,7 +22,7 @@ on:
 
 jobs:
   # Gates the build matrix: sidecar tests, Rust unit tests, and the (new) vitest
-  # frontend tests all run BEFORE any installer is built. Runs once on Linux only —
+  # frontend tests all run BEFORE any installer is built. Runs once on Linux only,
   # the build matrix below still builds/bundles on all three platforms regardless.
   test:
     runs-on: ubuntu-22.04
@@ -31,7 +31,7 @@ jobs:
 
       # Cheapest gate first: refuse agent/editor session artifacts and hardcoded
       # developer paths before spending 18 minutes on installers. This is a public
-      # repo — .claude/settings.json and a home-directory layout both reached it
+      # repo, .claude/settings.json and a home-directory layout both reached it
       # once already, and .gitignore can't catch an already-tracked path.
       - name: Repo hygiene
         run: sh scripts/check-repo-hygiene.sh
@@ -254,9 +254,9 @@ jobs:
           # OCCT/CPython shared objects (AppImage leg: "failed to run linuxdeploy").
           # NO_STRIP is linuxdeploy's own escape hatch; harmless on the other OSes.
           NO_STRIP: true
-          # UNSIGNED builds for now (Apple Developer Program deferred — no budget).
+          # UNSIGNED builds for now (Apple Developer Program deferred, no budget).
           # macOS ships unsigned, which current Gatekeeper reports as "the app is
-          # damaged and can't be opened" — right-click -> Open is NOT enough for an
+          # damaged and can't be opened", right-click -> Open is NOT enough for an
           # app with no signature at all, and saying so in the README and release
           # notes is what sent the reporter of #5 to the issue tracker. The command
           # that works is `xattr -dr com.apple.quarantine /Applications/FundaCAD.app`.
@@ -465,7 +465,7 @@ jobs:
   release:
     needs: build
     # A manual run of main publishes too. Push events do not currently start a
-    # run in this repository at all — the workflow is active, Actions are
+    # run in this repository at all, the workflow is active, Actions are
     # enabled and allowed, there is no ruleset and no branch protection, and a
     # workflow_dispatch starts immediately, but 11 commits pushed to main
     # produced no run. Until that is settled, "publish the beta" has to be a
@@ -495,7 +495,7 @@ jobs:
       # Packaging a plugin now BUILDS its app-side module, and that build resolves
       # `fundacad` against src/plugins/host.ts, which reaches most of src/. The
       # sparse list would have had to name the whole application, one path at a
-      # time, and be corrected every time a host export gained a dependency —
+      # time, and be corrected every time a host export gained a dependency,
       # with the failure being a release that publishes a bundle missing its
       # code.
       - uses: actions/checkout@v4
@@ -548,7 +548,7 @@ jobs:
           add() { # $1 = updater platform key, $2 = updater bundle path
             [ -n "$2" ] && [ -f "$2" ] || { echo "NOTE: no bundle for $1"; return 0; }
             sig="$2.sig"
-            [ -f "$sig" ] || { echo "WARNING: $2 has no .sig — $1 left out of latest.json"; return 0; }
+            [ -f "$sig" ] || { echo "WARNING: $2 has no .sig, $1 left out of latest.json"; return 0; }
             jq --arg k "$1" --arg u "$base/$(basename "$2")" --rawfile s "$sig" \
               '.platforms[$k] = {signature: $s, url: $u}' latest.json > t && mv t latest.json
           }
@@ -573,7 +573,7 @@ jobs:
           # plugin is published by existing.
           files="$files $(ls plugin-*.zip)"
           # Deliberately NOT `gh release delete ... --cleanup-tag` first. That left a
-          # window with no release at all — and since the delete came BEFORE the
+          # window with no release at all, and since the delete came BEFORE the
           # asset upload, the window was however long ~2GB takes to push, during
           # which downloads 404 and the updater has no latest.json to read. If the
           # create then failed the release simply stayed gone, which happened for
@@ -586,7 +586,7 @@ jobs:
           # project can sign will verify against it.
           #
           # This used to FAIL the job, which was too blunt: it withheld the
-          # installers too, and the installers are fine — they are what people
+          # installers too, and the installers are fine, they are what people
           # actually download. What must not be published is a manifest that
           # points installed copies at bundles they will reject, or one with no
           # platforms in it at all, which is what an unsigned build produces.
@@ -719,13 +719,13 @@ jobs:
 
   # docs/IMPROVEMENT-AUDIT.md §5.4: the opt-in `rust-geom` feature (src-tauri/src/geom.rs,
   # 2320 lines / 67 unwrap-or-expect calls) is never compiled by the `build` job above
-  # (default build is OCCT-free by design — see the Cargo.toml comment on the feature),
+  # (default build is OCCT-free by design, see the Cargo.toml comment on the feature),
   # so it can silently bit-rot. This job is a manual, non-gating bit-rot check: it does
   # NOT run on push/PR and nothing `needs:` it.
   #
   # ubuntu-22.04's package repos top out around OCCT 7.6, but opencascade-sys (the
   # vendored third_party/opencascade-rs fork) requires OCCT >= 7.9, which isn't
-  # available as a hosted-runner apt package — so this step is EXPECTED TO FAIL on
+  # available as a hosted-runner apt package, so this step is EXPECTED TO FAIL on
   # today's runners until either a newer runner image ships OCCT >= 7.9, or a step is
   # added here to build OCCT >= 7.9 from source (slow; deliberately not done today).
   # Trigger to revisit: when a runner image with OCCT 7.9 exists, or when rust-geom

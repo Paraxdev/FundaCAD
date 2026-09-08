@@ -26,7 +26,7 @@
 .timeline-transport {
   flex: 0 0 auto;
   display: flex;
-  /* Hairline — the three transport buttons are one control, like the view
+  /* Hairline, the three transport buttons are one control, like the view
      pill's segments over in _layout. */
   gap: var(--s-0);
 }
@@ -69,7 +69,7 @@
   display: none;
 }
 /* cancel the running operation (import / long rebuild). Sibling of the track,
-   never inside it — the track is wiped on every render. */
+   never inside it, the track is wiped on every render. */
 .timeline-cancel {
   flex: 0 0 auto;
   padding: var(--s-1) var(--s-3);
@@ -115,7 +115,7 @@
   display: flex;
   align-items: center;
   gap: var(--s-2);
-  /* List-row height, shared with .tree-folder above it in the same tree — the
+  /* List-row height, shared with .tree-folder above it in the same tree, the
      two used to differ only in that one said 5px and the other said 5px against
      a different horizontal, which is exactly the kind of near-duplicate that
      makes a panel look hand-placed. The inline value stays one rung tighter
@@ -265,7 +265,7 @@
 
 /* The feature's values, floating above the bottom strip. The in-flow twin of
    this (side arrangement) is styled in _shellsides.scss, where it is a plain
-   indented block — everything below is what it costs to be a free-standing
+   indented block, everything below is what it costs to be a free-standing
    panel instead. */
 .timeline-props.floating {
   position: fixed;
@@ -372,7 +372,7 @@
   display: flex;
   align-items: center;
   gap: var(--s-3);
-  /* Shared popup-row size — see .ribbon-overflow-item. */
+  /* Shared popup-row size, see .ribbon-overflow-item. */
   padding: var(--s-3) var(--s-4);
   border-radius: var(--r-sm);
   cursor: pointer;

@@ -1,14 +1,14 @@
 """A kernel fault must cost a feature, not the session.
 
 BRepOffset_MakeOffset does not refuse the shapes it cannot handle, it takes the
-process down. `_offset_faces` had two fallbacks written around it — press/pull
-thickens the one face instead, Offset Face retries face by face — and neither
+process down. `_offset_faces` had two fallbacks written around it, press/pull
+thickens the one face instead, Offset Face retries face by face, and neither
 had ever run, because there is no excepting your way out of an access violation.
 
 The trigger is not exotic. A cylinder with ONE chamfer is enough, and the same
 cylinder without the chamfer survives everything, which is the control that
-makes the chamfer the cause. On the document that prompted this — a belt spool
-with chamfered flanges — every face of the body crashed, in both directions.
+makes the chamfer the cause. On the document that prompted this, a belt spool
+with chamfered flanges, every face of the body crashed, in both directions.
 
 So the offset runs in a child process now. Most of what is below is a control:
 before the change, three of these tests did not fail, they ended the run.
@@ -78,7 +78,7 @@ def test_the_offsets_that_used_to_kill_the_process():
             assert str(ex).strip(), "refused with an empty message"
             print(PASS, f"{label}: refused, and this process is still here")
             continue
-        # Succeeding is allowed — another OCCT build may manage it. Taking the
+        # Succeeding is allowed, another OCCT build may manage it. Taking the
         # process along is not, and getting here proves it did not.
         print(PASS, f"{label}: completed (no crash either way)")
 
@@ -95,7 +95,7 @@ def test_isolation_did_not_change_a_single_answer():
 
 def test_press_pull_moves_the_face_the_offset_will_not():
     """What the user actually gets. The offset refuses the chamfer cone, so
-    press/pull falls through to thickening that one face — the fallback that was
+    press/pull falls through to thickening that one face, the fallback that was
     there all along and could never be reached."""
     before = CHAMFERED.volume
     out = _press_pull(CHAMFERED, _face(CHAMFERED, GeomType.CONE), 1.0)
@@ -107,7 +107,7 @@ def test_press_pull_moves_the_face_the_offset_will_not():
 def test_a_hard_crash_in_the_child_is_a_refusal_here():
     """The mechanism itself, without waiting for OCCT to misbehave on cue.
 
-    The child is pointed at a script that terminates abnormally on purpose —
+    The child is pointed at a script that terminates abnormally on purpose,
     os.abort(), no exception and no traceback, which is what the parent sees
     when the kernel faults. Not ctypes.string_at(0): Python turns that access
     violation into an OSError, so it would have tested a clean non-zero exit
@@ -142,7 +142,7 @@ def test_a_hard_crash_in_the_child_is_a_refusal_here():
 def test_a_face_from_another_body_is_refused_not_ignored():
     """The marshalling guard. SetOffsetOnFace ignores a face that is not the
     part's own, and the kernel then hands back the part UNCHANGED and calls it
-    success — a silent no-op, which is worse than the crash, because nothing
+    success, a silent no-op, which is worse than the crash, because nothing
     anywhere says the edit did not happen."""
     stranger = _face(Cylinder(7, 7), GeomType.CYLINDER)
     try:
@@ -170,8 +170,8 @@ def test_an_impossible_offset_keeps_its_own_words():
 
 def test_the_exit_codes_cannot_be_mistaken_for_a_crash():
     """A C runtime abort() exits 3 and a shell reports a fault as 139. A child
-    code sharing either number would make every log line about this ambiguous —
-    refused, or died? — which is the one question the codes exist to answer."""
+    code sharing either number would make every log line about this ambiguous,
+    refused, or died? which is the one question the codes exist to answer."""
     codes = {offset_child.REFUSED, offset_child.INVALID, offset_child.MARSHAL}
     assert len(codes) == 3, "two of the child's codes are the same number"
     assert offset_child.OK not in codes
@@ -181,7 +181,7 @@ def test_the_exit_codes_cannot_be_mistaken_for_a_crash():
 
 def test_the_child_ships_with_the_sidecar():
     """The bundle copies sidecar/*.py by denylist, so a new module ships by
-    default — but the path this resolves at RUNTIME is worth pinning, because
+    default, but the path this resolves at RUNTIME is worth pinning, because
     getting it wrong breaks the packaged build only."""
     assert os.path.isfile(solid_ops._OFFSET_CHILD), solid_ops._OFFSET_CHILD
     assert os.path.dirname(solid_ops._OFFSET_CHILD) == os.path.dirname(

@@ -31,7 +31,7 @@ describe("entityPolyline", () => {
   });
 });
 
-describe("glyphRegion — a tessellated glyph face becomes an extrudable profile", () => {
+describe("glyphRegion, a tessellated glyph face becomes an extrudable profile", () => {
   it("a square outer with a square hole yields a ring whose interior avoids the hole", () => {
     // 10×10 outer, 4×4 centered hole (like the counter of an 'O')
     const outer: [number, number][] = [[-5, -5], [5, -5], [5, 5], [-5, 5]];
@@ -41,7 +41,7 @@ describe("glyphRegion — a tessellated glyph face becomes an extrudable profile
     expect(region.sketchId).toBe("s1");
     expect(region.loop).toHaveLength(4);
     expect(region.holes).toHaveLength(1);
-    // the selection anchor must sit in the material — inside the outer, outside the hole
+    // the selection anchor must sit in the material, inside the outer, outside the hole
     expect(pointInRegion(region.interior, region)).toBe(true);
     // a point in the counter (hole) is NOT part of the material
     expect(pointInRegion(new THREE.Vector2(0, 0), region)).toBe(false);
@@ -55,7 +55,7 @@ describe("glyphRegion — a tessellated glyph face becomes an extrudable profile
   });
 });
 
-describe("detectRegions — simple closed rectangle", () => {
+describe("detectRegions, simple closed rectangle", () => {
   it("a single rectangle entity yields exactly one region with no holes", () => {
     const regions = detectRegions("s1", [rect("r1", 0, 0, 10, 6)]);
     expect(regions).toHaveLength(1);
@@ -88,9 +88,9 @@ describe("detectRegions — simple closed rectangle", () => {
   });
 });
 
-describe("detectRegions — circle-inside-rectangle hole handling", () => {
+describe("detectRegions, circle-inside-rectangle hole handling", () => {
   // Non-crossing (circle entirely inside, not touching the rectangle boundary):
-  // the fast path treats each as its own loop, then nests by containment —
+  // the fast path treats each as its own loop, then nests by containment,
   // a ring (rect w/ hole=circle) AND the disk (circle, no holes), per the code's
   // own comment at region.ts:131-132.
   const entities = [rect("r1", 0, 0, 20, 20), circle("c1", 0, 0, 3)];
@@ -127,10 +127,10 @@ describe("detectRegions — circle-inside-rectangle hole handling", () => {
   });
 });
 
-describe("detectRegions — thin-ring interior anchor (field bug: outer ring selects inner circle)", () => {
+describe("detectRegions, thin-ring interior anchor (field bug: outer ring selects inner circle)", () => {
   // Two concentric circles with a thin ring (inner_r/outer_r = 0.914 > 0.9), the
   // exact Test1 document geometry. The region's `interior` anchor MUST land in the
-  // ring material — not in the hole. When it fell in the hole (0,0), selecting the
+  // ring material, not in the hole. When it fell in the hole (0,0), selecting the
   // ring stored an anchor inside the disk, so the disk highlighted/extruded instead.
   it("the annulus anchor is inside its own material, not the hole", () => {
     const regions = detectRegions("s1", [circle("outer", 0, 0, 27.5), circle("inner", 0, 0, 25.123885645485018)]);
@@ -143,7 +143,7 @@ describe("detectRegions — thin-ring interior anchor (field bug: outer ring sel
   });
 });
 
-describe("detectRegions — projected reference geometry forms profiles", () => {
+describe("detectRegions, projected reference geometry forms profiles", () => {
   const pline = (id: string, x1: number, y1: number, x2: number, y2: number): ResolvedEntity => ({
     type: "projected", id,
     source: { kind: "edge", body: "body1", sel: { kind: "edge", by: "match", fp: { mid: [0, 0, 0], dir: [1, 0, 0] } } },
@@ -185,7 +185,7 @@ describe("detectRegions — projected reference geometry forms profiles", () => 
   });
 });
 
-describe("detectRegions — splitting a profile at the edge of the face it sits on", () => {
+describe("detectRegions, splitting a profile at the edge of the face it sits on", () => {
   // The 20x20 face of a box, in sketch coordinates. A sketch drawn on a face is
   // bounded by that face as much as by its own curves, and until this existed
   // the whole profile was one region that extruded off the side of the part.
@@ -241,7 +241,7 @@ describe("detectRegions — splitting a profile at the edge of the face it sits 
 
   it("leaves a profile wholly on the face as one region", () => {
     // Re-running the arrangement when nothing crosses would cost time and risk
-    // perturbing loops that were already right, so that path is skipped — but
+    // perturbing loops that were already right, so that path is skipped, but
     // the region must still be MARKED, because a tool needs to know it is
     // supported, not merely that it was not split.
     const regions = detectRegions("s1", [circle("c", 0, 0, 4)], face);
@@ -265,7 +265,7 @@ describe("detectRegions — splitting a profile at the edge of the face it sits 
 
   it("does not turn the face itself into a selectable region", () => {
     // Feeding the outline into the arrangement makes it produce cells for the
-    // FACE as well — most obviously "the face minus the profile", which is
+    // FACE as well, most obviously "the face minus the profile", which is
     // bounded by the outline and the profile and looks just like a legitimate
     // mixed cell. The user drew a circle, not a plate with a hole in it.
     const regions = detectRegions("s1", [circle("c", 10, 0, 6)], face);
@@ -352,7 +352,7 @@ describe("rectCorners rotation", () => {
   });
 
   it("gives entityPolyline a closed rotated loop", () => {
-    // The one place an entity becomes points — everything downstream (regions,
+    // The one place an entity becomes points, everything downstream (regions,
     // picking, snapping, the sidecar's own corners) reads through it.
     const p = entityPolyline({ type: "rectangle", id: "r", x: 0, y: 0, width: 10, height: 4, angle: 45 } as never);
     expect(p).toHaveLength(5);
@@ -389,7 +389,7 @@ describe("rectFromThreePoints", () => {
   });
 
   it("measures the third point PERPENDICULARLY to the edge", () => {
-    // Sliding the cursor ALONG the edge must not change the shape — otherwise
+    // Sliding the cursor ALONG the edge must not change the shape, otherwise
     // the rectangle creeps sideways while the user is choosing its thickness.
     const base = rectFromThreePoints(v(0, 0), v(10, 0), v(3, 4))!;
     for (const x of [-50, 0, 5, 10, 60]) {
@@ -407,13 +407,13 @@ describe("rectFromThreePoints", () => {
 
   it("refuses the degenerate clicks instead of emitting a zero rectangle", () => {
     // A committed rectangle of no area is invisible, unselectable and extrudes
-    // to nothing — a rejected click is the honest answer.
+    // to nothing, a rejected click is the honest answer.
     expect(rectFromThreePoints(v(3, 3), v(3, 3), v(9, 9))).toBeNull(); // no edge
     expect(rectFromThreePoints(v(0, 0), v(10, 0), v(4, 0))).toBeNull(); // c on the edge
   });
 });
 
-describe("detectRegions — every closed primitive is a profile, not just the two", () => {
+describe("detectRegions, every closed primitive is a profile, not just the two", () => {
   // Field bug: a slot drew fine and highlighted nothing. A slot and a polygon
   // are closed curves with no free endpoints, so the chain tracer has nothing to
   // join them to; only the entities the fast path names as loops of their own

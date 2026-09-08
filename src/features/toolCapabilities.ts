@@ -5,9 +5,9 @@
 //   applicableTools({face: 1})   -> given this selection, which tools apply?
 //
 // Same shape as document/numFields.ts and for the same reason. The answer used to
-// be spread across four readers that each re-derived it — the handle ranking in
+// be spread across four readers that each re-derived it, the handle ranking in
 // app/viewportWiring.ts, the context-menu enable rules, the "select a face first"
-// refusals inside each starter, and the tools themselves — and they disagreed: a
+// refusals inside each starter, and the tools themselves, and they disagreed: a
 // face selection offered Press/Pull and nothing else, while Fillet, which can
 // perfectly well round every edge of that face, needed the edges re-picked by hand.
 //
@@ -33,8 +33,8 @@ import { contributedTools } from "../plugins/contrib";
  *
  *  "vertex" is here ahead of its picker: nothing in the viewport selects a
  *  corner yet, so no tool declares it and `toolsConsuming("vertex")` is
- *  legitimately empty. It is in the union because the alternative — adding the
- *  kind at the same time as the first tool that wants it — is what turns a
+ *  legitimately empty. It is in the union because the alternative, adding the
+ *  kind at the same time as the first tool that wants it, is what turns a
  *  capability table into a rename. */
 export type EntityKind = "face" | "edge" | "vertex" | "body" | "sketch-region";
 
@@ -43,7 +43,7 @@ export type EntityKind = "face" | "edge" | "vertex" | "body" | "sketch-region";
  *  "selection" tools consume what is already selected: pressing the key acts on
  *  it immediately. "pick" tools run their own modal pick (see
  *  featureStarters.pickFaceInteractive) and ignore the ambient selection
- *  entirely — Shell can act on a face, but a selected face does not make Shell
+ *  entirely, Shell can act on a face, but a selected face does not make Shell
  *  runnable without a further click. Only "selection" tools can answer
  *  applicableTools(), which is the distinction the ambient affordances need and
  *  the one an `acts on a face` list alone would blur. */
@@ -57,7 +57,7 @@ export type EntitySource = "selection" | "pick";
  *
  *  A contributed tool's id is not in this union and cannot be: it is a string
  *  from a bundle this build has never seen. Everything downstream therefore
- *  takes a `string`, and the union survives as what it always was — the thing
+ *  takes a `string`, and the union survives as what it always was, the thing
  *  that makes TOOL_CAPABILITIES below exhaustive over the app's own tools, so
  *  adding one and forgetting its row is a compile error. */
 export type ToolId =
@@ -110,7 +110,7 @@ export interface ToolCapability {
  *  nearest the top is the one an affordance should default to. */
 export const TOOL_CAPABILITIES: Record<ToolId, ToolCapability> = {
   // Fillet and chamfer take EDGES, and a face is shorthand for "every edge of
-  // this face" — the same blend, named by the region it surrounds rather than
+  // this face", the same blend, named by the region it surrounds rather than
   // by twelve individual picks. edgeFeatureTool.start() is what expands it.
   fillet: { label: "Fillet", consumes: ["edge", "face"], source: "selection" },
   chamfer: { label: "Chamfer", consumes: ["edge", "face"], source: "selection" },
@@ -123,7 +123,7 @@ export const TOOL_CAPABILITIES: Record<ToolId, ToolCapability> = {
   // The one id that is not an action string: face delete is dispatched through
   // engine.deleteSelectedFace (the Del key and the face context menu), because
   // it is a selection verb rather than a command with a ribbon button. It earns
-  // its row anyway — leaving it out would make "what applies to this face"
+  // its row anyway, leaving it out would make "what applies to this face"
   // wrong, which is the only question this table exists to answer.
   "delete-face": { label: "Delete Face", consumes: ["face"], source: "selection" },
   move: { label: "Move", consumes: ["body"], source: "selection" },
@@ -168,7 +168,7 @@ export function coreCapabilities(): Capabilities {
  *  App-first is the offer order and it is deliberate: a selection that feeds
  *  both lists Press/Pull before a plugin's tool, because the app's own verbs
  *  are the ones somebody expects to be where they were yesterday. A plugin
- *  cannot displace one by claiming its id either — an id already in the map is
+ *  cannot displace one by claiming its id either, an id already in the map is
  *  kept, so the worst a colliding plugin achieves is a button of its own that
  *  runs the app's tool, rather than a Fillet that quietly does something else.
  *
@@ -203,7 +203,7 @@ export function consumedKinds(tool: AnyToolId): readonly EntityKind[] {
 }
 
 /** Can this tool act on that kind of entity at all? The guard a tool uses before
- *  reaching for a selection it does not normally take — Fillet asks this before
+ *  reaching for a selection it does not normally take, Fillet asks this before
  *  expanding a face into its edges, so the behaviour and the table can never
  *  drift apart. */
 export function canConsume(tool: AnyToolId, kind: EntityKind): boolean {
@@ -240,7 +240,7 @@ export function toolsConsuming(kind: EntityKind, source?: EntitySource): string[
 /** How many of each kind are currently selected. Absent === none. */
 export type SelectionCounts = Partial<Record<EntityKind, number>>;
 
-/** The tools this selection can feed, inventory order — the first is what an
+/** The tools this selection can feed, inventory order, the first is what an
  *  affordance should offer by default.
  *
  *  A tool qualifies when the selection holds at least `min` of ANY kind it
@@ -261,7 +261,7 @@ export function applicableTools(sel: SelectionCounts): string[] {
 }
 
 /** Which kind of the selection a tool would actually take, or null when it can
- *  take none of it — the tool's own preference order (see `consumes`) decides,
+ *  take none of it, the tool's own preference order (see `consumes`) decides,
  *  so a face selected under a visible profile hands Extrude the profile and
  *  Press/Pull the face, from the same counts. */
 export function consumedKindOf(tool: AnyToolId, sel: SelectionCounts): EntityKind | null {

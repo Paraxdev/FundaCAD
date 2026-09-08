@@ -33,13 +33,13 @@ This file starts on 2026-08-03. For anything before that, see the
 
 - **The MCP server is the first plugin**, so an assistant can drive the app without a copy of the source. Installing it produces the settings block to paste into the assistant, pointing at the Python the app already installed. Nothing changes for anyone running it from a checkout.
 
-- **An AI assistant can now work on the document you have open, instead of on a copy.** Connected through MCP, its edits appear in the window as it makes them, each one a single undo, and a badge next to the document name says who is connected and what they last did. Before this, an assistant started a geometry engine of its own and handed its work back as a file you had to open, so nothing it did was visible while it did it. Preferences has an Assistants section with three settings: don't share, share read-only, or share and allow edits. It can only ever *offer* an edit — the window decides whether to take it, and refuses one written against a model that has since changed, so an assistant cannot overwrite what you did while it was thinking.
+- **An AI assistant can now work on the document you have open, instead of on a copy.** Connected through MCP, its edits appear in the window as it makes them, each one a single undo, and a badge next to the document name says who is connected and what they last did. Before this, an assistant started a geometry engine of its own and handed its work back as a file you had to open, so nothing it did was visible while it did it. Preferences has an Assistants section with three settings: don't share, share read-only, or share and allow edits. It can only ever *offer* an edit, the window decides whether to take it, and refuses one written against a model that has since changed, so an assistant cannot overwrite what you did while it was thinking.
 
 ### Changed
 
 - Two heavy geometry operations from two different clients can no longer run at the same time. The rule that they must not was in place and was enforced per connection, so it held only while exactly one program was ever connected.
 
-- Clicking a body now opens the move gizmo on it. Picking a body IS reaching for it, so the obvious gesture — click the thing, drag it — no longer needs a second command first. A plain click elsewhere moves the gizmo to the next body, or puts it away over empty space, in one click rather than two.
+- Clicking a body now opens the move gizmo on it. Picking a body IS reaching for it, so the obvious gesture, click the thing, drag it, no longer needs a second command first. A plain click elsewhere moves the gizmo to the next body, or puts it away over empty space, in one click rather than two.
 - Each drag of the move gizmo is its own row in the timeline, so an undo takes back the last nudge instead of the whole sitting, and the next drag starts from the pose the last one produced.
 
 ### Fixed
@@ -249,8 +249,8 @@ This file starts on 2026-08-03. For anything before that, see the
   opening, permanently and by design: there is no upgrade step that can reach a
   file already sitting on someone's disk, so a name dropped from the read list
   is that person's work refusing to open. Opening a `.neocad` and saving over it
-  keeps the `.neocad`; only Save As offers the new name. Every stored setting —
-  theme, units, layout, recent files, the SpaceMouse map — is carried forward
+  keeps the `.neocad`; only Save As offers the new name. Every stored setting,
+  theme, units, layout, recent files, the SpaceMouse map, is carried forward
   from its old key, and now through a chain of names rather than a single
   fallback, so a value last written two names ago is still found.
 
@@ -352,14 +352,14 @@ This file starts on 2026-08-03. For anything before that, see the
 
 - **Model size is no longer a hard limit on what you can open.** Until now the
   finished geometry had to reach the 3D view as one piece, and there was a
-  ceiling on how big that piece could be — about 128 MB. The 356 MB reference
+  ceiling on how big that piece could be, about 128 MB. The 356 MB reference
   assembly came in at 95% of it, so a model only a few per cent larger simply
   refused to open, with a message telling you to hide some bodies in a document
   you could not open in the first place.
 
   The geometry is now sent in pieces and put back together as it arrives, so
-  there is no ceiling to hit. Nothing about the models you already have changes —
-  the same geometry, drawn the same way — but a document that used to be turned
+  there is no ceiling to hit. Nothing about the models you already have changes,
+  the same geometry, drawn the same way, but a document that used to be turned
   away now opens. A single body that is enormous on its own is still refused,
   and that message now tells you which body it is.
 
@@ -897,7 +897,7 @@ This file starts on 2026-08-03. For anything before that, see the
   kernel from the system killing the process for using too much memory. On Linux
   and macOS the status is `None` for every signal death, which is precisely those
   two cases. The crash and its signal are now written to `sidecar.log`, and the
-  message names the cause ("killed by SIGSEGV (11) — geometry kernel fault"), so
+  message names the cause ("killed by SIGSEGV (11), geometry kernel fault"), so
   even a screenshot of it is enough to triage from.
 - **A bug reported from inside the sketcher now carries the sketch.** An open
   sketch lives in the sketch session, not in the document, until you finish it,

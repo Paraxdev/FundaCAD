@@ -19,7 +19,7 @@ export function installSketchStateBridge(e: Engine): void {
     ribbon.context = e.sketch.active ? "sketch" : "model";
     ribbon.activeSketchTool = e.sketch.tool;
     palette.visible = e.sketch.active;
-    // #context-tab is components/shell/TitleBar.vue now — SOLID/SKETCH and the
+    // #context-tab is components/shell/TitleBar.vue now, SOLID/SKETCH and the
     // .sketch class both derive from this one flag.
     ui.sketchActive = e.sketch.active;
     if (e.sketch.active) {

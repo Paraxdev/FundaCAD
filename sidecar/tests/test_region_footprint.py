@@ -4,7 +4,7 @@ A sketch drawn on a face routinely runs off it, and the overlay splits it there
 so the part with material behind it and the part hanging off pick separately.
 Nothing carried that split to the builder, so a point naming one area resolved to
 the whole profile: a join grew a slab nobody selected, and a cut with the leftover
-area took the join with it — the reported "the whole sketch extrudes", then "it
+area took the join with it, the reported "the whole sketch extrudes", then "it
 vanishes completely without a warning".
 
 The document below is the reported one, rebuilt from primitives: a 60x60x34.664
@@ -131,7 +131,7 @@ def test_join_grows_only_the_selected_areas():
 
 def test_cut_takes_only_the_selected_area():
     """The reported cut. Whole-profile resolution made this one remove every bit of
-    the join above — the part 'vanishes completely'."""
+    the join above, the part 'vanishes completely'."""
     join = {"id": "f4", "type": "extrude", "sketch": "f3", "distance": 15.352,
             "operation": "join", "regions": [ONFACE, ABOVE], "hiddenBodies": []}
     cut = {"id": "f5", "type": "extrude", "sketch": "f3", "distance": 26.471,
@@ -148,7 +148,7 @@ def test_cut_takes_only_the_selected_area():
 
 def test_a_cut_that_empties_a_body_says_so():
     """CONTROL that must fail: the guard has to fire on a real annihilation, not
-    on every cut. A body that goes to nothing left no message at all before —
+    on every cut. A body that goes to nothing left no message at all before,
     it was simply gone at the next repaint."""
     whole = {"id": "f4", "type": "extrude", "sketch": "f1", "distance": H * 2,
              "operation": "cut", "regions": [[0, 0, 0]], "hiddenBodies": []}
@@ -204,7 +204,7 @@ def test_only_edges_that_lie_in_the_plane_count():
 
 
 def test_the_bbox_prefilter_never_rejects_an_edge_that_is_on_the_plane():
-    """It is a REJECTION test — the box contains the edge, so a box wholly to one
+    """It is a REJECTION test, the box contains the edge, so a box wholly to one
     side holds nothing that reaches the plane. The converse does not hold, which
     is why it may only prune."""
     part, _ = build()

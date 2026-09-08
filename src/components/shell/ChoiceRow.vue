@@ -2,8 +2,8 @@
 // A labelled row whose value is one of a fixed set: label on the left, a
 // dropdown on the right.
 //
-// The sibling of ValidatedRow, and deliberately the same row chrome — same
-// grid, same label column, same field height — because these sit interleaved
+// The sibling of ValidatedRow, and deliberately the same row chrome, same
+// grid, same label column, same field height, because these sit interleaved
 // with the value rows in one list and a control that announced itself as a
 // different KIND of control would break the column. What it does not have is
 // ValidatedInput's mid-edit guard: a <select> has no half-typed state to

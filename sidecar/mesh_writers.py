@@ -6,8 +6,8 @@ keeps untextured bodies on the build123d BRep-native exporters.export() path and
 only routes textured targets here).
 
 GLB is here for the same reason plus one more: displacement lives in the mesh, not
-in body["shape"], so OCCT's own RWGltf_CafWriter — which serialises B-rep through
-an XCAF document — would silently export a textured body untextured. Writing the
+in body["shape"], so OCCT's own RWGltf_CafWriter, which serialises B-rep through
+an XCAF document, would silently export a textured body untextured. Writing the
 container by hand from the same (positions, indices) arrays makes the textured and
 untextured paths identical, and is what lets each body keep its own colour.
 """
@@ -25,7 +25,7 @@ def write_stl(positions, indices, path):
     """Binary STL: 80-byte header, u32 triangle count, then 50 bytes/triangle
     (12 floats: normal + 3 vertices, + a 2-byte attribute count). Facet normals
     are computed here (STL has no shared-vertex normals) via numpy cross
-    products — vectorized over all triangles at once, not a per-triangle loop."""
+    products, vectorized over all triangles at once, not a per-triangle loop."""
     pos = np.asarray(positions, dtype=np.float32).reshape(-1, 3)
     idx = np.asarray(indices, dtype=np.int64).reshape(-1, 3)
     ntri = idx.shape[0]
@@ -42,7 +42,7 @@ def write_stl(positions, indices, path):
         fh.write(b"\x00" * 80)
         fh.write(struct.pack("<I", ntri))
         # one packed write per triangle beats struct.pack-per-field*N in pure
-        # Python — build the per-triangle 50-byte record via a structured array.
+        # Python, build the per-triangle 50-byte record via a structured array.
         rec = np.zeros(ntri, dtype=[
             ("n", "<f4", 3), ("v0", "<f4", 3), ("v1", "<f4", 3), ("v2", "<f4", 3),
             ("attr", "<u2"),
@@ -56,7 +56,7 @@ def write_stl(positions, indices, path):
 
 
 def write_plain_3mf(positions, indices, path):
-    """A minimal single-object plain 3MF (no Orca project metadata — see
+    """A minimal single-object plain 3MF (no Orca project metadata, see
     project3mf.py for that variant). Reuses the SAME vertex/triangle
     serialization as the Orca-project writer instead of forking it.
 
@@ -127,8 +127,8 @@ def _vertex_normals(pos, idx):
     duplicated at every face boundary: averaging can only ever run within one
     face. That yields smooth curved surfaces and sharp face-to-face edges for
     free, and a crease threshold could only make it worse (too low rounds off a
-    cube's corners). Winding is outward-correct upstream — tessellate flips
-    REVERSED faces — so no sign correction is needed here.
+    cube's corners). Winding is outward-correct upstream, tessellate flips
+    REVERSED faces, so no sign correction is needed here.
 
     The cross product's magnitude is twice the triangle area, so summing raw
     (unnormalised) face normals area-weights the average for free. Accumulated
@@ -153,7 +153,7 @@ def _vertex_normals(pos, idx):
 # Both conversions ride in the node matrix rather than the vertex data: one place
 # to be wrong, and the cached export arrays are never copied or mutated. glTF's
 # unit IS the metre per spec, which is why the scale belongs here and not as an
-# afterthought — emitting raw mm makes every model read 1000x too large to any
+# afterthought, emitting raw mm makes every model read 1000x too large to any
 # spec-abiding consumer (including our own importer, which must assume metres so
 # that third-party files load correctly).
 #
@@ -173,7 +173,7 @@ def write_glb(meshes, path, generator="FundaCAD"):
     """Write a binary glTF 2.0 (.glb).
 
     meshes : [{"name": str, "positions": flat xyz floats, "indices": flat ints,
-               "color": "#RRGGBB" or None}]  — ONE ENTRY PER BODY, kept separate
+               "color": "#RRGGBB" or None}], ONE ENTRY PER BODY, kept separate
              so each becomes its own named, individually coloured node. (STL and
              3MF merge everything into one soup; glTF has no reason to.)
 
@@ -204,7 +204,7 @@ def write_glb(meshes, path, generator="FundaCAD"):
         n_view = _view(nrm.tobytes(), 34962)
         i_view = _view(idx.astype(np.uint32).ravel().tobytes(), 34963)  # ELEMENT_ARRAY
 
-        # POSITION must carry min/max — validators reject the file without them.
+        # POSITION must carry min/max, validators reject the file without them.
         accessors.append({"bufferView": p_view, "componentType": 5126,
                           "count": int(pos.shape[0]), "type": "VEC3",
                           "min": [float(v) for v in pos.min(axis=0)],
@@ -248,7 +248,7 @@ def write_glb(meshes, path, generator="FundaCAD"):
         "bufferViews": views,
         "buffers": [{"byteLength": offset}],
     }
-    if not gl_meshes:  # nothing meshed — keep the file structurally valid
+    if not gl_meshes:  # nothing meshed, keep the file structurally valid
         for k in ("meshes", "materials", "accessors", "bufferViews", "buffers"):
             doc.pop(k)
 

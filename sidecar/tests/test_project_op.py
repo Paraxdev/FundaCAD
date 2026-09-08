@@ -1,4 +1,4 @@
-"""projectGeometry aux-op + projection math — _project_edge_to_plane exactness
+"""projectGeometry aux-op + projection math, _project_edge_to_plane exactness
 (line/circle/arc vs sampled-poly fallback), _curve_close tolerance compare, and
 project_geometry's strict per-source resolution (missing body / ambiguous
 selector → error entries, never exceptions).
@@ -99,7 +99,7 @@ def test_cylinder_rim_tilted_poly():
     xs, ys = [p[0] for p in pts], [p[1] for p in pts]
     assert abs(max(xs) - 10) < 0.02 and abs(min(xs) + 10) < 0.02
     # the tilted view compresses the rim's y SPAN to 2·r·cos(30°) ≈ 17.32 (its
-    # CENTER shifts by the rim plane's z-offset — only the span says "ellipse")
+    # CENTER shifts by the rim plane's z-offset, only the span says "ellipse")
     yspan = max(ys) - min(ys)
     assert abs(yspan - 2 * 10 * 0.8660254) < 0.05, f"tilted y span: {yspan}"
     print(f"  tilted rim OK: poly with {len(pts)} pts")
@@ -107,7 +107,7 @@ def test_cylinder_rim_tilted_poly():
 
 def test_degenerate_vertical_edge():
     """A box side edge viewed end-on (vertical line onto XY) projects to a point:
-    poly fallback with coincident endpoints — never an error."""
+    poly fallback with coincident endpoints, never an error."""
     r = _one(BOX, "XY", {"kind": "edge", "body": "body1",
                          "sel": {"kind": "edge", "by": "nearest", "point": [10, 10, 5]}})
     assert r["ok"], r

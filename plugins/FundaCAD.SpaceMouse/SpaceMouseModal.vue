@@ -17,7 +17,7 @@
 // The renderer, its scene resources and the rAF are all torn down in
 // onUnmounted. The class this replaces cancelled the rAF and disposed the
 // renderer but left the box/edges/sphere geometries and their materials on the
-// GPU — and "Reset to defaults" rebuilt the whole dialog, so it leaked a full
+// GPU, and "Reset to defaults" rebuilt the whole dialog, so it leaked a full
 // set every time it was pressed.
 
 import * as THREE from "three";
@@ -273,7 +273,7 @@ function tickTest() {
   // rotate accumulates (the thing being tested); pan/zoom nudge then spring
   // back so they read as "live while held". Gains are scaled up from the
   // camera sensitivities so motion is visible at this small size.
-  // Rotate — sign mirrors object mode (the cube IS the object).
+  // Rotate, sign mirrors object mode (the cube IS the object).
   // The cube shows what the MODEL appears to do = the inverse of the camera
   // motion the real loop applies (which carries modeSign). So the cube
   // coefficient is -modeSign: +1 in object mode, -1 in camera mode. Verified
@@ -290,7 +290,7 @@ function tickTest() {
   const rollc = ms * val("roll") * kr;
   if (rollc) t.cube.rotateOnWorldAxis(fwd, rollc); // bank around the view axis
 
-  // Pan — nudge in the screen plane, then spring back. Gentle gain + a hard
+  // Pan, nudge in the screen plane, then spring back. Gentle gain + a hard
   // clamp so the cube can never leave the little preview (this is a feel test,
   // not a 1:1 move).
   const kp = cfg.panSens * dt * 30; // v2 sens are ~100× smaller (view-proportional)
@@ -300,7 +300,7 @@ function tickTest() {
     .addScaledVector(screenUp, -ms * val("panY") * kp);
   const PAN_LIMIT = 1.3;
   if (t.cube.position.length() > PAN_LIMIT) t.cube.position.setLength(PAN_LIMIT);
-  // Zoom — scale gently; bound the per-frame step so a hard push can't invert
+  // Zoom, scale gently; bound the per-frame step so a hard push can't invert
   // the cube (negative scale).
   const zd = THREE.MathUtils.clamp(val("zoom") * cfg.zoomSens * dt * 430, -0.08, 0.08);
   if (zd) t.cube.scale.multiplyScalar(1 + zd); // +zoom dollies in on the model → cube grows

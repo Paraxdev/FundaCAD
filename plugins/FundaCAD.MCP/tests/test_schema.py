@@ -1,13 +1,13 @@
 """The schema, held to the builder.
 
-schema.py is hand-written, because the authority — src/types.ts — is a
+schema.py is hand-written, because the authority, src/types.ts, is a
 TypeScript union whose value is in its comments, and no generator turns that
 into prose worth reading. Hand-written documentation rots, and this is the test
 that stops it: every type documented here must be one the sidecar can build, and
 every type the sidecar can build must be documented here.
 
 Without this, a new feature type ships and the agent that could have used it
-never hears about it — the failure mode is silence, which is the kind no
+never hears about it, the failure mode is silence, which is the kind no
 end-to-end test finds.
 
 Run: uv run python mcp/tests/test_schema.py
@@ -44,7 +44,7 @@ def test_every_documented_type_is_one_the_builder_handles():
 def test_every_buildable_type_is_documented():
     missing = builder_types() - set(S.FEATURES)
     assert not missing, (f"the builder handles {sorted(missing)} and the schema does not "
-                         "mention them — an agent reading this schema cannot use them")
+                         "mention them, an agent reading this schema cannot use them")
 
 
 def test_every_entry_has_a_summary_and_fields():

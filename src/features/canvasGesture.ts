@@ -4,7 +4,7 @@
 // Nine tools were each declaring five bound-method fields, binding them in a
 // constructor, adding four listeners in start() and removing the same four in
 // cleanup(), plus their own raf handle to cancel. That is not shared behaviour
-// by accident: the set is the same because the contract is the same — a modal
+// by accident: the set is the same because the contract is the same, a modal
 // tool takes the canvas, and it must give every part of it back. Splitting the
 // add from the remove across two hundred lines of a tool file is exactly how
 // one of the four gets forgotten and a dead tool keeps eating clicks.

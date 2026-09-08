@@ -2,8 +2,8 @@
 
 Split out of builder.py. This is the 2D half of the kernel and it is genuinely
 separable: nothing here knows about bodies, booleans or the feature tree. It
-takes a sketch feature — the entity list a user drew, plus the parameter
-evaluator that turns "w/2" into a number — and answers the two questions the
+takes a sketch feature, the entity list a user drew, plus the parameter
+evaluator that turns "w/2" into a number, and answers the two questions the
 rest of the rebuild asks of a sketch:
 
   - what curves are these (_entity_edges, and _text_faces for lettering);
@@ -19,7 +19,7 @@ builder.py re-exports every name below.
 
 import math
 
-import font_guard  # noqa: F401  MUST precede build123d — see font_guard.py
+import font_guard  # noqa: F401  MUST precede build123d, see font_guard.py
 
 from build123d import (
     Align,
@@ -126,7 +126,7 @@ def _expand_pattern(pat, by_id, val):
 
     t = pat["type"]
     # pattern sources skip projected reference geometry (fixed/linked, never
-    # replicated) — mirrors the `sources` filter in expandPattern
+    # replicated), mirrors the `sources` filter in expandPattern
     def srcs_of(ids):
         return [by_id[s] for s in ids if s in by_id and by_id[s].get("type") != "projected"]
 
@@ -203,7 +203,7 @@ _TEXT_HALIGN = {"left": Align.MIN, "center": Align.CENTER, "right": Align.MAX}
 
 def _entity_edges(e, val):
     """The boundary edge(s) of one sketch entity, LOCAL to the sketch's XY frame
-    (unlocated — the caller applies `plane *`). The ONE construction path shared
+    (unlocated, the caller applies `plane *`). The ONE construction path shared
     by _build_sketch and projection sources, so a projected sketch curve is
     byte-for-byte the geometry the source sketch builds. Raises on degenerate
     input (per-feature error handling stays with the caller); returns [] for
@@ -255,7 +255,7 @@ def _entity_edges(e, val):
             Edge.make_three_point_arc((a2[0], a2[1], 0), (a_tip[0], a_tip[1], 0), (a1[0], a1[1], 0)),
         ]
     if t == "projected":
-        # Projected reference geometry: edges from the CACHED ProjectedCurve —
+        # Projected reference geometry: edges from the CACHED ProjectedCurve,
         # plain numbers authored by the projection recompute, consumed verbatim
         # and never val()'d or resolved here.
         cv = e.get("curve") or {}
@@ -277,8 +277,8 @@ def _entity_edges(e, val):
             pts = cv.get("pts") or []
             # A view-aligned source edge projects to a POINT: the degenerate
             # poly fallback ("never an error") arrives with coincident samples.
-            # Collapse consecutive duplicates and skip point-like remains —
-            # reference-only, like a sketch point — instead of feeding OCCT a
+            # Collapse consecutive duplicates and skip point-like remains,
+            # reference-only, like a sketch point, instead of feeding OCCT a
             # zero-length line (StdFail → whole sketch red).
             dedup = [p for i, p in enumerate(pts)
                      if i == 0 or math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]) > 1e-9]
@@ -290,7 +290,7 @@ def _entity_edges(e, val):
 
 
 def _entity_edge(e, val):
-    """One build123d edge for a line/arc/circle/spline entity — used as a text path.
+    """One build123d edge for a line/arc/circle/spline entity, used as a text path.
     Returns None for non-curve entities or on any construction failure."""
     if e.get("type") not in ("line", "arc", "circle", "spline"):
         return None
@@ -315,7 +315,7 @@ def _measure_text_width(s, font_size, font_style, font):
 
 
 def _wrap_text(txt, box_w, font_size, font_style, font):
-    """Greedy word-wrap `txt` to lines fitting box_w (mm), preserving explicit newlines —
+    """Greedy word-wrap `txt` to lines fitting box_w (mm), preserving explicit newlines,
     build123d's single_line_width does NOT wrap, so we do it by measuring. Capped so a
     huge string can't stall the per-keystroke preview."""
     if box_w <= 0 or len(txt) > 400:
@@ -460,18 +460,18 @@ def _build_sketch(f, val, datums=None, plane=None):
         et = e["type"]
         # Degenerate primitives must be caught HERE, by name. A zero-radius circle
         # is a point, not a wire, so build123d's make_face fails its coplanarity
-        # probe and reports "Cannot build face(s): wires not planar" — a message
+        # probe and reports "Cannot build face(s): wires not planar", a message
         # that sends the user hunting for a tilted sketch that does not exist.
         # This was a real field bug (docs/EDGE-CASES.md §1): a ring whose inner
         # circle had collapsed to r=0.
         if et == "circle" and not (val(e["radius"]) > 0):
             raise ValueError(
-                f"a circle in this sketch has a radius of {val(e['radius']):g} — "
+                f"a circle in this sketch has a radius of {val(e['radius']):g}, "
                 "give it a radius greater than 0, or delete it"
             )
         if et == "rectangle" and not (val(e["width"]) > 0 and val(e["height"]) > 0):
             raise ValueError(
-                "a rectangle in this sketch has a zero width or height — "
+                "a rectangle in this sketch has a zero width or height, "
                 "give it a size, or delete it"
             )
         if et == "rectangle":
@@ -486,8 +486,8 @@ def _build_sketch(f, val, datums=None, plane=None):
             all_edges.extend(_entity_edges(e, val))
         elif et in ("line", "arc", "spline", "polygon", "slot"):
             # free-form curves + parametric outlines: boundary edges join the
-            # loop assembly AND the planar arrangement (one construction path —
-            # _entity_edges — shared with sketch-curve projection sources)
+            # loop assembly AND the planar arrangement (one construction path,
+            # _entity_edges, shared with sketch-curve projection sources)
             for ed in _entity_edges(e, val):
                 edges.append(ed)
                 all_edges.append(ed)
@@ -495,7 +495,7 @@ def _build_sketch(f, val, datums=None, plane=None):
             continue  # a sketch point is reference/snap-only, never part of a profile
         elif et == "projected":
             # Projected reference geometry: edges come from the CACHED curve via
-            # _entity_edges (plain numbers, never resolved here — _build_sketch
+            # _entity_edges (plain numbers, never resolved here, _build_sketch
             # stays geometry-free; the checkpoint sketch-replay invariant
             # depends on it). A cached circle also contributes its FACE,
             # mirroring the native circle branch; degenerate curves (zero-length
@@ -511,7 +511,7 @@ def _build_sketch(f, val, datums=None, plane=None):
         elif et == "text":
             ref = e.get("pathRef")
             path_edge = _entity_edge(by_id_all[ref], val) if ref and ref in by_id_all else None
-            # glyph CONTOURS deliberately never enter all_edges — feeding them to
+            # glyph CONTOURS deliberately never enter all_edges, feeding them to
             # _subdivide_faces' splitter would fragment overlapping profiles + explode cost
             text_local.extend(_text_faces(e, val, path_edge))
 
@@ -540,7 +540,7 @@ def _build_sketch(f, val, datums=None, plane=None):
         # many-small-disjoint-SOLID class where _serial_bool's serial win applies.
         sk = faces[0].fuse(*faces[1:]) if len(faces) > 1 else faces[0]
         # Disjoint loops (e.g. a honeycomb of many hexagons) make `sk` a ShapeList,
-        # which `plane * sk` rejects — normalize to one Compound first.
+        # which `plane * sk` rejects, normalize to one Compound first.
         if _wrapped_or_none(sk) is None:
             sk = Compound(list(sk))
         sk = plane * sk  # locate the 2D sketch onto its plane
@@ -586,7 +586,7 @@ def _region_cells(entry, ctx):
     under the sketch ends.
 
     A sketch drawn on a face routinely runs off it, and the two halves are
-    separate areas on screen — the part with material behind it can cut into the
+    separate areas on screen, the part with material behind it can cut into the
     body or add flush to it, the overhanging part has nothing behind it and can
     only add. `_build_sketch` cannot know that: it sees the sketch alone. So a
     feature naming the overhang by its interior point resolved it to the whole
@@ -595,7 +595,7 @@ def _region_cells(entry, ctx):
     the frontend, which is where those areas come from in the first place.
 
     The bboxes are precomputed once here because region picking runs per selected
-    point (see _region_face_at) — and the split runs once for the same reason.
+    point (see _region_face_at), and the split runs once for the same reason.
     """
     faces = entry.get("faces") or []
     plane = entry.get("plane")
@@ -635,14 +635,14 @@ def _region_target(pts, entry, ctx):
 def _region_face_at(cells, P):
     """Pick the planar arrangement cell whose material contains point P.
 
-    `cells` is a list of (face, bounding_box) pairs — the caller precomputes the
+    `cells` is a list of (face, bounding_box) pairs, the caller precomputes the
     bboxes ONCE because region picking runs per selected point, and OCCT `is_inside`
     is far too slow to call on every face (38 honeycomb points × 160 cells of
     is_inside + a per-nested-face boolean was ~2.8 s). A bbox pre-filter cuts the
     point-in-face tests down to the 1-2 cells whose box actually contains P.
 
     Arrangement cells (from `_subdivide_faces`) already carry their holes natively, so
-    the smallest containing cell IS the region — no nested-hole subtraction needed.
+    the smallest containing cell IS the region, no nested-hole subtraction needed.
     Falls back to the nearest cell by center when P isn't inside any (tessellation
     drift / degenerate geometry)."""
     if not cells:
@@ -678,7 +678,7 @@ def _subdivide_faces(edges, plane):
     curved edges are preserved (smooth extrude) and faces with holes come out
     natively, so `_region_face_at` needs no change. Mirrors the frontend arrangement
     in src/sketch/region.ts (planarize + traceLoops). Returns [] on empty/failure so
-    the caller falls back to per-loop faces — this is a 2D edge split, unlike the
+    the caller falls back to per-loop faces, this is a 2D edge split, unlike the
     reverted 3D UnifySameDomain, and stays well under ~30 ms even for dense grids."""
     if not edges:
         return []
@@ -740,13 +740,13 @@ def _faces_from_edges(edges):
     The faces come back facing +Z, which is the sketch plane's own normal in the
     2D local space every caller works in. A face inherits its orientation from
     the direction its wire happens to run, and a loop wound clockwise therefore
-    produces a face pointing the other way — which an extrude then follows,
+    produces a face pointing the other way, which an extrude then follows,
     pushing the profile out of the BACK of the plane it was drawn on. Every
     primitive is wound anticlockwise by construction, so this only ever bit the
     free-form branch: a hand-drawn polyline traced clockwise, and a `slot`,
     whose edges are emitted right-side-first and so are clockwise EVERY time.
     That is why a slot on a base plane looked fine and the same slot on a face
-    cut nothing — the wrong direction still reaches a body centred on the
+    cut nothing, the wrong direction still reaches a body centred on the
     origin."""
     if not edges:
         return []
@@ -796,7 +796,7 @@ def _face_from_wire(w):
 # Math + the projectGeometry aux-op behind the Fusion-style Project command:
 # turn a 3D edge (a body edge, a face-boundary edge, a located sketch curve)
 # into a 2D ProjectedCurve on a target sketch plane. The REBUILD never calls
-# this from _build_sketch — projected entities carry a cached curve, and
+# this from _build_sketch, projected entities carry a cached curve, and
 # refreshing that cache is a rebuild-handler concern (see the plan). Numbers
 # are rounded to 6 decimals HERE so the persisted document is byte-stable.
 

@@ -4,7 +4,7 @@
 // notice with the mouse in your hand:
 //
 //   * the trip was instant. Entering a sketch teleported the view, and a teleport
-//     costs the user the one thing an animation gives away for free — that the
+//     costs the user the one thing an animation gives away for free, that the
 //     part did not change, only the vantage did. The stated reason was
 //     determinism: camera-controls aborts its own transitions on any input, so a
 //     twitch could strand the sketch view at an oblique angle and quietly ruin
@@ -63,14 +63,14 @@ export function worthFlying(turn: number, zoomRatio: number): boolean {
 }
 
 /** Ease in and out (smootherstep). Zero velocity at BOTH ends, so the flight
- *  neither jerks off the mark nor arrives with a bump — and, unlike a spring or
+ *  neither jerks off the mark nor arrives with a bump, and, unlike a spring or
  *  a damped follow, it is over at a time we chose rather than asymptotically. */
 export function ease(t: number): number {
   const x = t <= 0 ? 0 : t >= 1 ? 1 : t;
   return x * x * x * (x * (x * 6 - 15) + 10);
 }
 
-/** `normal`, flipped if need be so it points at `eye` rather than away from it —
+/** `normal`, flipped if need be so it points at `eye` rather than away from it,
  *  the side of the plane the camera is already on.
  *
  *  Grazing views (the eye within `graze` of the plane, relative to the standoff)

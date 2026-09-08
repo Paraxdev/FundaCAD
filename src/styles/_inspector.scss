@@ -1,11 +1,11 @@
 /* ============================================================================
-   INSPECTOR — parameters + feature editor
+   INSPECTOR, parameters + feature editor
    ============================================================================ */
 .param-row {
   display: grid;
   /* minmax(0, …) on both tracks: a grid track's automatic minimum is its
      content's MIN-CONTENT width, so an unbreakable label or a long value would
-     push the row past the panel rather than ellipsing inside it — which is what
+     push the row past the panel rather than ellipsing inside it, which is what
      the side-mounted history did, at 195px. */
   grid-template-columns: minmax(0, 1fr) minmax(0, 120px);
   gap: var(--s-3);
@@ -45,7 +45,7 @@
   color: var(--text);
   border-radius: var(--r-sm);
   /* The app's field size. Every text input and <select> in the app resolves to
-     this pair — the survey found 5px/8px here, 4px/7px in the Parameters
+     this pair, the survey found 5px/8px here, 4px/7px in the Parameters
      dialog, 4px/6px on the Units select and 8px/10px on the sign-in field, four
      spellings of one control. --s-2 vertical rather than --s-3 keeps a field
      shorter than a button, which is the hierarchy you want when they sit in the
@@ -77,8 +77,8 @@
   border-color: #ff6b6b;
   box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.18);
 }
-/* A value that is one of a fixed set. Same box as .param-row input — same
-   padding, same border, same focus ring — because the two sit interleaved in
+/* A value that is one of a fixed set. Same box as .param-row input, same
+   padding, same border, same focus ring, because the two sit interleaved in
    one column and a dropdown that read as a different KIND of control would
    break the line down the middle of the panel. */
 .param-select {
@@ -159,7 +159,7 @@
   font-style: italic;
   margin-right: var(--s-1);
 }
-/* parameter whose cached value is stale (cycle / missing ref / non-finite) —
+/* parameter whose cached value is stale (cycle / missing ref / non-finite),
    same amber as the solver's over-defined flag */
 .param-stale input {
   border-color: #e0a020;
@@ -189,8 +189,8 @@
   grid-template-columns: 110px 1fr 90px 1fr 24px;
   gap: var(--s-3);
   align-items: center;
-  /* Same rhythm as .param-row in the inspector. They are the same row — one
-     docked, one in a dialog — and read as unrelated widgets when the dialog
+  /* Same rhythm as .param-row in the inspector. They are the same row, one
+     docked, one in a dialog, and read as unrelated widgets when the dialog
      packed its rows 2px tighter than the panel did. */
   margin-bottom: var(--s-2);
 }
@@ -305,7 +305,7 @@
   white-space: nowrap;
 }
 /* An empty target usually MEANS something ("sealed hollow", "the whole body"),
-   so it is stated rather than dimmed away — just quieter than a count. */
+   so it is stated rather than dimmed away, just quieter than a count. */
 .target-empty {
   color: var(--text-dim);
   font-style: italic;

@@ -72,7 +72,7 @@ describe("faceNudgePlacement", () => {
     expect(place?.axis({} as never).toArray()).toEqual([1, 0, 0]);
   });
 
-  it("points OUTWARD on a bore too — the sign is the tool's problem", () => {
+  it("points OUTWARD on a bore too, the sign is the tool's problem", () => {
     // Pulling the handle away from the axis means a bigger hole and a bigger
     // shaft alike. Flipping the arrow on a bore would make the gesture ask the
     // user to know which side the material is on before they can resize it.

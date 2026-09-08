@@ -1,4 +1,4 @@
-"""e2e_coverage.py — real-server op/feature coverage counter for the sidecar.
+"""e2e_coverage.py, real-server op/feature coverage counter for the sidecar.
 
 Computes the universe U of units that ought to be exercised end-to-end:
     U = _FEATURE_HANDLERS keys (parsed at runtime from builder.py)
@@ -11,10 +11,10 @@ A unit earns coverage ONLY through a check that, hardcoded here:
       are observed and printed below);
   (b) got ok=true;
   (c) asserted a NUMERIC GEOMETRIC INVARIANT against a precomputed expected
-      constant — an exact body/pair count, or a volume/bbox within a fixed
+      constant, an exact body/pair count, or a volume/bbox within a fixed
       tolerance. Bare ok, or an open-ended predicate (>=0), earns nothing;
   (d) for transform/pattern/remove/scale/move units the asserted post value must
-      DIFFER from the pre-op measure (a no-op earns no credit) — enforced by
+      DIFFER from the pre-op measure (a no-op earns no credit), enforced by
       requiring those units to register through a delta_* invariant with a
       distinct `pre`.
 
@@ -43,11 +43,11 @@ import harness_util as H
 # --- hardcoded acceptance tolerances (mirror golden_corpus; not configurable) -
 VOL_REL_TOL = 0.005      # volume / delta_volume within 0.5% of expected
 BBOX_ABS_TOL = 1e-4      # bbox / delta_bbox component absolute tolerance (mm)
-FINE_TOL = 0.005         # rebuild tessellation tol — fine enough that a curved
+FINE_TOL = 0.005         # rebuild tessellation tol, fine enough that a curved
                          # body's mesh volume matches its analytic volume <0.5%
 
 # Mesh volume of a 20-cube with `ribs` (depth 0.4, scale 2.0) on its top face,
-# at FINE_TOL. MEASURED, like check_draft's constant — texture displaces the
+# at FINE_TOL. MEASURED, like check_draft's constant, texture displaces the
 # MESH, so there is no closed form to derive it from. Reproduced to six decimals
 # across repeated runs.
 #
@@ -59,15 +59,15 @@ FINE_TOL = 0.005         # rebuild tessellation tol — fine enough that a curve
 TEXTURED_BOX_VOLUME = 8071.166667
 
 # Units whose credit MUST come from a pre/post delta (rule (d)). Corpus presence
-# alone never credits these — a document has no "before" to compare against.
+# alone never credits these, a document has no "before" to compare against.
 # Single source of truth lives in harness_util so golden_corpus can't drift.
 DELTA_UNITS = H.DELTA_UNITS
 
-# ops already covered by other harnesses / trivially elsewhere — excluded from U.
+# ops already covered by other harnesses / trivially elsewhere, excluded from U.
 #
 # The four below are excluded on a STRICTER test than "someone tested it
 # somewhere": there is no numeric geometric invariant to assert about them, so
-# the only way to make them count would be to weaken register()'s rule (c) —
+# the only way to make them count would be to weaken register()'s rule (c),
 # and that gate is the only reason this number means anything. Each names the
 # suite that actually covers it. Adding to this set is a decision to stop
 # measuring something; do not do it to make a floor reachable.
@@ -87,19 +87,19 @@ EXCLUDED_OPS = {
     # HOST's font set rather than of this code. Covered by test_text.py.
     "listFonts",
     # Glyph outlines are font-dependent, so a hardcoded numeric invariant would
-    # be unreachable in CI by construction — precisely the trap that once put
+    # be unreachable in CI by construction, precisely the trap that once put
     # this floor at 23 on one machine and 21 on every other checkout. Covered by
     # test_text.py.
     "tessellateText",
     # The live session: a state machine, not a shape. Same reasoning as `cancel`
-    # above — there is no geometry to assert a number about, so the only way to
+    # above, there is no geometry to assert a number about, so the only way to
     # credit them here would be to weaken rule (c), and that gate is the whole
     # reason this count means anything.
     #
     # Covered instead by two suites that run against a real socket:
     # sidecar/tests/test_live_session.py holds every rule with the clock injected
     # and no server, and plugins/mcp/tests/test_live_session.py drives all five ops
-    # across three real processes — a spawned sidecar, a host loop, and the MCP
+    # across three real processes, a spawned sidecar, a host loop, and the MCP
     # server over its own stdio protocol.
     "session_host", "session_release", "session_state", "session_propose",
     "session_leave",
@@ -115,11 +115,11 @@ def _num_list(x):
 
 def _judge(unit, kind, expected, actual, pre):
     """Return None if the assertion earns credit, else a refusal reason. All
-    acceptance logic is here and hardcoded — no predicate the caller supplies can
+    acceptance logic is here and hardcoded, no predicate the caller supplies can
     widen it."""
     is_delta = kind.startswith("delta_")
     if unit in DELTA_UNITS and not is_delta:
-        return f"{unit} is a transform/pattern/remove/scale/move unit — needs a delta_* invariant"
+        return f"{unit} is a transform/pattern/remove/scale/move unit, needs a delta_* invariant"
     if is_delta and unit not in DELTA_UNITS:
         return f"{unit} may not claim credit through a delta invariant"
 
@@ -343,7 +343,7 @@ async def check_interference(ws):
         _box("b1", 20, 20, 20), _box("b2", 20, 20, 20), {"id": "mv", "type": "move", "dx": 10}]}
     reply = await H.ws_call(ws, "interference", "c", document=doc)
     if not reply.get("ok"):
-        print(f"  REFUSE interference     — op not ok: {reply.get('error')}")
+        print(f"  REFUSE interference, op not ok: {reply.get('error')}")
         return
     register("interference", "pairs_eq", 1, len(reply["result"].get("pairs") or []))
 
@@ -356,11 +356,11 @@ async def check_export(ws):
         path = os.path.join(td, "box.stl")
         exp = await H.ws_call(ws, "export", "c", document=doc, format="stl", path=path)
         if not exp.get("ok"):
-            print(f"  REFUSE export           — op not ok: {exp.get('error')}")
+            print(f"  REFUSE export, op not ok: {exp.get('error')}")
             return
         imp = await H.ws_call(ws, "import", "c", path=path, format="stl")
         if not imp.get("ok"):
-            print(f"  REFUSE export           — reimport not ok: {imp.get('error')}")
+            print(f"  REFUSE export, reimport not ok: {imp.get('error')}")
             return
         geom = imp["result"]["geom"]
         r = await _rebuild(ws, [{"id": "im", "type": "import", "format": "stl", "name": "box", "geom": geom}])
@@ -405,18 +405,18 @@ async def check_sweep(ws):
 
 
 async def check_simplify_mesh(ws):
-    # import a triangulated STL box, then simplifyMesh — exercises the real
+    # import a triangulated STL box, then simplifyMesh, exercises the real
     # UnifySameDomain-on-mesh path (import is a measuring instrument, not credited).
     doc = {"parameters": {}, "features": [_box("b", 20, 20, 20)]}
     with tempfile.TemporaryDirectory() as td:
         path = os.path.join(td, "box.stl")
         exp = await H.ws_call(ws, "export", "c", document=doc, format="stl", path=path)
         if not exp.get("ok"):
-            print(f"  REFUSE simplifyMesh     — export not ok: {exp.get('error')}")
+            print(f"  REFUSE simplifyMesh, export not ok: {exp.get('error')}")
             return
         imp = await H.ws_call(ws, "import", "c", path=path, format="stl")
         if not imp.get("ok"):
-            print(f"  REFUSE simplifyMesh     — reimport not ok: {imp.get('error')}")
+            print(f"  REFUSE simplifyMesh, reimport not ok: {imp.get('error')}")
             return
         r = await _rebuild(ws, [
             {"id": "im", "type": "import", "format": "stl", "name": "box", "geom": imp["result"]["geom"]},
@@ -427,7 +427,7 @@ async def check_simplify_mesh(ws):
 
 async def check_sketch(ws):
     # A sketch produces NO solid, so it can only be credited through a consumer
-    # that honours it — the same argument datumPlane is credited by below. The
+    # that honours it, the same argument datumPlane is credited by below. The
     # profile here is 12x8, deliberately NOT check_extrude's 20x20, so the
     # asserted numbers are determined by THIS sketch's geometry and nothing else.
     r = await _rebuild(ws, [_sketch_rect("s", 12, 8),
@@ -463,7 +463,7 @@ async def check_press_pull(ws):
 
 async def check_offset_face(ws):
     # offset the top face out by 2: 20*20*22. The bbox is what separates this
-    # from a thicken — the ORIGINAL body has to have grown, not gained a neighbour.
+    # from a thicken, the ORIGINAL body has to have grown, not gained a neighbour.
     r = await _rebuild(ws, [_box("b", 20, 20, 20),
         {"id": "of", "type": "offsetFace", "distance": 2,
          "faces": {"kind": "face", "by": "normal", "dir": [0, 0, 1]}}])
@@ -474,7 +474,7 @@ async def check_offset_face(ws):
 async def check_thicken(ws):
     # thicken defaults to a NEW body: the 20x20 top face at thickness 3 adds
     # 1200 alongside the untouched 8000, which is why the body count is asserted
-    # too — 9200 in one body would mean it silently merged.
+    # too, 9200 in one body would mean it silently merged.
     r = await _rebuild(ws, [_box("b", 20, 20, 20),
         {"id": "th", "type": "thicken", "thickness": 3,
          "faces": {"kind": "face", "by": "normal", "dir": [0, 0, 1]}}])
@@ -498,7 +498,7 @@ async def check_delete_face(ws):
 
 async def check_texture(ws):
     # Texture displaces at TESSELLATION, not on the solid, so the thing that
-    # moves is the MESH volume — which is exactly what _total_volume measures.
+    # moves is the MESH volume, which is exactly what _total_volume measures.
     # The constant is measured (like check_draft's), and it is the point of the
     # check: a texture that resolved to nothing would read the untextured 8000.
     r = await _rebuild(ws, [_box("b", 20, 20, 20),
@@ -506,7 +506,7 @@ async def check_texture(ws):
          "faces": {"kind": "face", "by": "normal", "dir": [0, 0, 1]}}])
     register("texture", "volume", TEXTURED_BOX_VOLUME, _total_volume(r))
     # Deliberately NO bodies_eq here. A textured body is still one body, so that
-    # assertion holds just as well for a texture that did nothing — and because
+    # assertion holds just as well for a texture that did nothing, and because
     # register() credits a unit on ANY passing assertion, pairing it with the
     # volume would let the weak one grant credit whenever the strong one broke.
 
@@ -514,7 +514,7 @@ async def check_texture(ws):
 async def check_project_geometry(ws):
     # The top-face boundary of a 20x20x10 extrusion projected onto XY: four exact
     # lines on the +-10 footprint. Asserted as a bbox in PLANE coordinates, with
-    # z pinned to 0 — a planar projection has no third component, so carrying a
+    # z pinned to 0, a planar projection has no third component, so carrying a
     # real z here would be inventing precision the result does not have.
     doc = {"parameters": {}, "features": [
         _sketch_rect("s1", 20, 20),
@@ -525,15 +525,15 @@ async def check_project_geometry(ws):
                                       "sel": {"kind": "face", "by": "nearest",
                                               "point": [0, 0, 10]}}])
     if not reply.get("ok"):
-        print(f"  REFUSE projectGeometry  — op not ok: {reply.get('error')}")
+        print(f"  REFUSE projectGeometry, op not ok: {reply.get('error')}")
         return
     res = reply["result"]["results"]
     if not res or not res[0].get("ok"):
-        print(f"  REFUSE projectGeometry  — source not ok: {res}")
+        print(f"  REFUSE projectGeometry, source not ok: {res}")
         return
     curves = [e["curve"] for e in res[0]["curves"]]
     if not curves or not all(c.get("kind") == "line" for c in curves):
-        print(f"  REFUSE projectGeometry  — expected 4 lines, got {curves}")
+        print(f"  REFUSE projectGeometry, expected 4 lines, got {curves}")
         return
     xs = [v for c in curves for v in (c["x1"], c["x2"])]
     ys = [v for c in curves for v in (c["y1"], c["y2"])]
@@ -555,11 +555,11 @@ async def check_migrate_geometry(ws):
                             items=[{"id": "legacy1",
                                     "brep": _shape_to_brep_b64(Box(20, 20, 20))}])
     if not reply.get("ok"):
-        print(f"  REFUSE migrateGeometry  — op not ok: {reply.get('error')}")
+        print(f"  REFUSE migrateGeometry, op not ok: {reply.get('error')}")
         return
     result = reply["result"]
     if result.get("failed") or not result.get("items"):
-        print(f"  REFUSE migrateGeometry  — failed={result.get('failed')}")
+        print(f"  REFUSE migrateGeometry, failed={result.get('failed')}")
         return
     r = await _rebuild(ws, [{"id": "im", "type": "import", "format": "brep",
                              "name": "legacy", "geom": result["items"][0]["geom"]}])
@@ -597,11 +597,11 @@ async def check_inspect(ws):
         {"id": "c1", "type": "cylinder", "radius": 10, "height": 20}]}
     reply = await H.ws_call(ws, "inspect", "c", document=doc)
     if not reply.get("ok"):
-        print(f"  REFUSE inspect          — op not ok: {reply.get('error')}")
+        print(f"  REFUSE inspect, op not ok: {reply.get('error')}")
         return
     bodies = reply["result"].get("bodies") or []
     if len(bodies) != 1:
-        print(f"  REFUSE inspect          — {len(bodies)} bodies, expected 1")
+        print(f"  REFUSE inspect, {len(bodies)} bodies, expected 1")
         return
     register("inspect", "volume", math.pi * 100 * 20, bodies[0].get("volume"))
 
@@ -626,7 +626,7 @@ async def _credit_corpus(ws):
     """Run each golden document; a document that (a) rebuilds ok, (b) matches its
     recorded body count / per-body volumes / bbox within the golden tolerances,
     and (c) has zero feature errors credits each of its NON-delta feature types
-    (delta units are excluded — a document has no pre-op measure)."""
+    (delta units are excluded, a document has no pre-op measure)."""
     golden = GC.load_golden()
     for key in sorted(golden):
         entry = golden[key]
@@ -648,7 +648,7 @@ async def _credit_corpus(ws):
                  or GC._cmp_bbox(entry["bbox"], cur["bbox"])
                  or GC._cmp_ferrs(entry["featureErrors"], cur["featureErrors"]))
         if diffs:
-            print(f"  corpus {key}: invariant mismatch ({diffs}) — no credit")
+            print(f"  corpus {key}: invariant mismatch ({diffs}), no credit")
             continue
         for t in entry["featureTypes"]:
             if t in DELTA_UNITS:
@@ -671,7 +671,7 @@ async def _main():
                     await check(ws)
                 except Exception as ex:
                     # A check whose op errors (e.g. a primitive that crashes the
-                    # render path) earns NO credit — report and keep going so one
+                    # render path) earns NO credit, report and keep going so one
                     # broken op can't hide the coverage of every later unit.
                     print(f"  REFUSE {check.__name__}: op raised {type(ex).__name__}: {ex}")
     covered = set(COVERED) & universe

@@ -16,8 +16,8 @@ geometry reader but it is lossy in two ways that matter for assemblies.
    ever creating that hazard, rather than guarding against it afterwards.
 
 Reading XCAF directly also removes a structural risk. Only the XCAF layer knows
-which compounds are assemblies and which are multi-solid products — both are
-TopAbs_COMPOUND to OCCT — so any design that reads structure from one tree and
+which compounds are assemblies and which are multi-solid products, both are
+TopAbs_COMPOUND to OCCT, so any design that reads structure from one tree and
 geometry from another has to keep two walks in lockstep. On the reference file
 493 of 1,293 leaf products are compounds, i.e. exactly the nodes where such
 walks diverge. One walk, one source of truth.
@@ -33,7 +33,7 @@ from dataclasses import dataclass, field
 @dataclass
 class AssemblyNode:
     """One product in the tree. `parent` indexes into the same node list, or is
-    None for a root. `color` is "#rrggbb" or None — read from this label only,
+    None for a root. `color` is "#rrggbb" or None, read from this label only,
     never inherited from an ancestor."""
 
     name: str
@@ -58,7 +58,7 @@ class Assembly:
     #: should stay on the historical single-shape import path.
     is_assembly: bool = False
     #: The file's free (top-level) shapes, placed. Kept so a non-assembly file
-    #: can go down the historical path without paying for a SECOND full read —
+    #: can go down the historical path without paying for a SECOND full read,
     #: on a large single-part STEP that second read would double import time.
     roots: list[object] = field(default_factory=list)
 
@@ -71,7 +71,7 @@ def _clean(name: str) -> str:
     """Strip Unicode control characters, and nothing else.
 
     Control characters are removed because they can break rendering and are
-    never meaningful in a product name. Spaces, dots and brackets are KEPT —
+    never meaningful in a product name. Spaces, dots and brackets are KEPT,
     losing them is the bug this module exists to avoid.
     """
     return "".join(ch for ch in name if unicodedata.category(ch)[0] != "C").strip()
@@ -173,7 +173,7 @@ def read_assembly(path: str) -> Assembly:
     def visit(label, parent: int | None, location: TopLoc_Location):
         referred = resolve(label)
         # Name: prefer the product's own label. Fall back to the instance label,
-        # then to a positional placeholder — an unnamed product must still be
+        # then to a positional placeholder, an unnamed product must still be
         # addressable rather than collapsing into its neighbour.
         name = _label_name(referred) or _label_name(label)
         # Colour: the per-instance override wins over the product's own, which

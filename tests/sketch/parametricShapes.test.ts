@@ -26,7 +26,7 @@ describe("slotOutline", () => {
   });
 });
 
-describe("entityPolyline — parametric shapes", () => {
+describe("entityPolyline, parametric shapes", () => {
   it("closes a polygon loop", () => {
     const poly: ResolvedEntity = { type: "polygon", id: "p", x: 0, y: 0, radius: 10, sides: 5, angle: 0 };
     const loop = entityPolyline(poly);

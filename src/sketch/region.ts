@@ -13,7 +13,7 @@ export interface Region {
   loop: THREE.Vector2[]; // outer boundary, closed polygon (no repeated last point)
   holes: THREE.Vector2[][]; // inner boundaries (directly-nested loops) cut out of the material
   centroid: THREE.Vector2; // outer-loop centroid (label placement; may sit in a hole)
-  interior: THREE.Vector2; // a point inside the material (outside all holes) — selection anchor
+  interior: THREE.Vector2; // a point inside the material (outside all holes), selection anchor
   /** Whether this region has the model under it.
    *
    *  A sketch drawn on a face routinely runs off its edge, and the two halves
@@ -21,7 +21,7 @@ export interface Region {
    *  flush to it, while the overhanging part has nothing behind it and can only
    *  add. They are therefore separate regions, and this says which is which.
    *
-   *  `null` is not a third kind of region — it means the question was not asked,
+   *  `null` is not a third kind of region, it means the question was not asked,
    *  because the sketch is on a datum plane with no face behind it. Callers must
    *  not read null as "overhang". */
   support?: "on-face" | "overhang" | null;
@@ -42,7 +42,7 @@ function closed(pts: THREE.Vector2[]): THREE.Vector2[] {
 /** The entity's curve as a single polyline, sampled at one consistent fidelity
  *  for ALL consumers (rendering, region tracing, picking, intersection). Closed
  *  primitives (rectangle/circle) include the closing vertex. This is the one
- *  place an entity is turned into points — consumers must not re-tessellate. */
+ *  place an entity is turned into points, consumers must not re-tessellate. */
 export function entityPolyline(e: ResolvedEntity): THREE.Vector2[] {
   switch (e.type) {
     case "line":
@@ -66,7 +66,7 @@ export function entityPolyline(e: ResolvedEntity): THREE.Vector2[] {
     case "text":
       return []; // text is rendered from cached glyph contours, not this single-polyline path
     case "projected":
-      // the cached curve is already plain numbers — sample like the native kinds
+      // the cached curve is already plain numbers, sample like the native kinds
       switch (e.curve.kind) {
         case "line":
           return [v(e.curve.x1, e.curve.y1), v(e.curve.x2, e.curve.y2)];
@@ -92,7 +92,7 @@ export function entitySegments(e: ResolvedEntity): [THREE.Vector2, THREE.Vector2
 }
 
 /** Four corners of a rectangle (CCW: bl, br, tr, tl; no repeat), about its own
- *  centre. `angleDeg` rotates it — degrees, as every other angle field is. */
+ *  centre. `angleDeg` rotates it, degrees, as every other angle field is. */
 export function rectCorners(
   x: number,
   y: number,
@@ -106,7 +106,7 @@ export function rectCorners(
   // Rotation lives HERE rather than at the nine call sites, so a rotated
   // rectangle draws, dimensions, solves, snaps, picks and extrudes correctly by
   // construction. Angle 0 must return exactly the old points, not the old points
-  // through a cos/sin that rounds them — every axis-aligned rectangle already
+  // through a cos/sin that rounds them, every axis-aligned rectangle already
   // saved depends on that being bit-identical.
   if (!angleDeg) return local.map(([lx, ly]) => new THREE.Vector2(x + lx, y + ly));
   const a = (angleDeg * Math.PI) / 180;
@@ -125,7 +125,7 @@ export interface RectDef {
   y: number;
   width: number;
   height: number;
-  /** degrees about its own centre — 0 for an axis-aligned one */
+  /** degrees about its own centre, 0 for an axis-aligned one */
   angle: number;
 }
 
@@ -136,7 +136,7 @@ export interface RectDef {
  *  This is the whole reason `rectangle.angle` exists. Decomposing a tilted
  *  rectangle into four lines would have been easier, and would have cost it its
  *  W/H dimension, its "<rectId>~k" edge addressing and its identity in the
- *  browser tree — so instead it stays one rectangle that happens to be turned.
+ *  browser tree, so instead it stays one rectangle that happens to be turned.
  *
  *  `c` is measured PERPENDICULARLY to a→b, not to where the cursor is: while
  *  dragging the third point the user is choosing a thickness, and letting the
@@ -144,7 +144,7 @@ export interface RectDef {
  *  cursor. Which SIDE of a→b it falls on is kept, so the rectangle grows toward
  *  the cursor rather than jumping across the edge at the crossing.
  *
- *  Null when the three points do not describe a rectangle with area — a and b in
+ *  Null when the three points do not describe a rectangle with area, a and b in
  *  the same place (no edge, and so no angle), or c on the line a→b. */
 export function rectFromThreePoints(
   a: Pt2,
@@ -226,12 +226,12 @@ function isClosedPolyline(pts: readonly THREE.Vector2[]): boolean {
 export function detectRegions(
   sketchId: string,
   allEntities: ResolvedEntity[],
-  /** Closed loops, in sketch 2D mm, bounding the face this sketch sits on —
+  /** Closed loops, in sketch 2D mm, bounding the face this sketch sits on,
    *  outline first, then any holes in it. Omit for a sketch on a datum plane,
    *  which has nothing behind it to be supported by. */
   footprint?: THREE.Vector2[][],
 ): Region[] {
-  // construction geometry is reference-only — it never forms a profile. Text glyphs
+  // construction geometry is reference-only, it never forms a profile. Text glyphs
   // are their own filled meshes (overlay), never part of line/arc region detection.
   const entities = allEntities.filter((e) => !e.construction && e.type !== "text");
 
@@ -250,8 +250,8 @@ export function detectRegions(
 
   // 1. collect every closed loop. Do any two entities' curves actually CROSS at
   //    an interior point (not merely meet at shared endpoints)? A crossing means
-  //    simple whole-shape / shared-vertex detection would miss a sub-region — or
-  //    emit a self-touching phantom (an "X" in a square) — so we planarize.
+  //    simple whole-shape / shared-vertex detection would miss a sub-region, or
+  //    emit a self-touching phantom (an "X" in a square), so we planarize.
   let loops: THREE.Vector2[][];
   if (anyCrossing(perEntity)) {
     // Split every segment at all pairwise interior intersections, then extract the
@@ -278,7 +278,7 @@ export function detectRegions(
     loops.push(...traceLoops(free));
   }
 
-  // 2. each loop becomes a region; its DIRECTLY-nested loops become holes — so
+  // 2. each loop becomes a region; its DIRECTLY-nested loops become holes, so
   //    two concentric circles yield a ring (outer, hole=inner) AND a disk (inner).
   //    parent(i) = the smallest-area loop that contains loop i. Uses a guaranteed-
   //    interior point (not the centroid) so non-convex arrangement cells nest right.
@@ -297,7 +297,7 @@ export function detectRegions(
 /** Turn a flat list of arrangement cells into Regions, resolving which loops are
  *  HOLES in which others.
  *
- *  parent(i) = the smallest-area loop that contains loop i — so two concentric
+ *  parent(i) = the smallest-area loop that contains loop i, so two concentric
  *  circles yield a ring (outer, hole=inner) AND a disk (inner). Uses a
  *  guaranteed-interior point rather than the centroid, because an arrangement
  *  cell can be non-convex enough that its centroid lies outside it and would
@@ -361,7 +361,7 @@ export function chainLoops(polylines: readonly (readonly THREE.Vector2[])[]): TH
   return traceLoops(segs);
 }
 
-/** Even-odd containment across a set of loops — the face outline plus whatever
+/** Even-odd containment across a set of loops, the face outline plus whatever
  *  holes it has. Odd crossings means inside the material, so a point in the bore
  *  of a washer-shaped face reads as OUTSIDE, which is right: there is nothing
  *  under it to extrude against. */
@@ -373,13 +373,13 @@ export function pointInLoops(p: THREE.Vector2, loops: THREE.Vector2[][]): boolea
 
 /** Re-cut the sketch's own cells against the boundary of the face behind them.
  *
- *  Returns null when the footprint does not actually cross the sketch — a
+ *  Returns null when the footprint does not actually cross the sketch, a
  *  profile wholly on the face, or wholly off it, is already one region and
  *  re-running the arrangement would only cost time and risk perturbing loops
  *  that were correct.
  *
  *  The filtering step is the subtle half. Feeding the face outline into the
- *  arrangement makes it produce cells for the FACE as well as for the sketch —
+ *  arrangement makes it produce cells for the FACE as well as for the sketch,
  *  most obviously "the face minus the profile", which is bounded by the outline
  *  and by the profile and so looks exactly like a legitimate mixed cell. Those
  *  are not profiles and must not become selectable regions; the user drew a
@@ -409,8 +409,8 @@ function splitByFootprint(
   // A strict crossing is NOT enough of a test, and assuming it was is what made
   // the first version of this silently do nothing. Curves are sampled as
   // polylines, so a circle centred on the edge it straddles lands VERTICES
-  // exactly on that edge — 64 samples of a circle at (10,0) put points on
-  // (10,+6) and (10,-6) — and a vertex touching a segment is not a crossing of
+  // exactly on that edge, 64 samples of a circle at (10,0) put points on
+  // (10,+6) and (10,-6), and a vertex touching a segment is not a crossing of
   // two spans. anyCrossing already knows this; the same touch test has to be
   // here or the common case is exactly the one that is missed.
   let crosses = false;
@@ -450,7 +450,7 @@ function mkRegion(
 }
 
 /** Build a selectable Region from one tessellated glyph face (outer boundary +
- *  holes, in sketch-2D mm). Text skips the line/arc arrangement entirely — its
+ *  holes, in sketch-2D mm). Text skips the line/arc arrangement entirely, its
  *  faces arrive pre-formed from the sidecar's font tessellation (cached client-
  *  side), so each glyph face becomes its own extrudable profile. */
 export function glyphRegion(
@@ -542,7 +542,7 @@ function interiorPoint(
   // Ray-sampling toward the outer vertices can't reach the material of a THIN
   // ring: every centroid→vertex sample up to t=0.9 still lands inside the hole
   // (inner_r/outer_r > 0.9). Falling through to `centroid` returned a point in
-  // the HOLE — which then highlighted/extruded the inner disk instead of the
+  // the HOLE, which then highlighted/extruded the inner disk instead of the
   // ring (field bug: "selecting the outer ring selects the inner circle").
   // Scanline fallback: on a horizontal line across the region, the midpoint
   // between two consecutive boundary crossings that lands outside every hole is
@@ -594,7 +594,7 @@ function boxesOverlap(a: Box, b: Box): boolean {
   );
 }
 
-/** Interior crossing point of two segments — where both segments cross strictly
+/** Interior crossing point of two segments, where both segments cross strictly
  *  inside their spans (not merely touching at a shared endpoint, and not parallel/
  *  collinear). Returns null otherwise. This is the geometry the vertex-only tracer
  *  can't see. */
@@ -613,7 +613,7 @@ function segCross(a: Seg, b: Seg): THREE.Vector2 | null {
 
 /** Param t ∈ (E, 1-E) if point (px,py) lies on segment s strictly between its
  *  endpoints (within EPS), else null. Detects T-junctions: one entity's VERTEX
- *  touching another's edge interior — e.g. a hexagon whose corner sits on a
+ *  touching another's edge interior, e.g. a hexagon whose corner sits on a
  *  boundary rectangle's edge. OCCT splits there, so we must too, or the frontend
  *  region and the sidecar cell disagree. */
 function pointOnSegInterior(px: number, py: number, s: Seg): number | null {
@@ -629,7 +629,7 @@ function pointOnSegInterior(px: number, py: number, s: Seg): number | null {
 
 type EntSegs = { segs: Seg[]; box: Box };
 
-/** Do any two entities' curves meet at a point that isn't a shared endpoint —
+/** Do any two entities' curves meet at a point that isn't a shared endpoint,
  *  an interior crossing (X) or a vertex-on-edge touch (T)? Entity-bbox broad-phase
  *  keeps this cheap: separated entities (a grid of holes) never reach the O(segs²)
  *  inner test, so the common non-crossing sketch pays almost nothing. */
@@ -700,8 +700,8 @@ function traceLoops(segs: Seg[]): THREE.Vector2[][] {
     `${Math.round(x / EPS)},${Math.round(y / EPS)}`;
 
   // Build a planar graph and extract its MINIMAL FACES via half-edge traversal. Unlike
-  // simple cycle-tracing this handles JUNCTIONS (degree > 2) — shared hexagon vertices,
-  // touching profiles, T-joins — splitting them into the right areas instead of voiding
+  // simple cycle-tracing this handles JUNCTIONS (degree > 2), shared hexagon vertices,
+  // touching profiles, T-joins, splitting them into the right areas instead of voiding
   // the whole component. This is MCAD-style profile detection.
   const nodes = new Map<string, THREE.Vector2>();
   const nodeKey = (x: number, y: number) => {

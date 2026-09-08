@@ -10,8 +10,8 @@ import type { MeasureRow } from "../features/measureRows";
  *  tool code through a facade whose signature did not change.
  *
  *  A PLUGIN'S TOOL DOES NOT PUT ITS PANEL HERE, and the docked Texture panel
- *  used to be the fourth entry. Nothing forced it out — a `texture` field on
- *  this store worked perfectly well — but it made the store a list of the tools
+ *  used to be the fourth entry. Nothing forced it out, a `texture` field on
+ *  this store worked perfectly well, but it made the store a list of the tools
  *  the app happens to have, which is the knowledge a plugin boundary exists to
  *  remove: a fourth plugin panel would have been a fourth field here, in a file
  *  that has no other reason to know a plugin exists. A contributed overlay keeps
@@ -19,7 +19,7 @@ import type { MeasureRow } from "../features/measureRows";
  *  which is one place for every plugin instead of one field for each.
  *
  *  Independent fields rather than one discriminant, matching panels.ts: they
- *  belong to different tools and nothing here arbitrates between tools —
+ *  belong to different tools and nothing here arbitrates between tools,
  *  toolBusy() does, and it stays a plain function.
  *
  *  markRaw on every request: each carries onCommit/onCancel/onChange closures
@@ -48,7 +48,7 @@ export const useToolPanelStore = defineStore("toolPanels", () => {
   }
 
   /** Commit, with the class's exact ordering: read the callback, tear the panel
-   *  down, THEN call it — an onCommit that reopens the panel must not be undone
+   *  down, THEN call it, an onCommit that reopens the panel must not be undone
    *  by our own hide. Empty text is dropped rather than committed. */
   function commitText(v: TextValues) {
     const cb = text.value?.onCommit;

@@ -189,7 +189,7 @@ describe("the window's half of a live session", () => {
 
   it("survives a backend that is not there", async () => {
     // The socket drops, the sidecar restarts. One missed tick, not a broken
-    // window — every publish carries the whole document, so the next one is a
+    // window, every publish carries the whole document, so the next one is a
     // complete recovery with no resync of any kind.
     const failing = {
       session: vi.fn().mockRejectedValue(new Error("socket closed")),

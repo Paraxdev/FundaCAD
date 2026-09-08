@@ -8,7 +8,7 @@ describe("asThemeId", () => {
 
   it("rejects anything unknown", () => {
     // An unknown id would stamp a data-theme attribute no rule matches, leaving
-    // the previous palette on screen — which looks like the setting silently not
+    // the previous palette on screen, which looks like the setting silently not
     // working rather than like a value being refused. Every boundary that can
     // set the theme (stored setting, <select> value) goes through this gate.
     expect(asThemeId("dracula")).toBeNull();
@@ -31,7 +31,7 @@ describe("the theme roster", () => {
   });
 
   it("offers at least one light palette", () => {
-    // The light theme is the one that genuinely exercises the token set — a
+    // The light theme is the one that genuinely exercises the token set, a
     // shadow tuned for near-black surfaces vanishes on white, so if it renders
     // correctly the others almost certainly do.
     expect(THEMES.some((t) => t.mode === "light")).toBe(true);

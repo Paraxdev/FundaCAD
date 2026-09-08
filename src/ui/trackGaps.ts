@@ -1,4 +1,4 @@
-// Where a pointer falls in a track of chips — the arithmetic behind dragging the
+// Where a pointer falls in a track of chips, the arithmetic behind dragging the
 // history strip's rollback marker.
 //
 // Split from TimelineBar.vue because the strip can now run either way (the
@@ -8,7 +8,7 @@
 // every chip's midpoint at the same coordinate, so the marker always lands in
 // gap 0 and the model rolls back to nothing.
 //
-// Rects in, index out — no DOM. happy-dom implements no layout, so measurement
+// Rects in, index out, no DOM. happy-dom implements no layout, so measurement
 // code is normally e2e territory; this is the half of it that need not be.
 
 /** The part of a DOMRect this needs. Structural, so a real DOMRect is one. */
@@ -25,7 +25,7 @@ export interface TrackRect {
  *  cannot disagree with what is actually on screen during the frame an
  *  arrangement changes. Compares the span from the first chip to the last in
  *  each axis: a row spreads horizontally, a column vertically. Fewer than two
- *  chips has no direction, and answering "across" there costs nothing — with one
+ *  chips has no direction, and answering "across" there costs nothing, with one
  *  chip both axes give the same gap. */
 export function trackIsStacked(rects: TrackRect[]): boolean {
   const first = rects[0];

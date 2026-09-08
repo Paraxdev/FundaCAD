@@ -1,7 +1,7 @@
 // A hidden sketch must be gone from BOTH surfaces it occupies: the curves drawn
 // on the model, and the region fills that answer a click.
 //
-// The overlay declared a `sketchVisible` hook and had always filtered on it —
+// The overlay declared a `sketchVisible` hook and had always filtered on it,
 // but nothing ever assigned it, so its default ("everything is visible") stood
 // and the filter was inert. Reported as two symptoms of one cause: a sketch
 // hidden from the browser tree still drew its outline over the pocket it had
@@ -38,7 +38,7 @@ describe("SketchOverlay.sketchVisible", () => {
 
   it("drops a hidden sketch's REGIONS, not just its curves", () => {
     // The click half of the report. A hidden sketch that kept its fills would
-    // still be invisible and still steal the pick — the worse of the two bugs,
+    // still be invisible and still steal the pick, the worse of the two bugs,
     // because there is nothing on screen to explain it.
     const o = new SketchOverlay();
     o.sketchVisible = (id) => id !== "s2";

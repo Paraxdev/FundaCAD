@@ -33,7 +33,7 @@ describe("rotationFrame", () => {
       expect(f.u.dot(n)).toBeCloseTo(0, 9);
       expect(f.v.dot(n)).toBeCloseTo(0, 9);
       // u x v points ALONG the axis, which is what makes a positive angle a
-      // right-handed turn — get this backwards and the ring drags the wrong way.
+      // right-handed turn, get this backwards and the ring drags the wrong way.
       expect(f.u.clone().cross(f.v).dot(n)).toBeCloseTo(1, 9);
     }
   });
@@ -90,8 +90,8 @@ describe("composeMove", () => {
     const landed = pivot.clone().applyMatrix4(moveMatrix(mv));
     expect(landed.distanceTo(pivot)).toBeLessThan(1e-9);
 
-    // CONTROL: the same rotation with no pivot correction — which is what the
-    // feature does on its own — swings it 424mm across the scene.
+    // CONTROL: the same rotation with no pivot correction, which is what the
+    // feature does on its own, swings it 424mm across the scene.
     const raw = composeMove(ZERO, rot, ZERO);
     const thrown = pivot.clone().applyMatrix4(moveMatrix(raw));
     expect(thrown.distanceTo(pivot)).toBeGreaterThan(400);

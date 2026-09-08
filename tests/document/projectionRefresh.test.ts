@@ -1,5 +1,5 @@
 // Associative projection refresh (plan step 4): rebuild results carrying
-// projectionUpdates land in the document via a DERIVED commit — no undo entry,
+// projectionUpdates land in the document via a DERIVED commit, no undo entry,
 // chained on the param queue, guarded against preview timelines, with a
 // stale-transition warning and a 5-strike oscillation valve. Driven against a
 // scripted stub backend (the sidecar side is covered by sidecar/test_refresh.py).
@@ -84,7 +84,7 @@ describe("projection refresh (derived commit loop)", () => {
     return store;
   };
 
-  it("lands new curves via a derived commit — no undo entry, quiescent in 2 rebuilds", async () => {
+  it("lands new curves via a derived commit, no undo entry, quiescent in 2 rebuilds", async () => {
     const store = makeStore((n) => (n === 1 ? [updCurve()] : undefined));
     edit(store); // ONE user edit -> rebuild 1 (updates) -> commit -> rebuild 2 (quiet)
     await settle();
@@ -190,7 +190,7 @@ describe("projection refresh (derived commit loop)", () => {
     store.onProjectionsApplied = (u) => void delivered.push(u);
     // 6 user edits while the sketch stays open: each rebuild re-delivers to the
     // session (the doc copy lags until finish(), so the sidecar re-emits every
-    // time) — nothing is oscillating, so the valve must NOT trip
+    // time), nothing is oscillating, so the valve must NOT trip
     for (let i = 0; i < 6; i++) {
       store.mutate(() => {}, true);
       await settle();
@@ -224,7 +224,7 @@ describe("projection refresh (derived commit loop)", () => {
 
   it("a quiet PREVIEW rebuild does not re-arm a tripped valve", async () => {
     // oscillate to a trip, then: preview rebuild = quiet, post-preview rebuild
-    // claims changes again — the pause must hold (no reset from the preview)
+    // claims changes again, the pause must hold (no reset from the preview)
     const store = makeStore((n) => (n <= 6 ? [updCurve(n % 2 ? CURVE1 : CURVE0)] : n === 7 ? undefined : [updCurve(CURVE0)]));
     edit(store);
     await settle();
@@ -232,7 +232,7 @@ describe("projection refresh (derived commit loop)", () => {
     const curveAtTrip = p1Of(store)?.curve;
     store.setPreview({ id: "pv", type: "extrude", sketch: "s1", distance: 1, operation: "new" } as Feature); // call 7 (quiet)
     await settle();
-    store.setPreview(null); // call 8: updates again — still paused
+    store.setPreview(null); // call 8: updates again, still paused
     await settle();
     expect(calls.length).toBe(8); // no commit -> no follow-up rebuild
     expect(p1Of(store)?.curve).toEqual(curveAtTrip);

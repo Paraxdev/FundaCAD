@@ -1,7 +1,7 @@
 """Synthetic many-body benchmark documents for large-assembly scale work.
 
-Emits a .funda whose features are `import{format:"brep"}` bodies — N features,
-each carrying a compound of K small boxes — mimicking a large imported assembly
+Emits a .funda whose features are `import{format:"brep"}` bodies, N features,
+each carrying a compound of K small boxes, mimicking a large imported assembly
 (the shape of document that exposed the sidecar's scale limits: stall-watchdog
 kills on honest work, monolithic replies in the 100+ MB range).
 
@@ -56,7 +56,7 @@ def main() -> None:
     ap.add_argument("output", help="output .funda path")
     ap.add_argument("--features", type=int, default=500, help="import features (default 500)")
     ap.add_argument("--solids", type=int, default=6,
-                    help="solids per feature (default 6 — bodies after explode = features × solids)")
+                    help="solids per feature (default 6, bodies after explode = features × solids)")
     args = ap.parse_args()
     doc = generate(args.features, args.solids)
     with open(args.output, "w") as f:

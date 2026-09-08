@@ -1,7 +1,7 @@
-# gitleaks config — extends the default ruleset, does not replace it.
+# gitleaks config, extends the default ruleset, does not replace it.
 #
 # The 8.30 default config was verified (2026-07-29) to miss two shapes:
-#   1. AWS access key IDs — no default rule fires on AKIA + 16 chars, in any file type.
+#   1. AWS access key IDs, no default rule fires on AKIA + 16 chars, in any file type.
 #   2. `Bearer <token>` outside a curl invocation. The default `curl-auth-header` rule
 #      only fires inside a curl command, so a bearer token in a .py, .ts, .md or a
 #      systemd unit passes clean. A live secret leaked in exactly this shape.
@@ -43,7 +43,7 @@ keywords = ["akia", "asia", "abia", "acca"]
   [[rules.allowlists]]
   regexTarget = "match"
   regexes = [
-    # AWS's own published documentation example key — not a credential.
+    # AWS's own published documentation example key, not a credential.
     '''AKIAIOSFODNN7EXAMPLE''',
     '''\[REDACTED''',
   ]

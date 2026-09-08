@@ -6,7 +6,7 @@ at import time, when it first produces a shape's bytes. Both read it.
 
 That works without any locking because **the path is a pure function of the
 content hash**: two writers racing on the same hash are writing byte-identical
-data, and each publishes via rename. It is also why this store has no index —
+data, and each publishes via rename. It is also why this store has no index,
 unlike `geomstore`, whose SQLite index is documented single-process-only, and
 which is exactly the wrong place to put a container's geometry: `geomstore`
 lives in `$XDG_CACHE_HOME`, its `evict()` reclaims any blob with a refcount of 0,
@@ -20,7 +20,7 @@ re-serialising a shape: `write(read(x)) != x` byte-wise for BREP, because readin
 rebuilds the shape graph in a different but equivalent order. A re-derived hash
 would change every generation, so every lookup would miss and the planned
 instancing/dedup work would never fire. `put_bytes` returns the hash it computed
-over exactly the bytes it stored — use that return value.
+over exactly the bytes it stored, use that return value.
 
 Deliberately OCP-FREE. `geomstore` imports `OCP.BinTools` at module level, which
 is why it can only be touched from a worker; this module is pure bytes so it can
@@ -54,7 +54,7 @@ def default_root():
 
 def hash_bytes(data):
     """The content hash of a blob. Matches container.rs::hash_bytes byte for
-    byte — a mismatch there would make every container reference dangle."""
+    byte, a mismatch there would make every container reference dangle."""
     return hashlib.blake2b(data, digest_size=_DIGEST_SIZE).hexdigest()
 
 

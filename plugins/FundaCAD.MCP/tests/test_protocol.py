@@ -57,7 +57,7 @@ def test_the_server_initializes_and_lists_its_tools():
 
 def test_a_notification_gets_no_reply():
     """MCP notifications carry no id, and answering one desynchronises every
-    reply after it — the client would match the next request against a stale
+    reply after it, the client would match the next request against a stale
     message and hang. McpClient.start() sends `initialized` and then the first
     tool call has to come back correctly, which is the assertion."""
     r = one("schema", {"type": "box"})
@@ -115,7 +115,7 @@ def test_a_RELATIVE_path_lands_where_the_caller_is_standing():
     A relative path resolves against the SERVER process's working directory. The
     client used to start it in `mcp/`, so an agent that ran the client from its
     own scratch directory and saved a part watched that directory stay empty
-    while the file appeared inside this repository — which it had been told not
+    while the file appeared inside this repository, which it had been told not
     to write to. Nothing said so: the reply echoed back the relative path it had
     been given, which is true from every directory and useful from none.
 

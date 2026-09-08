@@ -2,7 +2,7 @@
 //
 // It used to follow the selected chip, which meant it moved whenever the strip
 // scrolled and had to be clamped at both edges. It holds one berth now, against
-// the right edge and above the strip, and only its contents change — so what is
+// the right edge and above the strip, and only its contents change, so what is
 // checked here is that the berth does NOT move for anything the history does,
 // and still gets out of the way of the one piece of furniture that can share
 // its column.
@@ -25,7 +25,7 @@ describe("anchorPanel", () => {
 
   it("is the same berth whatever the history is doing", () => {
     // THE CONTROL for the whole change. The strip's own rect is the only input
-    // that varies with the history, and scrolling it does not move that rect —
+    // that varies with the history, and scrolling it does not move that rect,
     // so a scrolled strip, a longer one, and a fresh one all anchor identically.
     const a = anchorPanel(strip(), VIEW, 248);
     for (const again of [anchorPanel(strip(), VIEW, 248), anchorPanel(strip(), VIEW, 248)]) {
@@ -45,7 +45,7 @@ describe("anchorPanel", () => {
 
   describe("furniture it must not cover", () => {
     // The view-control pill sits at the bottom-left of the viewport, so at any
-    // ordinary width the berth is already clear of it — which is most of the
+    // ordinary width the berth is already clear of it, which is most of the
     // point of moving to the right edge.
     const pill = { left: 248, right: 700, top: 690 };
 

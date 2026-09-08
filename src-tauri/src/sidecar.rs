@@ -151,7 +151,7 @@ const EXIT_PORT_IN_USE: i32 = 3;
 /// Payload of the `sidecar:died` event.
 ///
 /// This used to be a bare cause string, which forced the frontend toast to open
-/// with "The geometry engine crashed" no matter what had happened — including the
+/// with "The geometry engine crashed" no matter what had happened, including the
 /// case where nothing crashed and the port was simply taken. `kind` lets the
 /// frontend pick the sentence; `cause` still carries the detail a screenshot of
 /// the toast has to be triageable from.
@@ -193,7 +193,7 @@ fn classify_exit(status: &std::process::ExitStatus, fatal: Option<String>) -> Si
 /// How the sidecar died, in a form a human can act on.
 ///
 /// A crash reaches us as an `ExitStatus`, and on Unix `status.code()` is `None`
-/// for ANY signal death — which is every interesting case: SIGSEGV from OCCT,
+/// for ANY signal death, which is every interesting case: SIGSEGV from OCCT,
 /// SIGKILL from the OOM killer. Reporting just the code therefore threw away the
 /// only thing that distinguishes "the geometry kernel faulted" from "the machine
 /// ran out of memory", and a field report of an engine crash arrived with no way
@@ -216,8 +216,8 @@ fn describe_exit(status: &std::process::ExitStatus) -> String {
             // the hint is the single most useful word for triage, and it is the
             // one a screenshot of the toast can carry
             let hint = match sig {
-                9 => " — out of memory?",
-                11 | 7 => " — geometry kernel fault",
+                9 => ", out of memory?",
+                11 | 7 => ", geometry kernel fault",
                 _ => "",
             };
             return format!("killed by {name} ({sig}){hint}");
@@ -232,14 +232,14 @@ fn describe_exit(status: &std::process::ExitStatus) -> String {
 /// Poll the child every ~2s so a sidecar death is noticed instead of silently
 /// leaving the frontend spinning against a closed socket. `kill()` takes the
 /// `Child` out of the `Mutex` before terminating it, so an empty slot here means
-/// an intentional shutdown (Drop/exit) — not a crash — and the loop just stops.
+/// an intentional shutdown (Drop/exit), not a crash, and the loop just stops.
 /// Auto-respawn is deliberately NOT implemented: the token/CSP contract (a fresh
 /// per-launch `FUNDACAD_SIDECAR_TOKEN` the frontend must re-fetch and re-dial with)
 /// makes a live respawn non-trivial; revisit once the frontend can rotate tokens
 /// without a full reload.
 ///
 /// `log` is the same handle the output mirroring uses. Without it the crash line
-/// went to stderr ONLY, which a packaged build discards — so `sidecar.log`, the
+/// went to stderr ONLY, which a packaged build discards, so `sidecar.log`, the
 /// very file the bug reporter attaches, ended at the last thing Python said and
 /// never recorded that the process had died, let alone how.
 fn spawn_supervisor(
@@ -260,7 +260,7 @@ fn spawn_supervisor(
                         None
                     }
                 },
-                None => break, // kill() already took it — intentional shutdown
+                None => break, // kill() already took it, intentional shutdown
             },
             Err(_) => break, // Mutex poisoned; nothing productive left to do
         };
@@ -313,7 +313,7 @@ fn configure_env(cmd: &mut Command, rt: &Runtime, token: &str, blobs: Option<&st
     // the two must agree exactly, since Rust writes this directory when opening
     // a container and Python writes it at import. Absent (e.g. a bare `python
     // server.py`) means "no store" and the sidecar falls back to its own
-    // default — never a crash, since geometry can always be re-imported.
+    // default, never a crash, since geometry can always be re-imported.
     if let Some(dir) = blobs {
         cmd.env("FUNDACAD_BLOB_DIR", dir);
     }
@@ -378,7 +378,7 @@ impl Sidecar {
         // log. Say so, in the file the bug reporter uploads.
         #[cfg(windows)]
         if job.is_none() {
-            let line = "[sidecar] WARNING: Job Object not attached — this sidecar can \
+            let line = "[sidecar] WARNING: Job Object not attached, this sidecar can \
                         outlive the app and hold its port";
             eprintln!("{line}");
             if let Some(l) = &log {
@@ -410,7 +410,7 @@ impl Sidecar {
                         // time: a file naming a dead port costs every reader a
                         // connect timeout to learn what a missing file says at
                         // once. The port comes off this line because the sidecar
-                        // owns it — it is env-overridable, and a second copy in
+                        // owns it, it is env-overridable, and a second copy in
                         // Rust would be a copy that can disagree.
                         if let (Some(dir), Some(port)) = (&session_dir, listening_port(&line)) {
                             let info = crate::session_file::SessionInfo {
@@ -465,14 +465,14 @@ impl Sidecar {
                 std::thread::sleep(Duration::from_secs(20));
                 if !ready.load(Ordering::SeqCst) {
                     eprintln!(
-                        "[sidecar] WARNING: no LISTENING after 20s — the geometry engine \
+                        "[sidecar] WARNING: no LISTENING after 20s, the geometry engine \
                          may have failed to start (check [sidecar:err] above)"
                     );
                     if let Some(l) = &log {
                         if let Ok(mut f) = l.lock() {
                             let _ = writeln!(
                                 f,
-                                "WARNING: no LISTENING after 20s — the geometry engine \
+                                "WARNING: no LISTENING after 20s, the geometry engine \
                                  may have failed to start (see err: lines above)"
                             );
                         }
@@ -639,7 +639,7 @@ mod tests {
     /// opening a container, the sidecar writes it at import. They must agree on
     /// the path, so Rust resolves it and TELLS the sidecar rather than letting
     /// each side guess. Absent is a valid state (a bare `python server.py`),
-    /// which is why it is an Option — but when present it must be passed.
+    /// which is why it is an Option, but when present it must be passed.
     #[test]
     fn sidecar_env_carries_the_blob_dir() {
         let rt = Runtime {
@@ -754,7 +754,7 @@ mod tests {
         let tmp = TmpDir::new("bundled");
         let resource_dir = tmp.0.join("resource");
         touch(&resource_dir.join("sidecar-runtime").join("python").join(BUNDLED_PY));
-        // manifest_dir is irrelevant once the bundled runtime is found — point it
+        // manifest_dir is irrelevant once the bundled runtime is found, point it
         // somewhere that doesn't even exist to prove it's never consulted.
         let manifest_dir = tmp.0.join("does-not-exist");
 

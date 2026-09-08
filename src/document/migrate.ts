@@ -6,7 +6,7 @@
 //   dimension constraints gain a stable `id`; bare parameter names stored in
 //   numeric fields become model parameters with the field rewritten to the cached
 //   number (loss-free); plain user parameters get a paramDefs row.
-// v2 -> v3: the "projected" sketch entity. Pure ADDITION — the stamp alone marks
+// v2 -> v3: the "projected" sketch entity. Pure ADDITION, the stamp alone marks
 //   the format, and older builds skip unknown entity types rather than crashing.
 // v3 -> v4: the "offset" sketch constraint and the sketch feature's `planeId` (a
 //   by-id datum reference, so an offset plane's distance stays editable instead of
@@ -22,25 +22,25 @@ import { nextDName } from "../params/engine";
 // whole shape inline as base64 ASCII BREP (`brep`); it now carries `geom`, the
 // content hash of the same geometry stored as binary BREP inside the document
 // container. On the 356 MiB reference assembly that inline field alone was
-// 541.8 MiB — 4.2x over the websocket frame cap and 6.4x over the 64 MiB
+// 541.8 MiB, 4.2x over the websocket frame cap and 6.4x over the 64 MiB
 // embedded-BREP cap re-checked on every rebuild, which is why an assembly that
 // size could not be opened at all.
 //
 // The stamp alone marks the format: `brep` is still READ, so a v4 document keeps
 // rebuilding untouched, and it is rewritten to `geom` when the document is
 // migrated on open. The file itself also changes shape (JSON → ZIP), which is
-// the first migration that is not purely a data rewrite — older builds get an
+// the first migration that is not purely a data rewrite, older builds get an
 // explicit "update FundaCAD" message rather than a JSON syntax error.
 
 // v5 → v6: `rectangle.angle` (degrees about its own centre), so a rectangle drawn
 // from three points can be SAVED as a rectangle rather than decomposed into four
-// lines — which would have cost it its W/H dimension, its "<rectId>~k" edge
+// lines, which would have cost it its W/H dimension, its "<rectId>~k" edge
 // addressing and its identity in the browser tree.
 //
 // A pure addition, and absent still means 0, so no data is rewritten. It is
 // stamped anyway because the failure mode without a stamp is worse than the ones
 // v3 and v4 guarded against: an older build does not skip a field it does not
-// know, it ignores it and draws the rectangle axis-aligned — the wrong SHAPE,
+// know, it ignores it and draws the rectangle axis-aligned, the wrong SHAPE,
 // silently. The stamp turns that into the "made by a newer version" warning.
 
 // v6 -> v7: `datumPlane.face` (and `datumPlane.at` for a round face), the face
@@ -71,32 +71,32 @@ import { nextDName } from "../params/engine";
 // revolve can turn about a feature of the part instead of only about X, Y or Z.
 // `axis` widens with it, from one of those three names to either a name or a
 // resolved {origin, dir} line, and holds what the edge resolved to. An older
-// build reads that object where it expects a name and falls back to Z — the
-// wrong axis, silently — which is the stamp's job again.
+// build reads that object where it expects a name and falls back to Z, the
+// wrong axis, silently, which is the stamp's job again.
 //
 // Stamped even though nothing is rewritten, because the two builds disagree about
 // geometry rather than about data. An older build opening a v8 file joins or cuts
-// with the WHOLE profile where the file means one half of it — a hole that eats
+// with the WHOLE profile where the file means one half of it, a hole that eats
 // the part it was drawn on, and nothing in the file looks wrong. The stamp turns
 // that into the "made by a newer version" warning.
 //
 // The change runs the other way too, and cannot be migrated: a pre-v8 file whose
 // profile crossed the edge of its face extruded whole, and now extrudes the piece
-// under its saved point. Nothing in the file records which was meant — the point
-// is all there ever was — so those features open smaller and are re-dragged.
+// under its saved point. Nothing in the file records which was meant, the point
+// is all there ever was, so those features open smaller and are re-dragged.
 
 // v8 -> v9: `combine` becomes `boolean`, and this is the first migration since
 // v1 that REWRITES features rather than adding a field.
 //
 // One command that asked which boolean it was performing became three commands
-// that each already know — the same trade the extrude commit made. The feature
+// that each already know, the same trade the extrude commit made. The feature
 // follows the commands: `operation` is spelled union/subtract/intersect (the
 // words on the three buttons) rather than join/cut/intersect, and `keepTools`
 // becomes `keepOriginals`, which is what the switch in Properties calls it.
 //
-// The rewrite is total and loss-free — every old operation has exactly one new
+// The rewrite is total and loss-free, every old operation has exactly one new
 // spelling, and no v8 document can carry a `boolean` for the migration to
-// collide with — so a v8 file opens as the same model it was saved as. What it
+// collide with, so a v8 file opens as the same model it was saved as. What it
 // cannot do is go back: an older build reading a v9 file finds a feature type it
 // has never heard of, which its rebuild raises on. That is the stamp's job, and
 // it is a better failure than the alternative, since a silently skipped boolean
@@ -165,7 +165,7 @@ export function migrateDocument(parsed: CadDocument): string[] {
     const raw = h[field];
     if (typeof raw !== "string") return;
     const value = params[raw];
-    if (value === undefined) return; // not a known param — leave for the legacy path
+    if (value === undefined) return; // not a known param, leave for the legacy path
     h[field] = value;
     defs[nextDName(defs)] = { expr: raw, value, unit, target };
   };

@@ -21,7 +21,7 @@ afterEach(() => resetContributions());
 /** Enough engine to build a menu and a dispatcher.
  *
  *  Every field the menubar touches is inside a thunk it does not call while
- *  building, and the dispatcher's own cases are not what is under test here —
+ *  building, and the dispatcher's own cases are not what is under test here,
  *  what is under test is what happens to an action id NONE of them match. */
 function fakeEngine(): Engine {
   setActivePinia(createPinia());
@@ -41,7 +41,7 @@ const labels = (menus: { label: string }[]) => menus.map((m) => m.label);
 describe("the menubar", () => {
   it("has no View menu of its own", () => {
     // Every row of View belonged to one capability. With nothing contributed the
-    // menu is not empty, it is absent — and the app arrives there by having
+    // menu is not empty, it is absent, and the app arrives there by having
     // nothing to put in it rather than by knowing whose it was.
     expect(labels(buildMenubar(fakeEngine()))).toEqual(["File", "Edit", "Help"]);
   });
@@ -82,7 +82,7 @@ describe("the menubar", () => {
     // different moments: the switch flips, and some milliseconds later the
     // module is fetched and its activate() runs. A surface that rebuilds on the
     // switch rebuilds while the rows it wants are still loading, and is left
-    // showing the state from before — permanently, because nothing else is
+    // showing the state from before, permanently, because nothing else is
     // coming.
     //
     // So this asserts the useless half directly: the registry moving is not the

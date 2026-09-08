@@ -3,7 +3,7 @@ a part.
 
 The protocol is JSON-RPC 2.0, one message per line, on stdin/stdout. That is all
 MCP is on a stdio transport, and hand-rolling it here beats pinning an SDK into
-a repository that has none — the whole of it is `_dispatch` below.
+a repository that has none, the whole of it is `_dispatch` below.
 
 STDOUT IS THE PROTOCOL. Nothing else may ever be printed to it; a stray print
 corrupts the stream and the client sees the server die for no stated reason.
@@ -11,12 +11,12 @@ Everything diagnostic goes to stderr, which the host shows in its logs.
 
 What the tools are for, in the order they are meant to be used:
 
-  schema        what a feature looks like — read this before authoring one
+  schema        what a feature looks like, read this before authoring one
   param_set     the driving dimensions, named, so the model stays parametric
   feature_*     the timeline
   build         make it, and say what broke
   inspect       exact measurements, and the SELECTORS that address each face
-                and edge — this is what makes the next feature writable
+                and edge, this is what makes the next feature writable
   view          a picture, because "is the hole in the right place" is not a
                 question numbers answer
   doc_save      a .funda file the app opens
@@ -35,7 +35,7 @@ There are two worlds, and `sidecar_link.py` picks between them at start-up:
 
 Which one is in force is `self.live`. Nothing in the tools themselves knows:
 `_call_live` wraps them, so a tool is written once and works either way. That is
-deliberate — a tool that had to remember which world it was in would eventually
+deliberate, a tool that had to remember which world it was in would eventually
 forget, and forgetting means editing the wrong document.
 """
 
@@ -108,7 +108,7 @@ def _append(result, extra):
 def _edit_note(name, args):
     """What the user sees beside the indicator that an assistant is editing.
 
-    The tool name plus the one argument that identifies what it touched — enough
+    The tool name plus the one argument that identifies what it touched, enough
     to recognise an edit in a list, short enough for a line of UI. Untrusted only
     in the sense that the model wrote it; the sidecar caps its length and the app
     renders it as text.
@@ -167,8 +167,8 @@ screen. Every edit you make appears in their window as it happens.
     async def attach(self, mode=None):
         """Decide where the engine comes from, once, at start-up.
 
-        Split out of __init__ because it does IO — it reads the session file and
-        dials the port — and because a test wants a Server with neither.
+        Split out of __init__ because it does IO, it reads the session file and
+        dials the port, and because a test wants a Server with neither.
         """
         link, app = await SidecarLink.for_mode(mode, log=log)
         self.link = link
@@ -272,13 +272,13 @@ screen. Every edit you make appears in their window as it happens.
 
         add("build",
             "Rebuild the document and report what came out: the bodies, their "
-            "sizes, and any feature that failed. Build often — an error names the "
+            "sizes, and any feature that failed. Build often, an error names the "
             "feature that caused it.",
             {}, [], self.t_build)
 
         add("inspect",
             "Exact measurements of the built bodies: volume, area, bounding box, "
-            "and — the part that matters — every face and edge with a ready-made "
+            "and, the part that matters, every face and edge with a ready-made "
             "SELECTOR you can paste into the next feature. Also flags seam edges "
             "and wrapping faces, which are what fillet and press/pull refuse.",
             {"body": {"type": "string", "description": "one body id; all of them if omitted"},
@@ -471,7 +471,7 @@ screen. Every edit you make appears in their window as it happens.
             vol = f", vol {e['volume']:.6g} mm3" if e.get("volume") else ""
             lines.append(f"{b['id']} \"{b.get('name')}\": {size[0]} x {size[1]} x {size[2]} mm{vol}, "
                          f"{b.get('faceCount')} faces, {len(b.get('indices') or []) // 3} triangles")
-        # `featureErrors` — NOT `errors`. A feature that fails is recorded as a
+        # `featureErrors`, NOT `errors`. A feature that fails is recorded as a
         # no-op and the rebuild carries on, so the reply is a successful one
         # carrying the failures beside the geometry that did build. Reading the
         # wrong key made a failed press/pull look like a press/pull that did
@@ -569,7 +569,7 @@ screen. Every edit you make appears in their window as it happens.
 
     async def handle(self, msg):
         """One JSON-RPC message in, zero or one out. A notification (no `id`)
-        gets no reply at all, which is not an oversight — replying to one is a
+        gets no reply at all, which is not an oversight, replying to one is a
         protocol error the client is entitled to hang up over."""
         method = msg.get("method")
         mid = msg.get("id")
@@ -661,8 +661,8 @@ screen. Every edit you make appears in their window as it happens.
         The distinction matters: a JSON-RPC error means the call was malformed
         and the model cannot learn anything from it, while isError puts the
         message in front of the model as something to react to. Almost
-        everything that goes wrong here — a bad selector, an impossible fillet,
-        a sketch that does not close — is the second kind."""
+        everything that goes wrong here, a bad selector, an impossible fillet,
+        a sketch that does not close, is the second kind."""
         tool = self.tools.get(name)
         if tool is None:
             return failure(f"No tool {name!r}. Have: {', '.join(sorted(self.tools))}")
@@ -749,8 +749,8 @@ async def _stdin_lines():
 
     Not asyncio's connect_read_pipe: on Windows the proactor loop cannot take a
     console stdin and the selector loop cannot take a pipe, and a blocking
-    readline on the default executor works on every platform. It costs nothing
-    — this process spends its life waiting on one pipe or the other."""
+    readline on the default executor works on every platform. It costs nothing,
+    this process spends its life waiting on one pipe or the other."""
     loop = asyncio.get_running_loop()
     return lambda: loop.run_in_executor(None, sys.stdin.readline)
 
@@ -764,7 +764,7 @@ def main():
 
     `FUNDACAD_MCP_MODE=attach` with no app open raises on purpose. A traceback
     would say the same thing in twenty lines of a log the user may never open,
-    so it is caught and stated once — stderr is what an MCP host shows."""
+    so it is caught and stated once, stderr is what an MCP host shows."""
     try:
         asyncio.run(_main())
     except RuntimeError as ex:

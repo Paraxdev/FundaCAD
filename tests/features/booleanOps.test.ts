@@ -3,7 +3,7 @@
 // They replaced one command that opened a dialog, and that is only an
 // improvement if all three are equally reachable. The way it regresses is a
 // surface learning about two of them, or about a third under a name nothing
-// else uses — a ribbon button whose action nobody dispatches, a toolbar offer
+// else uses, a ribbon button whose action nobody dispatches, a toolbar offer
 // with no icon, a key the keymap does not bind. Each of those ships looking
 // fine and does nothing when clicked.
 
@@ -41,8 +41,8 @@ describe("the inventory", () => {
       // a typo here ships as an invisible button that still takes clicks.
       expect(m, BOOLEAN_COMMANDS[i]!.iconName).not.toBe("");
     }
-    // They are one drawing seen three ways — same circles, different region
-    // shaded — so identical markup is a real hazard rather than a far-fetched
+    // They are one drawing seen three ways, same circles, different region
+    // shaded, so identical markup is a real hazard rather than a far-fetched
     // one, and it would put three buttons you cannot tell apart on the bar.
     expect(new Set(marks).size).toBe(3);
   });

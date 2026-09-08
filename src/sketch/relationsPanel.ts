@@ -3,8 +3,8 @@
 // Same split, and for the same reason, as sketchGlyphs.ts: the rows are built
 // by a pure function (relations.ts), rendered by a component
 // (components/shell/SketchPalette.vue) out of a store
-// (stores/sketchRelations.ts), and SketchMode — which has no HTML in it and is
-// not about to start — sees only show/hide and a few hook fields.
+// (stores/sketchRelations.ts), and SketchMode, which has no HTML in it and is
+// not about to start, sees only show/hide and a few hook fields.
 
 import { markRaw } from "vue";
 import type { ResolvedEntity } from "./snap";

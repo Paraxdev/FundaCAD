@@ -11,7 +11,7 @@ import { RebuildAssembly, manifestFromBodies } from "../../src/geometry/assembly
 import type { WireBody, WireBodyFull } from "../../src/geometry/assembly";
 import type { RebuildResult } from "../../src/types";
 
-/** A body payload with `tris` triangles on the given faceIds — same shape as
+/** A body payload with `tris` triangles on the given faceIds, same shape as
  *  assemble.test.ts's helper, plus edges, since edge ids are also assigned by
  *  cumulative position and so are order-sensitive. */
 function wireBody(id: string, faceIds: number[], edges = 1): WireBodyFull {
@@ -107,7 +107,7 @@ describe("RebuildAssembly, incremental", () => {
 
   it("refuses to complete while a body is missing", () => {
     // The load-bearing guard. Returning the partially-filled result would hand
-    // on zeroed slices, which render as plausible degenerate geometry — far
+    // on zeroed slices, which render as plausible degenerate geometry, far
     // worse than an error, because nothing downstream would question it.
     const asm = chunked([A, B, C], [0, 2]);
     expect(asm.remaining).toBe(1);
@@ -166,7 +166,7 @@ describe("RebuildAssembly, incremental", () => {
 
   it("takes the no-op fast path from the manifest alone, by reference", () => {
     // This identity is what lets viewport.setModel skip a full scene rebuild on
-    // an eye toggle — 0.63 s per toggle at 3,071 bodies.
+    // an eye toggle, 0.63 s per toggle at 3,071 bodies.
     const stubs: WireBody[] = [A, B].map((b) => ({
       id: b.id, name: b.name, etag: b.etag, unchanged: true as const,
     }));

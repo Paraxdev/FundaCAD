@@ -12,7 +12,7 @@
 //
 // That last one is the interesting case here. Two endpoints at the same
 // position compile to one solver point (sketchSolve's coincKey merge), so a
-// chain drawn end to end is genuinely joined with nothing recorded anywhere —
+// chain drawn end to end is genuinely joined with nothing recorded anywhere,
 // the corner holds, and there is no constraint, no glyph, and nothing in the
 // saved file to say so. Those are listed below as IMPLIED: real, load-bearing,
 // and not deletable, because there is no record to delete. Writing coincident
@@ -55,7 +55,7 @@ export interface RelationRow {
   implied?: true;
 }
 
-/** Degrees, not millimetres — the one dimensional constraint measured in them. */
+/** Degrees, not millimetres, the one dimensional constraint measured in them. */
 const isAngle = (c: SketchConstraint) => c.type === "angle";
 
 const KIND_NAME: Record<string, string> = {
@@ -65,7 +65,7 @@ const KIND_NAME: Record<string, string> = {
 };
 
 /** What to call an entity in a sentence: its kind plus its position among the
- *  others of that kind, which is the only handle a sketch entity has — they
+ *  others of that kind, which is the only handle a sketch entity has, they
  *  carry ids, not names. Decodes the compound rectangle-edge operand form.
  *  Returns null for an id nothing answers to, so a stale constraint reads as
  *  acting on nothing rather than on "undefined". */
@@ -90,7 +90,7 @@ export function entityLabel(ents: ResolvedEntity[], id: string): string | null {
  *
  *  The same key the solver merges on, deliberately: a list that used its own
  *  idea of "attached" would show joins the solver does not hold and miss ones
- *  it does. Only groups of two or more count — a lone endpoint is not a join. */
+ *  it does. Only groups of two or more count, a lone endpoint is not a join. */
 export function impliedJoins(ents: ResolvedEntity[]): RelationRow[] {
   const at = new Map<string, string[]>();
   const add = (x: number, y: number, id: string) => {
@@ -166,7 +166,7 @@ export function relationRows(
 /** How the degrees-of-freedom count reads to a person.
  *
  *  `dof < 0` is "no solve has run", which is the state a sketch with no
- *  constraints stays in — it is not the same as zero, and reporting it as
+ *  constraints stays in, it is not the same as zero, and reporting it as
  *  "fully defined" would be exactly backwards. */
 export function dofSummary(dof: number, conflict: boolean): string {
   if (conflict) return "Conflicting constraints";

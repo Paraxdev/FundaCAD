@@ -1,6 +1,6 @@
 // The arithmetic between "this cylindrical face is an M6 shank" and the two
 // features a thread actually is. The kernel side of the same seam is pinned in
-// sidecar/tests/test_thread_roundtrip.py — including the one that does not
+// sidecar/tests/test_thread_roundtrip.py, including the one that does not
 // raise: a profile that only just touches the cylinder it cuts leaves the shank
 // untouched, with no exception anywhere.
 

@@ -2,7 +2,7 @@
 // Persistent, editable dimension annotations on committed sketch geometry.
 // Replaces the DOM half of sketch/sketchDimensions.ts, which stays as the facade
 // SketchMode talks to (its constructor, method names and hook fields are
-// unchanged — see that file's header).
+// unchanged, see that file's header).
 //
 // The line this component draws, and the reason it is not "just" a v-for:
 //
@@ -12,7 +12,7 @@
 //   POSITION is not, and must not be. Every label is projected from sketch mm
 //   through the sketch plane and the live camera to screen px, on every frame
 //   the camera moves. The loop at the bottom writes style.transform straight
-//   onto elements it collected into a PLAIN array — no ref, no reactive(), no
+//   onto elements it collected into a PLAIN array, no ref, no reactive(), no
 //   scheduler. TimelineBar.vue's rollback drag and RibbonBar.vue's width
 //   measurement draw the same line for the same reason.
 //
@@ -73,7 +73,7 @@ watch(
 watch(
   () => s.dimItems,
   () => {
-    // A rebuild replaces the label a drag is riding on — drop the drag so its
+    // A rebuild replaces the label a drag is riding on, drop the drag so its
     // move/up handlers can't write a placement against stale geometry.
     drag = null;
     // The new set is at the same camera as the old one, so the hash check would
@@ -90,7 +90,7 @@ onUnmounted(stop);
 
 // --- selection -----------------------------------------------------------
 // Which label the Delete key acts on. Set by a click or a right-click, dropped
-// on the next rebuild by showDims() — a selection whose label no longer exists
+// on the next rebuild by showDims(), a selection whose label no longer exists
 // must not keep a stale delete armed.
 function select(i: number) {
   s.dimSelected = i;
@@ -121,9 +121,9 @@ let suppressClick = false;
 
 function onDown(e: PointerEvent, i: number, l: DimItem) {
   e.stopPropagation();
-  // Primary button only. A badge sits ON the geometry it labels — a line's
+  // Primary button only. A badge sits ON the geometry it labels, a line's
   // length badge lands at the midpoint, exactly where a user aims to right-click
-  // that line — and overlapPick REPLACES the selection with the single entity
+  // that line, and overlapPick REPLACES the selection with the single entity
   // under the cursor. So an unguarded right press ate a two-entity selection
   // before its constraint menu was ever built, and rebuilt the badge out from
   // under its own contextmenu handler. A secondary press selects nothing, starts
@@ -132,7 +132,7 @@ function onDown(e: PointerEvent, i: number, l: DimItem) {
   suppressClick = false;
   l.suppressEdit = s.dimHooks?.overlapPick(e) ?? false;
   // overlapPick rebuilds every label when geometry claims the pick, so the
-  // element under the cursor may already have been patched away — never start a
+  // element under the cursor may already have been patched away, never start a
   // drag on top of that.
   if (l.suppressEdit) return;
   select(i);
@@ -175,7 +175,7 @@ function onDragMove(e: PointerEvent) {
   const p = placeAt(e.clientX, e.clientY);
   if (!p) return;
   d.last = p;
-  // the host re-lays-out the dim and hands back where its label really goes — a
+  // the host re-lays-out the dim and hands back where its label really goes, a
   // perpendicular-only or radial-only dim tracks the cursor's useful component
   // and ignores the rest, with no jump when the drag ends
   const anchor = d.item.placeCommit!(p.x, p.y, false);
@@ -205,8 +205,8 @@ function onDragEnd(e: PointerEvent) {
 // --- right-click ---------------------------------------------------------
 // The discoverable half of deleting a dimension; the Delete key (handled by
 // SketchMode via deleteSelected()) is the shortcut. A dimensional constraint has
-// no constraint glyph — glyphs.ts deliberately skips them, since they already
-// draw as dimension badges — so without these two there is no way to remove one
+// no constraint glyph, glyphs.ts deliberately skips them, since they already
+// draw as dimension badges, so without these two there is no way to remove one
 // short of deleting the geometry under it. Reported 2026-08-02.
 function onContextMenu(e: MouseEvent, i: number, l: DimItem) {
   e.preventDefault();
@@ -233,7 +233,7 @@ function onClick(e: MouseEvent, i: number, l: DimItem) {
 
 // Escape hatch. A label that floats over its own geometry loses every single
 // click to the pick underneath (overlapPick), which would leave it permanently
-// uneditable — and in the dimension tool an in-progress dimension claims clicks
+// uneditable, and in the dimension tool an in-progress dimension claims clicks
 // too. A double-click is unambiguous, so it edits regardless of who won the
 // singles.
 function onDblClick(e: MouseEvent, i: number, l: DimItem) {
@@ -245,7 +245,7 @@ function onDblClick(e: MouseEvent, i: number, l: DimItem) {
 }
 
 function beginEdit(i: number, l: DimItem) {
-  if (editing.value === i) return; // already editing — a dblclick after a click
+  if (editing.value === i) return; // already editing, a dblclick after a click
   editing.value = i;
   editError.value = null;
   // a param-driven dim reopens its EXPRESSION (Fusion behaviour); a plain dim
@@ -269,7 +269,7 @@ function onEditKey(e: KeyboardEvent, l: DimItem) {
   if (e.key === "Enter") {
     const raw = editText.value.trim();
     if (l.commitExpr && (!isPlainNumber(raw) || l.expr !== undefined)) {
-      // formulas — and any edit to an already-bound dim — go through the
+      // formulas, and any edit to an already-bound dim, go through the
       // expression path so the binding stays consistent
       const err = l.commitExpr(raw);
       if (err) editError.value = err;

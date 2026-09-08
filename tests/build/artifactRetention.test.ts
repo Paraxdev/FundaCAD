@@ -3,7 +3,7 @@
 // This is here rather than in a CI script because the answer needs no build and
 // no network: the workflow files are text, and a test runs them on every push
 // and on every machine. What it defends is a failure that names something else
-// entirely — 55 GB of ninety-day artifacts from an intra-run handoff, and a
+// entirely, 55 GB of ninety-day artifacts from an intra-run handoff, and a
 // FinalizeArtifact 403 on one leg of the matrix that read as a Linux problem
 // and stopped a release from publishing.
 //

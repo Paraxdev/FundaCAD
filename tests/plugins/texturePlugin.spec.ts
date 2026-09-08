@@ -3,7 +3,7 @@
 //
 // The other files here take one surface at a time. This one runs the real
 // `activate(e)` against an engine it fakes, and then asks every surface the
-// application has whether it can see a texture — the tool inventory, the
+// application has whether it can see a texture, the tool inventory, the
 // selection toolbar, the icon registry, the history's mark, the properties
 // panel's rows, the action dispatcher, the busy predicate. Then it tears the
 // plugin down and asks all of them again.

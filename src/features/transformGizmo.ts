@@ -6,7 +6,7 @@
 // A ROTATION ABOUT A PIVOT is not something the `move` feature has. The kernel
 // applies `Rot(rx, ry, rz)` about the WORLD origin and only then translates, so
 // a body 300mm out along the part that you turn 90 degrees does not spin where
-// it stands — it swings a quarter circle around the origin and lands somewhere
+// it stands, it swings a quarter circle around the origin and lands somewhere
 // else entirely. The fix is not a new feature: rotating about c and then moving
 // by t is exactly rotating about the origin and moving by (t + c - R·c), which
 // is a translation the feature can already carry. `composeMove` is that one
@@ -14,7 +14,7 @@
 // plausible-looking wrong place rather than an error.
 //
 // The EULER ORDER is the kernel's, not a preference. Rot(rx, ry, rz) composes as
-// Rx · Ry · Rz — measured against build123d rather than assumed — which is what
+// Rx · Ry · Rz, measured against build123d rather than assumed, which is what
 // three.js calls "XYZ". Reading the angles back out in any other order gives a
 // preview that agrees with the rebuild for a single-axis turn and diverges as
 // soon as two axes are used, which is the worst way for it to be wrong.
@@ -22,7 +22,7 @@
 import * as THREE from "three";
 
 /** How far a rotation drag steps by default, in degrees. Fifteen because the
- *  turns people actually mean are its multiples — 15, 30, 45, 90 — and holding
+ *  turns people actually mean are its multiples, 15, 30, 45, 90, and holding
  *  shift lifts it, the same way it lifts the translation step. */
 export const ROTATE_SNAP_DEG = 15;
 
@@ -59,7 +59,7 @@ export function angleInFrame(
 /** The shortest way round from one angle to another, in radians.
  *
  *  Without this a drag that crosses the ±pi seam reports a turn of nearly a full
- *  circle in the wrong direction — once per revolution, which is exactly often
+ *  circle in the wrong direction, once per revolution, which is exactly often
  *  enough to be dismissed as a glitch and never fixed. */
 export function angleDelta(from: number, to: number): number {
   let d = to - from;
@@ -129,8 +129,8 @@ export function moveMatrix(v: MoveValues): THREE.Matrix4 {
 /** A resize by `s` per axis that holds `pivot` still.
  *
  *  The gizmo's whole transform is this, then the move: T . R . scaleAbout. That
- *  order is not a choice — it is the order the two FEATURES are applied in, a
- *  `scale` written before a `move` in the timeline — and the preview has to be
+ *  order is not a choice, it is the order the two FEATURES are applied in, a
+ *  `scale` written before a `move` in the timeline, and the preview has to be
  *  built the same way round or it agrees with the rebuild only while one of the
  *  two is the identity. */
 export function scaleAbout(pivot: THREE.Vector3, s: THREE.Vector3): THREE.Matrix4 {
@@ -150,7 +150,7 @@ export const MIN_SCALE = 0.01;
 
 /** Is this rotation axis too close to the line of sight to drag against?
  *
- *  Looking straight down a rotation axis is the GOOD case — the ring faces you
+ *  Looking straight down a rotation axis is the GOOD case, the ring faces you
  *  and the cursor's angle about its centre is the turn. Looking along the
  *  ring's own plane is the bad one: the ring is a line on screen, the plane the
  *  cursor is intersected against is edge-on, and a pixel of mouse movement

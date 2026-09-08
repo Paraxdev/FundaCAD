@@ -1,12 +1,12 @@
 // Selection-filter chips for the sketch Project tool: a small floating bar shown
-// while the tool is active (TextPanel's floating-DOM style — there is no shared
+// while the tool is active (TextPanel's floating-DOM style, there is no shared
 // FloatingPanel widget, and the Sketch Palette is a persistent checkbox list,
 // the wrong shape for a mutually-exclusive mode set).
 //
 // This is now a FACADE over stores/toolPanels.ts +
 // components/overlays/ProjectFilterBar.vue. `filter` stays a plain property
 // because sketchMode.ts:3119/3151/3185 read it SYNCHRONOUSLY, inside the
-// projection routine — it is tool state that happens to have chips, not panel
+// projection routine, it is tool state that happens to have chips, not panel
 // state, so it lives in the store and survives hide()/show().
 
 import { markRaw } from "vue";

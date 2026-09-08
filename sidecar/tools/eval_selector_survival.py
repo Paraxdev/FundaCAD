@@ -1,4 +1,4 @@
-"""Selector-survival oracle (Norn oracle entry-point — hash-locked at seal).
+"""Selector-survival oracle (Norn oracle entry-point, hash-locked at seal).
 
 Scores the v2 `by:"match"` resolver under a given tuning config against the frozen
 corpus. Contract (Norn oracle): prints exactly ONE JSON line as the last line of

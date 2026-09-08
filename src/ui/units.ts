@@ -1,6 +1,6 @@
 // Display/input units. Geometry is ALWAYS stored in millimetres internally
 // (build123d's base unit; correct for STL/STEP/3MF export and 3D printing).
-// The unit setting only converts what the user sees and types — lengths shown
+// The unit setting only converts what the user sees and types, lengths shown
 // in the dialog/inspector are divided by the factor, typed values multiplied
 // back to mm. Angles are always degrees and never converted.
 
@@ -21,7 +21,7 @@ const LEGACY_KEYS = ["neocad.unit", "sindricad.unit"];
 let current: Unit = readStored();
 const listeners = new Set<() => void>();
 
-/** Narrow an untrusted string — a `<select>` value, a stored setting — to a Unit,
+/** Narrow an untrusted string, a `<select>` value, a stored setting, to a Unit,
  *  or null. Every boundary that feeds `current` MUST come through here instead of
  *  casting: the unit is interpolated raw into innerHTML markup downstream (the
  *  properties and interference panels), so an unchecked value is a script-injection
@@ -72,13 +72,13 @@ export function fmtLength(mm: number): string {
 
 /** Quantise for STORAGE: a thousandth, which is `snap()`'s lattice floor and the
  *  finest a drag can land on (viewport/dragStep.ts). Not the same question as
- *  how many decimals to SHOW — that one is `displayRound`, and mixing them is
+ *  how many decimals to SHOW, that one is `displayRound`, and mixing them is
  *  how a panel ends up reading 24.098723. */
 export function round(v: number): number {
   return Math.round(v * 1000) / 1000;
 }
 
-/** Nearest "nice" step (1/2/5 × 10ⁿ) to a rough magnitude — used for the adaptive
+/** Nearest "nice" step (1/2/5 × 10ⁿ) to a rough magnitude, used for the adaptive
  *  grid spacing and for snapping drag/cursor values to clean numbers. */
 export function niceStep(rough: number): number {
   if (!(rough > 0) || !isFinite(rough)) return 1;
@@ -110,13 +110,13 @@ export function displayValue(mm: number, kind: FieldKind = "length"): number {
  *
  *  This was `parseFloat`, which is why every field in the app was quietly NOT
  *  unit agnostic: "2mm" came back as 2 in whatever the field was showing, "1
- *  inch" as 1, "1/2" as 1. parseFloat never fails on those — it stops at the
+ *  inch" as 1, "1/2" as 1. parseFloat never fails on those, it stops at the
  *  first character it does not like and returns what it has, so there was
  *  nothing to report and the part was simply the wrong size.
  *
  *  It now goes through ui/measure, so anything typeable in one field is
  *  typeable in all of them: units, symbols, compounds, fractions, arithmetic.
- *  A COUNT stays a plain number — "6 sides" has no unit to infer and a fraction
+ *  A COUNT stays a plain number, "6 sides" has no unit to infer and a fraction
  *  of a side is not a thing. */
 export function parseField(raw: string, kind: FieldKind = "length"): number | null {
   if (kind === "count") {
@@ -127,7 +127,7 @@ export function parseField(raw: string, kind: FieldKind = "length"): number | nu
   return tryParseMeasure(raw, display)?.value ?? null;
 }
 
-/** The unit a typed field NAMED, if it named one — so a surface can adopt it as
+/** The unit a typed field NAMED, if it named one, so a surface can adopt it as
  *  its display unit rather than showing the number back in a unit the user just
  *  told it not to use. Null for a bare number. */
 export function parsedUnit(raw: string, kind: FieldKind = "length"): string | null {

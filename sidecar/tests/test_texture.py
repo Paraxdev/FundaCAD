@@ -104,7 +104,7 @@ def test_selected_face_only_leaves_other_faces_unchanged():
 
 
 def test_boundary_taper_to_zero_at_edge():
-    # a synthetic 5x5 grid over [0,4]x[0,4] (1mm cells) — no OCCT needed, since
+    # a synthetic 5x5 grid over [0,4]x[0,4] (1mm cells), no OCCT needed, since
     # _boundary_taper is a pure geometry function over (points, triangles). The
     # center sits 2mm from every edge, well past a 1mm inset, so it should reach
     # full height while every boundary vertex tapers to exactly zero.
@@ -143,7 +143,7 @@ def test_manifold_check_flags_bad_edge_count():
 
 def test_manifold_diagnostic_surfaces_from_displace_face():
     # a pathologically dense request (tiny scale) forces max subdivision against the
-    # density cap; even so the SAME dedup logic keeps it manifold — the diagnostic
+    # density cap; even so the SAME dedup logic keeps it manifold, the diagnostic
     # path itself is unit-tested above, so here we confirm displace_face never
     # raises and produces a closed, well-formed local mesh at the cap.
     _s, feats = _box(1, 10, 10, 5)
@@ -159,7 +159,7 @@ def test_manifold_diagnostic_surfaces_from_displace_face():
     pos, idx, fids = tessellate(b["shape"], 0.1, textures=resolved, density_cap=5000, diag=diag)
     assert len(idx) > 0
     # the cap-bound case legitimately emits a "shown coarser than print detail"
-    # note (frequency clamped to what the mesh can carry) — only a MANIFOLD
+    # note (frequency clamped to what the mesh can carry), only a MANIFOLD
     # diagnostic would mean the mesh itself is broken.
     bad_diags = [d for d in diag if d.get("kind") == "texture" and "non-manifold" in d.get("reason", "")]
     assert not bad_diags, f"dense-but-valid subdivision should stay manifold, got {bad_diags}"
@@ -182,7 +182,7 @@ def test_cache_key_changes_with_texture_params():
     server._MESH_CACHE.pop(b["id"], None)
 
     b["_textures"] = None
-    # a small document keeps full quality — see server._viewport_profile
+    # a small document keeps full quality, see server._viewport_profile
     profile = server._viewport_profile(1)
     ent1 = server._body_payload(b, 0.1, profile)
     b["_textures"] = [texture.validate_texture_spec(
@@ -217,7 +217,7 @@ def test_height_field_kinds_in_zero_one_and_angle_rotates():
     assert hn.min() >= -1e-9 and hn.max() <= 1 + 1e-9
 
     # rotate(u,v,90) == (-v,u): a 90-degree wave pattern must equal the unrotated
-    # pattern evaluated with u <- -v — an exact algebraic transpose check.
+    # pattern evaluated with u <- -v, an exact algebraic transpose check.
     spec0 = {"scale": 2.0, "angle": 0.0, "sharpness": 0.5}
     spec90 = {"scale": 2.0, "angle": 90.0, "sharpness": 0.5}
     lhs = texture.height_field("waves", spec90, U, V)
@@ -281,7 +281,7 @@ def test_missing_image_is_feature_error_not_crash():
 def test_texture_targets_bound_body_not_active_in_multibody():
     # Regression: with >1 body, a texture that omits `body` falls back to the
     # ACTIVE (last-created) body and resolves its face selector against the wrong
-    # shape — so it lands on a random face of the wrong body (field report). The
+    # shape, so it lands on a random face of the wrong body (field report). The
     # frontend now binds `body`; the sidecar must honor it over require_active.
     feats = _box(1, 20, 20, 5, x=0)[1] + _box(2, 20, 20, 5, x=100)[1]
     sel = {"kind": "face", "by": "nearest", "point": [0, 0, 5]}  # aimed at body1's top
@@ -314,7 +314,7 @@ def test_faceted_profile_is_piecewise_planar():
     """The hard-surface claim, measured. A faceted profile puts ALL its curvature
     at the creases and none in between (median 2nd difference exactly 0); the
     round profile spreads curvature over the whole cell, which is what read as
-    soft bumps. knurl's old field was tri*tri — a product of two linear ramps is
+    soft bumps. knurl's old field was tri*tri, a product of two linear ramps is
     a BILINEAR SADDLE, so every cell curved."""
     x = np.linspace(0.0, 6.0, 301)
     y = np.zeros_like(x)
@@ -332,12 +332,12 @@ def test_faceted_profile_is_piecewise_planar():
 
 def test_knurl_facet_is_min_of_grooves_not_bilinear_product():
     """Two crossed V-grooves cut a MIN, not a product. At the centre of a cell
-    both grooves are at full height, so min() is 1 while the product is also 1 —
+    both grooves are at full height, so min() is 1 while the product is also 1,
     the two disagree off-axis, where the product's saddle sags."""
     s = 2.0
     # A 2D grid, not a line: along v=0 both grooves collapse to the same value
     # and min() == product trivially. The two only separate where BOTH grooves
-    # are partway down — e.g. (0.25s, 0.25s): min=0.5 but product=0.25.
+    # are partway down, e.g. (0.25s, 0.25s): min=0.5 but product=0.25.
     g = np.linspace(0.05, 0.95, 11) * s
     U, V = np.meshgrid(g, g)
     u, v = U.ravel(), V.ravel()
@@ -348,7 +348,7 @@ def test_knurl_facet_is_min_of_grooves_not_bilinear_product():
     expect = np.minimum(texture_height._tri_wave(v1, s), texture_height._tri_wave(v2, s))
     assert np.allclose(facet, expect), f"facet knurl should be min-of-grooves, got {facet}"
     assert not np.allclose(facet, product), "facet and round knurl must differ"
-    # the product SAGS below the true groove surface everywhere they differ —
+    # the product SAGS below the true groove surface everywhere they differ,
     # that sag is the bilinear saddle that made this read as soft bumps
     assert np.all(product <= facet + 1e-12), "the bilinear product should never exceed min-of-grooves"
     assert (facet - product).max() > 0.2, "the saddle sag should be substantial"
@@ -381,7 +381,7 @@ def test_hard_edge_keeps_boundary_pinned_but_full_depth_inside():
     """The crack-free invariant under the new inset=0 default. Boundary vertices
     MUST stay at exactly zero displacement (a neighbouring untextured face meets
     them, and any drift is a visible crack / broken export) while the first
-    interior sample already carries full depth — that is the machined cut-off
+    interior sample already carries full depth, that is the machined cut-off
     look, as opposed to the old 1mm fade."""
     n = 5
     pts_arr = np.array([(i, j, 0.0) for j in range(n) for i in range(n)], dtype=float)
@@ -401,7 +401,7 @@ def test_hard_edge_keeps_boundary_pinned_but_full_depth_inside():
 def test_faceted_display_splits_creases_but_export_stays_indexed():
     """Hard shading needs unshared vertices (one vertex can carry one normal),
     but de-indexing the EXPORT mesh would leave a 3MF whose shared edges no
-    longer share a vertex index — watertight, yet flagged non-manifold by some
+    longer share a vertex index, watertight, yet flagged non-manifold by some
     slicers. Display splits; export must not."""
     from tessellate import tessellate
 
@@ -451,7 +451,7 @@ def test_every_kind_meshes_cleanly_at_the_faceted_default():
 
 def test_boundary_ring_is_dense_enough_to_carry_the_pattern():
     """The edge-band bug. _aligned_grid_triangulation used to keep the boundary
-    ring VERBATIM from OCCT's base triangulation — on a real filleted part that
+    ring VERBATIM from OCCT's base triangulation, on a real filleted part that
     was 20 vertices with an 18mm longest edge against a 2mm pattern period, so
     the strip along the rim had no vertices to undulate with and came out flat
     and smeared however fine the interior got.
@@ -492,12 +492,12 @@ def test_boundary_ring_is_dense_enough_to_carry_the_pattern():
     too_long = [x for x in seg if x > scale / 2.0]
     assert not too_long, (
         f"{len(too_long)} boundary edges exceed half a period (longest {max(seg):.2f}mm "
-        f"vs period {scale}mm) — the rim cannot carry the pattern"
+        f"vs period {scale}mm), the rim cannot carry the pattern"
     )
     # crack-free: the densified ring must stay ON the face, not cut corners
     ring = np.unique(np.asarray(bnd, dtype=np.int64).ravel())
     worst = max(face.distance_to(gp.gp_Pnt(*pts[i])) for i in ring)
-    assert worst < 1e-9, f"ring vertex drifted {worst:.2e}mm off the face — that is a crack"
+    assert worst < 1e-9, f"ring vertex drifted {worst:.2e}mm off the face, that is a crack"
     print(PASS, f"boundary ring subdivided to {max(seg):.2f}mm (period {scale}), still exactly on the face")
 
 

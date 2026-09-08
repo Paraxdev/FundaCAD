@@ -2,7 +2,7 @@
 // Bottom timeline (MCAD-style): a compact strip of icon chips in build order,
 // plus a draggable rollback marker, transport buttons (roll to start / step /
 // roll to end) and an error badge that jumps to failing features. Number, name
-// and error text live in the tooltip — chips stay ~28px so a 100+-feature
+// and error text live in the tooltip, chips stay ~28px so a 100+-feature
 // document spans screens, not screen-miles.
 
 import { computed, nextTick, onMounted, onUnmounted, ref, useTemplateRef, watch } from "vue";
@@ -39,7 +39,7 @@ const features = useDocValue((doc) =>
 );
 
 // A feature's values are edited here, under the entry that names the operation
-// they belong to — there is no docked panel for them any more. That has to hold
+// they belong to, there is no docked panel for them any more. That has to hold
 // in BOTH arrangements, which means two presentations of the same rows: in the
 // flow, indented under the chip, when the history is a column with width to
 // spare; floating above the strip when it is 52px of chrome along the bottom.
@@ -74,7 +74,7 @@ async function measureProps() {
   const id = selection.featureId;
   const strip = shell.value?.getBoundingClientRect();
   // No selection, no strip to rest on, or the feature is gone (deleted, or
-  // rolled out of the built set) — there is nothing to show and a panel left at
+  // rolled out of the built set), there is nothing to show and a panel left at
   // the last coordinates would be showing the last feature's values.
   if (inFlowProps.value || !id || !strip || !features.value.some((f) => f.id === id)) {
     floatAt.value = null;
@@ -171,7 +171,7 @@ const busyText = computed(() =>
 );
 
 // Cancelling is not instant (the sidecar kills the worker and spawns a fresh
-// one), so the button disables itself in flight — a second press would target
+// one), so the button disables itself in flight, a second press would target
 // an op that is already gone.
 const cancelling = ref(false);
 async function cancelBusy() {
@@ -192,7 +192,7 @@ const showEmpty = computed(() => features.value.length === 0 && !building.value 
 // The whole feature, not just its type: a boolean is named after the operation
 // it performs (ui/featureMeta.ts), so a chip that read only the type would give
 // three different commands one word. Unknown types still render rather than
-// crash — a document from a newer version would otherwise throw mid-draw and
+// crash, a document from a newer version would otherwise throw mid-draw and
 // make File→Open silently do nothing.
 function metaFor(f: { type: string; operation?: unknown }) {
   return featureMeta(f);
@@ -204,7 +204,7 @@ function chipTitle(f: { id: string; type: string }, i: number) {
     `${i + 1} · ${metaFor(f).label}` +
     // A plain-text word, not a warning sign: this is a `title` attribute, and
     // the browser draws it in the OS tooltip font where a symbol lands as
-    // whatever fallback glyph — or tofu — that font happens to carry.
+    // whatever fallback glyph, or tofu, that font happens to carry.
     (err ? `\nFailed: ${err}` : "") +
     "\ndouble-click to edit · right-click for more"
   );
@@ -212,7 +212,7 @@ function chipTitle(f: { id: string; type: string }, i: number) {
 
 // --- scrolling -----------------------------------------------------------
 // The scroller is a persistent element and Vue patches the chips in place, so
-// scroll position survives a re-render on its own — the old code had to save
+// scroll position survives a re-render on its own, the old code had to save
 // and restore it around `track.innerHTML = ""`. Only the follow-on-append
 // behaviour is left to do explicitly.
 watch(
@@ -224,7 +224,7 @@ watch(
   },
 );
 
-// The wheel scrubs the strip horizontally — vertical wheels are useless here.
+// The wheel scrubs the strip horizontally, vertical wheels are useless here.
 // Non-passive: preventDefault is the point.
 function onWheel(e: WheelEvent) {
   const el = scroller.value;
@@ -302,8 +302,8 @@ function onMarkerDown(e: PointerEvent) {
 }
 
 /** Which inter-feature gap (0..n) the pointer falls into. The measuring is here;
- *  the arithmetic — including which axis the track runs along, since the history
- *  strip can be moved to the right-hand side — is in ui/trackGaps.ts. */
+ *  the arithmetic, including which axis the track runs along, since the history
+ *  strip can be moved to the right-hand side, is in ui/trackGaps.ts. */
 function gapIndexAt(ev: PointerEvent): number {
   const nodes = [...(track.value?.querySelectorAll<HTMLElement>(".timeline-node:not(.building)") ?? [])];
   return gapIndexIn(nodes.map((n) => n.getBoundingClientRect()), ev.clientX, ev.clientY);
@@ -313,7 +313,7 @@ function gapIndexAt(ev: PointerEvent): number {
 function openMenu(e: MouseEvent, id: string, i: number) {
   e.preventDefault();
   // "Re-pick" only appears when THIS feature's last build reported an ambiguous
-  // saved reference — offering it on a healthy feature would invite users to
+  // saved reference, offering it on a healthy feature would invite users to
   // overwrite references that are working.
   const repick = timeline.canRepick(id)
     ? [{ label: "Re-pick face…", onClick: () => timeline.repick(id) }]
@@ -413,7 +413,7 @@ function openMenu(e: MouseEvent, id: string, i: number) {
          That mattered structurally before (a button detached between mousedown
          and mouseup fires no click at all, so one press in eight was swallowed
          by the once-a-second re-render); Vue patches in place, so the hazard is
-         gone — but keeping them out here also keeps focus and the CSS. -->
+         gone, but keeping them out here also keeps focus and the CSS. -->
     <div class="timeline-busy" :class="{ hidden: !showCancel }">{{ busyText }}</div>
     <button
       class="timeline-cancel"

@@ -2,13 +2,13 @@
 //! references by content hash.
 //!
 //! Geometry used to live inside the document as base64 BREP. On the reference
-//! 356 MiB STEP assembly that is 541.8 MiB of JSON — 4.2x over the websocket frame
+//! 356 MiB STEP assembly that is 541.8 MiB of JSON, 4.2x over the websocket frame
 //! cap. Binary BinTools is 224.1 MiB, deflates to 83.5 MiB, and reloads in 1.9 s
 //! against 189.0 s to re-import from STEP.
 //!
 //! RUST OWNS IT, not the sidecar: sidecar.rs deliberately does not auto-respawn, so
 //! a save routed through it would leave the user unable to save at all with unsaved
-//! work in front of them. Saving needs no geometry — the document comes from the
+//! work in front of them. Saving needs no geometry, the document comes from the
 //! frontend and the blobs are already bytes on disk. Nothing here interprets a
 //! shape, so "Rust never touches geometry" still holds.
 //!
@@ -22,10 +22,10 @@
 //!    structurally impossible rather than filtered.
 //!
 //! ```text
-//! manifest.json        STORED, first — readable without a decompressor
-//! document.json        DEFLATE — the CadDocument, carrying its own `version`
-//! geom/<hash>.bbrep    DEFLATE — binary OCCT BinTools; the NAME is the hash
-//! mesh/<key>.bin       DEFLATE(1) — packed f32/u32; optional, skippable
+//! manifest.json        STORED, first, readable without a decompressor
+//! document.json        DEFLATE, the CadDocument, carrying its own `version`
+//! geom/<hash>.bbrep    DEFLATE, binary OCCT BinTools; the NAME is the hash
+//! mesh/<key>.bin       DEFLATE(1), packed f32/u32; optional, skippable
 //! ```
 
 use std::collections::BTreeMap;
@@ -94,7 +94,7 @@ pub struct Manifest {
 /// drops any blob with refcount 0 and `purge()` is wired to the Compute All
 /// button, so a container blob there would be deleted by a button press.
 ///
-/// This directory is the SEAM between the two languages — Rust writes it when
+/// This directory is the SEAM between the two languages, Rust writes it when
 /// opening a container, the sidecar writes it at import, both read it. Safe with no
 /// locking because the path is a pure function of the content hash: two writers
 /// racing on the same hash write byte-identical data, and each publishes by rename.
@@ -113,7 +113,7 @@ pub fn blob_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 }
 
 /// Packed viewport meshes carried alongside the blobs. Purely a reopen-speed
-/// cache — losing this costs re-tessellation time, never data — but it lives
+/// cache, losing this costs re-tessellation time, never data, but it lives
 /// next to the blobs rather than in geomstore so a container can seed it.
 pub fn mesh_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     use tauri::Manager;
@@ -129,7 +129,7 @@ pub fn mesh_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 /// The content hash of a blob. See rule 1 in the module docs: call this once, on
 /// the bytes as they are first produced.
 ///
-/// Not called on any production path — Rust only ever VERIFIES a hash, and does
+/// Not called on any production path, Rust only ever VERIFIES a hash, and does
 /// that while streaming, so it hashes incrementally rather than over a slice.
 /// This is kept as the executable statement of which digest the format uses, and
 /// is what `hash_matches_python` pins against the sidecar's copy.
@@ -170,7 +170,7 @@ fn fsync_dir(dir: &Path) {
     }
 }
 
-/// A temp path that cannot collide, in the SAME directory as the target — a temp
+/// A temp path that cannot collide, in the SAME directory as the target, a temp
 /// dir on another filesystem would make the rename fail with EXDEV.
 fn temp_sibling(target: &Path) -> PathBuf {
     let mut n = target.as_os_str().to_os_string();
@@ -200,7 +200,7 @@ fn uuid_hex() -> String {
 /// fully valid.
 ///
 /// The archive is built at a sibling temp path, fsynced, then renamed over the
-/// target. A crash leaves either the old file or the new one, never a torn one —
+/// target. A crash leaves either the old file or the new one, never a torn one,
 /// which matters because this file IS the user's geometry.
 pub fn write_container(
     dest: &Path,
@@ -433,7 +433,7 @@ fn extract_verified(
         out.sync_all().map_err(|e| e.to_string())?;
         if let Some(want) = want_hash {
             if hex(&h.finalize()) != want {
-                return Err("This document's geometry does not match its manifest — the file \
+                return Err("This document's geometry does not match its manifest, the file \
                             is damaged or was modified. Opening it was refused rather than \
                             showing you the wrong shape."
                     .to_string());
@@ -454,7 +454,7 @@ fn extract_verified(
 }
 
 // ---------------------------------------------------------------------------
-// Tauri commands. Privileged IPC, the same pattern as `recovery_write` — the
+// Tauri commands. Privileged IPC, the same pattern as `recovery_write`, the
 // webview holds only `fs:allow-read-text-file` / `fs:allow-write-text-file`, so
 // it could not read or write a ZIP itself even if we wanted it to. Widening that
 // to the binary APIs would reopen the post-XSS persistence channel the security
@@ -489,7 +489,7 @@ pub async fn container_save(
     }
     // Refuse rather than write a document whose geometry is not in it. The
     // atomic publish means the user still has their previous file, and the
-    // in-memory document is untouched — both strictly better than a saved file
+    // in-memory document is untouched, both strictly better than a saved file
     // that opens with missing bodies somewhere else.
     if !missing.is_empty() {
         return Err(format!(

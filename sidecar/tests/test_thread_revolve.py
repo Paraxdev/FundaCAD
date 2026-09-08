@@ -269,7 +269,7 @@ def test_turns_that_meet_exactly_are_given_a_hair_of_clearance():
     thing that was broken: the thread is subtracted from a cylinder that swallows
     it whole, and what comes off is the thread.
 
-    Two controls. The clearance is BOUNDED — the section may lose the hair and
+    Two controls. The clearance is BOUNDED, the section may lose the hair and
     nothing more, which is what fails if the trim is ever applied twice or in the
     wrong direction. And the refusal above still stands: a section genuinely
     taller than its climb is refused, not quietly shrunk to fit.

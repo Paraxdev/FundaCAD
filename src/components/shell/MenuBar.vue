@@ -9,7 +9,7 @@ const root = useTemplateRef<HTMLElement>("root");
 const openIndex = ref<number | null>(null);
 
 // `disabled` and `checked` are THUNKS that must be re-evaluated every time a
-// menu opens — that is how "Undo" greys out without anything pushing state at
+// menu opens, that is how "Undo" greys out without anything pushing state at
 // it. Bumping this on open re-runs the computed below; it is the reactive
 // equivalent of the old code walking the popup's DOM in open() and poking
 // `toggleAttribute("disabled")` on each row.
@@ -37,7 +37,7 @@ const rendered = computed<RenderedItem[][]>(() => {
 // label prefix padded with four spaces to keep both states the same width,
 // which put a glyph inside the string and pinned the alignment to whatever the
 // font did with a space. A gutter the whole menu shares does the same job
-// honestly — and it has to be the whole menu, or a toggle would shift sideways
+// honestly, and it has to be the whole menu, or a toggle would shift sideways
 // against its neighbours the moment it turns on.
 const hasChecks = computed(() => props.menus.map((m) => m.items.some((it) => it.checked)));
 

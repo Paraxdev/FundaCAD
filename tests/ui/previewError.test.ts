@@ -1,8 +1,8 @@
 // The channel that carries a preview's refusal from the build to the box the
 // user is typing in.
 //
-// rebuildBridge deliberately does NOT toast a preview's failures — a drag
-// through an unbuildable range would emit one a frame — so before this existed
+// rebuildBridge deliberately does NOT toast a preview's failures, a drag
+// through an unbuildable range would emit one a frame, so before this existed
 // the answer went nowhere the user was looking. The behaviour worth pinning is
 // the de-duplication and the immediate replay: a drag settles on the same
 // refusal many times, and a box that opens mid-failure has to show it without

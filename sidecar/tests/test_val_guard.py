@@ -1,7 +1,7 @@
 
 import _bootstrap  # noqa: F401  (puts sidecar/ on sys.path)
 # The val() guard: an unresolved string in a numeric field must become a
-# per-feature build error (red chip), never leak into OCCT — while legacy
+# per-feature build error (red chip), never leak into OCCT, while legacy
 # bare parameter NAMES keep resolving. Run: .venv/bin/python test_val_guard.py
 
 from builder import rebuild

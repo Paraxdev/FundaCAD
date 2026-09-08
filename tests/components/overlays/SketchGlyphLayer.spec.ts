@@ -104,7 +104,7 @@ describe("SketchGlyphLayer", () => {
     badges()[0]!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     expect(onDelete).not.toHaveBeenCalled();
 
-    // and only for THAT click — the suppression is consumed, not sticky
+    // and only for THAT click, the suppression is consumed, not sticky
     g.onOverlapPick = () => false;
     badges()[0]!.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
     badges()[0]!.dispatchEvent(new MouseEvent("click", { bubbles: true }));

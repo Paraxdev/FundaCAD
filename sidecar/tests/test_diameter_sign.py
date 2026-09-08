@@ -1,7 +1,7 @@
 """The sign a cylindrical Press/Pull needs, pinned on the kernel side.
 
 Dragging a round face now resizes it instead of translating it, and the drag
-handle points AWAY FROM THE AXIS on a shaft and on a hole alike — pulling
+handle points AWAY FROM THE AXIS on a shaft and on a hole alike, pulling
 outward means "bigger" either way, because that is the only reading a user does
 not have to think about.
 
@@ -13,7 +13,7 @@ shaft but AT the axis on a bore. So the frontend converts:
 
 That conversion is a sign, and a sign that is wrong does not raise anything: the
 hole you dragged open closes instead. These tests are the other half of the
-seam — they assert what the kernel actually does with each sign, so the two
+seam, they assert what the kernel actually does with each sign, so the two
 halves cannot drift apart silently.
 
 Run:  python test_diameter_sign.py
@@ -73,7 +73,7 @@ def test_the_two_signs_really_are_opposites():
     s = _bore(hole=5)
     tighter = _press_pull(s, _cyl_face(s, 5), 1.0)
     assert abs(float(_cyl_face(tighter, 4).radius) - 4) < 1e-6, (
-        "+1 on a bore should SHRINK it to r4 — if this fails the frontend's sign "
+        "+1 on a bore should SHRINK it to r4, if this fails the frontend's sign "
         "flip is unnecessary and radialDrag.ts is wrong"
     )
     print("bore +1 -> r4 OK (the flip is required)")

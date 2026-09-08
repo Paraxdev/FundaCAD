@@ -31,7 +31,7 @@ export function createDatumPlanes(e: Engine): Pick<Engine, "datumPlaneDef" | "sy
   };
 
   /** A datum plane's world placement (source spec + offset along its normal) as a
-   *  PlaneDef — lets "Sketch on plane" / "Offset plane" work straight off the quad. */
+   *  PlaneDef, lets "Sketch on plane" / "Offset plane" work straight off the quad. */
   const datumPlaneDef = (f: Extract<Feature, { type: "datumPlane" }>) => {
     const sp = sourcePlane(f);
     const off = f.offset ?? 0;

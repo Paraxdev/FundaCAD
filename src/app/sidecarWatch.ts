@@ -4,10 +4,10 @@ import { toast } from "../ui/toast";
 /** Rust's sidecar supervisor (src-tauri/src/sidecar.rs) emits this if the Python
  *  geometry process crashes after launch. There's no auto-respawn (the per-launch
  *  auth token would need to rotate live), so tell the user before they keep
- *  working on top of a dead backend. Guarded to Tauri only — plain `vite` dev
+ *  working on top of a dead backend. Guarded to Tauri only, plain `vite` dev
  *  (no Tauri host) has nothing to emit this and listen() would just reject.
  *
- *  The payload names HOW it died ("killed by SIGKILL (9) — out of memory?"), and
+ *  The payload names HOW it died ("killed by SIGKILL (9), out of memory?"), and
  *  it is shown rather than swallowed: field reports of this arrive as screenshots
  *  of the toast, so the message itself has to carry enough to triage from. The
  *  same line is in sidecar.log, which a bug report attaches.

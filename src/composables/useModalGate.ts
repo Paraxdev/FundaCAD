@@ -9,7 +9,7 @@ import { popModal, pushModal } from "../ui/choice";
  *  never returns to zero, toolBusy() stays true forever, and every tool in the app
  *  is silently dead with no error message.
  *
- *  Mounting is the one path that cannot be missed — the dialog components are
+ *  Mounting is the one path that cannot be missed, the dialog components are
  *  rendered with v-if, so mount == open and unmount == closed, once each, whatever
  *  route the user took.
  *

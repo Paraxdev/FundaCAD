@@ -25,7 +25,7 @@ THREE.Mesh.prototype.raycast = acceleratedRaycast;
 /** Build the BVH for a body mesh's geometry. Call once per mesh, at build time.
  *
  *  `indirect: true` IS LOAD-BEARING, not a tuning knob. The default build
- *  REORDERS the geometry's index buffer to group triangles spatially — and this
+ *  REORDERS the geometry's index buffer to group triangles spatially, and this
  *  whole app keys its face model on triangle index: `faceIds[t]`, the
  *  `faceTriangles` map, and the highlighter's per-face vertex painting. With the
  *  default build a cylinder's three faces each ended up owning a scrambled mix
@@ -35,14 +35,14 @@ THREE.Mesh.prototype.raycast = acceleratedRaycast;
  *  index alone.
  *
  *  Safe to call twice: three-mesh-bvh replaces an existing tree. Callers should
- *  normally use scheduleRaycastIndex (below) rather than this directly — the
+ *  normally use scheduleRaycastIndex (below) rather than this directly, the
  *  build is deferred past the first paint, not skipped. */
 export function buildRaycastIndex(geo: THREE.BufferGeometry) {
   // A geometry with no index has nothing to accelerate against, and
   // computeBoundsTree would throw rather than no-op.
   if (!geo.getIndex()) return;
   // `targetLeafSize` was `maxLeafTris` until three-mesh-bvh deprecated the name.
-  // The old name still works, but the shim console.warn()s on EVERY build — one
+  // The old name still works, but the shim console.warn()s on EVERY build, one
   // line per body, so ~3,000 of them on the reference assembly, and enough
   // console traffic in the test run to widen a vitest worker-RPC teardown race.
   // The library maps one to the other verbatim; this is a rename, not a retune.
@@ -60,7 +60,7 @@ export function disposeRaycastIndex(geo: THREE.BufferGeometry) {
 //
 // Building every body's BVH inline during setModel measured ~0.7 s of the 2.26 s
 // of frozen main thread after a large reply lands (3,071 bodies). A fully LAZY
-// build is still the wrong answer — it just moves the stall into the user's
+// build is still the wrong answer, it just moves the stall into the user's
 // first mouse move, which is worse than a stall during a load they are already
 // waiting through.
 //
@@ -71,7 +71,7 @@ export function disposeRaycastIndex(geo: THREE.BufferGeometry) {
 //
 // `flushRaycastIndex` closes the only hole: a pick that arrives before the queue
 // drains. Without it three-mesh-bvh would silently fall back to the stock
-// brute-force raycast — correct, but a scan of millions of triangles. The picker
+// brute-force raycast, correct, but a scan of millions of triangles. The picker
 // calls it first, and it is free once the queue is empty.
 const pending = new Set<THREE.BufferGeometry>();
 let scheduled = false;
@@ -108,7 +108,7 @@ export function scheduleRaycastIndex(geo: THREE.BufferGeometry) {
   pending.add(geo);
   if (scheduled) return;
   // One rAF first, so the browser gets to paint the model before we spend any
-  // main thread on trees. Headless callers (vitest) have no rAF — fall straight
+  // main thread on trees. Headless callers (vitest) have no rAF, fall straight
   // through to the idle/macrotask path rather than throwing.
   if (typeof globalThis.requestAnimationFrame !== "function") {
     schedule();

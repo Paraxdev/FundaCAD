@@ -2,7 +2,7 @@
 
 A blend option named "include tangent edges" was about to be built: pick one
 edge of a rounded outline and have the fillet follow the whole smooth run. It
-turns out OCCT does that on its own — filleting ONE edge of an eight-edge
+turns out OCCT does that on its own, filleting ONE edge of an eight-edge
 tangent rim gives byte-identical geometry to filleting all eight, while a sharp
 rim does not propagate at all.
 

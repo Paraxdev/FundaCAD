@@ -1,14 +1,14 @@
 """B-rep -> render payload: mesh (positions + indices + per-triangle faceIds),
 edge polylines, and bounding box.
 
-Meshing runs through OpenCASCADE's **BRepMesh in parallel** — one call meshes the
+Meshing runs through OpenCASCADE's **BRepMesh in parallel**, one call meshes the
 whole solid's faces across the OCCT thread pool in C++ (no Python GIL, scales to
 every core; see occt_smp.py). We then read each face's triangulation back and tag
 every triangle with its face index, which gives the frontend clean `faceIds` (one
 clicked triangle -> its whole CAD face) and a natural seam for per-face normals.
 
 (The previous implementation called build123d's `face.tessellate()` in a serial
-Python loop — single-threaded and GIL-bound. On a 6-sphere union @0.01mm that was
+Python loop, single-threaded and GIL-bound. On a 6-sphere union @0.01mm that was
 ~670ms; the parallel path below is ~85ms on a 5900X.)
 """
 
@@ -48,21 +48,21 @@ def tessellate(shape, tolerance=0.1, angular_tolerance=0.5, textures=None, densi
                   `relative` is True it is a DIMENSIONLESS fraction of each
                   edge/face's own size (see below).
     relative    : OCCT's BRepMesh `isRelative` flag. False (absolute mm) is what
-                  EXPORT must use — a printed part needs a deterministic chord
+                  EXPORT must use, a printed part needs a deterministic chord
                   error in mm regardless of how big the part is. True is for the
                   interactive viewport: OCCT then sizes the deflection per
                   feature, so a 1mm fillet on a 60mm ring gets a proportionally
                   finer mesh than the ring's big flat faces, which is exactly
                   where faceting is visible. Callers must pass a tolerance in the
-                  matching UNITS — see server._effective_tolerance.
+                  matching UNITS, see server._effective_tolerance.
     textures    : optional [(spec, [Face,...]), ...] from
-                  texture.resolve_body_textures() — targeted faces get
+                  texture.resolve_body_textures(), targeted faces get
                   texture.displace_face()'s denser, displaced chunk instead of
                   the plain one below (same faceId tags, so faceTriangles
                   grouping needs no changes for a subdivided textured face).
     density_cap : per-face triangle budget passed through to displace_face
                   (None = texture.py's own export-tier safety cap).
-    normals_out : optional list — receives (vertex_base, flat_normals) chunks
+    normals_out : optional list, receives (vertex_base, flat_normals) chunks
                   for each TEXTURED face's analytic displaced normals, so the
                   viewport payload can shade coarse displacement smoothly
                   (untextured faces are absent: the caller derives theirs from
@@ -75,7 +75,7 @@ def tessellate(shape, tolerance=0.1, angular_tolerance=0.5, textures=None, densi
     # asking for 0.02 after something asked for 0.001 silently returns the 0.001
     # mesh: measured on a sphere, 201,198 triangles when 10,108 were requested.
     #
-    # That makes a tolerance BACKOFF a no-op by default — it would return the
+    # That makes a tolerance BACKOFF a no-op by default, it would return the
     # mesh that already blew the budget, and look like it had worked. Dropping
     # the stored triangulation first is the only way to get the coarser mesh.
     # Off by default because it forces a re-mesh: only callers that are
@@ -102,7 +102,7 @@ def tessellate(shape, tolerance=0.1, angular_tolerance=0.5, textures=None, densi
         loc = TopLoc_Location()
         tri = BRep_Tool.Triangulation_s(face.wrapped, loc)
         if tri is None:
-            continue  # degenerate face with no triangulation — skip it
+            continue  # degenerate face with no triangulation, skip it
 
         if face_specs:
             from builder import _face_fp
@@ -114,7 +114,7 @@ def tessellate(shape, tolerance=0.1, angular_tolerance=0.5, textures=None, densi
                         face, tri, loc, loc.IsIdentity(), spec, density_cap,
                         diag=diag, feature_id=spec.get("feature_id"),
                         # normals_out is the viewport payload's channel, so it is
-                        # also the signal that this is the DISPLAY tessellation —
+                        # also the signal that this is the DISPLAY tessellation,
                         # the only place crease-splitting is safe (see displace_face)
                         split_creases=normals_out is not None,
                     )
@@ -133,8 +133,8 @@ def tessellate(shape, tolerance=0.1, angular_tolerance=0.5, textures=None, densi
                     # here is indistinguishable from a texture that worked: the
                     # feature is in the timeline, the timeline is green, the
                     # build reports no error, and the face is simply flat. There
-                    # is then nothing anywhere — not on screen, not in the
-                    # diagnostics, not in the log — to tell the difference
+                    # is then nothing anywhere, not on screen, not in the
+                    # diagnostics, not in the log, to tell the difference
                     # between "this pattern does nothing on this face" and "the
                     # displacement threw". A lossy diagnostic is what every other
                     # best-effort path in the builder already emits, and it is
@@ -151,7 +151,7 @@ def tessellate(shape, tolerance=0.1, angular_tolerance=0.5, textures=None, densi
 
         trsf = loc.Transformation()  # face-local -> world placement
         base = len(positions) // 3
-        # batched readback: bind lookups once and extend in one call per face —
+        # batched readback: bind lookups once and extend in one call per face,
         # the per-triangle Python cost was ~60 µs/tri, dominated by attribute
         # dispatch, and this loop runs for every freshly (re)built body
         node = tri.Node
@@ -212,7 +212,7 @@ def tessellate_bodies(bodies, tolerance=0.1, density_cap=None, diag=None):
         n_faces = (max(fids) + 1) if fids else 0
         face_ids.extend(fid + face_base for fid in fids)
         # per-face owning feature id (indexed by local face id) so a picked face maps
-        # back to the feature that created it — for click-a-face-then-delete.
+        # back to the feature that created it, for click-a-face-then-delete.
         owners_map = b.get("owners") or {}
         face_owners = [owners_map.get(_face_fp(face)) for face in sh.faces()]
         entry = {"id": b["id"], "name": b["name"], "faceStart": face_base,
@@ -229,7 +229,7 @@ def tessellate_bodies(bodies, tolerance=0.1, density_cap=None, diag=None):
 
 
 def vertex_normals(positions, indices):
-    """Area-weighted per-vertex normals for a whole mesh (flat lists in/out) —
+    """Area-weighted per-vertex normals for a whole mesh (flat lists in/out),
     the same accumulation three.js's computeVertexNormals does, run server-side
     so a textured body's payload can carry normals for ALL its vertices: plain
     faces get these, textured chunks are overwritten with texture.py's analytic
@@ -278,7 +278,7 @@ def _planar_face_normals(sh):
 
 
 # Chord-deviation target for edge polylines, in MILLIMETRES, plus clamps. Edges are
-# what the user reads as "is this circle round?" and cost a few floats each — far
+# what the user reads as "is this circle round?" and cost a few floats each, far
 # cheaper per unit of perceived quality than triangles. The old fixed 24 segments
 # per edge left a 60mm circle 0.257mm off true.
 #
@@ -329,11 +329,11 @@ def _sample_by_param(e, n):
     """Fallback sampler: walk the edge by its raw CURVE PARAMETER (u0..u1) via the
     OCCT adaptor, instead of build123d's `e @ t` (which parameterises by ARC LENGTH
     through GCPnts_AbscissaPoint and raises Standard_ConstructionError on degenerate
-    curves — e.g. a sphere's seam meridian, or a cone/revolve pole edge). Parameter
+    curves, e.g. a sphere's seam meridian, or a cone/revolve pole edge). Parameter
     sampling never computes arc length, so it can't hit that failure. Returns None
     when the edge has no usable 3-D curve (a true point-edge at a pole).
 
-    Also used by builder.py's projected-curve fallback — keep the signature."""
+    Also used by builder.py's projected-curve fallback, keep the signature."""
     w = getattr(e, "wrapped", None)
     if w is None:
         return None
@@ -346,7 +346,7 @@ def _sample_by_param(e, n):
 def _sample_by_deflection(w, deflection, min_seg, max_seg):
     """Deviation-bounded polyline for one edge: GCPnts_QuasiUniformDeflection over
     a BRepAdaptor_Curve subdivides until the chord is within `deflection` mm of the
-    true curve, whatever the curve type — so a 60mm circle and a 1mm fillet arc
+    true curve, whatever the curve type, so a 60mm circle and a 1mm fillet arc
     each get exactly the segment count they need instead of a shared fixed guess.
 
     Returns None when the edge has no usable 3-D curve (a degenerate pole edge) or
@@ -369,7 +369,7 @@ def _sample_by_deflection(w, deflection, min_seg, max_seg):
         if n - 1 > max_seg:
             # decimate evenly over the computed points (both ends kept). The
             # result is coarser than requested, which is the point of the cap.
-            # max_seg is even, so this stays an odd count — see below.
+            # max_seg is even, so this stays an odd count, see below.
             picks = [1 + round(i * (n - 1) / max_seg) for i in range(max_seg + 1)]
         else:
             picks = range(1, n + 1)
@@ -384,7 +384,7 @@ def _sample_by_deflection(w, deflection, min_seg, max_seg):
             # polyline (viewport/edgeMatch.ts polylineMid = pts[floor(len/2)]),
             # and that point is stored in saved documents as a `nearest` edge
             # selector. With an odd point count the index-middle is the exact
-            # parametric midpoint — which is what the old fixed-25-point sampler
+            # parametric midpoint, which is what the old fixed-25-point sampler
             # always produced, so saved selectors keep matching. With an EVEN
             # count it lands half a chord off (measured up to 0.77mm on a
             # 30mm-radius arc, past the frontend's 0.5mm match tolerance).
@@ -401,7 +401,7 @@ def _sample_by_deflection(w, deflection, min_seg, max_seg):
 
 def _line_endpoints(w):
     """The two endpoints of a straight edge, or None if it isn't a line. A line is
-    exactly its endpoints, so sampling it any finer is pure waste — and glyph
+    exactly its endpoints, so sampling it any finer is pure waste, and glyph
     strokes (text booleans) are overwhelmingly straight, so skipping them roughly
     halves wireframe extraction on engraved/embossed text."""
     if w is None:
@@ -434,7 +434,7 @@ def _edge_points(e, deflection=_EDGE_DEFLECTION, min_seg=_EDGE_MIN_SEG,
     if pts is None:
         pts = _sample_by_deflection(w, deflection, min_seg, max_seg)
     if pts is None:
-        # no usable deviation-bounded sampling (degenerate seam/pole edge) — walk
+        # no usable deviation-bounded sampling (degenerate seam/pole edge), walk
         # the raw parameter so a valid body still renders its wireframe instead
         # of the whole tessellation reply erroring out.
         pts = _sample_by_param(e, _EDGE_FALLBACK_SEG)
@@ -449,13 +449,13 @@ def _edge_points(e, deflection=_EDGE_DEFLECTION, min_seg=_EDGE_MIN_SEG,
 
 def edge_polylines(shape, deflection=_EDGE_DEFLECTION):
     """Sample every edge of one shape as a deviation-bounded polyline (see
-    _edge_points). Untagged/unfiltered — `edge_polylines_by_body` is what the
+    _edge_points). Untagged/unfiltered, `edge_polylines_by_body` is what the
     viewport actually ships; this is the single-shape convenience form."""
     out = []
     for i, e in enumerate(shape.edges()):
         pts = _edge_points(e, deflection)
         if pts is None:
-            continue  # degenerate point-edge (pole) — nothing to draw
+            continue  # degenerate point-edge (pole), nothing to draw
         out.append({"id": f"e{i}", "points": pts})
     return out
 
@@ -468,15 +468,15 @@ def _list_shapes(lst):
     TopTools_ListOfShape: iter + 2 next() = 0.9us, the third next() = 101us),
     while Extent() is 0.18us and First()/Last() together are 0.55us.
 
-    edge_polylines_by_body used to drain each edge's ancestor list TWICE — once
-    for the coplanar test, once for the seam test — so ~202us of every edge went
+    edge_polylines_by_body used to drain each edge's ancestor list TWICE, once
+    for the coplanar test, once for the seam test, so ~202us of every edge went
     on iterator teardown, dwarfing the ~1us to emit a straight line or ~82us to
     sample a circle. Almost every edge has one or two adjacent faces, so the
     drain now happens only in the non-manifold >2 case, which no shape in the
     fixtures produces at all. Measured on a cold open of the 356 MiB reference
     assembly: that pass went 85.7 s -> 7.7 s (11.1x), taking the whole cold open
-    from 298 s to 220 s. Output is byte-identical — same 348,580 polylines, same
-    1,726,523 points — which is why this needs no CODE_VERSION bump: the cached
+    from 298 s to 220 s. Output is byte-identical, same 348,580 polylines, same
+    1,726,523 points, which is why this needs no CODE_VERSION bump: the cached
     mesh artifacts stay valid, so the warm reopen path is untouched.
 
     First() on an EMPTY list raises Standard_NoSuchObject, and an edge with no
@@ -501,7 +501,7 @@ def edge_polylines_by_body(bodies, deflection=_EDGE_DEFLECTION, hide_coplanar_se
     can hide a hidden body's WIREFRAME). Two classes of edge are NOT real and are
     dropped (MCAD-style), so a part reads the way it would in any other CAD:
 
-      * edges between two COPLANAR planar faces — a boolean's leftover seam, which
+      * edges between two COPLANAR planar faces, a boolean's leftover seam, which
         would otherwise draw a line across a merged face;
       * the UV SEAM of a closed periodic face. A cylinder/cone/sphere/torus wraps
         onto itself, and OCCT records that closure as a real topological edge at
@@ -532,7 +532,7 @@ def edge_polylines_by_body(bodies, deflection=_EDGE_DEFLECTION, hide_coplanar_se
             for e in sh.edges():
                 pts = _edge_points(e, deflection)
                 if pts is None:
-                    continue  # degenerate point-edge (pole) — nothing to draw
+                    continue  # degenerate point-edge (pole), nothing to draw
                 out.append({"id": f"e{k}", "points": pts, "body": b["id"]})
                 k += 1
             continue
@@ -544,19 +544,19 @@ def edge_polylines_by_body(bodies, deflection=_EDGE_DEFLECTION, hide_coplanar_se
             if len(faces) == 2:
                 n0, n1 = fnorm.get(fmap.FindIndex(faces[0])), fnorm.get(fmap.FindIndex(faces[1]))
                 if n0 and n1 and abs(n0[0] * n1[0] + n0[1] * n1[1] + n0[2] * n1[2]) > cos_tol:
-                    continue  # coplanar seam — don't draw it
+                    continue  # coplanar seam, don't draw it
             ek = em.FindKey(i)
             # IsClosed(edge, face) is OCCT's own seam test: true only when the edge
             # carries TWO pcurves on that one face, which is what a wrap-around
             # seam is. An edge shared by two distinct faces is never closed on
             # either, so a fillet's cylindrical face (not closed) keeps all of its
-            # edges — measured: 0 dropped on a box with every edge filleted.
+            # edges, measured: 0 dropped on a box with every edge filleted.
             # Both arguments need the concrete TopoDS types; the map hands back
             # TopoDS_Shape, and the bare shape overload of IsClosed means
             # something else entirely.
             ke = TopoDS.Edge_s(ek)
             # A DEGENERATE edge collapses to a point (a sphere's poles, a cone's
-            # apex). OCCT flags it outright; _edge_points does not catch them —
+            # apex). OCCT flags it outright; _edge_points does not catch them,
             # it happily returns 5 coincident points, which draw as zero-length
             # segments. Harmless on screen but pure waste in the payload.
             if BRep_Tool.Degenerated_s(ke):
@@ -568,7 +568,7 @@ def edge_polylines_by_body(bodies, deflection=_EDGE_DEFLECTION, hide_coplanar_se
             e = Edge(ek)
             pts = _edge_points(e, deflection)
             if pts is None:
-                continue  # degenerate point-edge (pole) — nothing to draw
+                continue  # degenerate point-edge (pole), nothing to draw
             out.append({"id": f"e{k}", "points": pts, "body": b["id"]})
             k += 1
     return out
@@ -583,8 +583,8 @@ def bbox(shape):
 
 
 def mesh_bbox(shape, positions=None):
-    """Bounding box of the shape's TRIANGULATION — what the viewport actually
-    draws — rather than of its exact geometry. For a display bbox this is both
+    """Bounding box of the shape's TRIANGULATION, what the viewport actually
+    draws, rather than of its exact geometry. For a display bbox this is both
     the cheaper and the more honest number.
 
     Given the `positions` tessellate() just produced, that IS the answer: the box
@@ -602,7 +602,7 @@ def mesh_bbox(shape, positions=None):
     That is not hypothetical. `face_bands.face_bands()` calls bounding_box() and
     runs between the tessellation and this box in server._body_payload, so every
     body has been boxed from its poles since face bands were added. It shows on
-    curved geometry and nowhere else — on a planar solid the poles box IS the
+    curved geometry and nowhere else, on a planar solid the poles box IS the
     exact box. Measured on the body a 1.5mm press/pull produces from a revolved
     spline:
 
@@ -615,15 +615,15 @@ def mesh_bbox(shape, positions=None):
     after a press/pull on a curved face and Fit no longer fitted.
 
     The vertex box is very slightly SMALLER than exact on a curved surface,
-    because a chord cuts the corner off an arc — by the deflection, so hundredths
+    because a chord cuts the corner off an arc, by the deflection, so hundredths
     of a millimetre against the ten above. That is the right direction as well as
     the small one: what must not be clipped is what is DRAWN, and what is drawn
     is these vertices.
 
     `shape.bounding_box()` was never an option for the main path: it runs
     BRepBndLib.AddOptimal_s, which on a 60mm filleted ring measures 44.84 ms
-    against 0.053 ms here — 846x, or ~138 s versus ~0.2 s across the 3,071
-    bodies of a large assembly — and it calls BRepTools.Clean_s, DISCARDING the
+    against 0.053 ms here, 846x, or ~138 s versus ~0.2 s across the 3,071
+    bodies of a large assembly, and it calls BRepTools.Clean_s, DISCARDING the
     triangulation tessellate() has just built."""
     if positions is not None and len(positions) >= 3:
         a = np.asarray(positions, dtype=float).reshape(-1, 3)

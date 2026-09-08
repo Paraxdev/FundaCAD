@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Modify → Parameters: the Change Parameters dialog. User parameters (add /
 // rename / re-express / comment / delete-with-named-blockers) and model
-// parameters (dN — expression + target readout, renamable). Values are shown in
+// parameters (dN, expression + target readout, renamable). Values are shown in
 // display units for lengths; EXPRESSIONS are always canonical (mm / deg), the
 // same rule as every other expression surface.
 
@@ -28,7 +28,7 @@ interface Row {
 }
 
 /** Both lists ride the document version, so an async commit landing, an undo or
- *  a load refreshes them — what the keystrokeGuard'd re-render used to do. The
+ *  a load refreshes them, what the keystrokeGuard'd re-render used to do. The
  *  guard itself is per-input now (ValidatedRow / useDraft), so a refresh can no
  *  longer wipe an edit in progress. */
 const rows = useDocValue((doc) => {

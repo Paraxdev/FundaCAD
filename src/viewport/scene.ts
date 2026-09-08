@@ -110,8 +110,8 @@ export class AdaptiveGrid {
 
 /** Which renderer the webview reports, recorded once at startup.
  *
- *  TRUST THIS ONLY ON WINDOWS/macOS. WebKitGTK — the engine a Linux Tauri build
- *  runs on — deliberately SPOOFS WEBGL_debug_renderer_info for fingerprinting
+ *  TRUST THIS ONLY ON WINDOWS/macOS. WebKitGTK, the engine a Linux Tauri build
+ *  runs on, deliberately SPOOFS WEBGL_debug_renderer_info for fingerprinting
  *  resistance and reports "Apple GPU / Apple Inc." on any hardware, so neither
  *  the name nor a software-rasteriser guess means anything there. Verified on
  *  this machine: the string said "Apple GPU" while the web process actually had
@@ -327,7 +327,7 @@ export class OriginTriad {
   }
 
   /** `pixelWorldSize` is the world size of one screen pixel AT THE ORIGIN, which
-   *  is where this is drawn — measuring it anywhere else would size the arrows
+   *  is where this is drawn, measuring it anywhere else would size the arrows
    *  for a place they are not. */
   update(pixelWorldSize: number | null, modelDiagonal: number | null) {
     this.group.scale.setScalar(

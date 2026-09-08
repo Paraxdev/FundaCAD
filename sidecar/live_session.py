@@ -10,9 +10,9 @@ most often asked to do, which is change the part on the screen.
 This is the meeting point. It holds ONE document and the rule for who may
 replace it:
 
-  * exactly one HOST — the running app. It owns the document. It publishes what
+  * exactly one HOST, the running app. It owns the document. It publishes what
     it has, and it is the only thing that may raise the revision.
-  * any number of GUESTS — an MCP server, a probe script. A guest reads the
+  * any number of GUESTS, an MCP server, a probe script. A guest reads the
     document and PROPOSES a replacement. It cannot install one.
 
 That asymmetry is the whole design. A guest that could write directly would be
@@ -24,7 +24,7 @@ happen.
 
 Nothing here is async and nothing here touches a socket. It is a state machine
 with the clock injected, so every rule below can be asserted without a server, a
-websocket or a sleep — see tests/test_live_session.py.
+websocket or a sleep, see tests/test_live_session.py.
 
 STALENESS. A proposal names the revision it was written against. If the document
 has moved on, the proposal is refused rather than applied: an agent that read a
@@ -76,8 +76,8 @@ class LiveSession:
         """The app says what it has, and collects whatever guests have asked for.
 
         Publish and collect are ONE call because they are one loop on the app's
-        side, and splitting them would double the traffic of the idle case — an
-        app with live mode on and nobody attached, which is the common case — for
+        side, and splitting them would double the traffic of the idle case, an
+        app with live mode on and nobody attached, which is the common case, for
         no gain in either.
 
         A second app taking the host role is allowed and is the right answer: the
@@ -136,7 +136,7 @@ class LiveSession:
         """A guest asks for the document to be replaced.
 
         Returns the proposal id to watch for, or a refusal that says which of the
-        three things went wrong — no app, a stale base, or a queue nobody is
+        three things went wrong, no app, a stale base, or a queue nobody is
         draining. Three distinguishable answers rather than one `False`, because
         the guest's next move differs for each: give up, re-read, or wait.
         """

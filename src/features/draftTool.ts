@@ -1,6 +1,6 @@
 // Interactive Draft: pick a solid face, grab the handle on it and swing the face
-// over to the taper you want, or type the angle. Same gesture as Offset Face —
-// grab an arrow on the face and scrub along its normal — but the drag reads as an
+// over to the taper you want, or type the angle. Same gesture as Offset Face,
+// grab an arrow on the face and scrub along its normal, but the drag reads as an
 // ANGLE about the neutral line rather than as a distance (see draftMath.ts).
 //
 // Like Offset Face, the result cannot be faked client-side (OCCT's
@@ -94,7 +94,7 @@ export class DraftTool {
       const proj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.anchor, this.axis);
       const raw = draftAngle(draftDelta(this.grabAngle, this.lever) + (proj - this.grabProj), this.lever);
       const stepped = snap(raw, e.shiftKey ? ANGLE_STEP_FINE : ANGLE_STEP);
-      if (stepped === this.angle) return; // same step — don't re-trigger an OCCT rebuild
+      if (stepped === this.angle) return; // same step, don't re-trigger an OCCT rebuild
       this.angle = stepped;
       this.dim.updateFromCursor({ angle: this.angle });
       this.pushPreview();
@@ -108,7 +108,7 @@ export class DraftTool {
     if (e.button !== 0) return;
     if (this.phase === "pick") {
       const hit = this.viewport.pickFaceForPressPull(e.clientX, e.clientY);
-      if (!hit) return; // missed the body — let the click orbit
+      if (!hit) return; // missed the body, let the click orbit
       e.preventDefault();
       e.stopImmediatePropagation();
       this.beginDrag([hit.selector], [hit.faceId], hit.anchor, hit.normal, hit.bodyId);
@@ -176,7 +176,7 @@ export class DraftTool {
 
   /** The height of the grab above the neutral plane for a given pull axis. The
    *  neutral plane is the body's minimum along that axis (builder._draft), and
-   *  the bbox of the whole build is the closest thing the frontend has to it —
+   *  the bbox of the whole build is the closest thing the frontend has to it,
    *  a single-body document, which is what a draft is nearly always used on, is
    *  exact. */
   private leverFor(axis: Axis3): number {

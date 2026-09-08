@@ -132,7 +132,7 @@ describe("targetKey", () => {
 
 // --- single-pick plans -------------------------------------------------------
 
-describe("resolveDim — single pick", () => {
+describe("resolveDim, single pick", () => {
   it("line → a driving length", () => {
     const p = plan(resolveDim([T.entity(line("l", 0, 0, 10, 0))]));
     expect(p.kind).toBe("length");
@@ -191,7 +191,7 @@ describe("resolveDim — single pick", () => {
 
 // --- the pair matrix ---------------------------------------------------------
 
-describe("resolveDim — pair matrix", () => {
+describe("resolveDim, pair matrix", () => {
   it("point + point → p2pDistance", () => {
     const a = line("a", 0, 0, 10, 0), b = line("b", 0, 8, 10, 8);
     const res = resolveDim([T.point(a, 0, 0, 0), T.point(b, 0, 0, 8)]);
@@ -254,7 +254,7 @@ describe("resolveDim — pair matrix", () => {
   });
 
   it("the parallel-lines distance is the SAME constraint in either pick order", () => {
-    // setDrivingDimension dedups p2lDistance on (e, p, line) — an order-dependent
+    // setDrivingDimension dedups p2lDistance on (e, p, line), an order-dependent
     // operand would create a second dim for one visible gap instead of replacing
     const a = line("a", 0, 0, 10, 0), b = line("b", 0, 4, 10, 4);
     const fwd = made(resolveDim([T.entity(a), T.entity(b)]), 4);
@@ -263,7 +263,7 @@ describe("resolveDim — pair matrix", () => {
     expect(plan(resolveDim([T.entity(b), T.entity(a)])).parallelPair).toEqual({ l1: "a", l2: "b" });
   });
 
-  it("two edges of ONE rectangle need no parallel — the rectangle holds them", () => {
+  it("two edges of ONE rectangle need no parallel, the rectangle holds them", () => {
     const r = rect("r", 0, 0, 20, 10);
     const res = resolveDim([T.edge(r, 0, -10, -5, 10, -5), T.edge(r, 2, 10, 5, -10, 5)]);
     expect(plan(res).parallelPair).toBeUndefined();
@@ -334,12 +334,12 @@ describe("resolveDim — pair matrix", () => {
 
 // --- errors: nothing is ever a silent dead end -------------------------------
 
-describe("resolveDim — error cases", () => {
+describe("resolveDim, error cases", () => {
   it("same-entity: an entity pick and its own centre point are one operand (silent)", () => {
     const c = circle("c", 0, 0, 5);
     const e = err(resolveDim([T.entity(c), T.point(c, 0, 0, 0)]));
     expect(e.error).toBe("same-entity");
-    expect(e.message).toBe(""); // deliberately silent — a re-click keeps the diameter dim
+    expect(e.message).toBe(""); // deliberately silent, a re-click keeps the diameter dim
   });
 
   it("same-entity: the same line picked twice (silent)", () => {
@@ -349,7 +349,7 @@ describe("resolveDim — error cases", () => {
 
   it("concentric circles resolve straight to the radial gap, no tangent mode needed", () => {
     // their centre distance is 0 and always will be, so there is nothing to
-    // disambiguate — the wall thickness is the only meaningful dimension
+    // disambiguate, the wall thickness is the only meaningful dimension
     const p = plan(resolveDim([T.entity(circle("in", 0, 0, 2)), T.entity(circle("out", 0, 0, 9))]));
     expect(p.measure()).toBeCloseTo(7);
     expect(p.make(7, undefined)).toMatchObject({ type: "radialGap", inner: "in", outer: "out", value: 7 });
@@ -421,7 +421,7 @@ describe("resolveDim — error cases", () => {
   it("every error carries either a message or a deliberate silence, never undefined", () => {
     const cases: DimTarget[][] = [
       // two coincident endpoints on different lines: still a genuine refusal
-      // (a concentric circle PAIR is no longer one — it resolves to the gap)
+      // (a concentric circle PAIR is no longer one, it resolves to the gap)
       [T.point(line("ca", 0, 0, 10, 0), 0, 0, 0), T.point(line("cb", 0, 0, 0, 10), 0, 0, 0)],
       [T.entity(line("l", 4, 4, 4, 4))],
       [T.entity({ type: "spline", id: "s", points: [{ x: 0, y: 0 }, { x: 1, y: 1 }] })],
@@ -553,7 +553,7 @@ const rim = (t: DimTarget): DimTarget => {
   return { ...t, rim: true };
 };
 
-describe("resolveDim — rim (edge-to-edge) distances", () => {
+describe("resolveDim, rim (edge-to-edge) distances", () => {
   it("marks circles and arcs as rim-capable and everything else not", () => {
     expect(isRoundTarget(T.entity(circle("c", 0, 0, 5)))).toBe(true);
     expect(isRoundTarget(T.entity(arc("a")))).toBe(true);
@@ -594,7 +594,7 @@ describe("resolveDim — rim (edge-to-edge) distances", () => {
     const p = plan(resolveDim([rim(T.entity(outer)), rim(T.entity(inner))])); // outer picked FIRST
     expect(p.measure()).toBeCloseTo(7);
     expect(p.field).toBe("gap");
-    // inner/outer roles come from the radii, never from pick order — that is
+    // inner/outer roles come from the radii, never from pick order, that is
     // what stops the annulus solving inside-out
     expect(p.make(3)).toEqual({ type: "radialGap", inner: "i", outer: "o", value: 3 });
     expect(p.implyConcentric).toEqual({ c1: "i", c2: "o" });
@@ -621,7 +621,7 @@ describe("resolveDim — rim (edge-to-edge) distances", () => {
 
   it("REFUSES one rim pick against a CONCENTRIC circle's centre (that is its radius)", () => {
     // the outer rim armed, the inner picked plainly ⇒ its CENTRE against the
-    // outer rim — with the centres coincident that distance IS the outer radius,
+    // outer rim, with the centres coincident that distance IS the outer radius,
     // and there is no direction to draw the annotation along
     const e = err(resolveDim([T.entity(circle("i", 0, 0, 5)), rim(T.entity(circle("o", 0, 0, 12)))]));
     expect(e.error).toBe("coincident-points");
@@ -663,7 +663,7 @@ describe("resolveDim — rim (edge-to-edge) distances", () => {
     expect(p.make(1)).toEqual({ type: "c2cDistance", c1: "big", c2: "small", value: 1 });
   });
 
-  it("REFUSES overlapping rims — there is no clearance to drive", () => {
+  it("REFUSES overlapping rims, there is no clearance to drive", () => {
     const e = err(resolveDim([rim(T.entity(circle("a", 0, 0, 5))), rim(T.entity(circle("b", 6, 0, 5)))]));
     expect(e.error).toBe("overlapping");
     expect(e.message).toMatch(/overlap/);
@@ -794,7 +794,7 @@ describe("resolveDim — rim (edge-to-edge) distances", () => {
 
 // --- right-click Radius / Diameter override ----------------------------------
 
-describe("resolveDim — roundPref override", () => {
+describe("resolveDim, roundPref override", () => {
   it("defaults a circle to diameter and an arc to radius", () => {
     expect(plan(resolveDim([T.entity(circle("c", 0, 0, 5))])).kind).toBe("diameter");
     expect(plan(resolveDim([T.entity(arc("a"))])).kind).toBe("radius");

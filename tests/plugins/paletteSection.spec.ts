@@ -2,7 +2,7 @@
 // browser.
 //
 // These cases were in tests/components/shell/BrowserPane.spec.ts, where they had
-// to reach through the whole panel — mount the tree, stub a printer client by
+// to reach through the whole panel, mount the tree, stub a printer client by
 // module path, flip a capability switch, then look for a dot. The panel is not
 // what any of them were about. Mounted directly, each one is a sentence about
 // the palette: it needs bodies, it needs something that can answer about

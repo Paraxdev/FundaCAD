@@ -4,7 +4,7 @@ Run: uv run python test_checkpoint.py   (or .venv/bin/python test_checkpoint.py)
 
 Guards the checkpointing correctness/perf pass:
   - resume-from-cache must byte-match a full rebuild (the core checkpoint invariant),
-  - a resume must replay DIAGNOSTICS, not just errors, on BOTH tiers — the frontend
+  - a resume must replay DIAGNOSTICS, not just errors, on BOTH tiers, the frontend
     gates its "Re-pick face" repair on the ambiguity diagnostic, so dropping it
     silently removes a user-facing repair path,
   - every diagnostic shape must survive json.dumps (a checkpoint write that raises
@@ -112,7 +112,7 @@ def test_resume_equals_full():
     assert _sig(resumed, dr) == _sig(full, df), \
         f"resume diverged from full:\n {_sig(resumed, dr)}\n {_sig(full, df)}"
 
-    # also a mid-timeline edit (f2 extrude distance) — deeper resume
+    # also a mid-timeline edit (f2 extrude distance), deeper resume
     builder.rebuild_cached(DOC)
     edited2 = _edit_feature(DOC, 1, "distance", 6)
     dr2, df2 = [], []
@@ -126,7 +126,7 @@ def test_diagnostics_survive_resume():
 
     DIAG_DOC's press/pull is refused by the ambiguity gate, which records both an
     error and an `ambiguous nearest pick` diagnostic. The edit targets the fillet
-    AFTER it, so the resume restores that feature rather than re-running it — the
+    AFTER it, so the resume restores that feature rather than re-running it, the
     exact case where the diagnostic used to vanish while the error survived, which
     left the "Re-pick face" toast action showing a bare "Show" instead."""
     builder._CACHE = {"feature_sigs": [], "snaps": [], "global_sig": None}
@@ -147,7 +147,7 @@ def test_diagnostics_survive_resume():
 
 
 def test_diagnostics_survive_disk_resume():
-    """The DISK tier must carry diagnostics too — and this is the tier that bites.
+    """The DISK tier must carry diagnostics too, and this is the tier that bites.
 
     RAM snapshots die with the worker; disk checkpoints are durable, so reopening
     a document the machine has built before always resumes from disk. Nothing else
@@ -156,7 +156,7 @@ def test_diagnostics_survive_disk_resume():
     an opaque state blob), so this covers the restored `errors` path as well.
 
     Checkpoint writes are debounced by build cost, and DIAG_DOC is far too cheap to
-    trip the ~1 s budget — so drive `rebuild()` with a hand-built persist whose
+    trip the ~1 s budget, so drive `rebuild()` with a hand-built persist whose
     budget is 0, forcing a write after every feature. The write and the restore are
     both the production functions."""
     import geomstore
@@ -201,7 +201,7 @@ def test_diagnostics_survive_disk_resume():
 
 def test_every_diagnostic_shape_is_json_safe():
     """`_save_checkpoint` swallows exceptions, so a diagnostic carrying a value
-    json can't encode (a numpy scalar, an OCCT handle) would not raise — it would
+    json can't encode (a numpy scalar, an OCCT handle) would not raise, it would
     silently stop writing checkpoints and make every rebuild cold. Assert the
     encode directly, over every producer's shape."""
     shapes = [
@@ -236,7 +236,7 @@ def test_every_diagnostic_shape_is_json_safe():
 def test_textures_survive_disk_resume():
     """A disk resume must keep a body's `_textures` spec list.
 
-    `_handle_texture` never touches the body's OCCT shape — it appends the raw spec
+    `_handle_texture` never touches the body's OCCT shape, it appends the raw spec
     to `body["_textures"]` and displacement happens lazily at tessellation/export
     time. RAM snapshots keep the key for free (`_snapshot` does `dict(b)`), but the
     disk checkpoint serialises named fields only, so the spec used to vanish: a
@@ -283,7 +283,7 @@ def test_textures_survive_disk_resume():
 def test_body_fingerprint_carries_topology():
     fp = builder._body_fingerprint(Box(10, 10, 10))
     assert fp["f"] == 6 and fp["e"] == 12 and fp["vx"] == 8, fp
-    # a topological change (drill a hole) moves edge/vertex counts, not just aggregates —
+    # a topological change (drill a hole) moves edge/vertex counts, not just aggregates,
     # these fields close the same-volume/same-bbox collision the coarse fingerprint missed.
     holed = builder._body_fingerprint(Box(10, 10, 10) - Cylinder(2, 20))
     assert (holed["e"], holed["vx"]) != (12, 8), "edge/vertex counts must reflect topology"
@@ -314,7 +314,7 @@ def test_env_sig_covers_every_geometry_module():
     survivable while builder.py held the whole kernel. It does not any more: the
     press/pull clamps, the booleans, the blend refusals and the sketch builder
     each live in their own module now, and a list is one refactor away from
-    leaving one off. Being wrong here is SILENT — the checkpoints are on disk, so
+    leaving one off. Being wrong here is SILENT, the checkpoints are on disk, so
     a restart does not help and the geometry is simply built by code that no
     longer exists.
 

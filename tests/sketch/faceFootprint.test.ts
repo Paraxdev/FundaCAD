@@ -18,7 +18,7 @@ const seg = (
   b: [number, number, number],
 ): FootprintEdge => ({ points: [a, b] });
 
-/** The rim of the top face, as four separate B-rep edges — which is how the
+/** The rim of the top face, as four separate B-rep edges, which is how the
  *  viewport actually holds it. */
 const topRim = (): FootprintEdge[] => [
   seg([-10, -10, 5], [10, -10, 5]),
@@ -86,7 +86,7 @@ describe("planeFootprint", () => {
   it("ignores geometry on a PARALLEL plane", () => {
     // The bottom face of the same box projects onto the top face's 2D frame
     // exactly, so without the distance gate a sketch on the top would be cut by
-    // the outline of the bottom — indistinguishable from working, until the two
+    // the outline of the bottom, indistinguishable from working, until the two
     // faces differ in shape.
     const bottom: FootprintEdge[] = [
       seg([-8, -8, -5], [8, -8, -5]),

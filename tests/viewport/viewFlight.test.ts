@@ -79,7 +79,7 @@ describe("ease", () => {
     }
   });
 
-  it("starts and ends slowly — the point of easing", () => {
+  it("starts and ends slowly, the point of easing", () => {
     // The first tenth of the trip covers far less than a tenth of the distance,
     // and the middle tenth covers far more. A linear ramp would fail this.
     expect(ease(0.1)).toBeLessThan(0.02);
@@ -104,7 +104,7 @@ describe("viewSideNormal", () => {
     expect(viewSideNormal(up, [0, 0, 50], origin)).toEqual([0, 0, 1]);
   });
 
-  it("flips it when the camera is underneath — the whole point", () => {
+  it("flips it when the camera is underneath, the whole point", () => {
     // Starting a sketch on the base XY plane from below used to fling the view
     // through the part to look at it from above.
     expect(viewSideNormal(up, [0, 0, -50], origin)).toEqual([0, 0, -1]);

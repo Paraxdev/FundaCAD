@@ -1,13 +1,13 @@
-// Interactive Offset Face and Thicken. Both are the same gesture — pick solid
+// Interactive Offset Face and Thicken. Both are the same gesture, pick solid
 // face(s), grab an arrow on the face and scrub along its normal, or type a
-// value — so they share one tool, parameterised by `mode`:
+// value, so they share one tool, parameterised by `mode`:
 //
 //   offsetFace : the picked faces MOVE along their normals, the body staying
 //                closed (neighbouring faces stretch to follow).
 //   thicken    : the picked faces gain a wall, as a new body or joined in.
 //
 // Like Fillet/Press-Pull-on-curved-faces, neither result can be faked
-// client-side — a real surface offset needs build123d/OCCT — so the preview is
+// client-side, a real surface offset needs build123d/OCCT, so the preview is
 // sidecar-driven: the un-committed feature goes through store.setPreview() and
 // the normal rebuild pipeline renders it. Commit promotes it (records undo);
 // Esc reverts.
@@ -96,7 +96,7 @@ export class FaceOffsetTool {
       const proj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.anchor, this.axis);
       const raw = this.grabValue + (proj - this.grabProj);
       const stepped = snap(raw, this.viewport.snapStep(this.anchor, e.shiftKey));
-      if (stepped === this.value) return; // same step — don't re-trigger an OCCT rebuild
+      if (stepped === this.value) return; // same step, don't re-trigger an OCCT rebuild
       this.value = stepped;
       this.dim.updateFromCursor({ distance: Math.abs(this.value) });
       this.pushPreview();
@@ -110,7 +110,7 @@ export class FaceOffsetTool {
     if (e.button !== 0) return;
     if (this.phase === "pick") {
       const hit = this.viewport.pickFaceForPressPull(e.clientX, e.clientY);
-      if (!hit) return; // missed the body — let the click orbit
+      if (!hit) return; // missed the body, let the click orbit
       e.preventDefault();
       e.stopImmediatePropagation();
       this.beginDrag([hit.selector], [hit.faceId], hit.anchor, hit.normal, hit.bodyId);
@@ -212,7 +212,7 @@ export class FaceOffsetTool {
       });
       const s = this.viewport.projectToScreen(this.anchor);
       this.dim.position(s.x, s.y);
-      // The field is the truth once typed — including its SIGN. While dragging
+      // The field is the truth once typed, including its SIGN. While dragging
       // it displays |value|, so an unguarded read-back would strip an inward
       // drag's sign (the abs-display trap press-pull documents).
       if (!this.grabbing && this.dim.isUserDriven("distance")) {

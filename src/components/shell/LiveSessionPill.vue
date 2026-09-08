@@ -3,7 +3,7 @@
 //
 // This is the visible half of the live session, and it is the reason the setting
 // behind it can default to on. An assistant can change the part on screen; what
-// makes that acceptable is that it never happens quietly — the pill appears the
+// makes that acceptable is that it never happens quietly, the pill appears the
 // moment one attaches, says what it last did, and disconnecting it is one click
 // away in the same place.
 //

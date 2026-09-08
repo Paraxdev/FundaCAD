@@ -5,7 +5,7 @@
 // crowded assembly takes the small parts and leaves the plate they sit on.
 // Dragging LEFTWARD is crossing: it takes anything the box so much as touches,
 // so a thin box swept down a row takes every hole it clips. The convention is
-// old, it is unambiguous once you know it, and it costs no modifier key — which
+// old, it is unambiguous once you know it, and it costs no modifier key, which
 // matters here because shift is already spoken for (adding to the selection).
 //
 // Everything in this file is 2D screen arithmetic on plain numbers: no camera,
@@ -30,12 +30,12 @@ export type AreaMode = "window" | "crossing";
 
 /** WHICH KINDS a box takes. A box over a rounded corner covers the blend's
  *  edges and the four faces around them at once, and "select this region" is
- *  not the same request as "select these edges to fillet" — so the gesture
+ *  not the same request as "select these edges to fillet", so the gesture
  *  carries the answer instead of the next tool having to guess it. */
 export type AreaFilter = "all" | "faces" | "edges";
 
-/** What to call the filter on screen. Reads as the object of a sentence —
- *  "taking EDGES fully inside the box" — because that is the only place it is
+/** What to call the filter on screen. Reads as the object of a sentence,
+ *  "taking EDGES fully inside the box", because that is the only place it is
  *  ever shown. */
 export function areaFilterLabel(f: AreaFilter): string {
   return f === "all" ? "everything" : f === "faces" ? "faces" : "edges";
@@ -95,7 +95,7 @@ export function allInsideRect(pts: readonly number[], r: ScreenRect): boolean {
   return true;
 }
 
-/** True when a convex shape — given as flat x,y pairs — overlaps the rectangle
+/** True when a convex shape, given as flat x,y pairs, overlaps the rectangle
  *  at all, including the case where the rectangle is wholly INSIDE it.
  *
  *  Separating-axis, over the rectangle's two axes and the shape's own edge
@@ -105,7 +105,7 @@ export function allInsideRect(pts: readonly number[], r: ScreenRect): boolean {
  *  vertex-only test gets wrong and the case a user hits constantly (a box
  *  dragged inside one big face of a plate).
  *
- *  Works for a two-point shape — a line segment — where the one edge normal is
+ *  Works for a two-point shape, a line segment, where the one edge normal is
  *  the only axis the rectangle's own two do not already cover. */
 export function convexTouchesRect(pts: readonly number[], r: ScreenRect): boolean {
   const n = pts.length >> 1;
@@ -149,7 +149,7 @@ function spansOverlap(pts: readonly number[], nx: number, ny: number, r: ScreenR
   return !(hi < rlo || rhi < lo);
 }
 
-/** Does a polyline — a model edge, projected — fall in the box?
+/** Does a polyline, a model edge, projected, fall in the box?
  *
  *  In `window` mode every sample must be inside, which is the honest reading of
  *  "wholly inside" for a curve we only know by its samples. In `crossing` mode
@@ -181,7 +181,7 @@ export function triangleInBox(
 
 /** The verdict for a whole FACE, folded over its triangles.
  *
- *  A window takes the face only if every triangle is inside it — anything less
+ *  A window takes the face only if every triangle is inside it, anything less
  *  and part of the face is outside the box the user drew. Crossing takes it as
  *  soon as one triangle is touched, and stops looking, which is what keeps a
  *  crossing box over a 200k-triangle import from walking all of it.

@@ -5,7 +5,7 @@ Neutral mechanics ONLY: spawn a real server.py subprocess on an ephemeral port
 with the disk cache off, read its `TOKEN` + `LISTENING` lines, drive ops over
 the websocket, and compute mesh invariants (signed-tetra volume, bbox). Every
 tolerance and every anti-gaming credit rule lives hardcoded in the tool that
-owns it — never here — so an auditor can read each tool in isolation.
+owns it, never here, so an auditor can read each tool in isolation.
 
 Run headless with sidecar/.venv/bin/python from the sidecar/ directory.
 """
@@ -22,7 +22,7 @@ import time
 
 import websockets
 
-# sidecar/ (parent of tools/) — server.py, builder.py etc. live here and the
+# sidecar/ (parent of tools/), server.py, builder.py etc. live here and the
 # server must be spawned with this as its cwd.
 SIDECAR_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -42,7 +42,7 @@ DELTA_UNITS = frozenset(
 
 def _free_port():
     """Pick an ephemeral loopback port. Tiny bind/close race before the server
-    grabs it — acceptable for a local test harness, and never port 8765 because
+    grabs it, acceptable for a local test harness, and never port 8765 because
     the OS won't hand out a port already bound by the user's live sidecar."""
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.bind(("127.0.0.1", 0))
@@ -132,7 +132,7 @@ class SpawnedServer:
 
 async def ws_call(ws, op, req_id, **kw):
     """Send one op and return the matching reply, skipping interim `status`
-    (building-progress) frames — a long rebuild streams those before its `ok`
+    (building-progress) frames, a long rebuild streams those before its `ok`
     reply."""
     await ws.send(json.dumps({"id": req_id, "op": op, **kw}))
     while True:
@@ -167,7 +167,7 @@ def mesh_volume(positions, indices):
 
 
 def bbox_diagonal(bbox):
-    """Length of a bbox's space diagonal — the reference length the golden bbox
+    """Length of a bbox's space diagonal, the reference length the golden bbox
     tolerance is a fraction of. `bbox` is {"min":[x,y,z],"max":[x,y,z]}."""
     lo, hi = bbox["min"], bbox["max"]
     return sum((hi[i] - lo[i]) ** 2 for i in range(3)) ** 0.5
@@ -183,7 +183,7 @@ def error_class(message):
 
 
 def parse_feature_handler_keys():
-    """The feature-type strings the builder actually dispatches — parsed from the
+    """The feature-type strings the builder actually dispatches, parsed from the
     `_FEATURE_HANDLERS = { ... }` literal in builder.py source AT RUNTIME, never
     a hardcoded list here, so this set tracks the real handler table and can't
     silently drift from it."""
@@ -199,7 +199,7 @@ def parse_server_ops():
     AT RUNTIME.
 
     The name must look like an identifier. Without that, a COMMENT describing the
-    pattern matches it — which happened, and put a phantom op called "..." in the
+    pattern matches it, which happened, and put a phantom op called "..." in the
     universe. A phantom is not merely untidy: it is an entry nothing can ever
     cover, so it sits in the UNCOVERED list forever and trains the reader to
     ignore that list, which is the one thing this harness needs them to read."""

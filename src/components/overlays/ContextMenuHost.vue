@@ -38,7 +38,7 @@ function closeSub() {
   subPlaced.value = false;
 }
 // Hover-intent: moving diagonally from the parent item toward a lower flyout
-// entry crosses sibling rows — an instant close would retract the flyout mid-
+// entry crosses sibling rows, an instant close would retract the flyout mid-
 // travel, so sibling hover only *schedules* the close and entering the flyout
 // cancels it.
 function scheduleSubClose() {
@@ -98,7 +98,7 @@ function onDown(e: PointerEvent) {
 }
 function onKey(e: KeyboardEvent) {
   if (e.key === "Escape") {
-    e.stopPropagation(); // Escape only closes the menu — not the app's selection
+    e.stopPropagation(); // Escape only closes the menu, not the app's selection
     s.close();
   }
 }

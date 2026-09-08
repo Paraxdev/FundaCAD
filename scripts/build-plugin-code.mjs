@@ -1,6 +1,6 @@
 // Build one plugin directory into a single module the app can load at runtime.
 //
-// A plugin that draws — a menu row, a panel, paint on the model — runs in the
+// A plugin that draws, a menu row, a panel, paint on the model, runs in the
 // application's own JavaScript context. It cannot be a Worker and it cannot be a
 // process: those cannot touch the DOM, the viewport or Vue's reactivity. So the
 // only way for such a plugin to arrive from a release rather than from the app's

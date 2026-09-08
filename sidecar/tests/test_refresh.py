@@ -123,7 +123,7 @@ def test_upstream_change_moves_curve(src, true_curve):
 def test_sketch_curve_multi_edge_without_index_goes_stale():
     """A multi-edge source sibling WITHOUT a persisted source.index is
     unresolvable (the pick site has always written one): stale exactly once
-    on the transition, silent while stale — never a positional guess."""
+    on the transition, silent while stale, never a positional guess."""
     def sk_doc(stale=False):
         ents = []
         for i in range(1, 5):
@@ -153,7 +153,7 @@ def test_sketch_curve_multi_edge_without_index_goes_stale():
 
 def test_sketch_curve_index_survives_deletion():
     """Persisted source.index (what the pick site writes) keeps per-edge
-    identity even after a sibling was DELETED and the source later moves —
+    identity even after a sibling was DELETED and the source later moves,
     the legacy surviving-sibling positional fallback would shift e3/e4 onto
     their dead sibling's edges."""
     def sk_doc(rect_x, ids, cached_by_id):
@@ -192,7 +192,7 @@ def test_sketch_curve_index_survives_deletion():
 
 def test_chain_projection_of_projected_curve():
     """Chain projection: a committed sketch's PROJECTED line is itself a valid
-    sketchCurve source — _entity_edges builds its cached curve like any native
+    sketchCurve source, _entity_edges builds its cached curve like any native
     entity. Pick time resolves it (TOP -> TOP returns the curve verbatim), and
     the rebuild refresh tracks it instead of going permanently stale."""
     src, true_curve = _edge_source()
@@ -233,7 +233,7 @@ def test_resume_cap_ram_tier():
     rebuild_cached(doc, projections=p1)  # cold: full build, update emitted (NOT applied)
     assert len(p1) == 1, p1
     d2 = copy.deepcopy(doc)
-    d2["features"][3]["radius"] = 1.5  # downstream edit — prefix incl. f3 unchanged
+    d2["features"][3]["radius"] = 1.5  # downstream edit, prefix incl. f3 unchanged
     p2 = []
     rebuild_cached(d2, projections=p2)
     assert len(p2) == 1, \
@@ -270,7 +270,7 @@ def test_resume_cap_disk_tier():
 def test_quiet_proof_deep_resume():
     """Perf escape: once a build's projection pass in this worker is QUIET
     (fresh == cached proven, nothing pending), a downstream edit with the
-    prefix unchanged resumes PAST the projected sketch — its handler doesn't
+    prefix unchanged resumes PAST the projected sketch, its handler doesn't
     re-run. An emitting build re-arms the cap (test_resume_cap_ram_tier is the
     conservative side)."""
     builder._CACHE = {"feature_sigs": [], "snaps": [], "global_sig": None}
@@ -286,7 +286,7 @@ def test_quiet_proof_deep_resume():
     builder._recompute_projections = lambda f, ctx: (calls.append(f["id"]), orig(f, ctx))[1]
     try:
         d2 = copy.deepcopy(doc)
-        d2["features"][3]["radius"] = 1.5  # downstream edit — prefix incl. f3 unchanged
+        d2["features"][3]["radius"] = 1.5  # downstream edit, prefix incl. f3 unchanged
         p2 = []
         rebuild_cached(d2, projections=p2)
     finally:

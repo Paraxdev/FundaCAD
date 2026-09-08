@@ -1,4 +1,4 @@
-"""Body-silhouette projection (step 7) — _project_silhouette's HLR outline
+"""Body-silhouette projection (step 7), _project_silhouette's HLR outline
 (V + OutLineV union, exact lines/circles, seam-on-generator immunity, sewn-edge
 strays excluded), the projectGeometry silhouette source, extrudability of the
 projected outline, and the group-level refresh correspondence (cached match →
@@ -51,7 +51,7 @@ def test_cylinder_side_outline():
     """cylinder(r=10, h=30) onto the side plane → the closed 20x30 rectangle
     outline: 2 EXACT lines at x=±10 spanning y 0..30 + 2 edge-on rim curves
     joining (±10, 0) and (±10, 30). The default seam sits at +X, ON the +x
-    silhouette generator (the seam pitfall) — both lines must still appear."""
+    silhouette generator (the seam pitfall), both lines must still appear."""
     r = project_geometry({"parameters": {}, "features": _cyl_features()}, SIDE,
                          [{"kind": "silhouette", "body": "body1"}])["results"][0]
     assert r["ok"], r
@@ -74,7 +74,7 @@ def test_cylinder_side_outline():
 
 def test_seam_off_generator_same_outline(reference):
     """Rotating the cylinder 30° about Z moves the seam OFF the silhouette
-    generator (it becomes a plain sewn edge): the outline shape is unchanged —
+    generator (it becomes a plain sewn edge): the outline shape is unchanged,
     still exactly 2 lines at x=±10 + 2 rim curves. Proves the V+OutLineV union
     is immune to which bucket the seam-coincident generator lands in."""
     curves = _project_silhouette(Rot(0, 0, 30) * Cylinder(10, 30), _plane_of(SIDE))

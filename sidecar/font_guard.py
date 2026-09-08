@@ -8,18 +8,18 @@ build123d/text.py runs, at MODULE SCOPE:
 
 so merely importing build123d walks the OS font directories and hands every
 file it finds to fontTools' ``TTFont()``. ``FontManager.register_folder`` has no
-per-file error handling, so ONE unreadable font aborts the whole import — and
+per-file error handling, so ONE unreadable font aborts the whole import, and
 with it the geometry sidecar, before any geometry runs.
 
 That is not hypothetical. Four field reports across 0.1.82, 0.1.85 and 0.1.100,
 all Windows, all "the geometry engine could not start on this computer", in two
 flavours:
 
-  * ``TTLibFileIsCollectionError: specify a font number between 0 and 3`` — a
+  * ``TTLibFileIsCollectionError: specify a font number between 0 and 3``, a
     TrueType Collection whose extension is not ``.ttc``. build123d routes only
     the ``.ttc`` extension to ``TTCollection``, so a collection named ``.ttf``
     reaches ``TTFont()``, which refuses to guess a face.
-  * ``TTLibError: Not a TrueType or OpenType font (bad sfntVersion)`` — a file
+  * ``TTLibError: Not a TrueType or OpenType font (bad sfntVersion)``, a file
     caught by the ``*ttf``/``*otf`` glob that is not an sfnt font at all.
 
 Linux and macOS escape it in practice because their font directories rarely
@@ -27,7 +27,7 @@ hold either kind of file. C:\\Windows\\Fonts holds both.
 
 HOW IT WORKS
 ------------
-``register_folder`` finds candidates with ``glob.glob(...)`` — an attribute
+``register_folder`` finds candidates with ``glob.glob(...)``, an attribute
 lookup at call time, on the stdlib module. So for the duration of the build123d
 import, and only for patterns that are looking for fonts, ``glob.glob`` is
 wrapped to drop files that fontTools would refuse. build123d then never sees
@@ -38,8 +38,8 @@ after the first call (build123d is in sys.modules by then).
 
 WHY A CALL AND NOT AN IMPORT SIDE EFFECT
 ----------------------------------------
-The obvious shape — `import font_guard` at the top of every module that imports
-build123d — was the first version, and it was wrong for a reason that has
+The obvious shape, `import font_guard` at the top of every module that imports
+build123d, was the first version, and it was wrong for a reason that has
 nothing to do with fonts. `builder._env_sig` hashes the BYTES of builder.py,
 geom_select.py, tessellate.py and selector_tuning.json into the mesh-cache key,
 so adding even an import line to two of them changes the key and costs every
@@ -61,7 +61,7 @@ import sys
 
 # sfnt signatures fontTools accepts from TTFont().
 _SFNT_TAGS = (b"\x00\x01\x00\x00", b"true", b"OTTO", b"typ1")
-# A TrueType Collection. Loadable ONLY via the .ttc extension — see module docstring.
+# A TrueType Collection. Loadable ONLY via the .ttc extension, see module docstring.
 _COLLECTION_TAG = b"ttcf"
 # The extensions build123d's register_folder globs for.
 _FONT_EXTS = ("ttf", "otf", "ttc")
@@ -139,7 +139,7 @@ def ensure():
     _skipped.clear()
     try:
         _import_build123d(drop_everything=False)
-    except Exception as exc:  # noqa: BLE001 — the retry is the whole point; re-raised below
+    except Exception as exc:  # noqa: BLE001, the retry is the whole point; re-raised below
         # A font with a valid signature that still will not parse. Rather than
         # take the sidecar down, give up on system fonts altogether and say so.
         print(

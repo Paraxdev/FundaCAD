@@ -14,7 +14,7 @@ import { ref, watch, type Ref } from "vue";
  *  is by definition staler than what they typed. */
 export function useDraft(
   source: () => string,
-  /** The input this draft belongs to — the caller owns the template ref so it
+  /** The input this draft belongs to, the caller owns the template ref so it
    *  stays type-checked (a string `ref="el"` resolved inside a composable is
    *  invisible to vue-tsc). */
   el: Readonly<Ref<HTMLInputElement | null>>,

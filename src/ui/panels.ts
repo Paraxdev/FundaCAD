@@ -1,7 +1,7 @@
 // Facade for the floating "measure-panel" popups: Properties, Interference and
 // the Overhang (Draft Analysis) settings. The DOM lives in
 // components/overlays/*Panel.vue; what stays here is the part that is genuinely
-// this layer's job — preconditions, status-line messages, the geometry call,
+// this layer's job, preconditions, status-line messages, the geometry call,
 // and unit formatting of the numbers those produce.
 //
 // The app's own panels only. A capability that wants a floating panel brings its

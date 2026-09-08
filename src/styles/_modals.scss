@@ -25,7 +25,7 @@
   justify-content: space-between;
   /* Head, body and foot are siblings and share one inset, so the title, the
      content and the buttons all sit on the same two vertical lines. They were
-     14/16, 14/16 and 12/16 — three values for one edge, which is what made a
+     14/16, 14/16 and 12/16, three values for one edge, which is what made a
      dialog's footer look very slightly misaligned without it being obvious why.
      Note --s-5 rather than a mixed pair: at dialog scale a square inset reads
      as intentional, and the extra 2px of top and bottom is the "spaced out"
@@ -174,7 +174,7 @@
   gap: var(--s-3);
 }
 /* A slider whose name does not explain itself carries a line under the whole
-   row — spanning every column, so it reads as prose and not as a fourth cell. */
+   row, spanning every column, so it reads as prose and not as a fourth cell. */
 .sm-row .sm-srow-hint {
   grid-column: 1 / -1;
   margin-top: calc(var(--s-1) * -1);
@@ -265,7 +265,7 @@
 }
 .prefs-row {
   display: grid;
-  /* The label column is fixed so every control starts on the same line — a
+  /* The label column is fixed so every control starts on the same line, a
      settings list reads as a column of choices, not as ragged pairs. */
   grid-template-columns: 92px 1fr;
   align-items: center;

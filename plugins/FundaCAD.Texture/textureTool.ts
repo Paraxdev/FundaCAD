@@ -1,5 +1,5 @@
 // Texture tool: printed surface texture (knurl/hex/waves/ribs/voronoi/noise/image
-// heightmap). Unlike Fillet/Chamfer/Press-Pull, this tool has NO drag gizmo — it
+// heightmap). Unlike Fillet/Chamfer/Press-Pull, this tool has NO drag gizmo, it
 // rides the ambient viewport selection (click / Ctrl-click toggles faces, or a
 // whole body in Bodies mode) and drives a docked TexturePanel for the kind +
 // numeric knobs. An rAF tick diffs the ambient selection each frame (rather than
@@ -54,7 +54,7 @@ export class TextureTool {
   private awaitingRollback = false;
   private unsubBuild: (() => void) | null = null;
 
-  // --- ambient-selection diffing (rAF tick, not viewport.onSelectionChange —
+  // --- ambient-selection diffing (rAF tick, not viewport.onSelectionChange,
   // that single callback slot belongs to main.ts) ---
   private lastFaceIds: number[] = [];
   private lastBodyIds: string[] = [];
@@ -64,7 +64,7 @@ export class TextureTool {
   // WHILE A REBUILD IS IN FLIGHT THE AMBIENT SELECTION IS NOT AN ANSWER.
   //
   // Membership IS the ambient selection for this tool, and this tool rebuilds
-  // on its own preview — so every keystroke in the Depth box puts the thing the
+  // on its own preview, so every keystroke in the Depth box puts the thing the
   // gesture is standing on through a rebuild. A chunked reply reaches the screen
   // in installments, and the one that opens it does not carry the body being
   // edited (it is held back until its own chunk lands), so for a few frames the
@@ -82,7 +82,7 @@ export class TextureTool {
   // (a real drift), so the members are put back explicitly.
   private rebuildLanded = false;
   // Add was pressed while a rebuild was in flight. The tick can afford to skip
-  // those frames; a commit cannot — the person has finished and is waiting — so
+  // those frames; a commit cannot, the person has finished and is waiting, so
   // it is held and run when the build lands instead of being refused against a
   // selection that is only briefly empty.
   private pendingCommit = false;
@@ -140,20 +140,20 @@ export class TextureTool {
 
   /** Re-open a committed texture for editing: the model rolls back to just
    *  before the feature, its saved member faces/body are re-selected in the
-   *  ambient selection (best-effort — a stale reference just shows as an empty
+   *  ambient selection (best-effort, a stale reference just shows as an empty
    *  selection, the same way a moved fillet edge can miss), the panel seeds from
    *  the saved values, and commit REPLACES the feature in place (same id, one
    *  undo step). Returns false when a numeric field holds a parameter
-   *  expression (not tool-editable) — the caller falls back to the value rows. */
+   *  expression (not tool-editable), the caller falls back to the value rows. */
   startEdit(featureId: string, onDone: (id: string | null) => void): boolean {
     if (this.active) return false;
     const f = this.store.document.features.find((x) => x.id === featureId);
     if (!f || f.type !== "texture") return false;
     const numeric = [f.depth, f.scale, f.angle, f.offset, f.sharpness, f.boundaryInset, f.seed];
-    if (numeric.some((v) => v !== undefined && typeof v !== "number")) return false; // parameter — the value rows' job
+    if (numeric.some((v) => v !== undefined && typeof v !== "number")) return false; // parameter, the value rows' job
     const fields = ["depth", "scale", "angle", "offset", "sharpness", "boundaryInset", "seed"];
     if (fields.some((field) => this.store.isParamBound({ kind: "feature", feature: f.id, field })))
-      return false; // parameter-driven field — the value rows' job
+      return false; // parameter-driven field, the value rows' job
 
     this.active = true;
     this.onDone = onDone;
@@ -216,7 +216,7 @@ export class TextureTool {
       const ids: number[] = [];
       // the saved point was minted from the DISPLACED preview mesh, so on the
       // rolled-back (undisplaced) model it floats up to depth+offset off the
-      // surface — tell the matcher to expect that.
+      // surface, tell the matcher to expect that.
       const off = Math.abs(this.values.depth) + Math.abs(this.values.offset);
       for (const sel of this.savedFaceSelectors) {
         if (!("point" in sel)) continue;
@@ -236,8 +236,8 @@ export class TextureTool {
         initial: this.values,
         // Whatever colours a plugin says this document has, which is usually
         // none. Empty is already how the panel says "there is no inlay colour to
-        // choose" — it has been passed an empty palette on a document with no
-        // bodies since the row existed — so a build with nothing contributing
+        // choose", it has been passed an empty palette on a document with no
+        // bodies since the row existed, so a build with nothing contributing
         // one needs no second answer.
         palette: contributedPalette(),
       },
@@ -263,7 +263,7 @@ export class TextureTool {
     this.pushPreview();
   }
 
-  /** rAF tick: diff the ambient selection (not viewport.onSelectionChange —
+  /** rAF tick: diff the ambient selection (not viewport.onSelectionChange,
    *  that single slot belongs to main.ts) and refresh the panel + preview when
    *  it moves, so clicking faces in the viewport feels live. */
   private tick() {
@@ -281,7 +281,7 @@ export class TextureTool {
     }
     if (this.mode === "faces") {
       const cur = this.viewport.getSelectedFaceIds();
-      // a rebuild (our own preview landing, usually) wiped the selection — the
+      // a rebuild (our own preview landing, usually) wiped the selection, the
       // members are still the tool's; restore them instead of treating the
       // wipe as a user deselect. Face ids are stable here: displacement never
       // adds or removes B-rep faces.
@@ -335,10 +335,10 @@ export class TextureTool {
   }
 
   /** Live preview: every change (selection or params, any kind) debounces into
-   *  the same sidecar-preview pipeline Fillet/PressPull use — the REAL
+   *  the same sidecar-preview pipeline Fillet/PressPull use, the REAL
    *  displaced mesh at viewport density, ~half a second behind the slider.
    *  (A GPU vertex-shader preview was tried and dropped: it can only move
-   *  vertices that already exist — invisible on a 2-triangle flat face — and
+   *  vertices that already exist, invisible on a 2-triangle flat face, and
    *  without normal recomputation the shading never changes, so even dense
    *  meshes barely showed it.) An empty selection cancels any pending preview
    *  and clears an uncommitted one. */
@@ -369,7 +369,7 @@ export class TextureTool {
     }, PREVIEW_DEBOUNCE_MS);
   }
 
-  /** kind-specific extra fields — only the ones that apply to the chosen kind,
+  /** kind-specific extra fields, only the ones that apply to the chosen kind,
    *  so the emitted JSON stays a clean match for the sidecar's per-kind reader
    *  instead of every kind carrying every other kind's leftover defaults. */
   private kindFields(v: TextureValues): Partial<Record<string, Num | boolean | string>> {
@@ -380,13 +380,13 @@ export class TextureTool {
     extra.profile = v.profile;
     if (v.boundaryInset) extra.boundaryInset = v.boundaryInset;
     if (ANGLE_KINDS.has(v.kind) && v.angle) extra.angle = v.angle;
-    // direction is generic in the sidecar — it transforms the height field
+    // direction is generic in the sidecar, it transforms the height field
     // (out = h, in = h-1, both = centred) rather than the pattern, so EVERY
     // kind honours it. It used to ride along with the angle, which left
     // noise/voronoi/image permanently embossing outward.
     extra.direction = v.direction;
     // sharpness shapes the lattice/wave kinds under either profile, and under
-    // FACET it also drives the cellular wall width and the terrace count — so
+    // FACET it also drives the cellular wall width and the terrace count, so
     // voronoi/noise/image need it too, which they never used to get.
     if (ANGLE_KINDS.has(v.kind) || v.profile === "facet") {
       if (v.sharpness) extra.sharpness = v.sharpness;
@@ -415,7 +415,7 @@ export class TextureTool {
       if (!sel || !sel.faceIds.length) return null;
       // Bind the target body. Without it the sidecar falls back to the ACTIVE
       // (last-created) body and resolves the face selector against the wrong
-      // shape — so with >1 body the texture lands on a random face of the last
+      // shape, so with >1 body the texture lands on a random face of the last
       // body, not the one clicked. A texture applies to a single body, so if the
       // selection spans bodies keep only faces on the bound (first) one rather
       // than silently resolving the rest against the wrong shape.
@@ -447,7 +447,7 @@ export class TextureTool {
       // MID-REBUILD IS NOT AN ANSWER. The selection this reads is briefly empty
       // while a chunked reply is landing, so refusing here told somebody that
       // nothing was selected while the face they picked was lit up in front of
-      // them — and left the panel open with no way to tell what had gone wrong.
+      // them, and left the panel open with no way to tell what had gone wrong.
       // Hold it and try once more when the build lands.
       if (this.building && !this.pendingCommit) {
         this.pendingCommit = true;
@@ -500,7 +500,7 @@ export class TextureTool {
     this.lastBodyIds = [];
     this.rebuildLanded = false;
     // consumed members would dangle in the next tool's selection (same reason
-    // a boolean clears it after consuming the tool bodies) — clear both kinds.
+    // a boolean clears it after consuming the tool bodies), clear both kinds.
     this.viewport.clearSelection();
     this.viewport.setSelectedBodies([]);
     this.active = false;

@@ -10,7 +10,7 @@
 // it.
 //
 // There is deliberately no "Images" filter. This app has no reference-image or
-// canvas feature, so that row would filter to nothing every time it was picked —
+// canvas feature, so that row would filter to nothing every time it was picked,
 // a control that appears broken is worse than a control that is absent. It goes
 // in when there is something for it to find.
 

@@ -10,7 +10,7 @@ in whatever shape Python makes convenient.
 The two rules easiest to get wrong, both taken from the TypeScript:
 
   * `^` is right-associative and binds tighter than unary minus, so -2^2 is -4.
-  * function arguments are separated by SEMICOLONS, not commas — the frontend
+  * function arguments are separated by SEMICOLONS, not commas, the frontend
     chose that because a comma is ambiguous where the decimal separator is one.
 
 No eval(), no compile(): this parses. An expression arriving over MCP is
@@ -57,7 +57,7 @@ CONSTANTS = {"PI": math.pi}
 class ExprError(ValueError):
     """A structural problem: an unknown name, a bad arity, a syntax error.
 
-    Arithmetic is NOT structural — a division by zero yields inf and the caller
+    Arithmetic is NOT structural, a division by zero yields inf and the caller
     decides, exactly as the frontend does, because a parameter that briefly
     evaluates to inf while it is being typed is not an error worth refusing."""
 
@@ -199,7 +199,7 @@ def parse_expr(src):
 
 
 def refs_of(node, out=None):
-    """Every parameter name an expression reads. Constants are not references —
+    """Every parameter name an expression reads. Constants are not references,
     PI resolves without anyone defining it, and treating it as a reference would
     make every expression using it look broken."""
     out = set() if out is None else out

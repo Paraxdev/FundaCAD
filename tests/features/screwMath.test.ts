@@ -237,7 +237,7 @@ describe("clampDragAngle", () => {
   });
 
   it("clamps nothing but the far cap when the profile could not be measured", () => {
-    // minPitch 0 means "not measured", not "no height" — the kernel's own
+    // minPitch 0 means "not measured", not "no height", the kernel's own
     // refusal is the backstop there, exactly as it is for the pitch drag.
     expect(clampDragAngle(3600, 5, 0)).toBe(3600);
   });
@@ -272,8 +272,8 @@ describe("arcSpanDeg", () => {
   });
 
   it("caps rather than wrapping the arrow round the axis", () => {
-    // Past the cap the arc reads as a ring — a thing you turn to no particular
-    // end — instead of as the direction the sweep is already going.
+    // Past the cap the arc reads as a ring, a thing you turn to no particular
+    // end, instead of as the direction the sweep is already going.
     expect(arcSpanDeg(0.2, 1, 60)).toBe(MAX_ARC_DEG);
   });
 

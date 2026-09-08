@@ -29,7 +29,7 @@ describe("a fresh extrude", () => {
   it("makes a new body when there is nothing to boolean with", () => {
     expect(plannedOperation({ ...boss, hasSolid: false })).toBe("new");
     // CONTROL: it is the missing solid deciding, not the direction. An empty
-    // document with the direction flipped must still answer "new" — otherwise
+    // document with the direction flipped must still answer "new", otherwise
     // the first extrude of a document would come out as a Cut with nothing to
     // cut, which is the one answer that cannot be right.
     expect(plannedOperation({ ...boss, hasSolid: false, entersSolid: true })).toBe("new");

@@ -13,7 +13,7 @@ sidecar never reaps its pool; and terminating the sidecar leaves the worker
 orphaned in turn. Measured while driving the server from a script: 53 python
 processes left behind, at which point a fresh sidecar could no longer start its
 own worker and every build failed with "the geometry engine could not start on
-this computer" — an error about the machine, from a machine that was fine an
+this computer", an error about the machine, from a machine that was fine an
 hour earlier.
 
 A job object with KILL_ON_JOB_CLOSE fixes both ends at once. The handle is held

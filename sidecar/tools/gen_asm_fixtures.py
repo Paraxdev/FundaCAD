@@ -8,18 +8,18 @@ fixtures fill that gap.
 
 Each one isolates a case the import path has to get right:
 
-  asm_flat           3 single-solid products, depth 1 — the baseline.
+  asm_flat           3 single-solid products, depth 1, the baseline.
   asm_multisolid     "M3 Nut (x3)": ONE product label holding 3 disjoint solids,
                      plus a single-solid "Plate". The tree must not flatten this
                      to 4 anonymous bodies nor collapse it to 1.
   asm_nested         Depth 3, with one subassembly instanced TWICE at different
                      world positions. This is the fixture that catches leaves
                      being harvested in their parent's frame instead of world
-                     space — a bug that is invisible at depth 1.
+                     space, a bug that is invisible at depth 1.
   asm_colors         3 products with their own colour + 1 with none under a
                      coloured parent, which is the case that catches reading
                      build123d's inherited `.color` getter instead of the label.
-  asm_empty_product  A named product with faces and ZERO solids — the shape of
+  asm_empty_product  A named product with faces and ZERO solids, the shape of
                      the 11 products the importer silently drops today.
 
 Run with the sidecar venv:
@@ -89,7 +89,7 @@ def _part(shape_tool, assembly, shape, name):
 
     Deliberately NOT `AddShape(shape) -> name it -> AddComponent(label, loc)`:
     a name attached that way is DROPPED by STEPCAFControl_Writer for simple
-    solids. Verified — the product comes back out of the file as
+    solids. Verified, the product comes back out of the file as
     "Open CASCADE STEP translator 7.9 1.1", while compound products written the
     same way keep their names, which is a confusing thing to debug twice.
     Adding the shape through AddComponent and naming the REFERRED label writes
@@ -98,7 +98,7 @@ def _part(shape_tool, assembly, shape, name):
     their names, are instanced with an explicit location.
 
     makeAssembly stays off, which is what keeps a multi-solid compound as ONE
-    named product rather than an assembly of anonymous children — the whole
+    named product rather than an assembly of anonymous children, the whole
     point of asm_multisolid.
     """
     from OCP.TDF import TDF_Label
@@ -178,7 +178,7 @@ def asm_multisolid(path):
 def asm_nested(path):
     """Depth 3, with the "Board" subassembly instanced TWICE at different world
     positions. A leaf harvested in its parent's frame lands at the wrong place
-    here and nowhere in the shallower fixtures — measured: both MCU occurrences
+    here and nowhere in the shallower fixtures, measured: both MCU occurrences
     report the identical local bbox despite being 50mm apart in the file."""
     from build123d import Box, Pos
 
@@ -189,7 +189,7 @@ def asm_nested(path):
     _part(st, board, _boxes((1, 1, 3, 6, 1, 0), (1, 1, 3, 8, 1, 0)).wrapped, "Header (x2)")
 
     electronics = _empty_assembly(st, "Electronics")
-    # the same board, twice, 50mm apart — the ONLY thing distinguishing the two
+    # the same board, twice, 50mm apart, the ONLY thing distinguishing the two
     # occurrences is the component location, so a walk that drops ancestor
     # placement puts both at the same world position instead of two distinct ones
     st.AddComponent(electronics, board, _at(0, 0, 0))
@@ -273,7 +273,7 @@ def main():
         )
         if occ == 0:
             raise SystemExit(
-                f"{name}.step carries NO assembly structure — it is the same flat "
+                f"{name}.step carries NO assembly structure, it is the same flat "
                 "shape as every .step already in the repo and tests nothing"
             )
 

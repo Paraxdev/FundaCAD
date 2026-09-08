@@ -1,8 +1,8 @@
 // Ambiguous-reference repair: find the selector a rebuild refused, and produce
 // the patch that replaces it with a freshly picked one.
 //
-// Kept DOM-free and free of viewport/store imports so it can be tested directly
-// — the interactive half (highlight a face, click it) lives in featureStarters,
+// Kept DOM-free and free of viewport/store imports so it can be tested directly,
+// the interactive half (highlight a face, click it) lives in featureStarters,
 // which already owns picking. This module is only the part that is easy to get
 // quietly wrong: deciding WHICH of a feature's selectors the sidecar was
 // complaining about.
@@ -39,7 +39,7 @@ function isNearestAt(sel: unknown, at: readonly number[]): boolean {
 
 /**
  * Locate the `by:"nearest"` selector whose stored point is `at`, or null when the
- * feature no longer has one — which happens legitimately: the user may have
+ * feature no longer has one, which happens legitimately: the user may have
  * already re-picked it, or edited the feature, since the rebuild that failed.
  * Callers must treat null as "nothing to repair", not as an error.
  */
@@ -80,7 +80,7 @@ export function replaceSelectorAt(
 // `planeTilted` is deliberately NOT here, and that is a real limitation rather
 // than an oversight: resolve_face_on_plane filters candidate faces by the CACHED
 // plane's normal, and a repair writes only the selector (replaceSelectorAt
-// above, by design — rewriting the plane would re-frame a sketch's 2D entities
+// above, by design, rewriting the plane would re-frame a sketch's 2D entities
 // into a rotated basis and move everything downstream). So re-picking the tilted
 // face on the body that tilted reproduces the identical diagnostic, every time.
 // A button that cannot clear the chip beside it is the dead end this file exists
@@ -91,7 +91,7 @@ const REPAIRABLE_CODES = new Set(["ambiguousReference", "referenceNotFound"]);
  *
  *  "Repairable" means the user can fix it by picking a face, which is broader
  *  than ambiguity: a sketch or datum plane anchored to a face FALLS BACK to its
- *  cached plane rather than failing the build, and says why — the face is gone,
+ *  cached plane rather than failing the build, and says why, the face is gone,
  *  or the reference no longer names exactly one face. Both are answered by the
  *  same gesture, so both get the same button. Without them the "Re-pick the
  *  face" prose the sidecar writes would have nothing behind it.
@@ -101,8 +101,8 @@ const REPAIRABLE_CODES = new Set(["ambiguousReference", "referenceNotFound"]);
  *
  *  The prose fallback is DELIBERATE and stays. Matching `reason === "ambiguous
  *  nearest pick"` across the language boundary is what this used to do, so a
- *  sidecar older than the `code` field — most commonly server.py run by hand
- *  from another checkout, which is a routine workflow here — would otherwise
+ *  sidecar older than the `code` field, most commonly server.py run by hand
+ *  from another checkout, which is a routine workflow here, would otherwise
  *  lose the Re-pick affordance with nothing to explain it. */
 export function repairableDiagFor(
   diagnostics: { feature_id?: string; reason?: string; code?: string; at?: [number, number, number]; kind?: string; candidates?: string[] }[] | undefined,

@@ -2,8 +2,8 @@
 
 Split out of texture.py. Everything here is pure numpy: (u, v) in millimetres
 goes in, a [0,1] "raggedness" field comes out, and nothing knows what a face or
-a triangulation is. That makes every kind — knurl, hex, waves, ribs, voronoi,
-noise, an image heightmap — testable on a grid of numbers.
+a triangulation is. That makes every kind, knurl, hex, waves, ribs, voronoi,
+noise, an image heightmap, testable on a grid of numbers.
 
 The recurring theme is FACETS. A sub-millimetre sinusoid is something a printer
 rounds off into mush, so the default profile is hard-surface: triangle and
@@ -48,7 +48,7 @@ def _is_facet(spec):
 
 def _trapezoid(x, period, land):
     """Triangle wave with a flat LAND of width `land` (0..1 of the half-period)
-    at both the crest and the trough — the profile an actual knurling wheel or
+    at both the crest and the trough, the profile an actual knurling wheel or
     form tool leaves. land=0 is a pure V; land→1 is a square wave."""
     t = (x % period) / period
     tri = 1.0 - np.abs(2.0 * t - 1.0)  # 0..1..0
@@ -62,12 +62,12 @@ def _trapezoid(x, period, land):
 
 def _terrace(h, steps):
     """Quantise a continuous field into `steps` flat levels with vertical
-    risers between them — how a smooth field (noise, an image heightmap)
+    risers between them, how a smooth field (noise, an image heightmap)
     becomes hard-surface: plateaus a nozzle can actually lay down, instead of a
     slope it rounds into mush.
 
     The top bucket is clamped to steps-1 so h == 1.0 lands ON the top level
-    rather than one past it — without that the result exceeds 1.0 and breaks the
+    rather than one past it, without that the result exceeds 1.0 and breaks the
     [0,1] contract every caller relies on."""
     n = max(2, int(round(steps)))
     q = np.minimum(np.floor(np.clip(h, 0.0, 1.0) * n), n - 1)
@@ -82,12 +82,12 @@ def _steps_from(sharpness):
 
 
 def _height_knurl(u, v, scale, angle, sharpness, facet=True):
-    # crossed triangle-wave ridges (angle, angle+90) — classic diamond knurl.
+    # crossed triangle-wave ridges (angle, angle+90), classic diamond knurl.
     _, v1 = _rotate(u, v, angle)
     _, v2 = _rotate(u, v, angle + 90.0)
     if facet:
         # MIN of the two groove profiles, not their product. A product of two
-        # linear ramps is a BILINEAR SADDLE — every cell curves, which is what
+        # linear ramps is a BILINEAR SADDLE, every cell curves, which is what
         # made this read as soft bumps instead of knurling. min() is what two
         # crossed V-grooves actually cut: planar facets, straight ridges.
         return np.minimum(_trapezoid(v1, scale, sharpness), _trapezoid(v2, scale, sharpness))
@@ -105,7 +105,7 @@ _HEX_CORNERS = np.array([[math.cos(math.radians(30 + 60 * k)), math.sin(math.rad
 
 
 def _hex_wall_width(scale, sharpness):
-    """Wall width in mm, from the shared `sharpness` slider — crisper means a
+    """Wall width in mm, from the shared `sharpness` slider, crisper means a
     narrower wall and a broader flat top, matching what the slider does for every
     other kind. Expressed against the cell's inradius so it scales with `scale`.
 
@@ -113,7 +113,7 @@ def _hex_wall_width(scale, sharpness):
     cell the wall stops being meshable exactly: two neighbouring flat tops end up
     closer to each other than to the groove between them, and an unconstrained
     Delaunay takes the short edge and bridges the crease (measured 0.24mm on a
-    0.4mm texture at 0.10). It is not a real loss — a wall that narrow is a
+    0.4mm texture at 0.10). It is not a real loss, a wall that narrow is a
     near-vertical cliff no nozzle resolves anyway."""
     s = max(0.0, min(1.0, float(sharpness)))
     return (0.14 + 0.31 * (1.0 - s)) * (scale * 0.5)
@@ -124,7 +124,7 @@ def _hex_nearest_site(u, v, a):
     whose Voronoi cells ARE the honeycomb.
 
     The lattice's fundamental domain is a rhombus, so the nearest site to any
-    point is one of that rhombus's four corners — checking those four is exact,
+    point is one of that rhombus's four corners, checking those four is exact,
     not an approximation (the tests assert it by requiring every point to fall
     inside its own cell)."""
     root3 = math.sqrt(3.0)
@@ -149,7 +149,7 @@ def _hex_nearest_site(u, v, a):
 
 def _height_hex(u, v, scale, sharpness=0.5, facet=True):
     if not facet:
-        # 3-direction cosine interference sum — a closed-form honeycomb pattern
+        # 3-direction cosine interference sum, a closed-form honeycomb pattern
         # (no lattice nearest-neighbor search needed), normalized to [0,1].
         root3 = math.sqrt(3.0)
         a = np.cos(2 * np.pi * u / scale)
@@ -157,7 +157,7 @@ def _height_hex(u, v, scale, sharpness=0.5, facet=True):
         c = np.cos(2 * np.pi * (u * 0.5 + v * root3 * 0.5) / scale)
         return np.clip((a + b + c) / 3.0 * 0.5 + 0.5, 0.0, 1.0)
 
-    # FACETED: a real hexagonal mesa — flat top, six planar walls, creases along
+    # FACETED: a real hexagonal mesa, flat top, six planar walls, creases along
     # the cell edges and along the six spokes where two walls meet.
     #
     # This replaces a clipped cosine sum. That version's walls followed a
@@ -181,7 +181,7 @@ def _height_hex(u, v, scale, sharpness=0.5, facet=True):
 # the assembly is exact everywhere; at 12 and 16 the seam strip on a cylinder
 # starts handing Delaunay cells so slivered it bridges two crease columns at
 # once (measured: 5 and 37 interior triangles off by up to 0.026mm, all within
-# 1.2mm of the seam). Finer is also pointless for the printer — 16 facets on a
+# 1.2mm of the seam). Finer is also pointless for the printer, 16 facets on a
 # 2mm wave is 0.125mm each, under any nozzle. So the slider shapes the profile
 # BETWEEN these joins instead of adding more of them.
 _WAVE_JOINS = 8
@@ -192,7 +192,7 @@ def _wave_levels():
 
     There is deliberately NO shape parameter. Every way of flattening or peaking
     a one-dimensional profile on this few joins lands back on the trapezoid /
-    triangle family — which IS ribs, only phase-shifted — so a "roundness"
+    triangle family, which IS ribs, only phase-shifted, so a "roundness"
     slider would spend its travel walking waves back into the kind it exists to
     differ from. Tried and rejected: a gain about mid-height clipped the crest
     flat by slider position 0.21 and then did nothing for the remaining 80%. The
@@ -208,7 +208,7 @@ def _wave_phases():
     NOT every join: the sine is antisymmetric about its two INFLECTIONS, and the
     joins are symmetric about them too, so the chords either side share a slope
     and the polyline runs dead straight through. Those two turn no corner, and a
-    line there would buy nothing but triangles — a quarter of them. Read off the
+    line there would buy nothing but triangles, a quarter of them. Read off the
     levels rather than hardcoded, by comparing the slope arriving with the one
     leaving."""
     lv = _wave_levels()
@@ -220,7 +220,7 @@ def _wave_phases():
 def _facet_wave(x, period):
     """The faceted wave: linear interpolation between `_wave_levels`.
 
-    Faceted kinds must be piecewise linear to be MESHABLE EXACTLY — a curved
+    Faceted kinds must be piecewise linear to be MESHABLE EXACTLY, a curved
     level set cannot be reproduced by any arrangement of sample points, which is
     what left the old cosine-walled hex measured 41% of its own depth off. So
     the rounded look is built from real planar facets and real creases rather
@@ -241,7 +241,7 @@ def _height_waves(u, v, scale, angle, sharpness, facet=True):
         # a faceted SINE, not a trapezoid: rounded undulation against ribs' flat
         # -topped prisms. Both kinds used to return _trapezoid here, which made
         # them byte-identical under the default profile (measured max|w-r| = 0).
-        # `sharpness` is deliberately unused — see _wave_levels.
+        # `sharpness` is deliberately unused, see _wave_levels.
         return _facet_wave(u1, scale)
     h = 0.5 + 0.5 * np.sin(2 * np.pi * u1 / scale)
     return _sharpen(h, sharpness)
@@ -290,14 +290,14 @@ def _height_voronoi(u, v, scale, seed, sharpness=0.5, facet=True):
     punched into each cell.
 
     NOT exactly meshable, and knowingly so. The cone is curved, so no arrangement
-    of vertices reproduces it — measured 95% of the texture's own depth off, the
+    of vertices reproduces it, measured 95% of the texture's own depth off, the
     worst of any kind. The fix is the same one hex got (distance to the cell
     BOUNDARY, which is a min of half-planes and therefore piecewise linear), but
     a Voronoi cell is irregular, and insetting an irregular convex polygon is not
     just "move every edge inward": edges vanish at different widths, and the
     straight skeleton grows nodes a naive inset puts in the wrong place. That
     needs a real straight-skeleton pass, so it is left for its own change rather
-    than shipped half-done — a redefinition that changed every existing voronoi
+    than shipped half-done, a redefinition that changed every existing voronoi
     model without delivering exactness would be the worst of both."""
     from scipy.spatial import cKDTree
 
@@ -318,7 +318,7 @@ def _lerp(a, b, t):
 
 
 def _perlin2(x, y, perm):
-    """Vectorized 2D gradient noise (Perlin-style), 4-direction diagonal gradients —
+    """Vectorized 2D gradient noise (Perlin-style), 4-direction diagonal gradients,
     the standard cheap simplification (full 8/12-direction gradient sets buy
     smoothness we don't need for a bump texture)."""
     xi = np.floor(x).astype(np.int64) & 255
@@ -388,7 +388,7 @@ def height_field(kind, spec, u_mm, v_mm, u_range=None, v_range=None):
     """Return a [0,1] "raggedness" field (0=valley, 1=peak) for the given kind, as a
     plain vectorized numpy computation over the u_mm/v_mm coordinate arrays.
 
-    `spec["profile"]` selects hard-surface (`"facet"`, the default — planar
+    `spec["profile"]` selects hard-surface (`"facet"`, the default, planar
     facets and real creases, which is what survives a 3D print) or the original
     smooth fields (`"round"`). `sharpness` is reused per profile rather than
     adding a control: under facet it is the flat-LAND fraction for the periodic
@@ -421,7 +421,7 @@ def height_field(kind, spec, u_mm, v_mm, u_range=None, v_range=None):
 
 
 def _u_period(spec, scale):
-    """The pattern's translation period ALONG U — what a full turn has to be a
+    """The pattern's translation period ALONG U, what a full turn has to be a
     whole number of, for the pattern to meet itself at the seam.
 
     Rotating changes it. A rib pattern at angle θ repeats every `scale` across
@@ -432,8 +432,8 @@ def _u_period(spec, scale):
 
     knurl and hex are 2D lattices and get `scale` regardless, which is exact only
     at multiples of 90°. Closing a rotated 2D lattice on a cylinder needs the
-    turn to be a lattice vector in BOTH directions at once — possible only when
-    tan θ is rational — so at a general angle they cannot close, and the seam
+    turn to be a lattice vector in BOTH directions at once, possible only when
+    tan θ is rational, so at a general angle they cannot close, and the seam
     carries a phase joint. That is geometry, not a defect to fix here."""
     if spec["kind"] not in ("ribs", "waves"):
         return scale

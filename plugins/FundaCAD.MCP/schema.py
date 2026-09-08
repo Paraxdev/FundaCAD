@@ -7,7 +7,7 @@ first-class part of the server rather than a README: it is served as an MCP
 resource and returned by the `schema` tool, so the caller can read it without
 leaving the conversation.
 
-It is hand-written, because the authority — src/types.ts — is a TypeScript
+It is hand-written, because the authority, src/types.ts, is a TypeScript
 discriminated union with the reasoning in its comments, and no generator turns
 that into prose worth reading. Hand-written documentation rots, so
 tests/test_schema.py holds it to the sidecar: every type documented here must
@@ -33,7 +33,7 @@ COMMON = {
     "Selector": (
         "How a feature names a face or an edge of a body that does not exist "
         "until the rebuild runs. Prefer the selector the `inspect` tool hands "
-        "back for that exact face or edge — it carries a geometric fingerprint "
+        "back for that exact face or edge, it carries a geometric fingerprint "
         "and survives small changes upstream. The forms are:\n"
         '  {"kind":"face"|"edge", "by":"match", "fp":{...}, "nth":k, "body":"body1"}\n'
         '  {"kind":"face", "by":"nearest", "point":[x,y,z], "body":"body1"}\n'
@@ -126,7 +126,7 @@ FEATURES = {
         },
         "notes": "Sketch coordinates are 2D IN THE PLANE. On XY they are (x, y); on "
                  "XZ they are (x, z); on YZ they are (y, z). A profile to be "
-                 "extruded or revolved must CLOSE — the endpoints have to meet "
+                 "extruded or revolved must CLOSE, the endpoints have to meet "
                  "exactly, so write the same numbers, do not round differently.",
     },
     "extrude": {
@@ -204,7 +204,7 @@ FEATURES = {
         "example": {"id": "fil1", "type": "fillet",
                     "edges": {"kind": "edge", "by": "axis", "axis": "Z", "body": "body1"},
                     "radius": 2},
-        "notes": "A SEAM edge cannot be filleted — that is the edge where a face "
+        "notes": "A SEAM edge cannot be filleted, that is the edge where a face "
                  "that wraps 360 degrees closes on itself, and the kernel needs "
                  "two DIFFERENT faces to blend between. `inspect` marks those "
                  'edges with "seam": true. The radius must also fit: it cannot '
@@ -221,7 +221,7 @@ FEATURES = {
         "fields": {
             "face": "Selector or list of Selectors",
             "distance": "Num, signed: positive grows the body, negative cuts in",
-            "operation": '"join" or "cut" — a label derived from the sign',
+            "operation": '"join" or "cut", a label derived from the sign',
             "body": "optional body id",
             "upTo": "optional Selector naming a target face to stop at, instead "
                     "of using `distance`",
@@ -251,7 +251,7 @@ FEATURES = {
     "draft": {
         "summary": "Tilt faces by an angle about an axis (mould release).",
         "fields": {"faces": "Selector or list", "angle": "Num, degrees",
-                   "axis": '"X", "Y" or "Z" — the pull direction'},
+                   "axis": '"X", "Y" or "Z", the pull direction'},
         "example": {"id": "dr1", "type": "draft",
                     "faces": {"kind": "face", "by": "normal", "dir": [1, 0, 0], "body": "body1"},
                     "angle": 3, "axis": "Z"},
@@ -319,7 +319,7 @@ FEATURES = {
                    "keepOriginals": "optional bool"},
         "example": {"id": "bo1", "type": "boolean", "operation": "subtract",
                     "target": "body1", "tools": ["body2"]},
-        "notes": "Body ids are body1, body2, ... in creation order — NOT feature "
+        "notes": "Body ids are body1, body2, ... in creation order, NOT feature "
                  "ids. Call `build` and read the body list before writing one.",
     },
     "split": {

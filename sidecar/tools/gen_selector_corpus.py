@@ -1,18 +1,18 @@
-"""Selector-survival corpus generator (Norn oracle code — hash-locked at seal).
+"""Selector-survival corpus generator (Norn oracle code, hash-locked at seal).
 
 Generates a frozen corpus of (fingerprint, mutation, intended-entity) tuples for the
 v2 `by:"match"` resolver in geom_select.py. The pipeline for every case:
 
   1. build the ORIGINAL part from a parametric spec;
   2. locate the INTENDED entity in it by an INDEPENDENT structural rule (build123d's
-     own filters — never geom_select's scorer), and author a fingerprint from it, the
+     own filters, never geom_select's scorer), and author a fingerprint from it, the
      way the frontend persists a selection;
   3. build the MUTATED part (one upstream parameter changed);
   4. locate the SAME logical entity in the mutated part and freeze its identity key
      (center+radius for circles, midpoint+length for lines, centroid+area[+radius] for
-     faces) — this is the ground truth, computed without ever calling the resolver;
+     faces), this is the ground truth, computed without ever calling the resolver;
   5. certify the case: the intended entity actually moved (else it tests nothing), and
-     its identity key is UNIQUE in the mutated part (else the ask is ambiguous — reject).
+     its identity key is UNIQUE in the mutated part (else the ask is ambiguous, reject).
 
 The eval (eval_selector_survival.py) rebuilds the mutated part from the stored spec,
 runs the resolver under the config being tuned, and scores survival = resolved entity's
@@ -118,7 +118,7 @@ def top_rim_by_radius(part, want_outer):
 
 
 # Hole locators identify a hole by a logical property the mutation preserves
-# (it is a SINGLE hole / the +X of a symmetric pair / the one nearest origin) —
+# (it is a SINGLE hole / the +X of a symmetric pair / the one nearest origin),
 # never by absolute position, since the hole moves between original and mutated.
 
 
@@ -136,7 +136,7 @@ def hole_top_rim_by_sign(part, sx):
 
 
 def hole_top_rim_nearest_origin(part):
-    """The top rim closest to the origin — the original hole, when a distractor is added."""
+    """The top rim closest to the origin, the original hole, when a distractor is added."""
     tc = [e for e in _circles(part, top=True) if gs._edge_center(e) is not None]
     if not tc:
         return None
@@ -144,7 +144,7 @@ def hole_top_rim_nearest_origin(part):
 
 
 def top_corner_z_edge(part, sx, sy):
-    """A vertical (Z-parallel) box edge chosen by the sign of its X,Y corner — a
+    """A vertical (Z-parallel) box edge chosen by the sign of its X,Y corner, a
     logical identity a dimension change preserves (still the +X+Y vertical edge)."""
     zes = [e for e in part.edges() if gs._edge_curve(e) == "line" and abs(gs._edge_dir(e).Z) > 0.99]
     if not zes:
@@ -199,7 +199,7 @@ def _draw(rng, lo, hi):
 
 
 def gen_dimension_change(rng, n):
-    """Simple box/pipe, one dimension scaled — the position-drift control category."""
+    """Simple box/pipe, one dimension scaled, the position-drift control category."""
     out = []
     i = 0
     while len(out) < n and i < n * 6:
@@ -223,7 +223,7 @@ def gen_dimension_change(rng, n):
 
 
 def gen_moved_sketch(rng, n):
-    """Rigid translation — position drifts, but length/area/type still pin the entity."""
+    """Rigid translation, position drifts, but length/area/type still pin the entity."""
     out = []
     i = 0
     while len(out) < n and i < n * 6:
@@ -241,7 +241,7 @@ def gen_moved_sketch(rng, n):
 
 
 def gen_concentric(rng, n):
-    """Pipe with two concentric top rims — disambiguate inner vs outer by radius/center."""
+    """Pipe with two concentric top rims, disambiguate inner vs outer by radius/center."""
     out = []
     i = 0
     while len(out) < n and i < n * 8:
@@ -261,7 +261,7 @@ def gen_concentric(rng, n):
 
 
 def gen_mirrored_twin(rng, n):
-    """Two symmetric holes about X=0 — the resolver must not pick the mirror twin."""
+    """Two symmetric holes about X=0, the resolver must not pick the mirror twin."""
     out = []
     i = 0
     while len(out) < n and i < n * 8:
@@ -316,7 +316,7 @@ def gen_added_feature(rng, n):
         hx, hy, hr = _draw(rng, -6, 6), _draw(rng, -6, 6), _draw(rng, 3, 6)
         k = rng.uniform(1.15, 1.6)
         hx_m, hy_m = round(hx * k, 3), round(hy * k, 3)
-        # distractor near a corner of the mutated box — always farther from origin
+        # distractor near a corner of the mutated box, always farther from origin
         cx = round((rng.choice([1, -1])) * (w * k / 2 - hr - 3), 3)
         cy = round((rng.choice([1, -1])) * (d * k / 2 - hr - 3), 3)
         orig = {"archetype": "box_holes", "params": {"w": w, "d": d, "h": h, "holes": [[hx, hy, hr]]}}

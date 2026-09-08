@@ -6,14 +6,14 @@
 // geometry, and hand-listing them is how an undo feature ends up silently
 // missing one. Instead of instrumenting each, SketchMode diffs against a rolling
 // `preEdit` snapshot at the single choke point every user mutation passes
-// through (requestSolve). Anything that must NOT be undoable — the solver's own
-// write-back, parameter sync, projection refresh — either never reaches that
+// through (requestSolve). Anything that must NOT be undoable, the solver's own
+// write-back, parameter sync, projection refresh, either never reaches that
 // point or re-arms `preEdit` first so it compares equal.
 
 import type { SketchConstraint, SketchPattern } from "../types";
 import type { ResolvedEntity } from "./snap";
 
-/** The editable state one undo step restores — the whole of what a sketch edit
+/** The editable state one undo step restores, the whole of what a sketch edit
  *  can change. */
 export type SketchSnapshot = {
   entities: ResolvedEntity[];
@@ -57,7 +57,7 @@ export class SketchHistory {
     return true;
   }
 
-  /** Bank an explicit before-state — for a gesture that mutated continuously and
+  /** Bank an explicit before-state, for a gesture that mutated continuously and
    *  should collapse to ONE step (a drag), whose frames never reached
    *  bankIfChanged. No-ops when nothing actually changed. */
   bankBefore(before: SketchSnapshot, now: SketchSnapshot): boolean {

@@ -6,7 +6,7 @@
 // observation, so this measures it. Two claims are under test:
 //
 //   1. the collapsed tree is not SLOWER than the flat list it replaces
-//   2. the N at which a render crosses 100ms — which is what expanding a node
+//   2. the N at which a render crosses 100ms, which is what expanding a node
 //      with N children costs, the case collapsing does NOT help
 //
 // Both documents hold the SAME bodies; only the manifest differs, so the
@@ -37,7 +37,7 @@ const REPEATS = 7;
   const page = await browser.newPage();
   page.on("pageerror", (e) => console.error("PAGE ERROR:", e.message));
 
-  // SUBSTITUTE the token into the sidecar URL — the app already builds `?token=`
+  // SUBSTITUTE the token into the sidecar URL, the app already builds `?token=`
   // (empty outside Tauri), and the override must be scoped to 8765 or vite's own
   // HMR socket breaks and fills the run with red herrings.
   await page.addInitScript((t) => {
@@ -65,7 +65,7 @@ const REPEATS = 7;
       const docPath = `${DOCS}/perf_${kind}_${n}.funda`;
       if (!fs.existsSync(docPath)) {
         console.error(
-          `missing ${docPath} — generate the benchmark documents first:\n` +
+          `missing ${docPath}, generate the benchmark documents first:\n` +
             `  sidecar/.venv/bin/python e2e/gen_perf_docs.py`,
         );
         process.exit(1);
@@ -85,7 +85,7 @@ const REPEATS = 7;
           // viewport work.
           //
           // The await is load-bearing. The panel is a Vue component now and
-          // "render this now" is nextTick, so refresh() returns a PROMISE —
+          // "render this now" is nextTick, so refresh() returns a PROMISE,
           // without awaiting it, every sample times the bump alone (~0ms) and
           // the benchmark cheerfully reports an enormous speedup that is not
           // real. This script is excluded from CI, so nothing else would catch it.
@@ -126,7 +126,7 @@ const REPEATS = 7;
     if (!faster) ok = false;
     console.log(
       `${String(n).padStart(5)} bodies: tree ${tree.median.toFixed(2)}ms vs flat ` +
-        `${flat.median.toFixed(2)}ms -> ${faster ? "OK" : "SLOWER — STOP"} ` +
+        `${flat.median.toFixed(2)}ms -> ${faster ? "OK" : "SLOWER, STOP"} ` +
         `(${flat.rows} rows -> ${tree.rows})`,
     );
   }

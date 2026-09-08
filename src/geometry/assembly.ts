@@ -6,7 +6,7 @@
 // head frame's manifest names every body up front, so every array offset and
 // every body's global faceStart can be planned BEFORE any payload arrives.
 // Planning up front is what makes chunk writes order-independent and provably
-// identical to the single-shot path — the plan is the same cumulative walk the
+// identical to the single-shot path, the plan is the same cumulative walk the
 // old single pass did, just hoisted out of the copy loop.
 
 import type { F32Wire, RebuildResult, U32Wire } from "../types";
@@ -83,7 +83,7 @@ export interface WireRebuildResult {
 /** One row of a chunked reply's manifest (server.py's _manifest_entry): every
  *  body of the reply, in final order, in the head frame.
  *
- *  Sizes are absent on stubs BY DESIGN — the sidecar does not have them,
+ *  Sizes are absent on stubs BY DESIGN, the sidecar does not have them,
  *  because those arrays live in this client's own per-body cache. That is not a
  *  gap: resolving a stub against the cache is something begin() has to do
  *  anyway, to decide whether it can still back that etag at all. */
@@ -143,7 +143,7 @@ export function manifestFromBodies(bodies: WireBody[]): WireManifestEntry[] {
 }
 
 export type BeginOutcome =
-  /** A stub referenced an etag we no longer hold — the caller must resync with
+  /** A stub referenced an etag we no longer hold, the caller must resync with
    *  one full request. Deliberately decided BEFORE any array is allocated. */
   | { kind: "resync" }
   /** Nothing changed: the previous result, BY REFERENCE. */
@@ -152,7 +152,7 @@ export type BeginOutcome =
 
 export class RebuildAssembly {
   /** The result being filled. Its arrays are allocated at full size up front,
-   *  so a body that has arrived can be read out of them immediately — but the
+   *  so a body that has arrived can be read out of them immediately, but the
    *  regions of bodies that have NOT arrived are still zeros. Anything reading
    *  this before complete() must restrict itself to written bodies. */
   readonly result: RebuildResult;
@@ -160,7 +160,7 @@ export class RebuildAssembly {
   readonly sig: string | null;
   // The concrete typed arrays behind result.mesh. RebuildResult declares those
   // fields as the looser F32Wire/U32Wire (a backend may hand back plain
-  // arrays), but the ones allocated here are always typed — held separately so
+  // arrays), but the ones allocated here are always typed, held separately so
   // the copy path can use .set() without casting on every write.
   private readonly positions: Float32Array;
   private readonly normals: Float32Array | undefined;
@@ -196,8 +196,8 @@ export class RebuildAssembly {
     lastSig: string | null,
   ): BeginOutcome {
     // Resolve every entry FIRST. A stub whose etag the cache cannot back means
-    // the whole reply is unusable, and finding that out here — before any
-    // allocation and, for a chunked reply, before any partial display — makes
+    // the whole reply is unusable, and finding that out here, before any
+    // allocation and, for a chunked reply, before any partial display, makes
     // a resync cost one round trip and nothing else.
     const sizes: WireManifestEntry[] = [];
     for (const m of manifest) {
@@ -226,7 +226,7 @@ export class RebuildAssembly {
     // the viewport's setModel keys its own visibility-only fast path on result
     // identity, so this is what lets a no-op rebuild skip the scene rebuild
     // too. The signature includes the non-geometry extras precisely because
-    // they CAN change while geometry does not — a new diagnostic or
+    // they CAN change while geometry does not, a new diagnostic or
     // featureError must still produce a fresh object.
     const sig = manifest.length === 0 ? null : JSON.stringify([
       sizes.map((m) => [m.id, m.etag, m.name, m.nodeRef, m.faceCount]),
@@ -250,7 +250,7 @@ export class RebuildAssembly {
       return { kind: "noop", result: lastAssembled };
     }
 
-    // Plan every offset in one cumulative walk — the same arithmetic the old
+    // Plan every offset in one cumulative walk, the same arithmetic the old
     // single copy loop did inline, which is what keeps faceStart and the global
     // faceId rebasing byte-identical to the single-shot path.
     const plan: BodyPlan[] = [];
@@ -288,7 +288,7 @@ export class RebuildAssembly {
       mesh,
       edges: new Array(edgeBase),
       // the wire can supply `bbox: null` when nothing has built yet (no
-      // bodies); preserved as-is — RebuildResult models bbox as always-present.
+      // bodies); preserved as-is, RebuildResult models bbox as always-present.
       bbox: head.bbox as RebuildResult["bbox"],
       bodies: meta,
     };
@@ -329,7 +329,7 @@ export class RebuildAssembly {
     if (this.normals && p.normals !== undefined) {
       this.normals.set(p.normals as ArrayLike<number>, q.vOff);
     }
-    // indices/faceIds need per-element offsets — indexed reads work on both
+    // indices/faceIds need per-element offsets, indexed reads work on both
     // union members, and writes into a preallocated Uint32Array are cheap.
     // NOTE the two different arities: `indices` is 3 entries per triangle,
     // `faceIds` is ONE. Conflating them scatters body N>1's faceIds past the

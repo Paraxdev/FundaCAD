@@ -7,7 +7,7 @@
 //
 // The rule that keeps this safe: THE STREAM IS A PURE ACCELERATOR, THE COMMIT IS
 // AUTHORITATIVE. Everything built here is keyed by body id and etag, exactly as
-// viewport.setModel() builds it — so when the completed build finally arrives,
+// viewport.setModel() builds it, so when the completed build finally arrives,
 // setModel's ordinary etag diff finds every body already present, reuses all of
 // them, and runs its whole-model passes once. If a chunk was dropped or this
 // file got something wrong, setModel simply builds the missing bodies itself.
@@ -60,7 +60,7 @@ export class ProgressiveModel {
    *  edits while a large rebuild is still arriving, which is what this whole
    *  file exists to make bearable. In that case `prev` is the view the running
    *  stream published, so the bodies this stream is about to reuse ARE the
-   *  bodies the running stream is holding — and tearing the old one down first
+   *  bodies the running stream is holding, and tearing the old one down first
    *  freed exactly them. An unchanged body then came back into `slots` with its
    *  GPU buffers already released and without ever being added back to the
    *  scene, so it vanished and stayed vanished: the commit's own etag diff finds

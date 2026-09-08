@@ -1,7 +1,7 @@
 // Hiding the scar where two aligned pieces meet.
 //
-// Split out of viewport.ts. A contact line between ALIGNED pieces — two mating
-// bodies, or glued solids inside one body — reads as a scar across what is
+// Split out of viewport.ts. A contact line between ALIGNED pieces, two mating
+// bodies, or glued solids inside one body, reads as a scar across what is
 // visibly one continuous surface. This hides an edge when two DISTINCT coplanar,
 // same-orientation planar faces sit on OPPOSITE SIDES of it, checked against the
 // actual triangles rather than inferred, so a hole rim (whose far side is empty
@@ -13,13 +13,13 @@
 //
 // It runs on every model load, so it reports what it cost: an assembly past
 // FLUSH_SEAM_MAX_EDGES is skipped outright, and the skip is announced through
-// sceneStats rather than being silent — a bug report from a large file should
+// sceneStats rather than being silent, a bug report from a large file should
 // show the seams were left visible ON PURPOSE, not that the feature broke.
 
 import * as THREE from "three";
 import { edgeObjects, type BodyMesh, type ModelView } from "./render";
 
-// Flush-seam hiding is SUPERLINEAR in edge count — it builds a per-face map over
+// Flush-seam hiding is SUPERLINEAR in edge count, it builds a per-face map over
 // every triangle in the model and then scans candidate faces per edge. Measured
 // (Chromium, synthetic coplanar bodies, evals/harness/seam_cost.cjs):
 //
@@ -31,7 +31,7 @@ import { edgeObjects, type BodyMesh, type ModelView } from "./render";
 // Per-edge cost rises ~20x over that range, so the tail is what hurts: past
 // 20,000 edges the pass is already >60% of setModel and climbing quadratically.
 // A normally-modelled part is nowhere near this; an imported assembly is far
-// past it — and there, hiding contact lines between separate parts is arguably
+// past it, and there, hiding contact lines between separate parts is arguably
 // wrong anyway, since part boundaries are what you want to see.
 export const FLUSH_SEAM_MAX_EDGES = 20_000;
 
@@ -59,7 +59,7 @@ function hideSeams(model: ModelView) {
   // never hide a seam). faceId is globally unique across bodies (the wire
   // protocol partitions it per body), so a single Map keyed by faceId still
   // spans the whole model correctly even though the triangles backing each
-  // entry now live in several different BufferGeometries — this is what lets
+  // entry now live in several different BufferGeometries, this is what lets
   // a seam between two DIFFERENT mating bodies still hide, not just a seam
   // within one body's own faces.
   interface FInfo {
@@ -102,7 +102,7 @@ function hideSeams(model: ModelView) {
     }
   }
 
-  const TOL = 0.02;  // on-plane tolerance (mm) — flush contacts are exact
+  const TOL = 0.02;  // on-plane tolerance (mm), flush contacts are exact
   const INFL = 0.5;  // bbox slack for candidate gathering
   const EPS = 0.3;   // side-sample offset from the edge (mm)
   const planar = [...faces.values()].filter((f) => f.planar && f.n.lengthSq() > 0.5);

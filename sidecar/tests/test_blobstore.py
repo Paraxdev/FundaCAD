@@ -1,6 +1,6 @@
 """Tests for blobstore.py. Run: cd sidecar && .venv/bin/python test_blobstore.py
 
-Pure bytes — no OCP, no sidecar, no network.
+Pure bytes, no OCP, no sidecar, no network.
 
 The load-bearing test here is `test_hash_matches_rust`: this store is written by
 BOTH Rust (extracting a container) and Python (importing geometry), addressed
@@ -77,7 +77,7 @@ def test_roundtrip():
 def test_corruption_is_a_miss_not_wrong_geometry():
     """This store is the source of truth for the user's geometry, so bytes that
     do not hash to their own filename must NOT be handed back. Returning them
-    would build a silently wrong shape — the worst failure class in the design."""
+    would build a silently wrong shape, the worst failure class in the design."""
     print("corruption")
     root = tempfile.mkdtemp(prefix="blobstore_bad_")
     try:

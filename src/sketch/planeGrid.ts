@@ -3,7 +3,7 @@
 // see.
 //
 // It replaces a fixed 400mm / 80-division GridHelper whose three problems were all
-// one problem — it did not know what scale you were working at.
+// one problem, it did not know what scale you were working at.
 //
 //  - Spacing comes from niceStep, the same ui/units helper the world ground grid
 //    uses at the same ~64px target. The two are never on screen together, but they
@@ -17,8 +17,8 @@
 // Two things were wrong with that and only one of them was the fade. The fade
 // itself said the grid stops, which is the one thing a coordinate lattice must
 // never say; and the disc never moved, so panning away from the origin left you
-// drawing on nothing. What the fade bought was a lattice that could be small —
-// nine cells — and still never show an edge. Following the VIEW instead buys the
+// drawing on nothing. What the fade bought was a lattice that could be small,
+// nine cells, and still never show an edge. Following the VIEW instead buys the
 // same thing honestly, and it is cheaper: with nothing to fade along, a grid line
 // is one segment end to end rather than one per cell it crosses, and that is what
 // pays for the much larger lattice.
@@ -29,7 +29,7 @@ import type { SketchPlane } from "./plane";
 
 /** Target size of one minor cell on screen. Matches AdaptiveGrid. */
 export const GRID_CELL_PX = 64;
-/** Every Nth line is drawn brighter — the same 5 the ground grid uses, so the
+/** Every Nth line is drawn brighter, the same 5 the ground grid uses, so the
  *  eye can count cells the same way in both. */
 export const GRID_MAJOR_EVERY = 5;
 /** How far the lattice reaches from the view centre, as a multiple of the
@@ -83,14 +83,14 @@ export function gridReach(worldPerPixel: number, diagonalPx: number): number {
 }
 
 export interface GridLines {
-  /** x,y for every vertex — two vertices (four numbers) per line. */
+  /** x,y for every vertex, two vertices (four numbers) per line. */
   minor: number[];
   major: number[];
 }
 
 /** The lattice covering the square of half-width `reach` around (cx, cy).
  *
- *  Lines sit at absolute multiples of `step`, not at offsets from the centre —
+ *  Lines sit at absolute multiples of `step`, not at offsets from the centre,
  *  that is what keeps the major lines pinned to the sketch origin (and to round
  *  coordinates) however far the view wanders. Each one is a single segment
  *  spanning the whole lattice, and both its ends lie OUTSIDE the square that was
@@ -137,7 +137,7 @@ const LIFT_PX = 0.75;
 
 /** The scene object, rebuilt only when the lattice it should be drawing actually
  *  changes. Add `object` to the scene once and call update() as often as you
- *  like — the key check makes a no-op update cost a handful of divisions. */
+ *  like, the key check makes a no-op update cost a handful of divisions. */
 export class SketchPlaneGrid {
   readonly object = new THREE.Group();
   /** current minor spacing (mm), for anyone who wants to report it */
@@ -162,7 +162,7 @@ export class SketchPlaneGrid {
   }
 
   /** Re-place and (when needed) rebuild. `cx`/`cy` are the lattice centre in
-   *  sketch coordinates — the camera target dropped onto the plane, so the grid
+   *  sketch coordinates, the camera target dropped onto the plane, so the grid
    *  goes where you are looking. `reach` is how far it must run from there; see
    *  gridReach. Returns true when geometry was rebuilt, i.e. a repaint is owed. */
   update(
@@ -184,7 +184,7 @@ export class SketchPlaneGrid {
     const cells = Math.ceil(reach / step);
 
     // The lift tracks zoom continuously, so it is a TRANSFORM, not part of the
-    // key — baking it into vertices would rebuild the lattice on every scroll.
+    // key, baking it into vertices would rebuild the lattice on every scroll.
     this.lift.copy(plane.n).multiplyScalar(worldPerPixel * LIFT_PX);
     this.object.position.copy(this.lift);
 

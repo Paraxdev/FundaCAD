@@ -10,19 +10,19 @@ order of how often it works. These tests pin every step and every boundary.
    which is what resizes a hole, a boss or a blend properly. The torus matters
    most: a fillet on a round edge is a toroidal face, so "blend a part, then
    adjust the blend by dragging it" used to be refused outright.
-3. FREEFORM faces sweep along one direction and boolean, like a plane. Weaker —
-   the face travels with straight side walls instead of the surface thickening —
+3. FREEFORM faces sweep along one direction and boolean, like a plane. Weaker,
+   the face travels with straight side walls instead of the surface thickening,
    but robust, and a weaker answer beats a refusal.
 
 The offset must NEVER be tried on a freeform face. It does not fail there, it
 crashes: a swept BSPLINE offsets fine at +-1mm and dies with an access violation
 at +-8mm and +-20mm. An earlier change probed +-1.5mm only, concluded nothing
-crashes, and shipped — and a -20mm cut then killed a worker mid-rebuild. Hence
+crashes, and shipped, and a -20mm cut then killed a worker mid-rebuild. Hence
 test_the_large_offsets_that_killed_a_worker, which runs out of process so a
 crash is a return code, and test_the_freeform_path_never_calls_the_offset.
 
 And validity is not enough to accept a sweep. A face that wraps around produces
-a valid solid of volume 0.0 — a well-formed nothing — so the volume is checked
+a valid solid of volume 0.0, a well-formed nothing, so the volume is checked
 for sign and direction too.
 """
 
@@ -58,7 +58,7 @@ def test_the_blend_face_of_a_filleted_part():
     """The regression this whole change is about.
 
     Filleting a cylinder's rim makes a TORUS face. Under the old whitelist,
-    dragging it reported "Press/Pull supports flat and cylindrical faces only" —
+    dragging it reported "Press/Pull supports flat and cylindrical faces only",
     on a face the kernel offsets without complaint."""
     s = Solid.make_cylinder(12, 24)
     s = s.fillet(3, s.edges().filter_by(GeomType.CIRCLE))
@@ -87,7 +87,7 @@ def test_the_analytic_curved_surfaces():
 
 def _lofted_freeform():
     """A loft between two offset, rotated rectangles: four BSpline side faces,
-    each of which faces one way. The ordinary freeform shape — a draft, a blended
+    each of which faces one way. The ordinary freeform shape, a draft, a blended
     transition, an imported organic part."""
     from build123d import Face, Plane, Rot, loft
 
@@ -97,14 +97,14 @@ def _lofted_freeform():
 
 
 def test_a_freeform_face_moves_by_sweeping_instead_of_offsetting():
-    """A freeform face that faces one way is no longer refused — it sweeps.
+    """A freeform face that faces one way is no longer refused, it sweeps.
 
     This is the capability the refusal used to cost. The offset path cannot go
     here at all: it works at +-1mm and dies with an access violation at +-8mm and
     +-20mm, in both directions, on a threshold set by local curvature that
     nothing can bound.
 
-    Sweeping gives a different answer, and the difference is real — the face
+    Sweeping gives a different answer, and the difference is real, the face
     travels along one direction with straight side walls rather than the surface
     thickening. On a face like this that is what "push this patch" means."""
     s = _lofted_freeform()
@@ -123,7 +123,7 @@ def test_a_wrapping_face_is_thickened_rather_than_swept():
     """The side of a swept tube closes on itself, so no single direction means
     anything and a linear prism eats the solid. Measured, before there was
     anywhere else for it to go: the swept result passes BRepCheck_Analyzer and
-    has volume 0.0 — a perfectly well-formed nothing.
+    has volume 0.0, a perfectly well-formed nothing.
 
     It now goes to _thicken_press_pull instead, which follows the SURFACE and so
     needs no direction. The property to hold is the one that always mattered:
@@ -186,14 +186,14 @@ def test_a_wrapping_face_pushed_INWARD_is_still_refused():
         assert "wraps" in str(ex), f"refusal should name the reason, got: {ex}"
         print(f"inward push on a wrapping bspline refused OK: {ex}")
         return
-    raise AssertionError("an inward push on a wrapping BSPLINE face was accepted — "
+    raise AssertionError("an inward push on a wrapping BSPLINE face was accepted, "
                          "that is the case measured to crash the kernel")
 
 
 def test_a_wrapping_surface_of_revolution_moves_both_ways():
     """The case that started this: a 360-degree revolve of a profile the kernel
     cannot call a cylinder, a cone, a sphere or a torus. Its side face wraps, so
-    it used to reach the sweep and be refused — on a shape whose whole point is
+    it used to reach the sweep and be refused, on a shape whose whole point is
     that you push its wall around.
 
     Both directions, because unlike the BSPLINE this one was measured safe both
@@ -224,7 +224,7 @@ def test_the_freeform_path_never_calls_the_offset_that_crashes():
     into SOLID_OPS, where _press_pull is defined and so where it looks the name
     up; patched on builder, which imports the same function object, it could
     never fire. And it raises a BaseException, because the call it guards sits
-    inside `except Exception: pass` — an AssertionError was caught by the very
+    inside `except Exception: pass`, an AssertionError was caught by the very
     fallback under test and the guard reported success either way. Both are
     mutation-checked: put BSPLINE into OFFSETTABLE_CURVED and this must fail."""
     import builder
@@ -242,7 +242,7 @@ def test_the_freeform_path_never_calls_the_offset_that_crashes():
         which would swallow the evidence."""
 
     def bomb(*_a, **_k):
-        raise Reached("the freeform path reached BRepOffset — this crashes workers")
+        raise Reached("the freeform path reached BRepOffset, this crashes workers")
 
     solid_ops._offset_faces = bomb
     try:
@@ -300,7 +300,7 @@ def test_the_large_offsets_that_killed_a_worker():
 
 def test_an_impossible_offset_is_refused_not_crashed():
     """An offset the kernel accepts the shape of but cannot complete must come
-    back as a ValueError carrying a sentence — not as a solid that fails a
+    back as a ValueError carrying a sentence, not as a solid that fails a
     boolean three operations later, where nothing connects it to what the user
     did. A sphere pushed inward by more than its own radius is that case."""
     s = Solid.make_sphere(10)
@@ -312,7 +312,7 @@ def test_an_impossible_offset_is_refused_not_crashed():
         print(f"impossible offset refused OK: {ex}")
         return
     assert BRepCheck_Analyzer(out.wrapped).IsValid(), (
-        "an offset succeeded but produced an invalid solid — the result check "
+        "an offset succeeded but produced an invalid solid, the result check "
         "in _offset_faces is not doing its job")
     print("that offset actually succeeded, and validly")
 

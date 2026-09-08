@@ -5,8 +5,8 @@ went wrong. Sometimes that is the truth; sometimes it is a retry loop that
 cannot terminate, because the operation fails identically at 5mm and at 0.05mm.
 
 The instrument is one extra kernel attempt on the failure path, at a twentieth
-of the size. Measured on a cylinder half sunk into a plate — the partial cap rim
-runs into the plate at both ends — that rim builds at 1.5mm and fails at 2.0mm,
+of the size. Measured on a cylinder half sunk into a plate, the partial cap rim
+runs into the plate at both ends, that rim builds at 1.5mm and fails at 2.0mm,
 and the smaller probe builds, so OCCT's own sentence is the honest one and is
 passed through unchanged.
 
@@ -32,7 +32,7 @@ from builder import (
 def _boss_on_a_plate():
     """A cylinder lying on its side, half sunk in a plate. Its end cap is cut by
     the plate, so the cap rim is a pair of ARCS that die into a neighbouring
-    face rather than a closed circle — the shape a blend has the most trouble
+    face rather than a closed circle, the shape a blend has the most trouble
     terminating on."""
     plate = Box(40, 40, 6)
     return plate + Pos(0, 0, 3) * Rot(0, 90, 0) * Cylinder(8, 30)
@@ -77,7 +77,7 @@ def test_a_huge_request_does_not_make_the_probe_lie():
     drag that ran far past the limit probed past it too, and the refusal
     announced that no size would help while a small one built perfectly. The
     message was at its most misleading exactly when the user was furthest from a
-    value that works — which a drag reaches in a fraction of a second.
+    value that works, which a drag reaches in a fraction of a second.
 
     CONTROL: the same rim at 2.0mm, where the probe is genuinely small, must
     still come back True and must NOT be dragged down by this cap.
@@ -142,7 +142,7 @@ def test_the_kernel_sentence_drops_the_method_nobody_here_can_call():
 
 def test_the_message_refuses_by_name_when_no_size_would_help():
     """The failure this exists for. Nothing may suggest a smaller value, because
-    the user has already tried smaller values — that is how they got here."""
+    the user has already tried smaller values, that is how they got here."""
     shape = _boss_on_a_plate()
     body = {"name": "Body1", "shape": shape}
 

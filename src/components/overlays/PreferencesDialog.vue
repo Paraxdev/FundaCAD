@@ -4,8 +4,8 @@
 // surface at all.
 //
 // A surface over the existing setting modules, NOT a store of its own. Every
-// value here already persists itself and already notifies its own subscribers —
-// ui/theme.ts, ui/icons.ts, ui/units.ts, ui/layoutPrefs.ts — so this component
+// value here already persists itself and already notifies its own subscribers,
+// ui/theme.ts, ui/icons.ts, ui/units.ts, ui/layoutPrefs.ts, so this component
 // holds only the mirror it renders from, and every change is applied live.
 // Copying them into local state and writing back on "OK" would put a second
 // copy of each setting in the app, and the title bar's selects read the first.
@@ -45,7 +45,7 @@ const layout = ref(layoutPrefs());
 
 // The blocks the running plugins add. An "Assistants" block used to be written
 // out below, configuring what an assistant connected over MCP may do to the
-// open document — a question that decides nothing when no such plugin is
+// open document, a question that decides nothing when no such plugin is
 // installed, and a control that decides nothing is worse than a missing one.
 // It is contributed now, by the plugin it is about.
 const sections = shallowRef(contributedSettings());

@@ -2,18 +2,18 @@
 
 For each case the tool rebuilds the stored document IN-PROCESS (no server, no port)
 and decides pass/fail from invariants IT computes from the returned body via
-build123d — never from the builder's own diagnostics (those are used only to bucket
+build123d, never from the builder's own diagnostics (those are used only to bucket
 the failure taxonomy). A fillet/chamfer feature is FAILED if ANY of:
 
-  (a) error       — its feature_id appears in rebuild()'s errors list, and the
+  (a) error, its feature_id appears in rebuild()'s errors list, and the
                     message is not a selector miss (those are counted separately);
-  (b) validity    — the resulting body is not a SINGLE CLOSED VALID solid
-                    (BRepCheck_Analyzer.IsValid() and exactly one solid) — a
+  (b) validity, the resulting body is not a SINGLE CLOSED VALID solid
+                    (BRepCheck_Analyzer.IsValid() and exactly one solid), a
                     face-padded / partially-healed body is caught here;
-  (c) face-count  — resulting face count < pre_op_faces + n_edges (a correct blend
+  (c) face-count, resulting face count < pre_op_faces + n_edges (a correct blend
                     adds >= one face per resolved edge; fewer means a silent partial
                     fallback or a weakened selector);
-  (d) volume      — removed volume must be > 0 AND match the reference:
+  (d) volume, removed volume must be > 0 AND match the reference:
                       analytic cases: |removed - expected_removed| > 2% of expected;
                       combination cases: |removed - ref_removed|   > 2% of ref_removed,
                     where ref_removed is the corpus's sequential-oracle reference.
@@ -22,7 +22,7 @@ the failure taxonomy). A fillet/chamfer feature is FAILED if ANY of:
                     padding faces or silently dropping an edge.
 
 Selector misses (the op errors with a "no edge found" message) are counted SEPARATELY
-and kept out of the headline — the oracle-gated corpus should never miss, so a miss
+and kept out of the headline, the oracle-gated corpus should never miss, so a miss
 signals selector breakage. The corpus self-hash (sha256 of the canonical `cases`
 array) is recomputed and the tool HARD-FAILS on mismatch, so a tampered/truncated
 corpus cannot be scored.
@@ -74,7 +74,7 @@ def _load(path):
     stored = data.get("self_hash")
     if recomputed != stored:
         sys.exit(
-            f"CORPUS HASH MISMATCH — refusing to run.\n"
+            f"CORPUS HASH MISMATCH, refusing to run.\n"
             f"  stored     {stored}\n  recomputed {recomputed}\n"
             f"  ({path} is tampered, truncated, or was written by an incompatible generator)"
         )
@@ -131,7 +131,7 @@ def evaluate(cases):
             else:
                 result["other"] += 1
         else:
-            # op did not error — check the invariants this tool computes itself
+            # op did not error, check the invariants this tool computes itself
             checks = []
             if part is None:
                 checks.append("no-body")
@@ -139,7 +139,7 @@ def evaluate(cases):
                 if not _valid_single_solid(part):
                     checks.append("not-single-valid-solid")
                 # face-count floor: min_faces (a merging edge set fuses blend faces, so
-                # a valid complete solid can dip below pre+n_edges — see the corpus
+                # a valid complete solid can dip below pre+n_edges, see the corpus
                 # generator). Falls back to the naive pre+n for corpora without the field.
                 min_faces = c.get("min_faces") or (c["pre_op_faces"] + c["n_edges"])
                 if len(part.faces()) < min_faces:

@@ -7,8 +7,8 @@ import type { CadDocument } from "../types";
  *
  *  THIS IS THE ONLY SANCTIONED WAY FOR A COMPONENT TO READ store.document.
  *
- *  `store.document` keeps the same object identity across in-place mutate() —
- *  identity changes only on New/Open/undo/redo — and Vue 3.4+ computeds
+ *  `store.document` keeps the same object identity across in-place mutate(),
+ *  identity changes only on New/Open/undo/redo, and Vue 3.4+ computeds
  *  short-circuit propagation when the recomputed value is === the previous one. So
  *  `computed(() => (bridge.docVersion.value, store.document))` would re-run on
  *  every edit and then REFUSE TO NOTIFY its dependents, freezing every derived
@@ -21,7 +21,7 @@ import type { CadDocument } from "../types";
 export function useDocValue<T>(fn: (doc: CadDocument) => T): ComputedRef<T> {
   const { store, bridge } = useEngine();
   return computed(() => {
-    bridge.docVersion.value; // tracked dependency — read FIRST, unconditionally
+    bridge.docVersion.value; // tracked dependency, read FIRST, unconditionally
     return fn(store.document); // the live, RAW object
   });
 }

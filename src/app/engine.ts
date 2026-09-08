@@ -4,7 +4,7 @@
 // statement order WERE the boot sequence, and ~25 singletons referred to each
 // other through function-declaration hoisting. Moving that across module
 // boundaries loses hoisting, so the mutual references are resolved the way
-// main.ts already resolved getLastAction/setLastAction — late-bound members on
+// main.ts already resolved getLastAction/setLastAction, late-bound members on
 // one mutable record, assigned in the same order the statements used to run.
 //
 // The ordering constraints that were documented as comments in main.ts are kept
@@ -119,19 +119,19 @@ export interface Engine {
    *  app/useDoc.ts for how components must consume it. */
   bridge: DocBridge;
 
-  /** The single action dispatcher — ribbon, keymap, command palette and every
+  /** The single action dispatcher, ribbon, keymap, command palette and every
    *  context menu funnel through this one function. */
   handleAction(action: string): void;
 
   /** Guard checked at the top of every start* tool and interactive helper: they
    *  can't fire mid-sketch / mid-drag. Deliberately a plain function, not
-   *  reactive state — it is only ever read at event time. */
+   *  reactive state, it is only ever read at event time. */
   toolBusy(): boolean;
   /** True when the current rebuild produced a solid body (something to modify). */
   hasBody(): boolean;
   planePick: boolean;
 
-  /** Read-only accessor over the selection store — write it with selectFeature. */
+  /** Read-only accessor over the selection store, write it with selectFeature. */
   readonly selectedFeature: string | null;
   selectFeature(id: string | null): void;
   editFeature(id: string): void;
@@ -187,12 +187,12 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   e.store = new DocumentStore(e.geometry, EMPTY_DOCUMENT);
   e.store.onWarning = (msg) => toast(msg);
   // The Viewport is constructed before the store, and used to reach the store
-  // back through `(window as any).store` — which main.ts only ever set under
+  // back through `(window as any).store`, which main.ts only ever set under
   // import.meta.env.DEV, so the ViewCube's persisted side overrides silently did
   // nothing in a production build. Both live in this one function now, so hand
   // it over directly.
   e.viewport.attachStore(e.store);
-  // Subscribe ONCE, here, before any component exists — components read version
+  // Subscribe ONCE, here, before any component exists, components read version
   // refs rather than adding their own store subscriptions.
   e.bridge = createDocBridge(e.store);
   // crash-safety: periodic recovery snapshots + restore-on-launch prompt
@@ -202,7 +202,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   // Sharing this window's document with an assistant working through MCP. AFTER
   // the store exists and before anything can edit it, so the very first publish
   // carries a document rather than a null. Started only if the setting says so,
-  // and stopped and restarted when it changes — the loop holds a subscription to
+  // and stopped and restarted when it changes, the loop holds a subscription to
   // the store, so leaving it running in "off" would keep counting revisions for
   // a session nobody is in.
   e.live = new LiveSessionHost(e.store, e.geometry, liveEditsAllowed);
@@ -270,7 +270,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
     revolvePitch: new RevolvePitchTool(e.viewport, e.store, e.overlay),
   };
 
-  // Reads e.toolBusy, assigned below — hence the thunk, the same late binding
+  // Reads e.toolBusy, assigned below, hence the thunk, the same late binding
   // every other block in this file uses.
   e.nudge = new SelectionNudge(e.viewport, { toolBusy: () => e.toolBusy() });
 
@@ -315,7 +315,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
  *  Split out of createEngine for one reason: the panels that are still
  *  imperative classes take a container element from the shell, and the shell no
  *  longer exists until Vue has mounted. main.ts calls this immediately after
- *  app.mount(), which is synchronous — so the only change to the original boot
+ *  app.mount(), which is synchronous, so the only change to the original boot
  *  sequence is that a mount happens in the middle of it. Relative order within
  *  each half is untouched, which matters: several store subscriptions replay on
  *  subscribe, so who subscribes first is observable. */
@@ -325,7 +325,7 @@ export function mountUi(e: Engine): void {
   // store, so all that is left here is handing it the dispatcher.
   useRibbonStore().bind((a) => e.handleAction(a));
 
-  // Cmd/Ctrl-K command palette — search + run any command (discoverability safety net).
+  // Cmd/Ctrl-K command palette, search + run any command (discoverability safety net).
   // The overlay is components/overlays/CommandPalette.vue; this keeps the one
   // binding that has to be global, because the palette must open from anywhere.
   const cmdk = useCommandPaletteStore();
@@ -398,10 +398,10 @@ export function mountUi(e: Engine): void {
   });
 
   // handleAction closes over `menus`/`panels`/`starters`, and those close back
-  // over handleAction through the thunks above — assign it once they exist.
+  // over handleAction through the thunks above, assign it once they exist.
   e.handleAction = createActions(e);
 
-  // (The menubar is components/shell/MenuBar.vue now — TitleBar.vue calls
+  // (The menubar is components/shell/MenuBar.vue now, TitleBar.vue calls
   // buildMenubar(engine) itself, so there is nothing to construct here.)
 
   // show the welcome screen unless the user turned it off (its footer checkbox)

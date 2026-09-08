@@ -3,8 +3,8 @@
 // The rule this file exists for is the ORDER, and it is a judgement rather than
 // a mechanism: a pack is a look the user chose for the whole application, so a
 // plugin that shipped its own idea of a mark must not punch a hole in it. A
-// plugin fills a name no pack has — which is what a tool the application does
-// not have needs — and nothing else.
+// plugin fills a name no pack has, which is what a tool the application does
+// not have needs, and nothing else.
 //
 // The security note in ui/icons.ts is about this file too. Contributed markup
 // reaches the DOM through Icon.vue's v-html, and it is safe on exactly the same

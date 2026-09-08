@@ -16,8 +16,8 @@ binds the SIDE WALL after exactly the edit this exists to survive: the anchored
 top face has moved away while the wall still sits right beside the stored point.
 So candidates are filtered to faces parallel to the cached normal first, and
 ranked by IN-PLANE distance, because the point stays over its face however far
-that face slides along the normal. Each of the three survivors of that filter —
-the face itself, its coplanar halves, a parallel sibling — has its own way of
+that face slides along the normal. Each of the three survivors of that filter,
+the face itself, its coplanar halves, a parallel sibling, has its own way of
 being the silent wrong answer, and each gets a test here.
 
 It NEVER raises. A sketch is a root: a raise means it never registers, every
@@ -272,7 +272,7 @@ def test_a_face_whose_orientation_flipped_is_still_found():
     #
     # Isolated down to ONE reversed face on purpose. Reversing a whole solid
     # flips both its ends, so the far end starts facing the cached way and the
-    # same-sign pass takes it — correctly, and without ever reaching the
+    # same-sign pass takes it, correctly, and without ever reaching the
     # fallback this test is about.
     top = [f for f in Cylinder(20, 10).faces()
            if abs(f.center().Z - 5) < 1e-9][0]

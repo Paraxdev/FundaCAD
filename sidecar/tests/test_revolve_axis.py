@@ -2,7 +2,7 @@
 
 The axis used to be one of the three WORLD axes and nothing else, so anything
 turned about a feature of the part had to be modelled at the origin and moved
-afterwards — and moved again by hand every time the part changed. `axisEdge` is
+afterwards, and moved again by hand every time the part changed. `axisEdge` is
 a reference re-resolved on every rebuild, with the resolved line kept beside it
 as a cache so an edge that stops resolving leaves the revolve where it was
 rather than failing the feature and taking the body with it.

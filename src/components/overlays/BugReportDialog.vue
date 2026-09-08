@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// The bug-report form. Everything about what a report CONTAINS — the text,
-// the open-sketch snapshot, the clipboard write — is in ui/bugReporter.ts; this
+// The bug-report form. Everything about what a report CONTAINS, the text,
+// the open-sketch snapshot, the clipboard write, is in ui/bugReporter.ts; this
 // is the form and the "what will be copied" preview.
 
 import { computed, onMounted, onUnmounted, ref, useTemplateRef } from "vue";
@@ -10,7 +10,7 @@ import { bugContext, submitBugReport, type BugReportDeps } from "../../ui/bugRep
 import { appVersion } from "../../ui/updates";
 
 const dialogs = useDialogStore();
-// Non-null whenever this is rendered — App.vue gates on the same field.
+// Non-null whenever this is rendered, App.vue gates on the same field.
 const deps = dialogs.bugDeps as BugReportDeps;
 
 useModalGate();

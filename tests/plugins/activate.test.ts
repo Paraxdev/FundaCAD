@@ -12,7 +12,7 @@
 //
 // The decision is tested here as the pure function it is. That is not a
 // convenience: the alternative is driving it through a dynamic import of an
-// `import.meta.glob`, and a test cannot stand in for that glob — an earlier
+// `import.meta.glob`, and a test cannot stand in for that glob, an earlier
 // version of this file tried, the mock silently did not apply, and what it
 // actually exercised was all four real plugins starting at once. A test that
 // looks like it controls its inputs and does not is worse than no test.

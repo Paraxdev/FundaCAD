@@ -3,7 +3,7 @@
 // OFF IS THE EXCEPTION, and that is the whole shape of this file. A plugin runs
 // because somebody installed it; nothing has to be recorded for that. What is
 // recorded is the smaller and more surprising fact, that somebody installed one
-// and then turned it off — usually to see whether it was causing something, and
+// and then turned it off, usually to see whether it was causing something, and
 // usually temporarily.
 //
 // This used to be the other way round. It held the on/off state of the three
@@ -65,7 +65,7 @@ function read(): ReadonlySet<string> {
 
 /** Whether an installed plugin is running.
  *
- *  Says nothing about whether it is installed — that is `installedIds()` in
+ *  Says nothing about whether it is installed, that is `installedIds()` in
  *  ./index.ts, and the two together are what ./activate.ts asks. */
 export function pluginEnabled(id: string): boolean {
   return !off.has(id);

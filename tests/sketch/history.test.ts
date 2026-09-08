@@ -37,7 +37,7 @@ describe("SketchHistory", () => {
 
   // the solver moving geometry to satisfy constraints is NOT a user edit;
   // SketchMode re-arms after each settled solve, which must not bank
-  it("arm() re-baselines without banking — the derived/solver exclusion", () => {
+  it("arm() re-baselines without banking, the derived/solver exclusion", () => {
     const h = new SketchHistory();
     h.reset(snap([line("a", 10)]));
     h.arm(snap([line("a", 12)])); // e.g. the solver nudged it, or a param sync
@@ -122,7 +122,7 @@ describe("SketchHistory", () => {
     expect(h.undo(snap([line("a", 20)]))!.entities[0]).toMatchObject({ x2: 19 });
   });
 
-  it("reset() clears both stacks — leaving a sketch starts fresh", () => {
+  it("reset() clears both stacks, leaving a sketch starts fresh", () => {
     const h = new SketchHistory();
     h.reset(snap([line("a")]));
     h.bankIfChanged(snap([line("a"), line("b")]));

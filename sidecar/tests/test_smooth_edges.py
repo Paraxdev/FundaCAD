@@ -2,7 +2,7 @@
 
 The report: a block with rounded corners, one top edge picked, a 1.768mm
 chamfer refused with OCCT's "Failed creating a chamfer, try a smaller length
-value(s)". Smaller values were tried. They fail too — measured, the operation
+value(s)". Smaller values were tried. They fail too, measured, the operation
 fails identically at 5mm and at 0.05mm.
 
 The cause is not size. A fillet or a chamfer cuts across the corner between two
@@ -12,7 +12,7 @@ that one. There is no corner there, so there is nothing to cut at any size.
 
 That makes OCCT's message not merely unhelpful but wrong: it describes a size
 problem, so it sends the user into a retry loop that cannot terminate. These
-tests hold the honest refusal, and — just as important — hold that ordinary
+tests hold the honest refusal, and, just as important, hold that ordinary
 corners are still allowed, because a guard like this fails silently by refusing
 everything.
 """
@@ -28,7 +28,7 @@ from builder import SMOOTH_EDGE_DEG, _edge_dihedral_deg, _refuse_smooth_edges
 
 
 def _rounded_block():
-    """A block with rounded verticals, then a rounded top perimeter — so the
+    """A block with rounded verticals, then a rounded top perimeter, so the
     only edges left on the top plane are the boundaries of a round."""
     b = Solid.make_box(30, 20, 24)
     vert = [e for e in b.edges() if abs(e.tangent_at(0.5).Z) > 0.9]
@@ -58,7 +58,7 @@ def test_the_dihedral_tells_the_two_apart():
 
 def test_an_ordinary_corner_is_still_allowed():
     """The failure mode of a guard like this is refusing real work, and it would
-    be invisible — every blend would just start reporting the new message."""
+    be invisible, every blend would just start reporting the new message."""
     plain, tops, _ = _rounded_block()
     _refuse_smooth_edges(plain, tops, "Chamfer")  # must not raise
     box = Solid.make_box(10, 10, 10)
@@ -82,7 +82,7 @@ def test_the_reported_case_is_refused_with_the_reason():
 
 
 def test_an_unknown_edge_is_not_assumed_smooth():
-    """None from the dihedral means 'could not tell' — a seam, a free edge, a
+    """None from the dihedral means 'could not tell', a seam, a free edge, a
     degenerate normal. Reading that as smooth would refuse blends on perfectly
     good geometry, so the guard has to let unknowns through."""
     cyl = Solid.make_cylinder(6, 20)

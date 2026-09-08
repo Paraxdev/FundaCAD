@@ -1,6 +1,6 @@
 // FundaCAD stylesheet entry point.
 //
-// This is src/styles.css split by section — a pure byte-move, nothing was
+// This is src/styles.css split by section, a pure byte-move, nothing was
 // rewritten. The load order below IS the old file's top-to-bottom order and
 // must stay that way: several rules depend on later-wins cascade (most visibly
 // `.hidden { display: none !important }` in _utilities, which has to be able to
@@ -27,7 +27,7 @@
 @use "titlebar";
 @use "ribbon";
 @use "palette";
-// The "MAIN — browser | viewport" section. Named _layout rather than _main so
+// The "MAIN, browser | viewport" section. Named _layout rather than _main so
 // it can't be confused with this entry file, which Sass would otherwise refuse
 // to disambiguate.
 @use "layout";
@@ -38,13 +38,13 @@
 @use "inspector";
 // After _ribbon and _timeline, and before _utilities: these rules restate the
 // axis-specific parts of both bars for a side-mounted arrangement, so they must
-// win against them — and .hidden must still win against everything.
+// win against them, and .hidden must still win against everything.
 @use "shellsides";
 @use "utilities";
 @use "browser";
 @use "modals";
 @use "welcome";
-// Last on purpose — see the header of _icons.scss.
+// Last on purpose, see the header of _icons.scss.
 @use "seltools";
 @use "targetedit";
 @use "console";

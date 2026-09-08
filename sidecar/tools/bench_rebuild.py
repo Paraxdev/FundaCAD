@@ -43,7 +43,7 @@ def single_run(doc_path, tessellate_flag=False):
     """One cold rebuild in this (fresh) process; time ONLY rebuild(), not imports.
 
     `tessellate_flag` additionally times tessellate() (with any body textures
-    resolved) after the rebuild — rebuild() itself only validates/stores a
+    resolved) after the rebuild, rebuild() itself only validates/stores a
     texture spec, all the displacement cost lands in tessellate(), so a doc
     with texture features is invisible to this benchmark without it."""
     os.environ["FUNDACAD_DISK_CACHE"] = "0"

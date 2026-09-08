@@ -1,5 +1,5 @@
 // Client cache for sidecar-tessellated glyph outlines. The sidecar owns all font
-// work, so text preview outlines come from the `tessellateText` op — cached by a
+// work, so text preview outlines come from the `tessellateText` op, cached by a
 // content key so identical text/font/style/… reuses the result and re-renders are
 // instant. On a cache miss the op fires once and the overlay re-renders on arrival.
 
@@ -37,7 +37,7 @@ export function fetchFonts(): Promise<string[]> {
 
 /** Idempotently ensure every text entity's glyph outlines are cached: fire
  *  `tessellateText` for misses and re-render when results land. Safe to call on every
- *  paint — cached/in-flight entities are skipped, so the render loop converges.
+ *  paint, cached/in-flight entities are skipped, so the render loop converges.
  *  `entities` is the full resolved list so a text's `pathRef` sibling can be sent. */
 export function warmText(entities: ResolvedEntity[]): void {
   if (!backend) return;

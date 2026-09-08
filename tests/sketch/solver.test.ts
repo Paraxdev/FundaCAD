@@ -1,9 +1,9 @@
 // The 2D constraint solver's WASM warm-up must never become an app-level error.
 //
 // Field report, build 0.1.73 on Windows (bug eec3752a): every startup showed
-// "Something went wrong — check the console for details" and named nothing. The
+// "Something went wrong, check the console for details" and named nothing. The
 // breadcrumb behind it was an unhandledrejection carrying a Content Security
-// Policy violation — that WebView2 refused to compile the module, and V8 reports
+// Policy violation, that WebView2 refused to compile the module, and V8 reports
 // blocked WASM compilation through the same code-generation-from-strings hook it
 // uses for `eval`, which is why the message talks about evaluating a string.
 // `main.ts` called `void initSolver()` with no catch, so the rejection hit the
@@ -56,7 +56,7 @@ describe("constraint solver warm-up", () => {
     await expect(initSolver()).resolves.toBe(true);
   });
 
-  it("does not cache a failure — a later attempt retries and can succeed", async () => {
+  it("does not cache a failure, a later attempt retries and can succeed", async () => {
     let first = true;
     const { initSolver, instantiate } = await solverWith(() => {
       const r = first ? refuses() : works();

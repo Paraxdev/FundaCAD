@@ -2,7 +2,7 @@
  *
  *  Orbit up over the top of a sketch and the plane rolls away until you are
  *  looking along it. The screen-to-plane ray still meets it, and the answer is
- *  still exactly right — but a plane seen nearly edge-on turns a pixel of cursor
+ *  still exactly right, but a plane seen nearly edge-on turns a pixel of cursor
  *  travel into metres of plane. Measured on the XY plane at a 130mm standoff,
  *  clicking 90px above the view centre:
  *

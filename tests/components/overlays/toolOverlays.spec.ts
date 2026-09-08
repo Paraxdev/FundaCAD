@@ -1,11 +1,11 @@
 // The two smallest in-canvas overlays, and the one thing each has that is worth
 // pinning.
 //
-//   ProjectFilterBar — `filter` is TOOL state, not panel state: sketchMode.ts
+//   ProjectFilterBar, `filter` is TOOL state, not panel state: sketchMode.ts
 //   reads it synchronously inside the projection routine, so it has to survive
 //   the bar being hidden and shown again.
 //
-//   MeasureReadout — the rows used to be built with innerHTML and two hand-
+//   MeasureReadout, the rows used to be built with innerHTML and two hand-
 //   placed esc() calls. Interpolation escapes on its own now, and a leftover
 //   esc() would render a value containing "&" as "&amp;".
 //
@@ -52,7 +52,7 @@ describe("ProjectFilterBar", () => {
     expect(onChange).toHaveBeenCalledWith("sketchCurves");
   });
 
-  it("keeps the filter across hide/show — it belongs to the tool, not the bar", async () => {
+  it("keeps the filter across hide/show, it belongs to the tool, not the bar", async () => {
     const p = new ProjectPanel();
     p.show(document.createElement("div"));
     mount(ProjectFilterBar, { attachTo: document.body });

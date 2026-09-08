@@ -56,8 +56,8 @@ def bbox_straddles_plane(bb, origin, normal, tol):
 
     A rejection test, not an acceptance one. The box CONTAINS the shape, so a box
     whose every corner sits more than `tol` to one side holds nothing that
-    reaches the plane. The converse does not follow — a diagonal edge lying in a
-    tilted plane has corners well off it — which is why this only ever prunes,
+    reaches the plane. The converse does not follow, a diagonal edge lying in a
+    tilted plane has corners well off it, which is why this only ever prunes,
     and the sampling below decides.
     """
     lo = hi = None
@@ -129,7 +129,7 @@ def split_faces(faces, tools):
     fallback is what the builder did before this existed, so a splitter that
     cannot cope leaves a feature building the way it always did rather than
     building something new and wrong. Area is the check because that is the way
-    a bad split shows up — cells dropped, not cells added.
+    a bad split shows up, cells dropped, not cells added.
     """
     faces = [f for f in faces if f is not None]
     if not faces or not tools:

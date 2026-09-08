@@ -18,7 +18,7 @@ interface ToolItem {
 }
 // Split button: the FULL dropdown list lives in `children` (children[0] is the
 // initial one-click primary; `label` names the family for the arrow tooltip).
-// Picking a child runs it and makes it the primary — last-used-wins, mainstream MCAD
+// Picking a child runs it and makes it the primary, last-used-wins, mainstream MCAD
 // convention. Each tool is defined exactly once, in `children`.
 interface SplitItem {
   label: string;
@@ -31,7 +31,7 @@ interface Group {
 }
 export type { Item, ToolItem, Group };
 
-/** a split button's tools, or the item itself — every consumer that needs the
+/** a split button's tools, or the item itself, every consumer that needs the
  *  flat tool list (palette, overflow popup) goes through this. */
 export function leavesOf(it: Item): ToolItem[] {
   return "children" in it ? it.children : [it];
@@ -67,7 +67,7 @@ export const MODEL: Group[] = [
           { action: "scale", label: "Scale", iconName: "scale" },
           { action: "mirror", label: "Mirror", iconName: "mirror" },
           // Two entries, not one that asks. Linear and circular are different
-          // gestures — pull an arrow along an axis, or sweep around one — so
+          // gestures, pull an arrow along an axis, or sweep around one, so
           // the choice belongs on the button rather than in a dialog the
           // button raises.
           { action: "pattern-linear", label: "Linear Pattern", iconName: "patternLinear" },
@@ -75,15 +75,15 @@ export const MODEL: Group[] = [
         ],
       },
       // The three booleans are a family and share a split button. Split Body is
-      // not one of them — it cuts ONE body into pieces with a plane, where a
-      // boolean is two bodies meeting — and it used to be filed under Combine
+      // not one of them, it cuts ONE body into pieces with a plane, where a
+      // boolean is two bodies meeting, and it used to be filed under Combine
       // purely because both change how many bodies there are. It stands on its
       // own now.
       {
         label: "Boolean",
         // The hint is READ from the keymap rather than written again. Every
         // other row here spells its own key, which is a promise this table
-        // cannot keep on its own — and the booleans are the first rows whose key
+        // cannot keep on its own, and the booleans are the first rows whose key
         // carries a modifier, so a hand-written "U" would advertise a binding
         // that does nothing.
         children: BOOLEAN_COMMANDS.map((c) => {
@@ -284,7 +284,7 @@ export const SKETCH: Group[] = [
 ];
 
 // Collapse priority: lower numbers fold into the "⋯ More" overflow first. PALETTE
-// and FINISH are pinned (never collapse — Finish Sketch must stay reachable).
+// and FINISH are pinned (never collapse, Finish Sketch must stay reachable).
 export const PRIORITY: Record<string, number> = {
   CREATE: 100,
   MODIFY: 90,

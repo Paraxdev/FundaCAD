@@ -3,7 +3,7 @@
 // past which the answer is "remove this, it is gone".
 //
 // Grabbing a cylinder used to translate it, which is the one thing a cylindrical
-// face cannot do — it has no single direction to move along, and the average of
+// face cannot do, it has no single direction to move along, and the average of
 // its facet normals is zero. What a shaft or a hole actually has is a size, so
 // that is what the handle scrubs. The reading is a diameter rather than a radius
 // because a diameter is what a drawing, a drill and a caliper all say.
@@ -21,7 +21,7 @@ import type { Cylinder } from "./planeMath";
  *  grabs and the drag it arms cannot disagree. */
 export interface RoundFace {
   cylinder: Cylinder;
-  /** the CURRENT radius, in mm — what the drag is measured from */
+  /** the CURRENT radius, in mm, what the drag is measured from */
   radius: number;
   /** material inside the cylinder (a shaft/boss) rather than outside it (a bore) */
   solidInside: boolean;
@@ -32,7 +32,7 @@ export interface RoundFace {
 /** Below this fraction of its original radius, the face is treated as gone
  *  rather than resized.
  *
- *  Not a taste threshold — it is the kernel's. The sidecar caps an inward offset
+ *  Not a taste threshold, it is the kernel's. The sidecar caps an inward offset
  *  at 90% of the radius (`_clamp_cylinder` in builder.py), because collapsing a
  *  cylinder onto its own axis takes OCCT down rather than failing. So 10% of the
  *  starting radius is the smallest thing that can actually be built, and asking
@@ -47,7 +47,7 @@ export type RadialMode = "resize" | "remove";
 export interface RadialDrag {
   /** what a release right now would do */
   mode: RadialMode;
-  /** what the readout shows, in mm — 0 once the face is being removed */
+  /** what the readout shows, in mm, 0 once the face is being removed */
   diameter: number;
   /** the signed press/pull distance for the kernel, in mm. 0 when removing:
    *  removal is a different feature, not a very large push. */
@@ -57,7 +57,7 @@ export interface RadialDrag {
 /** Read a drag as a resize.
  *
  *  `delta` is signed millimetres along the OUTWARD radial (away from the axis),
- *  which is the direction the handle points on a bore and a boss alike — pulling
+ *  which is the direction the handle points on a bore and a boss alike, pulling
  *  away from the axis always means "bigger", whichever side the material is on.
  *
  *  `solidInside` is what turns that into the kernel's sign. A positive press/pull
@@ -77,7 +77,7 @@ export function radialDrag(radius: number, delta: number, solidInside: boolean):
   };
 }
 
-/** The drag a typed diameter corresponds to — the inverse of the above, for the
+/** The drag a typed diameter corresponds to, the inverse of the above, for the
  *  heads-up field. A diameter at or below the collapse floor comes back as the
  *  drag that removes the face, so typing 0 does what dragging to 0 does. */
 export function deltaForDiameter(radius: number, diameter: number): number {

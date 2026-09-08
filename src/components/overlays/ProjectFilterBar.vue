@@ -18,7 +18,7 @@ function choose(f: ProjectFilter) {
 
 // Horizontal centring stays imperative and stays here: it needs the bar's own
 // rendered width, which does not exist until it is in the document, and it is a
-// measurement — the same reason TimelineBar.vue keeps gapIndexAt() out of
+// measurement, the same reason TimelineBar.vue keeps gapIndexAt() out of
 // reactivity. (Untestable under happy-dom, which reports every width as 0.)
 function place() {
   const r = panels.projectAnchor;

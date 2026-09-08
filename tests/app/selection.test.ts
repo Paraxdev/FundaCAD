@@ -2,8 +2,8 @@
 //
 // It was `e.selectedFeature = null` in createEngine, and selectFeature only ever
 // wrote the pinia store, so the field kept its construction-time null forever.
-// Every non-Vue reader — Del on a selected feature, Edit ▸ Delete, Edit ▸
-// Suppress, "select a plane and Split" — silently did nothing, because "no
+// Every non-Vue reader, Del on a selected feature, Edit ▸ Delete, Edit ▸
+// Suppress, "select a plane and Split", silently did nothing, because "no
 // feature is selected" and "the wiring is broken" look identical from there.
 //
 // Guarding the accessor rather than the keyboard handler is deliberate: the

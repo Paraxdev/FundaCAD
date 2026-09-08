@@ -1,6 +1,6 @@
 // Interactive Fillet / Chamfer (MCAD-style): pick a solid edge, then grab the
 // drag handle on that edge and drag it to set the radius (fillet) or
-// setback (chamfer) — with a LIVE preview. Unlike Extrude, a fillet/chamfer
+// setback (chamfer), with a LIVE preview. Unlike Extrude, a fillet/chamfer
 // can't be faked client-side (a real rounded/beveled edge needs build123d/OCCT),
 // so the preview is sidecar-driven: the un-committed feature is appended to the
 // tree via store.setPreview() and the normal rebuild pipeline renders it.
@@ -13,7 +13,7 @@
 // features/edgeDragMath.ts turns the signed result into a treatment.
 //
 // So `value` here is always a magnitude and `signed` is which side of the edge
-// the drag has reached — `kind` is a reading of that sign, not an independent
+// the drag has reached, `kind` is a reading of that sign, not an independent
 // piece of state, except at the origin where there is no sign to read and the
 // last one stands.
 
@@ -83,7 +83,7 @@ const GHOST_ERROR = 0xe23b3b;
 /** One member edge: its selector, the sharp-model polyline snapshot it was
  *  matched to (for drawing + screen-space hit tests), its ghost line, and the
  *  tangent-chain gesture it arrived with (chain members select/deselect as one
- *  unit — recorded at add time because the preview may consume the edges,
+ *  unit, recorded at add time because the preview may consume the edges,
  *  making the chain unrecomputable from the displayed model). */
 interface GhostEdge {
   sel: Selector;
@@ -98,14 +98,14 @@ export class EdgeFeatureTool {
   private kind: Kind = "fillet";
   private phase: Phase = "pick";
   private anchor = new THREE.Vector3(); // arrow origin = edge midpoint
-  // Drag axis (unit). Frozen for the duration of a GESTURE — the drag and the
-  // arc both measure against it — but re-derived against the camera every idle
+  // Drag axis (unit). Frozen for the duration of a GESTURE, the drag and the
+  // arc both measure against it, but re-derived against the camera every idle
   // frame, so an orbit cannot leave the handle pointing at the viewer (see
   // refreshAxis).
   private axis = new THREE.Vector3(1, 0, 0);
   private quat = new THREE.Quaternion(); // Y -> axis, for orienting the handle
   private tangent: THREE.Vector3 | null = null; // edge direction (null = pre-selection fallback)
-  private value = 2; // radius / distance in mm — a MAGNITUDE, never negative
+  private value = 2; // radius / distance in mm, a MAGNITUDE, never negative
   /** Position on the drag axis: |signed| is `value`, and its sign picks between
    *  `positiveKind` and its opposite. 0 means "no feature here". */
   private signed = 2;
@@ -114,7 +114,7 @@ export class EdgeFeatureTool {
   private positiveKind: Kind = "fillet";
   private previewId = ""; // id shared by the live preview and the committed feature
 
-  // --- membership (create AND edit): every selected edge is a ghost line —
+  // --- membership (create AND edit): every selected edge is a ghost line,
   // drawn through the model (depthTest off) so inner/occluded members stay
   // visible, and click-toggleable in both modes. ---
   private ghosts: GhostEdge[] = []; // membership display + toggle targets
@@ -139,7 +139,7 @@ export class EdgeFeatureTool {
   private hovering = false;
   private grabbing = false;
   /** true when this drag began on the passive selection handle rather than on
-   *  our own gizmo — a one-press gesture, so releasing it commits (see onUp). */
+   *  our own gizmo, a one-press gesture, so releasing it commits (see onUp). */
   private fluentGrab = false;
   private grabSigned = 0; // signed offset at grab start (relative drag)
   private grabProj = 0; // axis projection at grab start
@@ -179,7 +179,7 @@ export class EdgeFeatureTool {
   }
 
   /** The largest blend the picked edges' own surroundings permit, measured once
-   *  per member set and held — the OPPOSITE of modelDiagonal's policy, and for a
+   *  per member set and held, the OPPOSITE of modelDiagonal's policy, and for a
    *  reason that would otherwise be a nasty bug.
    *
    *  The measurement has to describe the model the blend is applied TO. Once the
@@ -204,7 +204,7 @@ export class EdgeFeatureTool {
   }
 
   /** How far the cursor is from the picked edge, in mm, signed by which side of
-   *  it the cursor is on — the whole of the drag measurement (features/edgeSwipe.ts
+   *  it the cursor is on, the whole of the drag measurement (features/edgeSwipe.ts
    *  has the reasoning and the arithmetic).
    *
    *  Both reference directions are taken by projecting a step along them from
@@ -229,7 +229,7 @@ export class EdgeFeatureTool {
   }
 
   /** The largest size the sidecar has built during this gesture, and the
-   *  smallest it has refused. The drag's real wall — see blendCeiling.
+   *  smallest it has refused. The drag's real wall, see blendCeiling.
    *
    *  Reset whenever the question changes: a different treatment or a different
    *  set of member edges is a different question, and carrying an answer across
@@ -249,7 +249,7 @@ export class EdgeFeatureTool {
     return Math.min(dragLimit(this.modelDiagonal()), blendCeiling(this.range, this.dragStep()));
   }
 
-  /** The snap granularity the drag is currently moving in — the ceiling steps
+  /** The snap granularity the drag is currently moving in, the ceiling steps
    *  back by one of these, so it has to be the same number scrubSigned uses. */
   private dragStep(): number {
     return this.viewport.snapStep(this.anchor, false);
@@ -272,14 +272,14 @@ export class EdgeFeatureTool {
     if (this.active) return;
     // The direct-manipulation entry needs the selection its handle was drawn
     // for. If a rebuild landed between the paint and the press, arming into the
-    // pick phase would be a bait-and-switch into a tool nobody asked for — and
+    // pick phase would be a bait-and-switch into a tool nobody asked for, and
     // it would hold toolBusy() until noticed. Refuse before anything is
     // installed rather than arm and unwind.
     const pre = this.viewport.selectedEdgeSelectors();
     if (opts?.grabAt && !pre.length) return;
     // The OTHER way in: a selected FACE, which stands for every edge around it.
     // toolCapabilities.ts is what says a face is a kind this tool can consume,
-    // so the table and the behaviour cannot drift apart — and asking here rather
+    // so the table and the behaviour cannot drift apart, and asking here rather
     // than in each caller means the face route exists from the key, the ribbon,
     // the palette and the context menus at once.
     const seed = pre.length
@@ -309,7 +309,7 @@ export class EdgeFeatureTool {
         // for: expanding each across its tangent chain could only reach edges
         // that are NOT on the face, which is the one thing "round off this face"
         // rules out. An EDGE pre-selection carries whatever its own picks
-        // decided (pickScope.ts) — shift-picked edges stay exactly themselves.
+        // decided (pickScope.ts), shift-picked edges stay exactly themselves.
         scope: pre.length ? this.viewport.selectedEdgeScope().scope : "single",
       });
       if (opts?.grabAt) this.grabHandle(opts.grabAt.x, opts.grabAt.y);
@@ -329,7 +329,7 @@ export class EdgeFeatureTool {
     });
   }
 
-  /** Take hold of the handle at (x, y) without a fresh pointerdown of our own —
+  /** Take hold of the handle at (x, y) without a fresh pointerdown of our own,
    *  the press that started the gesture landed on the passive selection handle,
    *  before this tool existed. Everything after this point is the ordinary
    *  drag: the same onMove scrub, the same onUp release. */
@@ -350,7 +350,7 @@ export class EdgeFeatureTool {
    *  to add it), the saved value seeds the input, and commit REPLACES the
    *  feature in place (same id, one undo step). Returns false when this
    *  feature can't be tool-edited (parameter-driven value, or selectors
-   *  without a point) — the caller falls back to the value rows. */
+   *  without a point), the caller falls back to the value rows. */
   startEdit(featureId: string, onDone: (id: string | null) => void): boolean {
     if (this.active) return false;
     const f = this.store.document.features.find((x) => x.id === featureId);
@@ -358,9 +358,9 @@ export class EdgeFeatureTool {
     const value = f.type === "fillet" ? f.radius : f.distance;
     const field = f.type === "fillet" ? "radius" : "distance";
     if (typeof value !== "number" || this.store.isParamBound({ kind: "feature", feature: f.id, field }))
-      return false; // parameter-driven value — the value rows' job
+      return false; // parameter-driven value, the value rows' job
     const sels = Array.isArray(f.edges) ? f.edges : [f.edges];
-    if (!sels.length || !sels.every((s) => "point" in s)) return false; // structural selectors — can't re-anchor
+    if (!sels.length || !sels.every((s) => "point" in s)) return false; // structural selectors, can't re-anchor
 
     this.active = true;
     this.kind = f.type;
@@ -396,7 +396,7 @@ export class EdgeFeatureTool {
    *  (pass its saved selectors); create mode passes null and only wants the
    *  failure feedback. Create mode used to subscribe to nothing at all, so a
    *  radius the kernel refused mid-drag registered as "the preview stopped
-   *  changing" — no red edges, no message, nothing to tell you the drag had
+   *  changing", no red edges, no message, nothing to tell you the drag had
    *  gone past what the geometry allows. */
   private watchBuilds(rollbackSels: Selector[] | null) {
     this.unsubBuild = this.store.onBuild((s) => {
@@ -431,7 +431,7 @@ export class EdgeFeatureTool {
 
   /** Match each saved selector to a rendered sharp edge and build its ghost.
    *  Selectors that don't match (stale midpoint) are kept for commit but have
-   *  no visual — the sidecar still resolves them by nearest at build time. */
+   *  no visual, the sidecar still resolves them by nearest at build time. */
   private seedGhosts(sels: Selector[]) {
     for (const sel of sels) {
       if (!("point" in sel)) {
@@ -497,7 +497,7 @@ export class EdgeFeatureTool {
   // --- tangent-chain propagation (MCAD "G1 chain") --------------------------
   // A fillet/chamfer cannot terminate mid-tangency: an edge that blends
   // smoothly into a neighbour (e.g. a straight rim stretch meeting a rounded
-  // corner arc) drags that neighbour into the operation — OCCT has no way to
+  // corner arc) drags that neighbour into the operation, OCCT has no way to
   // end the blend at their joint. So every pick expands across
   // tangent-continuous connections, and deselection removes the same chain.
 
@@ -550,7 +550,7 @@ export class EdgeFeatureTool {
   }
 
   /** Add a picked edge as ghosts (skipping already-ghosted), taking its whole
-   *  tangent chain along or not according to `scope` — see viewport/pickScope.ts
+   *  tangent chain along or not according to `scope`, see viewport/pickScope.ts
    *  for who decides that and why. The whole gesture shares one chain id either
    *  way, so it deselects as one unit and a single-scoped pick removes exactly
    *  the one edge it added. */
@@ -574,7 +574,7 @@ export class EdgeFeatureTool {
     return pickScope({ shift: e.shiftKey, view: this.viewport.edgeScopeView(edge) }).scope;
   }
 
-  /** Remove a ghost AND everything added in the same gesture (its chain id) —
+  /** Remove a ghost AND everything added in the same gesture (its chain id),
    *  recorded at add time, so removal works even after the live preview has
    *  consumed the chain's edges in the displayed model. */
   private removeWithChain(g: GhostEdge) {
@@ -591,7 +591,7 @@ export class EdgeFeatureTool {
     this.axis.copy(this.computeAxis());
     this.quat.setFromUnitVectors(Y_AXIS, this.axis);
     // Reached only once the rollback build has landed, so the displayed model is
-    // the one WITHOUT this feature — which is exactly the geometry the blend has
+    // the one WITHOUT this feature, which is exactly the geometry the blend has
     // to fit into, and the reason editing measures the same way creating does.
     this.measureClearance();
     this.buildGizmo();
@@ -602,7 +602,7 @@ export class EdgeFeatureTool {
 
   /** (Re)build the heads-up input for the CURRENT treatment. DimInput builds
    *  its fields once in show() (and tears down whatever was there first), so
-   *  switching which field is displayed means putting the whole box back —
+   *  switching which field is displayed means putting the whole box back,
    *  which happens on every Tab and on every crossing of the origin, hence one
    *  place to do it. `keepTyped` locks the value in as the user's own rather
    *  than letting the drag track over it. */
@@ -639,13 +639,13 @@ export class EdgeFeatureTool {
     return [...this.unmatchedSels, ...this.ghosts.map((g) => g.sel)];
   }
 
-  /** Fillet ↔ chamfer without moving the pointer — what Tab does.
+  /** Fillet ↔ chamfer without moving the pointer, what Tab does.
    *
    *  The drag already switches treatments by crossing the origin, but that only
    *  helps someone whose hand is on the handle: a typed value has no side of the
    *  origin, and a value reached by dragging shouldn't have to be dragged back
    *  through zero and out again just to be re-labelled. So this flips the
-   *  treatment in place AND flips which side of the axis means it — otherwise
+   *  treatment in place AND flips which side of the axis means it, otherwise
    *  the next pointermove would read the unchanged sign and undo the flip. */
   private flipKind() {
     if (this.phase !== "drag") return;
@@ -684,9 +684,9 @@ export class EdgeFeatureTool {
 
   /** The drag-phase prompt.
    *
-   *  One function because five things move under it — the treatment, the member
+   *  One function because five things move under it, the treatment, the member
    *  count, create-vs-edit, sitting on the origin, and whether the kernel is
-   *  currently refusing the value — and the three hand-written copies this
+   *  currently refusing the value, and the three hand-written copies this
    *  replaced had already drifted apart on which keys they bothered to
    *  mention. */
   private promptForPhase() {
@@ -705,7 +705,7 @@ export class EdgeFeatureTool {
       return;
     }
     // The profile only earns a mention on a fillet, and only says its number
-    // once it is off the circular default — otherwise it is noise on the one
+    // once it is off the circular default, otherwise it is noise on the one
     // line the user reads mid-drag.
     const prof =
       this.kind === "fillet" && !isPlainProfile(this.profile)
@@ -723,7 +723,7 @@ export class EdgeFeatureTool {
    *  identical to the kernel: no member edges, and a drag parked on the origin.
    *  Either way the feature we would build is one OCCT would refuse (a
    *  zero-radius blend, a fillet over no edges), and it would refuse it again on
-   *  every pointermove — so the preview drops back to the bare model, which is
+   *  every pointermove, so the preview drops back to the bare model, which is
    *  also exactly what "no feature here" should look like. */
   private pushPreview() {
     if (this.neutral || !this.currentSelectors().length) {
@@ -745,7 +745,7 @@ export class EdgeFeatureTool {
    *
    *  Deliberately advisory: the commit is NOT blocked by it. Rebuilds coalesce
    *  during a drag, so the newest diagnostic can lag the value by one
-   *  round-trip — refusing a commit off it would sometimes reject a value that
+   *  round-trip, refusing a commit off it would sometimes reject a value that
    *  builds fine. A feature that fails is already a recoverable, visible,
    *  editable state everywhere else in this app; a commit that silently didn't
    *  happen is not. */
@@ -806,7 +806,7 @@ export class EdgeFeatureTool {
         signed = 0;
         at = { kind: this.kind, value: 0 };
       }
-      if (signed === this.signed) return; // same step — don't re-trigger an OCCT rebuild
+      if (signed === this.signed) return; // same step, don't re-trigger an OCCT rebuild
       const wasNeutral = this.neutral;
       const prevKind = this.kind;
       this.signed = signed;
@@ -822,14 +822,14 @@ export class EdgeFeatureTool {
         this.dim.updateFromCursor({ [this.field.name]: this.value });
       }
       this.pushPreview();
-      // The prompt names the treatment, so it has to keep up with both — and a
+      // The prompt names the treatment, so it has to keep up with both, and a
       // fast enough pointermove can land on the far side without ever reporting
       // a frame at the origin.
       if (this.neutral !== wasNeutral || this.kind !== prevKind) this.promptForPhase();
       return;
     }
     // idle: highlight whichever control is under the pointer so it reads as
-    // grabbable. The arc is checked first — it stands further out than the
+    // grabbable. The arc is checked first, it stands further out than the
     // arrow, so a hit on it is unambiguous.
     const onArc = this.arc.visible && this.arc.hitTest(e.clientX, e.clientY);
     this.arc.setHot(onArc);
@@ -840,7 +840,7 @@ export class EdgeFeatureTool {
     }
     this.hovering = this.hitGizmo(e.clientX, e.clientY);
     if (!this.hovering) {
-      // ghosts and bare edges are toggle targets in BOTH modes — show it
+      // ghosts and bare edges are toggle targets in BOTH modes, show it
       const g = this.ghostAt(e.clientX, e.clientY);
       const hit = g ? null : this.viewport.pickEdgeAt(e.clientX, e.clientY);
       this.viewport.hoverEdge(hit?.edge ?? null);
@@ -854,7 +854,7 @@ export class EdgeFeatureTool {
     if (e.button !== 0) return;
     if (this.phase === "pick") {
       const hit = this.viewport.pickEdgeAt(e.clientX, e.clientY);
-      if (!hit) return; // missed an edge — let the click orbit
+      if (!hit) return; // missed an edge, let the click orbit
       e.preventDefault();
       e.stopImmediatePropagation();
       const pts = hit.edge.points;
@@ -882,7 +882,7 @@ export class EdgeFeatureTool {
       this.viewport.domElement.style.cursor = "grabbing";
       return;
     }
-    // click toggles membership in BOTH modes — a ghost hit removes that edge,
+    // click toggles membership in BOTH modes, a ghost hit removes that edge,
     // a bare-edge hit adds it. Either way this press is a toggle, not the
     // commit-on-clean-click gesture (downOnGizmo doubles as that latch).
     const g = this.ghostAt(e.clientX, e.clientY);
@@ -922,7 +922,7 @@ export class EdgeFeatureTool {
       const moved =
         Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
       this.grabbing = false;
-      // Shared with Press/Pull, which offers the same handle over faces — see
+      // Shared with Press/Pull, which offers the same handle over faces, see
       // fluentRelease for what each outcome is protecting against.
       const release = fluentRelease({
         fluent: this.fluentGrab,
@@ -940,7 +940,7 @@ export class EdgeFeatureTool {
       if (!moved) {
         // A press that never travelled is the way IN to the full tool rather
         // than a drag. Arriving from the selection handle that means arming on
-        // nothing at all, so put the default value up — the tool the user just
+        // nothing at all, so put the default value up, the tool the user just
         // opened should have something to show and adjust.
         if (this.neutral) {
           this.setValue(seedValue(this.kind, this.bounds(), this.clearanceLimitMm));
@@ -964,7 +964,7 @@ export class EdgeFeatureTool {
     }
     // Tab flips fillet ↔ chamfer and carries the number across, mid-drag and
     // all. Capture phase, so it reaches us whether focus sits in the heads-up
-    // input or on the canvas — and so DimInput's own Tab (move to the next
+    // input or on the canvas, and so DimInput's own Tab (move to the next
     // field) never sees it. Nothing is lost there: fillet and chamfer each
     // show exactly ONE field, so tabbing between fields was already a no-op
     // that only had the side effect of locking the field against the drag.
@@ -985,7 +985,7 @@ export class EdgeFeatureTool {
     // Every member gets a ghost line (visible through the model) and stays
     // click-toggleable. A direct pick expands across its tangent chain; a
     // pre-selection expands each matched member's chain the same way
-    // (unmatched selectors still commit, just without a visual) — unless the
+    // (unmatched selectors still commit, just without a visual), unless the
     // gesture is single-scoped, in which case the members ARE the answer and
     // there is nothing to expand.
     const scope = opts?.scope ?? "chain";
@@ -1005,7 +1005,7 @@ export class EdgeFeatureTool {
     this.phase = "drag";
     this.axis.copy(this.computeAxis());
     this.quat.setFromUnitVectors(Y_AXIS, this.axis);
-    // Must precede the seed value below, which is clamped to these bounds — and
+    // Must precede the seed value below, which is clamped to these bounds, and
     // must precede pushPreview, which replaces the displayed model with one that
     // already has the blend in it.
     this.measureClearance();
@@ -1030,7 +1030,7 @@ export class EdgeFeatureTool {
    *  previewing live (the pointer may be still while the user types). */
   /** Show the profile slider exactly when it has something to say: a fillet,
    *  with members, actually applying. Reconciled per frame rather than at the
-   *  six places those can each change — the same trade selectionNudge makes,
+   *  six places those can each change, the same trade selectionNudge makes,
    *  and it costs one predicate per frame in a state the user is briefly in. */
   private syncArc() {
     const want =
@@ -1052,8 +1052,8 @@ export class EdgeFeatureTool {
 
   /** Keep the handle standing across an orbit.
    *
-   *  An edge handle's axis is defined against the CAMERA — perpendicular to the edge
-   *  and in the screen plane — so it is only right for the orbit it was computed in.
+   *  An edge handle's axis is defined against the CAMERA, perpendicular to the edge
+   *  and in the screen plane, so it is only right for the orbit it was computed in.
    *  Computed once when the tool armed, it ended up pointing at the viewer after a
    *  far enough orbit, where a 52px glyph projects to nothing. The PASSIVE handle
    *  recomputes every frame, so the armed tool was also drifting away from the
@@ -1107,7 +1107,7 @@ export class EdgeFeatureTool {
     return edgeHandleAxis(this.viewport, this.tangent, this.anchor, this.modelCentre());
   }
 
-  /** Centre of the model's bounding box — what "outward" is measured against. */
+  /** Centre of the model's bounding box, what "outward" is measured against. */
   private modelCentre(): THREE.Vector3 | null {
     const bb = this.store.buildState.result?.bbox;
     if (!bb) return null;

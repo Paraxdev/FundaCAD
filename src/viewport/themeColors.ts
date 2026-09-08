@@ -3,7 +3,7 @@
 // The chrome re-cascades by itself when the theme changes; the viewport cannot.
 // A material holds a resolved number, not a reference to a custom property, so
 // without this the manipulators would keep their molten amber under a steel-blue
-// theme — the one part of the app visibly belonging to a different palette, and
+// theme, the one part of the app visibly belonging to a different palette, and
 // the part the user is looking at most.
 //
 // So: read the SAME custom properties the stylesheet uses, resolved off the
@@ -15,7 +15,7 @@ import { onThemeChange } from "../ui/theme";
 
 /** Resolved values, keyed by custom-property name.
  *
- *  getComputedStyle is a forced style resolution — cheap once, absurd per frame,
+ *  getComputedStyle is a forced style resolution, cheap once, absurd per frame,
  *  and these are read from tick loops. The cache is cleared wholesale on a theme
  *  change, which is the only thing that can invalidate it. */
 const cache = new Map<string, number>();
@@ -25,7 +25,7 @@ onThemeChange(() => cache.clear());
 /** Parse the shapes a token can legally hold into 0xRRGGBB.
  *
  *  Handles `#rgb`, `#rrggbb` and `rgb()/rgba()`, because the palette uses all
- *  three — the accent is hex but its tints are rgba, and a tint is exactly the
+ *  three, the accent is hex but its tints are rgba, and a tint is exactly the
  *  kind of token someone will reach for next. Alpha is dropped: Three keeps
  *  opacity on the material, not in the colour.
  *

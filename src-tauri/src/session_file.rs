@@ -1,7 +1,7 @@
 //! Where a running FundaCAD says how to reach it.
 //!
 //! The sidecar's port and token live in this process's memory and nowhere else,
-//! which is why an outside program — the MCP server in `plugins/FundaCAD.MCP/`, a probe script —
+//! which is why an outside program, the MCP server in `plugins/FundaCAD.MCP/`, a probe script,
 //! has never been able to join a session in progress. It could only start a
 //! second engine of its own and work on a copy. That is a safe default and a
 //! poor one for the thing an agent is most often asked to do, which is change
@@ -15,7 +15,7 @@
 //! Whoever holds the token can drive the geometry engine: rebuild, import,
 //! export. The file is written user-only (0600 on Unix; on Windows the per-user
 //! AppData tree is already ACLed to the account), so the reader has to be a
-//! process running as this user — which is a process that can already read the
+//! process running as this user, which is a process that can already read the
 //! user's documents directly. The engine adds no reach beyond that.
 //!
 //! What it DOES add is reach into the document open in the app right now, and
@@ -27,13 +27,13 @@
 //! The file is removed on a clean exit and NOT on a kill, so a stale one is
 //! ordinary. It is therefore a hint, never an assertion: a reader has to dial
 //! the port and present the token, and treat a refusal as "no app". Liveness is
-//! not stored — a pid can be recycled, and checking one portably is more code
+//! not stored, a pid can be recycled, and checking one portably is more code
 //! than the handshake the reader needs to do anyway.
 
 use std::path::{Path, PathBuf};
 
 /// The file's name inside the app data directory. Read by `plugins/FundaCAD.MCP/app_session.py`,
-/// which resolves the same directory from the bundle identifier — change one and
+/// which resolves the same directory from the bundle identifier, change one and
 /// the other stops finding it, which is why both name the constant in a comment.
 pub const FILE_NAME: &str = "session.json";
 
@@ -51,7 +51,7 @@ pub struct SessionInfo {
 /// JSON for a session file. Pure, so the escaping can be asserted without a
 /// filesystem.
 ///
-/// The token comes from `random_token`, which is hex, so it needs no escaping —
+/// The token comes from `random_token`, which is hex, so it needs no escaping,
 /// but writing it unescaped would make this function correct only for as long as
 /// that stays true, and a token containing a quote would produce a file that
 /// silently parses into a DIFFERENT token. Escaped, always.
@@ -100,7 +100,7 @@ pub fn write_into(dir: &Path, info: &SessionInfo) -> std::io::Result<PathBuf> {
     Ok(path)
 }
 
-/// Owner-only permissions. Unix has no default worth relying on — a permissive
+/// Owner-only permissions. Unix has no default worth relying on, a permissive
 /// umask would otherwise publish the token to every account on the machine.
 #[cfg(unix)]
 fn restrict(path: &Path) -> std::io::Result<()> {
@@ -135,7 +135,7 @@ mod tests {
 
     /// A token is hex today. If it ever stops being, an unescaped quote would
     /// end the string early and the file would parse into a token that is not
-    /// the one this app is using — every client refused, and the file looking
+    /// the one this app is using, every client refused, and the file looking
     /// perfectly fine to a human reading it.
     #[test]
     fn a_token_with_json_syntax_in_it_survives_the_round_trip() {

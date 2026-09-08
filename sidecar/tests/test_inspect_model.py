@@ -1,4 +1,4 @@
-"""What the model measures, and — the part that matters more — what a caller can
+"""What the model measures, and, the part that matters more, what a caller can
 then DO with the answer.
 
 Two properties are worth more here than any single number:
@@ -175,7 +175,7 @@ def test_each_edge_names_the_two_faces_it_lies_between():
 
 
 def test_neighbours_are_symmetric_and_match_the_shared_edges():
-    """Face adjacency reported here has to agree with the edges reported here —
+    """Face adjacency reported here has to agree with the edges reported here,
     they come from the same map, and a numbering slip between comp.faces() and
     the OCCT shape map would show up as exactly this disagreement."""
     b = one(Box(20, 10, 4))

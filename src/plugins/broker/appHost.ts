@@ -14,8 +14,8 @@
 // FILES GO THROUGH RUST, when there is a Rust to go through. `file_pick`,
 // `file_read`, `file_write` and `app_info` are handed to a `NativeBridge`; see
 // ./native.ts for why they are ops on the same table rather than a channel of
-// their own. Without a bridge — a browser session, a test that did not pass one
-// — they refuse by name, because "the desktop app is not here" and "you did not
+// their own. Without a bridge, a browser session, a test that did not pass one,
+// they refuse by name, because "the desktop app is not here" and "you did not
 // ask for this" are different things a plugin author has to be able to tell
 // apart.
 //

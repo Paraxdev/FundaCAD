@@ -8,13 +8,13 @@ wound the other way. That is what the _curve_* comparisons are for, and why they
 compare shape rather than endpoints alone.
 
 Everything here is a LEAF: it takes shapes and a Plane and returns dicts. The
-half that needs the feature tree — resolving what to project, and re-running it
-per rebuild — stays in builder.py.
+half that needs the feature tree, resolving what to project, and re-running it
+per rebuild, stays in builder.py.
 """
 
 import math
 
-import font_guard  # noqa: F401  MUST precede build123d — see font_guard.py
+import font_guard  # noqa: F401  MUST precede build123d, see font_guard.py
 
 from build123d import Edge, Plane, Vector
 
@@ -39,7 +39,7 @@ def _project_edge_to_plane(edge, plane):
     view-aligned line → 2-point poly, never an error); a circle whose axis is
     parallel to the plane normal stays a circle (closed) or a 3-point arc
     (open). Everything else (tilted circle, ellipse, bspline) is sampled to a
-    poly — build123d's position_at is arc-length parametrized, so samples are
+    poly, build123d's position_at is arc-length parametrized, so samples are
     evenly spaced along the curve."""
     ct = _edge_curve(edge)
     if ct == "line":
@@ -75,7 +75,7 @@ def _project_edge_to_plane(edge, plane):
     except Exception:
         # length/position_at both run GCPnts_AbscissaPoint, which raises
         # Standard_ConstructionError on degenerate seam/pole edges (sphere seam
-        # meridian, revolve pole) — the hazard tessellate._sample_by_param
+        # meridian, revolve pole), the hazard tessellate._sample_by_param
         # hardens; walk the raw curve parameter instead
         from tessellate import _sample_by_param
 
@@ -142,7 +142,7 @@ def _pt_dist(p, q):
 def _curve_dist(a, b):
     """Distance between two ProjectedCurves for silhouette nearest-matching:
     endpoint distances (orientation-insensitive) + midpoint distance. Different
-    kinds never match (inf) — a resized cylinder's silhouette LINE must track a
+    kinds never match (inf), a resized cylinder's silhouette LINE must track a
     line, not the nearest rim poly."""
     if a.get("kind") != b.get("kind"):
         return float("inf")
@@ -159,7 +159,7 @@ def _curve_close_either(a, b):
 
 
 def _curve_oriented(c, cached):
-    """`c` or its reverse — whichever endpoint order lies nearer `cached`'s.
+    """`c` or its reverse, whichever endpoint order lies nearer `cached`'s.
     Matching is orientation-insensitive, but the ASSIGNED curve must keep the
     cached endpoint order: an HLR orientation flip on unchanged geometry would
     otherwise swap point indices 0/1 under endpoint-attached constraints/dims
@@ -177,18 +177,18 @@ def _project_silhouette(shape, plane):
 
     HLRBRep_Algo with an HLRAlgo_Projector built from the sketch plane's exact
     right-handed frame (gp_Ax2 sets Y = normal x xdir, matching the plane's
-    y_dir) returns edges ALREADY in projector 2D coordinates (x, y, z=0) — no
+    y_dir) returns edges ALREADY in projector 2D coordinates (x, y, z=0), no
     to_local_coords pass; _project_edge_to_plane against Plane.XY reuses the
     line/circle/arc-exactness + sampled-poly mapping unchanged.
 
     Buckets: VCompound (visible sharp edges) + OutLineVCompound (surface
-    silhouettes). The probe's seam pitfall — a cylinder seam lying ON a
-    silhouette generator moves that line INTO VCompound — is covered by this
+    silhouettes). The probe's seam pitfall, a cylinder seam lying ON a
+    silhouette generator moves that line INTO VCompound, is covered by this
     union, and probing shows OCCT promotes ANY outline-coincident regular edge
     the same way (a tangent edge seen edge-on lands in V too). Rg1LineV/RgNLineV
     are deliberately EXCLUDED: probing shows they only ever carry visible smooth/
     sewn edges NOT on the outline (a sphere's seam meridian, a tilted cylinder's
-    seam generator) — stray interior curves that would split regions and break
+    seam generator), stray interior curves that would split regions and break
     the sphere-projects-to-its-exact-circle contract."""
     from OCP.BRepLib import BRepLib
     from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt
@@ -204,7 +204,7 @@ def _project_silhouette(shape, plane):
     algo.Add(shape.wrapped if hasattr(shape, "wrapped") else shape)
     algo.Projector(HLRAlgo_Projector(ax2))
     algo.Update()
-    algo.Hide()  # required — without it the visible/hidden buckets are empty
+    algo.Hide()  # required, without it the visible/hidden buckets are empty
     hlr = HLRBRep_HLRToShape(algo)
     curves = []
     for comp in (hlr.VCompound(), hlr.OutLineVCompound()):
@@ -215,7 +215,7 @@ def _project_silhouette(shape, plane):
             ed = TopoDS.Edge_s(ex.Current())
             ex.Next()
             # HLR edges carry only 2D curve-on-surface data; materialize a 3D
-            # curve first — build123d's length/position_at SEGFAULT without it
+            # curve first, build123d's length/position_at SEGFAULT without it
             BRepLib.BuildCurves3d_s(ed)
             c = _project_edge_to_plane(Edge(ed), Plane.XY)
             if c["kind"] == "poly":
@@ -233,7 +233,7 @@ def _project_silhouette(shape, plane):
 
 def _assign_silhouette(sibs, fresh):
     """Assign one silhouette group's FRESH curve list to its sibling entities
-    (the correspondence rule — documented in _recompute_projections' docstring).
+    (the correspondence rule, documented in _recompute_projections' docstring).
     Returns {entity_id: curve-or-None}; None = stale. `sibs` arrive shortlex-
     sorted; `fresh` is None when the body itself no longer resolves."""
     if not fresh:
@@ -250,7 +250,7 @@ def _assign_silhouette(sibs, fresh):
         else:
             movers.append(e)
     # pass 2: nearest same-kind curve (a resized body's movers track), pairs
-    # consumed in globally ascending _curve_dist order — greedy-per-sibling
+    # consumed in globally ascending _curve_dist order, greedy-per-sibling
     # would let a shortlex-earlier sibling steal another mover's clearly
     # nearer curve on an asymmetric move. Exact ties stay deterministic:
     # (dist, sibling shortlex position, HLR position).
@@ -275,7 +275,7 @@ def _assign_silhouette(sibs, fresh):
     for i, e in enumerate(unmatched):  # pass 3: positional; beyond the fresh set -> stale
         out[e["id"]] = remaining[i] if i < len(remaining) else None
     # Fresh curves left with NO sibling are DROPPED: a shape change can grow new
-    # outline curves, but a refresh only updates existing entities — re-run the
+    # outline curves, but a refresh only updates existing entities, re-run the
     # Project pick to bring the new curves in (auto-adding entities from a
     # rebuild refresh is deferred).
     return out

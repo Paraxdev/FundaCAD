@@ -1,12 +1,12 @@
 """What a document means when it names a plane.
 
-Three ways to say it — a base plane id, a datum feature's id, or a baked
-{origin, normal, xdir} — and one function that turns any of them into a
+Three ways to say it, a base plane id, a datum feature's id, or a baked
+{origin, normal, xdir}, and one function that turns any of them into a
 build123d Plane. Split out of builder.py so the sketch builder can resolve a
 plane without importing the whole rebuild.
 """
 
-import font_guard  # noqa: F401  MUST precede build123d — see font_guard.py
+import font_guard  # noqa: F401  MUST precede build123d, see font_guard.py
 
 from build123d import Axis, Keep, Plane, Vector
 

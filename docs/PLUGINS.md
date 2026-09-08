@@ -147,8 +147,8 @@ plugin on a fresh install.
 **Switched off** is the smaller one, and it applies to something already
 installed: the bundle stays on disk, whatever it wrote to the document stays,
 and it does not run. It is what somebody reaches for to find out whether a
-plugin was the cause of something. `registry.ts` records only the exception —
-which ids are OFF — because installing something is already an answer to "do
+plugin was the cause of something. `registry.ts` records only the exception,
+which ids are OFF, because installing something is already an answer to "do
 you want this".
 
 Either way, off takes effect immediately: `activate()` returns a teardown, and
@@ -179,7 +179,7 @@ not be a toggle.
 
 ## How a downloaded plugin's code runs
 
-A plugin that DRAWS — a menu row, a Vue component, paint on the model — runs in
+A plugin that DRAWS, a menu row, a Vue component, paint on the model, runs in
 the application's own JavaScript context. It has to: none of that is expressible
 from a Worker or from a separate process. So there is no sandbox to put such a
 plugin in, and pretending otherwise on the consent screen would be the worst of
@@ -215,7 +215,7 @@ its reasons.
 
 `verify_plugin_signature` fails closed the moment a public key exists, and there
 is no key. Until there is one, the anchor is GitHub's TLS and this repository's
-path — which is the same anchor the updater has before ITS signature check.
+path, which is the same anchor the updater has before ITS signature check.
 Generating a key pair has a custody consequence and is not a decision to take on
 somebody's behalf.
 
@@ -257,7 +257,7 @@ There is no way to replace a core behaviour: `app/actions.ts` reaches its own
 `switch` before it asks the table, so a contribution naming `save` is inert, and
 that is the order of the code rather than a check that could be forgotten. There
 is no way to read another plugin's contributions except `service()`, which hands
-back an opaque value the app never looks inside — the same arrangement as grant
+back an opaque value the app never looks inside, the same arrangement as grant
 strings, which Rust compares without knowing what one means. And the table names
 no plugin, anywhere.
 
@@ -267,7 +267,7 @@ and its `activate()` runs. A surface that redraws on the switch redraws while th
 rows it wants are still loading and is then left showing the previous state
 permanently, because nothing else is coming. `TitleBar.vue` and `RibbonBar.vue`
 watch `onContribChange` for exactly this reason. It is written down because it
-was got wrong, and because no unit test caught it — a rendered app did.
+was got wrong, and because no unit test caught it, a rendered app did.
 
 ### A modeling tool, which is what the last three points are for
 
@@ -285,7 +285,7 @@ Three things did not:
 
 `tools` is the capability row: what the tool acts on, and whether it is running.
 Both halves earn their place. Without the first, a contributed tool has a ribbon
-button and nothing else — selecting a face offers Fillet, Press/Pull and Delete
+button and nothing else, selecting a face offers Fillet, Press/Pull and Delete
 Face and stays silent about the tool that is the whole reason a face is selected.
 Without the second, `app/toolBusy.ts` believes the window is idle while a plugin
 owns the pick, so it dispatches a second tool over the top of the first and the
@@ -302,7 +302,7 @@ silently.
 icon packs, so a pack the user chose keeps the last word: a plugin fills a name
 no pack has, and nothing else. This markup reaches the DOM through `Icon.vue`,
 which is the one sanctioned `v-html` in the app, and it is safe on the same terms
-core markup is — every value is a compile-time constant in a bundle whose code
+core markup is, every value is a compile-time constant in a bundle whose code
 already runs with the whole of the app's reach.
 
 ### The line a plugin may not cross
@@ -312,7 +312,7 @@ file you already saved still opens.**
 
 So `texture` stays in the `Feature` union in `src/types.ts`, the geometry that
 builds it stays in the sidecar, and `document/numFields.ts` keeps its numeric
-rows — that table is not a list of labels, it is the inventory of what a
+rows, that table is not a list of labels, it is the inventory of what a
 PARAMETER can drive, and `resolveTarget` reads it to answer what `texture1.depth`
 refers to. A parameter has to keep meaning the same thing on a machine where the
 plugin is switched off.
@@ -337,7 +337,7 @@ So the panel belongs to the capability that owns the data, and the printer
 contributes the answer under a name the two of them agree on (`filaments`),
 through the app, which stores it and hands it back without looking inside. With
 the printer switched off the panel is not hidden by a check: it has no way to
-learn what is loaded, so it draws nothing — which is what it should do on a
+learn what is loaded, so it draws nothing, which is what it should do on a
 machine with no printer anyway.
 
 ## Where a plugin's source lives
@@ -449,8 +449,8 @@ document whose only job is to be believed is a document that can lie, and the
 suggestions cost nothing to carry in the build.
 
 **Any HTTPS URL is a widening, and a deliberate one.** The check used to admit
-only this repository's releases. That was never the thing making a plugin safe
-— the grants it declared and the sandbox its kind runs in are — and an origin
+only this repository's releases. That was never the thing making a plugin safe,
+the grants it declared and the sandbox its kind runs in are, and an origin
 allowlist containing only ourselves is not a permission model, it is a
 distribution monopoly wearing one. What survives is the part that was always
 doing the work: `allowed_bundle_url` insists on HTTPS and on an authority that
@@ -463,14 +463,14 @@ network decided they should be, and the digest check, the manifest comparison
 and the extractor would all then run faithfully against an attacker's archive.
 It is also what makes the origin on the consent screen worth showing: with TLS,
 the host in the URL is the host that answered. **Every redirect hop is checked
-too**, not just the URL that was typed — otherwise an approved host could
+too**, not just the URL that was typed, otherwise an approved host could
 answer `302` to plain HTTP and the check would have secured one request out of
 two.
 
 **"Official" is a label, not a permission.** `is_official_url` answers only
 whether we published it. It is decided in Rust from the URL the bytes actually
 came from, stored on the record, and shown on the row. It skips no screen,
-grants nothing, and a bundle claiming it in its own manifest is ignored — a
+grants nothing, and a bundle claiming it in its own manifest is ignored, a
 bundle claiming to be ours is precisely the one that must not be believed for
 saying so.
 
@@ -528,7 +528,7 @@ A plugin from our releases, from a URL somebody was given, and from a zip on
 disk are all the same kind of row once installed; the suggestions appear
 underneath as things not installed yet, which is all they are.
 
-The origin is shown for anything we did not publish, and only then — a label on
+The origin is shown for anything we did not publish, and only then, a label on
 every row is a label nobody reads. It sits above the two permission lists rather
 than below them, because it is the half of the question a person can actually
 judge, and a note underneath an argument is a note read after the decision.
@@ -693,7 +693,7 @@ what the e2e test above is for.
 **One thing a unit test could not have caught.** Vite builds `sandbox.ts` as a
 worker *entry*, and an entry has no importers, so Rollup treats every export as
 unreachable and drops it. The first build produced a chunk holding the op-name
-array and no sandbox at all — past every test, and it would have failed at the
+array and no sandbox at all, past every test, and it would have failed at the
 first line of the first plugin anybody ran. The bootstrap registers itself with
 a top-level assignment now, which a bundler must keep, and
 `scripts/check-sandbox-chunk.mjs` reads the built artifact and fails if it is a
@@ -729,7 +729,7 @@ for this plugin.** A plugin cannot name a file, cannot guess a handle (they are
 random), and cannot use another plugin's handle, because every handle records
 whose it is and the check runs on every read.
 
-A path never crosses — not to the plugin, and not even into the window. The
+A path never crosses, not to the plugin, and not even into the window. The
 handle table lives in Rust, in `src-tauri/src/plugins/handed.rs`, so the most a
 plugin can learn about somebody's disk is a file name they chose to show it. A
 plugin that could display `C:\Users\alice\Documents\work\part.step` has been
@@ -830,7 +830,7 @@ runners**, and the kind decides which.
 | Rust | WebAssembly | a Worker | `compute` |
 | Python | nothing | its own process | `process` |
 
-WebAssembly compiles inside the sandbox — the e2e test checks it, because
+WebAssembly compiles inside the sandbox, the e2e test checks it, because
 `'wasm-unsafe-eval'` is inherited by the Worker and it would be unpleasant to
 discover otherwise later. What is not written yet is the loader that hands a
 `.wasm` its imports and calls into it, so a Rust plugin is a design with its
@@ -965,15 +965,15 @@ from the app or from a named plugin, which holds the plugins to it too.
 
 **`fieldApplies` was a document-layer function whose entire body was one tool's
 business.** It opened with `if (type !== "texture") return true;`. It is a
-contribution now, and it still governs the app's own numeric rows — which is the
+contribution now, and it still governs the app's own numeric rows, which is the
 better arrangement, not a concession: the app owns `seed` and `angle` because a
 parameter can drive them, and the plugin decides which of them a knurl reads.
 
 ### And then driving it found a bug in the application
 
 The move above is a refactor: it says the tool can live outside `src/`, not that
-the tool works. Actually using it — a browser, the real sidecar, eight shapes and
-every pattern, twenty-eight gestures — said something else. **Ten of the
+the tool works. Actually using it, a browser, the real sidecar, eight shapes and
+every pattern, twenty-eight gestures, said something else. **Ten of the
 twenty-eight worked.** The rest picked a face, showed it selected, and then
 refused Add with "No faces selected" over a face that was lit up on screen. Same
 shape, different answer run to run, which is what "sometimes" always means.
@@ -983,7 +983,7 @@ the kernel displaced correctly on sixty of sixty-six shape/pattern pairs, and th
 six were the harness's own bad input. It was `viewport.ts`.
 
 **A rebuild used to reach the screen in one piece, and it does not any more.**
-`setModel` was taught to carry the selection across a rebuild — capture before
+`setModel` was taught to carry the selection across a rebuild, capture before
 the Highlighter goes, restore onto the new model, `selectionMemo.ts`. A chunked
 reply reaches the screen in several installments instead, and every one of them
 publishes a fresh ModelView with a fresh Highlighter. Nothing carried the
@@ -1016,21 +1016,21 @@ The fix is in the shared path, so it is not a plugin's:
 | --- | --- |
 | `viewport.ts` `streamMemo` | snapshot at `begin`, re-applied on every installment, and the commit's fallback |
 | `selectionMemo.ts` `remapStreamedSelection` | a body whose chunk has not landed is not a body whose face is gone: hold the geometric fallback back rather than let it match some other body's face |
-| `selectionMemo.ts` `shouldAnnounce` | a commit announces a lost selection, an installment does not — mid-stream "nothing came back" is not news, and announcing it takes the drag handle down a few milliseconds before the body lands |
+| `selectionMemo.ts` `shouldAnnounce` | a commit announces a lost selection, an installment does not, mid-stream "nothing came back" is not news, and announcing it takes the drag handle down a few milliseconds before the body lands |
 
 Two things the plugin kept for itself, because they are about a gesture rather
 than about drawing. Its rAF tick ignores the ambient selection entirely while a
 rebuild is in flight, since mid-rebuild it is unknown rather than new. And a
 commit pressed during a rebuild is HELD and run when the build lands, instead of
-being refused — the person has finished and is waiting, and "nothing is selected"
+being refused, the person has finished and is waiting, and "nothing is selected"
 was a lie told to them about a face they could see.
 
 Measured the same way it was found: **twenty-eight of twenty-eight**.
 
 And one more thing the sweep turned up, latent rather than active:
 `tessellate.py` wrapped `displace_face` in a bare `except Exception: pass`. A
-texture that threw was not an error, not a diagnostic and not a red timeline row
-— it was a face that came out flat under a feature the timeline said was fine,
+texture that threw was not an error, not a diagnostic and not a red timeline row,
+it was a face that came out flat under a feature the timeline said was fine,
 with nothing anywhere to tell that from a pattern that legitimately does nothing
 there. It still falls back rather than failing the build, and now it says so.
 
@@ -1038,7 +1038,7 @@ there. It still falls back rather than failing the build, and now it says so.
 
 1. **The geometry engine, reachable from a plugin.** `build`, `inspect`, `view`
    and `export` are the four ops still refusing for a reason that will go away.
-   The file half of `export` is already answered — `doc_get` then `file_write` —
+   The file half of `export` is already answered, `doc_get` then `file_write`,
    so what is left is the kernel call itself.
 2. The wasm loader in the guest, which is what makes a Rust plugin run rather
    than merely compile.

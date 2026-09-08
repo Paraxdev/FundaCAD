@@ -17,7 +17,7 @@ export function createSketchVisibility(
     );
 
   const isSketchVisible = (id: string): boolean => {
-    if (e.tools.extrude.forcedSketchId === id) return true; // being edited — regions must exist
+    if (e.tools.extrude.forcedSketchId === id) return true; // being edited, regions must exist
     return e.store.sketchVisibilityOverride(id) ?? !isSketchConsumed(id);
   };
 

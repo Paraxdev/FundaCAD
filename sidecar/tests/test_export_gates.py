@@ -3,7 +3,7 @@ separate-body filenames.
 
 Run: uv run python test_export_gates.py
 
-Each of these was a way around a limit that the plain export path enforces —
+Each of these was a way around a limit that the plain export path enforces,
 a cache that ignored tolerance, a budget checked after the allocation it was
 meant to bound, a quadratic bbox walk, and a set of filenames that could
 silently overwrite each other.
@@ -54,8 +54,8 @@ def test_the_export_cache_keys_on_tolerance():
     budget again with nothing to explain why.
 
     Asserted by counting tessellations rather than by comparing triangle counts.
-    For many shapes the ANGULAR tolerance dominates — a sphere meshes identically
-    at 0.02 and at 1.0 — so equal output would not have meant a cache hit."""
+    For many shapes the ANGULAR tolerance dominates, a sphere meshes identically
+    at 0.02 and at 1.0, so equal output would not have meant a cache hit."""
     import tessellate as _tess
 
     server._EXPORT_MESH_CACHE.clear()
@@ -77,14 +77,14 @@ def test_the_export_cache_keys_on_tolerance():
         _tess.tessellate = real
 
     # And the tolerance genuinely round-trips: back at export grade the mesh is
-    # coarse again. This is the half the plan did not anticipate — OCCT stores
+    # coarse again. This is the half the plan did not anticipate, OCCT stores
     # the triangulation ON THE SHAPE and treats an existing finer mesh as good
     # enough for a coarser request, so before this the 0.02 call came back with
     # the 201,198-triangle mesh from the 0.001 call. A backoff would have been a
     # no-op with the cache key fixed and everything else correct.
     back = server._export_mesh(b)
     assert len(back[1]) // 3 < len(fine[1]) // 3, (
-        f"asked for 0.02 after 0.001 and got {len(back[1]) // 3} triangles — "
+        f"asked for 0.02 after 0.001 and got {len(back[1]) // 3} triangles, "
         "OCCT reused the finer triangulation"
     )
     print(f"{PASS} export tolerance round-trips: {len(back[1]) // 3} tris at 0.02, "
@@ -115,7 +115,7 @@ def test_the_triangle_budget_is_checked_per_body_not_after_everything():
             except ValueError as ex:
                 assert "too dense" in str(ex), ex
         assert len(seen) < 4, (
-            f"meshed all {len(seen)} bodies before refusing — the budget ran "
+            f"meshed all {len(seen)} bodies before refusing, the budget ran "
             "after the allocation it exists to bound"
         )
     finally:
@@ -148,7 +148,7 @@ def test_the_interference_sweep_computes_each_bbox_once():
     did 9,360,540 OCCT walks at 3,060 bodies to learn 3,060 things.
 
     Each walk is expensive (95.5 s over the reference assembly's 3,072 bodies), so
-    the count is what keeps the sweep survivable — the precompute also ticks per
+    the count is what keeps the sweep survivable, the precompute also ticks per
     body now, because unticked it was reaped at STALL_TIMEOUT."""
     doc = _box_doc(8)
     builder.rebuild_cached(doc)  # warm
@@ -215,7 +215,7 @@ def test_awkward_names_always_yield_something_usable():
 
 def test_separate_export_writes_a_directory_and_refuses_to_clobber():
     """The save dialog confirms overwriting `parts.step`, which is never
-    written — N siblings are. So the only file the user was asked about was the
+    written, N siblings are. So the only file the user was asked about was the
     one file that could not be clobbered."""
     server._EXPORT_MESH_CACHE.clear()
     doc = _box_doc(3)

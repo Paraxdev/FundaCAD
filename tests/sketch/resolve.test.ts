@@ -1,6 +1,6 @@
 // Regression lock for the Wave-1 pattern-baking fix (docs/IMPROVEMENT-AUDIT.md
 // §1.2 / §5.2): SketchMode.enter() must resolve ONLY a sketch's real (persisted)
-// entities — never the pattern-derived copies — or else every enter/finish cycle
+// entities, never the pattern-derived copies, or else every enter/finish cycle
 // bakes the previous cycle's derived copies in as new real entities and the
 // sketch grows without bound. These tests exercise the resolve.ts round trip
 // that enter()/finish() rely on: resolveRealEntities -> toSketchEntity -> (next
@@ -102,7 +102,7 @@ describe("enter/finish round trip (regression: pattern copies must never be bake
       entities = real.map(toSketchEntity);
     }
     // after 3 cycles the persisted entities are still just the resolved
-    // (now-numeric) originals — nothing accumulated.
+    // (now-numeric) originals, nothing accumulated.
     expect(entities).toEqual([
       { type: "circle", id: "e1", radius: 5, x: 0, y: 0 },
       { type: "line", id: "e2", x1: 0, y1: 0, x2: 10, y2: 0 },

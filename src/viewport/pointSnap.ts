@@ -1,4 +1,4 @@
-// "Which point on the model did I just aim at?" — the choice, without the
+// "Which point on the model did I just aim at?", the choice, without the
 // camera.
 //
 // The sketcher has had this since it was written (sketch/snap.ts): candidates
@@ -71,7 +71,7 @@ export function pickPoint(
 }
 
 /** The midpoint of a polyline BY ARC LENGTH, so a curved edge's middle is on
- *  the curve rather than on the chord. Null for a polyline with no length —
+ *  the curve rather than on the chord. Null for a polyline with no length,
  *  a closed edge's ends coincide, and the middle of a zero-length run is not a
  *  point worth aiming at. */
 export function polylineMidpoint3(

@@ -1,17 +1,17 @@
 """Configure OpenCASCADE shared-memory parallelism (SMP) once per process.
 
-OCCT is **CPU-only** — there is no GPU path for booleans or meshing. The lever
+OCCT is **CPU-only**, there is no GPU path for booleans or meshing. The lever
 for "blazingly fast" is therefore scaling across every core/thread:
 
-  * meshing  — `BRepMesh_IncrementalMesh` fans faces across OCCT's thread pool
-  * booleans — `BOPAlgo` (fuse/cut/intersect) run multi-threaded
+  * meshing, `BRepMesh_IncrementalMesh` fans faces across OCCT's thread pool
+  * booleans, `BOPAlgo` (fuse/cut/intersect) run multi-threaded
 
 Both draw their worker threads from one global `OSD_ThreadPool`. We point that
 pool at all logical CPUs (24 on a 5900X) and flip the parallel-by-default flags,
 so a single configure() at startup makes every rebuild use the whole machine.
 Override the thread count with the `VERXA_THREADS` env var.
 
-`configure()` is idempotent and must run in *each* process that touches OCCT —
+`configure()` is idempotent and must run in *each* process that touches OCCT,
 the server process AND every rebuild worker (see server.py's executor initializer).
 """
 

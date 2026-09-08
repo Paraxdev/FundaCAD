@@ -20,7 +20,7 @@
 // TWO controls, because a revolve has two numbers and they are different KINDS
 // of quantity. The straight arrow runs along the axis and sets how far one turn
 // climbs. The curved one rides the sweep's own circle, at the real radius, in
-// the real plane, and sets how far it turns in all — drag it round and the turns
+// the real plane, and sets how far it turns in all, drag it round and the turns
 // pile up, which is the only way 3600 degrees is an answer somebody arrives at
 // rather than types. Each points the way its own number grows, and they leave
 // the same anchor at right angles, so neither has to be labelled.
@@ -35,7 +35,7 @@
 // box read 600 degrees, the dashed line ran round twice, and the solid underneath
 // went on being the 360 it was built as. Two things on screen said different
 // numbers and the shaded one is the one that gets believed. So a value that is
-// typed goes through the store's edit preview once the typing settles — the real
+// typed goes through the store's edit preview once the typing settles, the real
 // feature, rebuilt by the sidecar, in the timeline position it will occupy. A
 // preview is not an undo step, so the value box stays the thing that commits.
 
@@ -405,7 +405,7 @@ export class RevolvePitchTool {
       // reopening: drag the pitch, and the angle arc was already gone.
       //
       // So a release stays armed and pushes the drag through the sidecar
-      // instead. That is the other half of it — the drag itself only moves the
+      // instead. That is the other half of it, the drag itself only moves the
       // dashed helix, because a rebuild per frame lurches, so without a build on
       // release you would go on aiming the second handle at the shape you
       // started with. manipulator.fluentRelease already says "stay" for every

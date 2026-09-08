@@ -3,7 +3,7 @@
 // A value box that only answers on Enter is a value box you have to guess at,
 // so typing into one now shows what the number would build before it is
 // committed. That needs the feature it WOULD build, without a speculative
-// mutate and an undo entry per keystroke — which is the whole of what this
+// mutate and an undo entry per keystroke, which is the whole of what this
 // function is for, and the two things it must never do are touch the document
 // it was handed and cost a copy of the whole part.
 

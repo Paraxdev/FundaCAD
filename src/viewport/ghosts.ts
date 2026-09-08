@@ -9,7 +9,7 @@
 //
 //   - press/pull builds new geometry (a prism raised off the picked faces), so
 //     it is a mesh of its own that is thrown away on commit;
-//   - a move touches no geometry at all — a rigid transform is a matrix on the
+//   - a move touches no geometry at all, a rigid transform is a matrix on the
 //     body objects, zero vertex writes, and picking follows it because raycasts
 //     read matrixWorld;
 //   - a pattern is the move trick N times over, drawn as cloned meshes.
@@ -24,7 +24,7 @@ import type { RoundFace } from "../features/radialDrag";
 import { bodyOfFace, type BodyEdges, type BodyMesh, type ModelView } from "./render";
 import { themeColor } from "./themeColors";
 
-/** The slice of Viewport these previews need — live accessors, not copies. */
+/** The slice of Viewport these previews need, live accessors, not copies. */
 export interface GhostHost {
   /** the current model, or null between builds */
   model(): ModelView | null;
@@ -117,13 +117,13 @@ export class GhostLayer {
   }
 
   // --- Move ghost: translate the selected bodies' mesh + edges live during a drag,
-  // with NO sidecar rebuild (a rigid move needs no geometry recompute) — so dragging
+  // with NO sidecar rebuild (a rigid move needs no geometry recompute), so dragging
   // is snappy. The real `move` feature is committed on release. With per-body meshes
   // this is a pure object-transform offset: zero vertex writes, zero GPU uploads.
   // Raycasts (bodyIdAt, pointInSolid parity) follow matrixWorld, refreshed eagerly
   // on every offset so picking never lags the visual. On commit (restore=false) the
   // offset stays until the rebuilt body arrives; the moved body's etag changes, so
-  // setModel replaces its mesh (position 0) — and resetBodyAppearance() clears any
+  // setModel replaces its mesh (position 0), and resetBodyAppearance() clears any
   // lingering offset on the reuse path as a belt-and-braces guard.
   private moveGhost: {
     bodies: BodyMesh[];
@@ -172,7 +172,7 @@ export class GhostLayer {
   }
   // --- Pattern ghosts: translucent copies of a body, one per pattern cell -----
   //
-  // The copies share the source body's geometry buffers — a ghost is a second
+  // The copies share the source body's geometry buffers, a ghost is a second
   // draw of the same vertices, so twenty of them cost twenty draw calls and no
   // memory. Rebuilt only when the SET changes (a different body, a different
   // count); a drag that only moves the copies rewrites matrices.

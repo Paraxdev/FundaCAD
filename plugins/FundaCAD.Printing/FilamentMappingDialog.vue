@@ -12,7 +12,7 @@ const props = defineProps<{ req: FilamentReq }>();
 
 // NOTE: no useModalGate(). This dialog never counted itself in the modal-depth
 // gate, and it opens from a flow that is already several native dialogs deep.
-// Changing that is behaviour, not layout — left as it was.
+// Changing that is behaviour, not layout, left as it was.
 
 /** Physical toolhead chosen per logical slot, keyed by the slot's index (which
  *  is the logical gcode tool Tn). Seeded from autoMatch, exactly as the
@@ -30,7 +30,7 @@ const OPTS = [
 
 function confirm() {
   props.req.resolve({
-    // Source order, not Map order — the two agree, but the wire format is
+    // Source order, not Map order, the two agree, but the wire format is
     // positional enough that it is worth not depending on that.
     mapTable: props.req.slots.map((s) => [s.index, picked.value.get(s.index) ?? s.index]),
     opts: { ...opts.value },
@@ -48,7 +48,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
   <Teleport to="body">
     <div class="choice-backdrop" @pointerdown.self="req.resolve(null)">
       <div class="choice-card print-map-card">
-        <div class="choice-title">Send to printer — filament mapping</div>
+        <div class="choice-title">Send to printer, filament mapping</div>
 
         <div class="print-map-rows">
           <div v-for="slot in req.slots" :key="slot.index" class="print-map-row">

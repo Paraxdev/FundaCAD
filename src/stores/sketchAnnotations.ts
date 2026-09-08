@@ -24,14 +24,14 @@ export interface GlyphHooks {
  *  constraint glyphs.
  *
  *  SPLIT OF RESPONSIBILITY, and it is the whole reason this store looks the way
- *  it does: everything here is STRUCTURE — which badges exist, what each says,
+ *  it does: everything here is STRUCTURE, which badges exist, what each says,
  *  which classes it wears, which one the Delete key is armed on. POSITION is not
  *  here and must never be. Both layers project every badge from sketch mm to
  *  screen px on each frame the camera moves; a 200-label sketch at 60 fps is
  *  12,000 style writes a second, and routing those through Vue's scheduler would
  *  be a performance disaster. The components collect their elements into a plain
  *  (non-reactive, non-ref) array and write `style.transform` directly from a rAF
- *  loop — see Sketch{Dim,Glyph}Layer.vue.
+ *  loop, see Sketch{Dim,Glyph}Layer.vue.
  *
  *  shallowRef throughout, and markRaw on everything that lands here: the items
  *  carry commit/placeCommit/onDelete closures over SketchMode and the raw

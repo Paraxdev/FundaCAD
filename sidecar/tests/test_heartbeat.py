@@ -5,14 +5,14 @@ Run: uv run python test_heartbeat.py   (or .venv/bin/python test_heartbeat.py)
 The supervisor reaps a worker whose shared heartbeat STOPS MOVING, not one that
 merely takes a long time. Export meshing, the interference pair sweep and the
 per-body checkpoint write never bumped it, so each was liable to be killed for
-being slow rather than for being wedged — the one distinction the stall watchdog
+being slow rather than for being wedged, the one distinction the stall watchdog
 exists to make. It is also a hard prerequisite for moving export onto
 `_run_stall`: STALL_TIMEOUT is 60 s, so supervising progress without ticks
 HALVES the budget instead of lifting it.
 
 Every check asserts the counter advances by AT LEAST the live body count.
 "Non-zero" passes vacuously here, because `rebuild_cached` already emits its own
-per-feature ticks — which is why the sweep check subtracts a measured warm
+per-feature ticks, which is why the sweep check subtracts a measured warm
 rebuild baseline rather than assuming the two never overlap.
 """
 
@@ -94,7 +94,7 @@ def test_export_mesh_ticks_on_every_tier():
 
     # The second pass is served entirely from the RAM identity cache, and must
     # still tick. Export walks every body in one uninterrupted loop, so the
-    # guarantee worth having is one tick per body regardless of tier — a mixed
+    # guarantee worth having is one tick per body regardless of tier, a mixed
     # warm/cold export is the common case, not the exception.
     with _Ticks() as warm:
         for b in live:
@@ -147,7 +147,7 @@ def test_interference_sweep_ticks_around_each_boolean():
     with _Ticks() as sweep:
         res = _interference_job(doc)
     assert "error" not in res, res
-    assert res["pairs"], "overlapping boxes should clash — no boolean ran"
+    assert res["pairs"], "overlapping boxes should clash, no boolean ran"
 
     gained = sweep.n - base.n
     assert gained >= N_BODIES + len(res["pairs"]), (
@@ -179,7 +179,7 @@ def test_checkpoint_write_ticks_per_body():
         # that did nothing but tick. Prove the write landed.
         cp = store.find_checkpoint([key])
         assert cp is not None, \
-            "checkpoint never landed — the tick count above proves nothing"
+            "checkpoint never landed, the tick count above proves nothing"
         assert len(cp["manifest"]) == len(live), cp["manifest"]
         print(f"{PASS} checkpoint write: {t.n} ticks for {len(live)} bodies "
               f"(checkpoint landed, {len(cp['manifest'])} entries)")
@@ -285,7 +285,7 @@ def _ticking_job(hb):
 
 
 def _stalling_job(hb):
-    """Publishes progress, then wedges — the shape of one stuck OCCT call."""
+    """Publishes progress, then wedges, the shape of one stuck OCCT call."""
     import time as _time
     for _ in range(3):
         _time.sleep(0.1)
@@ -308,7 +308,7 @@ def test_silent_work_is_reaped_with_a_stalled_message():
     res, elapsed = _drive_run_stall(_stalling_job, stall=1.0)
     msg = (res.get("error") or {}).get("message", "")
     assert "stalled" in msg, f"expected a stalled message, got {res}"
-    assert elapsed < 4.0, f"reaped at {elapsed:.2f}s — should be ~1s, not the job's 6s"
+    assert elapsed < 4.0, f"reaped at {elapsed:.2f}s, should be ~1s, not the job's 6s"
     assert res.get("did") is None, "a reaped job must not return its result"
     print(f"{PASS} silent work reaped at {elapsed:.1f}s: {msg[:58]}…")
 

@@ -2,7 +2,7 @@
 // has to know to draw a feature it did not invent.
 //
 // THIS IS THE ONE THAT PROVED THE CONTRIBUTION TABLE. The other capabilities in
-// this repository add to the edges of the window — a panel, a settings block, a
+// this repository add to the edges of the window, a panel, a settings block, a
 // menu row, colours on a body. A modeling TOOL is not an edge. It is a peer of
 // Fillet and Press/Pull: it takes over the pick, holds the window against every
 // other command, puts a verb in front of a selection, and leaves a feature in the
@@ -23,7 +23,7 @@
 //             is called, and what a double-click on it does.
 //   icons     a mark for a tool the application does not have.
 //
-// The rest — the ribbon button, the action behind it, the panel on screen — went
+// The rest, the ribbon button, the action behind it, the panel on screen, went
 // through points that already existed, which is the result worth having: adding
 // a tool needed three new points, not eleven.
 //
@@ -51,7 +51,7 @@ const ID = "FundaCAD.Texture";
 
 /** The mark, in the application's house style: a 24x24 box with a roughly 20x20
  *  live area, stroke-width 1.4 from the wrapper, round caps and joins, no fill.
- *  A knurl seen face-on — a rounded square with the cross-hatch that is the
+ *  A knurl seen face-on, a rounded square with the cross-hatch that is the
  *  first pattern in the list and the one people picture when they read the word.
  *
  *  A compile-time constant, and it has to stay one. This reaches the DOM through
@@ -131,7 +131,7 @@ export async function activate(e: Engine): Promise<() => void> {
   return () => {
     // Switching this off mid-gesture is not a hypothetical: the plugins panel is
     // reachable while a tool is running. Cancel first, so the model comes off
-    // the edit preview and the ambient selection is released — otherwise the
+    // the edit preview and the ambient selection is released, otherwise the
     // document is left rolled back to a point in its own history with no panel
     // on screen and no way to get back.
     tool.cancel();

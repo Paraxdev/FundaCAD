@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Live printer camera. The webview never dials the LAN — Rust polls the
+// Live printer camera. The webview never dials the LAN, Rust polls the
 // printer's webcam and pushes JPEG data: URLs (CSP img-src already allows
 // data:), so this only ever sets img.src.
 //
@@ -51,7 +51,7 @@ function detach(id: string) {
   offline.value = false;
 }
 
-// One watcher covers open, close AND switching printers while open — the old
+// One watcher covers open, close AND switching printers while open, the old
 // code could only handle the first two because open() built the DOM.
 watch(
   () => cameraPanel.value,

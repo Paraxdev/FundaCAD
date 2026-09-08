@@ -1,10 +1,10 @@
 // Interactive Thread: click a round face, and the thread that belongs on it
-// appears — the ISO coarse pitch for that diameter, running the length of the
+// appears, the ISO coarse pitch for that diameter, running the length of the
 // face, cut the right way round for a shank or a bore.
 //
 // It writes two features, because that is honestly what a thread is here: the
 // meridian profile as a sketch, and the climbing revolve that sweeps it
-// (builder._screw_revolve). Both stay in the timeline and both stay editable —
+// (builder._screw_revolve). Both stay in the timeline and both stay editable,
 // the pitch, the arc and the operation are ordinary value rows afterwards, and
 // the profile is an ordinary sketch. Nothing about the thread is a special case
 // the rest of the app has to know about, which is why there is no `thread`
@@ -108,7 +108,7 @@ export class ThreadTool {
         pre.round.cylinder.axis, pre.round.cylinder.point, pre.round.radial);
       return;
     }
-    setPrompt("Click a round face — a shank or a bore — to thread · Esc");
+    setPrompt("Click a round face, a shank or a bore, to thread · Esc");
   }
 
   private onMove(e: PointerEvent) {
@@ -137,10 +137,10 @@ export class ThreadTool {
     if (e.button !== 0) return;
     if (this.phase === "pick") {
       const hit = this.viewport.pickFaceForPressPull(e.clientX, e.clientY);
-      if (!hit) return; // missed the body — let the click orbit
+      if (!hit) return; // missed the body, let the click orbit
       const round = this.viewport.roundFaceAt(hit.faceId, hit.anchor);
       if (!round) {
-        setPrompt("That face is not round. A thread needs a cylinder — a shank or a bore · Esc");
+        setPrompt("That face is not round. A thread needs a cylinder, a shank or a bore · Esc");
         return;
       }
       e.preventDefault();
@@ -186,7 +186,7 @@ export class ThreadTool {
   ) {
     const d = new THREE.Vector3(axis[0], axis[1], axis[2]).normalize();
     const p = new THREE.Vector3(point[0], point[1], point[2]);
-    // The face's own extent along the axis — the thread runs the length of the
+    // The face's own extent along the axis, the thread runs the length of the
     // cylinder that was clicked, not of the body it belongs to.
     let lo = Infinity;
     let hi = -Infinity;
@@ -324,7 +324,7 @@ export class ThreadTool {
     const angle = threadAngleDeg(this.length, this.pitch);
     if (!(angle > 0)) return null;
     // A meridian plane: it CONTAINS the axis, so the sketch's own +X is radial
-    // (out from the axis) and its +Y is the axis direction — which is the frame
+    // (out from the axis) and its +Y is the axis direction, which is the frame
     // threadProfile answers in, so its numbers go in untouched.
     const normal = new THREE.Vector3().crossVectors(this.axis, this.radial).normalize();
     const plane: PlaneDef = {
@@ -351,12 +351,12 @@ export class ThreadTool {
   private commit() {
     if (this.phase !== "size") return this.cancel();
     if (threadTurns(this.length, this.pitch) < MIN_THREAD_TURNS) {
-      setPrompt(`A thread needs at least one full turn — ${this.pitch}mm at this pitch · Esc`);
+      setPrompt(`A thread needs at least one full turn, ${this.pitch}mm at this pitch · Esc`);
       return;
     }
     const features = this.buildFeatures();
     if (!features) {
-      toast("That pitch is too coarse for this diameter — the groove would reach the axis.");
+      toast("That pitch is too coarse for this diameter, the groove would reach the axis.");
       return;
     }
     // Cleanup BEFORE the write, so the preview is withdrawn and the rebuild
@@ -404,7 +404,7 @@ export class ThreadTool {
   }
 }
 
-/** Any unit vector perpendicular to `d` — the fallback meridian when the cursor's
+/** Any unit vector perpendicular to `d`, the fallback meridian when the cursor's
  *  own radial is degenerate (a click dead on the axis end cap). */
 function anyPerpendicular(d: THREE.Vector3): THREE.Vector3 {
   const up = Math.abs(d.z) < 0.9 ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0);

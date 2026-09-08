@@ -7,9 +7,9 @@ export interface DocBridge {
   /** Bumped on every onBuild emit, including `building` ticks. */
   buildVersion: Ref<number>;
   /** BusyState is replaced wholesale on each emit, so its identity is already a
-   *  correct change signal — no counter needed. */
+   *  correct change signal, no counter needed. */
   busy: ShallowRef<BusyState>;
-  /** Bumped on onMeta — file path + dirty flag only. */
+  /** Bumped on onMeta, file path + dirty flag only. */
   metaVersion: Ref<number>;
   dispose(): void;
 }
@@ -24,7 +24,7 @@ export interface DocBridge {
  *  refreshes silently stop shipping. The document stays raw and authoritative;
  *  components observe a version counter instead.
  *
- *  One subscription per channel, installed once at engine construction — never
+ *  One subscription per channel, installed once at engine construction, never
  *  per component. Emit is a synchronous unbatched fan-out, so N component
  *  subscriptions would mean N synchronous callbacks per edit; one counter bump
  *  is O(1) and Vue's scheduler batches the resulting effects. */
@@ -37,7 +37,7 @@ export function createDocBridge(store: DocumentStore): DocBridge {
   // Deliberately NOT subscribing to onBuildChunk / onBuildAbort. store.ts
   // documents that the chunk channel has exactly one legitimate subscriber
   // (app/rebuildBridge.ts) because store.buildState.result keeps pointing at the
-  // PREVIOUS document for the whole stream — a partial model must never become
+  // PREVIOUS document for the whole stream, a partial model must never become
   // visible to a panel.
   const offs = [
     store.onDocChange(() => { docVersion.value++; }),

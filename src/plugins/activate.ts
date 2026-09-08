@@ -41,7 +41,7 @@ type Activator = (e: Engine) => Promise<() => void>;
  *  development build compiled in.
  *
  *  Pure, exported, and tested directly. The two questions it answers are the
- *  whole policy of this file — is it here, and has it been switched off — and
+ *  whole policy of this file, is it here, and has it been switched off, and
  *  the alternative is testing them through a dynamic import of a glob that a
  *  test cannot stand in for. Sorted, so the order plugins start in does not
  *  depend on which set happened to name one first. */

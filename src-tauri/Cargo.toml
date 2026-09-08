@@ -57,7 +57,7 @@ tokio = { version = "1", features = ["time"] }
 # These four crates are used ONLY by src-tauri/src/geom.rs (the experimental
 # in-Rust OCCT geometry path, VITE_GEOM=rust). They are `optional` and behind the
 # `rust-geom` feature (below) so the DEFAULT build links no system OpenCASCADE and
-# needs no cmake — that is what makes the shell build cleanly on Windows/macOS/Linux.
+# needs no cmake, that is what makes the shell build cleanly on Windows/macOS/Linux.
 # The shipping geometry runs in the Python sidecar. Enable the spike with
 # `cargo build --features rust-geom` (needs OCCT >= 7.9 installed; Arch: `opencascade`).
 opencascade = { path = "../third_party/opencascade-rs/crates/opencascade", default-features = false, optional = true }
@@ -73,7 +73,7 @@ tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 # The document container (container.rs): a ZIP holding document.json plus the
 # geometry it references by content hash. Rust owns it, NOT the sidecar, because
-# sidecar.rs deliberately does not auto-respawn — a dead sidecar is permanent for
+# sidecar.rs deliberately does not auto-respawn, a dead sidecar is permanent for
 # the session, and a save that needed it would leave the user unable to save at
 # all. Saving is byte plumbing over files already on disk, so it needs no OCCT.
 #
@@ -84,7 +84,7 @@ zip = { version = "4", default-features = false, features = ["deflate-flate2"] }
 # flate2 is named EXPLICITLY, with its default `rust_backend`, and must stay that
 # way. zip's `deflate-flate2` turns on the flate2 dependency but does NOT select
 # a compression backend, so flate2 needs someone to enable one. This used to be
-# left to tauri-plugin-updater, which pulls flate2 for its tar.gz path — true on
+# left to tauri-plugin-updater, which pulls flate2 for its tar.gz path, true on
 # Linux and macOS, FALSE on Windows, where the updater ships .exe/.msi and never
 # touches tar.gz. The Windows build therefore got a backend-less flate2 and died
 # with "No compression backend selected" plus an unresolved `crc32fast`, while

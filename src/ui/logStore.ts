@@ -1,9 +1,9 @@
-// The app's own log — every error, warning and notice, kept whole.
+// The app's own log, every error, warning and notice, kept whole.
 //
 // Every other place an error surfaces shortens it. A toast is one line with
 // text-overflow: ellipsis and the status pill is narrower still, so "Fillet failed
 // on Body1: Failed creating a chamfer, try a smaller length value(s)" arrives as
-// "Fillet failed on Body1: Failed cr..." — the part that got cut is the part that
+// "Fillet failed on Body1: Failed cr...", the part that got cut is the part that
 // says what to do, and for a geometry kernel that sentence is often the only
 // diagnosis anyone gets. Nothing here ever truncates, the panel wraps rather than
 // clips, and an entry can be copied verbatim.
@@ -24,7 +24,7 @@ export interface LogEntry {
   at: number;
   /** The whole message. Never shortened, here or downstream. */
   message: string;
-  /** Where it came from — "rebuild", "sidecar", "window", a feature id. Shown
+  /** Where it came from, "rebuild", "sidecar", "window", a feature id. Shown
    *  as a tag so a wall of kernel errors can be told apart at a glance. */
   source?: string;
   /** Anything longer that belongs with it: a stack, a payload, a feature JSON.
@@ -35,7 +35,7 @@ export interface LogEntry {
 /** How many entries to keep.
  *
  *  A rebuild that fails on every frame of a drag can emit a message per frame,
- *  so this is a ring rather than a list — an unbounded log would turn a
+ *  so this is a ring rather than a list, an unbounded log would turn a
  *  misbehaving preview into a memory leak, and the oldest entries are the least
  *  useful ones anyway. 500 is far more than a session's worth of real errors and
  *  still small enough to render without virtualising. */
@@ -123,7 +123,7 @@ export function formatEntry(e: LogEntry): string {
   return e.detail ? `${head}\n${e.detail}` : head;
 }
 
-/** The whole log as plain text — what the copy-all button hands over. */
+/** The whole log as plain text, what the copy-all button hands over. */
 export function formatLog(list: readonly LogEntry[] = entries): string {
   return list.map(formatEntry).join("\n\n");
 }

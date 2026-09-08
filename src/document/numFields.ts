@@ -7,7 +7,7 @@
 import type { CadDocument, Feature, ParamTarget, ParamUnit, SketchEntity, SketchPattern } from "../types";
 import { isDimConstraint } from "../sketch/id";
 
-/** What kind of quantity a numeric field holds — drives display-unit conversion
+/** What kind of quantity a numeric field holds, drives display-unit conversion
  *  (lengths mm↔display), suffixes (° / mm), and parameter unit coercion.
  *  Defined here (document layer); ui/units.ts re-exports it for its consumers. */
 export type FieldKind = "length" | "angle" | "count";
@@ -15,7 +15,7 @@ export type FieldKind = "length" | "angle" | "count";
 /** [field, label, kind] rows per feature type. */
 export const FEATURE_NUM_FIELDS: Partial<Record<Feature["type"], [string, string, FieldKind][]>> = {
   extrude: [["distance", "Distance", "length"]],
-  // profile is a dimensionless ratio in (-1, 1) — "count" is this file's kind for
+  // profile is a dimensionless ratio in (-1, 1), "count" is this file's kind for
   // real-valued unitless fields (see scale.factor, texture.sharpness), not an
   // integer claim; INTEGER_FIELDS below is what marks those.
   fillet: [["radius", "Radius", "length"], ["profile", "Profile", "count"]],
@@ -45,7 +45,7 @@ export const FEATURE_NUM_FIELDS: Partial<Record<Feature["type"], [string, string
 
 /** Whether selecting this feature type actually opens an editor (numeric fields
  *  in the value rows, or the sketch editor). The context menu labels "Edit"
- *  honestly — a type without an editor gets "Select" instead.
+ *  honestly, a type without an editor gets "Select" instead.
  *
  *  Lives here rather than beside the value rows because it is a fact about the field
  *  table above, and its other caller (ui/contextMenus.ts) has no other reason to
@@ -56,7 +56,7 @@ export function isInspectorEditable(type: Feature["type"]): boolean {
 
 /** Numeric fields on the solver-RIGID parametric shapes (the solver never writes
  *  these, so a parameter may own them directly). Solved geometry (lines, circles,
- *  rectangles…) is parameter-driven through a dimension constraint instead — the
+ *  rectangles…) is parameter-driven through a dimension constraint instead, the
  *  solver overwrites raw coordinates every pump. */
 export const RIGID_ENTITY_NUM_FIELDS: Partial<Record<SketchEntity["type"], [string, FieldKind][]>> = {
   polygon: [["x", "length"], ["y", "length"], ["radius", "length"], ["sides", "count"], ["angle", "angle"]],
@@ -79,7 +79,7 @@ export const PATTERN_NUM_FIELDS: Record<SketchPattern["type"], [string, FieldKin
   gridHoles: [["cx", "length"], ["cy", "length"], ["diameter", "length"], ["countX", "count"], ["countY", "count"], ["spacingX", "length"], ["spacingY", "length"]],
 };
 
-/** Integer-only fields (a subset of the "count" kind — which also holds real-
+/** Integer-only fields (a subset of the "count" kind, which also holds real-
  *  valued unitless fields like texture sharpness or a scale factor) and their
  *  minimum legal value. A parameter write coerces through this. */
 export const INT_FIELDS: Record<string, number> = {
@@ -92,7 +92,7 @@ export const INT_FIELDS: Record<string, number> = {
 };
 
 /** String-typed Feature/SketchEntity fields that can NEVER hold a bare
- *  parameter name — the skip-set for the legacy bare-name scans in the params
+ *  parameter name, the skip-set for the legacy bare-name scans in the params
  *  engine. Keep in sync when a new string field lands on either union. */
 export const NON_NUM_STRING_FIELDS = new Set([
   "id", "type", "name", "operation", "font", "style", "align", "text", "pathRef",
@@ -105,12 +105,12 @@ export interface ResolvedTarget {
   field: string;
   kind: FieldKind;
   /** id of the sketch feature this value lives in (undefined for feature fields
-   *  outside sketches) — the re-solve cascade keys off it. */
+   *  outside sketches), the re-solve cascade keys off it. */
   sketch?: string;
 }
 
 /** Find the object+field a ParamTarget points at, or null if it no longer
- *  exists (deleted feature/entity/constraint — the caller decides what a
+ *  exists (deleted feature/entity/constraint, the caller decides what a
  *  dangling binding means). */
 export function resolveTarget(doc: CadDocument, target: ParamTarget): ResolvedTarget | null {
   const sketchOf = (id: string) => {
@@ -182,7 +182,7 @@ export function targetFeatureId(target: ParamTarget): string {
  *  a copy of the fillet rather than a copy of the part.
  *
  *  Null when the target no longer resolves, the value is not finite, or writing
- *  it would change nothing — all three of which a caller reads the same way, as
+ *  it would change nothing, all three of which a caller reads the same way, as
  *  "there is nothing here worth building".
  */
 export function featureWithTarget(

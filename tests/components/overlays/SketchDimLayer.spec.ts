@@ -13,8 +13,8 @@
 //      undo snapshot would throw, and identity checks in the store would fail.
 //
 // What this file honestly CANNOT cover: the projection itself, the label drag,
-// and the placement maths. happy-dom implements no layout — getBoundingClientRect
-// is all zeros, there is no WebGL camera and no pointer capture — so all three
+// and the placement maths. happy-dom implements no layout, getBoundingClientRect
+// is all zeros, there is no WebGL camera and no pointer capture, so all three
 // stay e2e/manual territory. The rAF loop below only ever runs against a stub.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -86,7 +86,7 @@ describe("SketchDimLayer", () => {
     await nextTick();
 
     const item = useSketchAnnotationStore().dimItems[0]!;
-    // sketch mm, and the CALLER's object — the drag mutates this in place and
+    // sketch mm, and the CALLER's object, the drag mutates this in place and
     // the loop has to see the mutation without a store write
     expect(item.anchor).toBe(anchor);
     expect(Object.keys(item)).not.toContain("x");
@@ -263,7 +263,7 @@ describe("SketchDimLayer", () => {
     expect(commit).toHaveBeenCalledWith(55);
   });
 
-  it("routes a formula — and any edit to an already-bound dim — through commitExpr", async () => {
+  it("routes a formula, and any edit to an already-bound dim, through commitExpr", async () => {
     const commit = vi.fn();
     const commitExpr = vi.fn(() => null);
     const input = await openEditor({ commit, commitExpr });
@@ -321,7 +321,7 @@ describe("SketchDimLayer", () => {
 
   // A badge takes pointer events so it can be clicked, dragged and edited, and
   // the viewport's own wheel listener is on the CANVAS. With the cursor over a
-  // badge the wheel therefore reached nothing, and the view did not zoom — on a
+  // badge the wheel therefore reached nothing, and the view did not zoom, on a
   // small profile, where the badges cover most of the drawing, that is the
   // normal case rather than the corner one. The layer hands the notch back.
   //

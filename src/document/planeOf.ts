@@ -4,7 +4,7 @@
 // by the sidecar every rebuild, and the resolved frames come back keyed by
 // feature id. The feature's own `plane` is only the cache written when it was
 // last closed, so reading it directly draws the curves at the OLD position while
-// the cut lands at the new one — the two halves of the same model disagreeing on
+// the cut lands at the new one, the two halves of the same model disagreeing on
 // screen.
 //
 // One function, imported by every consumer, because the failure mode of having
@@ -23,7 +23,7 @@ export function planeOf(
   // see featureStarters.offsetPlane), so the sidecar has no entry under this
   // feature's id, while the datum it is bound to does move. The sidecar resolves
   // that link when it BUILDS the sketch, so without this the geometry would
-  // follow and only the drawing stay behind — the same split, one indirection
+  // follow and only the drawing stay behind, the same split, one indirection
   // further out. A datum's entry already has its offset applied, which is
   // exactly the plane the sketch sits on.
   return (

@@ -2,14 +2,14 @@
 //
 // `depth` (stores/modals.ts) is what toolBusy() reads through isChoiceOpen(),
 // so a global shortcut cannot fire underneath an open dialog. Get the DECREMENT
-// wrong and there is no error and no visible symptom — depth simply never
+// wrong and there is no error and no visible symptom, depth simply never
 // returns to zero, toolBusy() stays true forever, and every tool in the app is
 // silently dead. That is exactly the class of bug a test is worth writing for,
 // and exactly the one the imperative version was structurally exposed to
 // (pushModal() in open(), popModal() hand-repeated on four dismissal paths).
 //
 // So these tests do not mount the dialogs directly. They drive them the way the
-// app does — through the store, with a host that mirrors App.vue's v-if — and
+// app does, through the store, with a host that mirrors App.vue's v-if, and
 // assert the count is back to zero after each dialog closes by its OWN exit
 // path: Escape, backdrop, Cancel, or the frame's close button.
 //
@@ -81,7 +81,7 @@ describe("modal depth gate", () => {
     mount(Host, { attachTo: document.body });
   });
 
-  it("starts at zero — the host on its own gates nothing", () => {
+  it("starts at zero, the host on its own gates nothing", () => {
     expect(depth()).toBe(0);
   });
 

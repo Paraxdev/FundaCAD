@@ -1,5 +1,5 @@
 // Crash-recovery autosave. Rust owns the snapshot files (app_data_dir/recovery,
-// atomic writes via the recovery_* commands) — deliberately OUTSIDE the
+// atomic writes via the recovery_* commands), deliberately OUTSIDE the
 // webview's tightened fs scope. The frontend just decides WHEN to snapshot:
 // 30 s after the last change (debounced), at most 2 min behind, and only while
 // the document is dirty. A successful manual save clears the slot, so a
@@ -45,7 +45,7 @@ export function installAutosave(store: DocumentStore) {
     writing = true;
     try {
       // ONE compact stringify of the whole envelope (was: pretty-print →
-      // parse → re-stringify, three passes over a possibly multi-MB doc) —
+      // parse → re-stringify, three passes over a possibly multi-MB doc),
       // and synchronously BEFORE any await, so the snapshot can't see a
       // half-applied edit that lands while we're suspended.
       const env: Envelope = {
@@ -88,7 +88,7 @@ export function installAutosave(store: DocumentStore) {
 }
 
 /** Drop the recovery snapshots for a just-saved document (called after a
- *  successful save — the on-disk file is now the truth). */
+ *  successful save, the on-disk file is now the truth). */
 export async function clearRecovery(path: string | null) {
   if (!isTauri()) return;
   try {

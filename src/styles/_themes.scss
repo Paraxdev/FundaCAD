@@ -7,7 +7,7 @@
    colour, and letting a theme move them would mean every layout has to be
    checked against every theme. A theme is a repaint, never a relayout.
 
-   Each block below redefines the SAME complete set — surfaces, borders, text,
+   Each block below redefines the SAME complete set, surfaces, borders, text,
    accent, semantics. Complete, not partial: a theme that overrode half the
    tokens would inherit the rest from FORGE and produce a near-black panel under
    a light-theme text colour the first time someone added a token. If you add a
@@ -17,14 +17,14 @@
    popup, scrollbars, focus rings) are drawn by the engine, not by us, and pick
    their colours from it rather than from anything we declare.
 
-   The 3D viewport reads these too — see viewport/themeColors.ts, which resolves
+   The 3D viewport reads these too, see viewport/themeColors.ts, which resolves
    the accent through the same custom properties so a manipulator can never
    drift out of step with the chrome around it.
    ============================================================================ */
 
 /* --- APOLLO: the default. The lospec palette of that name. -----------------
    Defined on :root in _tokens.scss rather than [data-theme="apollo"] so the app
-   is themed before any script runs — no flash of an unstyled palette on a cold
+   is themed before any script runs, no flash of an unstyled palette on a cold
    load, and the stylesheet stands on its own if the theme module never
    initialises. */
 
@@ -36,7 +36,7 @@
 
   /* --- surfaces (dark → light, back → front) ---
      Neutral grey throughout: no blue cast, no gradient. The steps are close
-     together on purpose — structure is carried by the BORDERS here, not by
+     together on purpose, structure is carried by the BORDERS here, not by
      luminance, so a panel does not need to glow to be a panel. */
   --bg: #0f0f0f;          /* app background, deepest */
   --panel: #181818;       /* docked panels (browser/inspector/ribbon/timeline) */
@@ -48,7 +48,7 @@
      Both rungs are lifted well clear of their surfaces. The old --line was 4%
      off the panel it sat on, which is a seam you infer rather than see; the
      whole look depends on the opposite. */
-  --line: #2f2f2f;        /* divider — visible, not a hairline */
+  --line: #2f2f2f;        /* divider, visible, not a hairline */
   --line-strong: #384149; /* stronger border (focusable controls, popups) */
 
   /* --- text --- */
@@ -184,7 +184,7 @@
 
 /* --- PAPER: light. The one that actually needs different shadows. ---------
    A shadow tuned for near-black surfaces disappears on white, so the elevation
-   ramp is rebuilt here rather than inherited — which is exactly why every block
+   ramp is rebuilt here rather than inherited, which is exactly why every block
    restates the full set instead of trusting a cascade. */
 :root[data-theme="paper"] {
   color-scheme: light;

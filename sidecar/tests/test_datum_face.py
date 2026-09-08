@@ -131,9 +131,9 @@ def test_it_keeps_the_direction_the_user_accepted():
     # THE PREMISE IS THE OUTWARD NORMAL, and it used to be the inward one: the
     # fixture faced the cached plane DOWN on the box's TOP face, on the story
     # that the pick had been made from below. The app cannot author that
-    # document — sketchView.faceSketchPlane runs every pick through
+    # document, sketchView.faceSketchPlane runs every pick through
     # outwardNormal, so a face pick always stores the normal pointing out of the
-    # solid — and once candidates are filtered by the cached normal (see
+    # solid, and once candidates are filtered by the cached normal (see
     # geom_select.resolve_face_on_plane) that fixture asks for the top face
     # while naming the bottom one, which is exactly the far-side confusion the
     # filter exists to remove. Read as written, the answer it now gets is the

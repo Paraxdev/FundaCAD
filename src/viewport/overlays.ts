@@ -8,7 +8,7 @@ import type { ModelView } from "./render";
 
 /** A reflective zebra material: black/white bands follow the reflected view
  *  vector, so kinks/curvature discontinuities show as broken or bunched stripes.
- *  Uses three's built-in `cameraPosition` uniform — no per-frame updates needed. */
+ *  Uses three's built-in `cameraPosition` uniform, no per-frame updates needed. */
 export function makeZebraMaterial(frequency = 7): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     uniforms: { uFreq: { value: frequency } },

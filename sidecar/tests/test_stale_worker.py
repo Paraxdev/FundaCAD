@@ -154,8 +154,8 @@ def test_editing_a_source_file_retires_the_worker_that_imported_it():
 
 
 def test_a_second_edit_within_the_filesystem_clock_is_still_seen():
-    """Why the stamp carries size and not just mtime: a coarse clock — FAT, a
-    network share, an OS that rounds to the second — hands two edits made in
+    """Why the stamp carries size and not just mtime: a coarse clock, FAT, a
+    network share, an OS that rounds to the second, hands two edits made in
     quick succession the same timestamp, and mtime alone would call the second
     one no change at all."""
     _reset()
@@ -177,7 +177,7 @@ def test_a_tree_with_no_python_in_it_is_not_watched():
 
     Not the packaged app, which was the original reason given here and is wrong:
     the bundle copies sidecar/*.py next to a real interpreter, so it is stamped
-    like any other tree — it simply never changes."""
+    like any other tree, it simply never changes."""
     _reset()
     with tree() as t:
         for name in os.listdir(t.dir):

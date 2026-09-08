@@ -5,7 +5,7 @@ whole it costs an agent most of its context to learn that a box is a box, so
 this is the summary layer: what the model IS, in a few dozen lines, with the
 full detail available on request for the one body that turned out to matter.
 
-Every line here is derived, none of it is measured — that is the point of
+Every line here is derived, none of it is measured, that is the point of
 keeping it separate from inspect_model.py, which does the measuring and knows
 nothing about how anyone wants to read it.
 """
@@ -52,7 +52,7 @@ def body_line(body):
 def warnings_for(body):
     """The things about a body that will bite a LATER feature.
 
-    Not errors — every one of these is a perfectly valid solid. They are listed
+    Not errors, every one of these is a perfectly valid solid. They are listed
     because each one is a refusal waiting to happen: a seam edge cannot be
     filleted, a wrapping face has no single direction to be pushed in, and a
     body that is several disjoint solids will surprise anything that assumes
@@ -61,17 +61,17 @@ def warnings_for(body):
     seams = [e for e in (body.get("edges") or []) if e.get("seam")]
     if seams:
         out.append(f"{len(seams)} seam edge(s) ({', '.join('E' + str(e['i']) for e in seams[:6])}"
-                   f"{'...' if len(seams) > 6 else ''}) — a fillet or chamfer on one of these "
+                   f"{'...' if len(seams) > 6 else ''}), a fillet or chamfer on one of these "
                    "will be refused: both sides are the same face")
     wrapping = [f for f in (body.get("faces") or []) if f.get("wraps")]
     if wrapping:
         out.append(f"{len(wrapping)} face(s) wrap all the way round "
                    f"({', '.join('F' + str(f['i']) for f in wrapping[:6])}"
-                   f"{'...' if len(wrapping) > 6 else ''}) — press/pull thickens these along "
+                   f"{'...' if len(wrapping) > 6 else ''}), press/pull thickens these along "
                    "the surface rather than pushing them in a direction")
     open_edges = [e for e in (body.get("edges") or []) if e.get("openBoundary")]
     if open_edges:
-        out.append(f"{len(open_edges)} edge(s) bound only ONE face — this body is a surface, "
+        out.append(f"{len(open_edges)} edge(s) bound only ONE face, this body is a surface, "
                    "not a closed solid")
     if (body.get("solidCount") or 1) > 1:
         out.append(f"this body is {body['solidCount']} solids that do not touch")

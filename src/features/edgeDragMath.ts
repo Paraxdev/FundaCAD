@@ -6,7 +6,7 @@
 // "nothing" at the origin between them. Drag the way the arrow points for a fillet,
 // keep pulling back through the origin and the same travel becomes a chamfer's
 // setback, stop at the origin and there is no feature. Changing your mind costs a
-// mouse movement rather than an abort and a restart — which is what the earlier
+// mouse movement rather than an abort and a restart, which is what the earlier
 // one-sided drag, floored at a snap step, forced on you.
 //
 // Split out of edgeFeatureTool.ts because the tool is pointer plumbing that cannot
@@ -30,7 +30,7 @@ export interface ValueBounds {
 }
 
 /** Smallest value worth committing, in mm. Below this OCCT either refuses or
- *  produces a blend nobody can see — so it is both the floor for a TYPED value
+ *  produces a blend nobody can see, so it is both the floor for a TYPED value
  *  and, for a dragged one, the test for "the user is sitting on the origin and
  *  has asked for no feature at all". */
 export const MIN_EDGE_VALUE = 0.001;
@@ -46,7 +46,7 @@ export const MIN_EDGE_VALUE = 0.001;
  *  It used to be a quarter, and it used to be replaced outright by the measured
  *  neighbourhood clearance (features/blendClearance.ts), which made that
  *  measurement a WALL. A distance to the nearest neighbouring edge cannot decide
- *  what OCCT will build — its own module says so — and used that way it stopped
+ *  what OCCT will build, its own module says so, and used that way it stopped
  *  a drag at 0.11 mm on a part that blends happily at twenty times that. The
  *  clearance now sizes the OPENING value only, which is the job it can do.
  *
@@ -66,7 +66,7 @@ export function treatmentLabel(kind: EdgeTreatment): string {
   return kind === "fillet" ? "Fillet" : "Chamfer";
 }
 
-/** How far a dragged value may travel from the origin, in mm — the same cap on
+/** How far a dragged value may travel from the origin, in mm, the same cap on
  *  BOTH sides, since a chamfer that overruns the face is no more buildable than
  *  a fillet that does. Infinity when the document has no geometry to measure. */
 export function dragLimit(modelDiagonal: number | null): number {
@@ -90,7 +90,7 @@ export interface BlendRange {
   built: number | null;
   /** the smallest size the kernel refused, or null */
   refused: number | null;
-  /** some size built at all — the evidence that SIZE is what decides here */
+  /** some size built at all, the evidence that SIZE is what decides here */
   anyBuilt: boolean;
 }
 
@@ -102,7 +102,7 @@ export const EMPTY_BLEND_RANGE: BlendRange = { built: null, refused: null, anyBu
  *  so it drops a `built` that has caught up with it. That case is real, not
  *  defensive: rebuilds coalesce, so a build begun at the previous size lands
  *  while the drag is already showing the next one, and both get recorded against
- *  it. Left in, the wall would sit exactly ON the refused size — the drag parked
+ *  it. Left in, the wall would sit exactly ON the refused size, the drag parked
  *  on a value that shows no blend, which is the behaviour all of this replaces.
  *
  *  `anyBuilt` never comes back off, because it answers a different question: not
@@ -129,16 +129,16 @@ export function noteBlendOutcome(range: BlendRange, value: number, built: boolea
  *  nothing has been refused: until then there is no measured wall and the
  *  runaway guard is the only bound.
  *
- *  The wall sits one `step` BELOW the refusal, not on it — one step down is the
+ *  The wall sits one `step` BELOW the refusal, not on it, one step down is the
  *  largest size the drag can hold that is actually there. A `built` above that
  *  raises it back: a refusal can describe a size the drag has already left. */
 export function blendCeiling(range: BlendRange, step: number): number {
   const { built, refused, anyBuilt } = range;
   if (refused == null || !Number.isFinite(refused) || refused <= 0) return Infinity;
   // Nothing has built at any size, so nothing says SIZE is what is wrong. Plenty
-  // of blends fail identically however small they get — a tangent edge has no
+  // of blends fail identically however small they get, a tangent edge has no
   // corner to cut, a chain with nowhere to end fails the same at a twentieth of
-  // the value — and walling the drag off a refusal like that would invent a
+  // the value, and walling the drag off a refusal like that would invent a
   // limit out of a failure that has none in it.
   if (!anyBuilt) return Infinity;
   const back = Number.isFinite(step) && step > 0 ? step : MIN_EDGE_VALUE;
@@ -172,7 +172,7 @@ export interface Scrub {
  *
  *  Exactly 0 inside a one-step dead zone around the origin. Snapping alone would
  *  already produce 0 within half a step, but half a step is ~4 px of mouse
- *  travel — too fine a target for a state the user has to be able to stop in on
+ *  travel, too fine a target for a state the user has to be able to stop in on
  *  purpose, since it is how the gesture is abandoned. A whole step either side
  *  makes the origin a detent you can feel, and the first value past it is one
  *  clean increment rather than a jump. */
@@ -191,7 +191,7 @@ export function scrubSigned(s: Scrub): number {
  *  magnitude is the radius or setback either way.
  *
  *  A radius and a setback are the same drag off the same edge, which is why one
- *  axis can carry both — the sign is the only thing that distinguishes them. At
+ *  axis can carry both, the sign is the only thing that distinguishes them. At
  *  exactly 0 the value is 0 and the reported kind is arbitrary; callers keep
  *  showing whichever they had rather than let the label flicker at the
  *  crossing. */
@@ -205,7 +205,7 @@ export function treatmentAt(
   };
 }
 
-/** Flip fillet ↔ chamfer in place, carrying the number across untouched — what
+/** Flip fillet ↔ chamfer in place, carrying the number across untouched, what
  *  Tab does, and the only way to switch a value that was TYPED rather than
  *  dragged (a typed number has no side of the origin to be on).
  *
@@ -220,13 +220,13 @@ export function switchTreatment(
 }
 
 /** Opening value for a gesture that starts from a command rather than from the
- *  handle — the tool has to show SOMETHING the moment it arms. (A gesture that
+ *  handle, the tool has to show SOMETHING the moment it arms. (A gesture that
  *  starts by grabbing the handle opens at 0 instead: there the drag itself is
  *  the value, measured from where you pressed.)
  *
  *  A 2 mm fillet / 1 mm chamfer is the familiar MCAD default, held down to what
  *  the picked edges' own neighbourhood plausibly holds (blendClearance.ts) and
- *  then to the drag bounds — a default nobody can build is worse than a small
+ *  then to the drag bounds, a default nobody can build is worse than a small
  *  one. This is the whole of the clearance measurement's job: it is a good guess
  *  at where to open, and it was never able to be the wall it used to be. */
 export function seedValue(

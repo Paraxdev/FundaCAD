@@ -10,7 +10,7 @@
 //
 // It knows by LOOKING once a frame, not by subscribing: onSelectionChange is a
 // single-slot callback already owned by app/viewportWiring.ts, and profile-area
-// selection notifies nothing at all. Polling covers the silent paths too — a
+// selection notifies nothing at all. Polling covers the silent paths too, a
 // rebuild restoring a selection, a tool clearing one, Escape.
 //
 // The loop costs nothing when idle: it runs only while a selection exists and
@@ -36,7 +36,7 @@ const engine = useEngine();
 /** Half the bar's own height, px. It is centred on the point computed below
  *  (translate -50%, -50%), so clearing the handle means clearing this too.
  *  Hard-coded rather than measured because happy-dom has no layout and neither
- *  does the frame in which a selection first appears — the same reason HALF_W_PX
+ *  does the frame in which a selection first appears, the same reason HALF_W_PX
  *  below is a constant. One button row, so it does not vary. */
 const BAR_HALF_PX = 20;
 
@@ -44,7 +44,7 @@ const BAR_HALF_PX = 20;
  *  zero: touching reads as one object, and the point of lifting the bar at all
  *  is that the handle should read as a control standing on the geometry. */
 const CLEARANCE_PX = 12;
-/** Keeps the bar on screen without measuring it — happy-dom has no layout, and
+/** Keeps the bar on screen without measuring it, happy-dom has no layout, and
  *  neither does the frame in which a selection first appears. */
 const HALF_W_PX = 110;
 
@@ -66,7 +66,7 @@ const toAnchor = new THREE.Vector3();
 /** The whole selection, in the order that decides which kind wins.
  *
  *  The ranking is ui/selectionTools.KIND_RANK, which is itself
- *  app/viewportWiring.ts's drag-handle ranking — one selection gets one answer,
+ *  app/viewportWiring.ts's drag-handle ranking, one selection gets one answer,
  *  and the arrow standing on the geometry must not disagree with the buttons
  *  floating above it. */
 function readSelection(): { counts: SelectionCounts; signature: string; anchor: THREE.Vector3 | null } {
@@ -102,7 +102,7 @@ function readSelection(): { counts: SelectionCounts; signature: string; anchor: 
     at = regionAnchor(regions);
   } else if (faceIds.length) {
     // The expensive one, and the reason this whole function is gated on the
-    // signature — see the header.
+    // signature, see the header.
     at = engine.viewport.selectedFacesForPressPull()?.anchor.clone() ?? null;
   } else if (bodies.length) {
     at = engine.viewport.bodiesCentroid(bodies);
@@ -110,7 +110,7 @@ function readSelection(): { counts: SelectionCounts; signature: string; anchor: 
   return { counts: c, signature: sig, anchor: at };
 }
 
-/** One frame. Returns whether anything is still selected — i.e. whether the
+/** One frame. Returns whether anything is still selected, i.e. whether the
  *  loop has a reason to run again. */
 function refresh(): boolean {
   const next = readSelection();
@@ -121,7 +121,7 @@ function refresh(): boolean {
   // An active tool owns the screen: its own gizmos, its own dimension box, its
   // own meaning for a click. Asked every frame rather than subscribed to,
   // because a tool can start from a shortcut, a menu, the palette or the
-  // browser tree — and because this is what puts the bar BACK the instant the
+  // browser tree, and because this is what puts the bar BACK the instant the
   // tool ends with the selection intact.
   if (!anchor || engine.toolBusy()) {
     screen.value = null;
@@ -133,7 +133,7 @@ function refresh(): boolean {
   toAnchor.copy(anchor).sub(cam.position);
   if (camForward.dot(toAnchor) <= 0) {
     // Behind the camera. project() would still return coordinates, mirrored
-    // through the centre of the screen — a bar hovering over empty space on the
+    // through the centre of the screen, a bar hovering over empty space on the
     // wrong side of the viewport, offering to fillet something nobody can see.
     screen.value = null;
     return true;
@@ -174,7 +174,7 @@ function tick() {
 }
 
 /** Something happened that could have changed the selection: look next frame.
- *  Cheap to call spuriously — one frame of four array reads. */
+ *  Cheap to call spuriously, one frame of four array reads. */
 function wake() {
   if (!raf) raf = requestAnimationFrame(tick);
 }
@@ -210,7 +210,7 @@ function title(o: ToolOffer): string {
 
 function run(o: ToolOffer) {
   if (engine.toolBusy()) return;
-  // The one tool with no action id is dispatched through the engine — see
+  // The one tool with no action id is dispatched through the engine, see
   // ui/selectionTools.ACTIONLESS and the note on "delete-face" in
   // features/toolCapabilities.ts.
   if (o.action) engine.handleAction(o.action);

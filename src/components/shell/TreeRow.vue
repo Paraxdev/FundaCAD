@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// One leaf row of the Browser: glyph, optional colour chip, label, eye — plus
+// One leaf row of the Browser: glyph, optional colour chip, label, eye, plus
 // the structured right-click menu ([extra…] · Edit · Rename · Delete).
 //
 // Labels are document-sourced (STEP product names, user renames), so they go
@@ -16,10 +16,10 @@ import { useBrowserStore } from "../../stores/browser";
 
 const props = defineProps<{
   label: string;
-  /** An icon NAME from ui/icons.ts, not a character — see featureMeta.ts. */
+  /** An icon NAME from ui/icons.ts, not a character, see featureMeta.ts. */
   icon: string;
   depth: number;
-  /** Stable id — a row with one can be renamed programmatically (the viewport's
+  /** Stable id, a row with one can be renamed programmatically (the viewport's
    *  body menu → Rename…), by way of the store's pendingRenameId. */
   id?: string | undefined;
   /** A small colored chip before the label (the body's assigned palette slot). */
@@ -32,9 +32,9 @@ const props = defineProps<{
   title?: string | undefined;
   activate?: ((e: MouseEvent) => void) | undefined;
   toggleVis?: (() => void) | undefined;
-  /** "Edit" action (sketches) — also double-click. */
+  /** "Edit" action (sketches), also double-click. */
   edit?: (() => void) | undefined;
-  /** "Rename" — also double-click when there is no `edit`. */
+  /** "Rename", also double-click when there is no `edit`. */
   rename?: ((name: string) => void) | undefined;
   /** "Delete" action. */
   remove?: (() => void) | undefined;
@@ -73,7 +73,7 @@ function startRename() {
 // Programmatic rename (viewport body menu → Rename…). `immediate` matters:
 // BrowserPane expands the enclosing folders when the id is set, so the row that
 // should start editing usually does not exist yet and is mounted by that same
-// update — its watcher then fires as it is created. Whichever row matches
+// update, its watcher then fires as it is created. Whichever row matches
 // clears the field, so exactly one edit starts however the row got on screen.
 watch(
   () => browser.pendingRenameId,

@@ -15,7 +15,7 @@ export function resolveNum(x: Num, params: Params): number {
   return Number.isNaN(n) ? 0 : n;
 }
 
-/** Resolve ONLY the sketch's real (persisted) entities — no pattern expansion.
+/** Resolve ONLY the sketch's real (persisted) entities, no pattern expansion.
  *  Use this wherever the result feeds back into edits/persistence (e.g. the
  *  sketch-editor session); see resolveEntities for the render/detect variant
  *  that also includes derived pattern copies. */
@@ -31,7 +31,7 @@ export function resolveRealEntities(
   for (const e of sketch.entities) {
     const c = e.construction ? { construction: true } : {};
     // badge label placement: plain numbers already, so it rides along unresolved
-    // (omitted when absent — byte stability, like every persisted optional)
+    // (omitted when absent, byte stability, like every persisted optional)
     const place = dimPlaceOf(e);
     const dp = place ? { dimPlace: place } : {};
     const id = e.id ?? newEntityId();
@@ -107,7 +107,7 @@ export function resolveRealEntities(
       out.push({ type: "slot", id, x1: resolveNum(e.x1, params), y1: resolveNum(e.y1, params), x2: resolveNum(e.x2, params), y2: resolveNum(e.y2, params), width: resolveNum(e.width, params), ...c, ...dp });
     } else if (e.type === "projected") {
       // structural pass-through: the cached curve is plain numbers (no Num),
-      // and source/stale never resolve — they identify, not measure
+      // and source/stale never resolve, they identify, not measure
       out.push({ type: "projected", id, source: e.source, curve: e.curve, ...(e.stale ? { stale: true as const } : {}), ...c });
     }
   }
@@ -115,10 +115,10 @@ export function resolveRealEntities(
 }
 
 /** Resolve a sketch's real entities AND every pattern's derived copies, in one
- *  flat array — for callers that only render/inspect (never persist) the
+ *  flat array, for callers that only render/inspect (never persist) the
  *  result: committed-sketch overlay rendering, region detection for those
  *  sketches, and the per-entity dimension list under a sketch. The copies are
- *  derived here, never stored as real entities — do NOT feed this back into
+ *  derived here, never stored as real entities, do NOT feed this back into
  *  `sketch.entities` (see resolveRealEntities for the editable, persist-safe
  *  subset; that's what the sketch-editor session uses). */
 export function resolveEntities(

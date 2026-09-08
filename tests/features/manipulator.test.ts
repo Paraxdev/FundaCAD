@@ -50,7 +50,7 @@ describe("orientOutward", () => {
   });
 });
 
-/** A camera on a sphere around the origin, looking in — one orbit position. */
+/** A camera on a sphere around the origin, looking in, one orbit position. */
 function orbit(az: number, el: number): THREE.PerspectiveCamera {
   const cam = new THREE.PerspectiveCamera(50, 1.6, 0.1, 1000);
   cam.position.setFromSphericalCoords(200, Math.PI / 2 - el, az);
@@ -83,14 +83,14 @@ function* orbits() {
 
 describe("screenPlaneOrientation", () => {
   it("keeps the control facing the camera at every orbit", () => {
-    // The bug this exists for: the shipped basis put `fwd x right` — which
-    // points DOWN the screen — in the +Y column, making it left-handed.
+    // The bug this exists for: the shipped basis put `fwd x right`, which
+    // points DOWN the screen, in the +Y column, making it left-handed.
     // setFromRotationMatrix does not object to a reflection, it just returns a
     // quaternion for some other rotation, so the profile arc was drawn at an
     // arbitrary tilt: over a full orbit sweep its plane averaged 40 degrees off
     // camera-facing and was frequently edge-on. An 84px arc then showed up on
-    // screen as a stub, while its sphere knob and sprite readout — neither of
-    // which has an orientation to get wrong — went on looking correct.
+    // screen as a stub, while its sphere knob and sprite readout, neither of
+    // which has an orientation to get wrong, went on looking correct.
     for (const { cam, axis } of orbits()) {
       const q = screenPlaneOrientation(forwardOf(cam), axis, rightOf(cam));
       const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(q);
@@ -101,7 +101,7 @@ describe("screenPlaneOrientation", () => {
   it("returns a unit quaternion", () => {
     // A non-unit quaternion is not merely a wrong rotation: Object3D composes it
     // straight into its matrix, so it silently scales the object by |q|^2 too.
-    // The old basis produced lengths as low as 0.7 — the control shrank as well
+    // The old basis produced lengths as low as 0.7, the control shrank as well
     // as tilting.
     for (const { cam, axis } of orbits()) {
       expect(screenPlaneOrientation(forwardOf(cam), axis, rightOf(cam)).length()).toBeCloseTo(1, 6);
@@ -124,7 +124,7 @@ describe("screenPlaneOrientation", () => {
 
   it("turns anticlockwise on screen, never mirrored", () => {
     // Not cosmetic: the arc's hit test reads cursor angles with atan2 about a
-    // flipped y — the anticlockwise-is-positive convention. A mirrored frame
+    // flipped y, the anticlockwise-is-positive convention. A mirrored frame
     // still faces the camera and still lines +X up with the axis, so it looks
     // right standing still; it only shows itself once the user drags, by running
     // the knob the opposite way round the track from the cursor. Local +Y a
@@ -164,7 +164,7 @@ describe("leanOutOfView", () => {
   it("tips an axis aimed at the camera back out until the handle has length", () => {
     // The squashed lump: a 52px blob standing along the view direction projects
     // to a 20px disc with no direction in it. Orbiting past an armed handle used
-    // to reach exactly that — a sweep of the whole orbit sphere against a fixed
+    // to reach exactly that, a sweep of the whole orbit sphere against a fixed
     // axis found positions leaving 0.03px of the 52.
     const cam = orbit(0.9, 0.4);
     const fwd = forwardOf(cam);
@@ -234,7 +234,7 @@ describe("arrow handle grab volume", () => {
 
   it("still misses when the cursor is genuinely nowhere near", () => {
     // A grab volume that swallowed the whole viewport would eat clicks meant
-    // for the model — the tools rely on a miss to mean "orbit" or "commit".
+    // for the model, the tools rely on a miss to mean "orbit" or "commit".
     const h = createDragHandle();
     expect(pick(h.group, 40, 30)).toHaveLength(0);
     expect(pick(h.group, 0, 140)).toHaveLength(0);
@@ -244,7 +244,7 @@ describe("arrow handle grab volume", () => {
   it("keeps the grab volume invisible", () => {
     // It must widen the target without widening the drawn glyph. Three's
     // raycaster tests layers and never `visible`, which is what lets these two
-    // requirements coexist — if that ever changed, the handle would silently go
+    // requirements coexist, if that ever changed, the handle would silently go
     // back to needing fine aim.
     const h = createDragHandle();
     const drawn = h.group.children.filter(
@@ -326,7 +326,7 @@ describe("fluentRelease", () => {
 
   it("stays armed when a fluent press never travelled", () => {
     // A click on the arrow is not a drag. Committing here would drop a default
-    // 2 mm fillet on a stray click — and staying armed is what makes clicking
+    // 2 mm fillet on a stray click, and staying armed is what makes clicking
     // the handle a way IN to the full tool.
     expect(fluentRelease({ fluent: true, moved: false, meaningful: true })).toBe("stay");
   });
@@ -351,7 +351,7 @@ describe("fluentRelease", () => {
 describe("handleScale", () => {
   it("leaves the usual pixel scale alone while the model is the bigger of the two", () => {
     // A 100mm part filling a 900px viewport: the handle is 45px against 900px of
-    // model, nowhere near the cap, and must stay exactly its pixel size — this
+    // model, nowhere near the cap, and must stay exactly its pixel size, this
     // is the ordinary case and the cap must be invisible in it.
     expect(handleScale(100, 100 / 900)).toBe(1);
     expect(handleScale(20, 20 / 600)).toBe(1);
@@ -377,7 +377,7 @@ describe("handleScale", () => {
 
   it("never returns zero or a non-finite scale", () => {
     // scale.setScalar(0) collapses the glyph AND its invisible grab volumes, so
-    // the handle would be invisible and unclickable at once — indistinguishable
+    // the handle would be invisible and unclickable at once, indistinguishable
     // from the tool being broken.
     for (const [d, p] of [[0, 1], [-5, 1], [10, 0], [10, -1], [NaN, 1], [10, NaN]] as const) {
       const s = handleScale(d, p);
@@ -418,7 +418,7 @@ describe("handleReachPx", () => {
   });
 
   it("shrinks with the handle when the model is small on screen", () => {
-    // A 60px-wide part cannot carry a 45px handle, so both shrink — and the
+    // A 60px-wide part cannot carry a 45px handle, so both shrink, and the
     // clearance has to shrink with them or the toolbar floats off on its own.
     const small = handleReachPx(6, 0.1); // 60px of model
     expect(small).toBeLessThan(HANDLE_LENGTH);

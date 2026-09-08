@@ -1,8 +1,8 @@
-// Viewport right-click: context-aware menus — one provider per target (datum
+// Viewport right-click: context-aware menus, one provider per target (datum
 // plane / edge / face / whole body / empty space), all on the shared engine in
 // ui/menu.ts. The viewport owns the click-vs-pan gesture (right button is
 // camera pan) and fires onContextClick only for a genuine click; toolBusy
-// gates it — an active tool (or sketch mode, which has its own canvas menu)
+// gates it, an active tool (or sketch mode, which has its own canvas menu)
 // owns the gesture.
 import type { DocumentStore } from "../document/store";
 import type { Viewport } from "../viewport/viewport";
@@ -63,7 +63,7 @@ export function createContextMenus(deps: ContextMenusDeps) {
   /** Wrap a menu item that starts a tool or mutates the DOCUMENT: the click runs
    *  when the item is chosen, not when the menu opened, and a keyboard shortcut
    *  may have started a tool in between. Refusals are reported, never silent.
-   *  Display-only items (hide/isolate/color/rename) stay unwrapped on purpose —
+   *  Display-only items (hide/isolate/color/rename) stay unwrapped on purpose,
    *  the browser tree's eye toggles are likewise always available, even mid-tool. */
   function unlessBusy(fn: () => void): () => void {
     return () => {
@@ -79,7 +79,7 @@ export function createContextMenus(deps: ContextMenusDeps) {
     const f = store.document.features.find(
       (ft): ft is Extract<Feature, { type: "datumPlane" }> => ft.id === datumId && ft.type === "datumPlane",
     );
-    selectFeature(datumId); // same as clicking it — the menu acts on a visible selection
+    selectFeature(datumId); // same as clicking it, the menu acts on a visible selection
     contextMenu(x, y, [
       { label: "Cut all bodies", onClick: unlessBusy(() => void startCutByPlane(datumId)) },
       // enter BY ID: the def is only the cached placement, so passing the datum
@@ -88,7 +88,7 @@ export function createContextMenus(deps: ContextMenusDeps) {
       { label: "Offset plane", disabled: !f, onClick: unlessBusy(() => { if (f) offsetPlaneFromFace(datumPlaneDef(f)); }) },
       { separator: true, label: "" },
       // setPlaneVisibility deliberately emits nothing (a plane toggle costs no
-      // rebuild), so the browser is told by hand — see stores/browser.ts.
+      // rebuild), so the browser is told by hand, see stores/browser.ts.
       { label: "Hide plane", onClick: () => { store.setPlaneVisibility(datumId, false); syncDatumPlanes(); useBrowserStore().bumpView(); } },
       { label: "Delete plane", danger: true, onClick: unlessBusy(() => { store.removeFeature(datumId); selectFeature(null); }) },
     ]);
@@ -206,13 +206,13 @@ export function createContextMenus(deps: ContextMenusDeps) {
   }
 
   // Both of these re-emit the build (see store.setBodiesVisibility), which is
-  // what repaints the browser — no explicit refresh, and none of the old
+  // what repaints the browser, no explicit refresh, and none of the old
   // "toggle N bodies, re-render N times" hazard either.
   function hideBody(id: string) {
     store.setBodyVisibility(id, false);
   }
 
-  /** Show only this body (Onshape "Isolate"): hide every other body — one batched
+  /** Show only this body (Onshape "Isolate"): hide every other body, one batched
    *  store update, ONE re-render. Undo is "Show all bodies" (Shift+H / the menus). */
   function isolateBody(id: string) {
     store.setBodiesVisibility(new Map((store.buildState.result?.bodies ?? []).map((b) => [b.id, b.id === id])));
@@ -224,7 +224,7 @@ export function createContextMenus(deps: ContextMenusDeps) {
     const datumId = viewport.pickDatumAt(x, y);
     if (datumId) return openDatumMenu(x, y, datumId);
     if (viewport.selecting === "bodies") {
-      // plain mesh raycast (no edge priority) — must agree with left-click select,
+      // plain mesh raycast (no edge priority), must agree with left-click select,
       // else right-clicking on/near any edge of a body misses the body menu
       const bodyId = viewport.bodyIdAt(x, y);
       return bodyId ? openBodyMenu(x, y, bodyId) : openEmptyMenu(x, y);

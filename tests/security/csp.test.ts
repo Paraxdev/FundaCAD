@@ -104,8 +104,8 @@ describe("Content-Security-Policy", () => {
     //
     // SECOND: src/plugins/loader.ts, which evaluates the app-side module of an
     // installed plugin. That one is a DELIBERATE addition and it is worth being
-    // precise about why it could not be avoided. A plugin that draws — a menu
-    // row, a component, paint on the model — runs in the app's own context;
+    // precise about why it could not be avoided. A plugin that draws, a menu
+    // row, a component, paint on the model, runs in the app's own context;
     // none of that is expressible from a Worker or a process. And the policy is
     // `script-src 'self'` with `worker-src 'self' blob:`, so a blob URL is not a
     // script source: `import(URL.createObjectURL(...))` is refused, and so is a

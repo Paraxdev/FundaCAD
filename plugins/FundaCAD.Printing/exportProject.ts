@@ -16,7 +16,7 @@ import type { DocumentStore, GeometryBackend } from "fundacad";
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;
 
-// The slicer preset the exported project should land on — minimal keys Orca needs
+// The slicer preset the exported project should land on, minimal keys Orca needs
 // to select the user's Snapmaker U1 machine on "open as project". Stage D.v2 (CLI)
 // overrides these with a fully-flattened config via `opts.settings`.
 const U1_PROJECT_SETTINGS: Record<string, unknown> = {
@@ -29,7 +29,7 @@ const U1_PROJECT_SETTINGS: Record<string, unknown> = {
  *  palette slot → toolhead, so the multi-color palette actually prints. With
  *  `opts.path` it writes there silently (Stage D staging → open in Orca); without,
  *  it prompts with a save dialog. Returns the written path, or null (cancelled /
- *  error). Palette/bodyColors/bodyNames are threaded explicitly — they live in
+ *  error). Palette/bodyColors/bodyNames are threaded explicitly, they live in
  *  store side-maps, never inside `document`. */
 export async function exportPrintProject(
   store: DocumentStore,
@@ -61,7 +61,7 @@ export async function exportPrintProject(
     path = picked;
   }
 
-  // Same busy/cancel treatment as the app's own export and import — this path
+  // Same busy/cancel treatment as the app's own export and import, this path
   // tessellates every body at export grade before writing the project, so it is
   // every bit as long-running as a plain export on a large document.
   const res = await store.runBusy(
@@ -74,12 +74,12 @@ export async function exportPrintProject(
     }, onStarted),
   );
   if (!res.ok) {
-    if (res.cancelled) return null;  // the user stopped it — not an error
+    if (res.cancelled) return null;  // the user stopped it, not an error
     await reportError(`Print export failed: ${res.message ?? "unknown error"}`);
     return null;
   }
   void warnUnloadedFilaments(store, bodies.map((b) => b.id));
-  // Only surface a modal when there are warnings (features that didn't build) —
+  // Only surface a modal when there are warnings (features that didn't build),
   // the silent-staging path (Stage D) shouldn't pop a dialog on the happy path.
   if (res.warnings?.length) {
     const lines = res.warnings.map(
@@ -93,12 +93,12 @@ export async function exportPrintProject(
 /** Best-effort post-export check: warn when the design uses palette slots whose
  *  toolhead has no filament loaded, or leaves bodies unassigned (they export as
  *  extruder 1). Fire-and-forget and bounded to 1.5s client-side (the shared
- *  Rust HTTP client has a 10s timeout — a warning arriving that late is worse
+ *  Rust HTTP client has a 10s timeout, a warning arriving that late is worse
  *  than none): unreachable/slow/unconfigured printer → silently no warning.
  *  Never blocks or fails the export itself.
  *
  *  Silent when nothing offers a palette. Every sentence it can produce is about
- *  toolheads and slot assignments — "3 bodies are unassigned (defaulting to
+ *  toolheads and slot assignments, "3 bodies are unassigned (defaulting to
  *  slot 1)" is a warning about a choice the user was never offered. */
 async function warnUnloadedFilaments(store: DocumentStore, bodyIds: string[]) {
   if (!contributedPalette().length) return;
@@ -127,6 +127,6 @@ async function warnUnloadedFilaments(store: DocumentStore, bodyIds: string[]) {
     if (unassigned) parts.push(`${unassigned} bod${unassigned > 1 ? "ies are" : "y is"} unassigned (defaulting to slot 1)`);
     toast(`Exported, but ${parts.join("; ")}.`, { kind: "warning" });
   } catch {
-    // printer offline/slow/unconfigured — the check is best-effort by design
+    // printer offline/slow/unconfigured, the check is best-effort by design
   }
 }

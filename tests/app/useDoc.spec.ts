@@ -4,7 +4,7 @@
 // SAME object across an in-place mutate(), and Vue 3.4+ computeds stop
 // propagating when a recomputed value is === the previous one. Get the shape
 // wrong and every store-reading panel silently freezes on edits while still
-// "waking up" on undo/load — which is why a happy-path smoke test misses it.
+// "waking up" on undo/load, which is why a happy-path smoke test misses it.
 //
 // These tests pin the behaviour rather than the implementation: they assert that
 // a dependent effect re-runs after an in-place edit that preserves identity.
@@ -25,7 +25,7 @@ function makeFakeEngine() {
   return {
     doc,
     docVersion,
-    /** Edit in place — object identity is deliberately preserved, exactly as
+    /** Edit in place, object identity is deliberately preserved, exactly as
      *  DocumentStore.mutate() does. */
     edit(fn: (d: CadDocument) => void) {
       fn(doc);
@@ -88,7 +88,7 @@ describe("useDocValue", () => {
     const fake = makeFakeEngine();
     const { seen } = trackDerived(fake, (d) => d.parameters.width);
 
-    // An unrelated edit bumps the version but must not churn this dependent —
+    // An unrelated edit bumps the version but must not churn this dependent,
     // the computed still short-circuits, which is the behaviour we WANT here.
     fake.edit((d) => { d.parameters.depth = 3; });
     await Promise.resolve();

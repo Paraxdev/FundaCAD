@@ -1,4 +1,4 @@
-"""Conic-profile edge blends — the fillet/chamfer family as one continuous knob.
+"""Conic-profile edge blends, the fillet/chamfer family as one continuous knob.
 
 A circular fillet and a 45-degree chamfer are the two ends of a single family of
 sections. Kernels that expose that family as a single parameter allow travel
@@ -15,7 +15,7 @@ But it does not need to offer it, because of one fact about circular arcs:
 and OCCT builds its blend faces out of exactly those arcs. Convert a blend face
 to NURBS and it comes back degree 2 across the section with three pole rows and
 that weight sitting in the middle. So the whole conic family is reachable by
-scaling one row of weights — no lofting, no fitting, no surface of our own:
+scaling one row of weights, no lofting, no fitting, no surface of our own:
 
     profile  0  ->  k = 1        the circular fillet, untouched
     profile -1  ->  k = 0        the chord: a chamfer
@@ -27,8 +27,8 @@ with `k` below. Two properties make this worth doing the awkward way round
   * No pole moves and no knot changes, so the tangency curves onto the supporting
     faces are bit-identical to OCCT's and every pcurve stays valid. We inherit
     OCCT's tangency, its handling of tangent chains, and its corner patches.
-  * A spherical corner patch is the tensor product of two arcs — its weights are
-    the outer product of (1, cos(theta/2), 1) with itself — so scaling every
+  * A spherical corner patch is the tensor product of two arcs, its weights are
+    the outer product of (1, cos(theta/2), 1) with itself, so scaling every
     middle weight converts tubes and corners by the same rule, and the shared
     boundaries still agree because both sides scaled identically.
 
@@ -45,13 +45,13 @@ One thing does NOT survive the conversion, and it is not a boundary: the
 parameterisation of a blend face OCCT built analytically. A straight edge
 between two planes gets a plain cylinder, whose u is an ANGLE, and no rational
 quadratic carries that, so converting one to poles moves the point at a given
-(u, v) — 0.02mm on a 1.3mm blend. The face is still the same set of points and
+(u, v), 0.02mm on a 1.3mm blend. The face is still the same set of points and
 its boundaries are still whole isolines, so the shape it produces is right; what
 goes wrong is COMPARING it to a neighbour at the same parameter, which is how
 the two kinds below are told apart. Hence `_holds_its_section`.
 
 A MITRE SEAM is where OCCT runs two blends the full length of their edges and
-trims them against each other instead of inserting a corner patch — which is
+trims them against each other instead of inserting a corner patch, which is
 what it does for the four top edges of a box, so it is two clicks away. Such a
 seam runs ACROSS the sections and is a whole section on neither side, so both
 faces' pcurves go stale and each face ends up describing a different curve
@@ -66,11 +66,11 @@ supports it is cut by whatever it hits, and that trim is a genuine
 surface/surface intersection: it lands on a different pcurve once the section
 changes shape, and its corner vertices move with it (measured: on a 4.8mm blend,
 up to 2.8mm at profile 0.95). Re-cutting is a different operation from
-reweighting, so such a blend is refused rather than approximated — see
+reweighting, so such a blend is refused rather than approximated, see
 `ConicNotApplicable`.
 
 Caveat for callers: `BRepGProp.VolumeProperties` integrates in parameter space
-and is unreliable on these surfaces at large |profile| — weights spanning two
+and is unreliable on these surfaces at large |profile|, weights spanning two
 orders of magnitude defeat its quadrature. It reported a blend that removes ~2mm3
 of a box as removing 450mm3. Measure such solids from the tessellation instead;
 the geometry is exact, the integrator is not.
@@ -103,7 +103,7 @@ TOL = 1e-7
 #: entirely and keeps the common case exactly as robust as it was.
 PROFILE_EPS = 1e-6
 
-#: The slider is open at both ends — a profile of exactly 1 is a sharp corner (no
+#: The slider is open at both ends, a profile of exactly 1 is a sharp corner (no
 #: feature at all) and exactly -1 is a degenerate zero weight. Clamp inside.
 #:
 #: 0.99 rather than 0.999, because the last thousandth is a shape nothing can
@@ -112,8 +112,8 @@ PROFILE_EPS = 1e-6
 #: resolving it: it emits FEWER triangles for the harder surface (2,572 against
 #: 3,380 one step back) and the two blends meeting at a mitred corner come out
 #: with boundaries that part company between shared nodes. That renders as a
-#: lens of surface standing proud of the corner — the reported "edges break and
-#: overlap" — while the kernel shape underneath is perfectly sound: valid, seams
+#: lens of surface standing proud of the corner, the reported "edges break and
+#: overlap", while the kernel shape underneath is perfectly sound: valid, seams
 #: on their mirror plane to 8e-7mm, a 1.9e-6mm tolerance sleeve, and no lens at
 #: all when the same solid is meshed twenty times finer.
 #:
@@ -123,7 +123,7 @@ PROFILE_EPS = 1e-6
 #:
 #: Nothing is lost by stopping there. The section's departure from its chord is
 #: k/(1+2k) of the corner offset, so the whole of the discarded range moves the
-#: surface by 0.035mm on that 5mm blend — under a printer's layer, under a
+#: surface by 0.035mm on that 5mm blend, under a printer's layer, under a
 #: mill's step, and indistinguishable from the chamfer it is approaching. The
 #: sharp end gains as well: +0.999 used to reach a corner the seam solver had to
 #: refuse outright, and the slider no longer goes there.
@@ -135,7 +135,7 @@ class ConicNotApplicable(ValueError):
 
     Its own class rather than a bare ValueError because callers must tell it
     apart from "we tried and broke it". Nothing is wrong with the fillet, the
-    solid or the request — the reweighting identity simply does not describe
+    solid or the request, the reweighting identity simply does not describe
     this face, so the only honest answers are the plain fillet or nothing. A
     caller that catches this can fall back to profile 0; a caller that catches
     ValueError generally is catching real breakage as well.
@@ -184,7 +184,7 @@ def _arc_dirs(bs):
 
     Degree 2, three poles, and the (1, cos(theta/2), 1) signature. A tube blend
     has one such direction; a spherical corner patch has both. A toroidal blend's
-    spine is a FULL circle and so has six poles — which is why the test is on the
+    spine is a FULL circle and so has six poles, which is why the test is on the
     pole structure and not merely "is this direction quadratic".
     """
     out = []
@@ -210,7 +210,7 @@ def _reweight(bs, along_u, k):
 
 
 def _blend_faces(sharp, mk, result):
-    """Result faces that are not descendants of an input face — the blend."""
+    """Result faces that are not descendants of an input face, the blend."""
     kept = []
     for f in _sub(sharp, TopAbs_FACE):
         kept += list(mk.Modified(f))
@@ -223,7 +223,7 @@ def _blend_faces(sharp, mk, result):
 def _reskin(face, newsurf):
     """The same face on a new surface: same wires, same edges, same pcurves.
 
-    Sound only because reweighting leaves the UV domain alone — every pcurve
+    Sound only because reweighting leaves the UV domain alone, every pcurve
     already on these edges still describes the right curve against the new
     surface, so the shell still closes and the neighbours never notice.
     """
@@ -276,7 +276,7 @@ def _plane_normal(c):
     """The normal of the plane a 3-pole section lies in.
 
     Three poles always span a plane, and reweighting moves none of them, so this
-    plane is the same before and after — which is the whole reason the crossing
+    plane is the same before and after, which is the whole reason the crossing
     below can be solved in closed form.
     """
     p1, p2, p3 = c.Pole(1), c.Pole(2), c.Pole(3)
@@ -292,7 +292,7 @@ def _roots(a, b, c):
         return [] if abs(b) < 1e-15 * scale else [-c / b]
     disc = b * b - 4 * a * c
     # A seam ENDS on a pole of its own section, where the line is tangent and the
-    # true discriminant is exactly 0 — so it arrives as a small negative number
+    # true discriminant is exactly 0, so it arrives as a small negative number
     # and the endpoint reads as "these blends do not meet", which is the one
     # place the answer is known in advance. Round-off only, at 1e-49 of the
     # coefficients here, so the clamp does not reach a genuine near miss.
@@ -355,8 +355,8 @@ def _holds_its_section(edge, face, dirs, samples=12):
 
     Worth asking separately because the approximate form can say no to a seam
     that is a section on both sides. Where OCCT builds one blend analytically and
-    the next along the same tangent chain as a BSpline — a cylinder and a spline
-    surface meeting at the rim of a slot — converting the cylinder to poles
+    the next along the same tangent chain as a BSpline, a cylinder and a spline
+    surface meeting at the rim of a slot, converting the cylinder to poles
     reparameterises it, and the two faces then reach the same point of their
     shared section at different parameters. Sampling them against each other
     measures 0.02mm on a 1.3mm blend and calls a plain tangent seam a mitre.
@@ -386,7 +386,7 @@ def _sides_agree(edge, sides, samples=12):
     instead of being one. Then the stale pcurve names a point that is not on the
     other face at all, and the two sides part company by millimetres.
 
-    So test the claim instead of assuming it — and then, if the sampling says no,
+    So test the claim instead of assuming it, and then, if the sampling says no,
     ask the pcurves outright whether each stays inside one section. Sampling
     compares the two sides at the same edge parameter, which is one assumption
     too many: two faces can hold the same section and still run along it at
@@ -424,7 +424,7 @@ def _extent(bs):
 def _pair_vertices(edge, start, end):
     """The edge's vertices, ordered to match a curve running `start` -> `end`.
 
-    Reuse the original vertices — a section's endpoints are corner poles, and
+    Reuse the original vertices, a section's endpoints are corner poles, and
     corner poles do not move, so the neighbouring faces still meet us exactly
     there. Pair them by POSITION: an edge's stored first/last follow its own
     curve, which need not agree with its sense inside this wire, and getting
@@ -452,14 +452,14 @@ def _settle_ends(edge, start, end, scale, too_far):
 
     Round-off, at a millionth of the face: a section endpoint sits on an END
     pole, which no reweight moves, but it sits there through a pcurve value and a
-    UV box that were each rounded once, so it can land a hair inside the arc —
+    UV box that were each rounded once, so it can land a hair inside the arc,
     where the reweight does move it, by a hair times k. OCCT already has the word
     for "the curves meet here, within this much": the vertex's own tolerance.
     Widen it rather than refusing a corner blend over a nanometre.
 
     Otherwise the blend is bounded by something that has to be re-intersected
     rather than reweighted (see the module docstring), and no tolerance can
-    honestly cover that — the same corner walks millimetres as the profile
+    honestly cover that, the same corner walks millimetres as the profile
     sweeps. Refuse by name here, where the measurement is in hand, instead of
     letting MakeEdge report a bare DifferentsPointAndParameter. Measured: 1e-6 of
     the face for round-off against 0.2 of it for a real cut.
@@ -495,8 +495,8 @@ def _reseam(edge, sides, samples=24):
     """A mitre seam re-solved section by section, with both pcurves rewritten.
 
     A seam that is a whole section on both sides needs none of this. A mitre
-    seam — where two blends were trimmed against each other so the seam runs
-    ACROSS the sections rather than being one — does: its stale pcurves point
+    seam, where two blends were trimmed against each other so the seam runs
+    ACROSS the sections rather than being one, does: its stale pcurves point
     somewhere that is no longer on the other face. Measured on a 4mm blend
     around a box's top face at profile 0.9, the two sides' ideas of the seam
     diverge by 2.7mm in the middle while both ENDS still agree exactly, which is
@@ -522,7 +522,7 @@ def _reseam(edge, sides, samples=24):
         # patch has turned up to measure, so refuse rather than guess.
         raise ConicNotApplicable(
             "two blends meet here along a corner patch, which has no single "
-            "section to re-solve — use profile 0 for a plain fillet here")
+            "section to re-solve, use profile 0 for a plain fillet here")
 
     aa, ab = BRepAdaptor_Curve2d(edge, fa), BRepAdaptor_Curve2d(edge, fb)
     lo, hi = aa.FirstParameter(), aa.LastParameter()
@@ -533,7 +533,7 @@ def _reseam(edge, sides, samples=24):
     def say(why):
         return (f"the two blends meeting at this corner {why} at this profile, "
                 "so their seam would have to be recomputed rather than "
-                "reweighted — use profile 0 here")
+                "reweighted, use profile 0 here")
 
     def refuse(why):
         return ConicNotApplicable(say(why))
@@ -604,7 +604,7 @@ def _reseam(edge, sides, samples=24):
     if err > scale * SEAM_LIMIT:
         raise ConicNotApplicable(
             "the seam where these two blends meet does not follow the conic "
-            f"family at this profile (it misses by {err:.4g}) — use profile 0 here")
+            f"family at this profile (it misses by {err:.4g}), use profile 0 here")
 
     pa0, pa1 = crossing(lo)[0], crossing(hi)[0]
     v1, v2 = _settle_ends(edge, ba.Value(pa0.X(), pa0.Y()), ba.Value(pa1.X(), pa1.Y()),
@@ -634,7 +634,7 @@ def _rebuild_edge(edge, face, newsurf):
         edge, start, end, _extent(newsurf),
         lambda gap: "this blend is cut across its section by a neighbouring "
                     "face, so its trim would have to be recomputed rather than "
-                    f"reweighted (a corner moves {gap:.4g}) — use profile 0 here")
+                    f"reweighted (a corner moves {gap:.4g}), use profile 0 here")
 
     mk = BRepBuilderAPI_MakeEdge(pc, newsurf, v1, v2, p1, p2)
     if not mk.IsDone():
@@ -670,12 +670,12 @@ def conic_blend(sharp, edges, radius, profile):
         bs = _nurbs_of(face)
         dirs = _arc_dirs(bs)
         if not dirs:
-            # A blend face whose section is not a single quadratic arc — an arc
+            # A blend face whose section is not a single quadratic arc, an arc
             # wider than a half turn, or a BSpline blend between curved supports.
             # Reweighting has no meaning there, and silently leaving it circular
             # would ship a feature that is conic on some edges and not others.
             raise ConicNotApplicable(
-                "this edge's blend has no conic profile — use profile 0 for a "
+                "this edge's blend has no conic profile, use profile 0 for a "
                 "plain fillet here")
         for along_u in dirs:
             _reweight(bs, along_u, k)
@@ -698,8 +698,8 @@ def conic_blend(sharp, edges, radius, profile):
     # An edge that is a whole SECTION on both sides needs only its 3D curve
     # recovered: it moved inside its own plane, so both faces' pcurves still
     # describe it and rebuilding from either gives the same curve. A MITRE seam
-    # does not have that property and has to be re-solved for both faces at once
-    # — see _reseam, and _sides_agree for how the two are told apart, which is by
+    # does not have that property and has to be re-solved for both faces at once,
+    # see _reseam, and _sides_agree for how the two are told apart, which is by
     # measurement rather than by trusting the property to hold.
     reshape2 = BRepTools_ReShape()
     for edge, sides in stale:

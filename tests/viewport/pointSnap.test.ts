@@ -24,7 +24,7 @@ describe("pickPoint", () => {
     const cs = [cand(100, 100, "surface"), cand(105, 103, "vertex")];
     expect(pickPoint(cs, flat, at(100, 100))?.kind).toBe("vertex");
     // CONTROL: with no corner in reach, the surface point is the answer rather
-    // than nothing — aiming at the middle of a large face has to land on it.
+    // than nothing, aiming at the middle of a large face has to land on it.
     expect(pickPoint([cs[0] as PointCandidate], flat, at(100, 100))?.kind).toBe("surface");
   });
 

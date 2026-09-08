@@ -1,8 +1,8 @@
 // Print-pipeline flows wired to ribbon actions:
-//   openInOrca   — export a colored project 3MF to staging, open it in OrcaSlicer
+//   openInOrca, export a colored project 3MF to staging, open it in OrcaSlicer
 //                  (Stage D.v1). The user slices + Upload&Prints from Orca, whose
 //                  U1 preset already carries the printer host.
-//   sendToPrinter — pick a sliced .gcode, map its filaments to the U1's loaded
+//   sendToPrinter, pick a sliced .gcode, map its filaments to the U1's loaded
 //                  toolheads, upload + start, and monitor progress (Stage D direct
 //                  send). In-app slicing (model→gcode) is a later round.
 
@@ -73,7 +73,7 @@ export async function openInOrca(store: DocumentStore, geometry: GeometryBackend
 /** the palette slots this document actually prints (logical gcode tools).
  *
  *  Exactly one when no palette is offered, whatever the document says. The
- *  assignments are still there — this is what a single-material print IS, and
+ *  assignments are still there, this is what a single-material print IS, and
  *  the alternative is to ask someone with one toolhead which of their four
  *  toolheads each colour goes in. */
 function usedSlots(store: DocumentStore): LogicalSlot[] {
@@ -104,7 +104,7 @@ export async function sendToPrinter(store: DocumentStore, _geometry: GeometryBac
   if (!isTauri()) return;
   const id = activePrinterId();
 
-  // pick the sliced gcode (from Orca) — the native dialog is the trust boundary.
+  // pick the sliced gcode (from Orca), the native dialog is the trust boundary.
   const picked = await openDialog({ filters: [{ name: "G-code", extensions: ["gcode"] }] });
   if (!picked) return;
 
@@ -143,7 +143,7 @@ async function startMonitoring(id: string) {
   const offStatus = await onPrinterStatus((s) => {
     if (s.id !== id) return;
     if (s.state === "printing" || s.state === "paused") {
-      setPrinterStatusText(`${s.state === "paused" ? "Paused" : "Printing"} ${s.filename} — ${Math.round(s.progress * 100)}%`);
+      setPrinterStatusText(`${s.state === "paused" ? "Paused" : "Printing"} ${s.filename}, ${Math.round(s.progress * 100)}%`);
     } else {
       setPrinterStatusText(null);
       if (s.state === "complete") toast(`Print complete: ${s.filename}`, { kind: "info" });

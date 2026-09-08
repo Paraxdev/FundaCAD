@@ -31,8 +31,8 @@ import {
 } from "./render";
 // Upward reach, deliberate and narrow: facePlanePick is the ONE derivation of
 // "which plane is that face", and a second copy here is exactly what this import
-// replaces. It is a pure function of a raycast plus planeMath — no tool state,
-// no document — so nothing cycles back.
+// replaces. It is a pure function of a raycast plus planeMath, no tool state,
+// no document, so nothing cycles back.
 import { pickFacePlaneAt } from "../features/facePlanePick";
 import { FpsMeter } from "./fpsMeter";
 import { sceneStats } from "../diagnostics/sceneStats";
@@ -48,7 +48,7 @@ import type { DocumentStore } from "../document/store";
 import type { ViewCubeSide } from "../types";
 
 /** A selection captured just before a rebuild replaces the Highlighter, held in
- *  whichever terms are cheapest to resolve again — see selectionMemo.ts for why
+ *  whichever terms are cheapest to resolve again, see selectionMemo.ts for why
  *  each entity carries both an object reference AND a world-space anchor, and
  *  why the anchor is allowed to be null. */
 interface SelectionMemo {
@@ -158,7 +158,7 @@ export class Viewport {
    *  setModel captures its own at the commit and that was believed to be the
    *  whole story, because a rebuild used to reach the screen in one piece. A
    *  chunked reply reaches it in several, and every installment publishes a
-   *  fresh ModelView with a fresh Highlighter (adoptProgressiveView) — so the
+   *  fresh ModelView with a fresh Highlighter (adoptProgressiveView), so the
    *  selection was gone before the commit ever ran, and setModel's own capture,
    *  reading that empty Highlighter, correctly reported "nothing is selected"
    *  and restored nothing.
@@ -175,7 +175,7 @@ export class Viewport {
    *  duration (see pickSuppressed): any selection made mid-stream is wiped by
    *  the commit's fresh Highlighter anyway, a partial edge set makes
    *  nearestEdgeByMid return edges that will not exist, and Picker.pick's
-   *  flushRaycastIndex would force-build every queued BVH synchronously —
+   *  flushRaycastIndex would force-build every queued BVH synchronously,
    *  exactly the stall the deferral exists to avoid, stolen from the thread the
    *  next chunk needs. Separate from suspendPicking so a stream cannot clobber a
    *  tool's own suspension. */
@@ -186,7 +186,7 @@ export class Viewport {
   private targetGridZ = 0;
   private clock = new THREE.Clock();
   private resolution = new THREE.Vector2();
-  /** The over-drawn wide line that makes ONE edge unmistakable — the hover
+  /** The over-drawn wide line that makes ONE edge unmistakable, the hover
    *  tint on its own is a colour swap on a 1.6px line and is not enough to see,
    *  least of all under the menu that asks which edge you meant. Created lazily
    *  on first use, because most sessions never need it. */
@@ -209,7 +209,7 @@ export class Viewport {
   onAreaDrag: ((mode: AreaMode | null) => void) | null = null;
   onPickDatum: ((id: string) => void) | null = null; // fired when a datum plane quad is clicked
   // Right-click context menu: fires only on a genuine right-CLICK (press +
-  // release without movement — right-drag is camera pan). `shouldOpenContextMenu`
+  // release without movement, right-drag is camera pan). `shouldOpenContextMenu`
   // is the app-level gate: when it returns false (a tool or sketch owns the
   // gesture) the event is left completely alone, no preventDefault.
   onContextClick: ((x: number, y: number) => void) | null = null;
@@ -220,7 +220,7 @@ export class Viewport {
   regionPickAt: ((clientX: number, clientY: number, additive: boolean) => boolean) | null = null;
   regionHoverAt: ((clientX: number, clientY: number) => boolean) | null = null;
   onBodySelectionChange: (() => void) | null = null; // fired when the body selection changes
-  // An edge click that landed on more than one edge at once — two bodies meeting
+  // An edge click that landed on more than one edge at once, two bodies meeting
   // put their shared boundary in the same pixels, and the runner-up is not a
   // worse answer but the other half of a question. The app decides how to ask
   // (it owns the menu, and the body/feature names the entries are labelled
@@ -238,12 +238,12 @@ export class Viewport {
   private get pickSuppressed(): boolean {
     return this.suspendPicking || this.streaming;
   }
-  // until the user drives the camera, the model is kept auto-framed on resize —
+  // until the user drives the camera, the model is kept auto-framed on resize,
   // this catches the canvas layout settling a frame or two after the first fit
   // (common under remote desktops / fractional scaling), which would otherwise
   // leave the model rendered off-centre and un-aimable.
   private userMovedCamera = false;
-  // Render-on-demand: the loop only draws when something is actually dirty —
+  // Render-on-demand: the loop only draws when something is actually dirty,
   // the camera moved (rig.update's own return), a mutation flagged us via
   // requestRender(), or we're still in the few-frame "linger" window after one
   // (covers effects that settle a frame late, e.g. a texture upload). Starts
@@ -301,7 +301,7 @@ export class Viewport {
   // to exist). Persisted ViewCube overrides live on the document.
   //
   // This used to read `(window as any).store`, which main.ts only ever set inside
-  // an `import.meta.env.DEV` branch — so in a PRODUCTION build this getter always
+  // an `import.meta.env.DEV` branch, so in a PRODUCTION build this getter always
   // returned undefined and every `this.store?.…` below silently no-op'd. That
   // meant the ViewCube's "redefine this side" overrides did not persist, did not
   // reset, and never re-marked, in exactly the builds users run. Both objects are
@@ -362,7 +362,7 @@ export class Viewport {
       }
       // Unconditional (not just when handleHover's own hover-paint fires below):
       // the ViewCube (not one of our owned files) also hover-highlights off this
-      // same canvas's pointermove, with no callback into the Viewport — so a cube
+      // same canvas's pointermove, with no callback into the Viewport, so a cube
       // hover-in/out needs a render even when handleHover early-returns (no
       // model, suspended picking, bodies-selection mode, etc).
       this.requestRender();
@@ -397,7 +397,7 @@ export class Viewport {
       this.handleClick(e);
     });
     // Right-click → onContextClick, but ONLY on a click (press + release
-    // without movement) — right-DRAG is camera orbit (mouseButtons.right =
+    // without movement), right-DRAG is camera orbit (mouseButtons.right =
     // ROTATE). WebKit fires `contextmenu` while the button is still down: the
     // click then waits for the release; a platform that fires it after the
     // release delivers immediately. Same shape as the left-click guard above.
@@ -463,7 +463,7 @@ export class Viewport {
    *  take pointer events, because a dimension badge is a click target: that is
    *  how a dimension is edited or deleted. Taking the pointer also takes the
    *  wheel, and the wheel listener is on the canvas, so with the cursor over a
-   *  badge a wheel notch went nowhere — the view simply did not zoom, with no
+   *  badge a wheel notch went nowhere, the view simply did not zoom, with no
    *  cursor change or any other sign to say why.
    *
    *  Badges are not a rare thing to be under. They are placed a fixed 18 screen
@@ -472,8 +472,8 @@ export class Viewport {
    *  you zoom the more of it they cover: the moment you most want the wheel is
    *  the moment it is most likely to be swallowed.
    *
-   *  So an overlay that has taken one hands it back. Deliberately explicit — two
-   *  call sites, both layers that cover the canvas — rather than a document-level
+   *  So an overlay that has taken one hands it back. Deliberately explicit, two
+   *  call sites, both layers that cover the canvas, rather than a document-level
    *  capture listener, which would also have to tell a badge from the panel
    *  scrollbars and lists that are supposed to keep their own wheel. */
   forwardWheel(e: WheelEvent) {
@@ -505,7 +505,7 @@ export class Viewport {
    *  The middle case is the one that matters and it used to be missing. A point
    *  at the target distance is a point on a sphere around the camera, not on any
    *  surface, so zooming over empty space converged the orbit target onto
-   *  somewhere off the grid plane and walked the camera through it — after which
+   *  somewhere off the grid plane and walked the camera through it, after which
    *  the whole lattice is outside the frustum and the viewport is blank. See
    *  zoomAnchor.groundAnchor. */
   private cursorWorldPoint(clientX: number, clientY: number): THREE.Vector3 {
@@ -518,7 +518,7 @@ export class Viewport {
     const target = this.rig.controls.getTarget(new THREE.Vector3());
     const dist = cam.distanceTo(target);
     // Only while the ground lattice is the thing being DRAWN. targetGridZ is
-    // where it sits — 0 on an empty document, the model's floor otherwise — so
+    // where it sits, 0 on an empty document, the model's floor otherwise, so
     // this aims at the surface actually on screen rather than at the world XY
     // plane by assumption. Inside a sketch the lattice is the sketch plane's,
     // which is not horizontal and may be vertical, and aiming at a horizontal
@@ -533,7 +533,7 @@ export class Viewport {
   }
 
   // Hover picking is a raycast, and a pointer device can deliver several moves
-  // per displayed frame — doing the pick on each one is wasted work, since only
+  // per displayed frame, doing the pick on each one is wasted work, since only
   // the last position is ever shown. Keep the newest event and pick ONCE per
   // animation frame. Independent of the BVH: that makes each pick cheap, this
   // makes the number of picks match the number of frames.
@@ -542,7 +542,7 @@ export class Viewport {
 
   private queueHover(e: PointerEvent) {
     // A held button means the user is orbiting/panning or dragging a tool, not
-    // shopping for a face — and hover-highlighting through it is expensive:
+    // shopping for a face, and hover-highlighting through it is expensive:
     // repainting a hovered face rewrites its vertex colours and re-uploads the
     // buffer. Measured while orbiting a hex-textured cylinder: 2.02ms PER FRAME,
     // 6.5x the cost of submitting the draw itself, and the hovered face changed
@@ -555,8 +555,8 @@ export class Viewport {
       return;
     }
     // Judged HERE, not when the deferred pass runs. The pass is a frame later,
-    // and a tool that hands the pointer back between the two — every "click the
-    // body / the face / the edge" step does, once per step — had its last
+    // and a tool that hands the pointer back between the two, every "click the
+    // body / the face / the edge" step does, once per step, had its last
     // suppressed move land as a hover on the model it was just released from:
     // one face of the body left painted amber under the next step's prompt.
     if (this.pickSuppressed) return;
@@ -581,7 +581,7 @@ export class Viewport {
     if (this.selectionMode === "bodies") return; // no face hover while picking bodies
     // NO MODEL IS NOT NO TARGETS, and this is where hover used to stop. A
     // document holding one sketch and no extrude has no solid at all, so
-    // rebuildBridge calls clearModel() and `model` is null — while the sketch's
+    // rebuildBridge calls clearModel() and `model` is null, while the sketch's
     // profile areas are still there and a click on one still selects it
     // (handleClick raycasts the model only `if (this.model)` and asks
     // regionPickAt either way). Hover asking a stricter question than the click
@@ -639,7 +639,7 @@ export class Viewport {
     //
     // SHIFT adds too, and on an EDGE it means something more besides: "exactly
     // this one, no tangent chain" (see pickScope.ts). One modifier for both
-    // halves of that is deliberate — "add this edge" and "add ONLY this edge"
+    // halves of that is deliberate, "add this edge" and "add ONLY this edge"
     // are the same intent, and asking for the second with a second key would
     // mean holding two of them to build an exact set one edge at a time.
     const mods: PickMods = { additive: e.ctrlKey || e.metaKey || e.shiftKey, exact: e.shiftKey };
@@ -678,7 +678,7 @@ export class Viewport {
     return this.highlighter.getSelectedBodies().length > 0;
   }
 
-  /** Apply a pick to the selection — the ONE path a click takes.
+  /** Apply a pick to the selection, the ONE path a click takes.
    *
    *  Factored out so the ambiguous-edge chooser can run it verbatim rather than
    *  reproduce it. A menu entry that selected an edge slightly differently from a
@@ -698,7 +698,7 @@ export class Viewport {
       } else if (hit?.kind === "face") {
         // A face the kernel had to store in pieces is picked as the whole run:
         // one click on a threaded shank means the shank, not one turn of it.
-        // Shift is `exact` here for the same reason it is on an edge — the way
+        // Shift is `exact` here for the same reason it is on an edge, the way
         // to take a single piece when the run is not what you meant.
         const want = mods.exact ? [hit.faceId] : expandToBand(hit.faceId, this.faceBands);
         for (const f of want) this.highlighter.toggleSelectFace(f);
@@ -719,7 +719,7 @@ export class Viewport {
       this.highlighter?.clearSelection();
       // ...and it must SAY so. This cleared the edge/face selection silently,
       // which left the "N edges selected" prompt standing over a selection that
-      // no longer existed — and now would leave the edge drag handle floating
+      // no longer existed, and now would leave the edge drag handle floating
       // over an edge nothing is holding.
       this.onSelectionChange?.();
     } else {
@@ -738,7 +738,7 @@ export class Viewport {
   // which direction means which verdict; this is the part that needs a camera.
   //
   // What "in it" means depends on one more thing the box cannot know: whether
-  // the far side of the model counts. It does not, unless see-through is on —
+  // the far side of the model counts. It does not, unless see-through is on,
   // otherwise the first crossing box thrown over a closed part would take every
   // face it has, including the six you cannot see, and the count in the prompt
   // would be the only clue. So a triangle is considered only when it FACES the
@@ -807,7 +807,7 @@ export class Viewport {
    *
    *  So the solid is withdrawn and its ghost left standing. The shape and the
    *  position stay legible; the claim that this is your part does not. What is
-   *  WRONG with it is said on the value box itself (ui/previewError.ts) — this
+   *  WRONG with it is said on the value box itself (ui/previewError.ts), this
    *  half only stops the model from arguing with that. */
   setStaleModel(on: boolean) {
     if (this.stale === on) return;
@@ -1011,7 +1011,7 @@ export class Viewport {
   // Points a pick has taken so far, plus the one under the cursor.
   //
   // Three clicks with nothing on screen between them is a gesture nobody can
-  // recover from a mistake in — you cannot see which corner you took, so you
+  // recover from a mistake in, you cannot see which corner you took, so you
   // cannot see that you took the wrong one. Drawn over the model (depthTest
   // off) because a point ON a surface z-fights with it by definition, and
   // scaled per frame so the dots are the same size at every zoom.
@@ -1091,7 +1091,7 @@ export class Viewport {
     return bodyOfFace(this.model, faceId)?.id ?? null;
   }
 
-  /** The body under the cursor via a plain mesh raycast (no edge priority) —
+  /** The body under the cursor via a plain mesh raycast (no edge priority),
    *  exactly how bodies-mode click-select resolves, so the right-click body
    *  menu agrees with a left-click at the same pixel. */
   bodyIdAt(clientX: number, clientY: number): string | null {
@@ -1104,7 +1104,7 @@ export class Viewport {
   // a diagonal probe direction: never coplanar with the model's axis-aligned
   // faces, so the parity count can't graze along a face and miscount.
   private psDir = new THREE.Vector3(0.5773, 0.5772, 0.5774).normalize();
-  /** True when world point `p` is INSIDE a solid body — an even/odd parity ray
+  /** True when world point `p` is INSIDE a solid body, an even/odd parity ray
    *  cast against the merged (closed, manifold) body mesh: an odd number of
    *  crossings means the point is enclosed. False when there's no model. Used by
    *  Extrude to tell whether pushing along a direction enters material (→ Cut) or
@@ -1188,7 +1188,7 @@ export class Viewport {
     } else {
       // default appearance: per-face texture-inlay colors win over the body's
       // assigned color, else the neutral shade. (component/draft overlays above
-      // deliberately mask both — analysis modes stay mutually exclusive.)
+      // deliberately mask both, analysis modes stay mutually exclusive.)
       this.highlighter.setBase((fid) => {
         const texHex = this.texturePaint[fid];
         if (texHex) return new THREE.Color(texHex);
@@ -1206,7 +1206,7 @@ export class Viewport {
     // Skip the repaint when nothing actually changed. main.ts calls setModel,
     // then setBodyPaint, then setTexturePaint on EVERY build, and each of the
     // latter two runs a full colour re-upload (~40 MiB of attribute writes on
-    // the reference assembly) — 0.39 s of a 0.63 s no-op rebuild. setModel
+    // the reference assembly), 0.39 s of a 0.63 s no-op rebuild. setModel
     // already paints with the maps stored here, so if the map is unchanged its
     // pass was correct and this one is pure waste. A CHANGED map still repaints,
     // which is what keeps setModel's stale-map pass from sticking.
@@ -1216,7 +1216,7 @@ export class Viewport {
   }
 
   /** per-face texture-inlay colors (global face id → hex), from texture features
-   *  carrying a colorSlot — same lifecycle as setBodyPaint. */
+   *  carrying a colorSlot, same lifecycle as setBodyPaint. */
   setTexturePaint(map: Record<number, string>) {
     if (sameStringMap(this.texturePaint, map)) return;
     this.texturePaint = map;
@@ -1283,11 +1283,11 @@ export class Viewport {
     return this.highlighter?.getSelectedBodies() ?? [];
   }
 
-  /** Selected face ids only — O(selection). selectedFacesForPressPull() builds
+  /** Selected face ids only, O(selection). selectedFacesForPressPull() builds
    *  full selectors via faceCentroidWorld, which walks EVERY triangle of every
    *  selected face twice; on a textured face (~50k triangles) that costs
    *  milliseconds. Per-frame callers (the texture tool's rAF tick diffs the
-   *  selection every tick) must use this — the full call dragged preview mode
+   *  selection every tick) must use this, the full call dragged preview mode
    *  to 41fps on a hex cylinder whose committed mesh renders at 60. */
   getSelectedFaceIds(): number[] {
     return this.highlighter?.getSelectedFaces() ?? [];
@@ -1323,7 +1323,7 @@ export class Viewport {
    *  ONE raycast over both sets, rather than two answers to be arbitrated
    *  afterwards. The two used to be asked separately and only one of them was
    *  ever asked during a "pick a plane" step, so a datum plane could not be
-   *  sketched on at all by clicking it — the ray sailed through it and took the
+   *  sketched on at all by clicking it, the ray sailed through it and took the
    *  base quad behind. Any rule that picked between two separate answers would
    *  also have had to invent a tie-break the depth buffer already knows. */
   pickConstructionAt(
@@ -1354,7 +1354,7 @@ export class Viewport {
     this.paintDatums();
   }
 
-  /** centroid (world) of the given bodies' vertices — the Move gizmo anchor. */
+  /** centroid (world) of the given bodies' vertices, the Move gizmo anchor. */
   bodiesCentroid(ids: string[]): THREE.Vector3 {
     const out = new THREE.Vector3();
     if (!this.model) return out;
@@ -1363,7 +1363,7 @@ export class Viewport {
     if (!bodies.length) return out;
     // each body's own buffer already holds only its own (deduped) vertices, so
     // this can walk every vertex directly instead of scanning triangles with a
-    // seen-set — the merged-mesh version needed the seen-set to dedupe a vertex
+    // seen-set, the merged-mesh version needed the seen-set to dedupe a vertex
     // shared by multiple triangles; a per-body buffer has no such duplicates.
     const tmp = new THREE.Vector3();
     let n = 0;
@@ -1379,7 +1379,7 @@ export class Viewport {
   }
 
   /** The world bounding box of the given bodies, or null when none of them are
-   *  in the current model. How big the thing being patterned IS — the natural
+   *  in the current model. How big the thing being patterned IS, the natural
    *  first spacing for a repeat is one span, where the copies just touch. */
   bodiesBox(ids: readonly string[]): THREE.Box3 | null {
     if (!this.model) return null;
@@ -1395,7 +1395,7 @@ export class Viewport {
     return box.isEmpty() ? null : box;
   }
 
-  /** True if (clientX,clientY) is over the ViewCube corner — so a right-click
+  /** True if (clientX,clientY) is over the ViewCube corner, so a right-click
    *  there belongs to the cube, not the model. */
   cubeHitsRegion(clientX: number, clientY: number): boolean {
     return this.cube.hitsRegion(clientX, clientY);
@@ -1463,7 +1463,7 @@ export class Viewport {
     this.requestRender();
   }
 
-  /** The currently selected edge lines themselves — for the selection handle,
+  /** The currently selected edge lines themselves, for the selection handle,
    *  which needs their polylines (midpoint + tangent) rather than the
    *  rebuild-stable selectors those polylines get turned into. */
   selectedEdgeLines(): EdgeRef[] {
@@ -1474,7 +1474,7 @@ export class Viewport {
   // Which edges are selected is only half of what a fillet needs to know; the
   // other half is whether each was picked as itself or as a handle on its
   // tangent chain. That is decided at PICK time (it reads the shift key and the
-  // camera — see pickScope.ts) and consumed much later, when a tool finally arms
+  // camera, see pickScope.ts) and consumed much later, when a tool finally arms
   // on the selection, so it is stored here beside the selection it describes and
   // carried across a rebuild with it.
 
@@ -1497,7 +1497,7 @@ export class Viewport {
     if (scope === decided.scope) this.edgeScope = decided;
   }
 
-  /** What the current edge selection means — "chain" to expand each member
+  /** What the current edge selection means, "chain" to expand each member
    *  across its tangent neighbours, "single" for exactly these edges. */
   selectedEdgeScope(): ScopeDecision {
     return this.edgeScope;
@@ -1523,13 +1523,13 @@ export class Viewport {
    *  there is any geometry. Public because the manipulators size themselves
    *  against it (manipulator.handleScale) and reading `store.buildState` instead
    *  would give them the model as the DOCUMENT has it, not as the viewport is
-   *  drawing it — those differ all through a live preview, which is exactly when
+   *  drawing it, those differ all through a live preview, which is exactly when
    *  a handle must not change size. */
   modelDiagonal(): number | null {
     return this.model ? this.model.box.getSize(new THREE.Vector3()).length() : null;
   }
 
-  /** Diagonal of a polyline's projected bounding box, in CSS pixels — its
+  /** Diagonal of a polyline's projected bounding box, in CSS pixels, its
    *  on-screen size however it is oriented, and non-zero for a closed edge whose
    *  two ends coincide. Sampled rather than walked in full: a deviation-sampled
    *  arc carries hundreds of points and eight of them bound it just as well. */
@@ -1550,13 +1550,13 @@ export class Viewport {
     return Number.isFinite(d) ? d : null;
   }
 
-  /** Every drawn edge that lies on one of the SELECTED faces — what "fillet this
+  /** Every drawn edge that lies on one of the SELECTED faces, what "fillet this
    *  face" means (features/toolCapabilities.ts is what says a face is a kind the
    *  edge tools can consume; this is how they get from one to the other).
    *
    *  Derived geometrically because there is no topology to ask: the rebuild reply
    *  carries faces and edges side by side and never says which bounds which (see
-   *  faceEdges.ts). Candidates are narrowed to the owning body first — an edge of
+   *  faceEdges.ts). Candidates are narrowed to the owning body first, an edge of
    *  another body that happens to lie on this face is not an edge OF it, and on
    *  an assembly that is also most of the work skipped. */
   edgesOfSelectedFaces(): EdgeRef[] {
@@ -1597,7 +1597,7 @@ export class Viewport {
   }
 
   /** Find the rendered edge whose polyline midpoint is nearest `mid` (world
-   *  units, model-scaled tolerance) — the rebuild-stable way to re-locate an
+   *  units, model-scaled tolerance), the rebuild-stable way to re-locate an
    *  edge a saved selector or a sidecar diagnostic refers to. */
   edgeLineByMid(mid: [number, number, number]): EdgeRef | null {
     if (!this.model) return null;
@@ -1625,7 +1625,7 @@ export class Viewport {
   }
 
   /** Find the face whose SURFACE is nearest `point` (world units, model-scaled
-   *  tolerance) — the rebuild-stable way to re-locate a face a saved
+   *  tolerance), the rebuild-stable way to re-locate a face a saved
    *  `by:"nearest"` selector refers to, so a texture feature's saved member faces
    *  can be re-highlighted on edit-reopen. Mirrors the sidecar's own
    *  by:"nearest" resolution, which also measures to the face, not to a
@@ -1633,14 +1633,14 @@ export class Viewport {
    *
    *  It must NOT compare against faceCentroidWorld(): that snaps to the nearest
    *  TRIANGLE centroid, which moves with tessellation density. A texture's point
-   *  is minted from the DISPLACED preview mesh (dense — lands near the middle of
+   *  is minted from the DISPLACED preview mesh (dense, lands near the middle of
    *  the face) but re-anchored against the rolled-back one (a planar face is 2
-   *  triangles — a third of the way to a corner). Measured on a 40 mm box top
+   *  triangles, a third of the way to a corner). Measured on a 40 mm box top
    *  face: 9.4 mm apart, ~19x the 0.5 mm tolerance, so EVERY face texture
    *  re-opened with an empty selection.
    *
    *  `extraTol` is for callers whose point sits off the rolled-back surface by a
-   *  known amount — a texture's displacement depth. */
+   *  known amount, a texture's displacement depth. */
   faceIdNear(point: [number, number, number], extraTol = 0): number | null {
     if (!this.model) return null;
     const target = new THREE.Vector3(point[0], point[1], point[2]);
@@ -1723,7 +1723,7 @@ export class Viewport {
   /** The cylinder a face lies on, or null when it is not one.
    *
    *  Deliberately NOT derived from faceNormalWorld: that averages the facet
-   *  normals, and a closed cylinder's cancel to zero — which is how grabbing a
+   *  normals, and a closed cylinder's cancel to zero, which is how grabbing a
    *  round face used to drag it along world +Z. The axis, the radius and which
    *  side the material is on all come from the tessellation directly. */
   roundFaceAt(faceId: number, at: THREE.Vector3): RoundFace | null {
@@ -1764,7 +1764,7 @@ export class Viewport {
    *  a "centre of the body" test would agree almost everywhere and then invert the
    *  underside of an overhang.
    *
-   *  Curved faces are rejected rather than flattened — a sketch on a mean plane
+   *  Curved faces are rejected rather than flattened, a sketch on a mean plane
    *  through a cylinder wall is geometry the user did not ask for. */
   selectedFaceSketchPlane(): {
     plane: PlaneDef;
@@ -1780,7 +1780,7 @@ export class Viewport {
     if (tris.length === 0) return null;
     // Planar means "every vertex sits on the plane through the centroid". The
     // tolerance scales with the model so a 2 m import is judged as leniently as
-    // a 20 mm part — the same rule selectCoplanarFaces uses.
+    // a 20 mm part, the same rule selectCoplanarFaces uses.
     const tol = 1e-3 * (this.model.box.getSize(new THREE.Vector3()).length() || 1) + 1e-4;
     const d0 = n.dot(c);
     for (const t of tris) {
@@ -1794,7 +1794,7 @@ export class Viewport {
       // What lets a sketch started this way FOLLOW the face, exactly as one
       // started through the plane picker does. The point is faceCentroidWorld's,
       // which snaps to a triangle centroid and so lies ON the face by
-      // construction — a plain average of the vertices does not, for an L-shape
+      // construction, a plain average of the vertices does not, for an L-shape
       // or a face with a hole, and the sidecar measures to the face.
       anchor: {
         selector: {
@@ -1810,7 +1810,7 @@ export class Viewport {
   //
   // A sketch started from a selected face used to drop that selection on the way
   // in and show nothing in its place, so the one question you ask constantly
-  // while drawing — "which face am I on?" — had no answer on screen. The model
+  // while drawing, "which face am I on?", had no answer on screen. The model
   // is dimmed to a quarter opacity for the session, which rules out tinting the
   // face in place: a tint at 25% is not a signal. This is its own surface, drawn
   // over the dimmed part in the accent colour, plus its outline.
@@ -1857,8 +1857,8 @@ export class Viewport {
     //
     // The fill LIGHTENS rather than tints. An accent wash at 0.16 over a body
     // held at 0.25 made the face and the part it belongs to one coloured ghost,
-    // and the accent was doing two jobs at once — "this face" and "this is the
-    // sketch" — on a surface where the second is never in doubt. Adding white
+    // and the accent was doing two jobs at once, "this face" and "this is the
+    // sketch", on a surface where the second is never in doubt. Adding white
     // can only brighten what is behind it, so the face comes out a lighter
     // shade of the same material and the identity is carried by the outline,
     // which is still the accent.
@@ -1892,7 +1892,7 @@ export class Viewport {
   }
 
   /** Start drawing a chunked reply as it arrives. `manifest` names every body,
-   *  and `bbox` is already final — which is why the camera can settle here, once,
+   *  and `bbox` is already final, which is why the camera can settle here, once,
    *  before any geometry exists, and never move again during the load.
    *
    *  The commit (setModel, with the finished result) is still authoritative;
@@ -1907,7 +1907,7 @@ export class Viewport {
   ) {
     // BEFORE anything is torn down: progressive.begin() disposes bodies that
     // this reply does not name, and the memo's anchors are read out of their
-    // geometry. The manifest already says which bodies are changing — an
+    // geometry. The manifest already says which bodies are changing, an
     // unchanged one is reused whole, keeps its faceId numbering, and needs no
     // anchor computed for it, exactly as in setModel.
     const held = new Map((this.model?.bodies ?? []).map((b) => [b.id, b] as const));
@@ -1927,7 +1927,7 @@ export class Viewport {
     // visibility-only fast path keys on result identity, and the in-progress
     // result is not a model anyone should shortcut against.
     this.lastResult = null;
-    // The previous model's ORPHAN edges — the ones with no owning body — belong
+    // The previous model's ORPHAN edges, the ones with no owning body, belong
     // to nobody once the stream takes over. ProgressiveModel accounts for every
     // body it is handed and knows nothing about these, and the ModelView it
     // publishes carries `orphanEdges: null`, so setModel's own "remove the last
@@ -2007,8 +2007,8 @@ export class Viewport {
     // re-emits the SAME RebuildResult object (setBodiesVisibility calls
     // emitBuild without a rebuild), so every etag matches and the whole pass
     // below reduces to flipping `visible` flags. Running it in full cost 0.63 s
-    // per toggle on the 3,071-body reference assembly — a Highlighter rebuild
-    // plus a full colour re-upload — and hiding bodies is the normal way to work
+    // per toggle on the 3,071-body reference assembly, a Highlighter rebuild
+    // plus a full colour re-upload, and hiding bodies is the normal way to work
     // with an assembly that size, which made this the highest-frequency freeze
     // in the app.
     //
@@ -2037,7 +2037,7 @@ export class Viewport {
       this.streaming = false;
     }
     // Face ids are a property of THIS tessellation, so the sketch-face overlay
-    // is stale the moment a real rebuild lands — and a stale one is worse than
+    // is stale the moment a real rebuild lands, and a stale one is worse than
     // none: it keeps drawing the old surface at the old place with nothing left
     // to explain it. (An eye toggle returns above and never reaches here.)
     this.showSketchFace(null);
@@ -2047,11 +2047,11 @@ export class Viewport {
     const bodyIds = new Set(bodyMeta.map((b) => b.id));
     const { byBody, orphans } = groupEdgesByBody(result.edges, bodyIds);
 
-    // bodies from the PREVIOUS model, keyed by id — consumed as we go; whatever
+    // bodies from the PREVIOUS model, keyed by id, consumed as we go; whatever
     // is left at the end no longer exists in this reply and gets disposed.
     const prevBodies = new Map<string, BodyMesh>(this.model?.bodies.map((b) => [b.id, b]) ?? []);
 
-    // Which bodies actually need rebuilding — an unchanged etag reuses its GPU
+    // Which bodies actually need rebuilding, an unchanged etag reuses its GPU
     // objects untouched. Settled BEFORE the build loop (which consumes
     // prevBodies) so the triangle partition covers exactly those bodies:
     // bucketing a reused body's triangles would be pure waste.
@@ -2061,7 +2061,7 @@ export class Viewport {
       if (!(prev && meta.etag !== undefined && prev.etag === meta.etag)) rebuilding.add(meta.id);
     }
     // One shared partition of the reply's triangles, so the build below is O(model)
-    // instead of O(bodies x model) — the difference between 2s and 38s on an
+    // instead of O(bodies x model), the difference between 2s and 38s on an
     // imported assembly. Not worth it for a single body (the live-preview drag
     // path): buildBodyMesh's own scan costs the same there.
     const partition = rebuilding.size > 1 ? partitionMesh(result, rebuilding) : undefined;
@@ -2069,11 +2069,11 @@ export class Viewport {
     // Snapshot the selection before the Highlighter goes. Placed HERE, after
     // `rebuilding` is settled, because that set is what decides whether a
     // selected face needs an expensive world-space anchor computed for it at
-    // all — a face on a body that is being reused keeps its faceId, so there is
+    // all, a face on a body that is being reused keeps its faceId, so there is
     // nothing to re-find and no centroid worth walking its triangles for.
     // The stream's memo is the fallback, not a duplicate: when the installments
     // already put the selection back, the capture above finds it and wins. It
-    // only matters when they could not — every body of a one-body document is
+    // only matters when they could not, every body of a one-body document is
     // "changing", so a document that streams and commits in the same breath can
     // reach here with an empty Highlighter and the memo is the only record left.
     const memo = this.captureSelection(rebuilding) ?? this.streamMemo;
@@ -2085,7 +2085,7 @@ export class Viewport {
       prevBodies.delete(meta.id);
       let body: BodyMesh;
       if (prev && meta.etag !== undefined && prev.etag === meta.etag) {
-        // unchanged since the last reply — keep its GPU objects untouched, just
+        // unchanged since the last reply, keep its GPU objects untouched, just
         // reset the transient display state a rebuild used to wipe for free.
         body = prev;
         resetBodyAppearance(body);
@@ -2103,14 +2103,14 @@ export class Viewport {
       body.edges.setBodyVisible(body.mesh.visible);
       bodies.push(body);
     }
-    // any body left in prevBodies is gone from this reply — dispose it
+    // any body left in prevBodies is gone from this reply, dispose it
     for (const stale of prevBodies.values()) {
       this.scene.modelGroup.remove(stale.mesh);
       this.scene.modelGroup.remove(stale.edges.object);
       disposeBody(stale);
     }
 
-    // orphan edges (no owning body — see ModelView.orphanEdges) are rebuilt
+    // orphan edges (no owning body, see ModelView.orphanEdges) are rebuilt
     // fresh every call; there's no per-body cache key to reuse them by.
     if (this.model?.orphanEdges) {
       this.scene.modelGroup.remove(this.model.orphanEdges.object);
@@ -2125,11 +2125,11 @@ export class Viewport {
 
     this.hideFlushSeams();
     // hideFlushSeams flushes what it hid, but it early-returns on an edgeless
-    // model — and a reused body may have just been un-hidden by
+    // model, and a reused body may have just been un-hidden by
     // resetBodyAppearance. flush() is a no-op when nothing changed, so this is
     // free and closes that gap.
     for (const d of edgeObjects(this.model)) d.flush();
-    this.picker.invalidate(); // edge geometry just changed — drop cached targets
+    this.picker.invalidate(); // edge geometry just changed, drop cached targets
     this.highlighter = new Highlighter(this.model);
     // Before applyAnalysis, not after: setBase() reads the selected set so it
     // can leave those faces' highlight alone while refreshing what they restore
@@ -2157,8 +2157,8 @@ export class Viewport {
    *  the whole mechanism.
    *
    *  `rebuilding` names the bodies whose geometry is being replaced; everything
-   *  else is reused whole, so its BodyMesh and EdgeRef objects — and its faceId
-   *  numbering — are still valid on the far side and need no anchor. Only the
+   *  else is reused whole, so its BodyMesh and EdgeRef objects, and its faceId
+   *  numbering, are still valid on the far side and need no anchor. Only the
    *  rebuilt ones pay for one. */
   private captureSelection(rebuilding: ReadonlySet<string>): SelectionMemo | null {
     const h = this.highlighter;
@@ -2185,13 +2185,13 @@ export class Viewport {
   }
 
   /** Put the captured selection back on the new model, and tell the app it
-   *  moved — including when NOTHING survived, because "the selection is gone"
+   *  moved, including when NOTHING survived, because "the selection is gone"
    *  is exactly the news the drag handle needs in order to take itself down.
    *
    *  `duringStream` is that last sentence's exception, and both halves of it
    *  matter. A body whose chunk has not landed yet is not a body whose face is
    *  gone, so the geometric fallback is held back until the body is actually
-   *  there — without that it measures to whatever else is on screen and moves
+   *  there, without that it measures to whatever else is on screen and moves
    *  the selection to a face of another body. And "nothing survived" is not
    *  news mid-stream, it is the ordinary state of an installment that has not
    *  delivered the right body yet, so only a real restore is announced. */
@@ -2214,7 +2214,7 @@ export class Viewport {
       // Body ids are stable across a rebuild that does not change how many
       // there are, which is every rebuild a gesture makes. When they do
       // renumber this simply defers to the commit, which is where the
-      // ungated fallback runs — so the gate can never do worse than before.
+      // ungated fallback runs, so the gate can never do worse than before.
       (m) => !duringStream || (m.body !== null && liveBodyIds.has(m.body.id)),
     );
     // Bodies are the easy case and always exact: ids ARE stable across a
@@ -2231,7 +2231,7 @@ export class Viewport {
       this.onBodySelectionChange?.();
   }
 
-  /** Wall-clock cost of the last flush-seam pass, ms — surfaced in sceneStats
+  /** Wall-clock cost of the last flush-seam pass, ms, surfaced in sceneStats
    *  so a slow open reports what it actually spent the time on. */
   seamMs = 0;
   /** Set when the pass was skipped for being too big (flushSeams.ts). */
@@ -2248,7 +2248,7 @@ export class Viewport {
     // A STREAM ENDS HERE TOO, and this is the only path that ends it this way:
     // `streaming` is otherwise cleared in setModel, and rebuildBridge routes a
     // reply whose mesh is empty to clearModel INSTEAD of setModel. Left set,
-    // `streaming` keeps pickSuppressed true for good — every hover and every
+    // `streaming` keeps pickSuppressed true for good, every hover and every
     // click in the viewport is dropped, faces, edges, sketch areas and datum
     // planes alike, with nothing on screen to say why.
     //
@@ -2257,7 +2257,7 @@ export class Viewport {
     // new document while a model is on screen. Both stream a `begin` chunk (the
     // manifest arrives before any body does, empty or not), then land here.
     // Measured on the first: the profile area under the cursor never lit, and
-    // the click that should have selected it did nothing — while the same
+    // the click that should have selected it did nothing, while the same
     // click, with the geometry engine down so no chunk ever arrived, selected
     // it fine. Runs before the early return because the reply is authoritative
     // whether or not a partial view was ever adopted; abortProgressiveModel is
@@ -2308,7 +2308,7 @@ export class Viewport {
 
   /**
    * Raycast the three plane quads and return the plane whose surface is nearest
-   * the camera under the cursor — i.e. the one you're pointing at.
+   * the camera under the cursor, i.e. the one you're pointing at.
    * `intersectObjects` returns hits sorted nearest-first, so hits[0] is it.
    */
   pickPlane(clientX: number, clientY: number): Plane3 | null {
@@ -2321,7 +2321,7 @@ export class Viewport {
   }
 
   /**
-   * The plane of the face under the cursor — for the right-click menu's "Sketch on
+   * The plane of the face under the cursor, for the right-click menu's "Sketch on
    * this face" / "Offset plane from face" and the ViewCube's set-side override.
    * Null over no face, or over one that implies no plane (a blend, sphere, cone,
    * spline).
@@ -2354,7 +2354,7 @@ export class Viewport {
     return this.picker.pickEdge(clientX, clientY, rect, this.rig.active, this.model);
   }
 
-  /** All visible edge lines of the current model — for tangent-chain expansion. */
+  /** All visible edge lines of the current model, for tangent-chain expansion. */
   visibleEdgeLines(): EdgeRef[] {
     return this.model ? this.picker.visibleEdges(this.model) : [];
   }
@@ -2398,7 +2398,7 @@ export class Viewport {
     };
   }
 
-  /** All world-space triangles of a B-rep face — the Measure tool's raw
+  /** All world-space triangles of a B-rep face, the Measure tool's raw
    *  material for true shortest-distance computation. */
   faceTriangles(faceId: number): THREE.Triangle[] {
     const out: THREE.Triangle[] = [];
@@ -2499,14 +2499,14 @@ export class Viewport {
   //
   // The near half is clipped; the far half is drawn a SECOND time, faintly, by a
   // per-body mesh sharing the body's geometry (no copy, no upload) with the
-  // mirrored clip plane. Cheap on this renderer — bodies already own separate
+  // mirrored clip plane. Cheap on this renderer, bodies already own separate
   // meshes and materials, so it is one extra draw call per visible body and one
   // shared material, with no render target or shader of our own. The ghosts are
   // CHILDREN of the body meshes, so they inherit a move-ghost's live transform and
   // vanish with a hidden or replaced body.
   //
   // Cost when off is zero, and the plane assignment runs only on a transition or a
-  // rebuild — nothing joins the per-frame path, which matters because this viewport
+  // rebuild, nothing joins the per-frame path, which matters because this viewport
   // renders on demand.
   private section: { ghost: number } | null = null;
   /** The live cut. Materials hold a REFERENCE to it, so moving the section is a
@@ -2537,7 +2537,7 @@ export class Viewport {
     else this.requestRender();
   }
 
-  /** True while cross-section mode is on — for anything that has to draw or
+  /** True while cross-section mode is on, for anything that has to draw or
    *  behave differently underneath it. */
   get sectioned(): boolean {
     return !!this.section;
@@ -2560,7 +2560,7 @@ export class Viewport {
   }
 
   /** Rebuild the ghost pass from scratch. Cheap enough to do wholesale, and only
-   *  ever runs on a transition, a ghost-level change or a rebuild — never per
+   *  ever runs on a transition, a ghost-level change or a rebuild, never per
    *  frame, which is what keeps a mode nobody is looking at off the render path.
    *  The pass itself is render.ts's buildSectionGhosts, where it can be tested
    *  without a canvas. */
@@ -2728,7 +2728,7 @@ export class Viewport {
   /** A representative point ON a B-rep face (world space).
    *
    *  The plain average of the face's vertices is NOT on the face: for a full
-   *  cylinder it lands on the AXIS. That was a real, deterministic bug — a
+   *  cylinder it lands on the AXIS. That was a real, deterministic bug, a
    *  by:"nearest" selector built from it resolved to whichever concentric face
    *  was nearest the axis, so selecting a ring's OUTER wall (r=30) textured the
    *  INNER wall (r=25). Measured: the point sent was (0.54, 0, 8.5).
@@ -2773,7 +2773,7 @@ export class Viewport {
     return acc.applyMatrix4(body.mesh.matrixWorld);
   }
 
-  /** Area-weighted average normal of a B-rep face (world space) — averaging its
+  /** Area-weighted average normal of a B-rep face (world space), averaging its
    *  triangles' normals. For a planar face this is the exact normal; for a curved
    *  face it's a representative outward direction. */
   private faceNormalWorld(faceId: number): THREE.Vector3 {
@@ -2911,11 +2911,11 @@ export class Viewport {
   }
 
   /** Select exactly the given edge line (clears any prior selection). Used by the
-   *  right-click Fillet/Chamfer menu — the edge tools consume the pre-selection. */
+   *  right-click Fillet/Chamfer menu, the edge tools consume the pre-selection. */
   selectOnlyEdge(line: EdgeRef) {
     this.highlighter?.clearSelection();
     this.highlighter?.toggleSelectEdge(line);
-    // A right-click on an edge IS a pick, so it is scoped like one — the menu's
+    // A right-click on an edge IS a pick, so it is scoped like one, the menu's
     // Fillet must mean the same thing there as a left-click does, zoom heuristic
     // included, and the scope of whatever was selected before must not leak into
     // a selection that has just been replaced.
@@ -3001,7 +3001,7 @@ export class Viewport {
     // Arrive on the side of the plane you are ALREADY on. A plane's normal is a
     // property of the plane, so following it blindly sent the camera through the
     // part to look at the base XY plane from above whenever you happened to be
-    // underneath it — a flight to the far side of a sketch you were already
+    // underneath it, a flight to the far side of a sketch you were already
     // looking straight at. viewport/viewFlight.viewSideNormal picks the sign.
     const eye = this.rig.controls.getPosition(new THREE.Vector3());
     const side = viewSideNormal(
@@ -3012,7 +3012,7 @@ export class Viewport {
     const n = new THREE.Vector3(side[0], side[1], side[2]).normalize();
     // Straighten to the NEAREST square orientation: the view is always squared
     // to the sketch axes, but among the four cardinal in-plane rotations pick
-    // the one closest to the camera's current visual up — entering a sketch
+    // the one closest to the camera's current visual up, entering a sketch
     // keeps your bearings instead of snapping to the plane's canonical v
     // (which could be 90°/180° off and forced Q/E view-rolling to fix it).
     const camUp = new THREE.Vector3().setFromMatrixColumn(
@@ -3074,7 +3074,7 @@ export class Viewport {
    *  sketching a feature ONTO is the only thing that says whether the profile is
    *  in the right place, and at 0.25 over a dark background a 24mm block reads
    *  as a smudge. Two thirds leaves it plainly a solid and still plainly not the
-   *  thing being edited — the sketch's own curves are drawn at full strength over
+   *  thing being edited, the sketch's own curves are drawn at full strength over
    *  it, and the face being drawn on is lifted back up past normal
    *  (showSketchFace), so the three read as three.
    *
@@ -3116,8 +3116,8 @@ export class Viewport {
   private gridStepMm = 0;
 
   /** Say what one grid cell is worth right now. Called by the render loop with
-   *  the ground grid's spacing and by SketchMode with the sketch plane lattice's
-   *  — only one of the two is ever on screen, and in a sketch it is also where
+   *  the ground grid's spacing and by SketchMode with the sketch plane lattice's,
+   *  only one of the two is ever on screen, and in a sketch it is also where
    *  the cursor snaps, so it is the number worth reporting either way. */
   reportGridStep(mm: number) {
     if (!(mm > 0) || mm === this.gridStepMm) return;
@@ -3133,7 +3133,7 @@ export class Viewport {
     return Math.hypot(Math.max(1, rect.width), Math.max(1, rect.height));
   }
 
-  /** Where the camera is pointed, in world space — the centre of what is on
+  /** Where the camera is pointed, in world space, the centre of what is on
    *  screen, and so the centre anything view-sized should be built around. */
   cameraTarget(out = new THREE.Vector3()): THREE.Vector3 {
     return this.rig.controls.getTarget(out);
@@ -3171,11 +3171,11 @@ export class Viewport {
 
   /** Capture the model view as a PNG data URL (publish cover, etc.). The
    *  renderer runs without preserveDrawingBuffer (scene.ts), so the buffer is
-   *  only valid in the same task as a render call — render synchronously right
+   *  only valid in the same task as a render call, render synchronously right
    *  before reading. Skips the ViewCube overlay for a clean shot; the next
    *  loop frame repaints it. */
   /** Snapshot of what the viewport is drawing, for a bug report's breadcrumbs.
-   *  See diagnostics/sceneStats — collected at report time, counters only. */
+   *  See diagnostics/sceneStats, collected at report time, counters only. */
   sceneStats(): string[] {
     return sceneStats({
       model: this.model,
@@ -3209,12 +3209,12 @@ export class Viewport {
       // job was to poke the lazy getter into subscribing. attachStore() does
       // that explicitly now.)
       // The ViewCube drives the camera through camera-controls' own animated
-      // setLookAt, so we just always advance the controls — no busy/adopt dance.
+      // setLookAt, so we just always advance the controls, no busy/adopt dance.
       // Always run this (needed for damping/transitions to progress); its
       // return says whether the camera actually moved this frame.
       const moved = this.rig.update(dt);
       // Render-on-demand: skip the (relatively expensive) grid rebuild + GPU
-      // draw entirely when nothing changed — camera didn't move, no mutation
+      // draw entirely when nothing changed, camera didn't move, no mutation
       // flagged requestRender(), and we've drained the post-mutation linger.
       if (moved || this.needsRender || this.lingerFrames > 0) {
         // keep the ground grid spacing/extent matched to the current zoom + pan

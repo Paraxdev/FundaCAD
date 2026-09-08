@@ -10,7 +10,7 @@
 //   2. Double-escaping. The innerHTML version needed an esc() on every
 //      document-sourced label; interpolation escapes on its own, so a leftover
 //      esc() would render a STEP product called "Bracket & Plate" as
-//      "Bracket &amp; Plate" — a bug you only see with the right file open.
+//      "Bracket &amp; Plate", a bug you only see with the right file open.
 //
 // Nothing measurement-driven is asserted: happy-dom implements no layout, so
 // paddingLeft is readable as an inline style but getComputedStyle/offsetWidth
@@ -61,7 +61,7 @@ function makeEngine(doc: CadDocument, bodies: { id: string; name: string; nodeRe
     docVersion,
     buildVersion,
     store,
-    /** Edit in place — identity is preserved on purpose. */
+    /** Edit in place, identity is preserved on purpose. */
     edit(fn: (d: CadDocument) => void) { fn(doc); docVersion.value++; },
     engine: {
       store,
@@ -85,7 +85,7 @@ function render(fake: ReturnType<typeof makeEngine>): VueWrapper {
  *
  *  A stand-in rather than the real palette panel, deliberately. What is being
  *  checked here is that the PANEL places a contributed section, hides it with
- *  the filter it named, and forgets it when the contribution goes — none of
+ *  the filter it named, and forgets it when the contribution goes, none of
  *  which is about what any particular section draws. The palette's own
  *  behaviour is tested against the palette, in tests/plugins/. */
 const MarkerSection = {
@@ -124,7 +124,7 @@ function folderNamed(w: VueWrapper, label: string) {
 /** Which icon a row's caret / eye is currently wearing.
  *
  *  These used to be `.text()` against a Unicode glyph. They are <svg> now, and
- *  an <svg> has no text content at all — so the assertion moves to the
+ *  an <svg> has no text content at all, so the assertion moves to the
  *  `data-icon` name Icon.vue stamps on every mark it draws, which is both
  *  readable in a failure message and independent of which icon pack is active. */
 const iconIn = (el: ReturnType<typeof folderNamed>, sel: string) =>
@@ -145,7 +145,7 @@ describe("BrowserPane", () => {
     const fake = makeEngine({ parameters: {}, features: [sketch("s1")] });
     const rows = panel(render(fake));
 
-    // Bodies is always emitted, even empty — it carries the "No bodies yet"
+    // Bodies is always emitted, even empty, it carries the "No bodies yet"
     // state, exactly as before.
     expect(rows.filter((r) => r.kind === "folder").map((r) => r.text)).toEqual([
       "Origin", "Bodies", "Sketches",
@@ -229,7 +229,7 @@ describe("BrowserPane", () => {
     const w = render(fake);
 
     expect(w.findAll("img")).toHaveLength(0);
-    // Not "&amp;" — {{ }} escapes for us, so an esc() left in place here would
+    // Not "&amp;", {{ }} escapes for us, so an esc() left in place here would
     // show the ampersand entity to the user.
     expect(panel(w).map((r) => r.text)).toContain(evil);
   });
@@ -247,7 +247,7 @@ describe("BrowserPane", () => {
     const select = w.get("#browser-filter");
     await select.setValue("sketches");
     expect(heads()).toEqual(["Sketches"]);
-    // The Bodies folder's own empty state must go with it — under "Sketches" a
+    // The Bodies folder's own empty state must go with it, under "Sketches" a
     // "No bodies yet" row would be answering a question nobody asked.
     expect(panel(w).some((r) => r.text.includes("bodies"))).toBe(false);
 
@@ -318,7 +318,7 @@ describe("BrowserPane", () => {
   });
 
   it("gives a body no colour swatch while nothing says it has a colour", async () => {
-    // The assignment stays in the document — this is about what is offered, not
+    // The assignment stays in the document, this is about what is offered, not
     // about what is stored. A chip nobody can explain or change is worse than no
     // chip: the menu that would change it comes from the same capability.
     const fake = makeEngine({ parameters: {}, features: [] }, [{ id: "b1", name: "Body1" }]);

@@ -21,13 +21,13 @@ export interface CtxItem {
    *  For a menu whose entries name things that are ON SCREEN: the ambiguous-edge
    *  chooser lights the edge each row refers to, so which is which is answered
    *  by looking at the model rather than by reading two similar sentences. The
-   *  host guarantees the trailing `false` — closing the menu while a row is
+   *  host guarantees the trailing `false`, closing the menu while a row is
    *  hovered fires it, because a preview left lit by a menu that no longer
    *  exists is a highlight nothing can clear. */
   onHover?: (hovering: boolean) => void;
 }
 
-/** The one shared right-click menu — viewport, timeline, browser tree, sketch
+/** The one shared right-click menu, viewport, timeline, browser tree, sketch
  *  mode and the ViewCube all pop it. At most one is open at a time, which is
  *  what the old module-level `activeClose` singleton enforced. */
 export const useContextMenuStore = defineStore("contextMenu", () => {

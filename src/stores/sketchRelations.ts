@@ -19,13 +19,13 @@ export interface RelationHooks {
  *  shallowRef + markRaw on the rows for the same reason the annotation store
  *  does it: they are rebuilt wholesale on every constraint change and every
  *  solve, and there is nothing in them a deep Proxy would earn. They are plain
- *  data though — no closures, no THREE objects — so unlike the badge layers
+ *  data though, no closures, no THREE objects, so unlike the badge layers
  *  this one has no per-frame path and no rAF loop. Position is not its problem. */
 export const useSketchRelationsStore = defineStore("sketchRelations", () => {
   const rows = shallowRef<readonly RelationRow[]>([]);
   /** dofSummary()'s sentence: "Fully defined", "6 degrees of freedom", ... */
   const summary = ref("");
-  /** true when the solver could not satisfy the set — colours the summary. */
+  /** true when the solver could not satisfy the set, colours the summary. */
   const conflict = ref(false);
   /** mirrors the palette's Show Constraints toggle, which governs the canvas
    *  glyphs; the list is the same information and follows the same switch. */

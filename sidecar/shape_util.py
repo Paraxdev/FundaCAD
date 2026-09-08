@@ -8,7 +8,7 @@ Three jobs live together because they are the same job seen from three sides:
   - serialise a body (B-rep blob in, B-rep blob out) so it can ride in a
     document or over the wire;
   - make a mesh-derived shape presentable (_refacet_clean, _drop_debris,
-    _unify_body) — a triangle soup sewn into a solid has thousands of coplanar
+    _unify_body), a triangle soup sewn into a solid has thousands of coplanar
     facets, and merging them is what makes an imported model editable;
   - answer basic topology questions the rest of the sidecar keeps asking
     (_wrap_topods, _explode_solids, _as_compound, _wrapped_or_none).
@@ -22,7 +22,7 @@ import io
 import os
 import tempfile
 
-import font_guard  # noqa: F401  MUST precede build123d — see font_guard.py
+import font_guard  # noqa: F401  MUST precede build123d, see font_guard.py
 
 from build123d import (
     Compound,
@@ -45,7 +45,7 @@ def _shape_to_brep_b64(shape):
     """Serialize a body to a base64 ASCII BREP string. LEGACY.
 
     This is how imported geometry used to be embedded in the document. Nothing
-    writes it any more — v5 stores binary BREP in the blob store and the document
+    writes it any more, v5 stores binary BREP in the blob store and the document
     carries only its content hash (`_shape_to_blob`), because on the 356 MiB
     reference assembly this encoding produced a 541.8 MiB field, over both the
     websocket frame cap and the 64 MiB embedded-BREP cap.
@@ -70,7 +70,7 @@ def _shape_to_blob(shape):
 
     Raises on failure, deliberately. The document no longer carries an embedded
     copy, so a hash we could not store means a feature with NO geometry
-    anywhere — and quietly handing back a document like that would lose the
+    anywhere, and quietly handing back a document like that would lose the
     user's import in a way nothing downstream could detect. Refusing the import
     is recoverable; a silently empty document is not."""
     import geomstore
@@ -114,7 +114,7 @@ def _maybe_unify(shape):
     """Best-effort merge of coplanar facets into single faces (OCCT
     UnifySameDomain). A freshly-read STL has one B-rep face per triangle; merging
     the coplanar ones recovers real planar faces (a CAD-exported box becomes 6
-    selectable faces, not 12 triangles) — so the import is genuinely editable
+    selectable faces, not 12 triangles), so the import is genuinely editable
     (press/pull, fillet, select). Curved regions (a faceted hole) stay faceted;
     recovering smooth surfaces from those is RANSAC fitting, a separate step.
     Falls back to the original shape if the upgrade yields nothing usable."""
@@ -137,7 +137,7 @@ def _refacet_clean(shape, tol=0.12, debug=False):
     merge unifies only EXACT coplanarity), and that debris is what defeats face
     picking, seam hiding, and Delete Face (the true supports hide behind
     slivers). Key insight: debris deviates from the design plane by DISTANCE
-    (≤ ~0.1 mm) no matter how wild its own normal is — so region-grow faces by
+    (≤ ~0.1 mm) no matter how wild its own normal is, so region-grow faces by
     max vertex distance to an anchor plane (adjacency-only, so a real 0.1 mm
     AIR GAP between parts can't merge: those faces aren't edge-connected), snap
     the mesh vertices onto the intersection of their regions' planes, and
@@ -159,7 +159,7 @@ def _refacet_clean(shape, tol=0.12, debug=False):
     except Exception:
         return shape
 
-    # clean each solid independently — two imported bodies can TOUCH, and a
+    # clean each solid independently, two imported bodies can TOUCH, and a
     # shared sewing pass would stitch them together at the contact
     parts = _explode_solids(shape)
     if len(parts) > 1:
@@ -206,14 +206,14 @@ def _refacet_clean(shape, tol=0.12, debug=False):
                         region[j] = rid
                         queue.append(j)
         if len(planes) >= n:
-            return shape  # nothing merged — no debris to clean
+            return shape  # nothing merged, no debris to clean
 
         # mesh the whole shape once (consistent shared edges), weld vertices,
         # tag each welded vertex with the region planes of the faces using it
         import tessellate as _tess
 
         positions, indices, face_ids = _tess.tessellate(comp, 0.5)
-        # tessellate() numbers faces by enumerate(comp.faces()) — translate that
+        # tessellate() numbers faces by enumerate(comp.faces()), translate that
         # 0-based order to fmap's 1-based indices instead of assuming they align
         fid_to_idx = {k: adj.index_of(f) for k, f in enumerate(comp.faces())}
         pos = np.array(positions).reshape(-1, 3)
@@ -237,7 +237,7 @@ def _refacet_clean(shape, tol=0.12, debug=False):
                 vregions[widx[a]].add(rid)
 
         # snap each welded vertex to the intersection of its regions' planes:
-        # min |x−v| s.t. n_r·x = n_r·p_r — rank-deficient (near-parallel planes)
+        # min |x−v| s.t. n_r·x = n_r·p_r, rank-deficient (near-parallel planes)
         # solved by lstsq, so a staircase vertex lands on the merged plane
         # instead of flying off along a bad intersection line
         snapped = wpos.copy()
@@ -260,7 +260,7 @@ def _refacet_clean(shape, tol=0.12, debug=False):
         # projected EXACTLY onto the region plane (lstsq snap residuals exceed
         # OCCT's plane-finding precision, so MakeFace gets the plane explicitly);
         # sewing at 1e-3 merges the per-face copies of shared boundaries. This
-        # avoids the mesh round-trip entirely — no degenerate-triangle repair,
+        # avoids the mesh round-trip entirely, no degenerate-triangle repair,
         # and the output IS the ideal one-face-per-plane solid.
         from collections import Counter, defaultdict
 
@@ -312,10 +312,10 @@ def _refacet_clean(shape, tol=0.12, debug=False):
             if not loops:
                 if debug:
                     print(f"refacet: region {rid} has no closed boundary")
-                return shape  # a region without a closed boundary — bail
+                return shape  # a region without a closed boundary, bail
 
             def flat(idx_loop):
-                # exact in-plane projection; prune ONLY exact duplicates — any
+                # exact in-plane projection; prune ONLY exact duplicates, any
                 # smarter (collinear) pruning must be identical in BOTH regions
                 # sharing a boundary, or the sew is left with open T-junction
                 # seams. Segmented collinear edges are merged by the final
@@ -339,7 +339,7 @@ def _refacet_clean(shape, tol=0.12, debug=False):
             for loop in loops:
                 pts = flat(loop)
                 if len(pts) < 3:
-                    continue  # loop collapsed by the snap — nothing to bound
+                    continue  # loop collapsed by the snap, nothing to bound
                 mp = BRepBuilderAPI_MakePolygon()
                 for p in pts:
                     mp.Add(gp_Pnt(*p))
@@ -347,7 +347,7 @@ def _refacet_clean(shape, tol=0.12, debug=False):
                 if mp.IsDone():
                     wires.append((mp.Wire(), loop_area(pts)))
             if not wires:
-                continue  # region fully collapsed (pure debris) — no face needed
+                continue  # region fully collapsed (pure debris), no face needed
             wires.sort(key=lambda w: -w[1])
             mf = BRepBuilderAPI_MakeFace(
                 gp_Pln(gp_Pnt(*p0), gp_Dir(*nn)), wires[0][0]
@@ -357,7 +357,7 @@ def _refacet_clean(shape, tol=0.12, debug=False):
             if not mf.IsDone():
                 if debug:
                     print(f"refacet: MakeFace failed for region {rid}")
-                return shape  # can't rebuild this region faithfully — bail
+                return shape  # can't rebuild this region faithfully, bail
             fx = ShapeFix_Face(mf.Face())
             fx.Perform()
             new_faces.append(fx.Face())
@@ -365,7 +365,7 @@ def _refacet_clean(shape, tol=0.12, debug=False):
         # sew tolerance must cover the step seams: a vertex pinched between two
         # near-parallel surviving regions (a real step ≤ tol whose wall got
         # absorbed) cannot lie on both planes, so the two regions' boundary
-        # copies diverge by up to ~tol there — sewing tighter leaves open seams
+        # copies diverge by up to ~tol there, sewing tighter leaves open seams
         sew = BRepBuilderAPI_Sewing(1.5 * tol)
         for f in new_faces:
             sew.Add(f)
@@ -423,8 +423,8 @@ def _drop_debris(shape, debug=False):
     """Drop floating boolean debris from a body shape: a solid that is
     sub-epsilon (<0.1%) of the biggest piece AND has clear distance from it
     is residue of the cuts that carved the body, not user geometry (DDR: a
-    1.5 mm³ chip floating 0.6 mm off the 17200 mm³ body). Anything touching —
-    even zero-measure vertex/edge contact — is kept, as are all pieces of a
+    1.5 mm³ chip floating 0.6 mm off the 17200 mm³ body). Anything touching,
+    even zero-measure vertex/edge contact, is kept, as are all pieces of a
     genuinely multi-piece body. Best-effort: any doubt → shape unchanged."""
     from OCP.BRepExtrema import BRepExtrema_DistShapeShape
 
@@ -437,7 +437,7 @@ def _drop_debris(shape, debug=False):
             # rebuilding a fresh Compound here every rebuild would defeat it)
         parts = shape.solids()
         # Count FIRST. Sorting by volume computes one per solid, and a body with
-        # a single solid cannot have debris — so the old order paid for a volume
+        # a single solid cannot have debris, so the old order paid for a volume
         # it then threw away. Measured on the reference assembly: 42.7 s across
         # 3,071 single-solid bodies, for an answer known from the count alone.
         if len(parts) < 2:
@@ -478,10 +478,10 @@ def _unify_body(shape, debug=False):
     mass properties), and sometimes an inside-out duplicate solid that poisons
     point classification. All of that lives BETWEEN solids, so the per-solid
     _refacet_clean is structurally unable to see it. Repair (measured on the
-    DDR document — proving-ground/membrane/): right inside-out solids with
+    DDR document, proving-ground/membrane/): right inside-out solids with
     ShapeFix_Solid, then ONE N-ary fuse of all constituents + SimplifyResult
     (merges the coplanar splits the fuse leaves). Genuinely-disjoint pieces
-    stay separate solids — fuse never merges non-touching or zero-measure
+    stay separate solids, fuse never merges non-touching or zero-measure
     (vertex/edge) contact, so grouped split bodies and separate physical
     pieces keep their identity. Best-effort, hard-validated: any doubt → the
     original shape, unchanged."""
@@ -551,7 +551,7 @@ def _unify_body(shape, debug=False):
         # (an inside-out duplicate contributes nothing; interpenetration is
         # counted once). Outside that bracket the fuse ate or invented
         # material. NOTE: shrinking from the input compound's naive GProp mass
-        # is EXPECTED — that mass double-counts overlaps; the union is the
+        # is EXPECTED, that mass double-counts overlaps; the union is the
         # physically true volume.
         hi = sum(abs(v) for v in vols)
         lo = max(abs(v) for v in vols)
@@ -629,7 +629,7 @@ def _explode_solids(shape):
     """Split an imported shape into individually-controllable bodies. A multi-object
     STL comes back as ONE solid with several disconnected shells (Mesher fuses
     objects); a multi-object 3MF comes back as several solids. So `.solids()` alone
-    isn't enough — for each solid with >1 shell, wrap each shell in its own solid.
+    isn't enough, for each solid with >1 shell, wrap each shell in its own solid.
     A non-solid (open shell / surface) is passed through as one body."""
     solids = shape.solids()
     if not solids:
@@ -654,7 +654,7 @@ def _explode_solids(shape):
     # one non-watertight object sews to exactly that: build123d hands back a
     # Shell for anything that does not close (Mesher._get_shape returns the bare
     # outer shell when `not outer_shell.is_manifold`). Dropping those made the
-    # caller's per-body face gates blind to them — measured, 60 of a compound's
+    # caller's per-body face gates blind to them, measured, 60 of a compound's
     # 66 faces were counted by neither MAX_IMPORT_FACES nor the whole-file
     # backstop, so a scanned organic part rode into the document alongside a
     # clean bracket. Judge each loose child as a body in its own right.
@@ -673,7 +673,7 @@ def _as_compound(s):
         return s  # a real, non-empty single shape
     if isinstance(s, (list, tuple)):
         return Compound(list(s))  # a ShapeList of disjoint shapes
-    return s  # an empty single shape (0.11 asserts on .wrapped) — pass through
+    return s  # an empty single shape (0.11 asserts on .wrapped), pass through
 
 def _wrapped_or_none(sh):
     """`sh.wrapped` (the single TopoDS shape) or None, tolerating two cases: a

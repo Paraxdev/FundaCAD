@@ -41,7 +41,7 @@ export const GROUND_ANCHOR_REACH = 20;
  *  sensible place to aim.
  *
  *  This is the zoom anchor whenever the cursor is over empty space, and it
- *  replaces a point on the ray at the current target distance — a point on a
+ *  replaces a point on the ray at the current target distance, a point on a
  *  SPHERE around the camera rather than on any surface. That distinction is not
  *  academic. Zooming toward it converges the orbit target onto a point off the
  *  grid plane, so the camera walks steadily toward that plane and eventually
@@ -55,7 +55,7 @@ export const GROUND_ANCHOR_REACH = 20;
  *  user is looking at: over empty space, the ground IS the surface on screen.
  *
  *  Returns null for a ray parallel to the plane, one pointing away from it, and
- *  one whose hit is absurdly far off (see GROUND_ANCHOR_REACH) — the caller
+ *  one whose hit is absurdly far off (see GROUND_ANCHOR_REACH), the caller
  *  keeps its old fallback for all three.
  */
 export function groundAnchor(
@@ -145,7 +145,7 @@ export interface OrthoZoom {
  *  zoom nothing would apply: past the stop, `1 - current/zoom` went negative and
  *  kept growing, so every further notch slid the view sideways while the zoom
  *  itself never moved again. Measured by wheeling out at a fixed cursor, the
- *  camera walked from x=60 to x=4697 with the zoom reading 0.01 throughout —
+ *  camera walked from x=60 to x=4697 with the zoom reading 0.01 throughout,
  *  scrolling that leaves the part behind instead of showing more of it.
  *
  *  `factor` > 1 zooms out. `minZoom`/`maxZoom` are the controls' own limits.

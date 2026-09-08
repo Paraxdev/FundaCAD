@@ -3,7 +3,7 @@ displaced into a face's triangulation at tessellation/export time.
 
 Two-phase design (mirrors selector-v2's own resolve-lazily pattern): builder.py's
 _handle_texture validates the spec against the CURRENT shape (for red-timeline
-feedback) and appends the raw spec to body["_textures"] — it never touches
+feedback) and appends the raw spec to body["_textures"], it never touches
 body["shape"]. The actual face selectors are resolved lazily, ONCE, against the
 FINAL shape by resolve_body_textures() below, called from tessellate.py right
 before meshing. This sidesteps every downstream-feature topology change the same
@@ -71,11 +71,11 @@ from texture_mesh import (  # noqa: F401
 
 TEXTURE_KINDS = {"knurl", "hex", "waves", "ribs", "voronoi", "noise", "image"}
 _DIRECTIONS = {"out", "in", "both"}
-# "facet" = hard-surface (planar facets, real creases — the default, because it
+# "facet" = hard-surface (planar facets, real creases, the default, because it
 # is what a printer can actually resolve); "round" = the original smooth fields.
 _PROFILES = {"facet", "round"}
 
-# Export-tier safety net even when the caller passes density_cap=None — a
+# Export-tier safety net even when the caller passes density_cap=None, a
 # pathologically fine scale/depth combo must not be able to allocate unbounded
 # memory. server.py's EXPORT_DENSITY_CAP_PER_FACE is normally what applies.
 _DEFAULT_DENSITY_CAP = 2_000_000
@@ -83,13 +83,13 @@ _DEFAULT_DENSITY_CAP = 2_000_000
 # Bump on ANY change to the displacement algorithm or output: it participates in the
 # persistent mesh-cache key, so a code update invalidates cached textured meshes
 # instead of serving stale geometry from the previous version.
-# 5: crease-aligned lattices — vertices land ON the pattern's gradient breakpoints
+# 5: crease-aligned lattices, vertices land ON the pattern's gradient breakpoints
 #    instead of a uniform grid, so faceted kinds are exact.
-# 6: seam-aware ring on closed faces — UV-seam columns densified with the lattice's
+# 6: seam-aware ring on closed faces, UV-seam columns densified with the lattice's
 #    own on-seam points, and the lattice no longer culled against them, so hex cells
 #    straddling the seam keep their crease corners (was: ~half crushed by up to 46%
 #    of depth, staggered by row).
-# 7: consistent triangle winding — lattice Delaunay orientation is arbitrary (half a
+# 7: consistent triangle winding, lattice Delaunay orientation is arbitrary (half a
 #    tube face wound inward), and a double-sided renderer negates the shading normal
 #    on back-wound triangles, lighting half the model inside-out; it also rode into
 #    STL/3MF exports. Now oriented to agree with the analytic normals.
@@ -102,7 +102,7 @@ CODE_VERSION = 8
 
 def validate_texture_spec(f):
     """Validate a raw texture feature dict and return the CLEANED spec stored on
-    body["_textures"]. Raises ValueError with a user-facing message — the same
+    body["_textures"]. Raises ValueError with a user-facing message, the same
     convention every other handler uses (see _handle_shell/_handle_draft)."""
     kind = f.get("kind")
     if kind not in TEXTURE_KINDS:
@@ -154,7 +154,7 @@ def validate_texture_spec(f):
         spec["imagePath"] = image_path
     # Two-tone inlay: which palette slot the textured faces print in. Kept out
     # of the spec when unset so old docs hash identically (texture_key). Never
-    # affects displaced geometry — do NOT bump CODE_VERSION for it.
+    # affects displaced geometry, do NOT bump CODE_VERSION for it.
     color_slot = f.get("colorSlot")
     if isinstance(color_slot, (int, float)) and not isinstance(color_slot, bool) and int(color_slot) >= 0:
         spec["colorSlot"] = int(color_slot)
@@ -178,7 +178,7 @@ def _resolve_texture_faces(shape, sel, diag=None, feature_id=None):
 
 def resolve_body_textures(body, diag=None):
     """Lazily resolve every texture spec on `body` against its FINAL shape. Returns
-    [(spec, [Face, ...]), ...] — specs whose selector now matches zero faces (the
+    [(spec, [Face, ...]), ...], specs whose selector now matches zero faces (the
     targeted face was fully consumed downstream) are dropped, same best-effort
     behavior as every other selector-based feature."""
     specs = body.get("_textures") or []
@@ -209,7 +209,7 @@ def _geometry_key(face, tri, flip, spec, scale, angle, inset_mm, cap):
     crease-aligned lattices the skeleton was genuinely kind-independent (a
     uniform grid at scale/angle), so kind/sharpness/profile/offset were
     correctly absent. A lattice derives its vertex placement from the pattern
-    itself, so all four now move vertices — leaving them out serves a knurl
+    itself, so all four now move vertices, leaving them out serves a knurl
     skeleton for a hex texture at the same scale and angle."""
     node1 = tri.Node(1)
     return (
@@ -253,18 +253,18 @@ def _displacement_geometry(face, tri, loc, ident, spec, scale, target_edge_mm, c
     surf = BRepAdaptor_Surface(face.wrapped)
 
     # Three tiers, most exact first:
-    #   1. CREASE-ALIGNED LATTICE — sample lines on the pattern's own gradient
+    #   1. CREASE-ALIGNED LATTICE, sample lines on the pattern's own gradient
     #      breakpoints, so the mesh reproduces the faceted profile exactly.
-    #   2. uniform pattern-aligned grid — the sampled approximation. An
+    #   2. uniform pattern-aligned grid, the sampled approximation. An
     #      axis-aligned grid beats against a diagonal pattern (roped/beaded
     #      ridges); alignment gives straight crests at the same triangle budget.
-    #   3. general subdivision — anything the mm chart cannot place a line on.
+    #   3. general subdivision, anything the mm chart cannot place a line on.
     # Tier 2 is a real fallback, not a failure: a fine pattern on a large face
     # has a line count fixed by the pattern rather than the budget, and dropping
     # straight to tier 3 there would be far worse than a coarser grid.
     #
     # Tiers 1-2 now cover CYLINDERS and CONES as well as planes, which is where
-    # the win is largest — a knurled knob is a cylinder, and the subdivision path
+    # the win is largest, a knurled knob is a cylinder, and the subdivision path
     # spent 834 triangles per pattern cell on one (against ~10 for a plane)
     # because it refines uniformly from a coarse base mesh with no idea where the
     # pattern is.
@@ -277,7 +277,7 @@ def _displacement_geometry(face, tri, loc, ident, spec, scale, target_edge_mm, c
         phases = _pattern_axes(spec["kind"], spec)
         tex_offset = float(spec.get("offset", 0.0))
         # a closed cylinder/cone is periodic in u: the seam is an artificial
-        # cut. Every kind's assembly needs to know where it is — cellular kinds
+        # cut. Every kind's assembly needs to know where it is, cellular kinds
         # to keep the lattice periodic, and ALL kinds so the crease-repair pass
         # may fix seam-strip triangles (their ring vertices displace with the
         # field, unlike a real rim's).
@@ -335,7 +335,7 @@ def _displacement_geometry(face, tri, loc, ident, spec, scale, target_edge_mm, c
     u_mm, v_mm = _face_uv_to_mm(surf, uv_arr[:, 0], uv_arr[:, 1], _u_period(spec, scale))
 
     inset_mm = max(float(spec.get("boundaryInset", 0.0)), 0.0)
-    # vertices sitting on a closed face's UV seam — an artificial cut, so they
+    # vertices sitting on a closed face's UV seam, an artificial cut, so they
     # must not be pinned like a real face boundary (see _boundary_taper)
     seam = None
     if _surface_kind(surf) in ("cylinder", "cone"):
@@ -367,16 +367,16 @@ def _orient_windings(P, I, normals):
     """Return I with every triangle wound to AGREE with its vertices' normals.
 
     The lattice assembly triangulates in the 2D chart with scipy's Delaunay,
-    whose simplex orientation is NOT guaranteed consistent — measured on a
+    whose simplex orientation is NOT guaranteed consistent, measured on a
     reversed tube face: 40,062 triangles wound outward, 40,064 inward, split
     cleanly down two halves of the cylinder. The analytic normals were right,
     but a double-sided renderer decides front/back per PIXEL from the winding
     and NEGATES the shading normal on back faces, so the inward-wound half lit
-    inside-out — a hard model-fixed light/dark split no lighting rig could
+    inside-out, a hard model-fixed light/dark split no lighting rig could
     remove (2026-08-02, the whole evening's "hard line"). Winding also rides
     into STL/3MF, where inconsistent orientation is a printability defect.
 
-    An earlier patch flipped the emitted NORMAL to match the winding — exactly
+    An earlier patch flipped the emitted NORMAL to match the winding, exactly
     backwards under gl_FrontFacing negation. Orient the WINDING; normals are
     already correct."""
     e1 = P[I[:, 1]] - P[I[:, 0]]
@@ -392,12 +392,12 @@ def _orient_windings(P, I, normals):
 
 def displace_face(face, tri, loc, ident, spec, density_cap, diag=None, feature_id=None,
                   split_creases=False):
-    """Return (positions, indices, normals) — a LOCAL (0-based) flat mesh for one
+    """Return (positions, indices, normals), a LOCAL (0-based) flat mesh for one
     textured face plus per-vertex displaced normals, ready for the caller to
     offset and append into the global buffers (same convention tessellate()'s
     own per-face loop already uses).
 
-    `split_creases` (VIEWPORT ONLY — see the flat-shading note at the return)
+    `split_creases` (VIEWPORT ONLY, see the flat-shading note at the return)
     emits the face non-indexed with per-triangle normals, so a faceted profile
     reads as hard surface instead of being smoothed across its creases."""
     from OCP.TopAbs import TopAbs_Orientation
@@ -424,7 +424,7 @@ def displace_face(face, tri, loc, ident, spec, density_cap, diag=None, feature_i
 
     spec_h = spec
     if kind != "image" and not geom.get("lattice") and mean_edge > target_edge_mm * 1.25:
-        # the density cap stopped refinement short of the target sampling —
+        # the density cap stopped refinement short of the target sampling,
         # evaluating the pattern at its true frequency would alias into noise.
         # Clamp the wavelength to what this mesh can carry so an under-sampled
         # face shows a clean, coarser pattern; exports use a far larger cap.
@@ -451,7 +451,7 @@ def displace_face(face, tri, loc, ident, spec, density_cap, diag=None, feature_i
     direction = spec.get("direction", "out")
 
     def signed_at(du, dv):
-        """The signed height field sampled at a (mm) offset from the vertices —
+        """The signed height field sampled at a (mm) offset from the vertices,
         one function so the finite-difference gradient below differentiates the
         SAME invert/direction-transformed field the displacement uses."""
         hh = height_field(kind, spec_h, u_mm + du, v_mm + dv, u_range, v_range)
@@ -470,7 +470,7 @@ def displace_face(face, tri, loc, ident, spec, density_cap, diag=None, feature_i
 
     # Analytic displaced normals (the whole reason coarse displacement can still
     # SHADE smoothly): n' ∝ n − depth·taper·∇h, with the tangent-plane gradient
-    # from central differences of the signed field — generic across every kind,
+    # from central differences of the signed field, generic across every kind,
     # image included, at the cost of four extra vectorized height evaluations.
     # (∇taper is ignored: it varies over boundaryInset ≫ one wavelength.)
     eps = max(float(spec_h.get("scale", 2.0)) / 16.0, 1e-3)
@@ -492,13 +492,13 @@ def displace_face(face, tri, loc, ident, spec, density_cap, diag=None, feature_i
     if split_creases and _is_facet(spec):
         # HARD-SURFACE SHADING. A shared vertex can carry only ONE normal, so on
         # a creased surface it is forced to average the two facets that meet
-        # there — which is exactly why sharp geometry still rendered soft. Emit
+        # there, which is exactly why sharp geometry still rendered soft. Emit
         # the face non-indexed (3 vertices per triangle) with each triangle's own
         # geometric normal.
         #
         # VIEWPORT ONLY, deliberately: positions/indices from here also feed
         # STL/3MF export, and de-indexing a 3MF means shared edges no longer
-        # share a vertex index — geometrically watertight but flagged as
+        # share a vertex index, geometrically watertight but flagged as
         # non-manifold by some slicers. Printing correctness beats shading, so
         # the export path keeps the indexed mesh (STL is non-indexed regardless).
         idx = _orient_windings(disp, np.asarray(geom["flat_indices"], dtype=np.int64).reshape(-1, 3),

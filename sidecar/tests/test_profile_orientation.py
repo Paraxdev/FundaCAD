@@ -85,7 +85,7 @@ def test_a_clockwise_polyline_is_turned_round_too():
 
 def test_a_primitive_is_left_exactly_as_it_was():
     """Rectangles, circles and polygons were already right, and the fix must not
-    be reaching them at all — they never go through the free-form branch."""
+    be reaching them at all, they never go through the free-form branch."""
     for entity in (
         {"type": "rectangle", "width": 6, "height": 22, "x": 0, "y": 0},
         {"type": "circle", "radius": 4, "x": 0, "y": 0},

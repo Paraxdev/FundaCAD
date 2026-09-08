@@ -2,7 +2,7 @@
 //
 // When a click lands on two edges at once (viewport/edgeTies.ts), the menu has
 // to say what each one IS, and it has one line to do it in. Whatever it says has
-// to distinguish them — a menu offering the same sentence twice is worse than
+// to distinguish them, a menu offering the same sentence twice is worse than
 // guessing, and edgeTies.ts drops the whole question when it would.
 //
 // Two facts identify a solid's edge to a user: the body it belongs to, and the
@@ -15,7 +15,7 @@
 // id that no longer resolves are all normal, and each has to degrade to
 // something still readable rather than to "undefined".
 
-/** Which feature owns most of a body's faces — the operation that made it.
+/** Which feature owns most of a body's faces, the operation that made it.
  *
  *  A body's faces can carry several owners: a boolean leaves the tool's faces
  *  tagged with the tool's feature and the target's with the target's. The most
@@ -37,7 +37,7 @@ export function dominantOwner(faceOwners: readonly (string | null)[] | undefined
   let bestN = 0;
   for (const [id, n] of counts) {
     // Ties break on the id, so the answer does not depend on Map iteration
-    // order — two runs over the same body must label it the same way.
+    // order, two runs over the same body must label it the same way.
     if (n > bestN || (n === bestN && best !== null && id < best)) {
       best = id;
       bestN = n;
@@ -50,7 +50,7 @@ export function dominantOwner(faceOwners: readonly (string | null)[] | undefined
  *
  *  Reads as a path from the general to the specific, which is the order the
  *  browser tree already puts them in: what it is, which body, which operation.
- *  Missing parts are dropped rather than filled with a placeholder — "Edge" on
+ *  Missing parts are dropped rather than filled with a placeholder, "Edge" on
  *  its own is honest, and "Edge · unknown body" is noise wearing a fact's
  *  clothes.
  *
@@ -77,7 +77,7 @@ export function edgeChoiceLabel(
  *  body list when another candidate carries the same name.
  *
  *  Two boxes are both called "Box", so the name alone cannot tell the rows
- *  apart — and the number that CAN is not an arbitrary counter but the body's
+ *  apart, and the number that CAN is not an arbitrary counter but the body's
  *  place in the browser, so "Box 2" in the menu is the second Box in the tree
  *  rather than the second row of this particular menu.
  */

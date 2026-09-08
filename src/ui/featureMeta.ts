@@ -21,7 +21,7 @@ export interface FeatureMeta {
 /** The mark and the word for every feature type THE APPLICATION DRAWS.
  *
  *  Partial over the union, and it used to be total. The union is the document
- *  FORMAT — every type a file may contain, which is a wider thing than every
+ *  FORMAT, every type a file may contain, which is a wider thing than every
  *  type this build knows how to present, and the two came apart when a tool
  *  became a plugin. A total Record could only have been kept by leaving a mark
  *  here for a feature the application has no other knowledge of.
@@ -29,7 +29,7 @@ export interface FeatureMeta {
  *  Totality was worth something, so it is not simply dropped: a new feature type
  *  with no mark anywhere is still a bug, and `tests/ui/featureMeta.test.ts`
  *  catches it by asking that every type in the union resolve to a mark from
- *  SOMEWHERE — the table here, or a plugin in this repository. That is a
+ *  SOMEWHERE, the table here, or a plugin in this repository. That is a
  *  stricter question than the Record was asking, because it holds the plugins to
  *  it too. */
 export const FEATURE_META: Partial<Record<FeatureType, FeatureMeta>> = {
@@ -73,7 +73,7 @@ export const FEATURE_META: Partial<Record<FeatureType, FeatureMeta>> = {
  *
  *  A boolean is three commands sharing a feature type, so a history that named
  *  them all "Boolean" would be a column of identical chips over three different
- *  operations — you could not tell a part being cut from a part being joined
+ *  operations, you could not tell a part being cut from a part being joined
  *  without opening each one. Everything else answers from its type.
  *
  *  Tolerant of a feature this build has never heard of, for the same reason the
@@ -85,7 +85,7 @@ export const FEATURE_META: Partial<Record<FeatureType, FeatureMeta>> = {
  *  own. It is asked BEFORE the grey-dot fallback, because that fallback is what
  *  a feature whose plugin is missing correctly looks like: the document still
  *  opens, the history still has a row for it, and it reads as something the
- *  build does not understand — which is exactly what it is. */
+ *  build does not understand, which is exactly what it is. */
 export function featureMeta(f: { type: string; operation?: unknown }): FeatureMeta {
   if (f.type === "boolean") {
     const cmd = BOOLEAN_COMMANDS.find((c) => c.op === f.operation);

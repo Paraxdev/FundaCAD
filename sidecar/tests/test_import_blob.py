@@ -77,7 +77,7 @@ def test_import_writes_a_blob_named_by_its_own_hash():
         # writes it any more.
         check("no inline base64 is produced any more", "brep" not in out)
 
-        # The blob deflates well, which is what keeps the container small — the
+        # The blob deflates well, which is what keeps the container small, the
         # measured figure on these fixtures is ~0.15x of the base64 that used to
         # sit raw in the JSON.
         deflated = len(zlib.compress(data, 6))
@@ -90,7 +90,7 @@ def test_import_writes_a_blob_named_by_its_own_hash():
 def test_hash_is_stable_across_processes():
     """Same file, two separate interpreters, same hash. If this ever fails, every
     stored reference goes stale on the next app launch and documents open with
-    missing geometry — so it must fail LOUDLY here rather than in the field."""
+    missing geometry, so it must fail LOUDLY here rather than in the field."""
     print("hash is stable across processes")
     root = tempfile.mkdtemp(prefix="import_blob_x_")
     try:

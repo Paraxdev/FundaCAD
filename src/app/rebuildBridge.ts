@@ -9,7 +9,7 @@ import { setPreviewError } from "../ui/previewError";
 /** Rebuild pipeline -> viewport. The one place a build result becomes pixels. */
 export function installRebuildBridge(e: Engine): void {
   // Whether the camera still owes the model a frame. Cleared by whichever path
-  // performs the fit — a progressive load fits from the manifest's bbox on its
+  // performs the fit, a progressive load fits from the manifest's bbox on its
   // FIRST frame, so the camera settles before any geometry exists and never moves
   // again while chunks land.
   let pendingFit = true;
@@ -20,8 +20,8 @@ export function installRebuildBridge(e: Engine): void {
   // This used to be two functions here that read the document's palette, walked
   // each body's slot assignment and each body's per-face texture slots, and
   // returned nothing at all when a capability was switched off. All of that
-  // knowledge — what a palette is, what a slot means, which capability decides
-  // whether any of it counts — was in the render bridge, which is the one place
+  // knowledge, what a palette is, what a slot means, which capability decides
+  // whether any of it counts, was in the render bridge, which is the one place
   // in the app whose job is turning a build result into pixels.
   //
   // What is left is the shape of the answer: a body id may have a colour, a
@@ -44,12 +44,12 @@ export function installRebuildBridge(e: Engine): void {
 
   // Failed-commit visibility: a feature that errors in the rebuild leaves the
   // model looking UNCHANGED (its body keeps the old mesh), so without an active
-  // notification the only signal is the small status line — "nothing happened".
+  // notification the only signal is the small status line, "nothing happened".
   // Diff each completed build's failing-feature set against the previous one and
   // toast every NEW failure; if it's the feature the user JUST committed from an
   // interactive tool, select it immediately (red chip scrolls into view).
   let prevErrorIds = new Set<string>();
-  // Failed fillet/chamfer edges (midpoints per feature id) — survives sidecar
+  // Failed fillet/chamfer edges (midpoints per feature id), survives sidecar
   // cache-hit rebuilds that re-emit the error without its diagnostics.
   const failedEdgeMids = new Map<string, [number, number, number][]>();
   let lastCommittedId: string | null = null;
@@ -87,7 +87,7 @@ export function installRebuildBridge(e: Engine): void {
     if (s.result && !s.building) {
       if (s.result.mesh.positions.length > 0) {
         // hide the faces AND wireframe of any body the user toggled off (filtered
-        // in the render, no sidecar rebuild — setBodyVisibility re-emits the build).
+        // in the render, no sidecar rebuild, setBodyVisibility re-emits the build).
         const hidden = (s.result.bodies ?? [])
           .filter((b) => !e.store.isBodyVisible(b.id))
           .map((b) => b.id);
@@ -104,7 +104,7 @@ export function installRebuildBridge(e: Engine): void {
       // A profile drawn across the edge of its face picks as two areas, and the
       // boundary between them comes from the model (sketch/faceFootprint.ts).
       // The overlay is otherwise rebuilt from onDocChange, which fires BEFORE the
-      // build it triggered — so it split against the previous model, and on a
+      // build it triggered, so it split against the previous model, and on a
       // freshly opened document against no model at all. Every profile there came
       // out whole, which is the one state in which the split cannot be seen to be
       // missing: it looks exactly like a profile that does not cross anything.
@@ -138,7 +138,7 @@ export function installRebuildBridge(e: Engine): void {
         }
         e.viewport.setErrorEdgeMids([...failedEdgeMids.values()].flat());
       }
-      // toast NEW feature errors (skip preview builds — they carry a transient
+      // toast NEW feature errors (skip preview builds, they carry a transient
       // un-committed feature whose failures resolve on commit/cancel)
       if (!e.store.hasPreview) {
         const errs = s.result.featureErrors ?? [];
@@ -150,7 +150,7 @@ export function installRebuildBridge(e: Engine): void {
           const id = err.feature_id;
           // An ambiguous saved reference is the one failure the user can actually
           // fix from here, so offer the repair instead of a bare "Show". These are
-          // old files whose stored point identifies no single face — without this
+          // old files whose stored point identifies no single face, without this
           // the toast is a dead end.
           const amb = repairableDiagFor(s.result?.diagnostics, id);
           const action = amb?.at
@@ -158,7 +158,7 @@ export function installRebuildBridge(e: Engine): void {
             : { label: "Show", onClick: () => e.selectFeature(id) };
           // Logged with the FEATURE beside it, not just the sentence. A kernel
           // refusal is usually about the geometry it was handed, so the message
-          // alone leaves out half the evidence — and the toast that carries the
+          // alone leaves out half the evidence, and the toast that carries the
           // message is clipped and gone in eight seconds either way.
           logError(`${label} failed: ${err.message}`, {
             source: id,

@@ -11,13 +11,13 @@
 // draws a rectangle nobody asked for. That cannot happen here, because opening
 // leaves the `pressing` phase and only `pressing` produces runDefault.
 //
-// Nothing reads a clock — the component owns the timer and sends `hold` when it
+// Nothing reads a clock, the component owns the timer and sends `hold` when it
 // fires. That keeps the rules synchronous and testable, and a timer that outlives
 // its press is just an event arriving in a phase that ignores it.
 
 /** How long the pointer must stay down before the flyout opens, in ms.
  *
- *  Long enough that an ordinary click — press, release, roughly 80-150ms — can
+ *  Long enough that an ordinary click, press, release, roughly 80-150ms, can
  *  never trip it, short enough that holding on purpose does not feel like the
  *  app has stopped responding. The touch convention is ~500ms, which is tuned
  *  for accidental contact with a screen; a deliberate press on a mouse needs
@@ -31,7 +31,7 @@ export type HoldPhase =
    *  still shut. `hasVariants` rides along so the machine can answer the hold
    *  without being handed the tool tables. */
   | { phase: "pressing"; groupId: string; hasVariants: boolean }
-  /** The flyout for `groupId` is on screen — reached by holding, or straight
+  /** The flyout for `groupId` is on screen, reached by holding, or straight
    *  away from a right-click. */
   | { phase: "open"; groupId: string };
 
@@ -45,7 +45,7 @@ export type HoldEvent =
   /** Primary-button pointerup anywhere. `over` is the family row under the
    *  pointer at that instant, or null for "released over nothing". */
   | { type: "release"; over: { groupId: string; action: string } | null }
-  /** Right-click (contextmenu) on a split button — the shortcut for people who
+  /** Right-click (contextmenu) on a split button, the shortcut for people who
    *  already know the flyout is there and do not want to wait for it. */
   | { type: "contextmenu"; groupId: string; hasVariants: boolean }
   /** Escape, pointercancel, a press outside, losing the window. */
@@ -57,7 +57,7 @@ export type HoldEffect =
   | { kind: "open"; groupId: string }
   /** Hide whatever is showing. */
   | { kind: "close" }
-  /** Run the tool currently on the button face, and leave that choice alone —
+  /** Run the tool currently on the button face, and leave that choice alone,
    *  a click is a use of the default, not a vote for it. */
   | { kind: "runDefault"; groupId: string }
   /** Run this variant AND make it the group's new default. */
@@ -66,14 +66,14 @@ export type HoldEffect =
 const NONE: HoldEffect = { kind: "none" };
 
 /** One step of the gesture. Total: every event is legal in every phase, because
- *  pointer streams are not — a pointerup can arrive with no matching down after
+ *  pointer streams are not, a pointerup can arrive with no matching down after
  *  a drag out of the window, and a timer can fire into a phase that has already
  *  moved on. */
 export function holdStep(state: HoldPhase, ev: HoldEvent): { next: HoldPhase; effect: HoldEffect } {
   switch (ev.type) {
     case "press":
       // A press while a flyout is open is first and foremost a DISMISS. On the
-      // button that owns the open flyout it is only that — otherwise the same
+      // button that owns the open flyout it is only that, otherwise the same
       // press would close the menu and immediately run the tool underneath it,
       // so tapping a button to change your mind would draw something. On any
       // other button the dismiss is free and the press starts normally, because
@@ -110,7 +110,7 @@ export function holdStep(state: HoldPhase, ev: HoldEvent): { next: HoldPhase; ef
         if (ev.over && ev.over.groupId === state.groupId) {
           return { next: IDLE, effect: { kind: "pick", groupId: state.groupId, action: ev.over.action } };
         }
-        // Released anywhere else: the gesture is abandoned. Nothing runs — this
+        // Released anywhere else: the gesture is abandoned. Nothing runs, this
         // is how you back out after seeing what the variants are.
         return { next: IDLE, effect: { kind: "close" } };
       }

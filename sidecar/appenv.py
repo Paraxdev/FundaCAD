@@ -3,8 +3,8 @@
 The project was called something else before it was called FundaCAD, and its
 variables were named after that. The names are `FUNDACAD_*` now. The old
 `SINDRI_*` and `SINDRICAD_*` spellings still answer, because a variable of this
-kind is a thing a PERSON sets — in a shell profile, a launcher script, a CI job,
-a docker-compose file — none of which live in this repository and none of which
+kind is a thing a PERSON sets, in a shell profile, a launcher script, a CI job,
+a docker-compose file, none of which live in this repository and none of which
 a rename here can reach. Dropping the old spelling outright would turn those
 settings off silently: no error, no warning, just a disk cache that is suddenly
 on again or a blob store pointing somewhere else.
@@ -17,7 +17,7 @@ The precedence is new-name-first, so someone who sets both is telling us which
 one they mean by setting the current one.
 
 Rust sets the spawn-time variables (see src-tauri/src/sidecar.rs) and writes the
-CURRENT names only — the old spellings exist for humans, not for our own
+CURRENT names only, the old spellings exist for humans, not for our own
 processes talking to each other.
 """
 
@@ -55,7 +55,7 @@ def set_(suffix, value):
 
 
 def clear(suffix):
-    """Unset every spelling. Used where the point is that nothing is set — a
+    """Unset every spelling. Used where the point is that nothing is set, a
     harness that wants the sidecar to mint its own token cannot leave an old
     name behind for it to find."""
     for prefix in (PREFIX,) + LEGACY_PREFIXES:

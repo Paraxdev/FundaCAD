@@ -83,8 +83,8 @@ export function shippedPlugins(): ShippedPlugin[] {
 // shipped INSIDE the app and the ones packaged as a bundle. Nothing ships inside
 // the app any more: every plugin in this repository, `builtin` included, is a
 // zip on a release and is installed like anybody else's. `builtin` still means
-// something, and what it means is REACH — it runs in the application's own
-// JavaScript context — which is a fact about what it can do and never was a
+// something, and what it means is REACH, it runs in the application's own
+// JavaScript context, which is a fact about what it can do and never was a
 // fact about where it came from.
 
 /** The file name build-plugins.py gives a plugin's zip. One function, so the

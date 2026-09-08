@@ -2,7 +2,7 @@ import { defineStore } from "pinia";
 import { ref } from "vue";
 
 /** Chrome state that used to live as imperative writes to element ids in
- *  index.html — `statusEl.textContent`, `docnameEl.classList.toggle("dirty")`,
+ *  index.html, `statusEl.textContent`, `docnameEl.classList.toggle("dirty")`,
  *  `projBtn.textContent`, `selBtn.classList.toggle("active")` and so on.
  *
  *  Everything here is a primitive. Nothing from the document, the build result

@@ -35,7 +35,7 @@ import mesh_import
 PASS = "  ok"
 
 # One .model part holding a single triangle, and a root part that holds only
-# build items — the shape of a real slicer project.
+# build items, the shape of a real slicer project.
 GEOM = """<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter"><resources><object id="1" type="model"><mesh>
 <vertices><vertex x="0" y="0" z="0"/><vertex x="1" y="0" z="0"/><vertex x="0" y="1" z="0"/></vertices>
@@ -75,7 +75,7 @@ def test_a_3mf_is_counted_over_every_part():
 
     The control is the count itself: 2 parts of one triangle each read as 4 (one
     long per part, for the <triangles> container), and reading only the root
-    would read 0 — which is not a small error, it is the whole file missing."""
+    would read 0, which is not a small error, it is the whole file missing."""
     with tempfile.TemporaryDirectory() as d:
         p = os.path.join(d, "plate.3mf")
         with zipfile.ZipFile(p, "w") as z:
@@ -99,7 +99,7 @@ def test_the_face_limit_is_per_body_with_a_whole_file_backstop():
     sum is 12 and would be refused, the largest single body is 6 and is not.
 
     Two controls, one for each gate. A limit of 4 refuses the SAME file, and the
-    message names which body — so the per-body gate is still a gate. And with
+    message names which body, so the per-body gate is still a gate. And with
     the per-body limit left open, a whole-file limit of 10 refuses it, so the
     backstop is load-bearing rather than decorative."""
     faces, total = mesh_import.MAX_IMPORT_FACES, mesh_import.MAX_IMPORT_TOTAL_FACES

@@ -7,8 +7,8 @@
 //
 // WHY IT EXISTS. The unit tests check that the menubar merges what it is given
 // and that the table gives it. Both passed while the app was visibly wrong: a
-// capability is switched on, and only some milliseconds later — after its module
-// is fetched and its activate() has run — does it have rows to add. The surfaces
+// capability is switched on, and only some milliseconds later, after its module
+// is fetched and its activate() has run, does it have rows to add. The surfaces
 // were watching the SWITCH, so they rebuilt while the rows were still loading
 // and were then left showing the previous state permanently. Nothing that stubs
 // the loading can see that.
@@ -78,7 +78,7 @@ async function setEnabled(page, id, on) {
   };
 
   // As shipped: everything that is on by default has drawn itself. This is the
-  // assertion the async-arrival bug failed, and it failed at 2.5 seconds — long
+  // assertion the async-arrival bug failed, and it failed at 2.5 seconds, long
   // after any plausible race, because the surface was never coming back.
   const shipped = await surfaces(page);
   for (const c of CASES) {

@@ -12,7 +12,7 @@ vague "does it look right":
     IF the plain fillet builds at radius r, the conic MUST build at every
     profile of r.
 
-Because the conic is not a different operation — it is OCCT's own blend face
+Because the conic is not a different operation, it is OCCT's own blend face
 with one row of NURBS weights scaled. No pole moves, no knot changes, no
 tangency is renegotiated. If reweighting can turn a solid OCCT accepted into one
 it rejects, that is our bug, not the kernel's, and it is exactly the "a sensible
@@ -31,18 +31,18 @@ Three more invariants ride along, all falsifiable:
 adds material instead of taking it away, so every one of these invariants would
 read backwards on it. Random booleans produce concave edges freely. The plain
 fillet is asked for the sign once and all three are then stated along it, which
-is also the only version that is true — the family runs from the chamfer to the
+is also the only version that is true, the family runs from the chamfer to the
 sharp corner whichever way the material goes.
 
-Cases the plain fillet already refuses are SKIPPED, not failed — that is OCCT
+Cases the plain fillet already refuses are SKIPPED, not failed, that is OCCT
 declining, and diagnosing it is a different job from this one. The skip rate is
 reported because it is itself interesting: a high rate means the generator is
 drawing radii the geometry cannot hold.
 
 Blends the conic family does not contain (`ConicNotApplicable`) are counted
-apart from both. They are not failures — the property above is about blends the
+apart from both. They are not failures, the property above is about blends the
 identity describes, and that exception is exactly the builder saying this one is
-not among them — but they are not passes either, so they get their own line and
+not among them, but they are not passes either, so they get their own line and
 have to be argued about rather than absorbed. Roughly one random boolean in
 thirty lands there.
 """
@@ -79,15 +79,15 @@ def measure(shape, r):
     support face and gets that face re-triangulated differently from the way the
     unblended solid had it. That error is deflection times curved area, which
     has nothing to do with the blend, while the quantity being measured is the
-    blend's own volume — near profile +0.95, where the blend has all but
+    blend's own volume, near profile +0.95, where the blend has all but
     vanished, the two met and the sign of the answer was the mesh's to choose (a
     1mm blend on a 9mm cylinder read as removing -0.58mm3 of material).
 
     Tying the deflection to the radius instead of the model keeps the ratio
     between them bounded: the error goes as defl*R*H and the blend as r^2*R, so
     at defl = r/2000 the noise is a couple of percent of the feature however
-    small the feature is relative to the part. NOISE below is the matching slack
-    — sized to that, not chosen to make a case pass.
+    small the feature is relative to the part. NOISE below is the matching slack,
+    sized to that, not chosen to make a case pass.
     """
     return min(0.005, r / 2000.0)
 
@@ -95,13 +95,13 @@ def measure(shape, r):
 #: Slack for the volume invariants, as a fraction of the plain fillet's own
 #: volume change. See `measure`: the mesh error is a bounded fraction of the
 #: feature, so the tolerance has to be too. These checks are here to catch a
-#: blend that runs backwards or overshoots its own ends — failures the size of
-#: the feature — not to resolve its last percent.
+#: blend that runs backwards or overshoots its own ends, failures the size of
+#: the feature, not to resolve its last percent.
 NOISE = 0.05
 
 
 def rand_solid(rng):
-    """A random primitive, or a boolean of two — booleans matter because they
+    """A random primitive, or a boolean of two, booleans matter because they
     make thin walls, which is where a blend's feasible radius stops being a
     function of the overall size and starts being local."""
     kind = rng.choice(["box", "cyl", "fuse", "cut"])
@@ -228,7 +228,7 @@ def run(n_cases=60, seed=20260810):
           f"outside={len(outside)} "
           f"(skips are OCCT declining the plain fillet)")
     if outside:
-        print(f"\n{len(outside)} OUTSIDE the conic family (not failures — the "
+        print(f"\n{len(outside)} OUTSIDE the conic family (not failures, the "
               f"builder refused by name rather than producing a bad solid):")
         for o in outside:
             print("  -", o)

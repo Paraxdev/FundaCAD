@@ -31,7 +31,7 @@ import type { CadDocument, Feature } from "../../../src/types";
  *  The four texture cases below used to need nothing: the pattern dropdown, the
  *  invert switch, the rule that hides a Seed on a knurl and the name of the
  *  shape slider were all tables in src/document/optionFields.ts. None of them is
- *  now — a plugin contributes them — so these tests say so by contributing the
+ *  now, a plugin contributes them, so these tests say so by contributing the
  *  same thing the plugin does. The `no plugin, no rows` control below is the
  *  other half: without this call the rows are genuinely gone, which is what
  *  makes the four that follow it measure something. */
@@ -69,8 +69,8 @@ function makeEngine(doc: CadDocument) {
     setTargetExpr: (t: { field: string }, raw: string) => { exprs.push({ field: t.field, raw }); return null; },
   };
   // The selection row asks whether the editor is open on it, and offers to open
-  // it. Neither is exercised here — this spec is about the write path for values
-  // — but a row that throws while rendering takes every other row down with it,
+  // it. Neither is exercised here, this spec is about the write path for values,
+  // but a row that throws while rendering takes every other row down with it,
   // which is exactly what an absent `tools` did.
   const targetEdit = { active: false, editingId: null, field: null, start: () => true };
   return {
@@ -97,7 +97,7 @@ function render(fake: ReturnType<typeof makeEngine>, featureId: string): VueWrap
  *  NOT part of the label: a label is a name, and "Radius mm | 5in" reads as a
  *  contradiction.
  *
- *  A row is not always a text box — a fixed choice is a <select>, a switch is a
+ *  A row is not always a text box, a fixed choice is a <select>, a switch is a
  *  checkbox, and a SELECTION row has no control at all, only the summary of what
  *  the feature acts on and a button that opens the editor. This reads whichever
  *  the row has. A row with none of them is a row that renders nothing, which is
@@ -184,7 +184,7 @@ describe("FeatureProperties", () => {
     const fake = makeEngine({ parameters: {}, features: [CIRCLE(6)] });
     const w = render(fake, "s1");
     await commit(w, "Diameter", "20");
-    // Diameter 20 is radius 10 — the row is a diameter, the document stores a
+    // Diameter 20 is radius 10, the row is a diameter, the document stores a
     // radius, and entityDims owns that conversion.
     expect(fake.updates).toHaveLength(1);
     const ents = fake.updates[0]!.patch["entities"] as { radius: number }[];
@@ -340,8 +340,8 @@ describe("FeatureProperties", () => {
       features: [{ id: "t1", type: "texture", kind: "image", depth: 0.4, scale: 2 } as unknown as Feature],
     });
     const l = labels(render(fake, "t1"));
-    // The numbers are the application's — a parameter can drive them, so they
-    // stay whatever is installed — and they are still here.
+    // The numbers are the application's, a parameter can drive them, so they
+    // stay whatever is installed, and they are still here.
     expect(l).toContain("Depth");
     expect(l).toContain("Scale");
     // The presentation is the plugin's, and it is not.
@@ -385,7 +385,7 @@ describe("FeatureProperties", () => {
 
   it("hides a row the chosen pattern will never read", () => {
     // The defect this rule exists for: the panel offered Seed and Angle on every
-    // texture. A knurl reads no seed — the sidecar ignores it — so turning that
+    // texture. A knurl reads no seed, the sidecar ignores it, so turning that
     // row did nothing and nothing said why.
     withTexturePlugin();
     const knurl = makeEngine({

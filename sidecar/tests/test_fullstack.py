@@ -30,7 +30,7 @@ async def call(ws, op, **kw):
     while True:
         msg = json.loads(await ws.recv())
         # skip interim {"status":"building"} progress frames (same id as the
-        # request) — like the real client, only the ok/error frame resolves
+        # request), like the real client, only the ok/error frame resolves
         if msg.get("id") == rid and "status" not in msg:
             return msg
 
@@ -45,7 +45,7 @@ async def main(token):
     PASS, FAIL = [], []
     def check(name, cond, info=""):
         (PASS if cond else FAIL).append(name)
-        print(f"  {'OK ' if cond else 'FAIL'} {name}{(' — ' + info) if info else ''}")
+        print(f"  {'OK ' if cond else 'FAIL'} {name}{(', ' + info) if info else ''}")
 
     async with websockets.connect(f"ws://{HOST}:{PORT}/?token={token}", max_size=64 * 1024 * 1024) as ws:
         # ping
@@ -147,7 +147,7 @@ async def main(token):
             r = await call(ws, "export", document={"parameters": {}, "features": box20}, format=fmt, path=p)
             check(f"export {fmt}", r["ok"] and os.path.exists(p) and os.path.getsize(p) > 0)
 
-        # error naming still works (bad fillet) — feature failures don't blank
+        # error naming still works (bad fillet), feature failures don't blank
         # the doc anymore: ok reply, geometry that built, featureError attached
         r = await rebuild(ws, box20 + [{"id": "bad", "type": "fillet", "edges": {"kind": "edge", "by": "axis", "axis": "Z"}, "radius": 100}])
         check("error names feature", r["ok"] and r["result"].get("featureError", {}).get("feature_id") == "bad" and nbodies(r) == 1)
@@ -158,7 +158,7 @@ async def main(token):
 
 def run():
     env = dict(os.environ)
-    # the server has no open mode — hand it a token and connect with it
+    # the server has no open mode, hand it a token and connect with it
     import secrets
     token = secrets.token_urlsafe(16)
     env["FUNDACAD_SIDECAR_TOKEN"] = token

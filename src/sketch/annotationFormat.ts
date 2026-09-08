@@ -1,12 +1,12 @@
-// Presentation of the two in-canvas sketch annotation layers — dimension badges
-// and constraint glyphs — as pure functions of a badge's state.
+// Presentation of the two in-canvas sketch annotation layers, dimension badges
+// and constraint glyphs, as pure functions of a badge's state.
 //
 // Extracted when sketchDimensions.ts / sketchGlyphs.ts handed their DOM to
 // components/overlays/Sketch{Dim,Glyph}Layer.vue. The split is deliberate: the
 // text, class list and tooltip of a badge only ever change when the sketch is
 // rebuilt, so they are computed once, here, and rendered declaratively. Where a
 // badge SITS changes every frame the camera moves and is written straight onto
-// the element by a rAF loop — screenTransform() below is the only part of that
+// the element by a rAF loop, screenTransform() below is the only part of that
 // path a test can reach, because happy-dom has no layout and no WebGL camera.
 
 import { displayValue, fmtLength, isPlainNumber } from "../ui/units";
@@ -27,13 +27,13 @@ export function fmtDim(
 }
 
 /** True when a dim's driving expression is a real formula rather than a bare
- *  literal — that is what earns the `fx:` prefix and reopens the EXPRESSION
+ *  literal, that is what earns the `fx:` prefix and reopens the EXPRESSION
  *  (not the value) when the label is clicked. */
 export function isFormula(expr?: string | undefined): boolean {
   return !!expr && !isPlainNumber(expr);
 }
 
-/** conflict beats over-defined, matching diagnosisOf() in glyphs.ts — the two
+/** conflict beats over-defined, matching diagnosisOf() in glyphs.ts, the two
  *  layers must never disagree about red vs amber.
  *
  *  The `| undefined` on every field is not noise: the project runs with

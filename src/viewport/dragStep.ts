@@ -1,7 +1,7 @@
 // The lattice a manipulator drag is quantised to: press/pull, move, offset
 // plane, section, and the fillet/chamfer scrub all round their value to this.
 //
-// It was `niceStep(worldPerPixel * 8)` — one step per eight screen pixels. On a
+// It was `niceStep(worldPerPixel * 8)`, one step per eight screen pixels. On a
 // freshly fitted 60mm part that is world-per-pixel 0.143mm, so the step came out
 // at 1mm and a face could only ever be pushed a whole millimetre at a time.
 // Measured, not assumed: 1mm at 7.0px per step, and you had to wheel in ten
@@ -36,7 +36,7 @@ export const DRAG_GRANULARITY_PX = 1;
  *  when the view is already framed the way you want it. */
 export const FINE_DIVISOR = 10;
 
-/** Finest lattice that is a lattice at all — see the note above about round().
+/** Finest lattice that is a lattice at all, see the note above about round().
  *  One micron, which is finer than any printer or cutter this is aimed at. */
 export const MIN_STEP = 0.001;
 

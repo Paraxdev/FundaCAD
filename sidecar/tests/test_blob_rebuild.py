@@ -8,7 +8,7 @@ that only appears cold.
 THE COLD-CACHE REQUIREMENT. Every op that carries a whole document goes through
 `rebuild_cached`, and a warm checkpoint resolves an import WITHOUT ever touching
 the blob. So a broken resolver passes on a developer's machine every time and
-fails on a fresh one, after an app update, or on a wiped cache — exactly the
+fails on a fresh one, after an app update, or on a wiped cache, exactly the
 machines that are not ours. Every test here therefore points geomstore at an
 empty directory, and `test_rebuild_is_cold` proves that isolation actually works
 rather than assuming it.
@@ -146,7 +146,7 @@ def test_a_pre_v5_document_still_opens():
 
 def test_a_missing_blob_with_no_fallback_is_a_clear_error():
     """What a v5 document does when its geometry cannot be found. It must name
-    the situation and the way out — not raise a kernel-level message."""
+    the situation and the way out, not raise a kernel-level message."""
     print("missing blob, no fallback")
     with Cold():
         import builder

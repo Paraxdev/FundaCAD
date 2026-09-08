@@ -7,22 +7,22 @@
 // gets the whole perimeter. So a pick carries a SCOPE, from two things the user
 // already told us:
 //
-//   SHIFT — "exactly what I clicked". Explicit, so it beats everything else, and
+//   SHIFT, "exactly what I clicked". Explicit, so it beats everything else, and
 //   additive: shift-click builds the member set one edge at a time.
-//   ZOOM — nobody flies in to fill the screen with one corner and means the whole
+//   ZOOM, nobody flies in to fill the screen with one corner and means the whole
 //   rim. A guess, so it is only ever the DEFAULT; members stay click-toggleable.
 //
 // Both zoom readings are RATIOS. An absolute distance would mean different things
 // on a 6mm cube and a 400mm plate, and the same part in inches would decide
 // differently from the same part in mm.
 //
-// DOM/three-free so vitest covers it with no canvas — the pointer plumbing on both
+// DOM/three-free so vitest covers it with no canvas, the pointer plumbing on both
 // sides cannot run headless, and this is the part that decides what the user gets.
 
 /** What a pick means: the tangent chain through it, or exactly that edge. */
 export type PickScope = "chain" | "single";
 
-/** Why a pick came out the way it did. Carried so the prompt can say it — a
+/** Why a pick came out the way it did. Carried so the prompt can say it, a
  *  gesture that quietly blends 1 edge where it used to blend 14 is
  *  indistinguishable from a broken tangent walk unless the app says which it did
  *  and why. */
@@ -34,9 +34,9 @@ export interface ScopeDecision {
 }
 
 /** The camera's relationship to the edge under the cursor, in the units the
- *  viewport already has to hand. Any reading may be null (or non-finite) —
+ *  viewport already has to hand. Any reading may be null (or non-finite),
  *  before the first build there is no model to measure, and a projection can
- *  degenerate behind the camera — and a missing reading simply withholds its
+ *  degenerate behind the camera, and a missing reading simply withholds its
  *  vote rather than forcing an answer. */
 export interface ScopeView {
   /** The picked edge's on-screen extent in CSS pixels: the diagonal of its
@@ -45,7 +45,7 @@ export interface ScopeView {
    *  the viewport when the edge runs off both sides of the screen, which is
    *  exactly the state this is looking for. */
   edgePx: number | null;
-  /** The viewport's SHORTER side in CSS pixels — the dimension an edge has to
+  /** The viewport's SHORTER side in CSS pixels, the dimension an edge has to
    *  span to be unmissable, whatever the window's aspect ratio. */
   viewportPx: number;
   /** World units per screen pixel at the edge (viewport.pixelWorldSize). */
@@ -59,7 +59,7 @@ export interface ScopeView {
  *
  *  0.9 is high on purpose: at that point the edge is essentially running out of
  *  frame, which takes a deliberate zoom. Anything looser starts firing on a long
- *  thin part seen whole — where the edge fills the screen because the PART does,
+ *  thin part seen whole, where the edge fills the screen because the PART does,
  *  and its tangent chain is still exactly what the user means. */
 export const CLOSE_EDGE_SCREEN_FRACTION = 0.9;
 
@@ -69,7 +69,7 @@ export const CLOSE_EDGE_SCREEN_FRACTION = 0.9;
  *  The second reading exists because the first misses the case that matters
  *  most: a 0.5mm edge on a 200mm bracket stays small on screen however far in
  *  you fly, so its own length never votes. What HAS changed is that the part no
- *  longer fits in the frame — a third of the diagonal is comfortably past "I am
+ *  longer fits in the frame, a third of the diagonal is comfortably past "I am
  *  looking at the whole thing" and still well short of the working zoom where a
  *  rim pick means the rim. */
 export const DETAIL_VIEW_FRACTION = 0.35;
@@ -96,8 +96,8 @@ export function viewWorldFraction(view: ScopeView): number | null {
 
 /** True when the camera is close enough that ONE edge is the likely intent.
  *
- *  EITHER reading is enough. They answer different questions — "is this edge
- *  huge" and "is the part still in frame" — and they fire at different zooms: a
+ *  EITHER reading is enough. They answer different questions, "is this edge
+ *  huge" and "is the part still in frame", and they fire at different zooms: a
  *  detail on a large part trips only the second, a small part inspected up close
  *  trips both. Requiring both would leave the small-part case, which is most of
  *  what this app models, never firing at all. */
@@ -121,7 +121,7 @@ export function pickScope(req: { shift: boolean; view: ScopeView }): ScopeDecisi
  *
  *  Once any pick in a selection has asked for exactly-that-edge, mixing it with
  *  a chain expansion would build a member set whose shape the user cannot see
- *  before committing — the two edges they chose, plus however many the walk
+ *  before committing, the two edges they chose, plus however many the walk
  *  decided to bring along. Of the two possible errors, blending too FEW edges is
  *  a click from being fixed (every member is click-toggleable inside the tool);
  *  blending too many is an undo and a re-pick. */

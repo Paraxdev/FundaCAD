@@ -3,7 +3,7 @@
 // Split out of measureTool.ts when the panel's markup moved to
 // components/overlays/MeasureReadout.vue. The tool keeps the picking, the
 // shortest-distance search and the viewport marker; this is only the part that
-// turns the result into labelled, unit-formatted lines — which is also the only
+// turns the result into labelled, unit-formatted lines, which is also the only
 // part of that file a headless test could ever reach.
 
 import * as THREE from "three";
@@ -11,7 +11,7 @@ import { getUnit, toDisplay, displayRound } from "../ui/units";
 
 /** What the tool has picked, stripped of the ids and edge references it keeps
  *  for highlighting. `size` is an area (mm²) on a face and a length (mm) on an
- *  edge — the unit differs, which is exactly why `kind` travels with it. */
+ *  edge, the unit differs, which is exactly why `kind` travels with it. */
 export type MeasureProbe =
   | { kind: "face"; point: THREE.Vector3; dir: THREE.Vector3; area: number }
   | { kind: "edge"; point: THREE.Vector3; dir: THREE.Vector3; length: number };

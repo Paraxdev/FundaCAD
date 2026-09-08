@@ -2,7 +2,7 @@
 slot) assignments, palette colors as filament slots.
 
 Why hand-written: build123d's Mesher emits no color, and Orca ignores generic 3MF
-color on import anyway — what survives an "open as project" round-trip is the
+color on import anyway, what survives an "open as project" round-trip is the
 Bambu/Orca PROJECT layout: per-object `<metadata key="extruder">` rows in
 Metadata/model_settings.config plus a filament_colour array in
 Metadata/project_settings.config. Objects also carry plain m:basematerials so the
@@ -109,7 +109,7 @@ def _mesh_chunks(positions, indices):
     Built as a generator rather than one string because the caller streams it
     straight into the zip. A 3,000-body assembly at export grade is millions of
     triangles, and materialising that as a single Python str (plus the list of
-    per-element strings "".join consumes) costs many times the mesh itself — on
+    per-element strings "".join consumes) costs many times the mesh itself, on
     the one path that has no triangle budget of its own.
     """
     yield "<mesh><vertices>"
@@ -142,17 +142,17 @@ def write_project_3mf(bodies, path, palette, body_colors, body_names, settings,
                       bed=(270.0, 270.0)):
     """Write an Orca-project 3MF. Returns `path`.
 
-    bodies      : [{"id", "name", "positions", "indices"}] — flat mm/Z-up lists
+    bodies      : [{"id", "name", "positions", "indices"}], flat mm/Z-up lists
                   straight from tessellate() (face_ids unused here)
     palette     : [{"name", "color"}] 0-based slots (sanitize_inputs first)
     body_colors : {body id → slot index}; missing → slot 0 (extruder 1)
     body_names  : {body id → display name} (sidebar renames win over b["name"])
     settings    : dict merged into project_settings.config; caller-provided keys
                   win, filament_colour is derived from the palette when absent
-    bed         : (x, y) mm — the assembly is centered on it, z-min dropped to 0
+    bed         : (x, y) mm, the assembly is centered on it, z-min dropped to 0
     """
     if not bodies:
-        raise ValueError("nothing to export — no bodies")
+        raise ValueError("nothing to export, no bodies")
 
     # One SHARED translation for all build items: relative body positions are an
     # assembly and must survive; only the group as a whole moves onto the plate.
@@ -217,7 +217,7 @@ def write_project_3mf(bodies, path, palette, body_colors, body_names, settings,
     # CLI path) override anything we derive here.
     proj = {"filament_colour": [s["color"] for s in palette]} if palette else {}
     # filament_type parallels filament_colour when the palette knows materials
-    # (printer-synced slots carry them). Slots without one fall back to PLA —
+    # (printer-synced slots carry them). Slots without one fall back to PLA,
     # Orca's own default for an unconfigured slot.
     if palette and any(s.get("material") for s in palette):
         proj["filament_type"] = [s.get("material") or "PLA" for s in palette]

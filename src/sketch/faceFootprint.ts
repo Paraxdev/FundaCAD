@@ -1,4 +1,4 @@
-// The model's outline on a sketch plane — the shape a profile drawn there is
+// The model's outline on a sketch plane, the shape a profile drawn there is
 // actually sitting on. A sketch made on a face routinely runs off it, and the two
 // halves are separate regions (region.ts says why), but only if the region
 // detector is told where the face ends.
@@ -57,7 +57,7 @@ export function edgeLiesInPlane(
 }
 
 /** The model's edges that lie in this sketch plane, each one still its own 2D
- *  polyline — before they are chained into loops.
+ *  polyline, before they are chained into loops.
  *
  *  Chaining is what the region detector needs and it is also what destroys the
  *  one thing an anchor wants: where one B-rep edge ends and the next begins. A
@@ -85,7 +85,7 @@ export function planeEdgePolys(
   return flat;
 }
 
-/** The model's outline on this sketch plane, as closed loops in sketch 2D mm —
+/** The model's outline on this sketch plane, as closed loops in sketch 2D mm,
  *  ready to hand to detectRegions as its footprint.
  *
  *  Empty when the plane has no model in it, which is the ordinary case for a
@@ -112,7 +112,7 @@ export function loopsFromEdgePolys(flat: readonly THREE.Vector2[][]): THREE.Vect
 export interface FootprintSource {
   edges(): readonly FootprintEdge[];
   modelScale(): number;
-  /** Any value whose IDENTITY changes exactly when the model does — the build
+  /** Any value whose IDENTITY changes exactly when the model does, the build
    *  result object itself is the natural one, and is what setModel already keys
    *  its own fast path on. */
   epoch(): unknown;
@@ -126,7 +126,7 @@ export interface FootprintSource {
  *  With it, a plane is walked once per model.
  *
  *  Keyed on the SketchPlane OBJECT, which is sound because the overlay hands out
- *  cached instances per plane spec — two sketches on one plane share the entry
+ *  cached instances per plane spec, two sketches on one plane share the entry
  *  and the walk. */
 export function footprintCache(
   src: FootprintSource,

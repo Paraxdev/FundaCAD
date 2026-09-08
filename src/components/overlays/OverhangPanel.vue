@@ -2,7 +2,7 @@
 // Overhang (Draft Analysis) settings: build direction + support threshold,
 // shown while Draft Analysis is active.
 //
-// No Esc-dismiss, on purpose — it is closed programmatically when Draft
+// No Esc-dismiss, on purpose, it is closed programmatically when Draft
 // Analysis is toggled off, so Esc must not leave the analysis running with its
 // controls gone. The settings live on the viewport, not the document: they are
 // display-only and deliberately not undoable.

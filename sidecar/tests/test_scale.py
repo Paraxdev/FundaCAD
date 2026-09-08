@@ -72,7 +72,7 @@ def test_about_holds_a_point_still():
     assert lo == [100, -10, -10], lo
     assert hi == [140, 30, 30], hi
 
-    # CONTROL: the same resize with no `about` — the feature's old behaviour,
+    # CONTROL: the same resize with no `about`, the feature's old behaviour,
     # which scales about the object's OWN location. The corner does not stay
     # put; it moves 10mm, and every hole and face bored relative to it moves
     # with it. That is the whole reason a gizmo has to send a point.
@@ -139,7 +139,7 @@ def test_the_mesh_is_dropped_so_it_cannot_disagree_with_the_geometry():
 
     b = body(Box(20, 20, 20))
     # CONTROL: the shape arrives WITH a mesh, which is the state that made this
-    # go wrong and is the ordinary state of a real body — the sidecar caches
+    # go wrong and is the ordinary state of a real body, the sidecar caches
     # bodies between rebuilds, so a body that has been drawn once is carrying
     # the tessellator's triangulation the next time a feature touches it.
     from OCP.BRepMesh import BRepMesh_IncrementalMesh

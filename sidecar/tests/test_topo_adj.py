@@ -1,9 +1,9 @@
-"""Which faces of a shape touch which — the one rule four callers now share.
+"""Which faces of a shape touch which, the one rule four callers now share.
 
 The property everything here turns on is that "adjacent" means SHARING AN EDGE
 in the kernel's sense: the same TShape, not two edges that happen to lie on top
 of one another. Two bodies pressed face to face have coincident geometry and no
-shared topology, and `_refacet_clean` depends on being able to tell them apart —
+shared topology, and `_refacet_clean` depends on being able to tell them apart,
 if it could not, it would sew two touching imported parts into one. So the
 controls below matter more than the positive cases: a box's OPPOSITE walls must
 not be neighbours, and two touching boxes must stay two components.
@@ -85,7 +85,7 @@ def test_two_bodies_apart_are_two_components():
 
 def test_two_bodies_TOUCHING_are_still_two_components():
     """The control that _refacet_clean's correctness rests on. These two boxes
-    share a plane exactly — one spans -5 to 5 in X, the other 5 to 15 — so their
+    share a plane exactly, one spans -5 to 5 in X, the other 5 to 15, so their
     facing walls are coincident to the last bit. They are still two bodies, because coincident is
     not shared, and a component split that used geometry would fuse them."""
     part = Compound([Box(10, 10, 10), Pos(10, 0, 0) * Box(10, 10, 10)])

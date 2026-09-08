@@ -1,11 +1,11 @@
-"""sysmem.py — available physical memory, on all three platforms, without psutil.
+"""sysmem.py, available physical memory, on all three platforms, without psutil.
 
 `psutil` is NOT available to the shipped sidecar. It appears in the dev lockfile
 only as a transitive dependency of ipython, so importing it here would work on a
 developer's machine and fail in front of a user. Each platform is read directly
 instead:
 
-  Linux    /proc/meminfo MemAvailable — the kernel's own estimate of what can be
+  Linux    /proc/meminfo MemAvailable, the kernel's own estimate of what can be
            allocated without swapping. NOT MemFree, which excludes reclaimable
            page cache and on a warm machine reads near zero while gigabytes are
            genuinely available.
@@ -19,7 +19,7 @@ memory figure must leave the caller free to proceed: refusing an import because 
 probe failed would be a worse failure than the OOM it was meant to prevent.
 
 The parsers take their input as an argument so all three can be tested on any
-machine — otherwise two thirds of this file would only ever run in production.
+machine, otherwise two thirds of this file would only ever run in production.
 """
 
 import re
@@ -40,7 +40,7 @@ def _parse_macos_vm_stat(text):
     """Reclaimable bytes from `vm_stat` output.
 
     The page size is in the header ("page size of 16384 bytes") and is NOT always
-    4096 — Apple Silicon uses 16384, so assuming 4096 would under-report by 4x."""
+    4096, Apple Silicon uses 16384, so assuming 4096 would under-report by 4x."""
     m = re.search(r"page size of (\d+) bytes", text)
     page = int(m.group(1)) if m else 4096
     wanted = ("Pages free", "Pages inactive", "Pages speculative", "Pages purgeable")
@@ -98,7 +98,7 @@ def _windows_available():
         if not ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat)):
             return None
         return int(stat.ullAvailPhys)
-    except Exception:  # noqa: BLE001 — a probe must never break the caller
+    except Exception:  # noqa: BLE001, a probe must never break the caller
         return None
 
 

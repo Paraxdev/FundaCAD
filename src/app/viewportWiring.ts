@@ -17,7 +17,7 @@ const AMBIGUOUS_MENU_OFFSET = 16;
 /** Viewport callbacks and the two Escape listeners that clear its selections.
  *
  *  The Viewport publishes through public callback FIELDS rather than events, so
- *  each of these is a single-slot assignment — last writer wins, and there is
+ *  each of these is a single-slot assignment, last writer wins, and there is
  *  exactly one writer for each. */
 export function installViewportWiring(e: Engine): void {
   // clicking a construction plane in the viewport selects it (so it can be cut by)
@@ -35,17 +35,17 @@ export function installViewportWiring(e: Engine): void {
   };
 
   // -------------------------------------------------------------------------
-  // Viewport right-click: context-aware menus — one provider per target (datum
+  // Viewport right-click: context-aware menus, one provider per target (datum
   // plane / edge / face / whole body / empty space), all on the shared engine in
   // ui/menu.ts. The viewport owns the click-vs-pan gesture (right button is
   // camera pan) and fires onContextClick only for a genuine click; toolBusy
-  // gates it — an active tool (or sketch mode, which has its own canvas menu)
+  // gates it, an active tool (or sketch mode, which has its own canvas menu)
   // owns the gesture.
   // -------------------------------------------------------------------------
   // -------------------------------------------------------------------------
   // A click that landed on two edges at once.
   //
-  // Two bodies that meet share a boundary, and each keeps its own edge there —
+  // Two bodies that meet share a boundary, and each keeps its own edge there,
   // same curve, same pixels. The picker ranks by distance from the cursor, which
   // is a tie, so the winner was whichever the raycaster reported first: stable
   // within a session, arbitrary between them, and impossible to override. Click
@@ -54,7 +54,7 @@ export function installViewportWiring(e: Engine): void {
   //
   // So it asks. The menu is the ordinary right-click menu, which already knows
   // how to place itself, dismiss on Escape or an outside click, and stay on
-  // screen near an edge — and hovering a row lights the edge it names, so which
+  // screen near an edge, and hovering a row lights the edge it names, so which
   // is which is answered by looking at the model rather than by reading two
   // similar sentences.
   e.viewport.onAmbiguousEdge = (cands, at, mods) => {
@@ -91,7 +91,7 @@ export function installViewportWiring(e: Engine): void {
     const choices = ambiguousCandidates(
       rows.map((r, i) => ({ ...r, label: labels[i] ?? "Edge", screenDist: r.cand.screenDist })),
     );
-    if (choices.length < 2) return false; // nothing worth asking — take the nearest
+    if (choices.length < 2) return false; // nothing worth asking, take the nearest
 
     // Offset off the cursor, unlike every other menu the app pops. This one is
     // asking about geometry AT the cursor, and opening its top-left corner
@@ -106,8 +106,8 @@ export function installViewportWiring(e: Engine): void {
       // which by construction opens right on top of the edges in question.
       //
       // KNOWN LIMIT, and not an oversight: where the two edges are EXACTLY
-      // coincident — two bodies meeting along one line, the commonest reason
-      // this menu opens at all — both previews draw the same pixels and only
+      // coincident, two bodies meeting along one line, the commonest reason
+      // this menu opens at all, both previews draw the same pixels and only
       // the label separates them. Which is why the label is the part that
       // decides whether the menu opens (viewport/edgeTies.ts) rather than the
       // geometry. Distinguishing them on screen would mean lighting the whole
@@ -127,7 +127,7 @@ export function installViewportWiring(e: Engine): void {
   e.viewport.shouldOpenContextMenu = () => !e.toolBusy();
   e.viewport.onContextClick = (x, y) => e.menus.openCanvasMenu(x, y);
 
-  // A left drag over empty canvas is an area selection — but only when nothing
+  // A left drag over empty canvas is an area selection, but only when nothing
   // else owns the pointer. Every 3D tool drags a handle with the same button,
   // and a sketch has its own gesture for everything.
   e.viewport.canAreaSelect = () => !e.toolBusy() && !e.sketch.active;
@@ -143,7 +143,7 @@ export function installViewportWiring(e: Engine): void {
   };
 
   // A context menu holds targets captured at open time (faceId, edge line, body
-  // id) — a completed rebuild renumbers topology and replaces the mesh, and any
+  // id), a completed rebuild renumbers topology and replaces the mesh, and any
   // document change can invalidate the owning feature. Dismiss rather than let a
   // click act on stale targets ("Delete face" healing the WRONG face).
   e.store.onDocChange(() => dismissContextMenu());
@@ -184,8 +184,8 @@ export function installViewportWiring(e: Engine): void {
   const browser = useBrowserStore();
   browser.setSelectedBodies(e.viewport.getSelectedBodies());
   // Picking a body IS reaching for it. The gizmo used to be a second step (M,
-  // or the toolbar), which meant the obvious gesture — click the thing, drag it
-  // — did nothing at all and the prompt had to explain the missing half. So a
+  // or the toolbar), which meant the obvious gesture, click the thing, drag it,
+  // did nothing at all and the prompt had to explain the missing half. So a
   // body selection opens the move gizmo on it, and the tool hands a plain click
   // back here so the next click moves the gizmo to the next body (or, over
   // nothing, puts it away) in one click rather than two.
@@ -217,7 +217,7 @@ export function installViewportWiring(e: Engine): void {
   // would consume it. The handle puts the offer where the geometry is; the
   // prompt now explains the handle rather than substituting for it.
   //
-  // Three kinds of selection, one handle — so this is also where they are ranked.
+  // Three kinds of selection, one handle, so this is also where they are ranked.
   // Edges first: an edge hit is the most specific thing the picker can return.
   // Then profiles, matching the picker's own sketch-over-solid priority (and
   // because a region pick deliberately does NOT clear the face selection
@@ -229,7 +229,7 @@ export function installViewportWiring(e: Engine): void {
     const faces = edges.length || regions.length ? null : e.viewport.selectedFacesForPressPull();
 
     if (edges.length) {
-      // The bbox centre decides which way is "out of the material" — read from
+      // The bbox centre decides which way is "out of the material", read from
       // the store, the same source EdgeFeatureTool reads, so the handle does not
       // flip at the instant the tool takes the gesture over.
       const bb = e.store.buildState.result?.bbox;
@@ -281,7 +281,7 @@ export function installViewportWiring(e: Engine): void {
   }
   e.viewport.onSelectionChange = refreshNudge;
 
-  // Profile selection has no change notification of its own — it lives on the
+  // Profile selection has no change notification of its own, it lives on the
   // overlay, which tools clear directly (extrude's edit-mode cancel) and which
   // the doc-change handler above rebuilds wholesale. Refreshing here catches
   // both, and registration order matters: this runs after that rebuild, so it
@@ -295,7 +295,7 @@ export function installViewportWiring(e: Engine): void {
   // Highlighter, the edge selection went with it, and the only safe response
   // was to drop the handle rather than let it act on a stale anchor. Cancelling
   // a fillet therefore left you looking at the sharp edge you started from with
-  // nothing selected and no arrow — the preview's OWN rebuild had eaten the
+  // nothing selected and no arrow, the preview's OWN rebuild had eaten the
   // selection the gesture was standing on.
   //
   // setModel now carries the selection across (viewport.ts captureSelection /

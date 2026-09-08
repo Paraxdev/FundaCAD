@@ -1,5 +1,5 @@
 // The dimension/glyph badges are now rendered declaratively, so what a badge
-// SAYS and what classes it wears are pure functions — and this is the only layer
+// SAYS and what classes it wears are pure functions, and this is the only layer
 // of the two annotation overlays a headless test can reach at all. Where a badge
 // sits comes out of a live camera through a rAF loop; happy-dom has no layout
 // and no WebGL, so that half stays e2e/manual territory. screenTransform's shape
@@ -24,7 +24,7 @@ describe("fmtDim", () => {
     expect(fmtDim(40, "length", false, true)).toBe("fx: 40 mm");
   });
 
-  it("lets driven win over fx — a reference dim is not editable either way", () => {
+  it("lets driven win over fx, a reference dim is not editable either way", () => {
     expect(fmtDim(40, "length", true, true)).toBe("(40 mm)");
   });
 });

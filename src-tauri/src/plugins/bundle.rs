@@ -93,8 +93,8 @@ pub fn is_official_url(url: &str) -> bool {
 ///
 /// HTTPS IS NOT NEGOTIABLE, and it is the one thing this function is really
 /// for. Over plain HTTP the bytes are whatever the network decided they should
-/// be, and every check downstream — the digest, the manifest comparison, the
-/// extractor — would then be run faithfully against an attacker's archive. It
+/// be, and every check downstream, the digest, the manifest comparison, the
+/// extractor, would then be run faithfully against an attacker's archive. It
 /// is also what makes the origin shown on the consent screen worth showing:
 /// with TLS the host in the URL is the host that answered.
 ///
@@ -129,8 +129,8 @@ pub fn allowed_bundle_url(url: &str) -> bool {
     // Userinfo, refused early and by name. REDUNDANT TODAY: `@` is not in the
     // host character set below, so removing this line changes no answer, which
     // was checked rather than assumed. It stays because the charset is the sort
-    // of thing that gets loosened one character at a time — for an underscore,
-    // for an IDN — and this is the refusal that must not be loosened with it.
+    // of thing that gets loosened one character at a time, for an underscore,
+    // for an IDN, and this is the refusal that must not be loosened with it.
     if authority.contains('@') {
         return false;
     }
@@ -489,7 +489,7 @@ mod tests {
         }
 
         // The control. Every refusal above is worth nothing unless ordinary
-        // URLs — ours, someone else's, a self-hosted one on a port — go
+        // URLs, ours, someone else's, a self-hosted one on a port, go
         // through, which is the whole reason the host is no longer checked.
         for good in [
             "https://github.com/Paraxdev/fundacad/releases/download/beta/plugin-mcp.zip",

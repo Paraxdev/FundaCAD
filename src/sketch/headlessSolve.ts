@@ -4,7 +4,7 @@
 // param-driven dim actually moves geometry instead of being decorative.
 //
 // Failure semantics (plan R2): a solve that fails or reports conflicts keeps
-// the OLD coordinates — the param edit still lands, and the caller surfaces
+// the OLD coordinates, the param edit still lands, and the caller surfaces
 // the sketch id so the user hears about it (never blocks the edit).
 
 import type { Feature, Params, SketchEntity } from "../types";
@@ -21,6 +21,6 @@ export async function solveSketchFeature(
     if (!r.ok || r.conflicts.length > 0) return null;
     return { entities: r.entities.map(toSketchEntity) };
   } catch {
-    return null; // solver unavailable/crashed — keep old coordinates
+    return null; // solver unavailable/crashed, keep old coordinates
   }
 }

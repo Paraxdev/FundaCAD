@@ -1,6 +1,6 @@
 // Rendering contract for projected (linked) reference geometry: the ONE
-// curveObjects factory feeds BOTH display paths — the open sketch's active
-// curves and the committed model overlay — so asserting its material colors
+// curveObjects factory feeds BOTH display paths, the open sketch's active
+// curves and the committed model overlay, so asserting its material colors
 // here covers stale/link rendering end to end (the stale FLAG's propagation
 // into doc entities is covered by the step-4 refresh e2e).
 import { describe, it, expect } from "vitest";
@@ -19,14 +19,14 @@ const matColor = (o: THREE.Object3D): number => {
   return ((line as THREE.Line).material as THREE.LineBasicMaterial).color.getHex();
 };
 
-describe("curveObjects — projected link colors", () => {
+describe("curveObjects, projected link colors", () => {
   const plane = new SketchPlane("XY");
   const fresh: ResolvedEntity = {
     type: "projected", id: "p1", source: SRC, curve: { kind: "line", x1: 0, y1: 0, x2: 10, y2: 0 },
   };
   const stale: ResolvedEntity = { ...fresh, id: "p2", stale: true };
 
-  it("fresh projected renders purple, stale renders amber — regardless of pass color", () => {
+  it("fresh projected renders purple, stale renders amber, regardless of pass color", () => {
     const objs = curveObjects([fresh, stale], plane, 0xffffff);
     expect(objs).toHaveLength(2);
     expect(matColor(objs[0]!)).toBe(PROJECTED_COLOR);

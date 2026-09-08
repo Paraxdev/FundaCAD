@@ -121,7 +121,7 @@ def test_the_field_crash_and_its_fix():
             raised = None
             try:
                 manager.register_folder(tmp)
-            except Exception as exc:  # noqa: BLE001 — the exception IS the assertion
+            except Exception as exc:  # noqa: BLE001, the exception IS the assertion
                 raised = exc
             check(
                 f"{name} unguarded raises {expected} "

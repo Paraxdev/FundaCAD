@@ -1,4 +1,4 @@
-// Single command registry — the source of truth for the Cmd-K command palette
+// Single command registry, the source of truth for the Cmd-K command palette
 // (and a searchable list of everything you can do). Built from the ribbon's tool
 // groups plus the global File/View commands that live in menus / view controls.
 // Key hints come from the shortcut table (src/input/shortcuts.ts) so the palette
@@ -37,7 +37,7 @@ const GLOBAL: Command[] = [
   { id: "show-all-bodies", label: "Show All Bodies", group: "View", context: "global", key: "Shift+H" },
   { id: "shortcut-help", label: "Keyboard Shortcuts…", group: "Help", context: "global", key: "?" },
   // pinned ribbon groups (FINISH/PALETTE) live outside the SKETCH const, so the
-  // palette must list them explicitly — "Finish Sketch" was unsearchable before
+  // palette must list them explicitly, "Finish Sketch" was unsearchable before
   { id: "finish", label: "Finish Sketch", group: "SKETCH", context: "sketch" },
   { id: "palette", label: "Sketch Palette", group: "SKETCH", context: "sketch" },
 ];
@@ -46,7 +46,7 @@ function fromGroups(groups: Group[], context: "model" | "sketch"): Command[] {
   const out: Command[] = [];
   for (const g of groups) {
     for (const it of g.items) {
-      // a split button's tools live in `children` — flatten via leavesOf or
+      // a split button's tools live in `children`, flatten via leavesOf or
       // the palette loses every tool folded into a dropdown
       for (const leaf of leavesOf(it)) {
         if (leaf.action === "palette" || leaf.kind === "toggle") continue; // not palette commands

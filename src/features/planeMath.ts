@@ -2,7 +2,7 @@
 // picked face implies, and the tangent plane where the cursor lands on a round one.
 //
 // Isolated because it can be WRONG in a way the user only discovers three
-// operations later — a drifted origin moves the snap lattice of every sketch drawn
+// operations later, a drifted origin moves the snap lattice of every sketch drawn
 // on it, and a tangent plane off by a chord's sagitta puts the sketch inside the
 // material. Neither raises an error; both show up as a part that does not fit.
 //
@@ -17,7 +17,7 @@
 import type { PlaneDef, Vec3 } from "../types";
 
 /** Two normals closer than this (dot product) are the same direction as far as
- *  "is this face flat?" is concerned — ~0.8°, comfortably above tessellation
+ *  "is this face flat?" is concerned, ~0.8°, comfortably above tessellation
  *  noise on a planar face (which is exact) and far below the facet angle of any
  *  curved face a kernel would emit. */
 export const PLANAR_DOT = 0.9999;
@@ -25,7 +25,7 @@ export const PLANAR_DOT = 0.9999;
 /** How far a fitted circle's points may sit off it, as a fraction of the radius,
  *  before we refuse to call the face cylindrical. A tessellated cylinder's
  *  VERTICES lie exactly on the true surface, so the residual is numerical for a
- *  real cylinder and large for a cone, sphere, torus or spline — this is the
+ *  real cylinder and large for a cone, sphere, torus or spline, this is the
  *  test that stops a tangent plane being invented on a face that has no single
  *  axis. */
 const FIT_TOLERANCE = 0.02;
@@ -59,7 +59,7 @@ export function unit(v: Vec3): Vec3 | null {
 /** The in-plane x axis a bare normal implies.
  *
  *  A normal supplies no x direction, so an arbitrary choice has to be made and it
- *  has to be the SAME one every time — derived one way at pick time and another
+ *  has to be the SAME one every time, derived one way at pick time and another
  *  later is a sketch that rotates about its own normal, moving every coordinate
  *  stored in it. viewport.pickFacePlane calls through here rather than carrying a
  *  second copy.
@@ -68,7 +68,7 @@ export function unit(v: Vec3): Vec3 | null {
  *  same question by the normal's dominant world axis, serving the "select a face,
  *  press S" route where this serves "press S, click a face". Both are stable and
  *  both are recorded IN the plane they produce, so the only symptom is the same
- *  face opening a quarter turn apart depending on route — never a plane in the
+ *  face opening a quarter turn apart depending on route, never a plane in the
  *  wrong place. Unifying is safe; picking the winner is a decision about feel.
  *
  *  World +Z projected into the plane, or world +X when the plane is nearly
@@ -85,7 +85,7 @@ export function planeXDir(normal: Vec3): Vec3 | null {
  *
  *  The origin is NOT the point you clicked: it is the WORLD origin projected
  *  onto the plane. Grid snapping rounds in plane-local coordinates, so the
- *  origin decides where the snap lattice falls in world space — anchoring it on
+ *  origin decides where the snap lattice falls in world space, anchoring it on
  *  the pick would give every sketch-on-face its own lattice, offset from the
  *  model's by wherever the cursor happened to be. (This is the same rule, and
  *  the same bug, documented at viewport.pickFacePlane; two planes parallel to
@@ -98,7 +98,7 @@ export function planeFromPointNormal(point: Vec3, normal: Vec3): PlaneDef | null
   return { origin: [o[0], o[1], o[2]], normal: [n[0], n[1], n[2]], xdir: [x[0], x[1], x[2]] };
 }
 
-/** True when every sampled facet normal points the same way — i.e. the face is
+/** True when every sampled facet normal points the same way, i.e. the face is
  *  flat and its own normal IS the plane's. */
 export function isPlanarFace(normals: Vec3[]): boolean {
   const first = normals.length ? unit(normals[0] as Vec3) : null;
@@ -111,7 +111,7 @@ export function isPlanarFace(normals: Vec3[]): boolean {
   return true;
 }
 
-/** Evenly spread sample of at most `k` items — the whole span, not the first k,
+/** Evenly spread sample of at most `k` items, the whole span, not the first k,
  *  because the first k triangles of a tessellated cylinder are a handful of
  *  neighbours whose normals barely differ. */
 function sample<T>(items: T[], k: number): T[] {
@@ -131,7 +131,7 @@ function sample<T>(items: T[], k: number): T[] {
  *  On a cylinder every normal is perpendicular to the axis, so any two
  *  NON-parallel normals cross to give it. The widest-separated pair is the
  *  best-conditioned one, so it seeds the answer; the rest are then folded in,
- *  each flipped onto the seed's side first — a cross product's sign depends on
+ *  each flipped onto the seed's side first, a cross product's sign depends on
  *  the order of its operands, and averaging without that flip cancels the axis
  *  to zero on any face that sweeps more than 180°. */
 export function axisFromNormals(normals: Vec3[]): Vec3 | null {
@@ -224,7 +224,7 @@ export interface Cylinder {
  *  the chords and you get a radius short by the sagitta, which is precisely the
  *  amount by which a tangent plane would then sink into the material.
  *
- *  Null for anything that is not a cylinder — a flat face (no axis), or a cone /
+ *  Null for anything that is not a cylinder, a flat face (no axis), or a cone /
  *  sphere / torus / spline, which have an axis-ish direction but whose points do
  *  not fall on one circle (caught by the residual). */
 export function cylinderFromFace(points: Vec3[], normals: Vec3[]): Cylinder | null {
@@ -251,7 +251,7 @@ export function radialAt(cyl: Cylinder, at: Vec3): Vec3 | null {
   return unit(sub(rel, scale(cyl.axis, dot(rel, cyl.axis))));
 }
 
-/** Does the material lie INSIDE this cylindrical face — a shaft or boss — rather
+/** Does the material lie INSIDE this cylindrical face, a shaft or boss, rather
  *  than outside it, as on a bore?
  *
  *  Asked per triangle against that triangle's own radial, and summed. The
@@ -263,14 +263,14 @@ export function radialAt(cyl: Cylinder, at: Vec3): Vec3 | null {
  *
  *  Weighted by nothing: a facet's area says how much of the surface it is, not
  *  how confident it is about which side the material is on, and the vote is
- *  unanimous on any real cylinder. Null when the normals do not agree at all —
+ *  unanimous on any real cylinder. Null when the normals do not agree at all,
  *  a face that is not the cylinder we were told it was.
  *
  *  This is the same asymmetry `tangentPlaneOnCylinder`'s `facing` handles, and it
  *  is what decides the SIGN sent to the kernel: a positive offset moves a face
  *  along its own outward normal, so it grows a boss and shrinks a bore.
  *
- *  `points` must be three-per-normal — the triangles' own corners, as
+ *  `points` must be three-per-normal, the triangles' own corners, as
  *  facePlanePick collects them. Refused outright rather than read loosely: the
  *  other packing a caller might reach for (one point per normal) would index
  *  into the wrong facet and answer plausibly, and the answer is a sign. */
@@ -300,7 +300,7 @@ export function solidInsideCylinder(cyl: Cylinder, points: Vec3[], normals: Vec3
  *  radius · radial), or the datum would be buried a hair inside the material.
  *
  *  The x axis is the cylinder's own axis, so a sketch has "along the shaft" as its
- *  horizontal — the only in-plane frame the geometry itself supplies.
+ *  horizontal, the only in-plane frame the geometry itself supplies.
  *
  *  `facing` decides which way the normal points: away from the axis on a shaft, but
  *  TOWARD it on a bore, where the face's own normal points into the void. Without
@@ -394,9 +394,9 @@ export function axisFromEdge(points: readonly Vec3[]): EdgeAxis | null {
 // --- planes made from geometry rather than from one face ------------------
 //
 // A datum plane could only ever be "this face, offset". The two constructions
-// people reach for after that are a plane THROUGH THREE POINTS — the plane a
+// people reach for after that are a plane THROUGH THREE POINTS, the plane a
 // pick of three corners means, and the only way to get at a plane that no face
-// lies in — and a MIDPLANE, which is what symmetry is made of and which is
+// lies in, and a MIDPLANE, which is what symmetry is made of and which is
 // otherwise a measurement plus an offset plus the hope that nothing upstream
 // moves.
 //
@@ -415,7 +415,7 @@ export function planeThroughPoints(a: Vec3, b: Vec3, c: Vec3): PlaneDef | null {
   return planeFromPointNormal(a, cross(sub(b, a), sub(c, a)));
 }
 
-/** How parallel two normals must be to count as parallel planes. cos(0.05°) —
+/** How parallel two normals must be to count as parallel planes. cos(0.05°),
  *  well inside anything a kernel emits for two faces that were built parallel,
  *  and far outside the angle at which the bisector construction below becomes
  *  ill-conditioned. Compared as |dot|, because two faces of a plate point AWAY
@@ -438,7 +438,7 @@ const PARALLEL_DOT = 0.9999996;
  *  PLANES THAT MEET give the bisector through their intersection line, and
  *  which of the two perpendicular bisectors it is falls straight out of the
  *  same rule: d_a = d_b has normal (na - nb). Worth checking against a case,
- *  because the other one is equally plausible-looking and wrong — the two
+ *  because the other one is equally plausible-looking and wrong, the two
  *  slopes of a roof have normals leaning left and right, and (na - nb) is the
  *  vertical plane through the ridge while (na + nb) is a horizontal plane that
  *  bisects nothing.

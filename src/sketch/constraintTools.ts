@@ -2,7 +2,7 @@
 // equal/tangent/coincident/concentric/symmetric): each adds a persistent geometric
 // constraint that the solver maintains alongside every other constraint already on
 // the sketch. Operates purely through the ConstraintHost accessor SketchMode
-// provides — no state is copied, so this collaborator always sees SketchMode's
+// provides, no state is copied, so this collaborator always sees SketchMode's
 // live entities/constraints.
 
 import * as THREE from "three";
@@ -28,29 +28,29 @@ export const CONSTRAINT_TOOLS = new Set<SketchTool>([
   "fix",
 ]);
 
-/** line/circle/arc are the tangency-capable curves (curveKind — see entityDims);
+/** line/circle/arc are the tangency-capable curves (curveKind, see entityDims);
  *  circle/arc carry a radius+center. */
 const isCurve = (e: ResolvedEntity) => curveKind(e) !== undefined;
 const isRound = (e: ResolvedEntity) => { const k = curveKind(e); return k === "circle" || k === "arc"; };
 
-/** The slice of SketchMode these click flows read/write — live accessors, not copies. */
+/** The slice of SketchMode these click flows read/write, live accessors, not copies. */
 export interface ConstraintHost {
   /** current active sketch tool (drives which constraint flow fires) */
   tool(): SketchTool;
-  /** live entity list — never copied */
+  /** live entity list, never copied */
   entities(): ResolvedEntity[];
-  /** live constraint list — never copied; constraint flows push onto it */
+  /** live constraint list, never copied; constraint flows push onto it */
   constraints(): SketchConstraint[];
   /** pick tolerance in plane units, scaled to current zoom */
   pickTol(): number;
-  /** shared "first pick" slot for two-step line/entity flows — also used by
+  /** shared "first pick" slot for two-step line/entity flows, also used by
    *  SketchMode's own fillet tool (filletClick/modifyHover); reset to null on
    *  every setTool() */
   getFilletFirst(): number | null;
   setFilletFirst(idx: number | null): void;
   /** kick the solve pump after a constraint changes */
   requestSolve(): void;
-  /** surface a user-facing warning (SketchMode routes it to the toast layer —
+  /** surface a user-facing warning (SketchMode routes it to the toast layer,
    *  kept an accessor so these flows stay DOM-free/unit-testable) */
   warn(msg: string): void;
 }
@@ -92,7 +92,7 @@ export class ConstraintTools {
     const ent = idx >= 0 ? entities[idx] : undefined;
     if (!ent || curveKind(ent) !== "line") return;
     if (t === "horizontal" || t === "vertical") {
-      // constraining the projected line ITSELF is meaningless — it's fixed
+      // constraining the projected line ITSELF is meaningless, it's fixed
       if (ent.type !== "line") return this.host.warn(PROJECTED_FIXED_MSG);
       if (t === "horizontal") this.addConstraint({ type: "horizontal", line: ent.id });
       else this.addConstraint({ type: "vertical", line: ent.id });
@@ -241,14 +241,14 @@ export class ConstraintTools {
     let best: { id: string; p: number } | null = null;
     let bestD = tol * tol;
     for (const e of this.host.entities()) {
-      if (e.type === "projected") continue; // already fixed — fixing it is meaningless
+      if (e.type === "projected") continue; // already fixed, fixing it is meaningless
       for (const r of dimRefPoints(e)) {
         const dx = r.pos.x - p.x, dy = r.pos.y - p.y, d = dx * dx + dy * dy;
         if (d <= bestD) { bestD = d; best = { id: e.id, p: r.p }; }
       }
     }
     if (best) return this.addConstraint({ type: "fix", e: best.id, p: best.p });
-    // no addressable point — explain a click on projected geometry (skipped
+    // no addressable point, explain a click on projected geometry (skipped
     // above: it is already fixed) instead of silently doing nothing
     const entities = this.host.entities();
     const idx = pickEntity(entities, p, tol);

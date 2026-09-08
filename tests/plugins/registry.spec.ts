@@ -7,9 +7,9 @@
 // and that a choice somebody already made is still their choice after an
 // upgrade.
 //
-// This file used to test the opposite arrangement — an on/off state per
+// This file used to test the opposite arrangement, an on/off state per
 // capability compiled into the app, with a default per capability read from its
-// manifest — because "installed" was not a question those three had an answer
+// manifest, because "installed" was not a question those three had an answer
 // to. Nothing ships inside the app now.
 //
 // The state is read once at module load, so each case re-imports the module

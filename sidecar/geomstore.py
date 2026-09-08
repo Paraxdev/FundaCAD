@@ -1,14 +1,14 @@
 """Durable checkpoint store for the OCCT rebuild cache (design §3.2/§3.3, Phase 1).
 
 Why this exists: rebuilding the measured 125-feature document costs ~26 s cold, but
-restoring a body from a binary BREP blob costs ~14 ms — a ~1,700x lever. This module
+restoring a body from a binary BREP blob costs ~14 ms, a ~1,700x lever. This module
 is the disk side of that: a content-addressed blob store (ONE body per blob, keyed by
 the chain key of the last feature that modified it, so an unchanged body dedups for
-free — same inputs => same key => same file, no geometry hashing) plus a SQLite index
+free, same inputs => same key => same file, no geometry hashing) plus a SQLite index
 of checkpoints.
 
 The index is SOFT STATE. Every method degrades a missing / corrupt / short entry to a
-cache MISS — never an exception, never wrong geometry — so a deleted or truncated cache
+cache MISS, never an exception, never wrong geometry, so a deleted or truncated cache
 only ever costs a rebuild (the `.funda` portability constraint, §1). A fresh directory
 scan can always reconstruct what is restorable; the index is only there to make the
 lookup O(1) instead of O(disk).
@@ -33,7 +33,7 @@ from OCP.TopoDS import TopoDS_Shape
 # Binary BREP, PINNED to format V3: this OCP build's V4 reader fails on real
 # sidecar bodies (booleans + defeaturing heritage) with
 # NCollection_IndexedMap::FindKey / 'UnExpected BRep_PointRepresentation', for
-# every triangle/normal flag combination — measured on the DDR document. V3
+# every triangle/normal flag combination, measured on the DDR document. V3
 # round-trips the same shapes in ~4 ms. Revisit only with a differential test.
 _FMT = BinTools_FormatVersion.BinTools_FormatVersion_VERSION_3
 
@@ -75,8 +75,8 @@ def serialize_shape(shape, with_triangles=True):
     """A shape as binary BREP bytes, pinned to BinTools format V3.
 
     THE ONE PLACE THAT PIN LIVES. `put_blob` below and the container blob writer
-    in builder.py both call this, so neither can drift onto the BinTools default
-    — this OCP build's V4 reader is measured broken on real sidecar bodies, and
+    in builder.py both call this, so neither can drift onto the BinTools default,
+    this OCP build's V4 reader is measured broken on real sidecar bodies, and
     in a cache that is a miss but in a SAVED FILE it is permanent data loss.
 
     Triangles are ALWAYS included: writing with_triangles=False on a shape that
@@ -124,7 +124,7 @@ class Store:
         )
         self.db.row_factory = sqlite3.Row
         # WAL so a reader never blocks the writer; NORMAL sync is safe because the
-        # index is rebuildable — we never trade a rebuild-vs-error decision on it.
+        # index is rebuildable, we never trade a rebuild-vs-error decision on it.
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute("PRAGMA synchronous=NORMAL")
         self.db.execute(
@@ -250,7 +250,7 @@ class Store:
             return None
         # Stamp the access time so evict_meshes can drop LEAST-RECENTLY-USED
         # rather than oldest-written. Most filesystems mount `relatime`, so a
-        # read does not move atime on its own, and mtime never moves on read —
+        # read does not move atime on its own, and mtime never moves on read,
         # without this the eviction order would be write order, which throws
         # away the artifacts a document actually opens with. Best-effort: a
         # failure here only costs eviction accuracy.
@@ -291,7 +291,7 @@ class Store:
 
         Sized against free space PLUS what the cache already holds, not bare free
         space. Otherwise the budget shrinks as the cache grows, so every sweep
-        would evict a little more than the last — a ratchet, not a cap.
+        would evict a little more than the last, a ratchet, not a cap.
 
         `FUNDACAD_CACHE_MAX_GB` overrides it outright, for a user with unusual
         files or an unusual disk."""
@@ -316,8 +316,8 @@ class Store:
 
         Ordered by what a miss COSTS, not by what it frees: a dropped mesh costs
         one body's re-tessellation, a dropped checkpoint costs a full history
-        replay. So meshes absorb the entire squeeze first — down to nothing if
-        they have to — and checkpoints are touched ONLY when the blobs alone
+        replay. So meshes absorb the entire squeeze first, down to nothing if
+        they have to, and checkpoints are touched ONLY when the blobs alone
         still exceed the budget. On anything short of a multi-thousand-body
         assembly that second step never runs, which is what makes bounding the
         cache safe to do automatically."""
@@ -335,7 +335,7 @@ class Store:
         by refcounting blob keys over checkpoint manifests, and a mesh key is
         derived from a body's content plus the tolerance/profile/code-version it
         was tessellated at, so no manifest ever references one. Nothing else
-        pruned this directory, so it grew without bound — measured at 3.2 GB."""
+        pruned this directory, so it grew without bound, measured at 3.2 GB."""
         entries, total = self._mesh_entries()
         if total <= byte_cap:
             return 0
@@ -439,7 +439,7 @@ class Store:
         """Delete the given checkpoints AND the blobs their manifests reference
         (unless another surviving checkpoint still references a blob). This is
         the 'Compute All' path: put_blob dedups on key, so a hypothetically
-        poisoned blob would survive a mere re-run — purging is what guarantees
+        poisoned blob would survive a mere re-run, purging is what guarantees
         the next build re-serializes everything fresh."""
         if not chain_keys:
             return 0
@@ -482,7 +482,7 @@ class Store:
         evicted.
 
         A blob referenced by ANY surviving checkpoint is retained (refcount over the
-        manifests). Unreferenced (orphan) blobs are reclaimed first — they cost bytes
+        manifests). Unreferenced (orphan) blobs are reclaimed first, they cost bytes
         but back nothing restorable. Then non-pinned checkpoints are evicted ordered
         by bytes / replay_ms descending (drop the big-but-cheap-to-replay ones first,
         §3.2), deleting a row BEFORE its now-unreferenced blobs so a crash mid-evict

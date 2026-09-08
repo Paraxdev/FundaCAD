@@ -7,7 +7,7 @@
 // not have (`icons`).
 //
 // Everything here is about the TABLE, not about a surface reading it: order,
-// collisions, and — the case worth most of the file — that all of it goes away
+// collisions, and, the case worth most of the file, that all of it goes away
 // when the contribution does. A plugin that can be switched off but whose tool
 // stays in the selection toolbar is a plugin that cannot be switched off.
 

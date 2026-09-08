@@ -7,7 +7,7 @@
 // constant path table. This test is the enforcement.
 //
 // Sources come from import.meta.glob rather than node:fs so the check needs no
-// @types/node and no __dirname — it is Vite reading the same files it builds.
+// @types/node and no __dirname, it is Vite reading the same files it builds.
 // The glob is EVERY .vue in src, not just components/: a policy that skips a
 // directory is a policy with a hole in it.
 

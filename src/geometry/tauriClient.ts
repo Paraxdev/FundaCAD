@@ -1,7 +1,7 @@
 // In-process Rust geometry backend, used when VITE_GEOM=rust.
 // Mirrors the public surface of `Geometry` (the Python websocket client) but
 // calls a Tauri command on the Rust side instead of round-tripping over a
-// socket. Being in-process, it is always "connected" — there is nothing to
+// socket. Being in-process, it is always "connected", there is nothing to
 // reconnect to. This is a spike; the websocket client remains the default.
 
 import { invoke } from "@tauri-apps/api/core";
@@ -13,7 +13,7 @@ type StatusListener = (connected: boolean) => void;
 export class TauriGeometry implements GeometryBackend {
   private statusListeners = new Set<StatusListener>();
 
-  // No socket to authenticate — in-process Rust invoke. Satisfies the
+  // No socket to authenticate, in-process Rust invoke. Satisfies the
   // GeometryBackend contract alongside the websocket client.
   async init(): Promise<void> {}
 
@@ -54,7 +54,7 @@ export class TauriGeometry implements GeometryBackend {
 
   // The v4 -> v5 geometry migration lives in the Python sidecar (it needs OCCT to
   // re-serialise ASCII BREP as binary). Returning nothing leaves a legacy
-  // document exactly as it was — it still opens and rebuilds from its inline
+  // document exactly as it was, it still opens and rebuilds from its inline
   // copy, so this stub costs a size optimisation, never data.
   async migrateGeometry(): Promise<{ id: string; geom: string }[]> {
     return [];
@@ -71,7 +71,7 @@ export class TauriGeometry implements GeometryBackend {
       bodyColors?: Record<string, number>;
     } = {},
   ): Promise<{ ok: boolean; path?: string; paths?: string[]; message?: string }> {
-    // Per-body / separate export isn't wired into the Rust kernel yet — it exports
+    // Per-body / separate export isn't wired into the Rust kernel yet, it exports
     // the merged part. Use the default Python sidecar for per-body export.
     try {
       const written = await invoke<string>("geom_export", {

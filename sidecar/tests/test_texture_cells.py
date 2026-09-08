@@ -1,6 +1,6 @@
 """Crease-aligned texture lattices: exactness, single-coverage, crack-freedom.
 
-A "faceted" texture is meant to be planar facets meeting at real creases — that
+A "faceted" texture is meant to be planar facets meeting at real creases, that
 is the whole reason it is the default, because a printer resolves a crease and
 rounds a sub-millimetre sinusoid into mush. Sampling a height field onto a grid
 only delivers that if vertices land ON the pattern's gradient breakpoints. They
@@ -9,7 +9,7 @@ trapezoid's four corners, and the measured error reached 50% of the texture's ow
 depth.
 
 These tests are the oracle for the lattice that replaces it. The exactness one is
-not a smoke test — it caught a wrong derivation of _trapezoid's breakpoints (the
+not a smoke test, it caught a wrong derivation of _trapezoid's breakpoints (the
 crest is a flat LAND, not a point, so there are four per period and not two)
 that every other check in this repo passed straight through.
 
@@ -113,7 +113,7 @@ def _boundary(tris):
 def test_trapezoid_has_four_breakpoints_per_period():
     """The land flattens BOTH the trough and the crest, so the profile turns four
     corners per period, not two. Missing the upper pair is what rounded the crest
-    off — assert against the field itself, not against the derivation."""
+    off, assert against the field itself, not against the derivation."""
     for land in (0.25, 0.5, 0.98):
         phases = texture_mesh._crease_phases(land)
         assert len(phases) == 4, (land, phases)
@@ -138,14 +138,14 @@ def test_faceted_waves_are_a_sine_polyline_not_a_trapezoid():
     one (measured max|w-r| = 0.000000 at every land and angle). They differed
     only under `round`, which is not the default, so almost nobody could see it.
 
-    Waves is now a sine POLYLINE — piecewise linear, because a curved level set
+    Waves is now a sine POLYLINE, piecewise linear, because a curved level set
     cannot be meshed exactly (that is what left the old cosine-walled hex 41% of
     its own depth off), but rounded where ribs is flat-topped.
 
     Three claims, each read off the field rather than off the derivation: it
     differs from ribs by a real fraction of depth at every slider position, it
     still spans [0,1] exactly (so `depth` keeps meaning what it says), and the
-    creases it turns are EXACTLY the ones `_wave_phases` declares — the lattice
+    creases it turns are EXACTLY the ones `_wave_phases` declares, the lattice
     plants one sample line per phase, so an undeclared crease is a chord cutting
     the curve and a phase that turns no corner is triangles bought for nothing.
 
@@ -189,7 +189,7 @@ def test_faceted_waves_are_a_sine_polyline_not_a_trapezoid():
 
 def test_lattice_reproduces_the_height_field_exactly():
     """THE oracle. Interior triangles must reproduce the true field at points
-    strictly inside them, not merely at their vertices — that is the difference
+    strictly inside them, not merely at their vertices, that is the difference
     between "the mesh touches the pattern" and "the mesh IS the pattern"."""
     face = _plate_top_face()
     worst = 0.0
@@ -259,11 +259,11 @@ def test_lattice_costs_no_more_than_the_pattern_demands():
 
     The ceilings are not all the same, and that is the honest result rather than
     a headline: ribs needs lines across one axis only. WAVES is on that same one
-    axis but is a sine POLYLINE, so it pays per facet — 6 creases per period
-    against ribs' 2 or 4 — and costs about a third more. Its count is fixed, so
+    axis but is a sine POLYLINE, so it pays per facet, 6 creases per period
+    against ribs' 2 or 4, and costs about a third more. Its count is fixed, so
     unlike ribs its ceiling does not move with the slider. A knurl with a LAND
     needs four breakpoints on both axes, so its tensor product is 4x4 cells = 32
-    triangles — no cheaper than sampling, but exact where sampling was wrong by
+    triangles, no cheaper than sampling, but exact where sampling was wrong by
     a third to a half of the texture's depth. Merging the coplanar trough and
     land quads would cut it further; that is an optimisation, not correctness."""
     face = _plate_top_face()
@@ -300,7 +300,7 @@ def test_lattice_meshes_stay_manifold():
 def test_geometry_cache_key_separates_lattices():
     """The skeleton used to be kind-independent, so the cache key legitimately
     left kind/sharpness/profile/offset out. A lattice derives vertex placement
-    from all four — leaving them out serves a knurl skeleton for a hex texture at
+    from all four, leaving them out serves a knurl skeleton for a hex texture at
     the same scale and angle, which is silent wrong geometry, not a slow path."""
     face = _plate_top_face()
     loc = TopLoc_Location()
@@ -318,7 +318,7 @@ def test_geometry_cache_key_separates_lattices():
 def test_offset_phase_locks_the_lattice():
     """`offset` shifts the field displace_face evaluates, so the lines have to
     shift with it. If they did not, the crests would drift off the vertices and
-    the mesh would go back to slicing corners — exactness is the observable."""
+    the mesh would go back to slicing corners, exactness is the observable."""
     face = _plate_top_face()
     spec = _spec("ribs", 0.5, offset=0.317)
     P, I = _displaced(face, spec)
@@ -388,7 +388,7 @@ def test_lattice_is_exact_on_a_cylinder():
         # number of those, so it closes at any angle. knurl and hex are 2D
         # lattices: closing needs the turn to be a lattice vector in BOTH
         # directions at once, which happens only when tan(angle) is rational. At
-        # a general angle they cannot close and the seam carries a phase joint —
+        # a general angle they cannot close and the seam carries a phase joint,
         # geometry, not a defect. Test them where closure exists.
         angles = (0.0, 30.0, 90.0) if kind in ("ribs", "waves") else (0.0, 90.0)
         for sharp in (0.0, 0.5, 1.0):
@@ -421,7 +421,7 @@ def test_curved_faces_keep_the_boundary_on_the_shared_polyline():
     midpoints on the TRUE surface while the adjacent cap kept the straight chord,
     so 4,032 of 4,224 boundary vertices drifted off it by up to 0.048mm.
 
-    Covers `noise` as well as the lattice kinds on purpose — noise still takes
+    Covers `noise` as well as the lattice kinds on purpose, noise still takes
     the subdivision path, so it is the one that regression-tests the chord fix
     rather than the lattice."""
     face = _cylinder_lateral_face(CYL_R_EXACT)
@@ -445,11 +445,11 @@ def test_the_seam_strip_is_exact():
     """The staggered crushed hex cells of 0.1.75, and their whole bug class.
 
     Every other exactness check here excludes triangles touching the boundary,
-    and on a closed face the UV seam columns ARE boundary — so the strip between
+    and on a closed face the UV seam columns ARE boundary, so the strip between
     them and the first lattice column was never scored, and three defects shipped
     unseen: (1) uniform ring densification put seam ring points at non-crease
     heights, (2) the near-ring cull then ate the lattice's own on-seam corners
-    (a lost corner is a crushed cell — up to 46% of depth, staggered by row),
+    (a lost corner is a crushed cell, up to 46% of depth, staggered by row),
     and (3) _flip_to_creases refused to repair any triangle touching a ring
     vertex, though seam ring vertices displace with the field (that one also
     broke ribs/waves at angle 0: a 33%-of-depth notch on every row).
@@ -505,8 +505,8 @@ def test_the_seam_strip_is_exact():
 
 def test_triangle_winding_agrees_with_the_normals():
     """The two-halves bug: scipy Delaunay simplex orientation is arbitrary, and
-    a double-sided renderer negates the shading normal on back-wound triangles
-    — so a tube's REVERSED outer face rendered half lit, half inside-out, with
+    a double-sided renderer negates the shading normal on back-wound triangles,
+    so a tube's REVERSED outer face rendered half lit, half inside-out, with
     a hard model-fixed boundary no lighting change could touch (2026-08-02).
     Inconsistent winding also rides into STL/3MF. Height oracles cannot see
     orientation, which is how it survived every exactness test.
@@ -534,7 +534,7 @@ def test_triangle_winding_agrees_with_the_normals():
         ex.Next()
     assert outer is not None, "no outer tube face"
     assert outer.wrapped.Orientation() == TopAbs_Orientation.TopAbs_REVERSED, \
-        "fixture no longer reversed — find another reversed-face case"
+        "fixture no longer reversed, find another reversed-face case"
 
     loc = TopLoc_Location()
     tri = BRep_Tool.Triangulation_s(outer.wrapped, loc)
@@ -570,13 +570,13 @@ def test_the_uv_seam_is_textured_like_any_other_line():
     """The seam stripe, and the misdiagnosis that outlived it.
 
     A closed face's UV seam is an artificial cut, so `_boundary_taper` exempts it
-    and both sides evaluate the same field — which only works because a full turn
+    and both sides evaluate the same field, which only works because a full turn
     is now a whole number of the pattern's u-period. An earlier reading of "0 of
     78 seam vertices displaced" concluded the exemption had failed for
     ribs/waves/knurl. It had not: their field is simply ZERO at the seam, because
     the phase origin is the seam and phase 0 is a trough. The trough LAND there is
     the same width as every other trough's (measured 0.5mm on a 2mm period), so
-    there is no stripe — nothing to fix.
+    there is no stripe, nothing to fix.
 
     So test the two things that actually have to hold, neither of which is "the
     seam vertices moved": the field wraps, and the taper pins nothing on the seam

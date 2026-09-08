@@ -4,8 +4,8 @@
 // The case this file was written for is the one that replaced a compile-time
 // check. FEATURE_META used to be a total `Record<FeatureType, FeatureMeta>`, so
 // adding a feature type and forgetting its mark was a type error. It cannot be
-// total any more: the union is the document FORMAT — every type a file may
-// contain — and that is a wider thing than every type this build knows how to
+// total any more: the union is the document FORMAT, every type a file may
+// contain, and that is a wider thing than every type this build knows how to
 // draw, which is what came apart when a tool became a plugin.
 //
 // So the totality is asserted here instead, and against a stricter question than
@@ -23,7 +23,7 @@ afterEach(() => resetContributions());
 /** Every feature type in the document format.
  *
  *  Typed as a total Record so the compiler still catches a NEW type with no
- *  entry — the check that was lost when FEATURE_META became partial, moved to
+ *  entry, the check that was lost when FEATURE_META became partial, moved to
  *  where it can also say who is expected to draw the thing. */
 const DRAWN_BY: Record<FeatureType, "app" | "FundaCAD.Texture"> = {
   sketch: "app",

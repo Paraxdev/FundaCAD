@@ -10,7 +10,7 @@
 //
 // Nothing tells you a step forgot this. The build stays green for weeks and
 // then fails somewhere else entirely, so the setting is read rather than
-// remembered — the same reason check-no-plugin-code.mjs reads the bundle.
+// remembered, the same reason check-no-plugin-code.mjs reads the bundle.
 //
 // Pure text, no filesystem: the caller passes a workflow's contents, so this is
 // checkable against a fixture that MUST be reported and not only against the
@@ -52,7 +52,7 @@ export function uploadSteps(text) {
     // The step's own keys, with the dash turned into a space so the first line
     // is indented like the rest of them. Without that the step's `name:` cannot
     // be told from `with: { name: ... }`, which is the artifact's name and not
-    // the step's — a message that says "(fundacad-linux)" instead of "(Upload
+    // the step's, a message that says "(fundacad-linux)" instead of "(Upload
     // artifacts)" points at the wrong line of the file.
     const step = lines.slice(start, end);
     step[0] = step[0].replace(/^(\s*)-/, "$1 ");

@@ -1,5 +1,5 @@
 // Single source of truth for keyboard shortcuts. keymap.ts dispatches from this
-// table, commands.ts reads its hint column, and the `?` HUD renders it — so the
+// table, commands.ts reads its hint column, and the `?` HUD renders it, so the
 // three surfaces can never disagree again (they did: M/T were emitted but never
 // dispatched, the palette advertised Fit on "F" while F ran Fillet, and the
 // ribbon promised sketch Offset on "O" with no binding behind it).
@@ -12,7 +12,7 @@ export interface Shortcut {
   /** Ctrl (or Cmd) must be held.
    *
    *  Only the booleans use it, and they use it because the three single letters
-   *  that name them — U, B, I — are already Clean Up, Chamfer and Measure, and a
+   *  that name them, U, B, I, are already Clean Up, Chamfer and Measure, and a
    *  family of three commands wants three keys that read as a family rather than
    *  whichever letters happened to be free. Everything else here is bare: a
    *  modeling app's tool keys are meant to be hit one-handed while the other
@@ -108,7 +108,7 @@ export function resolveShortcut(
 // --- the `?` cheat-sheet HUD: auto-generated, dismissed by any key/click ---
 
 /** One rendered section of the HUD. Derived from SHORTCUTS so the cheat sheet
- *  cannot drift from what the dispatcher actually does — the whole point of this
+ *  cannot drift from what the dispatcher actually does, the whole point of this
  *  file being the single source of truth. */
 export interface HudGroup {
   name: string;

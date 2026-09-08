@@ -1,4 +1,4 @@
-// Which drawn edges belong to a given B-rep face — the geometry behind "select a
+// Which drawn edges belong to a given B-rep face, the geometry behind "select a
 // face, then fillet it", where the face is shorthand for every edge around it.
 //
 // It has to be geometry, because there is no topology to ask. The rebuild reply
@@ -8,7 +8,7 @@
 // drop coplanar seams and never crosses the wire. So an edge belongs to a face
 // when it LIES on it: every sample of its polyline sits on the face's surface.
 //
-// DOM/three-free, so vitest covers it headlessly — same discipline as
+// DOM/three-free, so vitest covers it headlessly, same discipline as
 // edgeMatch.ts next door, and for the same reason: this is the part that can be
 // wrong in a way the user sees (filleting the wrong ring of edges), while the
 // buffer walking that feeds it needs a real model to exist at all.
@@ -17,7 +17,7 @@ export type Vec3 = [number, number, number];
 /** One world-space triangle of a face's tessellation. */
 export type Tri = readonly [Vec3, Vec3, Vec3];
 
-/** A face's triangles plus their bounding box — the box is the cheap reject that
+/** A face's triangles plus their bounding box, the box is the cheap reject that
  *  keeps the test near-linear: almost every edge of the body is nowhere near the
  *  face, and answering that costs six comparisons instead of a distance to every
  *  triangle. */
@@ -62,7 +62,7 @@ export function faceEdgeTol(bboxDiag: number): number {
   return Math.max(0.25, 0.004 * bboxDiag);
 }
 
-/** Squared distance from `p` to the closest point of triangle (a, b, c) —
+/** Squared distance from `p` to the closest point of triangle (a, b, c),
  *  Ericson's barycentric region test, which needs no square roots until the
  *  caller wants one. */
 export function pointTriangleDist2(p: Vec3, a: Vec3, b: Vec3, c: Vec3): number {
@@ -150,7 +150,7 @@ const MAX_SAMPLES = 12;
  *  Straight edges are the reason for the segment midpoints. The sidecar sends a
  *  straight edge as its two ENDPOINTS and nothing else
  *  (tessellate._line_endpoints), so testing "the polyline's points" alone would
- *  ask only about the two corners — and an edge that merely touches this face at
+ *  ask only about the two corners, and an edge that merely touches this face at
  *  both of its ends, without lying on it anywhere in between, would pass. */
 export function edgeSamples(points: readonly Vec3[]): Vec3[] {
   if (points.length < 2) return [...points];
@@ -170,7 +170,7 @@ export function edgeSamples(points: readonly Vec3[]): Vec3[] {
   return out;
 }
 
-/** Does this edge lie on this face? Every sample within `tol` of the surface —
+/** Does this edge lie on this face? Every sample within `tol` of the surface,
  *  "every", because an edge that shares a corner or a stretch with the face is
  *  not an edge OF it. */
 export function edgeLiesOnFace(points: readonly Vec3[], face: FaceSurface, tol: number): boolean {
@@ -184,7 +184,7 @@ export function edgeLiesOnFace(points: readonly Vec3[], face: FaceSurface, tol: 
 
 /** Every edge of `edges` that lies on `face`, input order preserved. Generic in
  *  the edge type so the viewport can hand it live EdgeRefs and get the same refs
- *  back — identity is what the selection is keyed on. */
+ *  back, identity is what the selection is keyed on. */
 export function edgesOnFace<T extends { points: readonly Vec3[] }>(
   edges: readonly T[],
   face: FaceSurface,

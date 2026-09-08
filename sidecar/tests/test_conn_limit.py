@@ -2,14 +2,14 @@
 
 Every connection is counted per source IP and refused past MAX_CONNS_PER_IP.
 The counter was incremented before the auth check and decremented in the
-handler's `finally` — but `finally` began by cancelling the pending-task set,
+handler's `finally`, but `finally` began by cancelling the pending-task set,
 and that set was only bound AFTER the auth check. So an unauthorized connection
 closed the socket, returned, and raised UnboundLocalError out of its own
 cleanup, which skipped the decrement below it.
 
 The result was a sidecar that quietly bricked itself. Eight bad handshakes from
-one address — a dev server started before its token was known, a page reloaded a
-few times with a stale token, a client retrying — and from then on EVERY
+one address, a dev server started before its token was known, a page reloaded a
+few times with a stale token, a client retrying, and from then on EVERY
 connection from that address was refused with "too many connections", including
 correct ones, for the life of the process. On the other end it looked like a
 viewport that simply never built anything, with the sidecar still listening and
@@ -71,7 +71,7 @@ async def main():
             assert code == 1008, f"rejection {i} closed with {code}, expected 1008"
 
         # The client sees the close before the server's own finally has run, so
-        # give the loop a turn — otherwise the last rejection is still "open"
+        # give the loop a turn, otherwise the last rejection is still "open"
         # and the count is legitimately 1.
         await asyncio.sleep(0.2)
         assert not server._ip_conns, (

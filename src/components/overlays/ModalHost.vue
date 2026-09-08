@@ -90,7 +90,7 @@ function onKeydown(e: KeyboardEvent) {
   e.stopPropagation();
 }
 
-// On WINDOW, in the CAPTURE phase — not on the backdrop element. The trap has to
+// On WINDOW, in the CAPTURE phase, not on the backdrop element. The trap has to
 // swallow keystrokes wherever focus happens to be (click the backdrop and focus
 // leaves the card), which is what the imperative version got from
 // window.addEventListener("keydown", onKey, true).

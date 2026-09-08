@@ -1,5 +1,5 @@
 // The gate, not the CSS. What matters here is that an untrusted stored value
-// can never put the shell into an arrangement the stylesheet has no rule for —
+// can never put the shell into an arrangement the stylesheet has no rule for,
 // the failure mode of which is not an error but a blank column.
 
 import { describe, it, expect } from "vitest";
@@ -56,7 +56,7 @@ describe("asLayoutPrefs", () => {
 
   it("hands back a fresh object each time", () => {
     // Callers compare identity to decide whether to redraw, and the defaults are
-    // a module constant — returning it directly would let a caller mutate the
+    // a module constant, returning it directly would let a caller mutate the
     // fallback every future read depends on.
     const a = asLayoutPrefs(null);
     expect(a).not.toBe(DEFAULT_LAYOUT);

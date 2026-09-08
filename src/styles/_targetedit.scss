@@ -1,5 +1,5 @@
 /* ============================================================================
-   Selection editor — the list of what a feature is applied to, open while the
+   Selection editor, the list of what a feature is applied to, open while the
    viewport is armed to add and remove entries.
 
    Parked, not floating. Every other overlay in the app follows the geometry it
@@ -111,14 +111,14 @@
   color: var(--text);
 }
 /* The row lights up with the geometry it names, so the pairing is visible from
-   either end — point at the row, the edge glows; point at the edge, you can see
+   either end, point at the row, the edge glows; point at the edge, you can see
    which row it is. */
 .tgt-item:hover {
   background: var(--accent-tint);
   border-color: var(--accent);
 }
 /* An entry this build cannot place on screen. Kept and carried through the
-   commit — the sidecar resolves these better than the viewport does — so it is
+   commit, the sidecar resolves these better than the viewport does, so it is
    marked rather than hidden, because a set of four that displayed as three would
    lose one on the next Done. */
 .tgt-unresolved .tgt-label {
@@ -141,7 +141,7 @@
   border-radius: 50%;
   background: none;
   /* Explicit, because this holds an <svg stroke="currentColor"> and a <button>
-     does NOT inherit colour — it falls back to the UA's `buttontext`, which on a
+     does NOT inherit colour, it falls back to the UA's `buttontext`, which on a
      dark surface draws the mark as an empty box. */
   color: var(--text-mute);
   cursor: pointer;

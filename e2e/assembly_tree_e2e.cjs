@@ -2,7 +2,7 @@
 //
 // Everything else about Phase C is unit tests, sidecar tests and row COUNTS.
 // This is the one that actually looks at the panel: real sidecar import of
-// asm_nested.step, real store, real BrowserTree, real DOM — then screenshots
+// asm_nested.step, real store, real BrowserTree, real DOM, then screenshots
 // it, expands it, toggles a subassembly's eye, and round-trips the document
 // through save/load to prove the tree survives.
 //
@@ -17,7 +17,7 @@ const FIXTURE = path.resolve(__dirname, "../sidecar/fixtures/asm_nested.step");
 const OUT = "/tmp/assembly_tree_shots";
 let failures = 0;
 const check = (name, ok, detail) => {
-  console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? ` — ${detail}` : ""}`);
+  console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
   if (!ok) failures++;
 };
 

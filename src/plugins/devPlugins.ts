@@ -14,7 +14,7 @@
 // THIS FILE IS IMPORTED FROM INSIDE AN `import.meta.env.DEV` BRANCH, and that is
 // load-bearing rather than tidy. Vite replaces that expression with `false` in a
 // production build, rollup drops the dead branch, and the dynamic import inside
-// it goes with it — taking this module, the glob, and every plugin's code out of
+// it goes with it, taking this module, the glob, and every plugin's code out of
 // the shipped bundle. An import at the top of ./activate.ts would keep all of it,
 // and the switch would be a claim rather than a fact. tests/plugins/shipped.test
 // checks the built output for exactly that.

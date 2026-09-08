@@ -13,8 +13,8 @@
 // would strand anyone who moved back to an older build partway through.
 //
 // One helper rather than nine open-coded fallbacks, because the failure here is
-// silent — a key that got renamed in one place and not the other loses a setting
-// with no error anywhere — and one helper is one thing to get right and one
+// silent, a key that got renamed in one place and not the other loses a setting
+// with no error anywhere, and one helper is one thing to get right and one
 // thing to test.
 
 /** The stored value for `key`, migrating a value found under an older name.
@@ -23,7 +23,7 @@
  *  reach all the way back: someone who last opened the app two names ago has
  *  their theme under the oldest key and nothing at all under the newer two, and
  *  a single fallback would look one step behind and give up. Tried newest
- *  first, which is also the order they should be passed in — the first one that
+ *  first, which is also the order they should be passed in, the first one that
  *  holds anything wins, so a stale value from three names ago cannot outrank a
  *  fresher one.
  *

@@ -1,5 +1,5 @@
 // Which sections each filter shows. The rule that matters is the one about
-// what happens to a section nobody thought about — see the last test.
+// what happens to a section nobody thought about, see the last test.
 
 import { describe, it, expect } from "vitest";
 import {
@@ -25,7 +25,7 @@ describe("sectionVisible", () => {
   });
 
   it("counts Origin as planes and axes", () => {
-    // Origin is not a construction plane, so it is its own section — but a user
+    // Origin is not a construction plane, so it is its own section, but a user
     // asking for "planes and axes" means both.
     expect(shown("planes")).toEqual(["origin", "planes"]);
   });

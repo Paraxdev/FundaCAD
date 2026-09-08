@@ -1,8 +1,8 @@
 """What is actually in the model, in the terms a caller can act on.
 
 The frontend measures off the MESH, because a browser has nothing else. The
-sidecar has the B-rep, so the exact quantities — volume, surface area, centre of
-mass, what kind of surface each face actually is — are one OCCT call away, and
+sidecar has the B-rep, so the exact quantities, volume, surface area, centre of
+mass, what kind of surface each face actually is, are one OCCT call away, and
 this is where they are asked for.
 
 Two things here are not measurements and matter more than the measurements:
@@ -24,7 +24,7 @@ Sizes are capped. A 60,000-face import must not turn one question into a
 40 MB answer, so faces and edges are truncated and the reply says so.
 """
 
-import font_guard  # noqa: F401  MUST precede build123d — see font_guard.py
+import font_guard  # noqa: F401  MUST precede build123d, see font_guard.py
 
 from geom_select import edge_fingerprint, face_fingerprint
 from shape_util import _as_compound
@@ -40,7 +40,7 @@ def _xyz(p):
     """Three plain floats out of a point, whichever kind it is.
 
     build123d exposes X/Y/Z as PROPERTIES and raw OCCT exposes them as METHODS,
-    and both kinds arrive here — the fingerprints come back through build123d,
+    and both kinds arrive here, the fingerprints come back through build123d,
     the extrema and mass properties come back as gp_Pnt. Getting this wrong is
     silent: every call site is inside a try that turns the TypeError into a
     missing field, so the reply simply loses the point rather than failing."""
@@ -58,14 +58,14 @@ def _round3(v):
 
 
 def _point_on(face):
-    """A point that genuinely lies ON `face` — the centroid projected onto the
+    """A point that genuinely lies ON `face`, the centroid projected onto the
     surface.
 
     The centroid itself does not: on an annulus it sits in the hole, on a bent
     face it sits behind it. by:"nearest" scores by true point-to-surface
     distance, so a centroid handed back as "the point on this face" is a point
     whose nearest face may be a different one. Returns None if the projection
-    fails, and then the caller simply has no point for that face — the selector
+    fails, and then the caller simply has no point for that face, the selector
     is the part that has to work."""
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeVertex
     from OCP.BRepExtrema import BRepExtrema_DistShapeShape
@@ -227,7 +227,7 @@ def inspect_bodies(bodies, detail=True, max_faces=MAX_FACES, max_edges=MAX_EDGES
             # FaceAdjacency numbers faces the way OCCT's shape map does; `i`
             # here is the position in comp.faces(). Measured, the two orders
             # agree on every shape tried (box, cylinder, washer, a cut, a fuse,
-            # a two-solid compound) — which is why there is no test that fails
+            # a two-solid compound), which is why there is no test that fails
             # without this map. It is here because nothing DOCUMENTS that they
             # agree: it is a coincidence of two libraries both walking a
             # TopExp_Explorer, and a face index that silently means a different

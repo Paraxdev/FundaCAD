@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // A text input that commits on `change` (Enter / blur): `commit` returns an
-// error message to show — the input turns red and KEEPS the rejected text so
-// the user can fix it — or null on success. Typing clears the error.
+// error message to show, the input turns red and KEEPS the rejected text so
+// the user can fix it, or null on success. Typing clears the error.
 //
 // Replaces liveInputs.ts's validatedInput. Bare on purpose: ValidatedRow wraps
 // it in a labelled row (ValidatedRow), while the Parameters dialog drops it
@@ -20,7 +20,7 @@ const props = defineProps<{
   /** A refusal from OUTSIDE the box: the kernel could not build what the value
    *  currently says. Kept apart from the local `error`, which is a parse failure
    *  the user caused by pressing Enter, because this one arrives unasked while
-   *  they are still typing and must not be cleared by the next keystroke — the
+   *  they are still typing and must not be cleared by the next keystroke, the
    *  keystroke schedules another preview, and that build is what withdraws it. */
   problem?: string | null | undefined;
   placeholder?: string | undefined;
@@ -34,7 +34,7 @@ const props = defineProps<{
    *
    *  Free text, so it will often be nonsense mid-word ("1", "16", "16m"). The
    *  panel is expected to ignore what it cannot parse rather than to flash an
-   *  error at every keystroke — the ERROR path is still `commit`, which is what
+   *  error at every keystroke, the ERROR path is still `commit`, which is what
    *  the user asked for by pressing Enter. */
   preview?: ((raw: string) => void) | undefined;
   /** Take the preview back down. `committing` is true when a commit is about to
@@ -87,8 +87,8 @@ function endPreview(committing: boolean) {
   props.previewEnd?.(committing);
 }
 
-// Leaving the field without committing — Escape, a click elsewhere, the panel
-// closing under a selection change — has to take the preview down too, or the
+// Leaving the field without committing, Escape, a click elsewhere, the panel
+// closing under a selection change, has to take the preview down too, or the
 // model is left showing a number the document does not hold and nothing on
 // screen says so.
 onBeforeUnmount(() => endPreview(false));

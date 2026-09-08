@@ -12,7 +12,7 @@ import type { Engine } from "./engine";
  *
  *  Cross-section is the one entry that is NOT `.active`. It became a MODE you keep
  *  working inside, so counting it as busy made every command in the app return
- *  silently for as long as the section was up — the same invisible dead-app symptom
+ *  silently for as long as the section was up, the same invisible dead-app symptom
  *  the stale `planePick` flag used to cause. Its modal half, `picking`, genuinely
  *  does own the gesture. The section stands its own handle down while another tool
  *  runs by reading this predicate back. */

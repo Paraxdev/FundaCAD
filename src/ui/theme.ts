@@ -1,6 +1,6 @@
 // The active theme, as a user setting.
 //
-// A theme here is a palette and nothing else — the proportions (radii, the
+// A theme here is a palette and nothing else, the proportions (radii, the
 // spacing scale, easing, durations) are shared across all of them, so switching
 // is a repaint and never a relayout. The palettes themselves live in
 // styles/_themes.scss; this file only decides which one is on, remembers it, and
@@ -12,7 +12,7 @@
 // in step.
 //
 // The DOM side is one attribute. CSS does the rest, because a theme block is the
-// same custom properties at a higher specificity — which also means the app is
+// same custom properties at a higher specificity, which also means the app is
 // already themed before this module runs, and a failure here degrades to the
 // default palette rather than to an unstyled page.
 
@@ -21,8 +21,8 @@ import { readSetting } from "./storedSetting";
 export interface Theme {
   id: string;
   label: string;
-  /** For the settings UI: is this a light or dark palette? Not used for styling
-   *  — `color-scheme` in the theme block does that — but a picker wants to group
+  /** For the settings UI: is this a light or dark palette? Not used for styling,
+   *  `color-scheme` in the theme block does that, but a picker wants to group
    *  them, and guessing from the id would break the moment one is renamed. */
   mode: "dark" | "light";
 }
@@ -46,8 +46,8 @@ export const DEFAULT_THEME_ID = "apollo";
 const KEY = "fundacad.theme";
 const LEGACY_KEYS = ["neocad.theme", "sindricad.theme"];
 
-/** Narrow an untrusted string — a stored setting, a `<select>` value, a URL
- *  parameter — to a known theme id, or null. Every boundary that can set the
+/** Narrow an untrusted string, a stored setting, a `<select>` value, a URL
+ *  parameter, to a known theme id, or null. Every boundary that can set the
  *  theme goes through here: an unknown id would stamp an attribute nothing
  *  matches, leaving whatever was on screen before, which looks exactly like the
  *  setting not working rather than like a rejected value. */
@@ -71,7 +71,7 @@ export function themeMode(id: string = activeId): "dark" | "light" {
 }
 
 /** Write the attribute. The default theme lives on bare `:root`, so it is
- *  expressed by REMOVING the attribute rather than by setting it — otherwise
+ *  expressed by REMOVING the attribute rather than by setting it, otherwise
  *  `[data-theme="forge"]` would have to exist as a duplicate of :root, and the
  *  two would drift. */
 function apply(id: string) {
@@ -96,7 +96,7 @@ export function setTheme(id: string) {
 
 /** Subscribe to theme changes; returns the unsubscribe.
  *
- *  CSS needs no subscriber — it re-cascades on its own. This exists for the
+ *  CSS needs no subscriber, it re-cascades on its own. This exists for the
  *  parts that CANNOT: the Three.js viewport, whose materials hold resolved
  *  numbers rather than references to a custom property (see
  *  viewport/themeColors.ts). */
@@ -108,7 +108,7 @@ export function onThemeChange(fn: () => void): () => void {
 /** Put the stored theme on the document. Call once at startup.
  *
  *  Needed even though `activeId` is read at module load, because reading it does
- *  not write the attribute — and a stored non-default theme would otherwise show
+ *  not write the attribute, and a stored non-default theme would otherwise show
  *  the default palette until the user changed something. */
 export function initTheme() {
   apply(activeId);

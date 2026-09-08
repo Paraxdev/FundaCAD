@@ -5,11 +5,11 @@
 // DimFlow / ProjectFlow precedent: ModifyHost below is a set of live accessors
 // into SketchMode, never a copy. The entity list is the one thing here that is
 // REPLACED rather than mutated (every op in ./modify returns a fresh array), so
-// the host carries a setter for it as well as a reader — an accessor alone
+// the host carries a setter for it as well as a reader, an accessor alone
 // would have let a stale array survive a solve.
 //
-// The three pieces of in-progress state — the first line of a fillet/chamfer
-// pair, the base point of a move, and the offset's live pick — moved out of
+// The three pieces of in-progress state, the first line of a fillet/chamfer
+// pair, the base point of a move, and the offset's live pick, moved out of
 // SketchMode entirely and are this collaborator's own. They are cleared
 // together by reset(), which is what Escape, a tool change and an undo all
 // call; leaving any one of them set across those is how a modify tool ends up
@@ -34,7 +34,7 @@ import { contextMenu } from "../ui/menu";
 import { setPrompt } from "../ui/prompt";
 import { toast } from "../ui/toast";
 
-/** The slice of SketchMode these tools read/write — live accessors, not copies. */
+/** The slice of SketchMode these tools read/write, live accessors, not copies. */
 export interface ModifyHost {
   /** live entity list */
   entities(): ResolvedEntity[];
@@ -53,7 +53,7 @@ export interface ModifyHost {
   planePoint(e: MouseEvent): THREE.Vector2 | null;
   /** the shared tail every modify op ends on: prune, re-solve, repaint, bank */
   afterModify(): void;
-  /** promote a measured dimension to a driving one — the offset distance */
+  /** promote a measured dimension to a driving one, the offset distance */
   setDrivingDimension(c: SketchConstraint): void;
 }
 
@@ -99,7 +99,7 @@ export class ModifyFlow {
   }
 
   /** Fusion's in-command marking menu for the Offset tool: the two things the
-   *  cursor alone can't say — whether to take the whole connected chain, and
+   *  cursor alone can't say, whether to take the whole connected chain, and
    *  which side to land on when the cursor is nowhere near the curve. */
   openOffsetMenu(e: MouseEvent) {
     e.preventDefault();
@@ -125,10 +125,10 @@ export class ModifyFlow {
   }
 
   /** Break Link (context menu): the selected projected entities become native
-   *  geometry with the SAME ids — attached constraints/dims stay valid, the
+   *  geometry with the SAME ids, attached constraints/dims stay valid, the
    *  geometry unfreezes, and the associative refresh skips them from now on
    *  (they are no longer type "projected"). Breaking one member of a
-   *  multi-curve group (a face boundary's siblings) breaks only that member —
+   *  multi-curve group (a face boundary's siblings) breaks only that member,
    *  the others stay linked (Fusion behavior). */
   breakSelectedLinks() {
     const ids = this.selectedProjectedIds();
@@ -205,7 +205,7 @@ export class ModifyFlow {
   }
 
   /** The selected projected (linked reference) ids, toasting PROJECTED_FIXED_MSG
-   *  once when any exist — the shared seam for tools that transform the
+   *  once when any exist, the shared seam for tools that transform the
    *  selection. Each caller keeps its own retention semantics (deselect /
    *  keep-selected / skip from copies). */
   warnSelectedProjected(): Set<string> {
@@ -241,7 +241,7 @@ export class ModifyFlow {
     return rot.length === 1 ? rot : rot.map((r) => ({ ...r, id: newEntityId() }));
   }
 
-  /** Move/Copy: click a base point, then a destination — translate the whole
+  /** Move/Copy: click a base point, then a destination, translate the whole
    *  selection. Move mutates in place; Copy leaves the originals and selects the copies. */
   moveClick(p: THREE.Vector2) {
     if (!this.host.selected().size) { toast("Select entities first, then Move/Copy"); return; }
@@ -251,7 +251,7 @@ export class ModifyFlow {
     if (this.host.tool() === "copy") {
       const copies: ResolvedEntity[] = [];
       const sel = new Set<string>();
-      const projected = this.warnSelectedProjected(); // linked — can't clone the link
+      const projected = this.warnSelectedProjected(); // linked, can't clone the link
       for (const e of this.host.entities()) {
         if (!this.host.selected().has(e.id) || projected.has(e.id)) continue;
         const id = newEntityId();
@@ -290,7 +290,7 @@ export class ModifyFlow {
     toast("Scale: type a factor (e.g. 2 or 0.5)");
   }
   /** Offset (Fusion parity), two-phase: click a curve, then move the cursor to
-   *  choose the SIDE and distance — or type one — and click again (or Enter) to
+   *  choose the SIDE and distance, or type one, and click again (or Enter) to
    *  apply. `side` and `mag` are kept apart on purpose: the box displays the
    *  magnitude, so folding them into one signed number is how typing a value
    *  silently flips an inward offset outward (the abs-display trap). */
@@ -320,7 +320,7 @@ export class ModifyFlow {
 
   /** The offset result for the current pick, honouring Chain Selection. Chain
    *  first (a connected profile offsets as a unit), falling back to the single
-   *  curve — which is also what a lone curve or a junction lands on. */
+   *  curve, which is also what a lone curve or a junction lands on. */
   private offsetResultFor(idx: number, dist: number): OffsetResult | null {
     if (Math.abs(dist) < 1e-6) return null;
     return (this.offsetChainMode ? offsetChain(this.host.entities(), idx, dist) : null)
@@ -336,7 +336,7 @@ export class ModifyFlow {
     const signed = signedOffsetAt(src, p);
     const typed = this.host.dim().isUserDriven("offset") ? this.host.dim().getValue("offset") : null;
     if (typed !== null) {
-      // Once a value is typed, the SIGN the user wrote owns the side — that is
+      // Once a value is typed, the SIGN the user wrote owns the side, that is
       // what the minus is FOR, and the old tool worked that way. Previously the
       // cursor always won, so typing -1 silently offset outward and the minus
       // looked ignored. Clear the field to hand the side back to the cursor.

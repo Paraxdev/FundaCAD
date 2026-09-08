@@ -1,8 +1,8 @@
-//! Printer device layer — talk Moonraker (Snapmaker U1 now, Qidi/other Moonraker
+//! Printer device layer, talk Moonraker (Snapmaker U1 now, Qidi/other Moonraker
 //! machines later) from the NATIVE side. The webview never reaches the LAN: it
 //! calls these Tauri commands by printer *id*, and Rust resolves the host from a
 //! Rust-owned registry (`app_data_dir()/printers.json`). This keeps the strict
-//! webview CSP (connect-src localhost only) intact — native reqwest is not
+//! webview CSP (connect-src localhost only) intact, native reqwest is not
 //! subject to it.
 //!
 //! Facts pinned to the U1's shipped firmware (fw 1.3.0, verified against
@@ -24,7 +24,7 @@ use tauri::{AppHandle, Emitter, Manager};
 pub enum PrinterKind {
     /// Snapmaker U1: Moonraker + the extra start_local_print/map_table endpoints.
     MoonrakerU1,
-    /// Plain Klipper/Moonraker (e.g. Qidi X-Plus 4) — upload + print/start only.
+    /// Plain Klipper/Moonraker (e.g. Qidi X-Plus 4), upload + print/start only.
     Moonraker,
 }
 
@@ -32,7 +32,7 @@ pub enum PrinterKind {
 pub struct PrinterConfig {
     pub id: String,
     pub name: String,
-    /// bare host or IP — validated: no scheme, slash, '@', or whitespace.
+    /// bare host or IP, validated: no scheme, slash, '@', or whitespace.
     pub host: String,
     pub port: u16,
     pub kind: PrinterKind,
@@ -129,7 +129,7 @@ fn write_registry(app: &AppHandle, list: &[PrinterConfig]) -> PResult<()> {
     std::fs::rename(&tmp, &path).map_err(|e| PrinterError::new(ErrCode::Config, e.to_string()))
 }
 
-/// A host must be a bare IP/hostname — never a URL. Rejecting scheme/slash/@/space
+/// A host must be a bare IP/hostname, never a URL. Rejecting scheme/slash/@/space
 /// is what lets us build `http://{host}:{port}` safely from webview-supplied data
 /// (the webview only ever sends an id, but upsert takes a host from a settings UI).
 fn valid_host(host: &str) -> bool {
@@ -329,7 +329,7 @@ async fn status_once(client: &reqwest::Client, base: &str) -> PResult<PrintStatu
 
 /// Serialize a filament remap as the Python-literal-ish string the U1 firmware
 /// parses: `[[logical,physical],...]`. It is a JSON string nested inside the
-/// start_local_print JSON body — a serialization that is easy to get subtly
+/// start_local_print JSON body, a serialization that is easy to get subtly
 /// wrong, hence the dedicated helper + unit test.
 fn map_table_string(map_table: &[(u8, u8)]) -> String {
     let pairs: Vec<[u8; 2]> = map_table.iter().map(|&(l, p)| [l, p]).collect();
@@ -374,7 +374,7 @@ pub async fn printer_upload_and_print(
     let client = http()?;
     let base = base_url(&cfg);
 
-    // 1) upload (print=false) — start separately so we can pass the map_table.
+    // 1) upload (print=false), start separately so we can pass the map_table.
     let part = reqwest::multipart::Part::bytes(bytes)
         .file_name(remote.clone())
         .mime_str("application/octet-stream")
@@ -463,7 +463,7 @@ pub async fn printer_set_filament(
 ) -> PResult<()> {
     let cfg = resolve(&app, &id)?;
     let hex = color.trim_start_matches('#').to_uppercase();
-    // guard the script fields — they are interpolated into a gcode command.
+    // guard the script fields, they are interpolated into a gcode command.
     let clean = |s: &str| -> String {
         s.chars().filter(|c| c.is_ascii_alphanumeric() || matches!(c, ' ' | '-' | '_' | '+')).take(48).collect()
     };
@@ -523,7 +523,7 @@ pub fn printer_monitor_start(app: AppHandle, id: String) -> PResult<()> {
         let client = match http() {
             Ok(c) => c,
             Err(_) => {
-                // never got as far as polling once — still tell the frontend
+                // never got as far as polling once, still tell the frontend
                 // monitoring for this printer isn't running, and don't leave a
                 // finished handle sitting in the map.
                 let _ = app2.emit("printer:offline", id2.clone());
@@ -542,7 +542,7 @@ pub fn printer_monitor_start(app: AppHandle, id: String) -> PResult<()> {
                     let terminal = !matches!(st.state.as_str(), "printing" | "paused");
                     let _ = app2.emit("printer:status", StatusEvent { id: id2.clone(), status: st });
                     if terminal {
-                        break; // idle/complete/error — stop polling until asked again
+                        break; // idle/complete/error, stop polling until asked again
                     }
                 }
                 Err(_) => {
@@ -576,9 +576,9 @@ pub fn printer_monitor_stop(app: AppHandle, id: String) -> PResult<()> {
 // Lifecycle is PANEL-driven, deliberately decoupled from the print-status
 // monitor: frames only flow while someone is looking at them. The U1's webcam
 // server (fw 1.3.0) serves /webcam/snapshot.jpg (and a native ~11fps MJPEG
-// stream we don't use — 1fps snapshots are enough for "is the print ok" and an
+// stream we don't use, 1fps snapshots are enough for "is the print ok" and an
 // order of magnitude less bandwidth). Frames reach the webview as data: URLs,
-// which the strict CSP already allows in img-src — no CSP change, no LAN access
+// which the strict CSP already allows in img-src, no CSP change, no LAN access
 // from the webview.
 
 /// Separate map from `Monitors`: camera polling starts/stops with its panel,
@@ -614,7 +614,7 @@ pub fn printer_camera_start(app: AppHandle, id: String) -> PResult<()> {
             }
         };
         let mut fails = 0u8;
-        // no terminal-state exit — the camera has no "printing" concept; it
+        // no terminal-state exit, the camera has no "printing" concept; it
         // stops on explicit printer_camera_stop or repeated fetch failure.
         loop {
             tokio::time::sleep(Duration::from_secs(1)).await;

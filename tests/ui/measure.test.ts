@@ -2,7 +2,7 @@
 //
 // Each of these was a silent wrong number before: parseFloat("2mm") is 2 in
 // whatever the field was showing, parseFloat("1 inch") is 1, parseFloat("1/2")
-// is 1. You always got a number back, so nothing ever reported an error — the
+// is 1. You always got a number back, so nothing ever reported an error, the
 // part was just the wrong size.
 
 import { describe, it, expect } from "vitest";

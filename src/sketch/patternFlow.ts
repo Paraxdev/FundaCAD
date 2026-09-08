@@ -1,7 +1,7 @@
 // Pattern placement/edit flow: click to place, drag to size, type counts, click
-// to commit. Each pattern persists as an editable (associative) definition —
+// to commit. Each pattern persists as an editable (associative) definition,
 // entity patterns (rect/circular) replicate the current selection, presets emit
-// holes. Operates through the PatternHost accessor SketchMode provides — the
+// holes. Operates through the PatternHost accessor SketchMode provides, the
 // pending/center/edit-original state below is this collaborator's own (moved
 // out of SketchMode entirely), everything else is a live reference back into it.
 
@@ -19,19 +19,19 @@ export const ENTITY_PATTERNS = new Set<SketchTool>(["patternRect", "patternCircu
 // every pattern tool (presets + entity patterns)
 export const PATTERN_TOOLS = new Set<SketchTool>([...PRESET_PATTERNS, ...ENTITY_PATTERNS]);
 
-/** The slice of SketchMode this flow reads/writes — live accessors, not copies. */
+/** The slice of SketchMode this flow reads/writes, live accessors, not copies. */
 export interface PatternHost {
   /** current active sketch tool (which pattern is being placed) */
   tool(): SketchTool;
-  /** raw tool assignment, bypassing setTool()'s reset side-effects — editPattern
+  /** raw tool assignment, bypassing setTool()'s reset side-effects, editPattern
    *  needs the active tool switched to match the pattern being edited without
    *  wiping the placement state it just set up */
   setActiveTool(t: SketchTool): void;
   /** the full tool switch (used once placement commits, to return to "select") */
   setTool(t: SketchTool): void;
-  /** live multi-selection — never copied */
+  /** live multi-selection, never copied */
   selected(): Set<string>;
-  /** live pattern list — never copied; placement/edit push/splice it directly */
+  /** live pattern list, never copied; placement/edit push/splice it directly */
   patterns(): SketchPattern[];
   /** the shared on-canvas dimension input */
   dim(): DimInput;
@@ -55,7 +55,7 @@ export class PatternFlow {
   }
 
   /** fresh sketch session: drop any placement state (mirrors enter()'s original
-   *  scope — editOriginal is intentionally left alone, as before: it's always
+   *  scope, editOriginal is intentionally left alone, as before: it's always
    *  overwritten before it's next read, by editPattern()). */
   resetForEnter() {
     this.pendingPattern = null;

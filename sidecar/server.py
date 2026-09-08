@@ -1,4 +1,4 @@
-"""FundaCAD geometry sidecar — WebSocket loop + dispatch.
+"""FundaCAD geometry sidecar, WebSocket loop + dispatch.
 
 Protocol: one JSON request/response per message, matched by `id`.
   rebuild -> tessellated mesh (+ per-tri faceIds) + edge polylines + bbox
@@ -6,19 +6,19 @@ Protocol: one JSON request/response per message, matched by `id`.
 
 Heavy geometry (rebuild + tessellate) runs in a separate worker **process**, not
 on the asyncio event loop. Two reasons:
-  * responsiveness — the socket keeps serving (pings, other connections) while a
+  * responsiveness, the socket keeps serving (pings, other connections) while a
     rebuild runs, instead of blocking the loop on a GIL-holding OCCT call;
-  * robustness — OCCT lives in another process, so a kernel crash (segfault on a
+  * robustness, OCCT lives in another process, so a kernel crash (segfault on a
     bad boolean) can't take the server down; the pool just respawns the worker.
 ONE worker (max_workers=1), for reasons that are about correctness, not CPU
 saturation: features form a serial dependency chain (no second rebuild can
 usefully overlap), crash isolation needs a disposable process, and we use the
 'spawn' start method because fork + OCCT's threads can deadlock. Meshing still
 fans out across all cores per op (occt_smp.configure), but the boolean hot path
-is deliberately SERIAL per-op (builder._serial_bool — parallel BOP measured
+is deliberately SERIAL per-op (builder._serial_bool, parallel BOP measured
 ~5x slower on many-small-tool fuses), so idle cores during a long rebuild are
 expected, not a lost opportunity (audited 2026-07-25: parallel body chains /
-speculative tessellation refuted — see .fable/parallelism-audit-2026-07-25.md).
+speculative tessellation refuted, see .fable/parallelism-audit-2026-07-25.md).
 
 Lifecycle: on Linux we ask the kernel to SIGTERM us if our parent (the Tauri
 shell) dies (PR_SET_PDEATHSIG), so we never orphan. We print `LISTENING <port>`
@@ -64,7 +64,7 @@ EXIT_PORT_IN_USE = 3
 # WebSocket auth: every connection must carry the per-launch shared secret.
 # Rust sets FUNDACAD_SIDECAR_TOKEN when it spawns us; a manual `python server.py`
 # (no env) mints one and prints `TOKEN <t>` on stdout so a prober can read it
-# and append ?token=. There is NO open mode — the token is always required,
+# and append ?token=. There is NO open mode, the token is always required,
 # which is what keeps a foreign local process or a DNS-rebinding web page from
 # driving export / import / rebuild against us.
 _TOKEN: str | None = None
@@ -72,11 +72,11 @@ _TOKEN: str | None = None
 # Origins the Tauri webview legitimately connects from (prod custom-protocol
 # origin on Linux/Windows + the vite devUrl). A browser-originated WS always
 # sends Origin; a foreign origin is rejected even with a valid token. An absent
-# Origin (a non-browser client like a Python prober) is allowed — the token
+# Origin (a non-browser client like a Python prober) is allowed, the token
 # alone gates it.
 ALLOWED_ORIGINS = {
     "tauri://localhost",       # Linux (WebKitGTK) + macOS (WKWebView)
-    "http://tauri.localhost",  # Windows WebView2 (useHttpsScheme off — the default)
+    "http://tauri.localhost",  # Windows WebView2 (useHttpsScheme off, the default)
     "https://tauri.localhost", # Windows WebView2 with useHttpsScheme on
     "http://localhost:5173",
     "http://127.0.0.1:5173",
@@ -87,8 +87,8 @@ ALLOWED_ORIGINS |= {o for o in appenv.get("EXTRA_ORIGINS", "").split(",") if o}
 
 # Per-peer-IP concurrent-connection cap. The sidecar is bound to 127.0.0.1, so
 # every connection shares that address and this is effectively a global cap on
-# open sockets — it stops a runaway/leaky client (or a token holder stuck in a
-# reconnect loop) from exhausting file descriptors. The legit webview holds 1–2.
+# open sockets, it stops a runaway/leaky client (or a token holder stuck in a
+# reconnect loop) from exhausting file descriptors. The legit webview holds 1, 2.
 MAX_CONNS_PER_IP = 8
 _ip_conns: dict[str, int] = {}
 
@@ -98,7 +98,7 @@ _ip_conns: dict[str, int] = {}
 # clean, recoverable error instead of a frozen app.
 JOB_TIMEOUT = 25.0
 # DOC_TIMEOUT (120 s) used to live here for the ops that replay the whole feature
-# history (export, exportProject, interference, projectGeometry). Gone — those four
+# history (export, exportProject, interference, projectGeometry). Gone, those four
 # are supervised by PROGRESS now (STALL_TIMEOUT below). A wall clock could not tell
 # a long build from a wedged one, and its failure was self-perpetuating: the timeout
 # recycled the worker, clearing the incremental cache, so every retry started cold
@@ -123,7 +123,7 @@ _IMPORT_PHASES = (
 
 # Split out of this file when it passed 2,600 lines. Re-exported so the tests
 # and the tools that read these by name are unaffected; they are READ here, and
-# a name below must never be reassigned through `server.` — that would bind a
+# a name below must never be reassigned through `server.`, that would bind a
 # fresh attribute nothing in wire.py reads. Patch it on wire itself.
 #
 # `_CANCEL` is the exception that proves it: a ContextVar is an OBJECT, so
@@ -148,7 +148,7 @@ from wire import (  # noqa: F401
 
 # Rebuilds are supervised by PROGRESS, not wall clock: the worker bumps a shared
 # heartbeat once per feature (and per tessellated body), and the supervisor kills
-# only when no progress is made for STALL_TIMEOUT — a legitimately long resumed
+# only when no progress is made for STALL_TIMEOUT, a legitimately long resumed
 # build is never executed for merely being long, while one wedged OCCT call still
 # gets reaped. Disk checkpoints make the kill a ratchet, not a restart.
 STALL_TIMEOUT = 60.0
@@ -161,7 +161,7 @@ _HB_IDX = None  # feature index the worker last started (Value 'q'; -1 = meshing
 # Meshing progress, deliberately a SEPARATE channel from _HB_IDX rather than more
 # overloading of its -1 sentinel. The payload phase ticks per body, which kept the
 # stall watchdog happy but published feature=-1 every time, so the timeline showed
-# "meshing…" pinned at 0% for the whole phase — measured 136 s of it on the
+# "meshing…" pinned at 0% for the whole phase, measured 136 s of it on the
 # reference assembly, the largest single feel defect on the open path. The counts
 # were always known here; only the wire to carry them was missing.
 # Both are -1 when no meshing is in flight.
@@ -172,7 +172,7 @@ _HB_MESH_TOTAL = None  # bodies to mesh in this pass (Value 'q')
 # A worker that dies DURING startup is a different failure from one that
 # segfaults on a user's shape: the first is deterministic (a broken install),
 # the second is specific to one operation. Both raise BrokenProcessPool with the
-# same private `_broken` string, so they are told apart by the warm-up future —
+# same private `_broken` string, so they are told apart by the warm-up future,
 # see _worker_came_up. Without this split we recycled a pool that could never
 # start, forever, while telling the user their model crashed the kernel.
 MAX_INIT_ATTEMPTS = 2  # the original bring-up plus one retry for a real transient
@@ -182,7 +182,7 @@ _WORKER_ERR_BUF = None  # worker-side handle on that buffer (set in _worker_init
 _pool_gen = -1  # bumped per pool; the idempotency key for one bring-up attempt
 _warm = None  # (generation, Future) for the CURRENT pool's warm-up
 _failed_gens: set = set()  # generations whose worker never finished _worker_init
-_reaped_gens: set = set()  # generations WE killed (timeout/stall) — not init failures
+_reaped_gens: set = set()  # generations WE killed (timeout/stall), not init failures
 _ever_came_up = False  # a worker started successfully at least once this session
 _env_broken = False  # latched: the worker cannot start on this machine
 
@@ -198,7 +198,7 @@ def _src_stamp(directory=None):
     for the rest of the session. Edit a file after that and the code on disk and
     the code doing the work disagree, silently and indefinitely: the fix is in
     the file, the failure is still in the process, and nothing anywhere says so.
-    Measured on this repo the day the check was written — a thread that had just
+    Measured on this repo the day the check was written, a thread that had just
     been fixed still failed in the running app twenty minutes later, and the only
     way to tell was to compare a file's mtime against a process's start time.
 
@@ -206,7 +206,7 @@ def _src_stamp(directory=None):
     _pool_available compares it. Size as well as mtime because a coarse
     filesystem clock can hand two edits the same second.
 
-    Returns None when there is nothing here to watch — an unreadable directory,
+    Returns None when there is nothing here to watch, an unreadable directory,
     or one with no .py in it. Not the packaged app, which was the first guess and
     is wrong: the bundle copies sidecar/*.py next to a real interpreter, so the
     stamp is taken there too. It just never changes, an installed tree being
@@ -226,7 +226,7 @@ def _src_stamp(directory=None):
 
 
 _INIT_FAIL_MSG = (
-    "the geometry engine could not start on this computer — this is an "
+    "the geometry engine could not start on this computer, this is an "
     "installation or environment problem, not a problem with your model. "
     'Please use "Report a bug" with the engine log included: the log now '
     "carries the exact error."
@@ -247,7 +247,7 @@ def _worker_init(hb=None, hb_idx=None, err_buf=None, mesh=None, mesh_total=None)
 
     `err_buf` is shared memory used to hand a STARTUP traceback back to the
     server. It is needed because CPython catches an initializer's exception in
-    the CHILD, logs it to the child's stderr and returns — and on Windows the
+    the CHILD, logs it to the child's stderr and returns, and on Windows the
     spawned worker does not inherit the Rust-owned stderr pipe, so that log goes
     nowhere. That is why field bug 8aa9ded7 arrived with no evidence at all.
     Shared memory crosses the boundary on every platform."""
@@ -263,7 +263,7 @@ def _worker_init(hb=None, hb_idx=None, err_buf=None, mesh=None, mesh_total=None)
         occt_smp.configure()
         # MUST precede `import builder`, which pulls in build123d. build123d
         # scans the system font folders at import time and one unreadable file
-        # there takes the whole import down with it — four Windows field reports
+        # there takes the whole import down with it, four Windows field reports
         # across 0.1.82/0.1.85/0.1.100, all "the geometry engine could not
         # start". Guarding HERE rather than inside builder.py is deliberate:
         # _env_sig hashes builder.py's bytes into the mesh-cache key, so editing
@@ -285,7 +285,7 @@ def _worker_init(hb=None, hb_idx=None, err_buf=None, mesh=None, mesh_total=None)
         # Bound the disk cache, once per worker start and off the request path.
         # Nothing pruned it before: evict() reclaims by refcounting blob keys over
         # checkpoint manifests, and no manifest ever references a mesh key, so
-        # meshes/ grew without bound — measured at 3.2 GB. The budget is sized
+        # meshes/ grew without bound, measured at 3.2 GB. The budget is sized
         # from FREE DISK (see Store.cache_budget), because $XDG_CACHE_HOME is the
         # user's home partition on most laptops; FUNDACAD_CACHE_MAX_GB overrides.
         # Meshes are evicted first and checkpoints only as a last resort, so a
@@ -316,7 +316,7 @@ def _publish_init_error(err_buf):
     """Write the current exception into the shared buffer, EXCEPTION LINE FIRST.
 
     Both this buffer and the log tail a bug report carries keep the HEAD of what
-    they are given, while a traceback's actual error is its LAST line — so the
+    they are given, while a traceback's actual error is its LAST line, so the
     one line worth having is written first and the frames follow."""
     if err_buf is None:
         return
@@ -337,7 +337,7 @@ def _warmup():
     OCP is NOT the same test as OCP working: a wheel built for a newer
     instruction set, or a mismatched/delay-loaded TBB or TKernel, imports fine
     and then faults on the first kernel call. Classified as an op-crash, that
-    told the user their sketch was degenerate and to try a different value —
+    told the user their sketch was degenerate and to try a different value,
     on an install where nothing would ever build. A box and one boolean cost a
     few ms on an already-cold path and put that failure in the init bucket,
     where it gets the environment diagnosis and the retry bound."""
@@ -361,7 +361,7 @@ def _warmup():
 # Worker-global per-body mesh cache, validated by SHAPE OBJECT IDENTITY **and**
 # tolerance: the cached entry holds a reference to the exact shape object it was
 # computed from (which also keeps id() stable), so `entry["shape"] is body["shape"]`
-# is a sound "nothing changed" test — snapshots share shape refs and every mutating
+# is a sound "nothing changed" test, snapshots share shape refs and every mutating
 # feature rebinds the body's shape to a new object. Tolerance must also match: the
 # same shape re-tessellated at a coarser/finer tolerance is a different payload, and
 # shape identity alone would wrongly serve the wrong-resolution mesh. A hit skips
@@ -380,7 +380,7 @@ EXPORT_TRIANGLE_WARN = 500_000
 
 # Below this, a mesh's tessellate+build cost doesn't recoup a disk write. An
 # interactive param drag re-tessellates every tick with a brand-new content key
-# (guaranteed cache miss on write AND on the next tick's read) — writing every
+# (guaranteed cache miss on write AND on the next tick's read), writing every
 # such tick to disk is pure churn for a payload that will almost never be read
 # back. Mirrors the checkpoint-tip debounce in builder.py's rebuild_cached
 # (trivial warm edits don't spam the store; anything that cost real time is
@@ -390,7 +390,7 @@ _MESH_PERSIST_MIN_MS = 50.0
 # Export-grade tessellation (the 0.1 viewport default is visibly faceted on a
 # printed part). Export meshes get their own cache, keyed exactly like the
 # viewport one in _body_payload: RAM shape-identity + texture spec, then a disk
-# artifact under meshKey + export tolerance — so re-exporting an unchanged
+# artifact under meshKey + export tolerance, so re-exporting an unchanged
 # document skips re-tessellating every body at 0.02mm.
 _EXPORT_TOL = 0.02
 _EXPORT_ANG_TOL = 0.3
@@ -422,7 +422,7 @@ def _export_mesh(b, tol=None):
     ent = _EXPORT_MESH_CACHE.get(bid)
     # TOLERANCE IS PART OF THE KEY. Without it a coarser retry (a tolerance
     # backoff after a triangle-budget refusal) would be handed the mesh from the
-    # finer attempt still sitting in this cache — the backoff would appear to
+    # finer attempt still sitting in this cache, the backoff would appear to
     # succeed while changing nothing, and the export would blow the same budget
     # a second time with no way to tell why.
     if (ent is not None and ent["shape"] is sh
@@ -431,7 +431,7 @@ def _export_mesh(b, tol=None):
     # This body was last meshed at a DIFFERENT tolerance. OCCT keeps the
     # triangulation on the shape and considers an existing finer mesh adequate
     # for a coarser request, so without dropping it first the new tolerance is
-    # silently ignored — which is what would make a backoff a no-op even with
+    # silently ignored, which is what would make a backoff a no-op even with
     # the cache keyed correctly.
     retolerance = ent is not None and ent["shape"] is sh and ent.get("tol") != tol
 
@@ -466,12 +466,12 @@ def _export_mesh(b, tol=None):
                 pass
     # Cached as NUMPY, not as the boxed Python lists tessellate returns.
     # Routing untextured stl/3mf through here means every export now populates
-    # this cache, and it is only pruned of DELETED bodies — live ones are held
+    # this cache, and it is only pruned of DELETED bodies, live ones are held
     # for the worker's lifetime. Measured for a 2M-triangle document: 96 MB of
     # positions + 217 MB of indices as lists, against 24 + 24 MB as float64/int32.
     # Lossless (float64 is the width tessellate produced; int32 covers 2.1e9
     # vertices), 6.5x smaller, and it removes the conversion each consumer was
-    # doing anyway — on the very worker the rest of this branch defends from OOM.
+    # doing anyway, on the very worker the rest of this branch defends from OOM.
     positions = np.asarray(mesh[0], dtype=np.float64)
     indices = np.asarray(mesh[1], dtype=np.int32)
     _EXPORT_MESH_CACHE[bid] = {
@@ -507,7 +507,7 @@ def _safe_part_filename(label, fallback):
     if not name or set(name) <= {"."}:  # empty or dot-only → no dotfiles
         name = str(fallback)
     # Byte budget, trimmed on a CHARACTER boundary so the result stays valid
-    # UTF-8 — truncating the bytes directly can split a multi-byte codepoint.
+    # UTF-8, truncating the bytes directly can split a multi-byte codepoint.
     while len(name.encode("utf-8")) > _MAX_NAME_BYTES and len(name) > 1:
         name = name[:-1]
     name = name.rstrip("_.") or str(fallback)
@@ -521,7 +521,7 @@ def _budget_refusal(ntri):
 
     ONE mechanism, because this had drifted into three: two raising sites and one
     returning an error dict, with the WARN threshold duplicated beside two of
-    them and missing from the third — which is how exportProject came to have no
+    them and missing from the third, which is how exportProject came to have no
     budget at all. A new export format now cannot be added without it.
 
     Deliberately NOT worded "textured": since untextured stl/3mf was routed
@@ -530,7 +530,7 @@ def _budget_refusal(ntri):
     """
     if ntri <= EXPORT_TRIANGLE_HARD_CAP:
         return None
-    return (f"export too dense ({ntri:,}+ triangles) — reduce texture scale or "
+    return (f"export too dense ({ntri:,}+ triangles), reduce texture scale or "
             f"depth, or export fewer bodies")
 
 
@@ -542,7 +542,7 @@ def _budget_warning(ntri):
 
 
 def _prune_export_cache(live):
-    """Drop export-cache entries for deleted/consumed bodies — a stale entry
+    """Drop export-cache entries for deleted/consumed bodies, a stale entry
     pins its OCCT shape in RAM for the worker's lifetime."""
     ids = {b["id"] for b in live}
     for k in list(_EXPORT_MESH_CACHE):
@@ -550,12 +550,12 @@ def _prune_export_cache(live):
             del _EXPORT_MESH_CACHE[k]
 
 # Wire default (also the literal fallback in the "rebuild"/"computeAll" handlers
-# below) — the reference point our size-adaptive scaling is relative to.
+# below), the reference point our size-adaptive scaling is relative to.
 _DEFAULT_TOLERANCE = 0.1
 
 # The interactive viewport meshes with OCCT's RELATIVE deflection: chord tolerance
 # as a fraction of each feature's own size, so a 1mm fillet gets a finer mesh than
-# the 60mm face it sits on — exactly where faceting is visible.
+# the 60mm face it sits on, exactly where faceting is visible.
 #
 # EXPORTS STAY ABSOLUTE (_EXPORT_TOL): a 3MF/STL for printing needs a deterministic
 # chord error in millimetres. Hence `relative` is a per-call argument, not a switch.
@@ -566,7 +566,7 @@ _DEFAULT_TOLERANCE = 0.1
 #     MATCHED cost absolute is worse: 0.03mm gives 8472 tris at 0.098mm.
 #   * 400mm plate: the 60mm hole goes 0.096 -> 0.053mm, triangles 164 -> 216.
 #   * 6mm cube: 628 -> 7428 tris, 2.5 -> 12.0ms, fillet deviation 0.022 -> 0.006mm.
-#     A 12x ratio at trivial absolute cost — triangle count tracking feature
+#     A 12x ratio at trivial absolute cost, triangle count tracking feature
 #     complexity instead of part size is the POINT of relative deflection.
 #   * bare sphere is the worst case (4002 -> 10108 tris, 17 -> 55ms), still well
 #     inside the stall supervisor's budget.
@@ -574,11 +574,11 @@ _VIEWPORT_RELATIVE = True
 _DEFAULT_RELATIVE_DEFLECTION = 0.002
 # OCCT's ANGULAR deflection governs how faceted a fillet LOOKS: it caps the turn
 # between adjacent facets. The old 0.5 rad let the worst adjacent-facet angle on a
-# 1mm fillet reach 47 degrees — visible banding however fine the linear term got,
+# 1mm fillet reach 47 degrees, visible banding however fine the linear term got,
 # because the tessellation is anisotropic (plenty of divisions AROUND a ring, almost
 # none ACROSS the fillet, and only the angular term adds those).
 #
-# 60mm ring + 1mm fillet — worst angle / triangles / mesh time:
+# 60mm ring + 1mm fillet, worst angle / triangles / mesh time:
 #     lin 0.001 ang 0.50   47.38deg    7992 tris    7.9ms   <- old
 #     lin 0.001 ang 0.20   45.96deg   20284 tris   22.8ms
 #     lin 0.002 ang 0.18    5.14deg   10640 tris   11.0ms   <- chosen
@@ -591,11 +591,11 @@ _DEFAULT_RELATIVE_DEFLECTION = 0.002
 _VIEWPORT_ANG_TOL = 0.18
 
 # DOCUMENT-SIZE tolerance profile. A large assembly's reply has to fit the 128 MiB
-# frame cap (a security control — see MAX_FRAME) and at shipping quality it does
+# frame cap (a security control, see MAX_FRAME) and at shipping quality it does
 # not: the 356 MiB reference assembly (3,071 bodies) yields 9,943,003 triangles and
 # 263.3 MiB at 0.002/0.18, against 3,809,240 and 121.1 MiB at 0.008/0.35.
 #
-# The LINEAR term alone cannot do this — 4x coarser cut only 13% of the triangles,
+# The LINEAR term alone cannot do this, 4x coarser cut only 13% of the triangles,
 # because the angular term binds. Same 60mm ring, worst adjacent-facet angle:
 #     lin 0.002 ang 0.18    5.14deg   10,640 tris   <- shipping
 #     lin 0.004 ang 0.26    7.35deg    5,488 tris
@@ -605,7 +605,7 @@ _VIEWPORT_ANG_TOL = 0.18
 # a document small enough to fit keeps full quality.
 #
 # Thresholds are anchored on the measured ~86 KiB/body at shipping quality. Body
-# count is a PROXY — bodies vary enormously in face count — so _rebuild_job also
+# count is a PROXY, bodies vary enormously in face count, so _rebuild_job also
 # guards the encoded reply against the cap rather than trusting this.
 _VIEWPORT_SIZE_TIERS = (
     # (bodies at or above, linear scale on _DEFAULT_RELATIVE_DEFLECTION, angular)
@@ -627,7 +627,7 @@ def _effective_tolerance(shape, requested, size_scale=1.0):
     actually hand BRepMesh, in the units the viewport's meshing mode expects.
 
     RELATIVE mode (_VIEWPORT_RELATIVE, the default): OCCT sizes the deflection
-    per feature itself, so there is NO bbox term here — applying our own size
+    per feature itself, so there is NO bbox term here, applying our own size
     scaling on top would double-count the very adaptivity we just delegated.
 
         effective = _DEFAULT_RELATIVE_DEFLECTION * (requested / DEFAULT_TOLERANCE)
@@ -646,8 +646,8 @@ def _effective_tolerance(shape, requested, size_scale=1.0):
 
     Either way the `requested / DEFAULT` factor keeps the wire contract intact: a
     client that asks for a smaller tolerance than the default still gets a
-    proportionally finer mesh for every body. Deterministic — a pure function of
-    (bbox, requested, size_scale) — so cache keys built from the result stay
+    proportionally finer mesh for every body. Deterministic, a pure function of
+    (bbox, requested, size_scale), so cache keys built from the result stay
     stable.
 
     `size_scale` is the document-size coarsening from _viewport_profile: 1.0 for
@@ -672,7 +672,7 @@ def _union_bbox(boxes):
     """Union of {"min":[x,y,z],"max":[...]} boxes, or None if there are none.
 
     This replaces a single bbox(merged_compound) call. That call was ONE OCCT
-    walk over every solid with no way to tick inside it — measured 95.3 s on the
+    walk over every solid with no way to tick inside it, measured 95.3 s on the
     356 MiB reference assembly against STALL_TIMEOUT = 60 s, so the supervisor
     reaped the worker before the rebuild could finish, every time. The union is
     exactly equivalent (`part` is the Compound of the same shapes) but is
@@ -707,13 +707,13 @@ def _body_payload(b, tolerance, profile):
 
     `tolerance` is the RAW requested (wire) tolerance; it's immediately mapped
     through _effective_tolerance to the value BRepMesh actually gets, and every
-    cache key below — RAM identity cache AND the disk mesh_key — is keyed on that
+    cache key below, RAM identity cache AND the disk mesh_key, is keyed on that
     EFFECTIVE value, never the raw request. Two bodies of different sizes (or one
     body whose bbox changed) must not share a cache slot keyed by a tolerance
     neither was actually tessellated at.
 
     A body's mesh also depends on its "_textures" spec list, which the shape
-    identity check CANNOT see (texture never mutates body["shape"] — see
+    identity check CANNOT see (texture never mutates body["shape"], see
     texture.py's module docstring). Both the RAM identity check and the disk
     mesh_key additionally key on a hash of that spec list, so scrubbing a
     texture-only parameter (depth/scale/…) can't serve a stale pre-edit mesh."""
@@ -738,7 +738,7 @@ def _body_payload(b, tolerance, profile):
     ent = _MESH_CACHE.get(bid)
     # RAM hit BEFORE _effective_tolerance: it's a pure function of (shape,
     # requested), so identical shape identity + identical request imply an
-    # identical effective tolerance — an unchanged body (the common case during
+    # identical effective tolerance, an unchanged body (the common case during
     # an interactive drag of some OTHER body) skips it (and, in absolute mode,
     # the OCCT bbox walk it does) instead of paying it on every tick.
     if (
@@ -787,7 +787,7 @@ def _body_payload(b, tolerance, profile):
         owners_map = b.get("owners") or {}
         face_owners = [owners_map.get(_face_fp(face)) for face in sh.faces()]
         # Two-tone inlay preview: dense per-face palette-slot array, same
-        # sh.faces() enumeration the fid convention uses. Sparse-by-convention —
+        # sh.faces() enumeration the fid convention uses. Sparse-by-convention,
         # None (omitted key) when no texture on this body carries a colorSlot.
         tex_color_slots = None
         if textures:
@@ -813,7 +813,7 @@ def _body_payload(b, tolerance, profile):
             "faceOwners": face_owners, "edges": edges,
             "faceCount": (max(fids) + 1) if fids else 0,
             # The box of the vertices just produced, stored in the payload so
-            # the disk mesh artifact carries it too — a cache hit must not fall
+            # the disk mesh artifact carries it too, a cache hit must not fall
             # back to a different box and make the camera jump between runs.
             "bbox": mesh_bbox(sh, pos),
         }
@@ -824,7 +824,7 @@ def _body_payload(b, tolerance, profile):
         if norm_chunks:
             # a textured body ships explicit normals: plain faces get the same
             # area-weighted accumulation the client would compute, textured
-            # chunks the analytic displaced normals — coarse displacement then
+            # chunks the analytic displaced normals, coarse displacement then
             # SHADES smoothly instead of showing triangle-grain.
             from tessellate import vertex_normals
             norms = vertex_normals(pos, idx)
@@ -838,7 +838,7 @@ def _body_payload(b, tolerance, profile):
         # content key is pure write churn. It reads very differently at scale:
         # 85% of the 3,072 bodies in the reference assembly build in under
         # 50 ms, so NONE of them were ever cached and every cold-worker open
-        # re-tessellated the whole model — most of a 32.9 s payload phase that
+        # re-tessellated the whole model, most of a 32.9 s payload phase that
         # actual disk loading accounts for only ~5 s of. profile[0] != 1.0 is
         # already the ">1,200 bodies" signal _viewport_profile computed, and a
         # document that large is not being scrubbed tick-by-tick anyway.
@@ -850,7 +850,7 @@ def _body_payload(b, tolerance, profile):
                 pass
     # The document bbox is the union of these (see the payload loop), so it is
     # covered by this function's progress tick and reuses the cache on an
-    # unchanged body — walking the merged compound was neither.
+    # unchanged body, walking the merged compound was neither.
     ent = {"shape": sh, "requested": requested, "tolerance": tolerance,
            "profile": profile, "bbox": payload.get("bbox"),
            "etag": _uuid.uuid4().hex, "payload": payload, "texture_key": texture_key}
@@ -864,7 +864,7 @@ def _body_payload(b, tolerance, profile):
 # we apply ops to this held copy. Any mismatch (worker respawn, missed message)
 # returns {"resync": true} and the client falls back to one full send. Holding
 # the doc worker-side ALSO makes the per-edit pickle across the pool boundary
-# O(changed) — at 10k features the full-doc stringify/parse/pickle tax is
+# O(changed), at 10k features the full-doc stringify/parse/pickle tax is
 # ~1 s/edit on the webview main thread AND the event loop.
 _DOC_STATE = {"rev": None, "doc": None}
 
@@ -888,12 +888,12 @@ def _apply_doc_ops(payload):
         feats = doc.get("features", [])
         del feats[ops["length"]:]
         while len(feats) < ops["length"]:
-            feats.append(None)  # placeholder — must be covered by "set" below
+            feats.append(None)  # placeholder, must be covered by "set" below
         doc["features"] = feats
     for i, f in ops.get("set", []):
         doc["features"][i] = f
     if any(f is None for f in doc.get("features", [])):
-        _DOC_STATE["doc"] = None  # hole the ops didn't fill — force resync
+        _DOC_STATE["doc"] = None  # hole the ops didn't fill, force resync
         return None
     _DOC_STATE["rev"] = payload.get("revision")
     return doc
@@ -908,7 +908,7 @@ def _rebuild_job(document, tolerance, known=None):
     Uses rebuild_cached (RAM prefix + durable disk checkpoints). The reply is
     protocol v2: PER-BODY payloads with etags. `known` maps body id -> etag the
     client already holds; a body whose payload is identity-cached under the same
-    etag is answered with a stub ("unchanged") instead of its mesh — the client
+    etag is answered with a stub ("unchanged") instead of its mesh, the client
     reassembles locally. Worker respawn empties the RAM caches, which simply
     downgrades every body to a full payload once."""
     from builder import rebuild_cached
@@ -925,11 +925,11 @@ def _rebuild_job(document, tolerance, known=None):
     )
     t_rebuild = time.monotonic() - t0
     if errors and part is None and not bodies:
-        # nothing built at all — the document is unusable, surface as fatal
+        # nothing built at all, the document is unusable, surface as fatal
         e = errors[0]
         return {"error": {"message": e["message"], "feature_id": e.get("feature_id")}}
     if part is None:
-        # no solid yet (e.g. only sketches exist) — not an error; the frontend
+        # no solid yet (e.g. only sketches exist), not an error; the frontend
         # still renders sketch overlays. Projection refresh entries still ride
         # along (a sketchCurve source needs no body at all).
         result = {"protocol": 2, "bodies": [], "bbox": None}
@@ -970,7 +970,7 @@ def _rebuild_job(document, tolerance, known=None):
         # The assembly-tree node lives in the ENVELOPE, next to id/name/etag, and
         # is sent on BOTH branches. It must not go inside the mesh payload: that
         # is etag-cached, so the tree would freeze at whatever it was when the
-        # geometry last changed. The stub branch matters most — on an assembly
+        # geometry last changed. The stub branch matters most, on an assembly
         # rebuild almost every body is unchanged.
         node_ref = {"nodeRef": b["node_ref"]} if b.get("node_ref") else {}
         if known.get(b["id"]) == ent["etag"]:
@@ -981,15 +981,15 @@ def _rebuild_job(document, tolerance, known=None):
             item.update(ent["payload"])
             out.append(item)
     t_payload = time.monotonic() - t0
-    _set_mesh_progress(-1, -1)  # meshing done — stop claiming a denominator
+    _set_mesh_progress(-1, -1)  # meshing done, stop claiming a denominator
     for bid in list(_MESH_CACHE):
         if bid not in live_ids:
-            del _MESH_CACHE[bid]  # body deleted/consumed — drop its cache
-    # The document bbox is the UNION of the per-body boxes accumulated above —
+            del _MESH_CACHE[bid]  # body deleted/consumed, drop its cache
+    # The document bbox is the UNION of the per-body boxes accumulated above,
     # see _union_bbox for why this is no longer one walk over the merged part.
     # No bbox(part) fallback: it can only be reached when EVERY body's box
     # failed, where walking the merged compound of those same shapes would fail
-    # too — after spending the untickable 95 s this change exists to remove.
+    # too, after spending the untickable 95 s this change exists to remove.
     # `bbox: null` is already a legal reply (the no-bodies branch sends it).
     t0 = time.monotonic()
     doc_bbox = _union_bbox(body_boxes)
@@ -1022,7 +1022,7 @@ def _rebuild_job(document, tolerance, known=None):
     if errors:
         # Failing features must NOT blank the whole document: rebuild() records
         # them as no-ops and continues, so return the geometry that DID build
-        # with the errors attached — the frontend shows the banner AND the model.
+        # with the errors attached, the frontend shows the banner AND the model.
         # The banner gets the LAST (most downstream) error: with a permanently-
         # failing feature upstream, the user's newest action is what they need
         # to see, not the same old error masking it. All errors ride along in
@@ -1047,7 +1047,7 @@ def _rebuild_delta_job(payload, tolerance, known=None):
 
 
 def _compute_all_job(payload, tolerance):
-    """mainstream MCAD's 'Compute All' escape hatch: bypass and REBUILD every cache layer —
+    """mainstream MCAD's 'Compute All' escape hatch: bypass and REBUILD every cache layer,
     RAM prefix snapshots, mesh cache, and this document's disk checkpoints and
     blobs (purged so a hypothetically poisoned blob can't survive put_blob's
     key-dedup skip). One full cold rebuild follows; all caches repopulate."""
@@ -1075,10 +1075,10 @@ def _export_job(document, fmt, path, body=None, separate=False,
     '<base>-<name>.<ext>'. Returns {"path"} (+ {"paths"} for separate) or {"error"}.
 
     Textured bodies can't go through build123d's BRep-native exporters.export()
-    (texture is mesh-only, applied at tessellation time — see texture.py), so an
+    (texture is mesh-only, applied at tessellation time, see texture.py), so an
     STL/3MF target with a texture anywhere branches to tessellate()+mesh_writers
     at export grade instead; a document with NO textures takes the exact same
-    export(...) calls as before, unchanged. STEP is BRep-only regardless —
+    export(...) calls as before, unchanged. STEP is BRep-only regardless,
     texture never reaches it, so a textured body exported as STEP gets a
     non-blocking warning instead of a silent drop."""
     import os
@@ -1092,7 +1092,7 @@ def _export_job(document, fmt, path, body=None, separate=False,
     part, errors, bodies = rebuild_cached(document)
     live = [b for b in bodies if b.get("shape") is not None]
     _prune_export_cache(live)
-    # Export what BUILT, and warn about what didn't — never silently. Refusing
+    # Export what BUILT, and warn about what didn't, never silently. Refusing
     # to export ANYTHING because one feature errored blocked the whole
     # import-repair→print loop (one stubborn face held nine good bodies
     # hostage). Only a document where nothing built at all is a hard error.
@@ -1100,7 +1100,7 @@ def _export_job(document, fmt, path, body=None, separate=False,
         e = errors[0]
         return {"error": {"message": e["message"], "feature_id": e.get("feature_id")}}
     if part is None and not live:
-        return {"error": {"message": "nothing to export — no bodies built yet"}}
+        return {"error": {"message": "nothing to export, no bodies built yet"}}
     warnings = [
         {"message": e["message"], "feature_id": e.get("feature_id")} for e in errors
     ]
@@ -1115,7 +1115,7 @@ def _export_job(document, fmt, path, body=None, separate=False,
 
     def _mesh_export(target_bodies, p):
         """Concatenate target_bodies into one merged, textured, export-grade mesh
-        and write it via mesh_writers. Raises past the triangle hard cap — a
+        and write it via mesh_writers. Raises past the triangle hard cap, a
         document-wide safety net so a pathological scale/depth combo can't
         allocate an unbounded mesh."""
         pos_parts, idx_parts, vbase = [], [], 0
@@ -1125,7 +1125,7 @@ def _export_job(document, fmt, path, body=None, separate=False,
             # Checked HERE, per body, rather than on the concatenated total.
             # The cap exists to stop a pathological document allocating
             # unbounded memory, and a check that runs only after every body has
-            # been meshed and concatenated has already allowed exactly that —
+            # been meshed and concatenated has already allowed exactly that,
             # it could report the OOM it was meant to prevent. Bounded now to
             # the cap plus one body.
             ntri += len(idx) // 3
@@ -1195,7 +1195,7 @@ def _export_job(document, fmt, path, body=None, separate=False,
         Shared by the separate-bodies and single-body paths, which became
         identical once untextured stl/3mf stopped taking the bypass: the
         `b.get("_textures")` test was the only thing that had distinguished them.
-        The whole-document path stays separate — it genuinely differs (STEP tree,
+        The whole-document path stays separate, it genuinely differs (STEP tree,
         fused part)."""
         if fmt == "glb":
             return _glb_export([b], p)
@@ -1205,7 +1205,7 @@ def _export_job(document, fmt, path, body=None, separate=False,
 
     if separate:
         if not live:
-            return {"error": {"message": "nothing to export — no bodies"}}
+            return {"error": {"message": "nothing to export, no bodies"}}
         # Prefer the user's sidebar rename (display-only override carried on the
         # document) over the positional default ("Body1"), so exported part files
         # are named the way the user named the bodies.
@@ -1214,7 +1214,7 @@ def _export_job(document, fmt, path, body=None, separate=False,
         # Into a DIRECTORY of our own, created with exist_ok=False.
         #
         # The save dialog asks the user to confirm overwriting `parts.step`, and
-        # then that file is never written — N sibling files are. So the one file
+        # then that file is never written, N sibling files are. So the one file
         # they were asked about was the only one that could not be clobbered,
         # while `parts-Body1.step` and its siblings were silently overwritten
         # with no prompt at all. A fresh directory makes the collision
@@ -1224,7 +1224,7 @@ def _export_job(document, fmt, path, body=None, separate=False,
             os.makedirs(outdir, exist_ok=False)
         except FileExistsError:
             return {"error": {"message": (
-                f"{os.path.basename(outdir)} already exists — the separate-bodies "
+                f"{os.path.basename(outdir)} already exists, the separate-bodies "
                 f"export writes a folder of that name. Choose another name, or "
                 f"move the existing folder."
             )}}
@@ -1255,7 +1255,7 @@ def _export_job(document, fmt, path, body=None, separate=False,
         return _done({"path": _glb_export(live, path)})
     # UNTEXTURED stl/3mf goes the same way as textured. It used to fall through to
     # exporters.export, which calls build123d's export_stl / Mesher directly and
-    # so bypassed every cap, every cache and the export tolerance — the one path
+    # so bypassed every cap, every cache and the export tolerance, the one path
     # where a pathological document could allocate without limit.
     #
     # Measured before switching, because it changes which tessellation runs: at
@@ -1266,8 +1266,8 @@ def _export_job(document, fmt, path, body=None, separate=False,
     if fmt in ("stl", "3mf"):
         return _done({"path": _mesh_export(live, path)})
     # STEP carries structure: hand build123d a LABELLED tree instead of the fused
-    # part, so product names — and an imported assembly's hierarchy, per-part
-    # colours and per-occurrence placement — survive the export. build123d's
+    # part, so product names, and an imported assembly's hierarchy, per-part
+    # colours and per-occurrence placement, survive the export. build123d's
     # export_step already writes XCAF via STEPCAFControl_Writer, so this only has
     # to supply the tree. Whole-document exports only: `body=` and `separate=True`
     # each write a single body, which has no tree.
@@ -1296,17 +1296,17 @@ def _export_project_job(document, path, palette, body_colors, body_names, settin
         if errors:
             e = errors[0]
             return {"error": {"message": e["message"], "feature_id": e.get("feature_id")}}
-        return {"error": {"message": "nothing to export — no bodies built yet"}}
+        return {"error": {"message": "nothing to export, no bodies built yet"}}
 
     palette, body_colors, body_names = sanitize_inputs(palette, body_colors, body_names)
     meshed = []
     ntri = 0
     for b in live:
-        # Export-grade tolerance — the viewport default (0.1) is visibly faceted
+        # Export-grade tolerance, the viewport default (0.1) is visibly faceted
         # on a printed part. Cached across exports of an unchanged body.
         positions, indices = _export_mesh(b)
         if not len(indices):
-            continue  # degenerate body with no triangulation — skip, like exports do
+            continue  # degenerate body with no triangulation, skip, like exports do
         # This path had NO budget at all, which made it the way round every cap
         # the plain export enforces. Checked per body, before the mesh is kept,
         # so the allocation is bounded to the cap plus one body.
@@ -1318,7 +1318,7 @@ def _export_project_job(document, path, palette, body_colors, body_names, settin
             {"id": b["id"], "name": b["name"], "positions": positions, "indices": indices}
         )
     if not meshed:
-        return {"error": {"message": "nothing to export — no meshable bodies"}}
+        return {"error": {"message": "nothing to export, no meshable bodies"}}
 
     res = {"path": write_project_3mf(meshed, path, palette, body_colors, body_names, settings)}
     if errors:
@@ -1334,7 +1334,7 @@ def _migrate_geometry_job(items):
 
     IN THE WORKER, deliberately. This parses geometry that came out of a file the
     user opened, and `builder._brep_b64_to_shape` exists precisely so a crafted
-    `.funda` cannot aim a parser fuzz at OCCT — doing it in the parent would put
+    `.funda` cannot aim a parser fuzz at OCCT, doing it in the parent would put
     that fuzz one segfault away from taking the whole sidecar down instead of a
     disposable worker.
 
@@ -1354,7 +1354,7 @@ def _migrate_geometry_job(items):
 
 def _interference_job(document):
     """Worker: rebuild + pairwise interference check among live bodies. Returns
-    {"pairs": [...]} — one entry per pair of solids that actually overlap (boolean
+    {"pairs": [...]}, one entry per pair of solids that actually overlap (boolean
     intersection volume above a tiny epsilon), with the overlap volume + bbox so the
     frontend can report and zoom to each clash."""
     from builder import rebuild_cached, _bbox_pair_overlap, bbox_of
@@ -1363,7 +1363,7 @@ def _interference_job(document):
     # rebuild_cached for the same reason as _export_job: same worker, warm cache
     part, errors, bodies = rebuild_cached(document)
     live = [b for b in bodies if b.get("shape") is not None]
-    # like export: check the bodies that BUILT, warn about what didn't — one red
+    # like export: check the bodies that BUILT, warn about what didn't, one red
     # feature must not block clash-checking an otherwise-valid assembly
     if errors and not live:
         e = errors[0]
@@ -1372,11 +1372,11 @@ def _interference_job(document):
     # linear in distinct shapes, so computing the box inside the pair test did
     # 9,360,540 OCCT bounding-box walks at 3,060 bodies to learn 3,060 things.
     # Ticked per body: this precompute runs BEFORE the first row tick below, and
-    # `bbox_of` is OCCT's exact AddOptimal_s — measured 95.5 s over the 3,072
+    # `bbox_of` is OCCT's exact AddOptimal_s, measured 95.5 s over the 3,072
     # bodies of the reference assembly, against a 60 s STALL_TIMEOUT. Unticked it
     # was reaped mid-precompute and the whole operation died with nothing logged.
     # It is still slow; the tick is what makes it finish and report progress. A
-    # cheaper poles-based box was measured and REJECTED — see `bbox_of`.
+    # cheaper poles-based box was measured and REJECTED, see `bbox_of`.
     boxes = []
     for b in live:
         progress_tick()
@@ -1397,7 +1397,7 @@ def _interference_job(document):
                 common = a["shape"] & b["shape"]
                 vol = abs(getattr(common, "volume", 0.0) or 0.0)
             except Exception:
-                continue  # tangent/degenerate intersection — treat as no clash
+                continue  # tangent/degenerate intersection, treat as no clash
             if vol <= 1e-6:
                 continue
             bb = common.bounding_box()
@@ -1476,7 +1476,7 @@ def _project_geometry_job(document, plane, sources):
     """Worker: resolve + project geometry sources onto a sketch plane (read-only;
     per-source errors ride inside `results`, only a failed prefix rebuild or a
     bad plane spec is a whole-call error). `document` is the frontend-truncated
-    timeline PREFIX — rebuild_cached gives its bodies from the warm cache."""
+    timeline PREFIX, rebuild_cached gives its bodies from the warm cache."""
     from builder import project_geometry
 
     try:
@@ -1522,7 +1522,7 @@ def _die_with_parent():
 def _new_pool():
     """Create a fresh single-worker pool and kick off its warm-up.
 
-    Returns None once _env_broken has latched — see _pool_available(), which is
+    Returns None once _env_broken has latched, see _pool_available(), which is
     what turns that back into a live pool if the failure was transient."""
     global _pool_gen, _warm, _pool_src
     if _env_broken:
@@ -1544,7 +1544,7 @@ def _new_pool():
         initargs=(_HB, _HB_IDX, _INIT_ERR, _HB_MESH, _HB_MESH_TOTAL),
     )
     try:
-        # Submitted at creation to force the lazy spawn — and KEPT, because this
+        # Submitted at creation to force the lazy spawn, and KEPT, because this
         # future is the only public signal separating an init failure from a
         # mid-op crash (see _worker_came_up).
         fut = pool.submit(_warmup)
@@ -1600,7 +1600,7 @@ def _init_traceback() -> str:
 def _note_init_failure(gen):
     """Record ONE failed bring-up (idempotent per generation) and print the
     worker's real traceback to stderr, which the Rust shell mirrors into
-    sidecar.log — the file a bug report uploads."""
+    sidecar.log, the file a bug report uploads."""
     global _env_broken
     if gen in _failed_gens or gen in _reaped_gens:
         return
@@ -1609,12 +1609,12 @@ def _note_init_failure(gen):
     print(
         "[init] geometry worker failed to start (attempt %d/%d): %s"
         % (len(_failed_gens), MAX_INIT_ATTEMPTS,
-           tb or "<no Python traceback — the worker died before it could report "
+           tb or "<no Python traceback, the worker died before it could report "
                  "one; a native library failed to load>"),
         file=sys.stderr, flush=True,
     )
     # An install that demonstrably worked earlier in this session is not an
-    # environment failure, whatever just happened — so a post-reap respawn that
+    # environment failure, whatever just happened, so a post-reap respawn that
     # fails to come up must never brick the session.
     if len(_failed_gens) >= MAX_INIT_ATTEMPTS and not _ever_came_up:
         _env_broken = True
@@ -1623,7 +1623,7 @@ def _note_init_failure(gen):
 
 
 def _watch_warmup(fut, gen):
-    """Report a bring-up outcome as soon as it is known — at LAUNCH, not on the
+    """Report a bring-up outcome as soon as it is known, at LAUNCH, not on the
     user's first rebuild. `gen` is captured so a late watcher cannot attribute
     its failure to a pool that has since been replaced."""
     global _ever_came_up
@@ -1636,7 +1636,7 @@ def _watch_warmup(fut, gen):
             # A pool WE killed (job timeout / stall reap) also resolves its
             # pending warm-up with BrokenProcessPool, which is indistinguishable
             # from a failed bring-up. Counting those would let a slow cold start
-            # on a healthy machine latch "your install is broken" — and would
+            # on a healthy machine latch "your install is broken", and would
             # stop the disk-checkpoint ratchet converging. _note_init_failure
             # skips reaped generations.
             _note_init_failure(gen)
@@ -1667,7 +1667,7 @@ def _pool_available():
             # The worker is running code this package no longer contains. Retire
             # it: the next job spawns a worker that imports what is on disk. This
             # is the same recycle a crash or a stall performs, so the document is
-            # as safe here as it is there — the frontend holds it and resends it.
+            # as safe here as it is there, the frontend holds it and resends it.
             print("sidecar: sources changed, recycling the geometry worker",
                   file=sys.stderr, flush=True)
             _kill_pool(_pool)
@@ -1700,7 +1700,7 @@ def _on_broken(gen):
 
 
 def _kill_pool(pool):
-    """Forcibly terminate a pool's worker process(es) — used to stop a worker that's
+    """Forcibly terminate a pool's worker process(es), used to stop a worker that's
     spinning on a runaway OCCT call, since shutdown() alone would wait for it."""
     _reaped_gens.add(_pool_gen)  # a deliberate kill is not a failed bring-up
     try:
@@ -1738,20 +1738,20 @@ async def _run(loop, fn, *args, timeout=JOB_TIMEOUT):
             return _cancelled_result()  # the pool was killed BY the cancel
         _kill_pool(_pool)
         _pool = _new_pool()
-        return {"error": {"message": "operation timed out — geometry too complex or degenerate"}}
+        return {"error": {"message": "operation timed out, geometry too complex or degenerate"}}
     except BrokenProcessPool:
         if cancelled():
             return _cancelled_result()
         return _on_broken(gen)
 
 
-_EXPORT_SEC_PER_BODY = 0.09  # 4x the measured 22.6 ms/body — see _export_stall_budget
+_EXPORT_SEC_PER_BODY = 0.09  # 4x the measured 22.6 ms/body, see _export_stall_budget
 
 
 def _export_stall_budget(document):
     """Wall-clock reap budget for an export, in seconds.
 
-    `_run_stall` normally supervises by PROGRESS, which is the right design — but
+    `_run_stall` normally supervises by PROGRESS, which is the right design, but
     the export WRITE (build123d's export_step/export_stl, or Mesher.write) is a
     single atomic OCCT call that holds the GIL, so nothing inside it can bump the
     heartbeat. Supervision therefore degrades to a wall clock here, exactly as it
@@ -1759,7 +1759,7 @@ def _export_stall_budget(document):
 
     Left on the default STALL_TIMEOUT this was not a slow path but a BROKEN one:
     the 3,071-body reference assembly writes 1,031.8 MB of STEP in 69.4 s, and
-    the 60 s default reaped it at 60.1 s — reporting "the geometry kernel was
+    the 60 s default reaped it at 60.1 s, reporting "the geometry kernel was
     restarted" for a kernel that was working fine, and leaving NO file at the
     path the user chose. `_export_job` ticks once per body while `rebuild_cached`
     runs and then goes silent for the whole write, so the rebuild half never
@@ -1768,7 +1768,7 @@ def _export_stall_budget(document):
     Scaled on the document's body count, which is what the write actually costs
     per unit: _EXPORT_SEC_PER_BODY is 4x the measured 22.6 ms/body, floored at the
     old default so a small export keeps its tight guard. Generous at the top is
-    safe because Cancel stays live throughout — the frontend wraps export in
+    safe because Cancel stays live throughout, the frontend wraps export in
     `runBusy`, and the supervisor's 1 s poll honours the cancel token
     independently of the GIL-holding worker."""
     # an import feature carries one `parts` entry per body it explodes to; any
@@ -1837,7 +1837,7 @@ async def _run_stall(loop, fn, *args, stall=STALL_TIMEOUT, on_progress=None):
     resumes from the last checkpoint, so it converges to a reported error on
     the one bad feature instead of a death spiral). `on_progress` (async, takes
     the current feature index) is fired roughly once a second while the job
-    runs — the rebuild path streams it to the frontend as building frames."""
+    runs, the rebuild path streams it to the frontend as building frames."""
     global _pool
     err = _pool_available()
     if err is not None:
@@ -1867,7 +1867,7 @@ async def _run_stall(loop, fn, *args, stall=STALL_TIMEOUT, on_progress=None):
             return _cancelled_result() if cancelled() else res
         except asyncio.TimeoutError:
             # cancel kills the pool, which usually surfaces as BrokenProcessPool
-            # below — but the 1s poll can land first, so check here too
+            # below, but the 1s poll can land first, so check here too
             if cancelled():
                 fut.cancel()
                 return _cancelled_result()
@@ -1897,7 +1897,7 @@ async def _run_stall(loop, fn, *args, stall=STALL_TIMEOUT, on_progress=None):
                 _pool = _new_pool()
                 fut.cancel()
                 return {"error": {"message": (
-                    "one operation stalled for over %d s — the geometry kernel was "
+                    "one operation stalled for over %d s, the geometry kernel was "
                     "restarted; progress up to the last checkpoint is kept"
                 ) % int(stall)}}
         except BrokenProcessPool:
@@ -1907,13 +1907,13 @@ async def _run_stall(loop, fn, *args, stall=STALL_TIMEOUT, on_progress=None):
             # feature the worker was building when it died, which is the only
             # clue that survives a segfault (the worker leaves no traceback).
             # Without it the app showed a bare ": the geometry kernel crashed",
-            # naming nothing — see _crash_feature().
+            # naming nothing, see _crash_feature().
             idx = int(_HB_IDX.value) if _HB_IDX is not None else -1
             res = _on_broken(gen)
             # feature_index only means anything for a real op crash; on an
             # environment failure there is no culprit feature to name, and
             # _crash_feature would rewrite the message into "your shape is
-            # degenerate" — the exact misattribution this change removes.
+            # degenerate", the exact misattribution this change removes.
             if res.get("error", {}).get("message") != _INIT_FAIL_MSG:
                 res["error"]["feature_index"] = idx
             return res
@@ -1923,7 +1923,7 @@ def _crash_feature(res, document):
     """Name the feature a crashed/stalled worker died on.
 
     OCCT segfaults inside native code, so there is no exception and no
-    traceback to attribute — only the heartbeat index the worker last published.
+    traceback to attribute, only the heartbeat index the worker last published.
     Map it back to a real feature id so the error names the culprit and the
     timeline can chip it, instead of reporting a nameless kernel crash.
     """
@@ -1941,11 +1941,11 @@ def _crash_feature(res, document):
     if fid:
         err["feature_id"] = fid
     err["message"] = (
-        f"{ftype} crashed the geometry kernel — this shape is degenerate for OCCT "
+        f"{ftype} crashed the geometry kernel, this shape is degenerate for OCCT "
         "(often a cut that runs exactly tangent to a fillet); try a slightly "
         "different value"
     )
-    # ALSO write it to stderr, which is mirrored into <app_data>/sidecar.log —
+    # ALSO write it to stderr, which is mirrored into <app_data>/sidecar.log,
     # the file the bug reporter uploads. A segfaulted worker leaves no traceback,
     # so without this line a field report contains no evidence the kernel died at
     # all; the only record was a toast the user has probably dismissed.
@@ -1972,7 +1972,7 @@ def _authorized(request) -> bool:
     if origin and origin not in ALLOWED_ORIGINS:
         # Loud on stderr (mirrored to sidecar.log): a silent origin rejection
         # looked like a healthy-but-unreachable sidecar for three field reports
-        # straight — the Windows webview origin was missing from the allowlist.
+        # straight, the Windows webview origin was missing from the allowlist.
         print(f"[auth] rejected WS handshake from origin {origin!r} "
               f"(allowed: {sorted(ALLOWED_ORIGINS)})", file=sys.stderr, flush=True)
         return False
@@ -1989,13 +1989,13 @@ def _mint_token() -> str:
 
 async def _dispatch(ws, loop, req, req_id, op):
     """Run one request and send its reply. Split out of handle() so the read
-    loop can stay responsive while this is running — see handle().
+    loop can stay responsive while this is running, see handle().
 
     INVARIANT, relied on by the chunked reply path: _serialized holds its lock
     across the whole of this function, INCLUDING every `await ws.send(...)`. A
     streamed reply is several frames that must reach the client contiguously,
-    so moving a send outside that lock — or letting two heavy ops run
-    concurrently — would splice two documents' bodies together."""
+    so moving a send outside that lock, or letting two heavy ops run
+    concurrently, would splice two documents' bodies together."""
     if op == "rebuild":
         tol = req.get("tolerance", 0.1)
         payload = {
@@ -2059,7 +2059,7 @@ async def _dispatch(ws, loop, req, req_id, op):
         #    SHORTER than the old deadline for the files that already worked.
         # 2. It goes through _run_stall for on_progress, but with an EXPLICIT
         #    stall=. The default STALL_TIMEOUT is 60 s and OCP holds the GIL for
-        #    the whole read, so nothing can bump the heartbeat — left at the
+        #    the whole read, so nothing can bump the heartbeat, left at the
         #    default this would reap a working import 30 s EARLIER than the old
         #    flat 90 s. The stall reaper cannot observe liveness through an
         #    atomic OCCT call, so here `stall` is simply the wall clock.
@@ -2069,11 +2069,11 @@ async def _dispatch(ws, loop, req, req_id, op):
             _sz = 0.0
         budget = max(90.0, 60.0 + 1.5 * _sz)
         # The REAPER budget above is deliberately generous, so it is the wrong
-        # denominator for a progress bar — using it made a 15.7 s import crawl to
+        # denominator for a progress bar, using it made a 15.7 s import crawl to
         # 6% and then jump to done. `eta` is a separate, deliberately tighter
         # ESTIMATE: ~0.5 s/MiB, measured at 0.41 s/MiB on a 38 MiB file and
         # 0.54 s/MiB on the 356 MiB reference. Under-estimating is the safe
-        # direction — the bar reaches its phase cap and waits, which reads as
+        # direction, the bar reaches its phase cap and waits, which reads as
         # "nearly there" rather than "stuck at 6%".
         eta = max(3.0, 0.5 * _sz)
 
@@ -2110,7 +2110,7 @@ async def _dispatch(ws, loop, req, req_id, op):
 
     elif op == "projectGeometry":
         # Usually a warm prefix-cache hit, but a cold start replays the whole
-        # prefix like export/interference do — and that replay ticks, so a long
+        # prefix like export/interference do, and that replay ticks, so a long
         # one is no longer mistaken for a hang.
         res = await _run_stall(
             loop, _project_geometry_job, req["document"], req["plane"],
@@ -2158,7 +2158,7 @@ def _session_reply(ws, req, req_id, op):
     optimisation. The host publishes its document on a loop; if that queued
     behind a rebuild, the app would stop answering an agent for exactly as long
     as the agent's own build took, and the agent would read "no app" and start a
-    second engine. Every one of them is a dict update — no geometry, no worker,
+    second engine. Every one of them is a dict update, no geometry, no worker,
     nothing that can block.
 
     The connection is the identity. A host that loses its socket stops being the
@@ -2227,7 +2227,7 @@ def _cancel_running(running, target=None):
     """Stop the job in flight. A ProcessPoolExecutor job cannot be interrupted
     any other way, so this kills the worker exactly as the timeout path does and
     hands back a fresh pool. The token tells _run/_run_stall that the resulting
-    BrokenProcessPool is a CANCEL, not a crash — otherwise a user pressing
+    BrokenProcessPool is a CANCEL, not a crash, otherwise a user pressing
     Cancel would be told the geometry kernel crashed.
 
     `target` (a request id) cancels only that request; None cancels whatever is
@@ -2255,8 +2255,8 @@ async def handle(ws):
         _ip_conns[peer] = _ip_conns.get(peer, 0) + 1
     # Bound BEFORE the try, because the finally reads it and one path through the
     # try returns before the old binding was reached: an unauthorized connection
-    # closed, returned, and then raised UnboundLocalError out of its own cleanup
-    # — which skipped the rest of that cleanup, so the per-IP counter above was
+    # closed, returned, and then raised UnboundLocalError out of its own cleanup,
+    # which skipped the rest of that cleanup, so the per-IP counter above was
     # incremented and never decremented. MAX_CONNS_PER_IP failed handshakes later
     # the sidecar answered "too many connections" to every client from that
     # address, for the rest of its life, and the only symptom on the other end
@@ -2268,13 +2268,13 @@ async def handle(ws):
             return
         loop = asyncio.get_running_loop()
         # Heavy ops stay STRICTLY serialized (the shared heartbeat counter and
-        # the rebuild cache both assume one job at a time) — the lock preserves
+        # the rebuild cache both assume one job at a time), the lock preserves
         # that, while dispatching as tasks keeps the read loop free.
         #
         # PROCESS-WIDE, not per connection. It was per connection while the app
         # was the only client that ever ran a heavy op, and that held right up
         # until a second one did: two connections meant two locks, and the
-        # invariant the comment above states — one job at a time — was enforced
+        # invariant the comment above states, one job at a time, was enforced
         # against nobody. There has always been a second client available (the
         # attach-by-token escape hatch), and the live session makes one ordinary.
         lock = _JOB_LOCK
@@ -2335,21 +2335,21 @@ async def main():
     _HB_MESH_TOTAL = _mp_ctx.Value("q", -1)
     # lock=False deliberately: a locked Array could deadlock the parent's read if
     # _kill_pool SIGKILLs a worker mid-write. One writer (the dying worker), one
-    # reader (us, after it is dead) — the same reasoning as _HB's single-writer
+    # reader (us, after it is dead), the same reasoning as _HB's single-writer
     # comment. A raw c_char array still supports .value.
     _INIT_ERR = _mp_ctx.Array("c", 16384, lock=False)
     _pool = _new_pool()
     try:
         # Raise the per-message cap well above the 1 MiB default: a rebuild ships
         # the WHOLE document, and a document with an imported mesh embeds that
-        # body as a (potentially multi-MB) BREP string — at the default limit the
+        # body as a (potentially multi-MB) BREP string, at the default limit the
         # server would slam the connection shut on the first real import, which
         # the frontend sees as a permanent "connecting to sidecar". 128 MiB is
         # plenty for a multi-body doc of imported meshes (each capped at 64 MiB
         # decoded by builder.py) while bounding a single message's memory cost.
         # compression=None: the socket is 127.0.0.1-only, so permessage-deflate
         # (the websockets default) buys no bandwidth and costs real CPU both
-        # sides — measured 84ms to deflate one 5MB mesh reply.
+        # sides, measured 84ms to deflate one 5MB mesh reply.
         bound = False
         try:
             async with websockets.serve(handle, HOST, PORT, max_size=wire._MAX_FRAME,
@@ -2363,7 +2363,7 @@ async def main():
                 raise  # already serving; this is not a bind failure, do not mislabel it
             # Almost always "address already in use": a second copy of the app, a
             # sidecar orphaned by a previous run, or an unrelated program sitting on
-            # the port. Whatever the cause, the user needs the PORT named — the Rust
+            # the port. Whatever the cause, the user needs the PORT named, the Rust
             # shell used to report only "exit code 1", which told a field reporter
             # nothing (bug 2c0cd78a). errno is deliberately not matched: EADDRINUSE
             # is 98 on Linux and 10048 on Windows, and every bind failure means the

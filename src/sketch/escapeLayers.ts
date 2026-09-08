@@ -2,7 +2,7 @@
 //
 // Escape in a sketcher is a stack, not a command: it undoes the most local thing
 // you are in the middle of, and only when there is nothing local left does it
-// leave. Collapsing that into a single answer is the classic way to lose work —
+// leave. Collapsing that into a single answer is the classic way to lose work,
 // an Escape that closes the sketch out from under a half-drawn rectangle throws
 // the rectangle away AND the session with it, and the user pressed one key.
 //
@@ -43,7 +43,7 @@ export type SketchEscapeAction =
 
 /** The rung this press lands on.
  *
- *  "close" is only ever reached from a sketch that is idle in every sense —
+ *  "close" is only ever reached from a sketch that is idle in every sense,
  *  select tool armed, nothing selected, nothing being drawn or dragged. That is
  *  the state the user is in when they mean "I'm done here", and it is exactly
  *  one Escape away from every other state, so leaving still costs at most two
