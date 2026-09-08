@@ -180,6 +180,7 @@ export class Viewport {
   // persistent construction/datum planes (translucent quads, click to select)
   private datumGroup = new THREE.Group();
   private datumQuads: THREE.Mesh[] = [];
+  private hoveredDatum: string | null = null;
   private selectedDatum: string | null = null;
   private dragMoved = false;
   private downPos = { x: 0, y: 0 };
@@ -1301,6 +1302,44 @@ export class Viewport {
     return dh ? (dh.object.userData.datumId as string) : null;
   }
 
+  /** The nearest CONSTRUCTION plane under the cursor: one of the three base
+   *  quads, or a datum plane the document holds, whichever the ray reaches
+   *  first.
+   *
+   *  ONE raycast over both sets, rather than two answers to be arbitrated
+   *  afterwards. The two used to be asked separately and only one of them was
+   *  ever asked during a "pick a plane" step, so a datum plane could not be
+   *  sketched on at all by clicking it — the ray sailed through it and took the
+   *  base quad behind. Any rule that picked between two separate answers would
+   *  also have had to invent a tie-break the depth buffer already knows. */
+  pickConstructionAt(
+    clientX: number,
+    clientY: number,
+  ):
+    | { kind: "base"; plane: Plane3 }
+    | { kind: "datum"; id: string; def: PlaneDef }
+    | null {
+    this.rayFrom(clientX, clientY);
+    const base = (["XY", "XZ", "YZ"] as Plane3[]).map((k) => this.scene.planes[k]);
+    const hit = this.sharedRaycaster.intersectObjects([...base, ...this.datumQuads], false)[0];
+    if (!hit) return null;
+    const id = hit.object.userData.datumId as string | undefined;
+    if (id) return { kind: "datum", id, def: hit.object.userData.datumDef as PlaneDef };
+    const plane = hit.object.userData.plane as Plane3 | undefined;
+    return plane ? { kind: "base", plane } : null;
+  }
+
+  /** Brighten the construction plane the cursor is over.
+   *
+   *  Separate from the SELECTED one, and both are kept, because during a pick
+   *  the selected plane may well be the one being hovered and the hover has to
+   *  read as a promise that the click will take it. */
+  hoverDatum(id: string | null) {
+    if (this.hoveredDatum === id) return;
+    this.hoveredDatum = id;
+    this.paintDatums();
+  }
+
   /** centroid (world) of the given bodies' vertices — the Move gizmo anchor. */
   bodiesCentroid(ids: string[]): THREE.Vector3 {
     const out = new THREE.Vector3();
@@ -1351,7 +1390,12 @@ export class Viewport {
   /** Render the document's datum/construction planes as translucent quads that
    *  can be clicked to select (and then cut by). */
   setDatumPlanes(
-    planes: { id: string; origin: [number, number, number]; normal: [number, number, number] }[],
+    planes: {
+      id: string;
+      origin: [number, number, number];
+      normal: [number, number, number];
+      xdir: [number, number, number];
+    }[],
   ) {
     for (const q of this.datumQuads) {
       this.datumGroup.remove(q);
@@ -1376,6 +1420,14 @@ export class Viewport {
       );
       m.renderOrder = -1;
       m.userData.datumId = p.id;
+      // The plane itself, kept on the quad that draws it.
+      //
+      // A raycast can say WHICH quad the cursor is over; only the document knows
+      // what plane that quad stands for, and the arbitration in
+      // features/facePlanePick.ts has no way to ask it. Carrying the answer here
+      // means the hit and the plane it implies cannot come apart, which is the
+      // same promise pickFaceForPressPull makes about a body face.
+      m.userData.datumDef = { origin: p.origin, normal: p.normal, xdir: p.xdir };
       this.datumGroup.add(m);
       this.datumQuads.push(m);
     }
@@ -1385,9 +1437,14 @@ export class Viewport {
   /** Brighten the selected construction plane; others stay faint. */
   highlightDatum(id: string | null) {
     this.selectedDatum = id;
+    this.paintDatums();
+  }
+
+  private paintDatums() {
     for (const q of this.datumQuads) {
+      const id = q.userData.datumId as string;
       (q.material as THREE.MeshBasicMaterial).opacity =
-        q.userData.datumId === id ? 0.32 : 0.12;
+        id === this.selectedDatum ? 0.32 : id === this.hoveredDatum ? 0.24 : 0.12;
     }
     this.requestRender();
   }

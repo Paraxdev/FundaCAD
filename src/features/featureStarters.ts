@@ -133,10 +133,18 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   /** `face` is the pick's face reference when a body face was taken, and null
    *  for a construction quad. A datum plane keeps it so it can follow the face
    *  across a rebuild; a sketch started directly on a face has no use for it,
-   *  since a sketch stores its own plane. */
+   *  since a sketch stores its own plane.
+   *
+   *  `datumId` is the other half of the same idea, for the other kind of quad. A
+   *  sketch that knows which datum feature it is on follows that datum when its
+   *  offset is edited later; one that only kept the resolved plane has the
+   *  placement frozen at pick time. The browser row's "Sketch on plane" has
+   *  always passed it, so without it here the same sketch would behave
+   *  differently depending on whether it was started from the tree or by
+   *  clicking the plane. */
   function pickPlaneInteractive(
     promptText: string,
-    onPick: (spec: PlaneSpec, face: FacePlanePick | null) => void,
+    onPick: (spec: PlaneSpec, face: FacePlanePick | null, datumId: string | null) => void,
   ) {
     if (toolBusy()) return;
     setPlanePick(true);
@@ -160,9 +168,13 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       if (target?.kind === "face") {
         viewport.hoverFaceAt(e.clientX, e.clientY); // highlight a selectable body face
         viewport.hoverPlane(null);
+        viewport.hoverDatum(null);
       } else {
         viewport.clearHover();
         viewport.hoverPlane(target?.kind === "base" ? target.spec : null);
+        // A datum lights up the same way a base plane does, because the promise
+        // is the same one: what is lit is what the click will take.
+        viewport.hoverDatum(target?.kind === "datum" ? target.id : null);
       }
       const why = target?.kind === "unusable";
       if (why !== sayingWhy) {
@@ -179,12 +191,13 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       const spec = planeSpecOf(target);
       if (!spec) return;
       const face = target?.kind === "face" ? target.face : null;
+      const datumId = target?.kind === "datum" ? target.id : null;
       // consume this click fully and run on the NEXT frame, so it can't bleed
       // into the sketch's own first-corner placement.
       e.preventDefault();
       e.stopImmediatePropagation();
       cleanup();
-      requestAnimationFrame(() => onPick(spec, face));
+      requestAnimationFrame(() => onPick(spec, face, datumId));
     };
     const onEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape") cleanup();
@@ -195,6 +208,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       viewport.showAllPlanes(false);
       viewport.suspendPicking = false;
       viewport.clearHover();
+      viewport.hoverDatum(null);
       canvas.removeEventListener("pointermove", onMove);
       canvas.removeEventListener("pointerdown", onDown, true);
       window.removeEventListener("keydown", onEsc, true);
@@ -233,11 +247,14 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
         return;
       }
     }
-    pickPlaneInteractive("Select a plane or a face to sketch on · a round face gives its tangent plane", (spec, face) => {
+    pickPlaneInteractive("Select a plane or a face to sketch on · a round face gives its tangent plane", (spec, face, datumId) => {
       // Only a PLANAR face can be followed: a tangent plane on a cylinder is a
       // different plane at every point, and the pick's own point is what defines
       // it, so there is nothing for a rebuild to re-derive.
-      sketch.enter(spec, store, undefined, undefined,
+      //
+      // A datum is followed by ID rather than by face, which is what makes
+      // editing its offset afterwards move this sketch with it.
+      sketch.enter(spec, store, undefined, datumId ?? undefined,
         face && face.kind === "planar" ? { selector: face.selector, at: face.at } : null);
       if (face) viewport.showSketchFace(face.faceId);
       if (tool) sketch.setTool(tool);
