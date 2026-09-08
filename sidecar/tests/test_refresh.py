@@ -224,7 +224,7 @@ def test_resume_cap_ram_tier():
     """Warm rebuild_cached, then edit a feature DOWNSTREAM of the projected
     sketch. Without the cap the resume would start past the sketch and swallow
     the pending update; with it, the sketch handler re-runs and re-emits."""
-    builder._CACHE = {"feature_sigs": [], "snaps": [], "global_sig": None}
+    builder.reset_cache()
     src, _true_curve = _edge_source()
     tail = [{"id": "f4", "type": "fillet",
              "edges": {"kind": "edge", "by": "axis", "axis": "Z"}, "radius": 2}]
@@ -256,13 +256,13 @@ def test_resume_cap_disk_tier():
     builder._disk_store = lambda: _FakeStore()
     builder._restore_from_disk = lambda store, keys: (seen.append(len(keys)), None)[1]
     try:
-        builder._CACHE = {"feature_sigs": [], "snaps": [], "global_sig": None}
+        builder.reset_cache()
         rebuild_cached(doc, projections=[])
-        builder._CACHE = {"feature_sigs": [], "snaps": [], "global_sig": None}
+        builder.reset_cache()
         rebuild_cached(doc)  # no accumulator -> full-depth disk resume allowed
     finally:
         builder._disk_store, builder._restore_from_disk = orig_store, orig_restore
-        builder._CACHE = {"feature_sigs": [], "snaps": [], "global_sig": None}
+        builder.reset_cache()
     assert seen == [2, 3], f"expected capped [2] then full [3] key lists, got {seen}"
     print(PASS, "disk-tier chain keys truncated at the projected sketch")
 
@@ -273,7 +273,7 @@ def test_quiet_proof_deep_resume():
     prefix unchanged resumes PAST the projected sketch, its handler doesn't
     re-run. An emitting build re-arms the cap (test_resume_cap_ram_tier is the
     conservative side)."""
-    builder._CACHE = {"feature_sigs": [], "snaps": [], "global_sig": None}
+    builder.reset_cache()
     src, true_curve = _edge_source()
     tail = [{"id": "f4", "type": "fillet",
              "edges": {"kind": "edge", "by": "axis", "axis": "Z"}, "radius": 2}]

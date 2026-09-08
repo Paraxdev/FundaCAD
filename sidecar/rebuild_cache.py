@@ -23,7 +23,9 @@ import font_guard  # noqa: F401  MUST precede build123d, see font_guard.py
 from progress import progress_tick
 from shape_util import _wrap_topods, _wrapped_or_none
 
-_CACHE = {"feature_sigs": [], "snaps": [], "global_sig": None}
+# The prefix cache, owned by builder.rebuild_cached (which rebinds its OWN
+# module-level name, not this one). builder.reset_cache() is how it is cleared.
+_CACHE = {"snaps": [], "keys": []}
 
 
 # import features embed multi-MB BREP b64, hashing it once per (feature id,
@@ -46,32 +48,15 @@ def _feature_sig(f):
     return json.dumps(f, sort_keys=True, separators=(",", ":"))
 
 
-def _global_sig(document):
-    # params affect features globally. Body visibility only gates LEGACY extrude
-    # booleans (features without a captured `hiddenBodies` set), when every
-    # extrude carries its own set, an eye toggle changes NO geometry and must
-    # not invalidate the cache (it used to force a full rebuild per click).
-    legacy_vis = any(
-        f.get("type") == "extrude" and "hiddenBodies" not in f
-        for f in document.get("features", [])
-    )
-    return json.dumps(
-        {
-            "p": document.get("parameters", {}),
-            "v": document.get("bodyVisibility", {}) if legacy_vis else None,
-        },
-        sort_keys=True, separators=(",", ":"),
-    )
-
-
 # --- durable checkpoint cache (proving-ground/rebuild-scaling-design-2026-07-03.md §3) ---
 #
-# Chain keys are INPUT-addressed: key_i = H(key_{i-1} ‖ feature_sig_i), seeded with
-# H(env_sig ‖ global_sig). Geometry is never hashed, so OCCT float nondeterminism
-# can't poison a key; a chain key found on disk proves the entire document prefix
-# (and params/visibility/env) that produced it is byte-identical, exactly the
-# validity condition of today's RAM prefix cache. Phase 1 changes durability only,
-# not invalidation semantics. Restores are verified against per-body fingerprints
+# Chain keys are INPUT-addressed: key_i = H(key_{i-1} ‖ feature_sig_i ‖ scope_i),
+# seeded with H(env_sig). Geometry is never hashed, so OCCT float nondeterminism
+# can't poison a key; a chain key proves the entire document prefix (and the
+# params, visibility and env that prefix could reach) is byte-identical. BOTH
+# tiers gate on these now, the RAM prefix cache as well as the disk one, so there
+# is a single answer to "is this prefix still valid" rather than two that could
+# drift. Restores from disk are additionally verified against per-body fingerprints
 # (face/edge/vertex counts + bbox): any divergence is a cache MISS, never wrong geometry.
 
 _ENV_SIG = None
@@ -136,9 +121,15 @@ def _env_sig():
 # reference it, and a visibility toggle only from the first extrude, both were
 # full cold rebuilds before. Conservative by construction: the reference scan
 # is a word-boundary superset (a body name that happens to equal a param name
-# merely over-invalidates, never under). The RAM cache keeps the old
-# whole-document _global_sig semantics untouched; on its (now more frequent)
-# miss the disk chain simply resumes deeper.
+# merely over-invalidates, never under).
+#
+# The RAM tier gates on these same keys. It used to keep a whole-document
+# parameter signature instead, which made every parameter edit a full cold
+# rebuild however little of the document could read the parameter: dragging one
+# slider that only the last feature consults cost 0.906 s a tick on a 122-feature
+# plate, against 0.016 s for typing the same number into that feature as a
+# literal. Both tiers now resume at the same place, so the scoping above is worth
+# what it says it is on the edit people make most.
 
 _IDENT_RE = None
 

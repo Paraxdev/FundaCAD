@@ -213,7 +213,6 @@ from rebuild_cache import (  # noqa: F401
     _feature_scope,
     _feature_sig,
     _feature_sigs,
-    _global_sig,
     _param_closure,
     _persist_tick,
     _restore_from_disk,
@@ -1880,6 +1879,21 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
 _RAM_SNAP_WINDOW = int(appenv.get("RAM_SNAP_WINDOW", "300"))
 
 
+def reset_cache():
+    """Forget the in-process prefix cache, so the next build starts cold.
+
+    The one way to say it. The dict's shape is this module's business and it has
+    changed before; a caller writing the literal gets no error when a key moves,
+    because an unrecognised cache reads as an empty one, which is the same thing
+    a reset asks for. So the mistake never surfaces, it just quietly stops being
+    a reset of anything in particular.
+
+    The disk checkpoints are untouched. This clears what THIS worker remembers,
+    which is what a cold-path test wants and what a Compute All means."""
+    global _CACHE
+    _CACHE = {"snaps": [], "keys": []}
+
+
 def rebuild_cached(document, diagnostics=None, projections=None, datums_out=None,
                    sketch_planes_out=None):
     """Incremental rebuild: reuse cached per-feature state for the unchanged document
@@ -1892,9 +1906,12 @@ def rebuild_cached(document, diagnostics=None, projections=None, datums_out=None
     global _CACHE
     features = document.get("features", [])
     new_sigs = _feature_sigs(features)
-    gsig = _global_sig(document)
     store = _disk_store()
-    keys = _chain_keys_scoped(document, new_sigs) if store is not None else []
+    # Computed for BOTH tiers now, not just the disk one. They are what the RAM
+    # cache compares below, and they are cheap: a blake2b per feature over sigs
+    # that are themselves identity-memoized, with the per-feature parameter
+    # scope memoized alongside them.
+    keys = _chain_keys_scoped(document, new_sigs)
 
     # RESUME CAP (projection soundness): when the caller collects projection
     # refresh entries, never resume PAST the first sketch carrying projected
@@ -1928,10 +1945,38 @@ def rebuild_cached(document, diagnostics=None, projections=None, datums_out=None
     resume = None
     from_disk = False
     disk_mod = {}
-    if _CACHE["global_sig"] == gsig and _CACHE["snaps"]:
-        old_sigs = _CACHE["feature_sigs"]
+    # Resume at the longest common prefix of the CHAIN KEYS, which is the same
+    # test the disk tier makes and a strictly better one than the pair it
+    # replaces (a whole-document parameter signature, plus per-feature sigs).
+    #
+    # The old gate was all-or-nothing on parameters: `_global_sig` hashed every
+    # parameter in the document, so touching ANY of them threw the entire RAM
+    # prefix away and rebuilt from feature zero. That is the slider drag, the
+    # one edit a person makes dozens of times a second, and it was the most
+    # expensive edit in the app. Measured on a 400x300 plate with 60 holes and
+    # one fillet whose radius is the document's only parameter, read by nothing
+    # else: dragging that parameter cost 0.914 s a tick, against 0.141 s for
+    # typing the identical number into the same fillet as a literal. Same
+    # geometry, same one feature to redo, 6.5x apart, and the disk tier did not
+    # rescue it (0.906 s with the checkpoints on).
+    #
+    # A chain key already folds in exactly what the old pair did AND the scoping
+    # that fixes this: key_i = H(key_{i-1} + sig_i + scope_i), where scope_i is
+    # the raw value of every parameter feature i can reach through an expression
+    # (plus the visibility map, for the legacy extrudes that consult it). So a
+    # parameter edit now invalidates from the first feature that actually reads
+    # that parameter, and features above it keep their snapshots.
+    #
+    # It is not a weakening. The scope scan is a word-boundary superset of the
+    # names a feature could reference, so it over-invalidates rather than under,
+    # and a matching prefix of these keys is already the condition on which the
+    # disk tier restores real geometry from a blob store. The RAM tier has the
+    # easier job of the two: it hands back the very objects it built, where the
+    # disk tier has to deserialize and fingerprint them.
+    if _CACHE.get("keys") and _CACHE["snaps"]:
+        old_keys = _CACHE["keys"]
         k = 0
-        while k < len(new_sigs) and k < len(old_sigs) and new_sigs[k] == old_sigs[k]:
+        while k < len(keys) and k < len(old_keys) and keys[k] == old_keys[k]:
             k += 1
         if proj_cap is not None and not (_CACHE.get("proj_quiet") and k > proj_cap):
             k = min(k, proj_cap)
@@ -1997,7 +2042,7 @@ def rebuild_cached(document, diagnostics=None, projections=None, datums_out=None
     merged.extend(snap for (_i, snap) in snaps_out)  # freshly built tail
     for j in range(0, max(0, len(merged) - _RAM_SNAP_WINDOW)):
         merged[j] = None  # bound RAM; disk checkpoints cover the deep prefix
-    _CACHE = {"feature_sigs": new_sigs, "snaps": merged, "global_sig": gsig,
+    _CACHE = {"snaps": merged, "keys": keys,
               # quiet-proof for the next build's resume-cap decision (see above);
               # missing key (worker restart, Compute All reset) reads falsy =
               # conservative

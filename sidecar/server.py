@@ -1056,7 +1056,7 @@ def _compute_all_job(payload, tolerance):
     document = _apply_doc_ops(payload)
     if document is None:
         return {"resync": True}
-    builder._CACHE = {"feature_sigs": [], "snaps": [], "global_sig": None}
+    builder.reset_cache()
     _MESH_CACHE.clear()
     try:
         import geomstore
