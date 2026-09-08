@@ -304,5 +304,37 @@ describe("ProgressiveModel", () => {
       expect(group.children.length).toBe(6); // still in the scene, now the model's
       expect(pm.streaming).toBe(false);
     });
+
+    it("finish() drops a body whose replacement never arrived", () => {
+      // The control for the case above, and a real defect it was written for.
+      // A body held `stale` is the PREVIOUS model's mesh, kept on screen while
+      // its chunk is in flight. It is deliberately not in the published
+      // ModelView, so when a stream ends with one still held, the commit diffs
+      // against a view that has never heard of it: the id reads as new, a fresh
+      // mesh is built and added to this same group, and the old one stays,
+      // untracked, on top of its own replacement. Two surfaces a hair apart
+      // draw as a shredded, doubled body with every hole twice.
+      const r = reply(3);
+      const disposed: string[] = [];
+      const group = new THREE.Group();
+      const pm = new ProgressiveModel(group, (b) => disposed.push(b.id));
+      pm.begin(0, r.bodies!, r, new THREE.Box3(), null, new Set());
+      const first = pm.append(0, r, r.bodies!, edgesByBody(r, ["b0", "b1", "b2"]),
+        { triStart: 0, triEnd: 6 }, new Set(), RES)!;
+
+      const edited = reply(3);
+      edited.bodies![2]!.etag = "etag-CHANGED";
+      // Exactly what the viewport adopts, and therefore what setModel will diff
+      // the commit against: b2 is not in it, which is why the commit rebuilds
+      // b2 and why the mesh below has to be gone before it does.
+      const adopted = pm.begin(1, edited.bodies!, edited, new THREE.Box3(), first, new Set());
+      expect(adopted.bodies.map((b) => b.id)).toEqual(["b0", "b1"]);
+      expect(group.children.length).toBe(6); // b2's old mesh held, no hole
+
+      pm.finish(); // b2's chunk never came
+
+      expect(disposed).toEqual(["b2"]);
+      expect(group.children.length).toBe(4); // and it is out of the scene
+    });
   });
 });

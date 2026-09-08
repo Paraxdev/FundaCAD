@@ -23,7 +23,7 @@ const version = ref("…");
 const copying = ref(false);
 
 // Snapshotted at open, not at send: see BugReportForm.
-const { connected, crumbs } = bugContext(deps);
+const { connected, crumbs, pipeline, faults } = bugContext(deps);
 
 const desc = useTemplateRef<HTMLTextAreaElement>("desc");
 
@@ -35,6 +35,13 @@ const preview = computed(() =>
     `geometry engine connected: ${connected}`,
     `recent events (${crumbs.length}):`,
     ...crumbs.slice(-5).map((c) => `  ${c}`),
+    // Said in the preview, not just buried in the attached log: a person who
+    // came here about a doubled or shredded body needs to see that the app
+    // noticed it too, and a person here about something else should not have
+    // to read the trail to learn the renderer is unhappy.
+    faults
+      ? `render pipeline: FAULTS DETECTED, ${pipeline.length} lines attached`
+      : `render pipeline: no faults, ${pipeline.length} lines attached`,
     `+ sidecar log tail (if checked), usernames/paths redacted`,
     `+ current document (only if checked)`,
   ].join("\n"),
@@ -54,6 +61,7 @@ async function copy() {
     version: version.value,
     connected,
     crumbs,
+    pipeline,
   });
   copying.value = false;
   // A refused clipboard leaves the dialog up rather than closing over text the

@@ -160,9 +160,24 @@ export class ProgressiveModel {
     this.release(EMPTY);
   }
 
-  /** Stop tracking without disposing: the commit has taken ownership of every
-   *  body this stream built. */
+  /** Hand over to the commit: it owns every body this stream BUILT, so those are
+   *  released without being disposed.
+   *
+   *  A body still held in `stale` is the exception, and it is not owned by
+   *  anybody. It is the PREVIOUS model's mesh, kept on screen because the chunk
+   *  carrying its replacement never arrived, and it never reached the ModelView
+   *  the viewport adopted (snapshot() publishes filled slots only). So the
+   *  commit cannot see it: setModel diffs against the view it adopted, finds no
+   *  entry for that id, builds the body fresh and adds it to this same group.
+   *  The old mesh is then in the scene with nothing referencing it and nothing
+   *  that will ever remove it, sitting a hair away from its own replacement.
+   *
+   *  That does not read as a leak on screen, it reads as corruption: two nearly
+   *  identical surfaces z-fighting, doubled edges, and holes that appear twice.
+   *  Disposing here is what makes the commit's rebuild of that body correct
+   *  rather than additive. */
   finish() {
+    for (const b of this.stale.values()) this.remove(b);
     this.reset();
   }
 
