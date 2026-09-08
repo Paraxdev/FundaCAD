@@ -163,3 +163,55 @@ describe("DimInput's optional switch", () => {
     expect(() => dim.setToggle(true)).not.toThrow();
   });
 });
+
+describe("DimInput seed and takeOver", () => {
+  // The contract a re-opened feature rests on. `seed` fills a field AND locks
+  // it, so a hand that merely happens to be moving cannot rewrite a saved
+  // value; `takeOver` is the one thing that unlocks it, for a deliberate drag
+  // on the handle that owns the field.
+  //
+  // Extrude is why these are tested. It seeded the distance when re-opening a
+  // committed extrude and had no grabbable arrow, so the lock had nothing to
+  // release it: the arrow was drawn, the depth could not be dragged, and the
+  // only way to change it was to retype. Both halves below are load-bearing,
+  // and the first is why the second cannot simply be "never lock".
+  const value = () => root().querySelector<HTMLInputElement>("input")!.value;
+
+  it("a seeded field ignores the cursor", () => {
+    dim.show([{ name: "distance", label: "D" }], () => {});
+    dim.seed("distance", 40);
+    expect(dim.isUserDriven("distance")).toBe(true);
+
+    dim.updateFromCursor({ distance: 7 });
+    expect(value()).toBe("40"); // the saved depth, not the passing cursor
+  });
+
+  it("a drag on the handle takes it back", () => {
+    dim.show([{ name: "distance", label: "D" }], () => {});
+    dim.seed("distance", 40);
+
+    dim.takeOver("distance");
+    expect(dim.isUserDriven("distance")).toBe(false);
+    dim.updateFromCursor({ distance: 52.5 });
+    // The number beside the arrow has to follow the arrow. Otherwise the
+    // geometry says one thing, the box says another, and nothing on screen
+    // says which of the two will be committed.
+    expect(value()).toBe("52.5");
+    expect(dim.getValue("distance")).toBe(52.5);
+  });
+
+  it("control: typing re-locks it, and the cursor is shut out again", () => {
+    // takeOver is not a one-way door. A drag hands control to the cursor; the
+    // next keystroke has to hand it back, or a typed value would be overwritten
+    // by the next mouse movement, which is the bug seed exists to prevent.
+    dim.show([{ name: "distance", label: "D" }], () => {});
+    dim.takeOver("distance");
+    const input = root().querySelector<HTMLInputElement>("input")!;
+    input.value = "12";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+
+    expect(dim.isUserDriven("distance")).toBe(true);
+    dim.updateFromCursor({ distance: 99 });
+    expect(value()).toBe("12");
+  });
+});
