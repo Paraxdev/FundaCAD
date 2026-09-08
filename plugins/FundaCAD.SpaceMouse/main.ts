@@ -10,11 +10,11 @@
 
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
-import { initSpaceMouse, setSpaceMouseConfig } from "../../input/spacemouse";
-import { stickyFact } from "../../diagnostics/breadcrumbs";
-import { toast } from "../../ui/toast";
-import type { Engine } from "../../app/engine";
-import type { Viewport } from "../../viewport/viewport";
+import { initSpaceMouse, setSpaceMouseConfig } from "../../src/input/spacemouse";
+import { stickyFact } from "../../src/diagnostics/breadcrumbs";
+import { toast } from "../../src/ui/toast";
+import type { Engine } from "../../src/app/engine";
+import type { Viewport } from "../../src/viewport/viewport";
 
 type Inventory = { picked: string | null; seen: string[]; note?: string | null };
 

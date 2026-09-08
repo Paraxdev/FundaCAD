@@ -92,7 +92,7 @@ pub struct Installed {
 }
 
 const RECORD: &str = "installed.json";
-const MANIFEST: &str = "plugin.json";
+const MANIFEST: &str = "manifest.json";
 
 // ---------------------------------------------------------------------------
 // on disk
@@ -258,7 +258,7 @@ fn install_bytes(
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Inspected {
-    /// The bundle's `plugin.json`, verbatim and unparsed.
+    /// The bundle's `manifest.json`, verbatim and unparsed.
     ///
     /// Handed over as-is for the frontend to run through `parseManifest`, the
     /// same function that will validate it at install and the same one that

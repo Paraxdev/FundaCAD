@@ -1,7 +1,7 @@
 //! Where a running FundaCAD says how to reach it.
 //!
 //! The sidecar's port and token live in this process's memory and nowhere else,
-//! which is why an outside program — the MCP server in `plugins/mcp/`, a probe script —
+//! which is why an outside program — the MCP server in `plugins/FundaCAD.MCP/`, a probe script —
 //! has never been able to join a session in progress. It could only start a
 //! second engine of its own and work on a copy. That is a safe default and a
 //! poor one for the thing an agent is most often asked to do, which is change
@@ -32,7 +32,7 @@
 
 use std::path::{Path, PathBuf};
 
-/// The file's name inside the app data directory. Read by `plugins/mcp/app_session.py`,
+/// The file's name inside the app data directory. Read by `plugins/FundaCAD.MCP/app_session.py`,
 /// which resolves the same directory from the bundle identifier — change one and
 /// the other stops finding it, which is why both name the constant in a comment.
 pub const FILE_NAME: &str = "session.json";

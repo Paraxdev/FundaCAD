@@ -19,24 +19,36 @@
 
 import { describe, expect, it } from "vitest";
 
-const sources = import.meta.glob("../../src/**/*.{ts,vue}", {
-  query: "?raw",
-  import: "default",
-  eager: true,
-}) as Record<string, string>;
+// BOTH TREES, and that is not tidiness. A capability now lives in its own
+// directory under plugins/, outside src/ entirely, so a glob of src/ alone
+// would still find every core file that could break the rule but would no
+// longer find the capability's own module to excuse it, and the control at the
+// bottom of this file would have nothing to check itself against.
+const sources = {
+  ...(import.meta.glob("../../src/**/*.{ts,vue}", {
+    query: "?raw",
+    import: "default",
+    eager: true,
+  }) as Record<string, string>),
+  ...(import.meta.glob("../../plugins/*/*.ts", {
+    query: "?raw",
+    import: "default",
+    eager: true,
+  }) as Record<string, string>),
+};
 
 /** The files that ARE the capability. A capability is allowed to import its own
  *  parts however it likes. */
 const CAPABILITIES: Record<string, (path: string) => boolean> = {
   "the printer connection": (p) =>
     p.includes("/src/print/") ||
-    p.endsWith("/plugins/builtin/printing.ts") ||
+    p.includes("/plugins/FundaCAD.Printing/") ||
     p.endsWith("/overlays/CameraPanel.vue") ||
     p.endsWith("/overlays/PrintStatusPill.vue") ||
     p.endsWith("/overlays/FilamentMappingDialog.vue"),
   "the 3D mouse": (p) =>
     p.endsWith("/input/spacemouse.ts") ||
-    p.endsWith("/plugins/builtin/spacemouse.ts") ||
+    p.includes("/plugins/FundaCAD.SpaceMouse/") ||
     p.endsWith("/overlays/SpaceMouseModal.vue"),
 };
 
@@ -114,10 +126,10 @@ describe("the core does not depend on the capabilities it can turn off", () => {
     // also what a broken matcher produces, so one known-bad case is checked
     // against the same machinery: the capability's own entry module imports the
     // capability, and would be reported if it were not excused for owning it.
-    const entry = Object.keys(sources).find((p) => p.endsWith("/plugins/builtin/spacemouse.ts"))!;
-    const target = resolve(entry, "../../input/spacemouse");
+    const entry = Object.keys(sources).find((p) => p.endsWith("/plugins/FundaCAD.SpaceMouse/main.ts"))!;
+    const target = resolve(entry, "../../src/input/spacemouse");
     expect(target).not.toBeNull();
     expect(candidates(target!).some(CAPABILITIES["the 3D mouse"]!)).toBe(true);
-    expect(staticImports(sources[entry]!)).toContain("../../input/spacemouse");
+    expect(staticImports(sources[entry]!)).toContain("../../src/input/spacemouse");
   });
 });

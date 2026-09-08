@@ -302,12 +302,31 @@ pub fn now_secs() -> u64 {
 /// An id from the webview names a directory, so it gets the same treatment as
 /// an archive entry: a closed character set, not a sanitiser.
 pub fn safe_id(id: &str) -> Result<&str, String> {
-    let ok = !id.is_empty()
-        && id.len() <= 32
-        && id.starts_with(|c: char| c.is_ascii_lowercase())
-        && id
-            .chars()
-            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+    // `Publisher.Name`, or a bare `Name`. Mirrors ID in src/plugins/manifest.ts.
+    //
+    // THE DOT IS WHY THIS IS WRITTEN OUT rather than left as one character
+    // class. An id is joined onto the plugins root to make a directory, so it
+    // is the only thing standing between a manifest and a path; allowing '.'
+    // anywhere would allow `..`, and allowing a leading '.' would allow an id
+    // to land on `.staging-x` or `.inspect-x`, which are real directories this
+    // module creates and deletes. Requiring every segment to START WITH A
+    // LETTER is what forbids all of those at once, and it is a rule about the
+    // shape of a name rather than a list of strings to remember.
+    fn segment(part: &str) -> bool {
+        !part.is_empty()
+            && part.len() <= 31
+            && part.starts_with(|c: char| c.is_ascii_alphabetic())
+            && part
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-')
+    }
+
+    let mut parts = id.split('.');
+    let ok = match (parts.next(), parts.next(), parts.next()) {
+        (Some(a), None, _) => segment(a),
+        (Some(a), Some(b), None) => segment(a) && segment(b),
+        _ => false,
+    };
     if ok {
         Ok(id)
     } else {
@@ -319,6 +338,59 @@ pub fn safe_id(id: &str) -> Result<&str, String> {
 mod tests {
     use super::*;
     use std::io::Write;
+
+    /// An id becomes a directory name, so this is a path guard wearing the word
+    /// "id". Every refusal below is a path that would otherwise be joined onto
+    /// the plugins root.
+    #[test]
+    fn an_id_from_the_webview_cannot_name_a_directory_of_its_choosing() {
+        for bad in [
+            "",
+            ".",
+            "..",
+            "../etc",
+            "..\\windows",
+            ".hidden",
+            ".staging-x",
+            ".inspect-x",
+            "a/b",
+            "a\\b",
+            "a.b.c",       // two dots is two chances to be a path
+            "a..b",        // and this one is `..` in the middle
+            "a.",
+            ".a",
+            "-leading",    // must start with a letter, not a dash
+            "1st",         // nor a digit
+            "with space",
+            "with:colon",
+            "with\u{0000}nul",
+            "with\nnewline",
+            "Uni\u{00e7}ode",
+            "\u{0430}dmin",  // Cyrillic a: reads as ASCII, is not
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", // 32 in one segment, cap is 31
+            "Ok.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        ] {
+            assert!(
+                safe_id(bad).is_err(),
+                "should not be a usable plugin id: {bad:?}"
+            );
+        }
+
+        // The controls. Without these the test passes just as well against a
+        // safe_id that refuses everything, which would be a plugin system that
+        // installs nothing.
+        for good in [
+            "FundaCAD.MCP",
+            "FundaCAD.MultiColor",
+            "someone.their-tool",
+            "bare",
+            "a",
+            "A1.b2",
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", // 31 + 31
+        ] {
+            assert_eq!(safe_id(good), Ok(good), "should be a usable plugin id");
+        }
+    }
 
     /// Build a zip in memory from (name, contents) pairs, so an archive with a
     /// hostile entry name can be written on purpose.
@@ -377,7 +449,7 @@ mod tests {
         // The control. If the guard refused everything it would pass the loop
         // above while making the feature impossible, and nothing else here
         // would notice.
-        assert_eq!(safe_entry("plugin.json"), Some(PathBuf::from("plugin.json")));
+        assert_eq!(safe_entry("manifest.json"), Some(PathBuf::from("manifest.json")));
         assert_eq!(
             safe_entry("pkg/sub/mod.py"),
             Some(PathBuf::from("pkg").join("sub").join("mod.py"))
@@ -458,7 +530,7 @@ mod tests {
     fn a_zip_unpacks_into_the_plugin_directory() {
         let dir = tmpdir("extract");
         let bytes = zip_of(&[
-            ("plugin.json", b"{}" as &[u8]),
+            ("manifest.json", b"{}" as &[u8]),
             ("server.py", b"print(1)"),
             ("pkg/mod.py", b"x = 2"),
         ]);
@@ -479,7 +551,7 @@ mod tests {
         let dir = tmpdir("slip");
         let outside = dir.join("outside.py");
         let bytes = zip_of(&[
-            ("plugin.json", b"{}" as &[u8]),
+            ("manifest.json", b"{}" as &[u8]),
             ("../outside.py", b"owned"),
         ]);
         let err = extract_into(&bytes, &dir.join("plug")).expect_err("zip slip must be refused");
@@ -527,14 +599,5 @@ mod tests {
             ..shown.clone()
         };
         assert!(grants_match(&shown, &extra_host).is_err(), "an added host slipped through");
-    }
-
-    #[test]
-    fn an_id_from_the_webview_cannot_name_a_directory_of_its_choosing() {
-        for bad in ["..", "../other", "a/b", "", "Mcp", "-mcp", "a".repeat(33).as_str()] {
-            assert!(safe_id(bad).is_err(), "a bad id was accepted: {bad:?}");
-        }
-        assert!(safe_id("mcp").is_ok());
-        assert!(safe_id("print-farm2").is_ok());
     }
 }

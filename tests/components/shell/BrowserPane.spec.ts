@@ -100,7 +100,7 @@ vi.mock("../../../src/print/printerClient", () => ({
  *  ships off. "Off" is a case of its own below, not a state these reach into. */
 async function renderWithPrinter(fake: ReturnType<typeof makeEngine>): Promise<VueWrapper> {
   (window as unknown as Record<string, unknown>)["__TAURI_INTERNALS__"] = {};
-  setPluginEnabled("multi-material", true);
+  setPluginEnabled("FundaCAD.MultiColor", true);
   const w = render(fake);
   for (let i = 0; i < 20 && !w.find(".pal-dot").exists(); i++) await nextTick();
   return w;
@@ -108,7 +108,7 @@ async function renderWithPrinter(fake: ReturnType<typeof makeEngine>): Promise<V
 
 afterEach(() => {
   delete (window as unknown as Record<string, unknown>)["__TAURI_INTERNALS__"];
-  setPluginEnabled("multi-material", false);
+  setPluginEnabled("FundaCAD.MultiColor", false);
   vi.useRealTimers();
 });
 
@@ -321,7 +321,7 @@ describe("BrowserPane", () => {
     await nextTick();
     expect(w.find(".tree-swatch").exists()).toBe(false);
 
-    setPluginEnabled("multi-material", true);
+    setPluginEnabled("FundaCAD.MultiColor", true);
     await nextTick();
     expect(w.find(".tree-swatch").exists()).toBe(true);
   });

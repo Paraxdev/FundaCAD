@@ -28,7 +28,7 @@ import { createBroker, type Broker, type BrokerHost } from "./broker";
 /** How the app names a new feature, mirroring `DocumentStore.nextId()`.
  *
  *  THIS IS NOT THE ONLY SCHEME IN THE SYSTEM, and an earlier version of this
- *  file said it was. `plugins/mcp/model.py` names features by type, `bx1` for a
+ *  file said it was. `plugins/FundaCAD.MCP/model.py` names features by type, `bx1` for a
  *  box and `ex1` for an extrude; the app names them `f1`, `f2`, counting from
  *  the number it already has. Both are hosts for the same op vocabulary and
  *  both are right, because an id is an id.

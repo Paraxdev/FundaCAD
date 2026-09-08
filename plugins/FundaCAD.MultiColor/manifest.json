@@ -1,0 +1,9 @@
+{
+  "id": "FundaCAD.MultiColor",
+  "name": "Multi-material",
+  "version": "1.0.0",
+  "kind": "builtin",
+  "summary": "Filament slots, per body and per texture colour, and the toolhead mapping a multi-colour print needs.",
+  "enabledByDefault": false,
+  "grants": ["document.read", "document.write"]
+}

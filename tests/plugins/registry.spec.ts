@@ -46,9 +46,9 @@ describe("what is on before anybody says anything", () => {
     // from passing.
     const m = await load();
     expect(m.builtinPlugins().map((p) => p.manifest.id)).toEqual([
-      "multi-material",
-      "printing",
-      "spacemouse",
+      "FundaCAD.MultiColor",
+      "FundaCAD.Printing",
+      "FundaCAD.SpaceMouse",
     ]);
     for (const p of m.builtinPlugins()) {
       expect(p.manifest.kind).toBe("builtin");
@@ -75,9 +75,40 @@ describe("the setting somebody already made", () => {
     expect(m.multiMaterialEnabled()).toBe(true);
   });
 
+  it("carries the capabilities forward through their rename", async () => {
+    // The ids gained a publisher segment. These three are in people's stored
+    // state right now under the old spelling, and dropping them would put every
+    // capability back to its default: multi-material would switch itself back
+    // ON for everyone who had turned it off, which is precisely what a toggle
+    // exists to prevent.
+    const m = await load({
+      [KEY]: JSON.stringify({ "multi-material": true, printing: false, spacemouse: false }),
+    });
+    expect(m.multiMaterialEnabled()).toBe(true);
+    expect(m.printingEnabled()).toBe(false);
+    expect(m.spaceMouseEnabled()).toBe(false);
+
+    // The control. Without it this passes just as well against a module that
+    // ignores the stored value and answers from somewhere else.
+    const other = await load({
+      [KEY]: JSON.stringify({ "multi-material": false, printing: true, spacemouse: true }),
+    });
+    expect(other.multiMaterialEnabled()).toBe(false);
+    expect(other.printingEnabled()).toBe(true);
+  });
+
+  it("lets the new name win when both are stored", async () => {
+    // A state holding both is a session that toggled something after upgrading,
+    // and what it did then is more recent than what it did before.
+    const m = await load({
+      [KEY]: JSON.stringify({ printing: false, "FundaCAD.Printing": true }),
+    });
+    expect(m.printingEnabled()).toBe(true);
+  });
+
   it("prefers its own key once there is one", async () => {
     const m = await load({
-      [KEY]: JSON.stringify({ "multi-material": false }),
+      [KEY]: JSON.stringify({ "FundaCAD.MultiColor": false }),
       [FLAGS_KEY]: JSON.stringify({ multiColor: true }),
     });
     // The new key is the answer to the question this module asks; the old one
@@ -89,7 +120,7 @@ describe("the setting somebody already made", () => {
     // The reason the state is a map sanitised per field rather than
     // all-or-nothing: a capability added in a later version must not cost
     // somebody the setting they chose for an older one.
-    const m = await load({ [KEY]: JSON.stringify({ printing: false }) });
+    const m = await load({ [KEY]: JSON.stringify({ "FundaCAD.Printing": false }) });
     expect(m.printingEnabled()).toBe(false);
     expect(m.spaceMouseEnabled()).toBe(true);
     expect(m.multiMaterialEnabled()).toBe(false);
@@ -114,18 +145,18 @@ describe("turning one on and off", () => {
     let told = 0;
     const off = m.onPluginChange(() => told++);
 
-    m.setPluginEnabled("printing", false);
+    m.setPluginEnabled("FundaCAD.Printing", false);
     expect(m.printingEnabled()).toBe(false);
     expect(told).toBe(1);
-    expect(JSON.parse(localStorage.getItem(KEY)!)["printing"]).toBe(false);
+    expect(JSON.parse(localStorage.getItem(KEY)!)["FundaCAD.Printing"]).toBe(false);
 
     // Setting it to what it already is is not a change, and must not wake
     // every surface in the window.
-    m.setPluginEnabled("printing", false);
+    m.setPluginEnabled("FundaCAD.Printing", false);
     expect(told).toBe(1);
 
     off();
-    m.setPluginEnabled("printing", true);
+    m.setPluginEnabled("FundaCAD.Printing", true);
     expect(told).toBe(1);
     expect(m.printingEnabled()).toBe(true);
   });
@@ -133,11 +164,11 @@ describe("turning one on and off", () => {
   it("hands out a new object each time, so a holder can compare identity", async () => {
     const m = await load();
     const before = m.pluginState();
-    m.setPluginEnabled("printing", false);
+    m.setPluginEnabled("FundaCAD.Printing", false);
     expect(m.pluginState()).not.toBe(before);
     // And the old one is unchanged, which is what makes the comparison mean
     // something.
-    expect(before["printing"]).toBe(true);
+    expect(before["FundaCAD.Printing"]).toBe(true);
   });
 
   it("refuses an id this build does not have", async () => {

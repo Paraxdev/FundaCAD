@@ -92,28 +92,43 @@ hurts.
 
 | id | what it is | asks for | on by default |
 | --- | --- | --- | --- |
-| `printing` | printers on your network, and opening a model in a slicer | `document.read`, `files.write`, `printer.control`, `process.spawn` | yes |
-| `spacemouse` | navigating and moving with a 3D mouse | `device.input`, `document.read`, `document.write` | yes |
-| `multi-material` | filament slots, per body and per texture colour | `document.read`, `document.write` | no |
+| `FundaCAD.Printing` | printers on your network, and opening a model in a slicer | `document.read`, `files.write`, `printer.control`, `process.spawn` | yes |
+| `FundaCAD.SpaceMouse` | navigating and moving with a 3D mouse | `device.input`, `document.read`, `document.write` | yes |
+| `FundaCAD.MultiColor` | filament slots, per body and per texture colour | `document.read`, `document.write` | no |
 
-The two that were always in the app default to on. An upgrade that silently
-removed a working printer connection would be a regression wearing the word
-"plugin"; multi-material was already off and stays off.
+Each is a directory under `plugins/`, shaped exactly like a downloadable one:
+`manifest.json`, a `README.md` saying why it asks for what it asks for, and a
+`main.ts` if it has anything to start. The manifest in that directory is the
+one the app reads. There is no second copy.
+
+The two that were always in the app default to on, which their manifests say
+with `enabledByDefault`. An upgrade that silently removed a working printer
+connection would be a regression wearing the word "plugin"; multi-material was
+already off and stays off.
+
+**Their ids were renamed** when the directories appeared: `printing`,
+`spacemouse` and `multi-material` are what they were called, and those names
+are in people's stored settings right now. `RENAMED` in `src/plugins/registry.ts`
+reads them forward. Dropping them would have put every capability back to its
+default, which for multi-material means switching itself back on for everyone
+who had turned it off, which is the exact thing a toggle exists to prevent.
 
 Some of the grant choices are worth stating, because the tempting answer is the
-wrong one in each case:
+wrong one in each case. Each one lives in that plugin's own `README.md` now,
+beside the manifest it explains, because JSON has no comments and the reasoning
+is the half worth keeping:
 
-- **`printing` claims `process.spawn`.** Opening a model in a slicer starts
+- **Printing claims `process.spawn`.** Opening a model in a slicer starts
   another program on the machine, and that is the most consequential thing
   anything in this app does on the user's behalf.
-- **`printing` does not claim `network`.** It reaches printers configured in
+- **Printing does not claim `network`.** It reaches printers configured in
   this app, over the local network. "Connect to the internet" would be a worse
   description rather than a more cautious one.
-- **`spacemouse` claims `document.write`.** Its object mode moves the selected
+- **The 3D mouse claims `document.write`.** Its object mode moves the selected
   body, and a move is an edit. Omitting it because the edit arrives through a
   knob rather than a dialog would be describing the input device instead of the
   effect.
-- **`spacemouse` does not claim `process.spawn`**, and neither does the MCP
+- **The 3D mouse does not claim `process.spawn`**, and neither does the MCP
   plugin. A vocabulary whose grants are claimed whenever they are technically
   defensible is one where every screen looks the same.
 
@@ -144,30 +159,85 @@ not be a toggle.
 
 ## Where a plugin's source lives
 
-Each plugin is one directory under `plugins/`, with a `plugin.json` at its top
-level. That is the entire rule, and it is what `scripts/build-plugins.py`
-discovers: adding a second plugin means adding a directory, not editing a
-script, a workflow or a list. A directory without a manifest is skipped rather
-than packaged into something that cannot be installed.
+**A plugin is a directory under `plugins/` with a `manifest.json` in it.** That
+is the entire rule. Adding a plugin is adding a directory: no script, workflow
+or list is edited, and a directory without a manifest is skipped rather than
+packaged into something that cannot be installed.
 
-`plugins/` is a plugin's OWN source, separate from `src/plugins/`, which is the
-app's side of the arrangement: the vocabulary, the broker, the registry and the
-screen. Nothing in `plugins/` is compiled into the app.
+```
+plugins/
+  FundaCAD.MCP/            manifest.json, README.md, server.py and the rest
+  FundaCAD.MultiColor/     manifest.json, README.md
+  FundaCAD.Printing/       manifest.json, README.md, main.ts
+  FundaCAD.SpaceMouse/     manifest.json, README.md, main.ts
+```
 
-The packaging script refuses a bundle that could not work once installed: a
-manifest whose `id` disagrees with the directory name (it would install under
-one name and be looked for under another), an unknown kind, or a missing entry
-point for the kind it claims. A bundle missing its entry point installs
-perfectly and then does nothing, which is the most annoying shape a failure can
-have.
+`plugins/` is a plugin's OWN source. `src/plugins/` is the app's side of the
+arrangement: the vocabulary, the broker, the runner, the registry and the
+screen. The two are not the same thing and are not in the same place.
 
-One consequence worth writing down, because it broke on the way here: nothing
-should work out where the repository root is by counting directories up from
-itself. `sidecar_link.py` did, with two `dirname` calls that meant "the
+### Ids are `Publisher.Name`
+
+An id is a global name in a space anybody may publish into. Without a publisher
+segment the first two people to write an exporter both call it `exporter`, and
+the second installs over the first.
+
+It is also a **directory name**, which is what the rest of the rule is about.
+Every segment must start with an ASCII letter, so `.`, `..`, `.ssh` and
+`.staging-x` cannot be spelled at all. That is not defence in depth, it is the
+defence: an id is joined onto the plugins root in Rust, so `safe_id` in
+`src-tauri/src/plugins/bundle.rs` is a path guard wearing the word "id", and
+`ID` in `src/plugins/manifest.ts` is the same rule on this side.
+
+Two ids differing only in case are treated as **one plugin**, by `sameId()`.
+Windows and macOS would give `Someone.Tool` and `someone.tool` the same
+directory and Linux would give them two, so without that rule an install
+replaces somebody else's plugin on one machine and sits beside it on another.
+Equal everywhere is the strict reading and the only one safe to standardise on.
+
+### One manifest, three readers
+
+The manifest in the directory is the only copy. Three programs read it:
+
+| | |
+| --- | --- |
+| the app | `src/plugins/shipped.ts` globs `plugins/*/manifest.json` at build time |
+| the packager | `scripts/build-plugins.py` reads it to decide what to zip |
+| the installer | reads the packaged copy back out of the zip and checks it against what the user agreed to |
+
+It used to be two copies: a JSON literal in `registry.ts` or `index.ts`, and the
+plugin's own file for the bundle to carry. Two copies of a permission list is
+two lists that can disagree, and the copy that would have won an argument is the
+one the consent screen never showed. `tests/plugins/offered.test.ts` now asserts
+that the offered entry and the file on disk are the same value, with a control
+that the comparison can still fail.
+
+**A `builtin` is never packaged.** Its code is the app's own code; there is no
+zip for it to arrive in and nothing that could install one. The packager skips
+it, and `officialPlugins()` leaves it out, because offering to download one
+would be offering a 404 behind a consent screen somebody has just answered.
+
+The packager refuses anything else that could not work once installed: a
+manifest whose `id` disagrees with the directory name, an id that is not a
+usable id, an unknown kind, or a missing entry point for the kind it claims. A
+bundle missing its entry point installs perfectly and then does nothing, which
+is the most annoying shape a failure can have.
+
+### Two things that broke on the way here
+
+**A shipped plugin's TypeScript is still the app's TypeScript, and moving it out
+of `src/` moved it out of the typechecker.** `tsconfig.json` included
+`src/**/*.ts`, so `plugins/*/main.ts` compiled into the bundle with nobody
+checking its types. It was found by putting a deliberate type error in one and
+getting no output at all. `plugins/**/*.ts` is in `include` now.
+
+**Nothing should work out where the repository root is by counting directories
+up from itself.** `sidecar_link.py` did, with two `dirname` calls that meant "the
 checkout" only while the plugin sat one level down. It searches upward for a
-`sidecar/server.py` now, and finds nothing when installed under the app data
-directory, which is exactly when the environment override is supposed to take
-over.
+`sidecar/server.py` now, so the directory could be renamed under it without
+every geometry test failing at once, and it finds nothing when installed under
+the app data directory, which is exactly when the environment override is
+supposed to take over.
 
 ## Where a plugin comes from
 
@@ -244,7 +314,7 @@ Then, for all three routes:
    escape that directory is refused: `..`, absolute paths, drive letters,
    backslashes, symlinks, and archives over the entry-count or unpacked-size
    limits.
-4. Read the bundle's own `plugin.json` and compare kind, grants and hosts
+4. Read the bundle's own `manifest.json` and compare kind, grants and hosts
    against what the screen showed. A mismatch is refused **by name** and the
    staging directory is deleted. This is the step a local file does not get to
    skip: if picking a file bypassed it, picking a file would be the way around
@@ -309,7 +379,7 @@ otherwise is `(await b.call(op)).value`, which reads `undefined` off a refusal
 and fails ten lines later as a TypeError naming neither the op nor the missing
 grant.
 
-`tests/plugins/broker.test.ts` reads the op list out of `plugins/mcp/server.py` rather
+`tests/plugins/broker.test.ts` reads the op list out of `plugins/FundaCAD.MCP/server.py` rather
 than restating it. Two copies of a list drift: someone adds a tool there, nobody
 adds a row here, and the new tool is either unreachable or reachable without a
 permission.
@@ -331,7 +401,7 @@ write it, run as a test so it cannot rot.
 
 **The document ops are real.** Parameters and the timeline are plain data with
 rules over them, so the double runs those rules: ids are assigned the way the
-app assigns them (checked against `plugins/mcp/model.py`, so the two cannot drift), a
+app assigns them (checked against `plugins/FundaCAD.MCP/model.py`, so the two cannot drift), a
 bad edit is refused before anything is written, and a plugin that adds a feature
 and reads the document back sees it.
 
@@ -457,7 +527,7 @@ synchronously and commits asynchronously and so cannot hand back the evaluated
 number. The double no longer promises one either.
 
 The same test also fixed a thing this document previously got wrong. There is
-more than one id scheme here: `plugins/mcp/model.py` names features by type
+more than one id scheme here: `plugins/FundaCAD.MCP/model.py` names features by type
 (`bx1`, `ex1`) and the app names them `f1`, `f2`, counting from what it already
 has. Both are hosts for one op vocabulary and both are right. The lesson holds
 either way: **read the id `feature_add` returns, never predict it.**
@@ -520,14 +590,17 @@ and the `process` sentence on the install screen says so.
 | `src/plugins/broker/appHost.ts` | the same door onto the document that is open |
 | `src/plugins/broker/testing.ts` | the app a plugin's tests are handed |
 | `src/plugins/runner/*.ts` | the sandbox: protocol, host, guest, spawn |
-| `src/plugins/registry.ts` | the built-in capabilities, and which are on |
-| `src/plugins/activate.ts` | starting and stopping them, by dynamic import |
-| `src/plugins/builtin/*.ts` | one activation module per capability |
+| `src/plugins/shipped.ts` | the one glob of `plugins/*/manifest.json`, parsed |
+| `src/plugins/registry.ts` | which built-in capabilities are on, and the rename migration |
+| `src/plugins/activate.ts` | starting and stopping them, by dynamic import; names none of them |
 | `src/plugins/index.ts` | the plugins this build offers, and the bridge to Rust |
 | `src/components/overlays/PluginsSection.vue` | Preferences ▸ Plugins |
 | `src-tauri/src/plugins/mod.rs` | the commands: list, inspect, install, remove, python runtime |
 | `src-tauri/src/plugins/bundle.rs` | the refusals, split out so they can be tested |
-| `plugins/<id>/` | each plugin's own sources, one directory each |
+| `plugins/<id>/manifest.json` | what it is and what it asks for; the only copy |
+| `plugins/<id>/README.md` | why it asks for that |
+| `plugins/<id>/main.ts` | a shipped capability's activation module, if it has one |
+| `plugins/<id>/server.py` | a process plugin's entry point |
 | `scripts/build-plugins.py` | packaging, run by the release job |
 
 The Rust side knows **nothing** about what a grant means, and must not learn.
@@ -553,9 +626,14 @@ node e2e/sandbox_csp.cjs                 # needs a Chromium; SC_CHROME names it
 
 ## What comes next
 
-1. The rest of `appHost`: the geometry ops, which need the engine reachable
-   from a plugin, and the file ops, which need a way for a plugin to ask for a
-   file rather than name one.
+1. **A way for a plugin to ask the Rust side for something.** The broker's op
+   table is served today by the window (`appHost`) and by a test double, and
+   both refuse the same six ops: `build`, `inspect` and `view` want the geometry
+   engine, and `doc_open`, `doc_save` and `export` want a file picker. A file
+   picker is a Rust window, not a webview dialog. This is one job rather than
+   two: the same op table gains the ops only Rust can serve, routed through the
+   same broker and checked against the same grants, because a second channel to
+   Rust would be a second permission system to keep in step with the first.
 2. The wasm loader in the guest, which is what makes a Rust plugin run rather
    than merely compile.
 3. Somewhere to press "run". A compute plugin is installable and runnable in
