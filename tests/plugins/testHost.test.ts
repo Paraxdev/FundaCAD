@@ -2,9 +2,10 @@
 //
 // A test double earns trust by being checkable against the real thing wherever
 // the real thing is checkable, and by refusing loudly wherever it is not. Both
-// halves are here: the id scheme is compared against plugins/mcp/model.py, which is the
-// implementation the app and the agent already share, and the four ops that
-// need the geometry kernel refuse rather than invent an answer.
+// halves are here: the id scheme is checked against DocumentStore.nextId, which
+// is what ./appHost.ts uses and therefore what a compute plugin really meets,
+// and the four ops that need the geometry kernel refuse rather than invent an
+// answer.
 //
 // The refusal is the part worth being stubborn about. A double that returned a
 // plausible bounding box would let a plugin's test pass while the plugin's
@@ -13,49 +14,47 @@
 
 import { describe, expect, it } from "vitest";
 
-import modelPy from "../../plugins/mcp/model.py?raw";
+import storeTs from "../../src/document/store.ts?raw";
 import { testBroker, TestHostError } from "../../src/plugins/broker/testing";
 import type { CadDocument } from "../../src/types";
-
-const read = (_rel: string) => modelPy;
 
 const value = <T>(r: { ok: boolean; value?: unknown; why?: string }): T => {
   if (!r.ok) throw new Error(`expected success, got: ${r.why}`);
   return r.value as T;
 };
 
-describe("feature ids", () => {
-  it("uses the same prefix per type as plugins/mcp/model.py, for every type it lists", async () => {
-    const py = read("../../plugins/mcp/model.py");
-    const block = py.match(/_PREFIXES = \{([\s\S]*?)\}/)?.[1] ?? "";
-    const pairs = [...block.matchAll(/"([A-Za-z-]+)":\s*"([a-z]+)"/g)].map(
-      (m) => [m[1]!, m[2]!] as const,
-    );
-    expect(pairs.length).toBeGreaterThan(15);
-
-    for (const [type, prefix] of pairs) {
-      const b = testBroker();
-      const r = await b.call("feature_add", { feature: { type } });
-      expect(value<{ id: string }>(r).id, type).toBe(`${prefix}1`);
+describe("feature ids follow the app, not the agent", () => {
+  it("names them f1, f2, the way DocumentStore.nextId does", async () => {
+    const b = testBroker();
+    for (const type of ["box", "extrude", "revolve"]) {
+      await b.call("feature_add", { feature: { type } });
     }
+    expect(b.host.document().features.map((f) => f.id)).toEqual(["f1", "f2", "f3"]);
   });
 
-  it("gives an unknown type the fallback prefix, as plugins/mcp/model.py does", async () => {
-    // The fallback lives in plugins/mcp/model.py as `_PREFIXES.get(kind, "f")`; if that
-    // letter ever changes, this is what says so before a plugin's test does.
-    expect(read("../../plugins/mcp/model.py")).toContain('_PREFIXES.get(kind, "f")');
+  it("counts the way the store counts, which is not the lowest free number", async () => {
+    // DocumentStore.nextId starts at `ids.size + 1` and climbs past anything
+    // taken. plugins/mcp/model.py takes the lowest free number instead, so a
+    // gap gets reused there and not here. Pinned because the difference is
+    // exactly the sort of thing a plugin author would otherwise discover by
+    // having predicted an id.
     const b = testBroker();
-    const r = await b.call("feature_add", { feature: { type: "somethingNew" } });
-    expect(value<{ id: string }>(r).id).toBe("f1");
-  });
-
-  it("takes the lowest free number rather than counting features", async () => {
-    const b = testBroker();
-    await b.call("feature_add", { feature: { type: "box" } }); // bx1
-    await b.call("feature_add", { feature: { type: "box" } }); // bx2
-    await b.call("feature_remove", { id: "bx1" });
+    await b.call("feature_add", { feature: { type: "box" } });   // f1
+    await b.call("feature_add", { feature: { type: "box" } });   // f2
+    await b.call("feature_remove", { id: "f1" });
     const r = await b.call("feature_add", { feature: { type: "box" } });
-    expect(value<{ id: string }>(r).id).toBe("bx1");
+    expect(value<{ id: string }>(r).id).toBe("f3");
+  });
+
+  it("is the same rule the store uses, read off the store itself", () => {
+    // The drift guard. This double is only worth anything while it agrees with
+    // the host it stands in for, and that host is ./appHost.ts calling
+    // DocumentStore.nextId. Read rather than restated: if that method stops
+    // being `f` plus a number counted from the size, this fails here rather
+    // than in somebody's plugin.
+    expect(storeTs, "could not read the store").toContain("nextId(): string {");
+    expect(storeTs).toContain("let n = ids.size + 1;");
+    expect(storeTs).toContain("while (ids.has(`f${n}`)) n++;");
   });
 
   it("refuses a duplicate id and a malformed one, and changes nothing", async () => {

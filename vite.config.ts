@@ -14,6 +14,11 @@ export default defineConfig({
     // fs.inotify.max_user_watches, crashes the dev server with ENOSPC.
     watch: { ignored: ["**/sidecar/.venv/**", "**/src-tauri/target/**", "**/third_party/**"] },
   },
+  // The plugin sandbox imports its bootstrap with `import`, from inside a blob
+  // module worker, so the worker chunk has to BE an ES module. Vite's default
+  // is an iife, which has no `import` and would fail at the first line of the
+  // generated script with an error naming neither the plugin nor the policy.
+  worker: { format: "es" },
   // Tauri builds for a specific target; keep the chunk modern.
   build: {
     target: "esnext",

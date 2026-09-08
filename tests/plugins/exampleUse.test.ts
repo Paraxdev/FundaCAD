@@ -27,7 +27,7 @@ async function bracket(app: Broker, width: number, thickness: number) {
 describe("a plugin, tested against an injected app", () => {
   it("does what it says when it holds what it asked for", async () => {
     const app = testBroker({ grants: ["document.write"] });
-    expect(await bracket(app, 40, 3)).toBe("bx1");
+    expect(await bracket(app, 40, 3)).toBe("f1");
     expect(app.host.document().parameters).toEqual({ wall: 3 });
     expect(app.host.document().features).toHaveLength(1);
   });

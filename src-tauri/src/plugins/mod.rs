@@ -421,6 +421,36 @@ pub fn plugin_install_file(
     install_bytes(&app, &id, path, false, &bytes, sha256, promise, expect)
 }
 
+/// The entry point of an installed plugin, as text.
+///
+/// One file, named by the plugin's kind, from inside the plugin's own
+/// directory. NOT an arbitrary read: the caller does not choose the name, the
+/// installed record does, so this cannot be turned into a file reader by asking
+/// it nicely. The id is checked the same way it is everywhere else, and the
+/// path is joined onto the plugins root rather than taken from the record's own
+/// `dir`, because a record is a file inside the directory it describes and a
+/// directory that can rewrite its own path is not a boundary.
+#[tauri::command]
+pub fn plugin_entry(app: AppHandle, id: String) -> Result<String, String> {
+    let id = safe_id(&id)?;
+    let dir = plugins_root(&app)?.join(id);
+    let record = read_record(&dir).ok_or("that plugin is not installed")?;
+    let name = match record.consented.kind.as_str() {
+        "compute" => "plugin.js",
+        "panel" => "index.html",
+        other => return Err(format!("a {other} plugin has no entry point to read")),
+    };
+    let path = dir.join(name);
+    let text = std::fs::read_to_string(&path)
+        .map_err(|e| format!("{}: {e}", path.display()))?;
+    // The same cap the bundle got. A plugin that grew a 32MB entry point after
+    // installation is not one to hand to a parser.
+    if text.len() > MAX_DOWNLOAD {
+        return Err(format!("{name} is {} bytes", text.len()));
+    }
+    Ok(text)
+}
+
 #[tauri::command]
 pub fn plugin_remove(app: AppHandle, id: String) -> Result<(), String> {
     let id = safe_id(&id)?;

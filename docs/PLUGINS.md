@@ -347,6 +347,129 @@ default: the second case every plugin should have is that it fails honestly when
 it does not hold what it asked for, which is the case an author otherwise never
 runs and a user eventually does, having turned something off.
 
+## The sandbox a compute plugin runs in
+
+A compute plugin is a Worker with one port. It has no DOM, no app, and nothing
+to reach except the broker at the other end of that port. What it may ask for
+there is checked against the grants recorded at INSTALL, not against anything it
+says at run time: the host sends the plugin its grant list so it can plan, and
+that copy is advice. A plugin editing it changes nothing.
+
+### How a plugin's code gets into the Worker
+
+The obvious way is a static Worker that receives the plugin's text and hands it
+to the Function constructor. It works, and it would tie every compute plugin to
+`'unsafe-eval'` in the policy. That grant exists here for exactly one unrelated
+reason, planegcs, and `tests/security/csp.test.ts` is written to fail when
+planegcs stops needing it so it gets removed. A plugin system quietly depending
+on it would make that removal impossible, and nobody would find out until they
+tried.
+
+So the plugin's text is inlined into the Worker's own script instead. That
+script is a blob; it imports the sandbox bootstrap from the app's own origin and
+calls what the bootstrap registered:
+
+```js
+import "<the app's sandbox chunk>";
+self["__fundacadStartPlugin"](async function (app) {
+  // the plugin
+});
+```
+
+That needs `worker-src 'self' blob:` and nothing else. `worker-src` is a
+separate directive from `script-src`, which is the point of using it: a blob may
+become a Worker, which has no DOM and one port, and may not become a script in
+the page, which has everything.
+
+**Measured, not assumed.** `e2e/sandbox_csp.cjs` runs this in a real browser
+under the policy read from `tauri.conf.json`, with `'unsafe-eval'` stripped out
+of it, and checks that the sandbox starts, has no DOM, compiles WebAssembly, and
+is refused an op it did not ask for. It carries a control that removes the
+`worker-src` grant and must fail.
+
+Inlining untrusted text into a script would be alarming anywhere else and is not
+here. A plugin that closes the wrapper early lands at the Worker's top level
+with exactly the same nothing available to it. The boundary is the Worker.
+
+### What the host defends against
+
+A plugin does all of these the first time its author writes a loop wrong, so
+they are conditions to survive rather than attacks to report.
+
+| | |
+| --- | --- |
+| a message that is not one | dropped, never partially acted on |
+| a plugin that never finishes | a deadline, after which the Worker is terminated |
+| a plugin holding slow work open | a cap on ops in flight |
+| a plugin that calls without pause | a cap on ops in total |
+| a plugin that logs a river | lines truncated, and a cap on how many are kept |
+| a plugin that speaks after `done` | ignored; the run is over once it is over |
+
+The in-flight cap is about **concurrency, not rate**, and the difference is easy
+to get wrong. An op that answers immediately never accumulates: its reply drains
+before the next message is even delivered, so a plugin can make a thousand quick
+calls with one outstanding throughout. What that cap bounds is many *slow* ops
+held open at once.
+
+### Where the runner is
+
+| file | what it holds |
+| --- | --- |
+| `src/plugins/runner/protocol.ts` | the messages, and the parsers that refuse anything else |
+| `src/plugins/runner/host.ts` | the app's end: the broker, the limits, the deadline |
+| `src/plugins/runner/guest.ts` | the plugin's end: `app`, and the pending-call bookkeeping |
+| `src/plugins/runner/sandbox.ts` | the module the Worker imports |
+| `src/plugins/runner/spawn.ts` | the generated script, the blob, the Worker |
+
+The host and the guest are wired to a `MessageChannel` in
+`tests/plugins/sandbox.test.ts` and run in one process. That is not a stub of
+the arrangement, it is the arrangement: same modules, same messages, same
+serialisation. What a Worker adds is isolation, which is the browser's and is
+what the e2e test above is for.
+
+**One thing a unit test could not have caught.** Vite builds `sandbox.ts` as a
+worker *entry*, and an entry has no importers, so Rollup treats every export as
+unreachable and drops it. The first build produced a chunk holding the op-name
+array and no sandbox at all — past every test, and it would have failed at the
+first line of the first plugin anybody ran. The bootstrap registers itself with
+a top-level assignment now, which a bundler must keep, and
+`scripts/check-sandbox-chunk.mjs` reads the built artifact and fails if it is a
+husk again.
+
+## The two hosts
+
+`BrokerHost` has two implementations, and they serve the same op table.
+
+| | |
+| --- | --- |
+| `src/plugins/broker/appHost.ts` | the document the window has open |
+| `src/plugins/broker/testing.ts` | an in-memory app, for a plugin's own tests |
+
+Every edit in `appHost` goes through `DocumentStore`, never around it, so a
+plugin's change is one undo step, re-runs the parameter cascade, triggers the
+rebuild, and is watched by the person it is happening to.
+
+`tests/plugins/appHost.spec.ts` runs the same script of ops through both and
+compares the documents that come out. That test is what makes a plugin's own
+tests worth anything, and it earned its place immediately: the two disagreed
+about what `param_set` replies with, because the real store validates
+synchronously and commits asynchronously and so cannot hand back the evaluated
+number. The double no longer promises one either.
+
+The same test also fixed a thing this document previously got wrong. There is
+more than one id scheme here: `plugins/mcp/model.py` names features by type
+(`bx1`, `ex1`) and the app names them `f1`, `f2`, counting from what it already
+has. Both are hosts for one op vocabulary and both are right. The lesson holds
+either way: **read the id `feature_add` returns, never predict it.**
+
+### What appHost does not serve yet
+
+`doc_open`, `doc_save` and `export` need a file picker; `build`, `inspect` and
+`view` need the geometry engine. Each refuses by name. A plugin author has to be
+able to tell "you did not ask for this" (the broker, `not-granted`) from "the
+app cannot do this yet" (the host, `failed`), and one refusal that could mean
+either is worth much less than two that cannot.
+
 ## Languages, and what runs them
 
 A plugin's language is a compiler choice, not an architecture. There are **two
@@ -357,6 +480,12 @@ runners**, and the kind decides which.
 | TypeScript | JavaScript | a Worker | `compute` |
 | Rust | WebAssembly | a Worker | `compute` |
 | Python | nothing | its own process | `process` |
+
+WebAssembly compiles inside the sandbox — the e2e test checks it, because
+`'wasm-unsafe-eval'` is inherited by the Worker and it would be unpleasant to
+discover otherwise later. What is not written yet is the loader that hands a
+`.wasm` its imports and calls into it, so a Rust plugin is a design with its
+foundation in place rather than something that runs today.
 
 **Rust means `wasm32`, not a native library.** A dynamic library loaded into the
 app process is not a sandbox that needs tightening, it is the absence of a
@@ -388,7 +517,9 @@ and the `process` sentence on the install screen says so.
 | `src/plugins/manifest.ts` | the grant vocabulary, the parser, the two lists, the promise |
 | `src/plugins/broker/ops.ts` | the op vocabulary: what each needs, and why |
 | `src/plugins/broker/broker.ts` | the door: check, then dispatch, and never throw at a plugin |
+| `src/plugins/broker/appHost.ts` | the same door onto the document that is open |
 | `src/plugins/broker/testing.ts` | the app a plugin's tests are handed |
+| `src/plugins/runner/*.ts` | the sandbox: protocol, host, guest, spawn |
 | `src/plugins/registry.ts` | the built-in capabilities, and which are on |
 | `src/plugins/activate.ts` | starting and stopping them, by dynamic import |
 | `src/plugins/builtin/*.ts` | one activation module per capability |
@@ -415,19 +546,25 @@ covers the packaging script and the guard together.
 
 ```sh
 sh scripts/check-plugin-guards.sh
-npx vitest run tests/plugins tests/components/overlays/PluginsSection.spec.ts
+npx vitest run tests/plugins tests/security/csp.test.ts
+node scripts/check-sandbox-chunk.mjs     # needs a build; runs one if there is none
+node e2e/sandbox_csp.cjs                 # needs a Chromium; SC_CHROME names it
 ```
 
 ## What comes next
 
-1. The Worker runner, and with it `compute` plugins in TypeScript and in Rust.
-   This is the one that makes `compute` in the kinds table true rather than
-   planned.
-2. MCP onto the broker, so it is a plugin in fact and not only in the
+1. The rest of `appHost`: the geometry ops, which need the engine reachable
+   from a plugin, and the file ops, which need a way for a plugin to ask for a
+   file rather than name one.
+2. The wasm loader in the guest, which is what makes a Rust plugin run rather
+   than merely compile.
+3. Somewhere to press "run". A compute plugin is installable and runnable in
+   code today and has no button.
+4. MCP onto the broker, so it is a plugin in fact and not only in the
    Preferences list.
-3. Panel plugins. Note that the policy currently forbids frames outright, and
+5. Panel plugins. Note that the policy currently forbids frames outright, and
    changing that is load-bearing for their sandbox rather than incidental.
-4. OS sandboxing for process plugins, per platform.
-5. Signing and revocation. Installing from anywhere is now possible, which
+6. OS sandboxing for process plugins, per platform.
+7. Signing and revocation. Installing from anywhere is now possible, which
    makes "this build of this plugin is the one its author published" a question
    worth being able to answer, rather than a nicety.

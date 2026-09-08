@@ -64,6 +64,13 @@ jobs:
       - name: Frontend unit tests (vitest)
         run: npx vitest run
 
+      # The plugin sandbox is a worker ENTRY, so Rollup treats its exports as
+      # unreachable and drops them. That produced a chunk with none of the
+      # sandbox in it, past every unit test, and would have failed at the first
+      # line of the first plugin anyone ran. Only the built artifact shows it.
+      - name: Plugin sandbox chunk survives the build
+        run: node scripts/check-sandbox-chunk.mjs
+
       - name: Install Python 3.12 + sync sidecar deps (locked)
         run: |
           uv python install 3.12
