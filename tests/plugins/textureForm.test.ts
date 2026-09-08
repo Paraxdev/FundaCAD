@@ -1,6 +1,6 @@
 // The Texture panel's conditional rows are the part of it worth pinning: they
 // encode sidecar behaviour rather than taste, and one of the rules here exists
-// because the opposite of it was a bug — Direction used to be gated behind
+// because the opposite of it was a bug, Direction used to be gated behind
 // ANGLE_KINDS, which left the noise/voronoi/image kinds able only to GROW the
 // part instead of texturing the surface it sits on.
 
@@ -60,7 +60,7 @@ describe("sharpnessLabel", () => {
 });
 
 describe("initialTextureForm / toTextureValues", () => {
-  it("defaults to a faceted knurl — what a printer can actually reproduce", () => {
+  it("defaults to a faceted knurl, what a printer can actually reproduce", () => {
     const v = toTextureValues(initialTextureForm({}));
     expect(v.kind).toBe("knurl");
     expect(v.profile).toBe("facet");
@@ -105,7 +105,7 @@ describe("initialTextureForm / toTextureValues", () => {
 });
 
 describe("basename", () => {
-  it("handles both separators — the picker returns native Windows paths", () => {
+  it("handles both separators, the picker returns native Windows paths", () => {
     expect(basename("C:\\images\\bump.png")).toBe("bump.png");
     expect(basename("/home/u/bump.png")).toBe("bump.png");
     expect(basename("bump.png")).toBe("bump.png");

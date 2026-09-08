@@ -1,14 +1,14 @@
 // Cross-section MODE (Inspect): a clipping plane you drag through the model, defined
 // by a world axis, a face you click, or a datum plane.
 //
-// It STAYS ON — orbit, select, fillet an edge you just exposed, and the cut is still
+// It STAYS ON, orbit, select, fillet an edge you just exposed, and the cut is still
 // there. The view state lives on the Viewport (setSectionView) so it survives the
 // rebuilds those operations cause, and this file keeps no document state. While
 // another tool owns the gesture the handle and offset box get out of the way and
 // our keys go quiet, the same bargain selectionNudge.ts strikes: a passive
 // affordance that ate Escape would be a mode the user never entered.
 //
-// And what it cuts away goes faint rather than VANISHING — watching half an assembly
+// And what it cuts away goes faint rather than VANISHING, watching half an assembly
 // disappear tells you nothing about where the visible half sits inside it. The dial
 // runs down to fully hidden, because a clean uncluttered cut is often right and was
 // this tool's entire previous behaviour.
@@ -41,7 +41,7 @@ const AXES: Record<string, Vec3> = {
 };
 
 /** What defines the cut. `pick` defers the answer to the user's next click on a
- *  face or a construction plane — the tool owns that pick rather than the
+ *  face or a construction plane, the tool owns that pick rather than the
  *  caller, so every entry point (ribbon, palette, menu) gets the same aiming
  *  behaviour without repeating the plumbing. */
 export type SectionSource =
@@ -52,7 +52,7 @@ export type SectionSource =
 export interface SectionDeps {
   /** Another tool/sketch owns the gesture: stand down (but keep cutting). */
   toolBusy?: () => boolean;
-  /** Placement of a datum-plane feature by id — the document lives outside this
+  /** Placement of a datum-plane feature by id, the document lives outside this
    *  file, so clicking a construction plane asks the app what it is. */
   datumDef?: (id: string) => PlaneDef | null;
 }
@@ -67,7 +67,7 @@ export class SectionTool {
 
   private plane = new THREE.Plane();
   private origin: Vec3 = [0, 0, 0]; // a point on the defining plane
-  private normal: Vec3 = [0, 0, 1]; // its unit normal — also the drag axis
+  private normal: Vec3 = [0, 0, 1]; // its unit normal, also the drag axis
   private offset = 0;
   private side: 1 | -1 = 1; // which half to keep (F flips)
   private ghost = GHOST_DEFAULT;
@@ -141,7 +141,7 @@ export class SectionTool {
    *  Anchored on the point of that plane NEAREST the model, not on the
    *  definition's own origin: a face plane's origin is the world origin
    *  projected onto it (planeMath explains why it has to be), which for an
-   *  off-centre part can sit far outside the geometry — and the handle would
+   *  off-centre part can sit far outside the geometry, and the handle would
    *  stand out there, off screen, on a cut the user can see perfectly well. */
   private armOn(def: PlaneDef) {
     const { origin, normal } = sectionFromPlaneDef(def);
@@ -173,7 +173,7 @@ export class SectionTool {
   private onPickDown(e: PointerEvent) {
     if (e.button !== 0) return;
     const def = this.planeAt(e.clientX, e.clientY);
-    if (!def) return; // clicked nothing cuttable — stay in the pick rather than arm on a guess
+    if (!def) return; // clicked nothing cuttable, stay in the pick rather than arm on a guess
     e.preventDefault();
     e.stopImmediatePropagation();
     this.endPick();
@@ -216,7 +216,7 @@ export class SectionTool {
     this.gesture.frame();
   }
 
-  /** Hand the current cut to the viewport, which owns it from here — including
+  /** Hand the current cut to the viewport, which owns it from here, including
    *  putting it back after every rebuild. */
   private pushPlane() {
     const c = clipPlaneAt(this.origin, this.normal, this.offset, this.side);
@@ -259,7 +259,7 @@ export class SectionTool {
 
   private onDown(e: PointerEvent) {
     if (e.button !== 0 || this.standing) return;
-    // Only OUR handle is ours. Every other click still belongs to the user —
+    // Only OUR handle is ours. Every other click still belongs to the user,
     // selecting a face through the cut is most of the point of the mode.
     if (!this.hitGizmo(e.clientX, e.clientY)) return;
     e.preventDefault();
@@ -274,7 +274,7 @@ export class SectionTool {
   }
 
   private onKey(e: KeyboardEvent) {
-    // Our keys are bare letters, and the mode outlives every other tool — so
+    // Our keys are bare letters, and the mode outlives every other tool, so
     // while one of those is running, they are ITS keys.
     if (this.standing) return;
     // …and while the user is typing they are the FIELD's keys. This matters more
@@ -323,7 +323,7 @@ export class SectionTool {
     );
     this.gizmo.scale.setScalar(this.viewport.pixelWorldSize(c));
     // The viewport renders on demand and a raycast reads matrixWorld, which only
-    // a render refreshes — so between two draws the handle would be hit-tested
+    // a render refreshes, so between two draws the handle would be hit-tested
     // where it USED to be: visible, but not grabbable.
     this.gizmo.updateMatrixWorld(true);
     this.handle?.paint({ hot: this.hovering || this.grabbing });
@@ -390,8 +390,8 @@ export class SectionTool {
     this.endPick();
     if (!this.active) {
       // Stopped from the AIMING step (the Section button pressed again, say).
-      // The caller is still owed its completion callback — the same one Escape
-      // during the pick delivers — or a caller that armed us and waited would
+      // The caller is still owed its completion callback, the same one Escape
+      // during the pick delivers, or a caller that armed us and waited would
       // wait forever, and the stale closure would fire on some later stop.
       if (wasPicking) {
         const done = this.onDone;

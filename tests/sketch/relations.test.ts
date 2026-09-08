@@ -92,7 +92,7 @@ describe("impliedJoins", () => {
   });
 
   // THE CONTROL. Pull one corner past the solver's 0.001mm merge bucket and the
-  // join is gone — which is the point of using the solver's own key rather than
+  // join is gone, which is the point of using the solver's own key rather than
   // a tolerance of this file's own choosing.
   it("does not claim a join the solver would not make", () => {
     const apart = [

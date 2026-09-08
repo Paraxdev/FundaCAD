@@ -14,7 +14,7 @@ when the document was private, which is why none of them mention any of this.
 WAITING IS THE POINT. `push` does not return until the app has adopted the edit
 or refused it. An agent that fired and forgot would report "added the hole" and
 then read a document without one on its next call, and would have no way to tell
-that from the app having rejected it — the two look identical from here.
+that from the app having rejected it, the two look identical from here.
 
 STALENESS IS NOT AN ERROR, it is a race that has a correct answer. The user moved
 the model while the agent was writing; the answer is to read again and re-apply,
@@ -27,7 +27,7 @@ import asyncio
 import time
 
 #: How long to wait for the app to adopt a proposal. The app collects on its own
-#: publish loop, so this is measured in polls, not in build time — it does not
+#: publish loop, so this is measured in polls, not in build time, it does not
 #: cover the rebuild the app does afterwards, which the agent sees as the next
 #: `build` being quick because the answer is already cached.
 ADOPT_TIMEOUT = 30.0
@@ -71,7 +71,7 @@ class LiveLink:
         st = await self.state()
         if not st.get("attached"):
             raise NoAppOpen(
-                "no FundaCAD window is sharing a document — open one, or turn on "
+                "no FundaCAD window is sharing a document, open one, or turn on "
                 "live editing in its settings"
             )
         self.base = st.get("revision", 0)
@@ -83,7 +83,7 @@ class LiveLink:
         """Offer `document` and wait for the app to take it.
 
         `on_stale` is called with the app's current document when the base has
-        moved, and must return the document to try again with — that is the
+        moved, and must return the document to try again with, that is the
         caller's chance to re-apply its edit to what is actually there rather
         than to what it read a moment ago. Without one, a stale push is reported
         as a refusal instead of being retried, which is the honest thing to do
@@ -99,7 +99,7 @@ class LiveLink:
             # the two look identical from this side and only one of them has an
             # answer the user can act on.
             raise ReadOnlySession(
-                "that FundaCAD window is sharing its document read-only — set "
+                "that FundaCAD window is sharing its document read-only, set "
                 "live editing to \"Read and edit\" in its preferences to let an "
                 "assistant change it"
             )
@@ -140,7 +140,7 @@ class LiveLink:
         The app publishes the ids of the proposals it applied, and that is the
         acknowledgement. Neither of the two things that look like one will do:
 
-          * "the revision moved" is not it — the revision moves for the user's
+          * "the revision moved" is not it, the revision moves for the user's
             own edits too, so a person nudging a face while this waits would read
             as this edit landing.
           * "the published document equals what I offered" is not it either. The
@@ -163,7 +163,7 @@ class LiveLink:
                 self.status = status
                 return self.base
         raise TimeoutError(
-            f"the FundaCAD window did not apply the edit within {ADOPT_TIMEOUT:.0f}s — "
+            f"the FundaCAD window did not apply the edit within {ADOPT_TIMEOUT:.0f}s, "
             "it may be busy, or live editing may be turned off in its settings"
         )
 

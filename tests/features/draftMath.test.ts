@@ -1,4 +1,4 @@
-// Draft used to be a guess made without looking at the part — 5° about Z, fix it
+// Draft used to be a guess made without looking at the part, 5° about Z, fix it
 // afterwards. The two numbers that replaced the guess are these, and both are
 // silent when wrong: the wrong pull axis tips the face about a line lying in
 // itself (OCCT answers with the shape unchanged), and the wrong angle mapping
@@ -52,7 +52,7 @@ describe("draftLever", () => {
     expect(draftLever([99, -99, 3], [0, 0, 0], "Z")).toBeCloseTo(3);
   });
 
-  it("is never negative — the neutral plane is a pivot, not a direction", () => {
+  it("is never negative, the neutral plane is a pivot, not a direction", () => {
     expect(draftLever([0, 0, -4], [0, 0, 0], "Z")).toBeCloseTo(4);
   });
 

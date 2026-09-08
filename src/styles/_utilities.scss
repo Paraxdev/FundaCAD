@@ -2,8 +2,8 @@
    Utilities
 
    (This section used to be headed "SKETCH CONTEXTUAL TOOLBAR + utilities" and
-   led with #sketchbar / .sketchbar-label / .sketchbar-sep. Those were dead —
-   no element in index.html, no reference anywhere in src/ — so they were
+   led with #sketchbar / .sketchbar-label / .sketchbar-sep. Those were dead,
+   no element in index.html, no reference anywhere in src/, so they were
    dropped when the stylesheet was split into partials. The sketch contextual
    toolbar is the RIBBON in sketch context (see _ribbon.scss) plus the docked
    palette (_palette.scss); this was an earlier design that left its CSS behind.)
@@ -68,8 +68,8 @@ button.finish:hover {
    _browser.scss and for the same reason: `position: fixed` with coordinates
    computed from a projected 3D point, so its box is sized against the geometry
    it is floating over rather than against the chrome's rhythm. It is also the
-   most keyboard-driven surface in the app — it appears under the cursor and is
-   dismissed with Enter or Esc — so growing it to look tidier costs picking area
+   most keyboard-driven surface in the app, it appears under the cursor and is
+   dismissed with Enter or Esc, so growing it to look tidier costs picking area
    on the model and buys nothing. */
 .dim-input {
   position: fixed;
@@ -120,7 +120,7 @@ button.finish:hover {
 }
 /* One row: NAME [value] UNIT. The name and the unit are chrome at the ends and
    the value is the thing, which is why they are on one line rather than the
-   label sitting above in its own tier — the box hangs next to the cursor over
+   label sitting above in its own tier, the box hangs next to the cursor over
    the model and every pixel of height is picking area given away. */
 .dim-field {
   display: flex;
@@ -147,7 +147,7 @@ button.finish:hover {
   flex: none;
 }
 .dim-field input {
-  /* width is set inline, from the content — a formula must not be typed into a
+  /* width is set inline, from the content, a formula must not be typed into a
      box sized for three digits */
   min-width: 0;
   border: none;
@@ -220,7 +220,7 @@ button.finish:hover {
   cursor: pointer;
   box-shadow: var(--shadow-2);
   /* Explicit, because these hold an <svg stroke="currentColor"> and a <button>
-     does NOT inherit colour — it defaults to the UA's `buttontext`, which on a
+     does NOT inherit colour, it defaults to the UA's `buttontext`, which on a
      dark surface resolved to almost the background and drew the confirm/cancel
      marks as two empty boxes. Text glyphs got away with it; an icon does not. */
   color: var(--text);

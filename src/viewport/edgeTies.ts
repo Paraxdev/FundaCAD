@@ -4,7 +4,7 @@
 // the right rule right up until two of them are the SAME distance, which happens
 // whenever two bodies meet: their shared boundary is two edges, one per body,
 // lying exactly on top of each other. The winner was then whichever the
-// raycaster happened to report first — stable within a session, arbitrary
+// raycaster happened to report first, stable within a session, arbitrary
 // between them, and impossible to override from the keyboard or the mouse. Click
 // the seam between two extrusions and you got one of them, with no way to say
 // which.
@@ -27,8 +27,8 @@
 
 /** Screen-space radius, in px, within which two edge candidates count as tied.
  *
- *  Small on purpose. This is not a grab radius — the picker's own threshold
- *  already decided what was hit — it is the distance below which the cursor
+ *  Small on purpose. This is not a grab radius, the picker's own threshold
+ *  already decided what was hit, it is the distance below which the cursor
  *  cannot express a preference. Three pixels is about a mouse's own jitter. */
 export const TIE_BAND_PX = 3;
 
@@ -39,7 +39,7 @@ export interface Candidate {
   label: string;
 }
 
-/** The candidates worth asking about, nearest first — or NOTHING when the pick
+/** The candidates worth asking about, nearest first, or NOTHING when the pick
  *  is not ambiguous.
  *
  *  An empty result means "just take the nearest", which is every ordinary click.

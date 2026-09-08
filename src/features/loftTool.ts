@@ -1,5 +1,5 @@
 // Interactive Loft (Fusion-style): pick two or more profile AREAS in order and
-// the loft previews live as soon as the second profile is added — click more to
+// the loft previews live as soon as the second profile is added, click more to
 // add, click a picked one again to drop it, Enter to commit, Esc to cancel. Each
 // profile keeps its holes, so two concentric-ring profiles loft into a tube (the
 // sidecar resolves each region anchor to its face; see builder._handle_loft).

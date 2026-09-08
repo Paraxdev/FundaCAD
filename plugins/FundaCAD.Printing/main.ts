@@ -98,7 +98,7 @@ export async function activate(e: Engine): Promise<() => void> {
     // "what is actually loaded in slot 3 right now" can only be answered by
     // something that can reach the machine. Neither can draw that panel alone.
     // So the panel belongs to the one that owns the data, and this contributes
-    // the answer under a name the two of them agree on — through the app, which
+    // the answer under a name the two of them agree on, through the app, which
     // stores it and hands it back without ever looking inside.
     //
     // The consequence worth having: with this capability off, the panel is not
@@ -118,8 +118,8 @@ export async function activate(e: Engine): Promise<() => void> {
 
 /** The `filaments` service: probe, read, and the confirmed sync.
  *
- *  The sync flow — diff, confirm before overwriting a customised palette, apply
- *  — used to be a hundred lines inside the browser panel. It is a printer
+ *  The sync flow, diff, confirm before overwriting a customised palette, apply,
+ *  used to be a hundred lines inside the browser panel. It is a printer
  *  operation that happens to write into a document, and it reads much better
  *  from the printer's side. */
 function filamentSource() {
@@ -129,7 +129,7 @@ function filamentSource() {
       try {
         return (await printerProbe(activePrinterId())).online;
       } catch {
-        return false; // passive — no toast
+        return false; // passive, no toast
       }
     },
 
@@ -168,7 +168,7 @@ function filamentSource() {
         const diff = proposed
           .map((p, i) =>
             p && (cur[i]?.name !== p.name || cur[i]?.color !== p.color)
-              ? `Slot ${i + 1}: ${cur[i]?.name ?? "—"} → ${p.name}`
+              ? `Slot ${i + 1}: ${cur[i]?.name ?? ", "} → ${p.name}`
               : null,
           )
           .filter(Boolean) as string[];

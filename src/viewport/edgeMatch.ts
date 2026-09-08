@@ -1,14 +1,14 @@
 // Pure geometry helpers for matching saved edge selectors (world-space
 // midpoints) back to rendered edge polylines. Edge ids are NOT stable across
 // rebuilds (the client assigns e0,e1,... per assembly), so geometry is the only
-// rebuild-stable edge identity — the same convention selectors already use.
+// rebuild-stable edge identity, the same convention selectors already use.
 // Kept DOM/three-free so vitest covers it headlessly.
 
 export type Vec3 = [number, number, number];
 
 /** The point an edge selector is built from: the polyline's ARC-LENGTH midpoint.
  *
- *  This used to be the index-middle sample, `points[floor(len/2)]` — which is
+ *  This used to be the index-middle sample, `points[floor(len/2)]`, which is
  *  the true middle only when the polyline has an odd number of samples. A
  *  STRAIGHT edge is sampled as just its two endpoints (tessellate._line_endpoints),
  *  so `floor(2/2)` returned the END POINT, and the sidecar's nearest-edge
@@ -110,7 +110,7 @@ export function midMatchTol(bboxDiag: number): number {
  *  EVERY site that mints an edge selector from a rendered edge must go through
  *  here. Without the body, the sidecar falls back to the active (last-created)
  *  body, and because `by:"nearest"` always returns SOME winner it then blends an
- *  edge of the wrong body with no error at all — the ring/hexagon bug.
+ *  edge of the wrong body with no error at all, the ring/hexagon bug.
  *
  *  `body` is omitted rather than set to undefined when the edge has none, so a
  *  saved document gains no `"body": null` noise and stays byte-stable. */

@@ -7,7 +7,7 @@ import { useBrowserStore } from "../stores/browser";
 import type { Engine } from "./engine";
 
 /** Debug handles for console + headless frontend-logic tests. Gated to DEV so
- *  they're absent from production bundles — a post-XSS attacker shouldn't be
+ *  they're absent from production bundles, a post-XSS attacker shouldn't be
  *  handed the live store/geometry API for free (the vite dev server is DEV, so
  *  the localhost:5173 test workflow keeps them).
  *
@@ -29,7 +29,7 @@ export function installDevGlobals(e: Engine): void {
   // The browser tree is components/shell/BrowserPane.vue now, so this is a
   // handle onto its store rather than onto a class. refresh() is ASYNC: "render
   // this now" in Vue is nextTick, and the bump is what makes it a genuine
-  // re-render rather than a no-op — e2e/browser_tree_perf.cjs times exactly this
+  // re-render rather than a no-op, e2e/browser_tree_perf.cjs times exactly this
   // call and would otherwise measure nothing and report a false speedup.
   w.tree = {
     refresh: async () => {

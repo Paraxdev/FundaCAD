@@ -1,4 +1,4 @@
-// What to OFFER for the current selection — the one answer the floating
+// What to OFFER for the current selection, the one answer the floating
 // selection toolbar renders, and the one the right-click menu ranks its model
 // entries by.
 //
@@ -6,7 +6,7 @@
 // profile and Press/Pull-the-face are different operations on different geometry,
 // and offering both invites a click on the one you weren't looking at. The ranking
 // is copied from app/viewportWiring.ts, which answers the same question to decide
-// which drag handle to mount, and the two MUST agree — the handle on the geometry
+// which drag handle to mount, and the two MUST agree, the handle on the geometry
 // and the toolbar above it are one affordance seen twice.
 //
 // Membership comes from the selection's KIND, enablement from its COUNT, and the
@@ -25,7 +25,7 @@ import {
 } from "../features/toolCapabilities";
 import { keyHint } from "../input/shortcuts";
 
-/** Which kind wins when a selection holds several. See the header — this is
+/** Which kind wins when a selection holds several. See the header, this is
  *  app/viewportWiring.ts's drag-handle ranking, and it may not drift from it.
  *
  *  Bodies come last rather than not at all: body selection is a separate mode
@@ -34,7 +34,7 @@ import { keyHint } from "../input/shortcuts";
  *  booleans sit one keystroke away. */
 export const KIND_RANK: readonly EntityKind[] = ["edge", "sketch-region", "face", "body"];
 
-/** Human name for the kind, for a title or a prompt. Singular — callers that
+/** Human name for the kind, for a title or a prompt. Singular, callers that
  *  have a count add the plural. */
 export const KIND_LABEL: Record<EntityKind, string> = {
   edge: "edge",
@@ -61,7 +61,7 @@ export interface ToolOffer {
   label: string;
   iconName: string;
   /** The id for the central dispatcher (app/actions.ts), or null for the one
-   *  tool that has no such id — see ACTIONLESS below. A caller that cannot
+   *  tool that has no such id, see ACTIONLESS below. A caller that cannot
    *  handle null must skip the offer rather than dispatch the tool id and
    *  silently do nothing. */
   action: string | null;
@@ -75,8 +75,8 @@ export interface ToolOffer {
 /** Tool id → icon name in ui/icons.ts.
  *
  *  A table rather than a convention (`iconFor(id)` doing string surgery)
- *  because two of them do not match — "delete-face" is drawn by `deleteFace`,
- *  "offset-face" by `offsetFace` — and a convention with exceptions is a
+ *  because two of them do not match, "delete-face" is drawn by `deleteFace`,
+ *  "offset-face" by `offsetFace`, and a convention with exceptions is a
  *  convention that fails silently, on the icon that turns into a blank square.
  *  selectionTools.test.ts holds every tool to having an entry. */
 const TOOL_ICON: Record<ToolId, string> = {
@@ -105,8 +105,8 @@ const TOOL_ICON: Record<ToolId, string> = {
  *  Exactly one, and features/toolCapabilities.ts documents why: face delete is
  *  dispatched through engine.deleteSelectedFace (the Del key and the face
  *  context menu) because it is a selection verb rather than a ribbon command.
- *  It earns its place in the offer anyway — leaving it out would make "what
- *  applies to this face" wrong — so the seam is declared here instead of being
+ *  It earns its place in the offer anyway, leaving it out would make "what
+ *  applies to this face" wrong, so the seam is declared here instead of being
  *  discovered when a click does nothing. */
 const ACTIONLESS: ReadonlySet<string> = new Set<string>(["delete-face"]);
 
@@ -119,7 +119,7 @@ const ACTIONLESS: ReadonlySet<string> = new Set<string>(["delete-face"]);
  *  is where a plugin put its icon name. Falling back to the id would draw a
  *  blank square, so it is better to have nothing to fall back to: a tool with
  *  no id in either place is not a tool this build can offer, and
- *  `selectionOffers` never sees one — every id it iterates came out of the
+ *  `selectionOffers` never sees one, every id it iterates came out of the
  *  merged inventory. */
 function iconFor(tool: AnyToolId, declared: string | undefined): string {
   return TOOL_ICON[tool as ToolId] ?? declared ?? "dot";
@@ -157,7 +157,7 @@ export function selectionOffers(sel: SelectionCounts): ToolOffer[] {
  *
  *  One, and it is destructive. The bar floats over the part, a button-sized
  *  piece of the thing you are looking at, so a stray click lands on geometry
- *  rather than on chrome — which is a poor place to keep "remove this face and
+ *  rather than on chrome, which is a poor place to keep "remove this face and
  *  heal the solid". It stays on Del and in the right-click menu.
  *
  *  A named rule rather than the count that used to produce it. The bar stopped

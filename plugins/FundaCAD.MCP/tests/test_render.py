@@ -2,7 +2,7 @@
 
 A renderer is easy to test badly: draw something, see that it is not blank,
 declare victory. Every test here therefore names a specific thing that must be
-TRUE of the image and pairs it with the arrangement where it must be FALSE — a
+TRUE of the image and pairs it with the arrangement where it must be FALSE, a
 depth test that ignores depth still paints, an upside-down projection still
 fills the frame, and a section that clips nothing still looks like a model.
 
@@ -51,7 +51,7 @@ def test_the_basis_is_orthonormal_for_every_named_view():
 
 def test_looking_straight_down_does_not_collapse():
     """The control for the up-vector fallback. World up is +Z, so a top view has
-    it parallel to the view direction and the obvious cross product is zero —
+    it parallel to the view direction and the obvious cross product is zero,
     without the fallback the whole image is one pixel wide."""
     for name in ("top", "bottom"):
         b = R.view_basis(R.direction_for(name))
@@ -170,7 +170,7 @@ def test_a_section_removes_the_half_it_was_told_to():
     whole = R.render([box], 200, 200, view="front")
     cut = R.render([box], 200, 200, view="front", section={"axis": "Z", "keep": "below"})
     # A front view of a box cut on Z shows half the height, and the fit then
-    # scales that half back up — so the test is on the SHAPE, not the area.
+    # scales that half back up, so the test is on the SHAPE, not the area.
     assert painted(whole) > 0 and painted(cut) > 0
     rows_whole = int((np.abs(whole.astype(int) - BG).sum(axis=2) > 12).any(axis=1).sum())
     rows_cut = int((np.abs(cut.astype(int) - BG).sum(axis=2) > 12).any(axis=1).sum())
@@ -200,8 +200,8 @@ def test_the_default_cut_is_through_the_middle_wherever_the_part_sits():
 def test_the_two_sides_of_a_cut_are_different_pictures():
     """The half that survives has to depend on which half was asked for.
 
-    The vocabulary was "above"/"over"/"+" against everything else, so `max` —
-    the word `at`, `min` and `max` elsewhere in this module invite — silently
+    The vocabulary was "above"/"over"/"+" against everything else, so `max`,
+    the word `at`, `min` and `max` elsewhere in this module invite, silently
     meant `below`. Both sides rendered byte-identical images and the reply said
     "keeping max" over a picture of the other half. Asserting on the PAIR is
     what catches that; a test of one side alone passes either way.

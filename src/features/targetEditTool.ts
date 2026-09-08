@@ -1,8 +1,8 @@
 // Editing what a feature is applied to: the set of edges, faces or bodies it
 // acts on, opened from the Properties row that shows it.
 //
-// The gesture is the one every other picking tool in the app already uses —
-// click geometry to toggle it in or out — with two things the others do not
+// The gesture is the one every other picking tool in the app already uses,
+// click geometry to toggle it in or out, with two things the others do not
 // have: the running set is a LIST you can read, and each entry can be pointed at
 // and removed on its own. That is the difference between "pick again and hope"
 // and "this one, the third, take it off".
@@ -10,7 +10,7 @@
 // THE ROLLBACK IS THE WHOLE TRICK. A committed fillet has already eaten its own
 // member edges: they are not on the model any more, so there is nothing to
 // highlight and nothing to click. store.beginEditPreview truncates the timeline
-// to just before this feature, which puts the sharp edges back on screen — the
+// to just before this feature, which puts the sharp edges back on screen, the
 // same arrangement edgeFeatureTool uses to re-open a blend, and the same one the
 // Surface Texture plugin uses to re-open a texture, for the same reason. Every
 // later feature is hidden for the duration, and the panel says so.
@@ -41,7 +41,7 @@ import {
 } from "./selectionTargets";
 
 /** One row of the list. `resolved` is false for an entry this tool could not put
- *  on screen — kept, carried through, and drawn greyed rather than hidden, so a
+ *  on screen, kept, carried through, and drawn greyed rather than hidden, so a
  *  set of four never silently reads as three. */
 export interface TargetRow {
   entry: TargetEntry;
@@ -115,7 +115,7 @@ export class TargetEditTool {
     if (this.active) return false;
     // This editor picks on the SOLID. A profile area is an interior point on a
     // sketch plane and there is nothing here that can click one, so refusing is
-    // the honest answer — the row for such a target opens the feature's own tool
+    // the honest answer, the row for such a target opens the feature's own tool
     // instead (features/selectionTargets says why).
     if (target.shape === "regionPoint") return false;
     const f = this.store.document.features.find((x) => x.id === featureId);
@@ -162,7 +162,7 @@ export class TargetEditTool {
     const patch = writeTarget(t, this.entries);
     this.cleanup();
     // endEditPreview BEFORE the write, so the rebuild the write schedules is the
-    // one that builds the whole timeline back — the same order extrudeTool's
+    // one that builds the whole timeline back, the same order extrudeTool's
     // commit uses.
     this.store.endEditPreview(false);
     this.store.updateFeature(id, patch);
@@ -211,7 +211,7 @@ export class TargetEditTool {
 
   /** Drop them all. The feature is left with an empty target, which for several
    *  of them is a legal and meaningful state (a sealed shell, a whole-body
-   *  texture) — see selectionTargets.whenEmpty. */
+   *  texture), see selectionTargets.whenEmpty. */
   clear() {
     if (!this.active || !this.entries.length) return;
     this.entries = [];
@@ -261,12 +261,12 @@ export class TargetEditTool {
   }
 
   /** What is under the cursor, as an entry of this target's kind. Null when the
-   *  click landed on nothing, or on something of the wrong kind — clicking a
+   *  click landed on nothing, or on something of the wrong kind, clicking a
    *  face while editing an edge set must do nothing rather than something
    *  surprising.
    *
    *  The EDGE selector is the pick's own, which viewport/picking.ts already
-   *  minted through edgeSelectorFrom — the one path that stamps the owning body,
+   *  minted through edgeSelectorFrom, the one path that stamps the owning body,
    *  without which the sidecar falls back to the active body and blends an edge
    *  of the wrong one with no error at all.
    *
@@ -274,7 +274,7 @@ export class TargetEditTool {
    *  face, which names EVERY face pointing that way; that is the right default
    *  for a press-pull, and quite wrong for a list where each row is meant to be
    *  one face you can point at and take off. So this mints a `by:"nearest"` from
-   *  the hit POINT — which picking.ts guarantees is on the face's material,
+   *  the hit POINT, which picking.ts guarantees is on the face's material,
    *  unlike its centroid on an annular one. */
   private pickAt(x: number, y: number, t: TargetField): TargetEntry | null {
     if (t.kind === "body") return this.viewport.bodyIdAt(x, y);
@@ -326,7 +326,7 @@ export class TargetEditTool {
   }
 
   /** Where an entry is on the CURRENT model, or null when it names nothing this
-   *  build renders. Null is a display fact, never a reason to drop it — see the
+   *  build renders. Null is a display fact, never a reason to drop it, see the
    *  header. */
   private locate(entry: TargetEntry):
     | { kind: "edge"; edge: EdgeRef }
@@ -343,7 +343,7 @@ export class TargetEditTool {
     const sel = selectorOf(entry);
     if (!sel) return null;
     const p = pointOf(sel);
-    if (!p) return null; // by:"all", by:"axis", a v2 fingerprint — no single spot
+    if (!p) return null; // by:"all", by:"axis", a v2 fingerprint, no single spot
     if (t.kind === "edge") {
       const edge = this.viewport.edgeLineByMid(p);
       return edge ? { kind: "edge", edge } : null;
@@ -390,7 +390,7 @@ export class TargetEditTool {
   }
 }
 
-/** The feature this tool is editing, if any — for the callers that need to know
+/** The feature this tool is editing, if any, for the callers that need to know
  *  which row is open without reaching into the tool. */
 export function editingTarget(tool: TargetEditTool): { id: string; field: string } | null {
   const id = tool.editingId;

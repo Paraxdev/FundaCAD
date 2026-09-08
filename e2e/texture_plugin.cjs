@@ -99,7 +99,7 @@ async function view(page) {
   await page.goto(URL, { waitUntil: "networkidle" });
   await page.waitForTimeout(2500);
   // The welcome screen opens over a fresh profile and counts as a modal, so
-  // toolBusy() is true and every starter in the application returns silently —
+  // toolBusy() is true and every starter in the application returns silently,
   // a plugin's included, which is the correct behaviour and not what is under
   // test here. Dismiss it and get on.
   await page.keyboard.press("Escape");
@@ -143,7 +143,7 @@ async function view(page) {
   await until(page, () => (window.__fundacad?.store?.buildState?.result?.mesh?.positions?.length ?? 0) > 0,
     "the box to build");
 
-  // Start the tool through handleAction, which is the APPLICATION'S dispatcher —
+  // Start the tool through handleAction, which is the APPLICATION'S dispatcher,
   // the same door the ribbon button and the command palette go through. Calling
   // the plugin's own function instead would prove the plugin works and nothing
   // about whether the application can reach it: app/actions.ts has to fall all
@@ -214,7 +214,7 @@ async function view(page) {
   );
 
   // Re-opening it is the plugin's `edit` contribution, reached through the
-  // application's editFeature — which has no case for a texture any more and
+  // application's editFeature, which has no case for a texture any more and
   // has to ask the table.
   const featureId = await page.evaluate(() =>
     window.__fundacad.store.document.features.find((x) => x.type === "texture").id);

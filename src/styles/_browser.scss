@@ -3,7 +3,7 @@
    ============================================================================ */
 /* The panel heading carries the kind filter, so it is a row rather than a line
    of text. The base .panel-title (in _timeline.scss, shared with the inspector)
-   still supplies the type and the margins — this only adds the layout. */
+   still supplies the type and the margins, this only adds the layout. */
 .browser-title {
   display: flex;
   align-items: center;
@@ -47,7 +47,7 @@
   display: flex;
   align-items: center;
   gap: var(--s-2);
-  /* Same row height as .feature-row below it — they are alternating rows of one
+  /* Same row height as .feature-row below it, they are alternating rows of one
      tree and used to be 5px each against different horizontals, which is the
      near-duplicate that made the panel look hand-placed. The inline value stays
      at --s-1 because .tree-child's indent is derived from it (see below): the
@@ -87,12 +87,12 @@
 .tree-count:empty {
   display: none;
 }
-/* Not a spacing choice — a computed alignment, which is why it is spelled out
+/* Not a spacing choice, a computed alignment, which is why it is spelled out
    rather than picked off the scale. A folder's LABEL starts at
    (.tree-folder's inline padding + .tree-caret's width + .tree-folder's gap);
    the children then step one further rung in from there, so a child row sits
    visibly under its parent's text instead of under its caret. Written as the
-   sum so that changing the row padding or the gap moves the indent with it —
+   sum so that changing the row padding or the gap moves the indent with it,
    as a bare 26px it silently went out of true the moment either changed. */
 .tree-child {
   padding-left: calc(var(--s-1) + 12px + var(--s-2) + var(--s-1));
@@ -125,8 +125,8 @@
    world coordinates every frame and written to `left`/`top` in px, and the
    labels are then centred on that point with a translate(-50%, -50%). Their
    size is therefore part of a picking and legibility budget measured against
-   the geometry underneath — how much of an edge a dimension label is allowed to
-   cover — and not part of the chrome's rhythm, which is what the scale governs.
+   the geometry underneath, how much of an edge a dimension label is allowed to
+   cover, and not part of the chrome's rhythm, which is what the scale governs.
    Rounding them to the nearest rung would move the labels off the features they
    annotate for no gain anyone can see. */
 .sketch-dims {

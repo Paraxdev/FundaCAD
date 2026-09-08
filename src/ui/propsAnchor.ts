@@ -1,6 +1,6 @@
 // Where the feature-values popover sits when the history is the bottom strip.
 //
-// The values a feature carries are edited under its own entry in the history —
+// The values a feature carries are edited under its own entry in the history,
 // that is the whole point of putting them there, since the entry already names
 // the operation being changed. In the side arrangement there is room to open
 // them in the flow, indented under the chip. The bottom strip is 52px of chrome
@@ -18,7 +18,7 @@
 // moves under a panel that is being typed into, two chips a few pixels apart
 // throw the panel across the window, and near the left edge it lands over the
 // view controls and has to be lifted off them. The panel keeps ONE berth now
-// and only its contents change — which is the same thing every docked inspector
+// and only its contents change, which is the same thing every docked inspector
 // in every other tool does, and for the same reason.
 
 export interface Rect {
@@ -48,7 +48,7 @@ export interface Viewport {
  *
  *  `over` is a rect the panel must not cover, given as the union of whatever
  *  furniture floats above the strip. It cannot fire at any ordinary window size
- *  now that the berth is on the far side from the pill — but a window narrow
+ *  now that the berth is on the far side from the pill, but a window narrow
  *  enough puts the two back in the same column, and the panel would land across
  *  ISO / Top / Front again. Horizontal overlap is the test, so furniture the
  *  panel is already clear of costs it no height. */

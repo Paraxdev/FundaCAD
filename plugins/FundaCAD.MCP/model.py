@@ -1,7 +1,7 @@
 """The document an agent is editing: features, parameters, and the edits to both.
 
 A FundaCAD document is a declarative feature list plus a parameter table, and
-nothing here knows how to build it — that is the sidecar's job. What lives here
+nothing here knows how to build it, that is the sidecar's job. What lives here
 is everything that has to be true BEFORE a rebuild is worth asking for: ids are
 unique, a feature that references a sketch references one that exists, a
 parameter table has no cycle in it.
@@ -12,7 +12,7 @@ this code.
 
 Parameters are the reason this is more than a list. `doc["paramDefs"]` is the
 source of truth (name -> {expr, value, unit}) and `doc["parameters"]` is the
-derived name -> number cache the SIDECAR reads — the sidecar has no expression
+derived name -> number cache the SIDECAR reads, the sidecar has no expression
 evaluator and never will, so the cache is not an optimisation, it is the
 interface. Writing one without the other is how a document builds at the old
 value after an edit that looked like it landed.
@@ -46,7 +46,7 @@ def find_feature(doc, fid):
 def next_id(doc, prefix):
     """`prefix` + the lowest free number. Ids are the ONLY way a later feature
     names an earlier one, so they have to be unique across the whole document
-    and stable across edits — never positional."""
+    and stable across edits, never positional."""
     used = set(feature_ids(doc))
     n = 1
     while f"{prefix}{n}" in used:
@@ -108,7 +108,7 @@ def update_feature(doc, fid, patch, replace=False):
     deletes that key, for the same reason."""
     i, f = find_feature(doc, fid)
     if f is None:
-        raise DocumentError(f"no feature {fid!r} — have {feature_ids(doc)}")
+        raise DocumentError(f"no feature {fid!r}, have {feature_ids(doc)}")
     if replace:
         out = dict(patch)
         out["id"] = fid
@@ -128,7 +128,7 @@ def update_feature(doc, fid, patch, replace=False):
 def remove_feature(doc, fid):
     i, f = find_feature(doc, fid)
     if f is None:
-        raise DocumentError(f"no feature {fid!r} — have {feature_ids(doc)}")
+        raise DocumentError(f"no feature {fid!r}, have {feature_ids(doc)}")
     doc["features"].pop(i)
     return f
 
@@ -136,7 +136,7 @@ def remove_feature(doc, fid):
 def move_feature(doc, fid, to):
     i, f = find_feature(doc, fid)
     if f is None:
-        raise DocumentError(f"no feature {fid!r} — have {feature_ids(doc)}")
+        raise DocumentError(f"no feature {fid!r}, have {feature_ids(doc)}")
     feats = doc["features"]
     feats.pop(i)
     feats.insert(max(0, min(int(to), len(feats))), f)
@@ -150,7 +150,7 @@ def set_parameter(doc, name, expr, unit="mm", comment=None):
     """Define or redefine one parameter and recompute the whole table.
 
     `expr` may be a number or a string; both are stored as the string the user
-    (or agent) wrote, because that string is the parametric part — storing 12.5
+    (or agent) wrote, because that string is the parametric part, storing 12.5
     where `hub_d/2` was meant severs the link the moment hub_d changes."""
     if not _ID_RE.match(str(name)):
         raise DocumentError(f"bad parameter name {name!r}")
@@ -177,7 +177,7 @@ def set_parameter(doc, name, expr, unit="mm", comment=None):
 def remove_parameter(doc, name):
     defs = doc.setdefault("paramDefs", {})
     if name not in defs:
-        raise DocumentError(f"no parameter {name!r} — have {sorted(defs)}")
+        raise DocumentError(f"no parameter {name!r}, have {sorted(defs)}")
     users = [n for n, d in defs.items()
              if n != name and name in _safe_refs(d.get("expr"))]
     if users:
@@ -267,8 +267,8 @@ _REFERENCE_FIELDS = {
 def validate(doc):
     """Everything wrong with the document that can be seen without building it.
 
-    Returns a list of plain strings. It is not a gate — the caller may build a
-    document with problems and see what the kernel says — but every entry here
+    Returns a list of plain strings. It is not a gate, the caller may build a
+    document with problems and see what the kernel says, but every entry here
     is a rebuild error that would arrive later with less context."""
     problems = []
     feats = doc.get("features", [])
@@ -336,10 +336,10 @@ def validate(doc):
                 if refs and refs <= params:
                     problems.append(
                         f"{f.get('id')}: {k} is the expression {v!r}. A field takes a "
-                        "number or a parameter NAME, never an expression — define a "
+                        "number or a parameter NAME, never an expression, define a "
                         f"parameter for it (param_set) and put its name in {k}.")
                 else:
                     problems.append(
                         f"{f.get('id')}: {k} is the string {v!r}, which is not a "
-                        f"parameter — known parameters are {sorted(params) or 'none'}")
+                        f"parameter, known parameters are {sorted(params) or 'none'}")
     return problems

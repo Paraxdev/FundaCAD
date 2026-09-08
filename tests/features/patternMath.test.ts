@@ -1,6 +1,6 @@
 // Where a pattern's copies go. The ghosts the tool draws and the solids the
 // kernel builds both come from here, so anything this gets wrong is a preview
-// that lies — the worst kind of wrong, because it is believed.
+// that lies, the worst kind of wrong, because it is believed.
 import { describe, expect, it } from "vitest";
 import {
   axisVector,
@@ -30,7 +30,7 @@ describe("clampCount", () => {
   });
 
   it("survives rubbish rather than producing NaN copies", () => {
-    // Infinity is not a big number, it is a broken one — treat it as the former
+    // Infinity is not a big number, it is a broken one, treat it as the former
     // and a held key could hang the ghost builder before the cap is reached.
     expect(clampCount(NaN)).toBe(MIN_COUNT);
     expect(clampCount(Infinity)).toBe(MIN_COUNT);
@@ -92,7 +92,7 @@ describe("circularAngles", () => {
   it("divides a full circle by the COUNT, so the last copy is not the first", () => {
     // The rule that is not obvious, and the one the ghost has to make the same
     // way the kernel does: at 360° over 4, dividing by the gaps (3) would put
-    // copy 3 at 360° — exactly on top of copy 0, doubling the seam.
+    // copy 3 at 360°, exactly on top of copy 0, doubling the seam.
     expect(circularAngles(4, 360)).toEqual([0, 90, 180, 270]);
   });
 

@@ -60,7 +60,7 @@ describe("dragLimit", () => {
   it("leaves room for a full round on a cube", () => {
     // The reported complaint is a drag that stops far short of what the kernel
     // will build. A 40mm cube rounds to a 20mm sphere at the limit, and its
-    // diagonal is 69.3 — so anything under 0.29 of the diagonal cannot reach a
+    // diagonal is 69.3, so anything under 0.29 of the diagonal cannot reach a
     // shape the kernel would have made.
     expect(dragLimit(Math.sqrt(3) * 40)).toBeGreaterThanOrEqual(20);
   });
@@ -108,7 +108,7 @@ describe("blendCeiling", () => {
   });
 
   it("stops one step BELOW the size that was refused", () => {
-    // Stopping ON it parks the drag where the model shows no blend at all —
+    // Stopping ON it parks the drag where the model shows no blend at all,
     // the "jumps back and says failed" state this replaces.
     expect(blendCeiling(range(2.5, 3), 0.5)).toBeCloseTo(2.5);
     expect(blendCeiling(range(1, 3), 0.5)).toBeCloseTo(2.5);
@@ -123,7 +123,7 @@ describe("blendCeiling", () => {
   it("invents no wall from a refusal that has no size in it", () => {
     // Measured on the reported document: the boundary of an existing round is a
     // tangent edge, refused at 0.5mm exactly as at 8mm. Nothing built at any
-    // size, so nothing says size is the problem — walling the drag at the seed
+    // size, so nothing says size is the problem, walling the drag at the seed
     // value would be the arbitrary limit this whole change is about.
     expect(blendCeiling(range(null, 2, false), 0.1)).toBe(Infinity);
   });
@@ -195,7 +195,7 @@ describe("scrubSigned", () => {
   });
 
   it("holds a one-step dead zone at the origin so the abort is reachable", () => {
-    // Half a step is ~4px of travel — too fine to stop in on purpose, and this
+    // Half a step is ~4px of travel, too fine to stop in on purpose, and this
     // is the state the user backs out of the gesture in.
     expect(scrubSigned({ grabSigned: 2, grabProj: 0, proj: -2.4, step: 0.5, limit })).toBe(0);
     expect(scrubSigned({ grabSigned: 2, grabProj: 0, proj: -1.6, step: 0.5, limit })).toBe(0);
@@ -243,7 +243,7 @@ describe("treatmentAt", () => {
 });
 
 describe("switchTreatment", () => {
-  it("carries the number across untouched — that is the whole gesture", () => {
+  it("carries the number across untouched, that is the whole gesture", () => {
     const bounds = { min: 0.5, max: 25 };
     expect(switchTreatment("fillet", 4.5, bounds)).toEqual({ kind: "chamfer", value: 4.5 });
     expect(switchTreatment("chamfer", 4.5, bounds)).toEqual({ kind: "fillet", value: 4.5 });

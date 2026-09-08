@@ -34,12 +34,12 @@ export const newPatternId = pattern.next;
 export const notePatternId = pattern.note;
 
 /** Constraint ids (dimension constraints only): the stable identity a parameter
- *  binding references — the constraint array itself is spliced by edits. */
+ *  binding references, the constraint array itself is spliced by edits. */
 const constraint = idFamily("c");
 export const newConstraintId = constraint.next;
 export const noteConstraintId = constraint.note;
 
-/** A dimension (value-bearing) constraint — the ones that carry a stable c-id.
+/** A dimension (value-bearing) constraint, the ones that carry a stable c-id.
  *  The single definition of the concept; the load migration and the editor both
  *  stamp through this predicate. */
 export function isDimConstraint(c: SketchConstraint): c is SketchConstraint & { id?: string; value: number } {

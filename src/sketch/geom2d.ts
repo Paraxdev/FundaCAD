@@ -63,7 +63,7 @@ export function circleLineIntersect(p1: V, p2: V, c: V, r: number): V[] {
   return ts.map((t) => v(p1.x + dx * t, p1.y + dy * t));
 }
 
-/** intersection points of the two full circles (c1,r1) and (c2,r2) — 0, 1 or 2.
+/** intersection points of the two full circles (c1,r1) and (c2,r2), 0, 1 or 2.
  *  Concentric or non-touching circles give none. The arc-to-arc companion to
  *  lineIntersect (line-line) and segCircleIntersect (line-arc), used to miter a
  *  corner where two offset arcs meet. */

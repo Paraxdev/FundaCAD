@@ -8,7 +8,7 @@
 //
 // One deliberate behaviour change: opening a second chooser while one is up
 // used to stack two backdrops with two competing capture-phase key traps. They
-// queue now — the second opens when the first resolves. Nothing in the app does
+// queue now, the second opens when the first resolves. Nothing in the app does
 // this today (toolBusy blocks it), but it was a live footgun.
 
 import { useModalStore, type ChoiceOption } from "../stores/modals";
@@ -80,7 +80,7 @@ export function chooseMulti<T extends string>(
 /** A read-only modal that lists `items` (e.g. the files an export wrote) with a
  *  single dismiss button. Resolves when closed.
  *
- *  Note it does NOT touch the modal depth — same as before. It is informational
+ *  Note it does NOT touch the modal depth, same as before. It is informational
  *  and appears after the operation it reports on has finished. */
 export function listModal(title: string, items: string[]): Promise<void> {
   const m = useModalStore();

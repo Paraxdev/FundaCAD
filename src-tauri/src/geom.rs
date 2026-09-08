@@ -10,7 +10,7 @@
 //!   - fillet / chamfer: resolve an edge selector, round/bevel those edges
 //!   - mirror: part + mirror(part) about a base plane
 //!   - press-pull: local surface offset of a planar/cylindrical face (true
-//!     Press/Pull — the face moves and side walls follow)
+//!     Press/Pull, the face moves and side walls follow)
 //!   - every other feature type is SKIPPED (logged) so the model still renders.
 //!
 //! Selectors (`geom_select.py`) are NEVER stored as indices: they are queryable
@@ -48,7 +48,7 @@ pub struct Bbox {
 /// A selector-resolution diagnostic (selector v2). Mirrors `ResolveDiag` in
 /// `src/types.ts`: surfaced when a selector resolved with low confidence or took a
 /// lossy / best-effort path, WITHOUT failing the build. The TS interface uses
-/// `feature_id` (snake_case), so the field names map directly — no `rename_all`.
+/// `feature_id` (snake_case), so the field names map directly, no `rename_all`.
 #[derive(Serialize)]
 pub struct ResolveDiag {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -156,7 +156,7 @@ fn write_3mf(shape: &Shape, path: &str) -> Result<(), String> {
     }
 
     if triangles.is_empty() {
-        return Err("nothing to export — the part has no geometry".to_string());
+        return Err("nothing to export, the part has no geometry".to_string());
     }
 
     let mesh = Mesh {
@@ -213,8 +213,8 @@ fn num_field(obj: &serde_json::Value, key: &str, params: &std::collections::Hash
 // Build pipeline (ports sidecar/builder.py:rebuild).
 // ---------------------------------------------------------------------------
 
-/// A built sketch: the union profile face (whole-sketch extrude) — or None if the
-/// sketch has no closed profile — plus the per-loop located faces (for region
+/// A built sketch: the union profile face (whole-sketch extrude), or None if the
+/// sketch has no closed profile, plus the per-loop located faces (for region
 /// selection) and the sketch plane's normal, which is the extrude direction
 /// (build123d's `extrude(sk, amount=d)` prisms along the plane normal, NOT the
 /// face's own orientation normal).
@@ -376,7 +376,7 @@ fn build(doc: &Document, diags: &mut Vec<ResolveDiag>) -> Result<Shape, String> 
                     .as_ref()
                     .ok_or_else(|| "sketch has no closed profile to revolve".to_string())?;
 
-                // Axis defaults to Z, angle to a full 360° turn — matching
+                // Axis defaults to Z, angle to a full 360° turn, matching
                 // builder.py's `revolve(sk, axis=AXES[..], revolution_arc=..)`.
                 let axis = f.get("axis").and_then(|v| v.as_str()).unwrap_or("Z");
                 let axis_dir = match axis {
@@ -460,7 +460,7 @@ fn build(doc: &Document, diags: &mut Vec<ResolveDiag>) -> Result<Shape, String> 
 
 /// Add a fresh base body (a primitive) in the single-body Rust model: it becomes
 /// the part if none exists yet, else it's unioned in. (The Python multi-body
-/// kernel would keep it as a separate body — Rust multi-body is future work.)
+/// kernel would keep it as a separate body, Rust multi-body is future work.)
 fn merge_body(part: Option<Shape>, s: Shape) -> Shape {
     match part {
         None => s,
@@ -474,7 +474,7 @@ fn merge_body(part: Option<Shape>, s: Shape) -> Shape {
 // ---------------------------------------------------------------------------
 // Selector resolution (ports sidecar/geom_select.py).
 //
-// References are property descriptors re-resolved against `part` every rebuild —
+// References are property descriptors re-resolved against `part` every rebuild,
 // never stored indices. This is FundaCAD's topological-naming mitigation.
 // ---------------------------------------------------------------------------
 
@@ -500,8 +500,8 @@ fn feature_id(f: &serde_json::Value) -> Option<&str> {
     f.get("id").and_then(|v| v.as_str())
 }
 
-/// Resolve an edge selector — or a JSON LIST of selectors (union, de-duplicated by
-/// geometric key) — to a set of edges of `part`. Mirrors
+/// Resolve an edge selector, or a JSON LIST of selectors (union, de-duplicated by
+/// geometric key), to a set of edges of `part`. Mirrors
 /// `geom_select.resolve_edges`. `diags`/`fid` collect low-confidence v2 matches
 /// without failing the build.
 fn resolve_edges(
@@ -711,7 +711,7 @@ fn unique_edges(part: &Shape) -> Vec<Edge> {
     out
 }
 
-/// De-duplicate `part.faces()` by geometric key — same per-incident duplication as
+/// De-duplicate `part.faces()` by geometric key, same per-incident duplication as
 /// `unique_edges` (a face can surface more than once via the shape's iterators).
 fn unique_faces(part: &Shape) -> Vec<Face> {
     let mut seen: Vec<[i64; 4]> = Vec::new();
@@ -859,7 +859,7 @@ fn edge_canon_key(e: &Edge) -> [i64; 4] {
     [r3(p.x), r3(p.y), r3(p.z), r3(e.length())]
 }
 
-/// List de-dup key (rounded mid + length, ×1e4) — keeps concentric edges (same
+/// List de-dup key (rounded mid + length, ×1e4), keeps concentric edges (same
 /// center, different length). Mirrors `_edge_dedup_key`.
 fn edge_dedup_key(e: &Edge) -> [i64; 4] {
     let p = edge_mid(e);
@@ -951,7 +951,7 @@ fn take_indices(edges: Vec<Edge>, idxs: &[usize]) -> Vec<Edge> {
 
 /// Grow a tangent-continuous chain from the seed index: edges connected through a
 /// shared endpoint whose tangents are collinear within `ANG_TOL`. Best-effort BFS
-/// (OCCT has no tangent walker). Visited tracked by INDEX — safe here because every
+/// (OCCT has no tangent walker). Visited tracked by INDEX, safe here because every
 /// edge appears once in `edges` and the seed is an index into that same list (the
 /// build123d-identity gotcha that forces geometric keys in the sidecar doesn't bite
 /// when we never cross two separate edge collections). Mirrors `_tangent_chain`.
@@ -1221,7 +1221,7 @@ fn json_point(v: &serde_json::Value) -> DVec3 {
 fn faces_from_edges(edges: Vec<Edge>) -> Vec<Face> {
     // Build a wire from the edges in document order (they're drawn connected
     // end-to-end). BRepBuilderAPI_MakeWire connects edges by coincident vertices
-    // with its own tolerance — the same path the fork's bottle example uses with
+    // with its own tolerance, the same path the fork's bottle example uses with
     // arcs. If the edges happen to be unordered, fall back to topological
     // connection (build123d's tolerance-based `Wire.combine`).
     let wire = Wire::from_edges(edges.iter());
@@ -1342,7 +1342,7 @@ fn combine_faces(faces: Vec<Face>) -> Face {
 
 /// Reduce a boolean result to its single profile Face. A face-vs-face boolean
 /// (subtract/union) yields a Compound wrapping one face (a ring keeps its hole as
-/// an inner wire of that one face), so `Shape::as_face` returns None — pull the
+/// an inner wire of that one face), so `Shape::as_face` returns None, pull the
 /// face out of the compound instead.
 fn result_to_single_face(shape: Shape) -> Option<Face> {
     shape.as_face().or_else(|| shape.faces().next())
@@ -1397,7 +1397,7 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    /// A 20×20×10 box document (rectangle on XY, extruded 10) — shared by the
+    /// A 20×20×10 box document (rectangle on XY, extruded 10), shared by the
     /// rebuild and export tests.
     fn box_doc() -> serde_json::Value {
         json!({
@@ -1458,7 +1458,7 @@ mod tests {
     }
 
     /// One sketch (rectangle 20×20 on XY) + one extrude (distance 10, op new)
-    /// must reproduce what the Python sidecar produces for the same doc: a box —
+    /// must reproduce what the Python sidecar produces for the same doc: a box,
     /// 6 B-rep faces, 12 triangles, 24 vertices, bbox spanning 20×20×10.
     #[test]
     fn rect_extrude_makes_a_box() {
@@ -1525,7 +1525,7 @@ mod tests {
     }
 
     /// A circle hole cut from a rectangle plate: rectangle extrude (new) then a
-    /// concentric circle extrude (cut) must leave a hole — more than 6 faces and
+    /// concentric circle extrude (cut) must leave a hole, more than 6 faces and
     /// a smaller volume than the solid box (here we just assert the cut adds the
     /// cylindrical hole face and keeps the outer bbox).
     #[test]
@@ -1657,7 +1657,7 @@ mod tests {
 
     // ---------------------------------------------------------------------
     // Phase 2: selectors + fillet/chamfer/mirror/press-pull. Counts/bbox are
-    // cross-checked against the Python sidecar (sidecar/builder.py) — see the
+    // cross-checked against the Python sidecar (sidecar/builder.py), see the
     // values inline. Tolerances are loose on curved geometry (OCCT's Bnd_Box
     // adds a small gap; tessellation node/triangle counts can differ slightly
     // between OCCT versions, so curved cases assert ranges, not exact counts).
@@ -1712,7 +1712,7 @@ mod tests {
 
     /// Fillet ALL 12 edges of a box. Face topology is version-stable: 26 faces
     /// (6 originals + 12 edge rounds + 8 spherical corner patches), matching the
-    /// Python sidecar exactly. The EDGE count differs by OCCT version — the
+    /// Python sidecar exactly. The EDGE count differs by OCCT version, the
     /// sidecar (OCCT 7.8.1) reports 48, system OCCT 7.9.3 reports 56 because 7.9
     /// splits each corner-patch boundary into more segments. We assert the
     /// version-stable face count + bbox and bound the edge count.
@@ -2155,7 +2155,7 @@ mod tests {
             resolve_edges(&part, &json!({"kind":"edge","by":"axis","axis":"X"}), &mut no_diag(), None)
                 .unwrap();
         // axis grabs the WHOLE parallel set (>=4; the legacy path doesn't de-dup
-        // OCCT's per-incident-face edge twins) — the contrast is that `match`
+        // OCCT's per-incident-face edge twins), the contrast is that `match`
         // below picks exactly ONE.
         assert!(x_edges.len() >= 4, "axis X should grab the whole parallel set");
 

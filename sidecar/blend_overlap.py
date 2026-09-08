@@ -21,7 +21,7 @@ and nobody else's, which settles attribution without any comparison to what came
 before. They are tessellated and each triangle asked whether its centre lies
 within a micron of a triangle of another of them, pointing the same way (or
 exactly opposite, which contests the depth buffer just as hard), AND whether the
-face it is accused of really is that near — a chord may sit as far from its own
+face it is accused of really is that near, a chord may sit as far from its own
 surface as the deflection, and beyond that a crossing is news about the mesh
 rather than about the model. The area that does is the answer.
 
@@ -110,7 +110,7 @@ def new_faces(before, after):
 
     Re-trimmed faces belong here as much as brand-new ones do. The reported fold
     is a new blend lying on the TORUS of an older one, which the new blend only
-    re-trimmed — drop those and the guard has nothing left to catch."""
+    re-trimmed, drop those and the guard has nothing left to catch."""
     old = TopTools_MapOfShape()
     for f in faces_of(before):
         old.Add(f)
@@ -228,8 +228,8 @@ def _near_the_face(point, face):
     for as the deflection it was meshed at. Two chords crossing therefore says
     nothing finer than that about the surfaces underneath. Measured on a sound
     conic blend: one triangle passed within a micron of another whose face was
-    0.1737mm away — over the deflection, on a surface the mesher handles badly
-    (see PROFILE_LIMIT in conic_blend.py) — and that one triangle carried three
+    0.1737mm away, over the deflection, on a surface the mesher handles badly
+    (see PROFILE_LIMIT in conic_blend.py), and that one triangle carried three
     times the area it takes to convict.
 
     So the mesh proposes and this bounds what the proposal can mean. The
@@ -262,7 +262,7 @@ def doubled_area(faces):
     the other.
 
     The triangles only ever PROPOSE. What a proposal is allowed to mean is
-    bounded by the face itself — see `_near_the_face` — because a chord that
+    bounded by the face itself, see `_near_the_face`, because a chord that
     crosses a face its own surface is nowhere near is evidence about the mesh
     and not about the model."""
     tris = _triangles(faces)

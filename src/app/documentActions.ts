@@ -6,7 +6,7 @@ export function createDocumentActions(
 ): Pick<Engine, "newDocument" | "openDoc" | "doUndo" | "doRedo"> {
   return {
     async newDocument() {
-      // window.confirm is a no-op in Tauri's WebKitGTK webview — use the native dialog.
+      // window.confirm is a no-op in Tauri's WebKitGTK webview, use the native dialog.
       if (e.store.dirty) {
         const { ask } = await import("@tauri-apps/plugin-dialog");
         const ok = await ask("Discard unsaved changes and start a new document?", {
@@ -19,7 +19,7 @@ export function createDocumentActions(
       e.store.newDocument();
     },
 
-    // Open must exit an active sketch first — else the in-progress sketch's curves
+    // Open must exit an active sketch first, else the in-progress sketch's curves
     // orphan on screen (loading the new doc doesn't touch the active-sketch overlay).
     async openDoc() {
       if (e.sketch.active) e.sketch.cancel();
@@ -27,7 +27,7 @@ export function createDocumentActions(
     },
 
     // Undo/redo routing: while a sketch is OPEN its geometry lives in SketchMode and
-    // is not in the document yet, so store.undo() can only reach the whole sketch —
+    // is not in the document yet, so store.undo() can only reach the whole sketch,
     // which is why Ctrl+Z used to vaporise it. Hand the request to the sketch, which
     // swallows it whenever it is active (an empty sketch history says so rather than
     // falling through and eating the sketch).

@@ -51,14 +51,14 @@ reason, not a quick patch.
    rust-geom` / `VITE_GEOM=rust`) kept as a spike; the Python build123d sidecar is the
    default and the source of truth.
 2. **Stateless full rebuild.** The frontend's logical model is "send the document, get
-   back a mesh" - the sidecar rebuilds the build123d tree from scratch on every change.
+   back a mesh", the sidecar rebuilds the build123d tree from scratch on every change.
    A failing feature is recorded as a no-op and the rebuild continues past it, rather
    than aborting the whole document. (The wire protocol layers a delta encoding and a
-   per-body cache on top of this for performance; see PROTOCOL.md - the semantics stay
+   per-body cache on top of this for performance; see PROTOCOL.md, the semantics stay
    stateless from the frontend's point of view.)
 3. **Selectors, not topology indices.** Geometry the frontend references (an edge for a
-   fillet, a face for a pattern) is picked by a queryable descriptor - an axis, a face
-   normal, the nearest point - never by a raw topology index. Indices renumber when
+   fillet, a face for a pattern) is picked by a queryable descriptor, an axis, a face
+   normal, the nearest point, never by a raw topology index. Indices renumber when
    upstream geometry changes; descriptors are re-resolved against the rebuilt shape, so
    a downstream feature keeps landing on the right edge.
 4. **The sidecar port and token are fixed.** `127.0.0.1:8765` plus a per-launch
@@ -75,12 +75,12 @@ reason, not a quick patch.
    before the replacement process starts, or the new instance quits on launch.
    While the app runs it also writes that port and token into `session.json` in
    its app data directory (`session_file.rs`), removing it on exit, so an outside
-   program can join the session instead of starting a second engine - see
+   program can join the session instead of starting a second engine, see
    `docs/MCP.md`. That file is the one place the token reaches disk; it is written
    user-only, and reaching the open DOCUMENT through it is gated separately by a
    setting in the app.
 5. **Display-only state stays in frontend side-maps.** Visibility, display names, and
-   palette/body colors are UI state, not model state - they live in `DocumentStore`
+   palette/body colors are UI state, not model state, they live in `DocumentStore`
    side-maps, not in the `document` sent to the sidecar, and are threaded explicitly
    through the calls that need them (e.g. `exportProject`).
 6. **Pattern expansion and region detection are mirrored TS <-> Python.** Both sides
@@ -95,15 +95,15 @@ reason, not a quick patch.
 
 1. The frontend sends the document (or, once a baseline is established, just the
    changed features) over the WebSocket.
-2. The sidecar replays the build123d feature tree from scratch - sketch, extrude,
-   fillet, pattern, and so on, in timeline order - inside a long-lived worker process.
+2. The sidecar replays the build123d feature tree from scratch, sketch, extrude,
+   fillet, pattern, and so on, in timeline order, inside a long-lived worker process.
 3. If a feature fails (a fillet with no matching edge, a boolean that would be a
    no-op), that failure is recorded and the feature is treated as a no-op. The rebuild
    **continues** with the remaining features rather than discarding the whole document.
 4. The result is tessellated per body and sent back as a mesh (positions, indices,
    per-triangle face ids) plus edge polylines, with any feature errors attached so the
    frontend can show a banner without losing the geometry that did build.
-5. The frontend never accumulates its own geometry state across edits - the same
+5. The frontend never accumulates its own geometry state across edits, the same
    `document` always rebuilds to the same result, deterministically.
 
 See [PROTOCOL.md](PROTOCOL.md) for the exact wire shapes, including the delta-send and
@@ -112,7 +112,7 @@ per-body etag mechanisms that make this fast without changing the statelessness 
 ## Bundled runtime layout (shipped builds)
 
 The default build links no system OpenCASCADE. Geometry ships as a Python sidecar built
-from `sidecar/uv.lock`, whose `cadquery-ocp-novtk` wheels carry their own compiled OCCT -
+from `sidecar/uv.lock`, whose `cadquery-ocp-novtk` wheels carry their own compiled OCCT,
 no system package is needed on the machine the app runs on. See
 [PACKAGING.md](PACKAGING.md) for the build details; the shape of what gets shipped is:
 
@@ -128,7 +128,7 @@ sidecar-runtime/
 The Rust shell launches the interpreter with `cwd` set to `app/` and `PYTHONPATH`
 pointing at `site-packages/`. In development, the same shell instead resolves the
 `sidecar/.venv` created by `uv sync`. The runtime is rebuilt from `sidecar/uv.lock`
-whenever that lockfile changes - the versions inside must match what the sidecar code
+whenever that lockfile changes, the versions inside must match what the sidecar code
 is tested against.
 
 The experimental Rust/OCCT geometry path (`geom.rs`, gated behind the `rust-geom`

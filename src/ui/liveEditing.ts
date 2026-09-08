@@ -3,7 +3,7 @@
 // The house shape for a user setting (ui/theme.ts, ui/units.ts,
 // layoutPrefs.ts): module state, a gate over the untrusted stored value, one
 // `fundacad.*` key read at load, and a listener set so live surfaces re-render.
-// No Vue import — that is what keeps the headless suite able to reach it.
+// No Vue import, that is what keeps the headless suite able to reach it.
 //
 // Three values rather than a checkbox, because "let an assistant read the part
 // I have open" and "let it change the part I have open" are different questions
@@ -20,7 +20,7 @@
 // this user account can read, so anything that can use it can already read and
 // rewrite the user's documents on disk directly; the marginal reach is real but
 // small. What makes it acceptable is not the size of the risk, it is that
-// nothing happens invisibly — every edit is one Ctrl+Z, the window says who is
+// nothing happens invisibly, every edit is one Ctrl+Z, the window says who is
 // attached while they are, and this setting turns it off in one click. A default
 // of `off` would mean the feature does not work until you find a checkbox, which
 // for the thing this was built for is not a safer default, only a quieter one.

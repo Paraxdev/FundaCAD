@@ -4,8 +4,8 @@
 //
 // The editing label is a SEPARATE vnode from the display label, not one element
 // with a toggled contenteditable attribute. That is load-bearing rather than
-// tidy: with a single element, any prop change arriving mid-edit — a rebuild
-// finishing, a sibling being renamed, an eye toggled — patches the label's text
+// tidy: with a single element, any prop change arriving mid-edit, a rebuild
+// finishing, a sibling being renamed, an eye toggled, patches the label's text
 // node, and the caret jumps to the start or disappears outright. As two
 // branches of a v-if, Vue owns no binding inside the editing node at all, so it
 // never touches it.
@@ -23,7 +23,7 @@ const props = defineProps<{
   labelStyle?: Record<string, string> | undefined;
   /** Start editing on a double-click of the label itself. Off by default: a tree
    *  row owns that gesture (double-click means Edit on a sketch), and only the
-   *  palette slots — whose row has no other double-click meaning — want it. */
+   *  palette slots, whose row has no other double-click meaning, want it. */
   renameOnDblclick?: boolean | undefined;
 }>();
 
@@ -71,7 +71,7 @@ defineExpose({ start });
 
 <template>
   <!-- @keydown.stop keeps every keystroke out of the global keymap while
-       editing — without it, typing a name made of tool shortcuts starts tools. -->
+       editing, without it, typing a name made of tool shortcuts starts tools. -->
   <span
     v-if="renaming"
     ref="editEl"

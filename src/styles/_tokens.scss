@@ -13,7 +13,7 @@
    one. Each token below therefore names WHICH of its ramps it came from and
    why, so a colour added later can be argued with rather than guessed at.
 
-   The SHAPE lives here and is shared by every theme — radii, the spacing ramp,
+   The SHAPE lives here and is shared by every theme, radii, the spacing ramp,
    borders, shadows and motion. Only the PALETTE varies (_themes.scss). That
    split is deliberate and predates this look: a theme is a repaint, never a
    relayout, so a palette can be added without re-checking every layout against
@@ -21,8 +21,8 @@
    ============================================================================ */
 
 :root {
-  /* Every NATIVE control — a <select> and its popup list, scrollbars, the focus
-     ring on form fields — is drawn by the engine, not by us, and defaults to the
+  /* Every NATIVE control, a <select> and its popup list, scrollbars, the focus
+     ring on form fields, is drawn by the engine, not by us, and defaults to the
      LIGHT palette however dark the page around it is. That is why the Units
      dropdown came out white with near-invisible grey text on a black title bar.
      Declaring the scheme is what makes the engine draw them dark; the rules on
@@ -46,7 +46,7 @@
      be one of those surfaces and read as a seam between two panels rather than
      as a line. The blues are the coolest thing in the palette and sit a clear
      step off every surface they can land on. */
-  --line: #253a5e;        /* divider — visible, not a hairline */
+  --line: #253a5e;        /* divider, visible, not a hairline */
   --line-strong: #3c5e8b; /* stronger border (focusable controls, popups) */
 
   /* --- text --- */
@@ -90,7 +90,7 @@
      surface behind it are the same shape, so a button reads as a painted region
      rather than something to press, and every corner in a dense panel lands as
      an identical hard point. 2-6px is enough to separate the two without the
-     card-floating-on-a-page look a large radius gives — the panels themselves
+     card-floating-on-a-page look a large radius gives, the panels themselves
      stay square, because a panel IS a region of the surface. */
   --r-xs: 2px;
   --r-sm: 3px;
@@ -103,16 +103,16 @@
      style preference: a survey of the stylesheet found the same intent written
      as 5px, 6px and 7px in three neighbouring panels, and 9/10/11/12 in four
      more, which is what made the UI read as arbitrary rather than dense.
-     Density is right for a CAD tool — the fix is one rung, not more air.
+     Density is right for a CAD tool, the fix is one rung, not more air.
 
      Roughly geometric so adjacent rungs are distinguishable but never jarring:
-       s-0  2px  hairline — items that must read as ONE control strip
+       s-0  2px  hairline, items that must read as ONE control strip
                  (the view-control pill's buttons, the timeline transport, the
                  ribbon's tool row). New rung: 2px was the third most common
                  literal in the sheet and had nowhere to live.
        s-1  4px  inside a small control; popup shell padding
        s-2  8px  list-row and field padding (vertical), icon-to-label
-       s-3  12px the workhorse — row padding (horizontal), control padding
+       s-3  12px the workhorse, row padding (horizontal), control padding
        s-4  16px panel padding, bar padding, popup row padding (horizontal)
        s-5  20px dialog padding, major gaps between groups
        s-6  28px card padding
@@ -122,7 +122,7 @@
      right for a CAD tool, so the two smallest are untouched: they are what
      holds a segmented control together, and loosening them would break the
      reading that those buttons are ONE thing. The air goes where it is read as
-     structure instead — row padding, panel padding, the gaps between groups. */
+     structure instead, row padding, panel padding, the gaps between groups. */
   --s-0: 2px;
   --s-1: 4px;
   --s-2: 8px;

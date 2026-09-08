@@ -14,7 +14,7 @@ interface ToggleDef {
 export const PALETTE_TOGGLES: ToggleDef[] = [
   // Off by default. A hard lock is right while you are drawing and wrong the
   // moment you want to see where the sketch sits on the part, and entry already
-  // squares the view and flattens the projection without it — so the lock only
+  // squares the view and flattens the projection without it, so the lock only
   // has to be there for the people who want the camera nailed down, and the
   // rest get a view they can turn.
   { key: "lockView", label: "Lock to Plane", default: false },

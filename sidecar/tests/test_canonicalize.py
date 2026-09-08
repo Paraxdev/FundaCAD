@@ -80,8 +80,8 @@ def test_the_gate_cannot_measure_a_compound_of_compounds():
     """Documents WHY the multi-root import path must canonicalise per root.
 
     Compound.volume does not recurse into nested compounds, so a nested shape
-    reads a partial volume and compares unequal to itself. Not a bug in the gate
-    — a limit of the measurement, which is exactly why callers with multi-root
+    reads a partial volume and compares unequal to itself. Not a bug in the gate,
+    a limit of the measurement, which is exactly why callers with multi-root
     input have to work per root instead of handing the whole thing in."""
     inner = Compound([Box(10, 10, 10)])
     nested = Compound([inner])
@@ -90,7 +90,7 @@ def test_the_gate_cannot_measure_a_compound_of_compounds():
     assert _canonical_ok(Compound([flat]), flat) is True
     # ...a nested one does not, which would silently fail every canonicalisation.
     assert _canonical_ok(nested, flat) is False
-    print(f"{PASS} the gate cannot measure nested compounds — hence per-root")
+    print(f"{PASS} the gate cannot measure nested compounds, hence per-root")
 
 
 def test_multi_root_canonicalises_each_root_separately():
@@ -101,7 +101,7 @@ def test_multi_root_canonicalises_each_root_separately():
     free shapes by OCCT's own writer gains a wrapper product (2 roots arrive as
     3 nodes), so step_assembly classifies it as an assembly and it takes the
     per-leaf path instead. Driving it through an import would have measured the
-    ASSEMBLY path while claiming to measure this one — which is how a test comes
+    ASSEMBLY path while claiming to measure this one, which is how a test comes
     to pass for the wrong reason."""
     seen = []
     real = mesh_import._canonicalize
@@ -113,7 +113,7 @@ def test_multi_root_canonicalises_each_root_separately():
         mesh_import._canonicalize = real
 
     assert len(seen) == len(roots), (
-        f"{len(seen)} canonicalise calls for {len(roots)} roots — the whole "
+        f"{len(seen)} canonicalise calls for {len(roots)} roots, the whole "
         "compound went in as one, which the gate cannot measure"
     )
     # Every root must be handed in individually, never a compound of them.

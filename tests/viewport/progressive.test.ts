@@ -2,7 +2,7 @@
 //
 // The commit (viewport.setModel with the finished result) is authoritative. What
 // the stream builds only counts if it is INDISTINGUISHABLE from what the commit
-// would have built on its own — same bodies, same order, same geometry, same
+// would have built on its own, same bodies, same order, same geometry, same
 // etags, so setModel's etag diff reuses all of it and rebuilds nothing.
 //
 // Headless like render.test.ts: ProgressiveModel takes a THREE.Group and a
@@ -215,7 +215,7 @@ describe("ProgressiveModel", () => {
       // first freed those exact objects and re-adopted them one line later: an
       // unchanged body came back into `slots` with its GPU buffers already
       // released and without ever being put back in the scene, so it vanished
-      // and stayed vanished — through the commit, since setModel's etag diff
+      // and stayed vanished, through the commit, since setModel's etag diff
       // finds it "already present" and reuses it too.
       const r = reply(3);
       const disposed: string[] = [];
@@ -291,7 +291,7 @@ describe("ProgressiveModel", () => {
       expect(group.children.length).toBe(4);
     });
 
-    it("finish() releases without disposing — the commit owns them now", () => {
+    it("finish() releases without disposing, the commit owns them now", () => {
       const r = reply(3);
       const disposed: string[] = [];
       const group = new THREE.Group();

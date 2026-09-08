@@ -42,7 +42,7 @@ fn sidecar_token(state: tauri::State<'_, Sidecar>) -> String {
 
 /// Restart the app after an update, tearing down the geometry engine and
 /// releasing the single-instance lock first, so the replacement process comes up
-/// clean. Neither step can be left to a destructor — see the body.
+/// clean. Neither step can be left to a destructor, see the body.
 #[tauri::command]
 fn restart_for_update(app: tauri::AppHandle) {
     // Kill the geometry engine EXPLICITLY rather than trusting a platform backstop.
@@ -51,7 +51,7 @@ fn restart_for_update(app: tauri::AppHandle) {
     // that, but they are timing-dependent: macOS has no PR_SET_PDEATHSIG and polls
     // getppid() once a SECOND (see `_die_with_parent` in sidecar/server.py), so the
     // replacement process can start, find port 8765 still held by the old sidecar,
-    // and come up with a dead engine — reporting "another copy is already running"
+    // and come up with a dead engine, reporting "another copy is already running"
     // immediately after an update, which is both wrong and alarming.
     // `Sidecar::kill` waits for the child, so the port is free before we return.
     if let Some(sidecar) = app.try_state::<Sidecar>() {
@@ -59,7 +59,7 @@ fn restart_for_update(app: tauri::AppHandle) {
     }
     // Then release the single-instance lock. The frontend used to call the process
     // plugin's `relaunch()` directly, which maps to `app.request_restart()` and
-    // spawns the replacement while this process is still shutting down — so with a
+    // spawns the replacement while this process is still shutting down, so with a
     // single-instance guard in place the NEW instance can find the lock still held
     // and exit immediately, leaving the user with no app at all after an update.
     // `destroy` is synchronous on every platform (D-Bus release_name on Linux,
@@ -99,7 +99,7 @@ fn slot_file(app: &tauri::AppHandle, slot: &str) -> Result<std::path::PathBuf, S
 }
 
 #[tauri::command]
-// async: Tauri runs sync commands on the MAIN thread — a multi-MB snapshot
+// async: Tauri runs sync commands on the MAIN thread, a multi-MB snapshot
 // write would stall the UI for its full fs time. async moves it to the runtime
 // pool; the tmp-write + rename stays atomic either way.
 async fn recovery_write(app: tauri::AppHandle, slot: String, json: String) -> Result<(), String> {
@@ -226,7 +226,7 @@ fn watch_frontend_load(app: tauri::AppHandle) {
         let lines = [
             format!("[ui] WARNING: the interface has not loaded after {secs}s."),
             "[ui] The window opened but the page never started, so this is NOT a geometry".to_string(),
-            "[ui] engine problem — the engine's own status is logged separately above."
+            "[ui] engine problem, the engine's own status is logged separately above."
                 .to_string(),
             "[ui] Either the document failed to load, or a script threw while loading it."
                 .to_string(),

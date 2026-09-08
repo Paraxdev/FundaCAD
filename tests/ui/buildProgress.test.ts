@@ -21,8 +21,8 @@ describe("buildProgress", () => {
     expect(buildProgress(0, null, null, 0).pct).toBe(0);
   });
 
-  // The meshing (payload) phase reports feature = -1 for its WHOLE duration —
-  // measured at 136s on the reference assembly — so without per-body counts it
+  // The meshing (payload) phase reports feature = -1 for its WHOLE duration,
+  // measured at 136s on the reference assembly, so without per-body counts it
   // renders as a bar pinned at 0% under a static label. These two cases are the
   // difference between "is it frozen?" and a progress bar.
   it("falls back to an indeterminate label when the sidecar sends no mesh counts", () => {

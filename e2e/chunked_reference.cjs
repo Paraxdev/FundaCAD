@@ -1,7 +1,7 @@
 // Real-app check of the CHUNKED rebuild reply on the reference assembly.
 //
 // Drives the real client (src/geometry/client.ts) in a real browser against a
-// real sidecar, over the real socket — the only thing faked is the Tauri file
+// real sidecar, over the real socket, the only thing faked is the Tauri file
 // dialog, which a browser harness cannot reach anyway. Counts the frames that
 // actually cross the wire by adding a passive "message" listener to every
 // WebSocket the app opens (it fires alongside the app's own onmessage, so the

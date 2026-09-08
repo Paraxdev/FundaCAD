@@ -1,7 +1,7 @@
 """The variables this app reads have had three names. All three must answer.
 
-The rename is invisible inside this repository — every read goes through
-appenv — and that is exactly what makes it dangerous. A variable of this kind is
+The rename is invisible inside this repository, every read goes through
+appenv, and that is exactly what makes it dangerous. A variable of this kind is
 set OUTSIDE the repository: a shell profile, a launcher script, a CI job, a
 docker-compose file, a .desktop entry. Rename it here and every one of those
 silently stops working, with no error and nothing in a log; the only symptom is
@@ -80,7 +80,7 @@ def test_nothing_set_is_the_default():
 
 def test_writing_clears_the_spellings_it_is_replacing():
     """A child handed two names that disagree would read whichever this module
-    happens to try first — which is the current one, so the disagreement would be
+    happens to try first, which is the current one, so the disagreement would be
     invisible here and load-bearing anywhere that reads os.environ directly."""
     _clear()
     os.environ[ALL[1]] = "stale"
@@ -98,7 +98,7 @@ def test_writing_clears_the_spellings_it_is_replacing():
 
 def test_an_existing_cache_directory_is_kept_rather_than_orphaned():
     """dir_under. A cache under the old name that stops being read does not
-    disappear — it sits there, outside the budget that was supposed to bound it,
+    disappear, it sits there, outside the budget that was supposed to bound it,
     while a second one grows beside it."""
     base = tempfile.mkdtemp(prefix="funda-appenv-")
 

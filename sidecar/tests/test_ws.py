@@ -1,4 +1,4 @@
-"""WebSocket transport smoke test — starts the server in-process, connects a
+"""WebSocket transport smoke test, starts the server in-process, connects a
 client, sends a rebuild request, asserts a matched-id mesh reply. Also covers
 the opt-in binary mesh frame (encoder unit test + binary-vs-JSON equality over
 the real socket).
@@ -31,7 +31,7 @@ URL = f"ws://{HOST}:{PORT}?token=test-token"
 
 
 def _decode_binary_frame(frame):
-    """Python mirror of client.ts handleBinaryReply — used only by tests."""
+    """Python mirror of client.ts handleBinaryReply, used only by tests."""
     assert isinstance(frame, (bytes, bytearray)), "expected a binary frame"
     (header_len,) = struct.unpack_from("<I", frame, 0)
     header = json.loads(frame[4:4 + header_len].decode("utf-8"))
@@ -48,7 +48,7 @@ def _decode_binary_frame(frame):
         for field in ("positions", "normals", "indices", "faceIds"):
             if field in b and isinstance(b[field], dict):
                 b[field] = views[b[field]["$buf"]]
-        # packed edge polylines (server._pack_edges) — expand to the same list
+        # packed edge polylines (server._pack_edges), expand to the same list
         # the JSON reply carries, exactly as client.ts handleBinaryReply does
         ed = b.get("edges")
         if isinstance(ed, dict):
@@ -164,7 +164,7 @@ def test_viewport_profile_tiers():
 def test_oversized_reply_becomes_an_error():
     """A reply over the frame cap must come back as a NAMED error, not as a frame
     websockets refuses to send (which closes the socket with 1009 and reaches the
-    user as the app vanishing mid-rebuild — GH #4's failure mode)."""
+    user as the app vanishing mid-rebuild, GH #4's failure mode)."""
     big = "x" * (wire._MAX_FRAME + 1024)
     out = json.loads(server._reply_bytes("rq", _one_body_res(name=big), True))
     assert out["ok"] is False, out
@@ -289,7 +289,7 @@ async def test_chunked_reply_reassembles_to_the_single_frame_reply():
 async def test_chunk_manifest_describes_every_body():
     """The manifest is what lets the client plan its arrays before any payload
     lands, so it must name every body in final order and carry sizes for the
-    full ones. Sizes are deliberately ABSENT for stubs — the sidecar does not
+    full ones. Sizes are deliberately ABSENT for stubs, the sidecar does not
     have them (they live in the client's cache), and a zero there would make the
     client allocate a body-shaped hole."""
     res = _many_body_res()
@@ -356,7 +356,7 @@ def test_body_wire_size_accepts_numpy_arrays():
     `len(x or ())` reads fine and works on a list, but on a numpy array `or`
     evaluates __bool__ and raises "truth value of an array with more than one
     element is ambiguous". Today tessellate returns lists, so this was
-    unreachable — but moving those arrays to numpy across the pool boundary is
+    unreachable, but moving those arrays to numpy across the pool boundary is
     the named next step for the ~1 GiB result-dict cost, and it would have
     landed exactly here."""
     arr = {"id": "b", "positions": np.zeros(9, dtype="<f4"),
@@ -373,7 +373,7 @@ def test_body_wire_size_accepts_numpy_arrays():
 
 async def test_single_oversized_body_aborts_the_stream_by_name():
     """A body whose own payload exceeds the cap is the one case chunking cannot
-    fix. The user must be told WHICH body — "hide some bodies" is useless advice
+    fix. The user must be told WHICH body, "hide some bodies" is useless advice
     when the problem is one of them."""
     res = {"protocol": 2, "bodies": [
         {"id": "b1", "name": "Small", "etag": "e1", "positions": [0.0] * 30,
@@ -412,7 +412,7 @@ def test_unchunked_client_still_gets_one_frame():
 async def test_cancel_mid_stream_stops_sending():
     """A cancel between chunks must stop the send, shaped like every other
     cancelled reply. Without it a user who cancels still waits out the whole
-    reply — after the worker they cancelled has already been killed."""
+    reply, after the worker they cancelled has already been killed."""
     res = _many_body_res(n=8)
     ws = _FakeWS()
     wire._CHUNK_TARGET_BYTES = 700
@@ -431,7 +431,7 @@ def test_mesh_bbox_is_the_box_of_the_vertices_sent():
 
     Curved geometry is the only place any of this shows: on a planar solid every
     candidate box is the exact box, which is why the multi-solid fixture below
-    cannot catch it. Measured on a 60mm ring with a 1mm fillet — exact +/-30.0,
+    cannot catch it. Measured on a 60mm ring with a 1mm fillet, exact +/-30.0,
     triangulation +/-30.118, OCCT poles +/-32.472."""
     from build123d import Cylinder, Mode, fillet
     from tessellate import tessellate, mesh_bbox, bbox as exact_bbox_of
@@ -446,7 +446,7 @@ def test_mesh_bbox_is_the_box_of_the_vertices_sent():
 
     worst = max(max(abs(got["min"][i] - exact["min"][i]),
                     abs(got["max"][i] - exact["max"][i])) for i in range(3))
-    assert worst < 0.5, f"box is {worst:.3f}mm out — is it boxing the poles?"
+    assert worst < 0.5, f"box is {worst:.3f}mm out, is it boxing the poles?"
     print(f"  mesh_bbox tight on curved geometry ({worst:.3f}mm)")
 
 
@@ -454,8 +454,8 @@ def test_mesh_bbox_survives_a_press_pull_on_a_curved_face():
     """The case that made this the vertex box rather than BRepBndLib's.
 
     Add_s boxes a face's triangulation when there is one and its CONTROL POINTS
-    when there is not, and `face_bands.face_bands()` — which runs between the
-    tessellation and this box in _body_payload — calls bounding_box(), which
+    when there is not, and `face_bands.face_bands()`, which runs between the
+    tessellation and this box in _body_payload, calls bounding_box(), which
     calls BRepTools.Clean_s, which removes the triangulation. So the real
     pipeline was boxing poles.
 
@@ -493,7 +493,7 @@ def test_mesh_bbox_survives_a_press_pull_on_a_curved_face():
     exact_b = exact_bbox_of(b)
     occt = mesh_bbox(b)  # the control: the same call with nothing left to box
     assert out_by(occt, exact_b) > 5.0, (
-        f"the poles box is only {out_by(occt, exact_b):.3f}mm out — the control "
+        f"the poles box is only {out_by(occt, exact_b):.3f}mm out, the control "
         "has stopped failing, so this test no longer measures anything")
     print(f"  press/pull bbox: vertices {out_by(mesh_bbox(a, pos), exact):.3f}mm out, "
           f"poles {out_by(occt, exact_b):.3f}mm out")
@@ -517,7 +517,7 @@ def test_doc_bbox_covers_the_model_without_the_slow_walk():
 
     Asserts the two properties that matter, against the exact geometric box:
     it CONTAINS the model (a camera fit must never clip), and it is TIGHT. The
-    tightness bound is what catches a regression to OCCT's poles-based box —
+    tightness bound is what catches a regression to OCCT's poles-based box,
     `bounding_box(optimal=False)` measures 2.5mm out on a 60mm part, where the
     triangulation box is 0.118mm out. Driven through the REAL _rebuild_job on a
     multi-body document, not on hand-made dicts."""
@@ -613,7 +613,7 @@ async def main():
 
             # chunked opt-in over the REAL socket: the same document must come
             # back as a stream that reassembles to the same reply. Also pins
-            # that no `building` progress frame lands mid-stream — it shares the
+            # that no `building` progress frame lands mid-stream, it shares the
             # request id, so a client demultiplexing on id alone would splice it
             # into the body list. That is safe today only because _run_stall has
             # returned before the first chunk goes out.
@@ -655,7 +655,7 @@ async def main():
             assert pong["ok"] and pong["result"]["pong"]
             print("  WS ping OK")
 
-            # projectGeometry: envelope over the real socket — one good
+            # projectGeometry: envelope over the real socket, one good
             # faceBoundary source, one strict-resolution error entry.
             box = {"parameters": {}, "features": [
                 {"id": "s1", "type": "sketch", "plane": "XY", "entities": [
@@ -727,7 +727,7 @@ def test_port_in_use_exits_with_its_own_code():
 
     Field bug 2c0cd78a: a Windows user launched a second copy of the app, its
     sidecar could not bind 8765, and the shell reported "The geometry engine
-    crashed (exit code 1)" — which named neither the port nor anything the user
+    crashed (exit code 1)", which named neither the port nor anything the user
     could do. server.py now exits EXIT_PORT_IN_USE and prints a FATAL line; the
     Rust shell (classify_exit in src-tauri/src/sidecar.rs) turns that pair into a
     message naming the port. This test pins BOTH halves of that contract.

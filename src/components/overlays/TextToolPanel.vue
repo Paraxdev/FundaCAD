@@ -19,7 +19,7 @@ const props = defineProps<{ req: TextReq }>();
 const panels = useToolPanelStore();
 
 // Local form state. App.vue keys this component on req.id, so a second show()
-// remounts it and this is rebuilt from the new `initial` — there is no reset
+// remounts it and this is rebuilt from the new `initial`, there is no reset
 // path to get wrong, and no chance of a stale field surviving into a different
 // text object.
 const form = reactive(initialTextForm(props.req.initial));

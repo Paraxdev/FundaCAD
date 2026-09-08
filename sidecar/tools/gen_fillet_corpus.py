@@ -9,11 +9,11 @@ fails yet a one-edge-at-a-time application recovers) are admitted and measured.
 Each case is a self-contained FundaCAD document: a primitive (box / cylinder) or a
 simple join/cut boolean of two primitives, followed by ONE fillet or chamfer feature
 (id "op") whose edges are chosen with a legacy queryable selector (axis / all /
-nearest — the forms the shipping frontend actually emits; `ofFace` is NOT used, its
+nearest, the forms the shipping frontend actually emits; `ofFace` is NOT used, its
 face argument routes through the match-fingerprint path the frontend does not emit).
 
 CLEARANCE BAND. For every selected edge the clearance is the distance to the nearest
-NON-TOUCHING face of the same body (faces at distance > EPS_TOUCH — a face sharing
+NON-TOUCHING face of the same body (faces at distance > EPS_TOUCH, a face sharing
 the edge or an end vertex touches at 0 and is excluded), additionally capped by the
 edge's own radius for a circular rim. A case's band is (min clearance) / (op size).
 Cases are generated to fill fixed per-band quotas:
@@ -21,28 +21,28 @@ Cases are generated to fill fixed per-band quotas:
     [1.5, 2.0) x   quota   |  [3.0, inf) x    quota (regression floor)
 op is set AFTER measuring clearance (op = min_clearance / ratio, ratio drawn inside
 the target band) so a case lands in its band by construction. Boolean templates
-(join_L, cut_pocket) dominate the tight bands naturally — their thin walls give a
+(join_L, cut_pocket) dominate the tight bands naturally, their thin walls give a
 small clearance whose op stays individually feasible; solid box/cylinder edges have
 a full-dimension clearance whose tight-band op would be individually infeasible, so
 they populate the loose bands. The per-band template mix is recorded in gen stats.
 
 FEASIBILITY ORACLE (replaces the bare clearance rule). A candidate is accepted iff
   (a) every selected edge blends INDIVIDUALLY on the pre-op body at the drawn size, and
-  (b) a reference SEQUENTIAL application — one edge at a time on the evolving body,
+  (b) a reference SEQUENTIAL application, one edge at a time on the evolving body,
       each subsequent edge re-identified geometrically (midpoint + direction + length)
-      because prior blends renumber the topology — yields a SINGLE CLOSED VALID solid
+      because prior blends renumber the topology, yields a SINGLE CLOSED VALID solid
       covering ALL selected edges, and
   (c) that sequential result removes net material (ref_removed > 0), so the evaluator's
       "removed volume > 0" and ref-volume checks are well defined.
 Cases whose sequential run reaches only n-1 edges (or produces an invalid / multi-solid
-body, or net-adds material) are EXCLUDED — the headline must be 100%-achievable. Each
+body, or net-adds material) are EXCLUDED, the headline must be 100%-achievable. Each
 accepted case stores applied=n (== n_edges) and ref_removed (the reference removed
 volume from the sequential run) for the evaluator to score the shipped single-call
 fillet against.
 
 ANALYTIC SUBSET. A case is analytic only when it is a pure box (no boolean) whose
 selected edges are convex 90-degree straight edges that do not interact at a shared
-vertex — the `axis` selector's 4 disjoint full-length parallel edges, or a single
+vertex, the `axis` selector's 4 disjoint full-length parallel edges, or a single
 `nearest` edge. For those the removed volume is EXACT with no vertex-interaction term:
   fillet:  removed = sum (1 - pi/4) * r^2 * L_e ;  chamfer: removed = sum (1/2) d^2 L_e
 The evaluator uses this exact expectation for analytic cases and ref_removed for the
@@ -50,7 +50,7 @@ rest.
 
 CYLINDER SEAM. The cyl_axisZ (seam line) and cyl_all (both rims + seam) templates are
 included because the frontend can emit those selectors, but the seam is a parametric
-artifact OCCT cannot blend, so the oracle rejects those draws at generation — proving
+artifact OCCT cannot blend, so the oracle rejects those draws at generation, proving
 the generator never emits a seam case even sequential can't complete. Seam discards
 are logged separately.
 
@@ -105,7 +105,7 @@ BANDS = [
     ("3.0-inf", 3.0, math.inf),
 ]
 
-# which templates may fill which band, as (template, weight) — see module docstring.
+# which templates may fill which band, as (template, weight), see module docstring.
 # The tight bands lean on join_L: its single reflex (concave) vertical edge is the
 # achievable-but-combined-fails case (the shipped single-call blend chokes on the
 # reflex neighbourhood while the sequential oracle recovers). cut_pocket contributes
@@ -140,7 +140,7 @@ def _edge_radius(e):
 def _clearance(shape, edge):
     """Distance from `edge` to the nearest non-touching face of `shape`, capped by
     the edge's own radius for a circular edge. math.inf if no non-touching face
-    (e.g. a cylinder seam line — handled as an infeasible seam draw upstream)."""
+    (e.g. a cylinder seam line, handled as an infeasible seam draw upstream)."""
     ew = edge.wrapped
     best = math.inf
     for f in shape.faces():
@@ -202,12 +202,12 @@ def _min_valid_faces(preop, targets, op_kind, size, tol, floor, sample_extra):
     application orderings. For a merging edge set (tight join_L) overlapping blend
     faces fuse, so a complete valid solid can have FEWER faces than pre + n_edges;
     different orderings yield distinct valid solids ({14,15,16} faces observed on one
-    case), so we take the minimum as the evaluator's face-count floor — otherwise the
+    case), so we take the minimum as the evaluator's face-count floor, otherwise the
     floor would reject the corpus's own certified references (and, later, the
     implementer's equally-valid fallback output). Clamped at `floor` so a non-merging
     set keeps the naive pre+n floor exactly. Only sampled when merging is possible
     (sample_extra, or the sorted reference already dips below floor); the shuffle RNG
-    is local so the main generation stream — and thus case selection — is untouched."""
+    is local so the main generation stream, and thus case selection, is untouched."""
     base = sorted(range(len(targets)),
                   key=lambda i: tuple(round(c, 3) for c in targets[i][0]))
     body0 = _apply_sequence(preop, targets, op_kind, size, base, tol)
@@ -238,7 +238,7 @@ def _oracle(preop, edges, op_kind, size, sample_extra=False):
     (a) every edge blends individually on the pre-op body, and
     (b) the SORTED-ordering sequential application (edges re-identified on the evolving
         body by midpoint + direction + length) covers ALL edges and yields a single
-        closed valid solid removing net material — this ordering defines acceptance and
+        closed valid solid removing net material, this ordering defines acceptance and
         ref_removed (unchanged from before), and
     (c) min_faces = the minimum face count of a valid complete solution across a sample
         of orderings (>= merging cases can fuse blend faces below pre+n_edges).
@@ -307,14 +307,14 @@ def _t_cyl_rim(rng):
     return feats, sel, False, min(R, H)
 
 
-def _t_cyl_axisZ(rng):  # cylinder SEAM line — oracle rejects (seam is unfilletable)
+def _t_cyl_axisZ(rng):  # cylinder SEAM line, oracle rejects (seam is unfilletable)
     R = round(rng.uniform(5, 16), 3)
     H = round(rng.uniform(8, 24), 3)
     feats = [{"id": "c1", "type": "cylinder", "radius": R, "height": H}]
     return feats, {"kind": "edge", "by": "axis", "axis": "Z"}, False, min(R, H)
 
 
-def _t_cyl_all(rng):  # both rims + seam — oracle rejects (seam is unfilletable)
+def _t_cyl_all(rng):  # both rims + seam, oracle rejects (seam is unfilletable)
     R = round(rng.uniform(5, 16), 3)
     H = round(rng.uniform(8, 24), 3)
     feats = [{"id": "c1", "type": "cylinder", "radius": R, "height": H}]
@@ -407,7 +407,7 @@ def _build_active(features):
 
 
 def _pick_band(quota, filled):
-    """Choose a band that still needs cases — the one with the largest remaining
+    """Choose a band that still needs cases, the one with the largest remaining
     need (ties broken by band order), for balanced deterministic filling."""
     needy = [(quota[b] - filled[b], -i, b) for i, (b, _, _) in enumerate(BANDS)
              if filled[b] < quota[b]]
@@ -489,7 +489,7 @@ def generate(seed, count):
                 stats["discard_sequential"] += 1
             continue
 
-        # feasible & fully achievable — place it in the band its op actually lands in
+        # feasible & fully achievable, place it in the band its op actually lands in
         actual_ratio = min_clear / op
         placed = None
         for b, blo, bhi in BANDS:
@@ -497,7 +497,7 @@ def generate(seed, count):
                 placed = b
                 break
         if placed is None or filled[placed] >= quota[placed]:
-            # landed in a full/undesired band after rounding — drop, try again
+            # landed in a full/undesired band after rounding, drop, try again
             stats["rejected_band_miss"] += 1
             continue
 

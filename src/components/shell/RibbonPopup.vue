@@ -3,7 +3,7 @@
 // Fixed-positioned against an anchor rect, teleported to body so it is not
 // clipped by the ribbon's overflow.
 //
-// Positioning stays imperative maths on a measured rect — happy-dom reports all
+// Positioning stays imperative maths on a measured rect, happy-dom reports all
 // zeros for getBoundingClientRect, so this is e2e/manual territory and is kept
 // deliberately identical to what the class did.
 

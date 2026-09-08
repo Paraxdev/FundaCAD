@@ -3,7 +3,7 @@
 An agent that can build geometry but cannot look at it is working blind, and
 "looks right" is a question no list of numbers answers. The app's own renderer
 is the authority on what a HUMAN sees, but reaching it means a vite server, a
-browser binary and a GPU — for a picture. The rebuild reply already carries
+browser binary and a GPU, for a picture. The rebuild reply already carries
 triangles and edge polylines, so a z-buffered flat render is a page of numpy,
 and it runs on a machine with no display at all.
 
@@ -50,7 +50,7 @@ BODY_COLORS = [
 HIGHLIGHT_COLOR = (255, 150, 40)
 
 #: Named directions to look FROM, in world space. Z-up, Y "into the screen" on
-#: the front view — the same convention the app's view cube uses.
+#: the front view, the same convention the app's view cube uses.
 NAMED_VIEWS = {
     "iso": (1.0, -1.0, 0.8),
     "front": (0.0, -1.0, 0.0),
@@ -149,8 +149,8 @@ SECTION_AXES = {"x": (1.0, 0.0, 0.0), "y": (0.0, 1.0, 0.0), "z": (0.0, 0.0, 1.0)
 #: Which side of the section plane survives, as True for the high side.
 #:
 #: Generous on purpose, and CLOSED on purpose. The vocabulary used to be
-#: "above"/"over"/"+" against everything else, so `keep: "max"` — which is what
-#: `at`/`min`/`max` elsewhere in this file invites — quietly meant "below", and
+#: "above"/"over"/"+" against everything else, so `keep: "max"`, which is what
+#: `at`/`min`/`max` elsewhere in this file invites, quietly meant "below", and
 #: the caller was told "keeping max" for a picture that kept the other half. A
 #: view tool that answers a question it was not asked is worse than one that
 #: refuses, because the refusal is visible.
@@ -200,7 +200,7 @@ def clip_triangle(p0, p1, p2, normal, offset):
 
     Sutherland-Hodgman on three vertices. There is no cap: a sectioned solid
     renders hollow, showing its own inside surfaces, which is what makes this
-    worth having — the question it answers is "is the thread in there", and a
+    worth having, the question it answers is "is the thread in there", and a
     capped section would hide exactly that."""
     pts = (p0, p1, p2)
     s = [float(np.dot(normal, p)) - offset for p in pts]
@@ -322,7 +322,7 @@ def shade(base, normal_view):
     face normals would otherwise render half black, and the winding is not
     something the caller controls or should have to. But the flip also erases
     the one thing a cutaway is for, so the sign it threw away comes back as the
-    INSIDE factor. On a closed solid with no section this changes nothing — a
+    INSIDE factor. On a closed solid with no section this changes nothing, a
     back face is never the nearest thing to the camera."""
     n = normal_view
     ln = float(np.linalg.norm(n))
@@ -370,7 +370,7 @@ def render(meshes, width=640, height=480, view="iso", azimuth=None, elevation=No
     pixels of a fitted view: without a way to look closer, "did the thread come
     out" is a question the picture cannot answer however many times it is asked.
 
-    `highlight` is {body_id: {face indices}} — the triangles of those faces are
+    `highlight` is {body_id: {face indices}}, the triangles of those faces are
     painted in HIGHLIGHT_COLOR instead of the body colour, still shaded. It is
     how a caller asks "which one is face 7" and gets an answer it can see.
 

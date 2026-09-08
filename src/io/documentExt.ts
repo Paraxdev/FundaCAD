@@ -1,7 +1,7 @@
 // What a saved document is called on disk.
 //
 // The app has been called three things. It saved `.sindri`, then `.neocad`, and
-// it saves `.funda` now — and it opens all three, permanently. That asymmetry is
+// it saves `.funda` now, and it opens all three, permanently. That asymmetry is
 // the whole design: an extension is not a brand decision once files exist,
 // because every `.sindri` and every `.neocad` already on someone's disk or in
 // someone's repository has to keep opening, and there is no upgrade step that
@@ -18,7 +18,7 @@
 // what someone opened would break their own links to it.
 //
 // Kept apart from files.ts so the Rust side has one obvious counterpart to stay
-// in step with — src-tauri/src/lib.rs gates the double-click open path on the
+// in step with, src-tauri/src/lib.rs gates the double-click open path on the
 // same names, and a mismatch there means an association that opens a blank
 // window rather than an error.
 

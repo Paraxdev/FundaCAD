@@ -10,7 +10,7 @@
 // IT IS NOW ONE FILE, and these tests changed shape accordingly. The app reads
 // plugins/<id>/manifest.json directly and the packager puts that same file at
 // the top of the zip, so there is no second copy left to drift. What is worth
-// checking is therefore no longer "do the two agree" — they cannot disagree —
+// checking is therefore no longer "do the two agree", they cannot disagree,
 // but that the single copy really is single, and that what it asks for is what
 // we meant to ask for.
 //

@@ -19,7 +19,7 @@ type RawReply<T> =
   | { id: string; ok: true; result: T }
   // `cancelled` marks a failure the USER caused by pressing Cancel. It stays
   // ok:false so nothing that only checks `ok` can mistake it for a result, but
-  // callers can tell "you stopped it" apart from "it broke" — the difference
+  // callers can tell "you stopped it" apart from "it broke", the difference
   // between a quiet dismissal and an error banner.
   | { id: string; ok: false; cancelled?: boolean; error: WireError };
 
@@ -32,8 +32,8 @@ export type TextFace = { outer: [number, number][]; holes: [number, number][][] 
 
 /** Per-source outcome of a projectGeometry call. `curves` carries one entry per
  *  resolved edge (a face boundary yields several); `fp` is the sidecar-authored
- *  edge fingerprint for body-edge sources — the caller wraps it into a
- *  by:"match" selector — and absent for sketch-curve sources (stable ids).
+ *  edge fingerprint for body-edge sources, the caller wraps it into a
+ *  by:"match" selector, and absent for sketch-curve sources (stable ids).
  *  `ok: false` + `error` = strict resolution refused (missing/ambiguous source). */
 export interface ProjectionResult {
   source_index: number;
@@ -72,7 +72,7 @@ export interface GeometryBackend {
   listFonts(): Promise<string[]>;
   /** One-way v4 -> v5: turn a pre-container document's inline base64 BREP into
    *  blobs in the durable store, returning the content hash for each feature.
-   *  Best-effort by design — the document keeps its inline copy, so a failure
+   *  Best-effort by design, the document keeps its inline copy, so a failure
    *  (or a dead sidecar) costs nothing. */
   migrateGeometry(items: { id: string; brep: string }[]): Promise<{ id: string; geom: string }[]>;
   export(
@@ -96,7 +96,7 @@ export interface GeometryBackend {
     path?: string;
     paths?: string[];
     message?: string;
-    // the user stopped it — distinct from a failure, so the caller can stay
+    // the user stopped it, distinct from a failure, so the caller can stay
     // silent instead of reporting their own action back to them as an error
     cancelled?: boolean;
     // features that FAILED during the export rebuild: their bodies are absent
@@ -111,7 +111,7 @@ export interface GeometryBackend {
   // Pairwise interference (clash) check among the document's bodies.
   interference(doc: CadDocument): Promise<{ ok: boolean; pairs?: ClashPair[]; message?: string }>;
   /** Colored multi-material 3MF PROJECT export (Orca format: one object per body,
-   *  palette slot → extruder). Optional — only the Python sidecar authors it; the
+   *  palette slot → extruder). Optional, only the Python sidecar authors it; the
    *  Rust spike backend omits it. Palette/bodyColors/bodyNames live in store
    *  side-maps, NOT in `document`, so they're passed explicitly here. */
   exportProject?(
@@ -138,19 +138,19 @@ export interface GeometryBackend {
   onStatus(fn: StatusListener): () => void;
   /** Interim build progress: fires with the feature index the sidecar is
    *  currently building (-1 = tessellating) roughly once a second during a
-   *  long rebuild. Optional — the in-process backend doesn't stream.
+   *  long rebuild. Optional, the in-process backend doesn't stream.
    *
    *  `meshed`/`meshTotal` are -1 except during the payload (meshing) phase,
    *  where they carry its real per-body denominator. Without them the phase
    *  reported only feature=-1, which the timeline rendered as a bar pinned at
-   *  0% for its whole duration — 136 s of it on the reference assembly. */
+   *  0% for its whole duration, 136 s of it on the reference assembly. */
   onProgress?(fn: (feature: number, meshed: number, meshTotal: number) => void): () => void;
   /** Installments of a chunked rebuild reply, for progressive display. Optional:
    *  the in-process backend answers in one piece and never streams. */
   onRebuildChunk?(fn: (c: RebuildChunk) => void): () => void;
   /** MCAD-style "Compute All": rebuild bypassing every cache layer. Optional. */
   computeAll?(doc: CadDocument, tolerance?: number): Promise<RebuildReply>;
-  /** Stop an op in flight. `target` is the request id to cancel — pass the id
+  /** Stop an op in flight. `target` is the request id to cancel, pass the id
    *  the busy state owns, NOT the most recent one. Optional (the in-process
    *  backend has nothing to cancel). Resolves to whether anything stopped. */
   cancel?(target?: string): Promise<boolean>;
@@ -162,7 +162,7 @@ export interface GeometryBackend {
    *  Deliberately one untyped passthrough rather than five methods. The session
    *  is a conversation between this window and the sidecar's own state machine,
    *  not part of the geometry surface every other method here belongs to, and
-   *  the in-process backend has nothing to say about it at all — hence optional.
+   *  the in-process backend has nothing to say about it at all, hence optional.
    *  Resolves to null when the backend cannot speak it or the call failed, so
    *  the caller's "no session" path and its "no backend" path are the same one. */
   session?(op: string, payload?: object): Promise<Record<string, unknown> | null>;
@@ -223,14 +223,14 @@ interface BinaryHeader {
 
 /** Longest gap tolerated between two frames of one chunked reply before the
  *  client gives up on it. Chunks are sent back to back off a result the sidecar
- *  already holds in full, so any real gap is a sidecar bug — this exists so
+ *  already holds in full, so any real gap is a sidecar bug, this exists so
  *  that bug surfaces as one failed rebuild instead of a permanently wedged UI. */
 type RebuildBodyMeta = NonNullable<RebuildResult["bodies"]>[number];
 
 /** One installment of a chunked rebuild reply, for RENDERERS ONLY.
  *
  *  `result` is the IN-PROGRESS RebuildResult: its arrays are allocated at full
- *  size but only the bodies delivered so far hold real data — the rest is still
+ *  size but only the bodies delivered so far hold real data, the rest is still
  *  zeros. Never retain it, and never read it as document truth. Anything that
  *  needs the finished, authoritative model waits for the ordinary completed
  *  build (store.onBuild), which is why store.build.result keeps pointing at the
@@ -248,7 +248,7 @@ export interface RebuildChunk {
   bodies: RebuildBodyMeta[];
   edgesByBody: Map<string, RebuildResult["edges"]>;
   triRange: { triStart: number; triEnd: number };
-  /** final for the whole reply, known from frame 0 — so the camera can settle
+  /** final for the whole reply, known from frame 0, so the camera can settle
    *  once, before any geometry arrives, and never move again */
   bbox: RebuildResult["bbox"];
   done: number;
@@ -265,7 +265,7 @@ const STREAM_IDLE_MS = 30_000;
  *  unchanged: each chunk carries its own header, pad and $buffers table and is
  *  independently decodable.
  *
- *  Exported for its own test, like expandPackedEdges — the sidecar-side test can
+ *  Exported for its own test, like expandPackedEdges, the sidecar-side test can
  *  only prove the encoder. */
 export function decodeBinaryFrame(buf: ArrayBuffer): BinaryHeader {
   const dv = new DataView(buf);
@@ -291,7 +291,7 @@ export function decodeBinaryFrame(buf: ArrayBuffer): BinaryHeader {
     if (fb.normals !== undefined) fb.normals = resolveBuf(fb.normals) as Float32Array;
     fb.indices = resolveBuf(fb.indices) as Uint32Array;
     fb.faceIds = resolveBuf(fb.faceIds) as Uint32Array;
-    // Edges arrive packed (server.py's _pack_edges) — expand them back to the
+    // Edges arrive packed (server.py's _pack_edges), expand them back to the
     // plain list every consumer expects, here at the one point the raw frame is
     // interpreted. Rebuilding the triples is still cheaper than the JSON text it
     // replaces: on a large assembly that was 97.1 MiB to parse, and the frame it
@@ -338,7 +338,7 @@ export const MAX_MESSAGE_BYTES = 128 * 1024 * 1024;
 /** The user-facing message for an over-cap payload, or null when it fits.
  *  Pure and exported so the boundary can be tested without allocating a 128 MiB
  *  string. `len` is `raw.length` (UTF-16 units), which slightly UNDER-counts a
- *  document carrying non-ASCII text — acceptable because the payload is
+ *  document carrying non-ASCII text, acceptable because the payload is
  *  overwhelmingly base64 and ASCII JSON, and measuring UTF-8 exactly would mean
  *  copying a 100+ MiB string on every single call. */
 export function tooLargeToSend(len: number): string | null {
@@ -373,7 +373,7 @@ export class Geometry implements GeometryBackend {
   private bodyMesh = new Map<string, WireBodyFull>();
   /** Chunked replies in flight, by request id (see server.py's
    *  _stream_binary_reply). INVARIANT: an entry here implies a live entry in
-   *  `pending` for the same id — every teardown clears both or neither, which
+   *  `pending` for the same id, every teardown clears both or neither, which
    *  is what keeps a broken stream from wedging rebuildNow()'s `rebuilding`
    *  flag forever. In practice there is at most one: both sides serialize
    *  rebuilds, and the map is keyed by id so a stale one cannot be mistaken for
@@ -390,12 +390,12 @@ export class Geometry implements GeometryBackend {
   /** The last RebuildResult assemble() produced, plus the reply signature that
    *  produced it. A rebuild whose bodies all arrive as unchanged stubs with the
    *  same signature returns this object by reference instead of rebuilding
-   *  ~98 MiB of typed arrays — see the fast path in assemble(). */
+   *  ~98 MiB of typed arrays, see the fast path in assemble(). */
   private lastAssembled: RebuildResult | null = null;
   private lastAssembledSig: string | null = null;
   // Delta wire protocol: the sidecar worker holds the last document; we send
   // {baseRevision, revision, ops} with only the CHANGED features (reference
-  // inequality against the last sent feature list — effectiveDoc() reuses
+  // inequality against the last sent feature list, effectiveDoc() reuses
   // feature objects, so an untouched feature is the same object). Any doubt
   // (worker respawn, missed reply, too many changes) falls back to a full send.
   private lastSent: { features: Feature[]; parameters: string; bodyVisibility: string } | null = null;
@@ -403,7 +403,7 @@ export class Geometry implements GeometryBackend {
 
   constructor(url = "ws://127.0.0.1:8765") {
     this.url = url;
-    // Does NOT connect — call init() once so the per-launch auth token is
+    // Does NOT connect, call init() once so the per-launch auth token is
     // fetched from the Rust shell before the first socket open.
   }
 
@@ -433,7 +433,7 @@ export class Geometry implements GeometryBackend {
   }
 
   /** Coarse progress for a long non-rebuild op (today: import). Phase-level
-   *  only — OCCT exposes no usable sub-operation progress in this OCP build. */
+   *  only, OCCT exposes no usable sub-operation progress in this OCP build. */
   onOpProgress(fn: (pct: number, label: string) => void): () => void {
     this.opProgressListeners.add(fn);
     return () => this.opProgressListeners.delete(fn);
@@ -467,7 +467,7 @@ export class Geometry implements GeometryBackend {
     this.ws = ws;
 
     ws.onopen = () => {
-      this.reconnectDelay = 500; // healthy connection — reset backoff
+      this.reconnectDelay = 500; // healthy connection, reset backoff
       this.emitStatus();
       for (const raw of this.outbox) ws.send(raw);
       this.outbox = [];
@@ -487,7 +487,7 @@ export class Geometry implements GeometryBackend {
       }
       if (msg && typeof msg.status === "string") {
         // ANY interim status frame is informational and must NEVER resolve the
-        // pending call — the real reply follows. Guarding on "building" alone
+        // pending call, the real reply follows. Guarding on "building" alone
         // was a trap for the next frame type: an unrecognised status fell
         // through to the pending map and resolved the caller's promise with a
         // frame carrying no `ok`, so the caller reported failure while the
@@ -509,7 +509,7 @@ export class Geometry implements GeometryBackend {
         this.pending.delete(msg.id);
         // A terminal TEXT reply for an id with a stream in flight is how the
         // sidecar aborts one mid-send (cancel, or a single body over the frame
-        // cap). Drop the partial stream — this reply supersedes it.
+        // cap). Drop the partial stream, this reply supersedes it.
         this.dropStream(msg.id);
         resolve(msg);
       }
@@ -519,7 +519,7 @@ export class Geometry implements GeometryBackend {
       this.emitStatus();
       // 1009 = "message too big": the sidecar refused a frame past its max_size.
       // The pre-flight guard in call() should have caught it, so reaching here
-      // means the two limits have drifted apart — say so rather than blaming the
+      // means the two limits have drifted apart, say so rather than blaming the
       // connection, which is what sent GH #4's reporter looking in the wrong place.
       const tooBig = ev.code === 1009;
       const message = tooBig
@@ -529,7 +529,7 @@ export class Geometry implements GeometryBackend {
       // Settle every in-flight call with a synthetic error reply shaped like a
       // real sidecar error, matching the `msg.ok === false` contract every
       // caller already checks (rebuild/export/etc). Without this, a call made
-      // before the drop just hangs forever — e.g. DocumentStore.rebuildNow()'s
+      // before the drop just hangs forever, e.g. DocumentStore.rebuildNow()'s
       // `await this.geometry.rebuild(...)` never returns, so its finally-block
       // never clears `rebuilding`, so the reconnect-triggered rebuild in
       // main.ts's onStatus() silently no-ops (rebuildNow sees rebuilding===true
@@ -539,7 +539,7 @@ export class Geometry implements GeometryBackend {
       }
       this.pending.clear();
       // Every pending call has just been settled, so no stream can still have
-      // its partner entry — clear them (and their watchdogs) to keep the
+      // its partner entry, clear them (and their watchdogs) to keep the
       // streams/pending invariant true rather than merely usually true.
       for (const s of this.streams.values()) clearTimeout(s.timer);
       this.streams.clear();
@@ -565,7 +565,7 @@ export class Geometry implements GeometryBackend {
    *  for the layout: [u32 LE header_len][JSON header][pad to 4][buf0][buf1]...).
    *  The header is the normal {id, ok, result} envelope with each big mesh array
    *  replaced by {"$buf": i} into result.$buffers ({dtype, len} in wire order);
-   *  buffers become TypedArray VIEWS over this frame's ArrayBuffer — zero copy,
+   *  buffers become TypedArray VIEWS over this frame's ArrayBuffer, zero copy,
    *  no JSON number parsing.
    *
    *  Buffer indices are FRAME-local, which is what lets a chunked reply reuse
@@ -602,7 +602,7 @@ export class Geometry implements GeometryBackend {
   /** Accumulate one frame of a chunked reply, and resolve the caller on the
    *  final one. See server.py's _stream_binary_reply for the framing.
    *
-   *  Every exit that drops a stream also settles its pending call — INVARIANT:
+   *  Every exit that drops a stream also settles its pending call, INVARIANT:
    *  an entry in `streams` implies a live entry in `pending` for the same id.
    *  That pairing is the whole leak surface. */
   private routeStreamFrame(header: BinaryHeader) {
@@ -611,7 +611,7 @@ export class Geometry implements GeometryBackend {
     if (st.seq === 0) {
       // A head frame always starts a fresh stream, replacing any half-received
       // one for the same id. Cannot happen (rebuilds are serialized on both
-      // sides) — but a silent body splice is a far worse failure than a reset.
+      // sides), but a silent body splice is a far worse failure than a reset.
       const prev = this.streams.get(id);
       if (prev) clearTimeout(prev.timer);
       const result = header.result as WireRebuildResult & { manifest?: WireManifestEntry[] };
@@ -619,7 +619,7 @@ export class Geometry implements GeometryBackend {
       delete result.manifest;
       // Plan the whole reply NOW, from the manifest, so each body can be written
       // the moment its chunk lands and the viewport can draw it without waiting
-      // for the rest. This is also where an unbacked stub is caught — before any
+      // for the rest. This is also where an unbacked stub is caught, before any
       // allocation and before any partial display, so a resync costs one round
       // trip and no visual damage.
       const begun = RebuildAssembly.begin(
@@ -692,7 +692,7 @@ export class Geometry implements GeometryBackend {
     clearTimeout(s.timer);
     if (!st.final) {
       // Chunks are sent back to back with no worker involvement, so this can
-      // only fire on a sidecar bug — but without it that bug wedges the UI
+      // only fire on a sidecar bug, but without it that bug wedges the UI
       // permanently, since nothing else will ever settle the pending call.
       s.timer = setTimeout(
         () => this.abortStream(id, "the geometry engine stopped part-way through its reply"),
@@ -704,7 +704,7 @@ export class Geometry implements GeometryBackend {
     // Every body the manifest named must have arrived. Checking is not belt and
     // braces: finishAssembly PRUNES bodyMesh to the ids this reply named, so a
     // stream that ended one body short would evict that body from the cache and
-    // corrupt the NEXT rebuild's `known` map too — a failure that outlives the
+    // corrupt the NEXT rebuild's `known` map too, a failure that outlives the
     // bad stream, with nothing on screen to show for it. complete() enforces the
     // same thing from the other side, and returns null rather than hand on a
     // zero-filled slice.
@@ -733,7 +733,7 @@ export class Geometry implements GeometryBackend {
     }
   }
 
-  /** Drop a stream WITHOUT settling its call — only safe when the caller is
+  /** Drop a stream WITHOUT settling its call, only safe when the caller is
    *  about to settle it another way (a terminal single-frame reply). */
   private dropStream(id: string) {
     const s = this.streams.get(id);
@@ -754,7 +754,7 @@ export class Geometry implements GeometryBackend {
   }
 
   /** See GeometryBackend.session. Answered on the sidecar's READ path, so it
-   *  never queues behind a rebuild — which is the whole reason the host can keep
+   *  never queues behind a rebuild, which is the whole reason the host can keep
    *  publishing while its own build is running. */
   async session(op: string, payload: object = {}): Promise<Record<string, unknown> | null> {
     const msg = await this.call<Record<string, unknown>>(op, payload);
@@ -777,7 +777,7 @@ export class Geometry implements GeometryBackend {
         return;
       }
       // the pending map is heterogeneous across calls with different T, so
-      // storing this call's typed resolver erases to Pending here — the one
+      // storing this call's typed resolver erases to Pending here, the one
       // type-erasing cast the generic requires.
       // Recorded only once the call is actually going out: an id set before
       // the refusal above would name a request the sidecar never saw, and
@@ -802,7 +802,7 @@ export class Geometry implements GeometryBackend {
   /** Every rebuild/computeAll request goes through here, so the wire opt-in
    *  flags are set in exactly one place. They were easy to get wrong scattered:
    *  of the four call sites, the two that matter most are the RESYNC paths,
-   *  which re-request the whole document with no `known` map — i.e. the largest
+   *  which re-request the whole document with no `known` map, i.e. the largest
    *  reply the sidecar can produce, and precisely the one that must not fall
    *  back to a single frame. */
   private rebuildCall(op: "rebuild" | "computeAll", extra: object) {
@@ -822,7 +822,7 @@ export class Geometry implements GeometryBackend {
         const f = doc.features[i];
         if (f !== undefined && this.lastSent.features[i] !== f) set.push([i, f]);
       }
-      // delta only when it's actually small — a reordered/rewritten timeline
+      // delta only when it's actually small, a reordered/rewritten timeline
       // ships fewer bytes as a full document
       if (set.length <= Math.max(8, doc.features.length / 2)) {
         const ops: RebuildDeltaPayload["ops"] = { length: doc.features.length, set };
@@ -835,7 +835,7 @@ export class Geometry implements GeometryBackend {
 
     let msg = await this.rebuildCall("rebuild", { ...payload, tolerance, known });
     if (msg.ok && msg.result?.resync) {
-      // worker respawned or lost sync — one full resend recovers everything
+      // worker respawned or lost sync, one full resend recovers everything
       this.lastSent = null;
       this.bodyMesh.clear();
       payload = { document: doc, revision: this.revision + 1 };
@@ -849,7 +849,7 @@ export class Geometry implements GeometryBackend {
       let assembled = this.assemble(msg.result);
       if (assembled === null) {
         // we claimed an etag the cache no longer backs (e.g. page kept state
-        // across a worker respawn race) — resync with a full request
+        // across a worker respawn race), resync with a full request
         this.bodyMesh.clear();
         // the assemble cache is keyed on payloads that just went away
         this.lastAssembled = null;
@@ -912,7 +912,7 @@ export class Geometry implements GeometryBackend {
 
   /** Common tail of both assembly paths: prune the per-body cache to the bodies
    *  this reply actually named, then publish the result as the no-op fast
-   *  path's new baseline. Returns null on an incomplete assembly — a
+   *  path's new baseline. Returns null on an incomplete assembly, a
    *  partially-filled result would hand on zeroed slices, which render as
    *  plausible-looking degenerate geometry rather than as an error. */
   private finishAssembly(assembly: RebuildAssembly, live: string[]): RebuildResult | null {
@@ -927,7 +927,7 @@ export class Geometry implements GeometryBackend {
 
 
   /** Build the legacy single-mesh RebuildResult from a protocol-v1 reply (no
-   *  per-body payload — mesh/edges inline). Returns null if the reply carries no
+   *  per-body payload, mesh/edges inline). Returns null if the reply carries no
    *  direct mesh, so the caller can route it to its error path rather than
    *  fabricating an empty result. */
   private legacyResult(r: WireRebuildResult): RebuildResult | null {
@@ -936,7 +936,7 @@ export class Geometry implements GeometryBackend {
       mesh: r.mesh,
       edges: r.edges,
       // the wire can supply `bbox: null` when nothing has built yet (no bodies);
-      // preserved as-is — RebuildResult models bbox as always-present.
+      // preserved as-is, RebuildResult models bbox as always-present.
       bbox: r.bbox as RebuildResult["bbox"],
     };
     if (r.diagnostics) out.diagnostics = r.diagnostics;
@@ -1034,7 +1034,7 @@ export class Geometry implements GeometryBackend {
   }
 
   /** Stop the geometry op in flight. Answered on the sidecar's READ path, so it
-   *  is heard DURING a long job rather than queued behind it — that is the whole
+   *  is heard DURING a long job rather than queued behind it, that is the whole
    *  reason it exists. Resolves to whether anything was actually stopped; the
    *  cancelled op settles separately, with `cancelled: true` on its own reply.
    *
@@ -1044,7 +1044,7 @@ export class Geometry implements GeometryBackend {
   async cancel(target?: string): Promise<boolean> {
     // ALWAYS prefer an explicit target. The document stays editable during a
     // long import, so any rebuild the user triggers meanwhile overwrites
-    // lastHeavyId — and the sidecar, which matches the running id against the
+    // lastHeavyId, and the sidecar, which matches the running id against the
     // target, would then refuse to cancel the very import the user is waiting
     // on. lastHeavyId is only a fallback for callers that never learned an id.
     const id = target ?? this.lastHeavyId;

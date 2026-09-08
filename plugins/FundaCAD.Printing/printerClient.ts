@@ -1,5 +1,5 @@
 // Typed wrappers over the Rust printer/slicer commands (see src-tauri/src/
-// printer.rs, slicer.rs). The webview addresses printers by id only — Rust owns
+// printer.rs, slicer.rs). The webview addresses printers by id only, Rust owns
 // the host registry, so this module never sees a LAN URL.
 
 import { invoke, listen, readSetting } from "fundacad";

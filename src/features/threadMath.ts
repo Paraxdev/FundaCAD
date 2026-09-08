@@ -3,7 +3,7 @@
 // The kernel already knows how to make one: a revolve with a `pitch` sweeps its
 // profile along a helix instead of closing on itself (builder._screw_revolve).
 // What was missing was the arithmetic between "this cylindrical face is an M6
-// shank" and that feature — the profile's own shape, where it sits, and how far
+// shank" and that feature, the profile's own shape, where it sits, and how far
 // round it goes. That is all here, and none of it needs a pointer, so none of it
 // is in the tool.
 //
@@ -40,7 +40,7 @@ export function coarsePitchFor(diameter: number): number {
   return best[1];
 }
 
-/** Basic thread height as a fraction of the pitch — ISO 68-1's 0.6134·P, the
+/** Basic thread height as a fraction of the pitch, ISO 68-1's 0.6134·P, the
  *  distance from the major to the minor diameter of a 60° external thread. */
 export const THREAD_DEPTH_RATIO = 0.6134;
 
@@ -74,7 +74,7 @@ export interface ProfilePoint { x: number; y: number }
 
 /** The triangle to sweep, for a thread of `pitch` on a cylinder of `radius`.
  *
- *  `external` says which side the material is on — a shank (material inside the
+ *  `external` says which side the material is on, a shank (material inside the
  *  cylinder, so the groove eats inward) or a bore (material outside, so it eats
  *  outward). Either way the result is a CUT: a thread is what is left after the
  *  groove is removed, which is why one profile serves both.
@@ -104,7 +104,7 @@ export function threadAngleDeg(length: number, pitch: number): number {
   return round3((length / pitch) * 360);
 }
 
-/** Turns in a thread of this length — what the readout says, because "6 turns"
+/** Turns in a thread of this length, what the readout says, because "6 turns"
  *  is a thing you can count on the part and 2160° is not. */
 export function threadTurns(length: number, pitch: number): number {
   if (!(length > 0) || !(pitch > 0)) return 0;

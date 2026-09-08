@@ -2,7 +2,7 @@
 
 Split out of builder.py. A boolean between two solids is one OCCT call; the rest
 of this module is everything around it that stops a document from quietly going
-wrong — bounding-box screening so a cut that cannot possibly touch anything is
+wrong, bounding-box screening so a cut that cannot possibly touch anything is
 skipped rather than run, volume checks that catch a no-op, a serial fallback for
 a fuse OCCT refuses in one go, and the retargeting that keeps a delete-face
 selection pointing at the right face after a body was split in two.
@@ -11,7 +11,7 @@ The `bodies` list is the shared thing every one of these edits, so it is passed
 in explicitly rather than closed over.
 """
 
-import font_guard  # noqa: F401  MUST precede build123d — see font_guard.py
+import font_guard  # noqa: F401  MUST precede build123d, see font_guard.py
 
 from build123d import Compound, Vector, split
 
@@ -29,7 +29,7 @@ def _bbox_overlap(a, b, tol=1e-6):
 # Memoized exact bounding boxes, keyed by shape OBJECT identity.
 #
 # An AddOptimal_s walk costs 95.5 s over the 3,072 bodies of the reference
-# assembly, and BOTH callers loop over every body in the document — on every
+# assembly, and BOTH callers loop over every body in the document, on every
 # boolean feature and every interference run. Bodies a feature did not touch keep
 # their shape object across rebuilds (rebuild_cached resumes from snapshots), so
 # after the first pass a large assembly's boxes are free.
@@ -37,7 +37,7 @@ def _bbox_overlap(a, b, tol=1e-6):
 # Keyed by id() with the shape held ALIVE in the value, exactly like _SIG_MEMO:
 # the strong reference is what makes id() reuse impossible, which is the only way
 # an id-keyed cache can go wrong. It relies on the same identity assumption
-# _MESH_CACHE already does — a feature that changes geometry produces a NEW shape
+# _MESH_CACHE already does, a feature that changes geometry produces a NEW shape
 # object rather than mutating one in place (texture.py's module docstring spells
 # out the one place that could have violated it, and does not).
 _BBOX_MEMO = {}
@@ -51,19 +51,19 @@ def bbox_of(shape):
     The underlying walk is EXPENSIVE and deliberately so: `.bounding_box()` is
     OCCT's AddOptimal_s, measured at 95.5 s over the 3,072 bodies of the 356 MiB
     reference assembly. Callers that loop over every body must still tick (see
-    `_interference_job`) — the memo makes the SECOND pass free, not the first.
+    `_interference_job`), the memo makes the SECOND pass free, not the first.
 
-    The obvious cheap substitute — `BRepBndLib.Add_s(..., useTriangulation=False)`,
-    the poles box `_body_fingerprint` uses — was tried here and REJECTED. It is 165x
+    The obvious cheap substitute, `BRepBndLib.Add_s(..., useTriangulation=False)`,
+    the poles box `_body_fingerprint` uses, was tried here and REJECTED. It is 165x
     faster and usually looser, but on that same assembly it came out up to 0.164 mm
     TIGHTER than exact on 3 of 3,072 bodies (against a 1e-6 compare tol). For a
     fingerprint that is irrelevant; for these callers a box tighter than the truth
     silently drops a real interference or a body a boolean should have touched. If
     you retry this, the property to prove is CONSERVATISM per body over the whole
-    document, not average speed — a 500-body sample showed zero violations and was
+    document, not average speed, a 500-body sample showed zero violations and was
     simply too small. (Its one genuine advantage: it reports empty compounds as
     void, where the exact call hands back a degenerate point-box at the origin that
-    spuriously overlaps anything near it — 8 such bodies in the reference assembly.)
+    spuriously overlaps anything near it, 8 such bodies in the reference assembly.)
 
     Two reasons it is a tuple and not the BoundBox.
 
@@ -122,7 +122,7 @@ def _noop_eps(ref):
     mirroring the tolerances used by _unify_body / cleanup elsewhere in this
     file. The ONE definition every boolean no-op guard shares
     (_boolean_into_bodies for extrude/revolve/loft/sweep, _do_boolean for the
-    three body booleans) — tune it here, never inline a copy."""
+    three body booleans), tune it here, never inline a copy."""
     return max(1e-6, 1e-4 * (ref or 0.0))
 
 
@@ -135,7 +135,7 @@ def _in_slices(solid, n):
     and that is the entire repair. See _retried_in_slices for why it is needed.
 
     Fewer than `n` pieces come back when a plane misses the solid, which is not a
-    failure — the caller only needs more than one.
+    failure, the caller only needs more than one.
     """
     from build123d import Plane
 
@@ -166,7 +166,7 @@ def _retried_in_slices(shape, tool, kind, accept=None):
     A long swept tool that runs nearly parallel to the face it meets can defeat
     the kernel outright: the boolean reports IsDone, raises nothing, and hands
     the argument straight back. Measured on a three turn thread cut into the bore
-    it belongs in — each solid classifies points inside the other as IN and
+    it belongs in, each solid classifies points inside the other as IN and
     BRepCheck calls both valid, yet the cut removed 0.0000 of the 505.7 mm3 it
     should have. The same tool halved removes 505.67, and so does the same tool
     in four or in six, sliced along any of the three axes. Nothing about the
@@ -184,10 +184,10 @@ def _retried_in_slices(shape, tool, kind, accept=None):
 
     `accept` judges a sliced result; without one, any real change in volume
     counts. A fuse needs its own test because the failure it has to catch is not
-    "nothing changed" — a fuse that merged nothing still reports the whole tool
-    volume as added — so the caller passes the shape of a genuine merge instead.
+    "nothing changed", a fuse that merged nothing still reports the whole tool
+    volume as added, so the caller passes the shape of a genuine merge instead.
 
-    Returns the repaired shape, or None when the slices changed nothing either —
+    Returns the repaired shape, or None when the slices changed nothing either,
     which is the honest answer that the tool really does not reach.
     """
     for n in (2, 4):
@@ -217,7 +217,7 @@ def _retried_in_slices(shape, tool, kind, accept=None):
 
 
 def _shape_extent(*shapes):
-    """How far from the origin these shapes reach — the magnitude pick_fuzz
+    """How far from the origin these shapes reach, the magnitude pick_fuzz
     scales its tolerance by.
 
     A COARSE box on purpose (BRepBndLib.Add_s walks control points), not
@@ -249,15 +249,15 @@ def _serial_bool(base, tool, kind):
     """A boolean (kind = "fuse" | "cut" | "common") forced SERIAL.
 
     build123d's `+`/`-`/`&` hardcode `SetRunParallel(True)`, but OCCT's parallel BOP is
-    pathologically slow — ~5-6x — when the tool is MANY small disjoint solids, e.g.
+    pathologically slow, ~5-6x, when the tool is MANY small disjoint solids, e.g.
     joining/cutting the ~36 glyph prisms of a sketch text into a body (measured on the
     Basket doc: 1.3s parallel -> 0.23s serial, byte-identical volume + face count). Same
     UnifySameDomain clean and result shape as build123d, so it's a drop-in for the
     operators. `base`/`tool` must already be Compound/Solid (have `.wrapped`);
-    `tool` may be a LIST of shapes — one N-tool boolean beats a chained per-tool
+    `tool` may be a LIST of shapes, one N-tool boolean beats a chained per-tool
     loop, which redoes the whole op + clean per step (O(n²)).
 
-    Runs with a FUZZY VALUE, sized by pick_fuzz — see that module for why. Short
+    Runs with a FUZZY VALUE, sized by pick_fuzz, see that module for why. Short
     version: the tool was built from numbers read off the rendered mesh, which is
     single precision, so a profile sketched ON a face is a fraction of an ulp off
     it and OCCT sees two planes where the user meant one. Left exact, a cut from
@@ -291,7 +291,7 @@ def _serial_bool(base, tool, kind):
 def _boolean_into_bodies(bodies, solid, op, new_body, hidden=frozenset(),
                          targets=None):
     """MCAD-style extrude operation: New Body adds a separate body; Join / Cut /
-    Intersect boolean the new solid against EVERY VISIBLE body it overlaps — so an
+    Intersect boolean the new solid against EVERY VISIBLE body it overlaps, so an
     extrude that bridges two bodies merges both. Join with nothing to act on just
     adds a new body. HIDDEN bodies are never touched (a hidden body is intentionally
     protected from edits), so they're excluded from the overlap set.
@@ -300,7 +300,7 @@ def _boolean_into_bodies(bodies, solid, op, new_body, hidden=frozenset(),
     body, or a Cut/Intersect that meets no material, used to return the model
     UNCHANGED with no error ("I extruded and nothing happened"). Each op is now
     measured by volume and, when it changed nothing (or Intersect would empty a
-    body), raises ValueError — the rebuild loop records it as a feature error and
+    body), raises ValueError, the rebuild loop records it as a feature error and
     flags the feature red, instead of silently doing nothing. Volume-read failures
     fall through to the old behavior (never raise a misleading no-op error).
 
@@ -313,14 +313,14 @@ def _boolean_into_bodies(bodies, solid, op, new_body, hidden=frozenset(),
     the targets is also what makes a join to a body OTHER than the ones a
     generous bounding box happens to touch expressible at all."""
     # Extruding several DISJOINT region faces (e.g. 38 selected honeycomb cells)
-    # yields a build123d ShapeList, which has no .bounding_box()/boolean ops —
+    # yields a build123d ShapeList, which has no .bounding_box()/boolean ops,
     # normalize to one Compound so overlap-testing and cut/join/intersect work.
     solid = _as_compound(solid)
     if op == "new":
         new_body(solid)
         return
     # Tick per body. `_bbox_overlap` runs the EXACT `bbox_of` on each candidate,
-    # measured 95.5 s over the 3,072 bodies of the 356 MiB reference assembly —
+    # measured 95.5 s over the 3,072 bodies of the 356 MiB reference assembly,
     # past the 60 s STALL_TIMEOUT, and `rebuild`'s tick is per FEATURE, so it has
     # already been spent by the time this loop starts. Unticked, a Join/Cut on a
     # freshly imported assembly is reaped mid-filter and dies with nothing logged.
@@ -343,7 +343,7 @@ def _boolean_into_bodies(bodies, solid, op, new_body, hidden=frozenset(),
                 and b.get("id") not in hidden
                 and _bbox_overlap(b["shape"], solid)):
             hits.append(b)
-    # a change smaller than this counts as "nothing happened" — shared by every
+    # a change smaller than this counts as "nothing happened", shared by every
     # boolean guard site (here and _do_boolean) so the tolerance convention
     # can't drift between features.
     eps = _noop_eps
@@ -408,7 +408,7 @@ def _boolean_into_bodies(bodies, solid, op, new_body, hidden=frozenset(),
                 merged = fixed
             elif merged_vol <= hit_vol + eps(prism_vol):
                 raise ValueError(
-                    "Join added no material — the profile is already inside the "
+                    "Join added no material, the profile is already inside the "
                     "body. Did you mean Cut?"
                 )
             elif (prism_vol is not None
@@ -438,7 +438,7 @@ def _boolean_into_bodies(bodies, solid, op, new_body, hidden=frozenset(),
             newshape = _serial_bool(_as_compound(b["shape"]), solid, "cut")
             after = _try_vol(newshape)
             # A cut that consumes a whole body leaves nothing to select, nothing
-            # to see and nothing in the timeline saying where it went — the body
+            # to see and nothing in the timeline saying where it went, the body
             # is simply gone at the next repaint. Say so, the same way Intersect
             # already does, and leave the model as it was.
             if before is not None and after is not None and after < eps(before):
@@ -462,7 +462,7 @@ def _boolean_into_bodies(bodies, solid, op, new_body, hidden=frozenset(),
                     healed = True
             if not healed:
                 raise ValueError(
-                    "Cut removed nothing — the extrude doesn't reach any body. "
+                    "Cut removed nothing, the extrude doesn't reach any body. "
                     "Drag the other way, or use Join."
                 )
         for b, newshape in results:
@@ -470,7 +470,7 @@ def _boolean_into_bodies(bodies, solid, op, new_body, hidden=frozenset(),
     elif op == "intersect":
         if not hits:
             raise ValueError(
-                "Intersect left nothing — the profile doesn't overlap any body."
+                "Intersect left nothing, the profile doesn't overlap any body."
             )
         results = []
         for b in hits:
@@ -478,7 +478,7 @@ def _boolean_into_bodies(bodies, solid, op, new_body, hidden=frozenset(),
             v = _try_vol(newshape)
             if v is not None and v < eps(_try_vol(b["shape"])):
                 raise ValueError(
-                    "Intersect would leave the body empty — the profile doesn't "
+                    "Intersect would leave the body empty, the profile doesn't "
                     "overlap it."
                 )
             results.append((b, newshape))
@@ -502,8 +502,8 @@ def _sum_hit_vol(hits):
 
 def _vertex_components(solids):
     """Group solids into physically-connected pieces (union-find over solids that
-    share a vertex). A connected lump — even one OCCT reports as many sub-solids
-    (a honeycomb half is dozens) — collapses to one group; genuinely separate lumps
+    share a vertex). A connected lump, even one OCCT reports as many sub-solids
+    (a honeycomb half is dozens), collapses to one group; genuinely separate lumps
     stay apart. Returns a list of solid-lists."""
     n = len(solids)
     if n <= 1:
@@ -557,7 +557,7 @@ def _do_split(f, bodies, find_body, active, new_body, datums):
                 # solids that are actually connected. So a connected half stays ONE
                 # body (a honeycomb half is dozens of solids → one piece), while
                 # genuinely disconnected lumps (separate tabs) each get their own.
-                # OPT-IN (new splits only) — body ids are positional, so changing the
+                # OPT-IN (new splits only), body ids are positional, so changing the
                 # count would renumber downstream bodies and break older files.
                 n, o = plane.z_dir, plane.origin
                 top = [p for p in pieces if (p.center() - o).dot(n) >= 0]
@@ -580,7 +580,7 @@ def _do_split(f, bodies, find_body, active, new_body, datums):
                     new_body(p, "Split")
         elif not pieces:
             # a plane that misses one of several bodies shouldn't fail the whole
-            # cut — only error when the sole target wasn't intersected.
+            # cut, only error when the sole target wasn't intersected.
             if len(targets) == 1:
                 raise ValueError("the plane does not intersect the body")
         else:
@@ -593,12 +593,12 @@ def _retarget_delete_faces(named, bodies, sels, diag, fid):
     Nearest-point selectors resolve across ALL bodies: the face closest to the
     recorded pick point wins, wherever it lives. This keeps the app's core
     invariant (geometry by geometric selector, never index) honest for the BODY
-    reference too — body ids are positional, so an upstream split/boolean
+    reference too, body ids are positional, so an upstream split/boolean
     renumbers them and the named body can quietly become a different piece of
     the part; the delete's nearest match on that wrong piece is then some
     distant face and the heal fails (measured: one inserted split turned all 9
     saved deletes red). Legitimate geometry shifts (an edited upstream dimension
-    moving the face) keep working exactly as before — the moved face is still
+    moving the face) keep working exactly as before, the moved face is still
     the global nearest. Non-point selectors (normal/axis/match) have no pick
     point to re-anchor by and stay on the named body.
 
@@ -614,7 +614,7 @@ def _retarget_delete_faces(named, bodies, sels, diag, fid):
     has_named = named is not None and named.get("shape") is not None
 
     if not points or not live:
-        # nothing to re-anchor by — classic resolution on the named body
+        # nothing to re-anchor by, classic resolution on the named body
         if not has_named:
             return None, []
         faces = []
@@ -674,7 +674,7 @@ def _retarget_delete_faces(named, bodies, sels, diag, fid):
 #
 # The v8 spellings are accepted too. document/migrate.ts rewrites `combine`
 # features on load so the app never sends them, but a document does not have to
-# arrive through the app — a fixture, a script, a hand-written test — and a
+# arrive through the app, a fixture, a script, a hand-written test, and a
 # three-entry dict is cheaper than a class of input that opens and will not
 # build.
 _BOOL_KINDS = {
@@ -691,7 +691,7 @@ def _do_boolean(f, bodies, find_body, diag=None):
     target body is modified in place; tool bodies are consumed unless
     keepOriginals is set.
 
-    Dangling references are NON-FATAL: if the target — or every tool — has already
+    Dangling references are NON-FATAL: if the target, or every tool, has already
     been consumed by an earlier boolean (or renumbered away by an upstream edit;
     body ids are positional), the feature becomes a no-op recorded in `diag` rather
     than halting the whole rebuild. Re-uniting a body an earlier union already
@@ -716,7 +716,7 @@ def _do_boolean(f, bodies, find_body, diag=None):
     shape = target["shape"]
     before_vol = _try_vol(shape)
     # _serial_bool, not build123d's +/-/&: a tool body is often a compound of
-    # MANY disjoint solids (explode:false import, multi-region extrude) —
+    # MANY disjoint solids (explode:false import, multi-region extrude),
     # exactly the shape class where OCCT's parallel BOP is ~5x slower than
     # serial (see _serial_bool). Same UnifySameDomain clean, same result.
     for t in tools:
@@ -725,7 +725,7 @@ def _do_boolean(f, bodies, find_body, diag=None):
     # _boolean_into_bodies. Only the SILENT failure modes raise: a subtract that
     # removed nothing still consumes the tools (the user loses bodies and gains
     # nothing), and an intersect that empties the target destroys it outright.
-    # Union-with-embedded-tool and intersect-inside-tool are NOT guarded — their
+    # Union-with-embedded-tool and intersect-inside-tool are NOT guarded, their
     # volume is unchanged but they visibly absorb the tool bodies, which is a
     # legitimate, observable operation (unlike extrude, nothing here is silent).
     # Volume-read failures skip the guard (never raise a misleading no-op error).
@@ -734,25 +734,25 @@ def _do_boolean(f, bodies, find_body, diag=None):
         guard_eps = _noop_eps(before_vol)
         if kind == "cut" and after_vol >= before_vol - guard_eps:
             raise ValueError(
-                f"{label} removed nothing — no tool body overlaps the one being kept."
+                f"{label} removed nothing, no tool body overlaps the one being kept."
             )
         # ...and the mirror-image silent failure: a subtract that removes
         # EVERYTHING. Cutting a body with an identical coincident one left a body
         # of volume 0.0 and no error at all, so the browser tree gained a phantom
         # body that cannot be seen, selected meaningfully, or printed
-        # (docs/EDGE-CASES.md §3). Same class as the no-op above — the user loses
+        # (docs/EDGE-CASES.md §3). Same class as the no-op above, the user loses
         # their body and is told nothing.
         if kind == "cut" and after_vol < guard_eps:
             raise ValueError(
-                f"{label} would remove the whole body — the tools cover all of it."
+                f"{label} would remove the whole body, the tools cover all of it."
             )
         if kind == "common" and after_vol < guard_eps:
             raise ValueError(
-                f"{label} would leave nothing — the tools don't overlap the body."
+                f"{label} would leave nothing, the tools don't overlap the body."
             )
     # A union of ragged/facet-heritage bodies GLUES solids instead of merging
     # them: the "united" body stays a compound of pieces sharing interior
-    # walls, with coincident skins and a visible seam at every contact — the
+    # walls, with coincident skins and a visible seam at every contact, the
     # boolean-rot class the cleanUp feature repairs after the fact. Repair it
     # AT THE SOURCE so a union yields one true solid. _unify_body is a fast
     # no-op on clean results and hard-validated (any doubt → unchanged), and
@@ -769,7 +769,7 @@ def _do_boolean(f, bodies, find_body, diag=None):
 
 def _skip_feature(diag, f, kind, reason):
     """Record a non-fatal stale-body-reference skip for any feature (same
-    shape as geom_select's selector diagnostics) — so the rebuild result
+    shape as geom_select's selector diagnostics), so the rebuild result
     surfaces that the feature did nothing instead of silently dropping it.
     No `diag` list = nothing recorded, and the feature is simply skipped."""
     if diag is None:

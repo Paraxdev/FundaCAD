@@ -8,7 +8,7 @@
 // This is the window's half of the live session. The sidecar holds the shared
 // state (sidecar/live_session.py); this publishes what is open, collects what
 // an attached assistant has asked for, and applies it the same way a person's
-// edit is applied — through the document store, as one undo step, with a
+// edit is applied, through the document store, as one undo step, with a
 // rebuild after it. That last part is the whole point: an agent's edit is not a
 // special kind of change, it is a change.
 //
@@ -18,7 +18,7 @@
 // nothing in this file should ever grow a path that writes without going
 // through `apply`.
 //
-// THE LOOP. One call per tick does both halves — publish and collect — because
+// THE LOOP. One call per tick does both halves, publish and collect, because
 // they are one round trip and the idle case (live editing on, nobody attached)
 // is the common one. It ticks slowly until someone is there and quickly while
 // they are, so an idle window costs one small message every few seconds.
@@ -119,7 +119,7 @@ export class LiveSessionHost {
     // The revision is what makes an assistant's edit safe: it names the document
     // the edit was written against, and the sidecar refuses a proposal whose
     // base has moved. So it has to move on EVERY change, not only on the ones
-    // an assistant caused — a user dragging a face while an agent writes an edit
+    // an assistant caused, a user dragging a face while an agent writes an edit
     // is exactly the race this exists to lose loudly.
     //
     // A counter, not a hash: two documents that differ only in a field this
@@ -132,7 +132,7 @@ export class LiveSessionHost {
     void this.tick();
   }
 
-  /** Stop publishing, and tell the sidecar so — an assistant that keeps reading
+  /** Stop publishing, and tell the sidecar so, an assistant that keeps reading
    *  a document no window is sharing would be measuring a part nobody has open.
    *  Best-effort: the sidecar drops the host when the socket closes anyway, so a
    *  failed release costs nothing but a few seconds of a stale answer. */
@@ -205,7 +205,7 @@ export class LiveSessionHost {
    *
    *  Nothing bumps the revision here. `loadDocument` emits a document change
    *  and the subscription in `start` counts it, which is also what counts a
-   *  person's edits — one counter, one place, so the two can never drift into
+   *  person's edits, one counter, one place, so the two can never drift into
    *  disagreeing about whether the document moved. It fires even when the
    *  proposed document is identical to what was already open, which is what
    *  lets an assistant's no-op edit be acknowledged instead of timing out. */
@@ -219,7 +219,7 @@ export class LiveSessionHost {
     if (!this.allowEdits()) {
       // The window is sharing read-only. The assistant is told the same thing
       // through `canEdit` in the published status and refuses before it gets
-      // this far — this is the check at the point of ACTION, which is the one
+      // this far, this is the check at the point of ACTION, which is the one
       // that has to be right if the two ever disagree.
       this.lastGuestSeen = this.now();
       return;

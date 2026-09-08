@@ -2,7 +2,7 @@
 //
 // Everything a plugin does to the app goes through `call`, and `call` checks
 // the grants before the host sees the request. The value of that is not that
-// the check is clever — it is three lines — but that there is exactly one of
+// the check is clever, it is three lines, but that there is exactly one of
 // it. A permission model with two entry points has two, and the second one is
 // the one nobody audits.
 //

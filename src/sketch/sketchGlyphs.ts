@@ -4,8 +4,8 @@
 //
 // This is now a FACADE. The badges are rendered by
 // components/overlays/SketchGlyphLayer.vue out of stores/sketchAnnotations.ts;
-// what stays here is the shape SketchMode already talks to — same constructor,
-// same show/hide/setInteractive, same onDelete/onOverlapPick hook fields — so
+// what stays here is the shape SketchMode already talks to, same constructor,
+// same show/hide/setInteractive, same onDelete/onOverlapPick hook fields, so
 // sketchMode.ts (3,781 lines, zero HTML) did not have to move a line.
 //
 // The projection loop that used to live at the bottom of this file went to the

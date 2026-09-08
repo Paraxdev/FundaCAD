@@ -31,7 +31,7 @@ setActivePinia(pinia);
 // The canvas is created here, detached, and handed to the Viewport before Vue
 // runs at all. Two reasons:
 //   1. Viewport / DocumentStore / SketchMode / all ten tools must be fully
-//      constructed before any component's setup() executes — the components
+//      constructed before any component's setup() executes, the components
 //      read them synchronously.
 //   2. It keeps the boot sequence (and the ordering constraints documented
 //      inside createEngine) in one place, top to bottom, with no Vue lifecycle
@@ -50,8 +50,8 @@ app.provide(ENGINE, markRaw(engine));
 app.use(pinia);
 app.mount("#app");
 
-// mount() is synchronous, so the shell — and the container elements the
-// not-yet-converted panels mount into — exist by the time this runs.
+// mount() is synchronous, so the shell, and the container elements the
+// not-yet-converted panels mount into, exist by the time this runs.
 mountUi(engine);
 
 installDevGlobals(engine);

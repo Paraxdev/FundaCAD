@@ -15,8 +15,8 @@ const OLD_MIN_DIST = 0.5;
 
 describe("perspNear", () => {
   it("leaves every ordinary view exactly where it was", () => {
-    // The safety property. Anything the user is likely to be looking at — a
-    // part framed, a detail examined, a whole assembly — is metres from this
+    // The safety property. Anything the user is likely to be looking at, a
+    // part framed, a detail examined, a whole assembly, is metres from this
     // rule's reach, and gets the same 0.1 it always did.
     for (const d of [2, 5, 20, 120, 500, 3000, 9000]) {
       expect(perspNear(d), `${d}mm`).toBe(OLD_NEAR);

@@ -1,14 +1,14 @@
 // Phase A.1 regression: buildBodyMesh's triangle partition.
 //
 // buildBodyMesh used to scan EVERY triangle in the model once per body, and
-// allocate+fill a whole-model Int32Array vertex remap per body — O(bodies x
+// allocate+fill a whole-model Int32Array vertex remap per body, O(bodies x
 // model), which is invisible at 5 bodies and fatal at 3,000 (38.1s to build one
 // imported assembly). partitionMesh buckets the triangles in two passes total
 // and hands every body a shared remap buffer.
 //
 // The contract that matters: the partition is a PERFORMANCE path only. Output
 // must be byte-identical to the scan path, and the shared remap must come back
-// clean from every body — otherwise a later body reads a stale local index and
+// clean from every body, otherwise a later body reads a stale local index and
 // silently draws another body's vertex.
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
@@ -21,7 +21,7 @@ const RES = new THREE.Vector2(800, 600);
 /** A reply whose bodies share a global vertex pool, so the shared remap buffer
  *  is genuinely re-entered on the same indices by consecutive bodies. Bodies
  *  emitted by the real assemble() get disjoint vertex ranges, which would let a
- *  missing reset go unnoticed — this is the case that catches it. */
+ *  missing reset go unnoticed, this is the case that catches it. */
 function sharedVertexReply(): RebuildResult {
   // 6 vertices on a unit grid, reused by both bodies
   const positions: number[] = [];
@@ -179,7 +179,7 @@ describe("buildBodyMesh with a partition", () => {
 
   it("welds a textured (de-indexed, normal-carrying) body the same either way", () => {
     // 2 triangles sharing an edge, fully de-indexed the way a textured face
-    // arrives (3 unique vertices per triangle) — exercises the weld path, whose
+    // arrives (3 unique vertices per triangle), exercises the weld path, whose
     // key includes the faceId, on both routes.
     const quad: RebuildResult = {
       mesh: {
@@ -202,7 +202,7 @@ describe("buildBodyMesh with a partition", () => {
 });
 
 /** `bodies` bodies of `trisPerBody` triangles each, every body owning its own
- *  contiguous faceId range and vertex range — the shape a real reply has. */
+ *  contiguous faceId range and vertex range, the shape a real reply has. */
 function syntheticModel(bodies: number, trisPerBody: number): RebuildResult {
   const positions: number[] = [];
   const indices: number[] = [];
@@ -245,7 +245,7 @@ describe("bodyOfFace", () => {
   });
 
   it("returns undefined below, above, and INSIDE a gap", () => {
-    // a gap is what a stale faceId from before a rebuild looks like — the old
+    // a gap is what a stale faceId from before a rebuild looks like, the old
     // linear .find returned undefined for it and the binary search must too
     const view = viewOf([[0, 2], [10, 2]]);
     expect(bodyOfFace(view, -1)).toBeUndefined();
@@ -267,7 +267,7 @@ describe("bodyOfFace", () => {
 });
 
 describe("buildBodyMesh scaling", () => {
-  // The regression this guards: the scan path is O(bodies x WHOLE MODEL) — it
+  // The regression this guards: the scan path is O(bodies x WHOLE MODEL), it
   // walks every triangle in the model once per body and allocates+fills a
   // whole-model remap per body. Measured on this synthetic model (node/V8):
   //
@@ -303,7 +303,7 @@ describe("buildBodyMesh scaling", () => {
 describe("buildSectionGhosts", () => {
   // The half of cross-section mode that is easy to leave out and impossible to
   // notice missing from a unit test of the arithmetic: the CUT is just a
-  // clipping plane and works whether or not this pass exists — it simply looks
+  // clipping plane and works whether or not this pass exists, it simply looks
   // like the old vanishing section. These pin the properties that make the
   // ghost readable rather than merely present.
 
@@ -316,7 +316,7 @@ describe("buildSectionGhosts", () => {
   const PLANE = new THREE.Plane(new THREE.Vector3(0, 0, -1), 4);
 
   it("draws the cut-away half rather than nothing at all", () => {
-    // One ghost per body, carrying the MIRRORED plane — the body's own material
+    // One ghost per body, carrying the MIRRORED plane, the body's own material
     // keeps the near half, so a ghost sharing the same plane would draw exactly
     // what is already there and the far side would still be gone.
     const bodies = twoBodies();
@@ -356,7 +356,7 @@ describe("buildSectionGhosts", () => {
   });
 
   it("builds nothing at all when the ghost is dialled to hidden", () => {
-    // "Hidden" has to stay genuinely free — it is the tool's previous behaviour,
+    // "Hidden" has to stay genuinely free, it is the tool's previous behaviour,
     // and a fully transparent pass over the whole model instead of no pass at
     // all would make the clean cut the expensive option.
     const bodies = twoBodies();

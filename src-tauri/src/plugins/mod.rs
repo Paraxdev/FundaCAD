@@ -27,8 +27,8 @@
 //! A bundle may come from any HTTPS URL, or from a zip the user picked off
 //! their own disk. That is a deliberate widening of what used to be a check
 //! that only ever admitted this repository's releases. The origin was never the
-//! thing that made a plugin safe — the grants it declared and the sandbox its
-//! kind runs in are — and an allowlist containing only ourselves is not a
+//! thing that made a plugin safe, the grants it declared and the sandbox its
+//! kind runs in are, and an allowlist containing only ourselves is not a
 //! permission model, it is a distribution monopoly wearing one. What survives
 //! of the old check is the part that was always doing the work:
 //! `allowed_bundle_url` still insists on HTTPS and on an authority that means
@@ -251,14 +251,14 @@ fn install_bytes(
 /// FETCHING IS NOT RUNNING, which is what makes that acceptable. This
 /// downloads, unpacks into a scratch directory, reads one file, and deletes the
 /// directory again. Nothing is executed, nothing is left behind, and nothing is
-/// recorded as installed. The extractor's refusals — traversal, absolute paths,
-/// symlinks, entry counts, unpacked size — all apply here exactly as they do on
+/// recorded as installed. The extractor's refusals, traversal, absolute paths,
+/// symlinks, entry counts, unpacked size, all apply here exactly as they do on
 /// the real thing, because it is the same function.
 ///
 /// WHY THE DIGEST COMES BACK. The install that follows is a second fetch, and
 /// between the two the asset could change: the screen would have described one
 /// bundle and the install would have taken another. Passing this digest back in
-/// as the pin closes that, and closes it in the direction that matters — a
+/// as the pin closes that, and closes it in the direction that matters, a
 /// bundle whose bytes moved is refused rather than silently accepted under the
 /// old description.
 #[derive(Serialize)]
@@ -462,7 +462,7 @@ pub fn plugin_entry(app: AppHandle, id: String) -> Result<String, String> {
 /// THE ONE COMMAND IN THIS FILE THAT HANDS BACK CODE TO BE RUN, and every
 /// condition on it is load-bearing.
 ///
-/// A plugin that draws — a menu row, a component, paint on the model — runs in
+/// A plugin that draws, a menu row, a component, paint on the model, runs in
 /// the application's own JavaScript context, because none of those is
 /// expressible from a Worker or from a separate process. There is no sandbox to
 /// put such a plugin in. So the only defensible rule is about WHERE THE CODE
@@ -539,7 +539,7 @@ pub fn plugin_code(app: AppHandle, id: String) -> Result<String, String> {
 /// FAILS CLOSED, and that is the whole design: with no public key compiled in,
 /// there is nothing to verify against and the origin gate above is what stands.
 /// The moment a key exists, a bundle without a good signature over it is
-/// refused — including every bundle installed before the key existed, which is
+/// refused, including every bundle installed before the key existed, which is
 /// the correct and slightly annoying outcome rather than a grandfather clause
 /// that would make the key decorative.
 fn verify_plugin_signature(_dir: &Path, _record: &Installed) -> Result<(), String> {

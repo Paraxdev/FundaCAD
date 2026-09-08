@@ -11,7 +11,7 @@ import { DimInput } from "../../src/sketch/dimInput";
 import { iconElement } from "../../src/ui/icons";
 
 /** happy-dom has no PointerEvent constructor in every version, and nothing here
- *  reads a pointer property — only the target — so a plain bubbling Event is
+ *  reads a pointer property, only the target, so a plain bubbling Event is
  *  the honest stand-in. */
 function press(type: string, target: EventTarget) {
   target.dispatchEvent(new Event(type, { bubbles: true }));
@@ -36,7 +36,7 @@ describe("DimInput hit testing", () => {
     press("pointerdown", document.body);
     // Without this the cursor crossing the box sends pointermove to the box,
     // and the tool listening on the canvas simply stops being told the drag is
-    // still happening — it reads as the value sticking, then jumping.
+    // still happening, it reads as the value sticking, then jumping.
     expect(root().style.pointerEvents).toBe("none");
 
     press("pointerup", document.body);
@@ -81,7 +81,7 @@ describe("iconElement", () => {
   it("carries the class that stops it collapsing in a flex slot", () => {
     // `.icon { flex: 0 0 auto }`. Without it the confirm/cancel marks laid out
     // 0px wide inside their `display: inline-flex` buttons and the heads-up box
-    // showed two empty squares — the paths were present and correct throughout,
+    // showed two empty squares, the paths were present and correct throughout,
     // which is why it survived every test that asserted on markup.
     const svg = iconElement("check", 13);
     expect(svg.getAttribute("class")).toBe("icon");

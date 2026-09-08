@@ -3,7 +3,7 @@
 //
 // The third of the three (edgeNudge.ts, faceNudge.ts), and the one that closes
 // the loop the app is actually built around: draw a closed shape, pull it into
-// a solid. Until now that middle step was "and then find Extrude" — the sketch
+// a solid. Until now that middle step was "and then find Extrude", the sketch
 // told you so in a prompt line, which is the app naming an operation instead of
 // showing you one.
 //
@@ -25,7 +25,7 @@ export interface RegionAnchorSource {
  *  selected areas' interior points.
  *
  *  Shared with ExtrudeTool rather than reimplemented, for the reason the whole
- *  fluent flow keeps coming back to — the tool arms inside the pointerdown that
+ *  fluent flow keeps coming back to, the tool arms inside the pointerdown that
  *  grabbed this handle and immediately draws its own arrow here. Two derivations
  *  of "the middle of the selection" that agreed to within a millimetre would
  *  still make the arrow twitch at the moment the user commits to the drag.
@@ -39,7 +39,7 @@ export function regionAnchor(regions: readonly RegionAnchorSource[]): THREE.Vect
 
 /** The placement for a profile selection, or null when there is none.
  *
- *  Several areas get ONE handle, on their shared normal — which is also the
+ *  Several areas get ONE handle, on their shared normal, which is also the
  *  only thing extruding them together can mean. */
 export function regionNudgePlacement(
   regions: readonly RegionAnchorSource[],
@@ -48,7 +48,7 @@ export function regionNudgePlacement(
   const first = regions[0];
   if (!first) return null;
   const axis = first.plane.n.clone().normalize();
-  if (axis.lengthSq() < 0.5) return null; // degenerate plane — nothing to point along
+  if (axis.lengthSq() < 0.5) return null; // degenerate plane, nothing to point along
   return {
     anchor: regionAnchor(regions),
     // Fixed, like a face's and unlike an edge's: the sketch plane's normal is

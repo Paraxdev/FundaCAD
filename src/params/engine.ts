@@ -3,7 +3,7 @@
 // (bind/rename/delete/cycle). All functions mutate the given document IN PLACE
 // and are meant to run inside one store.mutate() so a parameter edit and its
 // write-back cascade land as a single undo step. The sidecar never sees any of
-// this — only the derived `doc.parameters` numbers and the fields themselves.
+// this, only the derived `doc.parameters` numbers and the fields themselves.
 //
 // Invariants:
 //  - `paramDefs` is the source of truth; `doc.parameters` is a derived
@@ -22,7 +22,7 @@ import { kindUnit, NON_NUM_STRING_FIELDS, resolveTarget, writeTarget } from "../
 import type { FieldKind } from "../document/numFields";
 
 export interface RecomputeResult {
-  /** sketch feature ids whose constraint/entity/pattern values changed — these
+  /** sketch feature ids whose constraint/entity/pattern values changed, these
    *  need a re-solve (open sketch: live; closed: headless cascade). */
   affectedSketches: Set<string>;
   /** param name → why it kept its cached value (cycle, unknown ref, non-finite,
@@ -78,14 +78,14 @@ export function recompute(doc: CadDocument): RecomputeResult {
   const issues: Record<string, string> = {};
   const affectedSketches = new Set<string>();
   const nodes = parseDefs(defs);
-  // each def's in-table references, walked ONCE — serves both the GC set and
+  // each def's in-table references, walked ONCE, serves both the GC set and
   // the topo-sort deps (GC only deletes UNreferenced defs, so surviving
   // entries stay accurate)
   const refsByName = new Map<string, string[]>();
   for (const [name, node] of nodes) refsByName.set(name, extractDefRefs(node, defs));
 
   // --- GC dangling model params (their dim/feature was deleted). Unreferenced
-  // ones are dropped SILENTLY by design — an auto-minted dN is meaningless
+  // ones are dropped SILENTLY by design, an auto-minted dN is meaningless
   // without its target, and undo restores it via the doc snapshot anyway. ---
   const referenced = new Set<string>();
   for (const rs of refsByName.values()) for (const r of rs) referenced.add(r);
@@ -225,7 +225,7 @@ function hasUnitLiteral(n: ExprNode): boolean {
 }
 
 /** Set an existing (or add a new user) parameter's expression. Validate with
- *  validateExpr FIRST — this trusts its input. Evaluation/write-back happens in
+ *  validateExpr FIRST, this trusts its input. Evaluation/write-back happens in
  *  store.mutate()'s recompute (the single owner of that invariant). */
 export function commitParamExpr(doc: CadDocument, name: string, expr: string, unit?: ParamDef["unit"]): void {
   const defs = defsOf(doc);
@@ -261,7 +261,7 @@ function sameTarget(a: ParamTarget, b: ParamTarget): boolean {
   }
 }
 
-/** True when `target` is driven by a non-literal expression — drag tools must
+/** True when `target` is driven by a non-literal expression, drag tools must
  *  not overwrite it (the fx: rule). The single definition of the fx predicate. */
 export function isBound(doc: CadDocument, target: ParamTarget): boolean {
   const name = boundParam(doc, target);
@@ -284,7 +284,7 @@ export function commitFieldExpr(doc: CadDocument, target: ParamTarget, expr: str
 
 /** Fusion's on-the-fly `name=expr` in a dim field: the field's model param
  *  gets the CHOSEN name (renaming an existing dN binding). Validate the name
- *  (validateName) and the expr (validateExpr) first — this trusts its input. */
+ *  (validateName) and the expr (validateExpr) first, this trusts its input. */
 export function commitNamedFieldExpr(doc: CadDocument, target: ParamTarget, name: string, expr: string, kind: FieldKind): void {
   const defs = defsOf(doc);
   const existing = boundParam(doc, target);
@@ -305,7 +305,7 @@ export type ExprInput =
 
 /** Classify raw EXPRESSION input for a bindable field/dim, including Fusion's
  *  on-the-fly `name=expr` form: split, validate the name when it's genuinely
- *  new, validate the expression. The single home of that sequence — the
+ *  new, validate the expression. The single home of that sequence, the
  *  store's doc commit and the sketch editor's pending bindings both route
  *  through it. `name` is set only when the input renames the binding (a name
  *  equal to the current bound/pending one is a no-op rename → plain
@@ -367,14 +367,14 @@ export function deleteBlockers(doc: CadDocument, name: string): string | null {
   return null;
 }
 
-/** Remove a parameter. Check deleteBlockers FIRST — this trusts its input. */
+/** Remove a parameter. Check deleteBlockers FIRST, this trusts its input. */
 export function commitDeleteParam(doc: CadDocument, name: string): void {
   delete defsOf(doc)[name];
 }
 
 /** Rename a parameter, rewriting every referencing expression via the
  *  tokenizer (never regex) and following legacy bare-name fields. Validate
- *  FIRST (`from` exists + validateName(to)) — this trusts its input. */
+ *  FIRST (`from` exists + validateName(to)), this trusts its input. */
 export function commitRenameParam(doc: CadDocument, from: string, to: string): void {
   const defs = defsOf(doc);
   for (const def of Object.values(defs)) {

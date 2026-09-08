@@ -26,7 +26,7 @@ dialog. `main.ts` is the whole of what the app is told about any of it: four
 rows in File, a PRINT group in the ribbon, three action ids, three overlays, and
 one value offered to other plugins.
 
-The app used to carry all of that itself — three rows written out in the menubar
+The app used to carry all of that itself, three rows written out in the menubar
 behind a capability check, a ribbon group plus a list of which of its buttons to
 remove again, three cases in the action dispatcher, three components mounted by
 `App.vue`, a `camera` field on the panels store, a `filament` field on the

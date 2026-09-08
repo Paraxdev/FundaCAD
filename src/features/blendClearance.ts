@@ -1,7 +1,7 @@
 // How large a blend the geometry AROUND an edge can actually hold.
 //
-// The drag used to be bounded by one number for the whole document — a quarter of
-// the model's bbox diagonal — which is wrong in both directions at once. A
+// The drag used to be bounded by one number for the whole document, a quarter of
+// the model's bbox diagonal, which is wrong in both directions at once. A
 // 100x100x2 plate has a 141mm diagonal, so the drag reached a 35mm fillet on a 2mm
 // rim; on a chunky part the same fraction refused fillets the kernel would have
 // built. The real constraint is LOCAL: a blend fails when it runs out of face to
@@ -35,7 +35,7 @@ export const CLEARANCE_SHARE = 0.5;
 /** Distance below which two edges count as touching rather than as neighbours.
  *
  *  Edges meeting at a shared vertex are at distance 0, and they are not a
- *  constraint — the two faces along the picked edge are precisely what the blend
+ *  constraint, the two faces along the picked edge are precisely what the blend
  *  is meant to run across, and their bounding edges meet it at the corners. If
  *  those counted, every clearance would be 0 and the tool would refuse
  *  everything. Scaled to the model so it means the same thing on a 6mm cube and
@@ -130,7 +130,7 @@ export function polylineBox(points: readonly Pt3[]): Aabb | null {
   return { min, max };
 }
 
-/** Squared distance between two boxes — 0 when they overlap. A lower bound on
+/** Squared distance between two boxes, 0 when they overlap. A lower bound on
  *  the distance between anything inside them, which is what makes it usable as
  *  the reject test below. */
 export function boxDistanceSq(a: Aabb, b: Aabb): number {
@@ -145,7 +145,7 @@ export function boxDistanceSq(a: Aabb, b: Aabb): number {
  *  `bestSq` lets the caller pass the best distance found so far: any pair whose
  *  boxes are already further apart than that cannot improve on it, so the
  *  segment loop is skipped entirely. On an imported assembly this is the
- *  difference between a measure that is free and one that stalls the selection —
+ *  difference between a measure that is free and one that stalls the selection,
  *  the overwhelming majority of edges are nowhere near the picked one, and each
  *  is rejected on a single box test. */
 export function polylineDistance(
@@ -170,13 +170,13 @@ export function polylineDistance(
   return best === Infinity ? Infinity : Math.sqrt(best);
 }
 
-/** For a CLOSED edge, the blend's own turning radius as an upper bound — null for
+/** For a CLOSED edge, the blend's own turning radius as an upper bound, null for
  *  an open one.
  *
  *  Nearest-neighbour distance misses this entirely: the top rim of a tall thin
  *  cylinder is height/2 from the bottom rim and measures as roomy, but a fillet on
  *  it sweeps inward across the cap and runs out of cap at the axis. Half the
- *  largest bbox extent — exactly r for a circle. */
+ *  largest bbox extent, exactly r for a circle. */
 export function closedLoopRadius(points: readonly Pt3[]): number | null {
   if (points.length < 3) return null;
   const first = points[0];
@@ -207,7 +207,7 @@ export interface ClearanceRequest {
   modelScale: number;
 }
 
-/** The nearest thing the blend could collide with, in mm — or null when nothing
+/** The nearest thing the blend could collide with, in mm, or null when nothing
  *  qualifies and the caller should fall back to its global bound.
  *
  *  Null rather than Infinity, and the distinction is load-bearing: "nothing is
@@ -242,8 +242,8 @@ export function localClearance(req: ClearanceRequest): number | null {
     if (!box) continue;
     for (const t of targets) {
       // Cheap reject first, then the only-if-it-could-win reject. Note this
-      // cannot skip a TOUCHING neighbour early — touching pairs have box
-      // distance 0, which never rejects — so the tolerance test below still
+      // cannot skip a TOUCHING neighbour early, touching pairs have box
+      // distance 0, which never rejects, so the tolerance test below still
       // runs on exactly the pairs that need it.
       if (boxDistanceSq(box, t.box) >= bestSq) continue;
       const d = polylineDistance(t.pts, other.points, bestSq);
@@ -259,7 +259,7 @@ export function localClearance(req: ClearanceRequest): number | null {
 
 /** The largest blend the neighbourhood permits, from a measured clearance.
  *
- *  Deliberately NOT a hard promise that this value builds — OCCT's own limit
+ *  Deliberately NOT a hard promise that this value builds, OCCT's own limit
  *  depends on curvature and on how the blend runs off the ends of the chain,
  *  neither of which a distance can see. It is a bound that keeps the drag inside
  *  the range where success is plausible, which is all the old diagonal fraction

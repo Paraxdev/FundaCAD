@@ -27,7 +27,7 @@ export interface CameraRig {
   get active(): THREE.Camera;
   isOrtho(): boolean;
   /** 'auto' = Fusion's "Perspective with Ortho Faces": perspective while orbiting,
-   *  orthographic whenever the view axis is world-axis-aligned — so straight-on
+   *  orthographic whenever the view axis is world-axis-aligned, so straight-on
    *  views are truly flat (no parallax skew between bodies). */
   projectionMode(): ProjectionMode;
   setProjectionMode(mode: ProjectionMode): void;
@@ -39,7 +39,7 @@ export interface CameraRig {
    *  (a world point, usually under the cursor) is given, zooms TOWARD it
    *  (MCAD-style dolly-to-cursor) instead of toward the orbit target. */
   zoomBy(factor: number, pivot?: THREE.Vector3): void;
-  /** Half the visible view height at the orbit target, in world units — the
+  /** Half the visible view height at the orbit target, in world units, the
    *  natural scale for making input steps (SpaceMouse pan) zoom-proportional
    *  in BOTH projections, like wheel zoom already is. */
   viewScale(): number;
@@ -55,7 +55,7 @@ export interface CameraRig {
   /** Free-orbit by az/pol radians about the SCREEN axes (SpaceMouse tumble).
    *  Unlike controls.rotate(), which camera-controls clamps just short of the
    *  poles every frame (Spherical.makeSafe), this rotates the orbit up-vector
-   *  along with the camera, so vertical orbit passes straight over the top —
+   *  along with the camera, so vertical orbit passes straight over the top,
    *  3Dconnexion-style free rotation, upside down included. */
   tumble(az: number, pol: number): void;
   /** Lock out mouse orbit (sketch "lock to plane"); right-drag pans instead. */
@@ -80,7 +80,7 @@ export interface CameraRig {
    *
    *  `opts.animate` flies there over a few hundred milliseconds instead of
    *  cutting; `opts.onArrive` runs when it lands (immediately when it snapped),
-   *  which is where anything that must not happen mid-flight belongs — forcing
+   *  which is where anything that must not happen mid-flight belongs, forcing
    *  the flat projection, baselining the sketch lock. */
   lookAtPlane(
     origin: THREE.Vector3,
@@ -90,7 +90,7 @@ export interface CameraRig {
   ): void;
   /** True while a lookAtPlane flight is in the air. Input is off for the
    *  duration, and anything measuring the framing (the sketch lock's baseline)
-   *  has to wait for it — mid-flight the camera is nowhere in particular. */
+   *  has to wait for it, mid-flight the camera is nowhere in particular. */
   isFlying(): boolean;
   restoreUp(): void;
 }
@@ -143,7 +143,7 @@ export function createCameraRig(
     up1: THREE.Vector3;
     onArrive: (() => void) | null;
   } | null = null;
-  // ortho zoom queued this frame but not yet applied by controls.update() —
+  // ortho zoom queued this frame but not yet applied by controls.update(),
   // lets same-frame wheel bursts chain correctly (see zoomBy).
   let pendingOrthoZoom: number | null = null;
 
@@ -295,7 +295,7 @@ export function createCameraRig(
 
   /** Put the camera exactly where the flight was going, hand input back, and
    *  tell whoever asked. Called on the last frame AND by anything that has to
-   *  end a flight early, so "arrived" and "gave up" leave identical state —
+   *  end a flight early, so "arrived" and "gave up" leave identical state,
    *  there is no half-way pose the rest of the app can observe. */
   function landFlight() {
     const f = flight;
@@ -321,8 +321,8 @@ export function createCameraRig(
     }
     const s = ease(f.t / f.dur);
     // Orientation by slerp, position by lerp. Interpolating the up-vector
-    // directly would collapse on the 180° case — entering a sketch from the far
-    // side asks for exactly that — and the two ups are then antiparallel with no
+    // directly would collapse on the 180° case, entering a sketch from the far
+    // side asks for exactly that, and the two ups are then antiparallel with no
     // shortest arc between them. The quaternion has one.
     const q = f.q0.clone().slerp(f.q1, s);
     flightUp.set(0, 1, 0).applyQuaternion(q).normalize();
@@ -368,7 +368,7 @@ export function createCameraRig(
       pendingOrthoZoom = null; // camera.zoom is authoritative again after this update
       // The flight writes the goal, then controls.update() below commits it in
       // the same frame. Ahead of correctOrbitPivot because a flight is not a
-      // drag and has no pivot to correct — reading one would measure the
+      // drag and has no pivot to correct, reading one would measure the
       // flight's own rotation and shift the rig by it.
       const flew = stepFlight(dt);
       // BEFORE the update, so this frame damps toward the corrected goal rather
@@ -399,7 +399,7 @@ export function createCameraRig(
       const swapped = applyAutoProjection();
       // Apply the persistent roll AFTER camera-controls positions the camera.
       // update() always rewrites the orientation from its own spherical state,
-      // so re-banking every frame is idempotent — no drift, no position change,
+      // so re-banking every frame is idempotent, no drift, no position change,
       // and it never touches camera.up (so it can't fight the sketch-plane up
       // handling or desync camera-controls, which the old updateCameraUp roll did).
       if (rollAngle !== 0) {
@@ -416,7 +416,7 @@ export function createCameraRig(
     },
     zoomBy(factor: number, pivot?: THREE.Vector3) {
       // A wheel event during a flight would write a goal the flight overwrites
-      // on the next frame — a visible stutter for no effect. Input is off for a
+      // on the next frame, a visible stutter for no effect. Input is off for a
       // few hundred milliseconds; the wheel is part of the input.
       if (flight) return;
       const f = Math.max(0.1, Math.min(10, factor));
@@ -427,7 +427,7 @@ export function createCameraRig(
         // the cursor tracking and drops all but one step of zoom).
         const curZoom = pendingOrthoZoom ?? ortho.zoom;
         // The zoom and the truck come from ONE call, against the controls' own
-        // limits — see orthoZoomStep for what happened when they came from two.
+        // limits, see orthoZoomStep for what happened when they came from two.
         const { zoom: newZoom, truck: k } = orthoZoomStep(
           curZoom, f, controls.minZoom, controls.maxZoom,
         );
@@ -435,7 +435,7 @@ export function createCameraRig(
         if (pivot) {
           // keep the cursor point fixed on screen: TRUCK camera and target together
           // toward it as the frustum shrinks/grows (k = 1 − oldZoom/newZoom).
-          // Moving only the target re-aims the camera at it — a rotation that
+          // Moving only the target re-aims the camera at it, a rotation that
           // progressively tilted the locked sketch view ~3°/click. Translating
           // both endpoints by the same delta keeps the view direction bit-exact.
           const target = controls.getTarget(new THREE.Vector3());
@@ -457,9 +457,9 @@ export function createCameraRig(
       } else if (pivot) {
         // Dolly TOWARD THE CURSOR, by scaling camera and target about the cursor
         // point together. See zoomAnchor.ts for why that pins the point under the
-        // cursor, and why projecting it onto the view axis first — which is what
+        // cursor, and why projecting it onto the view axis first, which is what
         // this did until the point under the cursor was measured over a long
-        // zoom — loses it within a handful of notches.
+        // zoom, loses it within a handful of notches.
         const next = anchorDolly(
           controls.getPosition(new THREE.Vector3()),
           controls.getTarget(new THREE.Vector3()),
@@ -481,7 +481,7 @@ export function createCameraRig(
       const center = box.getCenter(new THREE.Vector3());
       const sphere = box.getBoundingSphere(new THREE.Sphere(center.clone()));
       // An EMPTY document has an empty box, and three.js answers that with
-      // Sphere.makeEmpty() — radius -1, not 0. Multiplied through, `dist` came
+      // Sphere.makeEmpty(), radius -1, not 0. Multiplied through, `dist` came
       // out NEGATIVE and the camera was placed behind its own target, looking
       // away from the scene: an empty viewport with no grid and no way to tell
       // why. It never showed while startup always loaded an example part with a
@@ -522,7 +522,7 @@ export function createCameraRig(
     setStandardView(view: StandardView) {
       rollAngle = 0;
       // a free tumble may have left the orbit up-vector anywhere; a standard
-      // view means "square me to the world" — restore Z-up first
+      // view means "square me to the world", restore Z-up first
       persp.up.set(0, 0, 1);
       ortho.up.set(0, 0, 1);
       controls.updateCameraUp();
@@ -615,15 +615,15 @@ export function createCameraRig(
       flight = null;
       controls.enabled = true;
       // Re-seat the orbit AFTER changing up: updateCameraUp() only rebuilds the
-      // internal up-basis — the stored spherical state still encodes the OLD
+      // internal up-basis, the stored spherical state still encodes the OLD
       // basis, so without setPosition the same numbers decode to a different
       // world position on the next tick (exiting a top-plane sketch snapped the
-      // camera to a side-on view — the flat sketch "disappeared" edge-on).
+      // camera to a side-on view, the flat sketch "disappeared" edge-on).
       // Same getPosition→updateCameraUp→setPosition pattern as the library's
       // own applyCameraUp().
       const pos = controls.getPosition(new THREE.Vector3());
       // Z-up is the model default, but exiting a sketch on a Z-normal plane (XY,
-      // or a plane parallel to it) leaves the camera looking straight DOWN -Z —
+      // or a plane parallel to it) leaves the camera looking straight DOWN -Z,
       // where world +Z is PARALLEL to the view axis. That is a degenerate orbit
       // basis: the pole sits on the view direction, so orbit gimbal-locks and
       // "moves a little, then jams" (SpaceMouse and mouse alike). Fall back to
@@ -637,7 +637,7 @@ export function createCameraRig(
     },
     roll(angle) {
       // accumulate; the bank is re-applied every frame in update(). Cheap and
-      // safe — no camera-controls state is touched here.
+      // safe, no camera-controls state is touched here.
       rollAngle += angle;
     },
     tumble(az, pol) {
@@ -645,7 +645,7 @@ export function createCameraRig(
       // screen axes (yaw about visual up, pitch about visual right), then
       // re-seat camera-controls in the rotated up-space. Because offset and up
       // rotate by the same quaternion, the polar angle camera-controls sees
-      // NEVER changes — the pole travels with the camera, so its per-frame
+      // NEVER changes, the pole travels with the camera, so its per-frame
       // (0, π) clamp (Spherical.makeSafe) has nothing to bite. Axis signs
       // match controls.rotate(): +az orbits CCW seen from above, +pol tips
       // the camera downward.

@@ -3,7 +3,7 @@ import { HOLD_MS, IDLE, holdStep } from "../../src/ui/holdGesture";
 import type { HoldEffect, HoldEvent, HoldPhase } from "../../src/ui/holdGesture";
 
 /** Replay a whole gesture and keep the effects, which is how these rules are
- *  actually felt — "press, wait, release over Center Rect" rather than one
+ *  actually felt, "press, wait, release over Center Rect" rather than one
  *  transition at a time. */
 function run(events: HoldEvent[], from: HoldPhase = IDLE) {
   let state = from;
@@ -74,7 +74,7 @@ describe("holding", () => {
   });
 
   it("ignores the hold on a button with no variants, leaving the click intact", () => {
-    // Nothing to show — but the press is still a press, so letting go after a
+    // Nothing to show, but the press is still a press, so letting go after a
     // long hold on Line must still draw a line rather than silently doing
     // nothing because the machine had wandered into another phase.
     const { state, effects } = run([press("line", false), hold]);
@@ -102,7 +102,7 @@ describe("picking a variant", () => {
   });
 
   it("cancels when the pointer comes up outside the flyout", () => {
-    // Backing out has to be possible after you have seen the variants —
+    // Backing out has to be possible after you have seen the variants,
     // otherwise a hold commits you to one of them.
     const { effects } = run([press(), hold, releaseOutside]);
     expect(effects[2]).toEqual({ kind: "close" });
@@ -163,7 +163,7 @@ describe("right-click", () => {
 });
 
 describe("pressing while a flyout is open", () => {
-  it("on the same button only dismisses — it does not also run the tool", () => {
+  it("on the same button only dismisses, it does not also run the tool", () => {
     // Otherwise "I've seen enough, close this" would draw a rectangle.
     const { state, effects } = run([press(), hold, press(), releaseOutside]);
     expect(effects[2]).toEqual({ kind: "close" });
@@ -197,7 +197,7 @@ describe("cancelling", () => {
   });
 
   it("leaves a stray release harmless", () => {
-    // A pointerup with no matching down — dragged out of the window and
+    // A pointerup with no matching down, dragged out of the window and
     // released, then back in. It must not run the last tool touched.
     expect(holdStep(IDLE, releaseOutside)).toEqual({ next: IDLE, effect: { kind: "none" } });
     expect(holdStep(IDLE, releaseOver("circle", "circle2"))).toEqual({

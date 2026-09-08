@@ -2,7 +2,7 @@
 
 `rectangle` gained an `angle` (degrees, about its own centre) so a rectangle
 drawn from three points can be SAVED as a rectangle instead of decomposed into
-four lines — which would cost it its W/H dimension, its "<rectId>~k" edge
+four lines, which would cost it its W/H dimension, its "<rectId>~k" edge
 addressing and its identity in the browser tree.
 
 The risk is a split brain. The frontend draws, picks and snaps from
@@ -34,7 +34,7 @@ def _rect(**kw):
 
 def test_no_angle_leaves_the_corners_untouched():
     """Every rectangle in every saved document takes this path. Routing them
-    through a cos/sin would move them by float noise — a diff in every file
+    through a cos/sin would move them by float noise, a diff in every file
     anyone opens and re-saves, for no change in shape."""
     for e in (_rect(x=3, y=5), _rect(x=3, y=5, angle=0)):
         assert _rect_corners(e, _val) == [(-2, 3), (8, 3), (8, 7), (-2, 7)], e
@@ -64,7 +64,7 @@ def test_the_corners_match_the_frontends_to_the_last_digit():
             for lx, ly in ((-5, -2), (5, -2), (5, 2), (-5, 2))]
     for got, exp in zip(c, want):
         assert abs(got[0] - exp[0]) < 1e-12 and abs(got[1] - exp[1]) < 1e-12, (got, exp)
-    # still counter-clockwise, still 10 x 4 — the edge addressing depends on both
+    # still counter-clockwise, still 10 x 4, the edge addressing depends on both
     area = sum(c[i][0] * c[(i + 1) % 4][1] - c[(i + 1) % 4][0] * c[i][1] for i in range(4)) / 2
     assert area > 0, "corner order must stay CCW"
     assert abs(area - 40) < 1e-9, area

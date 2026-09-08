@@ -4,7 +4,7 @@
 // close instead of an error reply. That took the whole session down rather than
 // one operation: the oversized body stays in the document, so every following
 // rebuild re-sent it and re-killed the socket, and the only thing the user was
-// shown was "geometry engine connection lost" — which points at the connection,
+// shown was "geometry engine connection lost", which points at the connection,
 // not at the file they just opened.
 //
 // The client therefore has to refuse the payload BEFORE sending it. This pins

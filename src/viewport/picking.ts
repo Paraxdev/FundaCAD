@@ -1,5 +1,5 @@
 // Picking: raycast the mesh (faces) and the fat edge lines (edges), then turn a
-// hit into a *selector descriptor* — never a raw index. Axis-aligned geometry
+// hit into a *selector descriptor*, never a raw index. Axis-aligned geometry
 // becomes a robust axis/normal selector; otherwise a nearest-to-point selector.
 
 import * as THREE from "three";
@@ -13,7 +13,7 @@ import { BAND_CAP_EXTENT_PX, ScreenExtent, edgeBandPx, sampleIndices } from "./e
 
 export interface EdgeHit {
   kind: "edge";
-  /** the edge itself — a stable reference, not the object that draws it */
+  /** the edge itself, a stable reference, not the object that draws it */
   edge: EdgeRef;
   selector: Selector;
 }
@@ -22,7 +22,7 @@ export interface FaceHit {
   kind: "face";
   faceId: number;
   selector: Selector;
-  /** world-space raycast intersection — a point guaranteed ON the face's
+  /** world-space raycast intersection, a point guaranteed ON the face's
    *  material (its centroid may not be: annular/holed faces). */
   point: [number, number, number];
 }
@@ -58,7 +58,7 @@ export class Picker {
   private raycaster = new THREE.Raycaster();
   private ndc = new THREE.Vector2();
   private scratch = new THREE.Vector3();
-  // screen-space distance (px) of the best edge hit from the last pickEdge() —
+  // screen-space distance (px) of the best edge hit from the last pickEdge(),
   // lets pick() prefer a face over an edge unless the cursor is on the edge line.
   private edgeScreenDist = Infinity;
   // ray distance of that same edge hit, so pick() can tell whether it is on the
@@ -67,7 +67,7 @@ export class Picker {
   // Raycast targets: ONE merged object per body now, so this list is ~3k long
   // instead of ~348k and the per-move filter is cheap. Hidden edges are not in
   // the geometry at all (BodyEdges rebuilds without them), so there is nothing
-  // per-edge left to filter here — only whole-body visibility.
+  // per-edge left to filter here, only whole-body visibility.
   private targetCache: { view: ModelView; targets: THREE.Object3D[] } | null = null;
   private edgeTargets(view: ModelView): THREE.Object3D[] {
     if (this.targetCache?.view !== view) {
@@ -77,13 +77,13 @@ export class Picker {
     return this.targetCache.targets;
   }
 
-  /** Drop the cached raycast targets — call after anything that changes which
+  /** Drop the cached raycast targets, call after anything that changes which
    *  bodies or edges are drawn (hideFlushSeams, body show/hide). */
   invalidate() {
     this.targetCache = null;
   }
 
-  /** All pickable (visible) edges — also used for tangent-chain expansion. */
+  /** All pickable (visible) edges, also used for tangent-chain expansion. */
   visibleEdges(view: ModelView): EdgeRef[] {
     return edgeObjects(view).flatMap((d) => d.visibleRefs());
   }
@@ -106,7 +106,7 @@ export class Picker {
     const edge = this.pickEdge(clientX, clientY, rect, camera, view);
 
     this.raycaster.setFromCamera(this.ndc, camera); // ndc set by pickEdge
-    // one Mesh per visible body now (not caching this list like visibleEdges —
+    // one Mesh per visible body now (not caching this list like visibleEdges,
     // body counts are small, unlike edge counts, so a per-move filter is cheap).
     const fHits = this.raycaster.intersectObjects(visibleBodyMeshes(view), false);
     const fHit = fHits[0];
@@ -145,7 +145,7 @@ export class Picker {
     return this.raycaster.intersectObjects(visibleBodyMeshes(view), false)[0]?.distance ?? null;
   }
 
-  /** Edge-only pick. Returns a precise single-edge (by:nearest) selector — used
+  /** Edge-only pick. Returns a precise single-edge (by:nearest) selector, used
    *  by fillet/chamfer where you want exactly the edge you clicked, not its
    *  whole axis group. Also sets this.ndc for a follow-up face pick. */
   pickEdge(
@@ -192,8 +192,8 @@ export class Picker {
     (this.raycaster as any).camera = camera;
     // NOTE: each LineMaterial's .resolution is kept in sync by
     // setEdgeResolution() on resize, and set at creation time in buildBodyMesh()
-    // (render.ts) — no per-move sync needed here.
-    // skip hidden lines (flush-seam-hidden contact rims, hidden bodies) — the
+    // (render.ts), no per-move sync needed here.
+    // skip hidden lines (flush-seam-hidden contact rims, hidden bodies), the
     // raycaster tests invisible objects too, which would give ghost edge picks
     const eHits = this.raycaster.intersectObjects(this.edgeTargets(view), false);
     this.edgeScreenDist = Infinity;
@@ -235,7 +235,7 @@ export class Picker {
  *  triangles sit up to a chord's sagitta inside the true surface, so an edge on
  *  that surface can measure marginally behind them, and that error scales with
  *  the geometry that produced it. Small enough that it stays well under the
- *  thickness of a thin plate — on a 100x100x2 plate (141mm diagonal) this is
+ *  thickness of a thin plate, on a 100x100x2 plate (141mm diagonal) this is
  *  0.28mm against 2mm of material, so the plate's own back edges are still
  *  rejected. */
 export const EDGE_DEPTH_FRACTION = 0.002;
@@ -253,7 +253,7 @@ export const EDGE_DEPTH_FRACTION = 0.002;
  *  A face hit is the depth of the surface under the cursor, so anything further
  *  than that (plus the tolerance above) is behind material and cannot have been
  *  what the user aimed at. With no face under the cursor there is nothing to be
- *  occluded BY — that is the case where you pick an edge against empty space,
+ *  occluded BY, that is the case where you pick an edge against empty space,
  *  and it must keep working. */
 export function occludedEdge(
   edgeDist: number,

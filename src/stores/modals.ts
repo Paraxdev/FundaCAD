@@ -32,8 +32,8 @@ export type ModalReq = (ChooseReq | MultiReq | ListReq) & { id: number };
 
 /** The one-shot modal chooser queue, plus the app-wide "a modal is open" gate.
  *
- *  `depth` is what toolBusy() reads (via isChoiceOpen) so a global shortcut —
- *  "e" for Extrude, say — can't fire underneath an awaiting modal. It counts
+ *  `depth` is what toolBusy() reads (via isChoiceOpen) so a global shortcut,
+ *  "e" for Extrude, say, can't fire underneath an awaiting modal. It counts
  *  modals built OUTSIDE this module too (welcome screen, sign-in, publish),
  *  which is why pushModal/popModal are public. */
 export const useModalStore = defineStore("modals", () => {

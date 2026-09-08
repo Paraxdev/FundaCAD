@@ -1,7 +1,7 @@
 // Measure (Inspect): click a face or edge to read its size, or a second one to
 // read the distance between them. While aiming, whatever would be picked lights
 // up under the cursor. Between two picks the tool reports the TRUE SHORTEST
-// distance (min over vertex↔triangle both ways + segment↔segment — exact for
+// distance (min over vertex↔triangle both ways + segment↔segment, exact for
 // planar faces / straight edges at any tessellation), draws a marker line
 // between the closest pair, and lists the closest-approach ΔX/ΔY/ΔZ + angle.
 // Computed from the tessellated model: instant, no rebuild round-trip.
@@ -183,7 +183,7 @@ export class MeasureTool {
     const [a, b] = this.probes;
     // The shortest-distance search and the marker it feeds stay here: they are
     // geometry, and setMeasureMarker is a Three.js write. Only the labelled
-    // lines are handed over — measureRows() is pure, and unit-tested.
+    // lines are handed over, measureRows() is pure, and unit-tested.
     const near = a && b ? this.closestPair(a, b) : null;
     if (near) this.viewport.setMeasureMarker(near.pa, near.pb);
     useToolPanelStore().measure = measureRows(a, b, near);

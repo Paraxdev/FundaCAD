@@ -14,7 +14,7 @@ import type { NudgePlacement } from "./selectionNudge";
 type Vec3 = [number, number, number];
 
 /** The placement for an edge selection, or null when there is nothing to stand
- *  on. Several edges get ONE handle — see handlePlacement for where it lands.
+ *  on. Several edges get ONE handle, see handlePlacement for where it lands.
  *
  *  `onGrab` receives the handle's own tangent so the tool can adopt it rather
  *  than recompute it: the tool arms inside the SAME pointerdown, and an axis
@@ -40,13 +40,13 @@ export function edgeNudgePlacement(
 /** Where the handle stands and which way it lies, from the selected edges'
  *  polylines. Null when there is nothing to stand on.
  *
- *  Kept pure (plain tuples in, plain tuples out — no viewport, no camera, no
+ *  Kept pure (plain tuples in, plain tuples out, no viewport, no camera, no
  *  scene) because it is the part of this file a headless test can hold: the
  *  hit-testing and the projection around it need a real canvas and a real
  *  camera, which vitest does not have.
  *
  *  The anchor is the mean of the ARC-LENGTH midpoints, matching where
- *  EdgeFeatureTool anchors the same selection — the handle must not shift when
+ *  EdgeFeatureTool anchors the same selection, the handle must not shift when
  *  the tool takes over. The tangent comes from the FIRST usable edge: with
  *  several edges there is no single right perpendicular, and one that at least
  *  lies across a real member reads better than the camera-right fallback.

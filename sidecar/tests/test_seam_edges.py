@@ -5,15 +5,15 @@ ChFi3d_Builder:only 2 faces". Nothing in that sentence names anything a person
 can go and change.
 
 What it means is that the picked edge is a SEAM. A face that wraps all the way
-round — the side of a cylinder or a cone, a 360-degree revolve — closes on
+round, the side of a cylinder or a cone, a 360-degree revolve, closes on
 itself, and the kernel records that closure as a topological edge. It is
 bookkeeping, not geometry: there is no crease along it and both sides of it are
 the SAME face. ChFi3d needs two different faces to blend between, so it refuses,
 and it refuses the same way at every radius.
 
 The guard is deliberately narrow, and the control below is the reason: a broad
-selector routinely sweeps a seam up along with real edges — by:"axis" on a
-cylinder picks the seam because the seam IS parallel to the axis — and OCCT
+selector routinely sweeps a seam up along with real edges, by:"axis" on a
+cylinder picks the seam because the seam IS parallel to the axis, and OCCT
 blends those groups perfectly well. Refusing them would break work that has
 always worked. So the refusal fires only when there is nothing else in the
 selection.
@@ -34,7 +34,7 @@ from topo_adj import FaceAdjacency
 
 def _cone():
     """A revolved triangle: one conical face, one flat base. Two faces, and the
-    exact shape the report was about — small enough that the whole side of it is
+    exact shape the report was about, small enough that the whole side of it is
     a single face that wraps."""
     prof = Plane.XZ * Polyline((0, 0), (12, 0), (0, 18), (0, 0))
     return revolve(make_face(prof), Axis.Z, 360)

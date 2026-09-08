@@ -2,15 +2,15 @@
 
 Press/Pull and Offset Face send a curved face to _offset_faces, which is OCCT's
 BRepOffset over the WHOLE solid. When that will not run it refuses every face at
-once, including ones that move perfectly well on their own — measured on the
+once, including ones that move perfectly well on their own, measured on the
 reported document, where two bores in a body carrying six blend surfaces could
 not be resized by any amount in either direction. The fallback then made it
 worse: a linear sweep has no direction to travel along on a face that closes on
 itself, so a hole landed on "its surface is freeform and wraps around", which is
 not true of a cylinder and not a size the user could fix.
 
-_thicken_press_pull asks the smaller question — thicken THIS face, boolean the
-slab in — and it is the one a hole can answer.
+_thicken_press_pull asks the smaller question, thicken THIS face, boolean the
+slab in, and it is the one a hole can answer.
 
 Run: uv run python tests/test_curved_offset.py
 """
@@ -78,7 +78,7 @@ def test_the_sweep_cannot_do_this_at_all():
 
 def test_press_pull_reaches_the_fallback_when_the_body_offset_will_not_run():
     """The wiring. _offset_faces failing is a property of the WHOLE body, which
-    takes an exotic solid to provoke honestly, so it is failed on purpose here —
+    takes an exotic solid to provoke honestly, so it is failed on purpose here,
     what is under test is that press/pull then lands on the thickened result
     rather than on the sweep's refusal."""
     import solid_ops

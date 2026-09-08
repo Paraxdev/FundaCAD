@@ -1,4 +1,4 @@
-// On-canvas heads-up dimension input — the signature mainstream MCAD interaction.
+// On-canvas heads-up dimension input, the signature mainstream MCAD interaction.
 // A small floating cluster of <input>s positioned near the cursor. Fields that
 // are "tracking" update live from the cursor; typing makes a field hold your
 // value; Tab locks the field and moves to the next; Enter commits everything.
@@ -55,7 +55,7 @@ export class DimInput {
     this.root.className = "dim-input";
     this.root.style.display = "none";
     document.body.appendChild(this.root);
-    // Capture phase, on the window, for the lifetime of the box — see
+    // Capture phase, on the window, for the lifetime of the box, see
     // onForeignPress for what it is protecting.
     window.addEventListener("pointerdown", this.boundForeignDown, true);
   }
@@ -64,7 +64,7 @@ export class DimInput {
    *  somewhere else.
    *
    *  The box hangs over the canvas near what is being dragged, and it is a
-   *  sibling of the canvas rather than a child — so the moment the cursor
+   *  sibling of the canvas rather than a child, so the moment the cursor
    *  crossed it, pointermove went to the box and the tool listening on the
    *  canvas simply stopped hearing about the drag. It read as the model sticking
    *  and then jumping, and on a short drag as the value refusing to move at all.
@@ -82,8 +82,8 @@ export class DimInput {
 
   private onForeignPress(e: PointerEvent) {
     // Deliberately NOT gated on `active`. The press that arms a tool is the same
-    // press that drags it — the box is shown from inside that pointerdown, long
-    // after this capture listener has already run — so a gate here would miss
+    // press that drags it, the box is shown from inside that pointerdown, long
+    // after this capture listener has already run, so a gate here would miss
     // the one gesture that needs it most, the grab-the-handle-and-pull entry.
     if (this.foreignPress) return;
     if (this.ownsTarget(e.target)) return;
@@ -118,7 +118,7 @@ export class DimInput {
     return this.active;
   }
 
-  /** true when `el` is one of THIS dim box's inputs — lets the owning tool's
+  /** true when `el` is one of THIS dim box's inputs, lets the owning tool's
    *  capture-phase key handler act on Escape for its own box without stealing
    *  Esc from other editors (e.g. a dimension label's inline value input). */
   ownsTarget(el: EventTarget | null): boolean {
@@ -126,7 +126,7 @@ export class DimInput {
   }
 
   /** While a tool is still deciding WHERE to drop something, the box is a
-   *  heads-up readout sitting over the canvas, not a widget — a click aimed at
+   *  heads-up readout sitting over the canvas, not a widget, a click aimed at
    *  the canvas underneath must reach it instead of hitting confirm. Typing is
    *  unaffected: keystrokes go to the focused input regardless of pointer-events.
    *  Turn it back off once the click-to-place is done, or confirm/cancel become unclickable. */
@@ -192,7 +192,7 @@ export class DimInput {
       this.sizeToContent(field);
       return field;
     });
-    // Visible confirm/cancel — Enter/Esc equivalents for mouse-first work (the
+    // Visible confirm/cancel, Enter/Esc equivalents for mouse-first work (the
     // Enter-only flow read as "no way to confirm"). pointerdown+preventDefault
     // so pressing them never blurs the input first.
     const ok = document.createElement("button");
@@ -219,7 +219,7 @@ export class DimInput {
     }
     // focus first field so typing goes straight to it. show() is often called from
     // a pointerdown handler (e.g. extrude's pick→drag), where the browser moves
-    // focus to the click target AFTER this handler returns — so re-focus next frame
+    // focus to the click target AFTER this handler returns, so re-focus next frame
     // too, or the field silently never holds focus and typing/Tab do nothing.
     this.focus();
     requestAnimationFrame(() => this.focus());
@@ -267,7 +267,7 @@ export class DimInput {
   /** A unit in the TEXT changes what the field is showing. This is the whole
    *  point of the field being unit agnostic: it says mm, you type "1 inch", and
    *  it should not answer by showing you 25.4 mm. The number is left exactly as
-   *  typed — only the chip moves. */
+   *  typed, only the chip moves. */
   private adoptTypedUnit(f: Field) {
     if (!f.unit) return;
     const m = tryParseMeasure(f.input.value, f.unit);
@@ -334,7 +334,7 @@ export class DimInput {
   }
 
   /** Pre-fill a field AND lock it (userDriven) so cursor tracking can't clobber
-   *  the value — used when re-opening a feature for editing, where the saved
+   *  the value, used when re-opening a feature for editing, where the saved
    *  value must hold until the user deliberately retypes or drags a handle. */
   seed(name: string, value: number) {
     const f = this.fields.find((x) => x.def.name === name);
@@ -406,7 +406,7 @@ export class DimInput {
     return this.fields.find((x) => x.def.name === name)?.unit ?? null;
   }
 
-  /** the field's RAW text, untouched — for callers that route input through the
+  /** the field's RAW text, untouched, for callers that route input through the
    *  expression evaluator (`w/2`, `name=expr`) instead of a bare parseField, and
    *  that must be able to tell "empty" from "unparseable". "" when there is no
    *  such field. */

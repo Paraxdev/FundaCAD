@@ -1,5 +1,5 @@
 /* ============================================================================
-   RIBBON  (the most visible element — icon-forward, grouped, amber-accented)
+   RIBBON  (the most visible element, icon-forward, grouped, amber-accented)
    ============================================================================ */
 #ribbon {
   background: var(--panel);
@@ -59,8 +59,8 @@
   border: 1px solid var(--line-strong, #3a4048);
   border-radius: var(--r-md, 8px);
   box-shadow: var(--shadow-3, 0 16px 48px rgba(0, 0, 0, 0.5));
-  /* Every popup shell in the app — this, .menu-popup, .context-menu, the Cmd-K
-     list — pads by --s-1, so a highlighted row always sits the same 4px inside
+  /* Every popup shell in the app, this, .menu-popup, .context-menu, the Cmd-K
+     list, pads by --s-1, so a highlighted row always sits the same 4px inside
      the popup's border wherever the popup came from. */
   padding: var(--s-1);
   animation: pop-in var(--t-fast, 0.12s) var(--ease, ease);
@@ -172,7 +172,7 @@
   align-items: center;
   gap: var(--s-2);
   width: 60px;
-  /* Symmetric, which 7px/6px was not — the icon sat a pixel high inside its own
+  /* Symmetric, which 7px/6px was not, the icon sat a pixel high inside its own
      button and every ribbon group inherited the drift. The vertical rung is one
      up from the old value because this is the largest click target in the app
      and the row it lives in is auto-sized (see the #app grid comment), so it

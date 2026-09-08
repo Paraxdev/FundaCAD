@@ -7,7 +7,7 @@ one connection per app instance; concurrent calls are matched by `id`, not by or
 
 This document describes the wire shapes as implemented in `sidecar/server.py` (the
 dispatch in `handle()`) and consumed in `src/geometry/client.ts`. If the two ever
-disagree, the code is the source of truth - update this file to match it, not the other
+disagree, the code is the source of truth, update this file to match it, not the other
 way around.
 
 ## Connecting
@@ -42,7 +42,7 @@ A **terminal** reply always has the same top-level shape:
 ```
 
 `rebuild` and `computeAll` additionally stream **non-terminal progress frames** with no
-`ok` field - see "Progress frames" below; a client must not resolve a pending call on
+`ok` field, see "Progress frames" below; a client must not resolve a pending call on
 one of those.
 
 ## Ops
@@ -74,11 +74,11 @@ of the mesh payload the client already holds, for the per-body cache described b
 
 Reply `result` is one of:
 
-- **Resync needed** - the worker doesn't hold a document at `baseRevision` (first
+- **Resync needed**, the worker doesn't hold a document at `baseRevision` (first
   connection, worker respawn, or a missed message): `{ "resync": true }`. The client
   must retry with a full send.
 - **Nothing built yet** (e.g. only sketches, no solid): `{ "protocol": 2, "bodies": [], "bbox": null }`.
-- **Built** (protocol v2, per-body payloads - see below):
+- **Built** (protocol v2, per-body payloads, see below):
   ```jsonc
   {
     "protocol": 2,
@@ -106,24 +106,24 @@ Reply `result` is one of:
   for a single-line banner; `featureErrors` carries all of them.
 
   `diagnostics` is omitted when empty, but when present it is **complete for the whole
-  document** — an incrementally-resumed rebuild replays the diagnostics of its cached
+  document**, an incrementally-resumed rebuild replays the diagnostics of its cached
   prefix rather than reporting only the features it re-ran. Clients may rely on that:
   the "Re-pick face" repair is offered only when the build carries a repairable entry,
   so a partial array would silently withdraw a repair path on exactly the documents
-  that need it. (Before 0.1.70 the array *was* partial — a resumed build re-reported
+  that need it. (Before 0.1.70 the array *was* partial, a resumed build re-reported
   every error with zero diagnostics.)
 
   A diagnostic may carry a machine-readable **`code`** beside its human `reason`:
   `ambiguousReference` (the selector matched several candidates), `referenceNotFound`
   (it matched nothing) and `planeTilted` (a face-anchored plane's face is no longer
-  parallel, so the plane kept its cached placement). Adding a code is a pure addition —
-  an unrecognised one must read as "unclassified" — and the prose match on `ambiguous
+  parallel, so the plane kept its cached placement). Adding a code is a pure addition,
+  an unrecognised one must read as "unclassified", and the prose match on `ambiguous
   nearest pick` is still honoured, so a sidecar older than the field keeps its repair
   affordance. The first two are repairable by picking a face; `planeTilted` is not,
   because the candidate filter is taken against the cached normal and re-picking the
   same tilted face reproduces the same diagnostic.
-- **Fatal** - nothing built at all: `{ "error": { "message": "...", "feature_id": "..." } }`.
-- **Stalled worker** - one operation ran past the stall timeout (60 s of no build
+- **Fatal**, nothing built at all: `{ "error": { "message": "...", "feature_id": "..." } }`.
+- **Stalled worker**, one operation ran past the stall timeout (60 s of no build
   progress): the sidecar kills and respawns the geometry worker and returns
   `{ "error": { "message": "one operation stalled for over N s - the geometry kernel was restarted; progress up to the last checkpoint is kept" } }`.
 - **Crashed worker**: `{ "error": { "message": "the geometry kernel crashed on this operation" } }`.
@@ -278,7 +278,7 @@ the tessellator and the frontend's face ids use.
 ### `import`
 
 Reads an external geometry file (STL / 3MF / STEP / BREP) into an embeddable BREP
-payload for an `import` feature. Path-based - the sidecar reads the file directly, the
+payload for an `import` feature. Path-based, the sidecar reads the file directly, the
 frontend never ships file bytes over the socket.
 
 ```jsonc
@@ -289,7 +289,7 @@ Reply: `{ "brep": "...", "name": "...", "solid": true, "faces": [...] }` (the ex
 fields the frontend embeds as an `import` feature), or `{ "error": { "message": "..." } }`.
 Given a longer budget than a normal rebuild (mesh read + B-rep build can run longer).
 
-### `session_*` — the live session
+### `session_*`, the live session
 
 Five ops that share one document between the app window and an outside client
 (the MCP server in `plugins/FundaCAD.MCP/`). They are answered on the **read path**, never behind
@@ -332,14 +332,14 @@ losing the socket gives it up.
 ```
 
 A proposal is refused if `baseRevision` is not the current revision. That is the
-rule that stops an agent's edit landing on a model the user has since changed —
+rule that stops an agent's edit landing on a model the user has since changed,
 the selector it wrote may now address a different face. Three named reasons
 rather than one failure, because the guest's next move differs for each: give
 up, read again, or wait.
 
 `status` is opaque to the sidecar and is passed through verbatim. The window puts
 `canEdit` in it (so a guest refuses an edit up front instead of waiting out its
-own timeout) and `applied`, the ids of the proposals it has taken — which is the
+own timeout) and `applied`, the ids of the proposals it has taken, which is the
 acknowledgement a guest waits on. Not "the revision moved", which also moves for
 the user's own edits, and not "the published document equals what I offered",
 which is never true: the window migrates a document on the way in and adds
@@ -369,7 +369,7 @@ tessellating. `meshed` / `meshTotal` carry the payload phase's per-body denomina
 `import` streams the same way with `status: "importing"` and `phase` / `label` / `pct`.
 
 A client must route **any** frame carrying a `status` string to its progress listeners
-and never treat one as the terminal reply - the real `{ "ok": ... }` reply always
+and never treat one as the terminal reply, the real `{ "ok": ... }` reply always
 follows once the rebuild finishes (or the worker is judged stalled/crashed, per the
 `rebuild` error cases above). Guarding on `status === "building"` alone is a trap: an
 unrecognised status then falls through to the pending-request map and resolves the
@@ -390,8 +390,8 @@ The header is the normal `{"id","ok","result"}` envelope, except each mesh array
 referencing `result.$buffers[i] = {"dtype","len"}` (`len` is an **element** count) in
 on-wire order; the client walks `$buffers` to compute offsets sequentially. A body's
 edge polylines are packed the same way into `{"$pts","$counts","body"}`, where `$counts`
-holds each edge's **point** count. Everything else - stubs, `faceOwners`, `bbox`,
-`diagnostics` - stays inline JSON in the header.
+holds each edge's **point** count. Everything else, stubs, `faceOwners`, `bbox`,
+`diagnostics`, stays inline JSON in the header.
 
 Both dtypes are 4 bytes/element, so after the single header pad every buffer is
 4-aligned for free. **INVARIANT: adding a wider dtype requires per-buffer padding.**
@@ -399,11 +399,11 @@ Both dtypes are 4 bytes/element, so after the single header pad every buffer is
 ## Chunked replies (`"chunked": true`)
 
 A successful `rebuild`/`computeAll` mesh reply can exceed any single frame the socket
-will carry (`_MAX_FRAME`, 128 MiB - a DoS control, mirrored in `client.ts` as
+will carry (`_MAX_FRAME`, 128 MiB, a DoS control, mirrored in `client.ts` as
 `MAX_MESSAGE_BYTES`). `"chunked": true` (which also requires `"binary": true`) splits
 the reply across several frames instead, so document size stops being a hard limit.
 
-Each chunk is a **self-contained binary frame** in exactly the layout above - its own
+Each chunk is a **self-contained binary frame** in exactly the layout above, its own
 header, its own pad, its own `$buffers` table. Buffer indices are therefore **frame-local**
 and each chunk decodes independently. The framing rides in one extra envelope field:
 
@@ -419,7 +419,7 @@ and each chunk decodes independently. The framing rides in one extra envelope fi
   `diagnostics`, `projectionUpdates`, `featureError(s)`) plus a **`manifest`**: one entry
   per body of the reply, in final order, as `{id, name, etag, nodeRef?, unchanged?}` plus
   `{faceCount, nVerts3, nIdx, nTris, nEdges, hasNormals?}` **for full bodies only**.
-  Sizes are absent on stubs by design - the sidecar does not have them, because those
+  Sizes are absent on stubs by design, the sidecar does not have them, because those
   arrays live in the client's own per-body cache. The head carries no `bodies`.
 - **`seq: 1..N`** each carry a contiguous slice of `bodies` (plus its `$buffers`), in
   manifest order. Order is load-bearing: the client accumulates each body's global
@@ -446,12 +446,12 @@ carrying `status` is routed to progress listeners and dropped.
 Negotiation is per request, exactly like `binary`. An older sidecar ignores the unknown
 flag and answers with one frame; an older client never sets it and gets one frame. So
 neither side can emit a stream the other cannot read. When the flag *is* set, every
-successful mesh reply is streamed - not just large ones - so the multi-frame path is
+successful mesh reply is streamed, not just large ones, so the multi-frame path is
 exercised constantly rather than for the first time on a user's oversized assembly.
 
 Two cases still end a reply with a terminal **text** error, which supersedes any partial
 stream: a cancel arriving between chunks (`{"ok": false, "cancelled": true, ...}`), and a
-**single body** whose own payload exceeds the frame cap - the one case chunking cannot
+**single body** whose own payload exceeds the frame cap, the one case chunking cannot
 fix, since a body is the indivisible unit of a chunk. That error names the offending body.
 
 ## Bad input

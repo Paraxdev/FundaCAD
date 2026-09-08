@@ -4,7 +4,7 @@
 // The house shape for a user setting (ui/theme.ts, icons.ts, units.ts,
 // toolRail.ts): module state, a validating gate over the untrusted stored value,
 // one `fundacad.*` key read at load, and a listener set so live surfaces
-// re-render. No Vue import — that is what keeps the headless *.test.ts suite
+// re-render. No Vue import, that is what keeps the headless *.test.ts suite
 // able to reach it.
 //
 // A MAP like toolRail's rather than one value, so it sanitises PER FIELD: a
@@ -70,7 +70,7 @@ function readStored(): LayoutPrefs {
 let current = readStored();
 const listeners = new Set<() => void>();
 
-/** Read-only — go through setLayoutPref so the write is persisted and
+/** Read-only, go through setLayoutPref so the write is persisted and
  *  subscribers are told. */
 export function layoutPrefs(): Readonly<LayoutPrefs> {
   return current;
@@ -99,7 +99,7 @@ export function onLayoutPrefsChange(fn: () => void): () => void {
 
 /** Stamp the non-default positions on <html>, so the stylesheet can answer with
  *  plain attribute selectors and the default arrangement needs no attribute at
- *  all — the same trick theme.ts uses for the palette that lives on bare :root,
+ *  all, the same trick theme.ts uses for the palette that lives on bare :root,
  *  and for the same reason: a `[data-ribbon="top"]` block would be a duplicate
  *  of the base rules and the two would drift. */
 function apply() {
@@ -113,7 +113,7 @@ function apply() {
 }
 
 /** Put the stored arrangement on the document. Call once at startup, alongside
- *  initTheme — reading the value at module load does not write the attributes,
+ *  initTheme, reading the value at module load does not write the attributes,
  *  so without this a stored side-ribbon would open along the top until the user
  *  changed something. */
 export function initLayoutPrefs() {

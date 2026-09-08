@@ -15,7 +15,7 @@
 // name files under src/: the printer connection owned src/print/ and three
 // components in src/components/overlays/, and the 3D mouse owned
 // src/input/spacemouse.ts and a fourth component. The test passed, and what it
-// proved was narrower than it sounded — nothing imported those files, but they
+// proved was narrower than it sounded, nothing imported those files, but they
 // were still in the app's own tree, typechecked with it, and reachable by a one
 // line import from anywhere. A capability was a set of files with a rule
 // attached rather than a thing you could point at.

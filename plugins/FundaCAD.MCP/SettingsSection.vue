@@ -2,7 +2,7 @@
 // What an assistant connected over MCP may do to the document that is open.
 //
 // This was written out in src/components/overlays/PreferencesDialog.vue, above
-// the plugin list, on every machine — including the ones where nothing had ever
+// the plugin list, on every machine, including the ones where nothing had ever
 // connected and nothing ever would. A control that decides nothing is worse
 // than a missing one: it is a question about a feature that is not there, and
 // five lines of explanation for it.

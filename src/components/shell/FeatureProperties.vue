@@ -10,8 +10,8 @@
 //
 // Four kinds of row, in the order a form reads best: what the feature is APPLIED
 // TO first, then the CHOICES, then the switches, then the numbers. A choice
-// usually decides which numbers are even there — pick a texture pattern and the
-// Angle and Seed rows appear or go — so putting it under the fields it governs
+// usually decides which numbers are even there, pick a texture pattern and the
+// Angle and Seed rows appear or go, so putting it under the fields it governs
 // would have the reader working upward. The numbers come last because they are
 // the long tail.
 //
@@ -60,7 +60,7 @@ const store = engine.store;
 const feature = useDocValue((doc) => doc.features.find((f) => f.id === props.featureId) ?? null);
 
 // What this feature is applied to. Declared in features/selectionTargets.ts, so
-// a feature with no editable selection — a primitive, a scale — simply has no
+// a feature with no editable selection, a primitive, a scale, simply has no
 // rows here rather than an empty heading.
 const targetRows = useDocValue((doc) => {
   const f = doc.features.find((x) => x.id === props.featureId);
@@ -231,7 +231,7 @@ const featureRows = useDocValue((doc) => {
       key: field,
       // Not every label is a constant. One tool's shape slider is a flat LAND
       // width on a faceted surface and a crispness on a smooth one, and calling
-      // both "Sharpness" describes neither — so whoever owns the feature type
+      // both "Sharpness" describes neither, so whoever owns the feature type
       // gets to answer, and the inventory's label is what it falls back to.
       label: fieldLabel(f.type, field, values)?.text ?? label,
       // An expression is written in CANONICAL units so a file evaluates the
@@ -289,7 +289,7 @@ function previewNumber(row: { key: string; kind: FieldKind }, raw: string): numb
  *  alternative to.
  *
  *  Through the store's edit preview, so what is on screen is the REAL feature
- *  rebuilt by the sidecar in the timeline position it will occupy — not a
+ *  rebuilt by the sidecar in the timeline position it will occupy, not a
  *  drawn approximation of it, which would be a second thing to keep in step and
  *  would go on looking right when the kernel had already refused. A preview is
  *  not an undo step, so Enter is still what commits.

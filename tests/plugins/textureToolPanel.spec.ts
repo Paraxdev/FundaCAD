@@ -7,7 +7,7 @@
 //     tool opens it. App.vue used to carry a `v-if` for this panel, which was the
 //     application knowing this tool exists;
 //
-//   * commit does NOT close the panel — the tool refuses a commit with no target
+//   * commit does NOT close the panel, the tool refuses a commit with no target
 //     and stays active, and closing first stranded the user in an invisible
 //     modal (panel gone, tool still owning face-picking, toolBusy() blocking
 //     every Esc handler);
@@ -184,7 +184,7 @@ describe("TextureToolPanel", () => {
     expect(handlers.onChange.mock.lastCall![0].depth).toBe(1.5);
   });
 
-  it("commits WITHOUT closing — the tool may refuse and stay active", async () => {
+  it("commits WITHOUT closing, the tool may refuse and stay active", async () => {
     const { handlers } = open();
     await nextTick();
     const ok = [...document.querySelectorAll<HTMLButtonElement>("button")]

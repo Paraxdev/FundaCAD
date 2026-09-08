@@ -1,12 +1,12 @@
 /* ============================================================================
-   SHELL ARRANGEMENT — the ribbon on the top or the side, history on the bottom
+   SHELL ARRANGEMENT, the ribbon on the top or the side, history on the bottom
    or the right.
    ============================================================================
 
    Driven by the attributes ui/layoutPrefs.ts stamps on <html>. The DEFAULT
    arrangement has no attribute at all and so has no rules here: it is what
    _base.scss's #app grid already says. Same trick theme.ts uses for the palette
-   that lives on bare :root, and for the same reason — a `[data-ribbon="top"]`
+   that lives on bare :root, and for the same reason, a `[data-ribbon="top"]`
    block would be a copy of the base rules and the two would drift.
 
    Nothing is re-parented. Every component keeps its element id and its place in
@@ -77,7 +77,7 @@
     padding: var(--s-3) 0;
   }
   /* The tools inside a group have to turn with the bar. Left as a row they run
-     off the side of a 112px column and are clipped — which is not a near miss
+     off the side of a 112px column and are clipped, which is not a near miss
      that a wider column fixes, because a group holds up to seven of them. */
   .ribbon-tools {
     flex-direction: column;
@@ -111,10 +111,10 @@
     text-align: left;
   }
   /* A split button's caret sits at the end of the row, not glued to a 60px
-     tile — the row is full width now. */
+     tile, the row is full width now. */
   .ribbon-split { width: 100%; }
   .ribbon-split .ribbon-btn { flex: 1; }
-  /* A group's divider moves from its right edge to its bottom one — it is
+  /* A group's divider moves from its right edge to its bottom one, it is
      separating rows now, not columns. */
   .ribbon-group:not(:last-child)::after {
     top: auto;
@@ -126,7 +126,7 @@
     background: var(--line);
   }
   /* The spacer that pushes Finish Sketch to the far end pushes it DOWN here;
-     `flex: 1` already does that once the axis is vertical, so nothing to add —
+     `flex: 1` already does that once the axis is vertical, so nothing to add,
      but the overflow button is centred on the cross axis, which was the
      horizontal one. */
   .ribbon-overflow {
@@ -154,7 +154,7 @@
     justify-content: flex-start;
     padding: var(--s-4) var(--s-3);
   }
-  /* The transport buttons stay a ROW — they are a segmented control, and four
+  /* The transport buttons stay a ROW, they are a segmented control, and four
      of them stacked would be a column of unrelated arrows. */
   .timeline-transport {
     flex: none;
@@ -176,7 +176,7 @@
     align-items: stretch;
     /* max-content is right for a horizontal strip (the track is as long as its
        chips) and wrong for a column, where it resolves to the widest child's
-       UNWRAPPED width — which #timeline then clips, so the empty state read
+       UNWRAPPED width, which #timeline then clips, so the empty state read
        "Your modeling history will appear he". */
     width: auto;
     height: auto;

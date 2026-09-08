@@ -3,7 +3,7 @@
 //! Everything else is verified on one side of the boundary: `container.rs`'s unit
 //! tests round-trip synthetic bytes, and the sidecar's `test_blob_rebuild.py`
 //! rebuilds from a blob the sidecar itself wrote. Neither proves the two halves
-//! compose — that a blob PYTHON produced survives RUST's zip round-trip and is
+//! compose, that a blob PYTHON produced survives RUST's zip round-trip and is
 //! still readable by Python afterwards. A mismatch in the hash, the filename
 //! convention, or the byte handling would slip through both suites and show up
 //! as "the geometry vanished" on a user's machine.

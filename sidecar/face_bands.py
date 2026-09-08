@@ -49,7 +49,7 @@ ANG_TOL = 1e-9
 # builder.py: absolute at small sizes so a 0.2 mm thread is not swallowed,
 # proportional above that so a coarse one scales with it. Measured off the body,
 # because this side has no profile to ask, which makes it the more generous of
-# the two — and still a hundredth of a printed layer on a 100 mm part.
+# the two, and still a hundredth of a printed layer on a 100 mm part.
 GAP_ABS = 1e-3
 GAP_REL = 1e-4
 
@@ -108,7 +108,7 @@ def _canon_dir(d):
 
 def _outward_at_middle(face):
     """(point, unit normal) at the face's parametric middle, its own orientation
-    already applied — so this is the direction the MATERIAL side faces, not the
+    already applied, so this is the direction the MATERIAL side faces, not the
     direction the underlying surface happens to be parametrised in.
 
     Returns None when the face has no usable normal there."""
@@ -134,7 +134,7 @@ def _radial_side(face, direction, location):
     question: a reversed face on an axis stored one way and a forward face on the
     same axis stored the other way are the same side of the same wall, and the
     reversed flag alone calls them opposites. Measuring the normal answers the
-    question that was actually being asked — which side is solid — without
+    question that was actually being asked, which side is solid, without
     caring how the surface underneath got written down."""
     got = _outward_at_middle(face)
     if got is None:
@@ -156,7 +156,7 @@ def _torus_side(face, direction, location, major):
     it, 0 when it cannot be told.
 
     Same trap, same answer. A torus is unchanged by writing its axis the other
-    way — it is symmetric about its own plane — so the direction cannot be part
+    way, it is symmetric about its own plane, so the direction cannot be part
     of the identity, and the reversed flag cannot carry the side on its own once
     the direction is normalised away. A fillet on a circular edge is a torus, so
     this is not a corner case: one split into pieces is the same wall."""
@@ -171,7 +171,7 @@ def _torus_side(face, direction, location, major):
     if m <= LIN_TOL:
         return 0.0
     # the nearest point on the circle the tube rides, and the outward direction
-    # from it — which is what "outside of the tube" means
+    # from it, which is what "outside of the tube" means
     centre = tuple(location[k] + planar[k] * (major / m) for k in range(3))
     ref = _sub(point, centre)
     rm = _norm(ref)
@@ -314,12 +314,12 @@ def gap_tolerance(shape):
 
 def _near_pairs(faces, surf, tol, already):
     """Same-surface faces that come within `tol` of each other without sharing an
-    edge — the kernel's own clearance standing where an edge would be.
+    edge, the kernel's own clearance standing where an edge would be.
 
     Bucketed by surface first and screened by bounding box second, so the only
     pairs that reach the real distance call are ones already known to be on one
     surface and within a hair of each other. On every shape that has no such
-    pair — which is nearly all of them — this costs one bounding box per face."""
+    pair, which is nearly all of them, this costs one bounding box per face."""
     from OCP.BRepExtrema import BRepExtrema_DistShapeShape
 
     buckets = {}

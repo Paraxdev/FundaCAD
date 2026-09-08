@@ -1,7 +1,7 @@
 // The selection-driven offer, proved without a viewport.
 //
 // Every failure here is a version of "the app knows perfectly well that Fillet
-// works on this, and still isn't offering it" — the complaint
+// works on this, and still isn't offering it", the complaint
 // features/toolCapabilities.ts was written to end, now one layer further up
 // where the buttons are.
 
@@ -74,8 +74,8 @@ describe("what a selection offers", () => {
   });
 
   it("never offers a tool that runs its own pick", () => {
-    // Shell can act on a face, but a selected face does not make Shell runnable
-    // — it would ignore the selection and ask for another click, which reads as
+    // Shell can act on a face, but a selected face does not make Shell runnable,
+    // it would ignore the selection and ask for another click, which reads as
     // the button having done nothing.
     for (const sel of [{ face: 4 }, { edge: 2 }, { body: 1 }]) {
       expect(labels(selectionOffers(sel))).not.toContain("shell");
@@ -147,7 +147,7 @@ describe("the toolbar's cut", () => {
   it("does not carry the destructive verb", () => {
     // A hover bar is a button-sized piece of the part you are looking at, so a
     // stray click lands on geometry. "Remove this face and heal the solid" is
-    // not something to keep there — it stays on Del and in the right-click
+    // not something to keep there, it stays on Del and in the right-click
     // menu. It is still in the OFFER, which is what a menu ranks from.
     expect(labels(toolbarOffers({ face: 1 }))).not.toContain("delete-face");
     expect(labels(selectionOffers({ face: 1 }))).toContain("delete-face");

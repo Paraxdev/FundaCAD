@@ -5,12 +5,12 @@ holding a loaded OCCT; an MCP host kills its servers with TerminateProcess,
 which runs no cleanup. Measured while driving the server from a script before
 this was fixed: 53 python processes left behind, after which a fresh sidecar
 could not start its own worker and every build failed with "the geometry engine
-could not start on this computer" — an error about the machine, from a machine
+could not start on this computer", an error about the machine, from a machine
 that had been fine an hour earlier.
 
 So the test kills the OWNER the way a host would, with no chance to clean up,
 and asks whether the sidecar is still there. The control is the same run with
-the job object switched off, which must leave it alive — otherwise this would
+the job object switched off, which must leave it alive, otherwise this would
 pass on a platform where something else happens to be reaping the process, and
 prove nothing.
 
@@ -98,7 +98,7 @@ def run_case(job):
         assert pid is not None, "the owner never reported a sidecar pid"
         assert alive(pid), "the sidecar was not running before the kill"
         tree = [pid] + children(pid)
-        assert len(tree) > 1, "the sidecar had no worker to leak — nothing to measure"
+        assert len(tree) > 1, "the sidecar had no worker to leak, nothing to measure"
         # TerminateProcess on the OWNER only: no /T, so nothing sweeps the tree
         # and nothing in the owner gets to run. This is what a host does.
         subprocess.run(["taskkill", "/F", "/PID", str(owner.pid)], capture_output=True)
@@ -117,7 +117,7 @@ def run_case(job):
 
 def test_the_sidecar_dies_when_its_owner_is_killed_outright():
     if sys.platform != "win32":
-        print("not Windows — the sidecar's own PR_SET_PDEATHSIG/getppid cover this")
+        print("not Windows, the sidecar's own PR_SET_PDEATHSIG/getppid cover this")
         return
     tree, left = run_case(job=True)
     assert not left, f"{left} outlived the process that started them (tree was {tree})"
@@ -128,11 +128,11 @@ def test_the_control_without_a_job_object_leaks():
     """Without the job object the sidecar MUST survive. If it does not, something
     else on this machine is reaping it and the test above proves nothing."""
     if sys.platform != "win32":
-        print("not Windows — skipped with the case above")
+        print("not Windows, skipped with the case above")
         return
     tree, left = run_case(job=False)
     try:
-        assert left, (f"the engine tree {tree} died even with no job object — the "
+        assert left, (f"the engine tree {tree} died even with no job object, the "
                       "test above is not measuring what it claims")
         print(f"{left} of {tree} leaked without a job object, as expected")
     finally:

@@ -8,11 +8,11 @@ worth more than calling build123d directly from this process.
 There are two ways to have an engine, and which one is in force decides what an
 agent can reach:
 
-  * STANDALONE — spawn one, on a free port, with a token minted here. It never
+  * STANDALONE, spawn one, on a free port, with a token minted here. It never
     competes with a running app for the worker and it cannot see the document
     the user has open. An agent working this way works on its own copy and hands
     back a file.
-  * ATTACHED — join the engine a running FundaCAD already has, by reading the
+  * ATTACHED, join the engine a running FundaCAD already has, by reading the
     port and token it publishes (app_session.py). The agent then shares the
     user's engine AND, through the session ops, the document on their screen.
 
@@ -73,8 +73,8 @@ CALL_TIMEOUT = 600.0
 def _free_port():
     """A port nothing is on, right now.
 
-    Inherently a race — something else can take it between this close and the
-    sidecar's bind — but the sidecar reports a bind failure by name, so the race
+    Inherently a race, something else can take it between this close and the
+    sidecar's bind, but the sidecar reports a bind failure by name, so the race
     is loud rather than silent."""
     s = socket.socket()
     try:
@@ -170,14 +170,14 @@ class SidecarLink:
         self._lock = asyncio.Lock()
         # Held for the life of this object. On Windows it is what makes the
         # sidecar and its worker pool die with THIS process however this process
-        # dies — an MCP host kills its servers outright, and a sidecar that
+        # dies, an MCP host kills its servers outright, and a sidecar that
         # outlives the kill takes its OCCT worker with it. See winjob.py.
         self._job = ProcessJob()
 
     @classmethod
     def from_env(cls):
         """A link configured by environment variables alone: the explicit
-        override. Knows nothing about a running app — see `for_mode`."""
+        override. Knows nothing about a running app, see `for_mode`."""
         tok = _env("SIDECAR_TOKEN")
         return cls(python=os.environ.get("FUNDACAD_SIDECAR_PYTHON"),
                    port=_env("SIDECAR_PORT"),
@@ -189,7 +189,7 @@ class SidecarLink:
 
         Returns `(link, app)` where `app` is the running app's `{port, token,
         pid}` when attached and None when not, so the caller can say which of the
-        two worlds it is in without inferring it from `link.attached` — that flag
+        two worlds it is in without inferring it from `link.attached`, that flag
         is also set by the environment override, which is a different thing.
 
         An explicit token in the environment wins over everything here. Someone
@@ -207,7 +207,7 @@ class SidecarLink:
         if mode != "standalone":
             app = await app_session.find_running_app()
             if app is not None:
-                say(f"[mcp] FundaCAD is open (pid {app.get('pid')}) — "
+                say(f"[mcp] FundaCAD is open (pid {app.get('pid')}), "
                     f"attaching to its engine on port {app['port']}")
                 return cls(port=app["port"], token=app["token"]), app
             if mode == "attach":
@@ -220,9 +220,9 @@ class SidecarLink:
                     "Open FundaCAD, or use FUNDACAD_MCP_MODE=auto to work on a "
                     "private copy when it is closed."
                 )
-            say("[mcp] no FundaCAD window is open — starting a private engine")
+            say("[mcp] no FundaCAD window is open, starting a private engine")
         else:
-            say("[mcp] standalone by configuration — starting a private engine")
+            say("[mcp] standalone by configuration, starting a private engine")
         return cls(), None
 
     async def start(self):
@@ -279,7 +279,7 @@ class SidecarLink:
             # Close the transport explicitly. Left open, the proactor loop on
             # Windows finalises it during interpreter shutdown, by which time
             # the pipes are gone, and every run ends in pages of "I/O operation
-            # on closed pipe" from __del__ — on STDERR, which for an MCP server
+            # on closed pipe" from __del__, on STDERR, which for an MCP server
             # is the log the user reads when something is wrong.
             transport = getattr(self.proc, "_transport", None)
             if transport is not None:

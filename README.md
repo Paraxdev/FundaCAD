@@ -59,15 +59,15 @@ your user profile.
 
 The builds are **not code signed**, so each OS says so in its own way:
 
-- **Windows** — SmartScreen shows "Windows protected your PC". Choose **More
+- **Windows**, SmartScreen shows "Windows protected your PC". Choose **More
   info**, then **Run anyway**. The portable build says it too, on first run.
-- **macOS** — Gatekeeper may report the app as damaged. It is not; that is what
+- **macOS**, Gatekeeper may report the app as damaged. It is not; that is what
   an unsigned app looks like to a current macOS. Clear the quarantine flag once,
   after moving it to Applications:
   ```bash
   xattr -dr com.apple.quarantine /Applications/FundaCAD.app
   ```
-- **Linux** — the AppImage needs `chmod +x` and nothing else, and is the one to
+- **Linux**, the AppImage needs `chmod +x` and nothing else, and is the one to
   reach for when the others give trouble: it carries its own WebKitGTK.
 
   The `.deb` and `.rpm` are built on Ubuntu 22.04, so they depend on the
@@ -121,9 +121,9 @@ outlives its shell, so kill it by hand or it keeps port 8765.
 
 ## Docs
 
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — how the three processes fit together
-- [`docs/PROTOCOL.md`](docs/PROTOCOL.md) — the WebSocket the frontend and sidecar speak
-- [`docs/PACKAGING.md`](docs/PACKAGING.md) — how the bundled Python runtime is built
-- [`docs/MCP.md`](docs/MCP.md) — the MCP server another model builds, measures and looks at parts through
-- [`docs/PLUGINS.md`](docs/PLUGINS.md) — optional parts of the app, what they may reach, and how that is asked
-- [`docs/EDGE-CASES.md`](docs/EDGE-CASES.md) / [`docs/IMPROVEMENT-AUDIT.md`](docs/IMPROVEMENT-AUDIT.md) — known rough edges
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), how the three processes fit together
+- [`docs/PROTOCOL.md`](docs/PROTOCOL.md), the WebSocket the frontend and sidecar speak
+- [`docs/PACKAGING.md`](docs/PACKAGING.md), how the bundled Python runtime is built
+- [`docs/MCP.md`](docs/MCP.md), the MCP server another model builds, measures and looks at parts through
+- [`docs/PLUGINS.md`](docs/PLUGINS.md), optional parts of the app, what they may reach, and how that is asked
+- [`docs/EDGE-CASES.md`](docs/EDGE-CASES.md) / [`docs/IMPROVEMENT-AUDIT.md`](docs/IMPROVEMENT-AUDIT.md), known rough edges

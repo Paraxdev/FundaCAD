@@ -52,7 +52,7 @@ export function snap(
   };
   let best: SnapCandidate | null = null;
   let bestD = pixelTol;
-  // Nearest anchor sharing the cursor's row / column — the alignment pass. Both
+  // Nearest anchor sharing the cursor's row / column, the alignment pass. Both
   // are gathered in this one loop rather than in a second walk of the candidates,
   // which on a large sketch is the difference between one projection per
   // candidate and three.
@@ -74,7 +74,7 @@ export function snap(
       }
     }
     // Measured to the point that has the ANCHOR's x and the CURSOR's y, as a
-    // full screen distance — the same construction the grid fallback uses below,
+    // full screen distance, the same construction the grid fallback uses below,
     // and for the same reason: the tolerance has to be the same reach at every
     // zoom, and with Lock to Plane off a sketch axis is neither screen axis.
     const dx = screenGap(new THREE.Vector2(c.p.x, raw.y));
@@ -117,8 +117,8 @@ export function snap(
 
   // ALIGNMENT, above the grid and below a point.
   //
-  // Above the grid because a guide is a statement about the drawing — "level
-  // with that hole", "centred on this face" — and the lattice is only ever the
+  // Above the grid because a guide is a statement about the drawing, "level
+  // with that hole", "centred on this face", and the lattice is only ever the
   // fallback for having nothing better to say. Below a point because when the
   // cursor is ON an anchor, that anchor is the answer and a line through it is
   // not needed.
@@ -135,7 +135,7 @@ export function snap(
     // The axis alignment did NOT answer still gets the grid's answer. A guide
     // and the lattice are two different statements about two different
     // coordinates, and there is no reason taking one should throw the other
-    // away — but it did: alignment returned before the grid was ever consulted,
+    // away, but it did: alignment returned before the grid was ever consulted,
     // so a point that lined up with an existing corner kept a raw, unrounded
     // coordinate in the other axis. That is where a vertex reading 20.0000 by
     // 5.0072 comes from, on a 1mm grid, seven microns off a line the user could
@@ -169,7 +169,7 @@ export function snap(
  *  With the select tool armed there is nothing to place, so a marker on a bare
  *  grid intersection or an alignment line advertises a position that no click is
  *  going to put anything at. What is still worth marking there is an anchor on
- *  real geometry — an endpoint, a midpoint, a centre — because those ARE what a
+ *  real geometry, an endpoint, a midpoint, a centre, because those ARE what a
  *  click grabs and drags. Every other tool is placing a point and wants the
  *  whole lattice.
  *
@@ -219,7 +219,7 @@ export function candidatesFromEntities(
     } else if (e.type === "point") {
       add(e.x, e.y, "endpoint", 110); // a placed point is a strong snap target
     } else if (e.type === "projected") {
-      // projected reference curves snap like their native counterparts — that's
+      // projected reference curves snap like their native counterparts, that's
       // half the point of projecting. Centers come from asRound (the one
       // circumcenter-for-projected-arc rule). Poly interior vertices are
       // SAMPLES, not real model points, so they snap weakly (60).
@@ -247,7 +247,7 @@ export function candidatesFromEntities(
 }
 
 // `id` is the stable in-session identity constraints reference (see ./id.ts).
-// `dimPlace` mirrors SketchEntity's badge-label placement (see types.ts) — it's
+// `dimPlace` mirrors SketchEntity's badge-label placement (see types.ts), it's
 // plain numbers already, so it survives resolution as a structural copy.
 export type ResolvedEntity =
   | { type: "line"; id: string; x1: number; y1: number; x2: number; y2: number; construction?: boolean; dimPlace?: DimPlace }

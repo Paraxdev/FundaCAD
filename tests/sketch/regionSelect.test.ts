@@ -10,7 +10,7 @@ import { worldPointInRegion } from "../../src/sketch/regionSelect";
 const circle = (id: string, r: number): ResolvedEntity =>
   ({ type: "circle", id, x: 0, y: 0, radius: r }) as ResolvedEntity;
 
-describe("worldPointInRegion — coplanarity gate", () => {
+describe("worldPointInRegion, coplanarity gate", () => {
   // The exact recovered loft geometry: lower rings r25/r20 on XY, upper rings
   // r16/r13.18 on a plane parallel to XY at z=24. The upper ring's anchor sits
   // at radius ~14.4, which projects INTO the lower disk (radius < 20).

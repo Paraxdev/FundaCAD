@@ -84,7 +84,7 @@ describe("convexTouchesRect", () => {
     const clip = [190, 190, 400, 190, 400, 400];
     expect(convexTouchesRect(clip, R)).toBe(true);
     // CONTROL: nudged past the corner it stops touching, and a bounding-box
-    // test would still say yes here — which is why the edge normals are tested.
+    // test would still say yes here, which is why the edge normals are tested.
     const missed = [210, 210, 400, 210, 400, 400];
     expect(convexTouchesRect(missed, R)).toBe(false);
   });
@@ -150,7 +150,7 @@ describe("faceInBox", () => {
 
   it("takes nothing for a face with no triangles left", () => {
     // What a face reduced to nothing by the caller's visibility filter looks
-    // like — every one of its triangles faces away. "Everything inside the box"
+    // like, every one of its triangles faces away. "Everything inside the box"
     // is vacuously true of an empty set and would have selected the whole far
     // side of the model.
     expect(faceInBox([], R, "window")).toBe(false);

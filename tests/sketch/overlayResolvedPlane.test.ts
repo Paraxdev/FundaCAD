@@ -2,7 +2,7 @@
 //
 // The sketch's own `plane` is the cache written when the pick was made. Once the
 // sketch follows a face, that cache and the plane the sidecar actually built on
-// part company the moment anything upstream moves — and the overlay is the half
+// part company the moment anything upstream moves, and the overlay is the half
 // the user sees. Drawing the cache means the profile outline sits at the old
 // height while the pocket cut from it sits at the new one: one model, two
 // answers, and nothing on screen saying which is which.

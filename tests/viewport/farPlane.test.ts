@@ -1,13 +1,13 @@
 // The far plane that follows the camera OUT, and the property it exists for: the
 // ground grid must never run through it.
 //
-// This is the bug those rules were written from. The lattice is adaptive — its
+// This is the bug those rules were written from. The lattice is adaptive, its
 // cell tracks the zoom and it runs three viewport diagonals either side of the
-// view centre — so zooming out grows it without limit, while far was a flat
+// view centre, so zooming out grows it without limit, while far was a flat
 // 10000mm. Measured on the running app before the fix: a 200mm grid step reached
 // 8000mm from a camera 2813mm out (the lattice started being cut off along a line
 // across the view), and a 1000mm step reached 37500mm from 13054mm out (the
-// viewport went black — grid, part and all, entirely behind far).
+// viewport went black, grid, part and all, entirely behind far).
 //
 // So the assertion is not "far is bigger now". It is that at EVERY zoom the grid
 // the app will actually build fits inside the frustum it will actually be drawn
@@ -42,7 +42,7 @@ function worldPerPixel(distance: number, heightPx: number): number {
   return (2 * Math.tan((FOV * Math.PI) / 360) * distance) / heightPx;
 }
 
-/** How far the ground grid reaches from its centre, for a camera this far out —
+/** How far the ground grid reaches from its centre, for a camera this far out,
  *  the same cell and cell-count the app builds (viewport/scene.ts). */
 function gridReach(distance: number, wPx: number, hPx: number): number {
   const mmPerPx = worldPerPixel(distance, hPx);
@@ -126,7 +126,7 @@ describe("orthoDepth", () => {
 
   it("covers the sketch grid rather than clipping it, zoomed out", () => {
     // Orthographic was left alone on the grounds that its precision does not
-    // vary with zoom — true, and beside the point: the range was the same fixed
+    // vary with zoom, true, and beside the point: the range was the same fixed
     // ±10000, so a zoomed-out sketch clipped its own lattice too.
     for (const [w, h] of VIEWPORTS) {
       for (let halfH = 1; halfH < 1e5; halfH *= 1.4) {

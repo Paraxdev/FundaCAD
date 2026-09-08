@@ -1,7 +1,7 @@
 """Not rebuilding what has not changed.
 
-Split out of builder.py. The rebuild is stateless by design — the whole feature
-tree, from scratch, every time — and this is what makes that affordable. Each
+Split out of builder.py. The rebuild is stateless by design, the whole feature
+tree, from scratch, every time, and this is what makes that affordable. Each
 feature gets a signature over the fields it actually reads (including the
 parameters it can reach through an expression, which is why _param_closure
 exists), the signatures chain into a key per prefix of the tree, and a matching
@@ -18,7 +18,7 @@ import json
 import os
 
 import appenv
-import font_guard  # noqa: F401  MUST precede build123d — see font_guard.py
+import font_guard  # noqa: F401  MUST precede build123d, see font_guard.py
 
 from progress import progress_tick
 from shape_util import _wrap_topods, _wrapped_or_none
@@ -26,7 +26,7 @@ from shape_util import _wrap_topods, _wrapped_or_none
 _CACHE = {"feature_sigs": [], "snaps": [], "global_sig": None}
 
 
-# import features embed multi-MB BREP b64 — hashing it once per (feature id,
+# import features embed multi-MB BREP b64, hashing it once per (feature id,
 # size, head, tail) instead of json.dumps-ing it into every signature keeps
 # per-edit sig work O(doc structure), not O(embedded geometry)
 _IMPORT_BREP_SIGS = {}
@@ -48,7 +48,7 @@ def _feature_sig(f):
 
 def _global_sig(document):
     # params affect features globally. Body visibility only gates LEGACY extrude
-    # booleans (features without a captured `hiddenBodies` set) — when every
+    # booleans (features without a captured `hiddenBodies` set), when every
     # extrude carries its own set, an eye toggle changes NO geometry and must
     # not invalidate the cache (it used to force a full rebuild per click).
     legacy_vis = any(
@@ -69,7 +69,7 @@ def _global_sig(document):
 # Chain keys are INPUT-addressed: key_i = H(key_{i-1} ‖ feature_sig_i), seeded with
 # H(env_sig ‖ global_sig). Geometry is never hashed, so OCCT float nondeterminism
 # can't poison a key; a chain key found on disk proves the entire document prefix
-# (and params/visibility/env) that produced it is byte-identical — exactly the
+# (and params/visibility/env) that produced it is byte-identical, exactly the
 # validity condition of today's RAM prefix cache. Phase 1 changes durability only,
 # not invalidation semantics. Restores are verified against per-body fingerprints
 # (face/edge/vertex counts + bbox): any divergence is a cache MISS, never wrong geometry.
@@ -79,7 +79,7 @@ _ENV_SIG = None
 
 def _env_sig():
     """Hash of everything outside the document that shapes geometry: kernel/library
-    versions + the sidecar's own geometry source files. Automatic and conservative —
+    versions + the sidecar's own geometry source files. Automatic and conservative,
     any builder change costs one cold rebuild per doc instead of risking stale
     geometry from a forgotten manual version bump. FUNDACAD_ENV_SIG overrides for dev."""
     global _ENV_SIG
@@ -109,7 +109,7 @@ def _env_sig():
             # So it is EVERY module, discovered rather than listed. This used to
             # be a hand-written list of six files, which was survivable while
             # builder.py held the whole kernel and is not now that it is split
-            # across a dozen modules — a list is one refactor away from being
+            # across a dozen modules, a list is one refactor away from being
             # wrong, and being wrong here is silent. Sorted, so the hash does not
             # depend on directory order. A module that cannot affect geometry
             # (server.py) costs an occasional cold rebuild when it is edited,
@@ -133,7 +133,7 @@ def _env_sig():
 # The durable chain keys scope params (and, for the features that consult it,
 # visibility) PER FEATURE instead of poisoning key_0: a parameter edit then
 # invalidates only from the first feature whose expressions (transitively)
-# reference it, and a visibility toggle only from the first extrude — both were
+# reference it, and a visibility toggle only from the first extrude, both were
 # full cold rebuilds before. Conservative by construction: the reference scan
 # is a word-boundary superset (a body name that happens to equal a param name
 # merely over-invalidates, never under). The RAM cache keeps the old
@@ -160,7 +160,7 @@ def _param_closure(params):
         if n in closed:
             return closed[n]
         if n in seen:
-            return {n}  # cycle guard — self-set, still conservative
+            return {n}  # cycle guard, self-set, still conservative
         out = {n}
         for d in deps[n]:
             out |= close(d, seen | {n})
@@ -214,7 +214,7 @@ def _feature_scope(f, params, closure, hidden_json):
 
 # Identity-keyed memos for per-feature signature/scope work. With the delta
 # wire protocol the worker holds ONE document object and patches it, so an
-# unchanged feature keeps its exact dict object across edits — id() identity is
+# unchanged feature keeps its exact dict object across edits, id() identity is
 # a sound memo key as long as the entry also pins the object (so the id can't
 # be recycled). Rebuilt each pass, so they never outgrow the current document.
 _SIG_MEMO = {}
@@ -278,7 +278,7 @@ def _body_fingerprint(shape):
     + bbox. A mismatch means the restore diverged and the checkpoint is treated as a
     miss. The counts are deterministic integers, so they never cause a false miss on
     OCCT float noise, and they catch a same-bbox but topologically different solid the
-    box alone would wave through — measured stable across a real BREP round trip on
+    box alone would wave through, measured stable across a real BREP round trip on
     400 bodies of the reference assembly.
 
     Every term here is chosen for cost: this runs per body inside _restore_from_disk,
@@ -286,7 +286,7 @@ def _body_fingerprint(shape):
     old cost did to the stall supervisor).
 
     - Counts come from TopExp.MapShapes_s, not build123d's `.faces()/.edges()/
-      .vertices()`, which build a full list of wrapper objects just to take len() —
+      .vertices()`, which build a full list of wrapper objects just to take len(),
       measured 45x slower, and `.edges()` additionally runs a Python-level degenerate
       filter over every edge. These counts therefore INCLUDE degenerate edges, which
       is fine for a fingerprint (still deterministic) but means a value taken here is
@@ -294,7 +294,7 @@ def _body_fingerprint(shape):
     - The box is BRepBndLib's poles-based one, not `shape.bounding_box()` (OCCT's
       exact AddOptimal_s): 0.080 ms/body against 67.3 ms.
     - `useTriangulation` MUST stay False. With True the box shifts by up to 0.49 mm
-      once a shape carries a triangulation — 492x the 1e-3 compare tolerance — and a
+      once a shape carries a triangulation, 492x the 1e-3 compare tolerance, and a
       body IS tessellated when the checkpoint is written and is NEVER tessellated when
       restored, so True would false-miss intermittently and force a cold rebuild. That
       is also why `tessellate.mesh_bbox` (True by design) must not be reused here
@@ -371,7 +371,7 @@ def _save_checkpoint(persist, i, bodies, datums, errors, counter_n, diagnostics=
             sh = b.get("shape")
             # The assembly-tree node this body came from. Body metadata that is
             # NOT recoverable from the shape, exactly like `_owners` and
-            # `_textures` below — and an import always blows the checkpoint
+            # `_textures` below, and an import always blows the checkpoint
             # budget, so a disk resume is the NORMAL way an assembly document
             # reopens. Omitting it here would flatten the tree on every reopen,
             # with no error and nothing for `_body_fingerprint` to catch, since
@@ -383,7 +383,7 @@ def _save_checkpoint(persist, i, bodies, datums, errors, counter_n, diagnostics=
             # Same class of state, and the same trap: `_intact` exempts an
             # explicitly collapsed import from _drop_debris, and it is NOT
             # recoverable from the shape. Dropping it here would let the debris
-            # pass delete legitimate small parts on every disk resume — which is
+            # pass delete legitimate small parts on every disk resume, which is
             # the NORMAL way an assembly document reopens, since an import always
             # blows the checkpoint budget. Third time this key set has bitten:
             # `_textures`, then `node_ref`, now this.
@@ -402,7 +402,7 @@ def _save_checkpoint(persist, i, bodies, datums, errors, counter_n, diagnostics=
             # `_textures` is body state that is NOT in the shape: _handle_texture
             # stores the raw spec and displacement happens lazily at tessellation.
             # Without persisting it, a disk resume past the texture feature returned
-            # an untextured body with no error — the mesh AND the export silently
+            # an untextured body with no error, the mesh AND the export silently
             # lost the texture. Same class of state as `_owners` above.
             if b.get("_textures"):
                 textures[b["id"]] = b["_textures"]
@@ -417,7 +417,7 @@ def _save_checkpoint(persist, i, bodies, datums, errors, counter_n, diagnostics=
             # diagnostics ride along with errors so a disk resume can re-report
             # BOTH (see _snapshot). Every producer emits plain JSON scalars; if
             # one ever emits something json can't encode, this whole write fails
-            # into the `except` below and SILENTLY disables the disk cache — hence
+            # into the `except` below and SILENTLY disables the disk cache, hence
             # test_checkpoint's serializability guard.
             "diagnostics": diagnostics or [],
             "n": counter_n,
@@ -434,7 +434,7 @@ def _save_checkpoint(persist, i, bodies, datums, errors, counter_n, diagnostics=
 def _restore_from_disk(store, chain_keys):
     """Find the deepest restorable checkpoint for this exact document prefix and
     reconstruct a resume snapshot from it. Returns (start_index, snapshot, mod_map)
-    or None. Every failure path — missing blob, fingerprint mismatch, bad JSON —
+    or None. Every failure path, missing blob, fingerprint mismatch, bad JSON,
     returns None (cache miss), never partial state."""
     try:
         cp = store.find_checkpoint(chain_keys)
@@ -444,12 +444,12 @@ def _restore_from_disk(store, chain_keys):
         bodies = []
         mod = {}
         for ent, fp in zip(cp["manifest"], state["fps"]):
-            # One tick per body, at the top so every path through the loop counts —
+            # One tick per body, at the top so every path through the loop counts,
             # same rule as the checkpoint-WRITE loop. Ticking INSIDE matters: this
             # restore measured 146.2 s on the 356 MiB reference assembly (3,072
             # bodies) against STALL_TIMEOUT = 60 s, and the ticks used to sit only
             # before and after, leaving one silent 146 s gap. The supervisor reaped
-            # the worker at 60 s, before rebuild_cached's first print — which is why
+            # the worker at 60 s, before rebuild_cached's first print, which is why
             # the document simply never opened and NOTHING was logged. Cheapening
             # _body_fingerprint brought the same restore under 8.5 s, but a bigger
             # assembly would walk into the same wall; the tick is the real fix.
@@ -509,7 +509,7 @@ def _restore_from_disk(store, chain_keys):
             "errors_ref": state["errors"], "n_errors": len(state["errors"]),
             # .get: checkpoints written before diagnostics were persisted have no
             # such key. In practice _env_sig hashes builder.py into every chain
-            # key, so those rows can no longer be matched at all — this is purely
+            # key, so those rows can no longer be matched at all, this is purely
             # so a stale row degrades to the old behaviour instead of raising.
             "diags_ref": state.get("diagnostics", []),
             "n_diags": len(state.get("diagnostics", [])),
@@ -521,5 +521,5 @@ def _restore_from_disk(store, chain_keys):
 
 
 # RAM snapshots kept per feature (beyond disk checkpoints); bounds worker memory
-# (~0.2 MB/snapshot measured, so 300 ≈ 60 MB) — a resume below the window falls
+# (~0.2 MB/snapshot measured, so 300 ≈ 60 MB), a resume below the window falls
 # through to the disk cache. FUNDACAD_RAM_SNAP_WINDOW overrides for large docs / tight RAM.

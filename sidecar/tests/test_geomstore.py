@@ -1,6 +1,6 @@
 """Tests for geomstore.py. Run: uv run python test_geomstore.py
 
-Exercises real OCCT round-trips (not byte-equality — OCCT does not guarantee that;
+Exercises real OCCT round-trips (not byte-equality, OCCT does not guarantee that;
 we compare restored volume / face count), the deepest-restorable-checkpoint walk,
 corrupt-blob demotion to a miss, atomic tmp sweep, eviction under pins + refcounts,
 and mesh put/get. Uses a throwaway temp root so it never touches the real cache."""
@@ -189,8 +189,8 @@ def test_eviction(store):
 
 def test_mesh_eviction(store):
     print("test_mesh_eviction")
-    # evict() cannot reach meshes/ — it reclaims by refcounting blob keys over
-    # checkpoint manifests, and no manifest references a mesh key — so before
+    # evict() cannot reach meshes/, it reclaims by refcounting blob keys over
+    # checkpoint manifests, and no manifest references a mesh key, so before
     # evict_meshes() existed this directory grew without bound (3.2 GB measured).
     payload = b"m" * 4096
     keys = ["evm%02d-0.1" % i for i in range(10)]
@@ -228,7 +228,7 @@ def test_cache_budget(store):
           512 * 1024**2 <= auto <= 8 * 1024**3)
 
     # Sized against free + what the cache already holds, so it must NOT shrink
-    # just because the cache grew — that ratchet would evict a little more on
+    # just because the cache grew, that ratchet would evict a little more on
     # every sweep instead of holding a stable cap.
     before = store.cache_budget()
     for i in range(20):
@@ -251,8 +251,8 @@ def test_cache_budget(store):
 
 def test_evict_to_budget_spares_checkpoints(store):
     print("test_evict_to_budget_spares_checkpoints")
-    # The load-bearing policy: meshes absorb the squeeze so checkpoints — which
-    # cost a full history replay, not one re-tessellation — survive.
+    # The load-bearing policy: meshes absorb the squeeze so checkpoints, which
+    # cost a full history replay, not one re-tessellation, survive.
     shape = _sample_shape()
     bk = "eb" + "7" * 30
     store.put_blob(bk, shape)

@@ -40,7 +40,7 @@ export const useToastStore = defineStore("toasts", () => {
 
   function push(message: string, kind: ToastItem["kind"], action: ToastAction | undefined, timeout: number) {
     const id = nextId++;
-    // keep the stack short — oldest goes first
+    // keep the stack short, oldest goes first
     while (items.value.length >= MAX) {
       const oldest = items.value[0];
       if (!oldest) break;

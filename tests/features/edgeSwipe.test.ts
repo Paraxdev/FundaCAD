@@ -3,7 +3,7 @@
 // It used to measure travel along a 3D axis, which is right for press/pull and
 // wrong here: a radius is a size, not a translation, so there is no world
 // direction it is a distance along. The axis measurement also had a degenerate
-// case — an axis leaning toward the camera has nothing left to project onto, so
+// case, an axis leaning toward the camera has nothing left to project onto, so
 // it fell back to the cursor's vertical screen position, and on a rim seen
 // near edge-on the drag stopped asking how far you were from the edge and
 // started asking how near the top of the window you were.
@@ -28,7 +28,7 @@ describe("swipeOffsetPx", () => {
 
   it("ignores travel ALONG the edge", () => {
     // The blend runs the whole length of the edge, so sliding beside it means
-    // nothing. Same distance out, 400px further along, same answer — including
+    // nothing. Same distance out, 400px further along, same answer, including
     // well past the projected end of the edge, because it is the distance to
     // the LINE and an edge has no ends to fall off.
     const near = swipeOffsetPx(O, ALONG_X, UP, { x: 100, y: 70 });

@@ -2,7 +2,7 @@
 
 A segfault is a RESULT, not a crash of the sweep: each case gets a fresh process,
 so exit 139 (SIGSEGV) and a timeout are recorded like any other outcome. That is
-the whole point — the interesting failures are the ones that kill the process.
+the whole point, the interesting failures are the ones that kill the process.
 
 Usage:  python sweep_run.py <sidecar-dir> [timeout-seconds]
 """

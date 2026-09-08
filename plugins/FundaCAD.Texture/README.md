@@ -25,9 +25,9 @@ a texture in it opens, rebuilds, renders and exports on a machine where this was
 never installed.
 
 What you lose is the ability to make a new one or change an old one from a panel.
-The feature still appears in the history — as a row the build does not have a
+The feature still appears in the history, as a row the build does not have a
 name or a mark for, which is honest, because without this that is exactly what it
-is — and its numbers are still in the value rows, still parameter-drivable, and
+is, and its numbers are still in the value rows, still parameter-drivable, and
 still editable by hand.
 
 That line is deliberate and it is the same one the multi-material capability

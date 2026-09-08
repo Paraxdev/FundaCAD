@@ -4,8 +4,8 @@
 // the sidecar sometimes says no: a thread whose turns would run into each other,
 // a fillet larger than the edge it is on, a shell thicker than its wall. The
 // answer used to go nowhere a user was looking. rebuildBridge deliberately does
-// not toast a preview's failures — a drag through a bad range would emit one a
-// frame — and the status bar is a strip at the far edge of the window from the
+// not toast a preview's failures, a drag through a bad range would emit one a
+// frame, and the status bar is a strip at the far edge of the window from the
 // value box under the cursor. So the model went on showing the last thing that
 // DID build while the boxes read the number that did not, which is the one
 // arrangement in which the screen is lying rather than merely unhelpful.

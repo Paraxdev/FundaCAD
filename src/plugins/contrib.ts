@@ -56,7 +56,7 @@ export interface MenuContribution {
 }
 
 /** One ribbon button. The same three fields the core's own tables carry, so a
- *  contributed group is indistinguishable from a built-in one downstream — the
+ *  contributed group is indistinguishable from a built-in one downstream, the
  *  command palette lists both without knowing which is which. */
 export interface RibbonEntry {
   action: string;
@@ -127,8 +127,8 @@ export interface SettingsSection {
  *  A tool is not one thing to the app, it is five: a row in the capability
  *  inventory ("a face could feed this"), a mark in the selection toolbar, a
  *  button on the ribbon, an entry in the action dispatcher, and a claim on the
- *  window while it is running. The last three already had a way in — `ribbon`
- *  and `actions` below, and the plugin's own code for the gesture — so this
+ *  window while it is running. The last three already had a way in, `ribbon`
+ *  and `actions` below, and the plugin's own code for the gesture, so this
  *  point is the two that did not: WHAT THE TOOL CONSUMES, and WHETHER IT IS
  *  RUNNING.
  *
@@ -153,7 +153,7 @@ export interface ToolContribution {
   /** Icon name, resolved the way every other icon in the app is. A plugin that
    *  draws its own mark contributes it under `icons` below. */
   iconName: string;
-  /** Entity kinds this tool acts on, MOST SPECIFIC FIRST — the same ordering
+  /** Entity kinds this tool acts on, MOST SPECIFIC FIRST, the same ordering
    *  rule the core's own table documents. */
   consumes: readonly EntityKind[];
   source: EntitySource;
@@ -173,8 +173,8 @@ export interface ToolContribution {
  *  one of those is a core surface that used to answer from a table with the
  *  feature's name typed into it.
  *
- *  ONE point rather than five, because they are all the same sentence — how
- *  this feature type is presented — and five would be five things to remember
+ *  ONE point rather than five, because they are all the same sentence, how
+ *  this feature type is presented, and five would be five things to remember
  *  to contribute, four of which fail silently: a missing `meta` is a grey dot
  *  in the tree, a missing `numFields` is a feature whose numbers cannot be
  *  edited, and neither throws.
@@ -191,7 +191,7 @@ export interface ToolContribution {
  *  `texture1.depth` refers to. A parameter has to keep meaning the same thing
  *  on a machine where the plugin is switched off, so that table stays in the
  *  app. What a plugin owns is which of those rows are worth showing and what
- *  they are called — `fieldApplies` and `fieldLabel` below — which is
+ *  they are called, `fieldApplies` and `fieldLabel` below, which is
  *  presentation, and changes nothing about what the document means. */
 export interface FeatureTypeContribution {
   /** The `type` field of the feature in the document. */
@@ -212,7 +212,7 @@ export interface FeatureTypeContribution {
     values: Record<string, unknown>,
   ) => { text: string; title?: string } | null;
   /** Re-open a committed feature in the tool that made it. False means "not
-   *  tool-editable" — a parameter-bound value, say — and the app falls back to
+   *  tool-editable", a parameter-bound value, say, and the app falls back to
    *  the value rows, exactly as it does for its own tools. */
   edit?: (featureId: string, done: (id: string | null) => void) => boolean;
 }
@@ -250,8 +250,8 @@ export interface Contribution {
    *  THIS MARKUP REACHES THE DOM THROUGH v-html, which is the one sanctioned
    *  v-html in the app and was safe because every path in ui/icons.ts is a
    *  compile-time constant. A contributed path is a constant in a bundle whose
-   *  code already runs with the whole of the app's reach — it could call
-   *  innerHTML itself — so this widens the surface without lowering the bar.
+   *  code already runs with the whole of the app's reach, it could call
+   *  innerHTML itself, so this widens the surface without lowering the bar.
    *  What must still hold: no document data, file name or network payload is
    *  interpolated into it, here any more than there. */
   icons?: Record<string, string>;

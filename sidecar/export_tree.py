@@ -10,7 +10,7 @@ it was assumed to be. It builds an XCAF document via `_create_xde(...,
 auto_naming=True)` and writes with `STEPCAFControl_Writer`
 (exporters3d.py:370-378), and `set_name_and_color` already writes
 `TDataStd_Name` onto BOTH the instance label and the referred label "so STEP
-PRODUCT names persist" — which is the name-drop workaround this project
+PRODUCT names persist", which is the name-drop workaround this project
 otherwise had to hand-roll. So all that is needed here is a `Compound` whose
 `children` mirror the assembly, with `.label` and `.color` set. The XCAF work is
 upstream's.
@@ -20,7 +20,7 @@ Two hazards this module exists to contain:
 1. `Compound(children=[...])` MUTATES each child's `.parent`, and setting
    `.label` mutates the shape object too. The shapes handed to an export are the
    LIVE ones from `rebuild_cached`, also referenced by `builder._CACHE` prefix
-   snapshots in a long-lived worker — re-parenting them would corrupt the
+   snapshots in a long-lived worker, re-parenting them would corrupt the
    rebuild cache. Every leaf is therefore re-wrapped as a FRESH build123d object
    around the same `TopoDS_Shape` before anything is set on it.
 
@@ -104,7 +104,7 @@ def build_export_tree(document, bodies, root_name="Model"):
     # list is known.
     #
     # One node per (feature, index), so two occurrences of the same subassembly
-    # stay separate branches — exactly what the Browser shows.
+    # stay separate branches, exactly what the Browser shows.
     spec_of = {}
     kids_of = {}
     leaves_of = {}

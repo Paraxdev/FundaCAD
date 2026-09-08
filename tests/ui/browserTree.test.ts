@@ -1,6 +1,6 @@
 // The imported-assembly grouping the Browser panel renders.
 //
-// DOM emission is not covered here (no jsdom in this project, deliberately —
+// DOM emission is not covered here (no jsdom in this project, deliberately,
 // see vitest.config.ts). What IS covered is the part with real logic: walking a
 // body's node chain to the root, keeping sibling identity straight, and refusing
 // to lose a body when the manifest is malformed.
@@ -45,7 +45,7 @@ describe("buildAssemblyGroups", () => {
 
   it("keeps two occurrences of the same subassembly separate", () => {
     // Both are called "Board". Keyed on the NODE INDEX, not the display name,
-    // they must stay two independent groups — otherwise selecting or collapsing
+    // they must stay two independent groups, otherwise selecting or collapsing
     // one silently affects the other.
     const out = buildAssemblyGroups(
       [body("body1", "MCU", "f1/3"), body("body2", "MCU", "f1/6")],
@@ -89,7 +89,7 @@ describe("buildAssemblyGroups", () => {
   });
 
   it("keeps a body whose nodeRef does not resolve, rather than dropping it", () => {
-    // A body missing from the browser is invisible AND unselectable — strictly
+    // A body missing from the browser is invisible AND unselectable, strictly
     // worse than one shown at the top level.
     const out = buildAssemblyGroups(
       [
@@ -134,7 +134,7 @@ describe("buildAssemblyGroups", () => {
       bodies.push(body(`body${i}`, `Part ${i}`, `f1/${nodes.length - 1}`));
     }
     const out = buildAssemblyGroups(bodies, trees(nodes))!;
-    // collapsed, the panel emits one head per ROOT — not one row per body
+    // collapsed, the panel emits one head per ROOT, not one row per body
     expect(out.roots).toHaveLength(1);
     expect(out.roots[0]!.total).toBe(3000);
     expect(out.loose).toHaveLength(0);

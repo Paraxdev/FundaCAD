@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# check-geometry-evals.sh — CI gate for the sidecar's geometry eval harnesses.
+# check-geometry-evals.sh, CI gate for the sidecar's geometry eval harnesses.
 #
 # WHY THIS EXISTS: the evals under sidecar/tools/ are MEASUREMENT oracles. They
 # print a number and exit 0 whether that number is good or catastrophic
-# (eval_selector_survival is a hash-locked Norn oracle — its exit contract is
+# (eval_selector_survival is a hash-locked Norn oracle, its exit contract is
 # "0 = measurement completed", and changing that would break the sealed arc).
 # So nothing was gating them, and nothing ran them: between 2026-07-12 and
 # 2026-07-28 the golden-document baselines went 15 commits stale and real-server
@@ -17,22 +17,22 @@ cd "$(dirname "$0")/.."/sidecar
 PY="${PY:-uv run python}"
 
 # Coverage RATCHET, not a target: real-server op coverage may never drop below
-# what it is today. It is currently 33 of 33 — every unit in the universe is
+# what it is today. It is currently 33 of 33, every unit in the universe is
 # covered by an EXPLICIT check that asserts a precomputed numeric geometric
 # invariant against a real spawned server.
 #
 # VERIFIED REACHABLE ON A CLEAN CHECKOUT: with corpus credit disabled entirely,
 # coverage still read 32/32 when the floor was 32, so not one counted unit
-# depends on a fixture document. That check is not optional ceremony — this
+# depends on a fixture document. That check is not optional ceremony, this
 # floor was once set to 23 from a machine where two ops were credited only by a
 # corpus document whose import source lived in the developer's home directory,
 # and every other checkout scored 21. Re-run that way before raising this number again.
 #
 # Four ops are excluded in e2e_coverage.py rather than counted, because no
 # numeric geometric invariant exists for them and the only way to make them
-# count would be to weaken the credit gate: cancel (a race — test_cancel.py),
+# count would be to weaken the credit gate: cancel (a race, test_cancel.py),
 # listFonts and tessellateText (font-dependent, so a hardcoded constant would be
-# unreachable in CI by construction — test_text.py), and cleanUp, which is
+# unreachable in CI by construction, test_text.py), and cleanUp, which is
 # best-effort-no-op by design and is the one ACKNOWLEDGED remaining gap.
 #
 # Raise this number when you cover more; never lower it to make a build pass.
@@ -42,7 +42,7 @@ PY="${PY:-uv run python}"
 # clean checkout by construction.
 # Raised 33 -> 34: the `inspect` op joined the universe and arrived with its own
 # explicit check (check_inspect), which asserts pi*r^2*h against the B-rep
-# volume — a closed form, so it needs no fixture and no tolerance argument.
+# volume, a closed form, so it needs no fixture and no tolerance argument.
 COVERAGE_FLOOR=34
 
 # The fillet/chamfer corpus was driven to zero failures by the Norn loop
@@ -74,7 +74,7 @@ out=$($PY tools/eval_selector_survival.py --config selector_tuning.json \
 echo "$out"
 # The oracle's contract: exactly ONE JSON line, last line of stdout.
 # $PY is a COMMAND WITH ARGS ("uv run python"), so it must stay unquoted here.
-# It was once "${PY%% *}" — the first word — which ran `uv -c '<script>'`; that is
+# It was once "${PY%% *}", the first word, which ran `uv -c '<script>'`; that is
 # not a valid uv invocation, and with stderr dropped it failed mute and set fail=1.
 # The threshold was never evaluated; the gate only ever pinned the build red.
 if ! echo "$out" | $PY -c "
@@ -105,19 +105,19 @@ fi
 # baselines were re-blessed on 2026-08-05 and it now passes 13/13 locally,
 # confirmed as a live detector (a +5% volume perturbation exits 1).
 #
-# THE BLOCKER IS NO LONGER THE BASELINES — it is that the 13 corpus documents
+# THE BLOCKER IS NO LONGER THE BASELINES, it is that the 13 corpus documents
 # are UNTRACKED. Every document extension is gitignored repo-wide on purpose
 # (public repo, no real geometry), so on a fresh checkout every path in
 # golden.json is missing and this would go red immediately. Wiring it needs
 # SYNTHETIC documents committed as an explicit exception in BOTH .gitignore and
-# check-repo-hygiene.sh — the same treatment the assembly STEP fixtures already
-# get — with their own captured baselines. Do NOT commit the real corpus
+# check-repo-hygiene.sh, the same treatment the assembly STEP fixtures already
+# get, with their own captured baselines. Do NOT commit the real corpus
 # documents: they are actual work, and this repo is public.
 #
 # What was re-blessed and why: 12 of 13 documents drifted, and every new error
 # was an `ambiguous face reference` refusal introduced deliberately by f58858b
-# ("Refuse an ambiguous nearest-selector instead of flipping a coin", 2026-07-28)
-# — 16 days AFTER the 2026-07-12 capture. Verified before re-blessing: no new
+# ("Refuse an ambiguous nearest-selector instead of flipping a coin", 2026-07-28),
+# 16 days AFTER the 2026-07-12 capture. Verified before re-blessing: no new
 # error CLASS appeared anywhere in the corpus, and the refused picks are genuine
 # exact ties (0.600 vs 0.600 mm, 0.000 vs 0.000, 5.731 vs 5.731 on corpus doc 1 f73,
 # which is the very feature that commit was written for).

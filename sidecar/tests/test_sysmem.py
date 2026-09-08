@@ -4,7 +4,7 @@ per-format file-size cap.
 Run: uv run python test_sysmem.py   (or .venv/bin/python test_sysmem.py)
 
 An OOM kill reaches the supervisor as a bare SIGKILL with no traceback, so it can
-only be reported as "the geometry kernel crashed" — a geometry fault named for
+only be reported as "the geometry kernel crashed", a geometry fault named for
 what is really a machine limit. `_refuse_if_memory_is_short` exists to turn that
 into a sentence the user can act on, BEFORE OCCT starts.
 
@@ -129,7 +129,7 @@ def test_a_file_that_fits_is_allowed():
 
 
 def test_headroom_is_left_for_the_rest_of_the_machine():
-    """An import that would consume ALL available memory is still refused — it
+    """An import that would consume ALL available memory is still refused, it
     would take the desktop down with it even though it technically 'fits'."""
     size = 100 * MIB
     exactly_enough = size * IMPORT_RSS_PER_FILE_BYTE
@@ -162,7 +162,7 @@ def test_an_unknown_memory_figure_never_refuses():
 
 
 def test_a_zero_size_file_is_never_refused():
-    """getsize() returns 0 on an OSError upstream — that must not become a
+    """getsize() returns 0 on an OSError upstream, that must not become a
     refusal, and must not divide anything by zero."""
     assert _refuses(0, 1) is None
     assert _refuses(-1, 1) is None
@@ -208,7 +208,7 @@ def test_the_reference_assembly_size_is_now_admissible():
 
     reference = 356 * MIB
     assert reference > MAX_IMPORT_FILE_BYTES, "the old cap would have admitted it"
-    assert reference < _import_size_cap("step"), "still refused — the raise did nothing"
+    assert reference < _import_size_cap("step"), "still refused, the raise did nothing"
     print(f"{PASS} a 356 MiB STEP passes the size cap (it did not before)")
 
 
@@ -224,7 +224,7 @@ def test_import_geometry_uses_the_cap_for_the_format_it_was_given():
     try:
         try:
             builder.import_geometry("/nonexistent/x.step", "STEP")
-        except Exception:  # noqa: BLE001 — only the recorded fmt matters here
+        except Exception:  # noqa: BLE001, only the recorded fmt matters here
             pass
     finally:
         mesh_import._import_size_cap = real
@@ -258,7 +258,7 @@ def test_import_geometry_refuses_before_it_parses_anything():
         assert "not enough memory" in msg, f"refused for the wrong reason: {msg}"
 
         # And with memory plentiful the SAME file gets far enough to be judged on
-        # its contents — proving the gate is what stopped it above, not the junk.
+        # its contents, proving the gate is what stopped it above, not the junk.
         _sysmem.available_bytes = lambda: 64 * 1024 * MIB
         try:
             builder.import_geometry(path, "step")

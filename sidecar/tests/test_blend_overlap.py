@@ -151,8 +151,8 @@ def test_a_coarse_chord_is_not_evidence_about_the_surfaces():
 
     The triangles are coarse on purpose, and a coarse triangle is a CHORD: it can
     sit a long way inside the surface it stands for, and two chords can cross
-    while their surfaces stay far apart. On this blend at a positive profile —
-    where the mesher has the hardest time, see PROFILE_LIMIT in conic_blend.py —
+    while their surfaces stay far apart. On this blend at a positive profile,
+    where the mesher has the hardest time, see PROFILE_LIMIT in conic_blend.py,
     four triangles pass within a micron of a face, and every one of those faces
     is a fifth of a millimetre away.
 
@@ -179,7 +179,7 @@ def test_a_coarse_chord_is_not_evidence_about_the_surfaces():
     assert gaps, "the proposals vanished between the two passes"
     assert min(gaps) > MEASURE_DEFLECTION_MM, (
         f"the accused faces are {min(gaps):.4f}mm apart, inside the deflection the "
-        "triangles promised — the mesh is entitled to that claim and this is no "
+        "triangles promised, the mesh is entitled to that claim and this is no "
         "longer a false one")
 
     area = doubled_area(fresh)

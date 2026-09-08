@@ -24,7 +24,7 @@ const cb = dialogs.welcomeCallbacks!;
 const close = () => { dialogs.welcome = false; };
 
 // pushModal/popModal, tied to mount rather than to open()/close(). See
-// useModalGate — this is the one that must not be got wrong.
+// useModalGate, this is the one that must not be got wrong.
 useModalGate();
 
 function onKey(e: KeyboardEvent): void {
@@ -45,10 +45,10 @@ async function openRecent(path: string) {
   if (outcome === "ok") {
     close();
   } else if (outcome === "unreadable") {
-    forgetRecent(path); // gone from disk — drop it so it stops teasing
+    forgetRecent(path); // gone from disk, drop it so it stops teasing
     recents.value = recents.value.filter((r) => r.path !== path);
   }
-  // "newerFormat": the file is fine, we're too old. Keep the row — it's how
+  // "newerFormat": the file is fine, we're too old. Keep the row, it's how
   // the user finds the file again after updating.
 }
 

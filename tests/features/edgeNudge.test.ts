@@ -62,7 +62,7 @@ describe("handlePlacement", () => {
 
   it("reports no tangent for a closed edge and lets the caller fall back", () => {
     // A full circle's first and last samples coincide, so it has no chord. The
-    // handle still has somewhere to stand — it just needs the camera's right
+    // handle still has somewhere to stand, it just needs the camera's right
     // vector for direction, which this module has no way to know.
     const circle: Vec3[] = [
       [1, 0, 0],

@@ -94,7 +94,7 @@ async function install(viewport: Viewport): Promise<(() => void)[]> {
     }),
   );
 
-  // The device is PRESENT but the OS won't let us open it — on Linux that means the
+  // The device is PRESENT but the OS won't let us open it, on Linux that means the
   // hidraw udev rule is missing (packaged installs ship it; AppImage can't), or
   // spacenavd/the 3Dconnexion driver is holding it. Without this the reader failed
   // into stderr and retried forever, so a plugged-in SpaceMouse just did nothing
@@ -111,7 +111,7 @@ async function install(viewport: Viewport): Promise<(() => void)[]> {
     }),
   );
 
-  // The HID inventory, recorded SILENTLY — never a toast. Most users own no 3D
+  // The HID inventory, recorded SILENTLY, never a toast. Most users own no 3D
   // mouse, so "no device" must stay quiet; but that silence is exactly why a
   // tester whose hardware differs from ours filed a bug report with no trace of
   // the SpaceMouse in it. Chunked because a crumb is capped at 300 chars, and
@@ -162,7 +162,7 @@ async function install(viewport: Viewport): Promise<(() => void)[]> {
       if (inv) recordInventory(inv);
     })
     .catch(() => {
-      /* no reader on this platform — nothing to record */
+      /* no reader on this platform, nothing to record */
     });
 
   // Let go of the device. Best effort: if the command is not there, the reader

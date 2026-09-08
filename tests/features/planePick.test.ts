@@ -8,7 +8,7 @@
 //
 // The bug this was written for: a datum plane was not one of the answers. A
 // plane through three points appeared in the browser, drew its quad, highlighted
-// on hover during ordinary selection and could be right-clicked — and could not
+// on hover during ordinary selection and could be right-clicked, and could not
 // be clicked to sketch on, because this function asked only about the three BASE
 // planes and the ray went through the datum to whichever of those was behind it.
 // Every construction the app can make was unreachable the one way people reach
@@ -26,7 +26,7 @@ const DATUM: PlaneDef = { origin: [0, -9, -3], normal: [0, -0.95, -0.31], xdir: 
  *
  *  A stub rather than a real Viewport: what is under test is the arbitration,
  *  and a real viewport would answer it with a WebGL context, a raycaster and a
- *  scene graph — none of which is the thing that was wrong. */
+ *  scene graph, none of which is the thing that was wrong. */
 function stub(over: {
   face?: unknown;
   construction?: ReturnType<Viewport["pickConstructionAt"]>;
@@ -62,7 +62,7 @@ describe("what a plane pick takes", () => {
 
   it("lets one raycast decide between a datum and a base plane", () => {
     // The control on the fix's shape. Two separate questions would have needed a
-    // tie-break rule invented here — and the old code had one by accident, in
+    // tie-break rule invented here, and the old code had one by accident, in
     // that it never asked the datum question at all. One raycast over both sets
     // means the depth buffer decides, so this function has no rule to get wrong:
     // whatever it is handed is what it returns.

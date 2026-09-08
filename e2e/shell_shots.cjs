@@ -1,6 +1,6 @@
 // Screenshots of the app shell, for looking at what a UI change actually did.
 //
-// Not an assertion suite — the other e2e scripts do that. This one exists
+// Not an assertion suite, the other e2e scripts do that. This one exists
 // because a stylesheet cannot be reviewed by reading it: the ribbon's overflow
 // packing, the panel widths and the side-mounted arrangements are all decided by
 // layout, which happy-dom does not implement, so the component tests are blind
@@ -13,7 +13,7 @@
 // Usage (from the repo root, with vite on 5173):
 //   node e2e/shell_shots.cjs [outDir]
 //
-// SC_CHROME picks the browser. Any Chromium build works — Brave and Edge are
+// SC_CHROME picks the browser. Any Chromium build works, Brave and Edge are
 // Chromium, and this needs no extension or profile.
 const { chromium } = require("playwright-core");
 const fs = require("fs");

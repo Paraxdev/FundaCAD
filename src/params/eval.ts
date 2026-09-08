@@ -1,9 +1,9 @@
 // Expression evaluation against a name→value scope. Values and results are in
 // canonical units (mm / degrees / raw counts). Evaluation never throws on
 // arithmetic (÷0 → Infinity); callers gate on Number.isFinite (a non-finite
-// result keeps the previous cached value — never ships into geometry). It DOES
+// result keeps the previous cached value, never ships into geometry). It DOES
 // throw ExprError on structural problems: unknown parameter, unknown function,
-// wrong arity — those are reject-at-commit errors.
+// wrong arity, those are reject-at-commit errors.
 
 import { CONSTANTS, ExprError, FUNCTIONS, RESERVED_FUNCTIONS, parseExpr } from "./parse";
 import type { ExprNode } from "./parse";
@@ -26,7 +26,7 @@ export function evalNode(n: ExprNode, values: Record<string, number>): number {
       }
       const [lo, hi] = fn.arity;
       if (n.args.length < lo || n.args.length > hi) {
-        throw new ExprError(`${n.name}() takes ${hi === Infinity ? `at least ${lo}` : lo === hi ? lo : `${lo}–${hi}`} argument${lo === 1 && hi === 1 ? "" : "s"}`);
+        throw new ExprError(`${n.name}() takes ${hi === Infinity ? `at least ${lo}` : lo === hi ? lo : `${lo}, ${hi}`} argument${lo === 1 && hi === 1 ? "" : "s"}`);
       }
       return fn.apply(n.args.map((a) => evalNode(a, values)));
     }

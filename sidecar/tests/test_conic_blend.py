@@ -1,4 +1,4 @@
-"""Conic blend profile — the geometry, not the plumbing.
+"""Conic blend profile, the geometry, not the plumbing.
 
 Run:  uv run python test_conic_blend.py
 
@@ -14,7 +14,7 @@ toroidal blend on a curved edge.
 
 Volumes come from the TESSELLATION on purpose. BRepGProp integrates in parameter
 space and is badly wrong on these surfaces at large |profile| (see the module
-docstring in conic_blend.py) — it is the one measure that would make a correct
+docstring in conic_blend.py), it is the one measure that would make a correct
 blend look broken.
 """
 
@@ -80,7 +80,7 @@ def box_edges(b):
 
 
 def corner_edges(b):
-    """The three edges meeting at one vertex — forces a spherical corner patch."""
+    """The three edges meeting at one vertex, forces a spherical corner patch."""
     vmap = TopTools_IndexedDataMapOfShapeListOfShape()
     TopExp.MapShapesAndAncestors_s(b, TopAbs_VERTEX, TopAbs_EDGE, vmap)
     for i in range(1, vmap.Extent() + 1):
@@ -110,7 +110,7 @@ def drifting_corner():
     """A box and three edges whose section endpoints land a hair off their pole.
 
     The unlovely dimensions are the whole point, so do not tidy them. A section
-    of a blend ends on an arc END pole, which no reweight moves — but it gets
+    of a blend ends on an arc END pole, which no reweight moves, but it gets
     there through a pcurve value and a UV box that were each rounded once, and
     on a box whose sides are round numbers those roundings cancel and the
     endpoint sits exactly on the pole. Off the lattice it misses by about a
@@ -136,7 +136,7 @@ CUBE_R = 4.0
 
 
 def cube_top():
-    """A cube and the four edges of its top face — the plainest model there is.
+    """A cube and the four edges of its top face, the plainest model there is.
 
     Extrude a cube, fillet the top face. OCCT does not put a corner patch at
     these corners: it runs each tube the full length and MITRES the four of them
@@ -165,7 +165,7 @@ SLOT_R = 2.0
 def slot_rim():
     """A slot-shaped prism and one straight edge of its top rim.
 
-    The rim is a tangent chain — two straight runs closed by two round ends —
+    The rim is a tangent chain, two straight runs closed by two round ends,
     so blending any one of its edges blends the whole loop, and the blends meet
     at seams that are a whole SECTION on both sides. Ordinary geometry: it is
     what a slot extrudes to.
@@ -175,7 +175,7 @@ def slot_rim():
     kind of surface OCCT gives each blend, and with it the case this exercises:
     a plain cylinder along the straight run meeting a BSpline around the end.
     Both are the same quarter-circle section, and only the cylinder's has to be
-    converted to poles to be reweighted — which reparameterises it, so the two
+    converted to poles to be reweighted, which reparameterises it, so the two
     faces reach the same point of their shared section at different parameters.
     """
     a = gp_Pnt(-SLOT_HALF, -SLOT_W, 0)
@@ -281,7 +281,7 @@ def test_weight_scale_anchors():
 
 
 def test_zero_profile_is_the_plain_fillet():
-    """Not "close to" — the same shape. Profile 0 must cost nothing and risk
+    """Not "close to", the same shape. Profile 0 must cost nothing and risk
     nothing, because it is what every existing fillet in every saved document
     rebuilds as."""
     for tag, solid, edges, r in _cases():
@@ -350,7 +350,7 @@ def test_extremes_reach_chamfer_and_sharp():
 
 def test_rebuilds_through_a_real_document():
     """The whole path: a document with `profile` on a fillet feature reaches the
-    conic builder, produces a solid, and reports no errors — and the same
+    conic builder, produces a solid, and reports no errors, and the same
     document without the field still takes the plain build123d route."""
     from builder import rebuild
 
@@ -389,8 +389,8 @@ def test_a_mitred_corner_keeps_its_seam():
 
     Each corner seam is shared by two blend faces, and pass 2 rebuilt it from one
     of them on the assumption that the two agree. They do agree for a seam that is
-    a whole SECTION — it moves inside its own plane, so both pcurves still
-    describe it — but a mitre seam runs ACROSS the sections and has no such
+    a whole SECTION, it moves inside its own plane, so both pcurves still
+    describe it, but a mitre seam runs ACROSS the sections and has no such
     property. At profile 0.9 the two faces' ideas of the seam diverged by 2.7mm on
     a 4mm blend, whereupon SameParameter widened the edge's tolerance to 0.38mm so
     that both fitted inside it. Valid, and visibly bent, because a tolerance that
@@ -430,7 +430,7 @@ def test_a_mitred_corner_keeps_its_seam():
     print("mitred corner seams stay on the mirror plane and stay crisp OK")
 
 
-#: What the viewport actually asks BRepMesh for — server._effective_tolerance's
+#: What the viewport actually asks BRepMesh for, server._effective_tolerance's
 #: relative deflection. The tearing below is a property of the mesh the USER
 #: sees, so it has to be measured at the deflection the user gets, not at a
 #: convenient one.
@@ -469,7 +469,7 @@ def test_the_slider_stops_where_the_mesh_still_holds():
 
     The reported defect: fillet the top face of an extruded rectangle, slide the
     profile to its negative end, and the corners break and overlap. The kernel is
-    not at fault — that solid is valid, its corner seams sit on their mirror plane
+    not at fault, that solid is valid, its corner seams sit on their mirror plane
     to 8e-7mm and its widest tolerance sleeve is 1.9e-6mm, and the same solid
     meshed twenty times finer has no defect at all. What breaks is the
     tessellation. As the middle weight runs to zero the section's parameterisation
@@ -499,7 +499,7 @@ def test_the_slider_stops_where_the_mesh_still_holds():
 
     cube, top = cube_top()
     # Each end is judged against a milder profile of ITS OWN sign. The two ends
-    # do not produce comparable blends — at +0.9 the surface has nearly vanished
+    # do not produce comparable blends, at +0.9 the surface has nearly vanished
     # into the corner, so its triangles are legitimately larger than any on the
     # chamfer side, and comparing across the middle would only measure that.
     mild = {s: viewport_mesh(conic_blend(cube, top, CUBE_R, 0.9 * s))
@@ -510,7 +510,7 @@ def test_the_slider_stops_where_the_mesh_still_holds():
         mild_n, _ = mild[s]
         n, _ = viewport_mesh(conic_blend(cube, top, CUBE_R, p))
         assert n >= mild_n * 0.9, (
-            f"profile {p}: {n} triangles against {mild_n} at {0.9 * s} — the "
+            f"profile {p}: {n} triangles against {mild_n} at {0.9 * s}, the "
             f"mesher stopped subdividing, which is what the torn corner is")
 
     # The control. Reach past the limit the way the old code did and the same
@@ -525,7 +525,7 @@ def test_the_slider_stops_where_the_mesh_still_holds():
     mild_n, _ = mild[-1]
     assert past_n < mild_n * 0.9, (
         f"the old limit no longer breaks the mesh ({past_n} triangles against "
-        f"{mild_n} at -0.9) — either the mesher improved or this measurement has "
+        f"{mild_n} at -0.9), either the mesher improved or this measurement has "
         f"stopped describing the defect, and the limit should be re-derived "
         f"either way")
     at_n, _ = viewport_mesh(conic_blend(cube, top, CUBE_R, -PROFILE_LIMIT))
@@ -543,7 +543,7 @@ def test_a_refused_profile_does_not_read_as_a_failed_fillet():
     the plain fillet at it builds, so a message about the fillet failing sends
     someone hunting for a size problem that does not exist. _blend_edges catches
     Exception broadly to fall back to per-edge blending, which is right for
-    kernel failures and wrong for this one — the retry can only arrive at the
+    kernel failures and wrong for this one, the retry can only arrive at the
     same refusal, and then hides why."""
     import builder
     from builder import rebuild
@@ -560,11 +560,11 @@ def test_a_refused_profile_does_not_read_as_a_failed_fillet():
     # context: what is being checked is the sentence that reaches the toast, and
     # that is decided by the whole chain of handlers between here and there. The
     # geometry that genuinely provokes this is a boolean about one in thirty, so
-    # the refusal is injected instead — the message's journey is the subject, not
+    # the refusal is injected instead, the message's journey is the subject, not
     # the surface that produces it.
     real = builder._conic_fillet
     builder._conic_fillet = lambda *_a, **_k: (_ for _ in ()).throw(
-        ConicNotApplicable("this blend is cut across its section — use profile 0 here"))
+        ConicNotApplicable("this blend is cut across its section, use profile 0 here"))
     try:
         _part, errors, _bodies = rebuild(doc)
     finally:
@@ -584,7 +584,7 @@ def test_a_tangent_chain_of_two_kinds_of_blend():
 
     Field report: a fillet that builds perfectly at profile 0 is refused the
     moment a profile is put on it, saying the two blends at that corner "lie in
-    the same plane". They do — because they are the same SECTION, seen from both
+    the same plane". They do, because they are the same SECTION, seen from both
     sides, which is the one case that needs no re-solving at all.
 
     What sent it there is that the two faces no longer answer to the same

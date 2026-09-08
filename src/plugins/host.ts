@@ -3,8 +3,8 @@
 // A plugin imports `fundacad` and nothing else from this application. That is
 // the point of the file and it is worth being blunt about why, because the
 // arrangement it replaces worked perfectly well for the plugins that SHIP here:
-// they reached in by relative path — `../../src/app/engine`,
-// `../../src/components/overlays/ModalFrame.vue`, nineteen specifiers in all —
+// they reached in by relative path, `../../src/app/engine`,
+// `../../src/components/overlays/ModalFrame.vue`, nineteen specifiers in all,
 // and every one of those is an internal module that moves when the app is
 // refactored.
 //
@@ -20,14 +20,14 @@
 //
 // WHAT IS NOT HERE, and will not be: anything that lets a plugin reach the
 // document, the geometry engine or the file system WITHOUT going through the
-// broker. `DocumentStore` and `Engine` appear below as TYPES only — erased
-// before anything runs — because the plugins that ship here are handed a live
+// broker. `DocumentStore` and `Engine` appear below as TYPES only, erased
+// before anything runs, because the plugins that ship here are handed a live
 // engine by `activate(e)` and always have been. A downloaded plugin gets what
 // its manifest asked for, checked at the broker, and the ops table is the door.
 //
 // THREE MORE MODULES a plugin may import, and they are not re-exported here
 // because they are not ours: `vue`, `three`, and `@tauri-apps/api/*`. A built
-// plugin must externalise them for a reason with teeth — two copies of Vue is
+// plugin must externalise them for a reason with teeth, two copies of Vue is
 // two reactivity systems that cannot see each other's refs, and two copies of
 // three.js is `instanceof` failing between them. scripts/build-plugin-code.mjs
 // is what enforces that.

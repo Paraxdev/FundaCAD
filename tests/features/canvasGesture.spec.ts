@@ -1,5 +1,5 @@
 // The listener lifecycle every modal tool shares: it takes the canvas, and it
-// must give all of it back. The controls here are the removals — an attach that
+// must give all of it back. The controls here are the removals, an attach that
 // works proves nothing on its own, since a leaked listener also fires.
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { CanvasGesture } from "../../src/features/canvasGesture";
@@ -92,7 +92,7 @@ describe("CanvasGesture", () => {
       frame: () => { passes++; },
     });
     g.frame();
-    g.frame(); // already pending — must not queue a second
+    g.frame(); // already pending, must not queue a second
     expect(g.framePending).toBe(true);
     expect(frames).toHaveLength(1);
     frames[0]!();

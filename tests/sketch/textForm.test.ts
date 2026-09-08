@@ -63,7 +63,7 @@ describe("toTextValues", () => {
     expect(v.angle).toBe(0);
   });
 
-  it("keeps the text verbatim — trimming is the commit's decision, not this one", () => {
+  it("keeps the text verbatim, trimming is the commit's decision, not this one", () => {
     expect(toTextValues({ ...base, text: "  a\nb  " }).text).toBe("  a\nb  ");
   });
 });

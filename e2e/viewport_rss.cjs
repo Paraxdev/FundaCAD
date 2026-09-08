@@ -1,7 +1,7 @@
 // Post-Phase-A viewport RSS: what a large document ACTUALLY costs in memory.
 //
-// WHY THIS EXISTS: the number the assemblies plan was built on — 12.2 GiB peak
-// RSS at 3,060 bodies — is the PRE-optimisation figure. `src/viewport/
+// WHY THIS EXISTS: the number the assemblies plan was built on, 12.2 GiB peak
+// RSS at 3,060 bodies, is the PRE-optimisation figure. `src/viewport/
 // edgeLines.ts` says so in as many words. Phase A replaced the per-body
 // LineSegments2 + per-edge material scheme that produced it, and nobody has
 // measured what replaced it. "The viewport OOMs at 3,060 bodies" therefore
@@ -10,11 +10,11 @@
 //
 // Measures RSS of the WHOLE browser process tree (browser + renderers + GPU),
 // because a WebGL scene's cost is spread across all three and the renderer's
-// JS heap alone would under-report badly. Read from /proc, so Linux only —
+// JS heap alone would under-report badly. Read from /proc, so Linux only,
 // which matches where the original 12.2 GiB was measured.
 //
 // A MEASUREMENT ORACLE, like the other evals: it prints numbers and exits 0.
-// Deliberately not a CI gate — RSS on a shared runner is not reproducible
+// Deliberately not a CI gate, RSS on a shared runner is not reproducible
 // enough to ratchet.
 //
 // Usage (from the repo root, with vite on 5173 + sidecar on 8765):
@@ -98,7 +98,7 @@ function rssMiB(pids) {
   const rows = [];
   for (const n of SIZES) {
     const file = `${DOCS}/perf_tree_${n}.funda`;
-    if (!fs.existsSync(file)) { console.log(`${n}: no ${file} — run gen_perf_docs.py`); continue; }
+    if (!fs.existsSync(file)) { console.log(`${n}: no ${file}, run gen_perf_docs.py`); continue; }
     const doc = JSON.parse(fs.readFileSync(file, "utf8"));
     await page.evaluate(async (d) => {
       window.store.loadDocument(d);
@@ -112,7 +112,7 @@ function rssMiB(pids) {
 
     // fps WHILE ORBITING, not while idle. requestAnimationFrame on a static
     // scene reports ~60 whatever the body count, because nothing is being
-    // redrawn — it measures the vsync clock, not the renderer. The number that
+    // redrawn, it measures the vsync clock, not the renderer. The number that
     // matters is the one the user feels when dragging, so the camera is
     // actually moved for the whole sample window.
     const box = await page.evaluate(() => {
@@ -145,8 +145,8 @@ function rssMiB(pids) {
       const d = Math.hypot(c.position.x - c0[0], c.position.y - c0[1], c.position.z - c0[2]);
       return d;
     }, camBefore);
-    if (moved === null) console.log("    (no camera handle — fps unverified)");
-    else if (moved < 1e-6) console.log(`    WARNING: camera did not move (${moved}) — fps is an IDLE number`);
+    if (moved === null) console.log("    (no camera handle, fps unverified)");
+    else if (moved < 1e-6) console.log(`    WARNING: camera did not move (${moved}), fps is an IDLE number`);
     const fps = await page.evaluate(() => {
       cancelAnimationFrame(window.__raf);
       return window.__frames / ((performance.now() - window.__t0) / 1000);

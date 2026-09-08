@@ -12,7 +12,7 @@
   box-shadow: var(--shadow-3);
   padding: var(--s-4);
   z-index: 20;
-  /* The card grew a list, and a list has no length limit — a sketch can carry a
+  /* The card grew a list, and a list has no length limit, a sketch can carry a
      hundred relations. Cap the card at the viewport it is docked inside and let
      the ONE scrollable part take the shortfall; everything above it is a fixed
      set of controls that must not be squeezed. */
@@ -67,7 +67,7 @@
   padding: var(--s-2) var(--s-3);
   /* The row bleeds out of the palette's own padding so its hover fill reaches
      towards the card edge instead of floating in the middle. The bleed has to
-     equal the row's own inline padding — then card padding (--s-4) minus bleed
+     equal the row's own inline padding, then card padding (--s-4) minus bleed
      plus padding lands the LABEL back on --s-4, flush with the title and the
      section rules above it. It was -6px against 8px of padding, which put every
      row's text 2px right of everything else in the card. */
@@ -133,7 +133,7 @@
   background: var(--raised);
 }
 /* The badge, deliberately the same 16px square with the same accent border the
-   canvas glyph wears — the panel is naming the thing you can see on the
+   canvas glyph wears, the panel is naming the thing you can see on the
    drawing, and it should look like the thing. */
 .rel-sym {
   flex: none;
@@ -228,7 +228,7 @@
 
 /* ---- status pill ---- */
 /* inline-BLOCK, not inline-flex: a sidecar error can be a whole sentence, and
-   text-overflow only ellipses real inline text — inside a flex box the text is
+   text-overflow only ellipses real inline text, inside a flex box the text is
    an anonymous flex item and just gets clipped mid-glyph instead. The dot is
    kept in line with vertical-align. */
 .status {
@@ -244,7 +244,7 @@
   padding: var(--s-1) var(--s-4) var(--s-1) var(--s-3);
   white-space: nowrap;
   /* shrink-to-fit rather than push the titlebar wide. `.spacer` is flex:1 1 0%
-     so it has nothing to give up — all the shrinkage lands here, which is what
+     so it has nothing to give up, all the shrinkage lands here, which is what
      we want: the message truncates, the layout holds. */
   min-width: 0;
   overflow: hidden;

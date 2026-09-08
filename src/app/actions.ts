@@ -69,7 +69,7 @@ export function createActions(e: Engine): (action: string) => void {
     if (action === "palette") return void (palette.visible = true);
     // Undo/redo must be handled BEFORE the finish-the-sketch line below. They are
     // not 3D modeling commands: letting Ctrl+Z fall through would commit the sketch
-    // and THEN undo it as a whole — which is the exact bug in-sketch undo exists to
+    // and THEN undo it as a whole, which is the exact bug in-sketch undo exists to
     // fix, so routing it any later is silently a no-op.
     if (action === "undo") return void e.doUndo();
     if (action === "redo") return void e.doRedo();
@@ -190,7 +190,7 @@ export function createActions(e: Engine): (action: string) => void {
         openParamsDialog();
         break;
       case "section":
-        // The button is the way OUT of the mode as well as in — including out of
+        // The button is the way OUT of the mode as well as in, including out of
         // the aiming step, which would otherwise be a state you could only leave
         // with Escape (pressing Section again during a pick did nothing at all,
         // because start() refuses to re-enter).
@@ -204,7 +204,7 @@ export function createActions(e: Engine): (action: string) => void {
         }
         // "Pick" leads, and is what the user's own words asked for: cut along a
         // face or a datum plane they choose. The three world axes stay because
-        // they need no aiming at all — on a part with no face facing the way you
+        // they need no aiming at all, on a part with no face facing the way you
         // want to look, Z is one click away and a pick is not.
         void (async () => {
           const src = await choose<"pick" | "X" | "Y" | "Z">("Section, cut along what?", [
@@ -328,8 +328,8 @@ export function createActions(e: Engine): (action: string) => void {
       // which is the version of the rule that cannot be forgotten.
       //
       // One dispatcher rather than a second one beside it, because everything
-      // downstream — the ribbon, the keymap, the command palette, every context
-      // menu — sends an action id here and must not have to learn which ids are
+      // downstream, the ribbon, the keymap, the command palette, every context
+      // menu, sends an action id here and must not have to learn which ids are
       // somebody else's.
       default:
         contributedAction(action)?.();

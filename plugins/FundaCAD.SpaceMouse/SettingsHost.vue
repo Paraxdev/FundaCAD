@@ -3,7 +3,7 @@
 //
 // It is a host and not the settings window itself, because a contributed
 // overlay is mounted for as long as the capability is running while the window
-// it wraps is open only sometimes — and that window builds a WebGL scene for
+// it wraps is open only sometimes, and that window builds a WebGL scene for
 // the test cube in onMounted. Mounting IS opening for the dialog, which is the
 // rule every modal in this app follows (see the note in App.vue); this is the
 // v-if that makes it true here.

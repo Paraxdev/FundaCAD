@@ -63,8 +63,8 @@ export interface PluginModule {
  *  It buys the thing the whole arrangement depends on. A plugin is ordinary Vue
  *  code and may use any of it; handing it ninety per cent of Vue and failing at
  *  runtime on the rest would be worse than the bytes. And the alternative to
- *  sharing is a plugin bundling its own copies, which does not merely cost more
- *  — it breaks. Two Vues cannot see each other's refs, two Pinias are two store
+ *  sharing is a plugin bundling its own copies, which does not merely cost more,
+ *  it breaks. Two Vues cannot see each other's refs, two Pinias are two store
  *  registries, and two three.js make `instanceof` false between them.
  *
  *  Async because none of it is needed until a plugin is actually loaded: a
@@ -95,7 +95,7 @@ export const EXPORT_NAME = "__fundacadPlugin";
  *  `new Function` rather than `eval`: the body is compiled in its own scope with
  *  exactly two names in it, so the plugin cannot see this function's locals, and
  *  nothing it declares leaks into the module that called it. That is a hygiene
- *  property and NOT a security one — the code has the whole window either way,
+ *  property and NOT a security one, the code has the whole window either way,
  *  which is what the origin rule above is for.
  *
  *  Throws with the plugin's id in the message. A plugin that will not evaluate

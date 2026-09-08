@@ -3,7 +3,7 @@
 // `mesh.indices` carries 3 entries per triangle but `mesh.faceIds` carries ONE.
 // A single shared write cursor for both (the bug this suite pins) sized faceIds
 // 3x too large and scattered every body after the first past the end of the
-// triangle range — so buildBodyMesh's `fid >= faceStart && fid < faceEnd` filter
+// triangle range, so buildBodyMesh's `fid >= faceStart && fid < faceEnd` filter
 // matched nothing for them and they rendered as edges with no surface.
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
@@ -12,7 +12,7 @@ import { buildBodyMesh } from "../../src/viewport/render";
 import type { RebuildResult } from "../../src/types";
 
 /** A body payload with `tris` triangles, each on the faceId given by `faceIds`.
- *  Geometry is throwaway (a fan off vertex 0) — only the array arities matter. */
+ *  Geometry is throwaway (a fan off vertex 0), only the array arities matter. */
 function wireBody(id: string, faceIds: number[]) {
   const tris = faceIds.length;
   const vcount = tris + 2;
@@ -101,7 +101,7 @@ describe("assemble (protocol v2, multi-body)", () => {
 // Regression: an "unchanged" stub carries its OWN identity.
 //
 // assemble() backs a stub with the CACHED mesh for that etag, then used to read
-// id/name straight off that cached payload — so anything the sidecar changed
+// id/name straight off that cached payload, so anything the sidecar changed
 // without changing the geometry was discarded. `name` was already wrong this
 // way and only looked right because a rename changes the etag, which turns the
 // body back into a full payload. `nodeRef` (the imported assembly tree) has no

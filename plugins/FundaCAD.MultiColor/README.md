@@ -15,10 +15,10 @@ adds is a control with nothing on the other end.
 
 ## What is here
 
-- `palette.ts` — what a slot means: the body colour menu, the nearest-slot match
+- `palette.ts`, what a slot means: the body colour menu, the nearest-slot match
   an import uses, and the paint the viewport is handed.
-- `PaletteSection.vue` — the palette panel, contributed to the browser.
-- `main.ts` — everything the app is told about all of it.
+- `PaletteSection.vue`, the palette panel, contributed to the browser.
+- `main.ts`, everything the app is told about all of it.
 
 This used to be a manifest and this file and nothing else, while the capability
 itself was eight `if (multiMaterialEnabled())` checks spread through the app: in
@@ -29,7 +29,7 @@ what a palette was and knew which switch decided whether it counted.
 ## Why it is TypeScript and not Python
 
 It answers per rebuild, per body, per face, synchronously, inside the render
-path — `paint` is asked again for every chunk of a progressive load. A process
+path, `paint` is asked again for every chunk of a progressive load. A process
 on the other end of a socket cannot serve that. It is the "a view and some TS"
 case rather than the "drive it from Python" case, and the difference is not
 preference: it is whether the answer has to arrive within a frame.
@@ -51,5 +51,5 @@ The panel it draws is a list of what is loaded in a machine's toolheads. It
 cannot answer that, and the capability that can should not have to own a colour
 panel. So it asks the app for a value called `filaments`, which the printer
 capability offers and the app passes along without looking inside. With no
-printer running there is no answer, so the panel draws nothing — which is what
+printer running there is no answer, so the panel draws nothing, which is what
 it should do on a machine with no printer anyway.

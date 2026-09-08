@@ -86,7 +86,7 @@ describe("BodyEdges", () => {
     be.setHidden(1, true); // hide e1 (2 segments)
     be.flush();
     expect(segCount(be)).toBe(1 + 3);
-    // e2 has moved down to segments 1..3 — the mapping must follow it
+    // e2 has moved down to segments 1..3, the mapping must follow it
     expect(be.refAtSegment(0)?.id).toBe("e0");
     expect(be.refAtSegment(1)?.id).toBe("e2");
     expect(be.refAtSegment(3)?.id).toBe("e2");
@@ -114,7 +114,7 @@ describe("BodyEdges", () => {
     expect(segColor(be, 1)).toEqual([1, 0, 1]);
   });
 
-  it("showAll clears inherited hiding — a reused body must not keep old seams", () => {
+  it("showAll clears inherited hiding, a reused body must not keep old seams", () => {
     const be = new BodyEdges(threeEdges(), RES);
     be.setHidden(0, true);
     be.setHidden(2, true);

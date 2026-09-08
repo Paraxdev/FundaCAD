@@ -16,7 +16,7 @@
 // than a checkbox that hides a panel.
 //
 // WHY THIS ONE IS TYPESCRIPT AND NOT PYTHON. It answers per rebuild, per body,
-// per face, synchronously, inside the render path — `paint` below is asked
+// per face, synchronously, inside the render path, `paint` below is asked
 // again for every chunk of a progressive load. A process on a socket cannot
 // serve that. It is the "a view and some TS" case rather than the "drive it from
 // Python" case, and the difference is not preference: it is whether the answer

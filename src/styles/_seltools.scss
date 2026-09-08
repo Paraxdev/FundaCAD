@@ -1,5 +1,5 @@
 /* ============================================================================
-   Selection toolbar — the tools that can act on what is currently selected,
+   Selection toolbar, the tools that can act on what is currently selected,
    parked next to it.
 
    Put the choice where the user is already looking, instead of making them
@@ -37,7 +37,7 @@
   border: 1px solid transparent;
   background: none;
   /* Explicit, because these hold an <svg stroke="currentColor"> and a <button>
-     does NOT inherit colour — it falls back to the UA's `buttontext`, which on
+     does NOT inherit colour, it falls back to the UA's `buttontext`, which on
      a dark surface draws the icon as an empty box. The same trap the heads-up
      dimension input's confirm/cancel marks fell into. */
   color: var(--text);

@@ -9,7 +9,7 @@ format for something a GPU draws.
 
 So a plane the user drew ON a face does not land on it. In the reported case a
 boss end face sat at y = 24.4 and the sketch drawn on it came back at
-y = 24.399999618530273 — the float32 neighbour, 3.8e-7 mm short. Cutting from
+y = 24.399999618530273, the float32 neighbour, 3.8e-7 mm short. Cutting from
 there gave OCCT two distinct planes where the user meant one: it removed the
 right volume, to the microlitre, but left the hole SEALED by a disc lying in
 the end face's own plane with a membrane 0.38 nanometres thick between them.
@@ -58,7 +58,7 @@ CEILING_MM = 1e-3
 def pick_fuzz(extent_mm):
     """The gap to treat as coincident for geometry picked at `extent_mm`.
 
-    `extent_mm` is how far from the origin the geometry involved reaches — the
+    `extent_mm` is how far from the origin the geometry involved reaches, the
     magnitude the float32 step is proportional to, not the size of the feature
     being cut. A 2 mm hole drilled a metre from the origin was picked at metre
     precision and needs the metre's tolerance.

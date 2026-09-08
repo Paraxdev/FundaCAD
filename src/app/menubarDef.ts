@@ -17,7 +17,7 @@ const ISSUES_URL = "https://github.com/Paraxdev/fundacad/issues";
  *  imagined ones. A contribution naming a menu that EXISTS appends its rows to
  *  it, which is how a capability adds two lines to File. A contribution naming
  *  one that does not CREATES it, placed before whatever `before` names, which is
- *  how a capability owns the whole of View — and why View disappears when that
+ *  how a capability owns the whole of View, and why View disappears when that
  *  capability is off, without anything here knowing that View is its.
  *
  *  Rows are appended in the order the plugins started, and a contribution
@@ -76,7 +76,7 @@ export function buildMenubar(e: Engine): MenuDef[] {
         {
           label: "Delete",
           shortcut: "Del",
-          // A selected FACE is deletable too (defeature) — onClick has always
+          // A selected FACE is deletable too (defeature), onClick has always
           // tried that first, but the predicate only asked about features, so
           // the menu greyed out the one case the Del key still handled.
           // getSelectedFaceIds, not selectedFacesForPressPull: this runs on

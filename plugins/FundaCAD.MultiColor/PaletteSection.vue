@@ -4,7 +4,7 @@
 // This was ~120 lines spread through components/shell/BrowserPane.vue: two node
 // kinds in the panel's own union type, a branch in the node builder, two blocks
 // of template, a connection dot, a staleness poll, a one-shot printer probe and
-// a sync flow — all of it behind a check on this capability, and a second check
+// a sync flow, all of it behind a check on this capability, and a second check
 // on the one that talks to printers. The browser is a tree of what is in the
 // document; none of that was.
 //
@@ -64,7 +64,7 @@ const dotTitle = computed(() =>
 // Passive checks, armed ONCE the first time bodies (and so the palette) appear:
 // a one-shot probe that lights the dot without a sync click, and a single 30s
 // staleness poll that re-diffs against the palette WITHOUT applying anything.
-// Both guarded, because the old version armed them from inside a render — where
+// Both guarded, because the old version armed them from inside a render, where
 // an unguarded re-arm probed the LAN per keystroke. The watcher is a transition,
 // so that hazard is structural now, but the guards stay: hasBodies flips on
 // every New and every Open too.

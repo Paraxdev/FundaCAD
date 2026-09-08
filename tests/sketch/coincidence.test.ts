@@ -3,8 +3,8 @@
 // sketchSolve merges two endpoints into ONE solver point when their positions
 // match to 0.001mm (coincKey), so a chain of lines drawn end to end is held
 // together structurally rather than by a coincident constraint. That is easy to
-// doubt from the outside — a saved sketch of a closed triangle has no
-// `constraints` key at all, which reads as "nothing is holding this together" —
+// doubt from the outside, a saved sketch of a closed triangle has no
+// `constraints` key at all, which reads as "nothing is holding this together",
 // and the answer decides whether auto-constrain owes the user a coincident on
 // every corner it draws. It does not: adding one would be redundant with the
 // merge, and redundant is what the over-defined diagnosis is for.
@@ -39,8 +39,8 @@ describe("a drawn chain is joined by position, not by a constraint", () => {
     expect(r.dof).toBe(6); // 3 corners x 2, i.e. every corner is ONE point
   });
 
-  // THE CONTROL. Pull one corner a hundredth of a millimetre apart — past the
-  // 0.001mm bucket — and the same three lines are four points, because two of
+  // THE CONTROL. Pull one corner a hundredth of a millimetre apart, past the
+  // 0.001mm bucket, and the same three lines are four points, because two of
   // them no longer merge. If the assertion above passed for any other reason
   // this one would report 6 as well.
   it("a chain whose corners miss carries the extra freedom", async () => {

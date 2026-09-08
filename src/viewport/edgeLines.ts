@@ -5,7 +5,7 @@
 // LineMaterial. On an imported assembly that is ~348,000 objects and ~348,000
 // materials: 12.2 GiB peak RSS (an OOM on a 16 GB machine, not merely a slow
 // frame) and 113-119 ms/frame of scene-graph traversal before a single draw
-// call. Measured in WebKitGTK — the webview Tauri actually uses on Linux, and
+// call. Measured in WebKitGTK, the webview Tauri actually uses on Linux, and
 // 2.2-2.6x worse than V8 at exactly that traversal. Merging per body measured
 // 348,844 -> 6,124 objects and 348,840 -> 3,061 materials, frame 1,385 -> 27-35 ms.
 // Hidden edges do NOT help: `visible = false` still costs the traversal, which
@@ -27,7 +27,7 @@ export type EdgePt = [number, number, number];
  *  always yields the same ref for the life of the body that owns it. */
 export interface EdgeRef {
   readonly id: string;
-  /** owning body id — undefined only for orphan edges (see ModelView). */
+  /** owning body id, undefined only for orphan edges (see ModelView). */
   readonly body: string | undefined;
   readonly points: EdgePt[];
   /** the merged object that draws this edge, and this edge's slot in it */
@@ -45,7 +45,7 @@ export class BodyEdges {
   readonly refs: EdgeRef[] = [];
 
   /** per edge: display-only hiding (flush seams). Hiding rebuilds the geometry
-   *  rather than flagging an object, because there is no object to flag — and
+   *  rather than flagging an object, because there is no object to flag, and
    *  because a hidden-but-present segment would still cost traversal. */
   private hidden: Uint8Array;
   /** per edge: the colour it should currently be (survives a geometry rebuild) */
@@ -54,7 +54,7 @@ export class BodyEdges {
   private segStart: Int32Array;
   /** per edge: how many segments it contributes (points - 1) */
   private segCount: Int32Array;
-  /** the live instance colour data — held by reference (LineSegmentsGeometry
+  /** the live instance colour data, held by reference (LineSegmentsGeometry
    *  .setColors does not copy a Float32Array), so a recolour writes into it. */
   private colorBuf = new Float32Array(0);
   /** segment index -> edge slot; this is the picking table, per body. Keeping
@@ -98,7 +98,7 @@ export class BodyEdges {
   }
 
   /** Rebuild the drawn geometry from the currently visible edges. O(edges), and
-   *  a no-op unless something changed — call it once after a BATCH of hides. */
+   *  a no-op unless something changed, call it once after a BATCH of hides. */
   flush() {
     if (!this.dirty) return;
     this.dirty = false;
@@ -143,7 +143,7 @@ export class BodyEdges {
   }
 
   /** Which edge a raycast hit belongs to. `segment` is the `faceIndex` three
-   *  reports for a LineSegments2 hit — the instance (segment) index. */
+   *  reports for a LineSegments2 hit, the instance (segment) index. */
   refAtSegment(segment: number): EdgeRef | undefined {
     const slot = this.segOwner[segment];
     return slot === undefined || slot < 0 ? undefined : this.refs[slot];
@@ -157,7 +157,7 @@ export class BodyEdges {
     this.rgb[slot * 3 + 2] = color.b;
     const start = this.segStart[slot]!;
     const n = this.segCount[slot]!;
-    if (start < 0 || n === 0) return; // hidden — the colour lands on the next flush
+    if (start < 0 || n === 0) return; // hidden, the colour lands on the next flush
     for (let s = start; s < start + n; s++) {
       const o = s * 6;
       this.colorBuf[o] = color.r; this.colorBuf[o + 1] = color.g; this.colorBuf[o + 2] = color.b;
@@ -208,7 +208,7 @@ export class BodyEdges {
   }
 
   /** Un-hide every edge. hideFlushSeams only ever HIDES, and a body reused
-   *  across a rebuild (etag unchanged) keeps this object — so without this its
+   *  across a rebuild (etag unchanged) keeps this object, so without this its
    *  seam-hiding from the previous model would accumulate and never come back.
    *  The old one-Line2-per-edge code got this for free, by reassigning
    *  `e.visible` on every edge each rebuild. */
@@ -234,7 +234,7 @@ export class BodyEdges {
     return this.object.visible;
   }
 
-  /** The refs a pick or a chain walk may land on — visible body, unhidden edge. */
+  /** The refs a pick or a chain walk may land on, visible body, unhidden edge. */
   visibleRefs(): EdgeRef[] {
     if (!this.object.visible) return [];
     return this.refs.filter((r) => this.segStart[r.slot]! >= 0);

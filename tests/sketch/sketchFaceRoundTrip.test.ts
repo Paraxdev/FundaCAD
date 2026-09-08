@@ -6,7 +6,7 @@
 // places in one class: enter() takes it, enter() re-adopts it from the feature
 // when editing, and snapshotFeature() writes it back out. snapshotFeature is
 // what a re-edit commits, so dropping it in any one of the three means: open the
-// sketch, change nothing, close it — and the anchor is silently gone, the plane
+// sketch, change nothing, close it, and the anchor is silently gone, the plane
 // is baked at wherever it stood, and the sealed-cavity bug is back with no
 // message at all.
 //
@@ -14,7 +14,7 @@
 // shipped, and it is the pattern this one copies. If a future edit breaks the
 // shape, both fail together and the cause is obvious.
 //
-// Driving a real SketchMode needs WebGL, so `this` is a hand-built stand-in —
+// Driving a real SketchMode needs WebGL, so `this` is a hand-built stand-in,
 // but the METHODS under test are the real ones, taken off the prototype. What is
 // faked is the viewport/overlay/solver around them, never the round-trip.
 
@@ -27,7 +27,7 @@ const PLANE: PlaneDef = { origin: [0, 0, 10], normal: [0, 0, 1], xdir: [1, 0, 0]
 const SEL: Selector = { kind: "face", by: "nearest", point: [9.5, 0, 10], body: "body1" };
 const ANCHOR = { selector: SEL, at: [9.5, 0, 10] as [number, number, number] };
 
-// vitest runs *.test.ts in node (no DOM, on purpose — see vitest.config.ts);
+// vitest runs *.test.ts in node (no DOM, on purpose, see vitest.config.ts);
 // enter() registers its key handler on window.
 (globalThis as unknown as { window: unknown }).window ??= {
   addEventListener() {},
@@ -42,7 +42,7 @@ const ANCHOR = { selector: SEL, at: [9.5, 0, 10] as [number, number, number] };
 
 /** A SketchMode whose collaborators are stubs, so enter()/snapshotFeature() can
  *  run. Everything here is a dependency of entering a sketch, not part of what
- *  is under test — the two methods themselves come from the real prototype. */
+ *  is under test, the two methods themselves come from the real prototype. */
 function makeSketch(doc: CadDocument) {
   const s = Object.create(SketchMode.prototype) as SketchMode & Record<string, unknown>;
   Object.assign(s, {
@@ -124,7 +124,7 @@ describe("a face-anchored sketch round-trips through enter, snapshot and enter",
 
   it("writes no face key at all for a sketch on a base plane", () => {
     // Legacy compat, the whole rule: no anchor picked, not one byte added. This
-    // is also the control for every assertion above — if a sketch on XY came out
+    // is also the control for every assertion above, if a sketch on XY came out
     // carrying a face, they would all pass for the wrong reason.
     const { s, store } = makeSketch(doc);
     s.enter("XY" as unknown as PlaneDef, store);

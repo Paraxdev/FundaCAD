@@ -90,7 +90,7 @@ describe("boxDistanceSq", () => {
 
 describe("polylineDistance", () => {
   it("finds the closest approach anywhere along either polyline", () => {
-    // The nearest pair is an interior segment of each, not an endpoint — a
+    // The nearest pair is an interior segment of each, not an endpoint, a
     // measure that only compared endpoints would report 5 instead of 1.
     const a: Pt3[] = [p(0, 0, 0), p(0, 5, 0), p(0, 10, 0)];
     const b: Pt3[] = [p(1, 10, 0), p(1, 5, 0), p(1, 0, 0)];
@@ -114,7 +114,7 @@ describe("localClearance", () => {
   it("ignores the edges that share a vertex with the pick", () => {
     // Every edge of a cube touches four others at a corner. If those counted,
     // the clearance would be 0 and the tool would refuse every blend on every
-    // edge of every part — the failure this whole tolerance exists to prevent.
+    // edge of every part, the failure this whole tolerance exists to prevent.
     const all = boxEdges(10, 10, 10);
     const c = localClearance({ selected: [at(all, 0)], all, modelScale: 17.3 });
     expect(c).toBeCloseTo(10);
@@ -134,7 +134,7 @@ describe("localClearance", () => {
   it("grows the bound on a chunky part instead of holding it back", () => {
     // The same global fraction was too TIGHT here: 0.25 x the 346mm diagonal
     // stopped at 86mm on a part that takes 100. Both complaints were the one
-    // bug — a global number standing in for a local one.
+    // bug, a global number standing in for a local one.
     const all = boxEdges(200, 200, 200);
     const c = localClearance({ selected: [at(all, 0)], all, modelScale: Math.hypot(200, 200, 200) })!;
     expect(clearanceLimit(c)).toBeCloseTo(100);
@@ -164,7 +164,7 @@ describe("localClearance", () => {
 
   it("is unmoved by the order the edges arrive in", () => {
     // The running-best rejection prunes pairs as it goes, so a wrong bound test
-    // would give different answers for different orderings — and the ordering
+    // would give different answers for different orderings, and the ordering
     // here is whatever the tessellation happened to emit.
     const all = boxEdges(30, 12, 7);
     const pick = at(all, 0);
@@ -210,7 +210,7 @@ describe("localClearance on a cylinder", () => {
   });
 
   it("still lets a neighbour tighten the bound below that radius", () => {
-    // A wide flat disc: r = 40 but only 2mm thick. The cap no longer decides —
+    // A wide flat disc: r = 40 but only 2mm thick. The cap no longer decides,
     // the far face does, and the tighter of the two has to win.
     const top = { id: "top", points: circle(40, 2) };
     const bottom = { id: "bottom", points: circle(40, 0) };

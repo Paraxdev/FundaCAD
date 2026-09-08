@@ -19,7 +19,7 @@
 //   width/2      a document parameter
 //
 // The arithmetic, the parameter references and the functions are the document's
-// existing expression language (params/parse.ts) — this does NOT reimplement
+// existing expression language (params/parse.ts), this does NOT reimplement
 // them. What it adds is the unit vocabulary and the notations that language has
 // no room for: symbols, compounds and fractions. Those are normalised into an
 // expression the existing parser already accepts, so there is one evaluator and
@@ -46,7 +46,7 @@ export interface UnitDef {
   /** everything that may be TYPED for it, lower-cased. Order does not matter;
    *  the scanner sorts by length so "mm" can never be eaten by "m". */
   aliases: string[];
-  /** offered in the unit picker — the rest are input-only, so "thou" parses
+  /** offered in the unit picker, the rest are input-only, so "thou" parses
    *  without putting a unit nobody asked for in front of everyone. */
   common?: boolean;
 }
@@ -94,7 +94,7 @@ export interface Measured {
    *  makes the field unit-agnostic: typing "1 inch" into a field showing mm
    *  means inches, and the field can adopt that as its display unit. */
   unit: UnitDef | null;
-  /** true when the text was more than a literal — an expression, a compound or
+  /** true when the text was more than a literal, an expression, a compound or
    *  a fraction. Surfaces show these with an fx marker rather than editing them
    *  as a plain number. */
   derived: boolean;
@@ -107,7 +107,7 @@ const DIGIT = /[0-9]/;
  *  because none of them is a letter. */
 const SYMBOLIC = new Set(["\"", "'", "″", "′", "°", "µ"]);
 
-/** `1/2 in` and `1 1/2 in` — a fraction is a way of writing ONE value, not a
+/** `1/2 in` and `1 1/2 in`, a fraction is a way of writing ONE value, not a
  *  term inside a formula, so it is only recognised when it is the whole input.
  *  Mixing it into arithmetic would make "1 1/2" ambiguous with "1 + 1/2" versus
  *  "1 * 1/2", and neither reading is obviously right. */
@@ -147,8 +147,8 @@ interface Normalised {
 
 /** Rewrite the typed text into the expression language, folding every unit into
  *  the canonical one. A unit becomes a plain multiplication rather than a `mm`
- *  suffix so that feet, microns and thou — which the document language has no
- *  suffix for — travel the same path as millimetres. */
+ *  suffix so that feet, microns and thou, which the document language has no
+ *  suffix for, travel the same path as millimetres. */
 export function normalise(raw: string): Normalised {
   const src = raw.trim();
   if (!src) throw new ExprError("empty value");
@@ -179,7 +179,7 @@ export function normalise(raw: string): Normalised {
     const ch = src[i]!;
     if (ch === " " || ch === "\t") { i++; continue; }
 
-    // `10x20` — x is multiply on every drawing ever printed. Only between two
+    // `10x20`, x is multiply on every drawing ever printed. Only between two
     // numbers, so a parameter called `x` is untouched.
     if (ch === "x" || ch === "X" || ch === "×") {
       let k = i + 1;
@@ -199,7 +199,7 @@ export function normalise(raw: string): Normalised {
       while (src[j] === " ") j++;
       const u = matchUnitAt(src, j);
       // A bare number sitting straight after a unit group is not a compound and
-      // not arithmetic — `2"5` and `2mm 3` are half-finished thoughts. Joining
+      // not arithmetic, `2"5` and `2mm 3` are half-finished thoughts. Joining
       // them silently (as concatenation, or as an implied +) would commit a
       // number the user never wrote.
       if (!u && pendingJoin) throw new ExprError(`put an operator between "${out}" and "${src.slice(i)}"`);
@@ -221,7 +221,7 @@ export function normalise(raw: string): Normalised {
     }
 
     if (SYMBOLIC.has(ch)) throw new ExprError(`"${ch}" needs a number in front of it`);
-    // anything else — operators, parens, parameter names — is the expression
+    // anything else, operators, parens, parameter names, is the expression
     // language's business, not ours
     out += ch;
     pendingJoin = false;
@@ -252,7 +252,7 @@ export function normalise(raw: string): Normalised {
 
 /** Read typed text as a measurement.
  *
- *  `displayUnit` is what a BARE number means — the unit the field is currently
+ *  `displayUnit` is what a BARE number means, the unit the field is currently
  *  showing. A written unit always wins over it, which is the whole point: the
  *  field shows mm, you type "1 inch", you get an inch.
  *
@@ -276,7 +276,7 @@ export function parseMeasure(
   return { value: scaled, unit: n.unit, derived: n.derived };
 }
 
-/** Same, but null instead of throwing — for the live path, where every
+/** Same, but null instead of throwing, for the live path, where every
  *  keystroke passes through a half-typed value and an exception per character
  *  is not an error, it is the user still typing. */
 export function tryParseMeasure(
@@ -314,15 +314,15 @@ export function measureError(raw: string, displayUnit: UnitDef | null, params: R
  *
  *  So two places, and the exception that makes two places safe: a value that is
  *  ALREADY a three-decimal number is left alone. That is the signature of a
- *  number somebody chose — typed into a field, or landed on by a drag, which
+ *  number somebody chose, typed into a field, or landed on by a drag, which
  *  quantises to a nice 1/2/5 step (viewport/dragStep.ts) and so never arrives at
  *  1.375 by accident. Blunting those to 1.38 would be destroying information;
  *  blunting 24.098723 is discarding noise. Within float fuzz, because the length
  *  a sketch reports is usually a SUBTRACTION of two chosen numbers and
  *  10.123 - 3.377 does not land on 6.746 exactly.
  *
- *  Under 1mm two places is no longer rounding but erasure — 0.0523 would come
- *  back as 0.05 and 0.0012 as nothing at all — so below there the rule switches
+ *  Under 1mm two places is no longer rounding but erasure, 0.0523 would come
+ *  back as 0.05 and 0.0012 as nothing at all, so below there the rule switches
  *  to three significant digits, still stopping at six places. */
 export function roundForDisplay(v: number): number {
   if (!Number.isFinite(v)) return v;

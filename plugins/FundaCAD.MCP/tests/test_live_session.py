@@ -8,7 +8,7 @@ discovery never found a running app at all.
 
 So this one stubs nothing that carries a message. It starts a real sidecar,
 writes a real session file, runs a host loop that does what
-src/live/liveSession.ts does — publish, collect, apply, raise the revision — and
+src/live/liveSession.ts does, publish, collect, apply, raise the revision, and
 drives mcp/server.py over its actual stdio protocol.
 
 The controls are the point, and each is a way this could pass while being
@@ -191,7 +191,7 @@ class Engine:
         """The environment an MCP host would give the server.
 
         No token in it, deliberately. An explicit token takes the override path,
-        which would attach without exercising discovery at all — the thing this
+        which would attach without exercising discovery at all, the thing this
         file exists to test."""
         env = dict(os.environ)
         env["FUNDACAD_MCP_MODE"] = mode
@@ -238,7 +238,7 @@ def test_an_agent_reads_and_edits_the_document_the_app_has_open():
                     assert "from-the-app" in out, f"the agent did not read the app's document: {out[:200]}"
 
                     # The tool call blocks until the app adopts the edit, and the
-                    # app only adopts on its own publish loop — so the loop has
+                    # app only adopts on its own publish loop, so the loop has
                     # to be running while the call is in flight. That is what the
                     # app does; here it means a thread.
                     loop = asyncio.get_running_loop()
@@ -265,7 +265,7 @@ def test_an_agent_reads_and_edits_the_document_the_app_has_open():
 
 def test_an_edit_against_a_stale_revision_is_refused():
     """Driven at the wire rather than through a tool, because the MCP path
-    re-reads before every call and so can never itself be stale — which is the
+    re-reads before every call and so can never itself be stale, which is the
     design working, and is exactly why the refusal underneath it has to be
     proven separately."""
     async def body():

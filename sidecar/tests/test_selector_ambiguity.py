@@ -41,7 +41,7 @@ def test_equidistant_faces_raise_instead_of_guessing():
         msg = str(ex)
         assert "ambiguous face reference" in msg, msg
         # the message must name the competing candidates so the user knows what
-        # to re-pick — a bare "ambiguous" is not actionable
+        # to re-pick, a bare "ambiguous" is not actionable
         assert msg.count("a face at") >= 2, msg
         assert "15.00" in msg, msg
         print(PASS, "equidistant faces raise, naming both candidates")
@@ -76,7 +76,7 @@ def test_moved_face_still_resolves_when_it_stays_nearest():
 
     LIMIT, deliberately pinned here: this holds while the top face is still
     closest. Grow the box far enough and the stored point ends up deep inside,
-    where the side walls are nearer and mutually tied — then it raises, which is
+    where the side walls are nearer and mutually tied, then it raises, which is
     correct: the point no longer identifies the top face. `by:"match"`
     fingerprints are what survive that, not `nearest`."""
     tall = Box(20, 20, 24)                 # was 20 tall, top z=10 -> now z=12
@@ -134,7 +134,7 @@ def test_a_confident_pick_records_no_diagnostic():
 
     Regression for a projection failure: the success path used to log an advisory
     entry carrying the distance margin in `confidence`, and `_push_diag` admits
-    anything under 0.5 — so a clear winner (cylinder rim, margin 0.109) was
+    anything under 0.5, so a clear winner (cylinder rim, margin 0.109) was
     recorded as low confidence. builder._project_source refused any non-empty
     `diag`, so projecting that rim reported "the source selection is ambiguous on
     this body" for a pick the gate had already ruled unambiguous. `diag` means
@@ -144,7 +144,7 @@ def test_a_confident_pick_records_no_diagnostic():
     assert len(got) == 1, got
     assert diag == [], f"a confident face pick must record nothing, got {diag}"
 
-    # and an edge pick whose margin clears the tie band but is well under 0.5 —
+    # and an edge pick whose margin clears the tie band but is well under 0.5,
     # the shape of the cylinder-rim case that actually broke.
     diag2 = []
     resolve_edges(BOX, edge_sel([10.0, 10.0, 3.0]), diag=diag2, feature_id="fZ")

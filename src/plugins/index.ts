@@ -63,8 +63,8 @@ export interface OfficialPlugin {
  *  EVERY directory under plugins/, with no exception for `builtin`. There used
  *  to be one: a builtin's code was the app's code, there was no zip on any
  *  release, and offering to download one would have been offering a 404. That
- *  is no longer true of anything here — scripts/build-plugins.py packages all
- *  four and the release job publishes them — so the exception went with it.
+ *  is no longer true of anything here, scripts/build-plugins.py packages all
+ *  four and the release job publishes them, so the exception went with it.
  *
  *  The asset name comes from `bundleAsset`, which is also what the packager
  *  uses, so this cannot come to expect a file the release does not carry. */
@@ -130,7 +130,7 @@ export async function installedPlugins(): Promise<InstalledPlugin[]> {
 // a plugin's app-side companion has to be started and stopped as installs come
 // and go, and the thing that does that (./activate.ts) runs from a synchronous
 // state sync. So the answer is cached here, refreshed on the paths that change
-// it, and published with a listener set — the same shape ./registry.ts uses for
+// it, and published with a listener set, the same shape ./registry.ts uses for
 // the built-in switches, and for the same reason.
 //
 // Empty until the first refresh, which is the right way round: a companion that

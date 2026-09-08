@@ -16,7 +16,7 @@ scratch directory:
         python mcp/client.py --script build.jsonl
 
     Each invocation is a FRESH server with an EMPTY document, so a sequence of
-    one-shot calls is not a session — use --script, which sends a whole list of
+    one-shot calls is not a session, use --script, which sends a whole list of
     calls down one connection.
 
 Images come back as base64 and are written to files rather than printed: a PNG
@@ -79,7 +79,7 @@ class McpClient:
         The last part is not tidiness. Without it the proactor loop on Windows
         finalises the subprocess transport during interpreter shutdown, by which
         time the pipes are gone, and every run ends in two pages of
-        "I/O operation on closed pipe" from __del__ — noise that buries whatever
+        "I/O operation on closed pipe" from __del__, noise that buries whatever
         the run was actually reporting."""
         proc, self.proc = self.proc, None
         if proc is None:

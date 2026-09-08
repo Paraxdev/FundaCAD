@@ -1,9 +1,9 @@
 // The chunk channel must stay disjoint from the completed-build channel.
 //
 // Progressive display draws a PARTIAL model. Every tool's onBuild handler is a
-// one-shot on the `!building` edge — fillet/chamfer ghost seeding, the texture
+// one-shot on the `!building` edge, fillet/chamfer ghost seeding, the texture
 // tool's selection reseed, the context-menu dismissal, the new-failure toast
-// diff — and roughly twenty other places read store.buildState.result directly,
+// diff, and roughly twenty other places read store.buildState.result directly,
 // two of which BAKE it into a persisted document (a split feature's body id
 // list, and post-import colour assignment). If a partial model could reach any
 // of them the result would be a wrong saved document, not just a wrong frame.

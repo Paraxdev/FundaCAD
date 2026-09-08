@@ -2,7 +2,7 @@
 // how faintly the half you cut away is still drawn.
 //
 // Split out for the reason edgeDragMath.ts was: the tool around it is pointer
-// listeners, a Three.js gizmo and a renderer flag, none of which run headless —
+// listeners, a Three.js gizmo and a renderer flag, none of which run headless,
 // while THIS is the part that decides whether a drag moves the cut the way the
 // user pushed it, and whether "hidden" is actually reachable on the ghost dial.
 
@@ -16,7 +16,7 @@ export interface ClipPlane {
 }
 
 /** The cut for a section defined by `origin`/`normal`, slid `offset` mm along
- *  its own normal and kept on `side` (+1 or −1 — what F flips).
+ *  its own normal and kept on `side` (+1 or −1, what F flips).
  *
  *  Offset is applied along the DEFINING normal, not the kept side's: flipping
  *  which half you keep must not also reverse which way dragging moves the cut,
@@ -46,7 +46,7 @@ export function sectionCentre(origin: Vec3, normal: Vec3, offset: number): Vec3 
  *  A PlaneDef's own origin is the world origin projected onto it, which is the
  *  only stable choice for a plane definition but says nothing about where the
  *  geometry is. On a part modelled far from the world origin that point sits out
- *  in empty space — so the cut would be perfectly visible while its handle was
+ *  in empty space, so the cut would be perfectly visible while its handle was
  *  somewhere off screen. Projecting the model's centre onto the plane puts the
  *  handle on the cut the user is actually looking at, without moving the plane
  *  itself: the result is on the same plane by construction. */
@@ -65,7 +65,7 @@ export function sectionAnchor(origin: Vec3, normal: Vec3, modelCentre: Vec3): Ve
   ];
 }
 
-/** The plane a datum/face definition cuts along — the section only needs a point
+/** The plane a datum/face definition cuts along, the section only needs a point
  *  and a direction, and this is the one place that decides which of a PlaneDef's
  *  three vectors those are. */
 export function sectionFromPlaneDef(def: PlaneDef): { origin: Vec3; normal: Vec3 } {
@@ -76,8 +76,8 @@ export function sectionFromPlaneDef(def: PlaneDef): { origin: Vec3; normal: Vec3
 //
 // The point of the mode: geometry past the cut does not VANISH, it goes faint,
 // so an assembly keeps its shape while you look inside it. But how faint has to
-// be the user's call — a dense assembly ghosts into fog at an alpha a single
-// bracket needs to be legible at — and "no ghost at all" has to stay reachable,
+// be the user's call, a dense assembly ghosts into fog at an alpha a single
+// bracket needs to be legible at, and "no ghost at all" has to stay reachable,
 // because a clean uncluttered cut is the right answer often enough that taking
 // it away would be a regression on the tool this replaced.
 
@@ -99,7 +99,7 @@ export function ghostAlpha(level: number): number {
   return GHOST_LEVELS[i] as number;
 }
 
-/** Next rung, wrapping back to hidden past the top — the dial is driven by ONE
+/** Next rung, wrapping back to hidden past the top, the dial is driven by ONE
  *  key press, so it has to be a cycle; a key that stopped dead at the end would
  *  need a second key to come back. */
 export function nextGhostLevel(level: number): number {

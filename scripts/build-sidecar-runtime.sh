@@ -51,8 +51,8 @@ rm -rf "$OUT"/site-packages/vtkmodules "$OUT"/site-packages/vtk.py \
 
 # 3b. jedi's editor stub tree. jedi is in the lock because build123d imports
 #     ipython, and nothing in a headless sidecar ever completes an identifier, so
-#     third_party/ — typeshed stubs for django, tensorflow, braintree and the
-#     rest — is data no import ever reads. It is also why the Windows portable
+#     third_party/, typeshed stubs for django, tensorflow, braintree and the
+#     rest, is data no import ever reads. It is also why the Windows portable
 #     zip trips the 260-character path limit: it holds 5536 of the payload's
 #     files and every one of the longest paths. Dropping it takes the longest
 #     internal path from 153 characters to 130, and the whole sidecar suite runs
@@ -60,7 +60,7 @@ rm -rf "$OUT"/site-packages/vtkmodules "$OUT"/site-packages/vtk.py \
 rm -rf "$OUT"/site-packages/jedi/third_party 2>/dev/null || true
 
 # 4. sidecar sources + precompile (read-only bundle: no .pyc writes at import time).
-#    Non-recursive, so sidecar/tests/ never ships. A denylist, not an allowlist —
+#    Non-recursive, so sidecar/tests/ never ships. A denylist, not an allowlist,
 #    a new sidecar module must ship by default, or the app breaks in the packaged
 #    build only, which is the worst place to find out.
 mkdir -p "$OUT/app"

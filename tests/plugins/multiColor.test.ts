@@ -38,7 +38,7 @@ describe("nearestPaletteSlot", () => {
     expect(nearestPaletteSlot("#abc", pal)).toBeNull(); // 3-digit form unsupported
   });
 
-  it("never invents a slot beyond the palette — it matches, never extends", () => {
+  it("never invents a slot beyond the palette, it matches, never extends", () => {
     // the palette is the U1's 4 physical filament slots, not a display palette
     for (const c of ["#123456", "#00ff00", "#ffff00", "#7f7f7f"]) {
       const slot = nearestPaletteSlot(c, pal);
@@ -133,7 +133,7 @@ describe("staleSlots", () => {
   });
 
   it("says nothing about a toolhead with nothing in it", () => {
-    // An empty toolhead is not a disagreement — the sync leaves that slot alone,
+    // An empty toolhead is not a disagreement, the sync leaves that slot alone,
     // so calling it stale would light the dot amber forever on a machine with
     // three of its four heads unloaded.
     expect(staleSlots(pal, loaded([{ present: false, color: "#00ff00" }, { vendor: "", material: "", color: "#e8e8e8" }]))).toEqual([]);

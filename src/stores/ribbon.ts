@@ -4,7 +4,7 @@ import type { RibbonContext } from "../ui/ribbonDefs";
 
 /** Which ribbon context is showing and which sketch tool is armed.
  *
- *  Both are pushed in by app/sketchStateBridge.ts from SketchMode's onState —
+ *  Both are pushed in by app/sketchStateBridge.ts from SketchMode's onState,
  *  the ribbon reflects sketch state, it does not own it. */
 export const useRibbonStore = defineStore("ribbon", () => {
   const context = ref<RibbonContext>("model");

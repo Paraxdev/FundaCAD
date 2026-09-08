@@ -24,8 +24,8 @@ const ui = useUiStore();
 //
 // The CONTRIBUTIONS, not the on/off state. Those are different moments and the
 // difference is visible: a capability is switched on, and only some
-// milliseconds later — after its module has been fetched and its activate() has
-// run — does it have rows to add. Watching the switch rebuilt the menu while the
+// milliseconds later, after its module has been fetched and its activate() has
+// run, does it have rows to add. Watching the switch rebuilt the menu while the
 // capability that owns the rows was still loading, so the menubar was always one
 // step behind, showing the last capability's rows and not this one's. Watching
 // what was actually contributed cannot be early.
@@ -48,13 +48,13 @@ onMounted(() => { offUnit = onUnitChange(() => { unit.value = getUnit(); }); });
 onUnmounted(() => offUnit?.());
 
 function onUnitInput(ev: Event) {
-  // asUnit is a mandatory narrowing gate, not a formality — see units.ts:15-22.
+  // asUnit is a mandatory narrowing gate, not a formality, see units.ts:15-22.
   const u = asUnit((ev.target as HTMLSelectElement).value);
   if (u) setUnit(u);
 }
 
-// Theme and icon pack are the same shape of setting as units — a module-level
-// observable with a listener set and localStorage behind it — so they are
+// Theme and icon pack are the same shape of setting as units, a module-level
+// observable with a listener set and localStorage behind it, so they are
 // mirrored the same way rather than through Pinia. The viewport reads the theme
 // synchronously while painting manipulators, which is the same reason units is
 // not in the store.
@@ -133,7 +133,7 @@ function onPackInput(ev: Event) {
     </label>
     <!-- A button, not a span, because this is where a failure is first seen and
          it is the one place in the app guaranteed to be showing a CLIPPED
-         version of it — the pill is narrow and the sentence is long, so the
+         version of it, the pill is narrow and the sentence is long, so the
          tail that says what to do is exactly what gets cut. Clicking opens the
          console, which keeps it whole. -->
     <button

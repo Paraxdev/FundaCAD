@@ -4,7 +4,7 @@ Split out of builder.py. Everything here is the KERNEL CALL a feature makes,
 with the guards that keep OCCT from being asked something it will answer badly:
 shelling, drafting, patterning, and the whole push-a-face family (press/pull,
 offset, thicken, and the swept fallback for a face that offsetting cannot
-handle). No feature dicts, no bodies list, no diagnostics — those stay with the
+handle). No feature dicts, no bodies list, no diagnostics, those stay with the
 handlers in builder.py, which is what makes this half testable on a bare shape.
 """
 
@@ -16,7 +16,7 @@ import sys
 import tempfile
 import time
 
-import font_guard  # noqa: F401  MUST precede build123d — see font_guard.py
+import font_guard  # noqa: F401  MUST precede build123d, see font_guard.py
 
 from build123d import (
     Compound,
@@ -38,7 +38,7 @@ def _simplify_mesh(shape, tol_deg):
     """Merge near-coplanar facets of an imported mesh into fewer, larger faces
     (OCCT UnifySameDomain with a widened angular tolerance). Recovers planar faces
     from imperfect/dense meshes and tames facet count. NOTE: this COARSENS curved
-    regions (a faceted cylinder becomes coarser planar strips) — it does not
+    regions (a faceted cylinder becomes coarser planar strips), it does not
     reconstruct true smooth surfaces; that's RANSAC surface fitting (deferred)."""
     import math
     from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
@@ -63,7 +63,7 @@ def _shell(shape, thickness, openings):
         # OCCT surfaces that as a bare RuntimeError, which told the user nothing
         # about the one number they need to change.
         raise ValueError(
-            f"Shell failed with a wall of {abs(thickness):g}mm — this is usually "
+            f"Shell failed with a wall of {abs(thickness):g}mm, this is usually "
             "thicker than the body's narrowest span; try a smaller thickness. "
             f"[{type(ex).__name__}]"
         )
@@ -81,7 +81,7 @@ def _rot_for(axis, deg):
 def _fuse_pattern_cells(cells):
     """Union pattern cells. Bbox-DISJOINT cells (the common grid) need no
     boolean at all: bbox-disjoint ⇒ solid-disjoint, and fusing disjoint solids
-    yields exactly the compound of them — the old incremental `result + cell`
+    yields exactly the compound of them, the old incremental `result + cell`
     chain spent O(n²) full booleans + UnifySameDomain per cell to produce that
     (measured 1.8s → ~0 on a 10x10 grid). OVERLAPPING cells keep the
     incremental chain: one N-tool fuse of mutually-overlapping solids measured
@@ -115,7 +115,7 @@ def _pattern_rect(shape, nx, ny, dx, dy):
 def _pattern_linear(shape, count, spacing, axis):
     """Replicate a body `count` times at `spacing` mm along a global axis and
     union the copies. Copy 0 is the original, so a count of 3 at 20 mm reaches
-    40 mm — mirrors src/features/patternMath.linearOffsets."""
+    40 mm, mirrors src/features/patternMath.linearOffsets."""
     count = max(1, int(round(count)))
     # A disjoint body is a ShapeList; Pos (Location.__mul__) takes one Shape.
     # Same normalisation _handle_move makes, for the same reason.
@@ -191,18 +191,18 @@ def _press_pull(part, face, d, clamp=True):
 
     PLANAR faces extrude the face region into a prism and boolean it (union for +d,
     subtract for -d). This is far more robust than a local surface offset
-    (BRepOffset), which SEGFAULTs on faceted / split imported faces — and it handles
+    (BRepOffset), which SEGFAULTs on faceted / split imported faces, and it handles
     holed faces fine in practice. Every CURVED face goes through the local offset
     (_offset_faces), which is what resizes a hole, a boss or a blend cleanly.
 
     Curved faces used to be restricted to cylinders, which rejected work the
-    kernel does perfectly well — most importantly a TORUS, which is what a fillet
+    kernel does perfectly well, most importantly a TORUS, which is what a fillet
     on a round edge is, i.e. exactly the face someone reaches for after blending
     a part. The permitted set is now every ANALYTIC surface (OFFSETTABLE_CURVED),
     each measured safe in an isolated subprocess at offsets up to +-20mm.
 
     FREEFORM faces sweep instead (_sweep_press_pull). They must never reach the
-    offset — it does not fail on them, it crashes the worker, and a small offset
+    offset, it does not fail on them, it crashes the worker, and a small offset
     on a BSPLINE works, which is precisely what makes a magnitude cap look
     sufficient when it is not. Sweeping is a weaker operation but a robust one,
     and a weaker answer beats a refusal.
@@ -223,7 +223,7 @@ def _press_pull(part, face, d, clamp=True):
         try:
             if len(part.faces()) > 300 and face.area < 1.0:
                 raise ValueError(
-                    "can't press/pull this region — it's a single mesh facet, not a "
+                    "can't press/pull this region, it's a single mesh facet, not a "
                     "clean face (the imported body is faceted, not prismatic)"
                 )
         except ValueError:
@@ -238,8 +238,8 @@ def _press_pull(part, face, d, clamp=True):
     # Curved. The radius cap applies only where a radius is what runs out: pushing
     # a cylinder or a cone inward past its own axis collapses it, and OCCT does
     # not survive that gracefully.
-    # Analytic curves get the REAL offset first — it is what resizes a hole, a
-    # boss or a blend properly — and the sweep only if that refuses. Freeform
+    # Analytic curves get the REAL offset first, it is what resizes a hole, a
+    # boss or a blend properly, and the sweep only if that refuses. Freeform
     # faces go straight to the sweep: the offset does not fail on them, it
     # crashes the worker, so it must never be tried.
     if gt in OFFSETTABLE_CURVED:
@@ -250,7 +250,7 @@ def _press_pull(part, face, d, clamp=True):
             pass
         # Thicken the ONE face before falling back to the sweep. The sweep is a
         # linear prism and has nothing to travel along on a face that closes on
-        # itself, so a hole — the commonest curved face there is — reached the
+        # itself, so a hole, the commonest curved face there is, reached the
         # refusal below whenever the whole-body offset would not run.
         try:
             return _thicken_press_pull(part, face, dd)
@@ -259,7 +259,7 @@ def _press_pull(part, face, d, clamp=True):
     # A face that WRAPS closes on itself, so the sweep below has no direction to
     # travel along: it produces a prism that swallows the body, and the volume
     # check catches that and refuses. That refusal is what a 360-degree revolve
-    # of a non-analytic profile lands in — the commonest way to make a shape
+    # of a non-analytic profile lands in, the commonest way to make a shape
     # this kernel cannot describe as a cylinder, cone, sphere or torus.
     #
     # Thicken follows the SURFACE, which is the operation such a face actually
@@ -296,13 +296,13 @@ def _wrapped_thickenable(gt, d):
 
 def _distance_to_target(src_face, target_pt, target_n):
     """Signed distance to extrude `src_face` along its own normal so it lands on the
-    target plane (a point `target_pt` on it + its normal `target_n`) — i.e. "up to
+    target plane (a point `target_pt` on it + its normal `target_n`), i.e. "up to
     that surface". Raises if the face is parallel to the target (it never reaches).
     MVP: assumes a planar source and a planar target."""
     c, n = src_face.center(), src_face.normal_at()
     denom = n.X * target_n.X + n.Y * target_n.Y + n.Z * target_n.Z
     if abs(denom) < 1e-6:
-        raise ValueError("Press/Pull: the face is parallel to the 'up to' surface — can't reach it")
+        raise ValueError("Press/Pull: the face is parallel to the 'up to' surface, can't reach it")
     num = (target_pt.X - c.X) * target_n.X + (target_pt.Y - c.Y) * target_n.Y + (target_pt.Z - c.Z) * target_n.Z
     return num / denom
 
@@ -338,7 +338,7 @@ def _clamp_planar(part, face, d):
 
 def _guard_offsetable(part, faces, label):
     """Shared precondition for the OCCT offset family (Offset Face, Thicken).
-    Raises ValueError — which the rebuild loop renders as user-facing prose —
+    Raises ValueError, which the rebuild loop renders as user-facing prose,
     rather than letting BRepOffset take the sidecar down.
 
     Scope is deliberately the SAME check press/pull already trusts, no more.
@@ -350,7 +350,7 @@ def _guard_offsetable(part, faces, label):
     backstop for whatever still manages to crash OCCT."""
     for f in faces:
         # The type gate is WIDER than it was (cone, sphere and torus join the
-        # planes and cylinders — see OFFSETTABLE_CURVED for the measurements) but
+        # planes and cylinders, see OFFSETTABLE_CURVED for the measurements) but
         # it is still a gate, because freeform surfaces do not fail on this path,
         # they crash it.
         try:
@@ -360,13 +360,13 @@ def _guard_offsetable(part, faces, label):
         if gt != GeomType.PLANE and gt not in OFFSETTABLE_CURVED:
             raise ValueError(
                 f"{label} needs a flat or a regularly-curved face "
-                "(round, cone, sphere or torus) — this one is freeform"
+                "(round, cone, sphere or torus), this one is freeform"
             )
         # a lone mesh facet on a dense body: reject rather than offset a sliver
         try:
             if len(part.faces()) > 300 and f.area < 1.0:
                 raise ValueError(
-                    f"can't {label.lower()} this region — it's a single mesh facet, "
+                    f"can't {label.lower()} this region, it's a single mesh facet, "
                     "not a clean face"
                 )
         except ValueError:
@@ -388,13 +388,13 @@ def _sweep_press_pull(part, face, d):
     It is NOT an offset, and the difference shows on a strongly curved face: the
     face keeps its shape and travels, with straight side walls, rather than the
     surface thickening. That is what "push this patch" means and is the honest
-    behaviour to offer where the exact one is unavailable — but it is the reason
+    behaviour to offer where the exact one is unavailable, but it is the reason
     this stays a FALLBACK and analytic faces keep the real offset, which resizes
     a hole, a boss or a blend properly.
 
     The direction is the face normal at its parametric centre. A freeform face
-    has no single normal, so a face that wraps — the side of a swept tube, which
-    closes on itself — has no direction that means anything, and sweeping it
+    has no single normal, so a face that wraps, the side of a swept tube, which
+    closes on itself, has no direction that means anything, and sweeping it
     produces a prism that swallows the body.
 
     Validity is NOT enough to catch that. Measured on exactly that tube: the
@@ -417,7 +417,7 @@ def _sweep_press_pull(part, face, d):
 
 
 _SWEEP_REFUSAL = (
-    "can't press/pull this face — it is freeform and wraps around, so there is "
+    "can't press/pull this face, it is freeform and wraps around, so there is "
     "no one direction to push it in. Try a neighbouring face instead."
 )
 
@@ -451,14 +451,14 @@ def _thicken_press_pull(part, face, d):
     This asks a smaller question. Thicken the one face by |d| along its own
     normal, then fuse (d > 0, the body grows across the face's front) or cut
     (d < 0). On a bore the slab is the annulus between r and r ∓ |d|, so the hole
-    changes radius by exactly d — measured 2.2124 → 1.2124 at d = +1.
+    changes radius by exactly d, measured 2.2124 → 1.2124 at d = +1.
 
     Unlike _sweep_press_pull the slab follows the SURFACE, which is what lets it
     take a face that wraps round on itself; a linear prism has no direction to
     travel along there, and that refusal is what a hole used to land in.
 
-    OCCT returns the slab REVERSED for one sign of the offset — a solid of
-    negative volume — and fusing that erases the body (measured: 44082 mm³ → 0).
+    OCCT returns the slab REVERSED for one sign of the offset, a solid of
+    negative volume, and fusing that erases the body (measured: 44082 mm³ → 0).
     Normalising the orientation is not tidying, it is the difference between the
     right answer and an empty document."""
     from OCP.BRepCheck import BRepCheck_Analyzer
@@ -484,7 +484,7 @@ def _thicken_press_pull(part, face, d):
     before, after = _solid_volume(part), _solid_volume(out)
     if not BRepCheck_Analyzer(out.wrapped).IsValid() or after <= 0 or (after > before) != (d > 0):
         raise ValueError(
-            "that offset ran past what this surface can hold — try a smaller amount"
+            "that offset ran past what this surface can hold, try a smaller amount"
         )
     return out
 
@@ -498,7 +498,7 @@ def _offset_faces(part, pairs):
 
     The pass itself runs in a CHILD PROCESS. On the shapes it cannot handle
     BRepOffset does not fail, it segfaults, so the two fallbacks written around
-    this call had never once run — there is no excepting your way out of an
+    this call had never once run, there is no excepting your way out of an
     access violation. offset_child.py carries the four-face body that proves it,
     the reason such a body is ordinary rather than exotic, and what the round
     trip through BREP turns out to fix on its own.
@@ -520,7 +520,7 @@ def _offset_faces(part, pairs):
         src, dst = os.path.join(tmp, "in.brep"), os.path.join(tmp, "out.brep")
         # The part FIRST, then the faces in the order their distances go on the
         # command line. Written as one compound so the faces stay shared with
-        # the part's own — offset_child checks that and refuses if they are not.
+        # the part's own, offset_child checks that and refuses if they are not.
         maker = BRep_Builder()
         bundle = TopoDS_Compound()
         maker.MakeCompound(bundle)
@@ -533,7 +533,7 @@ def _offset_faces(part, pairs):
         code = _run_offset_child(src, dst, [d for _f, d in pairs])
         if code == offset_child.INVALID:
             raise ValueError(
-                "that offset ran past what this surface can hold — try a smaller amount"
+                "that offset ran past what this surface can hold, try a smaller amount"
             )
         if code != offset_child.OK or not os.path.exists(dst):
             raise ValueError("can't offset this face by that amount")

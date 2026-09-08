@@ -3,8 +3,8 @@
 //
 // It used to be a modal that asked "rectangular or circular?" and then dropped a
 // feature with made-up numbers into the timeline for you to correct in the value
-// rows. Everything about a pattern is spatial — which way it runs, how far
-// apart, how many — and none of it was.
+// rows. Everything about a pattern is spatial, which way it runs, how far
+// apart, how many, and none of it was.
 //
 // Three axis arrows say which way. Click one and it becomes the direction (or,
 // for a circular pattern, the axis it turns about); the chosen one is the one
@@ -47,7 +47,7 @@ const AXES: { name: Axis3; dir: THREE.Vector3; color: number }[] = [
 ];
 
 /** Starting numbers. A pattern of one is not a pattern, so the tool opens with
- *  something to look at — the drag then corrects it, which is a smaller job than
+ *  something to look at, the drag then corrects it, which is a smaller job than
  *  conjuring it from nothing. */
 const START_COUNT = 4;
 const START_ANGLE = 360;
@@ -100,7 +100,7 @@ export class PatternTool {
     if (kind === "linear") {
       this.axis = 0; // X
       // One body-width apart, so the opening state is a row of copies that touch
-      // rather than a heap in the same place — the gesture starts from something
+      // rather than a heap in the same place, the gesture starts from something
       // you can see and stretch, not from nothing.
       this.value = this.bodySpan(AXES[0]!.dir) || 20;
     } else {
@@ -132,7 +132,7 @@ export class PatternTool {
     this.gesture.frame();
   }
 
-  /** How far the pattern's bodies reach along a direction — the natural first
+  /** How far the pattern's bodies reach along a direction, the natural first
    *  spacing, since copies one span apart are copies just touching. */
   private bodySpan(dir: THREE.Vector3): number {
     const box = this.viewport.bodiesBox(this.bodies);
@@ -144,7 +144,7 @@ export class PatternTool {
   /** Put the gizmo where the gesture actually happens.
    *
    *  A linear pattern runs FROM the bodies, so the arrows belong on them. A
-   *  circular one turns about a world axis through the origin — the arrows
+   *  circular one turns about a world axis through the origin, the arrows
    *  belong ON that axis, at the bodies' height, or the gizmo reads as "it turns
    *  about here" and points at a centre the copies plainly do not orbit. */
   private placeGizmo() {
@@ -210,7 +210,7 @@ export class PatternTool {
 
   /** The drag's scalar for the current kind: a distance along the axis, or an
    *  angle about it. Both are read from the same pointer, so both can be the
-   *  same gesture — take hold of the arrow and pull. */
+   *  same gesture, take hold of the arrow and pull. */
   private dragAt(e: PointerEvent): number {
     if (this.kind === "linear") {
       return axisDragDistance(this.viewport, e.clientX, e.clientY, this.anchor, this.axisDir());
@@ -238,7 +238,7 @@ export class PatternTool {
     e.preventDefault();
     e.stopImmediatePropagation();
     // Pressing an arrow that is not the current one CHANGES the axis and starts
-    // dragging in the same gesture — the axis is a choice you make by pulling
+    // dragging in the same gesture, the axis is a choice you make by pulling
     // the direction you want, not a mode you enter first.
     if (hit !== this.axis) {
       this.axis = hit;
@@ -369,7 +369,7 @@ export class PatternTool {
   }
 
   /** A typed value overrides the drag. Read every frame, because the field has
-   *  no change event this tool can subscribe to — the same read-back
+   *  no change event this tool can subscribe to, the same read-back
    *  planeOffsetTool does, and gated the same way so a display value written by
    *  a drag is never mistaken for one the user typed. */
   private readFields() {
@@ -464,6 +464,6 @@ export class PatternTool {
 // global axes, which is what the kernel's rotation and offset helpers take and
 // what the value row you edit afterwards can offer as a choice. A pattern
 // running along a picked EDGE is the obvious next thing and is a different
-// feature — it needs a stored reference to the edge so it FOLLOWS that edge when
+// feature, it needs a stored reference to the edge so it FOLLOWS that edge when
 // the model changes, which is the whole reason to pick one rather than type a
 // vector.

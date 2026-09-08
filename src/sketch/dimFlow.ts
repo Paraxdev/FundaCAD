@@ -4,13 +4,13 @@
 // Split out of sketchMode.ts, which had grown past four thousand lines. It
 // follows the ConstraintTools / PatternFlow precedent: a live accessor into
 // SketchMode (DimHost below) rather than a copy of its state, so nothing here
-// can hold a stale entity list. The nine fields of in-progress state below —
+// can hold a stale entity list. The nine fields of in-progress state below,
 // the picks, the resolved plan, the frozen placement, the value box's identity
-// and the two right-click overrides — moved out of SketchMode entirely and are
+// and the two right-click overrides, moved out of SketchMode entirely and are
 // this collaborator's own.
 //
 // Picks accumulate (0-2 operands, dimensionTool.pickDimTarget); resolveDim
-// decides WHICH dimension they describe — the type is a property of the pair,
+// decides WHICH dimension they describe, the type is a property of the pair,
 // not of the first pick. A placement click freezes the label position and the
 // DimInput commits the value. The tool re-arms after every commit
 // (dimensioning is a batch activity), so no setTool() call happens here.
@@ -34,11 +34,11 @@ import type { ResolvedEntity } from "./snap";
 import { setPrompt } from "../ui/prompt";
 import { toast } from "../ui/toast";
 
-/** The slice of SketchMode this flow reads/writes — live accessors, not copies. */
+/** The slice of SketchMode this flow reads/writes, live accessors, not copies. */
 export interface DimHost {
   /** live entity list; every solve replaces the objects in it */
   entities(): ResolvedEntity[];
-  /** live constraint list — the implied parallel/concentric are pushed onto it */
+  /** live constraint list, the implied parallel/concentric are pushed onto it */
   constraints(): SketchConstraint[];
   /** the shared on-canvas value box */
   dim(): DimInput;
@@ -69,7 +69,7 @@ export interface DimHost {
 
 export class DimFlow {
   // dimension tool: 0-2 accumulated picks and the plan they currently resolve
-  // to (see dimensionTool.ts — the dimension TYPE is decided by the pair, not
+  // to (see dimensionTool.ts, the dimension TYPE is decided by the pair, not
   // by the first pick). `dimPlace` is frozen by the placement click.
   private dimPicks: DimTarget[] = [];
   private dimPlan: DimPlan | null = null;
@@ -78,16 +78,16 @@ export class DimFlow {
   // is null for the dims that render through entityDims and have no place slot.
   private dimPlaced = false;
   // where the value box currently sits (client px), so it only steps aside when
-  // the cursor is genuinely about to land on it — and never once placed
+  // the cursor is genuinely about to land on it, and never once placed
   private dimBoxAt: { x: number; y: number } | null = null;
   private dimFieldKey = ""; // field set the open box was built for
   // full identity of the dimension the open box belongs to (kind + field set +
-  // the picks). Two DIFFERENT dimensions can share a field set — a rect edge's
-  // LENGTH and a circle-to-edge DISTANCE are both `distance:length` — so the
+  // the picks). Two DIFFERENT dimensions can share a field set, a rect edge's
+  // LENGTH and a circle-to-edge DISTANCE are both `distance:length`, so the
   // field key alone would carry a typed value silently across a plan change.
   private dimPlanKey = "";
   // Right-click overrides on the in-progress dimension. `dimTangentArmed` arms
-  // the NEXT pick only and is consumed by the first circle/arc that uses it —
+  // the NEXT pick only and is consumed by the first circle/arc that uses it,
   // never sticky. `dimRoundPref` overrides radius-vs-diameter for a lone round
   // and persists for the whole in-progress dim (reset with the picks).
   private dimTangentArmed = false;
@@ -126,7 +126,7 @@ export class DimFlow {
 
   // --- dimension tool ----------------------------------------------------
   // Picks accumulate (0-2 operands, dimensionTool.pickDimTarget); resolveDim
-  // decides WHICH dimension they describe — the type is a property of the pair,
+  // decides WHICH dimension they describe, the type is a property of the pair,
   // not of the first pick. A placement click freezes the label position and the
   // DimInput commits the value. The tool re-arms after every commit
   // (dimensioning is a batch activity), so no setTool() call happens here.
@@ -134,7 +134,7 @@ export class DimFlow {
   /** clear the whole in-progress dimension (picks, plan, frozen placement, box) */
   /** Entities selected in the select tool become this dimension's operands when
    *  the user switches to the dimension tool (Fusion: click the line, press D).
-   *  Whole-entity picks only — a rectangle selected as a unit names no single
+   *  Whole-entity picks only, a rectangle selected as a unit names no single
    *  edge, so resolveDim refuses it and the tool just starts empty. */
   seedDimPicks(ids: string[]) {
     if (ids.length > 2) return; // a dimension has at most two operands
@@ -158,13 +158,13 @@ export class DimFlow {
   /** Put the typed value into the entity the user picked FIRST, before solving.
    *
    *  A radial gap is one equation over two free radii, so planegcs satisfies it
-   *  by minimising total movement — it slides BOTH circles (a 60/50 pair asked
+   *  by minimising total movement, it slides BOTH circles (a 60/50 pair asked
    *  for a 3mm wall came back 57.838/51.838). The gap is right but the result is
    *  not what anyone means: you point at the ring you want resized first, and
    *  expect the other one to stay put. Pre-setting the first-picked radius makes
    *  the system already satisfied, so the solver has nothing to redistribute and
    *  the second circle keeps its size. If other constraints disagree the solver
-   *  still wins — this only chooses WHERE the slack is taken from.
+   *  still wins, this only chooses WHERE the slack is taken from.
    *  defer: the same treatment for c2cDistance rim clearance, whose branch
    *  depends on the centre distance too; revisit when a user reports it. */
   private seedFirstPicked(c: SketchConstraint, firstPicked: string | null) {
@@ -199,7 +199,7 @@ export class DimFlow {
   }
 
   /** WHICH dimension the open box belongs to: the plan shape plus the picks it
-   *  came from (rim/tangent MODE included — a rim distance and a centre distance
+   *  came from (rim/tangent MODE included, a rim distance and a centre distance
    *  between the same pair share a field set but are different dimensions).
    *  Re-showing the box on a change is what stops a value typed for one
    *  dimension being committed as another. */
@@ -210,7 +210,7 @@ export class DimFlow {
   /** Re-resolve the current picks against the LIVE entity list. Every solve
    *  replaces the entity objects, so a held pick reference goes stale;
    *  rebindTarget re-reads it and drops picks whose geometry vanished.
-   *  A dropped pick or a changed plan must reach the BOX too — otherwise the
+   *  A dropped pick or a changed plan must reach the BOX too, otherwise the
    *  box keeps showing a field the new plan doesn't have, and the commit builds
    *  a different constraint at a value the user never saw. */
   refreshDimPlan() {
@@ -235,11 +235,11 @@ export class DimFlow {
   }
 
   /** A dimension-tool click: pick an operand, or place the resolved dimension.
-   *  The candidate is recomputed HERE, never read from hover state — a
+   *  The candidate is recomputed HERE, never read from hover state, a
    *  synthetic pointerdown arrives with no preceding pointermove. */
   dimensionClick(p: THREE.Vector2, ev: PointerEvent) {
     const cand = pickDimTarget(this.host.entities(), p, this.host.pickTol());
-    // Text has no entitySegments, so pickDimTarget can never return it — without
+    // Text has no entitySegments, so pickDimTarget can never return it, without
     // this its "can't be dimensioned yet" message would be unreachable and a
     // click on the glyphs would be a total no-op.
     if (!cand && !this.dimPlan && this.host.textEntityAt(p)) {
@@ -254,7 +254,7 @@ export class DimFlow {
   private dimPick(t: DimTarget, ev: PointerEvent) {
     const prev = this.dimPicks.slice();
     // Fusion's tangent arm: consumed by the first circle/arc that can use it,
-    // and only by that one — a line/point pick leaves it armed for the next.
+    // and only by that one, a line/point pick leaves it armed for the next.
     const pick: DimTarget = this.dimTangentArmed && isRoundTarget(t) && t.kind !== "edge"
       ? { ...t, rim: true }
       : t;
@@ -264,7 +264,7 @@ export class DimFlow {
     if (isDimError(r)) {
       if (r.message) toast(r.message); // toast on CLICK only, never from hover
       // a dead combination (concentric, coincident, same operand) drops the new
-      // pick and keeps whatever already resolved — never a silent dead end
+      // pick and keeps whatever already resolved, never a silent dead end
       if (!r.keepPicks) this.dimPicks = prev;
       this.refreshDimPlan();
     } else {
@@ -275,14 +275,14 @@ export class DimFlow {
     this.syncDimBox(ev);
   }
 
-  /** Freeze the label position (`place`) at the cursor. Does NOT commit —
+  /** Freeze the label position (`place`) at the cursor. Does NOT commit,
    *  Enter / the confirm button in the value box does, so nothing reaches setDrivingDimension
    *  without passing through the box. */
   private dimPlaceClick(p: THREE.Vector2, ev: PointerEvent) {
     if (!this.dimPlan) {
       // Nothing resolved yet: a lone armed operand plus a click that hit
       // nothing (a missed second pick, which is exactly what happens on a long
-      // two-point distance). Keep the pick — Escape is the way to clear it —
+      // two-point distance). Keep the pick, Escape is the way to clear it,
       // and re-state what the tool is waiting for.
       if (this.dimPicks.length) {
         const r = resolveDim(this.dimPicks, this.dimOptions());
@@ -293,15 +293,15 @@ export class DimFlow {
     const anchor = this.dimPlan.labelAnchor();
     this.dimPlace = anchor
       ? clampPlace(p.x - anchor.x, p.y - anchor.y, this.host.planeMmPerPx())
-      : null; // distance/diameter render through entityDims — no place slot
-    this.dimPlaced = true; // NOT `dimPlace != null` — that is null for those two
+      : null; // distance/diameter render through entityDims, no place slot
+    this.dimPlaced = true; // NOT `dimPlace != null`, that is null for those two
     this.positionDimBox(ev);
     this.host.dim().setClickThrough(false); // confirm / cancel / the field are live from here on
     this.host.dim().focus(); // the canvas click blurred the input
   }
 
   /** Open / refresh the value box for the current plan. DimInput.show() starts
-   *  with hide(), which throws away anything typed — so re-show ONLY when the
+   *  with hide(), which throws away anything typed, so re-show ONLY when the
    *  dimension's identity actually changes, and say so when that discards input
    *  the user had already entered. */
   private syncDimBox(ev?: PointerEvent) {
@@ -324,7 +324,7 @@ export class DimFlow {
     this.host.dim().updateFromCursor({ [plan.field]: plan.measure() });
     this.positionDimBox(ev);
     // Until the label is placed the box must not intercept the click that
-    // places it — that click landed on confirm and committed the measured value.
+    // places it, that click landed on confirm and committed the measured value.
     this.host.dim().setClickThrough(!this.dimPlaced);
     this.host.dim().focus();
   }
@@ -360,7 +360,7 @@ export class DimFlow {
     const conc = plan.implyConcentric;
     this.resetDimPicks();
     this.host.overlay().setPreview([]);
-    // the parallelism a "distance between two parallel lines" implies — added
+    // the parallelism a "distance between two parallel lines" implies, added
     // BEFORE the dim so one solve covers both, and only for a DRIVING dim (a
     // reference dim must not move geometry)
     if (pair && !this.host.referenceMode() && !forceDriven) this.addParallelPair(pair.l1, pair.l2);
@@ -423,7 +423,7 @@ export class DimFlow {
   }
 
   /** Park the value box near the dimension's own anchor (which doesn't move
-   *  while you place), clamped inside the viewport — extrudeTool's rule: a
+   *  while you place), clamped inside the viewport, extrudeTool's rule: a
    *  cursor-glued box is unclickable. It sits on the side of the anchor AWAY
    *  from the cursor, because the quadrant the cursor is in is where the
    *  placement click is about to land, and a box under that click swallows it
@@ -434,7 +434,7 @@ export class DimFlow {
    *  away from the cursor, so it could never swallow the click-to-place. That
    *  made the box flee an approaching pointer and rendered confirm unclickable. The
    *  box is click-through until the dimension is placed (see
-   *  DimInput.setClickThrough), so it no longer needs to dodge anything —
+   *  DimInput.setClickThrough), so it no longer needs to dodge anything,
    *  a stationary box is worth far more than a clever one. */
   private positionDimBox(ev?: PointerEvent) {
     if (this.dimBoxAt) return; // already parked for this dimension
@@ -515,7 +515,7 @@ export class DimFlow {
     if (!an) return []; // angle dims render as a bare value (see entityDims)
     const anchor = this.dimBoxAnchor(plan);
     // A plan with no labelAnchor (line length, circle diameter) can't PERSIST a
-    // placement — those render through entityDims, which has no constraint
+    // placement, those render through entityDims, which has no constraint
     // access (see types.ts). Previewing at the cursor would promise a position
     // the commit throws away, so preview them exactly where they will land.
     const holdsPlace = plan.labelAnchor() !== null;

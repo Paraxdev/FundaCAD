@@ -69,8 +69,8 @@ export interface OpSpec {
   needs: readonly Grant[];
   /** one line, for a reader deciding whether the row is right */
   why: string;
-  /** Whether it changes the open document. Not a permission — `document.write`
-   *  is the permission — but the transport needs it: a guest attached to a
+  /** Whether it changes the open document. Not a permission, `document.write`
+   *  is the permission, but the transport needs it: a guest attached to a
    *  running app proposes a replacement and waits for the app to adopt it,
    *  where a read can be answered straight from the session. */
   writes: boolean;

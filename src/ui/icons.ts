@@ -18,7 +18,7 @@
 //
 // A pack is a whole named table; the user picks one, and any name the chosen pack
 // does not define resolves against the default pack. That fallback is what makes a
-// pack cheap to write — a variant redraws only the marks whose weight it wants to
+// pack cheap to write, a variant redraws only the marks whose weight it wants to
 // change, so a half-finished pack is legitimate rather than a screen full of holes.
 
 import { contributedIcons } from "../plugins/contrib";
@@ -45,7 +45,7 @@ const FORGE_PATHS: Record<string, string> = {
   text: `<path d="M4 6 H20 M12 6 V19" fill="none"/>`,
   slot: `<path d="M8 8 A 4 4 0 0 0 8 16 L16 16 A 4 4 0 0 0 16 8 Z"/>`,
   patternRect: `<rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="15" y="3" width="6" height="6" rx="1.5"/><rect x="3" y="15" width="6" height="6" rx="1.5"/><rect x="15" y="15" width="6" height="6" rx="1.5"/>`,
-  // Four cells strung along one direction, with the arrow that says WHICH —
+  // Four cells strung along one direction, with the arrow that says WHICH,
   // the grid icon next door is the same squares with no direction in them, and
   // the difference between the two features is exactly that arrow.
   patternLinear: `<rect x="2.5" y="9" width="5" height="6" rx="1.5"/><rect x="9.5" y="9" width="5" height="6" rx="1.5"/><rect x="16.5" y="9" width="5" height="6" rx="1.5"/><path d="M3 5.5h16M16.5 3l2.5 2.5l-2.5 2.5"/>`,
@@ -56,7 +56,7 @@ const FORGE_PATHS: Record<string, string> = {
   gridHoles: `<circle cx="6" cy="6" r="2" fill="currentColor"/><circle cx="12" cy="6" r="2" fill="currentColor"/><circle cx="18" cy="6" r="2" fill="currentColor"/><circle cx="6" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="18" cy="12" r="2" fill="currentColor"/><circle cx="6" cy="18" r="2" fill="currentColor"/><circle cx="12" cy="18" r="2" fill="currentColor"/><circle cx="18" cy="18" r="2" fill="currentColor"/>`,
   centerRectangle: `<rect x="4" y="6" width="16" height="12" rx="2"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="12" y1="9" x2="12" y2="15"/>`,
   // Three-point rectangle: a TILTED rectangle with the two edge corners and the
-  // thickness point marked — the tilt is the whole point of the tool, so an
+  // thickness point marked, the tilt is the whole point of the tool, so an
   // upright box here would read as the ordinary Rectangle.
   rectangle3: `<polygon points="3,13 12,4.5 21,11 12,19.5" fill="none"/><circle cx="3" cy="13" r="1.6" fill="currentColor"/><circle cx="12" cy="4.5" r="1.6" fill="currentColor"/><circle cx="21" cy="11" r="1.6" fill="currentColor"/>`,
   circle2: `<circle cx="12" cy="12" r="8"/><circle cx="4.5" cy="12" r="1.4" fill="currentColor"/><circle cx="19.5" cy="12" r="1.4" fill="currentColor"/>`,
@@ -96,7 +96,7 @@ const FORGE_PATHS: Record<string, string> = {
   presspull: `<path d="M4 16l6-3 8 3-6 3z" fill="none"/><path d="M10 13V4m0 0l-3 3m3-3l3 3"/>`,
   // body ops: split a body by a plane; the three booleans.
   //
-  // The booleans are one drawing seen three ways — the same two circles at the
+  // The booleans are one drawing seen three ways, the same two circles at the
   // same centres, with the RESULT shaded. That is the whole distinction between
   // them, so drawing three unrelated marks would hide the only thing the user
   // needs to read. The outlines are stroked on top of the shading so the tool
@@ -109,7 +109,7 @@ const FORGE_PATHS: Record<string, string> = {
   //
   // The shading is nearly opaque, and it has to be. These are drawn at 18px on
   // the hover bar, where the three sit side by side and are told apart ONLY by
-  // which part is filled — at a polite 30% the blob, the crescent and the lens
+  // which part is filled, at a polite 30% the blob, the crescent and the lens
   // were three grey smudges.
   split: `<rect x="4" y="7" width="16" height="10" rx="2"/><line x1="12" y1="3" x2="12" y2="21" stroke-dasharray="2 2"/>`,
   // Both circles, wound the same way, nonzero: the lens has winding 2 and is
@@ -178,14 +178,14 @@ const FORGE_PATHS: Record<string, string> = {
   removeBody: `<path d="M5 7h14"/><path d="M10 7V4.6a.6.6 0 0 1 .6-.6h2.8a.6.6 0 0 1 .6.6V7"/><path d="M6.5 7l.9 12a1 1 0 0 0 1 .95h7.2a1 1 0 0 0 1-.95l.9-12"/><line x1="10.5" y1="10.5" x2="10.5" y2="16.5"/><line x1="13.5" y1="10.5" x2="13.5" y2="16.5"/>`,
 
   // --- browser tree --------------------------------------------------------
-  // The origin datum: a survey mark, not a crosshair cursor — it names a
+  // The origin datum: a survey mark, not a crosshair cursor, it names a
   // location the model is measured from.
   origin: `<circle cx="12" cy="12" r="5"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>`,
   plane: `<path d="M3 9l9-4 9 4-9 4z"/>`,
   body: `<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5"/><line x1="12" y1="12" x2="12" y2="21"/>`,
   // An assembly node: a container holding parts, so a crate rather than a folder
   assembly: `<rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="M3 10h18"/><path d="M9 5v5M15 5v5"/>`,
-  // The filament palette head — swatch strips, matching what the section holds
+  // The filament palette head, swatch strips, matching what the section holds
   filament: `<rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M8.5 4v16M15.5 4v16"/>`,
 
   // --- eye / disclosure ----------------------------------------------------
@@ -233,7 +233,7 @@ export const FORGE_PACK: IconPack = {
  *  who find hairlines hard to pick out on a bright display or at a distance.
  *
  *  Deliberately NOT exhaustive. It redraws the marks that appear dozens of times
- *  on screen at small sizes — carets, the eye, checks, chips — where the weight
+ *  on screen at small sizes, carets, the eye, checks, chips, where the weight
  *  difference is actually felt, and inherits the rest from Forge. Adding a mark
  *  here later needs no other change anywhere. */
 export const ANVIL_PACK: IconPack = {
@@ -258,7 +258,7 @@ export const ANVIL_PACK: IconPack = {
   },
 };
 
-/** The pack every lookup falls back to — see resolveIconPaths. */
+/** The pack every lookup falls back to, see resolveIconPaths. */
 export const DEFAULT_PACK_ID = FORGE_PACK.id;
 
 const PACKS = new Map<string, IconPack>([
@@ -266,14 +266,14 @@ const PACKS = new Map<string, IconPack>([
   [ANVIL_PACK.id, ANVIL_PACK],
 ]);
 
-/** Pack resolution, as a pure function of the whole registry — the part with the
+/** Pack resolution, as a pure function of the whole registry, the part with the
  *  actual rule in it, and therefore the part under test.
  *
  *  Four tiers, in order: the active pack, the default pack, whatever a plugin
  *  contributed, then the empty string. The last one is not an oversight. An icon
  *  name that nothing knows is a typo at a call site, and rendering an empty
  *  <svg> keeps the button the same size with the same label instead of throwing
- *  during a render — a missing mark is a cosmetic bug, a crashed panel is a lost
+ *  during a render, a missing mark is a cosmetic bug, a crashed panel is a lost
  *  document.
  *
  *  PLUGINS COME LAST, after both packs, and the order is the whole rule: a pack
@@ -303,7 +303,7 @@ export function resolveIconPaths(
 const KEY = "fundacad.iconPack";
 const LEGACY_KEYS = ["neocad.iconPack", "sindricad.iconPack"];
 
-/** Narrow an untrusted string — a stored setting, a `<select>` value — to a
+/** Narrow an untrusted string, a stored setting, a `<select>` value, to a
  *  registered pack id, or null. Every boundary that can set the active pack goes
  *  through here: an unknown id would make EVERY lookup fall through to the
  *  default pack, which looks exactly like the setting silently not working. */
@@ -353,8 +353,8 @@ export function registerIconPack(pack: IconPack) {
 }
 
 /** The raw path markup for one icon in the ACTIVE pack, for Icon.vue's v-html.
- *  Every value in every pack is a compile-time constant — no document or network
- *  data reaches it — which is what makes that v-html the ONE sanctioned one in
+ *  Every value in every pack is a compile-time constant, no document or network
+ *  data reaches it, which is what makes that v-html the ONE sanctioned one in
  *  the app. */
 export function iconPaths(name: string): string {
   return resolveIconPaths(PACKS, activePackId, name, DEFAULT_PACK_ID, contributedIcons());
@@ -380,7 +380,7 @@ export function iconElement(name: string, size = 16): SVGSVGElement {
   // `.icon { flex: 0 0 auto }` is what stops an icon collapsing when its slot is
   // a flex container. Without it the confirm/cancel marks on the heads-up box
   // laid out 0px wide inside their `display: inline-flex` buttons and drew as
-  // two empty squares — the paths were there and correct the whole time.
+  // two empty squares, the paths were there and correct the whole time.
   svg.setAttribute("class", "icon");
   svg.setAttribute("data-icon", name);
   svg.setAttribute("viewBox", "0 0 24 24");

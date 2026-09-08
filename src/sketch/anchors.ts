@@ -4,8 +4,8 @@
 // onto it (planeMath), which is a defensible choice for coordinates and a poor
 // one for drawing: on a boss 20mm out along the part, the grid's origin and the
 // axis arrows sit off in space with nothing under them, and the face itself
-// offers no point to start from. A rectangle centred on the face — the commonest
-// thing anyone draws on one — had nothing to aim at.
+// offers no point to start from. A rectangle centred on the face, the commonest
+// thing anyone draws on one, had nothing to aim at.
 //
 // So the face contributes ANCHORS: its own centre, and the centre of every hole
 // in it. They are snap targets like any other, and the alignment guides in
@@ -36,7 +36,7 @@ export function signedArea2(loop: readonly THREE.Vector2[]): number {
   return a;
 }
 
-/** The centroid of the AREA a closed polygon encloses — not the average of its
+/** The centroid of the AREA a closed polygon encloses, not the average of its
  *  vertices.
  *
  *  The distinction is the whole point of doing it properly. A tessellated round
@@ -76,7 +76,7 @@ export function loopCentroid(loop: readonly THREE.Vector2[]): THREE.Vector2 | nu
 }
 
 /** True when the loop encloses so little of its own bounding box that its
- *  "centre" would be meaningless — a seam traced out and back, or three points
+ *  "centre" would be meaningless, a seam traced out and back, or three points
  *  in a line. */
 export function isDegenerateLoop(loop: readonly THREE.Vector2[]): boolean {
   if (loop.length < 3) return true;
@@ -102,7 +102,7 @@ export function isDegenerateLoop(loop: readonly THREE.Vector2[]): boolean {
  *  Deliberately NOT deduplicated against the sketch's own snap candidates. A
  *  circle drawn concentric with a hole leaves two anchors in the same place,
  *  which costs one comparison during a snap and keeps this a function of the
- *  MODEL alone — a face anchor that disappeared because a sketch entity happened
+ *  MODEL alone, a face anchor that disappeared because a sketch entity happened
  *  to sit on it would be a snap target that came and went as you drew.
  */
 export function footprintAnchors(
@@ -120,8 +120,8 @@ export function footprintAnchors(
 // --- the edge of the face itself ---------------------------------------
 //
 // The centre answers "in the middle of this face". The two things people reach
-// for next are its CORNERS and the middle of each SIDE — "level with that
-// corner", "centred on this edge" — and neither had anything to aim at, so both
+// for next are its CORNERS and the middle of each SIDE, "level with that
+// corner", "centred on this edge", and neither had anything to aim at, so both
 // were arithmetic.
 //
 // Taken from the plane's edges BEFORE they are chained into loops
@@ -137,7 +137,7 @@ export function footprintAnchors(
  *  and the two copies are the same point up to the rounding the wire applied. */
 const SAME_CORNER_FRACTION = 1e-6;
 
-/** True when a polyline comes back to where it started — a whole circle or
+/** True when a polyline comes back to where it started, a whole circle or
  *  closed spline, arriving as ONE edge.
  *
  *  Such an edge has no corners: the point where its ends meet is the surface's

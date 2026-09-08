@@ -1,5 +1,5 @@
 // The Measure readout's markup moved to a component, which left the interesting
-// half — which lines appear, in which order, in which unit — as a pure function.
+// half, which lines appear, in which order, in which unit, as a pure function.
 // MeasureTool keeps the picking, the shortest-distance search and the viewport
 // marker; none of that is reachable without WebGL, but this is.
 
@@ -38,7 +38,7 @@ describe("measureRows", () => {
   it("converts a length linearly and an area quadratically", () => {
     setUnit("cm");
     expect(valueOf(measureRows(edge(50), undefined, null), "Length")).toBe("5 cm");
-    // 100 mm² is 1 cm², not 10 — the f² is the whole reason A() exists separately
+    // 100 mm² is 1 cm², not 10, the f² is the whole reason A() exists separately
     expect(valueOf(measureRows(face(100), undefined, null), "Area")).toBe("1 cm²");
   });
 

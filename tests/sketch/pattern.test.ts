@@ -1,5 +1,5 @@
 // Unit tests for expandPattern (src/sketch/pattern.ts). Mirrors the Python port
-// (sidecar/builder.py _expand_pattern) — see the file header comment there.
+// (sidecar/builder.py _expand_pattern), see the file header comment there.
 import { describe, it, expect } from "vitest";
 import { expandPattern, scaled, rotated } from "../../src/sketch/pattern";
 import type { ResolvedEntity } from "../../src/sketch/snap";
@@ -45,7 +45,7 @@ describe("expandPattern / patternRect", () => {
   it("silently drops sources that aren't in byId (missing-source filtering)", () => {
     const patMissing: SketchPattern = { ...pat, sources: ["c1", "does-not-exist"] };
     const out = expandPattern(patMissing, byIdMap([src]), params);
-    // same count as with a single valid source — the missing id contributes nothing
+    // same count as with a single valid source, the missing id contributes nothing
     expect(out).toHaveLength(3 * 2 - 1);
   });
 });
@@ -88,10 +88,10 @@ describe("expandPattern / patternCircular", () => {
 
   // KNOWN ISSUE (docs/IMPROVEMENT-AUDIT.md §5.2 / §1.2): the TS preview and the
   // Python build (sidecar/builder.py _expand_pattern) round non-integer counts
-  // differently — JS `Math.round` rounds .5 away from zero, Python's `round()`
+  // differently, JS `Math.round` rounds .5 away from zero, Python's `round()`
   // rounds .5 to even (banker's rounding). A half-integer count like 2.5 is
   // therefore NOT guaranteed to produce the same instance count in both halves
-  // of the mirrored pair. This is an open bug, not intended behavior — do not
+  // of the mirrored pair. This is an open bug, not intended behavior, do not
   // assert a "correct" value here until it's fixed on both sides.
   it.skip("half-integer counts match the Python build123d port (KNOWN DIVERGENCE, unresolved)", () => {
     const pat: SketchPattern = {
@@ -99,7 +99,7 @@ describe("expandPattern / patternCircular", () => {
       cx: 0, cy: 0, count: 2.5, angle: 360,
     };
     const out = expandPattern(pat, byIdMap([src]), params);
-    // Math.round(2.5) = 3 in JS; Python round(2.5) = 2 (round-half-to-even) —
+    // Math.round(2.5) = 3 in JS; Python round(2.5) = 2 (round-half-to-even),
     // so `out` currently disagrees with what builder.py would build.
     expect(out).toHaveLength(2); // count - 1, once the divergence is resolved
   });

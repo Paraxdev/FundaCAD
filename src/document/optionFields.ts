@@ -2,9 +2,9 @@
 //
 // FEATURE_NUM_FIELDS has always been the inventory of what a feature's value
 // rows can edit, and everything in it is a number. So the editor could only ever
-// be a column of text boxes, and every fact about a feature that is a CHOICE —
+// be a column of text boxes, and every fact about a feature that is a CHOICE,
 // which boolean an extrude performs, which axis a revolve turns about, which way
-// a pattern is pushed — was editable at the moment the feature was made and
+// a pattern is pushed, was editable at the moment the feature was made and
 // never again. Changing your mind meant deleting the feature and re-picking
 // everything it referred to.
 //
@@ -26,7 +26,7 @@
 //   * anything derived from another field. press-pull's `operation` is read off
 //     the SIGN of its distance by the builder, so a dropdown offering "join" on
 //     a negative distance would be offering a state the rebuild cannot produce.
-//   * references to geometry — `faces`, `edges`, `sketch`, `body`. Those are
+//   * references to geometry, `faces`, `edges`, `sketch`, `body`. Those are
 //     selections, and picking one is a viewport gesture, not a menu.
 //   * `plane` on a sketch or a datum, which is a PlaneSpec: a string for the
 //     three world planes and a full origin/normal/xdir triple otherwise, so a
@@ -42,7 +42,7 @@
 // that this file had the wrong owner: its entire body was `if (type !==
 // "texture") return true;` followed by one tool's rules, sitting in the document
 // layer. Those rules are contributed now, and they still govern the app's own
-// numeric rows — which is the better arrangement rather than a concession. The
+// numeric rows, which is the better arrangement rather than a concession. The
 // app owns `seed` and `angle` because a PARAMETER can drive them and a document
 // has to mean the same thing with the plugin switched off; the plugin decides
 // which of them a given pattern actually reads.
@@ -61,7 +61,7 @@ export interface ChoiceField {
   label: string;
   options: ChoiceOption[];
   /** Tooltip for the row. Option labels are kept SHORT because the value column
-   *  is 120px and a closed <select> shows one line — "Faceted (hard surface)"
+   *  is 120px and a closed <select> shows one line, "Faceted (hard surface)"
    *  rendered as "Faceted (hard". The words that had to go live here instead,
    *  rather than being lost. */
   title?: string;
@@ -78,7 +78,7 @@ export interface ToggleField {
   fallback: boolean;
 }
 
-/** New / Join / Cut / Intersect — the same four everywhere they appear, so they
+/** New / Join / Cut / Intersect, the same four everywhere they appear, so they
  *  are written once. */
 const BOOLEAN_OPS: ChoiceOption[] = [
   { value: "new", label: "New body" },
@@ -107,7 +107,7 @@ const PLANES: ChoiceOption[] = [
 export const FEATURE_CHOICE_FIELDS: Partial<Record<FeatureType, ChoiceField[]>> = {
   // Three commands make the feature, and the row edits it afterwards. Nothing
   // asks which boolean you want, so this is the only place the answer is ever
-  // typed by hand — which is exactly what the row is for: changing your mind
+  // typed by hand, which is exactly what the row is for: changing your mind
   // should not mean deleting the feature and re-picking the bodies.
   boolean: [{ field: "operation", label: "Operation", options: BOOLEAN_KINDS, fallback: "union" }],
   extrude: [{ field: "operation", label: "Operation", options: BOOLEAN_OPS, fallback: "new" }],
@@ -140,7 +140,7 @@ export const FEATURE_TOGGLE_FIELDS: Partial<Record<FeatureType, ToggleField[]>> 
   // A boolean CONSUMES its tool bodies by default: the two circles go in and one
   // shape comes out, which is what the operation means and what leaves a browser
   // tree you can read. Off by default for that reason, and on when the same body
-  // is a cutter more than once — a bolt hole punched through three plates should
+  // is a cutter more than once, a bolt hole punched through three plates should
   // not need three copies of the bolt.
   boolean: [{ field: "keepOriginals", label: "Keep originals", fallback: false }],
   thicken: [{ field: "symmetric", label: "Symmetric", fallback: false }],
@@ -149,14 +149,14 @@ export const FEATURE_TOGGLE_FIELDS: Partial<Record<FeatureType, ToggleField[]>> 
 /** Does this field mean anything, given what the feature's other fields say?
  *
  *  Applies to every kind of row, numeric included. A knurl reads no Seed and a
- *  faceted wave has no shape parameter at all — the sidecar simply ignores what
- *  it is sent — so a row for either is a control the user can turn with nothing
+ *  faceted wave has no shape parameter at all, the sidecar simply ignores what
+ *  it is sent, so a row for either is a control the user can turn with nothing
  *  on the other end, which is worse than no row.
  *
  *  Fields not named here always apply, which is the honest default: a rule that
  *  hid a row it had no reason to hide would lose the user a value they could
  *  otherwise have edited. A feature type nobody has a rule for is that case, and
- *  so is one whose plugin is not installed — which is right: with nothing left
+ *  so is one whose plugin is not installed, which is right: with nothing left
  *  to say which rows a knurl reads, showing all of them beats hiding some on a
  *  guess.
  */
@@ -168,7 +168,7 @@ export function fieldApplies(
   return contributedFeature(type)?.fieldApplies?.(field, values) ?? true;
 }
 
-/** The label one row carries when its name is not a constant — a slider whose
+/** The label one row carries when its name is not a constant, a slider whose
  *  meaning changes with another field, say. Null for "use the inventory's". */
 export function fieldLabel(
   type: FeatureType | string,
@@ -196,14 +196,14 @@ export function toggleFieldsFor(type: FeatureType | string): readonly ToggleFiel
   );
 }
 
-/** Whether a feature type has any of these rows — the panel asks before it
+/** Whether a feature type has any of these rows, the panel asks before it
  *  decides there is nothing to show. */
 export function hasOptionFields(type: FeatureType | string): boolean {
   return choiceFieldsFor(type).length > 0 || toggleFieldsFor(type).length > 0;
 }
 
 /** The value a choice row should show for this feature: what it carries, or the
- *  builder's default when the field is absent. Absent is the common case — most
+ *  builder's default when the field is absent. Absent is the common case, most
  *  of these are optional, and a feature saved before the field existed has none. */
 export function choiceValue(feature: Feature, f: ChoiceField): string {
   const v = (feature as unknown as Record<string, unknown>)[f.field];

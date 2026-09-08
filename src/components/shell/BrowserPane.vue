@@ -1,14 +1,14 @@
 <script setup lang="ts">
 // Left browser, MCAD-style: object-oriented, collapsible folders rather than a
-// flat feature list. Origin (the three base planes — click to start a sketch on
+// flat feature list. Origin (the three base planes, click to start a sketch on
 // one), Bodies (grouped by the imported assembly tree when there is one) and
 // Sketches, plus whatever the running plugins add between the two. The
 // chronological operations (extrude/fillet/…) live in the bottom Timeline, as in
 // mainstream MCAD.
 //
 // A filament palette used to be a section here, with two node kinds of its own,
-// a connection dot, a one-shot printer probe and a thirty-second staleness poll
-// — a panel about a machine on the network, inside the panel that lists what is
+// a connection dot, a one-shot printer probe and a thirty-second staleness poll,
+// a panel about a machine on the network, inside the panel that lists what is
 // in the document, behind checks on two capabilities. It is contributed now, by
 // the capability whose subject it is, and this file does not know it exists.
 //
@@ -51,7 +51,7 @@ const browser = useBrowserStore();
 const root = useTemplateRef<HTMLElement>("root");
 
 // The chosen filter is module state in a plain .ts, not a store, so nothing
-// tracks it — the same arrangement ui/theme.ts, icons.ts and layoutPrefs.ts use,
+// tracks it, the same arrangement ui/theme.ts, icons.ts and layoutPrefs.ts use,
 // and for the same reason: ui/browserFilter.ts has to stay Vue-free for the
 // headless suite.
 const filter = ref(getBrowserFilter());
@@ -126,7 +126,7 @@ function toggleSketchVis(id: string) {
 function togglePlaneVis(id: string) {
   store.setPlaneVisibility(id, !store.isPlaneVisible(id));
   engine.syncDatumPlanes();
-  browser.bumpView(); // ditto — a plane toggle just re-syncs the quads
+  browser.bumpView(); // ditto, a plane toggle just re-syncs the quads
 }
 
 // Body visibility, names and colours all re-emit the build, so they need no
@@ -187,7 +187,7 @@ onUnmounted(stopContrib);
 /** The whole panel, as a flat list.
  *
  *  Reads docVersion (through useDocValue), buildVersion and the view tick
- *  FIRST and unconditionally — see app/useDoc.ts for why every derived computed
+ *  FIRST and unconditionally, see app/useDoc.ts for why every derived computed
  *  has to do that in its own body rather than lean on an intermediate. */
 const nodes = useDocValue((doc): TreeNode[] => {
   engine.bridge.buildVersion.value; // bodies, body names, body colours
@@ -208,7 +208,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
   const paintedBodies = contributedPalette().length > 0;
 
   /** A collapsible section head plus its rows, or an empty state. Returns
-   *  nothing — everything is appended to `out` in document order. */
+   *  nothing, everything is appended to `out` in document order. */
   const folder = (name: string, icon: string, rows: RowNode[]) => {
     const key = `f:${name}`;
     const collapsed = browser.isCollapsed(key);
@@ -262,8 +262,8 @@ const nodes = useDocValue((doc): TreeNode[] => {
   // Here rather than at the end, because the one section that exists is about
   // the bodies below it and read best above them. A section names one of the
   // panel's own filter sections to be hidden with, or none, in which case it is
-  // always shown: this file cannot decide for it, and the alternative — a
-  // section that vanishes under a narrow filter nobody told it about — is worse
+  // always shown: this file cannot decide for it, and the alternative, a
+  // section that vanishes under a narrow filter nobody told it about, is worse
   // than one that stays.
   for (const { key, section } of sections.value) {
     if (section.filter && isBrowserSection(section.filter) && !show(section.filter)) continue;
@@ -301,7 +301,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
   /** One assembly node and everything under it.
    *
    *  A node that owns exactly one body and no children is emitted as that body's
-   *  ROW, not as a folder wrapping a single entry — the body already carries the
+   *  ROW, not as a folder wrapping a single entry, the body already carries the
    *  product's name, so a folder there would just say everything twice. */
   const assemblyNode = (g: AsmGroup, depth: number) => {
     if (g.children.length === 0 && g.bodies.length === 1) {
@@ -327,7 +327,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
   if (!show("bodies")) {
     // nothing: the filter is narrowed to something else
   } else if (!groups) {
-    // no imported assembly tree in this document — exactly the flat list as before
+    // no imported assembly tree in this document, exactly the flat list as before
     folder("Bodies", "body", bodies.map((b) => bodyRow(b, 0)));
   } else {
     const collapsed = browser.isCollapsed("f:Bodies");
@@ -378,7 +378,7 @@ watch(
 
 // WebKitGTK quirk, carried over verbatim from mountUi's `for (const id of
 // ["browser", "inspector"])` loop: wheel events over an overflow panel don't
-// reliably reach the native scroller (GTK kinetic scrolling eats them — fine in
+// reliably reach the native scroller (GTK kinetic scrolling eats them, fine in
 // Chromium, dead in the webview), so drive the scroll explicitly, deltaMode-
 // normalized like the viewport's zoom wheel.
 //

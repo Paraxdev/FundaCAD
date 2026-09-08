@@ -31,7 +31,7 @@ for (let a = 0; a < Math.PI * 2; a += Math.PI / 7) {
 
 describe("sketchXdir", () => {
   it("reproduces the base-plane bases on the cardinal faces", () => {
-    // A top face should sketch like the XY plane and a +X face like YZ — anything
+    // A top face should sketch like the XY plane and a +X face like YZ, anything
     // else and "sketch on this face" would feel rotated relative to the datum
     // sketch a user already knows.
     close(sketchXdir([0, 0, 1]), [1, 0, 0]);
@@ -48,7 +48,7 @@ describe("sketchXdir", () => {
     }
   });
 
-  it("is deterministic — the same normal always gives the same axis", () => {
+  it("is deterministic, the same normal always gives the same axis", () => {
     // The whole point. A u derived from the camera, the click point or a
     // previous session would rotate the sketch's coordinates under the user
     // between two invocations on the SAME face.
@@ -101,7 +101,7 @@ describe("outwardNormal", () => {
 });
 
 describe("faceSketchPlane", () => {
-  it("keeps the face's own normal — it never inverts an outward one", () => {
+  it("keeps the face's own normal, it never inverts an outward one", () => {
     for (const n of SPREAD) close(faceSketchPlane(n, [3, -2, 7]).normal as Vec3, n);
   });
 
@@ -166,7 +166,7 @@ describe("sketchLockHolds", () => {
 
   it("holds when there is no baseline or no usable scale yet", () => {
     // Called before the camera has settled into the sketch view: holding is the
-    // safe answer — releasing is what CHANGES the camera policy, and doing that
+    // safe answer, releasing is what CHANGES the camera policy, and doing that
     // off a garbage reading would drop the user out of the plane view for no
     // reason at all.
     expect(sketchLockHolds(0, 500)).toBe(true);
@@ -209,7 +209,7 @@ describe("viewSquareToPlane", () => {
   });
 
   it("assumes it still holds when there is nothing to measure", () => {
-    // A zero view direction means the camera is at its own target — a transient
+    // A zero view direction means the camera is at its own target, a transient
     // during a fit. Dropping the projection on it would flicker.
     expect(viewSquareToPlane([0, 0, 0], up)).toBe(true);
     expect(viewSquareToPlane([0, 0, -1], [0, 0, 0])).toBe(true);

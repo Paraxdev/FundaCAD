@@ -2,7 +2,7 @@
 //
 // The viewport renders ON DEMAND (see Viewport.loop): when the camera is still
 // and nothing is dirty, no frame is drawn at all. A naive counter would then sit
-// at "0 fps" on a perfectly healthy idle app, so this reports `idle` instead —
+// at "0 fps" on a perfectly healthy idle app, so this reports `idle` instead,
 // which also makes the render-on-demand behaviour visible rather than looking
 // like a stall.
 //
@@ -31,7 +31,7 @@ export class FpsMeter {
   /** Adopt the readout element after construction.
    *
    *  The Viewport creates its FpsMeter in a field initializer, which runs while
-   *  the Vue shell that owns #fps has not rendered yet — so the element cannot
+   *  the Vue shell that owns #fps has not rendered yet, so the element cannot
    *  be looked up by id any more. components/shell/FpsReadout.vue hands it over
    *  in onMounted instead. */
   setHost(host: HTMLElement) {
@@ -44,7 +44,7 @@ export class FpsMeter {
     if (!this.timer) this.timer = window.setInterval(() => this.paint(), REFRESH_MS);
   }
 
-  /** Call once per ACTUALLY RENDERED frame (not once per rAF tick — the loop
+  /** Call once per ACTUALLY RENDERED frame (not once per rAF tick, the loop
    *  skips the draw when nothing changed, and counting skipped ticks would
    *  report a steady 60 no matter how slow the real frames were). */
   frame(now = performance.now()) {

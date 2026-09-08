@@ -44,8 +44,8 @@ export const FACE_VIEWS: Record<
 
 // The cube's own surfaces, and why every one of these numbers changed.
 //
-// A face plate is painted WHOLE into its canvas texture — background and label
-// together — and its material carries no tint. That is the fix, not a tidy-up. A
+// A face plate is painted WHOLE into its canvas texture, background and label
+// together, and its material carries no tint. That is the fix, not a tidy-up. A
 // MeshBasicMaterial's `color` MULTIPLIES its map, and the label canvas was
 // cleared to rgba(0,0,0,0) with `transparent: false`, so the alpha was discarded
 // and every face rendered as texRGB x COLOR_FACE: solid black where the canvas
@@ -99,7 +99,7 @@ interface Part {
 }
 
 export interface ViewCubeHooks {
-  /** apply a face side's view (honoring overrides) — left-click a face. */
+  /** apply a face side's view (honoring overrides), left-click a face. */
   applySide(side: ViewCubeSide): void;
   /** apply an arbitrary diagonal view direction (corners/edges). */
   applyDir(dir: THREE.Vector3, up: THREE.Vector3): void;
@@ -147,14 +147,14 @@ export class ViewCube {
   // ---- geometry -----------------------------------------------------------
 
   private buildCube() {
-    // six faces — thin plates inset slightly so edges/corners sit proud and the
+    // six faces, thin plates inset slightly so edges/corners sit proud and the
     // outline reads cleanly. Each face carries a canvas-texture label.
     for (const side of Object.keys(FACE_VIEWS) as ViewCubeSide[]) {
       const f = FACE_VIEWS[side];
       const tex = this.makeLabelTexture(side);
       const geo = new THREE.PlaneGeometry(0.78, 0.78);
       // No tint: the plate's canvas already holds its final colours (see the
-      // COLOR_FACE note — a tint here multiplies the map and can only darken).
+      // COLOR_FACE note, a tint here multiplies the map and can only darken).
       const mat = new THREE.MeshBasicMaterial({ map: tex, color: 0xffffff, transparent: false });
       const mesh = new THREE.Mesh(geo, mat);
       // orient the plate so its +Z points along the face normal, at the surface
@@ -281,7 +281,7 @@ export class ViewCube {
 
     const rect = this.canvas.getBoundingClientRect();
     // NOTE: renderer.setViewport/setScissor take CSS pixels and apply the
-    // renderer's pixelRatio internally — so we must NOT pre-multiply by it here.
+    // renderer's pixelRatio internally, so we must NOT pre-multiply by it here.
     // (Doing so applied pixelRatio twice, leaving a dpr²-sized viewport set for
     // the next main render → the whole model rendered offset/oversized on any
     // HiDPI / fractional-scaled display. Invisible at dpr=1.)
@@ -402,7 +402,7 @@ export class ViewCube {
   // cleanup function monkey-patched onto the element as `_cleanup`. It now pops
   // the one shared menu, so overflow flipping, Escape handling that doesn't also
   // clear the app selection, and "opening one closes the other" all come for
-  // free — and ~60 lines of duplicated dismissal bookkeeping are gone.
+  // free, and ~60 lines of duplicated dismissal bookkeeping are gone.
   private openMenu(clientX: number, clientY: number, side: ViewCubeSide) {
     const has = !!this.hooks.getOverrides()[side];
     contextMenu(clientX, clientY, [

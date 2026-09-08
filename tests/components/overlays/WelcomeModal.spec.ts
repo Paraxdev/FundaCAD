@@ -1,12 +1,12 @@
 // The welcome screen's load-bearing details.
 //
-//   1. `.modal-close` still exists. e2e/assembly_tree_e2e.cjs — the CI script —
+//   1. `.modal-close` still exists. e2e/assembly_tree_e2e.cjs, the CI script,
 //      dismisses the startup modal by clicking it, and if the button is gone
 //      that script HANGS rather than failing, so nothing tells you.
 //   2. Recent-file names are escaped exactly once. The innerHTML version needed
 //      esc() on every one; interpolation escapes on its own, so a leftover
 //      esc() would render a file called "Bracket & Plate" as "Bracket &amp;
-//      Plate" — a bug you only see with the right file on the recents list.
+//      Plate", a bug you only see with the right file on the recents list.
 //   3. It embeds NO remote content. The right half used to be a cross-origin
 //      iframe, which made this screen the app's only remote-content surface and
 //      its sandbox token list a real security boundary in a privileged webview.

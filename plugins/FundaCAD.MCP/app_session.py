@@ -5,7 +5,7 @@ src-tauri/src/session_file.rs). This reads it, and then does the only thing that
 actually settles the question: dials that port and presents that token.
 
 The file is a HINT and nothing more. It is removed on a clean exit and not on a
-kill, so a stale one is ordinary — after a crash, after a power cut, after a
+kill, so a stale one is ordinary, after a crash, after a power cut, after a
 `taskkill`. Trusting it would make "the app is open" mean "the app was open once
 on this machine", which is exactly the wrong answer to give an agent about to
 edit a document. Dialling costs one connect on loopback.
@@ -19,7 +19,7 @@ import os
 import sys
 
 #: The bundle identifier from src-tauri/tauri.conf.json. The app data directory
-#: is derived from it by Tauri, and re-derived here — the two must agree, so if
+#: is derived from it by Tauri, and re-derived here, the two must agree, so if
 #: the identifier ever changes, this constant changes with it and the test below
 #: is what says so.
 APP_IDENTIFIER = "dev.fundacad.app"
@@ -34,7 +34,7 @@ PROBE_TIMEOUT = 4.0
 #: Point the discovery at a different file. For a test or a probe that wants a
 #: session of its own: the alternative is writing into the real app data
 #: directory, where a file left behind by a failed run is exactly the stale hint
-#: this module is built to survive — but it would survive it by making every
+#: this module is built to survive, but it would survive it by making every
 #: later probe pay a connect timeout for nothing.
 SESSION_FILE_ENV = "FUNDACAD_SESSION_FILE"
 
@@ -125,6 +125,6 @@ def find_running_app_sync(path=None, timeout=PROBE_TIMEOUT):
     """For a caller with no event loop of its own (a script, a test).
 
     `asyncio.run` refuses to nest, so a caller that already has a loop gets that
-    refusal rather than a deadlock — which is the right way round, since the
+    refusal rather than a deadlock, which is the right way round, since the
     async form is right there."""
     return asyncio.run(find_running_app(path, timeout))

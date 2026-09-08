@@ -2,7 +2,7 @@
 // allowed to drift off that face once you are drawing on it.
 //
 // Both are arithmetic, and both are the kind of arithmetic a user notices when
-// it is wrong — a basis that spins between two invocations moves every
+// it is wrong, a basis that spins between two invocations moves every
 // coordinate in the sketch, and a normal that points into the solid makes the
 // first extrude cut instead of add. So they live here, in plain tuples with no
 // THREE.js, no camera and no viewport, where vitest can pin them down (the same
@@ -37,18 +37,18 @@ const WORLD_AXES: Vec3[] = [
   [0, 0, 1],
 ];
 
-/** Fallback normal when the caller hands us nothing usable — +Z, so a degenerate
+/** Fallback normal when the caller hands us nothing usable, +Z, so a degenerate
  *  pick still produces a sketch you can draw on rather than NaNs. */
 const FALLBACK_N: Vec3 = [0, 0, 1];
 
-/** Flip `normal` so it points away from `inside` — the material side.
+/** Flip `normal` so it points away from `inside`, the material side.
  *
  *  A face's outward direction normally comes for free: the tessellation of a
  *  sewn solid is wound so the triangle normal already points out, and the
  *  derivation below is careful never to invert it. This is the escape hatch for
  *  the cases where that is not true (an imported mesh with reversed winding),
  *  and it is deliberately something the CALLER opts into by supplying a point it
- *  knows to be inside the material — because a naive "centre of the body" test
+ *  knows to be inside the material, because a naive "centre of the body" test
  *  gets the underside of an overhang exactly backwards, and silently flipping a
  *  correct normal is worse than not flipping a wrong one.
  *
@@ -60,7 +60,7 @@ export function outwardNormal(normal: Vec3, at: Vec3, inside: Vec3 | null): Vec3
   return dot(normal, out) < 0 ? [-normal[0], -normal[1], -normal[2]] : normal;
 }
 
-/** The sketch's +X axis for a plane with this normal — the one genuinely free
+/** The sketch's +X axis for a plane with this normal, the one genuinely free
  *  decision in the derivation, and therefore the one to nail down.
  *
  *  Find the world axis the face most nearly FACES (largest normal component), take
@@ -92,7 +92,7 @@ export function sketchXdir(normal: Vec3): Vec3 {
 /** The sketch plane for a picked face: its own plane, normal pointing out of the
  *  solid, axes from sketchXdir.
  *
- *  The origin is NOT the face centroid — it is the WORLD origin projected onto
+ *  The origin is NOT the face centroid, it is the WORLD origin projected onto
  *  the face's plane, `n·(n·p)`. Grid snapping rounds in plane-local coordinates
  *  (snap.ts), so the origin is what decides where the lattice falls in world
  *  space; anchoring on the face gave every sketch-on-face its own grid, offset
@@ -132,14 +132,14 @@ export const VIEW_RELEASE_FACTOR = 2.2;
 
 /** Does the straight-on lock still apply at this zoom?
  *
- *  The lock is what makes drawing precise — square to the plane, orthographic,
- *  no orbit — and it is right for as long as you are working at drawing scale.
+ *  The lock is what makes drawing precise, square to the plane, orthographic,
+ *  no orbit, and it is right for as long as you are working at drawing scale.
  *  It is wrong the moment you pull back to see where the sketch sits on the
  *  part, which is exactly what you do on a face at an awkward angle: held rigid,
  *  the model behind the sketch is a flat silhouette with no depth to read.
  *
  *  So the lock is a function of zoom rather than a mode. Scroll out past the
- *  release factor and it lets go — once, and for the rest of the session, since
+ *  release factor and it lets go, once, and for the rest of the session, since
  *  re-squaring the camera underneath a user who has just taken hold of the view
  *  is the very thing that makes a hard lock feel rigid. Look At (or re-arming
  *  the palette toggle) is how you ask for it back. */

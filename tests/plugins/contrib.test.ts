@@ -2,9 +2,9 @@
 //
 // Everything here is about one of two things: that a contribution ARRIVES at
 // the surface that reads it, and that it LEAVES when the plugin stops. The
-// second is the half that decays quietly — a menu row that outlives its
+// second is the half that decays quietly, a menu row that outlives its
 // capability is a button that throws, and a paint map that outlives one is a
-// model wearing colours from a feature that is switched off — so nearly every
+// model wearing colours from a feature that is switched off, so nearly every
 // case below has an "and then it stopped" half.
 
 import { afterEach, describe, expect, it } from "vitest";
@@ -197,7 +197,7 @@ describe("an imported mesh with a colour of its own", () => {
     });
     contribute("B.Two", { importedBody: (id) => { order.push(`B ${id}`); } });
     await announceImportedBody("f1", "#ff0000");
-    // Both ran, and the awaited one finished before the call returned — an
+    // Both ran, and the awaited one finished before the call returned, an
     // import that reported itself done while a listener was still rebuilding
     // would be an import that is not done.
     expect(order).toEqual(["A f1 #ff0000", "B f1"]);

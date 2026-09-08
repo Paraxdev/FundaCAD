@@ -45,12 +45,12 @@ export default defineConfig({
   define: {
     // Vue's esm-bundler build ships these as compile-time flags. Both are off:
     // every component is <script setup> (no Options API) and the prod devtools
-    // hook is dead weight in a packaged desktop app. Behaviourally inert — this
+    // hook is dead weight in a packaged desktop app. Behaviourally inert, this
     // is a size win only.
     //
     // What is NOT negotiable is which Vue build we resolve. The webview CSP
-    // (src-tauri/tauri.conf.json) is `script-src 'self' 'wasm-unsafe-eval'` —
-    // no 'unsafe-eval' — so Vue's RUNTIME template compiler cannot run here.
+    // (src-tauri/tauri.conf.json) is `script-src 'self' 'wasm-unsafe-eval'`,
+    // no 'unsafe-eval', so Vue's RUNTIME template compiler cannot run here.
     // The default bundler entry (vue/dist/vue.runtime.esm-bundler.js) has no
     // compiler in it and @vitejs/plugin-vue compiles every <template> ahead of
     // time, which is why this works. Never alias `vue` to the full

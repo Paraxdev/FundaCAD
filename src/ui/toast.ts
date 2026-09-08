@@ -1,7 +1,7 @@
-// Lightweight toast notifications — a bottom-center stack above the timeline.
+// Lightweight toast notifications, a bottom-center stack above the timeline.
 // The one job: make sure nothing important can happen SILENTLY. A committed
 // feature that fails in the rebuild used to show only a small status line while
-// the model stayed visually unchanged — indistinguishable from "nothing
+// the model stayed visually unchanged, indistinguishable from "nothing
 // happened". Errors persist longer and carry an optional action button
 // ("Show" → select the failing feature).
 //

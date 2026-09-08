@@ -3,7 +3,7 @@
 // The unit test covers the arbitration in features/facePlanePick.ts with a stub
 // viewport. This covers the half a stub cannot: a real quad, in a real scene,
 // hit by a real raycast from a real click, with the plane it stands for carried
-// on it — and then the sketch that click is supposed to open.
+// on it, and then the sketch that click is supposed to open.
 //
 // It exists because the bug it checks for lived exactly in that gap. Every piece
 // worked. A plane through three points was in the document, drew its quad,

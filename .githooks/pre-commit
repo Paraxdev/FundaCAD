@@ -1,7 +1,7 @@
 #!/bin/sh
 # Pre-commit: refuse to commit a credential.
 #
-# Scans the STAGED DIFF only — every file type, including .py, .rs, .md, .toml and
+# Scans the STAGED DIFF only, every file type, including .py, .rs, .md, .toml and
 # tests. This repo is PUBLIC, so a secret that lands here is exposed the moment it is
 # pushed, and rewriting history does not un-expose it. Rotation is the only fix.
 #
@@ -11,7 +11,7 @@
 # Rules live in .gitleaks.toml, which extends the gitleaks default set.
 
 if ! command -v gitleaks >/dev/null 2>&1; then
-  echo "⚠️  gitleaks NOT INSTALLED — staged-diff secret scan SKIPPED."
+  echo "⚠️  gitleaks NOT INSTALLED, staged-diff secret scan SKIPPED."
   echo "   This repo is public; that is a real gap, not a nuisance warning."
   echo "   Install:  sudo pacman -S gitleaks   (or: brew install gitleaks)"
   exit 0
@@ -19,7 +19,7 @@ fi
 
 if ! gitleaks git --staged --redact --no-banner; then
   echo ""
-  echo "🚨 Commit blocked — a secret is in your STAGED changes."
+  echo "🚨 Commit blocked, a secret is in your STAGED changes."
   echo ""
   echo "   This repository is PUBLIC. Do not try to 'fix' this by amending later:"
   echo "   if it is ever pushed, treat the credential as compromised and ROTATE it."

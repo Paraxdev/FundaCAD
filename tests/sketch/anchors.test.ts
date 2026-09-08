@@ -80,7 +80,7 @@ describe("loopCentroid", () => {
 
 describe("footprintAnchors", () => {
   it("offers the face centre and every hole centre", () => {
-    // A 40x40 face with two holes — the shape the report was made on.
+    // A 40x40 face with two holes, the shape the report was made on.
     const anchors = footprintAnchors([
       rect(0, 0, 40, 40),
       circle(-10, 8, 3),
@@ -136,7 +136,7 @@ const rectEdges = (cx: number, cy: number, w: number, h: number) => {
 describe("polylineMidpoint", () => {
   it("is half way along the CURVE, not half way along the chord", () => {
     // The middle of a curved side is the point you would put a hole at. On a
-    // quarter circle the chord midpoint sits a sagitta inside the material —
+    // quarter circle the chord midpoint sits a sagitta inside the material,
     // 0.29 r on a 90 degree arc, which on a 20mm fillet is 5.9mm of daylight.
     const quarter = arc(0, 0, 10, 0, Math.PI / 2, 32);
     const mid = polylineMidpoint(quarter)!;

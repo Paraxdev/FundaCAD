@@ -105,7 +105,7 @@ describe("constraintTools click flows (Tier 1 additions)", () => {
     expect(h._cons).toEqual([{ type: "collinear", l1: "l1", l2: "l2" }]);
   });
 
-  it("fix pins the nearest point — a circle center → {fix, p:0} (NEW)", () => {
+  it("fix pins the nearest point, a circle center → {fix, p:0} (NEW)", () => {
     const h = new MockHost();
     h._ents = [{ type: "circle", id: "c1", radius: 5, x: 0, y: 0 }];
     h._tool = "fix";

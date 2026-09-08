@@ -70,7 +70,7 @@ def test_chamfer_bound_to_body_leaves_the_other_untouched():
 
 def test_unbound_cross_body_selector_is_refused():
     """The SAME point with no `body` used to resolve against the active body and
-    silently chamfer body2 — a wrong edit with no error, which is what made the
+    silently chamfer body2, a wrong edit with no error, which is what made the
     bug invisible. It is now caught twice over: the point is nowhere near the
     active body's edges, and the two nearest candidates there are effectively
     tied, so the ambiguity gate refuses rather than guessing.
@@ -101,7 +101,7 @@ def test_fillet_spans_two_bodies_in_one_feature():
 
 def test_partial_failure_leaves_every_body_untouched():
     """All-or-nothing: r=7 rounds body1's corner happily but is impossible on
-    body2, whose faces are only 6mm wide. body1 must NOT be left blended — a
+    body2, whose faces are only 6mm wide. body1 must NOT be left blended, a
     half-applied feature is a solid the user never asked for and cannot see."""
     solo, solo_errors = build({"id": "f1", "type": "fillet", "radius": 7.0,
                                "edges": edge_sel(B1_CORNER, "body1")})

@@ -4,13 +4,13 @@
 // 0x1b1f24 to a pale amber, on a 1.6px line, drawn with a depth test against the
 // surface it lies on. That is a real change and it is not enough to see. It has
 // to compete with a lit face right underneath it, and against the ambiguous-edge
-// menu — which by construction opens right where the edges in question are —
+// menu, which by construction opens right where the edges in question are,
 // there was nothing left to look at at all.
 //
 // So the emphasised edge is DRAWN AGAIN: one extra line, over the top, several
 // times wider, with the depth test off so it cannot be swallowed by the surface
 // it belongs to. Nothing about the model's own edge data changes, which is the
-// point — the emphasis is a display, so it is a separate object that can be
+// point, the emphasis is a display, so it is a separate object that can be
 // switched off by removing it rather than a state the edge buffers have to be
 // walked back out of.
 //
@@ -23,7 +23,7 @@ import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
 
-/** Width of the emphasis line, px. Roughly three times an idle edge — wide
+/** Width of the emphasis line, px. Roughly three times an idle edge, wide
  *  enough to read as "this one" at a glance without becoming a bar that hides
  *  the geometry under it. */
 export const EMPHASIS_WIDTH = 4.5;
@@ -36,7 +36,7 @@ const RENDER_ORDER = 1000;
  *  wants: every interior point appears twice, once as an end and once as the
  *  next start.
  *
- *  Split out and exported because it is the part that can silently be wrong —
+ *  Split out and exported because it is the part that can silently be wrong,
  *  an off-by-one here draws an edge that is subtly not the edge, which is the
  *  one thing an emphasis must never do. */
 export function segmentPositions(points: readonly (readonly number[])[]): Float32Array {

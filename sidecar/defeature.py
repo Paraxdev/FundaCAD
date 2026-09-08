@@ -8,7 +8,7 @@ being able to name a face without a topology index:
     quantised into the world frame, which survives a move because a move can be
     applied to the key.
   - DEFEATURING. Removing a fillet or a boss means deleting its faces and
-    healing the hole — either by filling it with a tool solid built from the
+    healing the hole, either by filling it with a tool solid built from the
     surrounding walls (_tool_fill), or by cutting the protrusion away
     (_tool_cut). _expand_blend_chain is what turns one picked fillet face into
     the whole tangent run it belongs to, since a user means the rounded edge,
@@ -17,7 +17,7 @@ being able to name a face without a topology index:
 
 import math
 
-import font_guard  # noqa: F401  MUST precede build123d — see font_guard.py
+import font_guard  # noqa: F401  MUST precede build123d, see font_guard.py
 
 from build123d import (
     Box,
@@ -56,7 +56,7 @@ def _face_fp(face):
 
     The memo caches the face's geometry in its OWN (local) frame and applies the
     face's Location on retrieval. Area is invariant under a rigid transform and
-    the centre is equivariant, so this is exact — verified on the 3,072-body
+    the centre is equivariant, so this is exact, verified on the 3,072-body
     reference assembly: 25,523 of 25,523 fingerprints byte-identical to the
     direct world-frame computation, zero differences.
 
@@ -64,7 +64,7 @@ def _face_fp(face):
     measurement that >99% of faces are identity-located after booleans. That
     holds for modelled geometry and is completely false for IMPORTED assemblies:
     step_assembly places every leaf with `.Moved()`, so 0 of 133,295 faces on the
-    reference file qualified and the memo was entirely dead there — the same
+    reference file qualified and the memo was entirely dead there, the same
     `.Moved()` blind spot that killed the edge memo in tessellate.py. Since
     `_face_fp` is called twice per face on an open (once building the owner map
     in _update_owners, once resolving faceOwners in server._body_payload) and
@@ -133,7 +133,7 @@ def _remove_features(shape, faces):
     """One low-level BOPAlgo_RemoveFeatures attempt. Returns (healed | None, alerts).
 
     None means OCCT errored, produced no solid, or silently returned the shape
-    UNCHANGED — per-feature failure is a WARNING by design (the BRepAlgoAPI wrapper
+    UNCHANGED, per-feature failure is a WARNING by design (the BRepAlgoAPI wrapper
     hides it), so the face-count drop is the real success signal. `alerts` carries
     the OCCT warning keys (e.g. BOPAlgo_AlertUnableToRemoveTheFeature) for an
     honest error message."""
@@ -181,7 +181,7 @@ def _face_width(f):
     """Characteristic band width: 2·area/perimeter (≈ true width for a long strip,
     small for a corner patch, large for a real base face). Same TShape memo as
     _face_fp (width is location-invariant, so identity-location gating isn't even
-    needed — but reuse the same safe pattern)."""
+    needed, but reuse the same safe pattern)."""
     w = _wrapped_or_none(f)
     key = None
     if w is not None:
@@ -205,21 +205,21 @@ def _expand_blend_chain(shape, seeds, width_factor=4.0, max_faces=64):
     """Grow the picked face(s) into the connected chamfer/fillet chain they belong to.
 
     RemoveFeatures heals by extending the faces ADJACENT to the removed set. Pick one
-    member of a chamfer chain and its neighbours are the OTHER blend faces — tangent
+    member of a chamfer chain and its neighbours are the OTHER blend faces, tangent
     or shallow, so extension fails and the whole delete no-ops. Feeding it the full
     chain makes the true base faces the neighbours, which extend exactly.
 
     Chain membership is geometric: a candidate must be narrow (width within
     `width_factor` of the widest seed) AND band-shaped (width well under its own
-    longest edge — the oblique-dihedral test alone is symmetric, a support meets
+    longest edge, the oblique-dihedral test alone is symmetric, a support meets
     its chamfer at 45° too; a base face is never a narrow band of the chamfer's
     scale, so these two filters are what stop expansion at the supports) and
     blend-like:
       * planar band meeting some neighbour at a clearly oblique dihedral
-        (a chamfer strip against its supports — never ~0° or ~90°), or
+        (a chamfer strip against its supports, never ~0° or ~90°), or
       * cylinder/cone/torus/sphere band tangent to a neighbour (a fillet), or
       * a small patch adjacent to ≥2 faces already in the chain (a corner patch).
-    Returns the seeds unchanged when nothing qualifies — or when expansion hits
+    Returns the seeds unchanged when nothing qualifies, or when expansion hits
     `max_faces`, which means the "chain" is really a mesh of narrow faces (e.g. a
     honeycomb wall lattice), not a blend: retrying on that is doomed and slow."""
     from OCP.BRepAdaptor import BRepAdaptor_Surface
@@ -263,7 +263,7 @@ def _expand_blend_chain(shape, seeds, width_factor=4.0, max_faces=64):
         GeomAbs_SurfaceType.GeomAbs_Torus,
         GeomAbs_SurfaceType.GeomAbs_Sphere,
     )
-    BAND_ASPECT_MAX = 0.4  # width / longest edge — a band, not a full face
+    BAND_ASPECT_MAX = 0.4  # width / longest edge, a band, not a full face
     blend_cache = {}
 
     def is_blend(i):
@@ -285,7 +285,7 @@ def _expand_blend_chain(shape, seeds, width_factor=4.0, max_faces=64):
         return r
 
     cap = width_factor * max(_face_width(face_at(i)) for i in seed_idx)
-    # the ≥2-chain-neighbours fallback is for CORNER PATCHES only — without a hard
+    # the ≥2-chain-neighbours fallback is for CORNER PATCHES only, without a hard
     # size limit it absorbs base faces once several strips surround them
     patch_area_max = (cap / 2.0) ** 2
     chain = set(seed_idx)
@@ -302,12 +302,12 @@ def _expand_blend_chain(shape, seeds, width_factor=4.0, max_faces=64):
                 chain.add(j)
                 queue.append(j)
                 if len(chain) >= max_faces:
-                    return list(seeds)  # runaway absorb — not a blend chain
+                    return list(seeds)  # runaway absorb, not a blend chain
     return [face_at(i) for i in chain]
 
 
 def _wound_boundary(comp, faces):
-    """Faces of `comp` adjacent (edge-sharing) to `faces` but not in the set —
+    """Faces of `comp` adjacent (edge-sharing) to `faces` but not in the set,
     the faces that would border the wound if `faces` were removed."""
     adj = FaceAdjacency(comp)
     removed = {adj.index_of(x) for x in faces}
@@ -321,12 +321,12 @@ def _tool_fill(shape, targets, feature_faces=None, max_planes=12):
     boolean emulation instead of healing: build the filler wedge as the
     intersection of the local support faces' material half-spaces, clipped to a
     box around the targets, and fuzzy-fuse it in. Never extends or intersects the
-    feature faces themselves — the restored corner emerges from the boolean — so
+    feature faces themselves, the restored corner emerges from the boolean, so
     it works exactly where RemoveFeatures' adjacent-face extension gives up
     (tangent neighbours, ragged facet supports).
 
     `targets` = the face(s) to erase THIS round (one convex pocket's worth);
-    `feature_faces` = the whole feature (defaults to targets) — fellow feature
+    `feature_faces` = the whole feature (defaults to targets), fellow feature
     faces are excluded from the support set, since a tangent chamfer continuation
     must never act as a bounding half-space. Returns the filled shape or None,
     with hard validation: planar supports only, ≥1 target face consumed, valid
@@ -344,7 +344,7 @@ def _tool_fill(shape, targets, feature_faces=None, max_planes=12):
     feat_fps = {fp for fp in (_face_fp(f) for f in feature_faces) if fp is not None}
     # supports = faces adjacent to the TARGETS that aren't part of the feature.
     # Facet-debris slivers (STL heritage) can sit between a chamfer and its true
-    # support — look THROUGH them one ring: the sliver's own neighbours join the
+    # support, look THROUGH them one ring: the sliver's own neighbours join the
     # support set (the wrong-side filter below discards any that don't actually
     # bound this pocket).
     first_ring = [
@@ -356,7 +356,7 @@ def _tool_fill(shape, targets, feature_faces=None, max_planes=12):
         if fp in seen:
             continue
         seen.add(fp)
-        if _face_width(b) < 0.25 and b.area < 1.0:  # debris — pass through
+        if _face_width(b) < 0.25 and b.area < 1.0:  # debris, pass through
             for c in _wound_boundary(comp, [b]):
                 cfp = _face_fp(c)
                 if cfp not in seen and not (
@@ -375,7 +375,7 @@ def _tool_fill(shape, targets, feature_faces=None, max_planes=12):
 
     # dedupe bases into distinct support planes. Parallel same-direction planes at
     # different offsets are a facet STAIRCASE (STL heritage) approximating one
-    # design plane — keep the OUTERMOST (largest material half-space): the wedge
+    # design plane, keep the OUTERMOST (largest material half-space): the wedge
     # then covers the whole wound, and the fill flattens the staircase instead of
     # being truncated by its innermost step (which strands the void short of the
     # feature faces).
@@ -392,7 +392,7 @@ def _tool_fill(shape, targets, feature_faces=None, max_planes=12):
     # drop wrong-side "supports": a neighbour whose material half-space excludes
     # the target face itself (e.g. the step wall of a stacked-plate clip meeting
     # the chamfer at its far edge) is geometry BEYOND the pocket, not a bound of
-    # it — keeping it pinches the wedge off the target. The solid surface still
+    # it, keeping it pinches the wedge off the target. The solid surface still
     # bounds the void in that direction, so dropping it can't overfill. Sample the
     # target's own vertices + center (its bbox corners overestimate for oblique
     # faces).
@@ -408,20 +408,20 @@ def _tool_fill(shape, targets, feature_faces=None, max_planes=12):
     if not groups:
         return None
     if len(groups) > max_planes:
-        return None  # too many distinct supports — mis-scoped region
+        return None  # too many distinct supports, mis-scoped region
     planes = [(n * off, n) for n, off in groups]
 
     # local clip box around the feature. Inflate a side only when some support
     # half-space bounds the wedge there; on an unbounded side, clip at the
-    # feature's own bbox — the band spans exactly the void it cut, so the restored
+    # feature's own bbox, the band spans exactly the void it cut, so the restored
     # material ends flush with the feature's extent (e.g. a chamfer chain that
     # wraps a tab END has no support plane past the end; the fill must stop at the
     # tab end, not run on into the inflation box).
     # clip/guard region = the WHOLE feature, not just this round's targets: a
     # clipped per-target fill leaves an end-cap that later rounds would see as a
     # support capping their wedge below the remaining pocket. Extending the wedge
-    # through fellow feature faces' region is safe — the solid itself bounds the
-    # void there — and lets sequential fills meet instead of walling each other off.
+    # through fellow feature faces' region is safe, the solid itself bounds the
+    # void there, and lets sequential fills meet instead of walling each other off.
     region = Compound(list(feature_faces))
     bb = region.bounding_box()
     d = (bb.max - bb.min).length * 0.2 + 0.5
@@ -431,7 +431,7 @@ def _tool_fill(shape, targets, feature_faces=None, max_planes=12):
         comps = [(n.X, n.Y, n.Z)[ax] for n, _ in groups]
         # strict-with-epsilon: a support at EXACTLY 0.5 (hex-pocket walls tilted
         # 30° off-axis produce ±0.5 components with float dust on top) barely
-        # bounds the wedge on this axis — inflating for it lets the wedge tube
+        # bounds the wedge on this axis, inflating for it lets the wedge tube
         # run past the feature into a neighbouring pocket's void, and the
         # bounds guard then rejects a perfectly fillable notch. Clip flush at
         # the feature bbox instead, per the design above.
@@ -440,7 +440,7 @@ def _tool_fill(shape, targets, feature_faces=None, max_planes=12):
         if any(v > 0.5 + 1e-9 for v in comps):
             hi[ax] += d
     if min(h - l for h, l in zip(hi, lo)) < 1e-6:
-        return None  # flat, unbounded region (e.g. a lone big face) — no wedge
+        return None  # flat, unbounded region (e.g. a lone big face), no wedge
     tool = Pos(
         (lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2
     ) * Box(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2])
@@ -469,10 +469,10 @@ def _tool_fill(shape, targets, feature_faces=None, max_planes=12):
     if not voids:
         return None
     # bounds guard: a real chamfer/fillet void lies within the feature's own
-    # bounding box (the band spans the void it cut — the restored corner/edge sits
+    # bounding box (the band spans the void it cut, the restored corner/edge sits
     # on the box boundary), so only fuzz-scale slack is legitimate. A void escaping
-    # the box — e.g. deleting a box's whole top face makes the "wedge" an unbounded
-    # slab clipped only by the inflation box — is NOT a feature void; filling it
+    # the box, e.g. deleting a box's whole top face makes the "wedge" an unbounded
+    # slab clipped only by the inflation box, is NOT a feature void; filling it
     # would silently extrude the part. Reject.
     margin = 0.5
     vb = Compound(voids).bounding_box()
@@ -511,7 +511,7 @@ def _tool_fill(shape, targets, feature_faces=None, max_planes=12):
     if gain <= 1e-9 or gain > gain_cap:
         return None
     # progress check: the fill must consume at least one feature face. A single
-    # convex wedge can only fill ONE convex pocket — a chain that wraps several
+    # convex wedge can only fill ONE convex pocket, a chain that wraps several
     # corners (e.g. around a tab end) is filled pocket-by-pocket by _tool_fill_all,
     # so partial consumption here is progress, not failure.
     fps_targets = {fp for fp in (_face_fp(f) for f in targets) if fp is not None}
@@ -527,17 +527,17 @@ def _tool_fill(shape, targets, feature_faces=None, max_planes=12):
 def _tool_fill_all(shape, feature_faces, max_rounds=24):
     """Erase a whole (possibly non-convex) missing-material feature by repeated
     convex wedge fills. A chain that wraps several corners has DIFFERENT support
-    pairs per segment — a single global wedge (AND of all half-spaces) degenerates
-    — so fill face-by-face: each round targets one remaining face using only ITS
+    pairs per segment, a single global wedge (AND of all half-spaces) degenerates,
+    so fill face-by-face: each round targets one remaining face using only ITS
     adjacent supports (fellow feature faces excluded), largest faces first (corner
     patches often gain usable supports only after their strips are filled).
-    Succeeds only when EVERY feature face is consumed — a half-filled chamfer
+    Succeeds only when EVERY feature face is consumed, a half-filled chamfer
     chain is worse than an honest error. Returns the filled shape or None.
 
     The ACCUMULATED gain across rounds is capped to the whole feature's
     gain_cap: each round's fill respects its own per-round cap, but a
-    degenerate flat remnant can otherwise staircase — round after round each
-    under-cap — into many times the feature's volume (measured +20.7 mm³
+    degenerate flat remnant can otherwise staircase, round after round each
+    under-cap, into many times the feature's volume (measured +20.7 mm³
     from a 1.5 mm² ledge on the DDR honeycomb rim)."""
     cur = shape
     v0 = _as_compound(shape).volume
@@ -552,12 +552,12 @@ def _tool_fill_all(shape, feature_faces, max_rounds=24):
             if filled is not None:
                 break
         if filled is None:
-            return None  # no remaining face could be filled — give up honestly
+            return None  # no remaining face could be filled, give up honestly
         if _as_compound(filled).volume - v0 > total_cap:
             return None  # staircasing past the whole feature's budget
         # remember the surfaces of the pre-fill remaining set: the fuse can SPLIT
         # a band face at the clip boundary, and the stub keeps its plane but gets
-        # a new fingerprint — losing it would hand it to later rounds as a
+        # a new fingerprint, losing it would hand it to later rounds as a
         # SUPPORT, whose half-space then cuts the next wedge to nothing
         prev = []
         for f in remaining:
@@ -603,15 +603,15 @@ def _tool_fill_all(shape, feature_faces, max_rounds=24):
 
 def _tool_cut(shape, targets, max_planes=12):
     """Erase an EXTRA-material remnant (a broken wall stub, or the ledge left
-    by a prior wedge fill) by boolean emulation — the mirror of _tool_fill:
+    by a prior wedge fill) by boolean emulation, the mirror of _tool_fill:
     build the same support-half-space wedge, clipped FLUSH to the remnant's
     own bbox on unbounded axes, and SUBTRACT it instead of fusing. The flush
     clip is what makes the cut honest: on the DDR honeycomb rim the remnant's
     top edge lies exactly on the rim line, so the cut plane coincides with
-    real geometry and the rim continues straight across — no invented gash.
+    real geometry and the rim continues straight across, no invented gash.
 
     The remnant = the picked face(s) plus the narrow wound-boundary bands
-    attached to them (a stub's own side slivers and cap — they'd otherwise
+    attached to them (a stub's own side slivers and cap, they'd otherwise
     wall the tool off from the material). Hard-validated like the fill:
     planar supports only, loss capped to remnant size, ≥1 target consumed,
     solid count preserved, valid B-rep; any doubt → None."""
@@ -675,7 +675,7 @@ def _tool_cut(shape, targets, max_planes=12):
         if any(v > 0.5 + 1e-9 for v in comps):
             hi[ax] += d
     if min(h - l for h, l in zip(hi, lo)) < 1e-6:
-        return None  # flat remnant with no thickness anywhere — nothing to cut
+        return None  # flat remnant with no thickness anywhere, nothing to cut
     tool = Pos(
         (lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2
     ) * Box(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2])
@@ -693,7 +693,7 @@ def _tool_cut(shape, targets, max_planes=12):
     ) * 3.0
     # raw OCCT cut, NOT build123d's `-`: the operator's clean() runs a GLOBAL
     # coplanar merge that dissolves the small remnant companions of every
-    # OTHER cell into the big skin/floor faces — after one ledge cut, the
+    # OTHER cell into the big skin/floor faces, after one ledge cut, the
     # next ledge would have no band topology left to recognize its stub by.
     from OCP.BRepAlgoAPI import BRepAlgoAPI_Cut
     from OCP.TopTools import TopTools_ListOfShape
@@ -727,17 +727,17 @@ def _tool_cut(shape, targets, max_planes=12):
 
 
 def _defeature(shape, faces):
-    """Remove one or more faces from a solid and heal the gap — deleting an
+    """Remove one or more faces from a solid and heal the gap, deleting an
     (imported) chamfer/fillet or a small protrusion where there's no feature
     history to edit. Four rungs, cheapest first:
       1. stock OCCT defeaturing on the picked face(s),
       2. retry with the whole recognized chamfer/fillet chain (rescues corner
-         chamfers — see _expand_blend_chain),
+         chamfers, see _expand_blend_chain),
       3. tool-solid fill: fuse a wedge built from the base faces' half-spaces
-         (works where extension-healing is structurally unable — ragged or
+         (works where extension-healing is structurally unable, ragged or
          tangent supports; see _tool_fill),
       4. tool-solid cut: the subtractive mirror, for EXTRA-material remnants
-         (broken wall stubs, prior-fill ledges) that have no bounded fill —
+         (broken wall stubs, prior-fill ledges) that have no bounded fill,
          see _tool_cut. Last on purpose: additive/extension heals are more
          conservative and must win when both apply."""
     healed, alerts = _remove_features(shape, faces)
@@ -750,11 +750,11 @@ def _defeature(shape, faces):
         if healed is not None:
             return healed
         alerts += alerts2
-    # a FLAT picked face (zero-thickness bbox — e.g. the horizontal ledge a
+    # a FLAT picked face (zero-thickness bbox, e.g. the horizontal ledge a
     # prior wedge fill left on the honeycomb rim) can never be a chamfer to
     # fill: blend-chain expansion from it grabs tangent structural bands and
     # the fill floods their wounds instead. For flat faces the subtractive
-    # cut is the honest heal — try it FIRST; sloped chamfers keep fill-first.
+    # cut is the honest heal, try it FIRST; sloped chamfers keep fill-first.
     fbb = Compound(list(faces)).bounding_box()
     flat = min(
         fbb.max.X - fbb.min.X, fbb.max.Y - fbb.min.Y, fbb.max.Z - fbb.min.Z
@@ -765,7 +765,7 @@ def _defeature(shape, faces):
             return cut
         # no fill fallback for flat faces: a flat face is never a fillable
         # blend, and chain expansion from one grabs tangent structural bands
-        # whose wound-fill floods (+20.7 mm³ measured) — honest error instead
+        # whose wound-fill floods (+20.7 mm³ measured), honest error instead
     else:
         filled = _tool_fill_all(shape, chain if expanded else faces)
         if filled is not None:
@@ -775,12 +775,12 @@ def _defeature(shape, faces):
             return cut
     detail = f" (OCCT: {', '.join(sorted(set(alerts)))})" if alerts else ""
     tried = (
-        f" — even removing its whole {len(chain)}-face chamfer/fillet chain and "
+        f", even removing its whole {len(chain)}-face chamfer/fillet chain and "
         "wedge-filling the corner"
         if expanded
-        else " — wedge-filling didn't apply either"
+        else ", wedge-filling didn't apply either"
     )
     raise ValueError(
         "can't heal after removing that face" + tried
-        + " — use Press/Pull to cut it instead" + detail
+        + ", use Press/Pull to cut it instead" + detail
     )

@@ -1,7 +1,7 @@
 // Turn a RebuildResult into Three.js objects: one shaded Mesh+BufferGeometry PER
 // BODY (with per-triangle faceIds for picking) plus crisp fat edge lines. Bodies
 // are keyed by id so an unchanged body (same wire-protocol etag) can reuse its
-// previous GPU objects untouched instead of rebuilding — see Viewport.setModel().
+// previous GPU objects untouched instead of rebuilding, see Viewport.setModel().
 
 import * as THREE from "three";
 import type { RebuildResult } from "../types";
@@ -13,11 +13,11 @@ export { BodyEdges, EDGE_IDLE_COLOR, EDGE_IDLE_WIDTH };
 export type { EdgeRef };
 
 /** One body's own isolated Mesh + edges. `faceStart`/`faceCount` are the body's
- *  B-rep faceId sub-range (global, per the wire protocol) — `faceIds` below are
+ *  B-rep faceId sub-range (global, per the wire protocol), `faceIds` below are
  *  NOT remapped, so a faceId is always globally meaningful even though the
  *  triangle/vertex indices that carry it are local to this body's own buffers.
  *  `etag` is the sidecar's content fingerprint as of this build (undefined if
- *  the reply didn't carry one) — Viewport.setModel() diffs on it to decide
+ *  the reply didn't carry one), Viewport.setModel() diffs on it to decide
  *  whether a body needs rebuilding at all. */
 export interface BodyMesh {
   id: string;
@@ -40,14 +40,14 @@ export interface BodyMesh {
 
 export interface ModelView {
   bodies: BodyMesh[];
-  // ALL edges, flattened (every body's + orphans below) — the flat list existing
+  // ALL edges, flattened (every body's + orphans below), the flat list existing
   // consumers (overlays.ts's curvature combs, edgeLineByMid, hideFlushSeams)
   // already expect. These are REFERENCES now, not THREE objects: the drawable
   // lives on the owning body's BodyEdges (ref.draw).
   edges: EdgeRef[];
   // Edges whose `body` doesn't name a live body id. The current sidecar/Rust
   // backend always tags every edge with its owning body, so in practice this is
-  // always empty — kept as a defensive fallback (rebuilt fresh every setModel()
+  // always empty, kept as a defensive fallback (rebuilt fresh every setModel()
   // call, always visible, never moved with a body) so a body-less edge can't
   // silently vanish if that invariant ever lapses.
   orphanEdges: BodyEdges | null;
@@ -90,27 +90,27 @@ function buildEdgeLines(edges: RebuildResult["edges"], resolution: THREE.Vector2
  *  Without this, buildBodyMesh is O(bodies x WHOLE-MODEL triangles): each body
  *  scans every triangle in the model to find its own, and allocates+fills its
  *  own whole-model `Int32Array` remap. That is invisible at 5 bodies and fatal
- *  at 3,000 — measured 38.1s to build one imported assembly, 2.1s with this.
+ *  at 3,000, measured 38.1s to build one imported assembly, 2.1s with this.
  *  Here the whole model is walked TWICE total, no matter how many bodies. */
 export interface MeshPartition {
   /** body id -> indices into `result.mesh.faceIds` of the triangles it owns */
   trisByBody: Map<string, Int32Array>;
   /** global vertex index -> body-local; -1 everywhere between bodies. Shared
    *  across bodies and handed back clean by buildBodyMesh (which resets only
-   *  the entries it touched) — refilling this per body is the very cost being
+   *  the entries it touched), refilling this per body is the very cost being
    *  removed. */
   remap: Int32Array;
 }
 
 /** Bucket `result`'s triangles by owning body, in two passes. Only bodies named in
- *  `rebuilding` get a list — an unchanged body keeps its GPU objects and is never
+ *  `rebuilding` get a list, an unchanged body keeps its GPU objects and is never
  *  passed to buildBodyMesh.
  *
  *  `opts.range` and `opts.remap` exist for PROGRESSIVE loads, where the reply's
  *  arrays are full-size but filled a chunk at a time. `range` is a CORRECTNESS
  *  requirement there: an unwritten slice is still zeros, and zero is a legitimate
  *  faceId, so scanning it would attribute every not-yet-arrived triangle to
- *  whichever body owns face 0. `remap` is the speed one — a caller-owned scratch
+ *  whichever body owns face 0. `remap` is the speed one, a caller-owned scratch
  *  buffer sized to the whole model, handed back clean, instead of O(chunks x model)
  *  allocation. Without opts the behaviour is unchanged. */
 export function partitionMesh(
@@ -176,8 +176,8 @@ export function partitionMesh(
 }
 
 /** Build one body's own isolated Mesh+BufferGeometry: slice its triangles out of
- *  the (still shared-array) wire mesh — result.mesh stays one concatenated set
- *  of arrays, per client.ts's assemble() — and remap to a dense local vertex
+ *  the (still shared-array) wire mesh, result.mesh stays one concatenated set
+ *  of arrays, per client.ts's assemble(), and remap to a dense local vertex
  *  range, so each body owns independent GPU buffers untouched by any other
  *  body's rebuild. `faceIds` in the slice stay their original (globally-unique)
  *  B-rep ids; only the vertex numbering is body-local.
@@ -198,8 +198,8 @@ export function buildBodyMesh(
   const faceEnd = faceStart + faceCount;
 
   // The triangles this body owns. With a partition they were bucketed in one
-  // pass over the whole model; without one — the single-body live-preview drag
-  // path — scanning costs the same, so don't make the caller build one.
+  // pass over the whole model; without one, the single-body live-preview drag
+  // path, scanning costs the same, so don't make the caller build one.
   const shared = partition?.trisByBody.get(meta.id);
   let owned: Int32Array;
   if (shared) {
@@ -213,7 +213,7 @@ export function buildBodyMesh(
     owned = Int32Array.from(scan);
   }
 
-  // global vertex index -> local (dense); a flat typed array beats a Map here —
+  // global vertex index -> local (dense); a flat typed array beats a Map here,
   // this runs per changed body on every live-preview drag tick, and Map<number,
   // number> pays hashing/boxing on 3 lookups per triangle.
   const remap = shared ? partition!.remap : new Int32Array(positions.length / 3).fill(-1);
@@ -250,7 +250,7 @@ export function buildBodyMesh(
   }
 
   // Hand the SHARED remap back clean for the next body by clearing only the
-  // entries this body touched — O(this body), never O(model). Refilling a
+  // entries this body touched, O(this body), never O(model). Refilling a
   // whole-model buffer per body is exactly the cost partitionMesh removes.
   if (shared) {
     for (let k = 0; k < owned.length; k++) {
@@ -262,7 +262,7 @@ export function buildBodyMesh(
     }
   }
 
-  // A textured face arrives fully de-indexed — 3 unique vertices per triangle
+  // A textured face arrives fully de-indexed, 3 unique vertices per triangle
   // (measured 2.99 verts/tri), which is how the sidecar delivers per-triangle
   // normals for faceted shading. Weld the duplicates back together.
   //
@@ -271,7 +271,7 @@ export function buildBodyMesh(
   // hover-painting one would bleed into the other.
   //
   // Triangle ORDER is untouched, so localFaceIds and faceTriangles stay valid. Only
-  // runs when the sidecar shipped normals — everything else arrives at ~1.02
+  // runs when the sidecar shipped normals, everything else arrives at ~1.02
   // verts/tri and welding would change what computeVertexNormals averages over.
   let posOut = localPositions;
   let nrmOut = localNormals;
@@ -304,7 +304,7 @@ export function buildBodyMesh(
   geo.setAttribute("position", new THREE.Float32BufferAttribute(posOut, 3));
   geo.setIndex(localIndices);
   // a textured body ships sidecar-computed normals (analytic on displaced
-  // faces — smooth shading at coarse displacement density); everything else
+  // faces, smooth shading at coarse displacement density); everything else
   // keeps the usual client-side accumulation.
   if (anyNormal) geo.setAttribute("normal", new THREE.Float32BufferAttribute(nrmOut, 3));
   else geo.computeVertexNormals();
@@ -337,7 +337,7 @@ export function buildBodyMesh(
   mesh.name = "model";
   // Hover picking raycasts this mesh on every pointermove; without a BVH that
   // is a full triangle scan (2.60ms median on a 50k-triangle textured body).
-  scheduleRaycastIndex(geo); // built after the first paint — see raycastIndex.ts
+  scheduleRaycastIndex(geo); // built after the first paint, see raycastIndex.ts
 
   const edges = buildEdgeLines(bodyEdges, resolution);
 
@@ -365,12 +365,12 @@ export function buildBodyMesh(
     faceTriangles,
   };
   // reverse lookup: a raycast hit's `.object` (the exact mesh hit) back to the
-  // BodyMesh that owns it — picking.ts/viewport.ts use this via faceIdOfHit().
+  // BodyMesh that owns it, picking.ts/viewport.ts use this via faceIdOfHit().
   mesh.userData.owner = body;
   return body;
 }
 
-/** All body meshes currently visible — the raycast target set for "the solid".
+/** All body meshes currently visible, the raycast target set for "the solid".
  *  three.js's Raycaster does NOT check `.visible` (only `layers.test()`), so any
  *  raycast against "the model" must filter explicitly; a hidden body is only
  *  `mesh.visible = false` now (not dropped from the geometry at build time). */
@@ -381,7 +381,7 @@ export function visibleBodyMeshes(view: ModelView): THREE.Mesh[] {
 }
 
 /** The B-rep faceId a raycast Intersection landed on, resolved via the hit
- *  mesh's own `userData.owner` (set in buildBodyMesh) — `hit.faceIndex` is a
+ *  mesh's own `userData.owner` (set in buildBodyMesh), `hit.faceIndex` is a
  *  LOCAL triangle index into whichever body mesh was actually hit. */
 export function faceIdOfHit(hit: THREE.Intersection): number {
   const owner = hit.object.userData.owner as BodyMesh | undefined;
@@ -429,7 +429,7 @@ export function buildSectionGhosts(
 /** faceId -> owning body, built lazily per ModelView and thrown away with it
  *  (a new reply always makes a new ModelView, so this can never go stale).
  *  Bodies own contiguous faceId ranges, so a sorted range table + binary search
- *  answers in log(bodies) instead of scanning — this runs on every hover, and a
+ *  answers in log(bodies) instead of scanning, this runs on every hover, and a
  *  linear scan over an imported assembly's thousands of bodies is felt. */
 const faceIndexCache = new WeakMap<ModelView, { starts: Int32Array; bodies: BodyMesh[] }>();
 
@@ -445,7 +445,7 @@ function faceIndexOf(view: ModelView) {
   return idx;
 }
 
-/** Which BodyMesh owns a global B-rep faceId (undefined if none — e.g. a stale
+/** Which BodyMesh owns a global B-rep faceId (undefined if none, e.g. a stale
  *  id from before a rebuild). Shared by viewport.ts's public faceIdToBodyId and
  *  highlight.ts's per-body paint/restore, so the range lookup has one definition. */
 export function bodyOfFace(view: ModelView, faceId: number): BodyMesh | undefined {
@@ -464,7 +464,7 @@ export function bodyOfFace(view: ModelView, faceId: number): BodyMesh | undefine
 
 /** Reset a REUSED body's transient per-model display state (clip plane, dimmed
  *  opacity, emphasized/hovered/selected edge styling) back to build-time
- *  defaults — i.e. make it look exactly like a freshly built body would. A
+ *  defaults, i.e. make it look exactly like a freshly built body would. A
  *  reused body's mesh/material/edge objects are never recreated across a
  *  rebuild, so without this they'd keep whatever setClipPlane()/
  *  setModelDimmed()/emphasizeEdges()/Highlighter left on them from before this
@@ -476,7 +476,7 @@ export function bodyOfFace(view: ModelView, faceId: number): BodyMesh | undefine
  *  never touched here). */
 export function resetBodyAppearance(body: BodyMesh) {
   // Clear any leftover move-ghost POSE: a reused (etag-unchanged) body must sit
-  // at the origin unrotated and unscaled — its vertices already encode its true
+  // at the origin unrotated and unscaled, its vertices already encode its true
   // position, and the rebuild has just re-encoded them. Position alone was
   // enough while the ghost could only translate; the gizmo now turns and
   // resizes through the same ghost, and a leftover quaternion on a reused body
@@ -514,7 +514,7 @@ export function setEdgeResolution(view: ModelView | null, res: THREE.Vector2) {
   view.orphanEdges?.setResolution(res);
 }
 
-/** Every merged edge object in the model — the things that actually live in the
+/** Every merged edge object in the model, the things that actually live in the
  *  scene graph and get raycast, as opposed to ModelView.edges (references). */
 export function edgeObjects(view: ModelView): BodyEdges[] {
   const out = view.bodies.map((b) => b.edges);

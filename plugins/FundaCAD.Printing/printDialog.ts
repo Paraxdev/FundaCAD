@@ -1,7 +1,7 @@
 // Filament-mapping dialog for "Send to Printer": for each colored slot the job
 // uses (logical gcode tool Tn = palette slot index), pick which physical U1
 // toolhead is loaded with that filament. Pre-matched by material type, then
-// nearest color — the same client-side reconciliation Snapmaker Orca does.
+// nearest color, the same client-side reconciliation Snapmaker Orca does.
 //
 // choice.ts's chooseMulti can't express per-row dropdowns, so this is a bespoke
 // modal built on the shared .choice-* styles. The markup is

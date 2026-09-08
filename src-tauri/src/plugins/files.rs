@@ -2,7 +2,7 @@
 //! the one they chose, writing one where they say, and asking what it is
 //! running on.
 //!
-//! WHY THESE ARE HERE. Not because the webview is untrusted — it is the app —
+//! WHY THESE ARE HERE. Not because the webview is untrusted, it is the app,
 //! but because this is where the paths and the dialogs are, and the useful
 //! property is that a path never leaves. What a plugin gets back is a handle, a
 //! file name and a length; to read the file it hands the handle back. The rules

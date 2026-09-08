@@ -6,7 +6,7 @@
 // tube; selecting several areas unions them.
 //
 // The operation is DECIDED, never asked: New Body when nothing exists, Cut when
-// the profile pushes into existing material, Join when it pulls away from it — a
+// the profile pushes into existing material, Join when it pulls away from it, a
 // profile drawn on a face and pulled off it is the common case, and it joins. The
 // commit used to stop on a four-way modal to have that answer confirmed, which
 // put a decision in front of every extrude in order to change the few where the
@@ -44,16 +44,16 @@ export class ExtrudeTool {
 
   // --- edit mode (re-opening a committed extrude) ---
   private editId: string | null = null; // committed feature id being edited
-  private editOp: Op | null = null; // saved operation — an edit keeps it rather than re-guessing
-  private editHiddenBodies: string[] | undefined; // participants captured at creation — KEPT
+  private editOp: Op | null = null; // saved operation, an edit keeps it rather than re-guessing
+  private editHiddenBodies: string[] | undefined; // participants captured at creation, KEPT
   /** while editing, this sketch is forced visible so its regions exist
-   *  (consumed sketches hide by default) — main.ts's isSketchVisible honors it. */
+   *  (consumed sketches hide by default), main.ts's isSketchVisible honors it. */
   forcedSketchId: string | null = null;
 
   /** Fluent grab: the cursor's projection along the normal at the moment the
    *  passive handle was pressed. Null for every other entry, where the depth
    *  free-tracks the cursor's ABSOLUTE projection. Holding the button changes
-   *  what the gesture means — the depth has to grow from where you took hold,
+   *  what the gesture means, the depth has to grow from where you took hold,
    *  not snap to wherever the arrow tip happened to project. */
   private grabProj: number | null = null;
   private fluentGrab = false;
@@ -106,7 +106,7 @@ export class ExtrudeTool {
     }
   }
 
-  /** Take hold of the arrow at (x, y) without a fresh pointerdown of our own —
+  /** Take hold of the arrow at (x, y) without a fresh pointerdown of our own,
    *  the press that started the gesture landed on the passive selection handle,
    *  before this tool existed. */
   private grabHandle(clientX: number, clientY: number) {
@@ -132,7 +132,7 @@ export class ExtrudeTool {
 
   /** Re-open a committed extrude for editing: the model rolls back to just
    *  before it, its sketch is forced visible, the saved profile areas are
-   *  pre-selected, and the saved distance seeds (and locks) the input — retype
+   *  pre-selected, and the saved distance seeds (and locks) the input, retype
    *  or Ctrl-click areas, then commit to REPLACE the feature in place (same id,
    *  one undo step). Returns false when the distance is a parameter expression
    *  (the value rows' job). */
@@ -141,7 +141,7 @@ export class ExtrudeTool {
     const f = this.store.document.features.find((x) => x.id === featureId);
     if (!f || f.type !== "extrude") return false;
     if (typeof f.distance !== "number" || this.store.isParamBound({ kind: "feature", feature: f.id, field: "distance" }))
-      return false; // parameter-driven distance — the value rows' job
+      return false; // parameter-driven distance, the value rows' job
 
     this.active = true;
     this.phase = "pick";
@@ -190,7 +190,7 @@ export class ExtrudeTool {
     const anchor = this.anchor();
     if (!this.dim.isUserDriven("distance")) {
       const proj = axisDragDistance(this.viewport, e.clientX, e.clientY, anchor, plane.n);
-      // Relative once the handle has been grabbed, absolute otherwise — see
+      // Relative once the handle has been grabbed, absolute otherwise, see
       // grabProj. Both come off the same projection; only the origin differs.
       const d = this.grabProj == null ? proj : proj - this.grabProj;
       this.distance = d;
@@ -203,7 +203,7 @@ export class ExtrudeTool {
     this.updatePreview();
   }
 
-  /** Park the depth input at a STABLE spot near the profile — anchored to the
+  /** Park the depth input at a STABLE spot near the profile, anchored to the
    *  selection center (which doesn't move while you drag depth), offset off the
    *  geometry and clamped inside the viewport. Following the cursor made the box
    *  (and its buttons) impossible to click. */
@@ -234,7 +234,7 @@ export class ExtrudeTool {
     // Ctrl-click keeps changing WHICH areas, even once the depth is being set.
     // The prompt has said "Ctrl-click areas" for as long as the edit flow has
     // existed and the tool did not honour it: every click in the drag phase
-    // committed, the modified one included — so re-opening an extrude to fix
+    // committed, the modified one included, so re-opening an extrude to fix
     // the areas it caught ended the moment you tried to.
     if (e.ctrlKey || e.metaKey || e.shiftKey) {
       const r = this.regionUnder(e.clientX, e.clientY);
@@ -308,9 +308,9 @@ export class ExtrudeTool {
     if (this.editId) {
       // seed the SIGNED saved distance and lock the field (userDriven): extrude's
       // onMove free-tracks the cursor and would clobber the seed on the first
-      // move otherwise. Cursor-scrub is deliberately off in edit mode — retype
+      // move otherwise. Cursor-scrub is deliberately off in edit mode, retype
       // or commit. (Seeding the abs value would silently drop a cut's sign the
-      // moment getValue is read back — the DimInput abs-display trap.)
+      // moment getValue is read back, the DimInput abs-display trap.)
       this.dim.seed("distance", this.distance);
     } else {
       this.distance = 10;
@@ -341,7 +341,7 @@ export class ExtrudeTool {
     return best;
   }
 
-  /** average of the selected areas' interior points — the arrow anchor.
+  /** average of the selected areas' interior points, the arrow anchor.
    *  Shared with the passive handle so the two arrows stand in the same place
    *  across the hand-off (features/regionNudge.ts). */
   private anchor(): THREE.Vector3 {
@@ -436,8 +436,8 @@ export class ExtrudeTool {
    *  saying which boolean you were about to get; a line that says so while you
    *  are still dragging does that job without stopping the gesture to do it.
    *
-   *  Gated on the two things the answer can turn on — which side of zero the
-   *  depth is, and how many areas are selected — because this runs on every
+   *  Gated on the two things the answer can turn on, which side of zero the
+   *  depth is, and how many areas are selected, because this runs on every
    *  pointermove and plannedOperation() casts a ray through the whole model per
    *  selected area. Nothing else moves during a drag: the model and the areas
    *  are fixed, and the depth's MAGNITUDE cannot change which boolean is meant.
@@ -464,7 +464,7 @@ export class ExtrudeTool {
   private commit() {
     if (!this.selected.length) return this.cancel();
     const v = this.dim.getValue("distance");
-    // GATE on isUserDriven: while dragging, the field displays |distance| —
+    // GATE on isUserDriven: while dragging, the field displays |distance|,
     // reading it back unconditionally strips the drag's sign and sends the
     // extrude the wrong way ("Cut removed nothing" on cut-toward-body).
     // Typed values (userDriven) carry their own sign and win.
@@ -483,7 +483,7 @@ export class ExtrudeTool {
       regions: this.selected.map((wr) => [wr.interior3D.x, wr.interior3D.y, wr.interior3D.z]),
       // capture the participants NOW: bodies hidden at creation stay excluded
       // from this boolean forever; later eye toggles are pure display. When
-      // EDITING, the ORIGINAL capture is kept — re-capturing here would let
+      // EDITING, the ORIGINAL capture is kept, re-capturing here would let
       // display toggles rewrite committed boolean history.
       ...(hiddenBodies !== undefined ? { hiddenBodies } : {}),
     };

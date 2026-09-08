@@ -3,14 +3,14 @@
 // and the rules that decide which rows a given pattern even has.
 //
 // Pure, and imports nothing from the host. That is not an accident of what it
-// happens to need — it is what lets this file's tests run in a node environment
+// happens to need, it is what lets this file's tests run in a node environment
 // with no DOM and no app, which is where the interesting content is. The
 // visibility rules encode real sidecar behaviour (a FACETED wave has no shape
 // parameter at all) and have been wrong before, in a way that shows up as a
 // slider with nothing on the other end of it rather than as an error.
 //
 // THESE RULES USED TO BE IN THE APPLICATION, in document/optionFields.ts, where
-// `fieldApplies` opened with `if (type !== "texture") return true;` — a function
+// `fieldApplies` opened with `if (type !== "texture") return true;`, a function
 // in the document layer whose entire body was one tool's business. They are
 // contributed back now, so the value rows for a committed texture ask this file
 // through the contribution table and get the same answer the panel does. Two
@@ -49,8 +49,8 @@ export const SEED_KINDS: ReadonlySet<TextureKind> =
  *
  *  Governs the numeric rows as well as the dropdowns, which is the point of it:
  *  turn the Seed on a knurl and the model does not move, and nothing says why.
- *  The application owns the numeric inventory — a parameter can drive
- *  `texture1.seed` whether or not this is installed — and this decides which of
+ *  The application owns the numeric inventory, a parameter can drive
+ *  `texture1.seed` whether or not this is installed, and this decides which of
  *  those rows are worth showing. */
 export function textureFieldApplies(field: string, values: Record<string, unknown>): boolean {
   const kind = (values["kind"] ?? "knurl") as TextureKind;

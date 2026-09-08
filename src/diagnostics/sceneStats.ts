@@ -23,7 +23,7 @@ export interface SceneStatsSource {
    *  A skipped pass leaves every seam visible, which looks like a bug unless
    *  the report says it was deliberate. */
   seam?: { ms: number; skipped: boolean };
-  /** `renderer.info.render` — what the LAST frame actually cost the GPU.
+  /** `renderer.info.render`, what the LAST frame actually cost the GPU.
    *  `calls` is the one that matters on a many-body document: the scene can be
    *  cheap in triangles and still be draw-call bound, which reads as "slow with
    *  a small model" and is otherwise invisible in a report. */
@@ -50,7 +50,7 @@ export function sceneStats(s: SceneStatsSource): string[] {
       edges += b.edges.refs.length;
     }
     // verts/tri near 3 means the mesh carries no vertex sharing at all, which is
-    // what a faceted texture produces — worth seeing next to a slow frame rate.
+    // what a faceted texture produces, worth seeing next to a slow frame rate.
     const ratio = tris ? (verts / tris).toFixed(2) : "0";
     out.push(`[mesh] ${s.model.bodies.length} bodies · ${Math.round(tris)} tris · ${verts} verts `
       + `(${ratio}/tri) · ${edges} edges`);

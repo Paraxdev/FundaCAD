@@ -3,7 +3,7 @@
 Two prisms that meet along a single corner line fuse into one body that carries
 that line TWICE: the fuse has no face to merge, so each prism keeps its own copy.
 Both copies sit at the same point, run the same length and score the same
-distance from any pick, so `by:"nearest"` measured a perfect tie and refused —
+distance from any pick, so `by:"nearest"` measured a perfect tie and refused,
 "re-pick the edge, the saved reference no longer identifies one", of an edge that
 no pick can identify differently. On the reported document that killed every
 blend on the body.
@@ -27,7 +27,7 @@ PASS = "  ok"
 
 # The reported shape, from primitives: a plate, and two 10x10x9 prisms that meet
 # along exactly one vertical line (x=0, y=0) and nothing else. Joined the way the
-# document made them — ONE extrude of a two-region sketch, so the tool is a
+# document made them, ONE extrude of a two-region sketch, so the tool is a
 # compound of both prisms and the fuse is _serial_bool. The result is a single
 # valid solid, and the seam line is in it twice: the fuse has no face to merge at
 # a contact of measure zero, so each prism keeps its own copy.
@@ -42,7 +42,7 @@ LONE = Pos(-5, 5, 4.5) * Box(10, 10, 9)
 
 def test_the_seam_edge_really_is_there_twice():
     """Without this the rest of the file could pass on a body that never had the
-    problem — the fuse might have merged the seam on some OCCT version."""
+    problem, the fuse might have merged the seam on some OCCT version."""
     keys = {}
     for e in TOUCHING.edges():
         keys.setdefault(_edge_dedup_key(e), 0)
@@ -72,7 +72,7 @@ def test_a_pick_on_the_seam_resolves_instead_of_refusing():
 
 def test_a_genuine_tie_still_refuses():
     """The control that must fail. Deduping indistinguishable candidates must not
-    quietly turn a real ambiguity — two DIFFERENT edges equally close — into a
+    quietly turn a real ambiguity, two DIFFERENT edges equally close, into a
     guess, which is the fault the tie gate exists for."""
     # The prism's own centre: every one of its twelve edges is the same distance
     # away, and they are twelve different edges.

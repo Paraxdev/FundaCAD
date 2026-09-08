@@ -69,7 +69,7 @@ describe("dragStep", () => {
 
   it("never offers a step that snap() would round away", () => {
     // The floor is not a taste call. snap() rounds through round(), which
-    // quantises to 0.001, so a lattice finer than that is not a finer drag —
+    // quantises to 0.001, so a lattice finer than that is not a finer drag,
     // it is a drag that stops responding. Two neighbouring lattice points must
     // still be two distinct values after snapping.
     for (const wpp of [1e-9, 1e-6, 1e-5, 1e-4, 5e-4]) {

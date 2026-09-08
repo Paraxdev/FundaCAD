@@ -79,8 +79,8 @@ describe("the plugins in this repository", () => {
     // screen somebody had just answered.
     //
     // Nothing ships inside the app now. `builtin` still means something and
-    // what it means is REACH — it runs in the application's own JavaScript
-    // context — which was always a fact about what a plugin can do rather than
+    // what it means is REACH, it runs in the application's own JavaScript
+    // context, which was always a fact about what a plugin can do rather than
     // about where it came from.
     expect(shippedPlugins().map((p) => p.manifest.id)).toEqual([
       "FundaCAD.MCP",

@@ -1,7 +1,7 @@
 // Where the drag handle stands on a selected FACE, and what grabbing it does.
 //
 // The mirror of edgeNudge.ts: same arrow, same loop (selectionNudge.ts), same
-// one-press gesture — pointed along the face normal and handing over to
+// one-press gesture, pointed along the face normal and handing over to
 // PressPullTool instead of EdgeFeatureTool.
 //
 // The anchor and the normal come from viewport.selectedFacesForPressPull(),
@@ -19,14 +19,14 @@ import type { RoundFace } from "./radialDrag";
 export interface FacePreselection {
   normal: THREE.Vector3;
   anchor: THREE.Vector3;
-  /** set when the face is a lone cylinder — the drag resizes it instead */
+  /** set when the face is a lone cylinder, the drag resizes it instead */
   round?: RoundFace | null;
 }
 
 /** The placement for a face selection, or null when there is none.
  *
  *  A multi-face selection gets ONE handle, standing on the first face and
- *  pointing along its normal — again matching the tool, which pushes every
+ *  pointing along its normal, again matching the tool, which pushes every
  *  selected face by the one distance measured along that same first normal.
  *
  *  On a round face the arrow points AWAY FROM THE AXIS rather than along the
@@ -34,7 +34,7 @@ export interface FacePreselection {
  *  bore as well as a boss: pulling the handle outward means a bigger hole and a
  *  bigger shaft alike, and the difference between them is a sign the tool
  *  applies on the way to the kernel, not a direction the user has to think
- *  about. The face normal is not merely unhelpful here — on a closed cylinder it
+ *  about. The face normal is not merely unhelpful here, on a closed cylinder it
  *  is the average of normals that cancel, so it is not a direction at all. */
 export function faceNudgePlacement(
   pre: FacePreselection | null,
@@ -42,12 +42,12 @@ export function faceNudgePlacement(
 ): NudgePlacement | null {
   if (!pre) return null;
   const axis = (pre.round?.radial ?? pre.normal).clone().normalize();
-  if (axis.lengthSq() < 0.5) return null; // degenerate normal — nothing to point along
+  if (axis.lengthSq() < 0.5) return null; // degenerate normal, nothing to point along
   return {
     anchor: pre.anchor.clone(),
     // Fixed, unlike the edge handle's: a face's normal is a property of the
     // geometry, so orbiting must NOT swing the arrow. Pointing outward is also
-    // the honest default — the drag starts at zero and pulling material out is
+    // the honest default, the drag starts at zero and pulling material out is
     // what the arrow is inviting; pushing in is the same gesture reversed, and
     // the tool turns the arrow red and flips it when the value goes negative.
     axis: () => axis,

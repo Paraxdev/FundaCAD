@@ -5,14 +5,14 @@
 // half was write-only. You picked four edges, the fillet swallowed them, and
 // from then on the feature said "Fillet" and a radius. Which four edges was not
 // shown, could not be checked, and could only be changed by deleting the feature
-// and picking again — so a fillet that caught one edge too many was cheaper to
+// and picking again, so a fillet that caught one edge too many was cheaper to
 // redo than to correct.
 //
 // The same shape as document/numFields.ts and document/optionFields.ts, and for
 // the same reason: one declaration, read by the row that shows the selection, by
 // the editor that changes it, and by the tests that hold the two together.
 // optionFields.ts deliberately leaves geometry references out of its tables and
-// says why — picking one is a viewport gesture, not a menu. This is that gesture,
+// says why, picking one is a viewport gesture, not a menu. This is that gesture,
 // declared where the menus are declared.
 //
 // SHAPES. Three of them, and the difference is real rather than historical:
@@ -37,10 +37,10 @@
 import type { Feature, FeatureType, Selector } from "../types";
 
 /** What a target holds, one entry at a time. "area" is a closed region of a
- *  sketch — the word the extrude prompts already use for the thing you click. */
+ *  sketch, the word the extrude prompts already use for the thing you click. */
 export type TargetKind = "edge" | "face" | "body" | "area";
 
-/** How the entries are stored, which decides WHO can resolve them — and, for
+/** How the entries are stored, which decides WHO can resolve them, and, for
  *  `regionPoint`, who cannot: the generic editor picks edges, faces and bodies
  *  off the solid, and a profile area is on neither. */
 export type TargetShape = "selector" | "bodyId" | "regionPoint";
@@ -55,7 +55,7 @@ export interface TargetField {
   kind: TargetKind;
   shape: TargetShape;
   /** "one" fields hold a bare value; "many" hold an array. A "one" field whose
-   *  document value is an array is still read as one — see readTarget. */
+   *  document value is an array is still read as one, see readTarget. */
   arity: "one" | "many";
   /** What an EMPTY target means, when empty is legal and means something other
    *  than "nothing". Shown in the row in place of a count, because "0 faces" and
@@ -70,7 +70,7 @@ export interface TargetField {
 }
 
 /** The inventory. A feature type absent from this table has no editable
- *  selection — a primitive, a scale, a datum plane.
+ *  selection, a primitive, a scale, a datum plane.
  *
  *  Declaration order is row order, and it is the order the feature reads in:
  *  what is kept before what is consumed, what is operated on before what it is
@@ -83,7 +83,7 @@ export const FEATURE_TARGETS: Partial<Record<FeatureType, readonly TargetField[]
   chamfer: [{ field: "edges", label: "Edges", kind: "edge", shape: "selector", arity: "many" }],
   "press-pull": [{ field: "face", label: "Face", kind: "face", shape: "selector", arity: "one" }],
   deleteFace: [{ field: "face", label: "Face", kind: "face", shape: "selector", arity: "one" }],
-  // Shell's empty set is not "no faces", it is a sealed hollow — a legitimate
+  // Shell's empty set is not "no faces", it is a sealed hollow, a legitimate
   // and quite different part.
   shell: [{
     field: "faces", label: "Faces to open", kind: "face", shape: "selector", arity: "many",
@@ -118,7 +118,7 @@ export const FEATURE_TARGETS: Partial<Record<FeatureType, readonly TargetField[]
     whenEmpty: "the active body", alsoReads: "body",
   }],
   // The half of an extrude that was never shown. It is the FIRST thing about the
-  // feature — which areas of the sketch became solid — and until now the panel
+  // feature, which areas of the sketch became solid, and until now the panel
   // opened on "Distance" as though the profile were settled at creation and
   // beyond discussion. Empty is legal and means the whole sketch, which is a
   // different statement from "no areas" and has to be spelled out.
@@ -166,7 +166,7 @@ export function readTarget(feature: Feature, t: TargetField): TargetEntry[] {
  *  Only ever true for a profile point, and that is the whole reason it exists: a
  *  point is itself an array, so `Array.isArray` cannot tell `[4, 4, 0]` (one
  *  area) from `[[4, 4, 0]]` (a list holding one). Read the wrong way, the
- *  legacy singular `extrude.region` came back as THREE areas — a row saying
+ *  legacy singular `extrude.region` came back as THREE areas, a row saying
  *  "3 areas" over an extrude with one. Look at what is inside instead: numbers
  *  mean the value is the point. */
 function isOneEntry(val: unknown, t: TargetField): boolean {
@@ -220,12 +220,12 @@ export function describeTarget(t: TargetField, count: number): string {
  *  is what a picked selector carries and what the sidecar resolves it by; two
  *  selectors naming the same edge from the same pick have the same point, and
  *  nothing else about them is stable across a rebuild. Selectors with no point
- *  (by:"all", by:"axis", a v2 fingerprint) compare by full value — they are not
+ *  (by:"all", by:"axis", a v2 fingerprint) compare by full value, they are not
  *  picked one at a time, so an exact match is the only honest test. */
 export function sameEntry(a: TargetEntry, b: TargetEntry): boolean {
   if (typeof a === "string" || typeof b === "string") return a === b;
   // A profile point IS its point, so it compares the same way a picked
-  // selector's does — same tolerance, same reason.
+  // selector's does, same tolerance, same reason.
   if (Array.isArray(a) || Array.isArray(b)) {
     return Array.isArray(a) && Array.isArray(b) && samePoint(a, b);
   }
@@ -258,7 +258,7 @@ export function pointOf(sel: Selector): [number, number, number] | null {
 // it does not stand alone: `revolve.axis` is written beside it as the RESOLVED
 // line, a cache the sidecar falls back to when the edge stops resolving and
 // older builds read instead of the reference. Writing a new `axisEdge` through
-// the generic editor would leave that cache describing the OLD edge — harmless
+// the generic editor would leave that cache describing the OLD edge, harmless
 // while the new one resolves, and quietly wrong the moment it stops. Keeping the
 // pair in step needs the edge's geometry, which is exactly what a pure module
 // does not have, so the axis stays with the pick flow that mints both together
@@ -275,7 +275,7 @@ export function pointOf(sel: Selector): [number, number, number] | null {
 // The two profile rows that ARE here do not use the generic editor. A profile
 // area is an interior point on a sketch plane, resolved against the overlay
 // rather than the solid, and editing one means showing a sketch that has already
-// been consumed and hidden — which the feature's own tool already does
+// been consumed and hidden, which the feature's own tool already does
 // (features/extrudeTool.startEdit rolls the model back, forces the sketch
 // visible and restores the saved areas). The row opens THAT, rather than an
 // editor that would have nothing to pick.

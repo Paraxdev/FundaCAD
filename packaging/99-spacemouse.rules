@@ -1,4 +1,4 @@
-# FundaCAD SpaceMouse access — let the logged-in user read the 3Dconnexion HID device.
+# FundaCAD SpaceMouse access, let the logged-in user read the 3Dconnexion HID device.
 #
 # FundaCAD reads the SpaceMouse via hidapi, which opens the /dev/hidrawN node.
 # The rule MUST therefore target SUBSYSTEM=="hidraw" (a SUBSYSTEM=="usb" rule

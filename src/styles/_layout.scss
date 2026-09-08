@@ -1,5 +1,5 @@
 /* ============================================================================
-   MAIN — browser | viewport
+   MAIN, browser | viewport
    ============================================================================ */
 #main {
   display: grid;
@@ -19,7 +19,7 @@
   border-right: 1px solid var(--line);
   overflow-y: auto;
   overflow-x: hidden;
-  /* grid items default to min-height:auto — without an explicit 0 the panel
+  /* grid items default to min-height:auto, without an explicit 0 the panel
      can grow with its content instead of scrolling (WebKitGTK is strict here:
      a long body list then simply runs off the bottom of the window) */
   min-height: 0;
@@ -109,7 +109,7 @@
 
 /* Frame-rate readout, viewport bottom-right. Deliberately quiet: it is a
    diagnostic you glance at, not a control. It DOES take pointer events, because
-   a `title` tooltip never fires on a pointer-events:none element — that is the
+   a `title` tooltip never fires on a pointer-events:none element, that is the
    whole reason the readout can explain itself on hover. It sits in the corner
    and is ~90px wide, so the picking area it costs is negligible. */
 .fps {
@@ -174,7 +174,7 @@ button {
   border: 1px solid var(--line-strong);
   border-radius: var(--r-sm);
   /* The app's default control size, and the one every other button is measured
-     against — .btn in a dialog resolves to the same pair. 6px/11px put this at
+     against, .btn in a dialog resolves to the same pair. 6px/11px put this at
      a ~29px box, which is under the ~32px that reads as comfortably clickable
      and is why the panels felt packed; one rung up on each axis lands at ~33px
      without turning a CAD panel into a settings page. */

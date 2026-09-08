@@ -2,8 +2,8 @@
 // A collapsible section head in the Browser: caret, glyph, label, count badge
 // and (for assembly nodes and anything else that can be hidden wholesale) an eye.
 //
-// The label is document-sourced — assembly node names come straight out of an
-// untrusted STEP file — so it is an interpolation, never markup. That is what
+// The label is document-sourced, assembly node names come straight out of an
+// untrusted STEP file, so it is an interpolation, never markup. That is what
 // replaced the esc() calls the innerHTML version needed; adding esc() back here
 // would double-escape and render a product called "Bracket & Plate" as
 // "Bracket &amp; Plate".
@@ -14,7 +14,7 @@ import { indent } from "../../ui/browserTree";
 
 const props = defineProps<{
   label: string;
-  /** An icon NAME from ui/icons.ts, not a character — see featureMeta.ts. */
+  /** An icon NAME from ui/icons.ts, not a character, see featureMeta.ts. */
   icon: string;
   count: number;
   depth: number;

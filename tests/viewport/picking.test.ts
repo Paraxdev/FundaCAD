@@ -23,14 +23,14 @@ describe("occludedEdge", () => {
   it("absorbs tessellation error rather than rejecting a real hit", () => {
     // A curved face's triangles sit a sagitta inside the true surface, so an edge
     // ON that surface can measure marginally behind them. Rejecting those would
-    // make edges on every cylinder unpickable — a far worse bug than the one this
+    // make edges on every cylinder unpickable, a far worse bug than the one this
     // is fixing.
     const sagitta = PLATE_DIAG * EDGE_DEPTH_FRACTION * 0.5;
     expect(occludedEdge(50 + sagitta, 50, PLATE_DIAG)).toBe(false);
   });
 
   it("lets an edge win when there is no face under the cursor", () => {
-    // Picking an edge against empty space — the silhouette grab. Nothing is in
+    // Picking an edge against empty space, the silhouette grab. Nothing is in
     // front of it, so nothing can occlude it, and this must keep working or the
     // fillet tool loses its main gesture.
     expect(occludedEdge(50, null, PLATE_DIAG)).toBe(false);

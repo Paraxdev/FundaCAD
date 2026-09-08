@@ -34,7 +34,7 @@ describe("remapSelection", () => {
   it("collapses two memos that resolve to the same entity", () => {
     // A fillet can merge two selected collinear stretches into one rebuilt
     // edge. Handing the same entity to a TOGGLE twice would select it and then
-    // immediately deselect it — the selection would vanish for no visible
+    // immediately deselect it, the selection would vanish for no visible
     // reason, which is the exact failure this whole file exists to prevent.
     const out = remapSelection(memos("a", "b"), () => null, () => "merged");
     expect(out).toEqual(["merged"]);
@@ -42,7 +42,7 @@ describe("remapSelection", () => {
 
   it("treats a zero entity as real, not as absent", () => {
     // faceIds start at 0. A truthiness test here silently drops the first face
-    // of the first body — a bug that would look like "sometimes it works".
+    // of the first body, a bug that would look like "sometimes it works".
     const out = remapSelection(memos("a"), () => 0, () => null);
     expect(out).toEqual([0]);
   });
@@ -57,7 +57,7 @@ describe("remapSelection", () => {
 
   it("still keeps survivors when the fallback is abandoned", () => {
     // Degrading to the pre-existing behaviour means losing what CANNOT be found
-    // cheaply — not throwing away entities that are sitting right there.
+    // cheaply, not throwing away entities that are sitting right there.
     const many = memos(...Array.from({ length: MAX_GEOMETRIC_REMATCH + 2 }, (_, i) => `f${i}`));
     const out = remapSelection(many, (m) => (m.tag === "f0" ? m.tag : null), (m) => m.tag);
     expect(out).toEqual(["f0"]);

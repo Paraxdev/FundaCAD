@@ -86,7 +86,7 @@ export interface TestHostOptions {
   /** Answers for the ops a unit test cannot really perform.
    *
    *  The four geometry ops refuse until one is given. `file_pick` and
-   *  `file_write` do not — they have a sensible default — but taking an answer
+   *  `file_write` do not, they have a sensible default, but taking an answer
    *  is how a test says WHAT THE PERSON DID: a file name to choose that one, or
    *  `null` for a dialog that was dismissed. The dismissal branch is the one
    *  every plugin author forgets, and it has to be reachable. */

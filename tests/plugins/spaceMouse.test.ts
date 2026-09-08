@@ -26,7 +26,7 @@ function cfg(over: Partial<SpaceMouseConfig> = {}): SpaceMouseConfig {
   return { ...structuredClone(getSpaceMouseConfig()), deadzone: 24, crossAxis: 0.25, ...over };
 }
 
-describe("filterMotion — the cross-axis filter", () => {
+describe("filterMotion, the cross-axis filter", () => {
   it("ships ON by default at a 24-count deadzone", () => {
     const d = getSpaceMouseConfig();
     expect(d.deadzone).toBe(24);
@@ -40,7 +40,7 @@ describe("filterMotion — the cross-axis filter", () => {
   });
 
   it("keeps a pure 30-count push/pull, so a gentle zoom still zooms", () => {
-    // THE CONTROL. The same 30 counts, on their own, are deliberate input — if
+    // THE CONTROL. The same 30 counts, on their own, are deliberate input, if
     // this went to 0 the filter would be an absolute deadzone in disguise.
     expect(filterMotion(mot({ ty: 30 }), cfg()).ty).toBe(30);
   });
@@ -67,7 +67,7 @@ describe("filterMotion — the cross-axis filter", () => {
 
   it("does not let an UNMAPPED axis gate the mapped ones", () => {
     // Unbind ry, then deflect it hard: it must not silence the mapped tilt. rx
-    // is deliberately 60, i.e. UNDER 0.25 x 300 — a peak taken over all six axes
+    // is deliberately 60, i.e. UNDER 0.25 x 300, a peak taken over all six axes
     // would zero it, a peak taken over the mapped ones only keeps it.
     const c = cfg();
     c.bind.roll = { src: "rx", invert: false };

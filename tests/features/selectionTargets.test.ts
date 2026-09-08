@@ -3,7 +3,7 @@
 // The failures this catches are all the same shape and all silent: a target that
 // reads empty when the document has geometry in it. The row then says "nothing
 // selected" over a fillet that is visibly rounding four edges, and the editor
-// that opens from that row starts from an empty set — so pressing Done would
+// that opens from that row starts from an empty set, so pressing Done would
 // wipe the selection the row failed to see.
 
 import { describe, it, expect } from "vitest";
@@ -45,8 +45,8 @@ describe("the inventory", () => {
     // the right question when a tool became a plugin: FEATURE_META is now the
     // types the APPLICATION DRAWS, and a feature can legitimately be in the
     // document format, have editable targets, and be drawn by a plugin. The
-    // typo itself is caught by the type — FEATURE_TARGETS is a
-    // Partial<Record<FeatureType, ...>> — so what is worth asserting here is
+    // typo itself is caught by the type, FEATURE_TARGETS is a
+    // Partial<Record<FeatureType, ...>>, so what is worth asserting here is
     // that the two tables agree wherever they overlap, and that every key is
     // either drawn by the application or is one a plugin in this repository
     // claims.
@@ -61,7 +61,7 @@ describe("the inventory", () => {
       const labels = (targets ?? []).map((t) => t.label);
       for (const l of labels) expect(l, type).toBeTruthy();
       // The boolean has two body targets, and two rows both reading "Bodies"
-      // would be two controls nobody can tell apart — over the one decision
+      // would be two controls nobody can tell apart, over the one decision
       // (which body survives a Subtract) that the labels exist to state.
       expect(new Set(labels).size, type).toBe(labels.length);
     }
@@ -137,8 +137,8 @@ describe("writing one back", () => {
   });
 
   it("deletes an emptied field instead of writing an empty array", () => {
-    // Several of these mean something specific when ABSENT — a shell with no
-    // faces is a sealed hollow — and every writer in the document keeps the
+    // Several of these mean something specific when ABSENT, a shell with no
+    // faces is a sealed hollow, and every writer in the document keeps the
     // omit-when-empty discipline that makes two identical models compare byte
     // for byte.
     const patch = writeTarget(field("shell", "faces"), []) as Record<string, unknown>;
@@ -207,7 +207,7 @@ describe("what the row says", () => {
 
   it("says what empty MEANS where empty means something", () => {
     // "0 faces" and "sealed hollow" are opposite answers, and a count alone
-    // cannot tell them apart — which is the whole reason whenEmpty exists.
+    // cannot tell them apart, which is the whole reason whenEmpty exists.
     expect(describeTarget(field("shell", "faces"), 0)).toBe("sealed hollow");
     expect(describeTarget(field("thicken", "faces"), 0)).toBe("the whole body");
     expect(describeTarget(field("move", "bodies"), 0)).toBe("the active body");

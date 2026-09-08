@@ -10,7 +10,7 @@ import { gapIndexIn, trackIsStacked, type TrackRect } from "../../src/ui/trackGa
 const row = (n: number): TrackRect[] =>
   Array.from({ length: n }, (_, i) => ({ left: 100 + i * 34, top: 50, width: 30, height: 30 }));
 
-/** The same chips stacked down the page from y=100 — the right-hand history panel. */
+/** The same chips stacked down the page from y=100, the right-hand history panel. */
 const column = (n: number): TrackRect[] =>
   Array.from({ length: n }, (_, i) => ({ left: 50, top: 100 + i * 34, width: 200, height: 30 }));
 
@@ -50,7 +50,7 @@ describe("gapIndexIn", () => {
 
   it("ignores the other axis entirely", () => {
     // Dragging the marker off the side of the strip must not change which gap it
-    // is over — the pointer leaves the track's bounds constantly during a drag.
+    // is over, the pointer leaves the track's bounds constantly during a drag.
     const c = column(3);
     expect(gapIndexIn(c, -500, 150)).toBe(2);
     expect(gapIndexIn(c, 5000, 150)).toBe(2);

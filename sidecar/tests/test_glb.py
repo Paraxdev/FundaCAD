@@ -4,14 +4,14 @@ Run: uv run python test_glb.py   (or .venv/bin/python test_glb.py)
 
 Covers the things that are easy to get silently wrong in a mesh interchange
 format, each of which produces a file that still LOADS:
-  - container structure (chunk alignment, POSITION min/max) — validators reject
+  - container structure (chunk alignment, POSITION min/max), validators reject
     a file missing accessor bounds, but viewers often don't,
   - orientation and unit, checked against the FILE's own contents rather than by
     round-tripping through our own reader (a Y-up or metre mistake made in both
     directions cancels out and a round trip passes),
   - normals: smooth within a curved face, sharp between faces,
   - per-body colour, one glTF material per body,
-  - textured bodies exporting their DISPLACED mesh — displacement lives in the
+  - textured bodies exporting their DISPLACED mesh, displacement lives in the
     mesh, not in body["shape"], so the whole reason write_glb exists instead of
     OCCT's RWGltf_CafWriter is that the latter would silently drop it.
 """
@@ -110,9 +110,9 @@ def test_orientation_and_unit_are_glTF_native():
     ext = world.max(axis=0) - world.min(axis=0)
 
     # glTF is Y-up and metres: the 40mm dimension must land on Y as 0.040
-    assert abs(ext[1] - 0.040) < 1e-6, f"Y extent {ext[1]} — expected 0.040 m (Y-up + metres)"
-    assert abs(ext[0] - 0.010) < 1e-6, f"X extent {ext[0]} — expected 0.010 m"
-    assert abs(ext[2] - 0.020) < 1e-6, f"Z extent {ext[2]} — expected 0.020 m"
+    assert abs(ext[1] - 0.040) < 1e-6, f"Y extent {ext[1]}, expected 0.040 m (Y-up + metres)"
+    assert abs(ext[0] - 0.010) < 1e-6, f"X extent {ext[0]}, expected 0.010 m"
+    assert abs(ext[2] - 0.020) < 1e-6, f"Z extent {ext[2]}, expected 0.020 m"
     print(PASS, "orientation + unit are glTF-native (Y-up, metres) in the file itself")
 
 
@@ -142,7 +142,7 @@ def test_normals_are_smooth_within_a_face_and_sharp_between():
     caps = int((nz > 0.95).sum())
     blurred = int(((nz >= 0.05) & (nz <= 0.95)).sum())
     assert lateral > 0 and caps > 0, (lateral, caps)
-    assert blurred == 0, f"{blurred} rim vertices have a blended normal — the edge was rounded off"
+    assert blurred == 0, f"{blurred} rim vertices have a blended normal, the edge was rounded off"
 
     lat = rim & (np.abs(N[:, 2]) < 0.05)
     radial = (N[lat][:, 0] * P[lat][:, 0] + N[lat][:, 1] * P[lat][:, 1]) / r[lat]
@@ -196,7 +196,7 @@ def test_textured_body_exports_its_displaced_mesh():
     gdoc, _blob = _read_glb_raw(p)
     ntri = gdoc["accessors"][gdoc["meshes"][0]["primitives"][0]["indices"]]["count"] // 3
     assert ntri > smooth_tris * 5, (
-        f"only {ntri} triangles vs {smooth_tris} for the smooth box — the texture was dropped")
+        f"only {ntri} triangles vs {smooth_tris} for the smooth box, the texture was dropped")
     print(PASS, f"textured body exports its displaced mesh ({ntri:,} triangles)")
 
 
@@ -231,7 +231,7 @@ def test_import_recovers_a_solid_not_a_surface_body():
     """GLB import must reach parity with STL import.
 
     OCCT's glTF reader returns ONE triangulated FACE per mesh, so a box arrived as
-    1 face / 0 solids — a surface body, "reference / section only" — where the
+    1 face / 0 solids, a surface body, "reference / section only", where the
     identical STL imports as 6 faces and a real editable solid. The glb branch
     round-trips its triangles through the shared sew path to fix that."""
     d = tempfile.mkdtemp()
@@ -252,7 +252,7 @@ def test_import_recovers_a_solid_not_a_surface_body():
 
 
 def test_import_reads_the_dominant_material_colour():
-    """Dominant = most triangles, not materials[0] — otherwise a tiny detail part
+    """Dominant = most triangles, not materials[0], otherwise a tiny detail part
     dictates the colour of the whole import."""
     d = tempfile.mkdtemp()
     p = os.path.join(d, "two.glb")

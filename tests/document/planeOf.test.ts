@@ -27,8 +27,8 @@ describe("where a plane-carrying feature actually sits", () => {
   });
 
   it("follows the datum a sketch is bound to when the sketch has no entry", () => {
-    // A sketch made by "Offset plane" carries no face of its own — the anchor
-    // rides on the DATUM — so the sidecar reports nothing under the sketch's id
+    // A sketch made by "Offset plane" carries no face of its own, the anchor
+    // rides on the DATUM, so the sidecar reports nothing under the sketch's id
     // while the datum does move. Without this the geometry follows and only the
     // drawing stays behind.
     const f = { id: "s1", plane: spec(10), planeId: "d1" };
@@ -54,7 +54,7 @@ describe("where a plane-carrying feature actually sits", () => {
     // This answers "where is the sketch", so the datum map is only ever a
     // lookup of what the sketch is BOUND to. A datum asked about itself belongs
     // to app/datumPlanes.ts, which reads that map directly and backs the offset
-    // out of it — a job this function does not do and must not appear to.
+    // out of it, a job this function does not do and must not appear to.
     const d = { id: "d1", plane: spec(10) };
     expect(planeOf(d, undefined, { d1: def(35) })).toBe(d.plane);
   });

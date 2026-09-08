@@ -2,7 +2,7 @@
 //
 // The claim this checks is the whole of "we do not ship the plugins": a built
 // app carries the loader and nothing to load. It is worth checking rather than
-// remembering because the mechanism that makes it true is one expression —
+// remembering because the mechanism that makes it true is one expression,
 // `import.meta.env.DEV` in src/plugins/activate.ts, which vite replaces with
 // `false` so rollup drops the branch, the dynamic import inside it, and
 // src/plugins/devPlugins.ts with its glob of every plugin directory.

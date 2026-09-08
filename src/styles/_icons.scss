@@ -5,12 +5,12 @@
    node, so it laid out as text: a font-size decided how big it was, a line-box
    decided where it sat, and `text-align: center` was enough to centre it. They
    are <svg> elements now (components/shell/Icon.vue), which are replaced
-   inline-level boxes — same flow, but with a baseline that leaves a descender
+   inline-level boxes, same flow, but with a baseline that leaves a descender
    gap under them and no relationship at all to font-size.
 
    This file is the small amount of CSS that difference costs. It is loaded LAST
    so a slot's own rules stay readable next to the rest of that component's
-   styles rather than being pre-empted here — and because the ribbon's
+   styles rather than being pre-empted here, and because the ribbon's
    `.ribbon-btn svg` sizing must keep winning, which it does on specificity
    (0,1,1 over `.icon`'s 0,1,0) whatever the order.
    ============================================================================ */

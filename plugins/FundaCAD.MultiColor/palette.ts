@@ -1,9 +1,9 @@
 // The pure half of this capability: what a palette slot means, and how a colour
 // finds one.
 //
-// No DOM, no Vue, no Tauri. Both functions used to live in src/ — the body
+// No DOM, no Vue, no Tauri. Both functions used to live in src/, the body
 // colour menu in ui/browserTree.ts beside the assembly-tree shaping, and the
-// nearest-slot match in io/files.ts beside the import path that called it — and
+// nearest-slot match in io/files.ts beside the import path that called it, and
 // both are only about a palette, which is this capability's whole subject.
 
 import type { CtxItem, DocumentStore } from "fundacad";
@@ -36,8 +36,8 @@ export function bodyColorMenuItems(store: DocumentStore, bodyId: string): CtxIte
 /** Nearest palette slot to a '#RRGGBB' colour, by squared RGB distance, or null
  *  when the palette is empty or the colour is unparseable.
  *
- *  Deliberately MATCHES rather than extends. The palette is a filament list —
- *  four physical slots — not a display palette, so a slot means "print this in
+ *  Deliberately MATCHES rather than extends. The palette is a filament list,
+ *  four physical slots, not a display palette, so a slot means "print this in
  *  filament N". Auto-adding an imported model's colour would claim a filament
  *  the printer doesn't have loaded. */
 export function nearestPaletteSlot(
@@ -125,7 +125,7 @@ export interface FilamentSlot {
 
 export const FILAMENTS = "filaments";
 
-/** Slots where the machine's loaded filament differs from the palette — the
+/** Slots where the machine's loaded filament differs from the palette, the
  *  same name/color criteria the sync confirmation diffs on. */
 export function staleSlots(
   palette: { name: string; color: string }[],

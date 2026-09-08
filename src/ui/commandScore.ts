@@ -3,7 +3,7 @@
 
 /** Subsequence fuzzy score: every query char must appear in order; contiguous
  *  runs and start-of-string matches score higher; mild preference for short
- *  labels. Returns 0 for "no match" — callers filter on `> 0`. */
+ *  labels. Returns 0 for "no match", callers filter on `> 0`. */
 export function score(q: string, text: string): number {
   if (!q) return 1;
   let ti = 0;

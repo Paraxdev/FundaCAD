@@ -223,7 +223,7 @@ def test_a_hairline_gap_counts_as_touching():
     A climbing revolve whose profile is as tall as its pitch would have crest
     meeting root along a LINE, which is non-manifold and makes every later
     boolean quietly do nothing, so builder._screw_revolve stops the crest a hair
-    short of the next root — max(1e-3, 1e-4 * height). That hair is a real gap
+    short of the next root, max(1e-3, 1e-4 * height). That hair is a real gap
     with no shared edge across it, and either side of it is one wall to anyone
     looking at it.
 
@@ -233,7 +233,7 @@ def test_a_hairline_gap_counts_as_touching():
 
     Built as separate solids ON PURPOSE. A face translated from another face
     keeps its edges' TShapes, so the kernel's edge map would report the two as
-    sharing an edge and the pair would come back joined for the wrong reason —
+    sharing an edge and the pair would come back joined for the wrong reason,
     the rule under test would never run.
     """
     near = Compound([Box(10, 10, 4), Pos(10 + 5e-4, 0, 0) * Box(10, 10, 4)])
@@ -289,7 +289,7 @@ def test_a_wall_is_one_wall_however_its_axis_was_written_down():
 
     A cylinder's axis is a LINE. Which way along it the kernel stores the
     direction is bookkeeping, not geometry, and the odd face out was rejected on
-    that alone — so the thread crest picked as seven faces plus a stray, and
+    that alone, so the thread crest picked as seven faces plus a stray, and
     pulling it moved seven eighths of a wall.
 
     Two strips stacked on one cylinder, one written each way, both solid on the
@@ -303,8 +303,8 @@ def test_a_wall_is_one_wall_however_its_axis_was_written_down():
     assert bands(flipped) == [[0, 1]], bands(flipped)
 
     # A torus has the same trap and is worse off, because writing its axis the
-    # other way leaves the torus itself unchanged — it is symmetric about its
-    # own plane — so the direction cannot be part of the identity at all.
+    # other way leaves the torus itself unchanged, it is symmetric about its
+    # own plane, so the direction cannot be part of the identity at all.
     t_same = Compound([_torus_arc(0.0, 1.5, True), _torus_arc(1.5, 3.0, True)])
     assert bands(t_same) == [[0, 1]], bands(t_same)
     t_flip = Compound([_torus_arc(0.0, 1.5, True), _torus_arc(1.5, 3.0, False)])
@@ -319,7 +319,7 @@ def test_the_side_still_decides_when_the_axis_sign_no_longer_does():
     That used to be answered by the face's reversed flag, which is only half the
     question: reversed is relative to the surface's own parametrisation, and that
     turns over with the axis. So the side is now MEASURED off the real outward
-    normal, and these four pairs are the proof it still separates them —
+    normal, and these four pairs are the proof it still separates them,
     including across the axis spelling, where the old flag would have called two
     opposite sides equal."""
     for axis_up in (True, False):

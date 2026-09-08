@@ -32,7 +32,7 @@ export interface WorldRegion {
   region: Region;
   plane: SketchPlane;
   centroid3D: THREE.Vector3;
-  interior3D: THREE.Vector3; // a point inside the material — selection anchor
+  interior3D: THREE.Vector3; // a point inside the material, selection anchor
   fill?: THREE.Mesh; // the fill mesh, for hover/selection recoloring
   groupId?: string; // regions selected/hovered as a unit (all glyphs of one text)
   entityId?: string; // the source text entity, for double-click-to-edit
@@ -51,7 +51,7 @@ function lineMat(color: number): THREE.LineBasicMaterial {
     // depthTest TRUE: WebKitGTK does not render LineBasicMaterial lines with
     // depthTest:false (the grid/model edges, which use depthTest:true, render
     // fine). The coplanar grids + the dimmed model all have depthWrite:false, so
-    // these lines never z-fight — they just paint on top via renderOrder.
+    // these lines never z-fight, they just paint on top via renderOrder.
     m = new THREE.LineBasicMaterial({ color, depthTest: true });
     lineMats.set(color, m);
   }
@@ -78,7 +78,7 @@ const GUIDE_MAT = new THREE.LineDashedMaterial({
   depthTest: true,
 });
 // projected reference geometry: purple (linked/fixed, Fusion-style); a stale
-// projection (source no longer resolves — last shape kept) tints amber
+// projection (source no longer resolves, last shape kept) tints amber
 const PROJECTED_COLOR = 0xb07fe8;
 const PROJECTED_STALE_COLOR = 0xd9a24d;
 const FILL_MAT = new THREE.MeshBasicMaterial({
@@ -104,7 +104,7 @@ const FILL_SELECTED_MAT = new THREE.MeshBasicMaterial({
 });
 
 // filled glyph interior is drawn by the region fill layer (fillMesh) so it can
-// show hover/selection and be picked for extrude — see SketchOverlay.glyphWorldRegions.
+// show hover/selection and be picked for extrude, see SketchOverlay.glyphWorldRegions.
 
 export class SketchOverlay {
   readonly group = new THREE.Group();
@@ -170,7 +170,7 @@ export class SketchOverlay {
   } = () => ({});
 
   /** The model's outline on a sketch plane, so a committed profile that runs off
-   *  its face splits there instead of picking as one region — the same cut the
+   *  its face splits there instead of picking as one region, the same cut the
    *  active sketch gets in sketchMode.
    *
    *  Injected because the overlay has no viewport. The default answers "no
@@ -214,7 +214,7 @@ export class SketchOverlay {
         this.regions.push(wr);
       }
       // Text glyphs are selectable/extrudable profiles too, but they skip line/arc
-      // region detection — build them from the cached glyph tessellation instead.
+      // region detection, build them from the cached glyph tessellation instead.
       for (const wr of this.glyphWorldRegions(ents, plane, f.id)) {
         wr.fill = fillMesh(wr.region, plane, this.fillMaterial(wr));
         this.fills.add(wr.fill);
@@ -224,7 +224,7 @@ export class SketchOverlay {
   }
 
   /** Selectable regions for each non-construction text entity's glyph faces,
-   *  sourced from the client-side tessellation cache (empty until glyphs warm —
+   *  sourced from the client-side tessellation cache (empty until glyphs warm,
    *  the async cache fill triggers a repaint, so they appear a frame later). */
   private glyphWorldRegions(
     ents: ResolvedEntity[],
@@ -255,7 +255,7 @@ export class SketchOverlay {
   /** Profile fills for the active sketch being edited (which `update()` hides).
    *  Sketch mode calls this so areas are visible + selectable while drawing.
    *  `textEnts` (the resolved entity list) lets glyph faces become fills/regions
-   *  too — text skips `detectRegions`, so it's threaded in separately. */
+   *  too, text skips `detectRegions`, so it's threaded in separately. */
   setActiveRegions(
     regions: Region[],
     plane: SketchPlane,
@@ -286,7 +286,7 @@ export class SketchOverlay {
     if (this.isHovered(wr)) return FILL_HOVER_MAT;
     return FILL_MAT;
   }
-  /** A region is hover-lit if the cursor is on it — or on any sibling in its group
+  /** A region is hover-lit if the cursor is on it, or on any sibling in its group
    *  (so hovering one glyph highlights the whole text it belongs to). */
   private isHovered(wr: WorldRegion): boolean {
     const h = this.hovered;
@@ -306,7 +306,7 @@ export class SketchOverlay {
     return this.regions.filter((wr) => this.isRegionSelected(wr));
   }
   // A stored 3D anchor counts for a region only if it lies ON that region's plane
-  // AND inside its material — see worldPointInRegion for why the coplanarity gate
+  // AND inside its material, see worldPointInRegion for why the coplanarity gate
   // is essential (parallel-sketch projection bug, loft workflow).
   private pointHitsRegion(p: [number, number, number], wr: WorldRegion): boolean {
     return worldPointInRegion(new THREE.Vector3(p[0], p[1], p[2]), wr.plane, wr.region);
@@ -316,7 +316,7 @@ export class SketchOverlay {
   }
   /** Toggle a region's selection. `additive` (Ctrl/Shift) keeps the rest; a plain
    *  click replaces the whole selection with just this region. A grouped region (a
-   *  text's glyphs) toggles as one unit — all its glyph anchors move together. */
+   *  text's glyphs) toggles as one unit, all its glyph anchors move together. */
   toggleRegionSelection(wr: WorldRegion, additive: boolean) {
     const group = this.regionGroup(wr);
     const pts = group.map(
@@ -326,7 +326,7 @@ export class SketchOverlay {
       group.some((r) => this.pointHitsRegion(p, r));
     const sel = this.isRegionSelected(wr);
     if (!additive) {
-      // plain click: this group becomes the whole selection — unless it already WAS
+      // plain click: this group becomes the whole selection, unless it already WAS
       // the whole selection, in which case a second click clears it.
       const soleSelection = sel && this.selectedRegionPoints.every(inGroup);
       this.selectedRegionPoints = soleSelection ? [] : pts;
@@ -343,7 +343,7 @@ export class SketchOverlay {
     this.recolorFills();
   }
   /** Replace the selection with regions containing these world points (the
-   *  persisted shape an extrude feature stores) — used when re-opening an
+   *  persisted shape an extrude feature stores), used when re-opening an
    *  extrude for editing. Points whose region no longer exists simply match
    *  nothing (the containment rule drops them silently). */
   selectRegionsByPoints(points: [number, number, number][]) {
@@ -363,7 +363,7 @@ export class SketchOverlay {
     }
     return null;
   }
-  /** The text entity id whose glyph group's bounding box contains `p` — a GENEROUS
+  /** The text entity id whose glyph group's bounding box contains `p`, a GENEROUS
    *  hit (the whole text block, not just glyph ink) so double-click-to-edit lands
    *  even in the gaps between letters. Smallest text wins when several overlap.
    *  `p` is a 2D sketch-plane point; returns null when no text is under it. */
@@ -388,7 +388,7 @@ export class SketchOverlay {
     }
     return best;
   }
-  /** Front-most COMMITTED region whose material the cursor ray hits — lets a visible
+  /** Front-most COMMITTED region whose material the cursor ray hits, lets a visible
    *  sketch's profile areas be selected directly in the model view (not just inside
    *  the extrude tool). Only visible sketches contribute regions (see update()), so
    *  this is inert when every sketch is hidden/consumed. */
@@ -414,8 +414,8 @@ export class SketchOverlay {
   }
 
   /** The committed sketch curve nearest the cursor, within `maxPx` SCREEN pixels
-   *  (the Project tool's sketch-curve pick). Walks the committed curve objects —
-   *  tagged with {sketchId, entityId} in update()/curveObjects — and measures
+   *  (the Project tool's sketch-curve pick). Walks the committed curve objects,
+   *  tagged with {sketchId, entityId} in update()/curveObjects, and measures
    *  screen-space distance to each polyline segment via `project` (the
    *  viewport's world→client projection). The active sketch's own curves are
    *  never here (update() hides them), and only VISIBLE sketches are pickable. */
@@ -555,7 +555,7 @@ export function curveObjects(
     }
     const pts = entityPolyline(e).map((p) => plane.to3D(p.x, p.y));
     // projected geometry keeps its link color (purple; amber when stale) even
-    // as construction — the link state is the more important signal. Emphasis
+    // as construction, the link state is the more important signal. Emphasis
     // passes (selection, modify hover) set `highlight` so their color wins:
     // Delete works on projected entities, so selection must be visible.
     const projected = e.type === "projected" ? e : null;
@@ -566,7 +566,7 @@ export function curveObjects(
     const curve =
       !projected && e.construction ? constructionLine(pts) : polyline(pts, drawColor);
     // Circles/arcs (native or projected) get a visible center "+": the center is
-    // a snap target and the dimension tool's position handle — invisible, nobody
+    // a snap target and the dimension tool's position handle, invisible, nobody
     // finds it. Grouped so the one-object-per-entity contract holds. asRound is
     // the one center rule (incl. circumcenter for projected arcs).
     const center = asRound(e);
@@ -599,14 +599,14 @@ function textObjects(
       g.add(construction ? constructionLine(pts) : polyline(pts, color));
     }
     // The solid glyph fill is drawn by the region layer (fillMesh) so it can show
-    // hover/selection state and be picked for extrude — see glyphWorldRegions.
+    // hover/selection state and be picked for extrude, see glyphWorldRegions.
   }
   g.renderOrder = 12;
   return g;
 }
 
 /** a small "+" glyph (two short crossed segments) marking a sketch point.
- *  Built in PLANE coordinates — world-axis offsets would push strokes out of
+ *  Built in PLANE coordinates, world-axis offsets would push strokes out of
  *  the plane on XZ/YZ sketches (edge-on, half the cross vanished). */
 function pointMarker(plane: SketchPlane, x: number, y: number, color: number): THREE.Object3D {
   const s = 0.9;

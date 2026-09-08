@@ -7,7 +7,7 @@
 // pointer move, to produce something the browser draws for free.
 //
 // It carries WHICH box it is in its class, because the two verdicts have to be
-// told apart while the drag is still happening — after the release it is too
+// told apart while the drag is still happening, after the release it is too
 // late for the difference to be information.
 
 import type { AreaMode } from "./areaSelect";

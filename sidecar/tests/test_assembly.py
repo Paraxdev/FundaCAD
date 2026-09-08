@@ -64,7 +64,7 @@ def leaf_occurrences(path):
     """The ordered leaf occurrences of a STEP assembly, as (node, shape).
 
     Delegates to step_assembly.read_assembly so there is exactly ONE walk in the
-    codebase — a second copy here would drift from the one that actually builds
+    codebase, a second copy here would drift from the one that actually builds
     documents, and the drift would show up as mis-named bodies, not as a test
     failure.
     """
@@ -76,7 +76,7 @@ def leaf_occurrences(path):
 
 def _fingerprint(shape):
     """Identity of one blob child that is independent of byte layout: face count
-    plus rounded volume plus rounded bbox. Volume is what actually proves ORDER —
+    plus rounded volume plus rounded bbox. Volume is what actually proves ORDER,
     face count alone matches between two different boxes."""
     from OCP.Bnd import Bnd_Box
     from OCP.BRepBndLib import BRepBndLib
@@ -142,7 +142,7 @@ def test_flat_compound_order_survives_the_brep_round_trip():
         # two identical parts at the same point; these deliberately do not).
         assert len(set(expected)) == len(expected), (
             f"{name}: leaf fingerprints are not unique, so this fixture cannot "
-            f"detect a reordering — fix the fixture, not the assertion"
+            f"detect a reordering, fix the fixture, not the assertion"
         )
 
         b64 = _flat_blob(leaves)
@@ -151,7 +151,7 @@ def test_flat_compound_order_survives_the_brep_round_trip():
             kids = _occt_children(shape.wrapped)
             assert len(kids) == len(expected), (
                 f"{name} gen{generation}: {len(expected)} children in, "
-                f"{len(kids)} out — the blob does not preserve child COUNT"
+                f"{len(kids)} out, the blob does not preserve child COUNT"
             )
             got = [_fingerprint(k) for k in kids]
             assert got == expected, (
@@ -168,7 +168,7 @@ def test_migration_preserves_flat_compound_order():
     """THE v4 -> v5 GATE. Migrating a pre-container document converts its inline
     ASCII BREP to binary BinTools V3 in the blob store. The assembly manifest
     binds row i to flat child i, so if that conversion reorders children, EVERY
-    legacy assembly document silently binds its parts to the wrong geometry —
+    legacy assembly document silently binds its parts to the wrong geometry,
     and a per-row face-count checksum will not catch it when two parts happen to
     have the same face count.
 
@@ -208,7 +208,7 @@ def test_migration_preserves_flat_compound_order():
                 kids = _occt_children(shape.wrapped)
                 assert len(kids) == len(expected), (
                     f"{name} gen{generation}: {len(expected)} children in, "
-                    f"{len(kids)} out — migration does not preserve child COUNT"
+                    f"{len(kids)} out, migration does not preserve child COUNT"
                 )
                 got = [_fingerprint(k) for k in kids]
                 assert got == expected, (
@@ -231,7 +231,7 @@ def test_migration_preserves_flat_compound_order():
 def test_leaf_walk_places_every_occurrence_in_world_space():
     """The transform regression test. asm_nested instances the same "Board"
     subassembly twice, 50mm apart. Harvesting leaves from build123d's `.children`
-    returns both occurrences at the SAME local position — measured, not
+    returns both occurrences at the SAME local position, measured, not
     theorised: both MCUs report bbox (-1,-1,-0.5)-(3,3,0.5). Only the OCCT walk
     composes the ancestor location."""
     leaves = leaf_occurrences(os.path.join(FIXTURES, "asm_nested.step"))
@@ -242,7 +242,7 @@ def test_leaf_walk_places_every_occurrence_in_world_space():
     mcus = by_name.get("MCU", [])
     assert len(mcus) == 2, f"expected 2 MCU occurrences, got {len(mcus)}"
     assert mcus[0] != mcus[1], (
-        "both MCU occurrences share a bounding box — ancestor placement was "
+        "both MCU occurrences share a bounding box, ancestor placement was "
         f"dropped and every instance is stacked at the same point: {mcus[0]}"
     )
     xs = sorted(b[0] for b in mcus)
@@ -273,7 +273,7 @@ def test_solid_less_products_are_not_dropped():
 
 def test_multi_solid_product_stays_one_product_with_many_leaves():
     """"M3 Nut (x3)" is ONE label holding 3 disjoint solids. It must become 3
-    selectable bodies that all trace back to the single product name — not 3
+    selectable bodies that all trace back to the single product name, not 3
     anonymous bodies, and not 1 body."""
     leaves = leaf_occurrences(os.path.join(FIXTURES, "asm_multisolid.step"))
     assert len(leaves) == 4, f"expected 4 leaf occurrences, got {len(leaves)}"
@@ -288,7 +288,7 @@ def test_multi_solid_product_stays_one_product_with_many_leaves():
 def test_names_are_verbatim():
     """The names are the whole point of the phase. build123d's import_step runs
     translate(maketrans(" .()", "____")) on every label, which turns the file's
-    "M3 Nut (x3)" into "M3_Nut__x3_" — so the tree is read through XCAF directly
+    "M3 Nut (x3)" into "M3_Nut__x3_", so the tree is read through XCAF directly
     and this asserts nothing mangles it on the way."""
     from step_assembly import read_assembly
 
@@ -309,7 +309,7 @@ def test_colour_is_read_per_label_not_inherited():
     assembly-root colour the fixture sets (the file carries 3 COLOUR_RGB entries,
     one per part). What it does prove is that colour is per-product: three
     siblings each keep their own and the fourth reports none. Inheritance is
-    structurally impossible here anyway — `_label_color` reads exactly one label.
+    structurally impossible here anyway, `_label_color` reads exactly one label.
     """
     from step_assembly import read_assembly
 
@@ -325,7 +325,7 @@ def test_colour_is_read_per_label_not_inherited():
 
 def test_a_single_part_step_is_not_treated_as_an_assembly():
     """The manifest path must be opt-in on the file actually carrying a tree.
-    Ordinary part files stay on the historical import path with nothing changed —
+    Ordinary part files stay on the historical import path with nothing changed,
     every .step already committed here is one of these."""
     from step_assembly import read_assembly
 
@@ -337,7 +337,7 @@ def test_a_single_part_step_is_not_treated_as_an_assembly():
         asm = read_assembly(path)
         assert not asm.is_assembly, (
             f"{name} is a single-part file but was classified as an assembly "
-            f"({asm.product_count} products) — this would change the import path "
+            f"({asm.product_count} products), this would change the import path "
             f"for every ordinary STEP"
         )
         print(f"  {name}: is_assembly=False ({asm.product_count} product)")
@@ -391,7 +391,7 @@ def test_rebuild_keeps_each_occurrence_of_a_repeated_subassembly_distinct():
 
 
 def test_rebuild_keeps_the_solid_less_product_as_a_body():
-    """Today `_explode_solids` drops these without a word — 11 products and 62
+    """Today `_explode_solids` drops these without a word, 11 products and 62
     faces on the reference file."""
     _payload, doc = _import_doc("asm_empty_product")
     names = [b["name"] for b in _rebuild(doc)]
@@ -416,11 +416,11 @@ def test_a_manifest_that_disagrees_with_the_geometry_falls_back_loudly():
         "bodies were bound to tree nodes despite the mismatch"
     )
     assert any(d.get("kind") == "import" for d in diagnostics), (
-        f"the fallback was silent — nothing recorded in diagnostics: {diagnostics}"
+        f"the fallback was silent, nothing recorded in diagnostics: {diagnostics}"
     )
     reason = next(d["reason"] for d in diagnostics if d.get("kind") == "import")
     assert "999" in reason and "6" in reason, reason
-    print(f"  fell back to {names} — {reason}")
+    print(f"  fell back to {names}, {reason}")
 
 
 def test_an_import_without_a_manifest_rebuilds_exactly_as_before():
@@ -484,7 +484,7 @@ def test_node_ref_survives_a_disk_checkpoint_resume():
 
     This is the likeliest place for the whole phase to fail silently. An import
     always blows the checkpoint budget, so a DISK resume is the normal way an
-    assembly document reopens — and `_body_fingerprint` compares geometry only,
+    assembly document reopens, and `_body_fingerprint` compares geometry only,
     so a dropped metadata key produces no mismatch, no error, and a browser tree
     that is simply flat again. The same bug already shipped once for `_textures`
     (see the comment at builder.py's `_save_checkpoint`).
@@ -535,7 +535,7 @@ def test_debris_dropping_never_changes_the_body_count():
     """`_drop_debris` runs on every body in the final pass and deletes a solid
     that is sub-0.1% of the biggest AND clear of it. Binding one body per LEAF
     SOLID keeps it a no-op (it early-returns below 2 solids), but that is a
-    property of the binding, not a guarantee — if a future change ever put
+    property of the binding, not a guarantee, if a future change ever put
     several solids in one body, a small part next to a large one would silently
     vanish from an assembly. This pins the count.
     """
@@ -564,7 +564,7 @@ def test_debris_dropping_never_changes_the_body_count():
         f"-> {len(bodies)} bodies ({names})"
     )
     assert "Chip" in names, f"the tiny part was dropped as debris: {names}"
-    print(f"  {names} — the 0.0008% chip survived")
+    print(f"  {names}, the 0.0008% chip survived")
 
 
 def test_a_part_name_cannot_move_an_import_s_chain_key():
@@ -676,7 +676,7 @@ def test_exported_step_keeps_the_assembly_tree():
         # losing the solid-less products (asm_empty_product's "Decal", and the
         # 11 of them on the reference file).
         assert _leaf_faces(back) == _leaf_faces(src), (
-            f"{fixture}: {_leaf_faces(src)} faces in, {_leaf_faces(back)} out — "
+            f"{fixture}: {_leaf_faces(src)} faces in, {_leaf_faces(back)} out, "
             f"geometry was lost on the way through STEP"
         )
         # Every source product name must still be somewhere in the exported tree.
@@ -697,12 +697,12 @@ def test_exported_step_keeps_the_assembly_tree():
         )
         print(
             f"  {fixture}: {len(src.leaves)} parts, {_leaf_faces(src)} faces, "
-            f"{colours_in} colours — all survived"
+            f"{colours_in} colours, all survived"
         )
 
 
 def test_a_modelled_document_exports_its_body_names():
-    """No import, so no assembly tree — but the bodies should still carry their
+    """No import, so no assembly tree, but the bodies should still carry their
     names out. build123d's export_step writes `.label` as the STEP product name,
     so this is nearly free; it is asserted because it changes the shape of the
     most common export in the product."""
@@ -738,7 +738,7 @@ def test_building_an_export_tree_does_not_mutate_the_cached_bodies():
     """`Compound(children=[...])` re-parents its children and setting `.label`
     writes to the shape object. The shapes handed to an export are the LIVE ones
     from rebuild_cached, also held by builder._CACHE prefix snapshots in a
-    long-lived worker — re-parenting them would corrupt the rebuild cache for
+    long-lived worker, re-parenting them would corrupt the rebuild cache for
     every later edit in the session."""
     import builder
     import export_tree
@@ -760,7 +760,7 @@ def test_explode_false_keeps_the_assembly_tree():
     """`explode:false` collapses the GEOMETRY to one body; it must not throw away
     the TREE.
 
-    This flag is the escape hatch for large assemblies — exactly the documents
+    This flag is the escape hatch for large assemblies, exactly the documents
     whose hierarchy matters most. It used to be checked before the manifest was
     even looked at, so it returned a single body named "Imported" with no
     node_ref, discarding product names, structure and colours in one step. A
@@ -791,7 +791,7 @@ def test_explode_false_keeps_the_assembly_tree():
     body = bodies2[0]
     # The tree survives: the body points at the assembly root...
     assert body.get("node_ref"), (
-        "explode:false produced a body with no node_ref — the assembly tree was "
+        "explode:false produced a body with no node_ref, the assembly tree was "
         "discarded, which is the bug this guards"
     )
     feat_id, _, idx = body["node_ref"].partition("/")
@@ -808,12 +808,12 @@ def test_explode_false_keeps_the_assembly_tree():
     # The geometry really is all there, just in one body. Counted with a
     # TopExp_Explorer rather than `.solids()` or `.faces()`: NEITHER build123d
     # accessor recurses into nested compounds (the same gotcha as
-    # `Compound.volume`), so both under-report a collapsed assembly — measured
+    # `Compound.volume`), so both under-report a collapsed assembly, measured
     # here as 3 solids and 18 faces against the real 7 and 42.
     faces_exploded = sum(_all_faces(b["shape"]) for b in bodies)
     faces_collapsed = _all_faces(body["shape"])
     assert faces_collapsed == faces_exploded, (
-        f"{faces_collapsed} faces collapsed vs {faces_exploded} exploded — "
+        f"{faces_collapsed} faces collapsed vs {faces_exploded} exploded, "
         "geometry was lost"
     )
     print(f"  explode:false OK: {n_exploded} bodies -> 1 body named "
@@ -827,7 +827,7 @@ def test_intact_survives_a_disk_checkpoint_resume():
     The RAM tier copies whole body dicts (`dict(b)`), so it carried the flag for
     free. The disk tier rebuilds bodies from an EXPLICIT key set, and a resume
     that dropped `_intact` would let _drop_debris delete the collapsed import's
-    small parts again — on the NORMAL reopen path, since an import always blows
+    small parts again, on the NORMAL reopen path, since an import always blows
     the checkpoint budget. Third time this key set has bitten: `_textures`, then
     `node_ref`, now this.
     """
@@ -845,7 +845,7 @@ def test_intact_survives_a_disk_checkpoint_resume():
          "explode": False}]}
     _p, err, out = rebuild(doc)
     assert not err, err
-    # `_intact` lives on the INTERNAL body list only — out_bodies deliberately
+    # `_intact` lives on the INTERNAL body list only, out_bodies deliberately
     # omits it, since the wire has no use for it. So the checkpoint round trip
     # is tested against a body of the shape _save_checkpoint actually receives.
     faces_before = _all_faces(out[0]["shape"])
@@ -861,11 +861,11 @@ def test_intact_survives_a_disk_checkpoint_resume():
         _save_checkpoint(persist, 0, bodies, [], [], 0)
 
         got = _restore_from_disk(store, [key])
-        assert got is not None, "checkpoint did not land — nothing to prove"
+        assert got is not None, "checkpoint did not land, nothing to prove"
         _start, snap, _mod = got
         restored = snap["bodies"][0]
         assert restored.get("_intact"), (
-            "_intact was lost through the disk checkpoint — a resumed build "
+            "_intact was lost through the disk checkpoint, a resumed build "
             "would run _drop_debris and delete the collapsed assembly's small parts"
         )
         # and the geometry the flag protects is still whole
@@ -916,7 +916,7 @@ def test_the_import_rebuild_is_not_silent():
     # Two ticks per body are expected (the manifest bind and the final pass) plus
     # face attribution; the floor is what matters, not the exact number.
     assert len(ticks) >= n, (
-        f"{len(ticks)} ticks for a {n}-body import rebuild — the stall watchdog "
+        f"{len(ticks)} ticks for a {n}-body import rebuild, the stall watchdog "
         f"sees almost nothing while this runs"
     )
     print(f"  import rebuild ticks {len(ticks)}x for {n} bodies")
@@ -928,7 +928,7 @@ if __name__ == "__main__":
     ]
     if missing:
         raise SystemExit(
-            f"missing fixtures {missing} — run: .venv/bin/python tools/gen_asm_fixtures.py"
+            f"missing fixtures {missing}, run: .venv/bin/python tools/gen_asm_fixtures.py"
         )
     failures = 0
     for fn in [

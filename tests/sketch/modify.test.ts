@@ -38,7 +38,7 @@ describe("chamferCorner", () => {
   });
 });
 
-describe("trimEntity — arcs & circles", () => {
+describe("trimEntity, arcs & circles", () => {
   it("trims a circle to the complementary arc", () => {
     const ents: ResolvedEntity[] = [
       { type: "circle", id: "c", x: 0, y: 0, radius: 5 },
@@ -66,7 +66,7 @@ describe("trimEntity — arcs & circles", () => {
   });
 });
 
-describe("breakAt — arcs & circles", () => {
+describe("breakAt, arcs & circles", () => {
   it("splits an arc into two arcs", () => {
     const ents: ResolvedEntity[] = [{ type: "arc", id: "a", x1: 5, y1: 0, x2: -5, y2: 0, mx: 0, my: 5 }];
     const out = breakAt(ents, 0, v(0, 5));
@@ -80,7 +80,7 @@ describe("breakAt — arcs & circles", () => {
   });
 });
 
-describe("extendLine — arcs", () => {
+describe("extendLine, arcs", () => {
   it("grows an arc's end to the nearest crossing", () => {
     const ents: ResolvedEntity[] = [
       { type: "arc", id: "a", x1: 5, y1: 0, x2: 0, y2: 5, mx: 3.5355, my: 3.5355 }, // quarter 0→90°
@@ -174,7 +174,7 @@ describe("offsetEntity", () => {
   });
 });
 
-describe("signedOffsetAt — the cursor-side convention", () => {
+describe("signedOffsetAt, the cursor-side convention", () => {
   it("is positive to the LEFT of a line's stored direction", () => {
     const l: ResolvedEntity = { type: "line", id: "l", x1: 0, y1: 0, x2: 10, y2: 0 };
     expect(signedOffsetAt(l, v(5, 3))).toBeCloseTo(3, 6);
@@ -315,7 +315,7 @@ describe("offsetChain", () => {
   });
 });
 
-describe("breakLink — projected → native, same id", () => {
+describe("breakLink, projected → native, same id", () => {
   const SRC = { kind: "sketchCurve", sketch: "s0", entity: "e0" } as const;
   const proj = (id: string, curve: any, extra: object = {}): ResolvedEntity =>
     ({ type: "projected", id, source: SRC, curve, ...extra }) as ResolvedEntity;
@@ -362,7 +362,7 @@ describe("breakLink — projected → native, same id", () => {
     const kept = proj("keep", { kind: "line", x1: 0, y1: 0, x2: 2, y2: 0 });
     const out = breakLink([native, kept, proj("go", { kind: "circle", x: 0, y: 0, r: 1 })], new Set(["go"]));
     expect(out[0]).toBe(native);
-    expect(out[1]).toBe(kept); // sibling stays linked — Break Link is per-entity
+    expect(out[1]).toBe(kept); // sibling stays linked, Break Link is per-entity
     expect(out[2]!.type).toBe("circle");
   });
 });

@@ -3,7 +3,7 @@
 // while the viewport is armed to add and remove them.
 //
 // The list is the point. Clicking geometry to toggle it is what every picking
-// tool in the app already does; what none of them has is a set you can READ —
+// tool in the app already does; what none of them has is a set you can READ,
 // point at the third entry and see which edge lights up, take that one off and
 // leave the other three. Without it, correcting a four-edge fillet that caught a
 // fifth means starting over.
@@ -12,7 +12,7 @@
 // geometry: features/targetEditTool owns all of it, including the rollback that
 // puts the consumed geometry back on screen.
 //
-// Subscribed, not polled — unlike the selection toolbar next door, which watches
+// Subscribed, not polled, unlike the selection toolbar next door, which watches
 // a selection nothing notifies it about. Every change here goes through the tool,
 // so the tool can say when it happened.
 
@@ -52,7 +52,7 @@ const field = computed(() => {
   return tool.field;
 });
 
-/** The feature's own name, so the panel says WHICH fillet is being edited —
+/** The feature's own name, so the panel says WHICH fillet is being edited,
  *  there are usually several. */
 const title = computed(() => {
   tick.value;
@@ -74,7 +74,7 @@ const summary = computed(() => {
        ribbon all move between layouts, and a window-anchored panel lands on top
        of one of them in some arrangement of them.
        The v-if is on the TELEPORT so the target is only resolved while the
-       editor is open — and so no hidden element is left over the viewport
+       editor is open, and so no hidden element is left over the viewport
        stealing the picks this panel exists to collect. -->
   <Teleport v-if="open && field" to="#viewport">
     <div class="tgt-panel" role="dialog" :aria-label="`${title} selection`">

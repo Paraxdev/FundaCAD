@@ -18,7 +18,7 @@
 //
 // This lives in viewport/ rather than in features/ because both sides need it
 // and features/manipulator.ts already imports the viewport: putting the rule the
-// other way round would be a cycle. One copy either way, which is the point —
+// other way round would be a cycle. One copy either way, which is the point,
 // two glyphs sized by two different rules drift, and the drift shows up as one
 // of them looking wrong at a zoom nobody tested.
 

@@ -1,19 +1,19 @@
 // Expand a sketch pattern DEFINITION into its derived entities (the copies). Kept
 // deliberately tiny and mirrored 1:1 by the Python port in builder.py (_expand_pattern)
 // so the frontend preview and the sidecar build agree. Derived ids are
-// "<pattern.id>#<n>" — render/build-only, never targeted by constraints.
+// "<pattern.id>#<n>", render/build-only, never targeted by constraints.
 
 import type { Num, Params, SketchPattern } from "../types";
 import { dimPlaceOf } from "../types";
 import type { ResolvedEntity } from "./snap";
 import { resolveNum } from "./resolve";
 
-/** an entity translated by (dx,dy) as a fresh object — shared by pattern
+/** an entity translated by (dx,dy) as a fresh object, shared by pattern
  *  expansion (derived copies) and the select tool's whole-entity body drag */
 export function translated(e: ResolvedEntity, dx: number, dy: number, id: string): ResolvedEntity {
   const c = e.construction ? { construction: true as const } : {};
   // badge label placement is an offset from the dim's own anchor, so a pure
-  // translation carries it unchanged (rotate/mirror/scale deliberately drop it —
+  // translation carries it unchanged (rotate/mirror/scale deliberately drop it,
   // a stale vector reads worse than the default placement)
   const place = dimPlaceOf(e);
   const dp = place ? { dimPlace: place } : {};
@@ -37,7 +37,7 @@ export function translated(e: ResolvedEntity, dx: number, dy: number, id: string
     case "text":
       return { ...e, id, x: e.x + dx, y: e.y + dy };
     case "projected":
-      return e; // fixed reference geometry — the transform tools refuse it upstream
+      return e; // fixed reference geometry, the transform tools refuse it upstream
   }
 }
 
@@ -63,7 +63,7 @@ export function scaled(e: ResolvedEntity, cx: number, cy: number, f: number, id:
     case "polygon": { const [x, y] = S(e.x, e.y); return { type: "polygon", id, x, y, radius: e.radius * a, sides: e.sides, angle: e.angle, ...c }; }
     case "slot": { const [x1, y1] = S(e.x1, e.y1), [x2, y2] = S(e.x2, e.y2); return { type: "slot", id, x1, y1, x2, y2, width: e.width * a, ...c }; }
     case "text": { const [x, y] = S(e.x, e.y); return { ...e, id, x, y, height: e.height * a }; }
-    case "projected": return e; // fixed reference geometry — never transformed
+    case "projected": return e; // fixed reference geometry, never transformed
   }
 }
 
@@ -114,7 +114,7 @@ export function rotated(e: ResolvedEntity, cx: number, cy: number, ang: number, 
       });
     }
     case "projected":
-      return [e]; // fixed reference geometry — never transformed
+      return [e]; // fixed reference geometry, never transformed
   }
 }
 
@@ -127,7 +127,7 @@ export function expandPattern(
   const out: ResolvedEntity[] = [];
   let n = 0;
   const did = () => `${pat.id}#${n++}`;
-  // pattern sources: skip missing ids AND projected reference geometry — it is
+  // pattern sources: skip missing ids AND projected reference geometry, it is
   // fixed/linked, never replicated (the UI strips it before the pattern flow;
   // hand-authored docs degrade the same way instead of emitting duplicate ids)
   const sources = (ids: string[]) =>
@@ -184,7 +184,7 @@ export function expandPattern(
   return out;
 }
 
-/** A regular (pointy-top) hexagon as 6 line entities — orientation aligns with the
+/** A regular (pointy-top) hexagon as 6 line entities, orientation aligns with the
  *  hex lattice so the cells read as a honeycomb. */
 function hexagonLines(cx: number, cy: number, R: number, id: string): ResolvedEntity[] {
   const v: [number, number][] = [];

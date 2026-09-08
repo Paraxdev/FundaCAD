@@ -1,15 +1,15 @@
 // The profile arc: a curved slider that sets a fillet's SECTION shape while the
 // radius drag stays where it is.
 //
-// Radius and profile are two independent things about one blend — how far it
-// reaches, and how full it is — so they get two controls that can be used in
+// Radius and profile are two independent things about one blend, how far it
+// reaches, and how full it is, so they get two controls that can be used in
 // either order without disturbing each other. The arrow answers "how big"; this
 // answers "what shape", from a chamfer's flat chord (-1), through the circular
 // fillet (0), to a corner barely rounded at all (+1).
 //
 // Everything is drawn in the screen plane at a constant pixel size, like the
 // arrow handle, and for the same reason: the control must stay grabbable at any
-// zoom and from any orbit. That also makes the hit test cheap — a camera-facing
+// zoom and from any orbit. That also makes the hit test cheap, a camera-facing
 // pixel-scaled arc has the same shape on screen as in its own local frame, so
 // "which point of the track is the cursor nearest" is a screen-space atan2
 // rather than a ray/surface intersection.
@@ -55,7 +55,7 @@ const GRAB_R = 16; // invisible, generous: the visible knob is small on purpose
  *
  *  Zero: the arc is centred on the handle's own direction, so it caps the
  *  handle like a crossbar rather than floating off to one side. That is what
- *  ties the two together as one control — the profile is a property of the
+ *  ties the two together as one control, the profile is a property of the
  *  blend the handle is sizing, and an arc hanging off at a quarter turn read as
  *  an unrelated widget that happened to be nearby. It also puts the circular
  *  fillet (profile 0, the detent) straight above the tip, which is where the
@@ -152,7 +152,7 @@ export class ProfileArc {
     group.add(knob);
 
     // Invisible and larger: a 5px sphere is honest as a mark but miserable as a
-    // target, and the alternative — a big visible knob — would swamp the arc.
+    // target, and the alternative, a big visible knob, would swamp the arc.
     const grab = new THREE.Mesh(
       new THREE.SphereGeometry(GRAB_R, 8, 6),
       new THREE.MeshBasicMaterial({ visible: false, depthTest: false }),
@@ -225,9 +225,9 @@ export class ProfileArc {
     return -SPAN / 2 + SPAN * fractionFromProfile(profile) + OFFSET;
   }
 
-  /** Per-frame: lie flat against the screen with local +X along the drag axis —
+  /** Per-frame: lie flat against the screen with local +X along the drag axis,
    *  so the whole control rotates WITH the handle rather than swimming against
-   *  it — and hold a constant on-screen size. */
+   *  it, and hold a constant on-screen size. */
   update() {
     if (!this.group) return;
     const cam = this.viewport.camera;
@@ -235,12 +235,12 @@ export class ProfileArc {
     const camRight = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 0);
     this.group.position.copy(this.anchor);
     // Not a hand-rolled makeBasis. Getting the handedness wrong there fails
-    // silently — setFromRotationMatrix does not object to a reflection, it just
-    // returns a rotation nobody asked for — and this control spent its whole
+    // silently, setFromRotationMatrix does not object to a reflection, it just
+    // returns a rotation nobody asked for, and this control spent its whole
     // life drawn edge-on because of it. See manipulator.screenPlaneOrientation.
     this.group.quaternion.copy(screenPlaneOrientation(fwd, this.axis, camRight));
     this.group.scale.setScalar(this.viewport.pixelWorldSize(this.anchor));
-    // A raycast reads matrixWorld, which only a render refreshes — without this
+    // A raycast reads matrixWorld, which only a render refreshes, without this
     // the knob is hit-tested where it was last drawn, not where it now is.
     this.group.updateMatrixWorld(true);
     const el = this.viewport.domElement;
@@ -258,7 +258,7 @@ export class ProfileArc {
   /** The profile the cursor is pointing at.
    *
    *  The group is camera-facing and pixel-scaled, so its local frame and the
-   *  screen agree up to a flip in y — which makes this an atan2 about the
+   *  screen agree up to a flip in y, which makes this an atan2 about the
    *  projected anchor rather than an intersection against the track. That also
    *  means it keeps working when the cursor leaves the track entirely: the angle
    *  is still defined, so the knob follows round instead of sticking. */

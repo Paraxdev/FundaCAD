@@ -106,7 +106,7 @@ export function runInSandbox(opts: RunOptions): Promise<RunOutcome> {
 
   return new Promise<RunOutcome>((resolve) => {
     // Declared before anything can call `finish`. A timer that fires
-    // synchronously — which a test can arrange and a stubbed clock does — would
+    // synchronously, which a test can arrange and a stubbed clock does, would
     // otherwise reach `clearTimer(deadline)` before the `const` below had been
     // initialised, and die in the temporal dead zone rather than time out.
     let deadline: unknown;

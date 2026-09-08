@@ -39,12 +39,12 @@ export interface SpaceMouseConfig {
   // Cross-axis filter: suppress any axis below this FRACTION of the strongest
   // MAPPED axis of the same frame; 0 = off. A real puck leaks a few counts onto
   // its neighbours under a hard deflection, and once that leak clears the
-  // absolute deadzone it is indistinguishable from deliberate input — a ~30
+  // absolute deadzone it is indistinguishable from deliberate input, a ~30
   // count push/pull leak while tilting 200 counts zoomed the view as well as
   // orbiting it. Raising the deadzone instead would kill legitimate slow input
   // for everyone.
   crossAxis: number;
-  // pan/zoom are ZOOM-PROPORTIONAL (scaled by rig.viewScale() — the visible
+  // pan/zoom are ZOOM-PROPORTIONAL (scaled by rig.viewScale(), the visible
   // view height): a puck deflection moves the view by the same FRACTION of
   // what's on screen at any zoom. Fixed world-unit steps made the puck feel
   // ~100× too fast when zoomed into mm-scale detail ("sensitivity went crazy").
@@ -54,8 +54,8 @@ export interface SpaceMouseConfig {
   staleMs: number; // no event for this long ⇒ motion treated as zero
   sensVersion?: number; // bump when sens semantics change (see loadConfig)
   // each camera action ← one raw axis (+ invert). All six axes map by default:
-  // 3 translations (pan X/Y, zoom) + 3 rotations (yaw, pitch, roll). Ry — the
-  // sideways tilt that used to be ignored — drives roll (its 3Dconnexion-
+  // 3 translations (pan X/Y, zoom) + 3 rotations (yaw, pitch, roll). Ry, the
+  // sideways tilt that used to be ignored, drives roll (its 3Dconnexion-
   // conventional action); every action is freely remappable in the settings UI.
   bind: Record<ActionName, AxisBinding>;
 }
@@ -85,7 +85,7 @@ const V1_PAN_DEFAULT = 0.00006;
 const V1_ZOOM_DEFAULT = 0.0001;
 
 // A crossAxis of 1 would mean "only the single strongest axis is ever heard",
-// and anything above it silences EVERY axis including the strongest — a puck
+// and anything above it silences EVERY axis including the strongest, a puck
 // that appears completely dead, which is a far worse bug than the leak this
 // filter exists to fix. So a garbled or hand-edited value is clamped, not
 // trusted, both on load and on set.
@@ -96,7 +96,7 @@ function clampCrossAxis(v: number | undefined): number {
 }
 
 /** Condition one frame of raw axis counts: per-axis deadzone, then the
- *  cross-axis filter. The single source of truth — the viewport motion loop and
+ *  cross-axis filter. The single source of truth, the viewport motion loop and
  *  the settings preview both call this, so they can never disagree.
  *
  *  The deadzone runs FIRST for readability, NOT for correctness: it cannot
@@ -153,7 +153,7 @@ function loadConfig(): SpaceMouseConfig {
       }
       // Rebuild bind from defaults and merge per-action with validation, so a
       // partial or stale-shaped persisted bind (older dev builds used different
-      // action keys) can never leave an action unbound — which would crash the
+      // action keys) can never leave an action unbound, which would crash the
       // settings UI and the motion loop reading `.src`/`.invert` of undefined.
       cfg.bind = structuredClone(DEFAULTS.bind);
       if (savedBind) {
@@ -208,8 +208,8 @@ export function getSpaceMouseMode(): "object" | "camera" {
   return CONFIG.mode;
 }
 
-// Sketch "lock to plane" — suppress orbit + roll (keep pan + zoom) so the puck
-// cannot tilt the view off the sketch plane — is read off the rig in the loop
+// Sketch "lock to plane", suppress orbit + roll (keep pan + zoom) so the puck
+// cannot tilt the view off the sketch plane, is read off the rig in the loop
 // below rather than pushed here by sketch mode. Sketch mode sets the same lock
 // on the rig one line earlier either way, so this asks the thing that already
 // knows instead of being a second copy that has to be kept in step. It also
@@ -314,7 +314,7 @@ export async function initSpaceMouse(
     if (!locked && (az || pol)) {
       // rig.tumble, NOT controls.rotate: camera-controls clamps vertical orbit
       // just short of the poles every frame, so rotate() hard-stops at the top.
-      // tumble() rotates the orbit up-vector along with the camera — free
+      // tumble() rotates the orbit up-vector along with the camera, free
       // rotation over the poles, matching the 3Dconnexion driver feel.
       viewport.rig.tumble(modeSign * az * CONFIG.orbitSens * dt, modeSign * pol * CONFIG.orbitSens * dt);
     }

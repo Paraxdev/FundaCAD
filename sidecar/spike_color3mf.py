@@ -3,7 +3,7 @@ Snapmaker Orca round-trips (colors shown + mapped to toolheads).
 
 A 3MF is just a zip with [Content_Types].xml, _rels/.rels and 3D/3dmodel.model.
 build123d's Mesher does NOT emit color and lib3mf can't set triangle props after
-mesh creation, so we write the model XML by hand — which is also the basis for the
+mesh creation, so we write the model XML by hand, which is also the basis for the
 production exporter.
 
 Run:  cd sidecar && uv run python spike_color3mf.py
@@ -166,7 +166,7 @@ def variant_project():
 def variant_project_mmuseg():
     v, t = _box(0, 0, 0)
     # every triangle tagged explicitly (no fallback ambiguity): body=ext1 ("4"),
-    # top face (triangles 2,3) = ext2 ("8") — mirrors what the production
+    # top face (triangles 2,3) = ext2 ("8"), mirrors what the production
     # exporter will emit for a colorSlot-tagged textured face.
     seg = ["4"] * 12
     seg[2] = seg[3] = "8"

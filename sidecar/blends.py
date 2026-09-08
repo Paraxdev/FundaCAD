@@ -14,7 +14,7 @@ re-tried one at a time so the failure names the edge rather than the feature.
 import re
 import math
 
-import font_guard  # noqa: F401  MUST precede build123d — see font_guard.py
+import font_guard  # noqa: F401  MUST precede build123d, see font_guard.py
 
 from build123d import Vector
 
@@ -37,8 +37,8 @@ from shape_util import _wrap_topods
 def _report_edge_failures(f, ctx, edges, try_one):
     """Failure-path-only probe for fillet/chamfer: which of `edges` fail the op
     INDIVIDUALLY? Appends an `edgeOpFailed` diagnostic naming the offenders'
-    midpoints — or ALL members when every edge passes alone (the combination
-    itself is the failure) — so the frontend can paint exactly those edges red.
+    midpoints, or ALL members when every edge passes alone (the combination
+    itself is the failure), so the frontend can paint exactly those edges red.
     Bounded (skipped past 32 edges) and only ever paid AFTER the combined op
     already raised; the happy path stays a single OCCT build."""
     if ctx.diagnostics is None or len(edges) > 32:
@@ -117,7 +117,7 @@ def _rematch_edge(shape, fp, max_mid_dist, tol_pos):
     """Find the edge on `shape` that is `fp`'s current incarnation, or None.
 
     A gate (`max_mid_dist`, scaled to the blend size) rejects everything the
-    edge could NOT have drifted into — so if the edge genuinely vanished we
+    edge could NOT have drifted into, so if the edge genuinely vanished we
     return None and let the caller raise, rather than silently blending the
     wrong edge. Among the survivors we pick the lowest `_edge_cost`, the exact
     scorer the selector resolver trusts."""
@@ -148,7 +148,7 @@ def _sequential_blend(shape, edges, apply_one, blend_size, diag_part):
     `apply_one(shape, edge) -> new_shape` runs the actual kernel op.
     """
     # Fingerprint every target up front, on the ORIGINAL body, before anything
-    # moves — then fix the canonical application order once.
+    # moves, then fix the canonical application order once.
     pending = [(e, _edge_identity(e)) for e in edges]
     pending.sort(key=lambda t: _canonical_blend_key(t[1]))
     # Positional gate: an edge shortened by a neighbouring blend shifts its
@@ -180,7 +180,7 @@ def _group_sels_by_body(sel, ctx, label):
     """Split a selector (or list of them) into [(body, [selectors])] groups, in
     first-seen order.
 
-    A selector's OWN `body` decides which shape it resolves against — the tools
+    A selector's OWN `body` decides which shape it resolves against, the tools
     stamp it from the edge/face the user actually clicked. Without this a
     multi-body model resolves every selector against require_active() =
     bodies[-1], and because `by:"nearest"` always returns SOME winner it edits
@@ -214,7 +214,7 @@ SMOOTH_EDGE_DEG = 1.0
 
 def _edge_dihedral_deg(shape, edge):
     """Angle between the surface normals of the two faces meeting at `edge`, in
-    degrees at its midpoint — 0 where they meet smoothly, 90 on a box corner.
+    degrees at its midpoint, 0 where they meet smoothly, 90 on a box corner.
 
     None when the question does not apply: a seam edge, a free edge, or a point
     where a normal degenerates. None must be read as "unknown", never as
@@ -271,13 +271,13 @@ def _refuse_smooth_edges(shape, edges, label):
 
     A fillet or a chamfer cuts across the corner between two faces. Where those
     faces are TANGENT there is no corner, so there is nothing to cut and no size
-    of cut that would find one — the operation fails identically at 5mm and at
+    of cut that would find one, the operation fails identically at 5mm and at
     0.05mm. This is not a rare shape: it is the boundary of every fillet on the
     model, so it is exactly what a user picks when they click the visible line
     around a round they already made.
 
     Without this, the failure surfaces as OCCT's own "try a smaller length
-    value(s)", which is not merely unhelpful but actively wrong — it describes a
+    value(s)", which is not merely unhelpful but actively wrong, it describes a
     size problem, so it sends someone into a retry loop that cannot terminate.
     Refusing here costs one dihedral measurement per feature and replaces that
     with the truth."""
@@ -295,7 +295,7 @@ def _refuse_smooth_edges(shape, edges, label):
     else:
         which = f"{len(smooth)} of the {len(edges)} selected edges are already smooth"
     raise ValueError(
-        f"can't {label.lower()} here — {which}. The faces meet tangentially, so "
+        f"can't {label.lower()} here, {which}. The faces meet tangentially, so "
         "there is no corner to cut and no smaller value will help. To get the "
         "sharp edge back, delete the rounded face."
     )
@@ -304,15 +304,15 @@ def _refuse_smooth_edges(shape, edges, label):
 def _refuse_seam_edges(shape, edges, label):
     """Refuse a blend when every selected edge is a SEAM, and say what a seam is.
 
-    A face that wraps all the way round — the side of a cylinder, a cone, a
-    360-degree revolve — closes on itself, and the kernel records that closure
+    A face that wraps all the way round, the side of a cylinder, a cone, a
+    360-degree revolve, closes on itself, and the kernel records that closure
     as a real topological edge. It is bookkeeping, not geometry: there is no
     crease there, and both sides of it are the SAME face. ChFi3d needs two
     different faces to blend between, so it refuses, and what it says is
     "ChFi3d_Builder:only 2 faces", which describes nothing anyone can act on.
 
-    Only when EVERY selected edge is a seam. A broad selector — by:"axis", which
-    on a cylinder picks up the seam along with the real edges, or by:"all" —
+    Only when EVERY selected edge is a seam. A broad selector, by:"axis", which
+    on a cylinder picks up the seam along with the real edges, or by:"all",
     routinely includes one, and OCCT blends those groups perfectly well
     (measured on a cone: by:"all" over a rim and its seam succeeds). Refusing
     those would break work that has always worked, and the seam in them is not
@@ -329,7 +329,7 @@ def _refuse_seam_edges(shape, edges, label):
     which = ("that edge is a seam" if len(edges) == 1
              else f"all {len(edges)} selected edges are seams")
     raise ValueError(
-        f"can't {label.lower()} here — {which}. A seam is the line where a face "
+        f"can't {label.lower()} here, {which}. A seam is the line where a face "
         "that wraps all the way round meets itself, so both sides of it are the "
         "same face and there is no corner to cut. Pick the edges where that face "
         "meets its NEIGHBOURS instead."
@@ -344,7 +344,7 @@ SIZE_PROBE_FRACTION = 0.05
 # ...but a twentieth of a HUGE value is still huge, and that made the probe lie.
 # Measured on a 60x6x20 wedge whose tip blends at 2mm and not at 5mm: asked for
 # 61mm, the probe tried 3.05mm, which also fails, and the refusal announced that
-# no size would help — while 2mm builds. A drag that has run well past the limit
+# no size would help, while 2mm builds. A drag that has run well past the limit
 # produces exactly that, so the message was at its most misleading precisely when
 # the user was furthest from a value that works.
 #
@@ -371,8 +371,8 @@ def _size_would_help(shape, edges, one_edge_at, blend_size):
     """Does a much SMALLER blend build where this one didn't?
 
     OCCT answers every blend failure with "try a smaller length value(s)",
-    whatever went wrong. When the real problem is where the blend has to END —
-    an arc dying into a neighbouring face, a corner the kernel cannot close —
+    whatever went wrong. When the real problem is where the blend has to END,
+    an arc dying into a neighbouring face, a corner the kernel cannot close,
     that message is not merely unhelpful, it sends the user into a retry loop
     that cannot terminate, because the operation fails identically at 5mm and at
     0.05mm. Measured on a cylinder half sunk into a plate: the partial rim
@@ -400,7 +400,7 @@ def _kernel_sentence(err):
     offered to someone whose entire interface is a radius box in a ribbon or a
     JSON field over a socket. Neither can call it, so the sentence spends its
     second half sending the reader after a thing that does not exist for them.
-    The first half — try a smaller value — is good advice and stays.
+    The first half, try a smaller value, is good advice and stays.
     """
     return re.sub(r"[,;]?\s*or use max_fillet\(\)[^.]*", "", str(err)).strip()
 
@@ -416,7 +416,7 @@ def _blend_failure_message(label, body, unresolved, one_edge_at, blend_size, err
     which = ("that edge" if len(unresolved) == 1
              else f"{len(unresolved)} of the selected edges")
     return (
-        f"can't {label.lower()} {which} on {body['name']} at ANY size — it fails "
+        f"can't {label.lower()} {which} on {body['name']} at ANY size, it fails "
         f"the same at {probed:g}mm as at {blend_size:g}mm. "
         "The blend has nowhere to end: add the neighbouring edges to it, or blend "
         "those first."
@@ -442,7 +442,7 @@ def _refuse_folded_blend(body, new_shape):
     # front, so naming it again gives "Fillet failed: Fillet folded over
     # itself", which spends the one line a toast has on saying it twice.
     raise ValueError(
-        f"made surface that folds back over itself on {body['name']} — at this "
+        f"made surface that folds back over itself on {body['name']}, at this "
         "size the blend runs past its own face and covers the model twice. Try a "
         "different size, or blend this edge before the one next to it."
     )
@@ -460,7 +460,7 @@ def _blend_edges(f, ctx, label, combined, one_edge_at, blend_size):
     ALL-OR-NOTHING across bodies: every group's new shape is computed first and
     only assigned once they ALL succeed. Otherwise a two-body fillet whose
     second body raises would leave the first one blended while the timeline
-    paints the feature red — a solid the user never asked for.
+    paints the feature red, a solid the user never asked for.
     """
     staged = []
     # A zero or negative blend is not a small blend, it is no blend. OCCT's own
@@ -484,8 +484,8 @@ def _blend_edges(f, ctx, label, combined, one_edge_at, blend_size):
             # the per-edge retry below would spend the work only to arrive at
             # the same refusal, and then dress it as "Fillet failed on Body1",
             # which sends the user hunting for a radius problem that isn't
-            # there. Re-raised untouched so its own sentence — which names the
-            # geometry and says to use profile 0 — is what reaches the toast.
+            # there. Re-raised untouched so its own sentence, which names the
+            # geometry and says to use profile 0, is what reaches the toast.
             raise
         except Exception as combined_err:
             # Combined call failed: fall back to per-edge blending on the evolving body.
@@ -495,7 +495,7 @@ def _blend_edges(f, ctx, label, combined, one_edge_at, blend_size):
             )
             if unresolved:
                 # Hard no-silent-degradation rule: any edge we could not blend means
-                # the feature FAILS — never a partial solid, never a smaller radius.
+                # the feature FAILS, never a partial solid, never a smaller radius.
                 # Paint exactly the offenders red, then re-raise the original error.
                 _report_edge_failures(f, ctx, unresolved,
                                       lambda e: one_edge(body["shape"], e))
@@ -511,7 +511,7 @@ def _blend_edges(f, ctx, label, combined, one_edge_at, blend_size):
 def _conic_fillet(shape, edges, radius, profile):
     """A fillet whose section is a conic rather than a circular arc.
 
-    Same tangency, same setback, different fullness — see conic_blend.py. Raw
+    Same tangency, same setback, different fullness, see conic_blend.py. Raw
     TopoDS in and out of the blend itself, because it rebuilds the solid's faces
     and edges directly; build123d only ever sees the wrapped result.
     """

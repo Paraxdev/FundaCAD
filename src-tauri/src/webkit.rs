@@ -7,13 +7,13 @@
 //! `sidecar::configure_env` is split out: this is behaviour that only misfires
 //! on hardware nobody here builds on, so the decision has to be assertable
 //! without the hardware. Nothing in this file has been exercised against an
-//! actual Nvidia GPU by me — see the test module.
+//! actual Nvidia GPU by me, see the test module.
 
 use std::path::Path;
 
 /// Our own opt-out. A user whose machine is made *worse* by the workaround
-/// needs an escape hatch, and the obvious one — setting
-/// `WEBKIT_DISABLE_DMABUF_RENDERER=0` — does not work: WebKit's own checks are
+/// needs an escape hatch, and the obvious one, setting
+/// `WEBKIT_DISABLE_DMABUF_RENDERER=0`, does not work: WebKit's own checks are
 /// presence-based in places, so "0" can read as "yes, disable it". A separate
 /// variable of ours has no such ambiguity.
 const OPT_OUT: &str = "FUNDACAD_NO_GPU_WORKAROUND";
@@ -26,7 +26,7 @@ const OPT_OUT_LEGACY: &str = "SINDRICAD_NO_GPU_WORKAROUND";
 
 /// The WebKitGTK knob we set. Deliberately NOT
 /// `WEBKIT_DISABLE_COMPOSITING_MODE`, which also avoids the crash but turns off
-/// accelerated compositing wholesale — a bad trade for an app whose main view is
+/// accelerated compositing wholesale, a bad trade for an app whose main view is
 /// a WebGL canvas, and the mode under which the reporter of issue #6 also saw
 /// viewport pointer capture stick (that is bug 2 of the same issue, unfixed).
 ///
@@ -60,7 +60,7 @@ const SKIP_NO_NVIDIA: &str = "no Nvidia driver";
 
 /// Issue #6 (Nobara/Fedora 44, RTX 5080, driver 595.84, Wayland):
 /// `WebKitWebProcess` takes a SIGSEGV inside `libnvidia-eglcore` on launch and
-/// the app dies before painting anything — no dialog, no message, nothing the
+/// the app dies before painting anything, no dialog, no message, nothing the
 /// user can act on. The reporter confirmed that EITHER
 /// `WEBKIT_DISABLE_DMABUF_RENDERER=1` or `WEBKIT_DISABLE_COMPOSITING_MODE=1`
 /// avoids it; we pick the narrower one.
@@ -69,7 +69,7 @@ const SKIP_NO_NVIDIA: &str = "no Nvidia driver";
 /// no way to tell them apart before the crash. That costs the working majority
 /// the per-frame cost described on `DMABUF`; the alternative costs the affected
 /// minority the entire application. The size of that cost is documented by
-/// WebKit, not measured by me — there is no Nvidia hardware here to measure on.
+/// WebKit, not measured by me, there is no Nvidia hardware here to measure on.
 fn decide(nvidia_present: bool, dmabuf_already_set: bool, opted_out: bool) -> Decision {
     // Precedence: an explicit human beats our guess, both ways round. Someone
     // running with the variable already set is mid-workaround (the issue #6
@@ -89,7 +89,7 @@ fn decide(nvidia_present: bool, dmabuf_already_set: bool, opted_out: bool) -> De
 /// Is the Nvidia userspace driver in play?
 ///
 /// `/proc/driver/nvidia/version` is the canonical marker for the loaded Nvidia
-/// kernel module, proprietary or open-kernel — both ship the same
+/// kernel module, proprietary or open-kernel, both ship the same
 /// `libnvidia-eglcore`, which is where the crash lives, so both must match.
 /// Nouveau creates neither path and is unaffected.
 ///
@@ -115,7 +115,7 @@ pub fn apply_gpu_workarounds() {
             // Logged unconditionally: when this machine later files a bug, the
             // terminal output needs to show that we changed the renderer.
             println!(
-                "[gpu] Nvidia driver detected — disabling the WebKitGTK DMABUF renderer \
+                "[gpu] Nvidia driver detected, disabling the WebKitGTK DMABUF renderer \
                  (issue #6). Set {OPT_OUT}=1 to keep it."
             );
         }
@@ -147,8 +147,8 @@ mod tests {
         assert_eq!(decide(false, false, false), Decision::Skip(SKIP_NO_NVIDIA));
     }
 
-    /// A human who has already set the variable — like the #6 reporter running
-    /// his workaround today — outranks the probe, on Nvidia and off it. Changing
+    /// A human who has already set the variable, like the #6 reporter running
+    /// his workaround today, outranks the probe, on Nvidia and off it. Changing
     /// it under him would silently swap the configuration he reported against.
     #[test]
     fn an_existing_setting_is_never_overridden() {
@@ -167,7 +167,7 @@ mod tests {
 
     /// The probe is filesystem shape, so it is worth pinning: a bare
     /// `/sys/module/nvidia` directory (nvidia_drm can appear on hybrid systems)
-    /// is not enough — we look for the version files the real driver writes.
+    /// is not enough, we look for the version files the real driver writes.
     #[test]
     fn the_probe_matches_the_paths_the_nvidia_driver_actually_writes() {
         let tmp = std::env::temp_dir().join("fundacad-webkit-probe-test");
@@ -197,7 +197,7 @@ mod tests {
     /// Both spellings are exercised, in one test rather than two: these are
     /// process-wide variables and a second test setting them would race this one
     /// under the parallel runner. The retired name matters as much as the current
-    /// one — it is set in shell profiles this repository cannot reach, so a
+    /// one, it is set in shell profiles this repository cannot reach, so a
     /// machine that opted out before the rename must still be opted out after it.
     ///
     /// This mutates process-wide environment, which is why it restores what it
@@ -219,7 +219,7 @@ mod tests {
             std::env::remove_var(name);
         }
 
-        // And with NEITHER set, the applier is free to act — otherwise the loop
+        // And with NEITHER set, the applier is free to act, otherwise the loop
         // above would pass on a build where the opt-out check was deleted
         // outright and nothing ever set DMABUF.
         std::env::remove_var(DMABUF);

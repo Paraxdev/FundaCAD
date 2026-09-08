@@ -3,7 +3,7 @@
 // The panel itself is components/shell/BrowserPane.vue (+ TreeFolder.vue and
 // TreeRow.vue); what is left here is the part with real logic and no DOM:
 // shaping an imported STEP assembly into the tree the panel paints, and the
-// shared body-colour menu. Both are unit-tested directly — see browserTree.test.ts,
+// shared body-colour menu. Both are unit-tested directly, see browserTree.test.ts,
 // which is a node-environment *.test.ts with no DOM at all.
 
 import type { CtxItem } from "./menu";
@@ -31,7 +31,7 @@ export function bodyExtraMenu(bodyId: string): CtxItem[] {
  *  the panel is a fixed 232px with no resizer, and the reference assembly is 12
  *  levels deep, so an uncapped step would spend the whole width on whitespace.
  *
- *  Bound as a :style in TreeFolder/TreeRow — e2e/assembly_tree_e2e.cjs reads the
+ *  Bound as a :style in TreeFolder/TreeRow, e2e/assembly_tree_e2e.cjs reads the
  *  computed paddingLeft back to assert that nesting is visibly indented. */
 export function indent(depth: number, base: number): number {
   return base + Math.min(depth, 6) * 8;
@@ -43,7 +43,7 @@ export interface AsmGroup {
   label: string;
   children: AsmGroup[];
   bodies: { id: string; name: string }[];
-  total: number; // bodies at or below this node — what the count badge shows
+  total: number; // bodies at or below this node, what the count badge shows
 }
 
 /** Every body id at or below `g`. */
@@ -55,7 +55,7 @@ export function collectBodyIds(g: AsmGroup, out: string[] = []): string[] {
 
 /** Shape imported-assembly bodies into the tree the browser renders.
  *
- *  Pure on purpose — this is the part with real logic (chain walking, sibling
+ *  Pure on purpose, this is the part with real logic (chain walking, sibling
  *  identity, malformed manifests), so it is unit-tested directly rather than
  *  through the DOM. Returns null when no body belongs to an assembly, which is
  *  every document without one; the caller then renders the flat list unchanged.

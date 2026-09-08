@@ -1,7 +1,7 @@
 // The tool's view: what is on screen, and the handful of refs that decide it.
 //
-// This used to be three fields on the application's `toolPanels` pinia store —
-// `texture`, `textureSummary`, `textureMode` — plus a facade class over them.
+// This used to be three fields on the application's `toolPanels` pinia store,
+// `texture`, `textureSummary`, `textureMode`, plus a facade class over them.
 // The fields worked. What they cost was a store in src/stores/ whose shape was a
 // list of the tools the application happens to have, so a second plugin with a
 // panel would have been three more fields in a file with no other reason to know
@@ -14,7 +14,7 @@
 // the application's own Vue are enough for three values read by one component.
 //
 // The component that reads them is mounted for the whole life of the plugin
-// through `contributedOverlays()`, and decides for itself whether to draw —
+// through `contributedOverlays()`, and decides for itself whether to draw,
 // which is the contract that point states. `App.vue` used to carry a
 // `v-if="toolPanels.texture"` for this panel, and that `v-if` was the
 // application knowing this tool exists.

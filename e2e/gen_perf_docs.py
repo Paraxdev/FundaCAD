@@ -33,7 +33,7 @@ def main():
         flat = json.loads(json.dumps(doc))  # same bodies, no manifest
 
         # Each import feature's blob is a compound of SOLIDS_PER_FEATURE boxes, so
-        # its top-level children are exactly those boxes (6 faces each) — which is
+        # its top-level children are exactly those boxes (6 faces each), which is
         # the shape a real assembly manifest binds to, row i -> child i.
         for i, f in enumerate(doc["features"]):
             f["nodes"] = [

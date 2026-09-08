@@ -38,7 +38,7 @@ export const filamentReq = shallowRef<FilamentReq | null>(null);
  *  send flow treats as "do not print" rather than as a failure.
  *
  *  markRaw because the request holds a `resolve` closure, which must not become
- *  a Proxy — the same rule the app's dialog store follows for the same reason. */
+ *  a Proxy, the same rule the app's dialog store follows for the same reason. */
 export function openFilamentMapping(
   slots: LogicalSlot[],
   toolheads: ToolheadFilament[],

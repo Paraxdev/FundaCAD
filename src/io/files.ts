@@ -31,7 +31,7 @@ function referencedHashes(store: DocumentStore): string[] {
  *
  *  Goes through Rust, NOT the sidecar: `sidecar.rs` does not auto-respawn, so a
  *  save that needed the geometry engine would be impossible for the whole rest
- *  of the session once it died — with unsaved work on screen. Saving needs no
+ *  of the session once it died, with unsaved work on screen. Saving needs no
  *  geometry anyway; the blobs are already bytes on disk. */
 async function writeContainer(store: DocumentStore, path: string): Promise<string | null> {
   const { invoke } = await import("@tauri-apps/api/core");
@@ -84,7 +84,7 @@ export async function saveDocumentAs(store: DocumentStore) {
     }
   } else {
     // Plain dev browser: no Tauri, so no container. Geometry lives in the
-    // sidecar's blob store either way, so this download is the document only —
+    // sidecar's blob store either way, so this download is the document only,
     // useful for inspecting a feature tree, NOT a portable file.
     downloadText(`${store.fileName}.${DOC_EXT}`, store.toJSON());
   }
@@ -96,7 +96,7 @@ export async function openDocument(store: DocumentStore, geometry: GeometryBacke
     const path = await open({
       multiple: false,
       // MCAD-style: Open takes our document AND mesh/CAD files (imported as a
-      // body), routed by extension below — so users can just "open" an STL.
+      // body), routed by extension below, so users can just "open" an STL.
       filters: [
         { name: "All supported", extensions: [DOC_EXT, ...LEGACY_DOC_EXTS, "json", "stl", "3mf", "step", "stp", "obj", "glb"] },
         { name: "FundaCAD Document", extensions: [DOC_EXT, ...LEGACY_DOC_EXTS, "json"] },
@@ -123,21 +123,21 @@ export async function openDocument(store: DocumentStore, geometry: GeometryBacke
 }
 
 /** What happened when we tried to open a document.
- *  "unreadable" means the file is gone or corrupt — callers may forget it.
+ *  "unreadable" means the file is gone or corrupt, callers may forget it.
  *  "newerFormat" means the file is fine and this build is too old, so the
  *  recent-files entry must SURVIVE: dropping it would delete the one affordance
  *  the user has for finding the file again, in the same breath as telling them
  *  to upgrade. */
 export type OpenOutcome = "ok" | "unreadable" | "newerFormat";
 
-/** True if `text` is a ZIP archive rather than JSON — i.e. a v5 packaged
+/** True if `text` is a ZIP archive rather than JSON, i.e. a v5 packaged
  *  document this build cannot read.
  *
  *  `readTextFile` decodes with a NON-FATAL TextDecoder, so a zip's invalid bytes
  *  become U+FFFD instead of throwing: the read SUCCEEDS and `JSON.parse` is what
  *  fails. The local-file header is pure ASCII ("PK" followed by two control
  *  bytes), so it survives that decode intact and we can diagnose from the text
- *  we already hold — no second read, and no binary fs permission (the webview
+ *  we already hold, no second read, and no binary fs permission (the webview
  *  has none, by design). Matching on "PK" alone is deliberate: it also catches
  *  the empty and spanned-archive headers, and anything starting "PK" is not a
  *  JSON document regardless. */
@@ -146,7 +146,7 @@ export function looksLikeContainer(text: string): boolean {
 }
 
 /** Rewrite a pre-v5 document's inline base64 BREP into blob-store references.
- *  Returns the original text unchanged on ANY failure — this is an optimisation
+ *  Returns the original text unchanged on ANY failure, this is an optimisation
  *  of the on-disk format, never a precondition for opening a file. */
 async function migrateInlineGeometry(text: string, geometry: GeometryBackend): Promise<string> {
   try {
@@ -179,7 +179,7 @@ async function migrateInlineGeometry(text: string, geometry: GeometryBackend): P
   }
 }
 
-/** Open a document at a known path (no dialog) — shared by Open…
+/** Open a document at a known path (no dialog), shared by Open…
  *  and the welcome screen's recent-files list.
  *
  *  A v5 document is a ZIP and is read by Rust, which also extracts its geometry
@@ -187,7 +187,7 @@ async function migrateInlineGeometry(text: string, geometry: GeometryBackend): P
  *  read as text exactly as it always was.
  *
  *  NOTE on ordering: `store.load()` ends by firing a rebuild SYNCHRONOUSLY,
- *  before `markSaved(path)` below has run — so that first rebuild sees the
+ *  before `markSaved(path)` below has run, so that first rebuild sees the
  *  PREVIOUS document's path. That is harmless here only because geometry is
  *  resolved by content hash out of the blob store, which needs no path at all.
  *  Do not add anything to the rebuild path that depends on `store.filePath`. */
@@ -215,7 +215,7 @@ export async function openDocumentAtPath(
   // One-way v4 -> v5, done on the PARSED text before `load()` rather than by
   // patching the store afterwards: patching would record an undo entry, mark a
   // freshly-opened document dirty, and fire a second rebuild. If anything here
-  // fails — a dead sidecar, an unreadable legacy body — `text` is untouched and
+  // fails, a dead sidecar, an unreadable legacy body, `text` is untouched and
   // the document opens exactly as it did before, still carrying its inline copy.
   if (!wasContainer && geometry) text = await migrateInlineGeometry(text, geometry);
 
@@ -287,7 +287,7 @@ export async function exportModel(store: DocumentStore, geometry: GeometryBacken
   // an export replays the whole feature history, so on a large document it runs
   // for as long as an import does with nothing on screen to show it and nothing
   // for Cancel to attach to. onStarted hands back the request id so a cancel
-  // targets THIS export — the document stays editable meanwhile, so any rebuild
+  // targets THIS export, the document stays editable meanwhile, so any rebuild
   // the user triggers would otherwise be the "most recent" op.
   const res = await store.runBusy(
     `Exporting ${path.split(/[\\/]/).pop() ?? "file"}`,
@@ -304,8 +304,8 @@ export async function exportModel(store: DocumentStore, geometry: GeometryBacken
     await reportError(`Export failed: ${res.message ?? "unknown error"}`);
     return;
   }
-  // Confirm what was written — list every file for "separate", the single path
-  // otherwise — and NAME any features whose geometry is missing from the export
+  // Confirm what was written, list every file for "separate", the single path
+  // otherwise, and NAME any features whose geometry is missing from the export
   // (export-what-built: one red feature no longer blocks the whole print loop).
   const written = res.paths?.length ? res.paths : res.path ? [res.path] : [];
   const lines = [...written];
@@ -325,7 +325,7 @@ export function extToFormat(path: string): ExportFormat {
   const ext = path.split(".").pop()?.toLowerCase();
   if (ext === "stl") return "stl";
   if (ext === "3mf") return "3mf";
-  // NOTE: this function is TOTAL — an unrecognised extension falls through to
+  // NOTE: this function is TOTAL, an unrecognised extension falls through to
   // STEP rather than erroring. Miss a format here and the user gets a STEP file
   // wearing the extension they asked for, with no error anywhere.
   if (ext === "glb") return "glb";
@@ -363,7 +363,7 @@ export async function importModel(store: DocumentStore, geometry: GeometryBacken
 }
 
 /** The path of the most recently CANCELLED import, so a retry is one click.
- *  Session state on purpose — it never touches the document, so nothing about a
+ *  Session state on purpose, it never touches the document, so nothing about a
  *  cancelled import can be saved, shared, or opened on another machine. */
 let lastCancelledImport: string | null = null;
 
@@ -417,7 +417,7 @@ async function importPath(store: DocumentStore, geometry: GeometryBackend, path:
   if (!res.ok) {
     if (res.cancelled) {
       // The user stopped it: say nothing (they know) and add NOTHING to the
-      // document. The path is remembered in SESSION state only — a placeholder
+      // document. The path is remembered in SESSION state only, a placeholder
       // feature would persist into the saved document and reference a path that
       // may not exist on another machine.
       lastCancelledImport = path;
@@ -460,8 +460,8 @@ async function importPath(store: DocumentStore, geometry: GeometryBackend, path:
   // the document's palette and assign the imported bodies to it, unless the
   // capability that owns palettes was switched off, in which case do nothing.
   // Three things this file has no business knowing were in those six lines. What
-  // is left is the fact — an import landed, it was this feature, it looked like
-  // this — which is true whether or not anybody is listening.
+  // is left is the fact, an import landed, it was this feature, it looked like
+  // this, which is true whether or not anybody is listening.
   //
   // Awaited rather than fired off, because a listener has to rebuild before it
   // can find the bodies the feature produced, and an import that returned while
@@ -470,7 +470,7 @@ async function importPath(store: DocumentStore, geometry: GeometryBackend, path:
   await announceImportedBody(id, res.color);
 }
 
-/** Surface an error to the user — a native dialog in the app, console otherwise.
+/** Surface an error to the user, a native dialog in the app, console otherwise.
  *  (Import used to fail silently, which read as "nothing happened".)
  *
  *  Exported for the capabilities that write files of their own. Not because
@@ -493,7 +493,7 @@ export function extToImportFormat(path: string): ImportFormat {
   if (ext === "obj") return "obj";
   if (ext === "brep") return "brep";
   if (ext === "glb") return "glb";
-  return "step";  // TOTAL, like extToFormat above — see the note there
+  return "step";  // TOTAL, like extToFormat above, see the note there
 }
 
 // --- browser fallbacks ---

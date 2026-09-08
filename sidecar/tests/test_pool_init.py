@@ -3,7 +3,7 @@
 Field bug 8aa9ded7 ("no bodies made", Windows 0.1.82) was a worker that could
 never start. Both BrokenProcessPool handlers recycled unconditionally and said
 "the geometry kernel crashed on this operation", so the replacement pool failed
-identically, forever, while the user was told their model was at fault — and
+identically, forever, while the user was told their model was at fault, and
 the real import error was invisible, because CPython logs an initializer's
 exception to the CHILD's stderr, which Windows does not inherit.
 
@@ -76,7 +76,7 @@ def _pool_with(initializer, err_buf=None):
 
 def test_worker_init_publishes_its_traceback_exception_line_first():
     """The buffer and the log both keep the HEAD, while a traceback's error is
-    its LAST line — so the summary has to be written first or it is the one
+    its LAST line, so the summary has to be written first or it is the one
     thing that gets cut."""
     buf = server._mp_ctx.Array("c", 16384, lock=False)
     try:
@@ -158,7 +158,7 @@ def test_an_install_that_worked_this_session_never_latches():
 
 def test_a_missing_pool_is_retryable_not_terminal():
     """One transient spawn failure must not disable geometry for the session
-    with the retry budget unspent — the old code survived this because it kept
+    with the retry budget unspent, the old code survived this because it kept
     the executor object and the next op retried the lazy spawn."""
     _reset()
     server._INIT_ERR = server._mp_ctx.Array("c", 4096, lock=False)

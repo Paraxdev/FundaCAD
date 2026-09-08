@@ -22,7 +22,7 @@ export function installKeyboard(e: Engine): void {
         }
         return;
       }
-      // everything else — including the once-dead M/Move and T/Trim keys — routes
+      // everything else, including the once-dead M/Move and T/Trim keys, routes
       // through the same dispatcher the ribbon and command palette use
       e.handleAction(a);
     },
@@ -30,7 +30,7 @@ export function installKeyboard(e: Engine): void {
   );
 
   // Tab, while an area box is open, cycles what that box will take. Registered
-  // here rather than in the keymap because it only exists during a drag — the
+  // here rather than in the keymap because it only exists during a drag, the
   // rest of the time Tab is the browser's own focus key and must stay that.
   window.addEventListener("keydown", (ev) => {
     if (ev.key !== "Tab" || ev.ctrlKey || ev.metaKey || ev.altKey) return;
@@ -38,7 +38,7 @@ export function installKeyboard(e: Engine): void {
     ev.preventDefault();
   });
 
-  // delete: a selected FACE → remove it and heal the solid (defeature — works on
+  // delete: a selected FACE → remove it and heal the solid (defeature, works on
   // imported geometry, where there's no feature to delete); otherwise delete the
   // selected timeline feature.
   window.addEventListener("keydown", (ev) => {
@@ -67,7 +67,7 @@ export function installKeyboard(e: Engine): void {
   });
 
   // Anything that escapes to the window. These are the failures with no toast
-  // at all — a listener that threw, a rejected promise nobody awaited — so
+  // at all, a listener that threw, a rejected promise nobody awaited, so
   // without this they exist only in devtools, which is exactly where a user
   // reporting a bug is not looking.
   window.addEventListener("error", (ev) => {

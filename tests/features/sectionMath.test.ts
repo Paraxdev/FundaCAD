@@ -11,7 +11,7 @@ import {
   sectionFromPlaneDef,
 } from "../../src/features/sectionMath";
 
-/** Signed distance of a point from a clip plane — positive is the kept side. */
+/** Signed distance of a point from a clip plane, positive is the kept side. */
 const side = (p: { normal: Vec3; constant: number }, x: Vec3) =>
   p.normal[0] * x[0] + p.normal[1] * x[1] + p.normal[2] * x[2] + p.constant;
 
@@ -38,7 +38,7 @@ describe("clipPlaneAt", () => {
   });
 
   it("moves the cut the SAME way after a flip", () => {
-    // Offset runs along the defining normal, not the kept side's — otherwise
+    // Offset runs along the defining normal, not the kept side's, otherwise
     // dragging would reverse direction the moment the user pressed F.
     const a = clipPlaneAt([0, 0, 0], [0, 0, 1], 2, -1);
     const b = clipPlaneAt([0, 0, 0], [0, 0, 1], 6, -1);
@@ -67,7 +67,7 @@ describe("sectionFromPlaneDef", () => {
 });
 
 describe("the ghost dial", () => {
-  it("can still reach fully hidden — the old behaviour", () => {
+  it("can still reach fully hidden, the old behaviour", () => {
     expect(GHOST_LEVELS[0]).toBe(0);
     expect(ghostAlpha(0)).toBe(0);
     expect(ghostLabel(0)).toBe("hidden");

@@ -1,14 +1,14 @@
 // Interactive multi-body Move: one gizmo at the selection's centroid carrying
 // three arrows and three rings. Grab an arrow to slide the bodies along that
 // axis; grab a ring to turn them about it. Both drive a LIVE preview (the mesh
-// and its edges transformed in place, no sidecar round-trip) — type a value for
+// and its edges transformed in place, no sidecar round-trip), type a value for
 // precision, click off the gizmo / Enter to commit, Esc to revert.
 //
 // Rotation is the addition, and it needed one thing that was not obvious. The
 // `move` feature turns about the WORLD ORIGIN and only then translates, so a
 // body 300mm out along the part, turned a quarter turn, used to swing 424mm
 // across the scene instead of spinning where it stands. The correction is
-// arithmetic, not a new feature — see features/transformGizmo.composeMove — and
+// arithmetic, not a new feature, see features/transformGizmo.composeMove, and
 // it lives there with its control test rather than inline here, because the
 // symptom of getting it wrong is a body in a plausible-looking wrong place.
 //
@@ -21,7 +21,7 @@
 // applied in that order on rebuild and a preview built the other way round
 // agrees only while one of them is the identity.
 //
-// The gizmo's ORIGIN is draggable, and snaps to the model — a corner, the middle
+// The gizmo's ORIGIN is draggable, and snaps to the model, a corner, the middle
 // of an edge, the centre of a face. That is what turns "rotate this" into
 // "rotate this about that corner", which is the only form of the request anyone
 // actually has. Dragging it never moves the part: the translation absorbs the
@@ -62,8 +62,8 @@ const AXES = [
 // every frame, so it is the same size on a 6mm part and a 600mm one.
 //
 // The arrows reach past the rings rather than stopping inside them. An arrow
-// only ever crosses the OTHER two rings — the ring you turn about X lies in the
-// YZ plane, which the X arrow passes through at its centre — so the crossings
+// only ever crosses the OTHER two rings, the ring you turn about X lies in the
+// YZ plane, which the X arrow passes through at its centre, so the crossings
 // are two per arrow and both are near the tips, where an arrow is thick enough
 // to read over a ring drawn behind it.
 /** The arrow, and its head at the size every other arrowhead in the app is.
@@ -72,7 +72,7 @@ const AXES = [
  *  0.055 of its 88px arm) and the edge handle's is 9px long and 9px across.
  *  This one was 20 long and 14 ACROSS, wider than either while sitting on a
  *  shorter arrow, and it is the only one of the three drawn on top of the model
- *  rather than off at the world origin — so it was the one that read as
+ *  rather than off at the world origin, so it was the one that read as
  *  oversized. Matched to the triad's head in absolute pixels rather than in
  *  proportion: these are two arrows a user sees side by side, and what has to
  *  agree between them is how big the heads LOOK, not how each relates to its
@@ -86,7 +86,7 @@ const ARROW_SHAFT_R = 1.6;
  *  RING_GRAB below and as the edge handle's own proxies: how big a handle is
  *  DRAWN and how big it is to aim at are two questions, and slimming the arrow
  *  must not spend the aiming margin. A uniform cylinder, so the tip is as easy
- *  to hit as the root — the drawn cone tapers to nothing and used to be the
+ *  to hit as the root, the drawn cone tapers to nothing and used to be the
  *  hardest part of the arrow to press. */
 const ARROW_GRAB_R = 6.5;
 const RING_RADIUS = 46;
@@ -144,14 +144,14 @@ export class MoveTool {
    *  selection already carried at that moment */
   private grabAngle = 0;
   private grabRot = new THREE.Quaternion();
-  /** total turn on the grabbed ring, degrees — the value the field shows */
+  /** total turn on the grabbed ring, degrees, the value the field shows */
   private ringDeg = 0;
   private downPos = { x: 0, y: 0 };
 
   private dim = new DimInput();
   private onDone: ((id: string | null) => void) | null = null;
   /** Where a plain click that stood the tool down landed, so the caller can let
-   *  that same click do its ordinary work — usually picking the next body. */
+   *  that same click do its ordinary work, usually picking the next body. */
   onClickThrough: ((x: number, y: number, additive: boolean) => void) | null = null;
 
   private readonly gesture: CanvasGesture;
@@ -218,7 +218,7 @@ export class MoveTool {
    *
    *  The cursor ray is intersected with the ring's own plane, which is the only
    *  reading that stays put as the camera moves. Null when that plane is nearly
-   *  edge-on, where a pixel of pointer movement is an unbounded jump in angle —
+   *  edge-on, where a pixel of pointer movement is an unbounded jump in angle,
    *  the ring is a line on screen there, and refusing is better than spinning
    *  the part (see transformGizmo.ringDragDegenerate). */
   private ringAngle(axis: number, clientX: number, clientY: number): number | null {
@@ -257,7 +257,7 @@ export class MoveTool {
    *  Then the translation absorbs the change. The feature's translation carries
    *  the pivot correction (c - R·c); swapping c for c' and adding the difference
    *  back into t leaves the composed transform bit for bit what it was, which is
-   *  the promise this handle makes — the part does not twitch when you decide
+   *  the promise this handle makes, the part does not twitch when you decide
    *  where to turn it from. */
   private setPivot(where: THREE.Vector3) {
     const before = this.values();
@@ -287,7 +287,7 @@ export class MoveTool {
       const hit = this.viewport.pointAt(e.clientX, e.clientY);
       // Off the model entirely: slide the origin in the plane facing the
       // camera through where it already is, so it still follows the cursor
-      // instead of sticking. It is a pivot, not a constraint — putting it in
+      // instead of sticking. It is a pivot, not a constraint, putting it in
       // mid-air is a legitimate thing to want.
       const at = hit?.p ?? this.freePivotPoint(e.clientX, e.clientY);
       this.pivotSnapped = !!hit && hit.kind !== "surface";
@@ -368,7 +368,7 @@ export class MoveTool {
     }
     const moved =
       Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
-    // A clean click off the handles ends the session — and then means whatever
+    // A clean click off the handles ends the session, and then means whatever
     // it would have meant with no gizmo up. Picking is suspended while the tool
     // owns the pointer, so the click has to be replayed once it does not.
     if (!moved && !this.hitHandle(e.clientX, e.clientY)) {
@@ -382,7 +382,7 @@ export class MoveTool {
   /** Write the drag just finished and re-open on the same bodies.
    *
    *  The re-open waits for the rebuild, because everything the gizmo is placed
-   *  from — the bodies' centroid, the ghost it drags — is read off the model,
+   *  from, the bodies' centroid, the ghost it drags, is read off the model,
    *  and the model between addFeature and the build landing is still the old
    *  one. Re-opening against that would put the gizmo back where the body used
    *  to be and the next drag would double the move. */
@@ -438,7 +438,7 @@ export class MoveTool {
     this.gizmo.position.copy(pos);
     // Deliberately NOT turned with the selection. dx/dy/dz are world axes and
     // so are rx/ry/rz, so an arrow that had rotated away from world X would
-    // still slide the bodies along world X — a handle pointing one way and
+    // still slide the bodies along world X, a handle pointing one way and
     // acting another. The rings stay world-aligned for the same reason.
     this.gizmo.scale.setScalar(k);
     const lit = (kind: NonNullable<Grab>["kind"], i: number) =>
@@ -640,7 +640,7 @@ export class MoveTool {
    *
    *  Arrows are tested FIRST and win outright. The two families overlap where
    *  an arrow crosses its neighbours' rings, and an arrow is the smaller target
-   *  of the two — losing it to a ring drawn over it would make the commonest
+   *  of the two, losing it to a ring drawn over it would make the commonest
    *  gesture the hard one. */
   private hitHandle(x: number, y: number): Grab {
     if (!this.gizmo) return null;

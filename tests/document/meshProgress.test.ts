@@ -1,6 +1,6 @@
 // The meshing phase reports feature = -1 for its whole duration, so the timeline
 // chip has to get its fraction from the separate meshed/meshTotal channel. Before
-// that channel existed the bar sat at 0% for the entire phase — measured at 136 s
+// that channel existed the bar sat at 0% for the entire phase, measured at 136 s
 // on the 3,071-body reference assembly, the largest feel defect on the open path.
 // These tests pin the store half of that contract: the counts reach RebuildState,
 // the "not meshing" sentinel (-1) is normalised to null, and they are cleared when

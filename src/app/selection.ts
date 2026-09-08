@@ -7,7 +7,7 @@ import type { Feature } from "../types";
 /** Said when a feature's value cannot be dragged and has to be typed. One
  *  constant because three feature types say it and they used to say three
  *  slightly different things, all of them naming a docked panel that no longer
- *  exists — the values moved under the history entry that names the operation
+ *  exists, the values moved under the history entry that names the operation
  *  they belong to. */
 const VALUES_IN_HISTORY = "Not draggable, edit the value under this feature in the history";
 
@@ -18,7 +18,7 @@ export function createSelection(
   // engine installs these with Object.assign, which COPIES a getter's current
   // value instead of the getter. It was a plain `e.selectedFeature = null` in
   // createEngine and nothing ever wrote it again, so every non-Vue reader saw a
-  // permanent null — Delete on a selected feature, and Edit ▸ Delete/Suppress,
+  // permanent null, Delete on a selected feature, and Edit ▸ Delete/Suppress,
   // all silently did nothing.
   Object.defineProperty(e, "selectedFeature", {
     get: () => useSelectionStore().featureId,
@@ -28,7 +28,7 @@ export function createSelection(
 
   const selectFeature = (id: string | null) => {
     // Writing the store is what opens the feature's values in the history AND
-    // marks it in the browser tree — both render from it rather than being
+    // marks it in the browser tree, both render from it rather than being
     // pushed at.
     useSelectionStore().featureId = id;
     e.viewport.highlightDatum(id); // brighten the matching construction plane (if any)
@@ -114,9 +114,9 @@ export function createSelection(
         // double-clicking a fillet does. Asked last, so nothing here can be
         // taken over by a plugin claiming a type the app already handles.
         //
-        // The same false means the same thing it means above — a parameter
+        // The same false means the same thing it means above, a parameter
         // drives one of the values, so the rows in the history are where it is
-        // changed — and the same status line says so.
+        // changed, and the same status line says so.
         {
           const edit = contributedFeature(f.type)?.edit;
           if (edit && !edit(id, done)) e.setStatus(VALUES_IN_HISTORY, "");

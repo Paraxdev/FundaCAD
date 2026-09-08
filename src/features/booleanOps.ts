@@ -1,8 +1,8 @@
 // The three booleans, in one place: Union, Subtract, Intersect.
 //
 // They arrived as three commands replacing one command with a dialog. That is
-// only an improvement if all three are equally reachable — a ribbon entry, a
-// key, a right-click item, a toolbar button on a two-body selection — and the
+// only an improvement if all three are equally reachable, a ribbon entry, a
+// key, a right-click item, a toolbar button on a two-body selection, and the
 // way that goes wrong is a fourth surface learning about two of them. So the
 // pairing of an operation with its word, its action id and its mark is declared
 // here, and every surface reads it.
@@ -21,7 +21,7 @@ export interface BooleanCommand {
   /** The word on the button, and the word in a refusal. */
   label: string;
   /** The id app/actions.ts dispatches, and the id features/toolCapabilities.ts
-   *  gives the tool — those two being the same string is what lets the selection
+   *  gives the tool, those two being the same string is what lets the selection
    *  toolbar run an offer it was handed. */
   action: string;
   /** Name in ui/icons.ts. */

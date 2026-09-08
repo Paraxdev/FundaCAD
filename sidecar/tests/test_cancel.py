@@ -1,7 +1,7 @@
 """Cancel: can a user actually stop a long-running geometry op?
 
 Before this there was no user-facing abort anywhere in server.py or client.ts.
-That was survivable only because every op was bounded by a short timeout — but
+That was survivable only because every op was bounded by a short timeout, but
 Phase B raises the import cap, and a 356 MiB STEP read holds the worker for
 100+ seconds. Without cancel, one mis-click freezes all geometry with no exit.
 
@@ -13,7 +13,7 @@ Two things have to be true, and neither is obvious from the code:
     finished. This is the reason the request loop was restructured.
 
  2. The cancelled op must report CANCELLED, not "the geometry kernel crashed".
-    A pool job cannot be interrupted, so cancel kills the worker — which is
+    A pool job cannot be interrupted, so cancel kills the worker, which is
     indistinguishable from a segfault unless the token says otherwise.
 
 Run:  uv run python test_cancel.py
@@ -49,7 +49,7 @@ _SERVER = None
 
 class _Keep:
     """No-op async context: the tests each say `async with await _serve()`, but
-    one server is bound for the whole run — rebinding per test races TIME_WAIT
+    one server is bound for the whole run, rebinding per test races TIME_WAIT
     on 8765 and fails the second test for reasons having nothing to do with
     cancel."""
 
@@ -69,7 +69,7 @@ async def _serve():
 
 async def test_cancel_stops_a_running_job():
     """The headline: a cancel sent during a long op is heard, and the op comes
-    back as cancelled — quickly, not after the full duration."""
+    back as cancelled, quickly, not after the full duration."""
     # route the "interference" op at a long sleep so we have something to cancel
     orig = server._interference_job
     server._interference_job = _sleep_job
@@ -109,7 +109,7 @@ async def test_cancel_stops_a_running_job():
 
 
 async def test_geometry_still_works_after_a_cancel():
-    """Cancel kills the worker pool. The very next op must succeed — a cancel
+    """Cancel kills the worker pool. The very next op must succeed, a cancel
     that leaves geometry dead is worse than no cancel."""
     orig = server._interference_job
     server._interference_job = _sleep_job
@@ -164,7 +164,7 @@ async def test_cancel_targeting_another_id_leaves_the_job_alone():
 
 async def test_ordering_is_preserved_under_task_dispatch():
     """Heavy ops became tasks, but they must still run ONE AT A TIME and in
-    order — the shared heartbeat counter and the rebuild cache both assume it."""
+    order, the shared heartbeat counter and the rebuild cache both assume it."""
     async with await _serve():
         async with websockets.connect(URL) as ws:
             ids = [f"p{i}" for i in range(6)]

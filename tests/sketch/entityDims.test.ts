@@ -237,7 +237,7 @@ describe("rim measures", () => {
   });
 });
 
-describe("constraintDims — rim dims", () => {
+describe("constraintDims, rim dims", () => {
   const inner: ResolvedEntity = { type: "circle", id: "i", x: 0, y: 0, radius: 5 };
   const outer: ResolvedEntity = { type: "circle", id: "o", x: 0, y: 0, radius: 12 };
   const far: ResolvedEntity = { type: "circle", id: "q", x: 40, y: 0, radius: 4 };
@@ -346,7 +346,7 @@ describe("badge label placement", () => {
     const [o] = entityDims(ents[0]!, defs.get("outer"));
     const [i] = entityDims(ents[1]!, defs.get("inner"));
     expect(o!.labelPos.distanceTo(i!.labelPos)).toBeGreaterThan(10);
-    // and neither label may land ON a rim — a badge over geometry hands its
+    // and neither label may land ON a rim, a badge over geometry hands its
     // clicks to that geometry
     for (const d of [o!, i!]) {
       for (const r of [17, 30]) expect(Math.abs(d.labelPos.length() - r)).toBeGreaterThan(2);
@@ -364,7 +364,7 @@ describe("badge label placement", () => {
     expect(at(entityDims(ents[0]!, defs.get("a"))[0]!)).toEqual([5, 0]);
   });
 
-  it("a linear badge only moves perpendicular — the along-segment part is ignored", () => {
+  it("a linear badge only moves perpendicular, the along-segment part is ignored", () => {
     const base: ResolvedEntity = { type: "line", id: "l", x1: 0, y1: 0, x2: 10, y2: 0 };
     const off = entityDims(base)[0]!.place;
     // the line's normal is +Y (left of a +X segment): only oy can matter
@@ -401,7 +401,7 @@ describe("badge label placement", () => {
   it("a polygon radius label only slides along its own radial line", () => {
     const e: ResolvedEntity = {
       type: "polygon", id: "p", x: 0, y: 0, radius: 10, sides: 6, angle: 0,
-      dimPlace: { radius: { ox: 8, oy: 50 } }, // the 50 is across the line — ignored
+      dimPlace: { radius: { ox: 8, oy: 50 } }, // the 50 is across the line, ignored
     };
     const [d] = entityDims(e);
     expect(d!.labelPos.y).toBeCloseTo(0);

@@ -3,12 +3,12 @@
 // Two things are worth testing separately and this file keeps them apart, which
 // is the same split the module itself is written in:
 //
-//   the RULES — what a selection can feed, how a minimum is applied, which kind
-//   a tool would take — are pure functions over a table they are handed, so they
+//   the RULES, what a selection can feed, how a minimum is applied, which kind
+//   a tool would take, are pure functions over a table they are handed, so they
 //   are tested against tables written here, with no plugin registered and
 //   nothing to reset.
 //
-//   the MERGE — the application's tools, then whatever is contributed — is the
+//   the MERGE, the application's tools, then whatever is contributed, is the
 //   impure part, and the only questions about it are about precedence and
 //   lifetime.
 

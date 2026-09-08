@@ -88,7 +88,7 @@ export function clampDragPitch(pitch: number, minPitch: number, angleDeg: number
 
 /** The most turns one drag may reach.
  *
- *  Not the kernel's limit — OCCT will sweep a hundred turns and take its time
+ *  Not the kernel's limit, OCCT will sweep a hundred turns and take its time
  *  doing it. It is a limit on what a HAND can mean: the arrow travels one turn
  *  per trip round the model, so twenty is already a long gesture, and past that
  *  a flick that overshoots costs a rebuild measured in seconds. A spring with
@@ -106,7 +106,7 @@ export const MIN_DRAG_ANGLE = 1;
  *  A cursor's angle about the axis is only ever known to within a full turn, so
  *  a drag that goes all the way round reads +179, then -179, and the sweep
  *  unwinds a whole circle at the moment it should have completed one. This picks
- *  the multiple of 360 that puts `raw` nearest `prev` — right for any hand that
+ *  the multiple of 360 that puts `raw` nearest `prev`, right for any hand that
  *  moves less than half a turn between two frames, and a hand moving faster than
  *  that was not aiming at anything in particular.
  *
@@ -128,8 +128,8 @@ export function unwrapTurn(prev: number, raw: number): number {
  *  run into the one before; OCCT builds that quite happily and hands back a
  *  self-intersecting solid, so the sidecar refuses it outright. The pitch arrow
  *  stops at the shortest climb that clears one turn of the last; the angle arrow
- *  stops at the last turn that clears, which for a pitch too small — a flat
- *  revolve very much included — is exactly one.
+ *  stops at the last turn that clears, which for a pitch too small, a flat
+ *  revolve very much included, is exactly one.
  *
  *  That wall is the point rather than a guard rail. A hand pulling the sweep
  *  round meets it at the turn where the geometry would begin to collide, so the
@@ -162,7 +162,7 @@ export function clampDragAngle(deg: number, pitch: number, minPitch: number): nu
  *  by two orders of magnitude in what a pixel is worth in degrees.
  *
  *  Capped, because a small radius or a far zoom would otherwise wrap the arrow
- *  round the axis and back — which reads as a ring, a thing you turn to no
+ *  round the axis and back, which reads as a ring, a thing you turn to no
  *  particular end, rather than as a direction the sweep is already going. */
 export function arcSpanDeg(
   radius: number,
@@ -180,7 +180,7 @@ export const MAX_ARC_DEG = 70;
 /** A short run of the sweep's OWN circle, continuing forward from where the
  *  sweep currently ends: the track the angle arrow rides.
  *
- *  At the real radius, in the real plane, climbing at the real pitch — not flat
+ *  At the real radius, in the real plane, climbing at the real pitch, not flat
  *  against the screen. The whole claim the arrow makes is "your sweep goes this
  *  way, round here", and a screen-flat arc standing beside the part would be a
  *  widget that happened to be nearby. Climbing matters for the same reason: on a

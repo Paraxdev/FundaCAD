@@ -3,7 +3,7 @@
 // setModel was taught to capture and restore a selection across a rebuild, and
 // that was believed to cover it. It did not: a chunked reply reaches the screen
 // in several installments and each one publishes a fresh ModelView with a fresh
-// Highlighter, so the selection was gone before the commit ever ran — and the
+// Highlighter, so the selection was gone before the commit ever ran, and the
 // commit's own capture, reading that empty Highlighter, correctly answered
 // "nothing is selected" and restored nothing.
 //
@@ -46,7 +46,7 @@ describe("remapStreamedSelection", () => {
   it("holds the geometric fallback back until the body is there", () => {
     // THE RULE: a body whose chunk has not landed yet is not a body whose face
     // is gone. faceIdNear answers with the nearest face on ANYTHING that has
-    // arrived, so letting it run here moves the selection onto another body —
+    // arrived, so letting it run here moves the selection onto another body,
     // worse than waiting, because the commit re-runs this and gets it right.
     const rematch = vi.fn((m: Memo) => `${m.tag}'`);
     const out = remapStreamedSelection(
@@ -87,7 +87,7 @@ describe("remapStreamedSelection", () => {
   it("counts a held-back entity against the cap the same way a missing one is", () => {
     // The cap exists because the fallback is O(model) each. A stream re-runs
     // this on EVERY installment, so an uncapped one would be O(chunks x model x
-    // entities) — the cost the cap was put there to refuse in the first place.
+    // entities), the cost the cap was put there to refuse in the first place.
     const many = Array.from({ length: MAX_GEOMETRIC_REMATCH + 1 }, (_, i) => memo(`f${i}`, true));
     const rematch = vi.fn((m: Memo) => m.tag);
     expect(remapStreamedSelection(many, () => null, rematch, (m) => m.landed)).toEqual([]);

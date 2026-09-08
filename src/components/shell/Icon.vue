@@ -4,7 +4,7 @@
 // It is safe for a reason that has to hold for it to stay safe: every value in
 // icons.ts's pack tables is a compile-time string constant in that file. No
 // document data, no file name, no network payload ever reaches it. Nothing else
-// may use v-html — see the CI grep.
+// may use v-html, see the CI grep.
 //
 // Renders the <svg> element ITSELF rather than wrapping one, because the layout
 // rules select `.ribbon-btn svg` / `.ctx-item svg` directly and a wrapper span
@@ -28,8 +28,8 @@ const props = withDefaults(defineProps<{ name: string; size?: number | string }>
 });
 
 // The active pack is module state in a plain .ts, not a store, so nothing
-// tracks it. One counter per mounted icon is cheap — an icon is a leaf with no
-// children to re-render — and it keeps icons.ts free of a Vue import, which
+// tracks it. One counter per mounted icon is cheap, an icon is a leaf with no
+// children to re-render, and it keeps icons.ts free of a Vue import, which
 // matters because the headless *.test.ts suite imports it.
 const tick = ref(0);
 const stop = onIconPackChange(() => tick.value++);

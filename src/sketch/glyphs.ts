@@ -1,7 +1,7 @@
 // Constraint glyphs: a small on-canvas badge per GEOMETRIC constraint, showing
 // its type and letting the user see/delete relationships (Fusion's "Show
 // Constraints"). Dimensional constraints (distance/diameter/p2p/p2l/radius/angle)
-// are NOT glyphed here — they already render as editable dimension badges.
+// are NOT glyphed here, they already render as editable dimension badges.
 
 import * as THREE from "three";
 import type { ResolvedEntity } from "./snap";
@@ -18,14 +18,14 @@ export interface ConstraintGlyph {
 
 /** The solver's diagnosis of a constraint, or null if clean. Conflict (can't be
  *  satisfied) takes precedence over over-defined (redundant/removable). This is
- *  the single source of that precedence — glyph and dimension badges both use it,
+ *  the single source of that precedence, glyph and dimension badges both use it,
  *  so their red/amber can't drift apart. */
 export type ConstraintDiagnosis = "conflict" | "over";
 export function diagnosisOf(i: number, conflict: Set<number>, over: Set<number>): ConstraintDiagnosis | null {
   return conflict.has(i) ? "conflict" : over.has(i) ? "over" : null;
 }
 
-/** The name, symbol and operands of a constraint — THE table, shared by the
+/** The name, symbol and operands of a constraint, THE table, shared by the
  *  glyph badges and the list so a constraint cannot be called one thing on the
  *  canvas and another in the panel. Operand ids may be compound rectangle-edge
  *  ids (`<rectId>~<k>`); entityLabel decodes those. */
@@ -39,7 +39,7 @@ export function constraintFace(c: SketchConstraint): {
     case "vertical": return { symbol: "V", name: "Vertical", operands: [c.line] };
     case "parallel": return { symbol: "∥", name: "Parallel", operands: [c.l1, c.l2] };
     case "perpendicular": return { symbol: "⊥", name: "Perpendicular", operands: [c.l1, c.l2] };
-    case "collinear": return { symbol: "—", name: "Collinear", operands: [c.l1, c.l2] };
+    case "collinear": return { symbol: ", ", name: "Collinear", operands: [c.l1, c.l2] };
     case "equal": return { symbol: "=", name: "Equal", operands: [c.l1, c.l2] };
     case "equalRadius": return { symbol: "=", name: "Equal radius", operands: [c.a, c.b] };
     case "tangent": return { symbol: "T", name: "Tangent", operands: [c.line, c.circle] };
@@ -49,14 +49,14 @@ export function constraintFace(c: SketchConstraint): {
     case "midpoint": return { symbol: "M", name: "Midpoint", operands: [c.e, c.line] };
     case "symmetric": return { symbol: "⋈", name: "Symmetric", operands: [c.e1, c.e2, c.line] };
     // "F", not an anchor. Every other symbol in this set is a letter or a
-    // mathematical operator that the UI font draws itself — one emoji among
+    // mathematical operator that the UI font draws itself, one emoji among
     // them came out in full colour, at a different weight, from whatever
     // fallback the platform reached for, and jumped a pixel or two off the
     // baseline its neighbours share. A letter matches the alphabet the rest of
     // the set already speaks.
     case "fix": return { symbol: "F", name: "Fixed", operands: [c.e] };
-    // The dimensional constraints have no glyph — they ARE their badge on the
-    // canvas — but a list that showed only the geometric half would be lying
+    // The dimensional constraints have no glyph, they ARE their badge on the
+    // canvas, but a list that showed only the geometric half would be lying
     // about what is holding the sketch.
     case "distance": return { symbol: "↔", name: "Length", operands: [c.line] };
     case "diameter": return { symbol: "⌀", name: "Diameter", operands: [c.circle] };

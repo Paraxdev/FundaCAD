@@ -3,13 +3,13 @@
 // A completed rebuild replaces the Highlighter and every trace of what was
 // selected. Tolerable while selecting only lit an edge up, but direct manipulation
 // makes the selection a live control: the drag handle is drawn FROM it, so
-// cancelling a fillet returned you to the sharp model with no arrow — the geometry
+// cancelling a fillet returned you to the sharp model with no arrow, the geometry
 // was back, the affordance was not.
 //
 // Two ways to find an entity again, in cost order:
 //
 //  1. It came through untouched. A body whose etag is unchanged is REUSED whole by
-//     setModel — same BodyMesh, same EdgeRefs, same faceId numbering — so the old
+//     setModel, same BodyMesh, same EdgeRefs, same faceId numbering, so the old
 //     reference is still right. The common case, since a rebuild usually touches
 //     one body out of however many exist.
 //  2. Its body was rebuilt. Ids are not stable (the client renumbers), so geometry
@@ -20,7 +20,7 @@
 // commit is one moment and the two tiers above are enough for it; a stream is
 // several, and EVERY installment publishes a fresh ModelView with a fresh
 // Highlighter. So the selection was gone long before the commit ran, and the
-// commit's own capture — reading that empty Highlighter — correctly reported
+// commit's own capture, reading that empty Highlighter, correctly reported
 // "nothing is selected" and restored nothing. It looked like a tool losing its
 // own gesture at random, because whether a reply streams at all depends on how
 // big it is.
@@ -37,7 +37,7 @@
  *  body. One or two of those is invisible; a coplanar smart-select of 200 faces
  *  would turn every rebuild into a freeze. Losing the selection there is the
  *  behaviour that existed before any of this, so the cap degrades to the old
- *  outcome rather than to a new bug — and the cases direct manipulation is
+ *  outcome rather than to a new bug, and the cases direct manipulation is
  *  built around (one edge, one face) are nowhere near it. */
 export const MAX_GEOMETRIC_REMATCH = 16;
 
@@ -45,7 +45,7 @@ export const MAX_GEOMETRIC_REMATCH = 16;
  *
  *  `survivor` returns the entity when the memo came through the rebuild
  *  verbatim, else null. `rematch` is the expensive geometric fallback, called
- *  ONLY for what `survivor` gave up on — and only while the number of those
+ *  ONLY for what `survivor` gave up on, and only while the number of those
  *  stays within `maxRematch`.
  *
  *  Order follows the capture, and duplicates collapse: two selected edges can
@@ -78,7 +78,7 @@ export function remapSelection<M, E>(
  *  The same two tiers, plus the one rule a stream adds: A BODY WHOSE CHUNK HAS
  *  NOT LANDED YET IS NOT A BODY WHOSE ENTITY IS GONE.
  *
- *  The survivor path needs no help — a body reused whole is on screen from the
+ *  The survivor path needs no help, a body reused whole is on screen from the
  *  first installment. The geometric fallback does: it finds the nearest thing
  *  to a point, and with the right body still in flight the nearest thing is
  *  some other body's face. Answering with that is worse than not answering,
@@ -102,7 +102,7 @@ export function remapStreamedSelection<M, E>(
  *
  *  AN INSTALLMENT MUST NOT. Mid-stream "nothing came back" is the ordinary
  *  state of a reply that has not delivered the right body yet, and announcing
- *  it takes the handle down — and ends the gesture — a few milliseconds before
+ *  it takes the handle down, and ends the gesture, a few milliseconds before
  *  the body lands. Only a real restore is news. */
 export function shouldAnnounce(captured: number, restored: number, duringStream: boolean): boolean {
   return duringStream ? restored > 0 : captured > 0;

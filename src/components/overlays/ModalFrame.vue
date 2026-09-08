@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// The large centred modal chrome — .modal-overlay > .modal-panel > .modal-head
-// — worn by the welcome screen and the 3D-Mouse settings.
+// The large centred modal chrome, .modal-overlay > .modal-panel > .modal-head,
+// worn by the welcome screen and the 3D-Mouse settings.
 //
 // It owns the frame and nothing else. No Escape handling and no modal-depth
 // gate: the two dialogs that wear it differ on both, and those differences are

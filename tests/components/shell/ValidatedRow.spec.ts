@@ -33,7 +33,7 @@ function mountRow(opts: {
  *  Deliberately not wrapper.setValue(): that fires `input` AND `change` (it
  *  supports v-model.lazy), so it would commit on every simulated keystroke and
  *  quietly invalidate every mid-edit assertion below. Committing is `change`,
- *  which is the blur/Enter moment — that is the distinction these tests are
+ *  which is the blur/Enter moment, that is the distinction these tests are
  *  about, so they draw it by hand. */
 async function type(w: ReturnType<typeof mountRow>, text: string) {
   const input = w.get("input");

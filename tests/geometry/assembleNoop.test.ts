@@ -1,8 +1,8 @@
 // assemble() returns the PREVIOUS RebuildResult by reference when a reply's
 // bodies all arrive as unchanged stubs and nothing else moved. Without it every
 // no-op rebuild rebuilt ~98 MiB of typed arrays (0.171 s on the reference
-// assembly), and the viewport — which keys its own fast path on result identity
-// — rebuilt the whole scene behind it.
+// assembly), and the viewport, which keys its own fast path on result identity,
+// rebuilt the whole scene behind it.
 //
 // The risk is the mirror image: returning a stale object when something DID
 // change. These tests pin both directions.

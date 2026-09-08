@@ -337,11 +337,11 @@ const ZOOM = Number(process.env.ZOOM || 1);
   // ---- the transform gizmo -------------------------------------------------
   // Selected through the browser: Move works on BODIES, and a click in the
   // viewport under the default Faces filter gives it a face, which it cannot
-  // use — it falls back to the last body built and the gizmo appears somewhere
+  // use, it falls back to the last body built and the gizmo appears somewhere
   // nobody pointed at.
   // The Housing rather than the Knob: the gizmo's handles are a FIXED number of
   // pixels across, so it only reads at a distance where the part fills a
-  // sensible part of the frame — and its value fields open to the right, which
+  // sensible part of the frame, and its value fields open to the right, which
   // runs off the edge on anything near it.
   await page.getByText("Housing", { exact: true }).click();
   await page.waitForTimeout(400);

@@ -1,4 +1,4 @@
-//! Slicer handoff — Stage D.v1: write the exported project into a staging dir and
+//! Slicer handoff, Stage D.v1: write the exported project into a staging dir and
 //! open it in the user's OrcaSlicer (GUI), where their U1 preset + print host are
 //! already configured so they can Slice → Upload & Print. The AppImage path is
 //! Rust-owned app settings, not a webview-supplied argument, so the webview can
@@ -13,13 +13,13 @@ use tauri::{AppHandle, Manager};
 pub struct AppSettings {
     /// path to the OrcaSlicer binary/AppImage used to open exported projects.
     pub slicer_path: String,
-    /// the user's Orca datadir (their presets) — used by the future CLI path.
+    /// the user's Orca datadir (their presets), used by the future CLI path.
     pub orca_datadir: String,
 }
 
 /// Where OrcaSlicer usually installs, most likely first. `default_settings` takes
 /// the first that actually exists, so a user who installed it in any of the usual
-/// places gets a working handoff without ever touching a settings file — which
+/// places gets a working handoff without ever touching a settings file, which
 /// matters because nothing in the UI writes one yet.
 ///
 /// `os` and `env` are parameters rather than `cfg!` so the Windows and macOS
@@ -135,12 +135,12 @@ pub fn print_staging_path(app: AppHandle, name: String, ext: String) -> Result<S
     Ok(dir.join(format!("{stem}.{ext}")).to_string_lossy().into_owned())
 }
 
-/// Open a project file in OrcaSlicer's GUI. Detached spawn — we don't wait.
+/// Open a project file in OrcaSlicer's GUI. Detached spawn, we don't wait.
 #[tauri::command]
 pub fn slicer_open(app: AppHandle, path: String) -> Result<(), String> {
     let slicer = settings_get(app.clone())?.slicer_path;
     if slicer.is_empty() {
-        return Err("no slicer configured — set the OrcaSlicer path in settings".into());
+        return Err("no slicer configured, set the OrcaSlicer path in settings".into());
     }
     let bin = PathBuf::from(&slicer);
     if !bin.is_file() {
@@ -159,13 +159,13 @@ pub fn slicer_open(app: AppHandle, path: String) -> Result<(), String> {
 // --- Orca preset flattening (so a handoff project selects the user's U1 preset) -
 //
 // A minimal `printer_model` stub is NOT enough for OrcaSlicer to bind a machine
-// preset on "open as project" — it falls back to "-" (no printer, no print host).
+// preset on "open as project", it falls back to "-" (no printer, no print host).
 // So we flatten the user's ACTIVE machine preset (resolving its `inherits` chain
 // the same way Orca does) plus a compatible process/filament, and embed that in
 // Metadata/project_settings.config. Orca then selects the U1 (with its print_host
 // 192.168.0.46), and the palette still owns the colors.
 
-/// preset fields that are per-file metadata, not effective config — dropped after
+/// preset fields that are per-file metadata, not effective config, dropped after
 /// the inherits chain is merged (mirrors the Orca preset model).
 const META_KEYS: &[&str] = &[
     "inherits", "from", "name", "setting_id", "filament_id", "renamed_from",
@@ -322,7 +322,7 @@ pub fn slicer_project_settings(app: AppHandle, filament_count: usize) -> Result<
     let m_idx = index_presets(&datadir, "machine");
     let (mut cfg, chain) = resolve_chain(&m_idx, &machine)?;
 
-    // process (prefer a 0.2mm profile) — merged over machine keys, brings real
+    // process (prefer a 0.2mm profile), merged over machine keys, brings real
     // line widths/speeds so Orca doesn't show a blank project process.
     let p_idx = index_presets(&datadir, "process");
     if let Some(proc_name) = pick_preset(&p_idx, &chain, &["0.20"]) {
@@ -438,7 +438,7 @@ mod tests {
             None => return,
         };
         if !dd.join("OrcaSlicer.conf").is_file() {
-            return; // not this machine — skip
+            return; // not this machine, skip
         }
         let conf: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(dd.join("OrcaSlicer.conf")).unwrap()).unwrap();

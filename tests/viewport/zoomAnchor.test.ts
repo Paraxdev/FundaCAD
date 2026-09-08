@@ -3,7 +3,7 @@
 // This is the whole claim of zoom-to-cursor, and it is a claim about PIXELS, so
 // it is tested in pixels: put a point at a known place on screen, zoom a dozen
 // notches, and project it again after each one. A single notch hides the defect
-// this replaced — the drift is a few percent per notch and compounds — which is
+// this replaced, the drift is a few percent per notch and compounds, which is
 // why every case here zooms far enough to matter.
 
 import { describe, expect, it } from "vitest";
@@ -148,8 +148,8 @@ describe("groundAnchor", () => {
 
   it("keeps a zoom over empty space ON the plane, notch after notch", () => {
     // The property the whole thing exists for. Aim at the ground, dolly toward
-    // it, and the orbit target must still be on the ground twenty notches later
-    // — that is what keeps the grid in the frame at extreme zoom.
+    // it, and the orbit target must still be on the ground twenty notches later,
+    // that is what keeps the grid in the frame at extreme zoom.
     let cam = v(60, -60, 48);
     let target = v(0, 0, 0);
     for (let i = 0; i < 20; i++) {
@@ -168,7 +168,7 @@ describe("groundAnchor", () => {
   it("is what the OLD fallback was not", () => {
     // The control, and the bug in one test. A point on the ray at the current
     // target distance is on a SPHERE around the camera rather than on any
-    // surface, so zooming toward it walks the orbit target off the plane —
+    // surface, so zooming toward it walks the orbit target off the plane,
     // and once the offset is comparable to how much of the world is on screen,
     // the grid has left the frame. Measured on the running app before the fix:
     // eight notches put the target 0.38mm below z = 0 with the view 0.44mm
@@ -238,7 +238,7 @@ describe("orthoZoomStep", () => {
 
   it("moves NOTHING once the zoom is at its stop", () => {
     // The reported bug. At the limit the zoom cannot change, so the truck must
-    // be exactly zero — not merely small, since it is applied every notch and a
+    // be exactly zero, not merely small, since it is applied every notch and a
     // user who cannot zoom out keeps scrolling.
     const out = step(MIN_ZOOM, 4);
     expect(out.zoom).toBe(MIN_ZOOM);

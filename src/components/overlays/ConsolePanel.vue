@@ -4,7 +4,7 @@
 //
 // Two rules it exists to keep, both of which the toast breaks:
 //
-//   * Nothing is truncated. Messages wrap, they never clip — a kernel sentence
+//   * Nothing is truncated. Messages wrap, they never clip, a kernel sentence
 //     is usually one long line and the tail is the part that says what to do.
 //   * Nothing expires. A toast is gone in eight seconds, which is not long
 //     enough to read a stack, let alone copy one.

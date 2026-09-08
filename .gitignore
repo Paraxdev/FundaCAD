@@ -24,7 +24,7 @@ green-select.png
 .DS_Store
 
 # scratch CAD artifacts: dev test parts, not shipped.
-# Repo-WIDE, not just src-tauri/ — this is a public repo, and a stray part file
+# Repo-WIDE, not just src-tauri/, this is a public repo, and a stray part file
 # anywhere in the tree publishes real geometry and dimensions. Two fixtures are
 # deliberate exceptions: one synthetic bench part, and third_party sample models.
 # scripts/check-repo-hygiene.sh backstops this by failing CI if a model is ever

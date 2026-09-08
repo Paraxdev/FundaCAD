@@ -1,7 +1,7 @@
 """Putting a reply on the socket.
 
-Split out of server.py. A rebuild's answer is mostly float arrays — vertices,
-normals, edge polylines — and JSON is the wrong shape for them twice over: it
+Split out of server.py. A rebuild's answer is mostly float arrays, vertices,
+normals, edge polylines, and JSON is the wrong shape for them twice over: it
 triples the bytes and it makes the frontend parse numbers one at a time. So a
 binary reply is a small JSON envelope followed by raw little-endian buffers the
 browser can hand straight to a GPU buffer, and this module is the packing,
@@ -65,7 +65,7 @@ def _reply_for(req_id, res):
 
 # The largest frame the websocket server will accept or emit. A security control
 # (sidecar DoS surface), deliberately lowered from 512 MiB in the 2026-07-02
-# hardening round — raise it only with that in mind. Enforced on the way IN by
+# hardening round, raise it only with that in mind. Enforced on the way IN by
 # websockets.serve(max_size=...) and on the way OUT by _reply_bytes.
 _MAX_FRAME = 128 * 1024 * 1024
 
@@ -77,7 +77,7 @@ _MAX_FRAME = 128 * 1024 * 1024
 # {"$buf": i} referencing result.$buffers[i] = {"dtype","len"} (len = element
 # count) in on-wire order; the client computes offsets sequentially. Both
 # dtypes are 4 bytes/element, so after the single header pad every buffer is
-# 4-aligned for free — INVARIANT: adding a wider dtype requires per-buffer
+# 4-aligned for free, INVARIANT: adding a wider dtype requires per-buffer
 # padding. NOTE the unit of that invariant is ONE FRAME, and with `"chunked":
 # true` a reply is several frames: each carries its own header, its own pad and
 # its own $buffers table, so the guarantee holds per chunk, not per reply.
@@ -95,7 +95,7 @@ def _pack_edges(edges, take, body):
     (u32) the client walks to re-split them.
 
     Edge polylines are the largest single component of a large assembly's reply
-    AND the one part tessellation tolerance cannot shrink — they sample at the
+    AND the one part tessellation tolerance cannot shrink, they sample at the
     fixed _EDGE_DEFLECTION, not at the viewport tolerance. Measured on the 356 MiB
     reference assembly: 97.1 MiB across 1,726,523 points, byte-identical at every
     point of a 5-step tolerance sweep, i.e. a hard floor under the 128 MiB frame
@@ -140,7 +140,7 @@ def _taker():
     def take(vals, dtype, tag):
         arr = np.asarray(vals, dtype=dtype)
         # memoryview, not .tobytes(): join copies either way, so a bytes copy
-        # here would put TWO full payloads in the parent at once — ~245 MiB at
+        # here would put TWO full payloads in the parent at once, ~245 MiB at
         # the shipping tier. The array stays alive through the view.
         buffers.append(memoryview(arr).cast("B"))
         buf_meta.append({"dtype": tag, "len": int(arr.size)})
@@ -152,7 +152,7 @@ def _taker():
 def _pack_bodies(bodies, take):
     """Swap each full body's mesh arrays for {"$buf": i} refs; stubs pass through
     untouched. Shared by the single-frame encoder and the chunked one so a body's
-    on-wire payload is identical either way — which is what lets the chunked
+    on-wire payload is identical either way, which is what lets the chunked
     round-trip test assert equality against the single-frame reply."""
     out = []
     for b in bodies:
@@ -188,7 +188,7 @@ def _frame_bytes(envelope, buffers):
 
 def _encode_binary_reply(req_id, res):
     """Encode a successful protocol-2 rebuild result as one binary frame.
-    Raises on anything unexpected — _reply_bytes falls back to the JSON text
+    Raises on anything unexpected, _reply_bytes falls back to the JSON text
     reply, so an encode bug can never break a rebuild."""
     take, buffers, buf_meta = _taker()
     header_obj = dict(res)
@@ -200,7 +200,7 @@ def _encode_binary_reply(req_id, res):
 def _too_large_error(req_id, size, n_bodies):
     """The reply exceeded the frame cap. websockets closes the connection with
     1009 "message too big" when a frame exceeds max_size, which reaches the user
-    as the app dying mid-rebuild with no explanation — the failure mode of GH #4.
+    as the app dying mid-rebuild with no explanation, the failure mode of GH #4.
     _viewport_profile coarsens a large document's mesh to stay under the cap, but
     it keys off BODY COUNT, and bodies vary enormously in face count; this is the
     backstop for when that proxy is wrong."""
@@ -221,7 +221,7 @@ def _reply_bytes(req_id, res, binary):
     the client opted in and the result is a successful mesh reply; the plain
     JSON text reply otherwise (errors, resync, opt-out, or encoder failure).
 
-    Either form is refused if it would exceed the frame cap — see
+    Either form is refused if it would exceed the frame cap, see
     _too_large_error for why that must not reach websockets. Clients that also
     opt into `chunked` never reach here for a successful mesh reply; they go
     through _stream_binary_reply, which has no such cliff."""
@@ -267,7 +267,7 @@ def _body_wire_size(b):
          + _wire_len(b.get("faceIds")) + _wire_len(b.get("normals")))
     for e in b.get("edges") or ():
         n += 3 * _wire_len(e.get("points")) + 1
-    # 4 bytes per binary element, plus the inline JSON riding in the header —
+    # 4 bytes per binary element, plus the inline JSON riding in the header,
     # faceOwners dominates that, at one short string or null per B-rep face.
     return 4 * n + 24 * _wire_len(b.get("faceOwners")) + 256
 
@@ -275,7 +275,7 @@ def _body_wire_size(b):
 def _manifest_entry(b):
     """One manifest row. The manifest names every body of the reply in final
     order and ships in the head frame, so the client can plan every array
-    offset and faceStart BEFORE any payload arrives — which is what makes chunk
+    offset and faceStart BEFORE any payload arrives, which is what makes chunk
     writes order-independent and byte-identical to the single-frame path.
 
     Sizes are present only for FULL bodies. For a stub the sidecar genuinely
@@ -304,7 +304,7 @@ def _chunk_bodies(bodies, target):
     Order is load-bearing all the way to the screen: the client accumulates
     faceStart by manifest order, and partitionMesh/buildBodyMesh key face
     picking off those ranges. A body over target gets a chunk to itself rather
-    than being split — the body is the indivisible unit here, which is what
+    than being split, the body is the indivisible unit here, which is what
     keeps every chunk independently decodable."""
     chunk, size = [], 0
     for b in bodies:
@@ -319,7 +319,7 @@ def _chunk_bodies(bodies, target):
 
 
 def _body_too_large_error(req_id, chunk, size):
-    """One body's own payload exceeds the frame cap — the single case chunking
+    """One body's own payload exceeds the frame cap, the single case chunking
     cannot fix, because a body is the indivisible unit of a chunk. Distinct from
     _too_large_error because its advice has to be: this ONE body is the problem.
     Reachable in practice: _viewport_profile coarsens by body COUNT, so a
@@ -352,13 +352,13 @@ def _cancelled_now():
 
 async def _stream_binary_reply(ws, req_id, res, cancelled=None):
     """Send a successful protocol-2 result as a STREAM of binary frames instead
-    of one. Returns True once the head frame is away — from that point the reply
+    of one. Returns True once the head frame is away, from that point the reply
     is committed and the caller must not send anything else.
 
     Frame 0 (the head) carries every non-body field plus the manifest; frames
     1..N carry contiguous slices of `bodies`. Non-final frames carry
     `status: "chunk"` and no `ok`, so a client that does not understand them
-    treats them as informational rather than as the reply — the same rule the
+    treats them as informational rather than as the reply, the same rule the
     `building` progress frame already relies on. The final frame carries
     `ok: true` and resolves the request.
 
@@ -435,7 +435,7 @@ async def _send_reply(ws, req_id, res, binary, chunked):
             # Fall through to the single-frame path. If this failed while
             # building the head, nothing has been sent and the fallback is the
             # whole reply. If it failed mid-loop the head is already out, and
-            # the fallback frame lands on top of a half-received stream — which
+            # the fallback frame lands on top of a half-received stream, which
             # is safe, because a terminal reply SUPERSEDES a partial stream on
             # the client (see Geometry.dropStream): the caller gets one complete
             # answer either way, rather than a wedged request.

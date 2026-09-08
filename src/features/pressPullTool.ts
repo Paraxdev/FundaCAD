@@ -1,11 +1,11 @@
 // Interactive Press/Pull (MCAD-style): pick a solid face, then grab the drag
 // handle on it and drag along the face normal to add material (boss / pull
-// out), cut material (pocket / push in), or resize a cylindrical face (hole/boss)
-// — with a LIVE preview. Same interaction as Fillet/Chamfer (EdgeFeatureTool): an
+// out), cut material (pocket / push in), or resize a cylindrical face (hole/boss),
+// with a LIVE preview. Same interaction as Fillet/Chamfer (EdgeFeatureTool): an
 // on-top, constant-screen-size gizmo you grab and scrub; a clean click commits.
 //
-// Like Fillet (and unlike sketch Extrude) the result can't be faked client-side —
-// a real surface offset needs build123d/OCCT — so the preview is sidecar-driven:
+// Like Fillet (and unlike sketch Extrude) the result can't be faked client-side,
+// a real surface offset needs build123d/OCCT, so the preview is sidecar-driven:
 // the un-committed feature is appended via store.setPreview() and the normal
 // rebuild pipeline renders it. Commit promotes it (records undo); Esc reverts.
 
@@ -53,7 +53,7 @@ export class PressPullTool {
   private hovering = false;
   private grabbing = false;
   /** true when this drag began on the passive selection handle rather than on
-   *  our own gizmo — a one-press gesture, so releasing it finishes (see onUp). */
+   *  our own gizmo, a one-press gesture, so releasing it finishes (see onUp). */
   private fluentGrab = false;
   private grabValue = 0; // value at grab start (relative drag)
   private grabProj = 0; // axis projection at grab start
@@ -90,7 +90,7 @@ export class PressPullTool {
     // Read BEFORE anything is installed, because the direct-manipulation entry
     // needs the selection its handle was drawn for: if a rebuild landed between
     // the paint and the press, arming into the pick phase would be a
-    // bait-and-switch into a tool nobody asked for — and it would hold
+    // bait-and-switch into a tool nobody asked for, and it would hold
     // toolBusy() until noticed.
     const pre = this.viewport.selectedFacesForPressPull();
     if (opts?.grabAt && !pre) return;
@@ -108,7 +108,7 @@ export class PressPullTool {
     }
   }
 
-  /** Take hold of the handle at (x, y) without a fresh pointerdown of our own —
+  /** Take hold of the handle at (x, y) without a fresh pointerdown of our own,
    *  the press that started the gesture landed on the passive selection handle,
    *  before this tool existed. Everything after this point is the ordinary
    *  drag: the same onMove scrub, the same onUp release. */
@@ -131,11 +131,11 @@ export class PressPullTool {
     }
     if (this.grabbing) {
       const proj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.anchor, this.axis);
-      // Snapped to the zoom's own lattice (viewport/dragStep.ts) — 0.1mm on a
+      // Snapped to the zoom's own lattice (viewport/dragStep.ts), 0.1mm on a
       // fitted hand-sized part, finer as you wheel in, finer again with Shift.
       const raw = this.grabValue + (proj - this.grabProj);
       const stepped = snap(raw, this.viewport.snapStep(this.anchor, e.shiftKey));
-      if (stepped === this.value) return; // same step — don't re-trigger an OCCT rebuild
+      if (stepped === this.value) return; // same step, don't re-trigger an OCCT rebuild
       this.value = stepped;
       this.dim.updateFromCursor({ distance: this.readout() });
       this.refreshPreview();
@@ -150,7 +150,7 @@ export class PressPullTool {
     if (e.button !== 0) return;
     if (this.phase === "pick") {
       const hit = this.viewport.pickFaceForPressPull(e.clientX, e.clientY);
-      if (!hit) return; // missed the body — let the click orbit
+      if (!hit) return; // missed the body, let the click orbit
       e.preventDefault();
       e.stopImmediatePropagation();
       this.beginDrag([hit.selector], [hit.faceId], hit.anchor, hit.normal, hit.bodyId,
@@ -158,7 +158,7 @@ export class PressPullTool {
       return;
     }
     // drag phase: clicking the "up to" target surface (after pressing T).
-    // Consume EVERY click in this mode — a miss must never fall through to the
+    // Consume EVERY click in this mode, a miss must never fall through to the
     // clean-click-commits path and fire a stray plain commit (audit bug #3).
     if (this.pickingTarget) {
       e.preventDefault();
@@ -208,7 +208,7 @@ export class PressPullTool {
         fluent: this.fluentGrab,
         moved:
           Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3,
-        // Same threshold commit() uses to decide there is nothing to commit —
+        // Same threshold commit() uses to decide there is nothing to commit,
         // read here so a drag that ended back at the face cancels out of a tool
         // the user never explicitly opened, instead of parking them in it with
         // a "nothing to commit" prompt.
@@ -227,7 +227,7 @@ export class PressPullTool {
     const moved =
       Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
     if (this.downOnGizmo || moved) return;
-    // Clean click on ANOTHER face = extrude UP TO it (mainstream MCAD "to object" —
+    // Clean click on ANOTHER face = extrude UP TO it (mainstream MCAD "to object",
     // no T needed: pick a face, then click the face to meet). Empty space or
     // one of the operation's own faces = commit as before.
     //
@@ -282,7 +282,7 @@ export class PressPullTool {
     this.dim.show([{ name: "distance", label: "D", kind: "length" }], () => this.commit(), () => this.cancel());
     const s = this.viewport.projectToScreen(this.anchor);
     this.dim.position(s.x, s.y);
-    // A round face opens showing the size it ALREADY is, not a zero — the field
+    // A round face opens showing the size it ALREADY is, not a zero, the field
     // is a diameter here, and the current one is the number you are about to
     // edit. A flat face opens at 0 because there the field is a travel.
     this.dim.updateFromCursor({ distance: this.readout() });
@@ -295,7 +295,7 @@ export class PressPullTool {
   }
 
   /** What the heads-up field shows for the current drag: a DIAMETER on a round
-   *  face (the size it would become — 0 while the drag is asking for it to go),
+   *  face (the size it would become, 0 while the drag is asking for it to go),
    *  the travelled distance on any other. */
   private readout(): number {
     return this.round ? radialDrag(this.round.radius, this.value, this.round.solidInside).diameter : Math.abs(this.value);
@@ -341,7 +341,7 @@ export class PressPullTool {
     }
   }
 
-  /** Instant ghost preview during the drag — a frontend-only translucent prism, no
+  /** Instant ghost preview during the drag, a frontend-only translucent prism, no
    *  kernel round-trip (that's why dragging feels immediate). The real OCCT geometry
    *  is computed once on commit. Near-zero distance clears the ghost. */
   private refreshPreview() {
@@ -376,7 +376,7 @@ export class PressPullTool {
     // A round face dragged past the smallest size the kernel will build is a
     // REMOVAL, not a very small cylinder. It commits as the same deleteFace the
     // Del key produces, so a shrunk-away hole heals exactly as a deleted one
-    // does — and until this moment nothing has been committed at all, which is
+    // does, and until this moment nothing has been committed at all, which is
     // what lets the user drag back out of it.
     const round = this.round && radialDrag(this.round.radius, this.value, this.round.solidInside);
     if (round?.mode === "remove") {
@@ -403,14 +403,14 @@ export class PressPullTool {
     if (this.phase !== "drag") return this.cancel();
     const v = this.dim.getValue("distance");
     if (v == null && this.dim.isUserDriven("distance")) {
-      // the field holds unparseable text — committing the stale drag value
+      // the field holds unparseable text, committing the stale drag value
       // instead would be a silent wrong-number surprise
       setPrompt("That number can't be read · Esc");
       return;
     }
-    // Typed sign wins (out = +, cut = −) — but ONLY when the user actually
+    // Typed sign wins (out = +, cut = −), but ONLY when the user actually
     // typed. While dragging, the field displays |value| (line ~106), so reading
-    // it back unguarded strips a dragged cut's sign and commits a JOIN — the
+    // it back unguarded strips a dragged cut's sign and commits a JOIN, the
     // mirror image of the typed-"-2"-after-outward-drag bug this line fixed.
     if (v != null && this.dim.isUserDriven("distance")) this.value = this.fromReadout(v);
     if (Math.abs(this.value) < 1e-3) {
@@ -424,7 +424,7 @@ export class PressPullTool {
     this.onDone?.(feature.id);
   }
 
-  /** Commit an "extrude up to a surface" — the sidecar derives each face's distance
+  /** Commit an "extrude up to a surface", the sidecar derives each face's distance
    *  from the target, so we skip the near-zero-distance guard `commit()` applies. */
   private commitUpTo() {
     const feature = this.buildFeature();

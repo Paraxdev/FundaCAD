@@ -35,8 +35,8 @@ const toolPanels = useToolPanelStore();
 
 // The overlays the running plugins add, mounted at the end of the stack.
 //
-// This file used to name four of them — a print-status pill, a printer camera,
-// a 3D-mouse settings window and a filament mapping dialog — and carry three
+// This file used to name four of them, a print-status pill, a printer camera,
+// a 3D-mouse settings window and a filament mapping dialog, and carry three
 // mirrored capability flags to decide which to draw. That was the app knowing
 // what its capabilities ARE, spelled out in the one file that should be able to
 // say least about them, and it was four more edits for anybody adding a fifth.
@@ -65,7 +65,7 @@ onUnmounted(() => offContrib?.());
   <TitleBar />
   <RibbonBar />
   <!-- Two columns: what is in the document, and the document. The tool rail
-       that used to stand left of the browser is gone — it was a second copy of
+       that used to stand left of the browser is gone, it was a second copy of
        the ribbon's tools one column away from the ribbon itself, so whichever
        of the two you reached for, the other was redundant chrome eating picking
        width. The ribbon carries every tool, on the top edge or the left one.
@@ -82,7 +82,7 @@ onUnmounted(() => offContrib?.());
   <TimelineBar />
 
   <!-- Global overlays. Each Teleports to body, which is where the imperative
-       versions appended themselves — they must not inherit a stacking context
+       versions appended themselves, they must not inherit a stacking context
        from #app's grid. -->
   <ToastStack />
   <ModalHost />
@@ -116,7 +116,7 @@ onUnmounted(() => offContrib?.());
        and unmount IS closed, which is what lets the ones that gate global
        shortcuts push/pop the modal depth in onMounted/onUnmounted and never
        leak a count (composables/useModalGate.ts). They are independent because
-       they genuinely stack — the welcome screen opens sign-in over itself. -->
+       they genuinely stack, the welcome screen opens sign-in over itself. -->
   <WelcomeModal v-if="dialogs.welcome && dialogs.welcomeCallbacks" />
   <PreferencesDialog v-if="dialogs.preferences" />
   <BugReportButton />

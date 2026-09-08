@@ -104,7 +104,7 @@ describe("candidatesFromEntities", () => {
   });
 });
 
-describe("candidatesFromEntities — projected reference geometry", () => {
+describe("candidatesFromEntities, projected reference geometry", () => {
   it("a projected line snaps like a native one: endpoints 100, midpoint 80", () => {
     const c = candidatesFromEntities([{
       type: "projected", id: "p1",
@@ -199,7 +199,7 @@ describe("snap alignment guides", () => {
   it("does not draw two zero-length guides through one anchor", () => {
     // 8 and 8 is inside tolerance on each axis but 11.3 away as a point, so the
     // point pass misses and BOTH alignment axes fire off the same anchor. The
-    // right answer is still the anchor — reported as itself, with no guides,
+    // right answer is still the anchor, reported as itself, with no guides,
     // rather than as an alignment with two lines of no length.
     const r = snap(v(48, 33), [hole], screen, 0, 10);
     expect(r.kind).toBe("center");
@@ -229,7 +229,7 @@ describe("snap alignment guides", () => {
 //
 // This is what a user's own file looked like afterwards. A thread profile drawn
 // on a 1mm grid closed on a vertex at x = 20 exactly (the guide up the first
-// vertex's column) and y = 5.007223063281328 — seven microns off a line that
+// vertex's column) and y = 5.007223063281328, seven microns off a line that
 // was on screen at the time, and enough to leave the sketch reading 5.01.
 describe("snap alignment composed with the grid", () => {
   const anchor: SnapCandidate = { p: v(20, 0), kind: "endpoint", priority: 100 };

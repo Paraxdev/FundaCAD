@@ -1,4 +1,4 @@
-"""Projected-entity build consumption — _build_sketch's "projected" branch turns
+"""Projected-entity build consumption, _build_sketch's "projected" branch turns
 the CACHED curve into profile edges/faces exactly like hand-drawn geometry (no
 ctx/bodies access; the cache refresh is a later step's rebuild handler).
 
@@ -66,7 +66,7 @@ def test_projected_poly_extrude():
 
 
 def test_projected_degenerate_poly_skipped():
-    """A point-degenerate poly (a view-aligned source edge — coincident samples)
+    """A point-degenerate poly (a view-aligned source edge, coincident samples)
     is reference-only: it must never fail the sketch, and the square around it
     still extrudes."""
     ents = [_pline(0, 0, 0, 20, 0), _pline(1, 20, 0, 20, 20),
@@ -85,7 +85,7 @@ def test_projected_degenerate_poly_skipped():
 def test_projected_construction_excluded():
     """A CONSTRUCTION projected circle inside a projected square is reference-only:
     it must not subdivide the profile, so a region pick at the circle's center
-    extrudes the WHOLE square (4000) — not just an inner disk (~785)."""
+    extrudes the WHOLE square (4000), not just an inner disk (~785)."""
     ents = [_pline(0, 0, 0, 20, 0), _pline(1, 20, 0, 20, 20),
             _pline(2, 20, 20, 0, 20), _pline(3, 0, 20, 0, 0),
             {"id": "pc", "type": "projected", "source": SRC, "construction": True,

@@ -3,7 +3,7 @@
 // range (per-face tessellation keeps each face's vertices distinct, so this
 // only tints the one face).
 //
-// Edges are held by EdgeRef, not by a THREE object — a ref is stable for the
+// Edges are held by EdgeRef, not by a THREE object, a ref is stable for the
 // life of its body, so Set membership works exactly as it did with Line2.
 
 import * as THREE from "three";
@@ -13,13 +13,13 @@ import type { EdgeRef } from "./edgeLines";
 const EDGE_BASE = new THREE.Color(0x1b1f24);
 const HOVER = new THREE.Color(0xffd089); // pale hot amber (under cursor)
 /** Exported so the over-drawn emphasis line (viewport/edgeEmphasis.ts) is the
- *  same colour as the tint it reinforces — two hover colours would read as two
+ *  same colour as the tint it reinforces, two hover colours would read as two
  *  different states. */
 export const EDGE_HOVER_COLOR = HOVER.getHex();
-// molten amber for SELECTED (the Forge accent) — distinct from the paler hover
+// molten amber for SELECTED (the Forge accent), distinct from the paler hover
 // and the muted-ember "pickable" emphasis; reads as forged/locked-in.
 const SELECT = new THREE.Color(0xff7a3c);
-// ERROR: the edge a fillet/chamfer failed on. Highest paint precedence — hover
+// ERROR: the edge a fillet/chamfer failed on. Highest paint precedence, hover
 // and select must never overwrite it, or the "which edge is the problem" signal
 // disappears the moment the user mouses over it.
 const ERROR = new THREE.Color(0xe23b3b);
@@ -49,7 +49,7 @@ export class Highlighter {
   /** body id -> BodyMesh, built once on first use.
    *
    *  Both paint paths used a linear `this.view.bodies.find(...)` per call, which
-   *  on an imported assembly's few thousand bodies is a scan per painted body —
+   *  on an imported assembly's few thousand bodies is a scan per painted body,
    *  and selection paints in loops. Safe to cache with no invalidation because
    *  viewport.setModel() builds a fresh ModelView AND a fresh Highlighter
    *  together, so `view` never changes under an instance. */
@@ -66,7 +66,7 @@ export class Highlighter {
   /** Set the idle edge color and repaint every idle edge to it. */
   setEdgeBase(color: THREE.Color) {
     this.edgeBase.copy(color);
-    // one whole-buffer write per body rather than one upload per edge — this
+    // one whole-buffer write per body rather than one upload per edge, this
     // fires on every fillet/chamfer tool activation, over every edge in the model
     const skip = (e: EdgeRef) =>
       e === this.hoveredEdge || this.selectedEdges.has(e) || this.errorEdges.has(e);
@@ -74,14 +74,14 @@ export class Highlighter {
   }
 
   /** Paint these edges as ERRORS (red), replacing any previous error set.
-   *  Precedence: error > select > hover — the error tint survives hover and
+   *  Precedence: error > select > hover, the error tint survives hover and
    *  selection toggles until the set is replaced (each rebuild re-derives it
    *  from the latest diagnostics, so it clears naturally when fixed). */
   setErrorEdges(lines: EdgeRef[]) {
     const next = new Set(lines);
     for (const e of this.errorEdges) {
       if (next.has(e)) continue;
-      // no longer failing — restore whatever tier it belongs to now
+      // no longer failing, restore whatever tier it belongs to now
       const c = this.selectedEdges.has(e) ? SELECT : e === this.hoveredEdge ? HOVER : this.edgeBase;
       paint(e, c);
     }
@@ -154,7 +154,7 @@ export class Highlighter {
   }
 
   /** Add to the selection without the toggle. A box drag over a region that
-   *  overlaps what is already selected must ADD, not un-select the overlap —
+   *  overlaps what is already selected must ADD, not un-select the overlap,
    *  toggling would make the second sweep of a two-sweep selection eat the
    *  first one's result. */
   selectEdge(line: EdgeRef) {
@@ -235,7 +235,7 @@ export class Highlighter {
 
   /** paint every vertex of the body's own (already-isolated) buffer. A body's
    *  geometry holds only its own vertices now, so "the whole body" IS the
-   *  whole buffer — no faceId-range scan needed (unlike paintFace below, this
+   *  whole buffer, no faceId-range scan needed (unlike paintFace below, this
    *  never needs to scope to a sub-range within a shared buffer). */
   private paintBody(bodyId: string, color: THREE.Color) {
     const body = this.bodyById(bodyId);
@@ -276,7 +276,7 @@ export class Highlighter {
     if (range) this.uploadRange(colorAttr, range);
   }
 
-  /** Restore every face of a body to its base color (the whole buffer — see
+  /** Restore every face of a body to its base color (the whole buffer, see
    *  paintBody's note on why no range scan is needed here). */
   private restoreBody(bodyId: string) {
     const body = this.bodyById(bodyId);
@@ -322,7 +322,7 @@ export class Highlighter {
    *  updates so they restore correctly on deselect. Pass `() => BASE_COLOR` to
    *  clear an analysis. Body selections re-apply on top afterward. Loops every
    *  body's own buffer (faceIds are globally unique, so the same faceId never
-   *  reappears in two bodies — each body only ever repaints its own faces). */
+   *  reappears in two bodies, each body only ever repaints its own faces). */
   setBase(colorOf: (faceId: number) => THREE.Color, only?: Iterable<BodyMesh>) {
     const cache = new Map<number, THREE.Color>();
     // `only` restricts the repaint to the bodies given. A progressive load paints
@@ -352,13 +352,13 @@ export class Highlighter {
           if (!selected) colorAttr.setXYZ(v, col.r, col.g, col.b);
         }
       }
-      // This is a full-buffer rewrite (every face), not a scoped one — clear any
+      // This is a full-buffer rewrite (every face), not a scoped one, clear any
       // pending partial ranges a prior paintFace/paintBody left queued so the
       // renderer does a full upload here instead of replaying a stale sub-range.
       colorAttr.clearUpdateRanges();
       colorAttr.needsUpdate = true;
     }
-    // whole-body selections paint on top of the base — re-apply them
+    // whole-body selections paint on top of the base, re-apply them
     for (const id of this.selectedBodies) this.paintBody(id, SELECT);
   }
 }

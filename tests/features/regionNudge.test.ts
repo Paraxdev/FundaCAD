@@ -15,7 +15,7 @@ describe("regionAnchor", () => {
   it("averages several areas", () => {
     // ExtrudeTool draws its own arrow from this same function. If the two ever
     // computed "the middle of the selection" separately, the arrow would twitch
-    // at the instant the handle is grabbed — the failure the whole shared-glyph
+    // at the instant the handle is grabbed, the failure the whole shared-glyph
     // arrangement exists to rule out.
     const a = regionAnchor([region([0, 0, 0]), region([4, 0, 0]), region([2, 6, 0])]);
     expect(a.toArray()).toEqual([2, 2, 0]);
@@ -45,7 +45,7 @@ describe("regionNudgePlacement", () => {
 
   it("takes the normal from the first area", () => {
     // Extruding several areas together moves them all along one direction, and
-    // that direction is the first area's — same rule as the tool's preview.
+    // that direction is the first area's, same rule as the tool's preview.
     const place = regionNudgePlacement(
       [region([0, 0, 0], [1, 0, 0]), region([2, 0, 0], [0, 1, 0])],
       () => {},

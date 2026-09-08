@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // The Measure (Inspect) readout. Replaces the innerHTML block at the bottom of
-// features/measureTool.ts — the tool keeps every bit of picking, the
+// features/measureTool.ts, the tool keeps every bit of picking, the
 // shortest-distance search and the viewport marker; it now pushes rows into the
 // store instead of building markup.
 //

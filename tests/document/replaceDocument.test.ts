@@ -3,7 +3,7 @@
 //
 // Reported 2026-08-08: File → New during a 3,000-body rebuild left the previous
 // model on screen over an empty document, with no message, and hiding the body
-// did nothing — because there was no body in the document to hide. Two causes,
+// did nothing, because there was no body in the document to hide. Two causes,
 // both pinned here. rebuildNow keeps the last good result when a rebuild does not
 // produce a new one, which is right within a document and wrong across a
 // replacement; and a rebuild already in flight holds the queue, so the

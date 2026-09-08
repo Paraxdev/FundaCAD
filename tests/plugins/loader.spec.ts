@@ -6,7 +6,7 @@
 // asked to contribute to the real table. If a plugin can be built and cannot be
 // run, or can be run and reaches nothing, this is where it shows.
 //
-// It is slow — a vite build per case — and it is worth it. Every cheaper version
+// It is slow, a vite build per case, and it is worth it. Every cheaper version
 // of this test replaces the one thing that keeps being wrong: what the build
 // leaves external, and whether the loader supplies exactly that.
 
@@ -56,7 +56,7 @@ describe("the two halves name the same things", () => {
     // The list that must not drift. A module the build externalises and the
     // loader does not supply evaluates to `undefined` and dies at its first use;
     // one the loader supplies and the build bundles anyway is a SECOND COPY,
-    // which does not die at all — it quietly gives the plugin its own Vue, its
+    // which does not die at all, it quietly gives the plugin its own Vue, its
     // own Pinia registry or its own three.js, and looks like a plugin whose
     // components never update.
     expect(Object.keys(modules).sort()).toEqual([...SHARED].sort());
@@ -92,7 +92,7 @@ describe("a plugin built for a release", () => {
   it("shares the app's Vue rather than bringing its own", async () => {
     // The failure this catches is silent: a plugin with its own Vue renders
     // once and never again, because the app's reactive effects and the plugin's
-    // are two systems that cannot see each other. Checked on the ARTIFACT —
+    // are two systems that cannot see each other. Checked on the ARTIFACT,
     // whether the built module carries Vue's source or asks the host for it.
     const js = await code("FundaCAD.MultiColor");
     expect(js).toContain('__fundacadHost["vue"]');
@@ -127,7 +127,7 @@ describe("what the loader refuses", () => {
   });
 
   it("hands the plugin nothing but the host argument", () => {
-    // Hygiene rather than security — the code has the whole window either way,
+    // Hygiene rather than security, the code has the whole window either way,
     // which is what the origin rule in loader.ts is for. But a plugin must not
     // be able to see the loader's own locals, or a rename in that file would
     // change what plugins can reach.

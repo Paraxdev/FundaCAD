@@ -4,7 +4,7 @@ Run:  python test_pick_fuzz.py
 
 The frontend fits a picked face's plane to that face's RENDERED triangles, and
 mesh positions are float32 on the wire. So a sketch drawn on a face at y = 24.4
-comes back at y = 24.399999618530273 — the float32 neighbour, 3.8e-7 mm short of
+comes back at y = 24.399999618530273, the float32 neighbour, 3.8e-7 mm short of
 the face it was drawn on. Cutting from there used to remove exactly the right
 volume and still leave the hole SEALED: a disc lying in the end face's own
 plane, with a membrane 0.38 nanometres thick between them, under an end face
@@ -19,7 +19,7 @@ numbers are the reported ones: a boss 10 mm across on a face at y = 24.4, a
 
 CONTROLS, and they are the point:
   * the same cut from a plane placed EXACTLY on the face already worked, and
-    must still produce the identical result — a tolerance that changes a
+    must still produce the identical result, a tolerance that changes a
     correct answer is not a tolerance,
   * a plane a HUNDREDTH of a millimetre inside the face is a real pocket the
     user could have meant, and must still be cut as one (membrane kept),
@@ -98,7 +98,7 @@ def _end_face_areas(shape):
     """Areas of the planar faces lying at the boss end, facing +/-Y.
 
     One entry means an open hole (the end face is an annulus). Two means the
-    hole is sealed by a disc in the same plane — the defect.
+    hole is sealed by a disc in the same plane, the defect.
     """
     out = []
     for f in _faces(shape.wrapped if hasattr(shape, "wrapped") else shape):
@@ -124,7 +124,7 @@ def test_a_cut_from_the_float32_neighbour_of_the_face_opens_the_hole():
     assert BRepCheck_Analyzer(out.wrapped).IsValid(), "the cut produced an invalid solid"
     areas = _end_face_areas(out)
     assert len(areas) == 1, (
-        f"the boss end carries {len(areas)} faces, areas {[round(a, 5) for a in areas]} — "
+        f"the boss end carries {len(areas)} faces, areas {[round(a, 5) for a in areas]}, "
         "two means the hole is still sealed by a disc lying in the end face's plane, "
         "which is the whole defect")
     assert abs(areas[0] - ANNULUS) < 1e-4, (
@@ -135,20 +135,20 @@ def test_a_cut_from_the_float32_neighbour_of_the_face_opens_the_hole():
 
 def test_the_exact_plane_is_untouched():
     """CONTROL. Cutting from the face's exact plane already worked. The
-    tolerance must not change what it produces — by volume or by face."""
+    tolerance must not change what it produces, by volume or by face."""
     exact = _cut_from(FACE_Y)
     fuzzed = _cut_from(FACE_Y_F32)
     ea, fa = _end_face_areas(exact), _end_face_areas(fuzzed)
     assert len(ea) == 1 and abs(ea[0] - ANNULUS) < 1e-4, (
         f"the CONTROL itself is wrong: end faces {[round(a, 5) for a in ea]}")
-    # The two may differ by the sliver the shifted tool does not reach — the
-    # hole's own area times the 3.8e-7 mm gap, 5.9e-6 mm3 — and by nothing else.
+    # The two may differ by the sliver the shifted tool does not reach, the
+    # hole's own area times the 3.8e-7 mm gap, 5.9e-6 mm3, and by nothing else.
     # Asserting they are bit-identical would be asserting the gap is not there.
     slack = DISC * (FACE_Y - FACE_Y_F32)
     delta = abs(_volume(exact.wrapped) - _volume(fuzzed.wrapped))
     assert delta <= slack, (
         f"exact {_volume(exact.wrapped):.9f} vs float32 {_volume(fuzzed.wrapped):.9f} "
-        f"— {delta:.3e} mm3 apart, more than the {slack:.3e} the gap itself accounts for")
+        f", {delta:.3e} mm3 apart, more than the {slack:.3e} the gap itself accounts for")
     assert abs(ea[0] - fa[0]) < 1e-9, f"end face {ea[0]:.9f} vs {fa[0]:.9f}"
     print(f"exact plane unchanged: {_volume(exact.wrapped):.6f} mm3 either way")
 
@@ -165,7 +165,7 @@ def test_a_pocket_a_hundredth_of_a_millimetre_deep_is_still_a_pocket():
     areas = _end_face_areas(out)
     assert len(areas) == 1 and abs(areas[0] - math.pi * BOSS_R**2) < 1e-4, (
         f"a 0.01 mm skin over the pocket was dissolved: end faces "
-        f"{[round(a, 5) for a in areas]} — the fuzz is far too large")
+        f"{[round(a, 5) for a in areas]}, the fuzz is far too large")
     # and the pocket is genuinely in there
     lost = _volume(_boss().wrapped) - _volume(out.wrapped)
     assert abs(lost - DISC * DEPTH) < 1e-3, f"removed {lost:.5f}, expected {DISC * DEPTH:.5f}"

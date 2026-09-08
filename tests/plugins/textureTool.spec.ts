@@ -4,7 +4,7 @@
 // takes the pick over, holds the window, watches the ambient selection every
 // frame, pushes a live preview, and either commits a feature or puts the model
 // back exactly as it found it. None of that stopped being the application's
-// business when the code moved out of src/ — it just stopped being the
+// business when the code moved out of src/, it just stopped being the
 // application's CODE, and this file is what says the move cost none of it.
 //
 // The fakes are deliberately dumb: arrays and counters, no partial mocks of real
@@ -93,7 +93,7 @@ function fakeStore(features: Feature[] = []) {
     for (const fn of [...listeners]) fn({ building: false, result: {} });
   };
   /** A rebuild is IN FLIGHT. The real store says this too, and the tool used to
-   *  ignore it — which is what let a streamed reply's momentarily empty
+   *  ignore it, which is what let a streamed reply's momentarily empty
    *  selection be read as the user deselecting. */
   const startBuild = () => {
     for (const fn of [...listeners]) fn({ building: true, result: {} });
@@ -200,7 +200,7 @@ describe("TextureTool", () => {
     });
 
     // The defect this flag exists for. setModel() clears the ambient selection
-    // on EVERY rebuild, including the tool's own preview landing — so a landed
+    // on EVERY rebuild, including the tool's own preview landing, so a landed
     // preview silently emptied the member set and Apply became a no-op.
     it("keeps its members when its own preview rebuild wipes the selection", async () => {
       const { vp, state } = fakeViewport();
@@ -224,7 +224,7 @@ describe("TextureTool", () => {
     // feel broken rather than fiddly. A chunked reply reaches the screen in
     // several installments and the first one does not carry the body being
     // edited, so the viewport truthfully reports NOTHING SELECTED for a few
-    // frames in the MIDDLE of the build — not at the end of it, where the flag
+    // frames in the MIDDLE of the build, not at the end of it, where the flag
     // above is armed. Read as a deselect, that ended the gesture: measured in a
     // real window, six runs out of six lost the face between picking it and
     // pressing Add.

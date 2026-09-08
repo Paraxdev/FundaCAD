@@ -1,8 +1,8 @@
 """The rules that let an agent edit the document a person has open.
 
 The dangerous shape here is not a crash, it is a silent divergence: two writers
-and a document that ends up neither one's. So the asymmetry — one host who owns
-the document, guests who can only propose — is the thing under test, and each
+and a document that ends up neither one's. So the asymmetry, one host who owns
+the document, guests who can only propose, is the thing under test, and each
 rule has a control that must fail if the rule were dropped.
 
 The clock is injected, so the lease tests are exact rather than a sleep.
@@ -66,7 +66,7 @@ def test_a_guest_reads_exactly_what_the_app_published():
 
 def test_a_guest_cannot_install_a_document_only_offer_one():
     """The rule the whole module exists for. A proposal must not change what the
-    next reader sees — only the host's own publish may do that."""
+    next reader sees, only the host's own publish may do that."""
     s, _ = _session()
     s.publish(APP, _doc(3), 7)
     r = s.propose(AGENT, _doc(99), 7, note="add a hole")
@@ -100,7 +100,7 @@ def test_an_edit_written_against_an_older_document_is_refused():
     """Staleness, and it is the difference between a tool and a hazard. An agent
     that read a part with eight holes and asked for one of them to be widened
     must not have that applied to a part someone has since changed underneath
-    it — the selector it wrote may now address a different face."""
+    it, the selector it wrote may now address a different face."""
     s, _ = _session()
     s.publish(APP, _doc(3), 7)
     s.publish(APP, _doc(5), 8)  # the user did something

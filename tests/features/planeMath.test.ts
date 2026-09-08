@@ -48,7 +48,7 @@ describe("planeXDir", () => {
   it("is the one rule every face pick goes through", () => {
     // Arbitrary, but it must be THE choice: world +Z projected in, except on a
     // near-horizontal plane where +Z has nothing to project. viewport
-    // .pickFacePlane carried a second copy of this and now calls through here —
+    // .pickFacePlane carried a second copy of this and now calls through here,
     // two derivations of an arbitrary axis is a sketch that rotates about its
     // own normal depending on which route created its plane.
     expect(planeXDir([0, 0, 1])).toEqual([1, 0, 0]);
@@ -167,7 +167,7 @@ describe("cylinderFromFace", () => {
   });
 });
 
-/** A cylinder wall as TRIANGLES — three corners per facet, which is the packing
+/** A cylinder wall as TRIANGLES, three corners per facet, which is the packing
  *  facePlanePick collects and the only one solidInsideCylinder accepts.
  *  `bore` flips the normals inward, as a hole's are. */
 function cylinderTris(r: number, bore = false, seg = 16, h = 10, arc = Math.PI * 2) {
@@ -217,7 +217,7 @@ describe("solidInsideCylinder", () => {
   });
 
   it("refuses the wrong point packing rather than reading it loosely", () => {
-    // One point per normal indexes into the wrong facet and still answers — and
+    // One point per normal indexes into the wrong facet and still answers, and
     // the answer is a sign, so a plausible one is worse than none.
     const { points, normals } = cylinderTris(5);
     expect(solidInsideCylinder(cyl, points.slice(0, normals.length), normals)).toBeNull();
@@ -257,8 +257,8 @@ describe("tangentPlaneOnCylinder", () => {
   });
 
   it("faces into the bore on a hole, following the face's own normal", () => {
-    // A hole wall's normal points at the axis. The plane must agree — otherwise
-    // its offset runs backwards — while still SITTING on the surface.
+    // A hole wall's normal points at the axis. The plane must agree, otherwise
+    // its offset runs backwards, while still SITTING on the surface.
     const p = tangentPlaneOnCylinder(cyl, [5, 0, 0], [-1, 0, 0])!;
     expect(p.origin).toEqual([5, 0, 0]);
     expect(p.normal[0]).toBeCloseTo(-1, 10);
@@ -291,7 +291,7 @@ describe("planeFromPickedFace", () => {
   });
 
   it("declines a face it can recognise as neither", () => {
-    // a spline-ish scatter: not flat, not one cylinder — better no datum than a
+    // a spline-ish scatter: not flat, not one cylinder, better no datum than a
     // plane through a surface that has no tangent frame worth the name.
     const points: Vec3[] = [[0, 0, 0], [1, 0, 0.3], [2, 0, 1.4], [3, 0, 3.9]];
     const normals: Vec3[] = [[0, 0, 1], [0, 0.3, 1], [0, 0.9, 1], [0, 2, 1]];
@@ -395,8 +395,8 @@ describe("midPlane", () => {
     // lands on one of the walls instead of between them.
     const m = midPlane(plane([0, 0, 0], [0, 0, 1]), plane([0, 0, 20], [0, 0, -1]))!;
     expect(off(m, [0, 0, 10])).toBeCloseTo(0, 9);
-    // CONTROL: naive averaging of the two normals gives (0,0,0) — no plane at
-    // all — and naive "halfway between the origins along a's normal" is only
+    // CONTROL: naive averaging of the two normals gives (0,0,0), no plane at
+    // all, and naive "halfway between the origins along a's normal" is only
     // right by luck here, so the check that matters is the one above.
     expect(m.normal.map((n) => Math.abs(n))).toEqual([0, 0, 1]);
   });
@@ -430,7 +430,7 @@ describe("midPlane", () => {
     const m = midPlane(plane([0, 0, 0], [-s, 0, c]), plane([0, 0, 0], [s, 0, c]))!;
     expect(Math.abs(m.normal[0])).toBeCloseTo(1, 9); // vertical plane x = 0
     expect(Math.abs(off(m, [0, 7, 12]))).toBeLessThan(1e-9);
-    // CONTROL: the other bisector — the average of the two normals — is the
+    // CONTROL: the other bisector, the average of the two normals, is the
     // horizontal plane z = 0, which bisects nothing anyone asked about.
     expect(Math.abs(off(m, [4, 0, 0]))).toBeGreaterThan(1);
   });

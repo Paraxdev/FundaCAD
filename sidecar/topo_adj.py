@@ -1,7 +1,7 @@
 """Which faces of a shape touch which, asked once instead of five times.
 
-Four places in the sidecar wanted the same thing — walk from a face to the
-faces that share an edge with it — and each built it by hand: the same two OCP
+Four places in the sidecar wanted the same thing, walk from a face to the
+faces that share an edge with it, and each built it by hand: the same two OCP
 import blocks, the same pair of indexed maps, the same explorer loop. They
 differed only in what they wanted back (a set of neighbour indices, the shared
 edge as well, a filtered set, or the connected components), which is exactly
@@ -16,7 +16,7 @@ A LEAF module: it knows about shapes and nothing about features, documents or
 the rebuild, so anything in the sidecar may import it.
 """
 
-import font_guard  # noqa: F401  MUST precede build123d — see font_guard.py
+import font_guard  # noqa: F401  MUST precede build123d, see font_guard.py
 
 from build123d import Face
 
@@ -35,7 +35,7 @@ def _list_shapes(lst):
     checked before either accessor is touched. An edge has one or two adjacent
     faces in all but non-manifold geometry, so the drain only happens in the >2
     case. Returns a tuple so callers can iterate it as often as they like for
-    free. (tessellate.py carries its own copy — see the note in its version.)"""
+    free. (tessellate.py carries its own copy, see the note in its version.)"""
     n = lst.Extent()
     if n == 0:
         return ()
@@ -50,7 +50,7 @@ def face_wraps(face):
     """Does this face close on itself in either parameter direction?
 
     True for the side of a cylinder, a full torus, a 360-degree revolve, a swept
-    tube. It is a topology question about one face — does it have a seam — which
+    tube. It is a topology question about one face, does it have a seam, which
     is why it lives here beside the rest of them.
 
     Two callers, and they want it for the same underlying reason. `inspect_model`
@@ -144,8 +144,8 @@ class FaceAdjacency:
         """the face indices an edge belongs to, in map order.
 
         Usually two. ONE means a free boundary; two entries that are the SAME
-        index mean a seam — the edge where a face that wraps 360 degrees closes
-        on itself — and that is not a curiosity, it is the case ChFi3d refuses
+        index mean a seam, the edge where a face that wraps 360 degrees closes
+        on itself, and that is not a curiosity, it is the case ChFi3d refuses
         to blend, so a caller reporting geometry has to be able to say it."""
         if not self._emap.Contains(getattr(edge, "wrapped", edge)):
             return []

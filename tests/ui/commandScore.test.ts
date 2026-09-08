@@ -1,11 +1,11 @@
-// The palette's ranking is the whole reason it is usable — a scorer that ranks
+// The palette's ranking is the whole reason it is usable, a scorer that ranks
 // "Fillet" below "Offset plane from face" for the query "fil" makes Ctrl+K
 // slower than the ribbon. These pin the ordering properties, not the numbers.
 
 import { describe, it, expect } from "vitest";
 import { score } from "../../src/ui/commandScore";
 
-/** Rank labels by score, best first, dropping non-matches — what the palette does. */
+/** Rank labels by score, best first, dropping non-matches, what the palette does. */
 function rank(q: string, labels: string[]): string[] {
   return labels
     .map((l) => ({ l, s: score(q.toLowerCase(), l.toLowerCase()) }))

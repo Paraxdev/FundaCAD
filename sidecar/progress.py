@@ -3,8 +3,8 @@
 The supervisor reaps a worker on a heartbeat that STOPS MOVING, not on one that
 is slow. That distinction is the whole reason this exists: a phase that runs for
 a minute without a word looks exactly like a wedged one, so every long stretch of
-work — a feature build, an import, export meshing, a checkpoint write, the
-interference sweep — publishes as it goes.
+work, a feature build, an import, export meshing, a checkpoint write, the
+interference sweep, publishes as it goes.
 
 ONE owner, so the hook is a live global rather than a copy. It used to live in
 builder.py and be read through `globals()` on every call, which was a way of

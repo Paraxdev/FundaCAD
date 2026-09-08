@@ -1,11 +1,11 @@
-"""golden_corpus.py — golden-document regression eval for the geometry sidecar.
+"""golden_corpus.py, golden-document regression eval for the geometry sidecar.
 
 Rebuilds real saved documents through a SPAWNED server.py subprocess and
 records/compares their build invariants: body count, per-body mesh volume, the
 document bbox, and the list of feature errors. A code change that silently alters
 the geometry a saved document builds is caught here.
 
-Tolerances are hardcoded literals in THIS file — no config, no env override — so
+Tolerances are hardcoded literals in THIS file, no config, no env override, so
 what "still matches" means can't be loosened from outside.
 
 Usage (run from sidecar/ with .venv/bin/python):
@@ -14,7 +14,7 @@ Usage (run from sidecar/ with .venv/bin/python):
 
 --capture is APPEND-ONLY: it refuses to modify an entry that already exists.
 Changing a recorded baseline requires deleting its entry from golden.json by
-hand — i.e. human review.
+hand, i.e. human review.
 """
 
 import glob
@@ -35,7 +35,7 @@ REBUILD_TOLERANCE = 0.1          # the app's own viewport tessellation tolerance
 
 
 #: Document extensions, current first. A baseline records the path a document
-#: had WHEN IT WAS CAPTURED, and those paths are not rewritten — a record that
+#: had WHEN IT WAS CAPTURED, and those paths are not rewritten, a record that
 #: says a measurement was taken against a file called something it never was is
 #: worse than a stale one. The app has been renamed twice, though, and a person
 #: who renamed their documents to match would otherwise find every baseline
@@ -167,7 +167,7 @@ async def _capture(paths):
     _save_golden(golden)
     print(f"captured {len(added)}: {added}")
     if skipped:
-        print(f"skipped {len(skipped)} (already recorded — append-only): {skipped}")
+        print(f"skipped {len(skipped)} (already recorded, append-only): {skipped}")
     for key, why in failed:
         print(f"CAPTURE-FAILED {key}: {why}")
     print(f"golden.json now holds {len(golden)} entries")
@@ -216,7 +216,7 @@ def _cmp_ferrs(rec, cur):
 async def _check():
     golden = load_golden()
     if not golden:
-        print("no golden.json — run --capture first")
+        print("no golden.json, run --capture first")
         return 2
     handler_keys = H.parse_feature_handler_keys()
 
@@ -241,22 +241,22 @@ async def _check():
                 rec_set = {(e["feature_id"], e["error_class"]) for e in rec_ferrs}
                 cur_set = {(e["feature_id"], e["error_class"]) for e in cur_ferrs}
 
-                # Feature-error verdict first — it alone can force FAIL or UPDATE.
+                # Feature-error verdict first, it alone can force FAIL or UPDATE.
                 if cur_set - rec_set:
-                    # a NEW or CHANGED error class appeared — a real regression.
+                    # a NEW or CHANGED error class appeared, a real regression.
                     results[key] = ("FAIL", [
                         f"featureErrors: new/changed {sorted(cur_set - rec_set)} vs recorded {sorted(rec_set)}"
                     ])
                     continue
                 if rec_set and cur_set != rec_set:
-                    # some (or all) recorded sentinel errors cleared, none new —
+                    # some (or all) recorded sentinel errors cleared, none new,
                     # neither pass nor fail; a human must re-bless the baseline.
                     results[key] = ("UPDATE", [
                         f"featureErrors cleared {sorted(rec_set - cur_set)}; recorded {sorted(rec_set)}, now {sorted(cur_set)}"
                     ])
                     continue
 
-                # errors match exactly (both empty, or the sentinel is unchanged) —
+                # errors match exactly (both empty, or the sentinel is unchanged),
                 # the build must still match its recorded geometry.
                 diffs = []
                 for label, fn, r, c in (

@@ -21,7 +21,7 @@
 // HOW THAT BODY BECOMES A FUNCTION IS THE CALLER'S PROBLEM, and deliberately
 // so, because it is a content-security-policy question rather than a language
 // one. In the app the plugin's text is inlined into the worker's own script by
-// ./spawn.ts and arrives here already compiled, as `run` — no Function
+// ./spawn.ts and arrives here already compiled, as `run`, no Function
 // constructor, and so no `'unsafe-eval'`. A caller with a different policy can
 // pass `evaluate` instead and get the AsyncFunction route. Neither is buried in
 // a message handler where the policy it depends on would be invisible.

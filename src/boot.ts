@@ -11,7 +11,7 @@
 //
 // CAVEAT, measured not assumed: `vite build` merges both entry scripts into one
 // chunk and emits a single <script> tag, so that separation is real in dev but
-// only best-effort in the shipped bundle — module ordering inside the chunk is
+// only best-effort in the shipped bundle, module ordering inside the chunk is
 // Rollup's to decide. The watchdog's message is worded to cover both cases
 // rather than claim a distinction the build might not preserve.
 //

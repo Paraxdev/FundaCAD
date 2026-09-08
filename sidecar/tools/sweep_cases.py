@@ -2,7 +2,7 @@
 
 Runs ONE case per invocation, by name, and prints a single JSON line. The runner
 (sweep_run.py) invokes this in a SUBPROCESS per case, because the failure mode we
-most care about — an OCCT segfault — kills the interpreter outright and would
+most care about, an OCCT segfault, kills the interpreter outright and would
 otherwise take the whole sweep with it. Exit 139 (SIGSEGV) is a RESULT here, not
 an accident.
 
@@ -52,7 +52,7 @@ def case(name, note):
 
 
 # --- primitives: degenerate dimensions ---
-@case("box-zero-height", "a box with one dimension 0 — degenerate solid")
+@case("box-zero-height", "a box with one dimension 0, degenerate solid")
 def _(): return doc(box(h=0))
 
 
@@ -60,11 +60,11 @@ def _(): return doc(box(h=0))
 def _(): return doc(box(l=-20))
 
 
-@case("box-tiny", "0.001mm box — below typical OCCT tolerance (1e-7 m)")
+@case("box-tiny", "0.001mm box, below typical OCCT tolerance (1e-7 m)")
 def _(): return doc(box(l=0.001, w=0.001, h=0.001))
 
 
-@case("box-huge", "10km box — far outside printable range")
+@case("box-huge", "10km box, far outside printable range")
 def _(): return doc(box(l=10_000_000, w=10, h=10))
 
 
@@ -77,19 +77,19 @@ def _(): return doc(cyl(r=-5))
 
 
 # --- fillet / chamfer: radius vs feature size ---
-@case("fillet-radius-equals-half-edge", "fillet exactly half the edge — tangency")
+@case("fillet-radius-equals-half-edge", "fillet exactly half the edge, tangency")
 def _(): return doc(box(l=20, w=20, h=20),
                     {"id": "f", "type": "fillet", "radius": 10,
                      "edges": {"kind": "edge", "by": "all"}})
 
 
-@case("fillet-radius-too-big", "fillet larger than the body — impossible")
+@case("fillet-radius-too-big", "fillet larger than the body, impossible")
 def _(): return doc(box(l=20, w=20, h=20),
                     {"id": "f", "type": "fillet", "radius": 50,
                      "edges": {"kind": "edge", "by": "all"}})
 
 
-@case("fillet-zero", "zero-radius fillet — no-op or error?")
+@case("fillet-zero", "zero-radius fillet, no-op or error?")
 def _(): return doc(box(), {"id": "f", "type": "fillet", "radius": 0,
                             "edges": {"kind": "edge", "by": "all"}})
 
@@ -119,12 +119,12 @@ def _(): return doc(box(), {"id": "s", "type": "shell", "thickness": 30})
 def _(): return doc(box(), {"id": "s", "type": "shell", "thickness": 0})
 
 
-@case("shell-negative", "negative thickness — outward shell")
+@case("shell-negative", "negative thickness, outward shell")
 def _(): return doc(box(), {"id": "s", "type": "shell", "thickness": -2})
 
 
 # --- extrude ---
-@case("extrude-zero", "zero-distance extrude — degenerate")
+@case("extrude-zero", "zero-distance extrude, degenerate")
 def _(): return doc(sk_rect(), {"id": "e", "type": "extrude", "sketch": "s",
                                 "distance": 0, "operation": "new"})
 
@@ -134,14 +134,14 @@ def _(): return doc({"id": "e", "type": "extrude", "sketch": "nope",
                      "distance": 10, "operation": "new"})
 
 
-@case("extrude-cut-nothing", "cut where there is no material — no-op boolean")
+@case("extrude-cut-nothing", "cut where there is no material, no-op boolean")
 def _(): return doc(box(), sk_rect("s", 5, 5),
                     {"id": "e", "type": "extrude", "sketch": "s", "distance": -0.0001,
                      "operation": "cut"})
 
 
 # --- press/pull: the known crash family ---
-@case("presspull-through-cut", "cut deeper than the material — through-cut")
+@case("presspull-through-cut", "cut deeper than the material, through-cut")
 def _(): return doc(box(l=20, w=20, h=10),
                     {"id": "p", "type": "press-pull", "distance": -50, "operation": "cut",
                      "face": {"kind": "face", "by": "nearest", "point": [0, 0, 5]}})
@@ -186,23 +186,23 @@ def _(): return doc(box(), {"id": "p", "type": "patternRect", "countX": 0, "coun
                             "spacingX": 30, "spacingY": 30})
 
 
-@case("pattern-count-huge", "1000-instance pattern — resource blowup")
+@case("pattern-count-huge", "1000-instance pattern, resource blowup")
 def _(): return doc(box(l=1, w=1, h=1),
                     {"id": "p", "type": "patternRect", "countX": 1000, "countY": 1,
                      "spacingX": 2, "spacingY": 2})
 
 
-@case("pattern-overlapping", "pattern spacing smaller than the body — overlaps")
+@case("pattern-overlapping", "pattern spacing smaller than the body, overlaps")
 def _(): return doc(box(l=20, w=20, h=20),
                     {"id": "p", "type": "patternRect", "countX": 5, "countY": 1,
                      "spacingX": 1, "spacingY": 30})
 
 
-@case("scale-zero", "scale factor 0 — collapse to a point")
+@case("scale-zero", "scale factor 0, collapse to a point")
 def _(): return doc(box(), {"id": "s", "type": "scale", "factor": 0})
 
 
-@case("scale-negative", "negative scale — mirror through origin")
+@case("scale-negative", "negative scale, mirror through origin")
 def _(): return doc(box(), {"id": "s", "type": "scale", "factor": -1})
 
 
@@ -216,7 +216,7 @@ def _(): return doc(sk_rect("s", 5, 20, "XZ"),
                     {"id": "r", "type": "revolve", "sketch": "s", "angle": 360, "axis": "Z"})
 
 
-@case("revolve-over-360", "angle greater than a full turn — self-overlap")
+@case("revolve-over-360", "angle greater than a full turn, self-overlap")
 def _(): return doc(sk_rect("s", 5, 20, "XZ"),
                     {"id": "r", "type": "revolve", "sketch": "s", "angle": 720, "axis": "Z"})
 
@@ -226,7 +226,7 @@ def _(): return doc(sk_rect("s", 5, 20, "XZ"),
                     {"id": "r", "type": "revolve", "sketch": "s", "angle": 0, "axis": "Z"})
 
 
-@case("revolve-profile-crosses-axis", "profile straddling the axis — self-intersecting")
+@case("revolve-profile-crosses-axis", "profile straddling the axis, self-intersecting")
 def _(): return doc(sk_rect("s", 40, 20, "XZ"),
                     {"id": "r", "type": "revolve", "sketch": "s", "angle": 360, "axis": "Z"})
 
@@ -238,7 +238,7 @@ def _(): return doc(box(),
                     {"id": "sp", "type": "split", "planeId": "d", "keep": "both"})
 
 
-@case("draft-90-degrees", "90-degree draft — degenerate taper")
+@case("draft-90-degrees", "90-degree draft, degenerate taper")
 def _(): return doc(box(), {"id": "d", "type": "draft", "angle": 90, "axis": "Z",
                             "faces": {"kind": "face", "by": "normal", "dir": [1, 0, 0]}})
 
@@ -249,7 +249,7 @@ def _(): return doc(box(), {"id": "d", "type": "draft", "angle": 120, "axis": "Z
 
 
 # --- sketch pathologies ---
-@case("sketch-self-intersecting", "figure-eight profile — self-intersecting wire")
+@case("sketch-self-intersecting", "figure-eight profile, self-intersecting wire")
 def _(): return doc(
     {"id": "s", "type": "sketch", "plane": "XY", "entities": [
         {"type": "line", "id": "l1", "x1": 0, "y1": 0, "x2": 20, "y2": 20},
@@ -277,7 +277,7 @@ def _(): return doc({"id": "s", "type": "sketch", "plane": "XY", "entities": []}
                     {"id": "e", "type": "extrude", "sketch": "s", "distance": 5, "operation": "new"})
 
 
-@case("sketch-nested-rings", "three concentric circles — nested holes")
+@case("sketch-nested-rings", "three concentric circles, nested holes")
 def _(): return doc(
     {"id": "s", "type": "sketch", "plane": "XY", "entities": [
         {"type": "circle", "id": "e1", "x": 0, "y": 0, "radius": 30},
@@ -302,7 +302,7 @@ def _(): return doc(box(l=20, w=20, h=20),
 # --- round 2: families the first sweep never touched -------------------------
 
 
-@case("loft-single-profile", "loft through only ONE profile — nothing to blend to")
+@case("loft-single-profile", "loft through only ONE profile, nothing to blend to")
 def _(): return doc(sk_rect("s1", 20, 20),
                     {"id": "lf", "type": "loft", "sketches": ["s1"]})
 
@@ -357,7 +357,7 @@ def _(): return doc(box(),
                      "face": {"kind": "face", "by": "nearest", "point": [500, 500, 500]}})
 
 
-@case("selector-on-symmetry-axis", "a nearest-selector on a cylinder's axis — every rim point ties")
+@case("selector-on-symmetry-axis", "a nearest-selector on a cylinder's axis, every rim point ties")
 def _(): return doc(cyl("c", 10, 20),
                     {"id": "f", "type": "fillet", "radius": 1,
                      "edges": {"kind": "edge", "by": "nearest", "point": [0, 0, 10]}})

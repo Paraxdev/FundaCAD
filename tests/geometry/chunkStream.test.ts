@@ -4,7 +4,7 @@ import { Geometry, decodeBinaryFrame } from "../../src/geometry/client";
 // The client half of the chunked rebuild reply (sidecar/server.py's
 // _stream_binary_reply). test_ws.py proves the encoder and that a stream
 // reassembles to the same reply the single-frame encoder produces; this proves
-// the reader, and especially the failure paths — a stream that cannot finish
+// the reader, and especially the failure paths, a stream that cannot finish
 // MUST settle its pending call, because a rebuild left pending forever leaves
 // DocumentStore.rebuildNow()'s `rebuilding` flag set and silently no-ops every
 // later rebuild for the life of the session.
@@ -28,7 +28,7 @@ function frame(env: object, buffers: (Float32Array | Uint32Array)[] = []): Array
 }
 
 /** One full body's wire payload plus the buffers it references, numbered from
- *  `base` — buffer indices are FRAME-local, so each chunk restarts at 0. */
+ *  `base`, buffer indices are FRAME-local, so each chunk restarts at 0. */
 function fullBody(id: string, base: number) {
   const positions = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]);
   const indices = new Uint32Array([0, 1, 2]);
@@ -101,7 +101,7 @@ describe("decodeBinaryFrame", () => {
     const f = chunkFrame("rq", "s1", 1, true, ["a", "b"]);
     const h = decodeBinaryFrame(f);
     const [a, b] = h.result.bodies as any[];
-    // b's buffers are indices 5..9 of ITS OWN table — a global table would have
+    // b's buffers are indices 5..9 of ITS OWN table, a global table would have
     // made this read a's data back
     expect(Array.from(a.positions)).toEqual([0, 0, 0, 1, 0, 0, 0, 1, 0]);
     expect(Array.from(b.indices)).toEqual([0, 1, 2]);

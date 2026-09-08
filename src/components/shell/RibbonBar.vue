@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// MCAD-style icon ribbon. Two contexts — modeling and sketch — each a row of
+// MCAD-style icon ribbon. Two contexts, modeling and sketch, each a row of
 // grouped icon buttons (CREATE / MODIFY / …) with the group name underneath.
 // The sketch context ends with the green Finish Sketch + a Sketch Palette toggle.
 
@@ -16,14 +16,14 @@ import { HOLD_MS, IDLE, holdStep, type HoldEvent, type HoldPhase } from "../../u
 const ribbon = useRibbonStore();
 // Two elements, two jobs, exactly as the class had them: the ResizeObserver
 // watches #ribbon (the container that actually changes size with the window),
-// while the packing measures .ribbon-context — #ribbon is an overflow-x:auto
+// while the packing measures .ribbon-context, #ribbon is an overflow-x:auto
 // scroller, so once the tools no longer fit, its clientWidth is the VIEWPORT
 // width, not the row's.
 const root = useTemplateRef<HTMLElement>("root");
 const ctx = useTemplateRef<HTMLElement>("ctx");
 
 // The sketch context's two pinned groups live outside the SKETCH table because
-// they are chrome, not tools — a spacer pushes them to the right-hand end.
+// they are chrome, not tools, a spacer pushes them to the right-hand end.
 const PALETTE_GROUP: Group = {
   label: "PALETTE",
   items: [{ action: "palette", label: "Sketch Palette", iconName: "palette", kind: "toggle" }],
@@ -81,7 +81,7 @@ watch(
 // --- overflow packing ----------------------------------------------------
 // Natural group sizes ALONG THE BAR, measured with every group shown, cached
 // per context. Re-measuring on each reflow would mean un-collapsing, awaiting a
-// frame and re-collapsing — a visible flicker during a resize drag. The sizes
+// frame and re-collapsing, a visible flicker during a resize drag. The sizes
 // only change when the context, the font, the zoom or the bar's axis changes,
 // none of which is a container resize, so the cache is invalidated on those.
 const naturalWidths = new Map<RibbonContext, number[]>();
@@ -103,7 +103,7 @@ function measure(): number[] {
 async function naturalFor(context: RibbonContext): Promise<number[]> {
   const cached = naturalWidths.get(context);
   if (cached?.length) return cached;
-  // Measure with nothing collapsed — the one frame we cannot avoid, paid once
+  // Measure with nothing collapsed, the one frame we cannot avoid, paid once
   // per context rather than once per resize event.
   const had = collapsedLabels.value;
   if (had.size) {
@@ -131,7 +131,7 @@ async function reflow() {
   }
   total += 40; // reserve the overflow button
 
-  // low priority first, then rightmost — same order the class used
+  // low priority first, then rightmost, same order the class used
   const order = list
     .map((g, i) => ({ g, i }))
     .filter((x) => !PINNED.has(x.g.label))
@@ -147,7 +147,7 @@ async function reflow() {
   }
   collapsedLabels.value = next;
   // A reflow moves or hides split-arrow anchors, so a split dropdown would be
-  // pointing at nothing. The overflow popup is fine — its contents are derived.
+  // pointing at nothing. The overflow popup is fine, its contents are derived.
   if (popup.value?.kind === "split") closePopup();
 }
 
@@ -164,7 +164,7 @@ onMounted(() => {
   ro = new ResizeObserver(() => void reflow());
   if (root.value) ro.observe(root.value);
   // Turning the bar on its side changes which dimension the cached sizes are,
-  // so they have to go — a column of heights compared against a row's width
+  // so they have to go, a column of heights compared against a row's width
   // collapses everything. The ResizeObserver fires too, but only after the
   // layout settles, and it would reflow against the stale cache first.
   offLayout = onLayoutPrefsChange(async () => {

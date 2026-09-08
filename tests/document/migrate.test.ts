@@ -179,8 +179,8 @@ describe("migrateDocument", () => {
     // rather than losing an option: a combine that does not become a boolean is
     // an unknown feature type, and an unknown feature type is a rebuild error
     // where a part used to be.
-    // `combine` is not in the Feature union any more — that is the point of the
-    // migration — so the fixture is cast in, the way a file read off disk is.
+    // `combine` is not in the Feature union any more, that is the point of the
+    // migration, so the fixture is cast in, the way a file read off disk is.
     const doc = v1({
       version: 8,
       features: [
@@ -215,7 +215,7 @@ describe("migrateDocument", () => {
   it("leaves a v9 boolean alone, so a second open cannot rewrite it again", () => {
     // The rewrite is keyed on the stamp, and this is what stops it being keyed
     // on the DATA: a boolean already carrying `keepOriginals` must not be walked
-    // a second time. Idempotence is not optional here — migrateDocument runs on
+    // a second time. Idempotence is not optional here, migrateDocument runs on
     // every load, and this document is what the previous test produced.
     const doc = v1({
       version: 9,

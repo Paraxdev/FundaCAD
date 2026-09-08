@@ -3,7 +3,7 @@
 BRepOffset_MakeOffset does not refuse the shapes it cannot handle. It takes the
 process down: an access violation inside OCCT, no exception, nothing for a
 caller to catch. That is why `_offset_faces` had two carefully written fallbacks
-that had never once run — you cannot except your way out of a segfault.
+that had never once run, you cannot except your way out of a segfault.
 
 It is not an exotic trigger either. Measured, a four-face body is enough:
 
@@ -16,8 +16,8 @@ It is not an exotic trigger either. Measured, a four-face body is enough:
 
 So the gesture that kills a worker is "push a face next to a chamfer by more
 than the chamfer is big", which is an ordinary thing to do to an ordinary part.
-On the document that prompted this — a belt spool with chamfered flanges and a
-threaded joint — EVERY face of the body crashed, in both directions.
+On the document that prompted this, a belt spool with chamfered flanges and a
+threaded joint, EVERY face of the body crashed, in both directions.
 
 Running it here instead means a crash is an exit code. The parent turns that
 into the ValueError its callers were already written to handle, and press/pull
@@ -25,7 +25,7 @@ lands on the thicken fallback, which answers the same question correctly.
 
 Two separate things then protect the app, and it is worth knowing which does
 what. Writing the shape out and reading it back is itself enough to turn SOME
-crashes into an honest refusal — the four-face body above dies in process and
+crashes into an honest refusal, the four-face body above dies in process and
 comes back REFUSED through here, with no fault at all. The boundary catches what
 survives that. Measured over the spool, every face in both directions, 102
 offsets: 6 died with 0xC0000005, 87 refused, 8 came back invalid, 1 succeeded.

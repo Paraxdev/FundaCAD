@@ -3,8 +3,8 @@
 // Four ops reach past the window: three about files, one about the build. They
 // go through the SAME broker, checked against the SAME grants, as everything
 // else. That is the whole design decision here and it is worth stating plainly,
-// because the tempting shape is a second channel — a `native` object handed to
-// the plugin beside `app` — and a second channel is a second permission system
+// because the tempting shape is a second channel, a `native` object handed to
+// the plugin beside `app`, and a second channel is a second permission system
 // to keep in step with the first. There is one door.
 //
 // WHAT MAKES THE FILE OPS SAFE IS NOT A RULE ABOUT DIRECTORIES. A plugin never

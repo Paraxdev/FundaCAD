@@ -56,7 +56,7 @@ describe("OriginTriad", () => {
 
   it("must fail without the sleeve: the drawn shaft alone is not that wide", () => {
     // The control for the test above. The shaft's radius is 0.017 of an 88-unit
-    // arm, about 1.5 units, so a ray 3 units off the axis misses it — which is
+    // arm, about 1.5 units, so a ray 3 units off the axis misses it, which is
     // exactly why the sleeve exists.
     const shaft = new THREE.Mesh(
       new THREE.CylinderGeometry(88 * 0.017, 88 * 0.017, 88, 10),

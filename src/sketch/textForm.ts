@@ -4,7 +4,7 @@
 // Split out of textPanel.ts when that became a facade over
 // components/overlays/TextToolPanel.vue. Everything here is a pure function of
 // its inputs, which is the only part of a floating panel a headless test can
-// reach — happy-dom has no layout, so the panel's measured placement is not
+// reach, happy-dom has no layout, so the panel's measured placement is not
 // testable, but the clamp that decides where it is ASKED to go is.
 
 export interface TextValues {
@@ -14,14 +14,14 @@ export interface TextValues {
   style: "regular" | "bold" | "italic" | "bolditalic";
   align: "left" | "center" | "right";
   angle: number;
-  boxWidth?: number; // wrap width (mm) — text fits inside this box
+  boxWidth?: number; // wrap width (mm), text fits inside this box
 }
 
 export function styleOf(bold: boolean, italic: boolean): TextValues["style"] {
   return bold && italic ? "bolditalic" : bold ? "bold" : italic ? "italic" : "regular";
 }
 
-/** The panel's live form state — strings, because that is what the <input>s
+/** The panel's live form state, strings, because that is what the <input>s
  *  hold and half of them are legitimately mid-edit and unparseable. */
 export interface TextForm {
   text: string;
@@ -36,7 +36,7 @@ export interface TextForm {
 
 export function initialTextForm(initial: Partial<TextValues>): TextForm {
   // `style` is one field on the value and two checkboxes on the form, and
-  // "bolditalic" has to light both — hence includes() rather than equality.
+  // "bolditalic" has to light both, hence includes() rather than equality.
   const style = String(initial.style ?? "regular");
   return {
     text: initial.text ?? "",

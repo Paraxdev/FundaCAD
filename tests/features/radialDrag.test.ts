@@ -26,7 +26,7 @@ describe("radialDrag", () => {
   it("flips the kernel's sign for a bore", () => {
     // A press/pull distance moves the face along its own outward normal, which
     // points at the axis on a hole. Get this backwards and a hole dragged open
-    // closes instead — no error, just the wrong part.
+    // closes instead, no error, just the wrong part.
     expect(radialDrag(5, 1, true).distance).toBeCloseTo(1);
     expect(radialDrag(5, 1, false).distance).toBeCloseTo(-1);
     expect(radialDrag(5, -0.4, true).distance).toBeCloseTo(-0.4);
@@ -47,7 +47,7 @@ describe("radialDrag", () => {
   it("sends no distance while removing", () => {
     // Removal is a different feature (defeature/heal), not a very large push:
     // handing the kernel -6 on a 5mm radius is the collapse the clamp exists to
-    // prevent, and it would come back clamped to -4.5 — a resize nobody asked for.
+    // prevent, and it would come back clamped to -4.5, a resize nobody asked for.
     const d = radialDrag(5, -9, true);
     expect(d.mode).toBe("remove");
     expect(d.distance).toBe(0);
@@ -55,7 +55,7 @@ describe("radialDrag", () => {
   });
 
   it("is reversible: the same delta always reads the same, either direction", () => {
-    // What makes the gesture safe to explore — crossing the floor and coming back
+    // What makes the gesture safe to explore, crossing the floor and coming back
     // has to land on the number you left, or a slip of the mouse costs the size.
     const before = radialDrag(5, -1, true);
     radialDrag(5, -9, true); // through the floor
@@ -71,7 +71,7 @@ describe("radialDrag", () => {
     for (const d of [12, 8, 1.5]) {
       expect(radialDrag(5, deltaForDiameter(5, d), true).diameter).toBeCloseTo(d, 9);
     }
-    // typing 0 does what dragging to 0 does — and so does anything under the
+    // typing 0 does what dragging to 0 does, and so does anything under the
     // floor, which is why the round trip above stays above it
     expect(radialDrag(5, deltaForDiameter(5, 0), true).mode).toBe("remove");
     expect(radialDrag(5, deltaForDiameter(5, 0.5), true).mode).toBe("remove");

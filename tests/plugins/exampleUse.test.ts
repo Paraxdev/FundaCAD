@@ -2,7 +2,7 @@
 //
 // This file is documentation that fails when it stops being true. `bracket` is
 // a stand-in for plugin code: it knows nothing about the app except the broker
-// it was handed, which is what makes it testable without an app at all — no
+// it was handed, which is what makes it testable without an app at all, no
 // Tauri, no webview, no geometry process, no window.
 //
 // The two cases are the pair every plugin should have. The first says the

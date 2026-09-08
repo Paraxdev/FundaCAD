@@ -13,7 +13,7 @@ export interface PropertiesData {
 }
 
 /** One overlapping pair, keeping the body ids so clicking the row can select
- *  them. Volume is pre-formatted in display units by the facade — unit
+ *  them. Volume is pre-formatted in display units by the facade, unit
  *  conversion stays next to the geometry that produced the number. */
 export interface ClashRow extends PanelRow {
   a: string;
@@ -25,7 +25,7 @@ export interface InterferenceData {
   clashes: ClashRow[];
 }
 
-/** The floating "measure-panel" popups. Each is independent — Properties and
+/** The floating "measure-panel" popups. Each is independent, Properties and
  *  the Overhang settings can legitimately be on screen together, which is why
  *  this is four fields rather than one `activePanel` discriminant. */
 export const usePanelsStore = defineStore("panels", () => {

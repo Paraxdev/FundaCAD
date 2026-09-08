@@ -11,7 +11,7 @@
 // Unit suffixes bind to NUMBER literals only and convert to canonical units at
 // parse time (lengths → mm, angles → degrees); the AST keeps the unit tag so a
 // dimensional checker can be added later without a format change. Function
-// arguments use SEMICOLON separators (Fusion convention — comma is ambiguous in
+// arguments use SEMICOLON separators (Fusion convention, comma is ambiguous in
 // comma-decimal locales). Identifiers are case-sensitive; '.' is rejected in
 // identifiers (qualified names are reserved for the future).
 
@@ -34,7 +34,7 @@ export const UNITS: Record<string, { factor: number; dim: "length" | "angle" }> 
 };
 
 /** Implemented tier-1 functions. Trig takes/returns DEGREES for angles (the
- *  canonical angle unit) — sin(30) = 0.5; use a `rad` literal to feed radians. */
+ *  canonical angle unit), sin(30) = 0.5; use a `rad` literal to feed radians. */
 export const FUNCTIONS: Record<string, { arity: [number, number]; apply: (args: number[]) => number }> = {
   sin: { arity: [1, 1], apply: ([a]) => Math.sin((a! * Math.PI) / 180) },
   cos: { arity: [1, 1], apply: ([a]) => Math.cos((a! * Math.PI) / 180) },
@@ -249,7 +249,7 @@ export function isIdentName(s: string): boolean {
 }
 
 /** Rewrite every reference to `from` as `to`, preserving the source verbatim
- *  otherwise (token-level splice — never a regex, so "width" can't hit "widths",
+ *  otherwise (token-level splice, never a regex, so "width" can't hit "widths",
  *  a unit suffix, or a function name). Assumes `src` parses. */
 export function renameRefs(src: string, from: string, to: string): string {
   const toks = tokenize(src);
@@ -258,7 +258,7 @@ export function renameRefs(src: string, from: string, to: string): string {
   for (let i = 0; i < toks.length; i++) {
     const t = toks[i]!;
     if (t.kind !== "ident" || t.name !== from) continue;
-    // an ident directly followed by "(" is a function name, not a reference —
+    // an ident directly followed by "(" is a function name, not a reference,
     // unreachable for valid renames (param names can't shadow functions), but
     // keep the splice honest anyway
     const next = toks[i + 1];
@@ -272,7 +272,7 @@ export function renameRefs(src: string, from: string, to: string): string {
   return out + src.slice(last);
 }
 
-/** True when the expression is just a literal number (with optional unit) —
+/** True when the expression is just a literal number (with optional unit),
  *  i.e. NOT worth an fx: badge. */
 export function isNumericLiteral(src: string): boolean {
   try {

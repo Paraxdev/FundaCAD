@@ -15,7 +15,7 @@ export interface MenuItem {
   onClick?: () => void;
   separator?: boolean;
   disabled?: () => boolean;
-  /** Toggle state — a check icon in the menu's reserved gutter when true.
+  /** Toggle state, a check icon in the menu's reserved gutter when true.
    *  A thunk, so it is re-evaluated each time the menu opens. */
   checked?: () => boolean;
 }
@@ -28,12 +28,12 @@ export interface MenuDef {
 // The Menubar class that used to live here is
 // components/shell/MenuBar.vue. MenuItem/MenuDef above are still the contract
 // app/menubarDef.ts builds against, and the disabled()/checked() thunks still
-// mean "re-evaluate every time the menu opens" — the component does that with a
+// mean "re-evaluate every time the menu opens", the component does that with a
 // tick ref instead of walking the popup's DOM and poking attributes.
 
 export type { CtxItem };
 
-/** Close the open context menu (if any). For tool/mode exits — normal dismissal
+/** Close the open context menu (if any). For tool/mode exits, normal dismissal
  *  (outside pointerdown, Escape, item click) is handled by the menu itself. */
 export function dismissContextMenu(): void {
   useContextMenuStore().close();

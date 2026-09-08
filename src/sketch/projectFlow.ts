@@ -32,7 +32,7 @@ import { toast } from "../ui/toast";
 
 // Tolerant edge-fingerprint compare for the Project tool's duplicate-pick check.
 // Fingerprints carry unrounded float noise (sidecar-authored), so byte equality
-// is meaningless — same midpoint (within 1e-3 mm), same unoriented tangent, and
+// is meaningless, same midpoint (within 1e-3 mm), same unoriented tangent, and
 // a matching length when both carry one, is "the same edge".
 function fpClose(a: EdgeFingerprint, b: EdgeFingerprint): boolean {
   if (Math.hypot(a.mid[0] - b.mid[0], a.mid[1] - b.mid[1], a.mid[2] - b.mid[2]) > 1e-3) return false;
@@ -42,7 +42,7 @@ function fpClose(a: EdgeFingerprint, b: EdgeFingerprint): boolean {
   return true;
 }
 
-/** The slice of SketchMode this flow reads/writes — live accessors, not copies. */
+/** The slice of SketchMode this flow reads/writes, live accessors, not copies. */
 export interface ProjectHost {
   /** live entity list; the projected curves are pushed straight onto it */
   entities(): ResolvedEntity[];
@@ -84,7 +84,7 @@ export class ProjectFlow {
     return f && f.type === "sketch" ? f : null;
   }
 
-  /** a committed sketch's REAL entity by id, with its owning sketch feature —
+  /** a committed sketch's REAL entity by id, with its owning sketch feature,
    *  derived pattern copies (ids carry "#") resolve to null: they don't exist
    *  in the document, so the sidecar could never re-find them. */
   private committedSource(
@@ -119,7 +119,7 @@ export class ProjectFlow {
   }
 
   /** does an already-placed projected entity carry (a match selector for) this
-   *  edge fingerprint? Tolerant compare — fps carry float noise, never compare
+   *  edge fingerprint? Tolerant compare, fps carry float noise, never compare
    *  them byte-for-byte. */
   private hasProjectedFp(fp: EdgeFingerprint): boolean {
     return this.host.entities().some((x) => {
@@ -140,7 +140,7 @@ export class ProjectFlow {
     if (this.host.projectPanel().filter === "sketchCurves") {
       const hit = this.host.overlay().committedCurveAt(e.clientX, e.clientY, (w) => this.host.viewport().projectToScreen(w));
       if (!hit) {
-        // nothing committed under the cursor — the ACTIVE sketch's own entities
+        // nothing committed under the cursor, the ACTIVE sketch's own entities
         // are never valid sources (checked second: a projection usually lies
         // screen-coincident with its source, and the source must stay pickable)
         const p = this.host.planePoint(e);
@@ -172,7 +172,7 @@ export class ProjectFlow {
           : this.host.viewport().faceIdToBodyId(hit.faceId);
       if (!body) return;
       if (this.host.projectPanel().filter === "silhouette") {
-        // any face/edge hit resolves to its whole BODY — the HLR outline source
+        // any face/edge hit resolves to its whole BODY, the HLR outline source
         const dup = this.host.entities().some(
           (x) => x.type === "projected" && x.source.kind === "silhouette" && x.source.body === body,
         );
@@ -183,7 +183,7 @@ export class ProjectFlow {
         source = { kind: "silhouette", body };
       } else if (hit.kind === "edge") {
         // NOT hit.selector: the picker's nearest point is the line's mid VERTEX,
-        // which for a 2-point straight edge is an ENDPOINT — a corner shared by
+        // which for a 2-point straight edge is an ENDPOINT, a corner shared by
         // three edges that "nearest" (center-distance) then resolves to the
         // wrong one. The middle segment's midpoint is on (or near) the curve
         // and never a corner.
@@ -198,7 +198,7 @@ export class ProjectFlow {
         // the raycast hit point re-finds exactly the clicked face: it lies ON
         // the face's material, so by:"nearest" distance is 0 there and > 0 for
         // every other face. NOT the face centroid (which can fall off the
-        // material — a washer's annular face — and tie with another face), and
+        // material, a washer's annular face, and tie with another face), and
         // NOT the picker's own selector (may be a by:"normal" GROUP hit, too
         // broad for one face's boundary).
         source = { kind: "faceBoundary", body, sel: { kind: "face", by: "nearest", point: hit.point } };
@@ -208,7 +208,7 @@ export class ProjectFlow {
     this.projectBusy = true;
     // Session identity: enter() always assigns a fresh entities array, so if the
     // sketch was finished and a NEW one started while the op was in flight (a
-    // realistic window — cold-cache prefix rebuilds take seconds), the identity
+    // realistic window, cold-cache prefix rebuilds take seconds), the identity
     // check below rejects the stale reply instead of landing curves computed
     // against the old sketch's plane and timeline prefix.
     const session = this.host.entities();
@@ -229,7 +229,7 @@ export class ProjectFlow {
       return;
     }
     // body-edge duplicates are detected against the returned fingerprints (the
-    // sketch-curve case was pre-checked above — its ids are stable)
+    // sketch-curve case was pre-checked above, its ids are stable)
     const fresh = r.curves.filter(({ fp }) => !(fp && this.hasProjectedFp(fp)));
     const skipped = r.curves.length - fresh.length;
     if (skipped) toast(skipped === r.curves.length ? "That edge is already projected into this sketch" : `${skipped} already-projected edge${skipped > 1 ? "s" : ""} skipped`);
@@ -241,12 +241,12 @@ export class ProjectFlow {
     const group = ids.length > 1 ? { group: ids[0]! } : {};
     fresh.forEach(({ fp, curve }, i) => {
       // NOTE (plan step 4): a faceBoundary source persists with a per-edge
-      // by:"match" sel — the rebuild refresh handler must resolve it via
+      // by:"match" sel, the rebuild refresh handler must resolve it via
       // resolve_edges (not resolve_faces) when it lands.
       const src: ProjectedSource =
         source.kind === "sketchCurve"
           ? // `index: i` is sound because sketch-curve results carry no fps, so
-            // the dedup filter above never drops any — i IS the edge index in
+            // the dedup filter above never drops any, i IS the edge index in
             // the sidecar's deterministic _entity_edges order (the refresh
             // handler's authoritative sibling correspondence).
             { kind: "sketchCurve", sketch: source.sketch, entity: source.entity, ...group, ...(fresh.length > 1 ? { index: i } : {}) }

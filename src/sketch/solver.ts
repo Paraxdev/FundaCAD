@@ -51,14 +51,14 @@ export type SConstraint =
   // `round1`/`round2`/`round` name a CIRCLE OR ARC primitive: planegcs's Arc
   // derives from Circle, so the same three constraints take either (verified
   // against the installed wasm). See entityDims.rimGap / lineRimPoints /
-  // pointRimPoints for the exact measures — they are not all signed, and
+  // pointRimPoints for the exact measures, they are not all signed, and
   // sketchSolve's solve guard re-checks the branch each one was created in.
   | { id: string; type: "rimGap"; round1: string; round2: string; value: number }
   | { id: string; type: "rimLine"; round: string; line: string; value: number }
   | { id: string; type: "rimPoint"; p: PointId; round: string; value: number }
   // radiusDifference: `outer.radius - inner.radius = value`, SIGNED, touching
   // only the two radius params (planegcs `difference` over ObjectParams). The
-  // concentric wall-thickness dim — c2cdistance's nested branch is unsigned and
+  // concentric wall-thickness dim, c2cdistance's nested branch is unsigned and
   // will happily converge to an inverted annulus, so it must NOT be used here.
   | { id: string; type: "radiusDifference"; inner: string; outer: string; value: number };
 

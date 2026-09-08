@@ -2,8 +2,8 @@
 //
 // Draft used to be fire-and-forget: pick a face, get 5° about Z, correct it in
 // the value row afterwards. Two of those three decisions were guesses made
-// without looking at the part — which axis the mould opens along, and how much
-// taper — and both are visible facts about the face that was just clicked.
+// without looking at the part, which axis the mould opens along, and how much
+// taper, and both are visible facts about the face that was just clicked.
 //
 // The pull axis is the world axis the face is most PARALLEL to, i.e. the one its
 // normal is most perpendicular to. A side wall of a box drafts about the axis
@@ -12,7 +12,7 @@
 //
 // The angle comes from the drag the same way a carpenter reads one: the face
 // pivots about the line where it meets the NEUTRAL plane (the body's near end
-// along the pull axis, which is where the sidecar puts it — builder._draft), so
+// along the pull axis, which is where the sidecar puts it, builder._draft), so
 // the far edge swings by lever * tan(angle). Dragging that edge d millimetres
 // along the face's own normal therefore means atan(d / lever), and the number in
 // the readout is the angle a protractor laid on the part would show.
@@ -34,7 +34,7 @@ export const MAX_DRAFT_DEG = 60;
 const MIN_LEVER = 1e-3;
 
 /** The world axis to pull along for a face with this normal: the one the normal
- *  is LEAST aligned with. Ties break X, Y, Z — a 45° face has no better answer
+ *  is LEAST aligned with. Ties break X, Y, Z, a 45° face has no better answer
  *  and a stable one beats a prettier one that moves when the mesh does. */
 export function pullAxisFor(normal: readonly [number, number, number]): Axis3 {
   const [nx, ny, nz] = normal;

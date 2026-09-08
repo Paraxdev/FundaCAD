@@ -11,7 +11,7 @@ import type { BugReportDeps } from "../ui/bugReporter";
  *  legitimately stack: a dialog may be raised over the welcome screen.
  *
  *  Dialogs that gate global shortcuts do it in their component's onMounted/
- *  onUnmounted (composables/useModalGate.ts), NOT here — a store field can be
+ *  onUnmounted (composables/useModalGate.ts), NOT here, a store field can be
  *  written from anywhere, including twice, while a mount happens exactly once and
  *  its unmount cannot be forgotten.
  *
@@ -21,9 +21,9 @@ import type { BugReportDeps } from "../ui/bugReporter";
  *
  *  ONLY THE APP'S OWN DIALOGS. A capability's window keeps its open/closed state
  *  in that capability's own directory, next to the component that reads it. Two
- *  used to live here — a 3D-mouse settings flag and a filament-mapping request,
+ *  used to live here, a 3D-mouse settings flag and a filament-mapping request,
  *  the second of which dragged two type imports from the printer client into
- *  every module that touches a dialog — and a fourth capability with a window
+ *  every module that touches a dialog, and a fourth capability with a window
  *  would have meant a third. */
 
 export const useDialogStore = defineStore("dialogs", () => {

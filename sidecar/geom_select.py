@@ -1,4 +1,4 @@
-"""Selector resolution — the topological-naming mitigation.
+"""Selector resolution, the topological-naming mitigation.
 
 Geometry is NEVER referenced by index. References are queryable property
 descriptors, re-resolved against the freshly built solid on every rebuild.
@@ -19,7 +19,7 @@ Face selectors:
 
 --- selector v2 (`by:"match"` / structural forms) -----------------------------
 
-The legacy `axis`/`normal` forms mean "ALL parallel / co-normal entities" — they
+The legacy `axis`/`normal` forms mean "ALL parallel / co-normal entities", they
 cannot mean "this ONE edge/face". `nearest` is the only single-entity legacy form
 and it collides when two entities share a midpoint/centroid (concentric circles,
 mirrored features) or when the rebuilt OCCT geometry drifts slightly from the kernel
@@ -40,7 +40,7 @@ optional `diag` accumulator, so the rebuild always completes and downstream tool
 can see which selections were shaky. It returns nothing only when the body has no
 candidates at all.
 
-NOTE: the frontend now emits `by:"match"` edge selectors — the Project tool
+NOTE: the frontend now emits `by:"match"` edge selectors, the Project tool
 persists sidecar-authored fingerprints as the source reference of projected
 sketch entities (builder._recompute_projections resolves them on every rebuild,
 and the projectGeometry op authors them). `by:"tangentChain"` is implemented and
@@ -51,7 +51,7 @@ import json
 import math
 import os
 
-import font_guard  # noqa: F401  MUST precede build123d — see font_guard.py
+import font_guard  # noqa: F401  MUST precede build123d, see font_guard.py
 
 from build123d import Axis, Vector, GeomType
 
@@ -349,7 +349,7 @@ def face_fingerprint(f, part):
 def _edge_cost(e, fp, tol_pos, rank_info=None):
     # Concentric rim (radius_group >= 2): under a uniform scale mutation the midpoint
     # (a CIRCUMFERENCE point, not the center), length, and absolute radius all go stale
-    # and favor the wrong rim. Score only the scale-stable signals — center (locates the
+    # and favor the wrong rim. Score only the scale-stable signals, center (locates the
     # family), curve type, and the radius RANK within the shared-center group. rank_info
     # is (rank, group_size) for THIS edge in the current part, or None.
     if _edge_curve(e) == "circle" and fp.get("radius_group", 1) >= 2 and "radius_rank" in fp:
@@ -463,7 +463,7 @@ def _push_diag(diag, feature_id, kind, resolved, confidence, lossy, reason, at=N
         # A malformed `at` is DROPPED rather than raised on. It comes straight
         # out of the document, and round(float(v)) on a hand-edited file whose
         # point holds a string raised right here, which the rebuild handler then
-        # reported as the feature failing — document text in the sidecar's own
+        # reported as the feature failing, document text in the sidecar's own
         # voice. Losing the Re-pick button on a reference that is already
         # unrepairable is the cheaper of the two.
         if pt is None:
@@ -481,7 +481,7 @@ def _push_diag(diag, feature_id, kind, resolved, confidence, lossy, reason, at=N
 
 
 def _nearest_one(cands, dist_of, key_fn, describe, kind, sel, diag, feature_id):
-    """Resolve a `by:"nearest"` selector — or REFUSE, when the pick is ambiguous.
+    """Resolve a `by:"nearest"` selector, or REFUSE, when the pick is ambiguous.
 
     A bare `min()` over the candidates cannot fail. It returns the closest entity
     however far away and, the case that actually bit us, however close the
@@ -494,7 +494,7 @@ def _nearest_one(cands, dist_of, key_fn, describe, kind, sel, diag, feature_id):
     but also measure the margin to the runner-up, the same way _resolve_one does
     for v2 `match`. Below TIE_BAND the pick is not determined by the data and we
     raise, naming both candidates, so the timeline red-chips and the user can
-    re-pick. `nth` overrides — a selector that deliberately means "the second of
+    re-pick. `nth` overrides, a selector that deliberately means "the second of
     the tied pair" can still say so.
 
     NOTE the discriminator is AMBIGUITY, not absolute distance. A gate on "how
@@ -506,8 +506,8 @@ def _nearest_one(cands, dist_of, key_fn, describe, kind, sel, diag, feature_id):
     if not cands:
         raise ValueError(f"no {kind} to select from")
     # Collapse candidates that no pick could tell apart. Two entities sharing a
-    # canonical key sit in the same place at the same size, so the refusal below
-    # — "re-pick, the saved reference no longer identifies one" — asks for
+    # canonical key sit in the same place at the same size, so the refusal below,
+    # "re-pick, the saved reference no longer identifies one", asks for
     # something that cannot exist: any pick finding one finds the other.
     #
     # Not hypothetical. Two prisms that meet at a single corner fuse into a body
@@ -530,7 +530,7 @@ def _nearest_one(cands, dist_of, key_fn, describe, kind, sel, diag, feature_id):
         # informational entry carrying `margin` as `confidence`, which broke two
         # ways: `confidence` means a distance MARGIN here but a fingerprint
         # match-QUALITY on the by:"match" path, and `_push_diag` admits anything
-        # under 0.5 — so a clear winner at margin 0.11 was logged as low
+        # under 0.5, so a clear winner at margin 0.11 was logged as low
         # confidence. `_project_source` (builder.py) then refused the projection
         # outright, which is how a cylinder-rim projection started reporting
         # "the source selection is ambiguous on this body". Keep `diag` meaning
@@ -552,7 +552,7 @@ def _nearest_one(cands, dist_of, key_fn, describe, kind, sel, diag, feature_id):
     raise ValueError(
         f"ambiguous {kind} reference at ({where}): "
         + " and ".join(described)
-        + f" are equally close ({best_d:.3f}mm vs {runner:.3f}mm) — re-pick the {kind}"
+        + f" are equally close ({best_d:.3f}mm vs {runner:.3f}mm), re-pick the {kind}"
     )
 
 
@@ -571,7 +571,7 @@ def _describe_edge(e):
 
 
 def resolve_edges(part, sel, diag=None, feature_id=None):
-    """Resolve an edge selector — or a LIST of selectors — to build123d edges.
+    """Resolve an edge selector, or a LIST of selectors, to build123d edges.
 
     `diag`/`feature_id` are optional: when a list is given, low-confidence v2 matches
     append a ResolveDiag dict for the rebuild to surface.
@@ -587,12 +587,12 @@ def resolve_edges(part, sel, diag=None, feature_id=None):
                 seen.setdefault(_edge_dedup_key(e), e)
         return list(seen.values())
 
-    # A FACE selector in an edge field means "the edges around that face" — the
+    # A FACE selector in an edge field means "the edges around that face", the
     # `ofFace` intent, arriving by point-pick rather than by fingerprint. It gets
     # here two ways: a fillet seeded from a selected face, and the re-pick repair,
     # which used to hand back a face selector whatever kind had gone ambiguous.
     # Falling through to the by:"nearest" branch below read the face's pick point
-    # as an EDGE point and rounded whichever edge happened to be closest to it —
+    # as an EDGE point and rounded whichever edge happened to be closest to it,
     # 2.14mm away on the reported document, an edge nobody had selected.
     if sel.get("kind") == "face":
         out = {}
@@ -616,7 +616,7 @@ def resolve_edges(part, sel, diag=None, feature_id=None):
         # A circle reference resolves to a circle when any exist: a rim selector must not
         # collapse onto a straight body edge just because its absolute position drifted
         # (e.g. a mirror-twin hole that translated under an upstream edit). Removing only
-        # non-circles is monotonic — it never reorders the circle candidates.
+        # non-circles is monotonic, it never reorders the circle candidates.
         if fp.get("curve") == "circle":
             circles = [e for e in edges if _edge_curve(e) == "circle"]
             if circles:
@@ -653,12 +653,12 @@ def resolve_edges(part, sel, diag=None, feature_id=None):
 
 
 def resolve_faces(part, sel, diag=None, feature_id=None):
-    """Resolve a face selector — or a LIST of selectors — to build123d faces."""
+    """Resolve a face selector, or a LIST of selectors, to build123d faces."""
     if part is None:
         raise ValueError("no part to select faces from")
 
     # a list of selectors (multi-face offset/thicken/shell/draft): union,
-    # de-duplicated — mirrors resolve_edges. Without this branch a list reaches
+    # de-duplicated, mirrors resolve_edges. Without this branch a list reaches
     # sel.get("by") and dies with a bare AttributeError, which the rebuild loop
     # renders as an unhelpful "Shell failed (AttributeError)".
     if isinstance(sel, list):
@@ -901,7 +901,7 @@ def resolve_face_on_plane(part, sel, normal, label, diag=None, feature_id=None):
 def _edge_dedup_key(e):
     """De-dup key for a union of edge selectors. Keys on the rounded midpoint AND
     length, so concentric edges (same center, different circumference) are NOT
-    collapsed — fixing the old center-only key that silently dropped them."""
+    collapsed, fixing the old center-only key that silently dropped them."""
     p = _edge_mid(e)
     try:
         ln = round(e.length, 4)
@@ -912,7 +912,7 @@ def _edge_dedup_key(e):
 
 def _face_dedup_key(f):
     """De-dup key for a union of face selectors. Centroid AND area, so two
-    coplanar concentric faces (same centroid, different size) stay distinct —
+    coplanar concentric faces (same centroid, different size) stay distinct,
     the face-side twin of _edge_dedup_key."""
     p = _face_centroid(f)
     try:
@@ -929,7 +929,7 @@ def _tangent_chain(part, seed):
 
     Visited edges are tracked by GEOMETRIC key, not id(): `seed` was resolved from a
     separate `part.edges()` call, so its twin in this local list has a different
-    Python id — keying on id() would re-add it as its own neighbour."""
+    Python id, keying on id() would re-add it as its own neighbour."""
     edges = list(part.edges())
 
     def endpoints(e):

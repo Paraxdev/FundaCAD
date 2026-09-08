@@ -1,4 +1,4 @@
-"""Backend smoke test — exercises rebuild/tessellate/selectors/export directly
+"""Backend smoke test, exercises rebuild/tessellate/selectors/export directly
 (no WebSocket) so failures point straight at the geometry code.
 
 Run:  uv run python test_smoke.py
@@ -109,7 +109,7 @@ def test_pattern_linear_and_circular():
     the timeline either way.
     """
     # 20x20x20 at the origin. Copies 30 apart are disjoint, so N copies is N
-    # times the volume — no overlap to argue about.
+    # times the volume, no overlap to argue about.
     _s, a = _box(1, 20, 20, 20)
     doc = {"parameters": {}, "features": a + [
         {"id": "pl", "type": "patternLinear", "count": 4, "spacing": 30, "axis": "X"}
@@ -122,7 +122,7 @@ def test_pattern_linear_and_circular():
     span = bb.max.X - bb.min.X
     assert abs(span - (20 + 3 * 30)) < 0.5, span
 
-    # The default axis is X, and Z runs the other way — the same document with a
+    # The default axis is X, and Z runs the other way, the same document with a
     # different axis must produce a differently-shaped solid, or `axis` is being
     # ignored (which a volume check alone would not notice).
     doc["features"][-1]["axis"] = "Z"
@@ -141,7 +141,7 @@ def test_pattern_linear_and_circular():
     assert not err2, err2
     assert abs(part2.volume - 6 * 1000) < 100, part2.volume
 
-    # A FULL circle divides by the count, so 6 copies means 6 — not 6 with the
+    # A FULL circle divides by the count, so 6 copies means 6, not 6 with the
     # last one landing on the first. Six disjoint copies is exactly what the
     # volume above proves; this pins the partial-sweep rule beside it, where the
     # division is by the gaps and the last copy lands ON the end angle.
@@ -182,7 +182,7 @@ def test_pattern_names_its_bodies():
     assert not err2, err2
     assert abs(vol(b2) - (8000 + 3 * 1000)) < 200, vol(b2)
 
-    # A stale id is a no-op with a diagnostic, not a failed build — an upstream
+    # A stale id is a no-op with a diagnostic, not a failed build, an upstream
     # split renumbers bodies, and a pattern that refuses to build at all would
     # take the rest of the timeline down with it.
     doc["features"][-1]["bodies"] = ["body9"]
@@ -207,7 +207,7 @@ def test_pattern_count_guards():
 
 def test_import_roundtrip():
     """Export a box to STL/STEP, import_geometry it, and rebuild a document with an
-    `import` feature — the imported body must survive the BREP round-trip."""
+    `import` feature, the imported body must survive the BREP round-trip."""
     _s, feats = _box(1, 20, 20, 10)
     part, _err, _b = rebuild({"parameters": {}, "features": feats})
     d = tempfile.mkdtemp()
@@ -218,7 +218,7 @@ def test_import_roundtrip():
         assert "error" not in payload, payload
         assert payload["solid"], f"{fmt} import should yield a solid"
         assert payload["geom"], "no geometry hash produced"
-        # a clean box must come back as 6 faces — proves coplanar-facet merging
+        # a clean box must come back as 6 faces, proves coplanar-facet merging
         # (UnifySameDomain) recovers real editable faces, not a triangle soup.
         assert payload["faces"] == 6, f"{fmt} box should merge to 6 faces, got {payload['faces']}"
         doc = {"parameters": {}, "features": [
@@ -311,7 +311,7 @@ def test_boolean_reads_the_pre_v9_spelling():
 
 def test_boolean_dangling_ref():
     """A boolean whose tool/target was already consumed by an earlier one is a
-    NON-FATAL no-op recorded in diagnostics (not a build-halting error) — so a
+    NON-FATAL no-op recorded in diagnostics (not a build-halting error), so a
     stale duplicate (positional-id drift) can't nuke the whole downstream timeline."""
     _s1, a = _box(1, 20, 20, 20)
     _s2, b = _box(2, 10, 10, 20)
@@ -471,7 +471,7 @@ def test_sketch_spline_extrude():
     """A sketch profile whose closed loop includes a free-form `spline` entity
     (not just line/arc) extrudes like any other polyline profile. The spline's
     points are collinear here, so `Edge.make_spline` degenerates to an exact
-    straight edge and the enclosed area stays an exact 10x6 rectangle — this
+    straight edge and the enclosed area stays an exact 10x6 rectangle, this
     checks the "spline" entity dispatch/combining, not curve fitting."""
     ents = [
         {"id": "l0", "type": "line", "x1": 0, "y1": 0, "x2": 10, "y2": 0},
@@ -515,7 +515,7 @@ def test_sketch_pattern_with_spline():
 
 
 def test_presspull_upto():
-    """press-pull `upTo` extrudes a face up to a target surface — the sidecar derives
+    """press-pull `upTo` extrudes a face up to a target surface, the sidecar derives
     the per-face distance from the target plane (here a low step face → a higher one)."""
     doc = {"parameters": {}, "features": [
         {"id": "b1", "type": "box", "length": 20, "width": 20, "height": 10},  # body1 z-5..5
@@ -542,7 +542,7 @@ def test_extrude_operation_multibody():
           "entities": [{"type": "rectangle", "width": 10, "height": 10, "x": 5}]}  # overlaps body1
     # distance 20 protrudes above body1's z=10 top, so the join both ADDS material
     # and merges the overlap into one body (a distance-10 prism would sit entirely
-    # inside body1 — a legitimate no-op now flagged by the boolean guard).
+    # inside body1, a legitimate no-op now flagged by the boolean guard).
     join = {"id": "e2", "type": "extrude", "sketch": "s2", "distance": 20, "operation": "join"}
     part, err, bodies = rebuild({"parameters": {}, "features": a + [s2, join]})
     assert not err, err
@@ -559,7 +559,7 @@ def test_extrude_noop_guards():
     """A boolean that changes nothing is flagged, not silently swallowed: a Join
     whose prism is already inside the body, a Cut/Intersect that meets no material,
     and an Intersect that would EMPTY a body all record a feature error (so the
-    timeline flags it red) and leave the body intact — while the interacting
+    timeline flags it red) and leave the body intact, while the interacting
     directions still succeed. Regression for 'I extruded a face and nothing
     happened, with no error'."""
     _s, base = _box(1, 40, 40, 20)  # body1: z=0..20, vol 32000
@@ -672,7 +672,7 @@ def test_offset_face_and_thicken():
     assert not e, e
     assert abs(p.volume - 2800) < 1, f"offset top -3 → 20×20×7, got {p.volume:.0f}"
 
-    # two faces in ONE offset pass — a list selector (resolve_faces list branch)
+    # two faces in ONE offset pass, a list selector (resolve_faces list branch)
     p, e, _ = build({"id": "of", "type": "offsetFace", "faces": [top, side], "distance": 2})
     assert not e, e
     assert abs(p.volume - 5280) < 1, f"offset top+side +2 → 22×20×12, got {p.volume:.0f}"
@@ -689,8 +689,8 @@ def test_offset_face_and_thicken():
     assert not e, e
     assert len(bodies) == 1 and abs(p.volume - 4800) < 1, "join merges into the source body"
 
-    # A sphere's face offsets. This used to assert the opposite — that a sphere
-    # MUST be refused — because the operation kept a whitelist of two surface
+    # A sphere's face offsets. This used to assert the opposite, that a sphere
+    # MUST be refused, because the operation kept a whitelist of two surface
     # types. Measurement (see _press_pull) showed that gate was denying work the
     # kernel does without complaint, so the whitelist is gone and this case flips
     # from a refusal to a result. See test_presspull.py for the full surface set.
@@ -706,7 +706,7 @@ def test_offset_face_and_thicken():
     assert e and "thickness is zero" in e[0]["message"], f"zero thicken must be refused, got {e}"
 
     # An imported STL body: _refacet_clean reduces it to real BRep faces, so
-    # offsetting one is legitimate and MUST work — this pins the deliberate
+    # offsetting one is legitimate and MUST work, this pins the deliberate
     # decision not to blanket-refuse "faceted" bodies. (Meshes that don't reduce
     # are already rejected at import by MAX_IMPORT_FACES, and server.py's
     # out-of-process worker is the backstop if OCCT still crashes.)
@@ -747,7 +747,7 @@ def test_simplify_mesh():
 
 
 def test_sweep():
-    """Sweep a circle profile (XY) along an arc path (XZ) — a smooth pipe."""
+    """Sweep a circle profile (XY) along an arc path (XZ), a smooth pipe."""
     doc = {"parameters": {}, "features": [
         {"id": "prof", "type": "sketch", "plane": "XY", "entities": [{"type": "circle", "radius": 2}]},
         {"id": "path", "type": "sketch", "plane": "XZ", "entities": [
@@ -814,7 +814,7 @@ def test_revolve_loft_operation():
 def test_loft_profiles_keeps_holes_as_tube():
     """Fusion-flow loft: lofting the SELECTED ring profiles (region anchors on two
     sketches) keeps each ring's hole, so two concentric-circle rings blend into a
-    hollow TUBE — not a solid cone (the whole-sketch loft lofts the outer wire
+    hollow TUBE, not a solid cone (the whole-sketch loft lofts the outer wire
     only). Volume = outer frustum (r25->r16) minus inner frustum (r20->r13.178)."""
     ring_lo = {"id": "s1", "type": "sketch", "plane": "XY", "entities": [
         {"type": "circle", "id": "a", "x": 0, "y": 0, "radius": 25},
@@ -996,7 +996,7 @@ def test_sketch_crossing_split():
     arrangement (builder._subdivide_faces / src/sketch/region.ts), so a line
     crossing a profile carves separately-extrudable sub-areas (MCAD parity), and
     a honeycomb hexagon whose corner sits on a boundary rectangle extrudes as its
-    true CLIPPED region — not the whole hexagon."""
+    true CLIPPED region, not the whole hexagon."""
     sq = [(0, 0, 10, 0), (10, 0, 10, 10), (10, 10, 0, 10), (0, 10, 0, 0)]
 
     def _lines(segs):
@@ -1021,7 +1021,7 @@ def test_sketch_crossing_split():
     assert abs(part.volume - 200) < 1, f"top half of a split square = 200, got {part.volume:.1f}"
 
     # honeycomb panel: a rectangle with hexagons. The hexagon centered at (15, 8.66)
-    # sits ON the right rect edge (a vertex-on-edge T-junction) — it must extrude as
+    # sits ON the right rect edge (a vertex-on-edge T-junction), it must extrude as
     # a HALF hexagon (32.48 * 2 = 64.95), NOT the full hexagon (would be ~130).
     def _hexlines(cx, cy, R):
         v = [(cx + R * math.cos(math.pi / 6 + k * math.pi / 3),
@@ -1047,7 +1047,7 @@ def test_sketch_crossing_split():
 def test_extrude_cut_disjoint():
     """A CUT extrude of several DISJOINT regions (e.g. honeycomb cells) removes
     material from EVERY body in its path. The disjoint extrude is a build123d
-    ShapeList — regression for "'ShapeList' object has no attribute 'bounding_box'"
+    ShapeList, regression for "'ShapeList' object has no attribute 'bounding_box'"
     which silently aborted the cut (the real DDR honeycomb-panel bug)."""
     b1 = {"id": "b1", "type": "box", "length": 40, "width": 40, "height": 10}  # z -5..5
     b2 = {"id": "b2", "type": "box", "length": 40, "width": 40, "height": 10}
@@ -1070,7 +1070,7 @@ def test_extrude_cut_disjoint():
 def test_visibility_captured():
     """Captured-visibility semantics: an extrude carrying `hiddenBodies` uses
     THAT set (participants decided at creation, MCAD-style) and ignores the
-    document's live eye states — so toggling visibility later can never rewrite
+    document's live eye states, so toggling visibility later can never rewrite
     what a cut touched. Legacy features (no field) keep the live-map behavior
     (test_cut_skips_hidden_body)."""
     b1 = {"id": "b1", "type": "box", "length": 40, "width": 40, "height": 10}
@@ -1091,7 +1091,7 @@ def test_visibility_captured():
     assert v["body2"] < 16000 - 100, f"body2 should be cut: {v['body2']:.0f}"
 
     # captured "nothing hidden": cuts EVERYTHING it crosses even though the
-    # live map hides body2 — eye toggles are pure display for stamped features
+    # live map hides body2, eye toggles are pure display for stamped features
     cut2 = {"id": "ex", "type": "extrude", "sketch": "s1", "distance": 30,
             "operation": "cut", "regions": [[0, 0, 0]], "hiddenBodies": []}
     _, err, bodies = rebuild({"parameters": {}, "features": [b1, b2, mv, sk, cut2],
@@ -1236,7 +1236,7 @@ def test_face_provenance():
 
 
 def test_delete_face():
-    """deleteFace (OCCT defeaturing) removes a face and heals the solid — deleting a
+    """deleteFace (OCCT defeaturing) removes a face and heals the solid, deleting a
     chamfer/fillet on geometry that has no feature to edit (e.g. imported parts)."""
     doc = {"parameters": {}, "features": [
         {"id": "bx", "type": "box", "length": 20, "width": 20, "height": 10},
@@ -1330,7 +1330,7 @@ def test_canonicalize_import():
 def test_tool_fill():
     """P2 tool-solid fill: erase a chamfer by fusing the wedge built from its
     supports' half-spaces (works where extension-healing gives up), with the
-    guards that keep it safe — an unbounded wound (deleting a box's whole top
+    guards that keep it safe, an unbounded wound (deleting a box's whole top
     face) is refused instead of extruding the part, and an unrelated hole inside
     the wedge region is never plugged."""
     from build123d import Box, Cylinder, Pos, Vector, chamfer
@@ -1352,7 +1352,7 @@ def test_tool_fill():
         f"corner-chain fill should restore vol 8000, got {r and r.volume}"
     )
 
-    # deleting a box's whole top face has an unbounded wound — must refuse
+    # deleting a box's whole top face has an unbounded wound, must refuse
     top = max(b.faces(), key=lambda f: f.center().Z)
     assert _tool_fill_all(b, [top]) is None, "unbounded fill must be refused"
 
@@ -1379,7 +1379,7 @@ def test_refacet_clean():
     b = Box(20, 20, 10)
     assert _refacet_clean(b) is b, "clean box must pass through untouched"
 
-    # two fused boxes, misaligned 0.05 mm in X — every side wall becomes a
+    # two fused boxes, misaligned 0.05 mm in X, every side wall becomes a
     # 2-plane staircase the exact-coplanar unify can't merge
     part = b + Pos(0.05, 0, 9.95) * Box(20, 20, 10)
     before = len(part.faces())
@@ -1464,7 +1464,7 @@ def test_error_continues():
         f"the cylinder AFTER the failed split must still build: {len(bodies)} bodies"
     )
 
-    # incremental: cold build, then a no-op resume — the error must re-report
+    # incremental: cold build, then a no-op resume, the error must re-report
     # from the cached snapshot, not vanish
     builder._CACHE = {"feature_sigs": [], "snaps": [], "global_sig": None}
     _, err1, bod1 = rebuild_cached(doc)
@@ -1493,7 +1493,7 @@ def test_error_continues():
 
 def test_delete_face_retarget():
     """deleteFace body refs are positional and go stale when upstream edits
-    renumber bodies — the pick must re-anchor GEOMETRICALLY: the face nearest
+    renumber bodies, the pick must re-anchor GEOMETRICALLY: the face nearest
     the recorded point wins across all bodies, with a lossy diagnostic when
     that's a different body than the named one."""
     from builder import rebuild
@@ -1505,7 +1505,7 @@ def test_delete_face_retarget():
          "rx": 0, "ry": 0, "rz": 0, "bodies": ["body2"]},
         {"id": "ch", "type": "chamfer",
          "edges": {"kind": "edge", "by": "axis", "axis": "Z"}, "distance": 2},
-        # names body1, but the pick point sits on body2's chamfer face — the
+        # names body1, but the pick point sits on body2's chamfer face, the
         # exact shape of a saved delete whose body id was renumbered upstream
         {"id": "del", "type": "deleteFace", "body": "body1",
          "face": {"kind": "face", "by": "nearest", "point": [54, 4, 0]}},
@@ -1528,12 +1528,12 @@ def test_delete_face_retarget():
 def test_presspull_upto_exact():
     """Up-to-surface distances are EXACT: (a) an inward up-to deeper than the
     90% thickness clamp lands ON the target, not short of it (audit bug #1);
-    (b) the target face may live on ANOTHER body — 'extrude until it meets
-    that part' — resolved globally from the pick point."""
+    (b) the target face may live on ANOTHER body, 'extrude until it meets
+    that part', resolved globally from the pick point."""
     from builder import rebuild
 
     # (a) L-shape: base slab + a boss on top. Press the boss top DOWN up-to the
-    # base bottom: the prism must cut clean through BOTH blocks (depth 20 —
+    # base bottom: the prism must cut clean through BOTH blocks (depth 20,
     # way past any single-face thickness clamp).
     doc = {"parameters": {}, "features": [
         {"id": "b1", "type": "box", "length": 20, "width": 20, "height": 10},  # z -5..5
@@ -1575,7 +1575,7 @@ def test_presspull_upto_exact():
 
 
 def test_export_despite_errors():
-    """Export writes what BUILT and warns about what didn't — one red feature
+    """Export writes what BUILT and warns about what didn't, one red feature
     must not hold every valid body hostage (it used to refuse entirely, which
     blocked the import-repair → print loop)."""
     import os
@@ -1698,7 +1698,7 @@ def test_face_selector_on_concentric_cylinders():
     The frontend used to build a by:"nearest" face selector from the mean of the
     face's mesh VERTICES, which for a full cylinder is a point on the AXIS. Both
     concentric walls then sat near that point and resolve_faces picked the closer
-    one — the inner — so texture / press-pull / delete-face on a ring's outside
+    one, the inner, so texture / press-pull / delete-face on a ring's outside
     landed inside. Measured on a real ring: the point sent was (0.54, 0, 8.5) and
     it resolved to r=25 instead of r=30.
 
@@ -1720,11 +1720,11 @@ def test_face_selector_on_concentric_cylinders():
             f"on-surface {label} point resolved to r={got.radius:.2f}, wanted r={want.radius:.2f}"
         )
 
-    # the axis point (what the old frontend sent) is inward-biased — asserted so
+    # the axis point (what the old frontend sent) is inward-biased, asserted so
     # nobody reintroduces a vertex-mean centroid for face selectors
     axis = resolve_faces(ring, {"kind": "face", "by": "nearest", "point": [0.0, 0.0, 0.0]})[0]
     assert abs(axis.radius - inner.radius) < 1e-6, (
-        "an axis point resolves to the INNER wall — never build a face selector from one"
+        "an axis point resolves to the INNER wall, never build a face selector from one"
     )
     print("  face-selector OK: on-surface points resolve correctly; an axis point is inward-biased")
 

@@ -1,8 +1,8 @@
 // In-app updates via tauri-plugin-updater: the packaged app checks the rolling
 // beta release's latest.json (assembled by the release job in
 // .github/workflows/build.yml) and offers a one-click restart-and-update.
-// Only meaningful where the updater can actually replace the install — the NSIS
-// install on Windows, the .app on macOS, the AppImage on Linux — so the Rust
+// Only meaningful where the updater can actually replace the install, the NSIS
+// install on Windows, the .app on macOS, the AppImage on Linux, so the Rust
 // `updates_supported` command gates deb/rpm installs (and plain-browser dev) out.
 
 import { choose } from "./choice";

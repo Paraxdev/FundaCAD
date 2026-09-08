@@ -51,7 +51,7 @@ function stop() {
   raf = 0;
 }
 
-// The loop only runs while a sketch is open, exactly as the class did — an
+// The loop only runs while a sketch is open, exactly as the class did, an
 // always-on rAF callback that early-returns is a frame budget nobody asked for.
 watch(
   () => s.glyphPlane,

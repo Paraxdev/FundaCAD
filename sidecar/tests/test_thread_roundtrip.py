@@ -74,7 +74,7 @@ def _check(name, blank, radius, pitch, length, external):
     after = _volume(blank + thread_features(radius, pitch, length, external))
     removed = before - after
     assert removed > 0.01 * before, (
-        f"{name}: the cut removed {removed:.4f} mm3 of {before:.1f} — a tangent "
+        f"{name}: the cut removed {removed:.4f} mm3 of {before:.1f}, a tangent "
         f"boolean silently kept the blank"
     )
     print(f"{name}: {before:.1f} -> {after:.1f} mm3, {removed:.2f} removed OK")
@@ -91,7 +91,7 @@ def test_external_threads_cut_a_groove():
 
 def test_an_internal_thread_cuts_outward():
     """A bore's material is OUTSIDE the cylinder, so the groove has to eat the
-    other way. Getting `external` backwards here does not raise either — it
+    other way. Getting `external` backwards here does not raise either, it
     carves air inside the hole."""
     blank = [
         {"id": "f1", "type": "cylinder", "radius": 8, "height": 10},

@@ -135,7 +135,7 @@ export type ParseResult =
 //
 // AND IT IS A DIRECTORY NAME, which is what the rest of this pattern is about.
 // Every segment must start with an ASCII letter, so `.`, `..`, `.ssh` and
-// `.staging-x` cannot be spelled at all — not as a defence in depth but as the
+// `.staging-x` cannot be spelled at all, not as a defence in depth but as the
 // only defence, since a traversal here would be a path join in Rust. ASCII
 // only, so a homograph cannot make two ids that read identically. And no case
 // rule, because the check that matters is not one a regex can make: Windows

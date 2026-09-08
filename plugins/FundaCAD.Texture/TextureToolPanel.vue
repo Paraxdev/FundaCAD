@@ -5,7 +5,7 @@
 // clicked point, so there is no natural anchor to follow.
 //
 // Which rows a given kind/profile shows is decided by textureRows() in
-// textureForm.ts — pure, and tested, because that logic encodes real sidecar
+// textureForm.ts, pure, and tested, because that logic encodes real sidecar
 // behaviour and has been wrong before.
 //
 // MOUNTED FOR THE WHOLE LIFE OF THE PLUGIN, and draws nothing until the tool
@@ -31,7 +31,7 @@ import * as panel from "./panel";
 // Seeded from the request, and RESEEDED whenever the tool opens a new one.
 // App.vue used to key the component on `req.id`, which remounted it and got the
 // fresh form for free. A permanently mounted overlay has no such key, so the
-// same job is done explicitly here — without it, re-opening the tool would show
+// same job is done explicitly here, without it, re-opening the tool would show
 // the values from the last time it ran.
 const form = reactive(initialTextureForm(panel.request.value?.initial ?? {}));
 watch(
@@ -140,7 +140,7 @@ const noBtn: CSSProperties = { ...btn, background: "#555" };
            whatever field is being typed into. -->
       <div :style="muted">{{ panel.summary.value }}</div>
 
-      <!-- [Faces] / [Whole Body] mode toggle — a segmented pair of buttons. -->
+      <!-- [Faces] / [Whole Body] mode toggle, a segmented pair of buttons. -->
       <div :style="row">
         <button :style="[modeBtn, panel.mode.value === 'faces' ? modeOn : modeOff]" @click="chooseMode('faces')">Faces</button>
         <button :style="[modeBtn, panel.mode.value === 'body' ? modeOn : modeOff]" @click="chooseMode('body')">Whole Body</button>
@@ -183,7 +183,7 @@ const noBtn: CSSProperties = { ...btn, background: "#555" };
       <!-- Direction is NOT an angle-kind thing: the sidecar applies it to the
            height field itself (out = h, in = h-1, both = centred), so every kind
            honours it. Gating it behind ANGLE_KINDS left noise/voronoi/image able
-           only to GROW the part — changing its dimensions instead of texturing
+           only to GROW the part, changing its dimensions instead of texturing
            the surface it sits on. -->
       <div :style="row">
         <label :style="lbl">Direction</label>

@@ -75,7 +75,7 @@ describe("projected geometry compiles as fixed solver primitives", () => {
     // driving dim between the two fixed endpoints with the WRONG value
     const r = await compileAndSolve(ents, [{ type: "p2pDistance", e1: "pl", p1: 0, e2: "pl", p2: 1, value: 30 }]);
     expect(projectedOf(r.entities)).toEqual(ents); // untouched
-    // the impossible dim surfaces (conflict or redundancy — never silence)
+    // the impossible dim surfaces (conflict or redundancy, never silence)
     const flagged = [...r.conflicts, ...r.overDefined].map(constraintIndexOf).filter((i) => i !== null);
     expect(flagged).toContain(0);
   });
@@ -161,7 +161,7 @@ describe("projected geometry compiles as fixed solver primitives", () => {
   it("coincident on an exactly-snapped projected endpoint: merged, no conflict", async () => {
     // user line starts EXACTLY on the projected endpoint → position-merge into
     // one (fixed) solver point. planegcs flags the now-vacuous coincident as
-    // removable (same as native snapped+coincident endpoints — pre-existing,
+    // removable (same as native snapped+coincident endpoints, pre-existing,
     // uniform behavior); it must never read as a CONFLICT, and the merge is
     // what anchors the line to the reference.
     const ents = [projected("pl", { kind: "line", x1: 0, y1: 0, x2: 40, y2: 0 }), line("u", 40, 0, 55, 5)];
@@ -194,7 +194,7 @@ describe("projected geometry compiles as fixed solver primitives", () => {
   });
 });
 
-describe("Break Link — constraints survive the projected→native conversion", () => {
+describe("Break Link, constraints survive the projected→native conversion", () => {
   it("a dim + coincident to a broken (now native) line still resolve, and the line drags", async () => {
     const constraints: SketchConstraint[] = [
       { type: "coincident", e1: "u", p1: 0, e2: "pl", p2: 1 },
@@ -205,7 +205,7 @@ describe("Break Link — constraints survive the projected→native conversion",
     expect(r1.ok).toBe(true);
     expect(r1.conflicts).toEqual([]);
 
-    // Break Link: same id, native line — the constraints keep their targets
+    // Break Link: same id, native line, the constraints keep their targets
     const broken = breakLink(r1.entities, new Set(["pl"]));
     expect(broken[0]).toMatchObject({ type: "line", id: "pl" });
     const r2 = await compileAndSolve(broken, constraints);
@@ -252,7 +252,7 @@ describe("Break Link — constraints survive the projected→native conversion",
 // The associative payoff for Offset, against the REAL solver. The bug this
 // fixes: an offset copy carried no constraint at all, so it drifted off its
 // source on the next solve ("de-concentrified") and its distance wasn't editable.
-describe("offset constraint — the copy stays tied to its source", () => {
+describe("offset constraint, the copy stays tied to its source", () => {
   const circle = (id: string, x: number, y: number, r: number): ResolvedEntity =>
     ({ type: "circle", id, x, y, radius: r });
 
@@ -308,7 +308,7 @@ describe("offset constraint — the copy stays tied to its source", () => {
       line(`${p}2`, 10 - o, 10 - o, o, 10 - o),
       line(`${p}3`, o, 10 - o, o, o),
     ];
-    // the copy starts SLOPPY — 1.4mm on one side, 2.6 on another
+    // the copy starts SLOPPY, 1.4mm on one side, 2.6 on another
     const ents = [...sq("s", 0), ...sq("c", 0), ...[]];
     const copy = [
       line("c0", 1.4, 1.4, 8.7, 1.4), line("c1", 8.7, 1.4, 8.7, 8.6),
@@ -358,7 +358,7 @@ describe("offset constraint — the copy stays tied to its source", () => {
 describe("a rotated rectangle survives the solver", () => {
   // The failure this exists for is silent and total. A rectangle used to be
   // pinned to the sketch axes with four horizontal/vertical rules; those do not
-  // FAIL on a rectangle drawn at an angle, they succeed — quietly straightening
+  // FAIL on a rectangle drawn at an angle, they succeed, quietly straightening
   // it on the first solve after it was placed. And the read-back took the
   // axis-aligned bounding box of the solved corners, which for a 10x4 turned
   // 37.5 degrees is 10.4 x 9.3, so the shape inflated too.
@@ -392,7 +392,7 @@ describe("a rotated rectangle survives the solver", () => {
   it("is RIGID: another entity's constraints cannot deform or spin it", async () => {
     // The alternative that was tried and rejected: hold the shape with
     // parallel/perpendicular rules instead of the axis rules. That keeps the
-    // rectangle a rectangle but leaves its ANGLE free — and a free angle is one
+    // rectangle a rectangle but leaves its ANGLE free, and a free angle is one
     // the solver moves. Measured, dimensioning both edges spun a 37.5-degree
     // rectangle to 33.8. So the corners are pinned instead, as a polygon's are.
     const other = line("u", 0, 0, 10, 0);
