@@ -427,11 +427,21 @@ jobs:
           Remove-Item $pack -Recurse -Force
           Write-Host "portable zip: $zip ($([math]::Round((Get-Item $zip).Length / 1MB, 1)) MB)"
 
+      # These exist to hand the installers to the `release` job below, in this
+      # same run, and for a person to download from a red build. Nothing reads
+      # them afterwards: a green build's installers are on the beta release
+      # within minutes and the artifact is a second copy of them.
+      #
+      # The default retention is 90 days, and at ~1.6 GB a run that is where the
+      # storage went: 98 artifacts and 55 GB, which is what made FinalizeArtifact
+      # answer 403 Forbidden and fail an otherwise green build. A day is longer
+      # than the only two uses this has.
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: fundacad-${{ matrix.platform }}
+          retention-days: 1
           if-no-files-found: warn
           path: |
             src-tauri/target/release/bundle/**/*.AppImage
