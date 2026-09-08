@@ -106,6 +106,27 @@ if [ -n "$old" ]; then
   printf '%s\n' "$old" | sed 's/^/    /'
 fi
 
+# --- em dashes ----------------------------------------------------------------
+# House style: a comma, never a dash, for a break inside a sentence. "the file is
+# large, so it is streamed", not "the file is large — so it is streamed".
+#
+# This is enforceable where the spaced hyphen is not, because an em dash is never
+# syntax in any language here: every one of the 4,391 removed lived in a comment,
+# a docstring, a Markdown paragraph or a string literal. A spaced hyphen is
+# `Date.now() - t0` and `calc(100vw - 32px)` far more often than it is prose, so
+# it is left to review rather than guessed at by a grep.
+#
+# Literal -e patterns rather than a -P class, because git is not always built
+# with PCRE. This script is excluded from its own scan for the usual reason.
+echo "checking for em dashes…"
+dashes=$(git grep -In -e '—' -e '–' -- . \
+  ':(exclude)third_party/**' ':(exclude)scripts/check-repo-hygiene.sh' \
+  ':(exclude)package-lock.json' 2>/dev/null || true)
+if [ -n "$dashes" ]; then
+  note "an em or en dash is used where a comma belongs:"
+  printf '%s\n' "$dashes" | cut -c1-160 | sed 's/^/    /'
+fi
+
 if [ "$fail" -ne 0 ]; then
   echo
   echo "Repo hygiene FAILED. Untrack with:  git rm --cached <path>"
