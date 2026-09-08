@@ -6,10 +6,9 @@
 //                  toolheads, upload + start, and monitor progress (Stage D direct
 //                  send). In-app slicing (model→gcode) is a later round.
 
-import { invoke } from "@tauri-apps/api/core";
 import { exportPrintProject } from "./exportProject";
 import { filamentMappingDialog, type LogicalSlot } from "./printDialog";
-import { contributedPalette, stripDocumentExt, toast } from "fundacad";
+import { contributedPalette, invoke, openDialog, stripDocumentExt, toast } from "fundacad";
 import type { DocumentStore, GeometryBackend } from "fundacad";
 import {
   activePrinterId,
@@ -106,9 +105,8 @@ export async function sendToPrinter(store: DocumentStore, _geometry: GeometryBac
   const id = activePrinterId();
 
   // pick the sliced gcode (from Orca) — the native dialog is the trust boundary.
-  const { open } = await import("@tauri-apps/plugin-dialog");
-  const picked = await open({ filters: [{ name: "G-code", extensions: ["gcode"] }] });
-  if (!picked || typeof picked !== "string") return;
+  const picked = await openDialog({ filters: [{ name: "G-code", extensions: ["gcode"] }] });
+  if (!picked) return;
 
   let toolheads: ToolheadFilament[];
   try {

@@ -29,6 +29,10 @@ import confRaw from "../../src-tauri/tauri.conf.json?raw";
 // The glue the app actually loads: src/sketch/solver.ts imports
 // `@salusoft89/planegcs`, which resolves to this file.
 import glue from "../../node_modules/@salusoft89/planegcs/dist/planegcs_dist/planegcs.js?raw";
+// The app's own second use of the Function constructor. Read as TEXT, like the
+// glue above, so this test measures what the file does rather than what a
+// comment about it says.
+import loader from "../../src/plugins/loader.ts?raw";
 
 const conf = JSON.parse(confRaw) as {
   app: { security: { csp: string; devCsp: string } };
@@ -90,30 +94,44 @@ describe("Content-Security-Policy", () => {
     }
   });
 
-  it("grants 'unsafe-eval' only for as long as planegcs needs it", () => {
-    // `var a=Function` is embind's `new_` helper as the minifier left it, and
-    // `a.apply(c, b)` invokes the Function constructor with a source string.
-    // That is the sink, and it is still the ONLY reason the policy is loose.
+  it("grants 'unsafe-eval' for reasons it can name, and no others", () => {
+    // TWO reasons now, and this test exists so the count is a fact rather than a
+    // memory. It used to be one, and the comment here said so at length.
     //
-    // Worth restating because the plugin sandbox looked like it would be a
-    // second reason and deliberately is not. The obvious sandbox hands a
-    // plugin's text to the Function constructor; this one inlines it into the
-    // worker's own script instead, so compute plugins hold no opinion about
+    // FIRST: `var a=Function` is embind's `new_` helper as the minifier left it,
+    // and `a.apply(c, b)` invokes the Function constructor with a source string.
+    // Nothing about planegcs has changed.
+    //
+    // SECOND: src/plugins/loader.ts, which evaluates the app-side module of an
+    // installed plugin. That one is a DELIBERATE addition and it is worth being
+    // precise about why it could not be avoided. A plugin that draws — a menu
+    // row, a component, paint on the model — runs in the app's own context;
+    // none of that is expressible from a Worker or a process. And the policy is
+    // `script-src 'self'` with `worker-src 'self' blob:`, so a blob URL is not a
+    // script source: `import(URL.createObjectURL(...))` is refused, and so is a
+    // data: URL. The Function constructor is what is left.
+    //
+    // THE COMPUTE SANDBOX IS STILL NOT ONE OF THE REASONS, and that distinction
+    // is the point of keeping this list. The obvious sandbox hands a plugin's
+    // text to the Function constructor; that one inlines it into the worker's
+    // own script instead, so a compute plugin holds no opinion about
     // 'unsafe-eval' and cannot block its removal. e2e/sandbox_csp.cjs runs the
     // sandbox under this policy with the grant stripped out, to keep that true.
-    const needsEval = glue.includes("var a=Function");
+    const reasons = [
+      glue.includes("var a=Function") && "planegcs hands source text to the Function constructor",
+      loader.includes("new Function(") && "src/plugins/loader.ts evaluates an installed plugin's module",
+    ].filter(Boolean) as string[];
     const granted = directive(conf.app.security.csp, "script-src").includes("'unsafe-eval'");
 
-    if (needsEval) {
+    if (reasons.length) {
       expect(
         granted,
-        "planegcs still hands source text to the Function constructor, so the policy " +
-          "must keep 'unsafe-eval' or the solver cannot start in a packaged build",
+        `the policy must keep 'unsafe-eval': ${reasons.join("; ")}`,
       ).toBe(true);
     } else {
       expect(
         granted,
-        "planegcs no longer needs the Function constructor, so 'unsafe-eval' should be " +
+        "nothing needs the Function constructor any more, so 'unsafe-eval' should be " +
           "removed from script-src in src-tauri/tauri.conf.json",
       ).toBe(false);
     }

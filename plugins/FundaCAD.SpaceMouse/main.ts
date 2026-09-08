@@ -15,8 +15,6 @@
 // plumbing are in this directory and reached only from here, so a machine with
 // no such device, which is most of them, never downloads or parses any of it.
 
-import { listen } from "@tauri-apps/api/event";
-import { invoke } from "@tauri-apps/api/core";
 import {
   getSpaceMouseMode,
   initSpaceMouse,
@@ -25,7 +23,7 @@ import {
 } from "./spacemouse";
 import { openSettings } from "./state";
 import SettingsHost from "./SettingsHost.vue";
-import { contribute, stickyFact, toast } from "fundacad";
+import { contribute, invoke, listen, stickyFact, toast } from "fundacad";
 import type { Engine, Viewport } from "fundacad";
 
 type Inventory = { picked: string | null; seen: string[]; note?: string | null };

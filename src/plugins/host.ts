@@ -89,6 +89,51 @@ export { useEngine } from "../app/engineKey";
 export { useBuildValue, useDocValue } from "../app/useDoc";
 export { useBrowserStore } from "../stores/browser";
 
+// --- the Rust side ------------------------------------------------------------
+//
+// READ THIS BEFORE ADDING ANYTHING NEAR IT. `invoke` calls any command the
+// application registered, which is the app's own reach and nothing less: it
+// goes around the broker, around the grant list, and around the consent screen.
+// A plugin holding it can do whatever this application can do.
+//
+// It is here because the capabilities that need it cannot exist without it. A
+// 3D mouse plugin's whole job is `spacemouse_start` and an event stream; a
+// printer plugin's is a dozen printer commands. Neither is expressible as a
+// broker op, and inventing one op per Rust command would be the same reach
+// wearing a longer name.
+//
+// So it is the reason a bundle carrying app-side code may be loaded ONLY from
+// an origin this project signed. That is not a policy statement to be softened
+// later: it is the single condition under which handing out this export is
+// defensible, and `sandboxNote("builtin")` already tells the person exactly
+// that in the words they will read.
+export { invoke } from "@tauri-apps/api/core";
+export { listen } from "@tauri-apps/api/event";
+export type { UnlistenFn } from "@tauri-apps/api/event";
+
+/** The native save dialog, or null when dismissed.
+ *
+ *  A wrapper rather than a re-export, so the plugin has no DYNAMIC import of a
+ *  package to resolve. The laziness is real and stays on this side: the dialog
+ *  plugin is a chunk the app loads the first time anything saves. */
+export async function saveDialog(opts: {
+  filters?: { name: string; extensions: string[] }[];
+  defaultPath?: string;
+}): Promise<string | null> {
+  const { save } = await import("@tauri-apps/plugin-dialog");
+  return await save(opts);
+}
+
+/** The native open dialog, or null when dismissed. Single selection only: a
+ *  plugin that wanted many would be describing a different gesture. */
+export async function openDialog(opts: {
+  filters?: { name: string; extensions: string[] }[];
+}): Promise<string | null> {
+  const { open } = await import("@tauri-apps/plugin-dialog");
+  const picked = await open({ ...opts, multiple: false });
+  return typeof picked === "string" ? picked : null;
+}
+
 // --- the one app setting a plugin governs ------------------------------------
 //
 // Here because the plugin that owns the "Assistants" block is the MCP bundle,

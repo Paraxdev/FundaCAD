@@ -11,8 +11,7 @@
 // Settings screen (./SpaceMouseModal.vue) edits this live with a raw-axis
 // readout + a test cube; the config persists to localStorage.
 
-import { listen } from "@tauri-apps/api/event";
-import { readSetting } from "fundacad";
+import { listen, readSetting } from "fundacad";
 import type { Viewport } from "fundacad";
 
 export interface Motion { tx: number; ty: number; tz: number; rx: number; ry: number; rz: number }
