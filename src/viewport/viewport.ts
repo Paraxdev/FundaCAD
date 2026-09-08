@@ -95,6 +95,8 @@ import { faceSketchPlane } from "../sketch/sketchView";
 import { viewSideNormal } from "./viewFlight";
 import { themeColor } from "./themeColors";
 import { AreaBox } from "./areaBox";
+import { auditIsClean, auditLine, auditScene } from "../diagnostics/sceneAudit";
+import { pipe, pipeFault } from "../diagnostics/pipelineLog";
 import {
   pickPoint,
   polylineMidpoint3,
@@ -1937,6 +1939,8 @@ export class Viewport {
       this.scene.modelGroup.remove(this.model.orphanEdges.object);
       this.model.orphanEdges.dispose();
     }
+    pipe(`stream begin epoch=${epoch} manifest=${manifest.length} changing=${changing.size} `
+      + `held=${held.size} hidden=${hiddenBodies.length}`);
     const view = this.progressive.begin(
       epoch, manifest, result, box, this.model, new Set(hiddenBodies),
     );
@@ -1963,7 +1967,15 @@ export class Viewport {
     const view = this.progressive.append(
       epoch, result, metas, edgesByBody, triRange, new Set(hiddenBodies), this.resolution,
     );
-    if (!view) return; // a chunk of a stream we are no longer running
+    if (!view) {
+      // Not an error on its own: an edit during a long rebuild starts a new
+      // stream and the old one's chunks land here afterwards. It IS the moment
+      // a body can stop being delivered, so it is on the record.
+      pipe(`stream chunk DROPPED epoch=${epoch} bodies=${metas.length} (stream moved on)`);
+      return;
+    }
+    pipe(`stream chunk epoch=${epoch} +${metas.length} tris=${triRange.triStart}..${triRange.triEnd} `
+      + `filled=${this.progressive.filled}/${this.progressive.total}`);
     this.adoptProgressiveView(view);
     // repaint ONLY what just arrived, so streamed bodies show their assigned
     // colour rather than popping from grey at the commit
@@ -1976,6 +1988,7 @@ export class Viewport {
    *  the store still holds, which rebuilds the previous model from scratch. */
   abortProgressiveModel() {
     if (!this.streaming) return;
+    pipe(`stream abort, ${this.progressive.filled}/${this.progressive.total} bodies delivered`);
     this.progressive.abort();
     this.streaming = false;
     this.streamMemo = null;
@@ -2032,7 +2045,13 @@ export class Viewport {
     // whole-model passes the stream deliberately skipped. finish(), not abort():
     // the bodies now belong to the model, and disposing them here would throw
     // away exactly the work the stream existed to do.
+    const afterStream = this.streaming;
     if (this.streaming) {
+      // Anything the stream is still holding in place of an undelivered body is
+      // dropped here, see ProgressiveModel.finish(): the commit rebuilds those
+      // bodies, and the old mesh would otherwise stay in the group under the
+      // new one.
+      pipe(`stream finish, ${this.progressive.filled}/${this.progressive.total} bodies delivered`);
       this.progressive.finish();
       this.streaming = false;
     }
@@ -2103,6 +2122,9 @@ export class Viewport {
       body.edges.setBodyVisible(body.mesh.visible);
       bodies.push(body);
     }
+    pipe(`commit bodies=${bodyMeta.length} built=${rebuilding.size} `
+      + `reused=${bodyMeta.length - rebuilding.size} dropped=${prevBodies.size} `
+      + `orphanEdges=${orphans.length} ${afterStream ? "after a stream" : "no stream"}`);
     // any body left in prevBodies is gone from this reply, dispose it
     for (const stale of prevBodies.values()) {
       this.scene.modelGroup.remove(stale.mesh);
@@ -2150,6 +2172,27 @@ export class Viewport {
     // where they are switched.
     if (this.xray || this.stale) this.applyBodyTransparency();
     if (fit) this.rig.fit(this.model.box, true);
+    this.auditScene("commit");
+  }
+
+  /** Check that the scene holds exactly this model, and say so in the pipeline
+   *  log either way.
+   *
+   *  Runs on every commit rather than when something looks wrong, because the
+   *  fault this is for is intermittent and its symptom (a doubled, shredded
+   *  body) is one a person reports hours later from a screenshot. Catching it
+   *  needs the check to have already run at the moment it happened.
+   *
+   *  Cost is one Map and one Set over the group's children, no geometry read.
+   *  On the 3,071-body reference assembly that is ~6,000 pointer inserts once
+   *  per rebuild, against the whole-model passes it sits beside. */
+  private auditScene(when: string) {
+    const a = auditScene(this.scene.modelGroup.children, this.model, {
+      orphanEdges: this.model?.orphanEdges?.object,
+      combs: this.combsObj,
+    });
+    if (auditIsClean(a)) pipe(`${when}: ${auditLine(a)}`);
+    else pipeFault(`${when}: ${auditLine(a)}`);
   }
 
   /** What is selected right now, in terms that can be found again after the

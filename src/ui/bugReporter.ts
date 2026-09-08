@@ -17,6 +17,7 @@ import type { DocumentStore } from "../document/store";
 import type { GeometryBackend } from "../geometry/client";
 import { toast } from "./toast";
 import { breadcrumbs } from "../diagnostics/breadcrumbs";
+import { hasFaults, pipelineLog } from "../diagnostics/pipelineLog";
 import { useDialogStore } from "../stores/dialogs";
 import type { Viewport } from "../viewport/viewport";
 import type { SketchMode } from "../sketch/sketchMode";
@@ -40,6 +41,11 @@ export interface BugReportForm {
    *  decided something was wrong, not when they finished typing. */
   connected: boolean;
   crumbs: string[];
+  /** The render pipeline's trail, see diagnostics/pipelineLog.ts. Its own field
+   *  rather than more crumbs: it is long, it is the answer to a specific class
+   *  of report (a body drawing doubled or shredded), and mixing it into the
+   *  event list would bury the events. */
+  pipeline: string[];
 }
 
 /** Registers the reporter's engine handles. The floating button renders once
@@ -53,10 +59,14 @@ export function createBugReporter(deps: BugReportDeps): void {
  *  Scene stats come FIRST: they answer the questions a performance report
  *  always raises (how many triangles, how big the canvas, what frame rate), and
  *  leading the list keeps them inside the server's breadcrumb cap. */
-export function bugContext(deps: BugReportDeps): { connected: boolean; crumbs: string[] } {
+export function bugContext(
+  deps: BugReportDeps,
+): { connected: boolean; crumbs: string[]; pipeline: string[]; faults: boolean } {
   return {
     connected: deps.geometry.connected,
     crumbs: [...deps.viewport.sceneStats(), ...breadcrumbs()],
+    pipeline: pipelineLog(),
+    faults: hasFaults(),
   };
 }
 
@@ -91,6 +101,7 @@ function reportText(
   version: string,
   connected: boolean,
   crumbs: string[],
+  pipeline: string[],
   documentJson: string | null,
 ): string {
   return [
@@ -102,6 +113,9 @@ function reportText(
     ``,
     `recent events:`,
     ...crumbs.map((c) => `  ${c}`),
+    ``,
+    `render pipeline:`,
+    ...pipeline.map((c) => `  ${c}`),
     ...(documentJson ? [``, `document:`, documentJson] : []),
   ].join("\n");
 }
@@ -122,6 +136,7 @@ export async function submitBugReport(deps: BugReportDeps, form: BugReportForm):
     form.version,
     connected,
     crumbList,
+    form.pipeline,
     form.includeDocument ? documentWithOpenSketch(store, live) : null,
   );
   try {

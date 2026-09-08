@@ -4,6 +4,7 @@
 
 import type { CadDocument, EdgeFingerprint, ExportFormat, F32Wire, Feature, ImportFormat, ImportReply, PlaneSpec, ProjectedCurve, ProjectedSource, RebuildReply, RebuildResult, U32Wire } from "../types";
 import { RebuildAssembly, manifestFromBodies } from "./assembly";
+import { pipe, pipeFault } from "../diagnostics/pipelineLog";
 import type {
   WireBody, WireBodyFull, WireEdgeList, WireManifestEntry, WireRebuildResult,
 } from "./assembly";
@@ -665,6 +666,9 @@ export class Geometry implements GeometryBackend {
           // The payload disagrees with what the manifest promised. Writing it
           // would run past this body's slice and corrupt the NEXT body's
           // triangles, producing a wrong-but-believable model.
+          pipeFault(`body ${b.id} did not match its manifest entry, stream aborted `
+            + `(declared verts3=${b.positions?.length ?? "?"} idx=${b.indices?.length ?? "?"} `
+            + `tris=${b.faceIds?.length ?? "?"})`);
           this.abortStream(id, "the geometry engine sent a body that did not match its manifest");
           return;
         }
@@ -836,6 +840,8 @@ export class Geometry implements GeometryBackend {
     let msg = await this.rebuildCall("rebuild", { ...payload, tolerance, known });
     if (msg.ok && msg.result?.resync) {
       // worker respawned or lost sync, one full resend recovers everything
+      pipe(`RESYNC asked by the engine, resending the whole document `
+        + `(${doc.features.length} features, ${Object.keys(known).length} known etags)`);
       this.lastSent = null;
       this.bodyMesh.clear();
       payload = { document: doc, revision: this.revision + 1 };
@@ -850,6 +856,8 @@ export class Geometry implements GeometryBackend {
       if (assembled === null) {
         // we claimed an etag the cache no longer backs (e.g. page kept state
         // across a worker respawn race), resync with a full request
+        pipe("RESYNC: a stub named an etag this client no longer holds, "
+          + "re-requesting every body in full");
         this.bodyMesh.clear();
         // the assemble cache is keyed on payloads that just went away
         this.lastAssembled = null;
@@ -905,7 +913,11 @@ export class Geometry implements GeometryBackend {
     for (const nb of bodies) {
       if (nb.unchanged) continue;
       this.bodyMesh.set(nb.id, nb);
-      if (!begun.assembly.writeBody(nb)) return null;
+      if (!begun.assembly.writeBody(nb)) {
+        pipeFault(`body ${nb.id} did not match its manifest entry in a single-frame `
+          + "reply, re-requesting the whole document");
+        return null;
+      }
     }
     return this.finishAssembly(begun.assembly, bodies.map((b) => b.id));
   }
