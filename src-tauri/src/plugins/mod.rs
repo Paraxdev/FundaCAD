@@ -95,6 +95,10 @@ pub struct Installed {
 
 const RECORD: &str = "installed.json";
 const MANIFEST: &str = "manifest.json";
+/// The app-side module of a plugin that runs in the window. Named the same by
+/// scripts/build-plugin-code.mjs, which writes it, and by build-plugins.py,
+/// which puts it in the zip.
+const CODE: &str = "main.js";
 
 // ---------------------------------------------------------------------------
 // on disk
@@ -452,6 +456,92 @@ pub fn plugin_entry(app: AppHandle, id: String) -> Result<String, String> {
     }
     Ok(text)
 }
+
+/// The app-side module of an installed plugin, for the window to evaluate.
+///
+/// THE ONE COMMAND IN THIS FILE THAT HANDS BACK CODE TO BE RUN, and every
+/// condition on it is load-bearing.
+///
+/// A plugin that draws — a menu row, a component, paint on the model — runs in
+/// the application's own JavaScript context, because none of those is
+/// expressible from a Worker or from a separate process. There is no sandbox to
+/// put such a plugin in. So the only defensible rule is about WHERE THE CODE
+/// CAME FROM, and it is enforced here rather than in the window: the frontend
+/// cannot check the provenance of a string handed to it by the same call it is
+/// trusting.
+///
+/// Three gates, and each refuses in its own words so that a person filing a bug
+/// can say which one stopped them:
+///
+///   1. The kind. Only a `builtin` runs in the app's context; that is what the
+///      word means on the consent screen, and `sandboxNote("builtin")` already
+///      says "the list above is what it uses, not a limit on it".
+///   2. The origin. Only a bundle from this project's own releases. `official`
+///      was decided once, at install, from the URL it actually came from, and
+///      is stored beside the plugin rather than re-derived from a string the
+///      caller supplies.
+///   3. The size. The same cap the bundle got, re-checked at read time, because
+///      a file can grow after it is installed.
+///
+/// What is deliberately NOT here yet is a signature over the bundle. The origin
+/// gate anchors on GitHub's TLS and this repository's path, which is the same
+/// anchor the updater has before ITS signature check; adding the second anchor
+/// needs a signing key, and generating one is not this file's decision to make.
+/// `verify_plugin_signature` below is where it goes, and it fails closed the
+/// moment a public key exists.
+#[tauri::command]
+pub fn plugin_code(app: AppHandle, id: String) -> Result<String, String> {
+    let id = safe_id(&id)?;
+    let dir = plugins_root(&app)?.join(id);
+    let record = read_record(&dir).ok_or("that plugin is not installed")?;
+
+    if record.consented.kind != "builtin" {
+        return Err(format!(
+            "a {} plugin does not run in the app's own context",
+            record.consented.kind
+        ));
+    }
+    if !record.official {
+        return Err(
+            "this plugin did not come from FundaCAD's own releases, and code that runs in the              app's own context is loaded only from there"
+                .into(),
+        );
+    }
+    verify_plugin_signature(&dir, &record)?;
+
+    let path = dir.join(CODE);
+    let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    if text.len() > MAX_DOWNLOAD {
+        return Err(format!("{CODE} is {} bytes", text.len()));
+    }
+    Ok(text)
+}
+
+/// The second anchor, when there is one to check against.
+///
+/// FAILS CLOSED, and that is the whole design: with no public key compiled in,
+/// there is nothing to verify against and the origin gate above is what stands.
+/// The moment a key exists, a bundle without a good signature over it is
+/// refused — including every bundle installed before the key existed, which is
+/// the correct and slightly annoying outcome rather than a grandfather clause
+/// that would make the key decorative.
+fn verify_plugin_signature(_dir: &Path, _record: &Installed) -> Result<(), String> {
+    match PLUGIN_PUBLIC_KEY {
+        None => Ok(()),
+        Some(_key) => Err(
+            "this build expects plugins to be signed, and signature checking is not implemented              yet. Remove the key or finish the check before shipping it."
+                .into(),
+        ),
+    }
+}
+
+/// The public key app-side plugin code is verified against, once there is one.
+///
+/// `None` until somebody generates a key pair, which is a decision with a
+/// key-custody consequence and is not one to take on anybody's behalf. Written
+/// as a constant rather than read from a file so that it cannot be swapped by
+/// anything that can write next to the executable.
+const PLUGIN_PUBLIC_KEY: Option<&str> = None;
 
 #[tauri::command]
 pub fn plugin_remove(app: AppHandle, id: String) -> Result<(), String> {

@@ -2,9 +2,8 @@
 // printer.rs, slicer.rs). The webview addresses printers by id only — Rust owns
 // the host registry, so this module never sees a LAN URL.
 
-import { invoke } from "@tauri-apps/api/core";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { readSetting } from "fundacad";
+import { invoke, listen, readSetting } from "fundacad";
+import type { UnlistenFn } from "fundacad";
 
 export type PrinterKind = "MoonrakerU1" | "Moonraker";
 

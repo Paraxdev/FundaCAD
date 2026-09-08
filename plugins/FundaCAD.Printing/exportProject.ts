@@ -11,7 +11,7 @@
 // formats. The difference is the word PROJECT: one object per body with a
 // toolhead assignment each, rather than one mesh.
 
-import { contributedPalette, listModal, reportError, stripDocumentExt, toast } from "fundacad";
+import { contributedPalette, listModal, reportError, saveDialog, stripDocumentExt, toast } from "fundacad";
 import type { DocumentStore, GeometryBackend } from "fundacad";
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;
@@ -52,9 +52,8 @@ export async function exportPrintProject(
 
   let path = opts.path;
   if (!path) {
-    const { save } = await import("@tauri-apps/plugin-dialog");
     const base = stripDocumentExt(store.fileName) || "part";
-    const picked = await save({
+    const picked = await saveDialog({
       filters: [{ name: "3MF project", extensions: ["3mf"] }],
       defaultPath: `${base}.3mf`,
     });
