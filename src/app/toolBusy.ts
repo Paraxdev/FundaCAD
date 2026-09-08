@@ -1,4 +1,5 @@
 import { isChoiceOpen } from "../ui/choice";
+import { anyToolBusy } from "../plugins/contrib";
 import type { Engine } from "./engine";
 
 /** Guard predicates checked at the top of every start* tool and interactive helper:
@@ -22,9 +23,15 @@ export function createToolBusy(e: Engine): Pick<Engine, "toolBusy" | "hasBody"> 
       return (
         e.sketch.active || t.extrude.active || t.edgeFeature.active || t.pressPull.active ||
         t.faceOffset.active || t.draft.active || t.thread.active || t.loft.active || t.planeOffset.active || t.move.active || t.pattern.active ||
-        t.measure.active || t.section.picking || t.texture.active || t.targetEdit.active ||
+        t.measure.active || t.section.picking || t.targetEdit.active ||
         t.revolvePitch.active ||
-        e.planePick || isChoiceOpen()
+        e.planePick || isChoiceOpen() ||
+        // A plugin's tool holds the window exactly as one of the above does.
+        // Without this the app believes it is idle while a contributed tool
+        // owns the pick: every Escape handler here is gated off, a second tool
+        // starts over the top of the first, and the user has two prompts and
+        // one key that answers neither.
+        anyToolBusy()
       );
     },
     // True when the current rebuild produced a solid body (something to modify).

@@ -3,21 +3,21 @@
 // FEATURE_NUM_FIELDS has always been the inventory of what a feature's value
 // rows can edit, and everything in it is a number. So the editor could only ever
 // be a column of text boxes, and every fact about a feature that is a CHOICE —
-// which boolean an extrude performs, which axis a revolve turns about, which
-// pattern a texture lays down, which way it is pushed — was editable at the
-// moment the feature was made and never again. A texture created as a knurl was
-// a knurl for the rest of the document's life; the tool panel that offered the
-// seven kinds was gone, and the properties rows showed Seed and Angle whether
-// the chosen kind used them or not.
+// which boolean an extrude performs, which axis a revolve turns about, which way
+// a pattern is pushed — was editable at the moment the feature was made and
+// never again. Changing your mind meant deleting the feature and re-picking
+// everything it referred to.
 //
 // Two more inventories, read the same way as the numeric one:
 //
 //   FEATURE_CHOICE_FIELDS   one of a fixed set   -> a dropdown
 //   FEATURE_TOGGLE_FIELDS   on or off           -> a switch
 //
-// And one rule, `fieldApplies`, that says whether a field means anything given
-// what the feature's OTHER fields currently say. That rule governs the numeric
-// rows too, which is what stops a knurl offering a Seed it will never read.
+// And two rules about ONE row rather than about a type: `fieldApplies`, which
+// says whether a field means anything given what the feature's other fields
+// currently say, and `fieldLabel`, for the rare row whose name is not a
+// constant. Both govern the numeric rows too, which is what stops a feature
+// offering a control with nothing on the other end of it.
 //
 // Deliberately not exhaustive over the union. A field belongs here when its
 // options are a closed set the user picks from and editing it after the fact is
@@ -32,14 +32,24 @@
 //     three world planes and a full origin/normal/xdir triple otherwise, so a
 //     dropdown over it could only offer the three and would silently discard a
 //     placement the moment it was used.
+//
+// AND A PLUGIN CAN ADD ROWS HERE, for a feature type whose tool it owns. The
+// readers below ask the contribution table after their own inventory, so a
+// feature the app stores and builds but does not know how to PRESENT gets its
+// dropdowns from whoever does.
+//
+// `fieldApplies` is the interesting one, and it used to be the clearest sign
+// that this file had the wrong owner: its entire body was `if (type !==
+// "texture") return true;` followed by one tool's rules, sitting in the document
+// layer. Those rules are contributed now, and they still govern the app's own
+// numeric rows — which is the better arrangement rather than a concession. The
+// app owns `seed` and `angle` because a PARAMETER can drive them and a document
+// has to mean the same thing with the plugin switched off; the plugin decides
+// which of them a given pattern actually reads.
 
 import { BOOLEAN_COMMANDS } from "../features/booleanOps";
+import { contributedFeature } from "../plugins/contrib";
 import type { Feature, FeatureType } from "../types";
-
-/** The seven texture patterns, read off the feature union rather than spelled
- *  again — a kind added to the document type and not to the lists below is then
- *  a compile error rather than a pattern nobody can choose. */
-export type TextureKind = Extract<Feature, { type: "texture" }>["kind"];
 
 export interface ChoiceOption {
   value: string;
@@ -94,29 +104,6 @@ const PLANES: ChoiceOption[] = [
   { value: "YZ", label: "YZ" },
 ];
 
-/** Texture patterns. Same list and the same wording the tool panel offers, so a
- *  texture reads the same before and after it is committed. */
-export const TEXTURE_KINDS: { value: TextureKind; label: string }[] = [
-  { value: "knurl", label: "Knurl" },
-  { value: "hex", label: "Hex" },
-  { value: "waves", label: "Waves" },
-  { value: "ribs", label: "Ribs" },
-  { value: "voronoi", label: "Voronoi" },
-  { value: "noise", label: "Perlin noise" },
-  { value: "image", label: "Heightmap" },
-];
-
-/** Texture kinds that have a lattice or wave orientation to rotate. The others
- *  are isotropic (voronoi, noise) or carry their own orientation in the file
- *  (image), so an Angle on them would be a control that does nothing. */
-export const ANGLE_KINDS: ReadonlySet<TextureKind> =
-  new Set<TextureKind>(["knurl", "hex", "waves", "ribs"]);
-
-/** Texture kinds generated from a pseudo-random field, and so the only ones a
- *  Seed changes. */
-export const SEED_KINDS: ReadonlySet<TextureKind> =
-  new Set<TextureKind>(["voronoi", "noise"]);
-
 export const FEATURE_CHOICE_FIELDS: Partial<Record<FeatureType, ChoiceField[]>> = {
   // Three commands make the feature, and the row edits it afterwards. Nothing
   // asks which boolean you want, so this is the only place the answer is ever
@@ -147,39 +134,6 @@ export const FEATURE_CHOICE_FIELDS: Partial<Record<FeatureType, ChoiceField[]>> 
   draft: [{ field: "axis", label: "Pull axis", options: AXES, fallback: "Z" }],
   patternLinear: [{ field: "axis", label: "Direction", options: AXES, fallback: "X" }],
   patternCircular: [{ field: "axis", label: "Axis", options: AXES, fallback: "Z" }],
-  texture: [
-    {
-      field: "kind",
-      label: "Pattern",
-      options: TEXTURE_KINDS,
-      fallback: "knurl",
-      title: "Which pattern is cut into the surface. Heightmap reads an image file.",
-    },
-    {
-      field: "profile",
-      label: "Surface",
-      options: [
-        { value: "facet", label: "Faceted" },
-        { value: "round", label: "Smooth" },
-      ],
-      fallback: "facet",
-      title: "Faceted gives planar facets and real creases, which is what survives "
-        + "a print — a printer rounds a sub-millimetre sinusoid into mush. Smooth "
-        + "keeps the continuous field.",
-    },
-    {
-      field: "direction",
-      label: "Direction",
-      options: [
-        { value: "out", label: "Emboss" },
-        { value: "in", label: "Deboss" },
-        { value: "both", label: "Symmetric" },
-      ],
-      fallback: "out",
-      title: "Whether the pattern stands out of the surface, is cut into it, or is "
-        + "centred on it.",
-    },
-  ],
 };
 
 export const FEATURE_TOGGLE_FIELDS: Partial<Record<FeatureType, ToggleField[]>> = {
@@ -190,7 +144,6 @@ export const FEATURE_TOGGLE_FIELDS: Partial<Record<FeatureType, ToggleField[]>> 
   // not need three copies of the bolt.
   boolean: [{ field: "keepOriginals", label: "Keep originals", fallback: false }],
   thicken: [{ field: "symmetric", label: "Symmetric", fallback: false }],
-  texture: [{ field: "invert", label: "Invert heights", fallback: false }],
 };
 
 /** Does this field mean anything, given what the feature's other fields say?
@@ -202,46 +155,51 @@ export const FEATURE_TOGGLE_FIELDS: Partial<Record<FeatureType, ToggleField[]>> 
  *
  *  Fields not named here always apply, which is the honest default: a rule that
  *  hid a row it had no reason to hide would lose the user a value they could
- *  otherwise have edited.
+ *  otherwise have edited. A feature type nobody has a rule for is that case, and
+ *  so is one whose plugin is not installed — which is right: with nothing left
+ *  to say which rows a knurl reads, showing all of them beats hiding some on a
+ *  guess.
  */
 export function fieldApplies(
-  type: FeatureType,
+  type: FeatureType | string,
   field: string,
   values: Record<string, unknown>,
 ): boolean {
-  if (type !== "texture") return true;
-  const kind = (values["kind"] ?? "knurl") as TextureKind;
-  switch (field) {
-    case "angle":
-      return ANGLE_KINDS.has(kind);
-    case "seed":
-      return SEED_KINDS.has(kind);
-    case "invert":
-    case "imagePath":
-      return kind === "image";
-    case "sharpness":
-      // The same slider means different things per surface, and for one pairing
-      // it means nothing: a FACETED wave is a fixed eight-join polyline with no
-      // shape parameter (the sidecar's `_wave_levels` says why). Under `round`
-      // waves is a real sine and the crispness still bites.
-      return ANGLE_KINDS.has(kind) && !(values["profile"] === "facet" && kind === "waves");
-    default:
-      return true;
-  }
+  return contributedFeature(type)?.fieldApplies?.(field, values) ?? true;
 }
 
-/** The label a texture's shape slider carries, which depends on what it is
- *  currently doing. */
-export function sharpnessLabel(profile: unknown): { text: string; title: string } {
-  return profile === "round"
-    ? { text: "Sharp", title: "Crispness of the smooth profile" }
-    : { text: "Land", title: "Flat land on the crests: 0 = pure V-groove peaks, 1 = wide flat tops" };
+/** The label one row carries when its name is not a constant — a slider whose
+ *  meaning changes with another field, say. Null for "use the inventory's". */
+export function fieldLabel(
+  type: FeatureType | string,
+  field: string,
+  values: Record<string, unknown>,
+): { text: string; title?: string } | null {
+  return contributedFeature(type)?.fieldLabel?.(field, values) ?? null;
+}
+
+/** Every choice row for a feature type: the app's own, then a plugin's. */
+export function choiceFieldsFor(type: FeatureType | string): readonly ChoiceField[] {
+  return (
+    FEATURE_CHOICE_FIELDS[type as FeatureType] ??
+    contributedFeature(type)?.choiceFields ??
+    []
+  );
+}
+
+/** Every toggle row for a feature type: the app's own, then a plugin's. */
+export function toggleFieldsFor(type: FeatureType | string): readonly ToggleField[] {
+  return (
+    FEATURE_TOGGLE_FIELDS[type as FeatureType] ??
+    contributedFeature(type)?.toggleFields ??
+    []
+  );
 }
 
 /** Whether a feature type has any of these rows — the panel asks before it
  *  decides there is nothing to show. */
-export function hasOptionFields(type: FeatureType): boolean {
-  return type in FEATURE_CHOICE_FIELDS || type in FEATURE_TOGGLE_FIELDS;
+export function hasOptionFields(type: FeatureType | string): boolean {
+  return choiceFieldsFor(type).length > 0 || toggleFieldsFor(type).length > 0;
 }
 
 /** The value a choice row should show for this feature: what it carries, or the

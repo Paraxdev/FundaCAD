@@ -2,13 +2,21 @@ import { defineStore } from "pinia";
 import { markRaw, ref, shallowRef } from "vue";
 import type { TextValues } from "../sketch/textForm";
 import type { ProjectFilter } from "../sketch/projectPanel";
-import type { TextureMode, TextureValues } from "../features/textureForm";
 import type { MeasureRow } from "../features/measureRows";
 
-/** The four floating overlays a TOOL owns while it is running: the sketch Text
- *  panel, the sketch Project filter chips, the docked Texture panel and the
- *  Measure readout. All four teleport to body, all four are opened and closed by
- *  imperative tool code through a facade whose signature did not change.
+/** The floating overlays a TOOL OF THE APP'S OWN owns while it is running: the
+ *  sketch Text panel, the sketch Project filter chips and the Measure readout.
+ *  All of them teleport to body, all of them are opened and closed by imperative
+ *  tool code through a facade whose signature did not change.
+ *
+ *  A PLUGIN'S TOOL DOES NOT PUT ITS PANEL HERE, and the docked Texture panel
+ *  used to be the fourth entry. Nothing forced it out — a `texture` field on
+ *  this store worked perfectly well — but it made the store a list of the tools
+ *  the app happens to have, which is the knowledge a plugin boundary exists to
+ *  remove: a fourth plugin panel would have been a fourth field here, in a file
+ *  that has no other reason to know a plugin exists. A contributed overlay keeps
+ *  its own state in its own module and mounts through `contributedOverlays()`,
+ *  which is one place for every plugin instead of one field for each.
  *
  *  Independent fields rather than one discriminant, matching panels.ts: they
  *  belong to different tools and nothing here arbitrates between tools —
@@ -27,17 +35,6 @@ export interface TextReq {
   onCommit: (v: TextValues) => void;
   onCancel: () => void;
   onChange: (v: TextValues) => void;
-}
-
-export interface TextureReq {
-  id: number;
-  editing: boolean;
-  initial: Partial<TextureValues>;
-  palette: { name: string; color: string }[];
-  onCommit: (v: TextureValues) => void;
-  onCancel: () => void;
-  onChange: (v: TextureValues) => void;
-  onModeChange: (mode: TextureMode) => void;
 }
 
 export const useToolPanelStore = defineStore("toolPanels", () => {
@@ -72,33 +69,6 @@ export const useToolPanelStore = defineStore("toolPanels", () => {
   const projectAnchor = shallowRef<DOMRect | null>(null);
   const projectChange = shallowRef<((f: ProjectFilter) => void) | null>(null);
 
-  // --- printed Texture tool -----------------------------------------------
-  const texture = shallowRef<TextureReq | null>(null);
-  /** Live selection summary, rewritten on every rAF tick of the tool. Separate
-   *  from the request so refreshing it cannot re-render the form and steal focus
-   *  from a field being typed into. */
-  const textureSummary = ref("");
-  const textureMode = ref<TextureMode>("faces");
-
-  function openTexture(req: Omit<TextureReq, "id">) {
-    texture.value = markRaw({ ...req, id: nextId++ });
-  }
-
-  /** Deliberately does NOT close the panel. The tool REFUSES a commit with no
-   *  target and leaves itself active — closing first stranded the user in an
-   *  invisible modal: the panel was gone, the tool still owned face-picking, and
-   *  toolBusy() blocked every other Esc handler. The tool's own cleanup() closes
-   *  it once the commit is actually accepted. */
-  function commitTexture(v: TextureValues) {
-    texture.value?.onCommit(v);
-  }
-
-  function cancelTexture() {
-    const cb = texture.value?.onCancel;
-    texture.value = null;
-    cb?.();
-  }
-
   // --- Measure (Inspect) readout ------------------------------------------
   /** null = the tool is not running; [] would be an empty panel. */
   const measure = shallowRef<readonly MeasureRow[] | null>(null);
@@ -106,7 +76,6 @@ export const useToolPanelStore = defineStore("toolPanels", () => {
   return {
     text, openText, commitText, cancelText,
     projectFilter, projectAnchor, projectChange,
-    texture, textureSummary, textureMode, openTexture, commitTexture, cancelTexture,
     measure,
   };
 });

@@ -87,6 +87,7 @@ describe("the plugins in this repository", () => {
       "FundaCAD.MultiColor",
       "FundaCAD.Printing",
       "FundaCAD.SpaceMouse",
+      "FundaCAD.Texture",
     ]);
   });
 

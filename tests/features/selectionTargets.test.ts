@@ -30,12 +30,29 @@ const field = (type: string, name: string): TargetField =>
 
 const feat = (f: Record<string, unknown>) => f as unknown as Feature;
 
+/** Feature types this repository draws from a PLUGIN rather than from
+ *  FEATURE_META. Spelled out rather than read off the contribution table,
+ *  because nothing is contributed in a headless test and a list that resolved
+ *  to empty would make the check above pass by asking nothing. */
+const PLUGIN_DRAWN = new Set(["texture"]);
+
 describe("the inventory", () => {
   it("names only feature types that exist", () => {
     // A typo'd key is a target that silently never appears, on a feature that
     // silently keeps no editable selection.
+    //
+    // This used to check every key against FEATURE_META, which stopped being
+    // the right question when a tool became a plugin: FEATURE_META is now the
+    // types the APPLICATION DRAWS, and a feature can legitimately be in the
+    // document format, have editable targets, and be drawn by a plugin. The
+    // typo itself is caught by the type — FEATURE_TARGETS is a
+    // Partial<Record<FeatureType, ...>> — so what is worth asserting here is
+    // that the two tables agree wherever they overlap, and that every key is
+    // either drawn by the application or is one a plugin in this repository
+    // claims.
     for (const type of Object.keys(FEATURE_TARGETS)) {
-      expect(FEATURE_META, type).toHaveProperty(type);
+      const known = type in FEATURE_META || PLUGIN_DRAWN.has(type);
+      expect(known, `${type} is drawn by nothing`).toBe(true);
     }
   });
 

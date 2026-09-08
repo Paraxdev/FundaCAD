@@ -15,9 +15,10 @@
 // menu, while the toolbar shows only what would run right now.
 
 import {
-  TOOL_CAPABILITIES,
-  applicableTools,
-  toolsConsuming,
+  applicableToolsIn,
+  capabilities,
+  toolsConsumingIn,
+  type AnyToolId,
   type EntityKind,
   type SelectionCounts,
   type ToolId,
@@ -56,7 +57,7 @@ export function primaryCount(sel: SelectionCounts): number {
 
 /** One tool, dressed for a button or a wedge. */
 export interface ToolOffer {
-  tool: ToolId;
+  tool: AnyToolId;
   label: string;
   iconName: string;
   /** The id for the central dispatcher (app/actions.ts), or null for the one
@@ -86,7 +87,6 @@ const TOOL_ICON: Record<ToolId, string> = {
   revolve: "revolve",
   sweep: "sweep",
   loft: "loft",
-  texture: "texture",
   "delete-face": "deleteFace",
   move: "move",
   "boolean-union": "booleanUnion",
@@ -108,7 +108,22 @@ const TOOL_ICON: Record<ToolId, string> = {
  *  It earns its place in the offer anyway — leaving it out would make "what
  *  applies to this face" wrong — so the seam is declared here instead of being
  *  discovered when a click does nothing. */
-const ACTIONLESS: ReadonlySet<ToolId> = new Set<ToolId>(["delete-face"]);
+const ACTIONLESS: ReadonlySet<string> = new Set<string>(["delete-face"]);
+
+/** The mark for a tool: the app's own table first, then whatever the tool
+ *  itself declared.
+ *
+ *  The table wins for the app's own tools because two of them have a name that
+ *  is not their id, and it is the exceptions the table exists for. A
+ *  contributed tool is not in it and answers from its own capability row, which
+ *  is where a plugin put its icon name. Falling back to the id would draw a
+ *  blank square, so it is better to have nothing to fall back to: a tool with
+ *  no id in either place is not a tool this build can offer, and
+ *  `selectionOffers` never sees one — every id it iterates came out of the
+ *  merged inventory. */
+function iconFor(tool: AnyToolId, declared: string | undefined): string {
+  return TOOL_ICON[tool as ToolId] ?? declared ?? "dot";
+}
 
 /** Every tool the selection's winning kind can feed, in the capability table's
  *  own preference order, each marked live or not. Empty for an empty
@@ -120,15 +135,22 @@ export function selectionOffers(sel: SelectionCounts): ToolOffer[] {
   // each tool's own minimum (a boolean needs two bodies, Loft two profiles), and
   // re-deriving that from the counts here is exactly the duplication this file
   // exists to avoid.
-  const live = new Set(applicableTools(sel));
-  return toolsConsuming(kind, "selection").map((tool) => ({
-    tool,
-    label: TOOL_CAPABILITIES[tool].label,
-    iconName: TOOL_ICON[tool],
-    action: ACTIONLESS.has(tool) ? null : tool,
-    hint: keyHint(tool),
-    enabled: live.has(tool),
-  }));
+  // ONE snapshot of the inventory for the whole answer. Asking twice would let
+  // a plugin switching itself off between the two calls produce an offer list
+  // whose "enabled" flags belong to a different set of tools than its rows.
+  const caps = capabilities();
+  const live = new Set(applicableToolsIn(caps, sel));
+  return toolsConsumingIn(caps, kind, "selection").map((tool) => {
+    const cap = caps.get(tool)!;
+    return {
+      tool,
+      label: cap.label,
+      iconName: iconFor(tool, cap.icon),
+      action: ACTIONLESS.has(tool) ? null : tool,
+      hint: keyHint(tool),
+      enabled: live.has(tool),
+    };
+  });
 }
 
 /** Verbs the hover bar does not carry however applicable they are.
@@ -143,7 +165,7 @@ export function selectionOffers(sel: SelectionCounts): ToolOffer[] {
  *  the end only because it happens to sort last; with the pie gone the cap has
  *  nothing behind it, and "the sixth offer is dropped" would have quietly
  *  become "whichever offer is sixth is dropped". */
-const BAR_EXCLUDED: ReadonlySet<ToolId> = new Set<ToolId>(["delete-face"]);
+const BAR_EXCLUDED: ReadonlySet<string> = new Set<string>(["delete-face"]);
 
 /** What the floating toolbar shows: every live offer it is willing to carry.
  *

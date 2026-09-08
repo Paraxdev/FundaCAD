@@ -9,12 +9,10 @@
 // PressPull (store.setPreview()/setEditPreview()). Commit promotes the preview
 // to a real feature (records undo); Esc (via the panel) or Cancel reverts.
 
-import type { Viewport } from "../viewport/viewport";
-import type { DocumentStore } from "../document/store";
-import type { Feature, Num, Selector } from "../types";
-import { TexturePanel, ANGLE_KINDS, SEED_KINDS, type TextureMode, type TextureValues } from "./texturePanel";
-import { setPrompt } from "../ui/prompt";
-import { contributedPalette } from "../plugins/contrib";
+import { contributedPalette, setPrompt } from "fundacad";
+import type { DocumentStore, Feature, Num, Selector, Viewport } from "fundacad";
+import * as panel from "./panel";
+import { ANGLE_KINDS, SEED_KINDS, type TextureMode, type TextureValues } from "./textureForm";
 
 // Warm texture ticks are ~10-70ms sidecar-side (geometry-skeleton cache), so a
 // short debounce keeps scrubbing responsive while still coalescing keystrokes.
@@ -69,8 +67,6 @@ export class TextureTool {
   // build-completion flag lets the next tick tell "rebuild wiped it" (restore
   // the members) from "the user clicked empty space" (legit deselect-all).
   private rebuildLanded = false;
-
-  private panel = new TexturePanel();
 
   // Esc lives on the TOOL, not the panel: the tool is active from the moment the
   // edit path starts rolling the model back (before any panel exists) until
@@ -205,7 +201,7 @@ export class TextureTool {
   }
 
   private openPanel(editing: boolean) {
-    this.panel.show(
+    panel.show(
       {
         editing,
         mode: this.mode,
@@ -235,7 +231,7 @@ export class TextureTool {
     this.viewport.setSelectionMode(m === "body" ? "bodies" : "faces");
     this.lastFaceIds = [];
     this.lastBodyIds = [];
-    this.panel.setMode(m);
+    panel.mode.value = m;
     this.refreshSummary();
     this.pushPreview();
   }
@@ -301,7 +297,7 @@ export class TextureTool {
   }
 
   private refreshSummary() {
-    this.panel.setSummary(this.currentSummary());
+    panel.summary.value = this.currentSummary();
   }
 
   /** Live preview: every change (selection or params, any kind) debounces into
@@ -439,7 +435,7 @@ export class TextureTool {
     this.raf = 0;
     if (this.previewDebounce) clearTimeout(this.previewDebounce);
     this.previewDebounce = 0;
-    this.panel.hide();
+    panel.hide();
     this.unsubBuild?.();
     this.unsubBuild = null;
     this.editId = null;

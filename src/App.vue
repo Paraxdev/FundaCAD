@@ -24,7 +24,6 @@ import SketchDimLayer from "./components/overlays/SketchDimLayer.vue";
 import SketchGlyphLayer from "./components/overlays/SketchGlyphLayer.vue";
 import TextToolPanel from "./components/overlays/TextToolPanel.vue";
 import ProjectFilterBar from "./components/overlays/ProjectFilterBar.vue";
-import TextureToolPanel from "./components/overlays/TextureToolPanel.vue";
 import MeasureReadout from "./components/overlays/MeasureReadout.vue";
 import { onMounted, onUnmounted, shallowRef } from "vue";
 import { useDialogStore } from "./stores/dialogs";
@@ -112,7 +111,6 @@ onUnmounted(() => offContrib?.());
   <SketchGlyphLayer />
   <TextToolPanel v-if="toolPanels.text" :key="toolPanels.text.id" :req="toolPanels.text" />
   <ProjectFilterBar v-if="toolPanels.projectAnchor" />
-  <TextureToolPanel v-if="toolPanels.texture" :key="toolPanels.texture.id" :req="toolPanels.texture" />
 
   <!-- Modal dialogs. v-if rather than an `open` prop on purpose: mount IS open
        and unmount IS closed, which is what lets the ones that gate global

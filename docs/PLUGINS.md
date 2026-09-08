@@ -88,7 +88,7 @@ table, so the reassuring half cannot go stale while the alarming half stays
 current. Hand-written reassurance goes stale silently and in the direction that
 hurts.
 
-## The four plugins this project publishes
+## The five plugins this project publishes
 
 | id | what it is | asks for | kind |
 | --- | --- | --- | --- |
@@ -96,6 +96,7 @@ hurts.
 | `FundaCAD.Printing` | printers on your network, and opening a model in a slicer | `document.read`, `files.write`, `printer.control`, `process.spawn` | `builtin` |
 | `FundaCAD.SpaceMouse` | navigating and moving with a 3D mouse | `device.input`, `document.read`, `document.write` | `builtin` |
 | `FundaCAD.MultiColor` | filament slots, per body and per texture colour | `document.read`, `document.write` | `builtin` |
+| `FundaCAD.Texture` | a printed surface texture on picked faces or a whole body | `document.read`, `document.write`, `files.read` | `builtin` |
 
 **THE APP SHIPS NONE OF THEM.** Every one is a zip on a release, installed like
 anybody else's, and a fresh install runs nothing but the app. Three of them used
@@ -247,6 +248,9 @@ with everything it adds, and gets back the removal:
 | `palette` | the colours a tool may offer |
 | `importedBody` | an imported mesh carried a colour of its own |
 | `provides` | a value offered to OTHER plugins, by name |
+| `tools` | a modeling tool: what it consumes, and whether it is running |
+| `features` | how a feature type is drawn and edited |
+| `icons` | a mark for a verb the app does not have |
 
 Four things this deliberately is not. There is no generic "run this on event X".
 There is no way to replace a core behaviour: `app/actions.ts` reaches its own
@@ -264,6 +268,62 @@ rows it wants are still loading and is then left showing the previous state
 permanently, because nothing else is coming. `TitleBar.vue` and `RibbonBar.vue`
 watch `onContribChange` for exactly this reason. It is written down because it
 was got wrong, and because no unit test caught it — a rendered app did.
+
+### A modeling tool, which is what the last three points are for
+
+The first ten points came out of capabilities that add to the EDGES of the
+window: a panel, a settings block, a menu row, colours on a body. Surface Texture
+was a different question, and it is the one that says whether any of this works,
+because a tool is a peer of Fillet and Press/Pull rather than an addition to
+them. Twenty-three files under `src/` named it, from the engine that constructed
+it to the dispatcher that ran it to the properties panel that decided its Seed
+row was worth drawing.
+
+Most of what it needed already existed. The ribbon button went through `ribbon`,
+the action behind it through `actions`, the docked panel through `overlays`.
+Three things did not:
+
+`tools` is the capability row: what the tool acts on, and whether it is running.
+Both halves earn their place. Without the first, a contributed tool has a ribbon
+button and nothing else — selecting a face offers Fillet, Press/Pull and Delete
+Face and stays silent about the tool that is the whole reason a face is selected.
+Without the second, `app/toolBusy.ts` believes the window is idle while a plugin
+owns the pick, so it dispatches a second tool over the top of the first and the
+user has two prompts and one Escape key.
+
+`features` is how the feature the tool leaves behind is DRAWN and EDITED: its
+mark and its name in the history, its dropdowns and its switch, which of its
+value rows a given pattern actually reads, what its shape slider is called, and
+what a double-click on it does. One point rather than five, because they are all
+the same sentence and five would be five things to remember, four of which fail
+silently.
+
+`icons` is a mark for a verb the app does not have. It is resolved AFTER both
+icon packs, so a pack the user chose keeps the last word: a plugin fills a name
+no pack has, and nothing else. This markup reaches the DOM through `Icon.vue`,
+which is the one sanctioned `v-html` in the app, and it is safe on the same terms
+core markup is — every value is a compile-time constant in a bundle whose code
+already runs with the whole of the app's reach.
+
+### The line a plugin may not cross
+
+**A plugin owns how something is CREATED and PRESENTED. It does not own whether a
+file you already saved still opens.**
+
+So `texture` stays in the `Feature` union in `src/types.ts`, the geometry that
+builds it stays in the sidecar, and `document/numFields.ts` keeps its numeric
+rows — that table is not a list of labels, it is the inventory of what a
+PARAMETER can drive, and `resolveTarget` reads it to answer what `texture1.depth`
+refers to. A parameter has to keep meaning the same thing on a machine where the
+plugin is switched off.
+
+With the plugin gone, a document with a texture in it opens, rebuilds, renders
+and exports; its numbers stay editable and stay parameter-drivable; and its row
+in the history falls back to a grey dot and the raw type, which is honest,
+because that is exactly what it is to that build. What you lose is the panel that
+makes one. `e2e/texture_plugin.cjs` ends by switching the plugin off and
+rebuilding the document, because this is the claim most worth checking against a
+running app rather than against a test that could be measuring its own fake.
 
 ### Two plugins that need each other
 
@@ -862,6 +922,51 @@ loader find the real plugin directories, and then switches each capability off
 and on while reading the menubar and the ribbon back out of the DOM. It exists
 because the async-arrival bug above was invisible to every unit test in this
 repository and obvious within one run of it.
+
+## Battle-testing this, and what it found
+
+Surface Texture was moved out specifically to find out whether the contribution
+table was real or whether it merely fitted the four capabilities it had been
+written against. What the move cost, measured rather than asserted:
+
+| | |
+| --- | --- |
+| new contribution points | three |
+| core files that stopped naming a texture | twenty-three |
+| main chunk | 4,183.29 kB -> 4,150.99 kB (932.01 -> 925.49 gzipped) |
+| tests | 2,028 -> 2,118 |
+
+The bundle got smaller, which is the arithmetic working the right way round: the
+tool, its panel and its form logic left the app, and nothing was added to replace
+them but three readers of a table that was already there.
+
+Where the checks are:
+
+| | |
+| --- | --- |
+| `tests/plugins/contribTools.test.ts` | the three points at the table: order, collisions, and that everything goes away with the plugin |
+| `tests/features/toolCapabilities.test.ts` | the rules, pure over a table the test wrote; then the merge, precedence and lifetime |
+| `tests/ui/contributedIcons.test.ts` | resolution order, and that a pack the user chose beats a plugin |
+| `tests/ui/featureMeta.test.ts` | every type in the document format is drawn by the app or by a named plugin |
+| `tests/plugins/textureTool.spec.ts` | the gesture, against a viewport and a store the test controls |
+| `tests/plugins/texturePlugin.spec.ts` | the real `activate()`, then every surface asked twice: once running, once switched off |
+| `tests/plugins/coreIndependence.test.ts` | nothing under `src/` statically imports the plugin |
+| `e2e/texture_plugin.cjs` | all of it in a real window, ending with the plugin off and the document still building |
+
+Two things this found that a smaller move would not have:
+
+**`FEATURE_META` could not stay a total `Record`.** It was one, so a new feature
+type with no mark was a compile error. The union is the document FORMAT, which is
+a wider thing than what a build knows how to draw, and the two came apart the
+moment a tool became a plugin. The check moved to `tests/ui/featureMeta.test.ts`
+and got stricter on the way: every type in the union has to resolve to a mark
+from the app or from a named plugin, which holds the plugins to it too.
+
+**`fieldApplies` was a document-layer function whose entire body was one tool's
+business.** It opened with `if (type !== "texture") return true;`. It is a
+contribution now, and it still governs the app's own numeric rows — which is the
+better arrangement, not a concession: the app owns `seed` and `angle` because a
+parameter can drive them, and the plugin decides which of them a knurl reads.
 
 ## What comes next
 
