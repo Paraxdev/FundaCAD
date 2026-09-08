@@ -6,8 +6,7 @@
 // nearest-slot match in io/files.ts beside the import path that called it — and
 // both are only about a palette, which is this capability's whole subject.
 
-import type { DocumentStore } from "../../src/document/store";
-import type { CtxItem } from "../../src/ui/menu";
+import type { CtxItem, DocumentStore } from "fundacad";
 
 /** The "Color" entry for a body's right-click menu.
  *

@@ -1,4 +1,5 @@
 import { defineConfig } from "vite";
+import { fileURLToPath } from "node:url";
 import vue from "@vitejs/plugin-vue";
 
 // Tauri expects a fixed dev port and no auto-clearing of the screen so its
@@ -24,6 +25,22 @@ export default defineConfig({
     target: "esnext",
     minify: false,
     sourcemap: true,
+  },
+  resolve: {
+    alias: {
+      // The one specifier a plugin uses to reach this application.
+      //
+      // An alias rather than a package, because the app and the plugins that
+      // ship with it are built together and a package would be a publish step
+      // between an edit and running it. What matters is that the SPECIFIER is
+      // the same one a downloaded plugin was built against: `fundacad` is
+      // externalised by scripts/build-plugin-code.mjs and resolved at load time
+      // against the running app's own copy, so a plugin's source reads
+      // identically whether it is compiled in or fetched from a release.
+      // Longest first: vite matches aliases in order.
+      "fundacad/ui": fileURLToPath(new URL("./src/plugins/hostUi.ts", import.meta.url)),
+      fundacad: fileURLToPath(new URL("./src/plugins/host.ts", import.meta.url)),
+    },
   },
   define: {
     // Vue's esm-bundler build ships these as compile-time flags. Both are off:

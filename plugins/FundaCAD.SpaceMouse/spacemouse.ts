@@ -12,8 +12,8 @@
 // readout + a test cube; the config persists to localStorage.
 
 import { listen } from "@tauri-apps/api/event";
-import type { Viewport } from "../../src/viewport/viewport";
-import { readSetting } from "../../src/ui/storedSetting";
+import { readSetting } from "fundacad";
+import type { Viewport } from "fundacad";
 
 export interface Motion { tx: number; ty: number; tz: number; rx: number; ry: number; rz: number }
 const ZERO: Motion = { tx: 0, ty: 0, tz: 0, rx: 0, ry: 0, rz: 0 };

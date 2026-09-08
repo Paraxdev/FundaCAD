@@ -15,7 +15,16 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["vite/client"],
     // vue-tsc requires a jsx setting even though this project has no JSX.
-    "jsx": "preserve"
+    "jsx": "preserve",
+    // The one specifier a plugin uses to reach this application. Mirrors the
+    // alias in vite.config.ts and the external in
+    // scripts/build-plugin-code.mjs; all three name the same file, and a
+    // downloaded plugin resolves the same name against the running app.
+    "baseUrl": ".",
+    "paths": {
+      "fundacad": ["./src/plugins/host.ts"],
+      "fundacad/ui": ["./src/plugins/hostUi.ts"]
+    }
   },
   // No `declare module "*.vue"` shim, deliberately: it would win over vue-tsc's
   // real resolution and silently switch off prop type-checking.

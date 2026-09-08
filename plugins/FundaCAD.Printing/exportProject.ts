@@ -11,11 +11,8 @@
 // formats. The difference is the word PROJECT: one object per body with a
 // toolhead assignment each, rather than one mesh.
 
-import type { DocumentStore } from "../../src/document/store";
-import type { GeometryBackend } from "../../src/geometry/client";
-import { stripDocumentExt } from "../../src/io/documentExt";
-import { reportError } from "../../src/io/files";
-import { contributedPalette } from "../../src/plugins/contrib";
+import { contributedPalette, listModal, reportError, stripDocumentExt, toast } from "fundacad";
+import type { DocumentStore, GeometryBackend } from "fundacad";
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;
 
@@ -89,7 +86,6 @@ export async function exportPrintProject(
     const lines = res.warnings.map(
       (w) => `Warning: ${w.feature_id ?? "feature"} failed, its result is NOT in the export: ${w.message}`,
     );
-    const { listModal } = await import("../../src/ui/choice");
     await listModal("Exported project, with warnings", [res.path ?? path, ...lines]);
   }
   return res.path ?? path;
@@ -130,7 +126,6 @@ async function warnUnloadedFilaments(store: DocumentStore, bodyIds: string[]) {
       parts.push(`slot${empty.length > 1 ? "s" : ""} ${empty.map((s) => s + 1).join(", ")} ha${empty.length > 1 ? "ve" : "s"} no filament loaded on the printer`);
     }
     if (unassigned) parts.push(`${unassigned} bod${unassigned > 1 ? "ies are" : "y is"} unassigned (defaulting to slot 1)`);
-    const { toast } = await import("../../src/ui/toast");
     toast(`Exported, but ${parts.join("; ")}.`, { kind: "warning" });
   } catch {
     // printer offline/slow/unconfigured — the check is best-effort by design

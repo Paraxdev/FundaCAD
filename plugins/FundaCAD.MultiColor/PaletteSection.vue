@@ -16,13 +16,9 @@
 // than absent.
 
 import { computed, onUnmounted, ref, watch } from "vue";
-import { useEngine } from "../../src/app/engineKey";
-import { useBuildValue } from "../../src/app/useDoc";
-import { useBrowserStore } from "../../src/stores/browser";
-import Icon from "../../src/components/shell/Icon.vue";
-import InlineLabel from "../../src/components/shell/InlineLabel.vue";
-import { service } from "../../src/plugins/contrib";
 import { FILAMENTS, staleSlots, type FilamentSource } from "./palette";
+import { service, useBrowserStore, useBuildValue, useEngine } from "fundacad";
+import { Icon, InlineLabel } from "fundacad/ui";
 
 const engine = useEngine();
 const store = engine.store;

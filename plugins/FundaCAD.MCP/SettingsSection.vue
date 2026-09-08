@@ -11,12 +11,7 @@
 // there is something for it to govern.
 
 import { onMounted, onUnmounted, ref } from "vue";
-import {
-  asLiveEditingMode,
-  liveEditingMode,
-  onLiveEditingChange,
-  setLiveEditingMode,
-} from "../../src/ui/liveEditing";
+import { asLiveEditingMode, liveEditingMode, onLiveEditingChange, setLiveEditingMode } from "fundacad";
 
 const live = ref(liveEditingMode());
 let off: (() => void) | null = null;

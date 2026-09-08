@@ -13,8 +13,8 @@
 // through the same table everything else does and gets no more reach for being
 // shipped here.
 
-import { contribute } from "../../src/plugins/contrib";
 import SettingsSection from "./SettingsSection.vue";
+import { contribute } from "fundacad";
 
 const ID = "FundaCAD.MCP";
 

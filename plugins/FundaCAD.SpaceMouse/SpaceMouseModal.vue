@@ -22,7 +22,6 @@
 
 import * as THREE from "three";
 import { onMounted, onUnmounted, ref, shallowRef, useTemplateRef, type ComponentPublicInstance } from "vue";
-import ModalFrame from "../../src/components/overlays/ModalFrame.vue";
 import {
   AXIS_LABELS,
   AXIS_NAMES,
@@ -40,6 +39,7 @@ import {
   type SpaceMouseConfig,
 } from "./spacemouse";
 import { closeSettings } from "./state";
+import { ModalFrame } from "fundacad/ui";
 
 const close = () => closeSettings();
 
