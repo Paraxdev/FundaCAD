@@ -1900,6 +1900,16 @@ export class Viewport {
     // visibility-only fast path keys on result identity, and the in-progress
     // result is not a model anyone should shortcut against.
     this.lastResult = null;
+    // The previous model's ORPHAN edges — the ones with no owning body — belong
+    // to nobody once the stream takes over. ProgressiveModel accounts for every
+    // body it is handed and knows nothing about these, and the ModelView it
+    // publishes carries `orphanEdges: null`, so setModel's own "remove the last
+    // model's orphans" line finds nothing to remove at the commit and they stay
+    // in the scene for the rest of the session, one set per streamed rebuild.
+    if (this.model?.orphanEdges) {
+      this.scene.modelGroup.remove(this.model.orphanEdges.object);
+      this.model.orphanEdges.dispose();
+    }
     const view = this.progressive.begin(
       epoch, manifest, result, box, this.model, new Set(hiddenBodies),
     );

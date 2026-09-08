@@ -25,6 +25,9 @@ type BodyMeta = NonNullable<RebuildResult["bodies"]>[number];
  *  disposal viewport.setModel does for a body that has gone away. */
 type DisposeFn = (b: BodyMesh) => void;
 
+/** Shared empty keep-set, so abort() allocates nothing. */
+const EMPTY: ReadonlySet<BodyMesh> = new Set<BodyMesh>();
+
 export class ProgressiveModel {
   private slots: (BodyMesh | null)[] = [];
   private byId = new Map<string, number>();
@@ -50,7 +53,20 @@ export class ProgressiveModel {
 
   /** Start a stream. `manifest` names every body of the reply in final order and
    *  is authoritative: a body of the previous model that it does not name is
-   *  provably gone and is disposed now. */
+   *  provably gone and is disposed now.
+   *
+   *  STARTING A STREAM OVER THE TOP OF ONE STILL RUNNING is the case to keep in
+   *  mind here, and it is not exotic: it is what happens every time somebody
+   *  edits while a large rebuild is still arriving, which is what this whole
+   *  file exists to make bearable. In that case `prev` is the view the running
+   *  stream published, so the bodies this stream is about to reuse ARE the
+   *  bodies the running stream is holding — and tearing the old one down first
+   *  freed exactly them. An unchanged body then came back into `slots` with its
+   *  GPU buffers already released and without ever being added back to the
+   *  scene, so it vanished and stayed vanished: the commit's own etag diff finds
+   *  it "already present", reuses it, and never rebuilds it either.
+   *
+   *  So nothing is disposed until this method knows what it wants. */
   begin(
     epoch: number,
     manifest: BodyMeta[],
@@ -59,7 +75,15 @@ export class ProgressiveModel {
     prev: ModelView | null,
     hidden: Set<string>,
   ): ModelView {
-    this.abort();
+    // Everything on screen from before this stream, by id: the bodies the last
+    // installment published, plus any the old stream was still holding in place
+    // of a body whose chunk never came. Both are bodies of the previous MODEL
+    // and both are candidates to reuse, replace or drop.
+    const keptById = new Map<string, BodyMesh>();
+    for (const b of prev?.bodies ?? []) keptById.set(b.id, b);
+    for (const [id, b] of this.stale) if (!keptById.has(id)) keptById.set(id, b);
+
+    this.release(new Set(keptById.values()));
     this.epoch = epoch;
     this.box = box;
     this.slots = new Array(manifest.length).fill(null);
@@ -70,8 +94,6 @@ export class ProgressiveModel {
     // exactly the O(chunks x model) cost this avoids.
     this.remap = new Int32Array(result.mesh.positions.length / 3).fill(-1);
 
-    const keptById = new Map<string, BodyMesh>();
-    for (const b of prev?.bodies ?? []) keptById.set(b.id, b);
     for (const m of manifest) {
       const p = keptById.get(m.id);
       if (!p) continue;
@@ -135,20 +157,28 @@ export class ProgressiveModel {
   /** Tear down everything this stream put on screen, including bodies it was
    *  holding from the previous model. Used when a stream cannot finish. */
   abort() {
-    for (const b of this.slots) if (b) this.remove(b);
-    for (const b of this.stale.values()) this.remove(b);
-    this.slots = [];
-    this.byId.clear();
-    this.stale.clear();
-    this.edges = [];
-    this.remap = null;
-    this.view = null;
-    this.epoch = -1;
+    this.release(EMPTY);
   }
 
   /** Stop tracking without disposing: the commit has taken ownership of every
    *  body this stream built. */
   finish() {
+    this.reset();
+  }
+
+  /** Drop this stream, disposing what it holds EXCEPT the bodies in `keep`.
+   *
+   *  `keep` is how a stream hands its bodies to the next one without them
+   *  passing through a disposed state on the way. Membership is by OBJECT, not
+   *  by id: two different meshes for one body id is exactly the swap this class
+   *  performs, and the old one of that pair still has to go. */
+  private release(keep: ReadonlySet<BodyMesh>) {
+    for (const b of this.slots) if (b && !keep.has(b)) this.remove(b);
+    for (const b of this.stale.values()) if (!keep.has(b)) this.remove(b);
+    this.reset();
+  }
+
+  private reset() {
     this.slots = [];
     this.byId.clear();
     this.stale.clear();
