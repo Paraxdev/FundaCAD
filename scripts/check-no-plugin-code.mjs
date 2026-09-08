@@ -35,6 +35,13 @@ const MARKERS = [
   ["FundaCAD.Printing", "print-status-pill"],
   ["FundaCAD.MultiColor", "nearestPaletteSlot"],
   ["FundaCAD.MultiColor", "pal-swatch"],
+  // Two STRING LITERALS rather than two identifiers, for the plugin whose code
+  // is the most ordinary application code of the four: a Vue panel and a tool
+  // class, with nothing like a Rust command name in it to be distinctive. A
+  // minifier renames a function and leaves a string alone, so a literal is the
+  // marker that cannot quietly stop matching and turn this row into a pass.
+  ["FundaCAD.Texture", "Perlin noise"],
+  ["FundaCAD.Texture", "Flat land on the crests"],
 ];
 
 if (!existsSync(dir)) {

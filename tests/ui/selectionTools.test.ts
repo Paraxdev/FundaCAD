@@ -136,7 +136,11 @@ describe("the toolbar's cut", () => {
     // every one of them but the excluded verb has to be on it now that no pie
     // holds the overflow.
     const live = selectionOffers({ face: 2 }).filter((o) => o.enabled && o.tool !== "delete-face");
-    expect(live.length).toBeGreaterThan(4);
+    // Four, not five: Texture used to be in this count and is a plugin now, so
+    // a headless suite with nothing contributed sees one fewer. The number is
+    // still a floor rather than an equality, because what the line is defending
+    // is "the bar is not capped", not the size of the inventory.
+    expect(live.length).toBeGreaterThan(3);
     expect(labels(toolbarOffers({ face: 2 }))).toEqual(labels(live));
   });
 

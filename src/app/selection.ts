@@ -1,4 +1,5 @@
 import { setPrompt } from "../ui/prompt";
+import { contributedFeature } from "../plugins/contrib";
 import { useSelectionStore } from "../stores/selection";
 import type { Engine } from "./engine";
 import type { Feature } from "../types";
@@ -106,10 +107,20 @@ export function createSelection(
         // parameter drives, and those fall through to the rows as before.
         if (!e.tools.revolvePitch.startEdit(id, done)) e.setStatus(VALUES_IN_HISTORY, "");
         break;
-      case "texture":
-        if (!e.tools.texture.startEdit(id, done)) e.setStatus(VALUES_IN_HISTORY, "");
-        break;
       default:
+        // A feature type the app has no tool for may still have one: a plugin
+        // that contributes a tool contributes how to REOPEN what the tool made,
+        // and double-clicking its feature has to land in the same place
+        // double-clicking a fillet does. Asked last, so nothing here can be
+        // taken over by a plugin claiming a type the app already handles.
+        //
+        // The same false means the same thing it means above — a parameter
+        // drives one of the values, so the rows in the history are where it is
+        // changed — and the same status line says so.
+        {
+          const edit = contributedFeature(f.type)?.edit;
+          if (edit && !edit(id, done)) e.setStatus(VALUES_IN_HISTORY, "");
+        }
         break; // the values under the history entry (selectFeature above) are the
                // edit surface for the rest
     }

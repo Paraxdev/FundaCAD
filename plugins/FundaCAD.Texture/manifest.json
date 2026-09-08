@@ -1,0 +1,13 @@
+{
+  "id": "FundaCAD.Texture",
+  "name": "Surface Texture",
+  "version": "1.0.0",
+  "kind": "builtin",
+  "summary": "A printed surface texture on picked faces or a whole body: knurl, hex, waves, ribs, voronoi, noise, or a heightmap read from an image.",
+  "enabledByDefault": true,
+  "grants": [
+    "document.read",
+    "document.write",
+    "files.read"
+  ]
+}

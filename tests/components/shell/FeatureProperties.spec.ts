@@ -10,14 +10,44 @@
 // path still work: a sketch dimension re-serialising one entity, and a feature
 // field going through the unit-agnostic parser.
 
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ref } from "vue";
 import { mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import FeatureProperties from "../../../src/components/shell/FeatureProperties.vue";
 import { ENGINE } from "../../../src/app/engineKey";
+import { contribute, resetContributions } from "../../../src/plugins/contrib";
+import {
+  TEXTURE_CHOICE_FIELDS,
+  TEXTURE_TOGGLE_FIELDS,
+  sharpnessLabel,
+  textureFieldApplies,
+} from "../../../plugins/FundaCAD.Texture/textureForm";
 import type { Engine } from "../../../src/app/engine";
 import type { CadDocument, Feature } from "../../../src/types";
+
+/** Register the Texture plugin's description of its own feature type.
+ *
+ *  The four texture cases below used to need nothing: the pattern dropdown, the
+ *  invert switch, the rule that hides a Seed on a knurl and the name of the
+ *  shape slider were all tables in src/document/optionFields.ts. None of them is
+ *  now — a plugin contributes them — so these tests say so by contributing the
+ *  same thing the plugin does. The `no plugin, no rows` control below is the
+ *  other half: without this call the rows are genuinely gone, which is what
+ *  makes the four that follow it measure something. */
+function withTexturePlugin() {
+  return contribute("FundaCAD.Texture", {
+    features: [{
+      type: "texture",
+      meta: { icon: "texture", label: "Texture" },
+      choiceFields: TEXTURE_CHOICE_FIELDS,
+      toggleFields: TEXTURE_TOGGLE_FIELDS,
+      fieldApplies: textureFieldApplies,
+      fieldLabel: (field, values) =>
+        field === "sharpness" ? sharpnessLabel(values["profile"]) : null,
+    }],
+  });
+}
 
 /** The narrowest engine FeatureProperties touches. */
 function makeEngine(doc: CadDocument) {
@@ -120,6 +150,9 @@ const EXTRUDE: Feature =
 
 describe("FeatureProperties", () => {
   beforeEach(() => { setActivePinia(createPinia()); });
+  // A contribution left behind changes what the next test renders, and the
+  // control above depends on there being none.
+  afterEach(() => { resetContributions(); });
 
   it("lists a sketch's entity dimensions", () => {
     const fake = makeEngine({ parameters: {}, features: [CIRCLE(6)] });
@@ -297,9 +330,33 @@ describe("FeatureProperties", () => {
     expect(rows(render(fake, "l1"))).toContainEqual(["Operation", "", "new"]);
   });
 
+  // CONTROL for the four cases that follow. Everything they assert comes from a
+  // plugin now, so if it were somehow still in the application they would all
+  // pass whether or not the contribution was made, and would be measuring
+  // nothing.
+  it("shows a plugin's feature no dropdowns and no switch when it is not running", () => {
+    const fake = makeEngine({
+      parameters: {},
+      features: [{ id: "t1", type: "texture", kind: "image", depth: 0.4, scale: 2 } as unknown as Feature],
+    });
+    const l = labels(render(fake, "t1"));
+    // The numbers are the application's — a parameter can drive them, so they
+    // stay whatever is installed — and they are still here.
+    expect(l).toContain("Depth");
+    expect(l).toContain("Scale");
+    // The presentation is the plugin's, and it is not.
+    expect(l).not.toContain("Pattern");
+    expect(l).not.toContain("Invert heights");
+    // And with no rule to say otherwise, every numeric row shows, which is the
+    // documented default rather than a guess about what a heightmap reads.
+    expect(l).toContain("Seed");
+    expect(l).toContain("Angle");
+  });
+
   it("puts the choices above the numbers they govern", () => {
     // A texture's pattern decides whether Angle and Seed are there at all, so a
     // reader who met the numbers first would be reading upward.
+    withTexturePlugin();
     const fake = makeEngine({
       parameters: {},
       features: [{ id: "t1", type: "texture", kind: "knurl", depth: 0.4, scale: 2 } as unknown as Feature],
@@ -312,6 +369,7 @@ describe("FeatureProperties", () => {
   });
 
   it("gives a switch to a field that is on or off", async () => {
+    withTexturePlugin();
     const fake = makeEngine({
       parameters: {},
       features: [{ id: "t1", type: "texture", kind: "image", depth: 0.4, scale: 2 } as unknown as Feature],
@@ -329,6 +387,7 @@ describe("FeatureProperties", () => {
     // The defect this rule exists for: the panel offered Seed and Angle on every
     // texture. A knurl reads no seed — the sidecar ignores it — so turning that
     // row did nothing and nothing said why.
+    withTexturePlugin();
     const knurl = makeEngine({
       parameters: {},
       features: [{ id: "t1", type: "texture", kind: "knurl", depth: 0.4, scale: 2, seed: 1, angle: 0 } as unknown as Feature],
@@ -349,6 +408,7 @@ describe("FeatureProperties", () => {
   it("renames the shape slider to what it currently does", () => {
     // The same number is a flat LAND width on a faceted surface and a crispness
     // on a smooth one. Calling both "Sharpness" describes neither.
+    withTexturePlugin();
     const facet = makeEngine({
       parameters: {},
       features: [{ id: "t1", type: "texture", kind: "knurl", profile: "facet", depth: 0.4, scale: 2, sharpness: 0.5 } as unknown as Feature],

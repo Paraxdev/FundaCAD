@@ -1,4 +1,4 @@
-// The core does not know these three capabilities exist.
+// The core does not know these four capabilities exist.
 //
 // That sentence is the whole of what "not part of the core" means here, and it
 // is exactly the kind of claim that decays: one convenient `import` restores
@@ -62,6 +62,12 @@ const CAPABILITIES: Record<string, (path: string) => boolean> = {
   "the printer connection": (p) => p.includes("/plugins/FundaCAD.Printing/"),
   "the 3D mouse": (p) => p.includes("/plugins/FundaCAD.SpaceMouse/"),
   "multiple colours": (p) => p.includes("/plugins/FundaCAD.MultiColor/"),
+  // The one that was hardest to get out, and so the one this rule is worth the
+  // most on. A surface texture was a MODELING TOOL: twenty-three files under
+  // src/ named it, from the engine that constructed it to the dispatcher that
+  // ran it to the properties panel that decided its Seed row was worth drawing.
+  // Every one of those was the application knowing what a texture is.
+  "a surface texture": (p) => p.includes("/plugins/FundaCAD.Texture/"),
 };
 
 /** Static import specifiers in a file, skipping `import type` (erased) and

@@ -10,6 +10,7 @@
 // hand-drawn 24×24 set is the same amount of typing and renders identically on
 // every machine.
 import { BOOLEAN_COMMANDS } from "../features/booleanOps";
+import { contributedFeature } from "../plugins/contrib";
 import type { Feature, FeatureType } from "../types";
 
 export interface FeatureMeta {
@@ -17,7 +18,21 @@ export interface FeatureMeta {
   label: string;
 }
 
-export const FEATURE_META: Record<FeatureType, FeatureMeta> = {
+/** The mark and the word for every feature type THE APPLICATION DRAWS.
+ *
+ *  Partial over the union, and it used to be total. The union is the document
+ *  FORMAT — every type a file may contain, which is a wider thing than every
+ *  type this build knows how to present, and the two came apart when a tool
+ *  became a plugin. A total Record could only have been kept by leaving a mark
+ *  here for a feature the application has no other knowledge of.
+ *
+ *  Totality was worth something, so it is not simply dropped: a new feature type
+ *  with no mark anywhere is still a bug, and `tests/ui/featureMeta.test.ts`
+ *  catches it by asking that every type in the union resolve to a mark from
+ *  SOMEWHERE — the table here, or a plugin in this repository. That is a
+ *  stricter question than the Record was asking, because it holds the plugins to
+ *  it too. */
+export const FEATURE_META: Partial<Record<FeatureType, FeatureMeta>> = {
   sketch: { icon: "sketch", label: "Sketch" },
   extrude: { icon: "extrude", label: "Extrude" },
   fillet: { icon: "fillet", label: "Fillet" },
@@ -51,7 +66,6 @@ export const FEATURE_META: Record<FeatureType, FeatureMeta> = {
   scale: { icon: "scale", label: "Scale" },
   move: { icon: "move", label: "Move" },
   removeBody: { icon: "removeBody", label: "Remove Body" },
-  texture: { icon: "texture", label: "Texture" },
 };
 
 /** The mark and the word for ONE feature, which is not always a fact about its
@@ -64,13 +78,24 @@ export const FEATURE_META: Record<FeatureType, FeatureMeta> = {
  *
  *  Tolerant of a feature this build has never heard of, for the same reason the
  *  table is a total Record: a document from a newer version must render as
- *  something rather than throw mid-draw and make File→Open look like a no-op. */
+ *  something rather than throw mid-draw and make File→Open look like a no-op.
+ *
+ *  A PLUGIN CAN NAME ONE, and is asked after the table rather than before it, so
+ *  a plugin cannot rename the app's own features by claiming a type it does not
+ *  own. It is asked BEFORE the grey-dot fallback, because that fallback is what
+ *  a feature whose plugin is missing correctly looks like: the document still
+ *  opens, the history still has a row for it, and it reads as something the
+ *  build does not understand — which is exactly what it is. */
 export function featureMeta(f: { type: string; operation?: unknown }): FeatureMeta {
   if (f.type === "boolean") {
     const cmd = BOOLEAN_COMMANDS.find((c) => c.op === f.operation);
     if (cmd) return { icon: cmd.iconName, label: cmd.label };
   }
-  return FEATURE_META[f.type as FeatureType] ?? { icon: "dot", label: f.type };
+  return (
+    FEATURE_META[f.type as FeatureType] ??
+    contributedFeature(f.type)?.meta ??
+    { icon: "dot", label: f.type }
+  );
 }
 
 /** The same answer for a whole feature, when the caller has one. */

@@ -38,7 +38,6 @@ import { MeasureTool } from "../features/measureTool";
 import { SectionTool } from "../features/sectionTool";
 import { PlaneOffsetTool } from "../features/planeOffsetTool";
 import { RevolvePitchTool } from "../features/revolvePitchTool";
-import { TextureTool } from "../features/textureTool";
 import { createFeatureStarters } from "../features/featureStarters";
 import { createContextMenus } from "../ui/contextMenus";
 import { createPanels } from "../ui/panels";
@@ -87,7 +86,6 @@ export interface EngineTools {
   section: SectionTool;
   planeOffset: PlaneOffsetTool;
   revolvePitch: RevolvePitchTool;
-  texture: TextureTool;
 }
 
 export interface EngineUi {
@@ -270,7 +268,6 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
     }),
     planeOffset: new PlaneOffsetTool(e.viewport),
     revolvePitch: new RevolvePitchTool(e.viewport, e.store, e.overlay),
-    texture: new TextureTool(e.viewport, e.store),
   };
 
   // Reads e.toolBusy, assigned below — hence the thunk, the same late binding
@@ -361,7 +358,6 @@ export function mountUi(e: Engine): void {
     moveTool: e.tools.move,
     patternTool: e.tools.pattern,
     planeOffset: e.tools.planeOffset,
-    texture: e.tools.texture,
     canvas: e.canvas,
     toolBusy: () => e.toolBusy(),
     hasBody: () => e.hasBody(),

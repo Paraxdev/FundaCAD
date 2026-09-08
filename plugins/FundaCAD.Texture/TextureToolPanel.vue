@@ -4,39 +4,58 @@
 // object) this is DOCKED top-right: the tool can span a whole body, not one
 // clicked point, so there is no natural anchor to follow.
 //
-// Replaces the DOM half of features/texturePanel.ts, which stays as the facade
-// TextureTool calls. Which rows a given kind/profile shows is decided by
-// textureRows() in textureForm.ts — pure, and tested, because that logic encodes
-// real sidecar behaviour and has been wrong before.
+// Which rows a given kind/profile shows is decided by textureRows() in
+// textureForm.ts — pure, and tested, because that logic encodes real sidecar
+// behaviour and has been wrong before.
+//
+// MOUNTED FOR THE WHOLE LIFE OF THE PLUGIN, and draws nothing until the tool
+// opens it. That is the contract a contributed overlay is held to: the
+// application mounts it once and never asks again whether it should be visible,
+// because the only thing that knows is the plugin. The `v-if` that used to be in
+// App.vue was the application knowing this tool exists.
 //
 // Escape is NOT handled here. TextureTool owns it for its whole active lifetime,
-// which starts before this panel exists (the edit path rolls the model back
+// which starts before this panel is open (the edit path rolls the model back
 // first) and must outlast a refused commit. A panel-scoped handler left those
 // windows with no way out.
 
-import { computed, reactive, type CSSProperties } from "vue";
+import { computed, reactive, watch, type CSSProperties } from "vue";
 import {
   KIND_OPTIONS, basename, initialTextureForm, sharpnessLabel, textureRows, toTextureValues,
   type TextureMode,
-} from "../../features/textureForm";
-import Icon from "../shell/Icon.vue";
-import { useToolPanelStore, type TextureReq } from "../../stores/toolPanels";
+} from "./textureForm";
+import { Icon } from "fundacad/ui";
+import { openDialog } from "fundacad";
+import * as panel from "./panel";
 
-const props = defineProps<{ req: TextureReq }>();
-const panels = useToolPanelStore();
-
-// App.vue keys this on req.id, so reopening the tool remounts with fresh state.
-const form = reactive(initialTextureForm(props.req.initial));
+// Seeded from the request, and RESEEDED whenever the tool opens a new one.
+// App.vue used to key the component on `req.id`, which remounted it and got the
+// fresh form for free. A permanently mounted overlay has no such key, so the
+// same job is done explicitly here — without it, re-opening the tool would show
+// the values from the last time it ran.
+const form = reactive(initialTextureForm(panel.request.value?.initial ?? {}));
+watch(
+  () => panel.request.value?.id,
+  () => {
+    const init = initialTextureForm(panel.request.value?.initial ?? {});
+    Object.assign(form, init);
+  },
+);
 const rows = computed(() => textureRows(form));
+// Read through the request so they follow a re-open. Empty is the meaningful
+// answer for the palette, not a degenerate one: nothing contributing colours is
+// how a document with no palette has always looked, and the row hides itself.
+const palette = computed(() => panel.request.value?.palette ?? []);
+const editing = computed(() => panel.request.value?.editing ?? false);
 const sharpLabel = computed(() => sharpnessLabel(form.profile));
 
 function emitChange() {
-  props.req.onChange(toTextureValues(form));
+  panel.request.value?.onChange(toTextureValues(form));
 }
 
 function chooseMode(m: TextureMode) {
-  panels.textureMode = m;
-  props.req.onModeChange(m);
+  panel.mode.value = m;
+  panel.request.value?.onModeChange(m);
 }
 
 function randomize() {
@@ -48,15 +67,18 @@ const isTauri = () => "__TAURI_INTERNALS__" in window;
 
 async function browse() {
   if (!isTauri()) {
-    console.warn("texture image needs the native app (a real filesystem path)");
+    console.warn("a heightmap needs the native app (a real filesystem path)");
     return;
   }
-  const { open } = await import("@tauri-apps/plugin-dialog");
-  const path = await open({
-    multiple: false,
+  // The host's dialog rather than the plugin's own import of it: a built plugin
+  // externalises nothing but vue, pinia, three and the host, so a dynamic
+  // import of @tauri-apps/plugin-dialog here would bundle a second copy of it
+  // into the plugin. This is also the only place `files.read` is exercised, and
+  // only after the person has pressed Browse and chosen something.
+  const path = await openDialog({
     filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "bmp"] }],
   });
-  if (typeof path !== "string") return;
+  if (path === null) return;
   form.imagePath = path;
   emitChange();
 }
@@ -102,19 +124,26 @@ const noBtn: CSSProperties = { ...btn, background: "#555" };
 </script>
 
 <template>
-  <Teleport to="body">
-    <div :style="root">
+  <!-- v-if on the request: mounted for the whole life of the plugin, drawn only
+       while the tool is running. -->
+  <Teleport v-if="panel.request.value" to="body">
+    <!-- `data-panel` is the one thing an e2e script can hold on to. Everything
+         here is inline-styled with no class names, and the application's own
+         Icon component makes the same argument for `data-icon`: a marker put
+         there on purpose beats a script matching on visible text, which changes
+         the first time a word does. -->
+    <div data-panel="texture" :style="root">
       <div :style="title">Texture</div>
       <!-- Live selection summary. Bound straight to the store rather than
            carried on the request, so refreshing it (the tool rewrites it on
            every rAF tick) cannot re-render the form and steal focus from
            whatever field is being typed into. -->
-      <div :style="muted">{{ panels.textureSummary }}</div>
+      <div :style="muted">{{ panel.summary.value }}</div>
 
       <!-- [Faces] / [Whole Body] mode toggle — a segmented pair of buttons. -->
       <div :style="row">
-        <button :style="[modeBtn, panels.textureMode === 'faces' ? modeOn : modeOff]" @click="chooseMode('faces')">Faces</button>
-        <button :style="[modeBtn, panels.textureMode === 'body' ? modeOn : modeOff]" @click="chooseMode('body')">Whole Body</button>
+        <button :style="[modeBtn, panel.mode.value === 'faces' ? modeOn : modeOff]" @click="chooseMode('faces')">Faces</button>
+        <button :style="[modeBtn, panel.mode.value === 'body' ? modeOn : modeOff]" @click="chooseMode('body')">Whole Body</button>
       </div>
 
       <div :style="row">
@@ -183,11 +212,11 @@ const noBtn: CSSProperties = { ...btn, background: "#555" };
       <!-- Inlay colour: which palette slot the textured faces print in
            (two-tone). Only shown when the caller passed a palette, i.e. in a
            document that has bodies. -->
-      <div v-show="req.palette.length" :style="row">
+      <div v-show="palette.length" :style="row">
         <label :style="lbl">Print color</label>
         <select v-model="form.colorSlot" :style="grow" @input="emitChange" @change="emitChange">
           <option value="">Body color</option>
-          <option v-for="(s, i) in req.palette" :key="i" :value="String(i)">{{ s.name }} (slot {{ i + 1 }})</option>
+          <option v-for="(s, i) in palette" :key="i" :value="String(i)">{{ s.name }} (slot {{ i + 1 }})</option>
         </select>
       </div>
 
@@ -207,10 +236,10 @@ const noBtn: CSSProperties = { ...btn, background: "#555" };
       <div :style="note">Preview is real geometry at display resolution, exports keep full detail.</div>
 
       <div :style="btnRow">
-        <button :style="okBtn" @pointerdown.prevent.stop="panels.commitTexture(toTextureValues(form))">
-          <Icon name="check" :size="13" /> {{ req.editing ? "Apply" : "Add" }}
+        <button :style="okBtn" @pointerdown.prevent.stop="panel.commit(toTextureValues(form))">
+          <Icon name="check" :size="13" /> {{ editing ? "Apply" : "Add" }}
         </button>
-        <button :style="noBtn" @pointerdown.prevent.stop="panels.cancelTexture()"><Icon name="close" :size="13" /> Cancel</button>
+        <button :style="noBtn" @pointerdown.prevent.stop="panel.cancel()"><Icon name="close" :size="13" /> Cancel</button>
       </div>
     </div>
   </Teleport>

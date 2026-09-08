@@ -11,9 +11,9 @@
 // member edges: they are not on the model any more, so there is nothing to
 // highlight and nothing to click. store.beginEditPreview truncates the timeline
 // to just before this feature, which puts the sharp edges back on screen — the
-// same arrangement edgeFeatureTool and textureTool use to re-open a blend or a
-// texture, and for the same reason. Every later feature is hidden for the
-// duration, and the panel says so.
+// same arrangement edgeFeatureTool uses to re-open a blend, and the same one the
+// Surface Texture plugin uses to re-open a texture, for the same reason. Every
+// later feature is hidden for the duration, and the panel says so.
 //
 // Selectors are NOT re-minted from what the rollback happens to render. An entry
 // that still matches a rendered edge gets a highlight; one that does not is kept

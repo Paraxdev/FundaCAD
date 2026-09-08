@@ -47,6 +47,7 @@ describe("the plugins this build offers", () => {
       "FundaCAD.MultiColor",
       "FundaCAD.Printing",
       "FundaCAD.SpaceMouse",
+      "FundaCAD.Texture",
     ]);
     // ...and one of them really is a builtin, so this is not passing because
     // the kind has quietly stopped being used.

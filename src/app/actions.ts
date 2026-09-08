@@ -158,9 +158,6 @@ export function createActions(e: Engine): (action: string) => void {
       case "thread":
         startFaceTool("thread");
         break;
-      case "texture":
-        e.starters.startTexture();
-        break;
       case "pattern-linear":
         e.starters.startPattern("linear");
         break;

@@ -7,7 +7,7 @@
 import { describe, it, expect } from "vitest";
 import {
   ANGLE_KINDS, SEED_KINDS, basename, initialTextureForm, sharpnessLabel, textureRows, toTextureValues,
-} from "../../src/features/textureForm";
+} from "../../plugins/FundaCAD.Texture/textureForm";
 
 describe("textureRows", () => {
   it("shows the lattice orientation only for the lattice/wave kinds", () => {

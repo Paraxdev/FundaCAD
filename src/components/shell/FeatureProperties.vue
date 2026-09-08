@@ -42,11 +42,11 @@ import { resolveEntities, toSketchEntity } from "../../sketch/resolve";
 import { entityDims } from "../../sketch/entityDims";
 import { FEATURE_NUM_FIELDS as NUM_FIELDS, featureWithTarget, type FieldKind } from "../../document/numFields";
 import {
-  FEATURE_CHOICE_FIELDS,
-  FEATURE_TOGGLE_FIELDS,
+  choiceFieldsFor,
   choiceValue,
   fieldApplies,
-  sharpnessLabel,
+  fieldLabel,
+  toggleFieldsFor,
   toggleValue,
 } from "../../document/optionFields";
 import { targetsOf } from "../../features/selectionTargets";
@@ -186,7 +186,7 @@ const choiceRows = useDocValue((doc) => {
   const f = doc.features.find((x) => x.id === props.featureId);
   if (!f) return [];
   const values = f as unknown as Record<string, unknown>;
-  return (FEATURE_CHOICE_FIELDS[f.type] ?? [])
+  return choiceFieldsFor(f.type)
     .filter((c) => fieldApplies(f.type, c.field, values))
     .map((c) => ({ ...c, current: choiceValue(f, c) }));
 });
@@ -195,7 +195,7 @@ const toggleRows = useDocValue((doc) => {
   const f = doc.features.find((x) => x.id === props.featureId);
   if (!f) return [];
   const values = f as unknown as Record<string, unknown>;
-  return (FEATURE_TOGGLE_FIELDS[f.type] ?? [])
+  return toggleFieldsFor(f.type)
     .filter((t) => fieldApplies(f.type, t.field, values))
     .map((t) => ({ ...t, current: toggleValue(f, t) }));
 });
@@ -229,12 +229,11 @@ const featureRows = useDocValue((doc) => {
     const fx = bound && store.isParamBound(target);
     return {
       key: field,
-      // One label is not a constant: a texture's shape slider is a flat LAND
+      // Not every label is a constant. One tool's shape slider is a flat LAND
       // width on a faceted surface and a crispness on a smooth one, and calling
-      // both "Sharpness" describes neither.
-      label: f.type === "texture" && field === "sharpness"
-        ? sharpnessLabel(values["profile"]).text
-        : label,
+      // both "Sharpness" describes neither — so whoever owns the feature type
+      // gets to answer, and the inventory's label is what it falls back to.
+      label: fieldLabel(f.type, field, values)?.text ?? label,
       // An expression is written in CANONICAL units so a file evaluates the
       // same on every machine, which is a fact about it and not a display
       // choice, so the chip states it and is not offered as a picker.

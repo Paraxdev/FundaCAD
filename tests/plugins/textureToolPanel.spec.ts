@@ -1,6 +1,11 @@
-// The printed-Texture panel. Which rows a kind/profile shows is tested purely in
-// features/textureForm.test.ts; this covers the wiring, and two behaviours that
-// exist because their opposite was a bug:
+// The Texture plugin's panel: its VIEW, in the sense the contribution table
+// means. Which rows a kind/profile shows is tested purely in textureForm.test.ts;
+// this covers the wiring, and three behaviours that exist because their opposite
+// was a bug:
+//
+//   * it is mounted for the whole life of the plugin and draws nothing until the
+//     tool opens it. App.vue used to carry a `v-if` for this panel, which was the
+//     application knowing this tool exists;
 //
 //   * commit does NOT close the panel — the tool refuses a commit with no target
 //     and stays active, and closing first stranded the user in an invisible
@@ -12,29 +17,32 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { nextTick } from "vue";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
-import { createPinia, setActivePinia } from "pinia";
-import TextureToolPanel from "../../../src/components/overlays/TextureToolPanel.vue";
-import { useToolPanelStore } from "../../../src/stores/toolPanels";
-import { TexturePanel } from "../../../src/features/texturePanel";
-import type { TextureMode, TextureValues } from "../../../src/features/textureForm";
+import TextureToolPanel from "../../plugins/FundaCAD.Texture/TextureToolPanel.vue";
+import * as panel from "../../plugins/FundaCAD.Texture/panel";
+import type { TextureMode, TextureValues } from "../../plugins/FundaCAD.Texture/textureForm";
 
 enableAutoUnmount(afterEach);
 
-function open(opts: Partial<Parameters<TexturePanel["show"]>[0]> = {}) {
+/** Mount the overlay the way the application does: once, with no props and no
+ *  condition on it. Everything after this goes through the plugin's own state,
+ *  which is the arrangement under test. */
+function mountPanel() {
+  mount(TextureToolPanel, { attachTo: document.body });
+}
+
+function open(opts: Partial<Parameters<typeof panel.show>[0]> = {}) {
   const handlers = {
     onCommit: vi.fn<(v: TextureValues) => void>(),
     onCancel: vi.fn(),
     onChange: vi.fn<(v: TextureValues) => void>(),
     onModeChange: vi.fn<(m: TextureMode) => void>(),
   };
-  const panel = new TexturePanel();
+  mountPanel();
   panel.show(
     { editing: false, mode: "faces", summary: "2 faces", initial: {}, ...opts },
     handlers,
   );
-  const req = useToolPanelStore().texture!;
-  mount(TextureToolPanel, { props: { req }, attachTo: document.body });
-  return { panel, handlers };
+  return { handlers };
 }
 
 const visible = (el: HTMLElement | null) => !!el && el.style.display !== "none";
@@ -44,27 +52,69 @@ const rowOf = (labelText: string) =>
 
 describe("TextureToolPanel", () => {
   beforeEach(() => {
-    setActivePinia(createPinia());
+    panel.resetPanel();
     document.body.innerHTML = "";
   });
+  afterEach(() => panel.resetPanel());
 
-  it("reaches the store through the facade", () => {
+  // The whole of what "a contributed overlay decides its own visibility" means.
+  // Mounted, and drawing nothing, because the tool is not running.
+  it("draws nothing until the tool opens it", async () => {
+    mountPanel();
+    await nextTick();
+    expect(document.body.textContent).not.toContain("Texture");
+    expect(panel.isOpen()).toBe(false);
+
+    panel.show({ editing: false, mode: "faces", summary: "2 faces", initial: {} }, {
+      onCommit: vi.fn(), onCancel: vi.fn(), onChange: vi.fn(), onModeChange: vi.fn(),
+    });
+    await nextTick();
+    expect(document.body.textContent).toContain("2 faces");
+  });
+
+  it("opens through the plugin\'s own state, not one of the app\'s stores", async () => {
     open();
-    expect(useToolPanelStore().texture).not.toBeNull();
-    expect(new TexturePanel().isActive).toBe(true);
+    await nextTick();
+    expect(panel.isOpen()).toBe(true);
   });
 
   it("labels the commit button for the flow it is in", async () => {
     open({ editing: true });
+    await nextTick();
     expect(document.body.textContent).toContain("Apply");
+    panel.resetPanel();
     document.body.innerHTML = "";
-    setActivePinia(createPinia());
     open({ editing: false });
+    await nextTick();
     expect(document.body.textContent).toContain("Add");
   });
 
+  // A permanently mounted overlay has no `:key` to remount it, so re-opening
+  // has to reseed the form explicitly. Without this the second run of the tool
+  // shows the values from the first.
+  it("reseeds the form when the tool re-opens it", async () => {
+    open({ initial: { depth: 0.4 } });
+    await nextTick();
+    const depth = () => document.querySelector<HTMLInputElement>("input[type=number]")!;
+    expect(depth().value).toBe("0.4");
+
+    depth().value = "9";
+    depth().dispatchEvent(new Event("input"));
+    await nextTick();
+    expect(depth().value).toBe("9");
+
+    panel.hide();
+    await nextTick();
+    panel.show({ editing: false, mode: "faces", summary: "", initial: { depth: 2.5 } }, {
+      onCommit: vi.fn(), onCancel: vi.fn(), onChange: vi.fn(), onModeChange: vi.fn(),
+    });
+    await nextTick();
+    expect(depth().value).toBe("2.5");
+  });
+
   it("shows the live summary and refreshes it without touching the form", async () => {
-    const { panel } = open({ summary: "2 faces" });
+    open({ summary: "2 faces" });
+    await nextTick();
     expect(document.body.textContent).toContain("2 faces");
 
     const depth = document.querySelector<HTMLInputElement>("input[type=number]")!;
@@ -72,29 +122,31 @@ describe("TextureToolPanel", () => {
     depth.dispatchEvent(new Event("input"));
     await nextTick();
 
-    panel.setSummary("5 faces");
+    panel.summary.value = "5 faces";
     await nextTick();
     expect(document.body.textContent).toContain("5 faces");
     expect(depth.value).toBe("9"); // the field being typed into is untouched
   });
 
   it("switches mode from a button and reflects a mode set by the tool", async () => {
-    const { panel, handlers } = open({ mode: "faces" });
+    const { handlers } = open({ mode: "faces" });
+    await nextTick();
     const [faces, body] = [...document.querySelectorAll<HTMLButtonElement>("button")];
     expect(faces!.textContent).toBe("Faces");
 
     body!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await nextTick();
     expect(handlers.onModeChange).toHaveBeenCalledWith("body");
-    expect(useToolPanelStore().textureMode).toBe("body");
+    expect(panel.mode.value).toBe("body");
 
-    panel.setMode("faces");
+    panel.mode.value = "faces";
     await nextTick();
-    expect(useToolPanelStore().textureMode).toBe("faces");
+    expect(document.querySelectorAll("button")[0]!.textContent).toBe("Faces");
   });
 
   it("hides the rows the chosen kind has no use for", async () => {
     open({ initial: { kind: "knurl", profile: "round" } });
+    await nextTick();
     expect(visible(rowOf("Angle°"))).toBe(true);
     expect(visible(rowOf("Seed"))).toBe(false);
 
@@ -109,19 +161,22 @@ describe("TextureToolPanel", () => {
     expect(visible(rowOf("Direction"))).toBe(true);
   });
 
-  it("hides the print-colour row when the document has no palette", () => {
+  it("hides the print-colour row when the document has no palette", async () => {
     open({ palette: [] });
+    await nextTick();
     expect(visible(rowOf("Print color"))).toBe(false);
   });
 
   it("offers one option per palette slot when there is one", async () => {
     open({ palette: [{ name: "Black", color: "#000" }, { name: "Red", color: "#f00" }] });
+    await nextTick();
     expect(visible(rowOf("Print color"))).toBe(true);
     expect(document.body.textContent).toContain("Red (slot 2)");
   });
 
   it("fires the live preview on an edit", async () => {
     const { handlers } = open();
+    await nextTick();
     const depth = document.querySelector<HTMLInputElement>("input[type=number]")!;
     depth.value = "1.5";
     depth.dispatchEvent(new Event("input"));
@@ -131,28 +186,31 @@ describe("TextureToolPanel", () => {
 
   it("commits WITHOUT closing — the tool may refuse and stay active", async () => {
     const { handlers } = open();
+    await nextTick();
     const ok = [...document.querySelectorAll<HTMLButtonElement>("button")]
       .find((b) => b.textContent!.includes("Add"))!;
     ok.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true }));
     await nextTick();
     expect(handlers.onCommit).toHaveBeenCalledOnce();
-    expect(useToolPanelStore().texture).not.toBeNull();
+    expect(panel.isOpen()).toBe(true);
   });
 
   it("cancels and closes on Cancel", async () => {
     const { handlers } = open();
+    await nextTick();
     const no = [...document.querySelectorAll<HTMLButtonElement>("button")]
       .find((b) => b.textContent!.includes("Cancel"))!;
     no.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true }));
     await nextTick();
     expect(handlers.onCancel).toHaveBeenCalledOnce();
-    expect(useToolPanelStore().texture).toBeNull();
+    expect(panel.isOpen()).toBe(false);
   });
 
   // TextureTool owns Escape for its whole active lifetime, which starts before
-  // this panel exists and must outlast a refused commit.
+  // this panel is open and must outlast a refused commit.
   it("does not handle Escape itself", async () => {
     const { handlers } = open();
+    await nextTick();
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     await nextTick();
     expect(handlers.onCancel).not.toHaveBeenCalled();

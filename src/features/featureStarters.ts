@@ -18,7 +18,6 @@ import type { LoftTool } from "./loftTool";
 import type { MoveTool } from "./moveTool";
 import type { PatternKind, PatternTool } from "./patternTool";
 import type { PlaneOffsetTool } from "./planeOffsetTool";
-import type { TextureTool } from "./textureTool";
 import { pickPlaneTarget, planeSpecOf, type FacePlanePick } from "./facePlanePick";
 import { choose } from "../ui/choice";
 import { pointInRegion } from "../sketch/region";
@@ -38,7 +37,6 @@ export interface FeatureStartersDeps {
   moveTool: MoveTool;
   patternTool: PatternTool;
   planeOffset: PlaneOffsetTool;
-  texture: TextureTool;
   canvas: HTMLCanvasElement;
   toolBusy: () => boolean;
   hasBody: () => boolean;
@@ -63,7 +61,6 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     moveTool,
     patternTool,
     planeOffset,
-    texture,
     canvas,
     toolBusy,
     hasBody,
@@ -1126,20 +1123,6 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
 
   // Draft: pick a face to taper by 5° about the body's base (pull +Z; edit the
   // angle in the value rows).
-  // Texture: printed surface texture (knurl/hex/waves/ribs/voronoi/noise/image
-  // heightmap) over selected faces or a whole body. No pick-then-drag gesture
-  // like Shell/Draft — it rides the ambient selection with a docked panel
-  // (click/Ctrl-click faces, or toggle Whole Body in the panel), so it just
-  // hands off to the tool directly.
-  function startTexture() {
-    if (toolBusy()) return;
-    if (!hasBody()) {
-      setStatus("Texture: create or import a body first", "");
-      return;
-    }
-    texture.start((id) => { noteCommitted(id); if (id) selectFeature(id); });
-  }
-
   // Pattern: repeat the selected bodies along an axis or around one, set up in
   // the viewport. It used to ask which kind in a modal and then drop a feature
   // with invented numbers into the timeline for the value rows to correct —
@@ -1240,7 +1223,6 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     startSweep,
     startPrimitive,
     startShell,
-    startTexture,
     startPattern,
     startExtrude,
     grabRegionHandle,

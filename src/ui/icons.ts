@@ -21,6 +21,7 @@
 // pack cheap to write — a variant redraws only the marks whose weight it wants to
 // change, so a half-finished pack is legitimate rather than a screen full of holes.
 
+import { contributedIcons } from "../plugins/contrib";
 import { readSetting } from "./storedSetting";
 
 /** A named, self-contained icon table. `paths` maps a semantic icon name to the
@@ -124,7 +125,6 @@ const FORGE_PATHS: Record<string, string> = {
   offsetFace: `<rect x="4" y="8" width="12" height="12" rx="1.5"/><path d="M8 4h12v12" stroke-dasharray="2 2"/><line x1="16" y1="8" x2="20" y2="4"/>`,
   thread: `<path d="M8 3h8M8 21h8" /><path d="M8 3v18M16 3v18" /><path d="M8 6l8 3M8 11l8 3M8 16l8 3" />`,
   thicken: `<path d="M4 14c4-6 12-6 16 0" fill="none"/><path d="M4 18c4-6 12-6 16 0" fill="none"/><line x1="4" y1="14" x2="4" y2="18"/><line x1="20" y1="14" x2="20" y2="18"/>`,
-  texture: `<rect x="4" y="4" width="16" height="16" rx="1.5"/><line x1="4" y1="9.3" x2="20" y2="9.3"/><line x1="4" y1="14.7" x2="20" y2="14.7"/><line x1="9.3" y1="4" x2="9.3" y2="20"/><line x1="14.7" y1="4" x2="14.7" y2="20"/>`,
   pattern: `<rect x="4" y="4" width="5" height="5"/><rect x="15" y="4" width="5" height="5"/><rect x="4" y="15" width="5" height="5"/><rect x="15" y="15" width="5" height="5"/>`,
   simplifyMesh: `<polygon points="12,3 21,8 21,16 12,21 3,16 3,8"/><path d="M3 8l9 5 9-5M12 13v8"/>`,
   cleanUp: `<path d="M15 4l1.2 2.8L19 8l-2.8 1.2L15 12l-1.2-2.8L11 8l2.8-1.2z"/><path d="M4 20l5-5M7 20.5l3.5-3.5M4 16.5L7.5 13"/>`,
@@ -269,19 +269,27 @@ const PACKS = new Map<string, IconPack>([
 /** Pack resolution, as a pure function of the whole registry — the part with the
  *  actual rule in it, and therefore the part under test.
  *
- *  Three tiers, in order: the active pack, the default pack, then the empty
- *  string. The last one is not an oversight. An icon name that no pack knows is
- *  a typo at a call site, and rendering an empty <svg> keeps the button the same
- *  size with the same label instead of throwing during a render — a missing mark
- *  is a cosmetic bug, a crashed panel is a lost document. */
+ *  Four tiers, in order: the active pack, the default pack, whatever a plugin
+ *  contributed, then the empty string. The last one is not an oversight. An icon
+ *  name that nothing knows is a typo at a call site, and rendering an empty
+ *  <svg> keeps the button the same size with the same label instead of throwing
+ *  during a render — a missing mark is a cosmetic bug, a crashed panel is a lost
+ *  document.
+ *
+ *  PLUGINS COME LAST, after both packs, and the order is the whole rule: a pack
+ *  is a look the user chose for the entire app, so a plugin that shipped its own
+ *  idea of a mark must not punch a hole in it. It fills a name no pack has,
+ *  which is what a tool the app does not have needs, and nothing else. */
 export function resolveIconPaths(
   packs: ReadonlyMap<string, IconPack>,
   activeId: string,
   name: string,
   defaultId: string = DEFAULT_PACK_ID,
+  extra: Readonly<Record<string, string>> = {},
 ): string {
   return (
-    packs.get(activeId)?.paths[name] ?? packs.get(defaultId)?.paths[name] ?? ""
+    packs.get(activeId)?.paths[name] ?? packs.get(defaultId)?.paths[name] ??
+    extra[name] ?? ""
   );
 }
 
@@ -349,7 +357,7 @@ export function registerIconPack(pack: IconPack) {
  *  data reaches it — which is what makes that v-html the ONE sanctioned one in
  *  the app. */
 export function iconPaths(name: string): string {
-  return resolveIconPaths(PACKS, activePackId, name);
+  return resolveIconPaths(PACKS, activePackId, name, DEFAULT_PACK_ID, contributedIcons());
 }
 
 /** One complete `<svg>` as markup, for the rare caller that has a string slot

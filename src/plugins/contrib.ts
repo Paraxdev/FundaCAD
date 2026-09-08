@@ -36,6 +36,9 @@
 import type { Component } from "vue";
 import type { MenuItem } from "../ui/menu";
 import type { CtxItem } from "../stores/contextMenu";
+import type { EntityKind, EntitySource } from "../features/toolCapabilities";
+import type { ChoiceField, ToggleField } from "../document/optionFields";
+import type { FeatureMeta } from "../ui/featureMeta";
 
 /** Undo a `contribute`. Idempotent: calling it twice is not an error. */
 export type Unregister = () => void;
@@ -119,6 +122,101 @@ export interface SettingsSection {
   component: Component;
 }
 
+/** A modeling tool a plugin adds, as the app has to know it.
+ *
+ *  A tool is not one thing to the app, it is five: a row in the capability
+ *  inventory ("a face could feed this"), a mark in the selection toolbar, a
+ *  button on the ribbon, an entry in the action dispatcher, and a claim on the
+ *  window while it is running. The last three already had a way in — `ribbon`
+ *  and `actions` below, and the plugin's own code for the gesture — so this
+ *  point is the two that did not: WHAT THE TOOL CONSUMES, and WHETHER IT IS
+ *  RUNNING.
+ *
+ *  Consuming is what makes a plugin's tool a peer of the app's own. Without it
+ *  a contributed tool has a ribbon button and nothing else: selecting a face
+ *  offers Fillet, Press/Pull and Delete Face and stays silent about the tool
+ *  that is the whole reason a face is selected. `features/toolCapabilities.ts`
+ *  merges these into the inventory it already keeps, and every reader of that
+ *  inventory gets the answer without knowing a plugin exists.
+ *
+ *  Running is the smaller half and the one with teeth. `app/toolBusy.ts` gates
+ *  every other command and every Escape handler in the app on "is a modal
+ *  gesture in progress". A tool that could not answer it would leave a window
+ *  where the app thinks it is idle, dispatches a second tool over the top of
+ *  the first, and the user has two prompts and one Escape key. */
+export interface ToolContribution {
+  /** Stable id, and the action id the ribbon and the palette dispatch. The
+   *  plugin must claim the same string under `actions`. */
+  id: string;
+  /** Human name, for prompts, menus and the selection toolbar. */
+  label: string;
+  /** Icon name, resolved the way every other icon in the app is. A plugin that
+   *  draws its own mark contributes it under `icons` below. */
+  iconName: string;
+  /** Entity kinds this tool acts on, MOST SPECIFIC FIRST — the same ordering
+   *  rule the core's own table documents. */
+  consumes: readonly EntityKind[];
+  source: EntitySource;
+  /** Entities needed before the tool can run. Defaults to 1. */
+  min?: number;
+  /** Is the tool holding the window right now? Read at event time only, so a
+   *  plain function is enough and nothing has to be reactive. */
+  busy?: () => boolean;
+}
+
+/** How a feature TYPE in the document is drawn and edited.
+ *
+ *  A plugin that adds a tool usually adds a feature the tool makes, and that
+ *  feature then outlives the gesture: it sits in the history with a mark and a
+ *  name, its values are edited in the properties panel long after the panel
+ *  that created it closed, and double-clicking it should reopen the tool. Every
+ *  one of those is a core surface that used to answer from a table with the
+ *  feature's name typed into it.
+ *
+ *  ONE point rather than five, because they are all the same sentence — how
+ *  this feature type is presented — and five would be five things to remember
+ *  to contribute, four of which fail silently: a missing `meta` is a grey dot
+ *  in the tree, a missing `numFields` is a feature whose numbers cannot be
+ *  edited, and neither throws.
+ *
+ *  WHAT THIS IS NOT. It does not add a feature type to the document, and it
+ *  cannot: the document's schema and the geometry that builds it stay in the
+ *  app, because a file must open and rebuild on a machine where the plugin was
+ *  never installed. Uninstalling may cost you the ability to CREATE and EDIT
+ *  one of these features. It may not cost you the ones you already made.
+ *
+ *  NOR DOES IT OWN THE NUMERIC ROWS, which is the same rule read twice.
+ *  `document/numFields.ts` is not a list of labels, it is the inventory of what
+ *  a PARAMETER can drive, and `resolveTarget` reads it to answer what
+ *  `texture1.depth` refers to. A parameter has to keep meaning the same thing
+ *  on a machine where the plugin is switched off, so that table stays in the
+ *  app. What a plugin owns is which of those rows are worth showing and what
+ *  they are called — `fieldApplies` and `fieldLabel` below — which is
+ *  presentation, and changes nothing about what the document means. */
+export interface FeatureTypeContribution {
+  /** The `type` field of the feature in the document. */
+  type: string;
+  /** Mark and word for the history and the browser tree. */
+  meta?: FeatureMeta;
+  /** Fixed-choice rows (a dropdown). */
+  choiceFields?: readonly ChoiceField[];
+  /** On/off rows (a switch). */
+  toggleFields?: readonly ToggleField[];
+  /** Does this field mean anything, given what the feature's other fields say?
+   *  Absent means every field always applies, which is the honest default. */
+  fieldApplies?: (field: string, values: Record<string, unknown>) => boolean;
+  /** A row label that depends on the feature's own values, for the rare field
+   *  whose name is not a constant. Null for "use the inventory's label". */
+  fieldLabel?: (
+    field: string,
+    values: Record<string, unknown>,
+  ) => { text: string; title?: string } | null;
+  /** Re-open a committed feature in the tool that made it. False means "not
+   *  tool-editable" — a parameter-bound value, say — and the app falls back to
+   *  the value rows, exactly as it does for its own tools. */
+  edit?: (featureId: string, done: (id: string | null) => void) => boolean;
+}
+
 export interface Contribution {
   menus?: MenuContribution[];
   ribbon?: RibbonContribution[];
@@ -141,6 +239,22 @@ export interface Contribution {
    *  is not there. Contributing it is what makes it appear and disappear with
    *  its plugin, with no check anywhere naming that plugin. */
   settings?: SettingsSection[];
+  /** Modeling tools, joined to the app's own inventory. */
+  tools?: ToolContribution[];
+  /** How the feature types a plugin's tools produce are drawn and edited. */
+  features?: FeatureTypeContribution[];
+  /** Icon name -> inner SVG markup, drawn inside the app's shared 24x24 stroke
+   *  wrapper. Resolved AFTER both icon packs, so a pack the user chose keeps
+   *  the last word over a plugin's idea of how a mark should look.
+   *
+   *  THIS MARKUP REACHES THE DOM THROUGH v-html, which is the one sanctioned
+   *  v-html in the app and was safe because every path in ui/icons.ts is a
+   *  compile-time constant. A contributed path is a constant in a bundle whose
+   *  code already runs with the whole of the app's reach — it could call
+   *  innerHTML itself — so this widens the surface without lowering the bar.
+   *  What must still hold: no document data, file name or network payload is
+   *  interpolated into it, here any more than there. */
+  icons?: Record<string, string>;
   paint?: () => Paint;
   palette?: () => PaletteEntry[];
   /** A mesh import landed, and the file carried a colour of its own ("#rrggbb").
@@ -274,6 +388,52 @@ export function contributedActionIds(): string[] {
 export function contributedBodyMenu(bodyId: string): CtxItem[] {
   const out: CtxItem[] = [];
   for (const e of entries) out.push(...(e.c.bodyMenu?.(bodyId) ?? []));
+  return out;
+}
+
+/** Every contributed tool, in registration order. */
+export function contributedTools(): ToolContribution[] {
+  return all("tools").flat();
+}
+
+/** Is any contributed tool holding the window?
+ *
+ *  What app/toolBusy.ts adds to its list of eleven `.active` fields. A plugin
+ *  that does not answer counts as idle, which is the only safe default: one
+ *  stuck reporting busy would freeze every command in the app. */
+export function anyToolBusy(): boolean {
+  return contributedTools().some((t) => t.busy?.() === true);
+}
+
+/** What a plugin says about one feature type, or null.
+ *
+ *  First claim wins, for the same reason `contributedAction` gives it to the
+ *  first: two plugins describing the same feature type is a mistake in this
+ *  repository and a confusing properties panel in somebody else's, and the
+ *  second is not improved by an exception thrown mid-render. */
+export function contributedFeature(type: string): FeatureTypeContribution | null {
+  for (const e of entries) {
+    for (const f of e.c.features ?? []) if (f.type === type) return f;
+  }
+  return null;
+}
+
+/** Every feature type anything has described. */
+export function contributedFeatureTypes(): string[] {
+  const out: string[] = [];
+  for (const e of entries) for (const f of e.c.features ?? []) out.push(f.type);
+  return out;
+}
+
+/** Icon name -> markup, merged. First contribution of a name wins, so a plugin
+ *  cannot quietly redraw another plugin's mark by loading second. */
+export function contributedIcons(): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const e of entries) {
+    for (const [name, markup] of Object.entries(e.c.icons ?? {})) {
+      if (!(name in out)) out[name] = markup;
+    }
+  }
   return out;
 }
 

@@ -49,14 +49,22 @@ export {
 export type {
   BrowserSection,
   Contribution,
+  FeatureTypeContribution,
   MenuContribution,
   Paint,
   PaletteEntry,
   RibbonContribution,
   RibbonEntry,
   SettingsSection,
+  ToolContribution,
   Unregister,
 } from "./contrib";
+
+// The shapes those two new points are written in. Types only: a plugin fills
+// them in, the application reads them, and neither needs anything at runtime.
+export type { ChoiceField, ChoiceOption, ToggleField } from "../document/optionFields";
+export type { FeatureMeta } from "../ui/featureMeta";
+export type { EntityKind, EntitySource } from "../features/toolCapabilities";
 
 // --- the shapes a plugin is handed ------------------------------------------
 //
@@ -67,10 +75,17 @@ export type { DocumentStore } from "../document/store";
 export type { GeometryBackend } from "../geometry/client";
 export type { Viewport } from "../viewport/viewport";
 export type { CtxItem, MenuDef, MenuItem } from "../ui/menu";
-export type { CadDocument, Feature, PlaneSpec, RebuildResult } from "../types";
+export type { CadDocument, Feature, Num, PlaneSpec, RebuildResult, Selector } from "../types";
 
 // --- telling somebody something ---------------------------------------------
 export { toast } from "../ui/toast";
+/** The line under the viewport that says what a running tool wants next.
+ *
+ *  A modal gesture with no prompt is a window that has stopped responding to
+ *  half its own commands for a reason it does not state, so a plugin whose tool
+ *  takes over the pick needs this as much as the application's own do. Passing
+ *  null clears it, and a tool's teardown must. */
+export { setPrompt } from "../ui/prompt";
 export { choose, listModal } from "../ui/choice";
 /** A failed write, as a native dialog in the app and the console outside it. */
 export { reportError } from "../io/files";
