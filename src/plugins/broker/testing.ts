@@ -207,8 +207,9 @@ export function testHost(opts: TestHostOptions = {}): TestHost {
         // two used to be served here against the pretend disk, which made this
         // double a liar in the one direction that costs the most: a plugin
         // whose tests passed on `doc_open` would have met a refusal the first
-        // time anybody ran it. Both take a PATH, and a plugin has no paths.
+        // time anybody ran it. All three take a PATH, and a plugin has no paths.
         case "doc_open":
+        case "doc_import":
         case "doc_save":
           throw new TestHostError(`${op}: ${UNSERVED[op]}`);
 

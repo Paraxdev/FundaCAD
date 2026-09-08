@@ -180,12 +180,12 @@ describe("the pretend disk", () => {
     expect(JSON.parse(b.host.files()["out.funda"]!).features).toHaveLength(1);
   });
 
-  it("refuses doc_open and doc_save in the app's own words", async () => {
+  it("refuses doc_open, doc_import and doc_save in the app's own words", async () => {
     // The double used to serve these against the pretend disk, which made it a
     // liar in the one direction that costs the most: a plugin whose tests
     // passed and which met a refusal the first time anybody ran it.
     const b = testBroker({ files: { "in.funda": "{}" } });
-    for (const op of ["doc_open", "doc_save"] as const) {
+    for (const op of ["doc_open", "doc_import", "doc_save"] as const) {
       const r = await b.call(op, { path: "in.funda" });
       expect(r.ok, op).toBe(false);
       expect(r.ok === false && r.code, op).toBe("failed");

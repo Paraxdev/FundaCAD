@@ -42,6 +42,7 @@ export const OPS = [
   "schema",
   "doc_new",
   "doc_open",
+  "doc_import",
   "doc_save",
   "doc_get",
   "doc_set",
@@ -96,6 +97,11 @@ export const OP_TABLE: Record<Op, OpSpec> = {
   doc_open: {
     needs: ["files.read", "document.write"],
     why: "reads a path off the disk and puts what it finds in place of the open document",
+    writes: true,
+  },
+  doc_import: {
+    needs: ["files.read", "document.write"],
+    why: "reads geometry from a path and adds it to the timeline as a body feature",
     writes: true,
   },
   doc_save: {

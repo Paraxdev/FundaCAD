@@ -8,7 +8,7 @@
 // says which and why, rather than letting the difference sit unremarked until a
 // plugin finds it.
 //
-// The other half is the refusals. Six ops are not served here yet, and each one
+// The other half is the refusals. Seven ops are not served here yet, and each one
 // says which of the two gates stopped it: the broker refuses for a missing
 // grant, this host refuses for a missing capability, and a plugin author needs
 // to be able to tell "you did not ask for this" from "the app cannot do this
@@ -114,7 +114,7 @@ describe("the app's host and the test double agree", () => {
 });
 
 describe("what this host cannot do yet, it refuses by name", () => {
-  const unserved = ["doc_open", "doc_save", "build", "inspect", "view", "export"] as const;
+  const unserved = ["doc_open", "doc_import", "doc_save", "build", "inspect", "view", "export"] as const;
   // Served, but only by the desktop app. A host built without a bridge refuses
   // them for a different reason and has to say which reason it is: "you did not
   // ask for this", "the app cannot do this yet" and "this is not running in the
