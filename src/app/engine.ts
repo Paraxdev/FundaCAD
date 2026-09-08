@@ -51,7 +51,7 @@ import { scheduleStartupUpdateCheck } from "../ui/updates";
 import { openDocumentAtPath } from "../io/files";
 
 import { installSidecarDiedToast } from "./sidecarWatch";
-import { activateBuiltins } from "../plugins/activate";
+import { activatePlugins } from "../plugins/activate";
 import { createSelection } from "./selection";
 import { DraftTool } from "../features/draftTool";
 import { ThreadTool } from "../features/threadTool";
@@ -427,7 +427,7 @@ export function mountUi(e: Engine): void {
   // Whatever capabilities are turned on, started here and restarted whenever
   // that set changes. The engine deliberately does not know which ones exist:
   // see plugins/activate.ts.
-  activateBuiltins(e);
+  activatePlugins(e);
 
   e.geometry.onStatus((connected) => {
     if (!connected) e.setStatus("connecting to sidecar…", "error");

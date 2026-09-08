@@ -14,7 +14,8 @@
 // bound with v-model, because those modules are deliberately Vue-free (that is
 // what lets the headless suite import them) and so nothing tracks them.
 
-import { onMounted, onUnmounted, ref } from "vue";
+import { onMounted, onUnmounted, ref, shallowRef } from "vue";
+import { contributedSettings, onContribChange } from "../../plugins/contrib";
 import { useDialogStore } from "../../stores/dialogs";
 import { useModalGate } from "../../composables/useModalGate";
 import ModalFrame from "./ModalFrame.vue";
@@ -29,12 +30,6 @@ import {
   onLayoutPrefsChange,
   setLayoutPref,
 } from "../../ui/layoutPrefs";
-import {
-  asLiveEditingMode,
-  liveEditingMode,
-  onLiveEditingChange,
-  setLiveEditingMode,
-} from "../../ui/liveEditing";
 
 const dialogs = useDialogStore();
 const close = () => { dialogs.preferences = false; };
@@ -47,7 +42,13 @@ const theme = ref(getTheme());
 const pack = ref(getIconPack());
 const unit = ref(getUnit());
 const layout = ref(layoutPrefs());
-const live = ref(liveEditingMode());
+
+// The blocks the running plugins add. An "Assistants" block used to be written
+// out below, configuring what an assistant connected over MCP may do to the
+// open document — a question that decides nothing when no such plugin is
+// installed, and a control that decides nothing is worse than a missing one.
+// It is contributed now, by the plugin it is about.
+const sections = shallowRef(contributedSettings());
 
 const stops: (() => void)[] = [];
 onMounted(() => {
@@ -56,7 +57,7 @@ onMounted(() => {
     onIconPackChange(() => { pack.value = getIconPack(); }),
     onUnitChange(() => { unit.value = getUnit(); }),
     onLayoutPrefsChange(() => { layout.value = layoutPrefs(); }),
-    onLiveEditingChange(() => { live.value = liveEditingMode(); }),
+    onContribChange(() => { sections.value = contributedSettings(); }),
   );
 });
 onUnmounted(() => { for (const stop of stops) stop(); });
@@ -70,7 +71,6 @@ function onPack(ev: Event) { const v = asIconPackId(value(ev)); if (v) setIconPa
 function onUnit(ev: Event) { const v = asUnit(value(ev)); if (v) setUnit(v); }
 function onRibbon(ev: Event) { const v = asRibbonSide(value(ev)); if (v) setLayoutPref("ribbon", v); }
 function onHistory(ev: Event) { const v = asHistorySide(value(ev)); if (v) setLayoutPref("history", v); }
-function onLive(ev: Event) { const v = asLiveEditingMode(value(ev)); if (v) setLiveEditingMode(v); }
 </script>
 
 <template>
@@ -116,24 +116,15 @@ function onLive(ev: Event) { const v = asLiveEditingMode(value(ev)); if (v) setL
           <option value="right">Down the right</option>
         </select>
       </label>
-      <div class="sm-hint">Changes apply straight away and are remembered.</div>
+      <div class="sm-hint">Applied straight away, and remembered.</div>
 
-      <div class="sm-section">Assistants</div>
-      <label class="prefs-row">
-        <span class="prefs-label">Live document</span>
-        <select id="prefs-live" :value="live" @change="onLive">
-          <option value="off">Do not share</option>
-          <option value="read">Share, read only</option>
-          <option value="edit">Share, and allow edits</option>
-        </select>
-      </label>
-      <div class="sm-hint">
-        Lets an AI assistant connected through MCP work on the document you have
-        open, instead of on a copy it hands back as a file. Its edits arrive one
-        at a time and each is a single undo, and a badge next to the document
-        name says who is connected and what they last did. Sharing stops the
-        moment this is set to Do not share.
-      </div>
+      <!-- What the running plugins ask about. Each brings its own heading, so a
+           plugin that is not installed leaves no gap where its block was. -->
+      <template v-for="s in sections" :key="s.key">
+        <div class="sm-section">{{ s.section.title }}</div>
+        <component :is="s.section.component" />
+      </template>
+
       <PluginsSection />
     </div>
 

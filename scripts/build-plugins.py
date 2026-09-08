@@ -53,7 +53,15 @@ PLUGINS = os.path.join(REPO, "plugins")
 MANIFEST = "manifest.json"
 
 SKIP_DIRS = {"tests", "__pycache__", "target", "node_modules", ".git"}
-SKIP_SUFFIX = (".pyc",)
+
+# .pyc for the obvious reason. .ts and .vue for a less obvious one: a plugin
+# directory may carry an APP-SIDE COMPANION -- the settings block a process
+# plugin contributes, the activation module a built-in is -- and that code is
+# compiled into the application, not run out of the bundle. The app has no way
+# to run a .ts from a zip and never will without a decision nobody has taken, so
+# shipping the source would be shipping a file that looks like it does something
+# and does nothing at all. What the bundle carries is what the far side runs.
+SKIP_SUFFIX = (".pyc", ".ts", ".vue")
 
 # 1980-01-01, the earliest a zip entry can carry. Any fixed value would do; the
 # point is that it is not "now".

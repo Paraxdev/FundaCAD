@@ -115,7 +115,10 @@ describe("reading a bundle from a link", () => {
 
     const origin = candidateRow(w).get(".plug-origin").text();
     expect(origin).toContain("plugins.example.com");
-    expect(origin).toContain("Nobody has checked it but you");
+    // Says nobody vouched for it. One word now rather than a sentence, and the
+    // word is what has to be there: the row that omitted it would read as a
+    // neutral fact about a URL.
+    expect(origin).toContain("unchecked");
     // The control: the sentence reserved for what we published must not appear
     // over a bundle from somewhere else.
     expect(origin).not.toContain("published by FundaCAD");

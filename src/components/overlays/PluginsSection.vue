@@ -237,10 +237,7 @@ async function copy(text: string) {
 
 <template>
   <div class="sm-section">In the app</div>
-  <div class="sm-hint">
-    Parts of FundaCAD you can turn off. Off means it does not run: its buttons
-    and panels are gone, and nothing it owns is loaded or connected to.
-  </div>
+  <div class="sm-hint">Off means it does not run, and its buttons and panels are gone.</div>
 
   <div v-for="b in builtins" :key="b.manifest.id" class="plug-row" :data-plugin="b.manifest.id">
     <div class="plug-head">
@@ -284,11 +281,7 @@ async function copy(text: string) {
   </div>
 
   <div class="sm-section">Installed plugins</div>
-  <div class="sm-hint">
-    Every plugin says up front what it wants to reach, and gets that and nothing
-    else. Where one came from does not change what it may do, so it is shown
-    separately.
-  </div>
+  <div class="sm-hint">Each gets what it asked for and nothing else.</div>
 
   <div v-if="rows.length === 0" class="sm-hint">Nothing installed yet.</div>
 
@@ -348,10 +341,7 @@ async function copy(text: string) {
   </div>
 
   <div class="sm-section">Add a plugin</div>
-  <div class="sm-hint">
-    From a link, or from a zip you already have. Either way it is read and
-    described first, and installed only after you say so.
-  </div>
+  <div class="sm-hint">Read and described first, installed only after you say so.</div>
 
   <div class="plug-row" data-plugin-add>
     <div class="plug-add">
@@ -384,8 +374,7 @@ async function copy(text: string) {
           Version {{ candidate.manifest.version }}, published by FundaCAD.
         </template>
         <template v-else>
-          Version {{ candidate.manifest.version }}, from {{ candidate.origin }}.
-          Nobody has checked it but you.
+          Version {{ candidate.manifest.version }}, from {{ candidate.origin }}, unchecked.
         </template>
       </div>
       <div class="plug-can">

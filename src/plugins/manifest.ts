@@ -279,13 +279,13 @@ export function sandboxNote(kind: PluginKind): string {
       // reads like a permission, and for a built-in it is a description. The
       // sentence exists so that difference cannot be missed by someone who
       // learned what the screen means from the other entries.
-      return "This one is part of FundaCAD itself and ships with it. The list above is what it uses, not a limit placed on it, and turning it off stops it running rather than taking anything away.";
+      return "Part of FundaCAD itself. The list above is what it uses, not a limit on it, and turning it off stops it running.";
     case "process":
-      return "This one runs as a normal program on your computer, so the list above is what it can reach through FundaCAD, not a cage around it. Install it only if you trust where it came from.";
+      return "Runs as a normal program on your computer. The list above is what it reaches through FundaCAD, not a cage around it, so install it only if you trust where it came from.";
     case "panel":
-      return "This one runs inside the window with no network and no access to your files, so the list above is all it can do.";
+      return "Runs inside the window with no network and no access to your files, so the list above is all it can do.";
     case "compute":
-      return "This one runs as an isolated calculation with no network and no access to your files, so the list above is all it can do.";
+      return "Runs as an isolated calculation with no network and no access to your files, so the list above is all it can do.";
   }
 }
 
