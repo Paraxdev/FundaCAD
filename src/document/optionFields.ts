@@ -78,6 +78,19 @@ export interface ToggleField {
   fallback: boolean;
 }
 
+/** A row whose value is a path on disk, chosen through the native dialog.
+ *
+ *  Not a choice and not a number: the set of values is the filesystem, so there
+ *  is no inventory to offer and nothing to validate against until the build
+ *  tries to read it. `filters` is what the dialog offers, and absent means every
+ *  file, which is the right default for a row nobody has narrowed. */
+export interface FileField {
+  field: string;
+  label: string;
+  filters?: { name: string; extensions: string[] }[];
+  title?: string;
+}
+
 /** New / Join / Cut / Intersect, the same four everywhere they appear, so they
  *  are written once. */
 const BOOLEAN_OPS: ChoiceOption[] = [
@@ -200,10 +213,30 @@ export function toggleFieldsFor(type: FeatureType | string): readonly ToggleFiel
   );
 }
 
+/** Every file row for a feature type. The app declares none of its own: no
+ *  feature it ships reads a path, and the one that does (a texture's heightmap)
+ *  arrives with the plugin that knows what to filter the dialog by. The
+ *  inventory constant is deliberately absent rather than empty, so a reader can
+ *  see there is nothing to look for here. */
+export function fileFieldsFor(type: FeatureType | string): readonly FileField[] {
+  return contributedFeature(type)?.fileFields ?? [];
+}
+
+/** The path a file row should show: what the feature carries, or "" for a
+ *  feature that has none, which is the state the row renders as "Choose…". */
+export function fileValue(feature: Feature, f: FileField): string {
+  const v = (feature as unknown as Record<string, unknown>)[f.field];
+  return typeof v === "string" ? v : "";
+}
+
 /** Whether a feature type has any of these rows, the panel asks before it
  *  decides there is nothing to show. */
 export function hasOptionFields(type: FeatureType | string): boolean {
-  return choiceFieldsFor(type).length > 0 || toggleFieldsFor(type).length > 0;
+  return (
+    choiceFieldsFor(type).length > 0 ||
+    toggleFieldsFor(type).length > 0 ||
+    fileFieldsFor(type).length > 0
+  );
 }
 
 /** The value a choice row should show for this feature: what it carries, or the

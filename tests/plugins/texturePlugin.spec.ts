@@ -30,8 +30,10 @@ import { selectionOffers } from "../../src/ui/selectionTools";
 import { iconPaths } from "../../src/ui/icons";
 import { featureMeta } from "../../src/ui/featureMeta";
 import {
-  choiceFieldsFor, fieldApplies, fieldLabel, hasOptionFields, toggleFieldsFor,
+  choiceFieldsFor, fieldApplies, fieldLabel, fileFieldsFor, fileValue,
+  hasOptionFields, toggleFieldsFor,
 } from "../../src/document/optionFields";
+import type { Feature } from "../../src/types";
 import type { Engine } from "../../src/app/engine";
 
 /** The engine surface `activate` actually touches: a viewport, a store, and the
@@ -160,6 +162,25 @@ describe("the Texture plugin, switched on and off", () => {
       expect(toggleFieldsFor("texture").map((t) => t.field)).toEqual(["invert"]);
     });
 
+    // The gap this closes: picking Heightmap in Properties changed the pattern
+    // to the one that reads an image, and there was nowhere to say WHICH image.
+    // `fieldApplies` had answered the question for a long time; no kind of row
+    // could show a path, so nothing read the answer.
+    it("has a row for the heightmap, and only under the pattern that reads one", () => {
+      const files = fileFieldsFor("texture");
+      expect(files.map((f) => f.field)).toEqual(["imagePath"]);
+      expect(files[0]!.filters?.[0]!.extensions).toContain("png");
+      expect(fieldApplies("texture", "imagePath", { kind: "image" })).toBe(true);
+      expect(fieldApplies("texture", "imagePath", { kind: "knurl" })).toBe(false);
+    });
+
+    it("shows the path a texture carries, and an empty row when it carries none", () => {
+      const f = fileFieldsFor("texture")[0]!;
+      const withPath = { id: "t1", type: "texture", imagePath: "C:/img/relief.png" };
+      expect(fileValue(withPath as unknown as Feature, f)).toBe("C:/img/relief.png");
+      expect(fileValue({ id: "t1", type: "texture" } as unknown as Feature, f)).toBe("");
+    });
+
     // The rule that governs the APPLICATION'S OWN numeric rows. The application
     // keeps `seed` and `angle` because a parameter can drive them; the plugin
     // decides which of them a given pattern actually reads.
@@ -200,6 +221,7 @@ describe("the Texture plugin, switched on and off", () => {
       expect(featureMeta({ type: "texture" })).toEqual({ icon: "dot", label: "texture" });
       expect(hasOptionFields("texture")).toBe(false);
       expect(choiceFieldsFor("texture")).toEqual([]);
+      expect(fileFieldsFor("texture")).toEqual([]);
       expect(anyToolBusy()).toBe(false);
     });
 

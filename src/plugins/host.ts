@@ -62,7 +62,7 @@ export type {
 
 // The shapes those two new points are written in. Types only: a plugin fills
 // them in, the application reads them, and neither needs anything at runtime.
-export type { ChoiceField, ChoiceOption, ToggleField } from "../document/optionFields";
+export type { ChoiceField, ChoiceOption, FileField, ToggleField } from "../document/optionFields";
 export type { FeatureMeta } from "../ui/featureMeta";
 export type { EntityKind, EntitySource } from "../features/toolCapabilities";
 

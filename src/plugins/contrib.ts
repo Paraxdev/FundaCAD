@@ -37,7 +37,7 @@ import type { Component } from "vue";
 import type { MenuItem } from "../ui/menu";
 import type { CtxItem } from "../stores/contextMenu";
 import type { EntityKind, EntitySource } from "../features/toolCapabilities";
-import type { ChoiceField, ToggleField } from "../document/optionFields";
+import type { ChoiceField, FileField, ToggleField } from "../document/optionFields";
 import type { FeatureMeta } from "../ui/featureMeta";
 
 /** Undo a `contribute`. Idempotent: calling it twice is not an error. */
@@ -202,6 +202,10 @@ export interface FeatureTypeContribution {
   choiceFields?: readonly ChoiceField[];
   /** On/off rows (a switch). */
   toggleFields?: readonly ToggleField[];
+  /** Rows whose value is a path on disk (a button that opens the native
+   *  dialog). The app ships no feature that reads a file, so this point exists
+   *  entirely for plugins; `fieldApplies` gates it like every other row. */
+  fileFields?: readonly FileField[];
   /** Does this field mean anything, given what the feature's other fields say?
    *  Absent means every field always applies, which is the honest default. */
   fieldApplies?: (field: string, values: Record<string, unknown>) => boolean;
