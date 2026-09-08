@@ -79,15 +79,13 @@ export function shippedPlugins(): ShippedPlugin[] {
   return out;
 }
 
-/** The ones that ship INSIDE the app and are only turned on and off. */
-export function shippedBuiltins(): ShippedPlugin[] {
-  return shippedPlugins().filter((p) => p.manifest.kind === "builtin");
-}
-
-/** The ones that are packaged as a bundle and installed like anybody else's. */
-export function shippedBundles(): ShippedPlugin[] {
-  return shippedPlugins().filter((p) => p.manifest.kind !== "builtin");
-}
+// There used to be two functions here, splitting these into the ones that
+// shipped INSIDE the app and the ones packaged as a bundle. Nothing ships inside
+// the app any more: every plugin in this repository, `builtin` included, is a
+// zip on a release and is installed like anybody else's. `builtin` still means
+// something, and what it means is REACH — it runs in the application's own
+// JavaScript context — which is a fact about what it can do and never was a
+// fact about where it came from.
 
 /** The file name build-plugins.py gives a plugin's zip. One function, so the
  *  app cannot come to expect an asset the packager does not produce. */

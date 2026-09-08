@@ -495,9 +495,20 @@ pub fn plugin_code(app: AppHandle, id: String) -> Result<String, String> {
     let dir = plugins_root(&app)?.join(id);
     let record = read_record(&dir).ok_or("that plugin is not installed")?;
 
-    if record.consented.kind != "builtin" {
+    // WHICH KINDS MAY CARRY APP-SIDE CODE, and the rule is the consent screen's
+    // own words rather than a taste. `builtin` and `process` are the two whose
+    // note already says nothing contains them: "the list above is what it uses,
+    // not a limit on it", and "runs as a normal program on your computer... not
+    // a cage around it". A bundle of either kind that also runs code in the
+    // window tells the person nothing new.
+    //
+    // `compute` and `panel` promise the opposite -- "no network and no access to
+    // your files, so the list above is all it can do" -- and app-side code would
+    // make that sentence false. So they are refused here, and build-plugins.py
+    // refuses to package one, which is the same rule at the other end.
+    if !matches!(record.consented.kind.as_str(), "builtin" | "process") {
         return Err(format!(
-            "a {} plugin does not run in the app's own context",
+            "a {} plugin is described to the person as contained, so it may not run code in              the app's own context",
             record.consented.kind
         ));
     }
@@ -510,6 +521,12 @@ pub fn plugin_code(app: AppHandle, id: String) -> Result<String, String> {
     verify_plugin_signature(&dir, &record)?;
 
     let path = dir.join(CODE);
+    // A bundle with no app-side module at all is the ordinary case, not a
+    // failure: most process plugins have no face in the window. The caller gets
+    // an empty string and starts nothing.
+    if !path.is_file() {
+        return Ok(String::new());
+    }
     let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
     if text.len() > MAX_DOWNLOAD {
         return Err(format!("{CODE} is {} bytes", text.len()));

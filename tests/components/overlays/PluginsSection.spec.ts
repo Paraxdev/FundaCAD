@@ -1,21 +1,25 @@
 // The Plugins screen, as the thing a person actually sees.
 //
 // manifest.test.ts proves the two lists are computed correctly and
-// registry.spec.ts proves the switches persist. This proves they reach the
-// screen, that the screen distinguishes the app's own capabilities from
-// somebody else's code, and that it does not install without asking: an install
-// button that installs without a consent screen is the one failure that makes
-// every other guard in this system decoration.
+// registry.spec.ts proves the switch persists. This proves they reach the
+// screen, and that it does not install without asking: an install button that
+// installs without a consent screen is the one failure that makes every other
+// guard in this system decoration.
+//
+// EVERY PLUGIN IS A DOWNLOAD NOW, including the ones written in this
+// repository, so this file no longer has an "in the app" half. What it lost
+// with that half is worth naming: there used to be rows on this screen for
+// three capabilities that were already present, with a switch each and no
+// install step. Nothing is already present.
 //
 // Nothing is stubbed. Outside Tauri the plugin module answers "nothing
 // installed" rather than throwing, which is what a plain browser session should
 // see, and the install path is never reached because no test presses the second
 // button.
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
 import PluginsSection from "../../../src/components/overlays/PluginsSection.vue";
-import { pluginEnabled, setPluginEnabled } from "../../../src/plugins/registry";
 
 enableAutoUnmount(afterEach);
 
@@ -25,72 +29,51 @@ const consent = ".plug-consent";
 // every assertion at the wrong plugin, which is a way for a test about consent
 // to keep passing while testing nothing.
 const row = (w: ReturnType<typeof mount>, id: string) => w.get(`[data-plugin="${id}"]`);
-/** the rows for the app's own capabilities, in registry order */
-const builtinRows = (w: ReturnType<typeof mount>) =>
-  ["FundaCAD.MultiColor", "FundaCAD.Printing", "FundaCAD.SpaceMouse"].map((id) => row(w, id));
-/** the row for the one thing that is downloaded */
-const downloadRow = (w: ReturnType<typeof mount>) => row(w, "FundaCAD.MCP");
+const offerRow = (w: ReturnType<typeof mount>, id: string) => row(w, id);
 
-beforeEach(() => {
-  localStorage.clear();
-  setPluginEnabled("FundaCAD.MultiColor", false);
-  setPluginEnabled("FundaCAD.Printing", true);
-  setPluginEnabled("FundaCAD.SpaceMouse", true);
-});
 afterEach(() => localStorage.clear());
 
-describe("the capabilities that are in the app", () => {
-  it("lists them with a switch each, on where they were on", () => {
+describe("what is offered", () => {
+  it("offers every plugin this project publishes, and none of them is already here", () => {
     const w = mount(PluginsSection);
-    expect(w.text()).toContain("Printer connection");
-    expect(w.text()).toContain("3D mouse");
-    expect(w.text()).toContain("Multi-material");
-
-    const boxes = w.findAll<HTMLInputElement>(".plug-row input[type=checkbox]");
-    expect(boxes.length).toBe(3);
-    // MultiColor, Printing, SpaceMouse: the order their directories sort in.
-    expect(boxes.map((b) => b.element.checked)).toEqual([false, true, true]);
+    for (const name of ["MCP server", "Printer connection", "3D mouse", "Multi-material"]) {
+      expect(w.text(), name).toContain(name);
+    }
+    // Nothing installed, so no switch: the only control on an offer is Install.
+    expect(w.findAll("input[type=checkbox]").length).toBe(0);
+    expect(w.text()).toContain("Nothing installed yet.");
   });
 
-  it("turns one off, and that is what the rest of the app will read", async () => {
+  it("says a builtin runs with the app's own reach", async () => {
+    // The sentence that carries the whole bargain for a plugin that draws. It
+    // used to describe code that was already in the app and could not be
+    // refused; it now describes a download, which is exactly when somebody
+    // needs to read it.
     const w = mount(PluginsSection);
-    const printing = w.findAll<HTMLInputElement>(".plug-row input[type=checkbox]")[1]!;
-    printing.element.checked = false;
-    await printing.trigger("change");
-    // The screen is a view of the registry, not a second copy of the answer.
-    // Everything that hides a menu row or declines to load a chunk reads this.
-    expect(pluginEnabled("FundaCAD.Printing")).toBe(false);
+    await offerRow(w, "FundaCAD.Printing").get(".btn").trigger("click");
+    const note = offerRow(w, "FundaCAD.Printing").get(consent).text();
+    expect(note).toContain("Part of FundaCAD itself");
+    // The sentence a process plugin gets. Reusing it here would describe a
+    // boundary neither of them has, in words that suggest one of them does.
+    expect(note.toLowerCase()).not.toContain("normal program on your computer");
   });
 
-  it("shows what a capability uses when it is switched on", async () => {
+  it("tells one plugin's reach from another's", async () => {
     const w = mount(PluginsSection);
-    expect(w.find(consent).exists()).toBe(false);
-
-    const multi = w.findAll<HTMLInputElement>(".plug-row input[type=checkbox]")[0]!;
-    multi.element.checked = true;
-    await multi.trigger("change");
-
-    const block = builtinRows(w)[0]!.get(consent);
+    await offerRow(w, "FundaCAD.MultiColor").get(".btn").trigger("click");
+    const block = offerRow(w, "FundaCAD.MultiColor").get(consent);
     expect(block.text()).toContain("Change the document you have open");
-    // The control: a capability that reads and writes the document is not
-    // thereby a capability that touches your printer, and the screen has to be
-    // able to tell those apart or it says nothing.
+    // The control: a plugin that reads and writes the document is not thereby a
+    // plugin that touches your printer, and the screen has to be able to tell
+    // those apart or it says nothing.
     expect(block.find(".plug-can").text()).not.toContain("Send jobs to your printer");
     expect(block.find(".plug-cannot").text()).toContain("Touch your printer");
-  });
-
-  it("does not describe the app's own code as if something were containing it", async () => {
-    const w = mount(PluginsSection);
-    await builtinRows(w)[1]!.get(".plug-link").trigger("click");
-    const note = builtinRows(w)[1]!.get(consent).text();
-    expect(note).toContain("Part of FundaCAD itself");
-    // The sentence a downloaded process plugin gets. Reusing it here would be
-    // claiming a boundary that does not exist.
-    expect(note.toLowerCase()).not.toContain("install it only if you trust");
   });
 });
 
 describe("the plugins that are downloaded", () => {
+  const downloadRow = (w: ReturnType<typeof mount>) => row(w, "FundaCAD.MCP");
+
   it("offers one, and asks nothing until the button is pressed", () => {
     const w = mount(PluginsSection);
     expect(w.text()).toContain("MCP server");

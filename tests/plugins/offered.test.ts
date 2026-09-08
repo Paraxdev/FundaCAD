@@ -22,7 +22,6 @@ import { describe, expect, it } from "vitest";
 import shippedRaw from "../../plugins/FundaCAD.MCP/manifest.json?raw";
 import { parseManifest, promiseOf } from "../../src/plugins/manifest";
 import { mcpConfigJson, mcpLaunch, officialPlugins } from "../../src/plugins";
-import { builtinPlugins } from "../../src/plugins/registry";
 import { bundleAsset } from "../../src/plugins/shipped";
 
 const RELEASES = "https://github.com/Paraxdev/fundacad/releases/download/";
@@ -36,16 +35,22 @@ describe("the plugins this build offers", () => {
     expect(offered.map((p) => p.manifest.id)).toContain("FundaCAD.MCP");
   });
 
-  it("offers no capability that ships inside the app", () => {
-    // A builtin has no bundle on any release, so offering to download one
-    // would be offering a 404 behind a consent screen somebody just answered.
-    // They are listed by registry.ts instead, with a switch rather than a
-    // button, and build-plugins.py refuses to package them.
-    for (const p of officialPlugins()) {
-      expect(p.manifest.kind).not.toBe("builtin");
-    }
-    // The control: there ARE builtins to have wrongly included.
-    expect(builtinPlugins().length).toBeGreaterThan(0);
+  it("offers every plugin this repository has, builtins included", () => {
+    // This used to assert the opposite: no builtin, because a builtin had no
+    // bundle on any release and offering to download one would have been a 404
+    // behind a consent screen somebody had just answered. Every one of them is
+    // packaged now, so holding any of them back would be hiding a plugin that
+    // exists.
+    const offered = officialPlugins().map((p) => p.manifest.id).sort();
+    expect(offered).toEqual([
+      "FundaCAD.MCP",
+      "FundaCAD.MultiColor",
+      "FundaCAD.Printing",
+      "FundaCAD.SpaceMouse",
+    ]);
+    // ...and one of them really is a builtin, so this is not passing because
+    // the kind has quietly stopped being used.
+    expect(officialPlugins().some((p) => p.manifest.kind === "builtin")).toBe(true);
   });
 
   it("asks for the asset the packager actually writes", () => {

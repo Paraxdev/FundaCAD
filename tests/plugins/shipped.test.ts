@@ -15,7 +15,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { bundleAsset, shippedBuiltins, shippedBundles, shippedPlugins } from "../../src/plugins/shipped";
+import { bundleAsset, shippedPlugins } from "../../src/plugins/shipped";
 import { PLUGIN_KINDS } from "../../src/plugins/manifest";
 
 // Every file at the top of every plugin directory. `?raw` because what is
@@ -34,6 +34,9 @@ const has = (id: string, name: string) =>
  *  in scripts/build-plugins.py, which is the copy that refuses to package one
  *  without it. This copy fails a test instead of a release. */
 const ENTRY: Record<string, string> = {
+  // A builtin's entry point is BUILT from main.ts by
+  // scripts/build-plugin-code.mjs, so what is on disk is the source.
+  builtin: "main.ts",
   process: "server.py",
   compute: "plugin.js",
   panel: "index.html",
@@ -69,25 +72,28 @@ describe("the plugins in this repository", () => {
     }
   });
 
-  it("splits into the ones that ship inside the app and the ones that do not", () => {
-    const builtins = shippedBuiltins().map((p) => p.manifest.id);
-    const bundles = shippedBundles().map((p) => p.manifest.id);
-    expect(builtins).toEqual([
+  it("is every directory, with nothing held back for shipping inside the app", () => {
+    // There used to be two lists here, and the split was the point of the test:
+    // a builtin's code WAS the app's code, so it had no bundle on any release
+    // and offering to download one would have been a 404 behind a consent
+    // screen somebody had just answered.
+    //
+    // Nothing ships inside the app now. `builtin` still means something and
+    // what it means is REACH — it runs in the application's own JavaScript
+    // context — which was always a fact about what a plugin can do rather than
+    // about where it came from.
+    expect(shippedPlugins().map((p) => p.manifest.id)).toEqual([
+      "FundaCAD.MCP",
       "FundaCAD.MultiColor",
       "FundaCAD.Printing",
       "FundaCAD.SpaceMouse",
     ]);
-    expect(bundles).toEqual(["FundaCAD.MCP"]);
-    // Neither list may hold what the other does. A builtin offered for download
-    // is a 404 behind a consent screen somebody has just answered.
-    expect(builtins.filter((id) => bundles.includes(id))).toEqual([]);
-    expect(builtins.length + bundles.length).toBe(shippedPlugins().length);
   });
 
-  it("gives every bundled plugin the entry point its kind needs", () => {
+  it("gives every plugin the entry point its kind needs", () => {
     // A bundle missing its entry point installs perfectly and then does
     // nothing, which is the most annoying shape a failure can have.
-    for (const { manifest, dir } of shippedBundles()) {
+    for (const { manifest, dir } of shippedPlugins()) {
       const entry = ENTRY[manifest.kind];
       expect(entry, `no entry point defined for kind ${manifest.kind}`).toBeTruthy();
       expect(has(dir, entry!), `plugins/${dir} is kind ${manifest.kind} and has no ${entry}`).toBe(true);
