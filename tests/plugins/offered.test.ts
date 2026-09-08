@@ -12,7 +12,7 @@
 // build can ship an entry the enforced copy would refuse.
 
 import { describe, expect, it } from "vitest";
-import shippedRaw from "../../mcp/plugin.json?raw";
+import shippedRaw from "../../plugins/mcp/plugin.json?raw";
 import { parseManifest, promiseOf } from "../../src/plugins/manifest";
 import { mcpConfigJson, mcpLaunch, officialPlugins } from "../../src/plugins";
 

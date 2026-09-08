@@ -1,6 +1,6 @@
 // Sharing the open document with an assistant.
 //
-// The MCP server in `mcp/` used to be unable to reach this window at all. It
+// The MCP server in `plugins/mcp/` used to be unable to reach this window at all. It
 // started an engine of its own, worked on a copy, and handed the result back as
 // a file you had to open. Everything an agent did was a round trip through the
 // disk, and nothing it did was visible while it did it.

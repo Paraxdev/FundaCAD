@@ -25,7 +25,7 @@ import { allOpGrants, type Op } from "./ops";
 import type { Grant } from "../manifest";
 import { createBroker, type Broker, type BrokerHost } from "./broker";
 
-/** Mirrors `_PREFIXES` in mcp/model.py, which is the implementation the app and
+/** Mirrors `_PREFIXES` in plugins/mcp/model.py, which is the implementation the app and
  *  the agent already share. `tests/plugins/testHost.test.ts` reads that file and
  *  fails if the two drift, because a test double that hands out different ids
  *  from the real thing is a test double that passes tests the app would fail. */

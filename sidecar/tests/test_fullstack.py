@@ -186,7 +186,7 @@ def run():
         # worker is orphaned and stays resident. Measured on this machine after
         # a handful of suite runs: six orphaned workers, each holding its own
         # copy of the kernel. The app is safe from this (the Rust shell owns a
-        # job object) and so is the MCP server (mcp/winjob.py), but a test
+        # job object) and so is the MCP server (plugins/mcp/winjob.py), but a test
         # script that spawns a server owns nothing, so it kills the tree.
         if sys.platform == "win32":
             subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)],

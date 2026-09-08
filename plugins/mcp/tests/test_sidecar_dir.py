@@ -7,11 +7,11 @@ the path over in the environment when it writes the launch command.
 
 Both readings have a way to be silently wrong, and each test here is one of
 them. An override that is ignored sends an installed plugin looking under
-`<app data>/plugins/sidecar`, which does not exist, and the failure surfaces as
+`<app data>/plugins/mcp/sidecar`, which does not exist, and the failure surfaces as
 a FileNotFoundError from Popen naming a path nobody set. An override that is
 trusted without checking does the same thing while looking like it worked.
 
-Run: uv run python mcp/tests/test_sidecar_dir.py
+Run: uv run python plugins/mcp/tests/test_sidecar_dir.py
 """
 
 import _bootstrap  # noqa: F401
@@ -47,12 +47,22 @@ class env:
 
 
 def default_dir():
-    return os.path.join(os.path.dirname(sidecar_link.__file__), "..", "sidecar")
+    """Where the engine is in THIS checkout, worked out from this test file
+    rather than from the module under test.
+
+    Counted from here on purpose: sidecar_link searches upward for a directory
+    containing sidecar/server.py, so an expectation that searched the same way
+    would agree with a broken search. This file is at plugins/mcp/tests/, three
+    levels under the root, and if that ever stops being true this line is the
+    one that says so."""
+    here = os.path.dirname(os.path.abspath(__file__))          # .../plugins/mcp/tests
+    root = os.path.dirname(os.path.dirname(os.path.dirname(here)))
+    return os.path.join(root, "sidecar")
 
 
-def test_a_checkout_finds_the_engine_beside_it():
+def test_a_checkout_finds_the_engine_in_it():
     """The control for everything below: with nothing set, the answer is the
-    sibling directory this repository has, and it is really there."""
+    engine this repository has, and it is really there."""
     with env(None):
         found = sidecar_link.sidecar_dir()
     assert os.path.isdir(found), found

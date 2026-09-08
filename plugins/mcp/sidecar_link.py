@@ -96,10 +96,33 @@ def sidecar_dir():
 
     Checked for existence rather than trusted, because an override naming a
     directory that is not there would otherwise turn "no engine" into a
-    FileNotFoundError from Popen with no hint of which setting caused it."""
+    FileNotFoundError from Popen with no hint of which setting caused it.
+
+    The checkout is found by walking UP until a `sidecar/server.py` turns up,
+    rather than by counting directories. This file used to sit one level below
+    the repository root and the fallback was written as two `dirname` calls;
+    moving it into `plugins/` made that resolve to `plugins/sidecar`, which does
+    not exist, and every test that spawns an engine failed at once. Counting
+    levels encodes where a file happens to live today into code that has no
+    other reason to know."""
     override = _env("SIDECAR_DIR")
     if override and os.path.isdir(override):
         return override
+
+    here = os.path.dirname(os.path.abspath(__file__))
+    # Bounded: a plugin installed under the app data directory has no checkout
+    # above it, and walking to the filesystem root to discover that is slow and
+    # would happily adopt an unrelated `sidecar` on the way.
+    for _ in range(6):
+        candidate = os.path.join(here, "sidecar")
+        if os.path.isfile(os.path.join(candidate, "server.py")):
+            return candidate
+        parent = os.path.dirname(here)
+        if parent == here:
+            break
+        here = parent
+    # Nothing found. Returned rather than raised so the caller fails where it
+    # tries to use it, with the path in the message, exactly as before.
     return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "sidecar")
 
 
