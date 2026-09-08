@@ -952,6 +952,7 @@ Where the checks are:
 | `tests/plugins/texturePlugin.spec.ts` | the real `activate()`, then every surface asked twice: once running, once switched off |
 | `tests/plugins/coreIndependence.test.ts` | nothing under `src/` statically imports the plugin |
 | `e2e/texture_plugin.cjs` | all of it in a real window, ending with the plugin off and the document still building |
+| `tests/viewport/streamedSelection.test.ts` | the two rules a stream adds to carrying a selection (see below) |
 
 Two things this found that a smaller move would not have:
 
@@ -967,6 +968,71 @@ business.** It opened with `if (type !== "texture") return true;`. It is a
 contribution now, and it still governs the app's own numeric rows — which is the
 better arrangement, not a concession: the app owns `seed` and `angle` because a
 parameter can drive them, and the plugin decides which of them a knurl reads.
+
+### And then driving it found a bug in the application
+
+The move above is a refactor: it says the tool can live outside `src/`, not that
+the tool works. Actually using it — a browser, the real sidecar, eight shapes and
+every pattern, twenty-eight gestures — said something else. **Ten of the
+twenty-eight worked.** The rest picked a face, showed it selected, and then
+refused Add with "No faces selected" over a face that was lit up on screen. Same
+shape, different answer run to run, which is what "sometimes" always means.
+
+It was not the plugin, and it was not the geometry: the same sweep straight at
+the kernel displaced correctly on sixty of sixty-six shape/pattern pairs, and the
+six were the harness's own bad input. It was `viewport.ts`.
+
+**A rebuild used to reach the screen in one piece, and it does not any more.**
+`setModel` was taught to carry the selection across a rebuild — capture before
+the Highlighter goes, restore onto the new model, `selectionMemo.ts`. A chunked
+reply reaches the screen in several installments instead, and every one of them
+publishes a fresh ModelView with a fresh Highlighter. Nothing carried the
+selection across those. So it was gone before the commit ran, and the commit's
+own capture, reading that emptied Highlighter, correctly answered "nothing is
+selected" and restored nothing. Whether a reply streams at all depends on how big
+it is, which is the whole of the intermittency.
+
+Traced rather than guessed at, by sampling the selection every 60 ms through the
+gesture. The selection died mid-build, before `setModel` was called at all:
+
+```
+172ms onBuild building=true  sel=1
+183ms onBuild building=true  sel=1
+189ms onBuild building=true  sel=0   <- gone, and nothing had called setModel yet
+213ms setModel               sel 0->0
+```
+
+**This was never a texture bug.** With no plugin loaded and no tool running, an
+ordinary two-face selection was lost across an ordinary rebuild in four runs out
+of four, and kept in four out of four once the stream carried it. Every
+selection-driven gesture in the app was standing on this. Texture is simply the
+one that could not hide it: for a fillet the selection arms a drag handle, and a
+handle that flickers is a cosmetic complaint, whereas here MEMBERSHIP IS THE
+SELECTION, so losing it silently is losing the gesture.
+
+The fix is in the shared path, so it is not a plugin's:
+
+| | |
+| --- | --- |
+| `viewport.ts` `streamMemo` | snapshot at `begin`, re-applied on every installment, and the commit's fallback |
+| `selectionMemo.ts` `remapStreamedSelection` | a body whose chunk has not landed is not a body whose face is gone: hold the geometric fallback back rather than let it match some other body's face |
+| `selectionMemo.ts` `shouldAnnounce` | a commit announces a lost selection, an installment does not — mid-stream "nothing came back" is not news, and announcing it takes the drag handle down a few milliseconds before the body lands |
+
+Two things the plugin kept for itself, because they are about a gesture rather
+than about drawing. Its rAF tick ignores the ambient selection entirely while a
+rebuild is in flight, since mid-rebuild it is unknown rather than new. And a
+commit pressed during a rebuild is HELD and run when the build lands, instead of
+being refused — the person has finished and is waiting, and "nothing is selected"
+was a lie told to them about a face they could see.
+
+Measured the same way it was found: **twenty-eight of twenty-eight**.
+
+And one more thing the sweep turned up, latent rather than active:
+`tessellate.py` wrapped `displace_face` in a bare `except Exception: pass`. A
+texture that threw was not an error, not a diagnostic and not a red timeline row
+— it was a face that came out flat under a feature the timeline said was fine,
+with nothing anywhere to tell that from a pattern that legitimately does nothing
+there. It still falls back rather than failing the build, and now it says so.
 
 ## What comes next
 

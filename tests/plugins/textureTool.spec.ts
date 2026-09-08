@@ -92,7 +92,13 @@ function fakeStore(features: Feature[] = []) {
   const landBuild = () => {
     for (const fn of [...listeners]) fn({ building: false, result: {} });
   };
-  return { store: store as unknown as DocumentStore, calls, landBuild };
+  /** A rebuild is IN FLIGHT. The real store says this too, and the tool used to
+   *  ignore it — which is what let a streamed reply's momentarily empty
+   *  selection be read as the user deselecting. */
+  const startBuild = () => {
+    for (const fn of [...listeners]) fn({ building: true, result: {} });
+  };
+  return { store: store as unknown as DocumentStore, calls, landBuild, startBuild };
 }
 
 /** Let the tool's rAF tick run once. */
@@ -214,6 +220,41 @@ describe("TextureTool", () => {
       tool.cancel();
     });
 
+    // The larger version of the same defect, and the one that made the tool
+    // feel broken rather than fiddly. A chunked reply reaches the screen in
+    // several installments and the first one does not carry the body being
+    // edited, so the viewport truthfully reports NOTHING SELECTED for a few
+    // frames in the MIDDLE of the build — not at the end of it, where the flag
+    // above is armed. Read as a deselect, that ended the gesture: measured in a
+    // real window, six runs out of six lost the face between picking it and
+    // pressing Add.
+    it("ignores the ambient selection entirely while a rebuild is in flight", async () => {
+      const { vp, state } = fakeViewport();
+      const { store, calls, startBuild, landBuild } = fakeStore();
+      const tool = new TextureTool(vp, store);
+      tool.start(() => {});
+      state.faceIds = [7, 8];
+      await tick();
+      runDebounce();
+      const previewsBefore = calls.previews.length;
+
+      startBuild();         // the reply begins arriving...
+      state.faceIds = [];   // ...and an installment publishes an empty selection
+      await tick();
+      await tick();
+
+      expect(panel.summary.value).toBe("2 faces selected");
+      // and it did not throw the preview away either, which is the part that
+      // left the model back at its untextured state mid-gesture
+      expect(calls.previews.length).toBe(previewsBefore);
+
+      state.faceIds = [7, 8]; // the viewport puts it back at the commit
+      landBuild();
+      await tick();
+      expect(vp.getSelectedFaceIds()).toEqual([7, 8]);
+      tool.cancel();
+    });
+
     // The control on the line above: a real deselect, with no rebuild in
     // between, has to be honoured. Otherwise the members could never be cleared.
     it("honours a deselect that is the user's and not a rebuild's", async () => {
@@ -306,6 +347,57 @@ describe("TextureTool", () => {
     // The panel deliberately does NOT close on commit, because the tool refuses
     // one with no target and stays active. Closing first stranded the user in an
     // invisible modal.
+    // Pressing Add during a rebuild used to be refused with "No faces selected"
+    // over a face that was plainly lit up on screen. The tick can afford to skip
+    // those frames; a commit cannot, because the person has finished and is
+    // waiting. So it is held and run once the build lands.
+    it("holds a commit that lands mid-rebuild rather than refusing it", async () => {
+      const { vp, state } = fakeViewport();
+      const { store, calls, startBuild, landBuild } = fakeStore();
+      const tool = new TextureTool(vp, store);
+      tool.start(() => {});
+      state.faceIds = [3];
+      await tick();
+
+      startBuild();
+      state.faceIds = []; // the installment's empty moment
+      panel.commit({
+        kind: "knurl", depth: 0.4, scale: 2, angle: 0, offset: 0, sharpness: 0.5,
+        profile: "facet", boundaryInset: 0, direction: "out", seed: 1, invert: false,
+      });
+      expect(calls.added).toHaveLength(0); // held, not refused
+      expect(tool.active).toBe(true);
+
+      state.faceIds = [3];  // the viewport restores it at the commit
+      landBuild();
+      expect(calls.added).toHaveLength(1);
+      expect(calls.added[0]).toMatchObject({ type: "texture", kind: "knurl" });
+      expect(tool.active).toBe(false);
+    });
+
+    // The control: holding is for a selection that is coming BACK. One that is
+    // genuinely empty when the build lands has to be refused, or Add would hang
+    // silently forever on a document with nothing picked.
+    it("refuses the held commit once the build lands with nothing picked", async () => {
+      const { vp, state } = fakeViewport();
+      const { store, calls, startBuild, landBuild } = fakeStore();
+      const tool = new TextureTool(vp, store);
+      tool.start(() => {});
+      state.faceIds = [3];
+      await tick();
+
+      startBuild();
+      state.faceIds = [];
+      panel.commit({
+        kind: "knurl", depth: 0.4, scale: 2, angle: 0, offset: 0, sharpness: 0.5,
+        profile: "facet", boundaryInset: 0, direction: "out", seed: 1, invert: false,
+      });
+      landBuild(); // and the face really is gone
+      expect(calls.added).toHaveLength(0);
+      expect(tool.active).toBe(true);
+      tool.cancel();
+    });
+
     it("refuses a commit with nothing picked, and stays up", () => {
       const { vp } = fakeViewport();
       const { store, calls } = fakeStore();
