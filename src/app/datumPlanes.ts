@@ -51,7 +51,11 @@ export function createDatumPlanes(e: Engine): Pick<Engine, "datumPlaneDef" | "sy
       .filter((f) => e.store.isPlaneVisible(f.id)) // hidden planes: not drawn, not pickable
       .map((f) => {
         const def = datumPlaneDef(f); // one formula for quad, sketch and offset targets
-        return { id: f.id, origin: def.origin, normal: def.normal };
+        // xdir goes too, so a click on the quad yields the SAME plane a sketch
+        // started from the browser row gets. Without it the viewport had the
+        // plane's position and facing but not its in-plane orientation, which is
+        // most of what a sketch is placed by.
+        return { id: f.id, origin: def.origin, normal: def.normal, xdir: def.xdir };
       });
     e.viewport.setDatumPlanes(planes);
     e.viewport.highlightDatum(e.selectedFeature);

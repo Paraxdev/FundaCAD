@@ -94,7 +94,7 @@ function facePlaneFromHit(viewport: Viewport, hit: FaceHit): FacePlanePick | nul
  *
  *  `unusable` is the case worth having a name for. A body face is under the
  *  cursor but it implies no plane — a fillet's blend, a sphere, a spline, a cone
- *  — and the base-plane quads are switched on and sitting BEHIND the model
+ *  — and the construction quads are switched on and sitting BEHIND the model
  *  during this step. Collapsing that to "nothing here" would let the ray sail
  *  through the part and pick the XY quad two hundred millimetres behind the face
  *  the user was aiming at, which is a wrong answer delivered silently. The
@@ -102,20 +102,33 @@ function facePlaneFromHit(viewport: Viewport, hit: FaceHit): FacePlanePick | nul
 export type PlanePickTarget =
   | { kind: "face"; spec: PlaneDef; face: FacePlanePick }
   | { kind: "base"; spec: Plane3 }
+  | { kind: "datum"; spec: PlaneDef; id: string }
   | { kind: "unusable" }
   | null;
 
 /** Resolve the plane under the cursor. A body face wins over the construction
  *  quads behind it — the quads are scenery for this step, the part is the thing
- *  the user is looking at. */
+ *  the user is looking at.
+ *
+ *  A DATUM PLANE IS ONE OF THOSE QUADS. It used not to be, and the omission was
+ *  the whole of a bug: a plane through three points appeared in the browser,
+ *  drew its quad, highlighted on hover in ordinary selection and could be
+ *  right-clicked, and could not be clicked to sketch on, because this function
+ *  asked only for the three BASE planes and the ray went straight through the
+ *  datum to whichever of those was behind it. Every construction the app can
+ *  make — three points, midplane, offset from a face — was unreachable the one
+ *  way people reach for a plane, and the browser row was the only way in. */
 export function pickPlaneTarget(viewport: Viewport, clientX: number, clientY: number): PlanePickTarget {
   const hit = viewport.pickFaceForPressPull(clientX, clientY);
   if (hit) {
     const face = facePlaneFromHit(viewport, hit);
     return face ? { kind: "face", spec: face.def, face } : { kind: "unusable" };
   }
-  const base = viewport.pickPlane(clientX, clientY);
-  return base ? { kind: "base", spec: base } : null;
+  const c = viewport.pickConstructionAt(clientX, clientY);
+  if (!c) return null;
+  return c.kind === "datum"
+    ? { kind: "datum", spec: c.def, id: c.id }
+    : { kind: "base", spec: c.plane };
 }
 
 /** The plane spec a target yields, or null when there is nothing to take. Sugar
