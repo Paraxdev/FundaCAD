@@ -1,13 +1,10 @@
 # FundaCAD
 
-A fork of SindriCAD with some tweaks to the workflow.
+A fork of SindriCAD with minor tweaks.
+adapted to be as guiding and fluent (easiest way from design in your head to real geometry) as possible
 
-A parametric solid modeller: sketch, extrude, fillet, chamfer, and export
-STEP/STL/3MF. The UI is Vue 3 + Three.js running in a Tauri window; all geometry
-lives in a Python sidecar on build123d / OpenCASCADE, which the app talks to over
-a localhost WebSocket.
 
-## Discression
+## Discretion 
 This project heavily or exclusively uses AI to generate code and tests.
 do NOT expect this software to be enterprise grade but it does allow very fast iteration.
 you may use AI for feature requests or even forking and creating your own.
@@ -17,12 +14,10 @@ human input is made for decisions, guiding and real usage by me.
 the goal is it to make this a personalized version of a CAD with features I like and would love to have.
 
 
+
 <p align="center">
   <img src="assets/readme/ui-overview.png" width="1000">
 </p>
-
-## What it looks like
-
 
 <p align="center">
   <img src="assets/readme/sketch-on-face.png" width="900">
