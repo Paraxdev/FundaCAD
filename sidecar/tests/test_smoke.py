@@ -1108,12 +1108,20 @@ def test_visibility_captured():
     stamped = {"parameters": {}, "features": [b1, b2, mv, sk, cut2]}
     legacy = {"parameters": {}, "features": [b1, b2, mv, sk,
               {k: val for k, val in cut2.items() if k != "hiddenBodies"}]}
-    sig = builder._global_sig
-    assert sig(stamped) == sig({**stamped, "bodyVisibility": {"body1": False}}), (
+    from rebuild_cache import _chain_keys_scoped, _feature_sigs
+
+    def keys(doc):
+        # What BOTH cache tiers gate on: a per-feature chain key folding in the
+        # feature's own signature and the parameters and visibility it can
+        # reach. Compared as a whole document here because that is what the
+        # assertions below are about.
+        return _chain_keys_scoped(doc, _feature_sigs(doc["features"]))
+
+    assert keys(stamped) == keys({**stamped, "bodyVisibility": {"body1": False}}), (
         "eye toggles must not invalidate the cache for stamped documents"
     )
-    assert sig(legacy) != sig({**legacy, "bodyVisibility": {"body1": False}}), (
-        "legacy documents must keep visibility in the cache signature"
+    assert keys(legacy) != keys({**legacy, "bodyVisibility": {"body1": False}}), (
+        "legacy documents must keep visibility in the cache keys"
     )
     print("  visibility-captured OK: creation set wins over live eyes both ways; "
           "cache sig ignores eyes for stamped docs")
@@ -1169,7 +1177,7 @@ def test_incremental_cache():
         {"id": "ex", "type": "extrude", "sketch": "sk", "distance": 30,
          "operation": "cut", "regions": [[0, 0, 0]]},
     ]}
-    builder._CACHE = {"feature_sigs": [], "snaps": [], "global_sig": None}  # cold
+    builder.reset_cache()  # cold
 
     steps = []
     steps.append(("cold", base))
@@ -1466,7 +1474,7 @@ def test_error_continues():
 
     # incremental: cold build, then a no-op resume, the error must re-report
     # from the cached snapshot, not vanish
-    builder._CACHE = {"feature_sigs": [], "snaps": [], "global_sig": None}
+    builder.reset_cache()
     _, err1, bod1 = rebuild_cached(doc)
     _, err2, bod2 = rebuild_cached(doc)  # 100% cache hit
     assert [e["feature_id"] for e in err1] == ["bad"]
@@ -1479,7 +1487,7 @@ def test_error_continues():
     # a fresh full rebuild
     doc["features"].append({"id": "bx2", "type": "box", "length": 5, "width": 5, "height": 5})
     _, err3, bod3 = rebuild_cached(doc)
-    builder._CACHE = {"feature_sigs": [], "snaps": [], "global_sig": None}
+    builder.reset_cache()
     _, err4, bod4 = rebuild(doc)
     assert [e["feature_id"] for e in err3] == ["bad"]
     assert len(bod3) == 3 and len(bod4) == 3

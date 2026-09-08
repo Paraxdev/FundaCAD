@@ -48,6 +48,8 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Fixed
 
+- **Changing a parameter no longer rebuilds the whole model.** It now rebuilds the features that actually read the parameter, and everything after them, which is what changing a feature by hand has always done. Before, any parameter edit threw away the entire in-progress cache and replayed the document from the very first feature, so dragging a slider was the slowest way to change a number in the app: on a 122-feature plate whose last feature was the only reader of the only parameter, a drag cost 0.9 s per tick against 0.016 s for typing the identical number into that feature as a literal. Those two are now the same speed, because they do the same amount of work.
+
 - **A cut that hollows out the middle of a part instead of opening its surface now says so**, with an amber mark on the feature in the timeline and the reason in its tooltip. The usual way to get one is a sketch on a plane buried inside the body: the pocket comes out as a sealed bubble that cannot be seen, selected or printed, and because it removes exactly as much material as the open pocket you wanted, nothing could tell the difference. The build is not refused, a deliberate hollow is legal, and a cut that splits a part into two pieces is not one of these and stays quiet.
 
 - A fillet on a circular edge, split into pieces, now picks as one too: a torus is unchanged by writing its axis the other way, so the direction could not be part of its identity at all.

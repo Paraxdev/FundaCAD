@@ -99,11 +99,52 @@ def _bbox_pair_overlap(a, b, tol=1e-6):
     )
 
 
+# Memoized volumes, keyed by shape OBJECT identity, on exactly the terms
+# `bbox_of` sets out above: the shape is held alive in the value so an id can
+# never be reused, and it rests on the same assumption the rest of the pipeline
+# already makes, that a feature which changes geometry produces a NEW shape
+# object rather than mutating one in place.
+#
+# The repetition this removes is the shape of a timeline, not an accident. Every
+# cut measures the body before it and after it, and the `after` of one feature is
+# the `before` of the next, over the same object, unchanged in between. So a
+# document of N cuts paid for roughly 2N integrals to learn N+1 numbers, and the
+# integral is over every face of the whole body, which is why the cost per cut
+# climbs as the body accumulates faces rather than staying flat.
+#
+# Measured on a 400x300 plate with 100 holes and an all-Z fillet, 203 features:
+# BRepGProp.VolumeProperties_s was 0.51 s of a 1.48 s rebuild, the largest single
+# line in the profile, ahead of every boolean in the document put together.
+_VOL_MEMO = {}
+_VOL_MEMO_CAP = 20000  # same bound, same coarse clear, as _BBOX_MEMO
+
+
 def _try_vol(shape):
-    """Best-effort |volume| of a shape. Returns 0.0 for a genuinely EMPTY shape (so
-    the no-op boolean guards fire on it), and None only when OCCT truly can't measure
-    a non-empty shape. build123d >=0.11 asserts on empty shapes instead of reporting
-    zero, so we detect emptiness via `_wrapped_or_none` first."""
+    """Best-effort |volume| of a shape, memoized on shape identity (see _VOL_MEMO).
+
+    Returns 0.0 for a genuinely EMPTY shape (so the no-op boolean guards fire on
+    it), and None only when OCCT truly can't measure a non-empty shape. build123d
+    >=0.11 asserts on empty shapes instead of reporting zero, so we detect
+    emptiness via `_wrapped_or_none` first.
+
+    A failure is cached too. It is a property of the shape, not of the moment, so
+    a second ask would fail the same way, and the guards that call this are
+    written to fall through on None: leaving it uncached would make an
+    unmeasurable body the one case that pays full price on every feature."""
+    key = id(shape)
+    hit = _VOL_MEMO.get(key)
+    if hit is not None and hit[0] is shape:
+        return hit[1]
+    vol = _measure_vol(shape)
+    if len(_VOL_MEMO) >= _VOL_MEMO_CAP:
+        _VOL_MEMO.clear()
+    _VOL_MEMO[key] = (shape, vol)
+    return vol
+
+
+def _measure_vol(shape):
+    """The integral itself. Split out so the memo above reads as a cache and this
+    reads as the measurement, and so a test can call the uncached path."""
     try:
         s = _as_compound(shape)
     except Exception:

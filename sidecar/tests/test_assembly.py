@@ -518,7 +518,7 @@ def test_node_ref_survives_a_disk_checkpoint_resume():
         assert restored == cold, f"the checkpoint dropped the tree: {restored} != {cold}"
 
         # production path: RAM cleared, so this resumes from disk
-        builder._CACHE = {"feature_sigs": [], "snaps": [], "global_sig": None}
+        builder.reset_cache()
         _p2, _e2, b2 = builder.rebuild_cached(doc)
         assert [(b["name"], b.get("node_ref")) for b in b2] == cold, (
             f"a disk-resumed build came back flat: "

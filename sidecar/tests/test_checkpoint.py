@@ -129,7 +129,7 @@ def test_diagnostics_survive_resume():
     AFTER it, so the resume restores that feature rather than re-running it, the
     exact case where the diagnostic used to vanish while the error survived, which
     left the "Re-pick face" toast action showing a bare "Show" instead."""
-    builder._CACHE = {"feature_sigs": [], "snaps": [], "global_sig": None}
+    builder.reset_cache()
     warm = []
     builder.rebuild_cached(DIAG_DOC, diagnostics=warm)
     assert any(d.get("reason") == "ambiguous nearest pick" for d in warm), \
@@ -187,14 +187,14 @@ def test_diagnostics_survive_disk_resume():
             f"the checkpoint dropped the diagnostic: {snap.get('diags_ref')}"
 
         # and the full production path: RAM cache cleared, so this resumes from disk
-        builder._CACHE = {"feature_sigs": [], "snaps": [], "global_sig": None}
+        builder.reset_cache()
         warm = []
         builder.rebuild_cached(DIAG_DOC, diagnostics=warm)
         assert any(d.get("reason") == "ambiguous nearest pick" for d in warm), \
             f"a disk-resumed build dropped the ambiguity diagnostic: {warm}"
     finally:
         builder._disk_store = orig_store
-        builder._CACHE = {"feature_sigs": [], "snaps": [], "global_sig": None}
+        builder.reset_cache()
         shutil.rmtree(tmp, ignore_errors=True)
     print(PASS, "diagnostics survive a DISK-checkpoint resume")
 
@@ -269,13 +269,13 @@ def test_textures_survive_disk_resume():
             f"the checkpoint dropped _textures: {restored.get('_textures')!r}"
 
         # production path: RAM cleared, so this resumes from disk
-        builder._CACHE = {"feature_sigs": [], "snaps": [], "global_sig": None}
+        builder.reset_cache()
         _p2, _e2, b2 = builder.rebuild_cached(TEX_DOC)
         assert b2[0].get("_textures") == cold, \
             f"a disk-resumed build returned an untextured body: {b2[0].get('_textures')!r}"
     finally:
         builder._disk_store = orig_store
-        builder._CACHE = {"feature_sigs": [], "snaps": [], "global_sig": None}
+        builder.reset_cache()
         shutil.rmtree(tmp, ignore_errors=True)
     print(PASS, "textures survive a DISK-checkpoint resume")
 
