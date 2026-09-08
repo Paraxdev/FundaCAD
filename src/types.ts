@@ -425,6 +425,16 @@ export type Feature =
       // honours it, and a caller building a multi-body model through the MCP
       // server sets it to keep an operation off a body it never selected.
       targets?: string[];
+      // Sweep the profile BOTH ways off its plane, `distance` each way, so the
+      // solid is twice that long and centred on the sketch. What a sketch made
+      // on a datum plane inside a body needs: there is material on both sides of
+      // that plane, one direction is a guess, and a cut that guesses wrong opens
+      // a sealed void in the middle of the part instead of a pocket.
+      //
+      // The SIGN of `distance` stops meaning anything under it, a solid centred
+      // on the plane is the same solid whichever way the arrow pointed. Absent
+      // means false, so every extrude saved before this rebuilds unchanged.
+      symmetric?: boolean;
     }
   // `profile` shapes the blend's SECTION without moving where it meets the
   // supporting faces: 0 (or absent) is the circular fillet, -1 flattens it to a
@@ -729,8 +739,12 @@ export interface ResolveDiag {
   // "boolean" = a dangling-reference boolean skipped (no-op);
   // "edgeOpFailed" = a fillet/chamfer failed and `failed` names the edges the
   // sidecar's per-edge probe blamed (or ALL members when only the combination
-  // fails), so the UI can paint exactly those edges red.
-  kind: "edge" | "face" | "boolean" | "edgeOpFailed";
+  // fails), so the UI can paint exactly those edges red;
+  // "sealedVoid" = a Cut gave a solid a second shell, i.e. it closed a cavity
+  // INSIDE the body instead of breaking its surface. Not a resolution at all,
+  // it describes the RESULT, so `resolved`/`confidence`/`lossy` carry neutral
+  // values on it, and not an error either, because a deliberate hollow is legal.
+  kind: "edge" | "face" | "boolean" | "edgeOpFailed" | "sealedVoid";
   resolved: number; // how many entities matched (0 for a skipped boolean)
   confidence: number; // 0..1, margin to the runner-up candidate (1 = lone clear winner)
   lossy: boolean; // a marginal / drift-path match was taken (or a feature was skipped)

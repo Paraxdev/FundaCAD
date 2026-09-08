@@ -134,6 +134,9 @@ FEATURES = {
         "fields": {
             "sketch": "the id of a sketch feature",
             "distance": "Num, signed; negative goes the other way",
+            "symmetric": "optional bool; sweeps `distance` BOTH ways off the "
+                         "sketch plane (the sign then means nothing). What a "
+                         "sketch on a datum plane inside a body wants",
             "operation": COMMON["operation"],
             "targets": COMMON["targets"],
             "regions": "optional; " + COMMON["region"],

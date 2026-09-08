@@ -17,6 +17,24 @@ export interface DimFieldDef {
   kind?: "length" | "angle" | "count"; // default length; count = raw number, no unit
 }
 
+/** An on/off switch in the box, beside Confirm and Cancel.
+ *
+ *  For the mode a tool has to offer WHILE the value is being set, where a
+ *  keyboard shortcut alone will not do. Extrude's Symmetric is the first: the
+ *  field is focused for the whole drag and it takes "1 1/2 in" and the
+ *  spelled-out unit names, so a bare letter cannot be claimed, and "millimeters"
+ *  and "inches" both contain the obvious one.
+ *
+ *  The tool stays the owner of the state. This reports a press and follows with
+ *  `setToggle` when the state changes some other way (a shortcut, re-opening on
+ *  a saved feature), so the button and the tool cannot disagree. */
+export interface DimToggleDef {
+  label: string;
+  title: string;
+  initial: boolean;
+  onChange: (on: boolean) => void;
+}
+
 interface Field {
   def: DimFieldDef;
   input: HTMLInputElement;
@@ -139,6 +157,7 @@ export class DimInput {
     defs: DimFieldDef[],
     onCommit: (values: Record<string, number>) => void,
     onCancel?: () => void,
+    toggle?: DimToggleDef,
   ) {
     this.hide();
     this.setClickThrough(false); // every other tool wants a clickable box
@@ -192,6 +211,25 @@ export class DimInput {
       this.sizeToContent(field);
       return field;
     });
+    // The tool's own switch, ahead of confirm/cancel: it changes what is about
+    // to be committed, so it belongs with the value rather than with the verbs.
+    if (toggle) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "dim-btn dim-toggle";
+      btn.title = toggle.title;
+      btn.textContent = toggle.label;
+      btn.classList.toggle("on", toggle.initial);
+      btn.addEventListener("pointerdown", (e) => {
+        e.preventDefault(); // never blur the input to press it
+        e.stopPropagation();
+        this.setToggle(!this.toggleOn);
+        toggle.onChange(this.toggleOn);
+      });
+      this.root.appendChild(btn);
+      this.toggleBtn = btn;
+      this.toggleOn = toggle.initial;
+    }
     // Visible confirm/cancel, Enter/Esc equivalents for mouse-first work (the
     // Enter-only flow read as "no way to confirm"). pointerdown+preventDefault
     // so pressing them never blurs the input first.
@@ -229,6 +267,19 @@ export class DimInput {
     // that opens onto an already-failing preview shows it rather than waiting
     // for a build that may never be asked for.
     this.unsubscribeError = onPreviewError((m) => this.setProblem(m));
+  }
+
+  /** The switch, when the tool asked for one. Null the rest of the time, which
+   *  is every tool but Extrude so far. */
+  private toggleBtn: HTMLButtonElement | null = null;
+  private toggleOn = false;
+
+  /** Put the switch in a state without pressing it, for a tool that changed the
+   *  same state from a shortcut or seeded it from a saved feature. Does NOT call
+   *  back: the caller already knows, and a callback here would be a loop. */
+  setToggle(on: boolean) {
+    this.toggleOn = on;
+    this.toggleBtn?.classList.toggle("on", on);
   }
 
   /** Focus + select the first field. show() calls it; tools whose flow keeps
@@ -429,6 +480,11 @@ export class DimInput {
   }
 
   hide() {
+    // The button belongs to ONE showing: the next tool to open the box may not
+    // want one, and a stale reference would have it toggling a mode nobody is
+    // in. root.innerHTML is cleared below, so this is the pointer, not the DOM.
+    this.toggleBtn = null;
+    this.toggleOn = false;
     this.active = false;
     this.closeUnitMenu();
     this.unsubscribeError?.();

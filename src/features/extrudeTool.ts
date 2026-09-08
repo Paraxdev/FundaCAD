@@ -34,6 +34,10 @@ export class ExtrudeTool {
   private phase: Phase = "pick";
   private selected: WorldRegion[] = [];
   private distance = 10;
+  /** Sweep both ways off the plane, `distance` each way. Off by default and
+   *  reset on every entry, it is a property of the gesture you are making, not
+   *  a mode the tool sits in. An EDIT seeds it from the saved feature. */
+  private symmetric = false;
   private preview: THREE.Group | null = null;
   private previewMat: THREE.MeshStandardMaterial | null = null;
   private previewKey = ""; // depth+sign+selection of the built preview geometry
@@ -90,6 +94,7 @@ export class ExtrudeTool {
     this.active = true;
     this.phase = "pick";
     this.onDone = onDone;
+    this.symmetric = false;
     this.viewport.suspendPicking = true;
     const el = this.viewport.domElement;
     el.addEventListener("pointermove", this.boundMove);
@@ -150,6 +155,7 @@ export class ExtrudeTool {
     this.editOp = f.operation;
     this.editHiddenBodies = f.hiddenBodies;
     this.distance = f.distance;
+    this.symmetric = f.symmetric === true;
     this.forcedSketchId = f.sketch;
 
     this.viewport.suspendPicking = true;
@@ -293,6 +299,17 @@ export class ExtrudeTool {
   }
 
   private onKey(e: KeyboardEvent) {
+    // Alt+S, and checked BEFORE the typing guard below, because the depth field
+    // holds focus for the whole drag and this has to work while it does. A chord
+    // rather than a bare letter: the field takes spelled-out units, and
+    // "millimeters", "inches" and "mils" all contain an s, so claiming the plain
+    // key would eat a letter out of a legitimate value.
+    if (e.altKey && (e.key === "s" || e.key === "S" || e.code === "KeyS") && this.phase === "drag") {
+      e.preventDefault();
+      e.stopPropagation();
+      this.setSymmetric(!this.symmetric);
+      return;
+    }
     if (this.dim.isActive && e.target instanceof HTMLInputElement) {
       if (e.key === "Escape") this.cancel();
       return;
@@ -301,10 +318,34 @@ export class ExtrudeTool {
     else if (e.key === "Enter" && this.phase === "pick" && this.selected.length) this.beginDrag();
   }
 
+  /** Turn Symmetric on or off from anywhere, and keep the box's switch with it.
+   *
+   *  The operation is recomputed rather than left alone: symmetric reaches
+   *  material that a one-sided extrude was pointing away from, so the word on
+   *  the prompt can change without the depth or the selection moving, which is
+   *  what the prompt's own cache is keyed on. */
+  private setSymmetric(on: boolean) {
+    if (this.symmetric === on) return;
+    this.symmetric = on;
+    this.dim.setToggle(on);
+    this.promptKey = "";
+    this.updatePreview();
+  }
+
   private beginDrag() {
     this.phase = "drag";
     this.overlay.setHoverRegion(null);
-    this.dim.show([{ name: "distance", label: "D" }], () => this.commit(), () => this.cancel());
+    this.dim.show(
+      [{ name: "distance", label: "D" }],
+      () => this.commit(),
+      () => this.cancel(),
+      {
+        label: "Symmetric",
+        title: "Sweep both ways off the sketch plane, this depth each way (Alt+S)",
+        initial: this.symmetric,
+        onChange: (on) => this.setSymmetric(on),
+      },
+    );
     if (this.editId) {
       // seed the SIGNED saved distance and lock the field (userDriven): extrude's
       // onMove free-tracks the cursor and would clobber the seed on the first
@@ -358,7 +399,7 @@ export class ExtrudeTool {
     const ids = this.selected
       .map((s) => `${s.sketchId}:${s.interior3D.x.toFixed(2)},${s.interior3D.y.toFixed(2)}`)
       .join("|");
-    const key = `${depth.toFixed(3)}:${sign}:${ids}`;
+    const key = `${depth.toFixed(3)}:${sign}:${this.symmetric ? "sym" : "one"}:${ids}`;
     if (key !== this.previewKey) {
       this.previewKey = key;
       this.disposePreviewGeom();
@@ -376,7 +417,16 @@ export class ExtrudeTool {
         for (const h of wr.region.holes) {
           shape.holes.push(new THREE.Path(h.map((p) => p.clone())));
         }
-        const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false, steps: 1 });
+        // Symmetric is drawn as one prism of twice the depth pulled back half
+        // its length, in LOCAL space before the basis is applied, so the same
+        // one matrix still places it and the mesh really is centred on the
+        // plane rather than two prisms that meet on it.
+        const geo = new THREE.ExtrudeGeometry(shape, {
+          depth: this.symmetric ? depth * 2 : depth,
+          bevelEnabled: false,
+          steps: 1,
+        });
+        if (this.symmetric) geo.translate(0, 0, -depth);
         geo.applyMatrix4(wr.plane.basisMatrix(sign)); // local +Z -> plane normal (flipped on cut)
         this.preview.add(new THREE.Mesh(geo, this.previewMat));
       }
@@ -390,13 +440,19 @@ export class ExtrudeTool {
     const plane = first.plane;
     const anchor = this.anchor();
     const dir = plane.n.clone().multiplyScalar(sign);
+    // Symmetric has no one direction, so the arrow spans the whole extent
+    // instead of half of it: it starts a depth BEHIND the plane and runs to the
+    // far face. An arrow that still measured one side would say the solid is
+    // half as long as the one being previewed underneath it.
+    const tail = this.symmetric ? anchor.clone().addScaledVector(dir, -depth) : anchor;
+    const len = Math.max(this.symmetric ? depth * 2 : depth, 1);
     if (!this.arrow) {
-      this.arrow = new THREE.ArrowHelper(dir, anchor, depth || 1, 0xffd24a, 6, 3);
+      this.arrow = new THREE.ArrowHelper(dir, tail, len, 0xffd24a, 6, 3);
       this.viewport.addToScene(this.arrow);
     } else {
-      this.arrow.position.copy(anchor);
+      this.arrow.position.copy(tail);
       this.arrow.setDirection(dir);
-      this.arrow.setLength(Math.max(depth, 1), 6, 3);
+      this.arrow.setLength(len, 6, 3);
     }
   }
 
@@ -413,7 +469,14 @@ export class ExtrudeTool {
     for (const wr of this.selected) {
       // step the area's interior a hair along the extrude direction, off its face
       const p = wr.interior3D.clone().addScaledVector(wr.plane.n, sign * 0.05);
-      if (this.viewport.pointInSolid(p)) inside++;
+      // Symmetric sweeps BOTH ways, so it enters material if EITHER side does.
+      // Reading one side is what made a profile on a datum plane buried in a
+      // body guess Join, which then reported adding no material because the
+      // prism was already inside the part.
+      const q = this.symmetric
+        ? wr.interior3D.clone().addScaledVector(wr.plane.n, -sign * 0.05)
+        : null;
+      if (this.viewport.pointInSolid(p) || (q !== null && this.viewport.pointInSolid(q))) inside++;
     }
     return inside * 2 > this.selected.length; // majority of selected areas
   }
@@ -444,20 +507,26 @@ export class ExtrudeTool {
    *  A dropped frame of a stale word is not a risk here; a raycast per area per
    *  move on an imported assembly is. */
   private shownOp: Op | null = null;
+  private shownSym = false;
   private promptKey = "";
   private refreshPrompt() {
     if (this.phase !== "drag") return;
-    const key = `${this.distance >= 0 ? "+" : "-"}${this.selected.length}`;
+    const key = `${this.distance >= 0 ? "+" : "-"}${this.selected.length}${this.symmetric ? "s" : ""}`;
     if (key === this.promptKey) return;
     this.promptKey = key;
     const op = this.plannedOperation();
-    if (op === this.shownOp) return;
+    // The symmetric state is on the line as well as the operation, so an
+    // unchanged word does not skip a repaint that has to announce the toggle
+    // the user just pressed.
+    if (op === this.shownOp && this.symmetric === this.shownSym) return;
     this.shownOp = op;
+    this.shownSym = this.symmetric;
     const word = OP_WORD[op];
+    const sym = this.symmetric ? " · both ways (Alt+S)" : " · Alt+S symmetric";
     setPrompt(
       this.editId
-        ? `${word} · Ctrl-click areas · drag or type a value · click to apply · Esc`
-        : `${word} · drag or type a depth, negative cuts · click to commit · Esc`,
+        ? `${word} · Ctrl-click areas · drag or type a value${sym} · click to apply · Esc`
+        : `${word} · drag or type a depth, negative cuts${sym} · click to commit · Esc`,
     );
   }
 
@@ -481,6 +550,10 @@ export class ExtrudeTool {
       distance: Math.round(this.distance * 1000) / 1000,
       operation: op,
       regions: this.selected.map((wr) => [wr.interior3D.x, wr.interior3D.y, wr.interior3D.z]),
+      // Written only when true, the way every other persisted flag here is: an
+      // ordinary extrude's JSON is byte-identical to the one this build wrote
+      // before the field existed.
+      ...(this.symmetric ? { symmetric: true } : {}),
       // capture the participants NOW: bodies hidden at creation stay excluded
       // from this boolean forever; later eye toggles are pure display. When
       // EDITING, the ORIGINAL capture is kept, re-capturing here would let
@@ -530,6 +603,7 @@ export class ExtrudeTool {
     this.overlay.setHoverRegion(null);
     this.viewport.suspendPicking = false;
     this.active = false;
+    this.symmetric = false;
     this.selected = [];
     if (this.editId !== null || this.forcedSketchId !== null) {
       this.editId = null;

@@ -130,12 +130,25 @@ def test_a_reference_that_resolves_to_nothing_keeps_the_cache_and_says_so():
     got = _build(doc)
     assert got["errs"] == [], got["errs"]          # a root never raises
     assert got["planes"] == {}, got["planes"]      # it stayed on the cache
-    assert len(got["diag"]) == 1, got["diag"]
-    d = got["diag"][0]
-    assert d["code"] == geom_select.CODE_REFERENCE_NOT_FOUND, d
+    found = [d for d in got["diag"]
+             if d.get("code") == geom_select.CODE_REFERENCE_NOT_FOUND]
+    assert len(found) == 1, got["diag"]
+    d = found[0]
     assert d["lossy"] is False, d  # no best-effort match was taken; none was taken at all
     assert "Sketch:" in d["reason"] and "Re-pick" in d["reason"], d["reason"]
     print(PASS, "a dead reference keeps the cache and says why")
+
+    # AND THE CAVITY IS REPORTED TOO. Falling back to the cached plane is what
+    # this file exists to allow: a root that failed would take every downstream
+    # feature with it. The cost of allowing it is the exact geometry the
+    # docstring above describes, a pocket buried inside the taller box, and for
+    # a long time nothing said so, because the volume of a sealed cavity and the
+    # volume of the open pocket the user wanted are identical.
+    sealed = [d for d in got["diag"] if d.get("code") == "sealedVoid"]
+    assert len(sealed) == 1, got["diag"]
+    assert sealed[0]["feature_id"] == "e2", sealed[0]
+    assert sealed[0]["lossy"] is False, sealed[0]
+    print(PASS, "and the cavity that fallback leaves behind is reported")
 
 
 def test_an_incremental_rebuild_agrees_with_a_full_one():
