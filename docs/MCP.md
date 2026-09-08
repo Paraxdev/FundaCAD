@@ -143,6 +143,7 @@ engine could not start on this computer".
 | `build` | rebuild, and say what came out and what failed |
 | `inspect` | exact volume, area, bbox, and every face and edge with a ready-made selector |
 | `view` | a PNG: orthographic, flat-shaded, with sections, body filtering and zoom |
+| `doc_import` | read a STEP, STL, 3MF, OBJ, BREP or GLB file in as a body to model against |
 | `export` | STEP, STL, 3MF, OBJ, BREP |
 
 `schema` is also served as an MCP resource at `fundacad://schema`.

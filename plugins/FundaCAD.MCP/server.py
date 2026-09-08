@@ -124,6 +124,24 @@ def failure(s):
     return {"content": [{"type": "text", "text": s}], "isError": True}
 
 
+#: What `doc_import` will read. The same set the app's file pickers offer, and
+#: the same names the engine's importer switches on.
+IMPORT_FORMATS = ("step", "stl", "3mf", "obj", "brep", "glb")
+
+
+def _import_format(path):
+    """The format an extension implies.
+
+    STEP is the fallback rather than an error, mirroring extToImportFormat in
+    src/io/files.ts and for its reason: a STEP file is spelled .step, .stp, .STP
+    and occasionally nothing recognisable, so a lookup table that refused what it
+    did not know would turn the commonest import into the one that needs an
+    argument. A file that is not one fails in the reader, which says so.
+    """
+    ext = os.path.splitext(path)[1].lstrip(".").lower()
+    return ext if ext in IMPORT_FORMATS else "step"
+
+
 class Server:
     def __init__(self):
         self.doc = M.new_document()
@@ -262,7 +280,7 @@ screen. Every edit you make appears in their window as it happens.
     #: proposed would put a no-op edit and an undo step in front of the user
     #: every time an agent measured something.
     MUTATORS = frozenset({
-        "doc_new", "doc_open", "doc_set", "param_set", "param_remove",
+        "doc_new", "doc_open", "doc_import", "doc_set", "param_set", "param_remove",
         "feature_add", "feature_update", "feature_remove", "feature_move",
     })
 
@@ -288,6 +306,20 @@ screen. Every edit you make appears in their window as it happens.
 
         add("doc_open", "Load a .funda document from disk.",
             {"path": {"type": "string"}}, ["path"], self.t_doc_open)
+
+        add("doc_import",
+            "Read an external geometry file (STEP, STL, 3MF, OBJ, BREP, GLB) into "
+            "the timeline as a body, so it can be measured with `inspect` and "
+            "modelled against. Use it when asked to fit something to a part that "
+            "exists as a file. The format comes from the extension unless given. "
+            "A large STEP can take minutes: it is one read, so do it once and "
+            "keep the document.",
+            {"path": {"type": "string", "description": "the file to read"},
+             "format": {"type": "string", "enum": list(IMPORT_FORMATS),
+                        "description": "override what the extension says"},
+             "at": {"type": "integer",
+                    "description": "timeline position, appended by default"}},
+            ["path"], self.t_doc_import)
 
         add("doc_save",
             "Write the document to a .funda file, which the FundaCAD app opens "
@@ -429,6 +461,60 @@ screen. Every edit you make appears in their window as it happens.
                 if issues else "")
         return text(f"Opened {path}: {len(self.doc['features'])} features, "
                     f"{len(self.doc.get('paramDefs') or {})} parameters.{note}")
+
+    async def t_doc_import(self, args):
+        """Read a geometry file into an `import` feature.
+
+        Two steps, the same two the app's own import does (src/io/files.ts
+        importPath): ask the engine to read the file, then put the fields it
+        hands back into the timeline. The geometry itself never travels through
+        here, `geom` is its content hash in the engine's durable blob store,
+        which is why this stays a small reply for a file of any size and why
+        that store has to be the one the app reads (see SidecarLink.start).
+        """
+        path = os.path.abspath(args["path"])
+        if not os.path.isfile(path):
+            return failure(f"No such file: {path}")
+        fmt = str(args.get("format") or _import_format(path)).lower()
+        if fmt not in IMPORT_FORMATS:
+            return failure(
+                f"Cannot import {fmt!r} files. Formats: {', '.join(IMPORT_FORMATS)}.")
+
+        reply = await self.link.call("import", path=path, format=fmt)
+        if not reply.get("ok"):
+            # The engine refuses for reasons an agent can act on (too large, too
+            # many triangles, unreadable), so its message is the whole answer and
+            # is passed through rather than summarised.
+            return failure("Import failed: "
+                           + (reply.get("error") or {}).get("message", "unreadable file"))
+        res = reply.get("result") or {}
+        if not res.get("geom"):
+            return failure(f"The engine read {path} but returned no geometry.")
+
+        feature = {
+            "type": "import",
+            "format": fmt,
+            "name": res.get("name") or os.path.splitext(os.path.basename(path))[0],
+            "geom": res["geom"],
+            "source": path,
+            "solid": bool(res.get("solid")),
+        }
+        # Spread, not defaulted, exactly as the app's import does: a file with no
+        # colour and no assembly tree must produce the feature it always did,
+        # and `null` is a different thing from absent to everything downstream.
+        for key in ("color", "nodes", "parts"):
+            if res.get(key) is not None:
+                feature[key] = res[key]
+
+        fid = M.add_feature(self.doc, feature, args.get("at"))
+        self._invalidate()
+        kind = "solid" if feature["solid"] else "surface body (not a solid)"
+        parts = f", {len(res['parts'])} parts" if res.get("parts") else ""
+        return text(self._state_line(
+            f"Imported {path} as {fid}: {feature['name']!r}, {kind}, "
+            f"{res.get('faces', '?')} faces{parts}.\n"
+            "Run `build`, then `inspect` for its sizes and the selectors that "
+            "address its faces and edges."))
 
     async def t_doc_save(self, args):
         path = args.get("path") or self.path

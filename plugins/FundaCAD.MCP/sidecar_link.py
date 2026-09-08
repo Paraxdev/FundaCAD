@@ -236,6 +236,19 @@ class SidecarLink:
         # when one of them is the auth token.
         _apply_env(env, "SIDECAR_PORT", str(self.port))
         _apply_env(env, "SIDECAR_TOKEN", self.token)
+        # The durable blob store, which the app's Rust shell normally sets
+        # (sidecar.rs::configure_env from container.rs::blob_dir). A bare
+        # `python server.py` is exactly what this is, so without this the store
+        # falls back to ~/.local/share, and an `import` feature's `geom` is a
+        # content hash INTO that store. The document would then save cleanly,
+        # name a blob the app has never held, and fail to open, which is the
+        # worst of the three possible outcomes: it looks like it worked.
+        #
+        # Not forced: an explicit FUNDACAD_BLOB_DIR in the environment is
+        # someone pointing this at a store on purpose.
+        if not _env("BLOB_DIR"):
+            _apply_env(env, "BLOB_DIR",
+                       os.path.join(app_session.app_data_dir(), "blobs"))
         self.proc = await asyncio.create_subprocess_exec(
             self.python, "server.py", cwd=sidecar_dir(), env=env,
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
