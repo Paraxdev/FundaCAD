@@ -59,6 +59,23 @@ def app_data_dir(identifier=APP_IDENTIFIER):
     return os.path.join(base, identifier)
 
 
+def session_file_path(path=None):
+    """The file `read_session_file` will actually open.
+
+    Its own function so a log line can name it. Worth naming, because the usual
+    reason this module finds nothing is not that the app is closed, it is that
+    the answer to "where is APPDATA" differed between the app and whatever
+    launched this server. A packaged host (an MSIX or Store build) can run its
+    children with the user's app data redirected into the package's own
+    container, and then this looks in a directory the app has never heard of and
+    reports, correctly and uselessly, that no app is running.
+
+    FUNDACAD_SESSION_FILE is the way out of that, and a log line naming the path
+    is what tells somebody they need it."""
+    return path or os.environ.get(SESSION_FILE_ENV) or os.path.join(
+        app_data_dir(), SESSION_FILE)
+
+
 def read_session_file(path=None):
     """`{"port": int, "token": str, "pid": int}`, or None.
 
@@ -68,8 +85,7 @@ def read_session_file(path=None):
     for all of them, and an exception here would make "FundaCAD is not open" look
     like a bug in the tool that asked.
     """
-    path = path or os.environ.get(SESSION_FILE_ENV) or os.path.join(
-        app_data_dir(), SESSION_FILE)
+    path = session_file_path(path)
     try:
         with open(path, encoding="utf-8") as fh:
             data = json.load(fh)

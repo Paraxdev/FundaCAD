@@ -41,21 +41,24 @@ forget, and forgetting means editing the wrong document.
 
 import asyncio
 import base64
+import contextlib
 import copy
 import io
 import json
 import os
 import sys
+import time
 import traceback
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import app_session  # noqa: E402
 import describe as D  # noqa: E402
 import model as M  # noqa: E402
 import render as R  # noqa: E402
 import schema as S  # noqa: E402
 from live_link import LiveLink, NoAppOpen, ReadOnlySession, StaleEdit  # noqa: E402
-from sidecar_link import SidecarLink  # noqa: E402
+from sidecar_link import SidecarLink, mode_from_env  # noqa: E402
 
 #: The MCP revisions this server knows how to speak. The client names one in
 #: `initialize` and we echo it back when we know it; otherwise we name our own
@@ -130,6 +133,14 @@ class Server:
         #: app has open. None means the document here is private, which is what
         #: every tool below assumed before there was another option.
         self.live = None
+        #: True once a tool has changed the PRIVATE document. It is what stops
+        #: the re-probe below from pulling the rug out from under work already
+        #: done here: adopting the app's document replaces this one, which is
+        #: right when nothing has been built and destructive when something has.
+        self.private_edits = False
+        #: When the last re-probe ran, so a closed app costs one file stat per
+        #: tool rather than one connect timeout (see _adopt_running_app).
+        self._probed_at = 0.0
         #: The last successful build's per-body mesh, which is what `view`
         #: draws. Kept rather than re-requested: a render right after a build is
         #: the common case and the mesh is the expensive part of the reply.
@@ -186,6 +197,65 @@ screen. Every edit you make appears in their window as it happens.
                 # like a broken installation.
                 log(f"[mcp] attached to the engine, but not to a document: {ex}")
         return self
+
+    #: How long to leave between re-probes for a running app. The probe is a
+    #: file read, and only dials a port when that file exists, so the usual cost
+    #: is nothing at all. The interval is for the stale-file case, where the dial
+    #: waits out its timeout and would otherwise do so on every single tool call.
+    REPROBE_SECONDS = 3.0
+
+    async def _adopt_running_app(self):
+        """Attach to the app if it has appeared since start-up.
+
+        `attach` runs once, at start-up, which is the wrong moment and the only
+        one that was available to it. An MCP host starts its servers when the
+        HOST starts, not when a conversation starts, so "is FundaCAD open?" got
+        asked before the user had any reason to have opened it. Answering no
+        then meant a private engine for the rest of the host's session, however
+        long ago the app was opened, which reads exactly as the server refusing
+        to use the app that is right there.
+
+        So the question is asked again, while the answer can still change: only
+        while private, only when nothing has been built here that adopting would
+        discard, and no more often than REPROBE_SECONDS.
+        """
+        if self.live is not None or self.private_edits:
+            return
+        if mode_from_env() == "standalone":
+            return  # configured to stay private, so do not go looking
+        now = time.monotonic()
+        if now - self._probed_at < self.REPROBE_SECONDS:
+            return
+        self._probed_at = now
+
+        app = await app_session.find_running_app()
+        if app is None:
+            return
+        link = SidecarLink(port=app["port"], token=app["token"])
+        live = LiveLink(link)
+        try:
+            doc = await live.pull()
+        except (NoAppOpen, OSError, RuntimeError, TimeoutError) as ex:
+            # Found the engine, but the window is not sharing (the live-editing
+            # setting), or it went away between the probe and the pull. Staying
+            # private is the honest outcome; saying why is what stops it looking
+            # like the connector is broken.
+            log(f"[mcp] FundaCAD is open but not sharing a document: {ex}")
+            return
+        log(f"[mcp] FundaCAD opened since start-up (pid {app.get('pid')}), "
+            f"switching to its engine on port {app['port']} and its open "
+            f"document: {live.title or 'untitled'}")
+        old = self.link
+        self.link, self.live = link, live
+        self.doc = doc or M.new_document()
+        self.doc.setdefault("parameters", {})
+        self.doc.setdefault("paramDefs", {})
+        self._invalidate()
+        # The private engine held an OCCT worker pool that nothing will ask for
+        # again. Dropped after the swap, never before: a failure above has to
+        # leave a working private session behind, not neither.
+        with contextlib.suppress(Exception):
+            await old.stop()
 
     #: Tools that change the document. Anything here is offered to the app when
     #: a live session is on; anything not here only reads, and a reader that
@@ -666,9 +736,15 @@ screen. Every edit you make appears in their window as it happens.
         tool = self.tools.get(name)
         if tool is None:
             return failure(f"No tool {name!r}. Have: {', '.join(sorted(self.tools))}")
+        with contextlib.suppress(Exception):
+            # Never fatal to a tool call: working privately is a worse answer
+            # than working on the open document, but it is a working one.
+            await self._adopt_running_app()
         try:
             if self.live is not None and name not in self.NO_DOCUMENT:
                 return await self._call_live(tool, name, args)
+            if name in self.MUTATORS:
+                self.private_edits = True
             return await tool.fn(args)
         except (M.DocumentError, KeyError, ValueError, TypeError) as ex:
             return failure(f"{type(ex).__name__}: {ex}")
