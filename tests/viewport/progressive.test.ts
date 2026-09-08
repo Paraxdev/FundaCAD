@@ -208,6 +208,89 @@ describe("ProgressiveModel", () => {
       expect(pm.streaming).toBe(false);
     });
 
+    it("does not dispose the bodies the next stream is about to reuse", () => {
+      // EDITING WHILE A REBUILD IS STILL STREAMING. The second begin() is handed
+      // the view the first stream published, so every body it might reuse is a
+      // body the first stream is still holding. Tearing the old stream down
+      // first freed those exact objects and re-adopted them one line later: an
+      // unchanged body came back into `slots` with its GPU buffers already
+      // released and without ever being put back in the scene, so it vanished
+      // and stayed vanished — through the commit, since setModel's etag diff
+      // finds it "already present" and reuses it too.
+      const r = reply(3);
+      const disposed: string[] = [];
+      const group = new THREE.Group();
+      const pm = new ProgressiveModel(group, (b) => disposed.push(b.id));
+
+      // Stream 1, complete.
+      pm.begin(0, r.bodies!, r, new THREE.Box3(), null, new Set());
+      const first = pm.append(0, r, r.bodies!, edgesByBody(r, ["b0", "b1", "b2"]),
+        { triStart: 0, triEnd: 6 }, new Set(), RES)!;
+      expect(group.children.length).toBe(6);
+      const uuids = new Map(first.bodies.map((b) => [b.id, b.mesh.uuid]));
+
+      // Stream 2, over the top of it: one body edited, two untouched.
+      const edited = reply(3);
+      edited.bodies![2]!.etag = "etag-CHANGED";
+      pm.begin(1, edited.bodies!, edited, new THREE.Box3(), first, new Set());
+
+      // The two unchanged bodies are neither disposed nor taken off screen.
+      expect(disposed).toEqual([]);
+      const kept = pm.current!.bodies.filter((b) => b.id !== "b2");
+      expect(kept.map((b) => b.id)).toEqual(["b0", "b1"]);
+      for (const b of kept) {
+        expect(b.mesh.uuid, b.id).toBe(uuids.get(b.id));
+        expect(group.children.includes(b.mesh), `${b.id} is in the scene`).toBe(true);
+      }
+      // ...and their buffers are still real, which is the half that decides
+      // whether anything is drawn.
+      for (const b of kept) {
+        expect(b.mesh.geometry.getAttribute("position"), b.id).toBeTruthy();
+        expect(b.mesh.geometry.getIndex(), b.id).toBeTruthy();
+      }
+    });
+
+    it("still disposes the body the next stream is replacing, once its chunk lands", () => {
+      // The control for the case above. Sparing everything would be a leak: the
+      // edited body's old mesh has to go, and it goes at the atomic swap rather
+      // than up front, so the screen never shows a hole where it was.
+      const r = reply(3);
+      const disposed: string[] = [];
+      const group = new THREE.Group();
+      const pm = new ProgressiveModel(group, (b) => disposed.push(b.id));
+      pm.begin(0, r.bodies!, r, new THREE.Box3(), null, new Set());
+      const first = pm.append(0, r, r.bodies!, edgesByBody(r, ["b0", "b1", "b2"]),
+        { triStart: 0, triEnd: 6 }, new Set(), RES)!;
+
+      const edited = reply(3);
+      edited.bodies![2]!.etag = "etag-CHANGED";
+      pm.begin(1, edited.bodies!, edited, new THREE.Box3(), first, new Set());
+      expect(disposed).toEqual([]);           // still held, so no hole
+      expect(group.children.length).toBe(6);  // and still on screen
+
+      pm.append(1, edited, [edited.bodies![2]!], edgesByBody(edited, ["b2"]),
+        { triStart: 4, triEnd: 6 }, new Set(), RES);
+      expect(disposed).toEqual(["b2"]);       // swapped, then dropped
+      expect(group.children.length).toBe(6);
+    });
+
+    it("drops a body the next stream's manifest no longer names", () => {
+      // The other control: sparing the previous stream's bodies must not mean
+      // keeping one the document has deleted.
+      const r = reply(3);
+      const disposed: string[] = [];
+      const group = new THREE.Group();
+      const pm = new ProgressiveModel(group, (b) => disposed.push(b.id));
+      pm.begin(0, r.bodies!, r, new THREE.Box3(), null, new Set());
+      const first = pm.append(0, r, r.bodies!, edgesByBody(r, ["b0", "b1", "b2"]),
+        { triStart: 0, triEnd: 6 }, new Set(), RES)!;
+
+      const fewer = reply(2);
+      pm.begin(1, fewer.bodies!, fewer, new THREE.Box3(), first, new Set());
+      expect(disposed).toEqual(["b2"]);
+      expect(group.children.length).toBe(4);
+    });
+
     it("finish() releases without disposing — the commit owns them now", () => {
       const r = reply(3);
       const disposed: string[] = [];
