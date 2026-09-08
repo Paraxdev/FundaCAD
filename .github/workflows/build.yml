@@ -71,6 +71,17 @@ jobs:
       - name: Plugin sandbox chunk survives the build
         run: node scripts/check-sandbox-chunk.mjs
 
+      # The app ships the loader and nothing to load. What makes that true is one
+      # `import.meta.env.DEV` branch in src/plugins/activate.ts, which vite
+      # replaces with `false` so rollup drops the branch, the dynamic import
+      # inside it, and src/plugins/devPlugins.ts with its glob of every plugin
+      # directory. Nothing fails loudly if that branch is ever written a way
+      # rollup cannot drop: the app keeps working, the plugins keep running from
+      # the bundle, and "we do not ship them" becomes a claim rather than a fact.
+      # Reads the artifact check-sandbox-chunk.mjs has just built.
+      - name: The app ships no plugin code
+        run: node scripts/check-no-plugin-code.mjs
+
       - name: Install Python 3.12 + sync sidecar deps (locked)
         run: |
           uv python install 3.12
@@ -467,35 +478,52 @@ jobs:
       # Must come BEFORE download-artifact: actions/checkout cleans the workspace
       # by default and would delete dist/. Sparse, because the only thing this job
       # needs out of the repo is the changelog it builds release notes from.
+      # A FULL checkout, and it used to be a sparse one naming four paths.
+      #
+      # Packaging a plugin now BUILDS its app-side module, and that build resolves
+      # `fundacad` against src/plugins/host.ts, which reaches most of src/. The
+      # sparse list would have had to name the whole application, one path at a
+      # time, and be corrected every time a host export gained a dependency —
+      # with the failure being a release that publishes a bundle missing its
+      # code.
       - uses: actions/checkout@v4
-        with:
-          # CHANGELOG.md for the notes, tauri.conf.json for the updater pubkey
-          # the manifest gate below reads. Leaving the config out made that gate
-          # fail on a missing file, under `set -euo pipefail`, which reads as a
-          # publish failure rather than as a missing checkout path.
-          sparse-checkout: |
-            CHANGELOG.md
-            src-tauri/tauri.conf.json
-            plugins
-            scripts/build-plugins.py
-          sparse-checkout-cone-mode: false
 
       - uses: actions/download-artifact@v4
         with:
           path: dist
 
       # The plugin bundles are built here rather than in the platform matrix:
-      # they are zips of sources with nothing compiled in them, so one copy
-      # serves every platform, and building them three times would only raise
-      # the question of which one got published.
+      # a bundle is the same bytes whoever builds it, so one copy serves every
+      # platform, and building them three times would only raise the question of
+      # which one got published.
       #
-      # Every directory under plugins/ with a manifest.json, so a new plugin needs
-      # a directory and not an edit here.
+      # Every directory under plugins/ with a manifest.json, so a new plugin
+      # needs a directory and not an edit here.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
       - name: Package the plugins
         shell: bash
         run: |
           set -euo pipefail
           python3 scripts/build-plugins.py .
+          # Every plugin this repository has, or the release is missing one and
+          # the app's offer list points at a 404. Counted rather than trusted:
+          # build-plugins.py exits 0 having built nothing if its discovery ever
+          # stops finding a directory.
+          want=$(ls -d plugins/*/manifest.json | wc -l)
+          got=$(ls plugin-*.zip | wc -l)
+          if [ "$want" != "$got" ]; then
+            echo "packaged $got bundles for $want plugin directories" >&2
+            exit 1
+          fi
+
+
 
       - name: Assemble latest.json
         shell: bash

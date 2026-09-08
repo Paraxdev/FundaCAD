@@ -295,6 +295,15 @@
   justify-content: space-between;
   gap: var(--s-3);
 }
+/* The switch and Remove, kept together at the right of a row. Two controls that
+   mean different things (stop it, and get rid of it), so they read as a pair
+   rather than as one thing with a label beside it. */
+.plug-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  flex: none;
+}
 .plug-name {
   font-size: 13px;
   color: var(--text, #e6e8ec);

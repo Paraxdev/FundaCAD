@@ -32,13 +32,7 @@
 // different from a greedy one at a glance.
 
 import { computed, onMounted, onUnmounted, ref } from "vue";
-import { describeGrants, sandboxNote, type PluginManifest } from "../../plugins/manifest";
-import {
-  builtinPlugins,
-  onPluginChange,
-  pluginEnabled,
-  setPluginEnabled,
-} from "../../plugins/registry";
+import { describeGrants, sandboxNote } from "../../plugins/manifest";
 import {
   inspectFile,
   inspectUrl,
@@ -55,9 +49,9 @@ import {
   type InstalledPlugin,
   type OfficialPlugin,
 } from "../../plugins";
+import { onPluginChange, pluginEnabled, setPluginEnabled } from "../../plugins/registry";
 import { toast } from "../../ui/toast";
 
-const builtins = builtinPlugins();
 const suggested = officialPlugins();
 
 const installed = ref<InstalledPlugin[]>([]);
@@ -76,27 +70,27 @@ const url = ref("");
 const candidate = ref<Candidate | null>(null);
 const reading = ref(false);
 
-// The registry is deliberately Vue-free, which is what lets the headless suite
-// import it, so its state reaches the template through a mirror.
+// The switch, mirrored. The registry is deliberately Vue-free, which is what
+// lets the headless suite import it, so its state reaches the template through
+// this.
+//
+// It sits on an INSTALLED row now rather than on a separate list of things
+// compiled into the app, because that list no longer exists. Off does not mean
+// gone: the bundle stays on disk and whatever it wrote stays in the document,
+// which is the difference between this and Remove and the reason both are here.
 const on = ref<Record<string, boolean>>({});
 const readState = () => {
   const next: Record<string, boolean> = {};
-  for (const b of builtins) next[b.manifest.id] = pluginEnabled(b.manifest.id);
+  for (const rec of installed.value) next[rec.id] = pluginEnabled(rec.id);
   on.value = next;
 };
-readState();
 let offPlugins: (() => void) | null = null;
 onMounted(() => { offPlugins = onPluginChange(readState); });
 onUnmounted(() => offPlugins?.());
 
-function toggle(manifest: PluginManifest, ev: Event) {
-  const wanted = (ev.target as HTMLInputElement).checked;
-  setPluginEnabled(manifest.id, wanted);
-  // Turning something on shows what it reaches, without having been asked to.
-  // Nobody is consenting here, the code is already in the app; but somebody
-  // switching a capability on for the first time should not have to go looking
-  // for what they switched on.
-  if (wanted) showing.value = manifest.id;
+function toggle(id: string, ev: Event) {
+  setPluginEnabled(id, (ev.target as HTMLInputElement).checked);
+  readState();
 }
 
 const record = (id: string) => installed.value.find((r) => r.id === id);
@@ -126,6 +120,7 @@ function whereFrom(rec: InstalledPlugin): string {
 async function refresh() {
   try {
     installed.value = await installedPlugins();
+    readState();
   } catch (err) {
     // Not a toast. Failing to read the plugin directory while someone browses
     // Preferences is worth knowing about, and worth nothing to interrupt for.
@@ -236,52 +231,11 @@ async function copy(text: string) {
 </script>
 
 <template>
-  <div class="sm-section">In the app</div>
-  <div class="sm-hint">Off means it does not run, and its buttons and panels are gone.</div>
-
-  <div v-for="b in builtins" :key="b.manifest.id" class="plug-row" :data-plugin="b.manifest.id">
-    <div class="plug-head">
-      <div>
-        <div class="plug-name">{{ b.manifest.name }}</div>
-        <div class="plug-summary">{{ b.manifest.summary }}</div>
-      </div>
-      <span class="param-switch">
-        <input
-          :id="`prefs-plugin-${b.manifest.id}`"
-          type="checkbox"
-          :checked="on[b.manifest.id]"
-          @change="toggle(b.manifest, $event)"
-        />
-        <span class="track"><span class="knob"></span></span>
-      </span>
-    </div>
-    <div class="plug-state">
-      <button
-        class="plug-link"
-        @click="showing = showing === b.manifest.id ? '' : b.manifest.id"
-      >
-        {{ showing === b.manifest.id ? "Hide what it uses" : "What it uses" }}
-      </button>
-    </div>
-    <div v-if="showing === b.manifest.id" class="plug-consent">
-      <div class="plug-can">
-        <div class="plug-listhead">It uses</div>
-        <ul>
-          <li v-for="line in describeGrants(b.manifest).can" :key="line">{{ line }}</li>
-        </ul>
-      </div>
-      <div class="plug-cannot">
-        <div class="plug-listhead">It does not</div>
-        <ul>
-          <li v-for="line in describeGrants(b.manifest).cannot" :key="line">{{ line }}</li>
-        </ul>
-      </div>
-      <div class="sm-hint">{{ sandboxNote(b.manifest.kind) }}</div>
-    </div>
-  </div>
-
   <div class="sm-section">Installed plugins</div>
-  <div class="sm-hint">Each gets what it asked for and nothing else.</div>
+  <div class="sm-hint">
+    Each gets what it asked for and nothing else. Off stops one without removing
+    it.
+  </div>
 
   <div v-if="rows.length === 0" class="sm-hint">Nothing installed yet.</div>
 
@@ -291,9 +245,20 @@ async function copy(text: string) {
         <div class="plug-name">{{ manifest ? manifest.name : rec.id }}</div>
         <div class="plug-summary">{{ manifest ? manifest.summary : "" }}</div>
       </div>
-      <button class="btn" :disabled="busy === rec.id" @click="drop(rec.id, manifest ? manifest.name : rec.id)">
-        {{ busy === rec.id ? "Removing…" : "Remove" }}
-      </button>
+      <div class="plug-controls">
+        <span class="param-switch" :title="on[rec.id] === false ? 'Switched off' : 'Running'">
+          <input
+            :id="`prefs-plugin-${rec.id}`"
+            type="checkbox"
+            :checked="on[rec.id] !== false"
+            @change="toggle(rec.id, $event)"
+          />
+          <span class="track"><span class="knob"></span></span>
+        </span>
+        <button class="btn" :disabled="busy === rec.id" @click="drop(rec.id, manifest ? manifest.name : rec.id)">
+          {{ busy === rec.id ? "Removing…" : "Remove" }}
+        </button>
+      </div>
     </div>
 
     <div class="plug-state">

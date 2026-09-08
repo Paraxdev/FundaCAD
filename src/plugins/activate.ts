@@ -1,147 +1,157 @@
-// Starting and stopping the plugins that ship in this repository.
+// Starting and stopping the plugins that are installed.
 //
-// One place where the core says "run whatever is active" instead of naming the
-// things it runs. That sentence is the whole point of this file: after it,
-// nothing in app/ imports the 3D mouse or the printer, and adding a capability
-// is adding a directory under plugins/ rather than an edit to anything here.
-// This file names no plugin at all.
+// One place where the app says "run whatever is active" instead of naming the
+// things it runs. That sentence is the whole point of this file: nothing in
+// app/ imports the 3D mouse or the printer, and adding a capability is adding a
+// directory under plugins/ rather than an edit to anything here. This file
+// names no plugin at all.
 //
-// ACTIVE MEANS TWO DIFFERENT THINGS, and both are here. A built-in is active
-// when its switch is on. A BUNDLE is active when it is installed on disk — and
-// a bundle can have an app-side module too: a process plugin still has a face
-// in the app (a setting that governs it, a badge that says who is connected),
-// and that face has to appear and disappear with the install rather than being
-// written into the app on every machine whether anybody installed it or not.
+// ACTIVE MEANS INSTALLED AND NOT SWITCHED OFF. Not a build-time list: what the
+// app ships with is nothing, and every plugin including the ones written in
+// this repository arrives as a zip from a release. The switch is the smaller of
+// the two questions and it defaults to on, because installing something is
+// already an answer to "do you want this".
 //
-// The imports are dynamic, and that is load-bearing rather than tidy: see
-// MAIN below. "Not part of the core" ends up a fact about the build rather than
-// a claim in a comment.
+// TWO SOURCES FOR A PLUGIN'S CODE, and the difference between them is the
+// difference between a shipped build and a development one:
 //
-// Turning one off at runtime really does stop it. Each activate() returns its
-// teardown, and this holds them so a toggle can run the right one. A capability
-// that could only be switched off by restarting would be a checkbox that lies
-// for as long as the session lasts.
+//   installed  the bundle's own `main.js`, read back through Rust (which is
+//              where the origin rule is enforced) and evaluated by ./loader.ts.
+//              This is what a real installation does, always.
+//   dev        the plugin directory compiled straight into the dev bundle, so
+//              an edit to a plugin is visible on reload rather than after a
+//              package-publish-install round trip. `vite dev` only; see
+//              ./devPlugins.ts for why the branch shape matters, and
+//              scripts/check-no-plugin-code.mjs for the check that it holds.
+//
+// Removing one at runtime really does stop it. Each activate() returns its
+// teardown, and this holds them so a removal can run the right one. A plugin
+// that could only be stopped by restarting would be an uninstall that lies for
+// as long as the session lasts.
 
+import { installedIds, onInstalledChange, pluginCode, refreshInstalled } from "./index";
 import { onPluginChange, pluginEnabled } from "./registry";
-import { installedIds, onInstalledChange, refreshInstalled } from "./index";
-import { shippedPlugins } from "./shipped";
+import { evaluatePlugin, hostModules, type PluginModule } from "./loader";
 import type { Engine } from "../app/engine";
 
-/** Whatever a capability needs to do when it starts, and the undo for it. */
+/** Whatever a plugin needs to do when it starts, and the undo for it. */
 type Activator = (e: Engine) => Promise<() => void>;
 
-/** Every plugin directory that has a `main.ts`, as a loader that has not run.
+/** Which plugins should be running, out of what is installed and what a
+ *  development build compiled in.
  *
- *  NOT eager, and that is the load-bearing half. A static import would put the
- *  printer client, the slicer bridge, the HID event plumbing and the input
- *  filter into the bundle every machine downloads and parses at startup,
- *  whether or not that machine has a printer or a 3D mouse. Written this way
- *  the bundler gives each capability a chunk of its own, and a capability that
- *  is off is never fetched.
- *
- *  A plugin with nothing to start in the app simply has no `main.ts`, and needs
- *  no entry here to say so. */
-const MAIN = import.meta.glob("../../plugins/*/main.ts") as Record<
-  string,
-  () => Promise<unknown>
->;
-
-/** `../../plugins/Some.Thing/main.ts` -> `Some.Thing`. */
-function idOf(path: string): string {
-  const parts = path.split("/");
-  return parts[parts.length - 2] ?? "";
-}
-
-const LOADERS: Record<string, () => Promise<unknown>> = Object.fromEntries(
-  Object.entries(MAIN).map(([path, load]) => [idOf(path), load]),
-);
-
-/** Which plugins are built into the app, as their own manifests declare.
- *
- *  Read once: the set of directories in this repository is fixed at build time.
- *  It decides only WHICH QUESTION to ask about a plugin — "is its switch on" or
- *  "is it installed" — and never whether the answer is yes. */
-const IS_BUILTIN = new Set(
-  shippedPlugins().filter((p) => p.manifest.kind === "builtin").map((p) => p.dir),
-);
-
-/** Whether this plugin's app-side module should be running.
- *
- *  A bundle whose id is not installed is not active, including the ones whose
- *  source happens to live in this repository: shipping a plugin's source is not
- *  the same as somebody having it. */
-function active(id: string): boolean {
-  return IS_BUILTIN.has(id) ? pluginEnabled(id) : installedIds().has(id);
+ *  Pure, exported, and tested directly. The two questions it answers are the
+ *  whole policy of this file — is it here, and has it been switched off — and
+ *  the alternative is testing them through a dynamic import of a glob that a
+ *  test cannot stand in for. Sorted, so the order plugins start in does not
+ *  depend on which set happened to name one first. */
+export function activeIds(
+  installed: Iterable<string>,
+  dev: Iterable<string>,
+  enabled: (id: string) => boolean,
+): string[] {
+  return [...new Set([...installed, ...dev])].filter(enabled).sort();
 }
 
 /** A module is startable if it exported the one thing this file calls.
  *
- *  Checked rather than asserted, because the glob above will happily pick up a
- *  `main.ts` that exports something else entirely, and the failure would
- *  otherwise be `m.activate is not a function` at a point where nothing says
- *  which plugin. */
+ *  Checked rather than asserted, because a bundle can carry any `main.js` at
+ *  all, and the failure would otherwise be `m.activate is not a function` at a
+ *  point where nothing says which plugin. */
 function activatorOf(m: unknown): Activator | null {
   const fn = (m as { activate?: unknown } | null)?.activate;
   return typeof fn === "function" ? (fn as Activator) : null;
 }
 
-/** Run the capabilities that are on, and keep doing so as that set changes.
+/** The plugins compiled into a development build: none at all in a shipped one.
+ *
+ *  The `import.meta.env.DEV` branch is what keeps them out of it. Vite replaces
+ *  the expression with `false`, rollup drops the branch, and the dynamic import
+ *  inside it goes too, taking ./devPlugins.ts and every plugin's code with it. */
+async function devLoaders(): Promise<Record<string, () => Promise<unknown>>> {
+  if (!import.meta.env.DEV) return {};
+  return (await import("./devPlugins")).devLoaders;
+}
+
+/** A plugin's app-side module, or null when it has none to run.
+ *
+ *  INSTALLED FIRST, and never the other way round. The installed copy is the one
+ *  somebody consented to and the one a release actually shipped; a development
+ *  build that quietly preferred its own would be testing something nobody has. */
+async function moduleFor(
+  id: string,
+  dev: Record<string, () => Promise<unknown>>,
+): Promise<PluginModule | null> {
+  const code = await pluginCode(id);
+  if (code !== null) return evaluatePlugin(id, code, await hostModules());
+  const load = dev[id];
+  return load ? ((await load()) as PluginModule) : null;
+}
+
+/** Run the plugins that are installed, and keep doing so as that set changes.
  *
  *  Returns a teardown that stops everything and stops listening, which is what
  *  a test needs to leave no timers, listeners or device handles behind. */
 export function activatePlugins(e: Engine): () => void {
   const running = new Map<string, () => void>();
-  // An activation is asynchronous, so a fast off-on-off can otherwise land its
-  // teardown before the thing it tears down exists. Recording the intent and
+  // Empty in a shipped build, and the plugin directories of this repository in
+  // a development one.
+  let dev: Record<string, () => Promise<unknown>> = {};
+  // Loading is asynchronous, so a fast install-remove-install can otherwise land
+  // a teardown before the thing it tears down exists. Recording the intent and
   // checking it again on the far side of the await is what keeps the last
   // instruction the winning one.
   const wanted = new Set<string>();
 
   const sync = () => {
-    for (const id of Object.keys(LOADERS)) {
-      const on = active(id);
-      if (on && !wanted.has(id)) {
-        wanted.add(id);
-        void LOADERS[id]!()
-          .then((m) => {
-            const activate = activatorOf(m);
-            if (!activate) {
-              throw new Error(`plugins/${id}/main.ts exports no activate()`);
-            }
-            return activate(e);
-          })
-          .then((stop) => {
-            if (!wanted.has(id)) {
-              stop(); // turned off again while it was loading
-              return;
-            }
-            running.set(id, stop);
-          })
-          .catch((err) => {
-            wanted.delete(id);
-            // Loud, but not fatal. A capability that will not start is a
-            // feature missing from the window, and a window that will not open
-            // is worse. The console is where the reason has to be.
-            console.error(`[plugins] ${id} could not start:`, err);
-          });
-      } else if (!on && wanted.has(id)) {
-        wanted.delete(id);
-        running.get(id)?.();
-        running.delete(id);
-      }
+    const on = new Set(activeIds(installedIds(), Object.keys(dev), pluginEnabled));
+    for (const id of on) {
+      if (wanted.has(id)) continue;
+      wanted.add(id);
+      void moduleFor(id, dev)
+        .then((m) => {
+          const activate = m && activatorOf(m);
+          // A plugin with no app-side module is not an error: a process plugin
+          // that contributes nothing to the window is a complete plugin.
+          return activate ? activate(e) : () => {};
+        })
+        .then((stop) => {
+          if (!wanted.has(id)) {
+            stop(); // removed again while it was loading
+            return;
+          }
+          running.set(id, stop);
+        })
+        .catch((err) => {
+          wanted.delete(id);
+          // Loud, but not fatal. A plugin that will not start is a feature
+          // missing from the window, and a window that will not open is worse.
+          // The console is where the reason has to be.
+          console.error(`[plugins] ${id} could not start:`, err);
+        });
+    }
+    for (const id of [...wanted]) {
+      if (on.has(id)) continue;
+      wanted.delete(id);
+      running.get(id)?.();
+      running.delete(id);
     }
   };
 
   sync();
-  const offSwitch = onPluginChange(sync);
   const offInstalled = onInstalledChange(sync);
+  const offSwitch = onPluginChange(sync);
+  // The dev set arrives a tick later (it is behind a dynamic import), so sync
+  // again once it is known. In a shipped build this resolves to nothing and the
+  // second sync is a no-op over an unchanged set.
+  void devLoaders().then((loaders) => { dev = loaders; sync(); });
   // What is on disk is not known until it has been asked for, and asking is a
   // command round-trip. Kicked off here rather than at a call site, so nothing
   // has to remember that starting the plugins needs this first.
   void refreshInstalled();
   return () => {
-    offSwitch();
     offInstalled();
+    offSwitch();
     wanted.clear();
     for (const stop of running.values()) stop();
     running.clear();

@@ -34,7 +34,7 @@ import {
   sameId,
   type PluginManifest,
 } from "./manifest";
-import { bundleAsset, shippedBundles } from "./shipped";
+import { bundleAsset, shippedPlugins } from "./shipped";
 import type { DocumentStore } from "../document/store";
 import type { RunOutcome } from "./runner/host";
 
@@ -60,16 +60,16 @@ export interface OfficialPlugin {
 
 /** The plugins this repository publishes, offered for install.
  *
- *  Every directory under plugins/ whose kind is not `builtin`. A builtin has no
- *  bundle to offer: its code IS the app's code, there is no zip on any release,
- *  and offering to download one would be offering a 404. Those are listed by
- *  ./registry.ts instead, on the same screen, with a switch rather than a
- *  button.
+ *  EVERY directory under plugins/, with no exception for `builtin`. There used
+ *  to be one: a builtin's code was the app's code, there was no zip on any
+ *  release, and offering to download one would have been offering a 404. That
+ *  is no longer true of anything here — scripts/build-plugins.py packages all
+ *  four and the release job publishes them — so the exception went with it.
  *
  *  The asset name comes from `bundleAsset`, which is also what the packager
  *  uses, so this cannot come to expect a file the release does not carry. */
 export function officialPlugins(): OfficialPlugin[] {
-  return shippedBundles().map(({ manifest }) => {
+  return shippedPlugins().map(({ manifest }) => {
     const asset = bundleAsset(manifest.id);
     return {
       manifest,
@@ -157,6 +157,22 @@ function noteInstalled(ids: string[]) {
   for (const fn of installedListeners) fn();
 }
 
+/** An installed plugin's app-side module, or null when there is none to run.
+ *
+ *  Null in a plain browser session, where nothing can be installed; the empty
+ *  string from the far side, which means "installed, with no app-side module",
+ *  is also null here because the two are the same instruction to the caller.
+ *
+ *  Anything ELSE the far side refuses is thrown, and that is deliberate: "this
+ *  bundle did not come from FundaCAD's own releases" is the sentence a person
+ *  needs to see, and swallowing it into null would turn a refusal into a plugin
+ *  that silently does nothing. */
+export async function pluginCode(id: string): Promise<string | null> {
+  if (!isTauri()) return null;
+  const code = await call<string>("plugin_code", { id });
+  return code.length ? code : null;
+}
+
 /** Re-read what is on disk. Called at startup and after anything that installs
  *  or removes, so nothing has to remember to keep the cache in step. */
 export async function refreshInstalled(): Promise<void> {
@@ -206,7 +222,7 @@ export function installedManifest(rec: InstalledPlugin): PluginManifest | null {
   // `sameId`, not `===`. Two ids that differ only in case are one directory on
   // Windows and macOS, so the row on screen and the record on disk can be
   // spelled differently and still be the same install.
-  const known = shippedBundles().find((p) => sameId(p.manifest.id, rec.id))?.manifest;
+  const known = shippedPlugins().find((p) => sameId(p.manifest.id, rec.id))?.manifest;
   const parsed = parseManifest({
     id: rec.id,
     name: known ? known.name : rec.id,

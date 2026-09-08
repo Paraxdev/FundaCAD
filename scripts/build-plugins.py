@@ -44,13 +44,17 @@ import hashlib
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
+import tempfile
 import zipfile
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PLUGINS = os.path.join(REPO, "plugins")
 
 MANIFEST = "manifest.json"
+CODE = "main.js"
 
 SKIP_DIRS = {"tests", "__pycache__", "target", "node_modules", ".git"}
 
@@ -71,11 +75,24 @@ FIXED_TIME = (1980, 1, 1, 0, 0, 0)
 #: rather than left to the install to discover: a bundle missing its entry
 #: point installs perfectly and then does nothing, which is the most annoying
 #: shape a failure can have.
+#:
+#: `builtin` is here because a builtin is no longer something that ships INSIDE
+#: the app. The word describes REACH -- it runs in the application's own
+#: JavaScript context, with the application's own reach, which is what
+#: sandboxNote("builtin") tells the person on the consent screen. Where it comes
+#: from is a separate question, and the answer is now the same as for every
+#: other kind: a zip on a release.
 ENTRY = {
+    "builtin": CODE,
     "process": "server.py",
     "compute": "plugin.js",
     "panel": "index.html",
 }
+
+#: The app-side module of a plugin that runs in the window, built by
+#: scripts/build-plugin-code.mjs and read back by src-tauri's plugin_code.
+#: Generated into the bundle rather than committed: it is a build artifact of the
+#: directory beside it, and a committed copy is a copy that can be stale.
 
 #: Ships inside the app, so there is no bundle to build. See the module docs.
 BUILTIN = "builtin"
@@ -107,20 +124,36 @@ def discover(only):
             continue
         if only and name not in only:
             continue
-        if read_manifest(name, path).get("kind") == BUILTIN:
-            skipped.append(name)
-            continue
         out.append((name, path))
     if only:
-        # A builtin named on the command line is an error rather than a silent
-        # nothing: somebody asked for a bundle that cannot exist, and printing
-        # "built 0 plugins" would let them believe it did.
-        for name in sorted(set(only) & set(skipped)):
-            sys.exit(f"plugins/{name} is a {BUILTIN}: it ships in the app, there is no bundle")
         missing = sorted(set(only) - {n for n, _ in out})
         if missing:
             sys.exit("no such plugin: " + ", ".join(missing))
     return out
+
+
+def build_code(pid, src):
+    """Compile a plugin's app-side module, and hand back (name, bytes).
+
+    Only for the kind that has one. The build is a vite library build and it is
+    the slow part of packaging, so it runs once per plugin and its output goes
+    straight into the zip rather than onto the disk beside the source, where a
+    stale copy could be committed by accident.
+    """
+    node = shutil.which("node")
+    if node is None:
+        sys.exit("node is not on PATH, and a builtin's bundle needs it to build main.js")
+    script = os.path.join(REPO, "scripts", "build-plugin-code.mjs")
+    with tempfile.TemporaryDirectory() as tmp:
+        target = os.path.join(tmp, CODE)
+        r = subprocess.run(
+            [node, script, src, target],
+            cwd=REPO, capture_output=True, text=True,
+        )
+        if r.returncode != 0:
+            sys.exit(f"plugins/{pid}: could not build {CODE}\n{r.stdout}{r.stderr}")
+        with open(target, "rb") as fh:
+            return CODE, fh.read()
 
 
 def sources(src):
@@ -153,17 +186,39 @@ def check(pid, src):
     entry = ENTRY.get(kind)
     if entry is None:
         sys.exit(f"plugins/{pid}/{MANIFEST} has an unknown kind: {kind!r}")
-    if not os.path.isfile(os.path.join(src, entry)):
-        sys.exit(f"plugins/{pid} is kind {kind} and has no {entry}")
+    # A builtin's entry point is GENERATED from main.ts, so what has to be on
+    # disk is the source it is generated from.
+    on_disk = "main.ts" if kind == BUILTIN else entry
+    if not os.path.isfile(os.path.join(src, on_disk)):
+        sys.exit(f"plugins/{pid} is kind {kind} and has no {on_disk}")
     return manifest
 
 
 def build(pid, src, out_dir):
-    check(pid, src)
+    manifest = check(pid, src)
     zip_path = os.path.join(out_dir, f"plugin-{pid}.zip")
     entries = sources(src)
+    generated = []
+    if os.path.isfile(os.path.join(src, "main.ts")):
+        # A bundle may carry app-side code whatever its kind, and two kinds may
+        # not: `compute` and `panel` are described to the person as contained
+        # ("no network and no access to your files, so the list above is all it
+        # can do"), and app-side code would make that sentence false. src-tauri's
+        # plugin_code refuses to serve one; this refuses to build one.
+        if manifest.get("kind") not in (BUILTIN, "process"):
+            sys.exit(
+                f"plugins/{pid} is kind {manifest.get('kind')} and has a main.ts. "
+                "That kind is described as contained, so it cannot carry code that "
+                "runs in the app."
+            )
+        generated.append(build_code(pid, src))
 
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
+        for rel, data in generated:
+            info = zipfile.ZipInfo(rel, date_time=FIXED_TIME)
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = 0o100644 << 16
+            z.writestr(info, data)
         for rel, full in entries:
             info = zipfile.ZipInfo(rel, date_time=FIXED_TIME)
             info.compress_type = zipfile.ZIP_DEFLATED
@@ -178,6 +233,10 @@ def build(pid, src, out_dir):
         digest = hashlib.sha256(fh.read()).hexdigest()
 
     print(zip_path)
+    # Generated first, exactly as they are written, so the listing is what is IN
+    # the zip rather than what was on disk beside it.
+    for rel, data in generated:
+        print(f"  {rel}  ({len(data)} bytes, built)")
     for rel, _ in entries:
         print("  " + rel)
     print(digest + "  " + os.path.basename(zip_path))

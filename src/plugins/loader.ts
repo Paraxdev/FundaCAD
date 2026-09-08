@@ -52,9 +52,23 @@ export interface PluginModule {
   [key: string]: unknown;
 }
 
-/** Assemble the module map. Async because every module in it is one this app
- *  loads lazily itself, and a plugin is not a reason to pull Vue's whole
- *  surface, three.js and the host into the first chunk. */
+/** Assemble the module map.
+ *
+ *  WHAT THIS COSTS, measured rather than guessed. Importing these as whole
+ *  NAMESPACES is not statically analysable, so rollup can no longer tree-shake
+ *  any of them and the app ships all of Vue, all of Pinia and all of three.js.
+ *  On the build at the time of writing that is 4,068 kB -> 4,183 kB unminified,
+ *  and 908 kB -> 932 kB gzipped: about 24 kB on the wire.
+ *
+ *  It buys the thing the whole arrangement depends on. A plugin is ordinary Vue
+ *  code and may use any of it; handing it ninety per cent of Vue and failing at
+ *  runtime on the rest would be worse than the bytes. And the alternative to
+ *  sharing is a plugin bundling its own copies, which does not merely cost more
+ *  — it breaks. Two Vues cannot see each other's refs, two Pinias are two store
+ *  registries, and two three.js make `instanceof` false between them.
+ *
+ *  Async because none of it is needed until a plugin is actually loaded: a
+ *  machine with nothing installed never calls this. */
 export async function hostModules(): Promise<HostModules> {
   const [vue, pinia, three, fundacad, ui] = await Promise.all([
     import("vue"),
