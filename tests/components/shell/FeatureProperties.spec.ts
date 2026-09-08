@@ -405,6 +405,24 @@ describe("FeatureProperties", () => {
     expect(n).not.toContain("Angle");
   });
 
+  it("gives an extrude the Symmetric switch, and writes it", async () => {
+    // The report: an extrude off a datum plane inside a body has material on
+    // both sides and no way to say so, and a committed one could not be talked
+    // out of the direction it was dragged in.
+    const fake = makeEngine({
+      parameters: {},
+      features: [{ id: "e1", type: "extrude", sketch: "s1", distance: 5,
+                   operation: "cut" } as unknown as Feature],
+    });
+    const w = render(fake, "e1");
+    expect(rows(w)).toContainEqual(["Symmetric", "", "false"]);
+    const box = w.findAll(".param-row").find((r) => r.find("label").text() === "Symmetric")!
+      .find("input[type=checkbox]");
+    (box.element as HTMLInputElement).checked = true;
+    await box.trigger("change");
+    expect(fake.updates).toEqual([{ id: "e1", patch: { symmetric: true } }]);
+  });
+
   it("renames the shape slider to what it currently does", () => {
     // The same number is a flat LAND width on a faceted surface and a crispness
     // on a smooth one. Calling both "Sharpness" describes neither.

@@ -95,3 +95,71 @@ describe("iconElement", () => {
     expect(root().querySelector(".dim-no .icon")).not.toBeNull();
   });
 });
+
+describe("DimInput's optional switch", () => {
+  // The mode a tool has to offer WHILE the value is being set. Extrude's
+  // Symmetric is the first, and the reason it is a button at all is that a bare
+  // letter cannot be claimed: the field is focused for the whole drag and it
+  // takes spelled-out units, and "millimeters", "inches" and "mils" all carry
+  // the obvious key.
+  const toggle = () => root().querySelector<HTMLButtonElement>(".dim-toggle");
+
+  it("is absent unless the tool asked for one", () => {
+    dim.show([{ name: "distance", label: "D" }], () => {});
+    expect(toggle()).toBeNull();
+  });
+
+  it("reports a press and reflects the state it lands in", () => {
+    const seen: boolean[] = [];
+    dim.show([{ name: "distance", label: "D" }], () => {}, undefined, {
+      label: "Symmetric", title: "both ways", initial: false,
+      onChange: (on) => seen.push(on),
+    });
+    const b = toggle()!;
+    expect(b.textContent).toBe("Symmetric");
+    expect(b.classList.contains("on")).toBe(false);
+
+    press("pointerdown", b);
+    expect(seen).toEqual([true]);
+    expect(b.classList.contains("on")).toBe(true);
+
+    press("pointerdown", b);
+    expect(seen).toEqual([true, false]);
+    expect(b.classList.contains("on")).toBe(false);
+  });
+
+  it("opens in the state a re-opened feature was saved with", () => {
+    dim.show([{ name: "distance", label: "D" }], () => {}, undefined, {
+      label: "Symmetric", title: "both ways", initial: true, onChange: () => {},
+    });
+    expect(toggle()!.classList.contains("on")).toBe(true);
+  });
+
+  it("follows the tool when the state changes some other way, without calling back", () => {
+    // Alt+S goes to the tool, not to the button, so the two would disagree
+    // about a mode the user is looking at unless the tool can push it here.
+    const seen: boolean[] = [];
+    dim.show([{ name: "distance", label: "D" }], () => {}, undefined, {
+      label: "Symmetric", title: "both ways", initial: false,
+      onChange: (on) => seen.push(on),
+    });
+    dim.setToggle(true);
+    expect(toggle()!.classList.contains("on")).toBe(true);
+    expect(seen).toEqual([]); // a callback here would be a loop
+
+    // and a press from THERE goes the other way, rather than repeating `true`
+    press("pointerdown", toggle()!);
+    expect(seen).toEqual([false]);
+  });
+
+  it("does not survive into the next tool's showing", () => {
+    dim.show([{ name: "distance", label: "D" }], () => {}, undefined, {
+      label: "Symmetric", title: "both ways", initial: true, onChange: () => {},
+    });
+    expect(toggle()).not.toBeNull();
+    dim.show([{ name: "radius", label: "R" }], () => {});
+    expect(toggle()).toBeNull();
+    // and setToggle on a box that has none is a no-op rather than a crash
+    expect(() => dim.setToggle(true)).not.toThrow();
+  });
+});

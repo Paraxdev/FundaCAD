@@ -116,6 +116,62 @@ def _try_vol(shape):
         return None
 
 
+def _void_count(shape):
+    """How many INTERNAL VOIDS the shape has, shells beyond one per solid, or
+    None when OCCT can't say.
+
+    This is the only cheap oracle that separates a cut which broke the body's
+    surface from one that sealed a cavity inside it: both leave one solid and,
+    measured, the same volume, so volume is a FALSE oracle here. A void is a
+    solid wearing a second skin.
+
+    Shells MINUS solids, not shells alone: a cut that splits a body into two
+    PIECES also goes from one shell to two, one skin each, and a raw shell delta
+    calls that a cavity.
+    """
+    try:
+        return len(shape.shells()) - len(shape.solids())
+    except Exception:
+        return None
+
+
+def _sealed_void_diag(diag, feature_id, solid):
+    """Record that a cut closed a cavity inside the body rather than breaking its
+    surface. That is what a sketch on a datum plane BURIED in a body produces:
+    the prism never reaches a face, so the pocket comes out as a bubble nobody
+    can see, select or print, and the build stays green.
+
+    A DIAGNOSTIC, never an error: a deliberate hollow is legal geometry, and this
+    fires on documents built that way on purpose as well as on mistaken ones.
+    `resolved`/`confidence`/`lossy` are required by the wire type and mean nothing
+    here, nothing was RESOLVED, so they carry neutral values. `lossy` in
+    particular must stay False: it means "a best-effort MATCH was taken", which
+    this is not. `at` is where the cavity is (the cutting prism's centre) so the
+    UI can point at it; it is not a selector point, and `sealedVoid` is
+    deliberately not re-pickable, there is no reference to re-pick.
+    """
+    if diag is None:
+        return
+    try:
+        c = _as_compound(solid).center()
+        at = [round(float(c.X), 6), round(float(c.Y), 6), round(float(c.Z), 6)]
+    except Exception:
+        at = None
+    entry = {
+        "feature_id": feature_id,
+        "kind": "sealedVoid",
+        "resolved": 0,
+        "confidence": 0.0,
+        "lossy": False,
+        "reason": "This cut closed a cavity inside the body instead of opening "
+                  "its surface. Extrude it further, or make it symmetric.",
+        "code": "sealedVoid",
+    }
+    if at is not None:
+        entry["at"] = at
+    diag.append(entry)
+
+
 def _noop_eps(ref):
     """Volume change smaller than this (per the op's reference volume) counts as
     "the boolean did nothing": an absolute floor plus a 0.01% relative slice,
@@ -289,7 +345,7 @@ def _serial_bool(base, tool, kind):
 
 
 def _boolean_into_bodies(bodies, solid, op, new_body, hidden=frozenset(),
-                         targets=None):
+                         targets=None, diag=None, feature_id=None):
     """MCAD-style extrude operation: New Body adds a separate body; Join / Cut /
     Intersect boolean the new solid against EVERY VISIBLE body it overlaps, so an
     extrude that bridges two bodies merges both. Join with nothing to act on just
@@ -303,6 +359,11 @@ def _boolean_into_bodies(bodies, solid, op, new_body, hidden=frozenset(),
     body), raises ValueError, the rebuild loop records it as a feature error and
     flags the feature red, instead of silently doing nothing. Volume-read failures
     fall through to the old behavior (never raise a misleading no-op error).
+
+    A Cut that SEALS a void (a solid gains a second shell) is the one
+    wrong-looking result that is not wrong enough to refuse, a deliberate hollow
+    is legal, so it pushes a `sealedVoid` diagnostic onto `diag` instead, keyed
+    to `feature_id`.
 
     `targets` narrows the candidate set to the named bodies. Without it the op
     acts on every visible body the solid overlaps, which is what someone
@@ -433,10 +494,23 @@ def _boolean_into_bodies(bodies, solid, op, new_body, hidden=frozenset(),
         # compute every cut first, measure how much came off, and only commit when
         # the extrude actually removed material from some body.
         results, removed, measured = [], 0.0, False
+        sealed = False
         for b in hits:
             before = _try_vol(b["shape"])
+            # Void counting is paid ONLY when someone is collecting diagnostics.
+            # OCCT walks shells, not faces, so the cost is per hit body rather
+            # than per face; the gate is there so a caller that discards
+            # diagnostics (previews, exports) pays nothing at all.
+            voids_before = _void_count(b["shape"]) if diag is not None else None
             newshape = _serial_bool(_as_compound(b["shape"]), solid, "cut")
             after = _try_vol(newshape)
+            # The backstop. A cut that ADDS a void did not break the surface, it
+            # closed a bubble inside the body. Measured on the RESULT, so it
+            # catches every document however the sketch was placed.
+            if voids_before is not None:
+                voids_after = _void_count(newshape)
+                if voids_after is not None and voids_after > voids_before:
+                    sealed = True
             # A cut that consumes a whole body leaves nothing to select, nothing
             # to see and nothing in the timeline saying where it went, the body
             # is simply gone at the next repaint. Say so, the same way Intersect
@@ -467,6 +541,13 @@ def _boolean_into_bodies(bodies, solid, op, new_body, hidden=frozenset(),
                 )
         for b, newshape in results:
             b["shape"] = newshape
+        # One entry per FEATURE, not per body: a cut that bridges two bodies and
+        # seals both is still one thing the user did, and the timeline shows one
+        # chip. Pushed after the commit loop so a raising guard above reports its
+        # error alone rather than an error plus an advisory about a cut that was
+        # then thrown away.
+        if sealed:
+            _sealed_void_diag(diag, feature_id, solid)
     elif op == "intersect":
         if not hits:
             raise ValueError(

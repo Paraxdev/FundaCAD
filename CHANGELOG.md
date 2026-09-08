@@ -25,6 +25,8 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **Extrude can now go both ways at once.** Press the Symmetric button in the depth box, or **Alt+S**, while you are setting the depth, or turn Symmetric on in the feature's values afterwards, and the profile is swept the same distance out of each side of its plane. This is what a sketch made on a datum plane inside a part needs: there is material on both sides of that plane, so a one-directional extrude has to guess which side you meant, and a cut that guesses wrong either misses the body or hollows out its middle. The depth you type is the distance to each side, so the result is twice that long and centred on the sketch.
+
 - **The printer connection, the 3D mouse and multi-material are now capabilities you can turn off**, in Preferences under Plugins. Off is not a hidden menu: their code is never loaded, their menu and ribbon entries are gone, and the 3D-mouse reader never opens the device, so nothing else on the machine has to compete with FundaCAD for it. Each one says what it uses in the same words a downloaded plugin does, and says plainly that it is part of the app rather than something held at arm's length. The printer connection and the 3D mouse stay on unless you turn them off; multi-material stays off, as before, and the setting you already had is carried over.
 
 - **Plugins can now come from anywhere, not only from us.** Paste a link, or pick a zip you already have. Either way it is read and described first: what it will be able to do, what it will not, and where it came from, all before anything is installed. Reading is not installing, and nothing is written until you say so. A plugin from somewhere else gets exactly the same permission screen ours get and exactly the same limits, because where something came from was never what decided what it could do.
@@ -43,6 +45,8 @@ This file starts on 2026-08-03. For anything before that, see the
 - Each drag of the move gizmo is its own row in the timeline, so an undo takes back the last nudge instead of the whole sitting, and the next drag starts from the pose the last one produced.
 
 ### Fixed
+
+- **A cut that hollows out the middle of a part instead of opening its surface now says so**, with an amber mark on the feature in the timeline and the reason in its tooltip. The usual way to get one is a sketch on a plane buried inside the body: the pocket comes out as a sealed bubble that cannot be seen, selected or printed, and because it removes exactly as much material as the open pocket you wanted, nothing could tell the difference. The build is not refused, a deliberate hollow is legal, and a cut that splits a part into two pieces is not one of these and stays quiet.
 
 - A fillet on a circular edge, split into pieces, now picks as one too: a torus is unchanged by writing its axis the other way, so the direction could not be part of its identity at all.
 - A threaded bore now picks as one wall. A cylinder's axis is a line, and the kernel is free to write its direction either way along that line: the spool's thread crest came back as eight faces of one bore with seven written downwards and one upwards, and the odd one out was rejected on that alone. Pulling the crest moved seven eighths of a wall. Which side is solid is now measured off the face's real outward normal instead of being inferred from a flag that turns over with the axis, so a bore and the shaft around it are still never joined.

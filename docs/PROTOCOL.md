@@ -115,13 +115,15 @@ Reply `result` is one of:
 
   A diagnostic may carry a machine-readable **`code`** beside its human `reason`:
   `ambiguousReference` (the selector matched several candidates), `referenceNotFound`
-  (it matched nothing) and `planeTilted` (a face-anchored plane's face is no longer
-  parallel, so the plane kept its cached placement). Adding a code is a pure addition,
+  (it matched nothing), `planeTilted` (a face-anchored plane's face is no longer
+  parallel, so the plane kept its cached placement) and `sealedVoid` (a Cut closed a
+  cavity inside a body instead of reaching its surface). Adding a code is a pure addition,
   an unrecognised one must read as "unclassified", and the prose match on `ambiguous
   nearest pick` is still honoured, so a sidecar older than the field keeps its repair
   affordance. The first two are repairable by picking a face; `planeTilted` is not,
   because the candidate filter is taken against the cached normal and re-picking the
-  same tilted face reproduces the same diagnostic.
+  same tilted face reproduces the same diagnostic; neither is `sealedVoid`, which
+  describes a RESULT rather than a resolution and has no reference to re-pick.
 - **Fatal**, nothing built at all: `{ "error": { "message": "...", "feature_id": "..." } }`.
 - **Stalled worker**, one operation ran past the stall timeout (60 s of no build
   progress): the sidecar kills and respawns the geometry worker and returns

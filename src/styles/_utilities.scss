@@ -225,6 +225,25 @@ button.finish:hover {
      marks as two empty boxes. Text glyphs got away with it; an icon does not. */
   color: var(--text);
 }
+/* A mode, not a verb, so it is wider than the 26px icon buttons and carries a
+   word. Off is the same quiet box as the rest of the cluster; on is the accent,
+   because the whole reason it is here is to be readable at a glance while the
+   eye is on the number beside it. */
+.dim-btn.dim-toggle {
+  width: auto;
+  padding: 0 var(--s-3);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.dim-btn.dim-toggle:hover {
+  color: var(--text);
+}
+.dim-btn.dim-toggle.on {
+  color: var(--accent-hot);
+  border-color: var(--accent);
+  background: var(--accent-tint);
+}
 .dim-btn.dim-ok {
   color: var(--ok);
 }

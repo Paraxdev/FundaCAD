@@ -448,6 +448,17 @@ def _handle_extrude(f, ctx):
     # Standard_ConstructionError. Negative IS meaningful (extrude the other way).
     if ctx.val(f["distance"]) == 0:
         raise ValueError("Extrude: distance must not be 0")
+    # `symmetric` sweeps the profile BOTH ways off its plane, `distance` each
+    # way, so the result is 2x distance long and centred on the sketch. It is
+    # the answer to a sketch made on a datum plane INSIDE a body: there is
+    # material on both sides of that plane, so one direction is a guess, and a
+    # cut that guesses wrong either misses the body entirely or opens a sealed
+    # void in the middle of it, which looks from outside like nothing happened.
+    #
+    # The SIGN stops meaning anything under it, which is right rather than
+    # sloppy: build123d sweeps |amount| each way, and a solid centred on the
+    # plane is the same solid whichever way the arrow was pointing.
+    both = bool(f.get("symmetric"))
     # region points (one per selected area) pick + combine specific
     # profiles; a ring (annulus) keeps its hole, several areas union.
     pts = f.get("regions")
@@ -456,7 +467,7 @@ def _handle_extrude(f, ctx):
     target = _region_target(pts, entry, ctx)
     if target is None:
         target = sk  # nothing selected: the whole sketch
-    solid = extrude(target, amount=ctx.val(f["distance"]))
+    solid = extrude(target, amount=ctx.val(f["distance"]), both=both)
     # Captured-visibility semantics: an extrude that carries
     # `hiddenBodies` uses THAT set (participants decided at feature
     # creation, MCAD-style, later eye toggles are pure display).
@@ -1126,6 +1137,7 @@ def _combine(f, ctx, solid, hidden=None, name=None):
         ctx.bodies, solid, f.get("operation", "new"), new_body,
         ctx.hidden_bodies if hidden is None else hidden,
         targets=f.get("targets"),
+        diag=ctx.diagnostics, feature_id=f.get("id"),
     )
 
 

@@ -14,6 +14,7 @@ import { featureMeta } from "../../ui/featureMeta";
 import Icon from "./Icon.vue";
 import { contextMenu } from "../../ui/menu";
 import { buildProgress, CANCEL_DELAY_MS } from "../../ui/buildProgress";
+import { featureNotes } from "../../ui/featureNotes";
 import { gapIndexIn } from "../../ui/trackGaps";
 import { anchorPanel } from "../../ui/propsAnchor";
 import { layoutPrefs, onLayoutPrefsChange } from "../../ui/layoutPrefs";
@@ -132,6 +133,16 @@ const errors = useBuildValue((b) => {
   if (b.errorFeatureId && !m.has(b.errorFeatureId)) m.set(b.errorFeatureId, b.errorMessage ?? "failed");
   return m;
 });
+/** Every feature that BUILT but had something to say: id -> reason. The rule
+ *  itself is in ui/featureNotes.ts, where it can be read and tested on its own;
+ *  this is the wiring. */
+const notes = useBuildValue((b) =>
+  featureNotes({
+    featureErrors: b.result?.featureErrors,
+    errorFeatureId: b.errorFeatureId,
+    diagnostics: b.result?.diagnostics,
+  }),
+);
 const building = useBuildValue((b) => b.building);
 const progress = useBuildValue((b) => ({ progress: b.progress, meshed: b.meshed, meshTotal: b.meshTotal }));
 
@@ -200,12 +211,17 @@ function metaFor(f: { type: string; operation?: unknown }) {
 
 function chipTitle(f: { id: string; type: string }, i: number) {
   const err = errors.value.get(f.id);
+  const note = notes.value.get(f.id);
   return (
     `${i + 1} · ${metaFor(f).label}` +
     // A plain-text word, not a warning sign: this is a `title` attribute, and
     // the browser draws it in the OS tooltip font where a symbol lands as
     // whatever fallback glyph, or tofu, that font happens to carry.
-    (err ? `\nFailed: ${err}` : "") +
+    //
+    // The two are mutually exclusive by construction (notes skips a feature
+    // that failed), so this reads as one line either way rather than as a
+    // feature accused of two different things.
+    (err ? `\nFailed: ${err}` : note ? `\nNote: ${note}` : "") +
     "\ndouble-click to edit · right-click for more"
   );
 }
@@ -366,6 +382,10 @@ function openMenu(e: MouseEvent, id: string, i: number) {
                 :class="{
                   selected: selection.featureId === f.id,
                   error: errors.has(f.id),
+                  // amber only where there is no red: the build SUCCEEDED, so
+                  // the chip must not read as a failure. `notes` already drops
+                  // every failing feature; the `&&` is the second lock.
+                  warn: !errors.has(f.id) && notes.has(f.id),
                   rolled: i >= rollback,
                   suppressed: suppressed.has(f.id),
                   'drop-target': dropTarget === f.id,

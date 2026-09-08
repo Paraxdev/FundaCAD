@@ -143,6 +143,10 @@ export const FEATURE_TOGGLE_FIELDS: Partial<Record<FeatureType, ToggleField[]>> 
   // is a cutter more than once, a bolt hole punched through three plates should
   // not need three copies of the bolt.
   boolean: [{ field: "keepOriginals", label: "Keep originals", fallback: false }],
+  // Both ways off the sketch plane, `distance` each way. The row an extrude made
+  // on a datum plane inside a body wants, and the one thing about an extrude's
+  // direction that a saved feature could not previously be talked out of.
+  extrude: [{ field: "symmetric", label: "Symmetric", fallback: false }],
   thicken: [{ field: "symmetric", label: "Symmetric", fallback: false }],
 };
 
