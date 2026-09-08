@@ -1,7 +1,19 @@
 # FundaCAD
 
-A fork of SindriCAD with minor tweaks.
-adapted to be as guiding and fluent (easiest way from design in your head to real geometry) as possible
+Free, open source parametric CAD for 3D printing. Sketch it, constrain it, model
+it, and export STEP, STL or 3MF. Windows, macOS and Linux.
+
+Built on the Open CASCADE geometry kernel through
+[build123d](https://github.com/gumyr/build123d), with a Rust
+([Tauri](https://tauri.app)) shell and a Vue + three.js viewport. A part is a
+timeline of features, so you can go back to any one of them, change it, and the
+model rebuilds from there.
+
+The thing being aimed at is the shortest path from the shape in your head to real
+geometry: guiding and fluent, and hard to get stuck in.
+
+It began as a fork of [SindriCAD](https://github.com/MakerViking/sindricad) and
+has diverged a fair way since, under the same AGPL-3.0 licence.
 
 
 ## Disclosure  
@@ -57,8 +69,23 @@ The builds are **not code signed**, so each OS says so in its own way:
   ```bash
   xattr -dr com.apple.quarantine /Applications/FundaCAD.app
   ```
-- **Linux** — the AppImage needs `chmod +x` and nothing else. The `.deb` and
-  `.rpm` install normally.
+- **Linux** — the AppImage needs `chmod +x` and nothing else, and is the one to
+  reach for when the others give trouble: it carries its own WebKitGTK.
+
+  The `.deb` and `.rpm` are built on Ubuntu 22.04, so they depend on the
+  WebKitGTK that ships from there on: `libwebkit2gtk-4.1-0`. That means
+  **Ubuntu 22.04 or newer, or Debian 12 or newer**. Install the `.deb` with apt
+  and not with `dpkg -i`, because dpkg only *reports* a missing dependency
+  while apt goes and fetches it:
+
+  ```bash
+  sudo apt install ./FundaCAD_0.1.38_amd64.deb
+  ```
+
+  Distributions carrying only the older `libwebkit2gtk-4.0-37`, or only the
+  newer `libwebkitgtk-6.0-4`, cannot satisfy that dependency under the name the
+  package asks for, and there the AppImage is the answer rather than installing
+  WebKitGTK by hand.
 
 ## Build
 
