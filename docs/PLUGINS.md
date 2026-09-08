@@ -88,37 +88,35 @@ table, so the reassuring half cannot go stale while the alarming half stays
 current. Hand-written reassurance goes stale silently and in the direction that
 hurts.
 
-## The three built-in capabilities
+## The four plugins this project publishes
 
-| id | what it is | asks for | on by default |
+| id | what it is | asks for | kind |
 | --- | --- | --- | --- |
-| `FundaCAD.Printing` | printers on your network, and opening a model in a slicer | `document.read`, `files.write`, `printer.control`, `process.spawn` | yes |
-| `FundaCAD.SpaceMouse` | navigating and moving with a 3D mouse | `device.input`, `document.read`, `document.write` | yes |
-| `FundaCAD.MultiColor` | filament slots, per body and per texture colour | `document.read`, `document.write` | no |
+| `FundaCAD.MCP` | lets an assistant build, measure and edit the open model | `document.*`, `geometry.build`, `files.*` | `process` |
+| `FundaCAD.Printing` | printers on your network, and opening a model in a slicer | `document.read`, `files.write`, `printer.control`, `process.spawn` | `builtin` |
+| `FundaCAD.SpaceMouse` | navigating and moving with a 3D mouse | `device.input`, `document.read`, `document.write` | `builtin` |
+| `FundaCAD.MultiColor` | filament slots, per body and per texture colour | `document.read`, `document.write` | `builtin` |
 
-Each is a directory under `plugins/`, shaped exactly like a downloadable one:
-`manifest.json`, a `README.md` saying why it asks for what it asks for, and a
-`main.ts` if it has anything to start. The manifest in that directory is the
-one the app reads. There is no second copy.
+**THE APP SHIPS NONE OF THEM.** Every one is a zip on a release, installed like
+anybody else's, and a fresh install runs nothing but the app. Three of them used
+to be compiled in with a switch each, and the switch was the only control they
+had because "installed" was not a question they had an answer to.
 
-The two that were always in the app default to on, which their manifests say
-with `enabledByDefault`. An upgrade that silently removed a working printer
-connection would be a regression wearing the word "plugin"; multi-material was
-already off and stays off.
+`builtin` still means something and it is worth being exact about what: the
+plugin's code runs in the APPLICATION'S OWN JAVASCRIPT CONTEXT, with the
+application's own reach. That is a fact about what it can do. It never was a
+fact about where it came from, and the two came apart the moment these were
+packaged.
+
+Each is a directory under `plugins/`: `manifest.json`, a `README.md` saying why
+it asks for what it asks for, and a `main.ts` if it has anything to run in the
+window. The manifest in that directory is the one the app reads and the one the
+zip carries. There is no second copy.
 
 **Their ids were renamed** when the directories appeared: `printing`,
-`spacemouse` and `multi-material` are what they were called, and those names
-are in people's stored settings right now. Each plugin lists its own old names
-in its manifest, under `formerIds`, and the registry reads them forward.
-Dropping them would have put every capability back to its default, which for
-multi-material means switching itself back on for everyone who had turned it
-off, which is the exact thing a toggle exists to prevent.
-
-That list is IN THE MANIFEST and not in a table in the app, which is the same
-decision this whole document keeps making. A rename table in the app is the app
-remembering the history of plugins it does not otherwise know exist, and it is
-one more file to edit to add a fourth capability. A plugin knows its own past;
-nothing else has to.
+`spacemouse` and `multi-material` are what they were called. Each plugin lists
+its own old names in its manifest, under `formerIds`, rather than the app
+holding a rename table for plugins it does not otherwise know exist.
 
 Some of the grant choices are worth stating, because the tempting answer is the
 wrong one in each case. Each one lives in that plugin's own `README.md` now,
@@ -139,20 +137,31 @@ is the half worth keeping:
   plugin. A vocabulary whose grants are claimed whenever they are technically
   defensible is one where every screen looks the same.
 
-### What "off" actually means
+### Two controls, and they mean different things
 
-Not a hidden menu. Each capability's code is behind a dynamic `import()`, so the
-bundler gives it a chunk of its own and a capability that is off is never
-fetched, never parsed and never run. Turning one off while the app is running
-takes effect immediately: `activate()` returns a teardown, and the frame loop,
-the event listeners, the menu rows, the overlays, the paint on the model and the
-Rust-side device handle all go with it.
+**Installed or not** is the big one. A plugin that is not installed is not on
+the machine: no code, no chunk, nothing to fetch. That is the state of every
+plugin on a fresh install.
 
-`tests/plugins/coreIndependence.test.ts` is what keeps this true. It reads every
-file under `src/` and under `plugins/`, and fails if anything outside a
-capability's own directory statically imports something inside it, because a
-single convenient `import` would put the code back in the bundle everyone
-downloads while the switch went on saying it was off.
+**Switched off** is the smaller one, and it applies to something already
+installed: the bundle stays on disk, whatever it wrote to the document stays,
+and it does not run. It is what somebody reaches for to find out whether a
+plugin was the cause of something. `registry.ts` records only the exception —
+which ids are OFF — because installing something is already an answer to "do
+you want this".
+
+Either way, off takes effect immediately: `activate()` returns a teardown, and
+the frame loop, the event listeners, the menu rows, the overlays, the paint on
+the model and the Rust-side device handle all go with it.
+
+Two things keep this true, and they check different halves.
+`tests/plugins/coreIndependence.test.ts` reads every file under `src/` and under
+`plugins/` and fails if anything outside a capability's own directory statically
+imports something inside it. `scripts/check-no-plugin-code.mjs` reads the BUILT
+BUNDLE and fails if any marker of a plugin's code is in it, because what keeps
+plugin code out of a shipped build is one `import.meta.env.DEV` branch in
+`activate.ts` and nothing fails loudly if that branch is written a way rollup
+cannot drop.
 
 That test used to carry exceptions. The printer connection "owned" `src/print/`
 and three components in `src/components/overlays/`; the 3D mouse owned
@@ -166,6 +175,48 @@ Whatever a capability owns in the document survives being turned off. Slot
 assignments are saved, loaded and exported exactly as before, so turning
 multi-material back on finds the work still there. A toggle that ate data would
 not be a toggle.
+
+## How a downloaded plugin's code runs
+
+A plugin that DRAWS — a menu row, a Vue component, paint on the model — runs in
+the application's own JavaScript context. It has to: none of that is expressible
+from a Worker or from a separate process. So there is no sandbox to put such a
+plugin in, and pretending otherwise on the consent screen would be the worst of
+both. What there is instead is an origin rule.
+
+**Code loaded this way runs with the application's own reach. Therefore it is
+loaded only from a bundle this project published.** `sandboxNote("builtin")`
+tells the person exactly that, in the words they read on the screen where they
+decide: "Part of FundaCAD itself. The list above is what it uses, not a limit on
+it."
+
+| | |
+| --- | --- |
+| `scripts/build-plugin-code.mjs` | builds a plugin directory into `main.js`, one IIFE taking one argument |
+| `src/plugins/host.ts`, `hostUi.ts` | the whole of what a plugin may import: `fundacad` and `fundacad/ui` |
+| `src/plugins/loader.ts` | evaluates that module against the running app's own vue, pinia, three and host |
+| `src-tauri`'s `plugin_code` | the origin rule, enforced where the bytes are |
+
+`vue`, `pinia`, `three`, `fundacad` and `fundacad/ui` are externalised by the
+build and supplied by the loader. Not to save bytes: two copies of Vue is two
+reactivity systems that cannot see each other's refs, two Pinias are two store
+registries so one `defineStore` call returns two different stores, and two
+three.js make `instanceof` false between them. Each fails at runtime, quietly,
+looking like a bug in the plugin.
+
+`new Function` rather than `import()`, because the policy is `script-src 'self'`
+and a blob URL is not a script source. That makes plugin loading the SECOND
+reason `'unsafe-eval'` is in the policy; `tests/security/csp.test.ts` names both
+and reads this file as text to check the second, so the grant can never outlive
+its reasons.
+
+### What is not finished
+
+`verify_plugin_signature` fails closed the moment a public key exists, and there
+is no key. Until there is one, the anchor is GitHub's TLS and this repository's
+path — which is the same anchor the updater has before ITS signature check.
+Generating a key pair has a custody consequence and is not a decision to take on
+somebody's behalf.
 
 ## What the app lets a plugin add
 
@@ -761,7 +812,13 @@ and the `process` sentence on the install screen says so.
 | `src/plugins/runner/*.ts` | the sandbox: protocol, host, guest, spawn |
 | `src/plugins/shipped.ts` | the one glob of `plugins/*/manifest.json`, parsed |
 | `src/plugins/contrib.ts` | what a plugin may add to the app, and the only way in; names no plugin |
-| `src/plugins/registry.ts` | which built-in capabilities are on; names no plugin either |
+| `src/plugins/registry.ts` | which installed plugins are switched off; names no plugin either |
+| `src/plugins/host.ts` | `fundacad`: the whole of what a plugin may import |
+| `src/plugins/hostUi.ts` | `fundacad/ui`: the four components, kept apart so `fundacad` needs no DOM |
+| `src/plugins/loader.ts` | evaluates a downloaded plugin's module against the app's own modules |
+| `src/plugins/devPlugins.ts` | the plugin directories, in a DEV build only |
+| `scripts/build-plugin-code.mjs` | builds one plugin directory into the module its bundle carries |
+| `scripts/check-no-plugin-code.mjs` | reads the built bundle and fails if any plugin's code is in it |
 | `src/plugins/activate.ts` | starting and stopping them, by dynamic import; names none of them |
 | `src/plugins/index.ts` | the plugins this build offers, and the bridge to Rust |
 | `src/components/overlays/PluginsSection.vue` | Preferences ▸ Plugins |
@@ -794,6 +851,8 @@ covers the packaging script and the guard together.
 sh scripts/check-plugin-guards.sh
 npx vitest run tests/plugins tests/security/csp.test.ts
 node scripts/check-sandbox-chunk.mjs     # needs a build; runs one if there is none
+node scripts/check-no-plugin-code.mjs    # reads the same build
+python scripts/build-plugins.py <dir>    # builds all four bundles, needs node
 node e2e/sandbox_csp.cjs                 # needs a Chromium; SC_CHROME names it
 node e2e/plugin_surfaces.cjs             # needs `npx vite` on 5173 as well
 ```
@@ -819,6 +878,11 @@ repository and obvious within one run of it.
 5. Panel plugins. Note that the policy currently forbids frames outright, and
    changing that is load-bearing for their sandbox rather than incidental.
 6. OS sandboxing for process plugins, per platform.
-7. Signing and revocation. Installing from anywhere is now possible, which
-   makes "this build of this plugin is the one its author published" a question
-   worth being able to answer, rather than a nicety.
+7. **Signing.** The one that moved up the list. App-side code is loaded only
+   from this project's own releases, and until there is a key that rule anchors
+   on GitHub's TLS and this repository's path alone.
+   `verify_plugin_signature` fails closed the moment a public key exists, so
+   the remaining work is generating the pair and signing the bundles in the
+   release job. Generating it has a key-custody consequence and is not a
+   decision to take on somebody's behalf.
+8. Revocation, once there is something to revoke.
