@@ -148,22 +148,93 @@ describe("parameters", () => {
 });
 
 describe("the pretend disk", () => {
-  it("opens what was put there and saves back", async () => {
+  it("opens a document the way a plugin actually has to", async () => {
+    // file_pick, file_read, doc_set. There is no doc_open for a plugin, because
+    // doc_open takes a path and a plugin has none; this is the same work with
+    // the person in it, and it is what a plugin will really write.
     const start: CadDocument = { parameters: { w: 10 }, features: [] };
     const b = testBroker({ files: { "in.funda": JSON.stringify(start) } });
-    expect((await b.call("doc_open", { path: "in.funda" })).ok).toBe(true);
+
+    const picked = await b.callOrThrow<{ handle: string; name: string }>("file_pick", {
+      purpose: "choose a document to work on",
+      extensions: ["funda"],
+    });
+    expect(picked.name).toBe("in.funda");
+    const body = await b.callOrThrow<{ text: string }>("file_read", {
+      handle: picked.handle,
+    });
+    await b.call("doc_set", { document: JSON.parse(body.text) });
     expect(b.host.document().parameters).toEqual({ w: 10 });
+  });
+
+  it("saves one the way a plugin actually has to", async () => {
+    const b = testBroker();
     await b.call("feature_add", { feature: { type: "box", id: "a" } });
-    await b.call("doc_save", { path: "out.funda" });
+    const doc = await b.callOrThrow<CadDocument>("doc_get");
+    const wrote = await b.callOrThrow<{ name: string }>("file_write", {
+      purpose: "save the finished part",
+      suggested: "out.funda",
+      text: JSON.stringify(doc),
+    });
+    expect(wrote.name).toBe("out.funda");
     expect(JSON.parse(b.host.files()["out.funda"]!).features).toHaveLength(1);
   });
 
-  it("refuses a path that is not there", async () => {
-    const b = testBroker();
-    expect(await b.call("doc_open", { path: "nope.funda" })).toMatchObject({
-      ok: false,
-      code: "failed",
+  it("refuses doc_open and doc_save in the app's own words", async () => {
+    // The double used to serve these against the pretend disk, which made it a
+    // liar in the one direction that costs the most: a plugin whose tests
+    // passed and which met a refusal the first time anybody ran it.
+    const b = testBroker({ files: { "in.funda": "{}" } });
+    for (const op of ["doc_open", "doc_save"] as const) {
+      const r = await b.call(op, { path: "in.funda" });
+      expect(r.ok, op).toBe(false);
+      expect(r.ok === false && r.code, op).toBe("failed");
+      // Names what to do instead, which is the whole value of the refusal.
+      expect(r.ok === false && r.why, op).toContain("file_");
+    }
+  });
+
+  it("lets a test say the person dismissed the dialog", async () => {
+    // The branch every plugin author forgets, and the reason `answers` accepts
+    // null for these two: without it, "they said no" is unreachable and a
+    // plugin's tests only ever exercise the happy path.
+    const b = testBroker({
+      files: { "a.funda": "{}" },
+      answers: { file_pick: null, file_write: null },
     });
+    expect(await b.callOrThrow("file_pick", {})).toBe(null);
+    expect(await b.callOrThrow("file_write", { suggested: "x", text: "y" })).toBe(null);
+    // and nothing was written
+    expect(Object.keys(b.host.files())).toEqual(["a.funda"]);
+  });
+
+  it("hands a plugin only what it was given", async () => {
+    const b = testBroker({ files: { "a.funda": "one", "b.funda": "two" } });
+    const picked = await b.callOrThrow<{ handle: string }>("file_pick", {});
+    // Its own handle works, which is the control.
+    expect((await b.callOrThrow<{ text: string }>("file_read", picked)).text).toBe("one");
+    // A handle nobody minted does not, and the refusal is the same one a
+    // handle belonging to another plugin gets: telling them apart would let a
+    // plugin learn that somebody else's file exists.
+    const r = await b.call("file_read", { handle: "f999" });
+    expect(r).toMatchObject({ ok: false, code: "failed" });
+    expect(r.ok === false && r.why).toContain("not offered to this plugin");
+  });
+
+  it("picks by the filter when the test does not say", async () => {
+    const b = testBroker({ files: { "a.txt": "x", "b.stl": "y" } });
+    const picked = await b.callOrThrow<{ name: string }>("file_pick", {
+      extensions: ["stl"],
+    });
+    expect(picked.name).toBe("b.stl");
+    // The control: without a filter it is the first name, not always the stl.
+    const other = await b.callOrThrow<{ name: string }>("file_pick", {});
+    expect(other.name).toBe("a.txt");
+  });
+
+  it("has nothing to offer from an empty disk", async () => {
+    const b = testBroker();
+    expect(await b.callOrThrow("file_pick", {})).toBe(null);
   });
 });
 

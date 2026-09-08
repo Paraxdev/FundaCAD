@@ -28,9 +28,14 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 SRC="$REPO/src-tauri/src/plugins/bundle.rs"
+# The other Tauri-free half: which files a plugin has been handed, and what it
+# may be told about them. Same reasoning, same crate.
+HANDED="$REPO/src-tauri/src/plugins/handed.rs"
 OUT="$REPO/src-tauri/target/plugin-guard"
 
-[ -f "$SRC" ] || { echo "missing $SRC"; exit 1; }
+for f in "$SRC" "$HANDED"; do
+  [ -f "$f" ] || { echo "missing $f"; exit 1; }
+done
 
 mkdir -p "$OUT/src"
 cat > "$OUT/Cargo.toml" <<TOML
@@ -54,9 +59,12 @@ TOML
 # and the whole point is to test what ships. cygpath because rustc wants a
 # Windows path where the shell here hands out /d/dev/... ones.
 SRCW="$(cygpath -m "$SRC" 2>/dev/null || echo "$SRC")"
+HANDEDW="$(cygpath -m "$HANDED" 2>/dev/null || echo "$HANDED")"
 cat > "$OUT/src/lib.rs" <<RS
 #[path = "$SRCW"]
 pub mod bundle;
+#[path = "$HANDEDW"]
+pub mod handed;
 RS
 
 # The bundle as it will be published, built by the same script CI runs.

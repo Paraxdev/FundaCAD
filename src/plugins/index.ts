@@ -198,14 +198,24 @@ export async function runComputePlugin(
   const manifest = installedManifest(rec);
   if (!manifest) throw new Error(`${rec.id} has no record this app can read`);
 
-  const [{ spawnAndRun }, { appHost }] = await Promise.all([
+  const [{ spawnAndRun }, { appHost }, { tauriNative }] = await Promise.all([
     import("./runner/spawn"),
     import("./broker/appHost"),
+    import("./broker/native"),
   ]);
   return await spawnAndRun({
     plugin: manifest.id,
     grants: manifest.grants,
-    host: appHost(featureTypes ? { store, featureTypes } : { store }),
+    host: appHost({
+      store,
+      // The id goes down with the host because every file the person hands this
+      // plugin is recorded against it on the Rust side. Without it the file ops
+      // refuse, which is the right failure: a file recorded against nobody
+      // could be read by anybody.
+      plugin: manifest.id,
+      native: tauriNative(),
+      ...(featureTypes ? { featureTypes } : {}),
+    }),
     source: await pluginEntry(rec.id),
   });
 }

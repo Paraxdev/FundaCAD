@@ -2,12 +2,19 @@
 // ask. This is the whole vocabulary: a plugin reaches the app through exactly
 // these, or it does not reach the app.
 //
-// The names are the MCP server's tool names, unchanged and on purpose. That
-// server already speaks a defined protocol over a token-gated socket, already
-// has a schema for each of these, and already works. Inventing a second
+// Most of the names are the MCP server's tool names, unchanged and on purpose.
+// That server already speaks a defined protocol over a token-gated socket,
+// already has a schema for each of these, and already works. Inventing a second
 // vocabulary here would mean a translation table, and a translation table is a
 // place for the two halves to disagree about what `feature_move` means. There
 // is one vocabulary and MCP is a transport for it.
+//
+// FOUR ARE NOT MCP'S: file_pick, file_read, file_write and app_info. They are
+// what a plugin uses to reach past the window, and they are here rather than in
+// a channel of their own because a second channel would be a second permission
+// system to keep in step with this one. MCP has no equivalent for a reason
+// worth knowing: an MCP server is a process on the machine and can open a file
+// by naming it, where a compute plugin cannot name anything. See ./native.ts.
 //
 // Three rules.
 //
@@ -48,6 +55,11 @@ export const OPS = [
   "inspect",
   "view",
   "export",
+
+  "file_pick",
+  "file_read",
+  "file_write",
+  "app_info",
 ] as const;
 
 export type Op = (typeof OPS)[number];
@@ -146,6 +158,28 @@ export const OP_TABLE: Record<Op, OpSpec> = {
   export: {
     needs: ["document.read", "geometry.build", "files.write"],
     why: "builds the open document and writes the result to a path",
+    writes: false,
+  },
+
+  // The four that reach past the window. Served in Rust, checked here.
+  file_pick: {
+    needs: ["files.read"],
+    why: "opens a picker and, if the person chooses something, hands back a handle for that one file",
+    writes: false,
+  },
+  file_read: {
+    needs: ["files.read"],
+    why: "reads a file the person already picked; it takes a handle and never a path, so it can reach nothing else",
+    writes: false,
+  },
+  file_write: {
+    needs: ["files.write"],
+    why: "opens a save dialog and writes what the plugin gave it where the person said",
+    writes: false,
+  },
+  app_info: {
+    needs: [],
+    why: "the version, the platform and the architecture. A plugin that cannot tell what it is running on has to assume or break, and none of the three says anything about the person",
     writes: false,
   },
 };

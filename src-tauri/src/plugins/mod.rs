@@ -46,6 +46,8 @@
 //! them revocation, are a later phase.
 
 pub mod bundle;
+pub mod files;
+pub mod handed;
 
 use bundle::{
     allowed_bundle_url, extract_into, grants_match, is_official_url, now_secs, safe_id, sha256_hex,

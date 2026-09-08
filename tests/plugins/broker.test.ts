@@ -17,6 +17,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { BrokerRefused, createBroker, type BrokerHost } from "../../src/plugins/broker/broker";
 import { OPS, OP_TABLE, allOpGrants, isOp, type Op } from "../../src/plugins/broker/ops";
+import { NATIVE_OPS } from "../../src/plugins/broker/native";
 import { GRANTS, type Grant } from "../../src/plugins/manifest";
 
 // Read through vite rather than the filesystem: `*.test.ts` runs in the node
@@ -52,7 +53,44 @@ describe("the op table", () => {
     // The control for the whole comparison: a regex that matched nothing would
     // make the two lists agree vacuously.
     expect(tools.length).toBeGreaterThan(10);
-    expect([...tools].sort()).toEqual([...OPS].sort());
+    // Every MCP tool is an op. Not the reverse: see the next test.
+    for (const tool of tools) {
+      expect(OPS, `the MCP server registers ${tool} and the op table has no such op`).toContain(
+        tool,
+      );
+    }
+  });
+
+  it("adds only the ops MCP could not have", () => {
+    // The op table is a superset of the MCP tool names, and the extra has to be
+    // argued for op by op rather than allowed to grow quietly. These four reach
+    // past the window, which an MCP server does not need: it is a process on
+    // the machine and can open a file by naming it, where a compute plugin
+    // cannot name anything at all.
+    const tools = new Set(serverTools());
+    const extra = OPS.filter((op) => !tools.has(op));
+    expect([...extra].sort()).toEqual([...NATIVE_OPS].sort());
+    // And they are on the same table, checked by the same broker, rather than
+    // in a channel of their own. A second channel would be a second permission
+    // system to keep in step with this one.
+    for (const op of NATIVE_OPS) {
+      expect(OP_TABLE[op], `${op} is not in the op table`).toBeTruthy();
+    }
+  });
+
+  it("does not give a file op away for free", () => {
+    // The one that would matter if it were wrong. `app_info` needs nothing and
+    // says so; the other three must cost a grant somebody was shown.
+    expect(OP_TABLE.file_pick.needs).toContain("files.read");
+    expect(OP_TABLE.file_read.needs).toContain("files.read");
+    expect(OP_TABLE.file_write.needs).toContain("files.write");
+
+    const none = broker([]);
+    for (const op of ["file_pick", "file_read", "file_write"] as const) {
+      expect(none.can(op), `${op} was free`).toBe(false);
+    }
+    // The control: the door does open for something.
+    expect(none.can("app_info")).toBe(true);
   });
 
   it("gives every op a reason, including the ones that need nothing", () => {

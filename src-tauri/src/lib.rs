@@ -317,6 +317,10 @@ pub fn run() {
         plugins::plugin_entry,
         plugins::plugin_remove,
         plugins::plugin_python,
+        plugins::files::plugin_file_pick,
+        plugins::files::plugin_file_read,
+        plugins::files::plugin_file_write,
+        plugins::files::plugin_app_info,
         spacemouse::spacemouse_inventory,
         spacemouse::spacemouse_start,
         spacemouse::spacemouse_stop
@@ -359,6 +363,10 @@ pub fn run() {
         plugins::plugin_entry,
         plugins::plugin_remove,
         plugins::plugin_python,
+        plugins::files::plugin_file_pick,
+        plugins::files::plugin_file_read,
+        plugins::files::plugin_file_write,
+        plugins::files::plugin_app_info,
         spacemouse::spacemouse_inventory,
         spacemouse::spacemouse_start,
         spacemouse::spacemouse_stop
@@ -368,6 +376,10 @@ pub fn run() {
         .manage(printer::Monitors::default())
         .manage(printer::Cameras::default())
         .manage(spacemouse::Inventory::default())
+        // The files a person has handed to a plugin this session. Session-lived
+        // and nowhere on disk: a plugin cannot come back tomorrow holding a
+        // token for a file somebody forgot they had offered it.
+        .manage(plugins::files::Handles::default())
         .setup(|app| {
             match Sidecar::spawn(app.handle()) {
                 Ok(s) => {
