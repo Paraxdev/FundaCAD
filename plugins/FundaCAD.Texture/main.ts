@@ -42,6 +42,7 @@ import TextureToolPanel from "./TextureToolPanel.vue";
 import * as panel from "./panel";
 import {
   TEXTURE_CHOICE_FIELDS,
+  TEXTURE_FILE_FIELDS,
   TEXTURE_TOGGLE_FIELDS,
   sharpnessLabel,
   textureFieldApplies,
@@ -113,6 +114,7 @@ export async function activate(e: Engine): Promise<() => void> {
       type: "texture",
       meta: { icon: "texture", label: "Texture" },
       choiceFields: TEXTURE_CHOICE_FIELDS,
+      fileFields: TEXTURE_FILE_FIELDS,
       toggleFields: TEXTURE_TOGGLE_FIELDS,
       // Governs the numeric rows too, which is the whole reason this is worth
       // contributing: the application owns `depth`, `scale`, `seed` and the rest

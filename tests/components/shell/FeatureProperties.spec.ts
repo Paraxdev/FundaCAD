@@ -19,6 +19,7 @@ import { ENGINE } from "../../../src/app/engineKey";
 import { contribute, resetContributions } from "../../../src/plugins/contrib";
 import {
   TEXTURE_CHOICE_FIELDS,
+  TEXTURE_FILE_FIELDS,
   TEXTURE_TOGGLE_FIELDS,
   sharpnessLabel,
   textureFieldApplies,
@@ -41,6 +42,7 @@ function withTexturePlugin() {
       type: "texture",
       meta: { icon: "texture", label: "Texture" },
       choiceFields: TEXTURE_CHOICE_FIELDS,
+      fileFields: TEXTURE_FILE_FIELDS,
       toggleFields: TEXTURE_TOGGLE_FIELDS,
       fieldApplies: textureFieldApplies,
       fieldLabel: (field, values) =>
@@ -98,22 +100,26 @@ function render(fake: ReturnType<typeof makeEngine>, featureId: string): VueWrap
  *  contradiction.
  *
  *  A row is not always a text box, a fixed choice is a <select>, a switch is a
- *  checkbox, and a SELECTION row has no control at all, only the summary of what
- *  the feature acts on and a button that opens the editor. This reads whichever
- *  the row has. A row with none of them is a row that renders nothing, which is
- *  worth failing on rather than skipping. */
+ *  checkbox, a FILE is a button carrying the name of what was chosen, and a
+ *  SELECTION row has no control at all, only the summary of what the feature
+ *  acts on and a button that opens the editor. This reads whichever the row has.
+ *  A row with none of them is a row that renders nothing, which is worth failing
+ *  on rather than skipping. */
 const rows = (w: VueWrapper) =>
   w.findAll(".param-row").map((r) => {
     const sel = r.find("select");
     const box = r.find("input[type=checkbox]");
     const count = r.find(".target-count");
+    const file = r.find("button.file-pick");
     const value = sel.exists()
       ? (sel.element as HTMLSelectElement).value
       : box.exists()
         ? String((box.element as HTMLInputElement).checked)
         : count.exists()
           ? count.text()
-          : (r.find("input").element as HTMLInputElement).value;
+          : file.exists()
+            ? file.text()
+            : (r.find("input").element as HTMLInputElement).value;
     return [
       r.find("label").text(),
       r.find(".dim-unit").exists() ? r.find(".dim-unit").text() : "",
@@ -403,6 +409,55 @@ describe("FeatureProperties", () => {
     const n = labels(render(noise, "t1"));
     expect(n).toContain("Seed");
     expect(n).not.toContain("Angle");
+  });
+
+  it("offers the heightmap file, and only to the pattern that reads one", async () => {
+    // The report: choose Heightmap in Properties and the pattern changes to the
+    // one that reads an image, with nowhere to say WHICH image. The rule that
+    // says imagePath applies to `image` and nothing else had existed for a long
+    // time; there was no KIND of row that could show a path, so nothing read it.
+    withTexturePlugin();
+    const heightmap = makeEngine({
+      parameters: {},
+      features: [{ id: "t1", type: "texture", kind: "image", depth: 0.4, scale: 2,
+                   imagePath: "C:/pictures/relief.png" } as unknown as Feature],
+    });
+    const w = render(heightmap, "t1");
+    expect(labels(w)).toContain("Heightmap");
+    // The NAME of the file, not the path: the value column is 120px, and the
+    // whole path is on the row's title where nothing is lost.
+    const row = w.findAll(".param-row").find((r) => r.find("label").text() === "Heightmap")!;
+    expect(row.find("button.file-pick").text()).toBe("relief.png");
+    expect(row.attributes("title")).toBe("C:/pictures/relief.png");
+
+    // Clearing is the way back from a heightmap that has been moved or deleted,
+    // which otherwise fails every rebuild with no row to fix it in.
+    await row.find("button.file-clear").trigger("click");
+    expect(heightmap.updates).toEqual([{ id: "t1", patch: { imagePath: "" } }]);
+  });
+
+  it("THE CONTROL: a pattern that reads no file gets no file row", () => {
+    withTexturePlugin();
+    const knurl = makeEngine({
+      parameters: {},
+      features: [{ id: "t1", type: "texture", kind: "knurl", depth: 0.4, scale: 2 } as unknown as Feature],
+    });
+    expect(labels(render(knurl, "t1"))).not.toContain("Heightmap");
+  });
+
+  it("shows a heightmap row with nothing chosen as a prompt to choose", () => {
+    // A texture whose file was never set, or was just cleared. An empty row that
+    // rendered as a blank button would read as broken rather than as unset.
+    withTexturePlugin();
+    const empty = makeEngine({
+      parameters: {},
+      features: [{ id: "t1", type: "texture", kind: "image", depth: 0.4, scale: 2 } as unknown as Feature],
+    });
+    const row = render(empty, "t1").findAll(".param-row")
+      .find((r) => r.find("label").text() === "Heightmap")!;
+    expect(row.find("button.file-pick").text()).toBe("Choose\u2026");
+    // and no Clear, because there is nothing to clear
+    expect(row.find("button.file-clear").exists()).toBe(false);
   });
 
   it("gives an extrude the Symmetric switch, and writes it", async () => {

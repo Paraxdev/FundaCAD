@@ -17,7 +17,7 @@
 // copies of "which kinds have an angle" is exactly how a tool panel and the rows
 // that edit the same feature afterwards come to disagree about it.
 
-import type { ChoiceField, ToggleField } from "fundacad";
+import type { ChoiceField, FileField, ToggleField } from "fundacad";
 
 export type TextureKind = "knurl" | "hex" | "waves" | "ribs" | "voronoi" | "noise" | "image";
 export type TextureMode = "faces" | "body";
@@ -120,6 +120,23 @@ export const TEXTURE_CHOICE_FIELDS: ChoiceField[] = [
 /** The switch a committed texture offers. */
 export const TEXTURE_TOGGLE_FIELDS: ToggleField[] = [
   { field: "invert", label: "Invert heights", fallback: false },
+];
+
+/** The heightmap, in the value rows as well as in the panel.
+ *
+ *  `textureFieldApplies` already answered "does imagePath mean anything here",
+ *  and the answer was read by nothing: there was no kind of row that could show
+ *  a path, so choosing Heightmap in Properties changed the pattern to the one
+ *  that reads an image and then offered no way to name one. Same field, same
+ *  filters and same dialog as the Browse button in the panel, so a texture reads
+ *  the same before and after it is committed. */
+export const TEXTURE_FILE_FIELDS: FileField[] = [
+  {
+    field: "imagePath",
+    label: "Heightmap",
+    filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "bmp"] }],
+    title: "The image whose brightness becomes height. Light is high.",
+  },
 ];
 
 export interface TextureValues {

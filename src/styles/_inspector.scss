@@ -105,6 +105,64 @@
   box-shadow: 0 0 0 3px var(--accent-tint);
 }
 
+/* A value that is a file on disk. Same box as .param-select above, for the same
+   reason: it sits interleaved with dropdowns and number fields in one column,
+   and a button that read as a different KIND of control would break the line
+   down the middle of the panel.
+
+   The name of the file is what shows, left-aligned and ellipsised. A path is
+   longer than the 120px this column has, and the row's `title` carries the whole
+   of it, so what is on screen is the shortest thing that identifies the file
+   rather than the middle of a directory tree. */
+.param-file {
+  min-width: 0;
+}
+.param-file .file-pick {
+  background: var(--panel-2);
+  border: 1px solid var(--line-strong);
+  color: var(--text);
+  border-radius: var(--r-sm);
+  padding: var(--s-2) var(--s-3);
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease);
+}
+.param-file .file-pick:hover {
+  border-color: #3d4452;
+}
+.param-file .file-pick:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--bg);
+  box-shadow: 0 0 0 3px var(--accent-tint);
+}
+/* Only present once there is something to clear, so it never sits there as a
+   dead control, and it never takes width from the name when the row is empty. */
+.param-file .file-clear {
+  flex: 0 0 auto;
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text-dim);
+  border-radius: var(--r-sm);
+  padding: 0 var(--s-2);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.param-file .file-clear:hover {
+  color: var(--error);
+  border-color: var(--line-strong);
+}
+
 /* A value that is on or off. The checkbox itself stays in the document rather
    than being display:none'd, so it keeps its keyboard behaviour and its label
    association; it is only moved out from under the drawn switch. */

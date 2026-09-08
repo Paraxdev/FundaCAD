@@ -8,12 +8,15 @@
 // re-serialises one entity), and two copies of that would drift the moment a
 // field type was added.
 //
-// Four kinds of row, in the order a form reads best: what the feature is APPLIED
-// TO first, then the CHOICES, then the switches, then the numbers. A choice
-// usually decides which numbers are even there, pick a texture pattern and the
-// Angle and Seed rows appear or go, so putting it under the fields it governs
-// would have the reader working upward. The numbers come last because they are
-// the long tail.
+// Five kinds of row, in the order a form reads best: what the feature is APPLIED
+// TO first, then the CHOICES, then the files, then the switches, then the
+// numbers. A choice usually decides which of the others are even there, pick a
+// texture pattern and the Angle, Seed and heightmap rows appear or go, so
+// putting it under the fields it governs would have the reader working upward.
+// The numbers come last because they are the long tail.
+//
+// A file sits directly under the choice that summons it: picking Heightmap is
+// what makes the image row exist, and the two read as one decision.
 //
 // The selection leads because it is the half of a feature that was missing. A
 // fillet is a set of edges and a radius; the radius has been editable since these
@@ -33,6 +36,7 @@ import { useDocValue } from "../../app/useDoc";
 import ValidatedRow from "./ValidatedRow.vue";
 import ChoiceRow from "./ChoiceRow.vue";
 import ToggleRow from "./ToggleRow.vue";
+import FileRow from "./FileRow.vue";
 import SelectionTargetRow from "./SelectionTargetRow.vue";
 import { displayRound, isPlainNumber } from "../../ui/units";
 import { onPreviewError } from "../../ui/previewError";
@@ -46,6 +50,8 @@ import {
   choiceValue,
   fieldApplies,
   fieldLabel,
+  fileFieldsFor,
+  fileValue,
   toggleFieldsFor,
   toggleValue,
 } from "../../document/optionFields";
@@ -189,6 +195,15 @@ const choiceRows = useDocValue((doc) => {
   return choiceFieldsFor(f.type)
     .filter((c) => fieldApplies(f.type, c.field, values))
     .map((c) => ({ ...c, current: choiceValue(f, c) }));
+});
+
+const fileRows = useDocValue((doc) => {
+  const f = doc.features.find((x) => x.id === props.featureId);
+  if (!f) return [];
+  const values = f as unknown as Record<string, unknown>;
+  return fileFieldsFor(f.type)
+    .filter((c) => fieldApplies(f.type, c.field, values))
+    .map((c) => ({ ...c, current: fileValue(f, c) }));
 });
 
 const toggleRows = useDocValue((doc) => {
@@ -389,6 +404,15 @@ function commitField(
     :options="c.options"
     :row-title="c.title"
     :commit="(v) => setOption(c.field, v)"
+  />
+  <FileRow
+    v-for="r in fileRows"
+    :key="`f:${r.field}`"
+    :label="r.label"
+    :value="r.current"
+    :filters="r.filters"
+    :row-title="r.title"
+    :commit="(v) => setOption(r.field, v)"
   />
   <ToggleRow
     v-for="t in toggleRows"
