@@ -506,6 +506,89 @@ a top-level assignment now, which a bundler must keep, and
 `scripts/check-sandbox-chunk.mjs` reads the built artifact and fails if it is a
 husk again.
 
+## Reaching past the window
+
+Four ops go somewhere the webview cannot: `file_pick`, `file_read`, `file_write`
+and `app_info`. They are on the **same op table**, checked by the **same
+broker**, against the **same grants** as everything else, and that is the whole
+design decision. The tempting shape is a second channel, a `native` object
+handed to the plugin beside `app`, and a second channel is a second permission
+system to keep in step with the first. There is one door.
+
+### A plugin never names a file
+
+It asks. A native dialog opens, with the plugin's id and its own sentence in the
+title, and if the person chooses something what comes back is a **handle**: an
+opaque token, a file **name**, and a length.
+
+```js
+const picked = await app.call("file_pick", {
+  purpose: "choose a profile to trace",
+  extensions: ["svg"],
+});
+if (!picked) return "nothing chosen";          // they dismissed it
+const body = await app.callOrThrow("file_read", { handle: picked.handle });
+```
+
+So "which files may this plugin read" needs no rule, no configured directory and
+no sandbox root to get wrong. It is: **the ones somebody picked, this session,
+for this plugin.** A plugin cannot name a file, cannot guess a handle (they are
+random), and cannot use another plugin's handle, because every handle records
+whose it is and the check runs on every read.
+
+A path never crosses — not to the plugin, and not even into the window. The
+handle table lives in Rust, in `src-tauri/src/plugins/handed.rs`, so the most a
+plugin can learn about somebody's disk is a file name they chose to show it. A
+plugin that could display `C:\Users\alice\Documents\work\part.step` has been
+told the person's name and the shape of their disk in exchange for nothing it
+needed.
+
+`file_write` has no handle at all and never will: the person picks the path
+every time, which is the difference between "save this file" and "may I write to
+your disk".
+
+### A dismissed dialog is an answer, not an error
+
+`file_pick` and `file_write` return `null` when the dialog is dismissed. A
+plugin that treats that as a failure will show somebody an error for having
+changed their mind, so the test double takes `answers: { file_pick: null }`
+precisely so that branch is reachable in a plugin's own tests. It is the one
+every author forgets.
+
+### Why `doc_open` and `doc_save` still refuse
+
+Not because they are unfinished. Both take a **path**, which is the one thing a
+plugin may not have, so they will keep refusing and their refusals name what to
+do instead:
+
+| instead of | a plugin does |
+| --- | --- |
+| `doc_open` | `file_pick`, then `file_read`, then `doc_set` |
+| `doc_save` | `doc_get`, then `file_write` |
+
+The alternative was to give those two ops a different meaning for a compute
+plugin than they have over MCP, where the server is a process on the machine and
+can open a file by naming it. One vocabulary that means two things is worse than
+one vocabulary with a gap in it.
+
+### What is enforced where
+
+| | |
+| --- | --- |
+| may this plugin ask at all | the broker, against the grants recorded at install |
+| may the app do this yet | the host, by name, per op |
+| is the desktop app under it | the host again, and it says so separately |
+| whose file is this | Rust, on every read |
+| does this happen at all | the person, at a native dialog, every time |
+
+Three refusals rather than one is deliberate. "You did not ask for this", "the
+app cannot do this yet" and "this is not running in the desktop app" are
+different problems with different fixes, and one message that could mean any of
+them is worth much less than three that cannot.
+
+The Rust side knows nothing about `files.read` and must not learn, for the same
+reason the installer next door knows nothing about `document.write`.
+
 ## The two hosts
 
 `BrokerHost` has two implementations, and they serve the same op table.
@@ -534,11 +617,14 @@ either way: **read the id `feature_add` returns, never predict it.**
 
 ### What appHost does not serve yet
 
-`doc_open`, `doc_save` and `export` need a file picker; `build`, `inspect` and
-`view` need the geometry engine. Each refuses by name. A plugin author has to be
-able to tell "you did not ask for this" (the broker, `not-granted`) from "the
-app cannot do this yet" (the host, `failed`), and one refusal that could mean
-either is worth much less than two that cannot.
+`build`, `inspect`, `view` and `export` need the geometry engine, which a plugin
+cannot reach yet. `doc_open` and `doc_save` refuse permanently and for a
+different reason; see above. Each refuses by name.
+
+`file_pick`, `file_read`, `file_write` and `app_info` are served, but only when
+the host was given a `NativeBridge` and a plugin id. In a browser session or a
+test that passed neither, they refuse with a message naming which half is
+missing rather than pretending to have opened a dialog nobody saw.
 
 ## Languages, and what runs them
 
@@ -588,6 +674,7 @@ and the `process` sentence on the install screen says so.
 | `src/plugins/broker/ops.ts` | the op vocabulary: what each needs, and why |
 | `src/plugins/broker/broker.ts` | the door: check, then dispatch, and never throw at a plugin |
 | `src/plugins/broker/appHost.ts` | the same door onto the document that is open |
+| `src/plugins/broker/native.ts` | the four ops that reach past the window, and the bridge to Rust |
 | `src/plugins/broker/testing.ts` | the app a plugin's tests are handed |
 | `src/plugins/runner/*.ts` | the sandbox: protocol, host, guest, spawn |
 | `src/plugins/shipped.ts` | the one glob of `plugins/*/manifest.json`, parsed |
@@ -597,6 +684,8 @@ and the `process` sentence on the install screen says so.
 | `src/components/overlays/PluginsSection.vue` | Preferences ▸ Plugins |
 | `src-tauri/src/plugins/mod.rs` | the commands: list, inspect, install, remove, python runtime |
 | `src-tauri/src/plugins/bundle.rs` | the refusals, split out so they can be tested |
+| `src-tauri/src/plugins/files.rs` | the dialogs and the disk |
+| `src-tauri/src/plugins/handed.rs` | which files a plugin holds, split out so it can be tested |
 | `plugins/<id>/manifest.json` | what it is and what it asks for; the only copy |
 | `plugins/<id>/README.md` | why it asks for that |
 | `plugins/<id>/main.ts` | a shipped capability's activation module, if it has one |
@@ -626,14 +715,10 @@ node e2e/sandbox_csp.cjs                 # needs a Chromium; SC_CHROME names it
 
 ## What comes next
 
-1. **A way for a plugin to ask the Rust side for something.** The broker's op
-   table is served today by the window (`appHost`) and by a test double, and
-   both refuse the same six ops: `build`, `inspect` and `view` want the geometry
-   engine, and `doc_open`, `doc_save` and `export` want a file picker. A file
-   picker is a Rust window, not a webview dialog. This is one job rather than
-   two: the same op table gains the ops only Rust can serve, routed through the
-   same broker and checked against the same grants, because a second channel to
-   Rust would be a second permission system to keep in step with the first.
+1. **The geometry engine, reachable from a plugin.** `build`, `inspect`, `view`
+   and `export` are the four ops still refusing for a reason that will go away.
+   The file half of `export` is already answered — `doc_get` then `file_write` —
+   so what is left is the kernel call itself.
 2. The wasm loader in the guest, which is what makes a Rust plugin run rather
    than merely compile.
 3. Somewhere to press "run". A compute plugin is installable and runnable in

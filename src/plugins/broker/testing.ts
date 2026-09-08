@@ -24,6 +24,7 @@ import type { CadDocument, Feature } from "../../types";
 import { allOpGrants, type Op } from "./ops";
 import type { Grant } from "../manifest";
 import { createBroker, type Broker, type BrokerHost } from "./broker";
+import { UNSERVED } from "./appHost";
 
 /** How the app names a new feature, mirroring `DocumentStore.nextId()`.
  *
@@ -78,12 +79,22 @@ export type Answer = ((args: Record<string, unknown>) => unknown) | Plain;
 export interface TestHostOptions {
   /** The document the session starts with. Empty if omitted. */
   document?: CadDocument;
-  /** Files on the pretend disk, path to contents. `doc_open` reads these. */
+  /** The pretend disk: file name to contents. This is what a person could
+   *  choose from when the plugin calls `file_pick`, and where `file_write`
+   *  puts things. Names, not paths, because that is all a plugin ever sees. */
   files?: Record<string, string>;
-  /** Answers for the four ops that need the geometry engine. */
+  /** Answers for the ops a unit test cannot really perform.
+   *
+   *  The four geometry ops refuse until one is given. `file_pick` and
+   *  `file_write` do not — they have a sensible default — but taking an answer
+   *  is how a test says WHAT THE PERSON DID: a file name to choose that one, or
+   *  `null` for a dialog that was dismissed. The dismissal branch is the one
+   *  every plugin author forgets, and it has to be reachable. */
   answers?: Partial<Record<Op, Answer>>;
   /** What `schema` reports. Empty unless a test cares. */
   featureTypes?: string[];
+  /** What `app_info` reports. */
+  appInfo?: { version: string; platform: string; arch: string };
 }
 
 export interface TestHost extends BrokerHost {
@@ -104,6 +115,10 @@ export function testHost(opts: TestHostOptions = {}): TestHost {
   let doc: CadDocument = clone(opts.document ?? EMPTY);
   const files: Record<string, string> = { ...(opts.files ?? {}) };
   const log: { op: Op; args: Record<string, unknown> }[] = [];
+  /** Handles minted by `file_pick`, exactly as the real one keeps them: a
+   *  plugin can read what it was handed and nothing else. */
+  const handed = new Map<string, string>();
+  let nextHandle = 1;
 
   const features = (): Feature[] => (doc.features ??= []);
   const ids = () => features().map((f) => f.id);
@@ -130,6 +145,35 @@ export function testHost(opts: TestHostOptions = {}): TestHost {
     return typeof answer === "function"
       ? (answer as (a: Record<string, unknown>) => unknown)(args)
       : answer;
+  };
+
+  /** What the test said the person did, or undefined for "decide it yourself". */
+  const said = (op: Op, args: Record<string, unknown>): unknown => {
+    const answer = opts.answers?.[op];
+    if (answer === undefined) return undefined;
+    return typeof answer === "function"
+      ? (answer as (a: Record<string, unknown>) => unknown)(args)
+      : answer;
+  };
+
+  /** Which file a person would plausibly pick, given the filter.
+   *
+   *  Advisory, exactly as the real dialog's filter is: it narrows what is
+   *  offered first, it does not narrow what could be chosen. A test wanting a
+   *  different answer says so with `answers: { file_pick: "other.stl" }`. */
+  const wouldPick = (extensions: unknown): string | null => {
+    const names = Object.keys(files).sort();
+    const exts = Array.isArray(extensions)
+      ? extensions
+          .filter((e): e is string => typeof e === "string")
+          .map((e) => e.trim().replace(/^\./, "").toLowerCase())
+          .filter(Boolean)
+      : [];
+    if (exts.length > 0) {
+      const match = names.find((n) => exts.some((e) => n.toLowerCase().endsWith(`.${e}`)));
+      if (match) return match;
+    }
+    return names[0] ?? null;
   };
 
   return {
@@ -159,20 +203,71 @@ export function testHost(opts: TestHostOptions = {}): TestHost {
           return { ok: true };
         }
 
-        case "doc_open": {
-          const path = str(args.path, "path");
-          const text = files[path];
-          if (text === undefined) throw new TestHostError(`no such file: ${path}`);
-          doc = JSON.parse(text) as CadDocument;
-          doc.parameters ??= {};
-          doc.features ??= [];
-          return { ok: true, path };
+        // Refused, in the app's own words, because the app refuses them. These
+        // two used to be served here against the pretend disk, which made this
+        // double a liar in the one direction that costs the most: a plugin
+        // whose tests passed on `doc_open` would have met a refusal the first
+        // time anybody ran it. Both take a PATH, and a plugin has no paths.
+        case "doc_open":
+        case "doc_save":
+          throw new TestHostError(`${op}: ${UNSERVED[op]}`);
+
+        case "app_info":
+          return (
+            opts.appInfo ?? { version: "0.0.0-test", platform: "test", arch: "test" }
+          );
+
+        case "file_pick": {
+          // `null` means the person dismissed the dialog. Distinguished from
+          // "the test said nothing" so that dismissal is reachable at all.
+          const answer = said(op, args);
+          const name =
+            answer === undefined ? wouldPick(args.extensions) : answer === null ? null : String(answer);
+          if (name === null) return null;
+          if (!(name in files)) {
+            throw new TestHostError(
+              `answers.file_pick chose ${JSON.stringify(name)}, which is not in files`,
+            );
+          }
+          const handle = `f${nextHandle++}`;
+          handed.set(handle, name);
+          return { handle, name, len: files[name]!.length };
         }
 
-        case "doc_save": {
-          const path = str(args.path, "path");
-          files[path] = JSON.stringify(doc);
-          return { ok: true, path };
+        case "file_read": {
+          const handle = str(args.handle, "handle");
+          const name = handed.get(handle);
+          // The real one answers the same way for a handle that does not exist
+          // and for one belonging to somebody else, so this does too: a plugin
+          // that branches on the difference would be branching on nothing.
+          if (name === undefined) {
+            throw new TestHostError("that file was not offered to this plugin");
+          }
+          const text = files[name]!;
+          return { name, len: text.length, text };
+        }
+
+        case "file_write": {
+          const answer = said(op, args);
+          if (answer === null) return null; // the person cancelled the save
+          const text = args.text;
+          const b64 = args.base64;
+          if (typeof text !== "string" && typeof b64 !== "string") {
+            throw new TestHostError("pass `text` or `base64`");
+          }
+          if (typeof text === "string" && typeof b64 === "string") {
+            throw new TestHostError("pass `text` or `base64`, not both");
+          }
+          const name =
+            answer === undefined
+              ? str(args.suggested, "suggested")
+              : String(answer);
+          // base64 is kept as it arrived. The pretend disk holds text, and a
+          // double that decoded it would be claiming to know an encoding the
+          // real one hands straight to the filesystem.
+          const body = typeof text === "string" ? text : (b64 as string);
+          files[name] = body;
+          return { name, len: body.length };
         }
 
         case "param_set": {
