@@ -32,6 +32,8 @@ import {
   promiseOf,
   type PluginManifest,
 } from "./manifest";
+import type { DocumentStore } from "../document/store";
+import type { RunOutcome } from "./runner/host";
 
 /** Where this project's own bundles are published. Mirrors BUNDLE_PREFIX in
  *  src-tauri/src/plugins/bundle.rs; this copy only builds the URLs, and that
@@ -190,6 +192,46 @@ export function installedManifest(rec: InstalledPlugin): PluginManifest | null {
     hosts: rec.consented.hosts,
   });
   return parsed.ok ? parsed.manifest : null;
+}
+
+/** Read an installed plugin's entry point.
+ *
+ *  The far side decides the file name from what the plugin declared, so this
+ *  is not a file reader with a plugin id attached to it. */
+export async function pluginEntry(id: string): Promise<string> {
+  return await call<string>("plugin_entry", { id });
+}
+
+/** Run an installed compute plugin against the document that is open.
+ *
+ *  The pieces are deliberately assembled here and nowhere else: the code comes
+ *  off disk, the grants come off the INSTALLED RECORD rather than from anything
+ *  the plugin says now, and the host is the app. A caller cannot widen a plugin
+ *  by calling this differently, because there is nothing to pass.
+ *
+ *  The sandbox arrives by dynamic import, so a build where nobody runs a plugin
+ *  never loads a Worker runner. */
+export async function runComputePlugin(
+  rec: InstalledPlugin,
+  store: DocumentStore,
+  featureTypes?: () => string[],
+): Promise<RunOutcome> {
+  if (rec.consented.kind !== "compute") {
+    throw new Error(`${rec.id} is a ${rec.consented.kind} plugin, which is not run here`);
+  }
+  const manifest = installedManifest(rec);
+  if (!manifest) throw new Error(`${rec.id} has no record this app can read`);
+
+  const [{ spawnAndRun }, { appHost }] = await Promise.all([
+    import("./runner/spawn"),
+    import("./broker/appHost"),
+  ]);
+  return await spawnAndRun({
+    plugin: manifest.id,
+    grants: manifest.grants,
+    host: appHost(featureTypes ? { store, featureTypes } : { store }),
+    source: await pluginEntry(rec.id),
+  });
 }
 
 export async function removePlugin(id: string): Promise<void> {

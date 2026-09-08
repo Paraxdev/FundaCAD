@@ -9,7 +9,7 @@
 //
 // WHAT IS REAL HERE. The document ops. Parameters and the feature timeline are
 // plain data with rules over them, so this runs those rules: ids are assigned
-// the way the app assigns them, a bad edit is refused before anything is
+// the way ./appHost.ts assigns them, a bad edit is refused before anything is
 // written, and a plugin that adds a feature and reads the document back sees it.
 //
 // WHAT IS NOT, AND SAYS SO. `build`, `inspect`, `view` and `export` need the
@@ -25,16 +25,23 @@ import { allOpGrants, type Op } from "./ops";
 import type { Grant } from "../manifest";
 import { createBroker, type Broker, type BrokerHost } from "./broker";
 
-/** Mirrors `_PREFIXES` in plugins/mcp/model.py, which is the implementation the app and
- *  the agent already share. `tests/plugins/testHost.test.ts` reads that file and
- *  fails if the two drift, because a test double that hands out different ids
- *  from the real thing is a test double that passes tests the app would fail. */
-const PREFIXES: Record<string, string> = {
-  sketch: "sk", extrude: "ex", revolve: "rev", fillet: "fil",
-  chamfer: "cha", "press-pull": "pp", box: "bx", cylinder: "cy",
-  sphere: "sp", shell: "sh", boolean: "bo", mirror: "mir",
-  loft: "lo", sweep: "sw", datumPlane: "pl", move: "mv",
-  patternCircular: "pc", patternLinear: "pln", split: "spl",
+/** How the app names a new feature, mirroring `DocumentStore.nextId()`.
+ *
+ *  THIS IS NOT THE ONLY SCHEME IN THE SYSTEM, and an earlier version of this
+ *  file said it was. `plugins/mcp/model.py` names features by type, `bx1` for a
+ *  box and `ex1` for an extrude; the app names them `f1`, `f2`, counting from
+ *  the number it already has. Both are hosts for the same op vocabulary and
+ *  both are right, because an id is an id.
+ *
+ *  This double follows the APP, because ./appHost.ts is the host a compute
+ *  plugin actually runs against. The lesson for a plugin author is the one that
+ *  holds either way and is worth learning here rather than in the field: read
+ *  the id `feature_add` returns, never predict it. */
+const nextFeatureId = (existing: readonly string[]): string => {
+  const used = new Set(existing);
+  let n = used.size + 1;
+  while (used.has(`f${n}`)) n += 1;
+  return `f${n}`;
 };
 
 const ID_RE = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
@@ -75,6 +82,8 @@ export interface TestHostOptions {
   files?: Record<string, string>;
   /** Answers for the four ops that need the geometry engine. */
   answers?: Partial<Record<Op, Answer>>;
+  /** What `schema` reports. Empty unless a test cares. */
+  featureTypes?: string[];
 }
 
 export interface TestHost extends BrokerHost {
@@ -98,14 +107,6 @@ export function testHost(opts: TestHostOptions = {}): TestHost {
 
   const features = (): Feature[] => (doc.features ??= []);
   const ids = () => features().map((f) => f.id);
-
-  const nextId = (type: string): string => {
-    const prefix = PREFIXES[type] ?? "f";
-    const used = new Set(ids());
-    let n = 1;
-    while (used.has(`${prefix}${n}`)) n += 1;
-    return `${prefix}${n}`;
-  };
 
   const findIndex = (id: string): number => {
     const i = features().findIndex((f) => f.id === id);
@@ -140,10 +141,9 @@ export function testHost(opts: TestHostOptions = {}): TestHost {
       log.push({ op, args: clone(args) });
       switch (op) {
         case "schema":
-          // Stands in for the real schema text without pretending to be it. A
-          // plugin that branches on the content of this is testing the wrong
-          // thing.
-          return { types: Object.keys(PREFIXES).sort(), note: "test double" };
+          // Stands in for the real schema without pretending to be it. A plugin
+          // that branches on the content of this is testing the wrong thing.
+          return { types: [...(opts.featureTypes ?? [])].sort(), note: "test double" };
 
         case "doc_get":
           return clone(doc);
@@ -193,7 +193,13 @@ export function testHost(opts: TestHostOptions = {}): TestHost {
           const unit = args.unit === "deg" || args.unit === "count" ? args.unit : "mm";
           (doc.paramDefs ??= {})[name] = { expr: String(expr), value, unit };
           doc.parameters[name] = value;
-          return { ok: true, name, value };
+          // No `value` in the reply, matching ./appHost.ts, which cannot give
+          // one: the real store validates synchronously and commits the
+          // cascade asynchronously, so the evaluated number is not available
+          // when the call returns. A plugin that needs it reads the document
+          // back. tests/plugins/appHost.spec.ts is what caught the two
+          // disagreeing about this.
+          return { ok: true, name };
         }
 
         case "param_remove": {
@@ -208,7 +214,7 @@ export function testHost(opts: TestHostOptions = {}): TestHost {
           const f = clone(obj(args.feature, "feature")) as unknown as Feature;
           if (!f.type) throw new TestHostError("a feature needs a `type`");
           if (f.id === undefined) {
-            f.id = nextId(String(f.type));
+            f.id = nextFeatureId(ids());
           } else if (!ID_RE.test(String(f.id))) {
             throw new TestHostError(`bad feature id ${JSON.stringify(f.id)}`);
           } else if (ids().includes(f.id)) {

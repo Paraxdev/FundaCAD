@@ -66,10 +66,41 @@ describe("Content-Security-Policy", () => {
     }
   });
 
+  it("lets a plugin sandbox be a worker on a blob, and nothing else be one", () => {
+    // src/plugins/runner/spawn.ts inlines a plugin's code into a blob and
+    // starts a module Worker on it. Without this grant the Worker cannot be
+    // created at all: `worker-src` is unset by default and falls back to
+    // `script-src`, which does not list blob:.
+    //
+    // e2e/sandbox_csp.cjs is the test that runs that for real, under this
+    // policy, in a browser. This is the fast guard that the grant is still here.
+    for (const csp of [conf.app.security.csp, conf.app.security.devCsp]) {
+      expect(directive(csp, "worker-src")).toEqual(["'self'", "blob:"]);
+    }
+  });
+
+  it("does not let a blob become a script in the window itself", () => {
+    // The whole reason the sandbox uses `worker-src` rather than loosening
+    // `script-src`: a blob may become a Worker, which has no DOM and one port,
+    // and may NOT become a script in the page, which has everything. Two
+    // directives, and only the narrow one is granted.
+    for (const csp of [conf.app.security.csp, conf.app.security.devCsp]) {
+      expect(directive(csp, "script-src")).not.toContain("blob:");
+      expect(directive(csp, "default-src")).not.toContain("blob:");
+    }
+  });
+
   it("grants 'unsafe-eval' only for as long as planegcs needs it", () => {
     // `var a=Function` is embind's `new_` helper as the minifier left it, and
     // `a.apply(c, b)` invokes the Function constructor with a source string.
-    // That is the sink, and it is the ONLY reason the policy is loose.
+    // That is the sink, and it is still the ONLY reason the policy is loose.
+    //
+    // Worth restating because the plugin sandbox looked like it would be a
+    // second reason and deliberately is not. The obvious sandbox hands a
+    // plugin's text to the Function constructor; this one inlines it into the
+    // worker's own script instead, so compute plugins hold no opinion about
+    // 'unsafe-eval' and cannot block its removal. e2e/sandbox_csp.cjs runs the
+    // sandbox under this policy with the grant stripped out, to keep that true.
     const needsEval = glue.includes("var a=Function");
     const granted = directive(conf.app.security.csp, "script-src").includes("'unsafe-eval'");
 
