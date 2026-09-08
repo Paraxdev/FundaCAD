@@ -4,7 +4,7 @@ A fork of SindriCAD with minor tweaks.
 adapted to be as guiding and fluent (easiest way from design in your head to real geometry) as possible
 
 
-## Discretion 
+## Disclosure  
 This project heavily or exclusively uses AI to generate code and tests.
 do NOT expect this software to be enterprise grade but it does allow very fast iteration.
 you may use AI for feature requests or even forking and creating your own.
