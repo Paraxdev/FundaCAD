@@ -220,7 +220,8 @@ class SidecarLink:
                     "Open FundaCAD, or use FUNDACAD_MCP_MODE=auto to work on a "
                     "private copy when it is closed."
                 )
-            say("[mcp] no FundaCAD window is open, starting a private engine")
+            say("[mcp] no FundaCAD window is open, starting a private engine "
+                    f"(looked for {app_session.session_file_path()})")
         else:
             say("[mcp] standalone by configuration, starting a private engine")
         return cls(), None
