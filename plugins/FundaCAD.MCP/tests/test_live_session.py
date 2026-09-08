@@ -43,8 +43,8 @@ import websockets
 
 from winjob import kill_tree
 
-HERE = os.path.dirname(os.path.abspath(__file__))       # plugins/mcp/tests
-MCP = os.path.dirname(HERE)                             # plugins/mcp
+HERE = os.path.dirname(os.path.abspath(__file__))       # plugins/FundaCAD.MCP/tests
+MCP = os.path.dirname(HERE)                             # plugins/FundaCAD.MCP
 ROOT = os.path.dirname(os.path.dirname(MCP))            # the checkout
 SIDECAR = os.path.join(ROOT, "sidecar")
 

@@ -22,7 +22,7 @@ import sys
 
 import schema as S
 
-# plugins/mcp/tests/this_file -> tests -> mcp -> plugins -> the checkout.
+# plugins/FundaCAD.MCP/tests/this_file -> tests -> FundaCAD.MCP -> plugins -> the checkout.
 SIDECAR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__))))), "sidecar")
 

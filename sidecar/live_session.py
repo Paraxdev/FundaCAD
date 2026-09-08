@@ -2,7 +2,7 @@
 
 Until now an outside program could drive the geometry engine but never the
 document: the engine is stateless, every rebuild carries the whole document with
-it, and the document itself lives in the frontend. So `plugins/mcp/` started an engine of
+it, and the document itself lives in the frontend. So `plugins/FundaCAD.MCP/` started an engine of
 its own and worked on a copy, and handing the work back meant saving a file and
 opening it. That is safe, and it is the wrong shape for the thing an agent is
 most often asked to do, which is change the part on the screen.
