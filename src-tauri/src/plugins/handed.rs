@@ -87,15 +87,38 @@ impl Table {
     }
 }
 
+/// The last component of a name, splitting on BOTH separators whatever this
+/// was compiled for.
+///
+/// Deliberately not `Path::file_name`, which knows only the separators of its
+/// own platform: a Windows path handed to a Linux build comes back whole, so
+/// the very thing the callers below promise not to leak leaks. Taking a `&str`
+/// rather than a `Path` is what makes that testable on either platform, since
+/// the interesting input is the string a foreign `Path` would have yielded.
+fn last_component(raw: &str) -> &str {
+    raw.rsplit(['/', '\\']).next().unwrap_or("")
+}
+
 /// The file name, and never the directory.
 ///
 /// A plugin saying "reading part.step" is helpful. One that could say
 /// "reading C:\Users\alice\Documents\work\part.step" has been told the person's
 /// name and the shape of their disk in exchange for nothing it needed.
+///
+/// A path can reach this from somewhere other than this machine's own dialog,
+/// and the promise is a guarantee rather than a tidy-up, so `last_component`
+/// finishes the job `file_name` starts. The cost is that a Linux file whose
+/// name genuinely contains a backslash is shown shortened: a cosmetic loss on
+/// a pathological name, against a privacy promise on an ordinary one.
 pub fn name_of(path: &Path) -> String {
-    path.file_name()
+    let whole = path
+        .file_name()
         .map(|s| s.to_string_lossy().to_string())
-        .unwrap_or_else(|| "the file".to_string())
+        .unwrap_or_default();
+    match last_component(&whole) {
+        "" => "the file".to_string(),
+        name => name.to_string(),
+    }
 }
 
 /// Extensions as a dialog filter, from what a plugin asked for.
@@ -148,7 +171,7 @@ pub fn dialog_title(plugin: &str, purpose: &str, fallback: &str) -> String {
 /// A "suggestion" carrying a path would be a plugin choosing the directory the
 /// dialog opens in, which is most of the way to choosing the file.
 pub fn suggested_name(raw: &str) -> Option<String> {
-    let name = raw.rsplit(['/', '\\']).next().unwrap_or("").trim();
+    let name = last_component(raw).trim();
     if name.is_empty() || name == "." || name == ".." {
         None
     } else {
@@ -214,8 +237,28 @@ mod tests {
         );
     }
 
+    // `name_of` alone cannot be held to this from Windows, where `file_name`
+    // has already done the splitting before the rule is reached. So the rule is
+    // asked directly, with the exact string a Linux `file_name` hands over.
+    #[test]
+    fn a_windows_path_is_split_on_this_platform_too() {
+        assert_eq!(last_component("C:\\Users\\alice\\Documents\\part.step"), "part.step");
+        assert_eq!(last_component("/home/alice/private/part.step"), "part.step");
+        // Mixed, which is what a path assembled by hand tends to look like.
+        assert_eq!(last_component("C:\\Users\\alice/part.step"), "part.step");
+        // The controls: a plain name is not shortened, and a trailing separator
+        // leaves nothing rather than reaching back for the directory.
+        assert_eq!(last_component("part.step"), "part.step");
+        assert_eq!(last_component("C:\\Users\\alice\\"), "");
+    }
+
     #[test]
     fn a_name_is_a_name_and_not_a_path() {
+        // Both of these on BOTH platforms. The Windows one used to be checked
+        // by `Path::file_name`, which splits on the separators of whatever it
+        // was compiled for: it passed on Windows and failed on Linux, where the
+        // whole path came back as the "name" and carried the account name with
+        // it.
         for (path, want) in [
             ("/home/alice/private/work/part.step", "part.step"),
             ("C:\\Users\\alice\\Documents\\part.step", "part.step"),
