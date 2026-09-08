@@ -142,6 +142,33 @@ assignments are saved, loaded and exported exactly as before, so turning
 multi-material back on finds the work still there. A toggle that ate data would
 not be a toggle.
 
+## Where a plugin's source lives
+
+Each plugin is one directory under `plugins/`, with a `plugin.json` at its top
+level. That is the entire rule, and it is what `scripts/build-plugins.py`
+discovers: adding a second plugin means adding a directory, not editing a
+script, a workflow or a list. A directory without a manifest is skipped rather
+than packaged into something that cannot be installed.
+
+`plugins/` is a plugin's OWN source, separate from `src/plugins/`, which is the
+app's side of the arrangement: the vocabulary, the broker, the registry and the
+screen. Nothing in `plugins/` is compiled into the app.
+
+The packaging script refuses a bundle that could not work once installed: a
+manifest whose `id` disagrees with the directory name (it would install under
+one name and be looked for under another), an unknown kind, or a missing entry
+point for the kind it claims. A bundle missing its entry point installs
+perfectly and then does nothing, which is the most annoying shape a failure can
+have.
+
+One consequence worth writing down, because it broke on the way here: nothing
+should work out where the repository root is by counting directories up from
+itself. `sidecar_link.py` did, with two `dirname` calls that meant "the
+checkout" only while the plugin sat one level down. It searches upward for a
+`sidecar/server.py` now, and finds nothing when installed under the app data
+directory, which is exactly when the environment override is supposed to take
+over.
+
 ## Where a plugin comes from
 
 Three routes in, and they differ only in where the manifest is read from.
@@ -282,7 +309,7 @@ otherwise is `(await b.call(op)).value`, which reads `undefined` off a refusal
 and fails ten lines later as a TypeError naming neither the op nor the missing
 grant.
 
-`tests/plugins/broker.test.ts` reads the op list out of `mcp/server.py` rather
+`tests/plugins/broker.test.ts` reads the op list out of `plugins/mcp/server.py` rather
 than restating it. Two copies of a list drift: someone adds a tool there, nobody
 adds a row here, and the new tool is either unreachable or reachable without a
 permission.
@@ -304,7 +331,7 @@ write it, run as a test so it cannot rot.
 
 **The document ops are real.** Parameters and the timeline are plain data with
 rules over them, so the double runs those rules: ids are assigned the way the
-app assigns them (checked against `mcp/model.py`, so the two cannot drift), a
+app assigns them (checked against `plugins/mcp/model.py`, so the two cannot drift), a
 bad edit is refused before anything is written, and a plugin that adds a feature
 and reads the document back sees it.
 
@@ -369,7 +396,8 @@ and the `process` sentence on the install screen says so.
 | `src/components/overlays/PluginsSection.vue` | Preferences ▸ Plugins |
 | `src-tauri/src/plugins/mod.rs` | the commands: list, inspect, install, remove, python runtime |
 | `src-tauri/src/plugins/bundle.rs` | the refusals, split out so they can be tested |
-| `scripts/build-plugin-mcp.py` | packaging, run by the release job |
+| `plugins/<id>/` | each plugin's own sources, one directory each |
+| `scripts/build-plugins.py` | packaging, run by the release job |
 
 The Rust side knows **nothing** about what a grant means, and must not learn.
 It compares grant sets as opaque strings. Teaching both sides the meaning of a

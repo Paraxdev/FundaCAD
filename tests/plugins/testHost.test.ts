@@ -2,7 +2,7 @@
 //
 // A test double earns trust by being checkable against the real thing wherever
 // the real thing is checkable, and by refusing loudly wherever it is not. Both
-// halves are here: the id scheme is compared against mcp/model.py, which is the
+// halves are here: the id scheme is compared against plugins/mcp/model.py, which is the
 // implementation the app and the agent already share, and the four ops that
 // need the geometry kernel refuse rather than invent an answer.
 //
@@ -13,7 +13,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import modelPy from "../../mcp/model.py?raw";
+import modelPy from "../../plugins/mcp/model.py?raw";
 import { testBroker, TestHostError } from "../../src/plugins/broker/testing";
 import type { CadDocument } from "../../src/types";
 
@@ -25,8 +25,8 @@ const value = <T>(r: { ok: boolean; value?: unknown; why?: string }): T => {
 };
 
 describe("feature ids", () => {
-  it("uses the same prefix per type as mcp/model.py, for every type it lists", async () => {
-    const py = read("../../mcp/model.py");
+  it("uses the same prefix per type as plugins/mcp/model.py, for every type it lists", async () => {
+    const py = read("../../plugins/mcp/model.py");
     const block = py.match(/_PREFIXES = \{([\s\S]*?)\}/)?.[1] ?? "";
     const pairs = [...block.matchAll(/"([A-Za-z-]+)":\s*"([a-z]+)"/g)].map(
       (m) => [m[1]!, m[2]!] as const,
@@ -40,10 +40,10 @@ describe("feature ids", () => {
     }
   });
 
-  it("gives an unknown type the fallback prefix, as mcp/model.py does", async () => {
-    // The fallback lives in mcp/model.py as `_PREFIXES.get(kind, "f")`; if that
+  it("gives an unknown type the fallback prefix, as plugins/mcp/model.py does", async () => {
+    // The fallback lives in plugins/mcp/model.py as `_PREFIXES.get(kind, "f")`; if that
     // letter ever changes, this is what says so before a plugin's test does.
-    expect(read("../../mcp/model.py")).toContain('_PREFIXES.get(kind, "f")');
+    expect(read("../../plugins/mcp/model.py")).toContain('_PREFIXES.get(kind, "f")');
     const b = testBroker();
     const r = await b.call("feature_add", { feature: { type: "somethingNew" } });
     expect(value<{ id: string }>(r).id).toBe("f1");

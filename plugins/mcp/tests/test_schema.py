@@ -22,8 +22,9 @@ import sys
 
 import schema as S
 
+# plugins/mcp/tests/this_file -> tests -> mcp -> plugins -> the checkout.
 SIDECAR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
-    os.path.abspath(__file__)))), "sidecar")
+    os.path.dirname(os.path.abspath(__file__))))), "sidecar")
 
 
 def builder_types():

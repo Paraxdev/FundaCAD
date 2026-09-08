@@ -62,7 +62,7 @@ RS
 # The bundle as it will be published, built by the same script CI runs.
 BUNDLE="$OUT/bundle"
 rm -rf "$BUNDLE"
-python "$REPO/scripts/build-plugin-mcp.py" "$BUNDLE" >/dev/null
+python "$REPO/scripts/build-plugins.py" "$BUNDLE" mcp >/dev/null
 ZIP="$(cygpath -m "$BUNDLE/plugin-mcp.zip" 2>/dev/null || echo "$BUNDLE/plugin-mcp.zip")"
 
 mkdir -p "$OUT/tests"

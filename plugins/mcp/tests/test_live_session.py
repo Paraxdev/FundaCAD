@@ -43,9 +43,9 @@ import websockets
 
 from winjob import kill_tree
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-MCP = os.path.dirname(HERE)
-ROOT = os.path.dirname(MCP)
+HERE = os.path.dirname(os.path.abspath(__file__))       # plugins/mcp/tests
+MCP = os.path.dirname(HERE)                             # plugins/mcp
+ROOT = os.path.dirname(os.path.dirname(MCP))            # the checkout
 SIDECAR = os.path.join(ROOT, "sidecar")
 
 #: A port of its own. The app's 8765 may be in use by a real session on the

@@ -140,7 +140,7 @@ def test_a_RELATIVE_path_lands_where_the_caller_is_standing():
         assert os.path.abspath(landed) in rs[-1]["text"].replace("/", os.sep), rs[-1]["text"]
     stray = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                          "part.funda")
-    assert not os.path.exists(stray), f"the server wrote into the repository: {stray}"
+    assert not os.path.exists(stray), f"the server wrote into its own directory: {stray}"
 
 
 def test_a_refused_edit_leaves_the_document_alone():

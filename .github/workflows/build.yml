@@ -79,11 +79,11 @@ jobs:
         run: |
           SKIP="test_conic_fuzz.py"  # minutes-long blend sweep; runs in the eval job
           fail=0
-          # ../mcp/tests too: the MCP server runs on this same venv (websockets,
+          # ../plugins/mcp/tests too: the MCP server runs on this same venv (websockets,
           # numpy and pillow are all sidecar dependencies) and its tests are the
           # same kind of __main__ script. Globbing both is what stops the second
           # directory from repeating the history the comment above records.
-          for t in tests/test_*.py ../mcp/tests/test_*.py; do
+          for t in tests/test_*.py ../plugins/mcp/tests/test_*.py; do
             case " $SKIP " in *" $(basename "$t") "*) echo "skip $t"; continue;; esac
             echo "::group::$t"
             uv run python "$t" || fail=1
@@ -469,23 +469,26 @@ jobs:
           sparse-checkout: |
             CHANGELOG.md
             src-tauri/tauri.conf.json
-            mcp
-            scripts/build-plugin-mcp.py
+            plugins
+            scripts/build-plugins.py
           sparse-checkout-cone-mode: false
 
       - uses: actions/download-artifact@v4
         with:
           path: dist
 
-      # The plugin bundle is built here rather than in the platform matrix: it
-      # is a zip of Python sources with nothing compiled in it, so one copy
-      # serves every platform, and building it three times would only raise the
-      # question of which one got published.
-      - name: Package the MCP plugin
+      # The plugin bundles are built here rather than in the platform matrix:
+      # they are zips of sources with nothing compiled in them, so one copy
+      # serves every platform, and building them three times would only raise
+      # the question of which one got published.
+      #
+      # Every directory under plugins/ with a plugin.json, so a new plugin needs
+      # a directory and not an edit here.
+      - name: Package the plugins
         shell: bash
         run: |
           set -euo pipefail
-          python3 scripts/build-plugin-mcp.py .
+          python3 scripts/build-plugins.py .
 
       - name: Assemble latest.json
         shell: bash
@@ -516,11 +519,12 @@ jobs:
             -o -name '*.dmg' -o -name '*.msi' -o -name '*setup.exe' \
             -o -name '*_portable.zip' \
             -o -name '*.app.tar.gz' -o -name '*.sig' \))
-          # Appended rather than found: it is beside the workflow, not under
-          # dist/, and being in $files is also what keeps the retention sweep at
-          # the end of this step from deleting it as an asset from an older
-          # build.
-          files="$files plugin-mcp.zip"
+          # Appended rather than found under dist/: the bundles are written
+          # beside the workflow. Being in $files is also what keeps the
+          # retention sweep at the end of this step from deleting them as
+          # assets from an older build. A glob rather than a list, so a new
+          # plugin is published by existing.
+          files="$files $(ls plugin-*.zip)"
           # Deliberately NOT `gh release delete ... --cleanup-tag` first. That left a
           # window with no release at all — and since the delete came BEFORE the
           # asset upload, the window was however long ~2GB takes to push, during
