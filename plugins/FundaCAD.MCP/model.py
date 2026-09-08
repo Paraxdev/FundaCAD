@@ -317,10 +317,15 @@ def validate(doc):
     params = set(doc.get("parameters") or {})
     for f in feats:
         for k, v in f.items():
+            # `geom` and `source` are an import's, and neither is ever a number:
+            # one is a content hash into the blob store and the other is the file
+            # it was read from. Without them here, every imported body reports two
+            # problems that say a build WILL fail, on a document that builds.
             if isinstance(v, str) and k not in ("id", "type", "name", "operation",
                                                 "sketch", "profile", "path", "body",
                                                 "target", "keep", "axis", "text",
-                                                "planeId", "plane", "format"):
+                                                "planeId", "plane", "format",
+                                                "geom", "source"):
                 if v in params:
                     continue
                 # An EXPRESSION in a feature field is the mistake worth naming

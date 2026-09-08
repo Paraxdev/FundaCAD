@@ -367,10 +367,20 @@ FEATURES = {
     },
 
     "import": {
-        "summary": "An imported body. Authored by the app's import flow, not by hand.",
+        "summary": "A body read from a geometry file. Use the `doc_import` TOOL, "
+                   "never feature_add: `geom` is a content hash in the blob store, "
+                   "and only the import itself can put the geometry there, so a "
+                   "hand-written one names a blob that does not exist.",
         "fields": {"format": '"stl" | "3mf" | "step" | "obj" | "brep" | "glb"',
-                   "name": "label", "geom": "content hash in the document blob store"},
+                   "name": "label", "geom": "content hash in the document blob store",
+                   "source": "the file it was read from, for reference",
+                   "solid": "Bool, false means a surface body that cannot be cut"},
         "example": None,
+        "notes": "An imported body is ordinary geometry once it is in: `inspect` "
+                 "gives its faces and edges with selectors, and it can be cut, "
+                 "filleted and measured against like anything else. `solid: false` "
+                 "means the file did not close into a watertight solid, so a "
+                 "boolean against it will disappoint: say so rather than press on.",
     },
 }
 
@@ -412,6 +422,12 @@ Working order that avoids most dead ends:
 4. `view` to look at it. Numbers say a hole is 8mm across; only the picture says
    it is in the wrong place.
 5. `doc_save` to a .funda file, which the app opens directly.
+
+Asked to fit something to a part that exists as a file (STEP, STL, 3MF, OBJ,
+BREP, GLB)? `doc_import` it first, then `build` and `inspect` it: that gives the
+real sizes and the selectors for its faces and edges, which is what makes the
+next feature something other than a guess. Import once and keep the document, a
+large STEP is minutes of reading.
 
 Things that are true here and not in every CAD:
  - Z is up. A sketch on XY is a floor plan; a sketch on XZ is a side elevation.
