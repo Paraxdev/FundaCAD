@@ -476,9 +476,11 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       # Must come BEFORE download-artifact: actions/checkout cleans the workspace
-      # by default and would delete dist/. Sparse, because the only thing this job
-      # needs out of the repo is the changelog it builds release notes from.
-      # A FULL checkout, and it used to be a sparse one naming four paths.
+      # by default and would delete dist/.
+      #
+      # A FULL checkout, and it used to be a sparse one naming four paths. Full
+      # in breadth only: it is still one commit deep with no tags, which is why
+      # the release notes below read history through the API and not `git log`.
       #
       # Packaging a plugin now BUILDS its app-side module, and that build resolves
       # `fundacad` against src/plugins/host.ts, which reaches most of src/. The
@@ -596,43 +598,77 @@ jobs:
             SELF_UPDATES=yes
           fi
 
-          # Release notes: boilerplate, plus a section of CHANGELOG.md (every line
-          # after a "## " heading, up to the next one). "### " subheads survive
-          # because the pattern requires a space in the third column.
+          R='${{ github.repository }}'
+          SHA='${{ github.sha }}'
+          MAX=25
+
+          # Release notes: a short header, then ONE LINE PER COMMIT.
           #
-          # Normally that is section 1, the open "## Unreleased". When it is EMPTY
-          # we fall back to section 2, the newest named version. That case is a
-          # release that was just cut: the cut is its own commit, so the build
-          # carrying it would otherwise find nothing to say and replace a release
-          # that HAD notes with one that has none, on a tag that is deleted and
-          # recreated every build. The heading below stays generic either way, so
-          # the notes never claim a version number the binary does not carry.
-          printf 'Rolling beta 0.1.%s, rebuilt automatically from the latest `main` (commit %s).\n' \
-            '${{ github.run_number }}' '${{ github.sha }}' > notes.md
-          if [ -f CHANGELOG.md ]; then
-            section() { awk -v want="$1" '/^## /{n++} n==want && !/^## /' CHANGELOG.md | sed -e '/./,$!d'; }
-            section 1 > changes.md
-            if [ ! -s changes.md ]; then
-              echo "NOTE: Unreleased is empty (a release was just cut) — using the newest named section"
-              section 2 > changes.md
-            fi
-            if [ -s changes.md ]; then
-              printf '\n## Changes in this build\n\n' >> notes.md
-              cat changes.md >> notes.md
-            fi
-          else
-            echo "WARNING: no CHANGELOG.md, publishing boilerplate notes only"
+          # This used to paste in the whole open "## Unreleased" section of
+          # CHANGELOG.md, which is written for a human reading a version, not
+          # for a page rebuilt on every push: it grows for as long as a version
+          # stays uncut, and the last one ran to nine hundred lines, almost all
+          # of it about builds the reader already has. The only question a
+          # rolling release raises is what is in this build that was not in the
+          # one it replaces, so that is what it answers now.
+          #
+          # Through the API rather than `git log`, because the checkout in this
+          # job has one commit of history and no tags.
+
+          # The commit the rolling tag is on RIGHT NOW: the build this replaces.
+          # Read BEFORE the tag is moved, further down.
+          prev=$(gh api "repos/$R/git/ref/tags/beta" --jq .object.sha 2>/dev/null || true)
+          commits=''
+          if [ -n "$prev" ] && [ "$prev" != "$SHA" ]; then
+            commits=$(gh api "repos/$R/compare/$prev...$SHA" \
+              --jq '[.commits[] | select((.parents | length) < 2)] | reverse' 2>/dev/null || true)
           fi
-          printf '\n---\n\nThe builds are unsigned for now: Windows shows a SmartScreen warning ("More info", then "Run anyway"); on macOS Gatekeeper may report the app as damaged, which it is not, and `xattr -dr com.apple.quarantine /Applications/FundaCAD.app` clears it. Install notes are in the [README](https://github.com/%s#install).\n' \
-            '${{ github.repository }}' >> notes.md
+          span="since [\`${prev:0:7}\`](https://github.com/$R/compare/$prev...$SHA)"
+          # No tag yet, a force-push that left the two unrelated, or an API that
+          # said no. A list that reaches back too far still tells the reader
+          # what they have; an empty one tells them the build changed nothing.
+          if [ -z "$commits" ] || [ "$(jq 'length' <<<"$commits")" -eq 0 ]; then
+            commits=$(gh api "repos/$R/commits?sha=$SHA&per_page=$MAX" \
+              --jq '[.[] | select((.parents | length) < 2)]')
+            span="the newest on \`main\`"
+          fi
+          total=$(jq 'length' <<<"$commits")
+
+          printf 'Rolling beta 0.1.%s, rebuilt from `main` at [`%s`](https://github.com/%s/commit/%s).\n' \
+            '${{ github.run_number }}' "${SHA:0:7}" "$R" "$SHA" > notes.md
+          {
+            printf '\n## Changes, %s\n\n' "$span"
+            # Merges are dropped (two parents): they carry no change of their
+            # own and their subject is never about the work. Square brackets go
+            # too, since the subject becomes the text of a link.
+            jq -r --arg base "https://github.com/$R/commit/" --argjson max "$MAX" '
+              def clip($n): if (length) > $n then (.[0:$n] | sub("\\s+$"; "")) + "…" else . end;
+              .[0:$max][]
+              | .sha as $sha
+              | (.commit.message | split("\n")) as $l
+              | ($l[0] | gsub("[\\[\\]]"; "")) as $subject
+              | ($l[1:] | map(select(test("\\S"))) | join(" ")
+                        | gsub("\\s+"; " ") | gsub("[\\[\\]]"; "")) as $body
+              | (($subject | capture("^(?<t>[a-z]+)(\\([^)]*\\))?!?: (?<r>.+)$"))
+                  // {t: "commit", r: $subject}) as $c
+              | "- " + $c.t + "(`" + $sha[0:7] + "`): ["
+                + ($c.r | clip(90)) + "](" + $base + $sha + ")"
+                + (if ($body | length) == 0 then "" else " " + ($body | clip(160)) end)
+            ' <<<"$commits"
+            if [ "$total" -gt "$MAX" ]; then
+              printf '\nand %d more.\n' "$((total - MAX))"
+            fi
+          } >> notes.md
+
+          # The footer is two facts and a link, and used to be a paragraph of
+          # each. Anyone who needs the long version follows the README.
+          printf '\n---\n\nUnsigned: Windows SmartScreen needs "More info", then "Run anyway"; macOS may call the app damaged, which `xattr -dr com.apple.quarantine /Applications/FundaCAD.app` clears. [Install notes](https://github.com/%s#install).\n' \
+            "$R" >> notes.md
           if [ "$SELF_UPDATES" = yes ]; then
             printf '\nInstalled apps update themselves from this release.\n' >> notes.md
           else
-            printf '\nThis build does not update itself: the in-app updater needs a signing key this project does not have yet, so download a new installer from this page when you want a newer build.\n' >> notes.md
+            printf '\nThis build does not update itself, so take a new installer from this page when you want a newer one.\n' >> notes.md
           fi
-
-          R='${{ github.repository }}'
-          SHA='${{ github.sha }}'
 
           # Move the rolling tag onto this commit (create it if it is missing).
           # Moving beats delete+recreate: the tag never stops existing, so the
