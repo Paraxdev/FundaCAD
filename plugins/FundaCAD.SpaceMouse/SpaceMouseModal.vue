@@ -22,8 +22,7 @@
 
 import * as THREE from "three";
 import { onMounted, onUnmounted, ref, shallowRef, useTemplateRef, type ComponentPublicInstance } from "vue";
-import { useDialogStore } from "../../stores/dialogs";
-import ModalFrame from "./ModalFrame.vue";
+import ModalFrame from "../../src/components/overlays/ModalFrame.vue";
 import {
   AXIS_LABELS,
   AXIS_NAMES,
@@ -39,10 +38,10 @@ import {
   type AxisName,
   type Motion,
   type SpaceMouseConfig,
-} from "../../input/spacemouse";
+} from "./spacemouse";
+import { closeSettings } from "./state";
 
-const dialogs = useDialogStore();
-const close = () => { dialogs.spaceMouse = false; };
+const close = () => closeSettings();
 
 // NOTE: deliberately no useModalGate() here. The imperative version never
 // counted itself in the modal-depth gate either, so global shortcuts have

@@ -7,7 +7,7 @@ import { getUnit, setUnit, asUnit, onUnitChange, type Unit } from "../../ui/unit
 import { THEMES, getTheme, setTheme, asThemeId, onThemeChange } from "../../ui/theme";
 import { iconPacks, getIconPack, setIconPack, asIconPackId, onIconPackChange } from "../../ui/icons";
 import { buildMenubar } from "../../app/menubarDef";
-import { onPluginChange } from "../../plugins/registry";
+import { onContribChange } from "../../plugins/contrib";
 import Icon from "./Icon.vue";
 import MenuBar from "./MenuBar.vue";
 import LiveSessionPill from "./LiveSessionPill.vue";
@@ -16,17 +16,25 @@ import brandLockup from "../../../assets/brand/fundacad-lockup-app.svg";
 const engine = useEngine();
 const ui = useUiStore();
 
-// Rebuilt only when the set of capabilities changes. Everything dynamic WITHIN
-// the tree (Undo greying out, the 3D-mouse mode checkmarks) is a thunk MenuBar
-// re-evaluates each time a menu opens, so this does not need to be reactive for
-// those. What a thunk cannot express is a row that should not exist at all, and
-// a menu left with no rows: turning the printer connection off has to take its
-// three File entries with it, and turning the 3D mouse off has to take the
-// whole View menu. markRaw because every onClick closes over the raw engine.
+// Rebuilt only when what the plugins contribute changes. Everything dynamic
+// WITHIN the tree (Undo greying out, a capability's own mode checkmarks) is a
+// thunk MenuBar re-evaluates each time a menu opens, so this does not need to be
+// reactive for those. What a thunk cannot express is a row that should not exist
+// at all, and a menu left with no rows.
+//
+// The CONTRIBUTIONS, not the on/off state. Those are different moments and the
+// difference is visible: a capability is switched on, and only some
+// milliseconds later — after its module has been fetched and its activate() has
+// run — does it have rows to add. Watching the switch rebuilt the menu while the
+// capability that owns the rows was still loading, so the menubar was always one
+// step behind, showing the last capability's rows and not this one's. Watching
+// what was actually contributed cannot be early.
+//
+// markRaw because every onClick closes over the raw engine.
 const menus = ref(markRaw(buildMenubar(engine)));
 let offPlugins: (() => void) | null = null;
 onMounted(() => {
-  offPlugins = onPluginChange(() => { menus.value = markRaw(buildMenubar(engine)); });
+  offPlugins = onContribChange(() => { menus.value = markRaw(buildMenubar(engine)); });
 });
 onUnmounted(() => offPlugins?.());
 

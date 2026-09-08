@@ -32,8 +32,6 @@ export const usePanelsStore = defineStore("panels", () => {
   const properties = ref<PropertiesData | null>(null);
   const interference = ref<InterferenceData | null>(null);
   const overhang = ref(false);
-  /** Printer id, or null when closed. */
-  const camera = ref<string | null>(null);
   const params = ref(false);
 
   function showProperties(d: PropertiesData) {
@@ -43,5 +41,5 @@ export const usePanelsStore = defineStore("panels", () => {
     interference.value = markRaw(d);
   }
 
-  return { properties, interference, overhang, camera, params, showProperties, showInterference };
+  return { properties, interference, overhang, params, showProperties, showInterference };
 });

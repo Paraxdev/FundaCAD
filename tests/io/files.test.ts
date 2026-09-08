@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { DocumentStore } from "../../src/document/store";
 import type { GeometryBackend } from "../../src/geometry/client";
 
-import { describeImportCapability, extToFormat, extToImportFormat, importedBodyCount, looksLikeContainer, nearestPaletteSlot } from "../../src/io/files";
+import { describeImportCapability, extToFormat, extToImportFormat, importedBodyCount, looksLikeContainer } from "../../src/io/files";
 
 // Both mappers are TOTAL — an unrecognised extension silently becomes "step"
 // rather than erroring. That is deliberate (the save dialog can hand back a bare
@@ -80,44 +80,6 @@ describe("looksLikeContainer", () => {
     expect(looksLikeContainer("")).toBe(false);
     expect(looksLikeContainer("<!DOCTYPE html>")).toBe(false);
     expect(looksLikeContainer(" PK")).toBe(false); // leading space: not a header
-  });
-});
-
-describe("nearestPaletteSlot", () => {
-  // the shipped default palette
-  const pal = [
-    { name: "White", color: "#e8e8e8" },
-    { name: "Black", color: "#202020" },
-    { name: "Red", color: "#d23b30" },
-    { name: "Blue", color: "#3050c8" },
-  ];
-
-  it("picks the exact slot when the colour is already in the palette", () => {
-    expect(nearestPaletteSlot("#d23b30", pal)).toBe(2);
-    expect(nearestPaletteSlot("#3050C8", pal)).toBe(3);
-  });
-
-  it("picks the perceptually closest slot for a colour that is not", () => {
-    expect(nearestPaletteSlot("#ff0000", pal)).toBe(2); // crimson -> Red
-    expect(nearestPaletteSlot("#0000aa", pal)).toBe(3); // navy -> Blue
-    expect(nearestPaletteSlot("#fdfdfd", pal)).toBe(0); // near-white -> White
-    expect(nearestPaletteSlot("#010101", pal)).toBe(1); // near-black -> Black
-  });
-
-  it("returns null rather than guessing on bad input", () => {
-    expect(nearestPaletteSlot("#d23b30", [])).toBeNull();
-    expect(nearestPaletteSlot("not-a-colour", pal)).toBeNull();
-    expect(nearestPaletteSlot("#abc", pal)).toBeNull(); // 3-digit form unsupported
-  });
-
-  it("never invents a slot beyond the palette — it matches, never extends", () => {
-    // the palette is the U1's 4 physical filament slots, not a display palette
-    for (const c of ["#123456", "#00ff00", "#ffff00", "#7f7f7f"]) {
-      const slot = nearestPaletteSlot(c, pal);
-      expect(slot).not.toBeNull();
-      expect(slot!).toBeGreaterThanOrEqual(0);
-      expect(slot!).toBeLessThan(pal.length);
-    }
   });
 });
 

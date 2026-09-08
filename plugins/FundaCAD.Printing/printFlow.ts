@@ -7,12 +7,12 @@
 //                  send). In-app slicing (model→gcode) is a later round.
 
 import { invoke } from "@tauri-apps/api/core";
-import type { DocumentStore } from "../document/store";
-import type { GeometryBackend } from "../geometry/client";
-import { stripDocumentExt } from "../io/documentExt";
-import { exportPrintProject } from "../io/files";
-import { toast } from "../ui/toast";
-import { multiMaterialEnabled } from "../plugins/registry";
+import type { DocumentStore } from "../../src/document/store";
+import type { GeometryBackend } from "../../src/geometry/client";
+import { stripDocumentExt } from "../../src/io/documentExt";
+import { exportPrintProject } from "./exportProject";
+import { toast } from "../../src/ui/toast";
+import { contributedPalette } from "../../src/plugins/contrib";
 import { filamentMappingDialog, type LogicalSlot } from "./printDialog";
 import {
   activePrinterId,
@@ -44,12 +44,18 @@ export async function openInOrca(store: DocumentStore, geometry: GeometryBackend
   let settings: Record<string, unknown> | undefined;
   try {
     settings = await invoke<Record<string, unknown>>("slicer_project_settings", {
-      // One filament with multi-material off. The palette is still in the
-      // document and the project still carries whatever colours the bodies
-      // were given, but the Orca preset is built for the machine the user
-      // actually has, and asking for four is what makes Orca open a
+      // One filament when nothing offers a palette. The assignments are still
+      // in the document and the project still carries whatever colours the
+      // bodies were given, but the Orca preset is built for the machine the
+      // user actually has, and asking for four is what makes Orca open a
       // toolchanger preset on a single-head printer.
-      filamentCount: multiMaterialEnabled() ? store.colorPalette.length : 1,
+      //
+      // Asked of the app rather than of the capability that answers it. This
+      // used to read "is multi-material switched on", which is one plugin
+      // naming another and holding an opinion about what its being off means.
+      // "What colours does this document have" is the question that was
+      // actually being asked, and an empty answer is a single-filament print.
+      filamentCount: contributedPalette().length || 1,
     });
   } catch (e) {
     console.warn("slicer_project_settings failed, falling back to minimal settings:", e);
@@ -70,14 +76,14 @@ export async function openInOrca(store: DocumentStore, geometry: GeometryBackend
 
 /** the palette slots this document actually prints (logical gcode tools).
  *
- *  Exactly one with multi-material off, whatever the document says. The
+ *  Exactly one when no palette is offered, whatever the document says. The
  *  assignments are still there — this is what a single-material print IS, and
  *  the alternative is to ask someone with one toolhead which of their four
  *  toolheads each colour goes in. */
 function usedSlots(store: DocumentStore): LogicalSlot[] {
-  const palette = store.colorPalette as { name: string; color: string; material?: string }[];
+  const palette = contributedPalette();
   const used = new Set<number>();
-  if (multiMaterialEnabled()) {
+  if (palette.length) {
     for (const v of Object.values(store.bodyColorsMap())) used.add(v);
   }
   if (store.buildState.result?.bodies?.length) used.add(0); // unassigned → extruder 1

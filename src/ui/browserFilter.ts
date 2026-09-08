@@ -50,6 +50,17 @@ export function sectionVisible(filter: BrowserFilter, section: BrowserSection): 
 const KEY = "fundacad.browserFilter";
 const LEGACY_KEYS = ["neocad.browserFilter", "sindricad.browserFilter"];
 
+/** Whether a string names one of the panel's sections.
+ *
+ *  For a section contributed from outside, which arrives as an unchecked string:
+ *  a plugin may say which of these it should be hidden with, and one naming
+ *  something this build does not have is always shown rather than never. A
+ *  section that vanished under a filter nobody told it about would be worse than
+ *  one that stays. */
+export function isBrowserSection(v: string): v is BrowserSection {
+  return v === "origin" || v === "planes" || v === "palette" || v === "bodies" || v === "sketches";
+}
+
 export function asBrowserFilter(v: unknown): BrowserFilter | null {
   return BROWSER_FILTERS.some((f) => f.id === v) ? (v as BrowserFilter) : null;
 }

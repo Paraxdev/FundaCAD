@@ -3,7 +3,7 @@
 // component so ui/commands.ts can build the command list from the same tables
 // without pulling in a Vue component.
 
-import { printingEnabled } from "../plugins/registry";
+import { contributedRibbon } from "../plugins/contrib";
 import { BOOLEAN_COMMANDS } from "../features/booleanOps";
 import { keyHint } from "../input/shortcuts";
 
@@ -152,36 +152,49 @@ export const MODEL: Group[] = [
       { action: "compute-all", label: "Compute All", iconName: "computeAll" },
     ],
   },
-  {
-    label: "PRINT",
-    items: [
-      { action: "print-export", label: "Print Project", iconName: "print" },
-      { action: "print-orca", label: "Open in OrcaSlicer", iconName: "slicer" },
-      { action: "print-send", label: "Send to Printer", iconName: "printerSend" },
-    ],
-  },
 ];
 
-/** Actions that only exist while the printer connection is running.
+/** Collapse priority for a group nobody gave one.
  *
- *  "Print Project" is deliberately NOT one of them: it writes a 3MF, which is a
- *  file format, and a file format is not a printer. The two below need a slicer
- *  installed or a machine on the network. */
-const PRINTING_ACTIONS = new Set(["print-orca", "print-send"]);
+ *  Below every group the app defines, so a contributed group folds into the
+ *  overflow before any of the modelling tools do. When the window is too narrow
+ *  for everything, the thing somebody added is the thing they are least likely
+ *  to be reaching for at that moment. */
+const CONTRIBUTED_PRIORITY = 10;
 
-/** The model ribbon as it should be drawn right now.
+/** The model ribbon as it should be drawn right now: the app's own groups, plus
+ *  whatever the running plugins add.
  *
- *  MODEL above stays the full definition, because it is also the answer to
- *  "what actions exist"; this is the answer to "what can be reached", and the
- *  two are different questions the moment a capability can be turned off. The
- *  group is filtered rather than dropped: with the printer off it still holds
- *  the export, so nothing has to handle an empty group. */
+ *  MODEL above stays the full definition of what the APP has, and this is the
+ *  answer to "what can be reached", which became a different question the moment
+ *  a capability could be turned off. It used to be answered by filtering MODEL:
+ *  a PRINT group was written out here and two of its three buttons were removed
+ *  again when the printer capability was off, so this file held both the
+ *  capability's buttons and the rule for hiding them. Now it holds neither, and
+ *  a group that is not contributed is not drawn because it does not exist.
+ *
+ *  Contributed groups go at the end, in the order the plugins started. Merged by
+ *  heading, so two capabilities that both call their group PRINT share one
+ *  rather than drawing two ribbons' worth of the same word. */
 export function modelGroups(): Group[] {
-  if (printingEnabled()) return MODEL;
-  return MODEL.map((g) => ({
-    ...g,
-    items: g.items.filter((it) => !("action" in it && PRINTING_ACTIONS.has(it.action))),
-  })).filter((g) => g.items.length > 0);
+  const extra = contributedRibbon();
+  if (!extra.length) return MODEL;
+  const out: Group[] = MODEL.map((g) => ({ ...g, items: [...g.items] }));
+  for (const c of extra) {
+    const existing = out.find((g) => g.label === c.group);
+    if (existing) existing.items.push(...c.items);
+    else out.push({ label: c.group, items: [...c.items] });
+  }
+  return out.filter((g) => g.items.length > 0);
+}
+
+/** Collapse priority for a group, contributed or not. Read by the ribbon bar in
+ *  place of PRIORITY, which only knows the app's own headings. */
+export function priorityOf(group: string): number {
+  const own = PRIORITY[group];
+  if (own !== undefined) return own;
+  const c = contributedRibbon().find((x) => x.group === group);
+  return c?.priority ?? CONTRIBUTED_PRIORITY;
 }
 
 export const SKETCH: Group[] = [
@@ -276,7 +289,6 @@ export const SKETCH: Group[] = [
 export const PRIORITY: Record<string, number> = {
   CREATE: 100,
   MODIFY: 90,
-  PRINT: 50,
   INSPECT: 45,
   CONSTRUCT: 40,
   INSERT: 30,

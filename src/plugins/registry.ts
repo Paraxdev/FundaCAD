@@ -24,6 +24,15 @@
 // having on its own: the surfaces it owns disappear, its code is never
 // imported, and on the Rust side its device reader is never started.
 //
+// THIS MODULE NAMES NO CAPABILITY. Not in a type, not in a helper, not in a
+// migration table. It used to name all three: a `BuiltinId` union, three
+// one-line `xEnabled()` helpers, and a map of what each had been called before.
+// Every one of those was a place the core had to be edited to add a fourth
+// capability, and the last of them was the subtlest — a rename table in the app
+// is the app remembering the history of plugins it does not otherwise know
+// exist. A plugin's former names are in its own manifest now (`formerIds`), so
+// this module reads a general rule where it used to hold three specific facts.
+//
 // House shape, kept from featureFlags: module state, a validating gate over the
 // untrusted stored value, one `fundacad.*` key read at load, a listener set for
 // live surfaces, and NO Vue import, which is what lets the headless suite reach
@@ -44,9 +53,9 @@ export interface BuiltinPlugin {
   /** Whether it is on before anybody has said anything, as the plugin's own
    *  manifest declares it.
    *
-   *  On for the two that have always been in the app: an upgrade that silently
-   *  removed a working printer connection would be a regression wearing the
-   *  word "plugin". Off for the one that was already off. */
+   *  The manifest decides, not this module: an upgrade that silently switched
+   *  off something that had always worked would be a regression wearing the
+   *  word "plugin", and the plugin is what knows whether it is that kind. */
   defaultEnabled: boolean;
 }
 
@@ -59,14 +68,6 @@ export function builtinPlugins(): BuiltinPlugin[] {
   }));
 }
 
-/** Written out rather than derived, so that a capability removed from
- *  plugins/ fails to compile at its call sites instead of quietly becoming a
- *  gate that is always false. */
-export type BuiltinId =
-  | "FundaCAD.MultiColor"
-  | "FundaCAD.Printing"
-  | "FundaCAD.SpaceMouse";
-
 const KEY = "fundacad.plugins";
 // featureFlags' key, and its own two ancestors. A value found under any of them
 // is a person's answer to a question this module is still asking, so it is
@@ -77,20 +78,19 @@ const FLAGS_LEGACY = ["neocad.features", "sindricad.features"];
 
 type State = Record<string, boolean>;
 
-/** What each capability was called before ids grew a publisher.
+/** Old id -> current id, as the plugins themselves declare it.
  *
- *  Read forward, not reset. These are in people's `fundacad.plugins` right now,
- *  and a rename that dropped them would put every capability back to its
- *  default: multi-material would switch itself back ON for everyone who had
- *  turned it off, which is the exact behaviour a toggle exists to prevent.
- *
- *  One-directional and never written back. The new key is what gets saved the
- *  next time anything changes, and until then the old value keeps answering. */
-const RENAMED: Record<string, BuiltinId> = {
-  "multi-material": "FundaCAD.MultiColor",
-  printing: "FundaCAD.Printing",
-  spacemouse: "FundaCAD.SpaceMouse",
-};
+ *  Derived, not written down. Every entry comes from a `formerIds` in some
+ *  plugin's own manifest, so a capability that has never been renamed
+ *  contributes nothing and a capability that has is not something this module
+ *  had to be told about. */
+function renamed(): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const p of builtinPlugins()) {
+    for (const was of p.manifest.formerIds) out[was] = p.manifest.id;
+  }
+  return out;
+}
 
 function defaults(): State {
   const out: State = {};
@@ -109,7 +109,7 @@ export function asPluginState(v: unknown): State {
   // The old name first, so the new one wins when a value has been written under
   // it since. A state holding both is a session that toggled something after
   // upgrading, and what it did then is more recent than what it did before.
-  for (const [was, now] of Object.entries(RENAMED)) {
+  for (const [was, now] of Object.entries(renamed())) {
     if (now in out && typeof o[was] === "boolean") out[now] = o[was] as boolean;
   }
   for (const id of Object.keys(out)) {
@@ -120,25 +120,26 @@ export function asPluginState(v: unknown): State {
 
 /** The one-flag map this replaced, read forward.
  *
- *  Only `multiColor` ever existed in it, and it means the multi-material
- *  capability, which has been renamed twice since. This reads straight to the
- *  current name rather than hopping through RENAMED, because a migration in two
- *  steps is a migration that can break in the middle and leave the value
- *  nowhere. The other two capabilities were not toggleable at all before this,
- *  so there is nothing stored to read for them and their defaults are on, which
- *  is what the app did. */
+ *  One flag ever existed in it. Which one, and which capability it belongs to,
+ *  is not this module's business: it is a former id like any other, declared by
+ *  the plugin that used to answer to it, and read through the same table the
+ *  newer rename goes through. A capability that was not toggleable before this
+ *  simply has nothing stored, and keeps the default its manifest asks for. */
 function fromFeatureFlags(): Partial<State> {
   try {
     const raw = readSetting(FLAGS_KEY, ...FLAGS_LEGACY);
     if (!raw) return {};
     const parsed: unknown = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object") return {};
-    const multi = (parsed as Record<string, unknown>)["multiColor"];
-    return typeof multi === "boolean" ? { "FundaCAD.MultiColor": multi } : {};
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const o = parsed as Record<string, unknown>;
+    const out: Partial<State> = {};
+    for (const [was, now] of Object.entries(renamed())) {
+      if (typeof o[was] === "boolean") out[now] = o[was] as boolean;
+    }
+    return out;
   } catch {
-    // Unparseable JSON is treated as nothing stored. The capability it decided
-    // is off by default, so a corrupt value costs a checkbox rather than
-    // turning something on behind somebody's back.
+    // Unparseable JSON is treated as nothing stored. A corrupt value costs a
+    // checkbox rather than turning something on behind somebody's back.
     return {};
   }
 }
@@ -165,7 +166,7 @@ const listeners = new Set<() => void>();
  *  An id this build does not have is false, not a throw: a stored state from a
  *  newer version, or a stale call site, should cost a feature rather than the
  *  session. */
-export function pluginEnabled(id: BuiltinId | string): boolean {
+export function pluginEnabled(id: string): boolean {
   return current[id] === true;
 }
 
@@ -175,7 +176,7 @@ export function pluginState(): Readonly<State> {
   return current;
 }
 
-export function setPluginEnabled(id: BuiltinId | string, value: boolean): void {
+export function setPluginEnabled(id: string, value: boolean): void {
   if (typeof value !== "boolean" || current[id] === value) return;
   if (!(id in current)) return;
   // A fresh object rather than a mutation, so a subscriber may hold the result
@@ -195,16 +196,4 @@ export function setPluginEnabled(id: BuiltinId | string, value: boolean): void {
 export function onPluginChange(fn: () => void): () => void {
   listeners.add(fn);
   return () => listeners.delete(fn);
-}
-
-/** The one call site shape that reads best where it is used: a gate whose name
- *  says what it gates rather than which id it looks up. */
-export function multiMaterialEnabled(): boolean {
-  return pluginEnabled("FundaCAD.MultiColor");
-}
-export function printingEnabled(): boolean {
-  return pluginEnabled("FundaCAD.Printing");
-}
-export function spaceMouseEnabled(): boolean {
-  return pluginEnabled("FundaCAD.SpaceMouse");
 }

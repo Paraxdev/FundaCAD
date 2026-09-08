@@ -1,9 +1,16 @@
 <script setup lang="ts">
 // Left browser, MCAD-style: object-oriented, collapsible folders rather than a
 // flat feature list. Origin (the three base planes — click to start a sketch on
-// one), the filament Palette, Bodies (grouped by the imported assembly tree when
-// there is one) and Sketches. The chronological operations (extrude/fillet/…)
-// live in the bottom Timeline, as in mainstream MCAD.
+// one), Bodies (grouped by the imported assembly tree when there is one) and
+// Sketches, plus whatever the running plugins add between the two. The
+// chronological operations (extrude/fillet/…) live in the bottom Timeline, as in
+// mainstream MCAD.
+//
+// A filament palette used to be a section here, with two node kinds of its own,
+// a connection dot, a one-shot printer probe and a thirty-second staleness poll
+// — a panel about a machine on the network, inside the panel that lists what is
+// in the document, behind checks on two capabilities. It is contributed now, by
+// the capability whose subject it is, and this file does not know it exists.
 //
 // What the imperative class needed and this does not: a render-skip signature
 // (the panel rebuilt its whole innerHTML on every doc change AND every build, so
@@ -18,24 +25,23 @@
 // readable pass instead of a recursive component whose props thread through
 // every level.
 
-import { computed, onMounted, onUnmounted, ref, useTemplateRef, watch } from "vue";
+import { onMounted, onUnmounted, ref, shallowRef, useTemplateRef, watch } from "vue";
 import { useEngine } from "../../app/engineKey";
-import { useBuildValue, useDocValue } from "../../app/useDoc";
+import { useDocValue } from "../../app/useDoc";
 import { useSelectionStore } from "../../stores/selection";
 import { useBrowserStore } from "../../stores/browser";
-import Icon from "./Icon.vue";
-import InlineLabel from "./InlineLabel.vue";
 import TreeFolder from "./TreeFolder.vue";
 import TreeRow from "./TreeRow.vue";
 import {
-  bodyColorMenu, buildAssemblyGroups, collectBodyIds, type AsmGroup,
+  bodyExtraMenu, buildAssemblyGroups, collectBodyIds, type AsmGroup,
 } from "../../ui/browserTree";
 import {
-  BROWSER_FILTERS, asBrowserFilter, getBrowserFilter, onBrowserFilterChange,
-  sectionVisible, setBrowserFilter, type BrowserSection,
+  BROWSER_FILTERS, asBrowserFilter, getBrowserFilter, isBrowserSection,
+  onBrowserFilterChange, sectionVisible, setBrowserFilter, type BrowserSection,
 } from "../../ui/browserFilter";
 import type { CtxItem } from "../../ui/menu";
-import { multiMaterialEnabled, onPluginChange, printingEnabled } from "../../plugins/registry";
+import { contributedBrowserSections, contributedPalette, onContribChange } from "../../plugins/contrib";
+import type { Component } from "vue";
 import type { CadDocument, Feature, Plane3 } from "../../types";
 
 const engine = useEngine();
@@ -92,16 +98,10 @@ interface RowNode {
   extraMenu?: CtxItem[] | undefined;
 }
 interface EmptyNode { kind: "empty"; k: string; text: string }
-interface PaletteHeadNode { kind: "palette-head"; k: string; count: number; collapsed: boolean }
-interface PaletteSlotNode {
-  kind: "palette-slot";
-  k: string;
-  index: number;
-  name: string;
-  color: string;
-  material: string;
-}
-type TreeNode = FolderNode | RowNode | EmptyNode | PaletteHeadNode | PaletteSlotNode;
+/** A section some plugin contributed, drawn as its own component. The panel
+ *  places it and knows nothing else about it. */
+interface PluginNode { kind: "plugin"; k: string; component: Component }
+type TreeNode = FolderNode | RowNode | EmptyNode | PluginNode;
 
 // --- engine callbacks (was app/browserWiring.ts) -------------------------
 // The panel reads live engine state directly rather than being handed props,
@@ -176,17 +176,13 @@ const bodyAncestors = useDocValue((doc) => {
   return buildAssemblyGroups(bodyList(), importTrees(doc))?.ancestors ?? new Map<string, string[]>();
 });
 
-/** Whether a printer answered the last probe. null = never asked, or asked and
- *  the answer has not come back. Declared up here rather than beside the rest of
- *  the palette code below because the node list gates a whole section on it. */
-const printerOnline = ref<boolean | null>(null);
-
-/** Multi-material, mirrored into a ref so the node list re-runs when it is
- *  toggled. The module is deliberately Vue-free (that is what lets the headless
- *  suite import it), so nothing tracks it without this. */
-const multiColor = ref(multiMaterialEnabled());
-const stopFlags = onPluginChange(() => { multiColor.value = multiMaterialEnabled(); });
-onUnmounted(stopFlags);
+/** The sections the running plugins add, mirrored into a ref so the node list
+ *  re-runs when one starts or stops. The registry is deliberately Vue-free (that
+ *  is what lets the headless suite import it), so nothing tracks it without
+ *  this. */
+const sections = shallowRef(contributedBrowserSections());
+const stopContrib = onContribChange(() => { sections.value = contributedBrowserSections(); });
+onUnmounted(stopContrib);
 
 /** The whole panel, as a flat list.
  *
@@ -194,7 +190,7 @@ onUnmounted(stopFlags);
  *  FIRST and unconditionally — see app/useDoc.ts for why every derived computed
  *  has to do that in its own body rather than lean on an intermediate. */
 const nodes = useDocValue((doc): TreeNode[] => {
-  engine.bridge.buildVersion.value; // bodies, body names/colours, the palette
+  engine.bridge.buildVersion.value; // bodies, body names, body colours
   browser.viewTick; // sketch + plane visibility, which the store does not emit
 
   // A hidden section is not BUILT, not built-then-dropped: under "Sketches" the
@@ -207,6 +203,9 @@ const nodes = useDocValue((doc): TreeNode[] => {
   const datums = doc.features.filter((f) => f.type === "datumPlane");
   const selectedIds = new Set(browser.selectedBodyIds);
   const out: TreeNode[] = [];
+  // Whether anything claims this document's bodies have colours. The swatch on a
+  // body row is drawn only when something does; see bodyRow below.
+  const paintedBodies = contributedPalette().length > 0;
 
   /** A collapsible section head plus its rows, or an empty state. Returns
    *  nothing — everything is appended to `out` in document order. */
@@ -258,30 +257,27 @@ const nodes = useDocValue((doc): TreeNode[] => {
     })));
   }
 
-  // --- Palette + Bodies ---
-  // The palette is the printer's filament slots, not a document colour scheme:
-  // every slot means "the material loaded in toolhead N", and the sync button
-  // and staleness dot only mean anything against a machine that answers. With
-  // no printer it was four fixed rows of nothing, permanently at the top of the
-  // browser, so it waits for one — the same rule the Images filter follows, that
-  // a control which cannot do its job is worse present than absent.
-  if (bodies.length && show("palette") && multiColor.value && printerOnline.value === true) {
-    const collapsed = browser.isCollapsed("Palette");
-    out.push({ kind: "palette-head", k: "palette", count: store.colorPalette.length, collapsed });
-    if (!collapsed) {
-      store.colorPalette.forEach((slot, i) => {
-        out.push({
-          kind: "palette-slot", k: `pal:${i}`, index: i,
-          name: slot.name, color: slot.color, material: slot.material ?? "",
-        });
-      });
-    }
+  // --- what the plugins add, between the document's structure and its bodies ---
+  //
+  // Here rather than at the end, because the one section that exists is about
+  // the bodies below it and read best above them. A section names one of the
+  // panel's own filter sections to be hidden with, or none, in which case it is
+  // always shown: this file cannot decide for it, and the alternative — a
+  // section that vanishes under a narrow filter nobody told it about — is worse
+  // than one that stays.
+  for (const { key, section } of sections.value) {
+    if (section.filter && isBrowserSection(section.filter) && !show(section.filter)) continue;
+    out.push({ kind: "plugin", k: `x:${key}`, component: section.component });
   }
 
   const bodyRow = (b: { id: string; name: string }, depth: number): RowNode => {
-    // The swatch is the slot assignment made visible, so it goes with the rest
-    // of the feature. The assignment itself stays in the document either way.
-    const slot = multiColor.value ? store.bodyColorSlot(b.id) : undefined;
+    // The swatch is the slot assignment made visible. Drawn only while
+    // something is contributing a colour menu for a body, because that is the
+    // same capability that decides a body HAS a colour: a chip with no way to
+    // change it, on a document whose palette is not shown anywhere, is a colour
+    // nobody chose and nobody can undo. The assignment stays in the document
+    // either way.
+    const slot = paintedBodies ? store.bodyColorSlot(b.id) : undefined;
     const chip = slot != null ? store.colorPalette[slot]?.color : undefined;
     return {
       kind: "row",
@@ -295,7 +291,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
       visible: store.isBodyVisible(b.id),
       activate: (e: MouseEvent) => selectBody(b.id, e.ctrlKey || e.metaKey),
       toggleVis: () => toggleBodyVis(b.id),
-      extraMenu: bodyColorMenu(store, b.id),
+      extraMenu: bodyExtraMenu(b.id),
       rename: (name: string) => store.setBodyName(b.id, name),
       remove: () => store.removeBody(b.id),
       title: "Click to select (Ctrl+click adds) · double-click to rename · right-click for Color / Rename / Delete · eye to show/hide",
@@ -378,148 +374,7 @@ watch(
   },
 );
 
-// --- filament palette ----------------------------------------------------
-// Editable colour slots (≤4 → the U1's toolheads). Click a swatch to recolor a
-// slot; double-click its name to rename. Bodies are assigned to a slot, so
-// editing one recolors everything using it. The header carries a connection dot
-// and a "sync from printer" button.
-
-const hasBodies = useBuildValue(() => bodyList().length > 0);
-
-const staleSlots = ref<number[]>([]); // palette slots that differ from the printer
-
-const stale = computed(() => printerOnline.value === true && staleSlots.value.length > 0);
-const dotStyle = computed(() => ({
-  width: "8px",
-  height: "8px",
-  borderRadius: "50%",
-  background:
-    printerOnline.value == null ? "#888"
-      : !printerOnline.value ? "#d23b30"
-        : stale.value ? "#d2a83b" : "#3ba55d",
-  display: "inline-block",
-  marginRight: "6px",
-}));
-const dotTitle = computed(() =>
-  stale.value
-    ? `Printer filaments changed since sync (slot${staleSlots.value.length > 1 ? "s" : ""} ${staleSlots.value.map((i) => i + 1).join(", ")}), click the sync button to re-sync`
-    : "Printer connection",
-);
-
-// Passive printer checks, armed ONCE the first time bodies (and so the palette)
-// appear: a one-shot probe that lights the dot without a sync click, and a
-// single 30s staleness poll that re-diffs the printer's filaments against the
-// palette WITHOUT applying anything. Both guarded, because the old version armed
-// them from inside render() — where an unguarded re-arm probed the LAN per
-// keystroke. The watcher is a transition, so that hazard is structural now, but
-// the guards stay: hasBodies flips on every New/Open too.
-let probedOnce = false;
-let pollTimer: number | null = null;
-
-function armPrinterChecks() {
-  if (!("__TAURI_INTERNALS__" in window)) return;
-  // Nothing here is worth doing without the printer capability: the probe would
-  // load the printer client this capability exists to keep out of the bundle,
-  // and the poll would go on asking a machine about its filament every thirty
-  // seconds on behalf of a feature that is switched off.
-  if (!printingEnabled()) return;
-  if (!probedOnce) {
-    probedOnce = true;
-    void (async () => {
-      try {
-        const { activePrinterId, printerProbe } = await import("../../print/printerClient");
-        const info = await printerProbe(activePrinterId());
-        printerOnline.value = info.online;
-      } catch {
-        printerOnline.value = false; // passive — no toast
-      }
-    })();
-  }
-  if (pollTimer == null) pollTimer = window.setInterval(() => void pollStaleness(), 30_000);
-}
-
-async function pollStaleness() {
-  if (document.visibilityState !== "visible" || browser.isCollapsed("Palette")) return;
-  try {
-    const { activePrinterId, printerFilaments } = await import("../../print/printerClient");
-    const filaments = await printerFilaments(activePrinterId());
-    printerOnline.value = true;
-    staleSlots.value = filamentDiffSlots(filaments);
-  } catch {
-    printerOnline.value = false;
-    staleSlots.value = [];
-  }
-}
-
-/** Slots where the printer's loaded filament differs from the palette — the same
- *  name/color criteria the sync-confirm dialog diffs on. */
-function filamentDiffSlots(
-  filaments: { index: number; present: boolean; vendor: string; material: string; color: string }[],
-): number[] {
-  const cur = store.colorPalette;
-  const out: number[] = [];
-  filaments.forEach((f, i) => {
-    if (!f.present || i >= cur.length) return;
-    const name = `${f.vendor} ${f.material}`.trim() || `Toolhead ${f.index + 1}`;
-    if (cur[i]?.name !== name || cur[i]?.color !== f.color) out.push(i);
-  });
-  return out;
-}
-
-/** Pull the printer's loaded filaments into the palette, 1:1 by toolhead index.
- *  Read-only sync (printer → palette); the printer is the source of truth for
- *  what's physically loaded. Confirms before overwriting a customized palette. */
-async function syncFilamentsFromPrinter() {
-  if (!("__TAURI_INTERNALS__" in window)) return;
-  const { activePrinterId, printerFilaments, asPrinterError } = await import("../../print/printerClient");
-  const { toast } = await import("../../ui/toast");
-  let filaments;
-  try {
-    filaments = await printerFilaments(activePrinterId());
-  } catch (e) {
-    printerOnline.value = false;
-    const pe = asPrinterError(e);
-    toast(pe ? `Can't reach the printer: ${pe.message}` : `Printer error: ${String(e)}`, { kind: "error" });
-    return;
-  }
-  printerOnline.value = true;
-
-  // one proposed slot per loaded toolhead; empty toolheads leave the slot alone.
-  const proposed = filaments.map((f) =>
-    f.present
-      ? { name: `${f.vendor} ${f.material}`.trim() || `Toolhead ${f.index + 1}`, color: f.color, material: f.material }
-      : undefined,
-  );
-  if (!proposed.some(Boolean)) {
-    toast("No filament loaded on the printer.", { kind: "info" });
-    return;
-  }
-
-  if (!store.paletteIsDefault()) {
-    const { choose } = await import("../../ui/choice");
-    const cur = store.colorPalette;
-    const diff = proposed
-      .map((p, i) => (p && (cur[i]?.name !== p.name || cur[i]?.color !== p.color) ? `Slot ${i + 1}: ${cur[i]?.name ?? "—"} → ${p.name}` : null))
-      .filter(Boolean) as string[];
-    const go = await choose<"apply" | "cancel">(
-      diff.length ? `Overwrite palette from printer?\n${diff.join("\n")}` : "Sync palette from printer?",
-      [
-        { value: "apply", label: "Overwrite", hint: `${diff.length} slot${diff.length === 1 ? "" : "s"}` },
-        { value: "cancel", label: "Cancel" },
-      ],
-    );
-    if (go !== "apply") return;
-  }
-
-  store.applyFilamentSync(proposed);
-  staleSlots.value = []; // palette now matches the printer by construction
-  toast("Palette synced from printer.", { kind: "info" });
-}
-
 // --- lifecycle -----------------------------------------------------------
-
-watch(hasBodies, (v) => { if (v) armPrinterChecks(); }, { immediate: true });
-onUnmounted(() => { if (pollTimer != null) clearInterval(pollTimer); });
 
 // WebKitGTK quirk, carried over verbatim from mountUi's `for (const id of
 // ["browser", "inspector"])` loop: wheel events over an overflow panel don't
@@ -592,49 +447,9 @@ onUnmounted(() => root.value?.removeEventListener("wheel", onWheel));
       />
       <div v-else-if="n.kind === 'empty'" class="empty-state tree-child">{{ n.text }}</div>
 
-      <!-- The palette head keeps its own markup: a connection dot and the sync
-           button sit where a folder's eye would, and its label deliberately has
-           no .tree-label class (the e2e panel dump reads that). -->
-      <div v-else-if="n.kind === 'palette-head'" class="tree-folder" :aria-expanded="!n.collapsed" @click="browser.toggle('Palette')">
-        <span class="tree-caret"><Icon :name="n.collapsed ? 'caretRight' : 'caretDown'" :size="11" /></span>
-        <span class="feature-icon"><Icon name="filament" :size="14" /></span>
-        <span>Palette</span>
-        <span style="flex: 1"></span>
-        <span class="pal-dot" :title="dotTitle" :style="dotStyle"></span>
-        <!-- .stop: the button lives in the header but must not also toggle it -->
-        <button
-          class="pal-sync"
-          title="Sync filaments from printer"
-          style="background: none; border: none; color: inherit; cursor: pointer; font-size: 13px; padding: 0 4px; margin-right: 6px"
-          @click.stop="syncFilamentsFromPrinter()"
-        ><Icon name="sync" :size="14" /></button>
-        <span class="tree-count">{{ n.count }}</span>
-      </div>
-
-      <div
-        v-else
-        class="feature-row tree-child"
-        :title="`Filament slot ${n.index + 1} → toolhead ${n.index + 1}${n.material ? ` (${n.material})` : ''}`"
-      >
-        <input
-          type="color"
-          class="pal-swatch"
-          style="width: 18px; height: 18px; border: none; background: none; padding: 0; cursor: pointer; vertical-align: middle"
-          :value="n.color"
-          @change="store.setPaletteSlot(n.index, { color: ($event.target as HTMLInputElement).value })"
-        />
-        <InlineLabel
-          :text="n.name"
-          :label-style="{ marginLeft: '7px' }"
-          rename-on-dblclick
-          :rename="(name: string) => store.setPaletteSlot(n.index, { name })"
-        />
-        <span
-          v-if="n.material"
-          class="pal-material"
-          style="margin-left: 6px; opacity: 0.55; font-size: 11px"
-        >{{ n.material }}</span>
-      </div>
+      <!-- A section some plugin added. It draws its own rows, decides its own
+           visibility and is unmounted when its capability stops. -->
+      <component :is="n.component" v-else />
     </template>
   </aside>
 </template>

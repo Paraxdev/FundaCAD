@@ -16,7 +16,7 @@ import {
   setSpaceMouseConfig,
   type Motion,
   type SpaceMouseConfig,
-} from "../../src/input/spacemouse";
+} from "../../plugins/FundaCAD.SpaceMouse/spacemouse";
 
 const mot = (p: Partial<Motion>): Motion => ({ tx: 0, ty: 0, tz: 0, rx: 0, ry: 0, rz: 0, ...p });
 
@@ -97,7 +97,7 @@ describe("crossAxis is clamped to [0, 0.9]", () => {
       setItem: (k: string, v: string) => void store.set(k, v),
     });
     vi.resetModules();
-    return (await import("../../src/input/spacemouse"));
+    return (await import("../../plugins/FundaCAD.SpaceMouse/spacemouse"));
   }
 
   it("clamps a persisted 5 down to 0.9", async () => {

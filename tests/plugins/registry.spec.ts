@@ -14,6 +14,14 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+// The three ids, named ONCE. registry.ts no longer holds a type that lists them
+// — a plugin's id belongs to the plugin — so a test that wants to ask about one
+// spells it out, and spelling it out three times per case would be three places
+// a rename could be missed.
+const COLOR = "FundaCAD.MultiColor";
+const PRINTING = "FundaCAD.Printing";
+const MOUSE = "FundaCAD.SpaceMouse";
+
 const KEY = "fundacad.plugins";
 const FLAGS_KEY = "fundacad.features";
 const FLAGS_OLD = "sindricad.features";
@@ -34,10 +42,10 @@ describe("what is on before anybody says anything", () => {
     // On. These were not optional before this existed, and an upgrade that
     // silently took away a working printer connection would be a regression
     // wearing the word "plugin".
-    expect(m.printingEnabled()).toBe(true);
-    expect(m.spaceMouseEnabled()).toBe(true);
+    expect(m.pluginEnabled(PRINTING)).toBe(true);
+    expect(m.pluginEnabled(MOUSE)).toBe(true);
     // Off, as it shipped. It answers to hardware nobody has said they own.
-    expect(m.multiMaterialEnabled()).toBe(false);
+    expect(m.pluginEnabled(COLOR)).toBe(false);
   });
 
   it("describes every built-in in terms the install screen can render", async () => {
@@ -60,11 +68,11 @@ describe("what is on before anybody says anything", () => {
 describe("the setting somebody already made", () => {
   it("carries multi-material forward from the feature flags it replaced", async () => {
     const m = await load({ [FLAGS_KEY]: JSON.stringify({ multiColor: true }) });
-    expect(m.multiMaterialEnabled()).toBe(true);
+    expect(m.pluginEnabled(COLOR)).toBe(true);
     // The control. Without it this test passes just as well against a module
     // that has started returning true for everything.
     const off = await load({ [FLAGS_KEY]: JSON.stringify({ multiColor: false }) });
-    expect(off.multiMaterialEnabled()).toBe(false);
+    expect(off.pluginEnabled(COLOR)).toBe(false);
   });
 
   it("reaches back through the older names too", async () => {
@@ -72,7 +80,7 @@ describe("the setting somebody already made", () => {
     // names ago has their answer under the oldest key and nothing under the
     // newer ones.
     const m = await load({ [FLAGS_OLD]: JSON.stringify({ multiColor: true }) });
-    expect(m.multiMaterialEnabled()).toBe(true);
+    expect(m.pluginEnabled(COLOR)).toBe(true);
   });
 
   it("carries the capabilities forward through their rename", async () => {
@@ -84,17 +92,17 @@ describe("the setting somebody already made", () => {
     const m = await load({
       [KEY]: JSON.stringify({ "multi-material": true, printing: false, spacemouse: false }),
     });
-    expect(m.multiMaterialEnabled()).toBe(true);
-    expect(m.printingEnabled()).toBe(false);
-    expect(m.spaceMouseEnabled()).toBe(false);
+    expect(m.pluginEnabled(COLOR)).toBe(true);
+    expect(m.pluginEnabled(PRINTING)).toBe(false);
+    expect(m.pluginEnabled(MOUSE)).toBe(false);
 
     // The control. Without it this passes just as well against a module that
     // ignores the stored value and answers from somewhere else.
     const other = await load({
       [KEY]: JSON.stringify({ "multi-material": false, printing: true, spacemouse: true }),
     });
-    expect(other.multiMaterialEnabled()).toBe(false);
-    expect(other.printingEnabled()).toBe(true);
+    expect(other.pluginEnabled(COLOR)).toBe(false);
+    expect(other.pluginEnabled(PRINTING)).toBe(true);
   });
 
   it("lets the new name win when both are stored", async () => {
@@ -103,7 +111,7 @@ describe("the setting somebody already made", () => {
     const m = await load({
       [KEY]: JSON.stringify({ printing: false, "FundaCAD.Printing": true }),
     });
-    expect(m.printingEnabled()).toBe(true);
+    expect(m.pluginEnabled(PRINTING)).toBe(true);
   });
 
   it("prefers its own key once there is one", async () => {
@@ -113,7 +121,7 @@ describe("the setting somebody already made", () => {
     });
     // The new key is the answer to the question this module asks; the old one
     // is an answer to a question that was asked before it existed.
-    expect(m.multiMaterialEnabled()).toBe(false);
+    expect(m.pluginEnabled(COLOR)).toBe(false);
   });
 
   it("does not let one capability's stored value decide another's", async () => {
@@ -121,21 +129,21 @@ describe("the setting somebody already made", () => {
     // all-or-nothing: a capability added in a later version must not cost
     // somebody the setting they chose for an older one.
     const m = await load({ [KEY]: JSON.stringify({ "FundaCAD.Printing": false }) });
-    expect(m.printingEnabled()).toBe(false);
-    expect(m.spaceMouseEnabled()).toBe(true);
-    expect(m.multiMaterialEnabled()).toBe(false);
+    expect(m.pluginEnabled(PRINTING)).toBe(false);
+    expect(m.pluginEnabled(MOUSE)).toBe(true);
+    expect(m.pluginEnabled(COLOR)).toBe(false);
   });
 
   it("treats an unreadable value as no value rather than as a reason to fail", async () => {
     const m = await load({ [KEY]: "{not json" });
-    expect(m.printingEnabled()).toBe(true);
-    expect(m.multiMaterialEnabled()).toBe(false);
+    expect(m.pluginEnabled(PRINTING)).toBe(true);
+    expect(m.pluginEnabled(COLOR)).toBe(false);
   });
 
   it("ignores a stored entry that is not a yes or a no", async () => {
     const m = await load({ [KEY]: JSON.stringify({ printing: "yes", spacemouse: null }) });
-    expect(m.printingEnabled()).toBe(true);
-    expect(m.spaceMouseEnabled()).toBe(true);
+    expect(m.pluginEnabled(PRINTING)).toBe(true);
+    expect(m.pluginEnabled(MOUSE)).toBe(true);
   });
 });
 
@@ -146,7 +154,7 @@ describe("turning one on and off", () => {
     const off = m.onPluginChange(() => told++);
 
     m.setPluginEnabled("FundaCAD.Printing", false);
-    expect(m.printingEnabled()).toBe(false);
+    expect(m.pluginEnabled(PRINTING)).toBe(false);
     expect(told).toBe(1);
     expect(JSON.parse(localStorage.getItem(KEY)!)["FundaCAD.Printing"]).toBe(false);
 
@@ -158,7 +166,7 @@ describe("turning one on and off", () => {
     off();
     m.setPluginEnabled("FundaCAD.Printing", true);
     expect(told).toBe(1);
-    expect(m.printingEnabled()).toBe(true);
+    expect(m.pluginEnabled(PRINTING)).toBe(true);
   });
 
   it("hands out a new object each time, so a holder can compare identity", async () => {

@@ -5,10 +5,10 @@
 //
 // choice.ts's chooseMulti can't express per-row dropdowns, so this is a bespoke
 // modal built on the shared .choice-* styles. The markup is
-// components/overlays/FilamentMappingDialog.vue; the reconciliation below is
-// pure and stays here, where printFlow.ts's other pure helpers are.
+// ./FilamentMappingDialog.vue; the reconciliation below is pure and stays
+// here, where printFlow.ts's other pure helpers are.
 
-import { useDialogStore } from "../stores/dialogs";
+import { openFilamentMapping } from "./state";
 import type { StartOpts, ToolheadFilament } from "./printerClient";
 
 export interface LogicalSlot {
@@ -62,5 +62,5 @@ export function filamentMappingDialog(
   slots: LogicalSlot[],
   toolheads: ToolheadFilament[],
 ): Promise<MappingResult | null> {
-  return useDialogStore().openFilamentMapping(slots, toolheads);
+  return openFilamentMapping(slots, toolheads);
 }

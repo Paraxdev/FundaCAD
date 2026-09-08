@@ -1,16 +1,31 @@
-// The 3D-mouse capability: everything that has to happen for a plugged-in
-// puck to move the view, and everything that has to be undone when the
-// capability is turned off.
+// The 3D-mouse capability: everything that has to happen for a plugged-in puck
+// to move the view, everything that has to appear in the app while it can, and
+// everything that has to be undone when the capability is turned off.
 //
-// This file is the whole of the app's knowledge that a 3D mouse exists. Nothing
-// in the core imports it; plugins/activate.ts loads it when the capability is
-// on, which is also what keeps the HID reader, the settings modal and the input
-// filter out of the main bundle on the machines that have no such device, which
-// is most of them.
+// THE APP CONTAINS NO OTHER KNOWLEDGE THAT A 3D MOUSE EXISTS. Not a menu, not a
+// modal, not a dialog-store field, not a cached module handle in the menubar
+// builder. It used to contain all four: View's every row was written out in
+// app/menubarDef.ts behind a capability check, the settings window was mounted
+// by App.vue behind a second one, `dialogs.spaceMouse` sat in the core's dialog
+// store, and menubarDef kept a live reference to the input module so it could
+// answer "which mode is ticked" synchronously. What is left of all that is the
+// `contribute` call below.
+//
+// The input filter, the settings window and its three.js scene, and the HID
+// plumbing are in this directory and reached only from here, so a machine with
+// no such device, which is most of them, never downloads or parses any of it.
 
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
-import { initSpaceMouse, setSpaceMouseConfig } from "../../src/input/spacemouse";
+import { contribute } from "../../src/plugins/contrib";
+import {
+  getSpaceMouseMode,
+  initSpaceMouse,
+  setSpaceMouseConfig,
+  setSpaceMouseMode,
+} from "./spacemouse";
+import { openSettings } from "./state";
+import SettingsHost from "./SettingsHost.vue";
 import { stickyFact } from "../../src/diagnostics/breadcrumbs";
 import { toast } from "../../src/ui/toast";
 import type { Engine } from "../../src/app/engine";
@@ -28,6 +43,43 @@ type Inventory = { picked: string | null; seen: string[]; note?: string | null }
  *  note in spacemouse.rs is about, arriving from the other direction. */
 export async function activate(e: Engine): Promise<() => void> {
   const stops = await install(e.viewport);
+
+  // What the app shows on this capability's behalf.
+  //
+  // The whole View menu, because every row of it is this capability's: with the
+  // 3D mouse off the menu is not empty, it is absent, and the app arrives at
+  // that by having nothing to put there rather than by knowing to leave it out.
+  //
+  // `checked` is a thunk the menubar re-evaluates each time a menu opens, which
+  // is why the mode can be read straight from the module here. It could not be
+  // before: the core had to keep a cached handle on an input module it was not
+  // supposed to import, precisely because it could not run this code.
+  stops.push(
+    contribute("FundaCAD.SpaceMouse", {
+      menus: [
+        {
+          menu: "View",
+          before: "Help",
+          items: [
+            {
+              label: "SpaceMouse: Move Object",
+              checked: () => getSpaceMouseMode() === "object",
+              onClick: () => setSpaceMouseMode("object"),
+            },
+            {
+              label: "SpaceMouse: Move Camera",
+              checked: () => getSpaceMouseMode() === "camera",
+              onClick: () => setSpaceMouseMode("camera"),
+            },
+            { separator: true, label: "" },
+            { label: "3D Mouse Settings\u2026", onClick: () => openSettings() },
+          ],
+        },
+      ],
+      overlays: [SettingsHost],
+    }),
+  );
+
   return () => {
     for (const stop of stops.reverse()) stop();
   };

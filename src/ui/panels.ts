@@ -4,8 +4,10 @@
 // this layer's job — preconditions, status-line messages, the geometry call,
 // and unit formatting of the numbers those produce.
 //
-// Every exported name keeps its old signature, so app/actions.ts,
-// app/menubarDef.ts and the print-status pill are unchanged.
+// The app's own panels only. A capability that wants a floating panel brings its
+// own component and its own state; a printer camera used to be a fifth field on
+// the store below and a fifth function here, which put "which printer is being
+// watched" in the same object as "which bodies are overlapping".
 
 import type { DocumentStore } from "../document/store";
 import type { Viewport } from "../viewport/viewport";
@@ -103,14 +105,7 @@ export function createPanels(deps: PanelsDeps) {
     panels.overhang = false;
   }
 
-  /** Live snapshot frames from the Rust poller; the component owns the
-   *  subscription lifecycle. Kept async because the print-status pill and the
-   *  menubar both `void` the result. */
-  async function showCameraPanel(printerId: string) {
-    panels.camera = printerId;
-  }
-
-  return { showProperties, showInterference, showOverhangSettings, closeOverhangSettings, showCameraPanel };
+  return { showProperties, showInterference, showOverhangSettings, closeOverhangSettings };
 }
 
 export type Panels = ReturnType<typeof createPanels>;

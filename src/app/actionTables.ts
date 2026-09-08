@@ -42,7 +42,7 @@ export const SKETCH_MODIFY: Record<string, SketchTool> = {
  *  they don't overwrite it. */
 export const NON_REPEATABLE = new Set([
   "new", "open", "save", "saveas", "export", "import",
-  "print-export", "print-orca", "print-send", "welcome", "ta-publish",
+  "welcome", "ta-publish",
   "undo", "redo", "compute-all", "shortcut-help", "finish", "palette",
   "fit", "iso", "top", "front", "right", "persp",
   "selmode", "selmode-faces", "selmode-bodies", "toggle-xray",

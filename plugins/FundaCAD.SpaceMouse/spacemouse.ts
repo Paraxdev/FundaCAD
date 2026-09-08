@@ -8,12 +8,12 @@
 // The axis→action mapping is DATA-DRIVEN and user-configurable (each camera
 // action binds to one of the six raw axes, with invert + sensitivity), because
 // which physical axis is which differs per device/orientation. The 3D-Mouse
-// Settings screen (components/overlays/SpaceMouseModal.vue) edits this live with a raw-axis
+// Settings screen (./SpaceMouseModal.vue) edits this live with a raw-axis
 // readout + a test cube; the config persists to localStorage.
 
 import { listen } from "@tauri-apps/api/event";
-import type { Viewport } from "../viewport/viewport";
-import { readSetting } from "../ui/storedSetting";
+import type { Viewport } from "../../src/viewport/viewport";
+import { readSetting } from "../../src/ui/storedSetting";
 
 export interface Motion { tx: number; ty: number; tz: number; rx: number; ry: number; rz: number }
 const ZERO: Motion = { tx: 0, ty: 0, tz: 0, rx: 0, ry: 0, rz: 0 };

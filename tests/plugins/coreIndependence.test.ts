@@ -11,6 +11,22 @@
 // Dynamic `import()` is fine and is the point: that is how a capability is
 // loaded when it is turned on and left on disk when it is not.
 //
+// WHAT CHANGED, AND WHY IT IS THE INTERESTING PART. Each of those sets used to
+// name files under src/: the printer connection owned src/print/ and three
+// components in src/components/overlays/, and the 3D mouse owned
+// src/input/spacemouse.ts and a fourth component. The test passed, and what it
+// proved was narrower than it sounded — nothing imported those files, but they
+// were still in the app's own tree, typechecked with it, and reachable by a one
+// line import from anywhere. A capability was a set of files with a rule
+// attached rather than a thing you could point at.
+//
+// A capability is now A DIRECTORY. The three predicates below are the same
+// sentence three times, and that is the whole of the claim: everything the
+// capability is, is under plugins/<its id>/, and nothing outside statically
+// imports any of it. There is nowhere left for an exception to hide, because a
+// file that needed one would have to be added to a set that is otherwise just a
+// path prefix.
+//
 // Two things this deliberately does not do. It does not check the other
 // direction: a capability may import as much of the core as it likes, which is
 // what makes it a plugin rather than a fork. And it does not police
@@ -30,7 +46,7 @@ const sources = {
     import: "default",
     eager: true,
   }) as Record<string, string>),
-  ...(import.meta.glob("../../plugins/*/*.ts", {
+  ...(import.meta.glob("../../plugins/*/*.{ts,vue}", {
     query: "?raw",
     import: "default",
     eager: true,
@@ -38,18 +54,14 @@ const sources = {
 };
 
 /** The files that ARE the capability. A capability is allowed to import its own
- *  parts however it likes. */
+ *  parts however it likes.
+ *
+ *  One directory each, with no exceptions and nowhere to put one. That is the
+ *  claim; see the note at the top for what it replaced. */
 const CAPABILITIES: Record<string, (path: string) => boolean> = {
-  "the printer connection": (p) =>
-    p.includes("/src/print/") ||
-    p.includes("/plugins/FundaCAD.Printing/") ||
-    p.endsWith("/overlays/CameraPanel.vue") ||
-    p.endsWith("/overlays/PrintStatusPill.vue") ||
-    p.endsWith("/overlays/FilamentMappingDialog.vue"),
-  "the 3D mouse": (p) =>
-    p.endsWith("/input/spacemouse.ts") ||
-    p.includes("/plugins/FundaCAD.SpaceMouse/") ||
-    p.endsWith("/overlays/SpaceMouseModal.vue"),
+  "the printer connection": (p) => p.includes("/plugins/FundaCAD.Printing/"),
+  "the 3D mouse": (p) => p.includes("/plugins/FundaCAD.SpaceMouse/"),
+  "multiple colours": (p) => p.includes("/plugins/FundaCAD.MultiColor/"),
 };
 
 /** Static import specifiers in a file, skipping `import type` (erased) and
@@ -127,9 +139,36 @@ describe("the core does not depend on the capabilities it can turn off", () => {
     // against the same machinery: the capability's own entry module imports the
     // capability, and would be reported if it were not excused for owning it.
     const entry = Object.keys(sources).find((p) => p.endsWith("/plugins/FundaCAD.SpaceMouse/main.ts"))!;
-    const target = resolve(entry, "../../src/input/spacemouse");
+    const target = resolve(entry, "./spacemouse");
     expect(target).not.toBeNull();
     expect(candidates(target!).some(CAPABILITIES["the 3D mouse"]!)).toBe(true);
-    expect(staticImports(sources[entry]!)).toContain("../../src/input/spacemouse");
+    expect(staticImports(sources[entry]!)).toContain("./spacemouse");
+  });
+
+  it("found each capability's files, so the rules are not about nothing", () => {
+    // The second control, and the one that matters most after the move. Every
+    // predicate above is now a path prefix, and a path prefix that matches
+    // nothing makes its rule vacuously true: the whole suite would pass on a
+    // repository where all three capabilities had been deleted.
+    for (const [name, owns] of Object.entries(CAPABILITIES)) {
+      const mine = Object.keys(sources).filter(owns);
+      expect(mine.length, name).toBeGreaterThan(1);
+      // and each one really is a plugin directory, not a chance substring
+      expect(mine.every((p) => p.includes("/plugins/")), name).toBe(true);
+    }
+  });
+
+  it("leaves no capability code in the app's own tree", () => {
+    // The claim the file's opening sentence makes, checked directly rather than
+    // inferred from the import graph. A file can sit inside src/ unimported for
+    // a long time; this is what stops one being put back there.
+    const strays = Object.keys(sources).filter(
+      (p) =>
+        p.includes("/src/") &&
+        (/\/print(er|Flow|Dialog|StatusLine|Status)?\.(ts|vue)$/i.test(p) ||
+          /spacemouse/i.test(p) ||
+          /CameraPanel|FilamentMapping|PrintStatusPill|SpaceMouseModal/.test(p)),
+    );
+    expect(strays).toEqual([]);
   });
 });

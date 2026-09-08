@@ -106,6 +106,21 @@ export interface PluginManifest {
    *  install IS the answer to the question. Defaults to true, so a manifest
    *  that says nothing gets the reading that matches "I installed it". */
   enabledByDefault: boolean;
+  /** Ids this plugin used to be published under.
+   *
+   *  A stored on/off answer is keyed by id, so a rename that dropped the old key
+   *  would put the capability back to its default: something a person had turned
+   *  OFF would switch itself back on at the version that renamed it, which is
+   *  the exact behaviour a toggle exists to prevent.
+   *
+   *  IT LIVES HERE, in the plugin's own manifest, and not in a table in the app.
+   *  A table in the app is the app knowing which plugins exist and what each of
+   *  them used to be called, which is the coupling this whole boundary is for.
+   *  A plugin knows its own history; nothing else has to.
+   *
+   *  Read forward and never written back: the new id is what gets saved the next
+   *  time anything changes, and until then the old value keeps answering. */
+  formerIds: string[];
 }
 
 export type ParseResult =
@@ -182,6 +197,20 @@ export function parseManifest(raw: unknown): ParseResult {
     return { ok: false, why: "enabledByDefault must be true or false" };
   }
 
+  // Not run through the id pattern. These are names from BEFORE the convention,
+  // which is what they are for, and a plugin whose old name would fail today's
+  // check is exactly the plugin whose stored setting most needs finding.
+  const formerRaw = r.formerIds === undefined ? [] : r.formerIds;
+  if (!Array.isArray(formerRaw)) return { ok: false, why: "formerIds must be a list" };
+  const formerIds: string[] = [];
+  for (const f of formerRaw) {
+    if (typeof f !== "string" || !f) {
+      return { ok: false, why: `not a former id: ${JSON.stringify(f)}` };
+    }
+    if (f === id) return { ok: false, why: "formerIds repeats the current id" };
+    formerIds.push(f);
+  }
+
   const hostsRaw = r.hosts === undefined ? [] : r.hosts;
   if (!Array.isArray(hostsRaw)) return { ok: false, why: "hosts must be a list" };
   const hosts = hostsRaw.map(str);
@@ -210,6 +239,7 @@ export function parseManifest(raw: unknown): ParseResult {
       grants,
       hosts,
       enabledByDefault: r.enabledByDefault !== false,
+      formerIds,
     },
   };
 }

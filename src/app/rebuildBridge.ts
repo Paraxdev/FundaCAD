@@ -2,7 +2,7 @@ import { toast } from "../ui/toast";
 import { logError } from "../ui/logStore";
 import { featureMeta } from "../ui/featureMeta";
 import { repairableDiagFor } from "../features/repickReference";
-import { multiMaterialEnabled, onPluginChange } from "../plugins/registry";
+import { contributedPaint, onContribChange } from "../plugins/contrib";
 import type { Engine } from "./engine";
 import { setPreviewError } from "../ui/previewError";
 
@@ -14,47 +14,31 @@ export function installRebuildBridge(e: Engine): void {
   // again while chunks land.
   let pendingFit = true;
 
-  // Resolve each body's assigned palette slot to a hex color for the viewport.
+  // Colour a plugin has put on the model, asked for fresh at every point the
+  // model changes.
   //
-  // Empty when multi-material is off, which is the whole of what "off" means
-  // here: the assignments stay in the document, they are still saved and still
-  // exported, and the bodies simply render in the material they would have had
-  // if nobody had ever assigned one.
-  function computeBodyPaint(bodies = e.store.buildState.result?.bodies): Record<string, string> {
-    if (!multiMaterialEnabled()) return {};
-    const pal = e.store.colorPalette;
-    const out: Record<string, string> = {};
-    for (const b of bodies ?? []) {
-      const slot = e.store.bodyColorSlot(b.id);
-      if (slot != null && pal[slot]) out[b.id] = pal[slot].color;
-    }
-    return out;
-  }
+  // This used to be two functions here that read the document's palette, walked
+  // each body's slot assignment and each body's per-face texture slots, and
+  // returned nothing at all when a capability was switched off. All of that
+  // knowledge — what a palette is, what a slot means, which capability decides
+  // whether any of it counts — was in the render bridge, which is the one place
+  // in the app whose job is turning a build result into pixels.
+  //
+  // What is left is the shape of the answer: a body id may have a colour, a
+  // global face index may have a colour, and whoever knows why says so. With
+  // nothing contributed both maps are empty, which is exactly what the model
+  // looked like with the capability off, arrived at by there being no answer
+  // rather than by a check that suppressed one.
+  const paint = () => contributedPaint();
 
-  // two-tone texture inlays: per-face palette overrides (global face id → hex),
-  // from the sidecar's textureColorSlots (dense per-body face array, sparse key).
-  function computeTexturePaint(): Record<number, string> {
-    if (!multiMaterialEnabled()) return {};
-    const pal = e.store.colorPalette;
-    const out: Record<number, string> = {};
-    for (const b of e.store.buildState.result?.bodies ?? []) {
-      const slots = b.textureColorSlots;
-      if (!slots) continue;
-      for (let i = 0; i < slots.length; i++) {
-        const s = slots[i];
-        if (s != null && pal[s]) out[b.faceStart + i] = pal[s]!.color;
-      }
-    }
-    return out;
-  }
-
-  // Toggling multi-material has to repaint what is already on screen. Both
-  // setters are no-ops when the map has not changed, so this costs nothing on
-  // any other flag; without it the colours would hang about until the next
-  // rebuild, which on a finished model is never.
-  onPluginChange(() => {
-    e.viewport.setBodyPaint(computeBodyPaint());
-    e.viewport.setTexturePaint(computeTexturePaint());
+  // Starting or stopping a capability has to repaint what is already on screen.
+  // Both setters are no-ops when the map has not changed, so this costs nothing
+  // when the change was somebody else's; without it the colours would hang about
+  // until the next rebuild, which on a finished model is never.
+  onContribChange(() => {
+    const p = paint();
+    e.viewport.setBodyPaint(p.bodies);
+    e.viewport.setTexturePaint(p.faces);
     e.viewport.requestRender();
   });
 
@@ -82,10 +66,10 @@ export function installRebuildBridge(e: Engine): void {
   e.store.onBuildChunk((c) => {
     if (c.phase === "begin") {
       const hidden = c.manifest.filter((b) => !e.store.isBodyVisible(b.id)).map((b) => b.id);
-      // Push the palette BEFORE the first body lands, from the manifest — so
-      // streamed bodies arrive already wearing their assigned colour instead of
-      // popping from grey when the build commits.
-      e.viewport.setBodyPaint(computeBodyPaint(c.manifest));
+      // Push the colours BEFORE the first body lands, so streamed bodies arrive
+      // already wearing the one they were assigned instead of popping from grey
+      // when the build commits.
+      e.viewport.setBodyPaint(paint().bodies);
       e.viewport.beginProgressiveModel(c.epoch, c.manifest, c.result, c.bbox, hidden, pendingFit);
       pendingFit = false;
       return;
@@ -109,8 +93,9 @@ export function installRebuildBridge(e: Engine): void {
           .map((b) => b.id);
         e.viewport.setModel(s.result, pendingFit, hidden);
         pendingFit = false;
-        e.viewport.setBodyPaint(computeBodyPaint()); // apply assigned per-body colors
-        e.viewport.setTexturePaint(computeTexturePaint()); // + per-face inlay colors
+        const p = paint();
+        e.viewport.setBodyPaint(p.bodies); // per-body colours
+        e.viewport.setTexturePaint(p.faces); // + per-face inlay colours
       } else {
         e.viewport.clearModel();
       }
