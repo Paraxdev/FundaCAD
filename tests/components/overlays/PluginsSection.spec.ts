@@ -27,15 +27,15 @@ const consent = ".plug-consent";
 const row = (w: ReturnType<typeof mount>, id: string) => w.get(`[data-plugin="${id}"]`);
 /** the rows for the app's own capabilities, in registry order */
 const builtinRows = (w: ReturnType<typeof mount>) =>
-  ["multi-material", "printing", "spacemouse"].map((id) => row(w, id));
+  ["FundaCAD.MultiColor", "FundaCAD.Printing", "FundaCAD.SpaceMouse"].map((id) => row(w, id));
 /** the row for the one thing that is downloaded */
-const downloadRow = (w: ReturnType<typeof mount>) => row(w, "mcp");
+const downloadRow = (w: ReturnType<typeof mount>) => row(w, "FundaCAD.MCP");
 
 beforeEach(() => {
   localStorage.clear();
-  setPluginEnabled("multi-material", false);
-  setPluginEnabled("printing", true);
-  setPluginEnabled("spacemouse", true);
+  setPluginEnabled("FundaCAD.MultiColor", false);
+  setPluginEnabled("FundaCAD.Printing", true);
+  setPluginEnabled("FundaCAD.SpaceMouse", true);
 });
 afterEach(() => localStorage.clear());
 
@@ -48,7 +48,7 @@ describe("the capabilities that are in the app", () => {
 
     const boxes = w.findAll<HTMLInputElement>(".plug-row input[type=checkbox]");
     expect(boxes.length).toBe(3);
-    // multi-material, printing, spacemouse — registry order.
+    // MultiColor, Printing, SpaceMouse: the order their directories sort in.
     expect(boxes.map((b) => b.element.checked)).toEqual([false, true, true]);
   });
 
@@ -59,7 +59,7 @@ describe("the capabilities that are in the app", () => {
     await printing.trigger("change");
     // The screen is a view of the registry, not a second copy of the answer.
     // Everything that hides a menu row or declines to load a chunk reads this.
-    expect(pluginEnabled("printing")).toBe(false);
+    expect(pluginEnabled("FundaCAD.Printing")).toBe(false);
   });
 
   it("shows what a capability uses when it is switched on", async () => {

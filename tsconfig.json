@@ -19,5 +19,12 @@
   },
   // No `declare module "*.vue"` shim, deliberately: it would win over vue-tsc's
   // real resolution and silently switch off prop type-checking.
-  "include": ["src/**/*.ts", "src/**/*.vue", "tests/**/*.ts"]
+  //
+  // plugins/ is here because a shipped plugin's code is this app's code living
+  // in its own directory, and it is imported by the app at build time. Leaving
+  // it out was not a decision, it was what happened when those files moved out
+  // of src/, and the effect was two modules that compiled into the bundle
+  // without anybody checking their types. A deliberate error in one of them
+  // produced no output at all, which is how it was found.
+  "include": ["src/**/*.ts", "src/**/*.vue", "tests/**/*.ts", "plugins/**/*.ts"]
 }

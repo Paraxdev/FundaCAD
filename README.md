@@ -9,7 +9,7 @@ a localhost WebSocket.
 
 ## Discression
 This project heavily or exclusively uses AI to generate code and tests.
-do NOT expect this software to be enterprise grade but it does allow very fast itteration.
+do NOT expect this software to be enterprise grade but it does allow very fast iteration.
 you may use AI for feature requests or even forking and creating your own.
 this code open to the public and free forever.
 

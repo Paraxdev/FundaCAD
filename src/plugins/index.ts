@@ -2,24 +2,25 @@
 //
 // THREE WAYS IN, and they differ only in where the manifest is read from.
 //
-//   1. The suggested ones, listed below and compiled into the build. Their
-//      manifests are known before anything is fetched, so there is nothing to
-//      download in order to decide.
+//   1. The ones that ship in this repository, read straight out of
+//      plugins/<id>/manifest.json at build time. Their manifests are known
+//      before anything is fetched, so there is nothing to download in order to
+//      decide, and they are known from the SAME FILE that goes into the zip
+//      rather than from a copy of it kept here.
 //   2. A URL the user gives. The only account of what the bundle wants is
 //      inside the bundle, so it is fetched and unpacked to be read, and only
 //      then described on a screen.
 //   3. A zip the user already has, read the same way.
 //
 // There is no catalogue fetched from anywhere and there never will be. A
-// document whose only job is to be believed is a document that can lie, and the
-// suggestions below cost nothing to carry in the build.
+// document whose only job is to be believed is a document that can lie, and a
+// manifest already in the checkout costs nothing to carry in the build.
 //
 // WHAT IS NOT DECIDED HERE: whether a plugin may do what it asks. That is
-// ./manifest.ts, and every one of the three routes goes through it. The entries
-// below are written as untrusted JSON and parsed by the same `parseManifest`
-// that parses a stranger's `plugin.json`, so a suggested entry that could not
-// be installed cannot be offered either. The test that matters asserts exactly
-// that.
+// ./manifest.ts, and every one of the three routes goes through it. Our own
+// manifests are read as untrusted JSON by the same `parseManifest` that parses
+// a stranger's, so one of ours that could not be installed cannot be offered
+// either. The test that matters asserts exactly that.
 //
 // AND WHAT "OFFICIAL" MEANS: that we published it, and nothing else. It is a
 // label on a row, decided in Rust from the URL the bytes actually came from. It
@@ -30,8 +31,10 @@
 import {
   parseManifest,
   promiseOf,
+  sameId,
   type PluginManifest,
 } from "./manifest";
+import { bundleAsset, shippedBundles } from "./shipped";
 import type { DocumentStore } from "../document/store";
 import type { RunOutcome } from "./runner/host";
 
@@ -39,6 +42,10 @@ import type { RunOutcome } from "./runner/host";
  *  src-tauri/src/plugins/bundle.rs; this copy only builds the URLs, and that
  *  copy decides which of them get the label. */
 const RELEASES = "https://github.com/Paraxdev/fundacad/releases/download/";
+
+/** The release the assets hang off. "beta" is the rolling one the installers
+ *  and the update feed already use. */
+const RELEASE_TAG = "beta";
 
 export interface OfficialPlugin {
   manifest: PluginManifest;
@@ -51,54 +58,24 @@ export interface OfficialPlugin {
   url: string;
 }
 
-/** Written as plain data, on purpose: this is the same shape a third-party
- *  bundle will arrive in, so it goes through the same parser and gets the same
- *  refusals. A built-in entry is not privileged. */
-const OFFICIAL_RAW: { tag: string; asset: string; manifest: unknown }[] = [
-  {
-    tag: "beta",
-    asset: "plugin-mcp.zip",
-    manifest: {
-      id: "mcp",
-      name: "MCP server",
-      version: "0.1.0",
-      kind: "process",
-      summary: "Lets an AI assistant build, measure and edit models here.",
-      // Not process.spawn, and the distinction is the point of having a closed
-      // vocabulary. The server does start a second process when it works on
-      // its own copy, but that process is the geometry engine this app already
-      // ships, started from a path this app hands it. "Start other programs on
-      // your computer" would be a true sentence describing something else.
-      //
-      // Not network either: it speaks to the engine over loopback, and putting
-      // "connect to 127.0.0.1" on a consent screen teaches people to skim it.
-      grants: [
-        "document.read",
-        "document.write",
-        "geometry.build",
-        "files.read",
-        "files.write",
-      ],
-    },
-  },
-];
-
-/** The offered plugins, refusing to offer one whose own manifest is invalid.
+/** The plugins this repository publishes, offered for install.
  *
- *  Throws rather than skipping. A built-in entry that does not parse is a
- *  mistake in this file, not a condition to degrade around, and a silent skip
- *  would ship an app whose plugin list is quietly one short. */
+ *  Every directory under plugins/ whose kind is not `builtin`. A builtin has no
+ *  bundle to offer: its code IS the app's code, there is no zip on any release,
+ *  and offering to download one would be offering a 404. Those are listed by
+ *  ./registry.ts instead, on the same screen, with a switch rather than a
+ *  button.
+ *
+ *  The asset name comes from `bundleAsset`, which is also what the packager
+ *  uses, so this cannot come to expect a file the release does not carry. */
 export function officialPlugins(): OfficialPlugin[] {
-  return OFFICIAL_RAW.map((entry) => {
-    const parsed = parseManifest(entry.manifest);
-    if (!parsed.ok) {
-      throw new Error(`built-in plugin entry is not installable: ${parsed.why}`);
-    }
+  return shippedBundles().map(({ manifest }) => {
+    const asset = bundleAsset(manifest.id);
     return {
-      manifest: parsed.manifest,
-      tag: entry.tag,
-      asset: entry.asset,
-      url: `${RELEASES}${entry.tag}/${entry.asset}`,
+      manifest,
+      tag: RELEASE_TAG,
+      asset,
+      url: `${RELEASES}${RELEASE_TAG}/${asset}`,
     };
   });
 }
@@ -146,7 +123,7 @@ export async function installedPlugins(): Promise<InstalledPlugin[]> {
 /** Download and install, having already shown what it asks for.
  *
  *  `promise` and the grant set are passed down so the far side can hold the
- *  bundle to them. They are not advice: an unpacked `plugin.json` that asks for
+ *  bundle to them. They are not advice: an unpacked `manifest.json` that asks for
  *  more than this is refused there and never becomes installed. */
 export async function installPlugin(plugin: OfficialPlugin): Promise<InstalledPlugin> {
   const { manifest } = plugin;
@@ -170,24 +147,23 @@ export async function installPlugin(plugin: OfficialPlugin): Promise<InstalledPl
  *  What is recorded on disk is the PROMISE, not the presentation: the grants,
  *  the hosts, the kind and the version, because those are what was agreed to
  *  and what has to be checked again. A name and a one-line summary are not part
- *  of that and are not stored, so they come from the suggested entry when the
- *  plugin is one of ours and from the id when it is not.
+ *  of that and are not stored, so they come from our own copy of the manifest
+ *  when the plugin is one of ours and from the id when it is not.
  *
  *  Null rather than a best guess when the record will not parse. A row that
  *  cannot be described accurately is a row that must not be described
  *  reassuringly, and the screen shows it plainly instead. */
 export function installedManifest(rec: InstalledPlugin): PluginManifest | null {
-  const suggested = OFFICIAL_RAW.find((e) => {
-    const parsed = parseManifest(e.manifest);
-    return parsed.ok && parsed.manifest.id === rec.id;
-  });
-  const known = suggested ? parseManifest(suggested.manifest) : null;
+  // `sameId`, not `===`. Two ids that differ only in case are one directory on
+  // Windows and macOS, so the row on screen and the record on disk can be
+  // spelled differently and still be the same install.
+  const known = shippedBundles().find((p) => sameId(p.manifest.id, rec.id))?.manifest;
   const parsed = parseManifest({
     id: rec.id,
-    name: known?.ok ? known.manifest.name : rec.id,
+    name: known ? known.name : rec.id,
     version: rec.version,
     kind: rec.consented.kind,
-    summary: known?.ok ? known.manifest.summary : "",
+    summary: known ? known.summary : "",
     grants: rec.consented.grants,
     hosts: rec.consented.hosts,
   });

@@ -62,8 +62,8 @@ RS
 # The bundle as it will be published, built by the same script CI runs.
 BUNDLE="$OUT/bundle"
 rm -rf "$BUNDLE"
-python "$REPO/scripts/build-plugins.py" "$BUNDLE" mcp >/dev/null
-ZIP="$(cygpath -m "$BUNDLE/plugin-mcp.zip" 2>/dev/null || echo "$BUNDLE/plugin-mcp.zip")"
+python "$REPO/scripts/build-plugins.py" "$BUNDLE" FundaCAD.MCP >/dev/null
+ZIP="$(cygpath -m "$BUNDLE/plugin-FundaCAD.MCP.zip" 2>/dev/null || echo "$BUNDLE/plugin-FundaCAD.MCP.zip")"
 
 mkdir -p "$OUT/tests"
 cat > "$OUT/tests/real_bundle.rs" <<'RS'
@@ -84,7 +84,7 @@ fn the_published_mcp_bundle_unpacks_and_declares_itself() {
     extract_into(&bytes, &dir).expect("the shipped bundle was refused by the extractor");
 
     // The two files the installer and the launch command depend on by name.
-    assert!(dir.join("plugin.json").is_file(), "no plugin.json in the bundle");
+    assert!(dir.join("manifest.json").is_file(), "no manifest.json in the bundle");
     assert!(dir.join("server.py").is_file(), "no server.py in the bundle");
 
     // Tests are deliberately not packaged, so a bundle carrying them means the

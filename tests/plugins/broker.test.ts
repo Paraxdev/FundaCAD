@@ -8,7 +8,7 @@
 //
 // The exhaustiveness test is the one that will still be earning its keep in a
 // year. The op table is a second copy of a list that already exists in
-// plugins/mcp/server.py, and a second copy is a thing that drifts: someone adds a tool
+// plugins/FundaCAD.MCP/server.py, and a second copy is a thing that drifts: someone adds a tool
 // there, nobody adds a row here, and the new tool is either unreachable or
 // reachable without a permission. So the list is read out of that file rather
 // than restated.
@@ -22,7 +22,7 @@ import { GRANTS, type Grant } from "../../src/plugins/manifest";
 // Read through vite rather than the filesystem: `*.test.ts` runs in the node
 // environment but the rest of the suite reads sources this way, and one habit
 // beats two.
-import serverPy from "../../plugins/mcp/server.py?raw";
+import serverPy from "../../plugins/FundaCAD.MCP/server.py?raw";
 
 /** The tools the MCP server actually registers, off its source. */
 function serverTools(): string[] {

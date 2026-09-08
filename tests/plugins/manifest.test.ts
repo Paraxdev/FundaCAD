@@ -19,6 +19,7 @@ import {
   parseManifest,
   promiseCovers,
   promiseOf,
+  sameId,
   sandboxNote,
   type PluginManifest,
 } from "../../src/plugins/manifest";
@@ -83,10 +84,51 @@ describe("what a manifest is allowed to say", () => {
   });
 
   it("refuses an id that could name something other than itself", () => {
-    for (const bad of ["../evil", "Sample", "", "a/b", "9lives"]) {
+    // An id becomes a DIRECTORY under the plugins root, so every entry here is
+    // a path that would otherwise be joined onto it. The dotted ones are the
+    // reason this list grew: ids gained a publisher segment, and a rule that
+    // allowed a dot loosely would have allowed `..` with it.
+    for (const bad of [
+      "../evil",
+      "",
+      "a/b",
+      "a\\b",
+      "9lives",
+      "-leading",
+      ".",
+      "..",
+      ".hidden",
+      "a.b.c",
+      "a..b",
+      "a.",
+      ".a",
+      "one two",
+      "\u0430dmin", // Cyrillic a: reads as ASCII, is not
+    ]) {
       expect(why({ ...base, id: bad })).toContain("not a plugin id");
     }
     expect(ok({ ...base, id: "a-plugin-9" }).id).toBe("a-plugin-9");
+    expect(ok({ ...base, id: "FundaCAD.MCP" }).id).toBe("FundaCAD.MCP");
+    expect(ok({ ...base, id: "Someone.their-tool" }).id).toBe("Someone.their-tool");
+  });
+
+  it("treats two ids that differ only in case as one plugin", () => {
+    // Not fussiness. macOS and Windows would give `Someone.Tool` and
+    // `someone.tool` the same directory under the plugins root and Linux would
+    // give them two, so an install could replace somebody else's plugin on one
+    // machine and sit beside it on another. Equal everywhere is the strict
+    // reading, and the only one safe to standardise on.
+    expect(sameId("Someone.Tool", "someone.tool")).toBe(true);
+    expect(sameId("Someone.Tool", "Someone.Tool")).toBe(true);
+    // The control: it is not comparing everything as equal.
+    expect(sameId("Someone.Tool", "Someone.Other")).toBe(false);
+  });
+
+  it("says which line to fix when the default is not a yes or a no", () => {
+    expect(why({ ...base, enabledByDefault: "yes" })).toContain("enabledByDefault");
+    // Absent means on, which is the reading that matches "I installed it".
+    expect(ok({ ...base }).enabledByDefault).toBe(true);
+    expect(ok({ ...base, enabledByDefault: false }).enabledByDefault).toBe(false);
   });
 
   it("refuses a kind it cannot describe the sandbox of", () => {

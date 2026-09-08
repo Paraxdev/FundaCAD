@@ -5,12 +5,18 @@ One script for all of them rather than one per plugin. A per-plugin script is a
 per-plugin chance to get the reproducibility wrong, and the reproducibility is
 the whole reason this is a program and not a `zip` invocation.
 
-A PLUGIN IS A DIRECTORY UNDER plugins/ WITH A plugin.json IN IT. That is the
-entire rule. Adding a second plugin means adding a directory, not editing this
-file, and a directory without a manifest is skipped rather than packaged into
+A PLUGIN IS A DIRECTORY UNDER plugins/ WITH A manifest.json IN IT. That is the
+entire rule. Adding a plugin means adding a directory, not editing this file,
+and a directory without a manifest is skipped rather than packaged into
 something that cannot be installed.
 
-The bundle is a zip with plugin.json and the plugin's sources at the TOP level,
+EXCEPT the builtins, which are skipped. A plugin of kind "builtin" is the app's
+own code, shipped inside the app and only turned on and off; there is no zip for
+it to arrive in and nothing that could install one. Packaging it would put an
+asset on the release that nothing can consume, under a name the app would then
+be entitled to offer as a download.
+
+The bundle is a zip with manifest.json and the plugin's sources at the TOP level,
 because the app runs `<plugin dir>/<entry>` and the entry point puts its own
 directory on sys.path. Nothing is vendored: for a Python plugin the interpreter
 and the packages both come from the runtime the app already installed, handed
@@ -37,13 +43,14 @@ With no ids, every plugin is built.
 import hashlib
 import json
 import os
+import re
 import sys
 import zipfile
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PLUGINS = os.path.join(REPO, "plugins")
 
-MANIFEST = "plugin.json"
+MANIFEST = "manifest.json"
 
 SKIP_DIRS = {"tests", "__pycache__", "target", "node_modules", ".git"}
 SKIP_SUFFIX = (".pyc",)
@@ -62,20 +69,46 @@ ENTRY = {
     "panel": "index.html",
 }
 
+#: Ships inside the app, so there is no bundle to build. See the module docs.
+BUILTIN = "builtin"
+
+#: `Publisher.Name`, or a bare name. Mirrors ID in src/plugins/manifest.ts,
+#: which is the copy that decides whether a bundle installs; this one only
+#: refuses to NAME an asset something the app would not accept back, so that
+#: the failure lands here rather than on a release nobody can install from.
+ID = re.compile(r"^[A-Za-z][A-Za-z0-9-]{0,30}(\.[A-Za-z][A-Za-z0-9-]{0,30})?$")
+
+
+def read_manifest(pid, src):
+    with open(os.path.join(src, MANIFEST), encoding="utf-8") as fh:
+        try:
+            return json.load(fh)
+        except ValueError as e:
+            sys.exit(f"plugins/{pid}/{MANIFEST} is not readable JSON: {e}")
+
 
 def discover(only):
     """Plugin directories to build, as (id, path)."""
     if not os.path.isdir(PLUGINS):
         sys.exit("no plugins/ directory")
     out = []
+    skipped = []
     for name in sorted(os.listdir(PLUGINS)):
         path = os.path.join(PLUGINS, name)
         if not os.path.isdir(path) or not os.path.isfile(os.path.join(path, MANIFEST)):
             continue
         if only and name not in only:
             continue
+        if read_manifest(name, path).get("kind") == BUILTIN:
+            skipped.append(name)
+            continue
         out.append((name, path))
     if only:
+        # A builtin named on the command line is an error rather than a silent
+        # nothing: somebody asked for a bundle that cannot exist, and printing
+        # "built 0 plugins" would let them believe it did.
+        for name in sorted(set(only) & set(skipped)):
+            sys.exit(f"plugins/{name} is a {BUILTIN}: it ships in the app, there is no bundle")
         missing = sorted(set(only) - {n for n, _ in out})
         if missing:
             sys.exit("no such plugin: " + ", ".join(missing))
@@ -98,12 +131,10 @@ def sources(src):
 
 def check(pid, src):
     """Refuse to package something that could not work once installed."""
-    with open(os.path.join(src, MANIFEST), encoding="utf-8") as fh:
-        try:
-            manifest = json.load(fh)
-        except ValueError as e:
-            sys.exit(f"plugins/{pid}/{MANIFEST} is not readable JSON: {e}")
+    manifest = read_manifest(pid, src)
 
+    if not ID.match(pid):
+        sys.exit(f"plugins/{pid} is not a usable plugin id (Publisher.Name, ASCII)")
     if manifest.get("id") != pid:
         # The directory name is what the release asset is named after and what
         # the app installs into. A manifest disagreeing with it would install

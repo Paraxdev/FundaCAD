@@ -1,9 +1,9 @@
 # FundaCAD over MCP
 
-`plugins/mcp/` is a Model Context Protocol server that lets another model build, measure,
+`plugins/FundaCAD.MCP/` is a Model Context Protocol server that lets another model build, measure,
 look at and describe FundaCAD parts. It speaks JSON-RPC 2.0 over stdio, which is
 all MCP is on a stdio transport, and it is hand-rolled — no SDK is pinned into
-this repository, and the whole protocol is one `handle()` in `plugins/mcp/server.py`.
+this repository, and the whole protocol is one `handle()` in `plugins/FundaCAD.MCP/server.py`.
 
 `.mcp.json` at the repository root registers it, so a client that reads that file
 (Claude Code among them) picks it up with no further setup:
@@ -11,7 +11,7 @@ this repository, and the whole protocol is one `handle()` in `plugins/mcp/server
 ```json
 { "mcpServers": { "fundacad": {
     "command": "uv",
-    "args": ["run", "--project", "sidecar", "python", "plugins/mcp/server.py"] } } }
+    "args": ["run", "--project", "sidecar", "python", "plugins/FundaCAD.MCP/server.py"] } } }
 ```
 
 It runs on the sidecar's own virtual environment because everything it needs is
@@ -38,7 +38,7 @@ host's settings, pointing at the interpreter the app already installed:
 ```json
 { "mcpServers": { "fundacad": {
     "command": "<the app's bundled python>",
-    "args": ["<app data>/plugins/mcp/server.py"],
+    "args": ["<app data>/plugins/FundaCAD.MCP/server.py"],
     "env": {
       "PYTHONPATH": "<the app's bundled site-packages>",
       "FUNDACAD_SIDECAR_DIR": "<the app's geometry engine sources>" } } } }
@@ -93,7 +93,7 @@ in here can reach.)
 
 A running app writes `session.json` into its app data directory naming its
 engine's port and token, and removes it on the way out
-(`src-tauri/src/session_file.rs`). `plugins/mcp/app_session.py` reads it and then does
+(`src-tauri/src/session_file.rs`). `plugins/FundaCAD.MCP/app_session.py` reads it and then does
 the thing that actually settles the question: dials that port with that token and
 pings. The file is a hint — it survives a crash — so a stale one costs one
 connect and is then ignored.
@@ -179,22 +179,22 @@ The thing an agent most often needs to see is inside. `view` takes:
 - `highlight_faces: [...]` — paint named faces orange, to answer "which one is
   face 7".
 
-The renderer is a z-buffered flat rasteriser in `plugins/mcp/render.py`: pure numpy,
+The renderer is a z-buffered flat rasteriser in `plugins/FundaCAD.MCP/render.py`: pure numpy,
 arrays in and an array out, no browser and no GPU. It is deliberately plain. The
 app's own renderer stays the authority for what a person sees; this answers "did
 that do what I meant".
 
 ## Driving it without an MCP host
 
-`plugins/mcp/client.py` is a small client. It is in the repository because the end-to-end
+`plugins/FundaCAD.MCP/client.py` is a small client. It is in the repository because the end-to-end
 test needs one — testing the tools by calling their coroutines would skip the
 protocol, and the protocol is where a stray `print` to stdout or a reply to a
 notification breaks everything under a real host. It doubles as a command line:
 
 ```sh
-uv run --project sidecar python plugins/mcp/client.py                     # list the tools
-uv run --project sidecar python plugins/mcp/client.py schema '{"type":"revolve"}'
-uv run --project sidecar python plugins/mcp/client.py --script build.json
+uv run --project sidecar python plugins/FundaCAD.MCP/client.py                     # list the tools
+uv run --project sidecar python plugins/FundaCAD.MCP/client.py schema '{"type":"revolve"}'
+uv run --project sidecar python plugins/FundaCAD.MCP/client.py --script build.json
 ```
 
 Each invocation is a fresh server with an empty document, so a sequence of
@@ -236,16 +236,16 @@ one-shot calls is not a session — use `--script`, which is either a JSON array
 | `schema.py` | the feature reference the agent reads |
 | `client.py` | the client the tests and the command line use |
 | `winjob.py` | the Windows job object that makes the engine die with the server |
-| `plugin.json` | what it declares when installed as a plugin (`docs/PLUGINS.md`) |
+| `manifest.json` | what it declares when installed as a plugin (`docs/PLUGINS.md`) |
 
 `expr.py` and `schema.py` are both ports of things whose authority lives
-elsewhere, so both are pinned by tests: `plugins/mcp/tests/test_expr.py` holds the
+elsewhere, so both are pinned by tests: `plugins/FundaCAD.MCP/tests/test_expr.py` holds the
 grammar (degrees trig, right-associative `^`, semicolon arguments) and
-`plugins/mcp/tests/test_schema.py` holds every documented type against the sidecar's own
+`plugins/FundaCAD.MCP/tests/test_schema.py` holds every documented type against the sidecar's own
 `_FEATURE_HANDLERS` table, in both directions.
 
 Tests run the same way the sidecar's do, and CI globs both directories:
 
 ```sh
-cd sidecar && uv run python ../plugins/mcp/tests/test_render.py
+cd sidecar && uv run python ../plugins/FundaCAD.MCP/tests/test_render.py
 ```

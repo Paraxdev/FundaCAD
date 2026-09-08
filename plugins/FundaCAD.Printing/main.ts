@@ -8,13 +8,13 @@
 // so a machine with no printer never parses the printer client, the slicer
 // bridge, or the status pill's polling.
 
-import type { Engine } from "../../app/engine";
+import type { Engine } from "../../src/app/engine";
 
 /** Start the capability. Returns the teardown that stops it. */
 export async function activate(e: Engine): Promise<() => void> {
   const [{ setPrinterPillClick }, { activePrinterId }] = await Promise.all([
-    import("../../print/printStatusLine"),
-    import("../../print/printerClient"),
+    import("../../src/print/printStatusLine"),
+    import("../../src/print/printerClient"),
   ]);
 
   // Clicking the live print-progress pill opens the camera on the active

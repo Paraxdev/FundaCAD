@@ -89,6 +89,7 @@ const COPY: Record<Grant, GrantCopy> = {
 };
 
 export interface PluginManifest {
+  /** `Publisher.Name`. See the ID pattern below for why it has two halves. */
   id: string;
   name: string;
   version: string;
@@ -98,17 +99,55 @@ export interface PluginManifest {
   grants: Grant[];
   /** required when, and only when, `network` is granted */
   hosts: string[];
+  /** Whether a capability that SHIPS with the app runs before anybody has said
+   *  anything. Deliberately outside `promiseOf()`: it is a preference, never a
+   *  permission, and it decides nothing about reach. A downloaded bundle
+   *  setting it gains nothing either, because for a downloaded bundle the
+   *  install IS the answer to the question. Defaults to true, so a manifest
+   *  that says nothing gets the reading that matches "I installed it". */
+  enabledByDefault: boolean;
 }
 
 export type ParseResult =
   | { ok: true; manifest: PluginManifest }
   | { ok: false; why: string };
 
-const ID = /^[a-z][a-z0-9-]{0,31}$/;
+// `Publisher.Name`, or a bare name for the ones that predate the convention.
+//
+// TWO HALVES because the id is a global name in a space anybody may publish
+// into. Without a publisher segment the first two people to write an exporter
+// both call it `exporter`, and the second one installs over the first.
+//
+// AND IT IS A DIRECTORY NAME, which is what the rest of this pattern is about.
+// Every segment must start with an ASCII letter, so `.`, `..`, `.ssh` and
+// `.staging-x` cannot be spelled at all — not as a defence in depth but as the
+// only defence, since a traversal here would be a path join in Rust. ASCII
+// only, so a homograph cannot make two ids that read identically. And no case
+// rule, because the check that matters is not one a regex can make: Windows
+// treats `Foo.Bar` and `foo.bar` as one directory and Linux does not, so
+// `sameId()` below compares them the way the worst filesystem would.
+const SEGMENT = "[A-Za-z][A-Za-z0-9-]{0,30}";
+const ID = new RegExp(`^${SEGMENT}(\\.${SEGMENT})?$`);
 // A hostname, or a leading-dot suffix that stands for one level of subdomain.
 // No scheme, no path, no wildcard in the middle: a host allowlist that can
 // express `*.anything.com` is not much of an allowlist.
 const HOST = /^\.?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
+
+/** Whether two ids name the same plugin ON EVERY PLATFORM THIS RUNS ON.
+ *
+ *  Not `a === b`, and the difference is a real bug rather than a hypothetical
+ *  one. An id becomes a directory under the plugins root. macOS and Windows
+ *  would hand `Someone.Tool` and `someone.tool` the same directory; Linux would
+ *  hand them two. So a plugin could be installed twice on one machine and
+ *  overwrite its neighbour on another, and the second is the one that matters:
+ *  it is an install that replaces somebody else's plugin without either of them
+ *  being asked.
+ *
+ *  Resolved by treating them as equal everywhere, which is the strictest of the
+ *  two readings and therefore the only safe one to standardise on. */
+export function sameId(a: string, b: string): boolean {
+  return a.toLowerCase() === b.toLowerCase();
+}
 
 const isGrant = (v: unknown): v is Grant => (GRANTS as readonly unknown[]).includes(v);
 const isKind = (v: unknown): v is PluginKind =>
@@ -139,6 +178,10 @@ export function parseManifest(raw: unknown): ParseResult {
     grants.push(g);
   }
 
+  if (r.enabledByDefault !== undefined && typeof r.enabledByDefault !== "boolean") {
+    return { ok: false, why: "enabledByDefault must be true or false" };
+  }
+
   const hostsRaw = r.hosts === undefined ? [] : r.hosts;
   if (!Array.isArray(hostsRaw)) return { ok: false, why: "hosts must be a list" };
   const hosts = hostsRaw.map(str);
@@ -166,6 +209,7 @@ export function parseManifest(raw: unknown): ParseResult {
       summary: str(r.summary),
       grants,
       hosts,
+      enabledByDefault: r.enabledByDefault !== false,
     },
   };
 }

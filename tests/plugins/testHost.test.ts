@@ -34,7 +34,7 @@ describe("feature ids follow the app, not the agent", () => {
 
   it("counts the way the store counts, which is not the lowest free number", async () => {
     // DocumentStore.nextId starts at `ids.size + 1` and climbs past anything
-    // taken. plugins/mcp/model.py takes the lowest free number instead, so a
+    // taken. plugins/FundaCAD.MCP/model.py takes the lowest free number instead, so a
     // gap gets reused there and not here. Pinned because the difference is
     // exactly the sort of thing a plugin author would otherwise discover by
     // having predicted an id.

@@ -279,11 +279,11 @@ describe("the list of what is installed", () => {
   });
 
   it("stops offering a suggestion once it is installed", async () => {
-    installedPlugins.mockResolvedValue([record({ id: "mcp" })]);
+    installedPlugins.mockResolvedValue([record({ id: "FundaCAD.MCP" })]);
     const w = await mounted();
     // One row, not two: the suggested entry and the installed one are the same
     // plugin, and a screen showing both offers to install what is installed.
-    expect(w.findAll('[data-plugin="mcp"]').length).toBe(1);
-    expect(w.get('[data-plugin="mcp"]').text()).toContain("Remove");
+    expect(w.findAll('[data-plugin="FundaCAD.MCP"]').length).toBe(1);
+    expect(w.get('[data-plugin="FundaCAD.MCP"]').text()).toContain("Remove");
   });
 });

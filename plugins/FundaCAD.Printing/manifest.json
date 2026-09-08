@@ -1,0 +1,14 @@
+{
+  "id": "FundaCAD.Printing",
+  "name": "Printer connection",
+  "version": "1.0.0",
+  "kind": "builtin",
+  "summary": "Sends jobs to a printer on your network, reads its status, and opens a model in your slicer.",
+  "enabledByDefault": true,
+  "grants": [
+    "document.read",
+    "files.write",
+    "printer.control",
+    "process.spawn"
+  ]
+}
