@@ -2,7 +2,7 @@
 name = "fundacad"
 version = "0.1.0"
 description = "FundaCAD, a parametric CAD app driving build123d"
-authors = ["MakerViking"]
+authors = ["Paraxdev"]
 edition = "2021"
 rust-version = "1.77"
 license = "AGPL-3.0-only"
