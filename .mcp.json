@@ -2,7 +2,7 @@
   "mcpServers": {
     "fundacad": {
       "command": "uv",
-      "args": ["run", "--project", "sidecar", "python", "plugins/mcp/server.py"],
+      "args": ["run", "--project", "sidecar", "python", "plugins/FundaCAD.MCP/server.py"],
       "env": {}
     }
   }

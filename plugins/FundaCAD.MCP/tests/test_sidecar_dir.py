@@ -7,11 +7,11 @@ the path over in the environment when it writes the launch command.
 
 Both readings have a way to be silently wrong, and each test here is one of
 them. An override that is ignored sends an installed plugin looking under
-`<app data>/plugins/mcp/sidecar`, which does not exist, and the failure surfaces as
+`<app data>/plugins/FundaCAD.MCP/sidecar`, which does not exist, and the failure surfaces as
 a FileNotFoundError from Popen naming a path nobody set. An override that is
 trusted without checking does the same thing while looking like it worked.
 
-Run: uv run python plugins/mcp/tests/test_sidecar_dir.py
+Run: uv run python plugins/FundaCAD.MCP/tests/test_sidecar_dir.py
 """
 
 import _bootstrap  # noqa: F401
@@ -52,10 +52,10 @@ def default_dir():
 
     Counted from here on purpose: sidecar_link searches upward for a directory
     containing sidecar/server.py, so an expectation that searched the same way
-    would agree with a broken search. This file is at plugins/mcp/tests/, three
+    would agree with a broken search. This file is at plugins/FundaCAD.MCP/tests/, three
     levels under the root, and if that ever stops being true this line is the
     one that says so."""
-    here = os.path.dirname(os.path.abspath(__file__))          # .../plugins/mcp/tests
+    here = os.path.dirname(os.path.abspath(__file__))          # .../plugins/FundaCAD.MCP/tests
     root = os.path.dirname(os.path.dirname(os.path.dirname(here)))
     return os.path.join(root, "sidecar")
 
