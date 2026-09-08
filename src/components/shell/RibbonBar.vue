@@ -5,8 +5,8 @@
 
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, useTemplateRef, watch } from "vue";
 import { useRibbonStore } from "../../stores/ribbon";
-import { modelGroups, SKETCH, PRIORITY, PINNED, leavesOf } from "../../ui/ribbonDefs";
-import { onPluginChange } from "../../plugins/registry";
+import { modelGroups, SKETCH, PINNED, priorityOf, leavesOf } from "../../ui/ribbonDefs";
+import { onContribChange } from "../../plugins/contrib";
 import type { Group, Item, RibbonContext, ToolItem } from "../../ui/ribbonDefs";
 import Icon from "./Icon.vue";
 import RibbonPopup from "./RibbonPopup.vue";
@@ -39,7 +39,7 @@ const FINISH_GROUP: Group = {
 // mirror ref is how its changes become reactive here.
 const pluginTick = ref(0);
 let offPlugins: (() => void) | null = null;
-onMounted(() => { offPlugins = onPluginChange(() => pluginTick.value++); });
+onMounted(() => { offPlugins = onContribChange(() => pluginTick.value++); });
 onUnmounted(() => offPlugins?.());
 
 const groups = computed<Group[]>(() => {
@@ -47,7 +47,10 @@ const groups = computed<Group[]>(() => {
   return ribbon.context === "sketch" ? [...SKETCH, PALETTE_GROUP, FINISH_GROUP] : modelGroups();
 });
 
-const priorityOf = (label: string) => (PINNED.has(label) ? Infinity : (PRIORITY[label] ?? 50));
+// PINNED first: a pinned group never collapses, whoever owns it. Everything
+// else asks ribbonDefs, which knows the app's own order AND what a plugin
+// asked for when it contributed a group of its own.
+const collapsePriority = (label: string) => (PINNED.has(label) ? Infinity : priorityOf(label));
 
 // --- split buttons: last-used-wins primary -------------------------------
 // Keyed by the split's label, so a primary chosen in one context survives a
@@ -132,7 +135,7 @@ async function reflow() {
   const order = list
     .map((g, i) => ({ g, i }))
     .filter((x) => !PINNED.has(x.g.label))
-    .sort((a, b) => priorityOf(a.g.label) - priorityOf(b.g.label) || b.i - a.i);
+    .sort((a, b) => collapsePriority(a.g.label) - collapsePriority(b.g.label) || b.i - a.i);
 
   const next = new Set<string>();
   for (const { g, i } of order) {

@@ -2,10 +2,8 @@
 // toast stack. Kept separate from the geometry status line (stores/ui.ts) so
 // printer progress never clobbers build/connection state. Pass null to hide.
 //
-// Facade over stores/printStatus.ts, rendered by
-// components/overlays/PrintStatusPill.vue. Both exported signatures are
-// unchanged.
-import { usePrintStatusStore } from "../stores/printStatus";
+// Facade over ./printStatus.ts, rendered by ./PrintStatusPill.vue.
+import { usePrintStatusStore } from "./printStatus";
 
 export function setPrinterStatusText(text: string | null) {
   usePrintStatusStore().text = text;

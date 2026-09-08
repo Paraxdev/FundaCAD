@@ -217,12 +217,12 @@ mod tests {
     #[test]
     fn a_name_is_a_name_and_not_a_path() {
         for (path, want) in [
-            ("/home/someone/private/work/part.step", "part.step"),
+            ("/home/alice/private/work/part.step", "part.step"),
             ("C:\\Users\\alice\\Documents\\part.step", "part.step"),
         ] {
             let got = name_of(Path::new(path));
             assert_eq!(got, want);
-            assert!(!got.contains("someone") && !got.contains("alice"));
+            assert!(!got.contains("alice") && !got.contains("private"));
         }
         // The control: it is not simply returning a constant.
         assert_eq!(name_of(Path::new("/a/other.stl")), "other.stl");

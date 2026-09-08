@@ -5,8 +5,8 @@
 // autoMatch (material first, then nearest color).
 
 import { onMounted, onUnmounted, ref } from "vue";
-import type { FilamentReq } from "../../stores/dialogs";
-import { autoMatch, toolheadLabel } from "../../print/printDialog";
+import type { FilamentReq } from "./state";
+import { autoMatch, toolheadLabel } from "./printDialog";
 
 const props = defineProps<{ req: FilamentReq }>();
 

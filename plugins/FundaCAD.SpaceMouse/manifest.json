@@ -5,5 +5,12 @@
   "kind": "builtin",
   "summary": "Navigates the view, and moves what you have selected, with a 3D mouse.",
   "enabledByDefault": true,
-  "grants": ["device.input", "document.read", "document.write"]
+  "grants": [
+    "device.input",
+    "document.read",
+    "document.write"
+  ],
+  "formerIds": [
+    "spacemouse"
+  ]
 }

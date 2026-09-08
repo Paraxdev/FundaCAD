@@ -1,4 +1,5 @@
-import { saveDocument, saveDocumentAs, exportModel, exportPrintProject, importModel } from "../io/files";
+import { saveDocument, saveDocumentAs, exportModel, importModel } from "../io/files";
+import { contributedAction } from "../plugins/contrib";
 import { openParamsDialog } from "../ui/paramsDialog";
 import { toggleShortcutHUD } from "../input/shortcuts";
 import { choose } from "../ui/choice";
@@ -46,7 +47,11 @@ export function createActions(e: Engine): (action: string) => void {
   }
 
   return function handleAction(action: string) {
-    if (!NON_REPEATABLE.has(action)) e.lastAction = action; // for "Repeat <command>"
+    // for "Repeat <command>". A contributed action is never repeatable, and the
+    // default is that way round because the core cannot tell whether re-running
+    // somebody else's action is safe: a "Repeat" that quietly uploads a second
+    // job to a printer is worse than a "Repeat" that is missing one entry.
+    if (!NON_REPEATABLE.has(action) && !contributedAction(action)) e.lastAction = action;
     // sketch CREATE tools: switch tool while sketching, else start a sketch with it
     if (SKETCH_TOOLS.has(action)) {
       if (e.sketch.active) e.sketch.setTool(action as SketchTool);
@@ -122,18 +127,6 @@ export function createActions(e: Engine): (action: string) => void {
         break;
       case "export":
         void exportModel(e.store, e.geometry);
-        break;
-      case "print-export":
-        void exportPrintProject(e.store, e.geometry);
-        break;
-      // Imported when used. The printer client and the slicer bridge are a
-      // chunk of their own, and this file is reached on every keystroke through
-      // the command palette.
-      case "print-orca":
-        void import("../print/printFlow").then((m) => m.openInOrca(e.store, e.geometry));
-        break;
-      case "print-send":
-        void import("../print/printFlow").then((m) => m.sendToPrinter(e.store, e.geometry));
         break;
       case "welcome":
         e.ui.welcome.open();
@@ -328,6 +321,21 @@ export function createActions(e: Engine): (action: string) => void {
       case "compute-all":
         e.setStatus("Compute All, rebuilding everything from scratch…", "");
         void e.store.computeAllNow();
+        break;
+      // Anything this file does not know is offered to the running plugins.
+      //
+      // LAST, and never first. A plugin cannot take an action the app already
+      // has: the switch above is reached before this line, so a contribution
+      // that names "export" or "save" is inert rather than a way to replace what
+      // Ctrl+S does. That is not a check anywhere, it is the order of the code,
+      // which is the version of the rule that cannot be forgotten.
+      //
+      // One dispatcher rather than a second one beside it, because everything
+      // downstream — the ribbon, the keymap, the command palette, every context
+      // menu — sends an action id here and must not have to learn which ids are
+      // somebody else's.
+      default:
+        contributedAction(action)?.();
         break;
     }
   };

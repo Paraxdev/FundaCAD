@@ -23,7 +23,8 @@ import { mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import BrowserPane from "../../../src/components/shell/BrowserPane.vue";
 import { ENGINE } from "../../../src/app/engineKey";
-import { setPluginEnabled } from "../../../src/plugins/registry";
+import { contribute, resetContributions } from "../../../src/plugins/contrib";
+import { setBrowserFilter } from "../../../src/ui/browserFilter";
 import type { Engine } from "../../../src/app/engine";
 import type { CadDocument, Feature } from "../../../src/types";
 
@@ -79,36 +80,27 @@ function render(fake: ReturnType<typeof makeEngine>): VueWrapper {
   });
 }
 
-// The filament palette is the printer's toolhead slots, so the panel only draws
-// it once a printer has answered. The probe is behind a dynamic import and a
-// desktop-shell check, both of which have to be satisfied for the section to
-// exist at all — hence the stub rather than a flag on the component.
-vi.mock("../../../src/print/printerClient", () => ({
-  activePrinterId: () => "p1",
-  printerProbe: () => Promise.resolve({ online: true }),
-  printerFilaments: () => Promise.resolve([]),
-  asPrinterError: (e: unknown) => e,
-}));
-
-/** Render with a printer on the other end AND multi-material turned on, then
- *  wait for the probe to land. The probe is a dynamic import followed by an
- *  awaited call, so it settles over several microtasks; nextTick drains one each
- *  time round.
+/** A section a plugin might contribute, as the panel sees it: a component with
+ *  one recognisable row in it.
  *
- *  The flag is part of the setup because the palette needs both: it is a set of
- *  toolheads, so it wants a machine, and it is the multi-material feature, which
- *  ships off. "Off" is a case of its own below, not a state these reach into. */
-async function renderWithPrinter(fake: ReturnType<typeof makeEngine>): Promise<VueWrapper> {
-  (window as unknown as Record<string, unknown>)["__TAURI_INTERNALS__"] = {};
-  setPluginEnabled("FundaCAD.MultiColor", true);
-  const w = render(fake);
-  for (let i = 0; i < 20 && !w.find(".pal-dot").exists(); i++) await nextTick();
-  return w;
-}
+ *  A stand-in rather than the real palette panel, deliberately. What is being
+ *  checked here is that the PANEL places a contributed section, hides it with
+ *  the filter it named, and forgets it when the contribution goes — none of
+ *  which is about what any particular section draws. The palette's own
+ *  behaviour is tested against the palette, in tests/plugins/. */
+const MarkerSection = {
+  name: "MarkerSection",
+  template: `<div class="tree-folder"><span class="marker">Contributed</span></div>`,
+};
 
 afterEach(() => {
   delete (window as unknown as Record<string, unknown>)["__TAURI_INTERNALS__"];
-  setPluginEnabled("FundaCAD.MultiColor", false);
+  resetContributions();
+  // The chosen filter is module state in ui/browserFilter.ts, not per-component
+  // and not per-test, so a case that narrows the tree leaves it narrowed for
+  // every case after it. That was survivable while the cases that changed it
+  // happened to end on a wide filter; it is not something to keep relying on.
+  setBrowserFilter("all");
   vi.useRealTimers();
 });
 
@@ -247,11 +239,10 @@ describe("BrowserPane", () => {
       { parameters: {}, features: [sketch("s1"), { id: "dp", type: "datumPlane", plane: "XY", offset: 5 } as Feature] },
       [{ id: "b1", name: "Body1" }],
     );
-    const w = await renderWithPrinter(fake);
-    // The palette head is a .tree-folder with no .tree-label, so it falls
-    // through to el.text() and reads as its label plus its count.
+    const w = render(fake);
+    await nextTick();
     const heads = () => panel(w).filter((r) => r.kind === "folder").map((r) => r.text);
-    expect(heads()).toEqual(["Origin", "Planes", "Palette1", "Bodies", "Sketches"]);
+    expect(heads()).toEqual(["Origin", "Planes", "Bodies", "Sketches"]);
 
     const select = w.get("#browser-filter");
     await select.setValue("sketches");
@@ -264,64 +255,79 @@ describe("BrowserPane", () => {
     expect(heads()).toEqual(["Origin", "Planes"]);
 
     await select.setValue("all");
-    expect(heads()).toEqual(["Origin", "Planes", "Palette1", "Bodies", "Sketches"]);
+    expect(heads()).toEqual(["Origin", "Planes", "Bodies", "Sketches"]);
   });
 
-  it("keeps the palette with the bodies", async () => {
-    // The palette head carries no .tree-label, so it is found by its own class.
+  it("draws a contributed section between the document's structure and its bodies", async () => {
     const fake = makeEngine({ parameters: {}, features: [sketch("s1")] }, [{ id: "b1", name: "Body1" }]);
-    const w = await renderWithPrinter(fake);
-    expect(w.find(".pal-dot").exists()).toBe(true);
+    contribute("Some.Body", {
+      browserSections: [{ key: "marker", component: MarkerSection }],
+    });
+    const w = render(fake);
+    await nextTick();
+    const heads = panel(w).filter((r) => r.kind === "folder").map((r) => r.text);
+    expect(heads).toEqual(["Origin", "Contributed", "Bodies", "Sketches"]);
+  });
+
+  it("forgets a section when its plugin stops", async () => {
+    // The control for the case above: a section that appears and never leaves
+    // would pass that test and would be a panel that keeps drawing a switched-off
+    // capability's panel until the window is reloaded.
+    const fake = makeEngine({ parameters: {}, features: [] }, [{ id: "b1", name: "Body1" }]);
+    const off = contribute("Some.Body", {
+      browserSections: [{ key: "marker", component: MarkerSection }],
+    });
+    const w = render(fake);
+    await nextTick();
+    expect(w.find(".marker").exists()).toBe(true);
+    off();
+    await nextTick();
+    expect(w.find(".marker").exists()).toBe(false);
+  });
+
+  it("hides a contributed section with the filter section it named", async () => {
+    const fake = makeEngine({ parameters: {}, features: [sketch("s1")] }, [{ id: "b1", name: "Body1" }]);
+    contribute("Some.Body", {
+      browserSections: [{ key: "marker", component: MarkerSection, filter: "palette" }],
+    });
+    const w = render(fake);
+    await nextTick();
+    expect(w.find(".marker").exists()).toBe(true);
 
     await w.get("#browser-filter").setValue("sketches");
-    expect(w.find(".pal-dot").exists()).toBe(false);
+    expect(w.find(".marker").exists()).toBe(false);
 
+    // ...and back, with the bodies it rides alongside.
     await w.get("#browser-filter").setValue("bodies");
-    expect(w.find(".pal-dot").exists()).toBe(true);
+    expect(w.find(".marker").exists()).toBe(true);
   });
 
-  it("shows no palette until a printer answers", async () => {
-    // Every slot in it means "the filament loaded in toolhead N", and the sync
-    // button and the staleness dot only mean anything against a machine that
-    // replies. With nothing on the other end it was four fixed rows of nothing
-    // pinned above the bodies. Bodies exist here and the filter is "all", so
-    // the ONLY thing keeping it off screen is the missing printer.
+  it("shows a contributed section that names no filter under every filter", async () => {
+    // A section may name one of the panel's own filter sections to be hidden
+    // with, and a plugin's section usually corresponds to none of them. The
+    // panel cannot guess, and the wrong guess is a section that vanishes under a
+    // filter nobody told it about.
     const fake = makeEngine({ parameters: {}, features: [sketch("s1")] }, [{ id: "b1", name: "Body1" }]);
+    contribute("Some.Body", {
+      browserSections: [{ key: "marker", component: MarkerSection }],
+    });
     const w = render(fake);
-    for (let i = 0; i < 20; i++) await nextTick();
-    expect(w.find(".pal-dot").exists()).toBe(false);
-    expect(panel(w).map((r) => r.text)).not.toContain("Palette1");
-    // ...and the bodies it colours are still there, so this is the palette
-    // being absent rather than the section it rides with failing to render.
-    expect(panel(w).some((r) => r.text === "Body1")).toBe(true);
+    await nextTick();
+    await w.get("#browser-filter").setValue("sketches");
+    expect(w.find(".marker").exists()).toBe(true);
   });
 
-  it("shows no palette while multi-material is off, printer or no printer", async () => {
-    // The default. A palette is four toolhead slots, and on a single-material
-    // machine there is nothing for them to name — so the whole section is
-    // absent rather than present and inert. The printer IS answering here and
-    // the filter is "all", so the flag is the only thing holding it back.
-    const fake = makeEngine({ parameters: {}, features: [sketch("s1")] }, [{ id: "b1", name: "Body1" }]);
-    (window as unknown as Record<string, unknown>)["__TAURI_INTERNALS__"] = {};
-    const w = render(fake);
-    for (let i = 0; i < 20; i++) await nextTick();
-    expect(w.find(".pal-dot").exists()).toBe(false);
-    expect(panel(w).map((r) => r.text)).not.toContain("Palette1");
-    // The bodies it would have coloured are untouched, so this is the palette
-    // being absent and not the section it rides with failing to render.
-    expect(panel(w).some((r) => r.text === "Body1")).toBe(true);
-  });
-
-  it("gives a body no colour swatch and no Color menu while it is off", async () => {
+  it("gives a body no colour swatch while nothing says it has a colour", async () => {
     // The assignment stays in the document — this is about what is offered, not
-    // about what is stored.
+    // about what is stored. A chip nobody can explain or change is worse than no
+    // chip: the menu that would change it comes from the same capability.
     const fake = makeEngine({ parameters: {}, features: [] }, [{ id: "b1", name: "Body1" }]);
     fake.store.setBodyColorSlot("b1", 0);
     const w = render(fake);
     await nextTick();
     expect(w.find(".tree-swatch").exists()).toBe(false);
 
-    setPluginEnabled("FundaCAD.MultiColor", true);
+    contribute("Some.Body", { palette: () => [{ name: "Slot 1", color: "#ff0000" }] });
     await nextTick();
     expect(w.find(".tree-swatch").exists()).toBe(true);
   });

@@ -26,41 +26,36 @@ import TextToolPanel from "./components/overlays/TextToolPanel.vue";
 import ProjectFilterBar from "./components/overlays/ProjectFilterBar.vue";
 import TextureToolPanel from "./components/overlays/TextureToolPanel.vue";
 import MeasureReadout from "./components/overlays/MeasureReadout.vue";
-import { defineAsyncComponent, onMounted, onUnmounted, ref } from "vue";
+import { onMounted, onUnmounted, shallowRef } from "vue";
 import { useDialogStore } from "./stores/dialogs";
 import { useToolPanelStore } from "./stores/toolPanels";
-import { multiMaterialEnabled, onPluginChange, printingEnabled, spaceMouseEnabled } from "./plugins/registry";
+import { contributedOverlays, onContribChange } from "./plugins/contrib";
 
 const dialogs = useDialogStore();
 const toolPanels = useToolPanelStore();
 
-// The overlays a capability owns, fetched when that capability first needs to
-// draw something. Async rather than imported at the top for the same reason
-// plugins/activate.ts loads its modules dynamically: a machine with no printer
-// should not download, parse and instantiate a camera view and a filament
-// mapping dialog to render a window that will never show either.
+// The overlays the running plugins add, mounted at the end of the stack.
 //
-// Every one of these is already behind a v-if, so "when it first needs to draw"
-// is a moment that may never come.
-const PrintStatusPill = defineAsyncComponent(() => import("./components/overlays/PrintStatusPill.vue"));
-const CameraPanel = defineAsyncComponent(() => import("./components/overlays/CameraPanel.vue"));
-const SpaceMouseModal = defineAsyncComponent(() => import("./components/overlays/SpaceMouseModal.vue"));
-const FilamentMappingDialog = defineAsyncComponent(() => import("./components/overlays/FilamentMappingDialog.vue"));
-
+// This file used to name four of them — a print-status pill, a printer camera,
+// a 3D-mouse settings window and a filament mapping dialog — and carry three
+// mirrored capability flags to decide which to draw. That was the app knowing
+// what its capabilities ARE, spelled out in the one file that should be able to
+// say least about them, and it was four more edits for anybody adding a fifth.
+//
+// Now it draws what it was given and asks nothing about any of it. A component
+// arrives already knowing when it should be visible, because the plugin that
+// contributed it is the only thing that could know; a plugin that is off
+// contributed nothing and there is nothing to hide. `shallowRef`, because these
+// are component definitions and must not become reactive proxies.
+//
 // The registry is deliberately Vue-free, which is what lets the headless suite
-// import it, so its changes reach the template through mirrors.
-const printing = ref(printingEnabled());
-const spaceMouse = ref(spaceMouseEnabled());
-const multiMaterial = ref(multiMaterialEnabled());
-let offPlugins: (() => void) | null = null;
+// import it, so its changes reach the template through this mirror.
+const overlays = shallowRef(contributedOverlays());
+let offContrib: (() => void) | null = null;
 onMounted(() => {
-  offPlugins = onPluginChange(() => {
-    printing.value = printingEnabled();
-    spaceMouse.value = spaceMouseEnabled();
-    multiMaterial.value = multiMaterialEnabled();
-  });
+  offContrib = onContribChange(() => { overlays.value = contributedOverlays(); });
 });
-onUnmounted(() => offPlugins?.());
+onUnmounted(() => offContrib?.());
 </script>
 
 <template>
@@ -92,7 +87,6 @@ onUnmounted(() => offPlugins?.());
        from #app's grid. -->
   <ToastStack />
   <ModalHost />
-  <PrintStatusPill v-if="printing" />
   <ShortcutHud />
   <ContextMenuHost />
   <ConsolePanel />
@@ -105,7 +99,6 @@ onUnmounted(() => offPlugins?.());
   <PropertiesPanel />
   <InterferencePanel />
   <OverhangPanel />
-  <CameraPanel v-if="printing" />
   <ParamsDialog />
   <MeasureReadout />
 
@@ -127,9 +120,12 @@ onUnmounted(() => offPlugins?.());
        leak a count (composables/useModalGate.ts). They are independent because
        they genuinely stack — the welcome screen opens sign-in over itself. -->
   <WelcomeModal v-if="dialogs.welcome && dialogs.welcomeCallbacks" />
-  <SpaceMouseModal v-if="spaceMouse && dialogs.spaceMouse" />
   <PreferencesDialog v-if="dialogs.preferences" />
-  <FilamentMappingDialog v-if="printing && multiMaterial && dialogs.filament" :req="dialogs.filament" />
   <BugReportButton />
   <BugReportDialog v-if="dialogs.bugReport && dialogs.bugDeps" />
+
+  <!-- Whatever the running plugins add. Last, so a capability's window opens
+       over the app's own rather than under it, and keyed by contributor so
+       switching one off unmounts exactly its components. -->
+  <component :is="o.component" v-for="o in overlays" :key="o.key" />
 </template>

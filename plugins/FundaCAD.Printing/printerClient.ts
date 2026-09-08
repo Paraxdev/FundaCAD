@@ -4,7 +4,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { readSetting } from "../ui/storedSetting";
+import { readSetting } from "../../src/ui/storedSetting";
 
 export type PrinterKind = "MoonrakerU1" | "Moonraker";
 

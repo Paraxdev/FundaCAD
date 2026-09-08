@@ -108,10 +108,17 @@ already off and stays off.
 
 **Their ids were renamed** when the directories appeared: `printing`,
 `spacemouse` and `multi-material` are what they were called, and those names
-are in people's stored settings right now. `RENAMED` in `src/plugins/registry.ts`
-reads them forward. Dropping them would have put every capability back to its
-default, which for multi-material means switching itself back on for everyone
-who had turned it off, which is the exact thing a toggle exists to prevent.
+are in people's stored settings right now. Each plugin lists its own old names
+in its manifest, under `formerIds`, and the registry reads them forward.
+Dropping them would have put every capability back to its default, which for
+multi-material means switching itself back on for everyone who had turned it
+off, which is the exact thing a toggle exists to prevent.
+
+That list is IN THE MANIFEST and not in a table in the app, which is the same
+decision this whole document keeps making. A rename table in the app is the app
+remembering the history of plugins it does not otherwise know exist, and it is
+one more file to edit to add a fourth capability. A plugin knows its own past;
+nothing else has to.
 
 Some of the grant choices are worth stating, because the tempting answer is the
 wrong one in each case. Each one lives in that plugin's own `README.md` now,
@@ -138,24 +145,89 @@ Not a hidden menu. Each capability's code is behind a dynamic `import()`, so the
 bundler gives it a chunk of its own and a capability that is off is never
 fetched, never parsed and never run. Turning one off while the app is running
 takes effect immediately: `activate()` returns a teardown, and the frame loop,
-the event listeners and the Rust-side device handle all go with it.
+the event listeners, the menu rows, the overlays, the paint on the model and the
+Rust-side device handle all go with it.
 
 `tests/plugins/coreIndependence.test.ts` is what keeps this true. It reads every
-file under `src/` and fails if anything outside a capability's own files
-statically imports one of them, because a single convenient `import` would put
-the code back in the bundle everyone downloads while the switch went on saying
-it was off.
+file under `src/` and under `plugins/`, and fails if anything outside a
+capability's own directory statically imports something inside it, because a
+single convenient `import` would put the code back in the bundle everyone
+downloads while the switch went on saying it was off.
 
-Multi-material is the exception and is not in the loader: it has no listeners,
-no device and no process, only gates read where the work happens (the document
-store, the browser tree, the exporters), so there is nothing to hand a teardown
-for. Its code is not separately chunked, and this document should not imply it
-is.
+That test used to carry exceptions. The printer connection "owned" `src/print/`
+and three components in `src/components/overlays/`; the 3D mouse owned
+`src/input/spacemouse.ts` and a fourth component. It passed, and what it proved
+was narrower than it sounded: nothing imported those files, but they were in the
+app's own tree, typechecked with it, and one line from being coupled again. Each
+capability is now a directory and each predicate is a path prefix, so there is
+nowhere for an exception to hide.
 
 Whatever a capability owns in the document survives being turned off. Slot
 assignments are saved, loaded and exported exactly as before, so turning
 multi-material back on finds the work still there. A toggle that ate data would
 not be a toggle.
+
+## What the app lets a plugin add
+
+A capability that only had a switch would be a capability that could not do
+anything. Three of them needed to put things on screen, and for a long time the
+app did it for them: `App.vue` mounted a camera panel and a filament dialog by
+name, `app/menubarDef.ts` wrote out the 3D mouse's menu behind a capability
+check and cached the input module so it could tick the right mode,
+`ui/ribbonDefs.ts` held a PRINT group plus a list of which of its buttons to
+remove again, `app/actions.ts` had three print cases, `stores/dialogs.ts` and
+`stores/panels.ts` each carried a field for somebody else's window, and the
+browser panel carried a filament palette with a LAN probe and a thirty-second
+staleness poll in it. Every one of those was the app knowing what a capability
+IS, and every one was an edit a fourth capability would have needed.
+
+`src/plugins/contrib.ts` is what replaced them. A plugin calls `contribute` once,
+with everything it adds, and gets back the removal:
+
+| point | what it fills |
+| --- | --- |
+| `menus` | rows in a menu that exists, or a whole menu that does not |
+| `ribbon` | a group of buttons, with a collapse priority |
+| `actions` | action ids, reached from the ribbon, the palette, the keymap and every context menu |
+| `overlays` | components mounted for the life of the capability |
+| `browserSections` | a panel in the browser, drawn as its own component |
+| `bodyMenu` | rows on a body's right-click menu |
+| `paint` | colours for bodies and faces, asked for fresh at every rebuild |
+| `palette` | the colours a tool may offer |
+| `importedBody` | an imported mesh carried a colour of its own |
+| `provides` | a value offered to OTHER plugins, by name |
+
+Four things this deliberately is not. There is no generic "run this on event X".
+There is no way to replace a core behaviour: `app/actions.ts` reaches its own
+`switch` before it asks the table, so a contribution naming `save` is inert, and
+that is the order of the code rather than a check that could be forgotten. There
+is no way to read another plugin's contributions except `service()`, which hands
+back an opaque value the app never looks inside — the same arrangement as grant
+strings, which Rust compares without knowing what one means. And the table names
+no plugin, anywhere.
+
+**The signal is the contribution, not the switch.** These are different moments:
+a capability is switched on, and some milliseconds later its module is fetched
+and its `activate()` runs. A surface that redraws on the switch redraws while the
+rows it wants are still loading and is then left showing the previous state
+permanently, because nothing else is coming. `TitleBar.vue` and `RibbonBar.vue`
+watch `onContribChange` for exactly this reason. It is written down because it
+was got wrong, and because no unit test caught it — a rendered app did.
+
+### Two plugins that need each other
+
+The filament palette is the case that made this concrete. A palette is a list of
+colours in a document, which belongs to the colour capability; "what is actually
+loaded in toolhead 3 right now" can only be answered by something that can reach
+the machine. Neither can draw that panel alone, and neither should import the
+other.
+
+So the panel belongs to the capability that owns the data, and the printer
+contributes the answer under a name the two of them agree on (`filaments`),
+through the app, which stores it and hands it back without looking inside. With
+the printer switched off the panel is not hidden by a check: it has no way to
+learn what is loaded, so it draws nothing — which is what it should do on a
+machine with no printer anyway.
 
 ## Where a plugin's source lives
 
@@ -167,10 +239,20 @@ packaged into something that cannot be installed.
 ```
 plugins/
   FundaCAD.MCP/            manifest.json, README.md, server.py and the rest
-  FundaCAD.MultiColor/     manifest.json, README.md
-  FundaCAD.Printing/       manifest.json, README.md, main.ts
-  FundaCAD.SpaceMouse/     manifest.json, README.md, main.ts
+  FundaCAD.MultiColor/     manifest.json, README.md, main.ts, palette.ts,
+                           PaletteSection.vue
+  FundaCAD.Printing/       manifest.json, README.md, main.ts, printerClient.ts,
+                           printFlow.ts, printDialog.ts, printStatusLine.ts,
+                           printStatus.ts, exportProject.ts, state.ts,
+                           PrintStatusPill.vue, CameraPanel.vue,
+                           FilamentMappingDialog.vue, FilamentMappingHost.vue
+  FundaCAD.SpaceMouse/     manifest.json, README.md, main.ts, spacemouse.ts,
+                           state.ts, SettingsHost.vue, SpaceMouseModal.vue
 ```
+
+A capability's Vue components live there too, and that is the point rather than
+an oddity: a settings window that only one capability opens is that
+capability's, wherever the rest of the app happens to keep its components.
 
 `plugins/` is a plugin's OWN source. `src/plugins/` is the app's side of the
 arrangement: the vocabulary, the broker, the runner, the registry and the
@@ -678,7 +760,8 @@ and the `process` sentence on the install screen says so.
 | `src/plugins/broker/testing.ts` | the app a plugin's tests are handed |
 | `src/plugins/runner/*.ts` | the sandbox: protocol, host, guest, spawn |
 | `src/plugins/shipped.ts` | the one glob of `plugins/*/manifest.json`, parsed |
-| `src/plugins/registry.ts` | which built-in capabilities are on, and the rename migration |
+| `src/plugins/contrib.ts` | what a plugin may add to the app, and the only way in; names no plugin |
+| `src/plugins/registry.ts` | which built-in capabilities are on; names no plugin either |
 | `src/plugins/activate.ts` | starting and stopping them, by dynamic import; names none of them |
 | `src/plugins/index.ts` | the plugins this build offers, and the bridge to Rust |
 | `src/components/overlays/PluginsSection.vue` | Preferences ▸ Plugins |
@@ -688,7 +771,8 @@ and the `process` sentence on the install screen says so.
 | `src-tauri/src/plugins/handed.rs` | which files a plugin holds, split out so it can be tested |
 | `plugins/<id>/manifest.json` | what it is and what it asks for; the only copy |
 | `plugins/<id>/README.md` | why it asks for that |
-| `plugins/<id>/main.ts` | a shipped capability's activation module, if it has one |
+| `plugins/<id>/main.ts` | a shipped capability's activation module: everything it contributes |
+| `plugins/<id>/*.vue` | a capability's own components, mounted through `overlays` or `browserSections` |
 | `plugins/<id>/server.py` | a process plugin's entry point |
 | `scripts/build-plugins.py` | packaging, run by the release job |
 
@@ -711,7 +795,14 @@ sh scripts/check-plugin-guards.sh
 npx vitest run tests/plugins tests/security/csp.test.ts
 node scripts/check-sandbox-chunk.mjs     # needs a build; runs one if there is none
 node e2e/sandbox_csp.cjs                 # needs a Chromium; SC_CHROME names it
+node e2e/plugin_surfaces.cjs             # needs `npx vite` on 5173 as well
 ```
+
+`e2e/plugin_surfaces.cjs` is the one that starts the real app, lets the real
+loader find the real plugin directories, and then switches each capability off
+and on while reading the menubar and the ribbon back out of the DOM. It exists
+because the async-arrival bug above was invisible to every unit test in this
+repository and obvious within one run of it.
 
 ## What comes next
 

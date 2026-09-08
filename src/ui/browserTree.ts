@@ -6,39 +6,25 @@
 // shared body-colour menu. Both are unit-tested directly — see browserTree.test.ts,
 // which is a node-environment *.test.ts with no DOM at all.
 
-import type { DocumentStore } from "../document/store";
 import type { CtxItem } from "./menu";
-import { multiMaterialEnabled } from "../plugins/registry";
+import { contributedBodyMenu } from "../plugins/contrib";
 
-/** The "Color" entry for a body's menu, or NOTHING when multi-material is off.
+/** The rows a plugin adds to a body's right-click menu.
  *
  *  A list to be spread rather than an item to be placed, because the two states
- *  are "an entry with a submenu" and "no entry at all". Returning an item whose
- *  submenu happened to be empty would leave both call sites showing a Color menu
- *  that opens onto nothing, which is the one outcome neither wants — and it
- *  would leave the decision duplicated at both of them.
+ *  are "some entries" and "no entry at all". Shared by the browser-tree row menu
+ *  and the viewport's body menu so the two surfaces cannot drift.
  *
- *  Shared by the browser-tree row menu and the viewport's right-click body menu
- *  so the two surfaces can't drift. */
-export function bodyColorMenu(store: DocumentStore, bodyId: string): CtxItem[] {
-  if (!multiMaterialEnabled()) return [];
-  return [{ label: "Color", children: bodyColorMenuItems(store, bodyId) }];
-}
-
-/** Palette → menu items for assigning a body's color slot. Exported for the
- *  test that pins the swatches and the disabled current slot; call sites want
- *  `bodyColorMenu` above, which knows when there should be no menu. */
-export function bodyColorMenuItems(store: DocumentStore, bodyId: string): CtxItem[] {
-  const slot = store.bodyColorSlot(bodyId);
-  return [
-    ...store.colorPalette.map((s, i) => ({
-      label: s.name,
-      swatch: s.color,
-      disabled: slot === i,
-      onClick: () => store.setBodyColorSlot(bodyId, i),
-    })),
-    { label: "None", disabled: slot == null, onClick: () => store.setBodyColorSlot(bodyId, null) },
-  ];
+ *  A "Color" submenu built from the document's palette used to be written out
+ *  here, behind a check on the capability that owns palettes. Both are gone: the
+ *  submenu is contributed by that capability, and this file no longer knows that
+ *  a body can have a colour.
+ *
+ *  Kept as a named function rather than calling the registry at both sites,
+ *  because those two are also where a THIRD surface would come looking, and one
+ *  name is easier to find than two call sites. */
+export function bodyExtraMenu(bodyId: string): CtxItem[] {
+  return contributedBodyMenu(bodyId);
 }
 
 /** Indentation for a row/head nested `depth` levels inside its folder. Capped:

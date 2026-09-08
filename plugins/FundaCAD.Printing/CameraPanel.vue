@@ -8,13 +8,12 @@
 // dismissal path had to stop the poll; onUnmounted cannot be missed.
 
 import { ref, watch } from "vue";
-import { usePanelsStore } from "../../stores/panels";
+import { cameraPanel } from "./state";
 import {
   printerCameraStart, printerCameraStop, onPrinterCameraFrame, onPrinterCameraOffline,
-} from "../../print/printerClient";
-import FloatingPanel from "./FloatingPanel.vue";
+} from "./printerClient";
+import FloatingPanel from "../../src/components/overlays/FloatingPanel.vue";
 
-const panels = usePanelsStore();
 const frame = ref<string | null>(null);
 const offline = ref(false);
 
@@ -55,7 +54,7 @@ function detach(id: string) {
 // One watcher covers open, close AND switching printers while open — the old
 // code could only handle the first two because open() built the DOM.
 watch(
-  () => panels.camera,
+  () => cameraPanel.value,
   (id, prevId) => {
     if (prevId) detach(prevId);
     if (id) void attach(id);
@@ -65,8 +64,8 @@ watch(
 </script>
 
 <template>
-  <FloatingPanel :open="!!panels.camera" close-on-esc @close="panels.camera = null">
-    <div class="measure-title">Camera, {{ panels.camera }}</div>
+  <FloatingPanel :open="!!cameraPanel" close-on-esc @close="cameraPanel = null">
+    <div class="measure-title">Camera, {{ cameraPanel }}</div>
     <img
       class="camera-frame"
       alt="printer camera"
@@ -75,7 +74,7 @@ watch(
     />
     <div v-if="offline" class="camera-offline" style="padding: 8px; color: #e24a3b">
       camera unavailable
-      <button class="camera-retry" @click="panels.camera && start(panels.camera)">Retry</button>
+      <button class="camera-retry" @click="cameraPanel && start(cameraPanel)">Retry</button>
     </div>
     <div class="measure-hint">~1 frame/s · Esc to close</div>
   </FloatingPanel>

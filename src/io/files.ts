@@ -9,8 +9,8 @@ import type { GeometryBackend } from "../geometry/client";
 import type { CadDocument, ExportFormat, Feature, ImportFormat } from "../types";
 import { clearRecovery } from "./recovery";
 import { noteRecent } from "./recentFiles";
-import { DOC_EXT, LEGACY_DOC_EXTS, isDocumentExt, stripDocumentExt } from "./documentExt";
-import { multiMaterialEnabled } from "../plugins/registry";
+import { DOC_EXT, LEGACY_DOC_EXTS, isDocumentExt } from "./documentExt";
+import { announceImportedBody } from "../plugins/contrib";
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -332,124 +332,11 @@ export function extToFormat(path: string): ExportFormat {
   return "step";
 }
 
-// The slicer preset the exported project should land on — minimal keys Orca needs
-// to select the user's Snapmaker U1 machine on "open as project". Stage D.v2 (CLI)
-// overrides these with a fully-flattened config via `opts.settings`.
-const U1_PROJECT_SETTINGS: Record<string, unknown> = {
-  printer_model: "Snapmaker U1",
-  printer_variant: "0.4",
-  version: "2.4.0.0",
-};
-
-/** Export a colored multi-material 3MF PROJECT (Orca format): one object per body,
- *  palette slot → toolhead, so the multi-color palette actually prints. With
- *  `opts.path` it writes there silently (Stage D staging → open in Orca); without,
- *  it prompts with a save dialog. Returns the written path, or null (cancelled /
- *  error). Palette/bodyColors/bodyNames are threaded explicitly — they live in
- *  store side-maps, never inside `document`. */
-export async function exportPrintProject(
-  store: DocumentStore,
-  geometry: GeometryBackend,
-  opts: { path?: string; settings?: Record<string, unknown> } = {},
-): Promise<string | null> {
-  if (!isTauri()) {
-    console.warn("print export needs the native app (a real filesystem path)");
-    return null;
-  }
-  if (!geometry.exportProject) {
-    await reportError("Colored 3MF export needs the Python sidecar backend (run without VITE_GEOM=rust).");
-    return null;
-  }
-  const bodies = store.buildState.result?.bodies ?? [];
-  if (!bodies.length) {
-    await reportError("Nothing to export yet, build a body first.");
-    return null;
-  }
-
-  let path = opts.path;
-  if (!path) {
-    const { save } = await import("@tauri-apps/plugin-dialog");
-    const base = stripDocumentExt(store.fileName) || "part";
-    const picked = await save({
-      filters: [{ name: "3MF project", extensions: ["3mf"] }],
-      defaultPath: `${base}.3mf`,
-    });
-    if (!picked) return null;
-    path = picked;
-  }
-
-  // Same busy/cancel treatment as exportModel and importPath — this path
-  // tessellates every body at export grade before writing the project, so it is
-  // every bit as long-running as a plain export on a large document.
-  const res = await store.runBusy(
-    `Exporting ${path.split(/[\\/]/).pop() ?? "project"}`,
-    (onStarted) => geometry.exportProject!(store.document, path, {
-      palette: store.colorPalette,
-      bodyColors: store.bodyColorsMap(),
-      bodyNames: store.bodyNamesMap(),
-      settings: { ...U1_PROJECT_SETTINGS, ...(opts.settings ?? {}) },
-    }, onStarted),
-  );
-  if (!res.ok) {
-    if (res.cancelled) return null;  // the user stopped it — not an error
-    await reportError(`Print export failed: ${res.message ?? "unknown error"}`);
-    return null;
-  }
-  void warnUnloadedFilaments(store, bodies.map((b) => b.id));
-  // Only surface a modal when there are warnings (features that didn't build) —
-  // the silent-staging path (Stage D) shouldn't pop a dialog on the happy path.
-  if (res.warnings?.length) {
-    const lines = res.warnings.map(
-      (w) => `Warning: ${w.feature_id ?? "feature"} failed, its result is NOT in the export: ${w.message}`,
-    );
-    const { listModal } = await import("../ui/choice");
-    await listModal("Exported project, with warnings", [res.path ?? path, ...lines]);
-  }
-  return res.path ?? path;
-}
-
-/** Best-effort post-export check: warn when the design uses palette slots whose
- *  toolhead has no filament loaded, or leaves bodies unassigned (they export as
- *  extruder 1). Fire-and-forget and bounded to 1.5s client-side (the shared
- *  Rust HTTP client has a 10s timeout — a warning arriving that late is worse
- *  than none): unreachable/slow/unconfigured printer → silently no warning.
- *  Never blocks or fails the export itself.
- *
- *  Silent with multi-material off. Every sentence it can produce is about
- *  toolheads and slot assignments — "3 bodies are unassigned (defaulting to
- *  slot 1)" is a warning about a choice the user was never offered. */
-async function warnUnloadedFilaments(store: DocumentStore, bodyIds: string[]) {
-  if (!multiMaterialEnabled()) return;
-  try {
-    const { activePrinterId, printerFilaments } = await import("../print/printerClient");
-    const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), 1500));
-    const filaments = await Promise.race([printerFilaments(activePrinterId()), timeout]);
-    const assigned = store.bodyColorsMap();
-    const usedSlots = new Set<number>();
-    let unassigned = 0;
-    for (const id of bodyIds) {
-      const slot = assigned[id];
-      if (slot == null) {
-        unassigned++;
-        usedSlots.add(0); // project3mf defaults unassigned bodies to slot 0
-      } else {
-        usedSlots.add(slot);
-      }
-    }
-    const empty = [...usedSlots].filter((s) => !filaments[s]?.present).sort();
-    if (!empty.length && !unassigned) return;
-    const parts: string[] = [];
-    if (empty.length) {
-      parts.push(`slot${empty.length > 1 ? "s" : ""} ${empty.map((s) => s + 1).join(", ")} ha${empty.length > 1 ? "ve" : "s"} no filament loaded on the printer`);
-    }
-    if (unassigned) parts.push(`${unassigned} bod${unassigned > 1 ? "ies are" : "y is"} unassigned (defaulting to slot 1)`);
-    const { toast } = await import("../ui/toast");
-    toast(`Exported, but ${parts.join("; ")}.`, { kind: "warning" });
-  } catch {
-    // printer offline/slow/unconfigured — the check is best-effort by design
-  }
-}
-
+// The colored 3MF project export used to live here, with the slicer preset it
+// writes into the file and a post-export check that asked a printer which
+// filaments it had loaded. Both moved out with the capability that owns them:
+// this file writes the formats the app itself understands, and a project format
+// aimed at one machine's toolchanger was never one of those.
 
 /** Import an external mesh / B-rep file (STL / 3MF / STEP / OBJ) as a new body.
  *  The sidecar reads the file by path and returns an embeddable BREP payload, so
@@ -473,38 +360,6 @@ export async function importModel(store: DocumentStore, geometry: GeometryBacken
   });
   if (typeof path !== "string") return;
   await importPath(store, geometry, path);
-}
-
-/** Nearest palette slot to a '#RRGGBB' colour, by squared RGB distance, or null
- *  when the palette is empty or the colour is unparseable.
- *
- *  Deliberately MATCHES rather than extends. The palette is the U1's filament
- *  list — four physical slots — not a display palette, so a slot means "print
- *  this in filament N". Auto-adding an imported model's colour would claim a
- *  filament the printer doesn't have loaded. */
-export function nearestPaletteSlot(
-  hex: string,
-  palette: { name: string; color: string }[],
-): number | null {
-  const rgb = (s: string): [number, number, number] | null => {
-    const t = s.trim().replace(/^#/, "");
-    if (!/^[0-9a-f]{6}$/i.test(t)) return null;
-    return [parseInt(t.slice(0, 2), 16), parseInt(t.slice(2, 4), 16), parseInt(t.slice(4, 6), 16)];
-  };
-  const want = rgb(hex);
-  if (!want || !palette.length) return null;
-  let best: number | null = null;
-  let bestD = Infinity;
-  for (let i = 0; i < palette.length; i++) {
-    const got = rgb(palette[i]?.color ?? "");
-    if (!got) continue;
-    const d = (want[0] - got[0]) ** 2 + (want[1] - got[1]) ** 2 + (want[2] - got[2]) ** 2;
-    if (d < bestD) {
-      bestD = d;
-      best = i;
-    }
-  }
-  return best;
 }
 
 /** The path of the most recently CANCELLED import, so a retry is one click.
@@ -598,27 +453,31 @@ async function importPath(store: DocumentStore, geometry: GeometryBackend, path:
     toast(capability, { kind: "info" });
   }
 
-  // Carry the file's own colour onto the body it produced. The body doesn't
-  // exist until the rebuild runs, and its id is positional, so wait for the
-  // build and find the bodies this feature owns via faceOwners. setBodyColorSlot
-  // is a display-only overlay write, so this adds no second undo step.
+  // The file carried a colour of its own. Say so, and let whoever has a use for
+  // it decide.
   //
-  // Skipped when multi-material is off. This one WRITES, unlike the rest of the
-  // gated surfaces, and a slot assigned behind a hidden palette would be an
-  // edit the user cannot see, cannot undo from any visible control, and would
-  // meet later as a colour they never chose.
-  if (res.color === undefined || !multiMaterialEnabled()) return;
-  const slot = nearestPaletteSlot(res.color, store.colorPalette);
-  if (slot === null) return;
-  await store.rebuildNow();
-  for (const b of store.buildState.result?.bodies ?? []) {
-    if (b.faceOwners?.some((owner) => owner === id)) store.setBodyColorSlot(b.id, slot);
-  }
+  // This used to be the decision itself: match the colour to the nearest slot of
+  // the document's palette and assign the imported bodies to it, unless the
+  // capability that owns palettes was switched off, in which case do nothing.
+  // Three things this file has no business knowing were in those six lines. What
+  // is left is the fact — an import landed, it was this feature, it looked like
+  // this — which is true whether or not anybody is listening.
+  //
+  // Awaited rather than fired off, because a listener has to rebuild before it
+  // can find the bodies the feature produced, and an import that returned while
+  // that was still running would report itself finished too early.
+  if (res.color === undefined) return;
+  await announceImportedBody(id, res.color);
 }
 
 /** Surface an error to the user — a native dialog in the app, console otherwise.
- *  (Import used to fail silently, which read as "nothing happened".) */
-async function reportError(msg: string) {
+ *  (Import used to fail silently, which read as "nothing happened".)
+ *
+ *  Exported for the capabilities that write files of their own. Not because
+ *  this is where such a helper belongs, but because a plugin re-implementing it
+ *  would be a second answer to "what does a failed write look like", and two
+ *  answers is how one of them ends up being a console warning nobody sees. */
+export async function reportError(msg: string) {
   if (isTauri()) {
     const { message } = await import("@tauri-apps/plugin-dialog");
     await message(msg, { title: "FundaCAD", kind: "error" });

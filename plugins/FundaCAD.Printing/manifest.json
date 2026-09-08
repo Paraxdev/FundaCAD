@@ -10,5 +10,8 @@
     "files.write",
     "printer.control",
     "process.spawn"
+  ],
+  "formerIds": [
+    "printing"
   ]
 }

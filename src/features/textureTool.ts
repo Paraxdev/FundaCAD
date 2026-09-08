@@ -14,7 +14,7 @@ import type { DocumentStore } from "../document/store";
 import type { Feature, Num, Selector } from "../types";
 import { TexturePanel, ANGLE_KINDS, SEED_KINDS, type TextureMode, type TextureValues } from "./texturePanel";
 import { setPrompt } from "../ui/prompt";
-import { multiMaterialEnabled } from "../plugins/registry";
+import { contributedPalette } from "../plugins/contrib";
 
 // Warm texture ticks are ~10-70ms sidecar-side (geometry-skeleton cache), so a
 // short debounce keeps scrubbing responsive while still coalescing keystrokes.
@@ -211,12 +211,12 @@ export class TextureTool {
         mode: this.mode,
         summary: this.currentSummary(),
         initial: this.values,
-        // Empty when multi-material is off, which is already how the panel says
-        // "there is no inlay colour to choose" — a document with no bodies has
-        // passed it an empty palette since the row existed. Gating it HERE
-        // rather than in the panel keeps the decision at the one place that
-        // knows what a palette is for.
-        palette: multiMaterialEnabled() ? this.store.colorPalette : [],
+        // Whatever colours a plugin says this document has, which is usually
+        // none. Empty is already how the panel says "there is no inlay colour to
+        // choose" — it has been passed an empty palette on a document with no
+        // bodies since the row existed — so a build with nothing contributing
+        // one needs no second answer.
+        palette: contributedPalette(),
       },
       {
         onCommit: (v) => { this.values = v; this.commit(); },

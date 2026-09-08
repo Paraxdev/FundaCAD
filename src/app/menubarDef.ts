@@ -1,56 +1,58 @@
-import { saveDocument, saveDocumentAs, exportModel, exportPrintProject, importModel } from "../io/files";
-import { printingEnabled, spaceMouseEnabled } from "../plugins/registry";
+import { saveDocument, saveDocumentAs, exportModel, importModel } from "../io/files";
+import { contributedMenus } from "../plugins/contrib";
 import { toggleShortcutHUD } from "../input/shortcuts";
 import { checkForUpdates, showAbout } from "../ui/updates";
 import { useDialogStore } from "../stores/dialogs";
 import { openExternal } from "../ui/welcome";
-import type { MenuDef, MenuItem } from "../ui/menu";
+import type { MenuDef } from "../ui/menu";
 import type { Engine } from "./engine";
 
 /** Where a bug report goes. The reporter puts the report on the clipboard and
  *  says to paste it into a new issue, so the app has to be able to say where. */
 const ISSUES_URL = "https://github.com/Paraxdev/fundacad/issues";
 
-/** Rows a capability owns, present only while that capability is running.
+/** Fold what the running plugins add into the app's own tree.
  *
- *  Left OUT rather than greyed out. A greyed row is a promise that the thing
- *  exists and could be reached from here, which is the wrong thing to say about
- *  something that is not running at all.
+ *  Two shapes, both wanted, and both arrived at from real cases rather than
+ *  imagined ones. A contribution naming a menu that EXISTS appends its rows to
+ *  it, which is how a capability adds two lines to File. A contribution naming
+ *  one that does not CREATES it, placed before whatever `before` names, which is
+ *  how a capability owns the whole of View — and why View disappears when that
+ *  capability is off, without anything here knowing that View is its.
  *
- *  A spread of nothing rather than a flag on each row, because a menu whose
- *  every row belongs to one capability has to be able to disappear as well, and
- *  the empty array falls out of the same shape. buildMenubar drops any menu
- *  left with no items. */
-const when = <T>(on: boolean, items: T[]): T[] => (on ? items : []);
+ *  Rows are appended in the order the plugins started, and a contribution
+ *  brings its own leading separator if it wants one. Neither is a policy this
+ *  file is in a position to have: it cannot tell a row that belongs at the top
+ *  of File from one that belongs at the bottom.
+ *
+ *  A copy, never a mutation: `menus` is rebuilt on every open, but the ITEM
+ *  arrays inside a contribution are the plugin's own and pushing into them would
+ *  grow them once per menu render. */
+function withContributions(menus: MenuDef[]): MenuDef[] {
+  const out = menus.map((m) => ({ ...m, items: [...m.items] }));
+  for (const c of contributedMenus()) {
+    const existing = out.find((m) => m.label === c.menu);
+    if (existing) {
+      existing.items.push(...c.items);
+      continue;
+    }
+    const at = c.before ? out.findIndex((m) => m.label === c.before) : -1;
+    const fresh: MenuDef = { label: c.menu, items: [...c.items] };
+    if (at >= 0) out.splice(at, 0, fresh);
+    else out.push(fresh);
+  }
+  return out;
+}
 
-// The 3D mouse's module, once something has needed it.
-//
-// `checked` below is synchronous — Menubar calls it while opening the menu —
-// so the mode cannot be read through a dynamic import at that moment. It is
-// cached here instead, and primed when the menu is built. That import is not a
-// download: the capability itself loaded the same chunk when it started, so
-// this resolves from the module cache. Before it lands, neither mode is ticked,
-// which is the honest answer to "which is selected" from something that has not
-// read the setting yet.
-type SpaceMouseModule = typeof import("../input/spacemouse");
-let spaceMouse: SpaceMouseModule | null = null;
-const loadSpaceMouse = (): Promise<SpaceMouseModule> =>
-  import("../input/spacemouse").then((m) => (spaceMouse = m));
-const spaceMouseMode = (): "object" | "camera" | null =>
-  spaceMouse ? spaceMouse.getSpaceMouseMode() : null;
-const setSpaceMouseMode = (mode: "object" | "camera") => {
-  if (spaceMouse) spaceMouse.setSpaceMouseMode(mode);
-  else void loadSpaceMouse().then((m) => m.setSpaceMouseMode(mode));
-};
-
-/** The File / Edit / View / Help tree.
+/** The File / Edit / Help tree, plus whatever the running plugins add.
  *
  *  `disabled` and `checked` are THUNKS, not values: Menubar re-evaluates them
  *  every time a menu opens, so "Undo" greys out correctly without anything
- *  having to push state at it. */
+ *  having to push state at it. A contributed row's thunks are the plugin's own
+ *  and are called the same way, which is what lets a capability tick its own
+ *  mode without this file holding a handle on the module that knows it. */
 export function buildMenubar(e: Engine): MenuDef[] {
-  if (spaceMouseEnabled() && !spaceMouse) void loadSpaceMouse();
-  return ([
+  return withContributions([
     {
       label: "File",
       items: [
@@ -63,30 +65,6 @@ export function buildMenubar(e: Engine): MenuDef[] {
         { label: "Save As…", shortcut: "Ctrl+Shift+S", onClick: () => void saveDocumentAs(e.store) },
         { separator: true, label: "" },
         { label: "Export…", shortcut: "Ctrl+E", onClick: () => void exportModel(e.store, e.geometry) },
-        { label: "Export for Print (3MF)…", onClick: () => void exportPrintProject(e.store, e.geometry) },
-        { separator: true, label: "" },
-        // Imported when used, not when the menu is built: the slicer bridge,
-        // the printer client and the status pill are a chunk of their own, and
-        // a machine with no printer should never pay to parse it.
-        ...when<MenuItem>(printingEnabled(), [
-          {
-            label: "Open in OrcaSlicer…",
-            onClick: () =>
-              void import("../print/printFlow").then((m) => m.openInOrca(e.store, e.geometry)),
-          },
-          {
-            label: "Send to Printer…",
-            onClick: () =>
-              void import("../print/printFlow").then((m) => m.sendToPrinter(e.store, e.geometry)),
-          },
-          {
-            label: "Camera…",
-            onClick: () =>
-              void import("../print/printerClient").then((m) =>
-                e.ui.panels.showCameraPanel(m.activePrinterId()),
-              ),
-          },
-        ]),
       ],
     },
     {
@@ -121,19 +99,6 @@ export function buildMenubar(e: Engine): MenuDef[] {
         { label: "Preferences…", shortcut: "Ctrl+,", onClick: () => { useDialogStore().preferences = true; } },
       ],
     },
-    // Every row of View belongs to the 3D mouse today, so with that capability
-    // off the menu is not empty, it is absent.
-    ...when<MenuDef>(spaceMouseEnabled(), [
-      {
-        label: "View",
-        items: [
-          { label: "SpaceMouse: Move Object", checked: () => spaceMouseMode() === "object", onClick: () => setSpaceMouseMode("object") },
-          { label: "SpaceMouse: Move Camera", checked: () => spaceMouseMode() === "camera", onClick: () => setSpaceMouseMode("camera") },
-          { separator: true, label: "" },
-          { label: "3D Mouse Settings…", onClick: () => { useDialogStore().spaceMouse = true; } },
-        ],
-      },
-    ]),
     {
       label: "Help",
       items: [

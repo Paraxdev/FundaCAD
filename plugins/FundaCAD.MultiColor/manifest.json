@@ -5,5 +5,12 @@
   "kind": "builtin",
   "summary": "Filament slots, per body and per texture colour, and the toolhead mapping a multi-colour print needs.",
   "enabledByDefault": false,
-  "grants": ["document.read", "document.write"]
+  "grants": [
+    "document.read",
+    "document.write"
+  ],
+  "formerIds": [
+    "multi-material",
+    "multiColor"
+  ]
 }

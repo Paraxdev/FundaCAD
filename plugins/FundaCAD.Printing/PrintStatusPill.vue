@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { usePrintStatusStore } from "../../stores/printStatus";
+import { usePrintStatusStore } from "./printStatus";
 
 const print = usePrintStatusStore();
 </script>
