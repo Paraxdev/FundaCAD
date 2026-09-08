@@ -83,10 +83,10 @@ describe("the capabilities that are in the app", () => {
     const w = mount(PluginsSection);
     await builtinRows(w)[1]!.get(".plug-link").trigger("click");
     const note = builtinRows(w)[1]!.get(consent).text();
-    expect(note).toContain("part of FundaCAD itself");
+    expect(note).toContain("Part of FundaCAD itself");
     // The sentence a downloaded process plugin gets. Reusing it here would be
     // claiming a boundary that does not exist.
-    expect(note).not.toContain("Install it only if you trust where it came from");
+    expect(note.toLowerCase()).not.toContain("install it only if you trust");
   });
 });
 

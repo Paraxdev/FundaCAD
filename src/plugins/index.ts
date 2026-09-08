@@ -117,7 +117,56 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
  *  rather than an error to render. */
 export async function installedPlugins(): Promise<InstalledPlugin[]> {
   if (!isTauri()) return [];
-  return await call<InstalledPlugin[]>("plugin_list");
+  const list = await call<InstalledPlugin[]>("plugin_list");
+  noteInstalled(list.map((r) => r.id));
+  return list;
+}
+
+// ---------------------------------------------------------------------------
+// which bundles are on disk, synchronously
+// ---------------------------------------------------------------------------
+//
+// `plugin_list` is a command and so a promise, and it is the honest source. But
+// a plugin's app-side companion has to be started and stopped as installs come
+// and go, and the thing that does that (./activate.ts) runs from a synchronous
+// state sync. So the answer is cached here, refreshed on the paths that change
+// it, and published with a listener set — the same shape ./registry.ts uses for
+// the built-in switches, and for the same reason.
+//
+// Empty until the first refresh, which is the right way round: a companion that
+// started before its plugin was known to be installed would be a companion for a
+// plugin that might not be.
+
+let installedIdSet: ReadonlySet<string> = new Set();
+const installedListeners = new Set<() => void>();
+
+/** The ids on disk as of the last refresh. */
+export function installedIds(): ReadonlySet<string> {
+  return installedIdSet;
+}
+
+export function onInstalledChange(fn: () => void): () => void {
+  installedListeners.add(fn);
+  return () => installedListeners.delete(fn);
+}
+
+function noteInstalled(ids: string[]) {
+  const next = new Set(ids);
+  if (next.size === installedIdSet.size && [...next].every((id) => installedIdSet.has(id))) return;
+  installedIdSet = next;
+  for (const fn of installedListeners) fn();
+}
+
+/** Re-read what is on disk. Called at startup and after anything that installs
+ *  or removes, so nothing has to remember to keep the cache in step. */
+export async function refreshInstalled(): Promise<void> {
+  try {
+    await installedPlugins();
+  } catch {
+    // Not fatal and not worth a toast: a companion that cannot start is a
+    // feature missing from a screen, and the screen itself reports the failure
+    // when the list is drawn.
+  }
 }
 
 /** Download and install, having already shown what it asks for.

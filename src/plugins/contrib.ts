@@ -106,6 +106,19 @@ export interface BrowserSection {
   filter?: string;
 }
 
+/** A block of settings a plugin adds to Preferences.
+ *
+ *  A component, for the same reason a browser section is one: what a plugin
+ *  needs to ask is its own business, and no row vocabulary the app could invent
+ *  would fit the next one. The app supplies the heading and the place. */
+export interface SettingsSection {
+  /** Stable within the contributing plugin; used as the render key. */
+  key: string;
+  /** The heading, in the dialog's own style. */
+  title: string;
+  component: Component;
+}
+
 export interface Contribution {
   menus?: MenuContribution[];
   ribbon?: RibbonContribution[];
@@ -121,6 +134,13 @@ export interface Contribution {
   /** Extra rows on a body's right-click menu, in the browser and the viewport. */
   bodyMenu?: (bodyId: string) => CtxItem[];
   browserSections?: BrowserSection[];
+  /** Blocks in Preferences.
+   *
+   *  A settings block that outlives the thing it configures is worse than a
+   *  missing one: it offers a choice that decides nothing, about a feature that
+   *  is not there. Contributing it is what makes it appear and disappear with
+   *  its plugin, with no check anywhere naming that plugin. */
+  settings?: SettingsSection[];
   paint?: () => Paint;
   palette?: () => PaletteEntry[];
   /** A mesh import landed, and the file carried a colour of its own ("#rrggbb").
@@ -204,6 +224,16 @@ export function contributedOverlays(): { key: string; component: Component }[] {
     (e.c.overlays ?? []).forEach((component, i) => {
       out.push({ key: `${e.plugin}:${i}`, component });
     });
+  }
+  return out;
+}
+
+export function contributedSettings(): { key: string; section: SettingsSection }[] {
+  const out: { key: string; section: SettingsSection }[] = [];
+  for (const e of entries) {
+    for (const section of e.c.settings ?? []) {
+      out.push({ key: `${e.plugin}:${section.key}`, section });
+    }
   }
   return out;
 }
