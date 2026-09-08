@@ -9,11 +9,9 @@ Built on the Open CASCADE geometry kernel through
 timeline of features, so you can go back to any one of them, change it, and the
 model rebuilds from there.
 
-The thing being aimed at is the shortest path from the shape in your head to real
-geometry: guiding and fluent, and hard to get stuck in.
 
-It began as a fork of [SindriCAD](https://github.com/MakerViking/sindricad) and
-has diverged a fair way since, under the same AGPL-3.0 licence.
+started as a fork of [SindriCAD](https://github.com/MakerViking/sindricad) and
+has diverged a quite a lot since, under the same AGPL-3.0 licence.
 
 
 ## Disclosure  
