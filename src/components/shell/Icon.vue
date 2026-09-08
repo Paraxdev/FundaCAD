@@ -50,7 +50,7 @@ const paths = computed(() => {
     :height="size"
     fill="none"
     stroke="currentColor"
-    stroke-width="1.6"
+    stroke-width="1.4"
     stroke-linecap="round"
     stroke-linejoin="round"
     v-html="paths"

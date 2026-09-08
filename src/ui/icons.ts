@@ -2,6 +2,14 @@
 // INNER SVG markup; Icon.vue and iconElement() wrap it in the <svg> carrying the
 // shared viewBox / stroke / linecap so no icon can drift off the house weight.
 //
+// HOUSE STYLE, hold to it when adding entries: a 24x24 viewBox with a roughly
+// 20x20 live area, stroke-width 1.4 set once on the wrapper, round caps and
+// joins, fill="none". A per-path `stroke-width` is for the few marks that are
+// meant to read heavier than a line of geometry: a tick, a close cross, the bar
+// of a warning sign. Corners are rounded rather than merely de-aliased, so a
+// boxy mark sits in a row beside a curved one without reading as the harder of
+// the two.
+//
 // Everything here is a compile-time string constant. That is the security
 // invariant, not a style note: this markup reaches the DOM through v-html, and it
 // is only safe because no document data, file name or network payload can ever be
@@ -27,7 +35,7 @@ export interface IconPack {
 const FORGE_PATHS: Record<string, string> = {
   // sketch create
   line: `<line x1="4" y1="20" x2="20" y2="4"/><circle cx="4" cy="20" r="1.6" fill="currentColor"/><circle cx="20" cy="4" r="1.6" fill="currentColor"/>`,
-  rectangle: `<rect x="4" y="6" width="16" height="12" rx="0.5"/>`,
+  rectangle: `<rect x="4" y="6" width="16" height="12" rx="2"/>`,
   circle: `<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="1" fill="currentColor"/>`,
   arc: `<path d="M4 19 A 14 14 0 0 1 20 11"/><circle cx="4" cy="19" r="1.5" fill="currentColor"/><circle cx="20" cy="11" r="1.5" fill="currentColor"/>`,
   spline: `<path d="M3 17 C 7 5, 11 5, 13 12 S 19 19, 21 7" fill="none"/><circle cx="3" cy="17" r="1.5" fill="currentColor"/><circle cx="13" cy="12" r="1.5" fill="currentColor"/><circle cx="21" cy="7" r="1.5" fill="currentColor"/>`,
@@ -35,17 +43,17 @@ const FORGE_PATHS: Record<string, string> = {
   point: `<circle cx="12" cy="12" r="2.2" fill="currentColor"/>`,
   text: `<path d="M4 6 H20 M12 6 V19" fill="none"/>`,
   slot: `<path d="M8 8 A 4 4 0 0 0 8 16 L16 16 A 4 4 0 0 0 16 8 Z"/>`,
-  patternRect: `<rect x="3" y="3" width="6" height="6" rx="1"/><rect x="15" y="3" width="6" height="6" rx="1"/><rect x="3" y="15" width="6" height="6" rx="1"/><rect x="15" y="15" width="6" height="6" rx="1"/>`,
+  patternRect: `<rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="15" y="3" width="6" height="6" rx="1.5"/><rect x="3" y="15" width="6" height="6" rx="1.5"/><rect x="15" y="15" width="6" height="6" rx="1.5"/>`,
   // Four cells strung along one direction, with the arrow that says WHICH —
   // the grid icon next door is the same squares with no direction in them, and
   // the difference between the two features is exactly that arrow.
-  patternLinear: `<rect x="2.5" y="9" width="5" height="6" rx="1"/><rect x="9.5" y="9" width="5" height="6" rx="1"/><rect x="16.5" y="9" width="5" height="6" rx="1"/><path d="M3 5.5h16M16.5 3l2.5 2.5l-2.5 2.5"/>`,
+  patternLinear: `<rect x="2.5" y="9" width="5" height="6" rx="1.5"/><rect x="9.5" y="9" width="5" height="6" rx="1.5"/><rect x="16.5" y="9" width="5" height="6" rx="1.5"/><path d="M3 5.5h16M16.5 3l2.5 2.5l-2.5 2.5"/>`,
   patternCircular: `<circle cx="12" cy="4" r="2.4"/><circle cx="19" cy="9" r="2.4"/><circle cx="16.5" cy="18" r="2.4"/><circle cx="7.5" cy="18" r="2.4"/><circle cx="5" cy="9" r="2.4"/>`,
   boltCircle: `<circle cx="12" cy="12" r="9" fill="none"/><circle cx="12" cy="3.5" r="1.8" fill="currentColor"/><circle cx="19.4" cy="8.3" r="1.8" fill="currentColor"/><circle cx="19.4" cy="15.7" r="1.8" fill="currentColor"/><circle cx="12" cy="20.5" r="1.8" fill="currentColor"/><circle cx="4.6" cy="15.7" r="1.8" fill="currentColor"/><circle cx="4.6" cy="8.3" r="1.8" fill="currentColor"/>`,
   hexHoles: `<circle cx="12" cy="6" r="2" fill="currentColor"/><circle cx="6.8" cy="9" r="2" fill="currentColor"/><circle cx="17.2" cy="9" r="2" fill="currentColor"/><circle cx="6.8" cy="15" r="2" fill="currentColor"/><circle cx="17.2" cy="15" r="2" fill="currentColor"/><circle cx="12" cy="18" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/>`,
   honeycomb: `<polygon points="12,2 16,4.5 16,9.5 12,12 8,9.5 8,4.5" fill="none"/><polygon points="12,12 16,14.5 16,19.5 12,22 8,19.5 8,14.5" fill="none"/><polygon points="20,7 24,9.5 24,14.5 20,17 16,14.5 16,9.5" fill="none"/><polygon points="4,7 8,9.5 8,14.5 4,17 0,14.5 0,9.5" fill="none"/>`,
   gridHoles: `<circle cx="6" cy="6" r="2" fill="currentColor"/><circle cx="12" cy="6" r="2" fill="currentColor"/><circle cx="18" cy="6" r="2" fill="currentColor"/><circle cx="6" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="18" cy="12" r="2" fill="currentColor"/><circle cx="6" cy="18" r="2" fill="currentColor"/><circle cx="12" cy="18" r="2" fill="currentColor"/><circle cx="18" cy="18" r="2" fill="currentColor"/>`,
-  centerRectangle: `<rect x="4" y="6" width="16" height="12" rx="0.5"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="12" y1="9" x2="12" y2="15"/>`,
+  centerRectangle: `<rect x="4" y="6" width="16" height="12" rx="2"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="12" y1="9" x2="12" y2="15"/>`,
   // Three-point rectangle: a TILTED rectangle with the two edge corners and the
   // thickness point marked — the tilt is the whole point of the tool, so an
   // upright box here would read as the ordinary Rectangle.
@@ -57,11 +65,11 @@ const FORGE_PATHS: Record<string, string> = {
   project: `<path d="M5 6 Q 12 1 19 6" fill="none"/><line x1="12" y1="7" x2="12" y2="13"/><path d="M9.5 11 L12 14 L14.5 11"/><path d="M3 19l5-4h13l-5 4z"/><path d="M6.5 17.4 Q 12 13.6 17.5 17.4" fill="none" stroke-dasharray="2 1.4"/>`,
 
   // inspect
-  measure: `<rect x="3" y="9" width="18" height="6" rx="0.5"/><line x1="7" y1="9" x2="7" y2="12"/><line x1="11" y1="9" x2="11" y2="12.5"/><line x1="15" y1="9" x2="15" y2="12"/><line x1="19" y1="9" x2="19" y2="12.5"/>`,
-  properties: `<rect x="4" y="3" width="16" height="18" rx="1"/><line x1="7" y1="7" x2="17" y2="7"/><line x1="7" y1="11" x2="17" y2="11"/><line x1="7" y1="15" x2="13" y2="15"/>`,
+  measure: `<rect x="3" y="9" width="18" height="6" rx="2"/><line x1="7" y1="9" x2="7" y2="12"/><line x1="11" y1="9" x2="11" y2="12.5"/><line x1="15" y1="9" x2="15" y2="12"/><line x1="19" y1="9" x2="19" y2="12.5"/>`,
+  properties: `<rect x="4" y="3" width="16" height="18" rx="1.5"/><line x1="7" y1="7" x2="17" y2="7"/><line x1="7" y1="11" x2="17" y2="11"/><line x1="7" y1="15" x2="13" y2="15"/>`,
   parameters: `<line x1="4" y1="7" x2="20" y2="7"/><circle cx="9" cy="7" r="2"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2"/><line x1="4" y1="17" x2="20" y2="17"/><circle cx="7" cy="17" r="2"/>`,
   section: `<path d="M4 8 L12 4 L20 8 L20 16 L12 20 L4 16 Z"/><line x1="4" y1="8" x2="20" y2="16" stroke-dasharray="2 2"/>`,
-  componentColors: `<rect x="3" y="3" width="9" height="9" rx="1"/><rect x="12" y="12" width="9" height="9" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/>`,
+  componentColors: `<rect x="3" y="3" width="9" height="9" rx="1.5"/><rect x="12" y="12" width="9" height="9" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/>`,
   draftAnalysis: `<path d="M5 4 L5 20 L19 20"/><line x1="5" y1="20" x2="17" y2="6"/><polyline points="13,6 17,6 17,10"/>`,
   interference: `<circle cx="9" cy="12" r="6"/><circle cx="15" cy="12" r="6"/>`,
   zebra: `<path d="M3 21 L9 3"/><path d="M9 21 L15 3"/><path d="M15 21 L21 3"/>`,
@@ -102,7 +110,7 @@ const FORGE_PATHS: Record<string, string> = {
   // the hover bar, where the three sit side by side and are told apart ONLY by
   // which part is filled — at a polite 30% the blob, the crescent and the lens
   // were three grey smudges.
-  split: `<rect x="4" y="7" width="16" height="10" rx="0.5"/><line x1="12" y1="3" x2="12" y2="21" stroke-dasharray="2 2"/>`,
+  split: `<rect x="4" y="7" width="16" height="10" rx="2"/><line x1="12" y1="3" x2="12" y2="21" stroke-dasharray="2 2"/>`,
   // Both circles, wound the same way, nonzero: the lens has winding 2 and is
   // still simply inside, so the union shades evenly.
   booleanUnion: `<path d="M3.5 12a6 6 0 1 0 12 0a6 6 0 1 0-12 0M8.5 12a6 6 0 1 0 12 0a6 6 0 1 0-12 0" fill="currentColor" fill-opacity="0.85" stroke="none"/><circle cx="9.5" cy="12" r="6"/><circle cx="14.5" cy="12" r="6"/>`,
@@ -111,20 +119,20 @@ const FORGE_PATHS: Record<string, string> = {
   booleanSubtract: `<path d="M3.5 12a6 6 0 1 0 12 0a6 6 0 1 0-12 0M12 6.546A6 6 0 0 1 12 17.454A6 6 0 0 1 12 6.546Z" fill="currentColor" fill-opacity="0.85" fill-rule="evenodd" stroke="none"/><circle cx="9.5" cy="12" r="6"/><circle cx="14.5" cy="12" r="6"/>`,
   // The lens alone.
   booleanIntersect: `<path d="M12 6.546A6 6 0 0 1 12 17.454A6 6 0 0 1 12 6.546Z" fill="currentColor" fill-opacity="0.85" stroke="none"/><circle cx="9.5" cy="12" r="6"/><circle cx="14.5" cy="12" r="6"/>`,
-  shell: `<rect x="4" y="4" width="16" height="16" rx="1"/><rect x="8" y="8" width="8" height="8" rx="0.5" stroke-dasharray="2 2"/>`,
+  shell: `<rect x="4" y="4" width="16" height="16" rx="1.5"/><rect x="8" y="8" width="8" height="8" rx="2" stroke-dasharray="2 2"/>`,
   draft: `<path d="M7 20l4-16h2l4 16z" fill="none"/><line x1="5" y1="20" x2="19" y2="20"/>`,
-  offsetFace: `<rect x="4" y="8" width="12" height="12" rx="1"/><path d="M8 4h12v12" stroke-dasharray="2 2"/><line x1="16" y1="8" x2="20" y2="4"/>`,
+  offsetFace: `<rect x="4" y="8" width="12" height="12" rx="1.5"/><path d="M8 4h12v12" stroke-dasharray="2 2"/><line x1="16" y1="8" x2="20" y2="4"/>`,
   thread: `<path d="M8 3h8M8 21h8" /><path d="M8 3v18M16 3v18" /><path d="M8 6l8 3M8 11l8 3M8 16l8 3" />`,
   thicken: `<path d="M4 14c4-6 12-6 16 0" fill="none"/><path d="M4 18c4-6 12-6 16 0" fill="none"/><line x1="4" y1="14" x2="4" y2="18"/><line x1="20" y1="14" x2="20" y2="18"/>`,
-  texture: `<rect x="4" y="4" width="16" height="16" rx="1"/><line x1="4" y1="9.3" x2="20" y2="9.3"/><line x1="4" y1="14.7" x2="20" y2="14.7"/><line x1="9.3" y1="4" x2="9.3" y2="20"/><line x1="14.7" y1="4" x2="14.7" y2="20"/>`,
+  texture: `<rect x="4" y="4" width="16" height="16" rx="1.5"/><line x1="4" y1="9.3" x2="20" y2="9.3"/><line x1="4" y1="14.7" x2="20" y2="14.7"/><line x1="9.3" y1="4" x2="9.3" y2="20"/><line x1="14.7" y1="4" x2="14.7" y2="20"/>`,
   pattern: `<rect x="4" y="4" width="5" height="5"/><rect x="15" y="4" width="5" height="5"/><rect x="4" y="15" width="5" height="5"/><rect x="15" y="15" width="5" height="5"/>`,
   simplifyMesh: `<polygon points="12,3 21,8 21,16 12,21 3,16 3,8"/><path d="M3 8l9 5 9-5M12 13v8"/>`,
   cleanUp: `<path d="M15 4l1.2 2.8L19 8l-2.8 1.2L15 12l-1.2-2.8L11 8l2.8-1.2z"/><path d="M4 20l5-5M7 20.5l3.5-3.5M4 16.5L7.5 13"/>`,
   computeAll: `<path d="M12 4a8 8 0 1 1-7.4 5"/><path d="M4 4v5h5"/>`,
-  scale: `<path d="M4 10V4h6"/><path d="M20 14v6h-6"/><rect x="4" y="4" width="10" height="10" rx="0.5"/>`,
+  scale: `<path d="M4 10V4h6"/><path d="M20 14v6h-6"/><rect x="4" y="4" width="10" height="10" rx="2"/>`,
   move: `<path d="M12 3v18M3 12h18"/><path d="M12 3l-3 3m3-3l3 3M12 21l-3-3m3 3l3-3M3 12l3-3m-3 3l3 3M21 12l-3-3m3 3l-3 3"/>`,
   rotate: `<path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4h-4"/>`,
-  copy: `<rect x="9" y="9" width="11" height="11" rx="1"/><path d="M5 15V5a1 1 0 0 1 1-1h9"/>`,
+  copy: `<rect x="9" y="9" width="11" height="11" rx="1.5"/><path d="M5 15V5a1 1 0 0 1 1-1h9"/>`,
   // insert / construct
   import: `<path d="M12 3v11m0 0l-4-4m4 4l4-4"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/>`,
   datumPlane: `<path d="M3 9l9-4 9 4-9 4z"/><line x1="12" y1="13" x2="12" y2="20"/><circle cx="12" cy="20" r="1.4" fill="currentColor"/>`,
@@ -143,9 +151,9 @@ const FORGE_PATHS: Record<string, string> = {
   offsetPlane: `<path d="M3 8l8-4 10 4-8 4z"/><path d="M3 15l8-4 10 4-8 4z" stroke-dasharray="2 2"/>`,
 
   // print pipeline
-  print: `<path d="M6 9V3h12v6"/><rect x="4" y="9" width="16" height="8" rx="1"/><rect x="7" y="14" width="10" height="6"/><circle cx="17" cy="12" r="0.9" fill="currentColor"/>`,
+  print: `<path d="M6 9V3h12v6"/><rect x="4" y="9" width="16" height="8" rx="1.5"/><rect x="7" y="14" width="10" height="6"/><circle cx="17" cy="12" r="0.9" fill="currentColor"/>`,
   slicer: `<rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><path d="M11 14h5m0 0l-2-2m2 2l-2 2"/>`,
-  printerSend: `<path d="M6 8V3h9l3 3v2"/><rect x="4" y="8" width="16" height="7" rx="1"/><path d="M8 15h5v6H8z"/><path d="M15 19h6m0 0l-2-2m2 2l-2 2"/>`,
+  printerSend: `<path d="M6 8V3h9l3 3v2"/><rect x="4" y="8" width="16" height="7" rx="1.5"/><path d="M8 15h5v6H8z"/><path d="M15 19h6m0 0l-2-2m2 2l-2 2"/>`,
 
   // sketch constraints
   horizontal: `<line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="9" x2="3" y2="15"/><line x1="21" y1="9" x2="21" y2="15"/>`,
@@ -236,17 +244,17 @@ export const ANVIL_PACK: IconPack = {
     caretDown: `<path d="M5 9l7 7 7-7z" fill="currentColor" stroke-linejoin="round"/>`,
     caretUp: `<path d="M5 15l7-7 7 7z" fill="currentColor" stroke-linejoin="round"/>`,
     visible: `<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" fill="currentColor" fill-opacity="0.25"/><circle cx="12" cy="12" r="3.2" fill="currentColor"/>`,
-    hidden: `<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" fill="currentColor" fill-opacity="0.15"/><line x1="3.5" y1="3.5" x2="20.5" y2="20.5" stroke-width="2.4"/>`,
-    check: `<path d="M4 12l5 5L20 6" stroke-width="2.6"/>`,
-    close: `<path d="M6 6l12 12M18 6L6 18" stroke-width="2.6"/>`,
+    hidden: `<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" fill="currentColor" fill-opacity="0.15"/><line x1="3.5" y1="3.5" x2="20.5" y2="20.5" stroke-width="2.1"/>`,
+    check: `<path d="M4 12l5 5L20 6" stroke-width="2.27"/>`,
+    close: `<path d="M6 6l12 12M18 6L6 18" stroke-width="2.27"/>`,
     dot: `<circle cx="12" cy="12" r="5.5" fill="currentColor"/>`,
-    warning: `<path d="M12 3.5L21.5 20H2.5z" fill="currentColor" fill-opacity="0.28"/><line x1="12" y1="9.5" x2="12" y2="14" stroke-width="2.2"/><circle cx="12" cy="17" r="1.3" fill="currentColor"/>`,
+    warning: `<path d="M12 3.5L21.5 20H2.5z" fill="currentColor" fill-opacity="0.28"/><line x1="12" y1="9.5" x2="12" y2="14" stroke-width="1.92"/><circle cx="12" cy="17" r="1.3" fill="currentColor"/>`,
     body: `<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z" fill="currentColor" fill-opacity="0.22"/><path d="M4 7.5l8 4.5 8-4.5"/><line x1="12" y1="12" x2="12" y2="21"/>`,
     plane: `<path d="M3 9l9-4 9 4-9 4z" fill="currentColor" fill-opacity="0.85"/>`,
-    skipStart: `<path d="M18 5.5v13L8 12z" fill="currentColor"/><line x1="6" y1="5.5" x2="6" y2="18.5" stroke-width="2.4"/>`,
+    skipStart: `<path d="M18 5.5v13L8 12z" fill="currentColor"/><line x1="6" y1="5.5" x2="6" y2="18.5" stroke-width="2.1"/>`,
     stepBack: `<path d="M15.5 5.5v13L6.5 12z" fill="currentColor"/>`,
     stepForward: `<path d="M8.5 5.5v13l9-6.5z" fill="currentColor"/>`,
-    skipEnd: `<path d="M6 5.5v13L16 12z" fill="currentColor"/><line x1="18" y1="5.5" x2="18" y2="18.5" stroke-width="2.4"/>`,
+    skipEnd: `<path d="M6 5.5v13L16 12z" fill="currentColor"/><line x1="18" y1="5.5" x2="18" y2="18.5" stroke-width="2.1"/>`,
   },
 };
 
@@ -348,7 +356,7 @@ export function iconPaths(name: string): string {
  *  rather than a component slot. Prefer <Icon>; prefer iconElement() in
  *  imperative DOM code. */
 export function icon(name: string): string {
-  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${iconPaths(name)}</svg>`;
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">${iconPaths(name)}</svg>`;
 }
 
 /** An `<svg>` ELEMENT, for the handful of surfaces still built with
@@ -372,7 +380,7 @@ export function iconElement(name: string, size = 16): SVGSVGElement {
   svg.setAttribute("height", String(size));
   svg.setAttribute("fill", "none");
   svg.setAttribute("stroke", "currentColor");
-  svg.setAttribute("stroke-width", "1.6");
+  svg.setAttribute("stroke-width", "1.4");
   svg.setAttribute("stroke-linecap", "round");
   svg.setAttribute("stroke-linejoin", "round");
   svg.innerHTML = iconPaths(name);
