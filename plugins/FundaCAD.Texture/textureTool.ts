@@ -61,12 +61,31 @@ export class TextureTool {
   private raf = 0;
   private boundTick: () => void;
   private previewDebounce = 0;
-  // setModel() clears the ambient selection on every rebuild — including the
-  // tool's OWN preview rebuilds. Membership IS the ambient selection here, so
-  // a landed preview would silently empty it (and Apply would no-op). A
-  // build-completion flag lets the next tick tell "rebuild wiped it" (restore
-  // the members) from "the user clicked empty space" (legit deselect-all).
+  // WHILE A REBUILD IS IN FLIGHT THE AMBIENT SELECTION IS NOT AN ANSWER.
+  //
+  // Membership IS the ambient selection for this tool, and this tool rebuilds
+  // on its own preview — so every keystroke in the Depth box puts the thing the
+  // gesture is standing on through a rebuild. A chunked reply reaches the screen
+  // in installments, and the one that opens it does not carry the body being
+  // edited (it is held back until its own chunk lands), so for a few frames the
+  // viewport truthfully reports nothing selected. Read as a deselect, that ends
+  // the gesture: the members go, the preview is cleared, and Add is refused with
+  // "No faces selected" over a face that is plainly lit up on screen.
+  //
+  // The viewport now carries the selection across a stream (viewport.ts,
+  // streamMemo), so it comes back by the time the build completes. This covers
+  // the frames in between, which is the part no restore can help with: for that
+  // moment the body genuinely is not on screen.
+  private building = false;
+  // A build COMPLETED and the selection is still empty. Distinct from the flag
+  // above: this one says the restore had its chance and did not find the face
+  // (a real drift), so the members are put back explicitly.
   private rebuildLanded = false;
+  // Add was pressed while a rebuild was in flight. The tick can afford to skip
+  // those frames; a commit cannot — the person has finished and is waiting — so
+  // it is held and run when the build lands instead of being refused against a
+  // selection that is only briefly empty.
+  private pendingCommit = false;
 
   // Esc lives on the TOOL, not the panel: the tool is active from the moment the
   // edit path starts rolling the model back (before any panel exists) until
@@ -105,8 +124,13 @@ export class TextureTool {
     this.lastFaceIds = [];
     this.lastBodyIds = [];
     this.rebuildLanded = false;
+    this.building = false;
+    this.pendingCommit = false;
     this.unsubBuild = this.store.onBuild((s) => {
-      if (!s.building && s.result) this.rebuildLanded = true;
+      this.building = s.building;
+      if (s.building || !s.result) return;
+      this.rebuildLanded = true;
+      this.runHeldCommit();
     });
     this.openPanel(false);
     setPrompt(PICK_PROMPT);
@@ -154,6 +178,7 @@ export class TextureTool {
       ...(typeof f.colorSlot === "number" ? { colorSlot: f.colorSlot } : {}),
     };
     this.awaitingRollback = true;
+    this.pendingCommit = false;
     this.lastFaceIds = [];
     this.lastBodyIds = [];
     this.viewport.setSelectionMode(this.mode === "body" ? "bodies" : "faces");
@@ -162,6 +187,7 @@ export class TextureTool {
     this.store.beginEditPreview(featureId);
     this.listenForEscape();
     this.unsubBuild = this.store.onBuild((s) => {
+      this.building = s.building;
       if (s.building || !s.result) return;
       if (this.awaitingRollback) {
         this.awaitingRollback = false;
@@ -172,6 +198,7 @@ export class TextureTool {
         this.raf = requestAnimationFrame(this.boundTick);
       } else {
         this.rebuildLanded = true; // an edit-preview rebuild wipes the selection too
+        this.runHeldCommit();
       }
     });
     return true;
@@ -242,6 +269,13 @@ export class TextureTool {
   private tick() {
     if (!this.active) return;
     if (this.awaitingRollback) {
+      this.raf = requestAnimationFrame(this.boundTick);
+      return;
+    }
+    // Mid-rebuild the ambient selection is in an unknown state, not a new one.
+    // Diffing against it here is what turned the tool's own preview into the
+    // thing that ended the gesture.
+    if (this.building) {
       this.raf = requestAnimationFrame(this.boundTick);
       return;
     }
@@ -397,10 +431,29 @@ export class TextureTool {
     return { ...base, body } as Feature;
   }
 
+  /** Run a commit that was held for a rebuild. One attempt: the build has
+   *  landed and the selection is whatever it is now, so a second refusal is a
+   *  real one and says so. */
+  private runHeldCommit() {
+    if (!this.pendingCommit) return;
+    this.pendingCommit = false;
+    this.commit();
+  }
+
   private commit() {
     if (!this.active) return;
     const feature = this.buildFeature();
     if (!feature) {
+      // MID-REBUILD IS NOT AN ANSWER. The selection this reads is briefly empty
+      // while a chunked reply is landing, so refusing here told somebody that
+      // nothing was selected while the face they picked was lit up in front of
+      // them — and left the panel open with no way to tell what had gone wrong.
+      // Hold it and try once more when the build lands.
+      if (this.building && !this.pendingCommit) {
+        this.pendingCommit = true;
+        setPrompt("Adding the texture, waiting for the model…");
+        return;
+      }
       setPrompt(
         this.mode === "faces"
           ? "No faces selected, click one or more faces · Esc to cancel"
@@ -440,6 +493,7 @@ export class TextureTool {
     this.unsubBuild = null;
     this.editId = null;
     this.awaitingRollback = false;
+    this.pendingCommit = false;
     this.savedFaceSelectors = [];
     this.savedBodyId = null;
     this.lastFaceIds = [];

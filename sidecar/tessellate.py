@@ -125,9 +125,29 @@ def tessellate(shape, tolerance=0.1, angular_tolerance=0.5, textures=None, densi
                     if normals_out is not None:
                         normals_out.append((base, local_norm))
                     continue
-                except Exception:
-                    pass  # never crash a rebuild on a texture bug — fall through
-                    # to the plain untextured path below for this face
+                except Exception as ex:
+                    # Never crash a rebuild on a texture bug: fall through to the
+                    # plain untextured path below for this face.
+                    #
+                    # BUT SAY SO. This used to be a bare `pass`, and a bare pass
+                    # here is indistinguishable from a texture that worked: the
+                    # feature is in the timeline, the timeline is green, the
+                    # build reports no error, and the face is simply flat. There
+                    # is then nothing anywhere — not on screen, not in the
+                    # diagnostics, not in the log — to tell the difference
+                    # between "this pattern does nothing on this face" and "the
+                    # displacement threw". A lossy diagnostic is what every other
+                    # best-effort path in the builder already emits, and it is
+                    # what puts the feature's row in the timeline on notice.
+                    print(f"[texture] face {fid} fell back to flat: "
+                          f"{type(ex).__name__}: {ex}", flush=True)
+                    if diag is not None:
+                        diag.append({
+                            "feature_id": spec.get("feature_id"), "kind": "texture",
+                            "resolved": 0, "confidence": 0.0, "lossy": True,
+                            "reason": "the texture could not be applied to one face; "
+                                      "it is shown untextured",
+                        })
 
         trsf = loc.Transformation()  # face-local -> world placement
         base = len(positions) // 3

@@ -41,6 +41,18 @@ async function until(page, fn, what, ms = 15000) {
  *  time to have been wrong in, and there is nothing to poll for. */
 const settle = (page) => page.waitForTimeout(700);
 
+/** Like `until`, but ANSWERS instead of throwing. For a condition whose failure
+ *  is itself one of the findings: a thrown timeout reports the wait, a returned
+ *  false lets the check that cares report the behaviour. */
+async function soft(page, fn, ms = 8000) {
+  const t0 = Date.now();
+  for (;;) {
+    if (await page.evaluate(fn)) return true;
+    if (Date.now() - t0 > ms) return false;
+    await page.waitForTimeout(100);
+  }
+}
+
 async function setEnabled(page, on) {
   await page.evaluate(async ([pid, value]) => {
     const m = await import("/src/plugins/registry.ts");
@@ -151,6 +163,35 @@ async function view(page) {
     return !!p && /1 face selected/.test(p.textContent || "");
   }, "the tool to notice the selection");
   check("the ambient selection reaches the plugin's own loop", true);
+
+  // THE GESTURE HAS TO SURVIVE ITS OWN PREVIEW, which is the thing this whole
+  // file exists to check and the thing it used to miss. The tool pushes a live
+  // preview 150 ms after the pick, and the reply comes back CHUNKED: every
+  // installment publishes a fresh Highlighter, so the selection was wiped
+  // mid-build and the tool read that as the user deselecting. It then threw the
+  // members away, cleared the preview, and refused Add over a face that was lit
+  // up on screen. Six runs out of six, on a plain box.
+  //
+  // The check above raced past it: it polls every 100 ms and the pick satisfies
+  // it before the preview is even scheduled. So wait for the preview to have
+  // been through the sidecar and landed, and only THEN ask.
+  // A SOFT wait, not `until`: when this regresses, the preview never lands at
+  // all (the tool clears it along with the members), and a thrown timeout would
+  // report itself instead of the two named checks below.
+  const landed = await soft(page,
+    () => (window.__fundacad.store.buildState.result?.mesh?.positions?.length ?? 0) > 400
+      && window.__fundacad.store.buildState.building === false);
+  check("the tool's live preview reaches the model", landed);
+  await settle(page);
+  const survived = await page.evaluate(() => {
+    const p = document.querySelector("[data-panel=texture]");
+    return {
+      faces: window.__fundacad.viewport.getSelectedFaceIds().length,
+      summary: p ? /1 face selected/.test(p.textContent || "") : false,
+    };
+  });
+  check("the pick survives the tool's own preview rebuild", survived.faces === 1);
+  check("and the panel still says so", survived.summary);
 
   // Commit through the panel's own button, and read the document back.
   await page.evaluate(() => {

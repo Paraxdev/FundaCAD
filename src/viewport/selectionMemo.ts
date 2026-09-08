@@ -1,4 +1,4 @@
-// Carrying a selection across a rebuild.
+// Carrying a selection across a rebuild, and across a STREAM.
 //
 // A completed rebuild replaces the Highlighter and every trace of what was
 // selected. Tolerable while selecting only lit an edge up, but direct manipulation
@@ -15,6 +15,18 @@
 //  2. Its body was rebuilt. Ids are not stable (the client renumbers), so geometry
 //     is the only identity left: match by the world-space point convention the
 //     selectors already use. Correct, but each lookup walks the model.
+//
+// A chunked reply is the harder half, and it was missed for a long time. The
+// commit is one moment and the two tiers above are enough for it; a stream is
+// several, and EVERY installment publishes a fresh ModelView with a fresh
+// Highlighter. So the selection was gone long before the commit ran, and the
+// commit's own capture — reading that empty Highlighter — correctly reported
+// "nothing is selected" and restored nothing. It looked like a tool losing its
+// own gesture at random, because whether a reply streams at all depends on how
+// big it is.
+//
+// Two rules come out of that, and both are here rather than in the viewport
+// because both are decisions, not drawing.
 //
 // Generic over entity type so survivor reuse, the fallback, its cap and
 // de-duplication can all be tested with no scene, camera or GPU.
@@ -59,4 +71,39 @@ export function remapSelection<M, E>(
     out.push(e);
   }
   return out;
+}
+
+/** Re-point a captured selection at ONE INSTALLMENT of a streamed rebuild.
+ *
+ *  The same two tiers, plus the one rule a stream adds: A BODY WHOSE CHUNK HAS
+ *  NOT LANDED YET IS NOT A BODY WHOSE ENTITY IS GONE.
+ *
+ *  The survivor path needs no help — a body reused whole is on screen from the
+ *  first installment. The geometric fallback does: it finds the nearest thing
+ *  to a point, and with the right body still in flight the nearest thing is
+ *  some other body's face. Answering with that is worse than not answering,
+ *  because the commit re-runs this a few installments later and would have got
+ *  it right. `landed` is what holds it back until then. */
+export function remapStreamedSelection<M, E>(
+  memos: readonly M[],
+  survivor: (memo: M) => E | null,
+  rematch: (memo: M) => E | null,
+  landed: (memo: M) => boolean,
+  maxRematch: number = MAX_GEOMETRIC_REMATCH,
+): E[] {
+  return remapSelection(memos, survivor, (m) => (landed(m) ? rematch(m) : null), maxRematch);
+}
+
+/** Whether a restore should tell the app the selection moved.
+ *
+ *  A COMMIT announces either way, and deliberately: "the selection is gone" is
+ *  exactly the news a drag handle needs in order to take itself down, so the
+ *  test is on what was captured, not on what came back.
+ *
+ *  AN INSTALLMENT MUST NOT. Mid-stream "nothing came back" is the ordinary
+ *  state of a reply that has not delivered the right body yet, and announcing
+ *  it takes the handle down — and ends the gesture — a few milliseconds before
+ *  the body lands. Only a real restore is news. */
+export function shouldAnnounce(captured: number, restored: number, duringStream: boolean): boolean {
+  return duringStream ? restored > 0 : captured > 0;
 }

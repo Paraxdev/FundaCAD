@@ -85,7 +85,7 @@ import { ProgressiveModel } from "./progressive";
 import { nearestEdgeByMid, midMatchTol, edgeSelectorFrom, polylineMid } from "./edgeMatch";
 import { mergeScope, pickScope, type ScopeDecision, type ScopeView } from "./pickScope";
 import { edgesOnFace, faceEdgeTol, faceSurface, type Tri } from "./faceEdges";
-import { remapSelection } from "./selectionMemo";
+import { remapSelection, remapStreamedSelection, shouldAnnounce } from "./selectionMemo";
 import { cylinderFromFace, radialAt, solidInsideCylinder } from "../features/planeMath";
 import type { RoundFace } from "../features/radialDrag";
 import type { Plane3, PlaneDef, RebuildResult, Selector, Vec3 } from "../types";
@@ -153,6 +153,20 @@ export class Viewport {
    *  member (faceBands). Rebuilt with the model, since face ids belong to one
    *  tessellation and mean nothing across two. */
   private faceBands: BandIndex = new Map();
+  /** The selection, carried across a STREAM.
+   *
+   *  setModel captures its own at the commit and that was believed to be the
+   *  whole story, because a rebuild used to reach the screen in one piece. A
+   *  chunked reply reaches it in several, and every installment publishes a
+   *  fresh ModelView with a fresh Highlighter (adoptProgressiveView) — so the
+   *  selection was gone before the commit ever ran, and setModel's own capture,
+   *  reading that empty Highlighter, correctly reported "nothing is selected"
+   *  and restored nothing.
+   *
+   *  Held from the first installment to the commit, because the body a selected
+   *  face belongs to usually has not arrived yet at `begin`. */
+  private streamMemo: SelectionMemo | null = null;
+
   /** The RebuildResult behind the current scene, held by IDENTITY so setModel
    *  can recognise a re-emit of the same reply (an eye toggle) and skip
    *  everything but the visibility flags. Never read for its contents. */
@@ -1891,6 +1905,19 @@ export class Viewport {
     hiddenBodies: string[],
     fit: boolean,
   ) {
+    // BEFORE anything is torn down: progressive.begin() disposes bodies that
+    // this reply does not name, and the memo's anchors are read out of their
+    // geometry. The manifest already says which bodies are changing — an
+    // unchanged one is reused whole, keeps its faceId numbering, and needs no
+    // anchor computed for it, exactly as in setModel.
+    const held = new Map((this.model?.bodies ?? []).map((b) => [b.id, b] as const));
+    const changing = new Set<string>();
+    for (const m of manifest) {
+      const p = held.get(m.id);
+      if (!(p && m.etag !== undefined && p.etag === m.etag)) changing.add(m.id);
+    }
+    this.streamMemo = this.captureSelection(changing);
+
     const box = new THREE.Box3(
       new THREE.Vector3(...(bbox?.min ?? [0, 0, 0])),
       new THREE.Vector3(...(bbox?.max ?? [0, 0, 0])),
@@ -1951,6 +1978,7 @@ export class Viewport {
     if (!this.streaming) return;
     this.progressive.abort();
     this.streaming = false;
+    this.streamMemo = null;
     this.model = null;
     this.highlighter = null;
     this.lastResult = null;
@@ -1966,6 +1994,11 @@ export class Viewport {
     this.model = view;
     this.highlighter = new Highlighter(view);
     this.picker.invalidate();
+    // Put the selection back on the installment that just landed. Re-tried on
+    // every one of them rather than once, because the body a selected face
+    // belongs to is usually still in flight at `begin`: it is held off-view as
+    // `stale` until its own chunk arrives.
+    if (this.streamMemo) this.restoreSelection(this.streamMemo, true);
   }
 
   setModel(result: RebuildResult, fit = false, hiddenBodies: string[] = []) {
@@ -2038,7 +2071,13 @@ export class Viewport {
     // selected face needs an expensive world-space anchor computed for it at
     // all — a face on a body that is being reused keeps its faceId, so there is
     // nothing to re-find and no centroid worth walking its triangles for.
-    const memo = this.captureSelection(rebuilding);
+    // The stream's memo is the fallback, not a duplicate: when the installments
+    // already put the selection back, the capture above finds it and wins. It
+    // only matters when they could not — every body of a one-body document is
+    // "changing", so a document that streams and commits in the same breath can
+    // reach here with an empty Highlighter and the memo is the only record left.
+    const memo = this.captureSelection(rebuilding) ?? this.streamMemo;
+    this.streamMemo = null;
 
     const bodies: BodyMesh[] = [];
     for (const meta of bodyMeta) {
@@ -2147,8 +2186,16 @@ export class Viewport {
 
   /** Put the captured selection back on the new model, and tell the app it
    *  moved — including when NOTHING survived, because "the selection is gone"
-   *  is exactly the news the drag handle needs in order to take itself down. */
-  private restoreSelection(memo: SelectionMemo): void {
+   *  is exactly the news the drag handle needs in order to take itself down.
+   *
+   *  `duringStream` is that last sentence's exception, and both halves of it
+   *  matter. A body whose chunk has not landed yet is not a body whose face is
+   *  gone, so the geometric fallback is held back until the body is actually
+   *  there — without that it measures to whatever else is on screen and moves
+   *  the selection to a face of another body. And "nothing survived" is not
+   *  news mid-stream, it is the ordinary state of an installment that has not
+   *  delivered the right body yet, so only a real restore is announced. */
+  private restoreSelection(memo: SelectionMemo, duringStream = false): void {
     const h = this.highlighter;
     if (!h || !this.model) return;
     const liveBodies = new Set<BodyMesh>(this.model.bodies);
@@ -2160,10 +2207,15 @@ export class Viewport {
       (m) => (liveEdges.has(m.ref) ? m.ref : null),
       (m) => (m.mid ? this.edgeLineByMid(m.mid) : null),
     );
-    const faces = remapSelection(
+    const faces = remapStreamedSelection(
       memo.faces,
       (m) => (m.body && liveBodies.has(m.body) ? m.id : null),
       (m) => (m.point ? this.faceIdNear(m.point) : null),
+      // Body ids are stable across a rebuild that does not change how many
+      // there are, which is every rebuild a gesture makes. When they do
+      // renumber this simply defers to the commit, which is where the
+      // ungated fallback runs — so the gate can never do worse than before.
+      (m) => !duringStream || (m.body !== null && liveBodyIds.has(m.body.id)),
     );
     // Bodies are the easy case and always exact: ids ARE stable across a
     // rebuild, so a body is either still here or genuinely gone.
@@ -2173,8 +2225,10 @@ export class Viewport {
     for (const f of faces) h.toggleSelectFace(f);
     for (const b of bodies) h.toggleSelectBody(b);
 
-    if (memo.edges.length || memo.faces.length) this.onSelectionChange?.();
-    if (memo.bodies.length) this.onBodySelectionChange?.();
+    if (shouldAnnounce(memo.edges.length + memo.faces.length, edges.length + faces.length, duringStream))
+      this.onSelectionChange?.();
+    if (shouldAnnounce(memo.bodies.length, bodies.length, duringStream))
+      this.onBodySelectionChange?.();
   }
 
   /** Wall-clock cost of the last flush-seam pass, ms — surfaced in sceneStats
