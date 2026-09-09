@@ -3,7 +3,9 @@
 // ui/menu.ts. The viewport owns the click-vs-pan gesture (right button is
 // camera pan) and fires onContextClick only for a genuine click; toolBusy
 // gates it, an active tool (or sketch mode, which has its own canvas menu)
-// owns the gesture.
+// owns the gesture. NOT toolBusy for that gate, though: picking a body raises
+// the Move gizmo by itself, so a plain busy test meant right-clicking a body
+// you had already selected opened no menu at all. See Engine.toolOwnsScreen.
 import type { DocumentStore } from "../document/store";
 import type { Viewport } from "../viewport/viewport";
 import type { SketchMode } from "../sketch/sketchMode";
@@ -26,6 +28,15 @@ export interface ContextMenusDeps {
   sketch: SketchMode;
   measure: MeasureTool;
   toolBusy: () => boolean;
+  /** toolBusy() minus the Move gizmo a body selection raises by itself, see
+   *  Engine.toolOwnsScreen. What gates the menu OPENING: with plain toolBusy
+   *  here, right-clicking a body that was already selected opened nothing at
+   *  all, because selecting it is what raised the gizmo. */
+  toolOwnsScreen: () => boolean;
+  /** Stand that gizmo down, see Engine.dropBodyGizmo. What every item that acts
+   *  on the body calls first, or it is refused by the guard inside the very
+   *  command the menu just offered. */
+  dropBodyGizmo: () => void;
   setStatus: (text: string, cls: "" | "connected" | "error") => void;
   selectFeature: (id: string | null) => void;
   editFeature: (id: string) => void;
@@ -47,6 +58,8 @@ export function createContextMenus(deps: ContextMenusDeps) {
     sketch,
     measure,
     toolBusy,
+    toolOwnsScreen,
+    dropBodyGizmo,
     setStatus,
     selectFeature,
     editFeature,
@@ -68,6 +81,11 @@ export function createContextMenus(deps: ContextMenusDeps) {
    *  the browser tree's eye toggles are likewise always available, even mid-tool. */
   function unlessBusy(fn: () => void): () => void {
     return () => {
+      // The body gizmo first: it is not a tool the user started, it is what
+      // picking a body raises, and every item below that acts on that body was
+      // refused by it. A no-op for the datum, edge and face menus, which are
+      // not in bodies mode.
+      dropBodyGizmo();
       if (toolBusy()) {
         setStatus("Finish the active tool first (Esc cancels it)", "");
         return;
@@ -246,6 +264,9 @@ export function createContextMenus(deps: ContextMenusDeps) {
   // what repaints the browser, no explicit refresh, and none of the old
   // "toggle N bodies, re-render N times" hazard either.
   function hideBody(id: string) {
+    // The gizmo is standing on it. Left up, it is a set of arrows floating over
+    // a body nobody can see, still offering to drag it.
+    dropBodyGizmo();
     store.setBodyVisibility(id, false);
   }
 
@@ -256,7 +277,7 @@ export function createContextMenus(deps: ContextMenusDeps) {
   }
 
   function openCanvasMenu(x: number, y: number) {
-    if (toolBusy()) return;
+    if (toolOwnsScreen()) return;
     // a construction plane wins where its quad is exposed (same order as click-select)
     const datumId = viewport.pickDatumAt(x, y);
     if (datumId) return openDatumMenu(x, y, datumId);

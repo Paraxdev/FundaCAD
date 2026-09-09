@@ -16,23 +16,41 @@ import type { Engine } from "./engine";
  *  the stale `planePick` flag used to cause. Its modal half, `picking`, genuinely
  *  does own the gesture. The section stands its own handle down while another tool
  *  runs by reading this predicate back. */
-export function createToolBusy(e: Engine): Pick<Engine, "toolBusy" | "hasBody"> {
+export function createToolBusy(
+  e: Engine,
+): Pick<Engine, "toolBusy" | "toolOwnsScreen" | "dropBodyGizmo" | "hasBody"> {
+  // ONE predicate, read two ways. The only difference is whether the Move
+  // gizmo counts, and it is spelled as a parameter rather than as a second list
+  // so the other fifteen entries can never drift apart.
+  const busy = (moveCounts: boolean) => {
+    const t = e.tools;
+    return (
+      e.sketch.active || t.extrude.active || t.edgeFeature.active || t.pressPull.active ||
+      t.faceOffset.active || t.draft.active || t.thread.active || t.loft.active || t.planeOffset.active ||
+      (moveCounts && t.move.active) || t.pattern.active ||
+      t.measure.active || t.section.picking || t.targetEdit.active ||
+      t.revolvePitch.active ||
+      e.planePick || isChoiceOpen() ||
+      // A plugin's tool holds the window exactly as one of the above does.
+      // Without this the app believes it is idle while a contributed tool
+      // owns the pick: every Escape handler here is gated off, a second tool
+      // starts over the top of the first, and the user has two prompts and
+      // one key that answers neither.
+      anyToolBusy()
+    );
+  };
   return {
-    toolBusy: () => {
-      const t = e.tools;
-      return (
-        e.sketch.active || t.extrude.active || t.edgeFeature.active || t.pressPull.active ||
-        t.faceOffset.active || t.draft.active || t.thread.active || t.loft.active || t.planeOffset.active || t.move.active || t.pattern.active ||
-        t.measure.active || t.section.picking || t.targetEdit.active ||
-        t.revolvePitch.active ||
-        e.planePick || isChoiceOpen() ||
-        // A plugin's tool holds the window exactly as one of the above does.
-        // Without this the app believes it is idle while a contributed tool
-        // owns the pick: every Escape handler here is gated off, a second tool
-        // starts over the top of the first, and the user has two prompts and
-        // one key that answers neither.
-        anyToolBusy()
-      );
+    toolBusy: () => busy(true),
+    // See the note on Engine.toolOwnsScreen: a body selection RAISES the Move
+    // gizmo by itself (app/viewportWiring.onBodySelectionChange), so counting
+    // it here would mean no ambient affordance could ever show for a body.
+    toolOwnsScreen: () => busy(false),
+    // See the note on Engine.dropBodyGizmo. Deliberately unconditional about
+    // WHY the gizmo is up: an explicitly started Move over a body selection is
+    // the same gizmo on the same bodies, so there is nothing for a caller to
+    // tell apart, and a Move started over anything else is not in bodies mode.
+    dropBodyGizmo: () => {
+      if (e.tools.move.active && e.viewport.selecting === "bodies") e.tools.move.cancel();
     },
     // True when the current rebuild produced a solid body (something to modify).
     hasBody: () => (e.store.buildState.result?.mesh.positions.length ?? 0) > 0,
