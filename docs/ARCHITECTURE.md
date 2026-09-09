@@ -80,14 +80,19 @@ reason, not a quick patch.
    user-only, and reaching the open DOCUMENT through it is gated separately by a
    setting in the app.
 5. **Display-only state stays in frontend side-maps.** Visibility, display names,
-   palette/body colors, and the ELEMENTS a body is filed into are UI state, not
+   palette/body colors, MATERIALS, and the ELEMENTS a body is filed into are UI state, not
    model state, they live in `DocumentStore` side-maps, not in the `document` sent
    to the sidecar, and are threaded explicitly through the calls that need them
    (e.g. `exportProject`). Elements (`src/document/elements.ts`) are the strongest
    case for the rule: they exist so a several-thousand-body import can be sorted
    into something navigable, and organising a model must never be able to change
    its geometry. A document with every element deleted rebuilds byte-identically
-   to one that never had any.
+   to one that never had any. Materials (`src/document/materials.ts`) are the
+   same bargain in the other direction: they are appearance only, a colour and a
+   finish, never a physical property, and they are deliberately NOT the filament
+   `palette`, which is up to four physical toolhead slots and means "print this
+   part from filament N". Where a body carries both, the palette slot wins on
+   screen; the render bridge is the one place that decides.
 6. **Pattern expansion and region detection are mirrored TS <-> Python.** Both sides
    independently expand associative patterns and detect split regions for direct
    editing; a change to one algorithm without the matching change to the other silently

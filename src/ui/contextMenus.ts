@@ -8,7 +8,7 @@ import type { DocumentStore } from "../document/store";
 import type { Viewport } from "../viewport/viewport";
 import type { SketchMode } from "../sketch/sketchMode";
 import type { MeasureTool } from "../features/measureTool";
-import { bodyExtraMenu, elementMoveMenu } from "./browserTree";
+import { bodyExtraMenu, elementMoveMenu, materialMenu } from "./browserTree";
 import { ancestryOf } from "../document/elements";
 import { useBrowserStore } from "../stores/browser";
 import { contextMenu, type CtxItem } from "./menu";
@@ -147,11 +147,18 @@ export function createContextMenus(deps: ContextMenusDeps) {
     contextMenu(x, y, items);
   }
 
-  /** "Move to" for the body under the cursor, and for the whole selection when
-   *  that body is part of it, the same rule the Browser row uses. */
-  function moveToElementMenu(bodyId: string): CtxItem {
+  /** The bodies a body-menu entry acts on: the whole selection when the body
+   *  under the cursor is part of it, otherwise just that one. The same rule the
+   *  Browser row uses, and the reason organising an import is one gesture. */
+  function bodiesUnder(bodyId: string): string[] {
     const selected = viewport.getSelectedBodies();
-    const ids = selected.includes(bodyId) ? [...selected] : [bodyId];
+    return selected.includes(bodyId) ? [...selected] : [bodyId];
+  }
+
+  /** "Move to" for the body under the cursor, and for the whole selection when
+   *  that body is part of it. */
+  function moveToElementMenu(bodyId: string): CtxItem {
+    const ids = bodiesUnder(bodyId);
     return elementMoveMenu(store.bodyElements, ids, store.bodyElementOf(bodyId), {
       toNew: () => {
         const id = store.addElement();
@@ -194,6 +201,8 @@ export function createContextMenus(deps: ContextMenusDeps) {
       // clicked on in the viewport, and finding its row among three thousand to
       // right-click it is the work this feature exists to remove.
       moveToElementMenu(bodyId),
+      materialMenu(store.materialLibrary, bodiesUnder(bodyId), store.bodyMaterialId(bodyId),
+        (m) => store.setBodiesMaterial(bodiesUnder(bodyId), m)),
       ...bodyExtraMenu(bodyId),
       { separator: true, label: "" },
       { label: "Remove body", danger: true, onClick: unlessBusy(() => store.removeBody(bodyId)) },

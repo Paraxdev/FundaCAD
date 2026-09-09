@@ -29,7 +29,16 @@ export function installRebuildBridge(e: Engine): void {
   // nothing contributed both maps are empty, which is exactly what the model
   // looked like with the capability off, arrived at by there being no answer
   // rather than by a check that suppressed one.
-  const paint = () => contributedPaint();
+  //
+  // The document's own materials sit UNDER that: a material is what a body is
+  // made of, a contribution is what a capability has decided to paint on top,
+  // and the one capability that paints today is the filament palette, whose
+  // slots are a deliberate choice about a real print. A material is usually
+  // whatever an imported file said, so it loses.
+  const paint = () => {
+    const c = contributedPaint();
+    return { bodies: { ...e.store.materialPaint(), ...c.bodies }, faces: c.faces };
+  };
 
   // Starting or stopping a capability has to repaint what is already on screen.
   // Both setters are no-ops when the map has not changed, so this costs nothing
@@ -70,6 +79,7 @@ export function installRebuildBridge(e: Engine): void {
       // already wearing the one they were assigned instead of popping from grey
       // when the build commits.
       e.viewport.setBodyPaint(paint().bodies);
+      e.viewport.setBodyFinish(e.store.materialFinishes());
       e.viewport.beginProgressiveModel(c.epoch, c.manifest, c.result, c.bbox, hidden, pendingFit);
       pendingFit = false;
       return;
@@ -96,6 +106,7 @@ export function installRebuildBridge(e: Engine): void {
         const p = paint();
         e.viewport.setBodyPaint(p.bodies); // per-body colours
         e.viewport.setTexturePaint(p.faces); // + per-face inlay colours
+        e.viewport.setBodyFinish(e.store.materialFinishes()); // + how each is finished
       } else {
         e.viewport.clearModel();
       }

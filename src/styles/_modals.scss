@@ -240,6 +240,28 @@
   background-color: var(--panel-2, #1c1f26);
   color: var(--text, #e6e8ec);
 }
+/* A TEXT field on a settings screen. Everything .sm-select has except the
+   caret and its clearance, because a caret on something you type into says the
+   value is one of a fixed set and it is not. Its own rule rather than an
+   override of .sm-select for that reason: the two differ in what they mean,
+   not only in what they look like. */
+.sm-input {
+  background-color: var(--panel-2, #1c1f26);
+  color: var(--text, #e6e8ec);
+  border: 1px solid var(--line-strong, #323843);
+  border-radius: var(--r-sm, 6px);
+  padding: var(--s-2) var(--s-3);
+  font: inherit;
+  font-size: 11px;
+  min-width: 0;
+}
+.sm-input:hover {
+  border-color: #3d4452;
+}
+.sm-input:focus {
+  outline: none;
+  border-color: var(--accent, #ff7a3c);
+}
 .sm-inv {
   font-size: 11px;
   color: var(--text-dim, #9aa3af);
@@ -763,4 +785,98 @@
   color: var(--text, #e6e8ec);
   box-shadow: var(--shadow-2, 0 2px 8px rgba(0, 0, 0, 0.4));
   pointer-events: none;
+}
+
+/* --- Materials dialog ---
+   Two columns: the library on the left, the editor for one row on the right.
+   Side by side rather than stacked because the whole gesture is picking a
+   material and immediately dragging a slider, and a stacked layout puts the two
+   halves of that a scroll apart. */
+.mats-panel {
+  width: min(720px, 92vw);
+}
+.mats {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: var(--s-5);
+  /* Bounded, so a library of two hundred scrolls inside the dialog instead of
+     growing it past the window. */
+  max-height: min(56vh, 460px);
+}
+.mats-list {
+  overflow: auto;
+  border: 1px solid var(--line, #262a31);
+  border-radius: var(--r-sm, 6px);
+  padding: var(--s-1);
+}
+.mats-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm, 6px);
+  padding: var(--s-2);
+  color: var(--text, #e6e8ec);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.mats-row:hover {
+  background: var(--raised, #22262e);
+}
+.mats-row.is-selected {
+  background: var(--accent-tint);
+  border-color: var(--accent);
+}
+.mats-swatch {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r-sm, 6px);
+  border: 1px solid #0007;
+}
+.mats-name {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mats-edit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  overflow: auto;
+}
+/* Native controls, deliberately: a colour well and a slider are two of the very
+   few inputs the platform draws better than a hand-rolled one, and both are
+   keyboard-operable for free. Only the sizing is ours. */
+.mats-color {
+  width: 56px;
+  height: 26px;
+  padding: 0;
+  background: var(--panel-2);
+  border: 1px solid var(--line, #262a31);
+  border-radius: var(--r-sm, 6px);
+  cursor: pointer;
+}
+/* Shared with Preferences, hence the sm- prefix rather than mats-: it joins
+   .sm-section / .sm-hint / .sm-select as the settings-screen vocabulary, and a
+   second slider under another name would drift from this one. */
+.sm-slider {
+  width: 100%;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.mats-actions {
+  display: flex;
+  gap: var(--s-3);
+  margin-top: var(--s-3);
+}
+/* The footer holds two groups (edit the library, move it about) with the gap
+   between them, so it is a flex row rather than the default right-aligned pair. */
+.mats-foot {
+  justify-content: flex-start;
 }

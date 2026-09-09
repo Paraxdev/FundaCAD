@@ -8,6 +8,7 @@ import type { RebuildResult } from "../types";
 import { disposeObject } from "./dispose";
 import { scheduleRaycastIndex } from "./raycastIndex";
 import { BodyEdges, EDGE_IDLE_COLOR, EDGE_IDLE_WIDTH, type EdgeRef } from "./edgeLines";
+import { FINISH } from "../document/materials";
 
 export { BodyEdges, EDGE_IDLE_COLOR, EDGE_IDLE_WIDTH };
 export type { EdgeRef };
@@ -323,8 +324,11 @@ export function buildBodyMesh(
   const mat = new THREE.MeshStandardMaterial({
     color: 0xffffff,
     vertexColors: true,
-    metalness: 0.1,
-    roughness: 0.55,
+    // The one definition of the app's default finish, shared with materials so
+    // that "no material" and "a material that says nothing about its finish"
+    // are the same picture rather than two nearly identical ones.
+    metalness: FINISH.metalness,
+    roughness: FINISH.roughness,
     flatShading: false,
     // push faces back so edge lines stay crisp on top (no z-fighting)
     polygonOffset: true,

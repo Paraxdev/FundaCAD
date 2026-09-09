@@ -9,6 +9,7 @@
 import type { CtxItem } from "./menu";
 import { contributedBodyMenu } from "../plugins/contrib";
 import { ancestryOf, childrenByParent, type ElementDef } from "../document/elements";
+import type { MaterialDef } from "../document/materials";
 
 /** The rows a plugin adds to a body's right-click menu.
  *
@@ -273,4 +274,28 @@ export function elementMoveMenu(
     }
   }
   return { label: ids.length > 1 ? `Move ${ids.length} bodies to` : "Move to", children: rows };
+}
+
+/** The "Material" submenu for a set of bodies, shared by the Browser row menu
+ *  and the viewport's body menu, exactly as elementMoveMenu above is.
+ *
+ *  A flat list of the library with a swatch on each row, and "None" at the
+ *  bottom for going back to the default grey. No "New material…" here: making
+ *  one is dialling in a colour and three sliders, which is the dialog's job, and
+ *  a context menu that opened a modal over the model the user was pointing at
+ *  would be a menu that took the thing they were aiming at away. */
+export function materialMenu(
+  materials: readonly MaterialDef[],
+  ids: readonly string[],
+  current: string | undefined,
+  apply: (material: string | null) => void,
+): CtxItem {
+  const rows: CtxItem[] = materials.map((m) => ({
+    label: m.name,
+    swatch: m.color,
+    disabled: m.id === current,
+    onClick: () => apply(m.id),
+  }));
+  rows.push({ label: "None", disabled: current === undefined, onClick: () => apply(null) });
+  return { label: ids.length > 1 ? `Material for ${ids.length} bodies` : "Material", children: rows };
 }

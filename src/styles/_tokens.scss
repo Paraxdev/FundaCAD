@@ -39,6 +39,13 @@
   --panel-2: #151d28;     /* nested surfaces, inputs, popups */
   --raised: #202e37;      /* hover / raised interactive surface */
   --raised-2: #394a50;    /* pressed / stronger hover */
+  /* The 3D view's own ground. Read by the Three side (viewport/themeColors
+     -> scene.applyRenderPrefs), not by any CSS rule, which is why it is not
+     one of the surfaces above: it sits BEHIND lit geometry rather than
+     behind chrome, and a panel colour used there reads as a fog. The value
+     is what the viewport has always been, so no theme changes by gaining
+     this token; a theme that wants its own says so. */
+  --viewport-bg: #1a1d21;
 
   /* --- borders ---
      From the BLUE ramp, not the neutral one. The neutral rungs are already

@@ -25,6 +25,7 @@ const GLOBAL: Command[] = [
   { id: "export", label: "Export…", group: "File", context: "global", key: "Ctrl+E" },
   { id: "import", label: "Import Mesh…", group: "File", context: "global" },
   { id: "welcome", label: "Welcome Screen", group: "Help", context: "global" },
+  { id: "materials", label: "Materials…", group: "View", context: "global" },
   { id: "undo", label: "Undo", group: "Edit", context: "global", key: "Ctrl+Z" },
   { id: "redo", label: "Redo", group: "Edit", context: "global", key: "Ctrl+Y" },
   { id: "fit", label: "Fit View", group: "View", context: "global", key: "Home / F6" },

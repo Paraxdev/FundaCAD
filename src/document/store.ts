@@ -11,6 +11,10 @@ import {
   ancestryOf, descendantsOf, type ElementDef, freshElementName, reparented,
   withElementRemoved,
 } from "./elements";
+import {
+  FINISH, finishOf, freshMaterialName, type MaterialDef, normalizeMaterial,
+  slugId, STARTER_LIBRARY, uniqueId,
+} from "./materials";
 import * as params from "../params/engine";
 import type { FieldKind } from "./numFields";
 import { writeTarget } from "./numFields";
@@ -184,6 +188,12 @@ export class DocumentStore {
   private palette: { name: string; color: string; material?: string }[] = DEFAULT_PALETTE.map((s) => ({ ...s }));
   private bodyColors = new Overlay<number>("bodyColors"); // per-body palette-slot assignment (id → slot index)
   private bodyElement = new Overlay<string>("bodyElement"); // per-body element assignment (id → element id)
+  private bodyMaterial = new Overlay<string>("bodyMaterial"); // per-body material assignment (id → material id)
+  /** The document's material library. Starts as the shared starter set and is
+   *  omitted from the saved file while it is still exactly that and nothing is
+   *  assigned, the same bargain the filament palette strikes: a document nobody
+   *  has restyled saves no bigger than it did before materials existed. */
+  private materials: MaterialDef[] = STARTER_LIBRARY.map((m) => ({ ...m }));
   /** The user's own folders over the bodies. A LIST rather than an overlay
    *  because an element is not a property of anything: it exists before it holds
    *  a body, it has a name and a parent of its own, and its order is what the
@@ -198,6 +208,7 @@ export class DocumentStore {
     { overlay: this.bodyNames },
     { overlay: this.bodyColors, mapValue: (v) => Number(v) },
     { overlay: this.bodyElement },
+    { overlay: this.bodyMaterial },
   ];
   /** Un-committed features shown live (a fillet drag, a thread being sized).
    *  Never recorded in undo.
@@ -415,6 +426,8 @@ export class DocumentStore {
     this.bodyColors.clear();
     this.bodyElement.clear();
     this.elements = [];
+    this.bodyMaterial.clear();
+    this.materials = STARTER_LIBRARY.map((m) => ({ ...m }));
     this.path = null;
     this.isDirty = false;
     this.discardModelForReplacement();
@@ -1228,6 +1241,161 @@ export class DocumentStore {
     this.emitBuild();
   }
 
+  // --- materials: what a body is made of, on screen -------------------------
+  //
+  // Display-only and off the undo stack, on the same terms as elements above.
+  // See document/materials.ts for what a material is and why it is not the
+  // filament palette.
+
+  /** the document's material library, in list order. */
+  get materialLibrary(): readonly MaterialDef[] {
+    return this.materials;
+  }
+
+  /** The material assigned to a body, or undefined. Resolved, not the raw id:
+   *  an assignment naming a material that has since been deleted is the same
+   *  thing as no assignment, and every caller would otherwise have to say so. */
+  bodyMaterialOf(id: string): MaterialDef | undefined {
+    const held = this.bodyMaterial.get(id);
+    return held ? this.materials.find((m) => m.id === held) : undefined;
+  }
+
+  /** the raw assignment, for a menu that has to grey out the current row. */
+  bodyMaterialId(id: string): string | undefined {
+    return this.bodyMaterial.get(id);
+  }
+
+  /** Body colours from materials: the layer UNDER whatever a capability paints.
+   *
+   *  Merged with `contributedPaint()` in the render bridge, and losing to it,
+   *  because the one thing that contributes paint today is the filament palette,
+   *  and a palette slot is a deliberate choice about a real print while a
+   *  material is usually whatever an imported file said. */
+  materialPaint(): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const [body, id] of this.bodyMaterial.entries()) {
+      const m = this.materials.find((x) => x.id === id);
+      if (m) out[body] = m.color;
+    }
+    return out;
+  }
+
+  /** Body finishes from materials: metalness, roughness and opacity per body,
+   *  every default already filled in.
+   *
+   *  Separate from the colour above because they travel differently in the
+   *  renderer: colour is baked per VERTEX (so a hover can recolour one face
+   *  without touching the lighting) and the finish is per MATERIAL, one
+   *  MeshStandardMaterial per body. Only bodies that differ from the app's
+   *  default finish appear, so an unstyled document hands the viewport an empty
+   *  map and it changes nothing. */
+  materialFinishes(): Record<string, { metalness: number; roughness: number; opacity: number }> {
+    const out: Record<string, { metalness: number; roughness: number; opacity: number }> = {};
+    for (const [body, id] of this.bodyMaterial.entries()) {
+      const m = this.materials.find((x) => x.id === id);
+      if (!m) continue;
+      const f = finishOf(m);
+      if (f.metalness === FINISH.metalness && f.roughness === FINISH.roughness && f.opacity === FINISH.opacity) {
+        continue;
+      }
+      out[body] = f;
+    }
+    return out;
+  }
+
+  /** Add a material and return its id. */
+  addMaterial(m?: Partial<MaterialDef>): string {
+    const taken = new Set(this.materials.map((x) => x.id));
+    const name = (m?.name ?? "").trim() || freshMaterialName(this.materials);
+    const next: MaterialDef =
+      normalizeMaterial({ ...m, name, color: m?.color ?? "#9aa7b4" }) ??
+      { id: slugId(name), name, color: "#9aa7b4" };
+    next.id = uniqueId(m?.id && !taken.has(m.id) ? m.id : slugId(name), taken);
+    this.materials = [...this.materials, next];
+    this.markDirty();
+    this.emitBuild();
+    return next.id;
+  }
+
+  /** Change a material in place. Every body wearing it repaints, which is the
+   *  whole point of a library: the colour is edited once, not per body. */
+  updateMaterial(id: string, patch: Partial<Omit<MaterialDef, "id">>) {
+    let changed = false;
+    this.materials = this.materials.map((m) => {
+      if (m.id !== id) return m;
+      const merged = normalizeMaterial({ ...m, ...patch });
+      if (!merged) return m; // a patch that removed the colour is not applied
+      merged.id = m.id;
+      changed = true;
+      return merged;
+    });
+    if (!changed) return;
+    this.markDirty();
+    this.emitBuild();
+  }
+
+  /** Delete a material. Bodies wearing it become unassigned and go back to the
+   *  default grey; nothing about them is otherwise touched. */
+  removeMaterial(id: string) {
+    if (!this.materials.some((m) => m.id === id)) return;
+    this.materials = this.materials.filter((m) => m.id !== id);
+    for (const [body, held] of [...this.bodyMaterial.entries()]) {
+      if (held === id) this.bodyMaterial.delete(body);
+    }
+    this.markDirty();
+    this.emitBuild();
+  }
+
+  /** Merge a library in, by ID.
+   *
+   *  Merge and not replace: importing a library is adding to what is here, and a
+   *  replace would silently unassign every body wearing a material the incoming
+   *  file happens not to have. A colliding id UPDATES that material, which is
+   *  what makes re-importing an edited export do what it looks like it does.
+   *  Returns how many were added and how many were updated. */
+  importMaterials(incoming: readonly MaterialDef[]): { added: number; updated: number } {
+    let added = 0;
+    let updated = 0;
+    const next = [...this.materials];
+    for (const m of incoming) {
+      const at = next.findIndex((x) => x.id === m.id);
+      if (at >= 0) {
+        next[at] = { ...m };
+        updated++;
+      } else {
+        next.push({ ...m });
+        added++;
+      }
+    }
+    if (!added && !updated) return { added, updated };
+    this.materials = next;
+    this.markDirty();
+    this.emitBuild();
+    return { added, updated };
+  }
+
+  /** Assign a material to bodies (null clears it). Batched and emitting once,
+   *  for the same reason setBodiesElement is: this is applied to a selection. */
+  setBodiesMaterial(bodyIds: Iterable<string>, material: string | null) {
+    const target = material !== null && this.materials.some((m) => m.id === material) ? material : null;
+    let changed = false;
+    for (const id of bodyIds) {
+      if ((this.bodyMaterial.get(id) ?? null) === target) continue;
+      if (target === null) this.bodyMaterial.delete(id);
+      else this.bodyMaterial.set(id, target);
+      changed = true;
+    }
+    if (!changed) return;
+    this.markDirty();
+    this.emitBuild();
+  }
+
+  /** Is the library still exactly the one every new document starts with? What
+   *  decides whether it is written to the file at all. */
+  private materialsAreDefault(): boolean {
+    return JSON.stringify(this.materials) === JSON.stringify(STARTER_LIBRARY);
+  }
+
   /** delete a body by appending a removeBody feature at the END of the timeline
    *  (so it operates on the final body list). Undoable like any feature. */
   removeBody(bodyId: string) {
@@ -1313,6 +1481,12 @@ export class DocumentStore {
     // Omitted when there are none, so a document that was never organised is
     // byte-identical to one saved before elements existed.
     if (this.elements.length) out.elements = this.elements.map((e) => ({ ...e }));
+    // Same bargain the palette strikes below: written whenever it carries
+    // information, which is a library that has been changed OR any body wearing
+    // one of its rows, and omitted while it is still the untouched starter set.
+    if (this.bodyMaterial.size || !this.materialsAreDefault()) {
+      out.materials = this.materials.map((m) => ({ ...m }));
+    }
     // Persist the palette whenever it carries information: body assignments
     // reference it, and a synced/customized palette is project state in its own
     // right (the "design in loaded colors" premise) even with zero assignments.
@@ -1343,6 +1517,13 @@ export class DocumentStore {
     // at every reader: an element is addressed by id everywhere (the body map,
     // the parent link, the collapse key), so one without a string id is not a
     // folder that renders oddly, it is a folder nothing can name.
+    // A material with no usable colour is dropped, see normalizeMaterial: it
+    // is a row that can be assigned to a body and then change nothing.
+    this.materials = parsed.materials?.length
+      ? parsed.materials
+          .map((m, i) => normalizeMaterial(m, i))
+          .filter((m): m is MaterialDef => m !== null)
+      : STARTER_LIBRARY.map((m) => ({ ...m }));
     this.elements = (parsed.elements ?? [])
       .filter((e) => e && typeof e.id === "string" && e.id)
       .map((e) => ({

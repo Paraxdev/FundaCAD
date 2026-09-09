@@ -7,6 +7,8 @@ import { stickyFact } from "../diagnostics/breadcrumbs";
 import { niceStep } from "../ui/units";
 import { glyphWorldScale } from "./gizmoScale";
 import { EDGE_HOVER_COLOR } from "./highlight";
+import { BACKGROUND_COLOR, renderPrefs } from "../ui/renderPrefs";
+import { themeColor } from "./themeColors";
 import type { Axis3 } from "../types";
 
 export interface SceneBundle {
@@ -16,6 +18,10 @@ export interface SceneBundle {
   planes: Record<"XY" | "XZ" | "YZ", THREE.Mesh>;
   grid: AdaptiveGrid;
   triad: OriginTriad;
+  /** Re-read ui/renderPrefs and apply it: lighting, what the model reflects,
+   *  and what it is drawn against. Called once at construction and again from
+   *  every change; the caller asks for a frame afterwards. */
+  applyRenderPrefs: () => void;
 }
 
 /** How many minor cells the ground grid spans, for a viewport `diagonalPx`
@@ -137,22 +143,29 @@ function recordGpu(renderer: THREE.WebGLRenderer) {
   stickyFact(`[gpu] ${desc}${note}`);
 }
 
+/** The lighting rig at brightness 1, i.e. the light level this app has always
+ *  had. The brightness setting scales all three together, so these stay the one
+ *  definition of the look rather than three numbers a slider replaced. */
+const KEY_INTENSITY = 2.0;
+const FILL_INTENSITY = 0.6;
+const HEMI_INTENSITY = 0.6;
+
 export function createScene(canvas: HTMLCanvasElement): SceneBundle {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setClearColor(0x1a1d21, 1);
   recordGpu(renderer);
 
   const scene = new THREE.Scene();
 
   // --- lighting rig (key + fill + ambient) for a clean product look ---
-  const key = new THREE.DirectionalLight(0xffffff, 2.0);
+  const key = new THREE.DirectionalLight(0xffffff, KEY_INTENSITY);
   key.position.set(40, -60, 80);
   scene.add(key);
-  const fill = new THREE.DirectionalLight(0xffffff, 0.6);
+  const fill = new THREE.DirectionalLight(0xffffff, FILL_INTENSITY);
   fill.position.set(-50, 40, 20);
   scene.add(fill);
-  scene.add(new THREE.HemisphereLight(0xbfd4ff, 0x202428, 0.6));
+  const hemi = new THREE.HemisphereLight(0xbfd4ff, 0x202428, HEMI_INTENSITY);
+  scene.add(hemi);
 
   // --- Z-up adaptive ground grid in the XY plane (rescales with zoom) ---
   const grid = new AdaptiveGrid(scene);
@@ -179,7 +192,72 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
   const modelGroup = new THREE.Group();
   scene.add(modelGroup);
 
-  return { renderer, scene, modelGroup, planes, grid, triad };
+  return {
+    renderer, scene, modelGroup, planes, grid, triad,
+    applyRenderPrefs: () => applyRenderPrefs(renderer, scene, { key, fill, hemi }),
+  };
+}
+
+/** The neutral room the model reflects, built once and kept.
+ *
+ *  Lazily, and cached forever after: it is a render to a cubemap plus a PMREM
+ *  pass, tens of milliseconds, and the setting can be switched off and on again.
+ *  Never disposed for the same reason, there is exactly one of these per
+ *  process and it is a few hundred KiB of texture.
+ *
+ *  Generated rather than loaded. An HDR file would be a network fetch (or an
+ *  asset in the bundle) for something the renderer can produce from a handful of
+ *  boxes, and the app deliberately fetches nothing at start-up. */
+let studioEnv: THREE.Texture | null = null;
+async function studioEnvironment(renderer: THREE.WebGLRenderer): Promise<THREE.Texture> {
+  if (studioEnv) return studioEnv;
+  const { RoomEnvironment } = await import("three/examples/jsm/environments/RoomEnvironment.js");
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  studioEnv = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  pmrem.dispose();
+  return studioEnv;
+}
+
+/** Put the user's viewport settings on a scene.
+ *
+ *  ONE writer for all three, because they are one statement about exposure: the
+ *  lighting rig and the environment are multiplied by the same brightness, so
+ *  they cannot drift into a model lit from one side at one exposure and
+ *  reflecting at another.
+ *
+ *  The environment is loaded ASYNCHRONOUSLY (it is a dynamic import and a render
+ *  pass) and the rest is applied at once, so the viewport is never waiting on it
+ *  to draw a frame: the model appears flat-lit and gains its reflections a beat
+ *  later, which is what it did before this existed. */
+function applyRenderPrefs(
+  renderer: THREE.WebGLRenderer,
+  scene: THREE.Scene,
+  lights: { key: THREE.DirectionalLight; fill: THREE.DirectionalLight; hemi: THREE.HemisphereLight },
+) {
+  const p = renderPrefs();
+  lights.key.intensity = KEY_INTENSITY * p.brightness;
+  lights.fill.intensity = FILL_INTENSITY * p.brightness;
+  lights.hemi.intensity = HEMI_INTENSITY * p.brightness;
+  // The ground follows the app's palette by default, reading a token off the
+  // document root exactly as the stylesheet does (see themeColors.ts), so a
+  // theme that wants its own 3D ground gets one. The fixed grounds below are
+  // for looking at a PART rather than at the app, so they ignore the theme on
+  // purpose: comparing two finishes needs the same ground both times.
+  renderer.setClearColor(
+    p.background === "theme" ? themeColor("--viewport-bg", 0x1a1d21) : BACKGROUND_COLOR[p.background],
+    1,
+  );
+  if (p.environment === "none") {
+    scene.environment = null;
+    return;
+  }
+  scene.environmentIntensity = p.brightness;
+  void studioEnvironment(renderer).then((tex) => {
+    // Re-checked, not assumed: the setting may have been switched off again
+    // while the cubemap was being generated, and writing it then would turn
+    // reflections back on after the user turned them off.
+    if (renderPrefs().environment === "studio") scene.environment = tex;
+  });
 }
 
 /** The one axis-to-colour table in the scene. RGB for XYZ is the convention
