@@ -25,6 +25,9 @@ import BrowserPane from "../../../src/components/shell/BrowserPane.vue";
 import { ENGINE } from "../../../src/app/engineKey";
 import { contribute, resetContributions } from "../../../src/plugins/contrib";
 import { setBrowserFilter } from "../../../src/ui/browserFilter";
+import {
+  descendantsOf, type ElementDef, freshElementName, reparented, withElementRemoved,
+} from "../../../src/document/elements";
 import type { Engine } from "../../../src/app/engine";
 import type { CadDocument, Feature } from "../../../src/types";
 
@@ -35,7 +38,51 @@ function makeEngine(doc: CadDocument, bodies: { id: string; name: string; nodeRe
   const buildVersion = ref(0);
   const hidden = new Set<string>();
   const slots = new Map<string, number>();
+  // Elements are a display overlay in the real store, not part of the document
+  // object, so the fake keeps them the same way. The PURE half is imported
+  // rather than reimplemented: a fake that disagreed with document/elements.ts
+  // about what a delete does would pass while the panel was broken.
+  let elements: ElementDef[] = [];
+  const bodyElement = new Map<string, string>();
   const store = {
+    get bodyElements() { return elements; },
+    bodyElementOf: (id: string) => bodyElement.get(id),
+    bodyElementMap: () => bodyElement,
+    elementSubtree: (id: string) => descendantsOf(elements, id),
+    addElement(name?: string, parent: string | null = null) {
+      const id = `e${elements.length + 1}`;
+      elements = [
+        ...elements,
+        { id, name: name ?? freshElementName(elements, parent), ...(parent ? { parent } : {}) },
+      ];
+      buildVersion.value++;
+      return id;
+    },
+    renameElement(id: string, name: string) {
+      elements = elements.map((e) => (e.id === id ? { ...e, name } : e));
+      buildVersion.value++;
+    },
+    removeElement(id: string) {
+      const { elements: next, movedTo } = withElementRemoved(elements, id);
+      elements = next;
+      for (const [body, held] of [...bodyElement]) {
+        if (held !== id) continue;
+        if (movedTo === null) bodyElement.delete(body);
+        else bodyElement.set(body, movedTo);
+      }
+      buildVersion.value++;
+    },
+    setElementParent(id: string, parent: string | null) {
+      elements = reparented(elements, id, parent);
+      buildVersion.value++;
+    },
+    setBodiesElement(ids: Iterable<string>, element: string | null) {
+      for (const id of ids) {
+        if (element === null) bodyElement.delete(id);
+        else bodyElement.set(id, element);
+      }
+      buildVersion.value++;
+    },
     get document() { return doc; },
     buildState: {
       building: false,
@@ -140,6 +187,116 @@ const IMPORT = (nodes: { name: string; parent: number | null }[]): Feature =>
 
 describe("BrowserPane", () => {
   beforeEach(() => { setActivePinia(createPinia()); });
+
+  // --- elements: the user's own folders over the bodies --------------------
+
+  it("draws an element as a folder, with the bodies filed into it under it", async () => {
+    const fake = makeEngine({ parameters: {}, features: [] }, [
+      { id: "body1", name: "Bracket" },
+      { id: "body2", name: "Plate" },
+    ]);
+    const w = render(fake);
+    // the control: with no element, both bodies are top-level rows
+    expect(panel(w).filter((r) => r.kind === "row").map((r) => r.text))
+      .toEqual(expect.arrayContaining(["Bracket", "Plate"]));
+    expect(folderNamed(w, "Rig")).toBeUndefined();
+
+    const rig = fake.store.addElement("Rig");
+    fake.store.setBodiesElement(["body1"], rig);
+    await nextTick();
+
+    expect(folderNamed(w, "Rig")).toBeDefined();
+    const rows = panel(w);
+    // an element head is emitted, and the filed body sits inside it (which is
+    // to say: after the head, and before the body that was left alone)
+    const at = (t: string) => rows.findIndex((r) => r.text === t);
+    expect(at("Rig")).toBeGreaterThan(-1);
+    expect(at("Bracket")).toBeGreaterThan(at("Rig"));
+    expect(at("Plate")).toBeGreaterThan(at("Bracket"));
+  });
+
+  it("keeps an element that holds nothing, so it can be filled afterwards", async () => {
+    const fake = makeEngine({ parameters: {}, features: [] }, [{ id: "body1", name: "Bracket" }]);
+    const w = render(fake);
+    fake.store.addElement("Empty");
+    await nextTick();
+    const head = folderNamed(w, "Empty");
+    expect(head).toBeDefined();
+    // and it says so: no count badge, rather than a stale one
+    expect(head!.find(".tree-count").text()).toBe("");
+  });
+
+  it("hides every body under an element from its eye, one batched write", async () => {
+    const fake = makeEngine({ parameters: {}, features: [] }, [
+      { id: "body1", name: "A" },
+      { id: "body2", name: "B" },
+    ]);
+    const w = render(fake);
+    const rig = fake.store.addElement("Rig");
+    fake.store.setBodiesElement(["body1", "body2"], rig);
+    await nextTick();
+
+    expect(eyeName(folderNamed(w, "Rig"))).toBe("visible");
+    await folderNamed(w, "Rig")!.find(".tree-eye").trigger("click");
+    expect(fake.store.isBodyVisible("body1")).toBe(false);
+    expect(fake.store.isBodyVisible("body2")).toBe(false);
+    await nextTick();
+    expect(eyeName(folderNamed(w, "Rig"))).toBe("hidden");
+  });
+
+  it("takes a body dragged onto an element head into it, and back out on the Bodies head", async () => {
+    const fake = makeEngine({ parameters: {}, features: [] }, [{ id: "body1", name: "Bracket" }]);
+    const w = render(fake);
+    const rig = fake.store.addElement("Rig");
+    await nextTick();
+
+    const row = w.findAll(".feature-row").find((el) => el.text().includes("Bracket"))!;
+    await row.trigger("dragstart");
+    await folderNamed(w, "Rig")!.trigger("dragover");
+    await folderNamed(w, "Rig")!.trigger("drop");
+    expect(fake.store.bodyElementOf("body1")).toBe(rig);
+
+    await nextTick();
+    const back = w.findAll(".feature-row").find((el) => el.text().includes("Bracket"))!;
+    await back.trigger("dragstart");
+    await folderNamed(w, "Bodies")!.trigger("drop");
+    expect(fake.store.bodyElementOf("body1")).toBeUndefined();
+  });
+
+  it("refuses a drop that would bury an element inside its own child", async () => {
+    const fake = makeEngine({ parameters: {}, features: [] }, []);
+    const w = render(fake);
+    const rig = fake.store.addElement("Rig");
+    const motor = fake.store.addElement("Motor", rig);
+    await nextTick();
+
+    await folderNamed(w, "Rig")!.trigger("dragstart");
+    await folderNamed(w, "Motor")!.trigger("drop");
+    expect(fake.store.bodyElements.find((e) => e.id === rig)!.parent).toBeUndefined();
+
+    // the control: the same gesture the other way round is taken
+    await folderNamed(w, "Motor")!.trigger("dragstart");
+    await folderNamed(w, "Bodies")!.trigger("drop");
+    expect(fake.store.bodyElements.find((e) => e.id === motor)!.parent).toBeUndefined();
+    expect(fake.store.bodyElements.map((e) => e.id)).toEqual([rig, motor]);
+  });
+
+  it("gives an assembly node no rename and no menu, an element both", async () => {
+    // Two levels, so "Robot" is a genuine folder: a product owning ONE body and
+    // no children is drawn as that body's row instead of a head wrapping it.
+    const fake = makeEngine(
+      { parameters: {}, features: [IMPORT([{ name: "Robot", parent: null }, { name: "MCU", parent: 0 }])] },
+      [{ id: "body1", name: "MCU", nodeRef: "imp1/1" }, { id: "body2", name: "Loose" }],
+    );
+    const w = render(fake);
+    fake.store.addElement("Rig");
+    await nextTick();
+
+    // An element head is draggable (it can be filed somewhere itself); an
+    // imported product is a fact about a file and is not.
+    expect(folderNamed(w, "Rig")!.attributes("draggable")).toBe("true");
+    expect(folderNamed(w, "Robot")!.attributes("draggable")).toBe("false");
+  });
 
   it("renders the built-in folders and the sketches in the document", () => {
     const fake = makeEngine({ parameters: {}, features: [sketch("s1")] });

@@ -33,8 +33,10 @@ import { useBrowserStore } from "../../stores/browser";
 import TreeFolder from "./TreeFolder.vue";
 import TreeRow from "./TreeRow.vue";
 import {
-  bodyExtraMenu, buildAssemblyGroups, collectBodyIds, type AsmGroup,
+  bodyExtraMenu, buildBodyTree, collectGroupBodyIds, elementMoveMenu, elementPath,
+  type BodyRef, type TreeGroup,
 } from "../../ui/browserTree";
+import { ancestryOf } from "../../document/elements";
 import {
   BROWSER_FILTERS, asBrowserFilter, getBrowserFilter, isBrowserSection,
   onBrowserFilterChange, sectionVisible, setBrowserFilter, type BrowserSection,
@@ -76,6 +78,14 @@ interface FolderNode {
   collapsed: boolean;
   visible?: boolean | undefined;
   toggleVis?: (() => void) | undefined;
+  /** An element's id: what a programmatic rename aims at, see TreeFolder. */
+  id?: string | undefined;
+  rename?: ((name: string) => void) | undefined;
+  remove?: (() => void) | undefined;
+  extraMenu?: CtxItem[] | undefined;
+  dragStart?: (() => void) | undefined;
+  acceptDrop?: (() => boolean) | undefined;
+  dropHere?: (() => void) | undefined;
 }
 interface RowNode {
   kind: "row";
@@ -96,6 +106,7 @@ interface RowNode {
   rename?: ((name: string) => void) | undefined;
   remove?: (() => void) | undefined;
   extraMenu?: CtxItem[] | undefined;
+  dragStart?: (() => void) | undefined;
 }
 interface EmptyNode { kind: "empty"; k: string; text: string }
 /** A section some plugin contributed, drawn as its own component. The panel
@@ -167,14 +178,97 @@ function importTrees(doc: CadDocument): Map<string, { name: string; parent: numb
   return trees;
 }
 
-/** body id → the assembly node keys enclosing it, so a programmatic rename can
- *  open the whole chain before the row is looked for. Read only when a rename is
- *  requested, so the second buildAssemblyGroups pass costs nothing in the
- *  ordinary case. */
+/** The whole body tree: the user's elements over whatever structure the imports
+ *  brought with them. Elements live in the store rather than in the document
+ *  object useDocValue hands out (they are a display overlay, like body names),
+ *  so they are read fresh here and their setters re-emit the build. */
+function bodyTree(doc: CadDocument) {
+  return buildBodyTree(bodyList(), importTrees(doc), store.bodyElements, store.bodyElementMap());
+}
+
+/** body id → the folder keys enclosing it, so a programmatic rename can open the
+ *  whole chain before the row is looked for. Read only when a rename is
+ *  requested, so the second shaping pass costs nothing in the ordinary case. */
 const bodyAncestors = useDocValue((doc) => {
   engine.bridge.buildVersion.value;
-  return buildAssemblyGroups(bodyList(), importTrees(doc))?.ancestors ?? new Map<string, string[]>();
+  return bodyTree(doc).ancestors;
 });
+
+// --- elements: filing bodies into folders ---------------------------------
+
+/** The bodies one gesture acts on: the whole selection when the row that was
+ *  grabbed is part of it, otherwise just that row.
+ *
+ *  The rule every file manager uses, and the one that makes this usable at all:
+ *  organising an import means moving hundreds of parts, and a menu that silently
+ *  acted on one of a selection of two hundred would be worse than no menu. */
+function actOn(bodyId: string): string[] {
+  const sel = browser.selectedBodyIds;
+  return sel.includes(bodyId) ? [...sel] : [bodyId];
+}
+
+/** Put `ids` in a brand new element and start naming it. The element is made
+ *  first and the bodies moved into it second, two writes, because both are
+ *  display overlays and neither is undoable, so there is nothing to be atomic
+ *  about. */
+function fileIntoNewElement(ids: readonly string[], parent: string | null = null) {
+  const id = store.addElement(undefined, parent);
+  if (ids.length) store.setBodiesElement(ids, id);
+  browser.expand("f:Bodies");
+  for (const key of ancestryOf(store.bodyElements, id)) browser.expand(`e:${key}`);
+  browser.beginRename(id);
+}
+
+/** The "Move to" submenu for a set of bodies. */
+function moveBodiesMenu(ids: readonly string[], from: string | undefined): CtxItem {
+  return elementMoveMenu(store.bodyElements, ids, from, {
+    toNew: () => fileIntoNewElement(ids),
+    to: (element) => store.setBodiesElement(ids, element),
+  });
+}
+
+/** The "Move to element" submenu for an element itself (reparenting a folder).
+ *  Its own subtree is left out: a folder cannot go inside itself, and offering
+ *  the move only to refuse it is a menu that lies. */
+function moveElementMenu(id: string): CtxItem {
+  const inside = store.elementSubtree(id);
+  const rows: CtxItem[] = [
+    {
+      label: "Top level",
+      disabled: store.bodyElements.find((e) => e.id === id)?.parent === undefined,
+      onClick: () => store.setElementParent(id, null),
+    },
+  ];
+  for (const e of store.bodyElements) {
+    if (inside.has(e.id)) continue;
+    rows.push({
+      label: elementPath(store.bodyElements, e.id),
+      onClick: () => store.setElementParent(id, e.id),
+    });
+  }
+  return { label: "Move to", children: rows };
+}
+
+/** Take the in-flight drag into `element` (null = the top level). Both drop
+ *  kinds land here so the two targets, a folder head and the Bodies head,
+ *  cannot drift apart. */
+function dropInto(element: string | null) {
+  const d = browser.drag;
+  browser.endDrag();
+  if (!d) return;
+  if (d.kind === "bodies") store.setBodiesElement(d.ids, element);
+  else store.setElementParent(d.id, element);
+}
+
+/** Would that drop do anything? A folder onto itself or into its own subtree is
+ *  refused here rather than on the drop, so the row never lights up as a target
+ *  it is going to reject. */
+function canDropInto(element: string | null): boolean {
+  const d = browser.drag;
+  if (!d) return false;
+  if (d.kind === "bodies") return true;
+  return element === null ? true : !store.elementSubtree(d.id).has(element);
+}
 
 /** The sections the running plugins add, mirrored into a ref so the node list
  *  re-runs when one starts or stops. The registry is deliberately Vue-free (that
@@ -215,11 +309,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
     out.push({ kind: "folder", k: key, key, label: name, icon, count: rows.length, depth: 0, collapsed });
     if (collapsed) return;
     if (!rows.length) {
-      out.push({
-        kind: "empty",
-        k: `${key}:empty`,
-        text: name === "Bodies" ? "No bodies yet" : `No ${name.toLowerCase()} yet`,
-      });
+      out.push({ kind: "empty", k: `${key}:empty`, text: `No ${name.toLowerCase()} yet` });
       return;
     }
     out.push(...rows);
@@ -270,7 +360,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
     out.push({ kind: "plugin", k: `x:${key}`, component: section.component });
   }
 
-  const bodyRow = (b: { id: string; name: string }, depth: number): RowNode => {
+  const bodyRow = (b: BodyRef, depth: number): RowNode => {
     // The swatch is the slot assignment made visible. Drawn only while
     // something is contributing a colour menu for a body, because that is the
     // same capability that decides a body HAS a colour: a chip with no way to
@@ -291,53 +381,85 @@ const nodes = useDocValue((doc): TreeNode[] => {
       visible: store.isBodyVisible(b.id),
       activate: (e: MouseEvent) => selectBody(b.id, e.ctrlKey || e.metaKey),
       toggleVis: () => toggleBodyVis(b.id),
-      extraMenu: bodyExtraMenu(b.id),
+      extraMenu: [
+        moveBodiesMenu(actOn(b.id), store.bodyElementOf(b.id)),
+        ...bodyExtraMenu(b.id),
+      ],
+      dragStart: () => browser.startDrag({ kind: "bodies", ids: actOn(b.id) }),
       rename: (name: string) => store.setBodyName(b.id, name),
       remove: () => store.removeBody(b.id),
-      title: "Click to select (Ctrl+click adds) · double-click to rename · right-click for Color / Rename / Delete · eye to show/hide",
+      title: "Click to select (Ctrl+click adds) · drag into an element · double-click to rename · right-click for Move / Color / Rename / Delete · eye to show/hide",
     };
   };
 
-  /** One assembly node and everything under it.
+  /** One folder of the body tree and everything under it.
    *
-   *  A node that owns exactly one body and no children is emitted as that body's
-   *  ROW, not as a folder wrapping a single entry, the body already carries the
-   *  product's name, so a folder there would just say everything twice. */
-  const assemblyNode = (g: AsmGroup, depth: number) => {
-    if (g.children.length === 0 && g.bodies.length === 1) {
+   *  An ASSEMBLY node that owns exactly one body and no children is emitted as
+   *  that body's ROW, not as a folder wrapping a single entry: the body already
+   *  carries the product's name, so a folder there would just say everything
+   *  twice. An ELEMENT is never collapsed away like that, however little it
+   *  holds, because it is a folder the user made on purpose and one that
+   *  disappeared when it got down to one part could not be filled again. */
+  const groupNode = (g: TreeGroup, depth: number) => {
+    if (g.kind === "assembly" && g.children.length === 0 && g.bodies.length === 1) {
       out.push(bodyRow(g.bodies[0]!, depth));
       return;
     }
-    const ids = collectBodyIds(g);
+    const ids = collectGroupBodyIds(g);
     const anyVisible = ids.some((id) => store.isBodyVisible(id));
     const collapsed = browser.isCollapsed(g.key);
+    const element = g.kind === "element" ? g.id! : null;
     out.push({
-      kind: "folder", k: g.key, key: g.key, label: g.label, icon: "assembly",
+      kind: "folder", k: g.key, key: g.key, label: g.label,
+      icon: g.kind === "element" ? "element" : "assembly",
       count: g.total, depth, collapsed, visible: anyVisible,
       // ONE batched write: a per-body loop would re-render the whole model once
       // per body (setModel plus the flush-seam pass each time).
       toggleVis: () => store.setBodiesVisibility(new Map(ids.map((id) => [id, !anyVisible]))),
+      // Everything below is an element's, and absent on an assembly node, which
+      // is a fact about a file: it cannot be renamed, deleted or dropped into,
+      // and TreeFolder renders no menu at all when given none of them.
+      ...(element
+        ? {
+            id: element,
+            rename: (name: string) => store.renameElement(element, name),
+            remove: () => store.removeElement(element),
+            extraMenu: [
+              { label: "New element inside", onClick: () => fileIntoNewElement([], element) },
+              ...(ids.length ? [moveBodiesMenu(ids, element)] : []),
+              moveElementMenu(element),
+              { separator: true, label: "" },
+            ],
+            dragStart: () => browser.startDrag({ kind: "element", id: element }),
+            acceptDrop: () => canDropInto(element),
+            dropHere: () => dropInto(element),
+          }
+        : {}),
     });
     if (collapsed) return;
-    for (const c of g.children) assemblyNode(c, depth + 1);
+    for (const c of g.children) groupNode(c, depth + 1);
     for (const b of g.bodies) out.push(bodyRow(b, depth + 1));
   };
 
-  const groups = show("bodies") ? buildAssemblyGroups(bodies, importTrees(doc)) : null;
-  if (!show("bodies")) {
-    // nothing: the filter is narrowed to something else
-  } else if (!groups) {
-    // no imported assembly tree in this document, exactly the flat list as before
-    folder("Bodies", "body", bodies.map((b) => bodyRow(b, 0)));
-  } else {
+  if (show("bodies")) {
+    const tree = bodyTree(doc);
     const collapsed = browser.isCollapsed("f:Bodies");
     out.push({
       kind: "folder", k: "f:Bodies", key: "f:Bodies", label: "Bodies", icon: "body",
       count: bodies.length, depth: 0, collapsed,
+      extraMenu: [{ label: "New element", onClick: () => fileIntoNewElement([]) }],
+      // The head is also the way OUT of a folder: dropping onto "Bodies" is what
+      // orphans a body again, and without it a part filed by mistake could be
+      // moved between folders but never back to the top level by dragging.
+      acceptDrop: () => canDropInto(null),
+      dropHere: () => dropInto(null),
     });
     if (!collapsed) {
-      for (const b of groups.loose) out.push(bodyRow(b, 0));
-      for (const n of groups.roots) assemblyNode(n, 0);
+      if (!tree.groups.length && !tree.loose.length) {
+        out.push({ kind: "empty", k: "f:Bodies:empty", text: "No bodies yet" });
+      }
+      for (const n of tree.groups) groupNode(n, 0);
+      for (const b of tree.loose) out.push(bodyRow(b, 0));
     }
   }
 
@@ -424,6 +546,13 @@ onUnmounted(() => root.value?.removeEventListener("wheel", onWheel));
         :collapsed="n.collapsed"
         :visible="n.visible"
         :toggle-vis="n.toggleVis"
+        :id="n.id"
+        :rename="n.rename"
+        :remove="n.remove"
+        :extra-menu="n.extraMenu"
+        :drag-start="n.dragStart"
+        :accept-drop="n.acceptDrop"
+        :drop-here="n.dropHere"
         @toggle="browser.toggle(n.key)"
       />
       <TreeRow
@@ -444,6 +573,7 @@ onUnmounted(() => root.value?.removeEventListener("wheel", onWheel));
         :rename="n.rename"
         :remove="n.remove"
         :extra-menu="n.extraMenu"
+        :drag-start="n.dragStart"
       />
       <div v-else-if="n.kind === 'empty'" class="empty-state tree-child">{{ n.text }}</div>
 

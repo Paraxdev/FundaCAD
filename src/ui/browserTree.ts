@@ -8,6 +8,7 @@
 
 import type { CtxItem } from "./menu";
 import { contributedBodyMenu } from "../plugins/contrib";
+import { ancestryOf, childrenByParent, type ElementDef } from "../document/elements";
 
 /** The rows a plugin adds to a body's right-click menu.
  *
@@ -122,4 +123,154 @@ export function buildAssemblyGroups(
     (g.total = g.bodies.length + g.children.reduce((n, c) => n + total(c), 0));
   for (const r of roots) total(r);
   return { roots, loose, ancestors };
+}
+
+// --- the whole body tree: the user's elements over the imports' own -----------
+
+/** A body as the tree carries it. */
+export interface BodyRef {
+  id: string;
+  name: string;
+}
+
+/** One folder in the Browser's body tree, from either source.
+ *
+ *  ONE shape for both kinds rather than two, because everything the panel does
+ *  with a folder, indent it, count it, collapse it, toggle every body under it,
+ *  is the same for both, and `kind` is consulted only where they genuinely
+ *  differ: an element can be renamed, deleted and dropped onto, an assembly node
+ *  is a fact about a file and can be none of those. */
+export interface TreeGroup {
+  kind: "element" | "assembly";
+  /** The element's id. Absent on an assembly node, which has no id of its own,
+   *  only a position in a manifest. */
+  id?: string;
+  key: string; // collapse key: "e:<elementId>" or "n:<featureId>/<nodeIndex>"
+  label: string;
+  children: TreeGroup[];
+  bodies: BodyRef[];
+  total: number; // bodies at or below here, what the count badge shows
+}
+
+/** Every body id at or below `g`. */
+export function collectGroupBodyIds(g: TreeGroup, out: string[] = []): string[] {
+  for (const b of g.bodies) out.push(b.id);
+  for (const c of g.children) collectGroupBodyIds(c, out);
+  return out;
+}
+
+function fromAsm(g: AsmGroup): TreeGroup {
+  return {
+    kind: "assembly",
+    key: g.key,
+    label: g.label,
+    children: g.children.map(fromAsm),
+    bodies: g.bodies,
+    total: g.total,
+  };
+}
+
+/** The Browser's whole body tree: the user's elements first, then whatever
+ *  assembly structure the imports brought with them, then the rest.
+ *
+ *  AN ELEMENT ASSIGNMENT WINS. A body the user has filed shows in that folder
+ *  and nowhere else, including when the file it came from had an opinion about
+ *  where it belonged. That is the entire point of the feature: an imported tree
+ *  is a record of how somebody else's CAD system organised the part, and it is
+ *  frequently not how this document wants it. Bodies left alone keep the
+ *  imported structure exactly as they had it, so opening an assembly and
+ *  changing nothing looks the way it always did.
+ *
+ *  Empty elements are kept. A folder made and not yet filled is the first half
+ *  of every organising gesture there is, and one that vanished until something
+ *  was dropped in it could never be dropped into.
+ *
+ *  Always returns a tree, never null: a document with no elements and no
+ *  imported assembly comes back as `groups: []` plus every body in `loose`,
+ *  which is the flat list the panel has always drawn. */
+export function buildBodyTree(
+  bodies: readonly { id: string; name: string; nodeRef?: string }[],
+  trees: ReadonlyMap<string, readonly { name: string; parent: number | null }[]>,
+  elements: readonly ElementDef[],
+  bodyElement: ReadonlyMap<string, string>,
+): { groups: TreeGroup[]; loose: BodyRef[]; ancestors: Map<string, string[]> } {
+  const known = new Set(elements.map((e) => e.id));
+  const held = new Map<string, BodyRef[]>();
+  const rest: { id: string; name: string; nodeRef?: string }[] = [];
+  for (const b of bodies) {
+    const e = bodyElement.get(b.id);
+    if (e && known.has(e)) {
+      let list = held.get(e);
+      if (!list) held.set(e, (list = []));
+      list.push({ id: b.id, name: b.name });
+    } else {
+      rest.push(b);
+    }
+  }
+
+  const ancestors = new Map<string, string[]>();
+  const kids = childrenByParent(elements);
+  const walk = (e: ElementDef, chain: readonly string[]): TreeGroup => {
+    const key = `e:${e.id}`;
+    const here = [...chain, key];
+    const g: TreeGroup = {
+      kind: "element",
+      id: e.id,
+      key,
+      label: e.name,
+      children: (kids.get(e.id) ?? []).map((c) => walk(c, here)),
+      bodies: held.get(e.id) ?? [],
+      total: 0,
+    };
+    for (const b of g.bodies) ancestors.set(b.id, here);
+    g.total = g.bodies.length + g.children.reduce((n, c) => n + c.total, 0);
+    return g;
+  };
+  const groups = (kids.get("") ?? []).map((e) => walk(e, []));
+
+  const asm = buildAssemblyGroups(rest, trees);
+  if (asm) {
+    for (const [id, chain] of asm.ancestors) ancestors.set(id, chain);
+    groups.push(...asm.roots.map(fromAsm));
+  }
+  return { groups, loose: asm ? asm.loose : rest.map((b) => ({ id: b.id, name: b.name })), ancestors };
+}
+
+/** "Chassis / Frame": the path that tells two folders of the same name apart in
+ *  a flat menu. The context menu opens one level of flyout and elements nest
+ *  without limit, so the nesting has to go in the label. */
+export function elementPath(elements: readonly ElementDef[], id: string): string {
+  const names = new Map(elements.map((e) => [e.id, e.name]));
+  return ancestryOf(elements, id)
+    .map((e) => names.get(e) ?? e)
+    .reverse()
+    .join(" / ");
+}
+
+/** The "Move to" submenu for a set of bodies, shared by the Browser row menu and
+ *  the viewport's body menu so the two cannot drift.
+ *
+ *  `from` is the element they are in now, undefined for orphans, and only
+ *  greys out the row that would be a no-op. It is taken from ONE of the bodies:
+ *  a mixed selection is the ordinary case when several folders are being merged,
+ *  and every destination is legal for it. */
+export function elementMoveMenu(
+  elements: readonly ElementDef[],
+  ids: readonly string[],
+  from: string | undefined,
+  act: { toNew: () => void; to: (element: string | null) => void },
+): CtxItem {
+  const rows: CtxItem[] = [{ label: "New element…", onClick: act.toNew }];
+  if (elements.length) {
+    rows.push({ separator: true, label: "" });
+    rows.push({ label: "Top level", disabled: from === undefined, onClick: () => act.to(null) });
+    for (const e of elements) {
+      rows.push({
+        label: elementPath(elements, e.id),
+        disabled: e.id === from,
+        onClick: () => act.to(e.id),
+      });
+    }
+  }
+  return { label: ids.length > 1 ? `Move ${ids.length} bodies to` : "Move to", children: rows };
 }

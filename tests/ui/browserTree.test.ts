@@ -5,7 +5,8 @@
 // body's node chain to the root, keeping sibling identity straight, and refusing
 // to lose a body when the manifest is malformed.
 import { describe, expect, it } from "vitest";
-import { buildAssemblyGroups } from "../../src/ui/browserTree";
+import { buildAssemblyGroups, buildBodyTree, type TreeGroup } from "../../src/ui/browserTree";
+import type { ElementDef } from "../../src/document/elements";
 
 type Node = { name: string; parent: number | null };
 
@@ -147,5 +148,74 @@ describe("buildAssemblyGroups", () => {
     )!;
     expect(out.loose.map((b) => b.name)).toEqual(["Extrude1"]);
     expect(out.roots).toHaveLength(1);
+  });
+});
+
+// --- the merged tree: the user's elements over the imports' own --------------
+
+describe("buildBodyTree", () => {
+  const el = (id: string, name: string, parent?: string): ElementDef =>
+    parent === undefined ? { id, name } : { id, name, parent };
+  const assigned = (pairs: [string, string][]) => new Map(pairs);
+  const labels = (g: TreeGroup): unknown =>
+    [g.kind, g.label, g.total, g.bodies.map((b) => b.id), g.children.map(labels)];
+
+  it("draws the flat list unchanged when there is neither an element nor an assembly", () => {
+    const out = buildBodyTree([body("body1", "Body1"), body("body2", "Body2")], trees([]), [], new Map());
+    expect(out.groups).toEqual([]);
+    expect(out.loose.map((b) => b.id)).toEqual(["body1", "body2"]);
+  });
+
+  it("keeps an empty element, so a folder can be made before it is filled", () => {
+    const out = buildBodyTree([body("body1", "Body1")], trees([]), [el("e1", "Rig")], new Map());
+    expect(out.groups.map(labels)).toEqual([["element", "Rig", 0, [], []]]);
+    expect(out.loose.map((b) => b.id)).toEqual(["body1"]);
+  });
+
+  it("nests elements and counts every body at or below one", () => {
+    const out = buildBodyTree(
+      [body("body1", "A"), body("body2", "B"), body("body3", "C")],
+      trees([]),
+      [el("e1", "Rig"), el("e2", "Motor", "e1")],
+      assigned([["body1", "e1"], ["body2", "e2"]]),
+    );
+    expect(out.groups.map(labels)).toEqual([
+      ["element", "Rig", 2, ["body1"], [["element", "Motor", 1, ["body2"], []]]],
+    ]);
+    expect(out.loose.map((b) => b.id)).toEqual(["body3"]);
+    expect(out.ancestors.get("body2")).toEqual(["e:e1", "e:e2"]);
+  });
+
+  it("takes a filed body OUT of the assembly node it was imported under", () => {
+    const bodies = [body("body1", "MCU", "f1/3"), body("body2", "MCU", "f1/6")];
+    // the control first: with no element, both sit under the imported tree
+    const before = buildBodyTree(bodies, trees(NESTED), [], new Map());
+    expect(before.groups.map((g) => g.kind)).toEqual(["assembly"]);
+    expect(before.groups[0]!.total).toBe(2);
+
+    const after = buildBodyTree(bodies, trees(NESTED), [el("e1", "Spares")], assigned([["body1", "e1"]]));
+    expect(after.groups.map((g) => [g.kind, g.total])).toEqual([
+      ["element", 1],
+      ["assembly", 1],
+    ]);
+    expect(after.ancestors.get("body1")).toEqual(["e:e1"]);
+    expect(after.ancestors.get("body2")![0]).toBe("n:f1/0");
+  });
+
+  it("ignores an assignment to an element that is not there", () => {
+    const out = buildBodyTree([body("body1", "A")], trees([]), [], assigned([["body1", "gone"]]));
+    expect(out.groups).toEqual([]);
+    expect(out.loose.map((b) => b.id)).toEqual(["body1"]);
+  });
+
+  it("puts elements before the imported structure, and loose bodies last", () => {
+    const out = buildBodyTree(
+      [body("body1", "Loose"), body("body2", "MCU", "f1/3"), body("body3", "Filed")],
+      trees(NESTED),
+      [el("e1", "Rig")],
+      assigned([["body3", "e1"]]),
+    );
+    expect(out.groups.map((g) => g.kind)).toEqual(["element", "assembly"]);
+    expect(out.loose.map((b) => b.id)).toEqual(["body1"]);
   });
 });

@@ -40,6 +40,9 @@ const props = defineProps<{
   remove?: (() => void) | undefined;
   /** Menu items prepended to the row's own (Cut all bodies, Color). */
   extraMenu?: CtxItem[] | undefined;
+  /** Begin dragging this row (a body being filed into an element). Omit and the
+   *  row is not draggable at all, which is what every non-body row stays. */
+  dragStart?: (() => void) | undefined;
 }>();
 
 const browser = useBrowserStore();
@@ -107,9 +110,12 @@ function openMenu(e: MouseEvent) {
     :class="{ selected: selected, error: error }"
     :style="style"
     :title="title"
+    :draggable="!!dragStart"
     @click="activate?.($event)"
     @dblclick="onDblClick"
     @contextmenu="openMenu"
+    @dragstart="dragStart?.()"
+    @dragend="browser.endDrag()"
   >
     <span class="feature-icon"><Icon :name="icon" :size="14" /></span>
     <span v-if="swatch" class="tree-swatch" :style="{ ...swatchStyle, background: swatch }"></span>
