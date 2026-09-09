@@ -188,6 +188,28 @@ an archive and its contents has no upper bound, so a limit only on what arrives
 would be no limit at all. `path` has no ceiling and stays the answer for
 anything genuinely large.
 
+### The limit that actually binds
+
+None of those numbers is the one that decides anything. Inline content is
+written by the model, character by character, as its own output. A megabyte of
+base64 is somewhere north of a quarter of a million tokens, so the ceiling is
+the model's output budget: roughly one message per piece, and a few hundred
+kilobytes in each at the very most. Compression is what makes that a real
+option, and it is a tenfold difference on a STEP, not a marginal one. Beyond a
+handful of pieces it stops being worth doing at all.
+
+That matters more than it sounds, because of what an agent does when it decides
+a file cannot be sent. It does not stop. It measures the part with whatever it
+has and models against a simplified stand-in, and the result is wrong in the one
+way nothing downstream catches: every measurement it takes afterwards is
+consistent with every other one. So the tool says the alternative out loud
+wherever the question comes up (a missing path, an oversized payload, the first
+piece of a long upload): ask the person for the path on the machine FundaCAD
+runs on, or ask them to open the file themselves with **File ▸ Import Mesh…**,
+after which it is in the document and `inspect` measures the real geometry. In
+a live session that is the cheapest route by a wide margin, and no bytes cross
+the wire at all.
+
 ### Why `inspect` returns selectors
 
 A feature addresses geometry that does not exist until the rebuild runs, through

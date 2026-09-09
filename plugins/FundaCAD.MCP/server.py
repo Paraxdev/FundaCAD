@@ -148,6 +148,13 @@ MAX_INLINE_BYTES = 64 * 1024 * 1024
 #: gigabyte of zeroes, and a limit only on what arrives is not a limit at all.
 MAX_UNPACKED_BYTES = 512 * 1024 * 1024
 
+#: Past this many pieces, say so. Inline content is written by the model, so
+#: every piece costs a whole message of its output whatever this server's own
+#: limit is. An agent that cannot see that will spend ten messages transcribing
+#: base64, or, worse, decide the file cannot be sent and model against a
+#: simplified stand-in it invented instead.
+PIECES_WORTH_IT = 5
+
 #: When pieces nobody came back for are dropped. This process outlives any one
 #: conversation, so an upload abandoned halfway would otherwise hold its
 #: directory for as long as the host runs.
@@ -182,7 +189,14 @@ def _safe_filename(name, fmt):
 BLOCK = 4 * 1024 * 1024
 
 
-def _mib(n):
+def _size(n):
+    """A size in the unit it is actually in. The progress line on an upload
+    reads a few hundred kilobytes as "0.0 MiB", which is the one number the
+    caller is watching and the one that has to look like it moved."""
+    if n < 1024:
+        return f"{n} bytes"
+    if n < 1024 * 1024:
+        return f"{n / 1024:.0f} KiB"
     return f"{n / (1024 * 1024):.1f} MiB"
 
 
@@ -299,10 +313,24 @@ class Upload:
 
 
 def _too_large(size):
-    return (f"content reached {_mib(size)}, more than can be sent inline "
+    return (f"content reached {_size(size)}, more than can be sent inline "
             f"(limit {MAX_INLINE_BYTES // (1024 * 1024)} MiB). Send it gzipped "
             "with compression=\"gzip\", which a STEP file typically shrinks "
-            "tenfold, or pass path instead, which has no limit at all.")
+            "tenfold, or pass path instead, which has no limit at all. " + ASK_FOR_A_PATH)
+
+
+#: What to do when the file cannot come this way. Written out in full wherever
+#: the question arises, because the wrong answer to it is expensive and quiet:
+#: an agent that decides the part cannot be sent will model against something it
+#: made up, and everything it measures afterwards will be self-consistent and
+#: wrong.
+ASK_FOR_A_PATH = (
+    "If you cannot reach the file from where you are, ask the person you are "
+    "working with for its path on the machine FundaCAD runs on, or ask them to "
+    "open it in FundaCAD themselves (File, Import Mesh), which puts it in the "
+    "document for `inspect` to measure. Do not substitute a simplified stand-in "
+    "for the real part: fitting to an approximation is the failure this tool "
+    "exists to prevent.")
 
 
 def _decode_spool(up, out_path):
@@ -356,7 +384,7 @@ def _copy_capped(src, dst, what):
         total += len(block)
         if total > MAX_UNPACKED_BYTES:
             raise ValueError(
-                f"{what} is over {_mib(MAX_UNPACKED_BYTES)} once unpacked, "
+                f"{what} is over {_size(MAX_UNPACKED_BYTES)} once unpacked, "
                 "which is more than "
                 "will be read from an archive. Send the file itself, or pass "
                 "path.")
@@ -400,8 +428,8 @@ def _unzip_one(src_path, dst_path, fmt, told_format):
                 info = want[0]
             if info.file_size > MAX_UNPACKED_BYTES:
                 raise ValueError(
-                    f"{info.filename} is {_mib(info.file_size)} unpacked, more "
-                    f"than the {_mib(MAX_UNPACKED_BYTES)} an archive is read up "
+                    f"{info.filename} is {_size(info.file_size)} unpacked, more "
+                    f"than the {_size(MAX_UNPACKED_BYTES)} an archive is read up "
                     "to. Pass path.")
             with z.open(info) as src, open(dst_path, "wb") as dst:
                 total = _copy_capped(src, dst, info.filename)
@@ -653,16 +681,18 @@ screen. Every edit you make appears in their window as it happens.
             "Read an external geometry file (STEP, STL, 3MF, OBJ, BREP, GLB) into "
             "the timeline as a body, so it can be measured with `inspect` and "
             "modelled against. Use it when asked to fit something to a part that "
-            "exists as a file. Give `path` if this machine can open the file, or "
-            "`content` if you are holding the file itself (an upload, a sandbox) "
-            "and have no path to give. Inline, gzip it and say so: a STEP file "
-            "shrinks about tenfold, and what fits in one message is the limit "
-            "worth spending. Too big for one message even so? Send it in pieces: "
-            "encode the WHOLE file once, split the text that comes out, and send "
-            "each piece with `part` and `parts`, quoting the `upload` id the "
-            "first reply gives you. The format comes from the extension unless "
-            "given. A large STEP can take minutes: it is one read, so do it once "
-            "and keep the document.",
+            "exists as a file.\n"
+            "`path` is a file the machine FundaCAD runs on can open, and is how "
+            "anything of real size gets in. `content` is the file itself, for "
+            "when you have no path to give: gzip it (`compression`, and a STEP "
+            "shrinks about tenfold), and split it with `part` and `parts` if one "
+            "message will not hold it.\n"
+            "But content is written by YOU, so the limit that binds is your own "
+            "output and not this server's: roughly one message per piece, and a "
+            "file needing more than a handful of pieces is one to ask for a path "
+            "to instead. " + ASK_FOR_A_PATH + "\n"
+            "The format comes from the extension unless given. A large STEP can "
+            "take minutes: it is one read, so do it once and keep the document.",
             {"path": {"type": "string",
                       "description": "a file on the machine FundaCAD runs on"},
              "content": {"type": "string",
@@ -938,7 +968,7 @@ screen. Every edit you make appears in their window as it happens.
         if has_path:
             path = source = os.path.abspath(args["path"])
             if not os.path.isfile(path):
-                return failure(f"No such file: {path}")
+                return failure(f"No such file: {path}\n" + ASK_FOR_A_PATH)
             fmt = str(args.get("format") or _import_format(path)).lower()
             if fmt not in IMPORT_FORMATS:
                 return failure(f"Cannot import {fmt!r} files. "
@@ -949,10 +979,18 @@ screen. Every edit you make appears in their window as it happens.
             except ValueError as ex:
                 return failure(str(ex))
             if up.got < up.parts:
+                # The nudge goes on the FIRST piece or nowhere: that is while
+                # there is still something to decide. On the fifth it would only
+                # be telling an agent that the thing it is halfway through was a
+                # bad idea, which is worse than silence.
+                costly = ("\nThis is one message of yours per piece. "
+                          + ASK_FOR_A_PATH
+                          if up.got == 1 and up.parts > PIECES_WORTH_IT else "")
                 return text(
-                    f"Part {up.got} of {up.parts} received, {_mib(up.spooled)} "
+                    f"Part {up.got} of {up.parts} received, {_size(up.spooled)} "
                     f"of {up.name} so far. Send part {up.got + 1} with "
-                    f'upload="{up.id}". Nothing is imported until the last piece.')
+                    f'upload="{up.id}". Nothing is imported until the last '
+                    f"piece.{costly}")
             try:
                 path = _unpack(up)
             except (ValueError, OSError) as ex:
