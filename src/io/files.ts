@@ -11,7 +11,9 @@ import { clearRecovery } from "./recovery";
 import { noteRecent } from "./recentFiles";
 import { DOC_EXT, LEGACY_DOC_EXTS, isDocumentExt } from "./documentExt";
 import { announceImportedBody } from "../plugins/contrib";
-import { parseLibrary, serializeLibrary } from "../document/materials";
+import {
+  asHex, materialsForColors, nodeColors, parseLibrary, serializeLibrary,
+} from "../document/materials";
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -454,7 +456,14 @@ async function importPath(store: DocumentStore, geometry: GeometryBackend, path:
     toast(capability, { kind: "info" });
   }
 
-  // The file carried a colour of its own. Say so, and let whoever has a use for
+  // The file's own colours become materials, and the bodies it produced wear
+  // them. This is the half of an import that used to be thrown away: a STEP
+  // assembly's product colours were read by the sidecar, carried in the
+  // manifest, and then never looked at, so a file that arrived fully coloured
+  // opened as three thousand identical grey bodies.
+  await adoptImportedColors(store, id, res);
+
+  // The file carried ONE dominant colour. Say so, and let whoever has a use for
   // it decide.
   //
   // This used to be the decision itself: match the colour to the nearest slot of
@@ -469,6 +478,66 @@ async function importPath(store: DocumentStore, geometry: GeometryBackend, path:
   // that was still running would report itself finished too early.
   if (res.color === undefined) return;
   await announceImportedBody(id, res.color);
+}
+
+/** Make materials out of the colours an import carried, and put them on the
+ *  bodies it produced.
+ *
+ *  The IO half of document/materials.ts's `materialsForColors`, which is where
+ *  the decision (match an existing material, or mint one, and what to call it)
+ *  actually lives. What is here is the part that cannot be pure: the bodies do
+ *  not exist until the rebuild runs, and their ids are positional, so the import
+ *  has to wait for the build and then find its own bodies in the result.
+ *
+ *  TWO WAYS A BODY IS FOUND, because there are two kinds of import. An assembly
+ *  body carries `nodeRef` naming the product it came from, and that is what
+ *  binds it to a per-part colour. A single-body import has no tree, so its one
+ *  colour goes on whatever bodies the feature owns, which `faceOwners` answers.
+ *
+ *  Assignments are display-only overlays, so this adds no second undo step on
+ *  top of the import itself. */
+async function adoptImportedColors(
+  store: DocumentStore,
+  featureId: string,
+  res: { color?: string; nodes?: { name: string; parent: number | null; color?: string }[] },
+) {
+  const perNode = res.nodes ? nodeColors(res.nodes) : null;
+  // Normalised once, here, because it is the KEY into the map materialsForColors
+  // hands back and that map is keyed by the normalised form. nodeColors already
+  // returns it; a single dominant colour comes straight off the wire.
+  const single = perNode ? null : asHex(res.color);
+  const wanted: { color: string; name?: string | undefined }[] = [];
+  if (perNode) {
+    for (const c of perNode) if (c) wanted.push({ color: c });
+  } else if (single) {
+    wanted.push({ color: single });
+  }
+  if (!wanted.length) return;
+
+  const { add, byColor } = materialsForColors(wanted, store.materialLibrary);
+  if (add.length) store.importMaterials(add);
+
+  await store.rebuildNow();
+  const bodies = store.buildState.result?.bodies ?? [];
+  // One batched write per material, not one per body: an assembly is thousands
+  // of bodies and every write re-emits the build.
+  const byMaterial = new Map<string, string[]>();
+  const claim = (bodyId: string, hex: string | undefined) => {
+    const material = hex ? byColor.get(hex) : undefined;
+    if (!material) return;
+    const list = byMaterial.get(material);
+    if (list) list.push(bodyId);
+    else byMaterial.set(material, [bodyId]);
+  };
+  for (const b of bodies) {
+    const slash = b.nodeRef ? b.nodeRef.lastIndexOf("/") : -1;
+    if (perNode && slash > 0 && b.nodeRef!.slice(0, slash) === featureId) {
+      claim(b.id, perNode[Number(b.nodeRef!.slice(slash + 1))]);
+    } else if (!perNode && b.faceOwners?.some((owner) => owner === featureId)) {
+      claim(b.id, single ?? undefined);
+    }
+  }
+  for (const [material, ids] of byMaterial) store.setBodiesMaterial(ids, material);
 }
 
 /** Surface an error to the user, a native dialog in the app, console otherwise.

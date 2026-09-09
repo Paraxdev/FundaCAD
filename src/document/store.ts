@@ -1648,17 +1648,38 @@ export class DocumentStore {
     };
   }
 
-  async rebuildNow() {
-    // Serialize rebuilds: if one is already in flight, just mark that another is
-    // wanted. When the current one finishes it drains to the LATEST effectiveDoc.
-    // This keeps live previews (fillet drag) responsive without overlapping or
-    // out-of-order sidecar round-trips.
+  /** The drain currently running, so a caller that arrives mid-rebuild can
+   *  await the same finish rather than a promise of its own. Null when idle. */
+  private rebuildDrain: Promise<void> | null = null;
+
+  /** Rebuild and RESOLVE WHEN THE RESULT IS PUBLISHED.
+   *
+   *  That second half is the whole contract, and it used to be broken in the one
+   *  case that matters. Rebuilds are serialized: when one is already in flight a
+   *  second caller only marks that another pass is wanted, and the running drain
+   *  picks it up. But that path RETURNED IMMEDIATELY, so `await rebuildNow()`
+   *  resolved with `buildState.result` still pointing at the previous document.
+   *
+   *  Every caller of it is doing the same thing, which is why this is worth
+   *  fixing here rather than at each of them: something has just been added to
+   *  the timeline, and the next step needs the BODIES it produced, whose ids do
+   *  not exist until the build lands. Both callers today are import paths, and
+   *  both reach here immediately after addFeature, i.e. with that feature's own
+   *  rebuild already in flight, which is exactly the case that returned early.
+   *  So the colours an imported file carried were matched, and then written onto
+   *  an empty body list.
+   *
+   *  Awaiting the running drain is correct rather than merely closer: the drain
+   *  loops until `rebuildQueued` is clear, so when it resolves the published
+   *  result is the LATEST document, which is what "rebuild now" is asking for. */
+  async rebuildNow(): Promise<void> {
     if (this.rebuilding) {
       this.rebuildQueued = true;
+      await this.rebuildDrain;
       return;
     }
     this.rebuilding = true;
-    try {
+    const drain = (async () => {
       // Wrap the whole drain in runBusy so a LONG rebuild gets the Cancel button
       // and busy label. Without this, busy.active stayed false for every rebuild
       // and timeline.ts, which gates both on it, offered no way to stop a build
@@ -1693,8 +1714,13 @@ export class DocumentStore {
           this.rebuilding = false;
         }
       });
+    })();
+    this.rebuildDrain = drain;
+    try {
+      await drain;
     } finally {
       this.rebuilding = false; // belt and braces if runBusy throws before the callback
+      this.rebuildDrain = null;
     }
   }
 

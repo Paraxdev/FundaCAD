@@ -9,8 +9,9 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  asHex, FINISH, finishOf, freshMaterialName, type MaterialDef, nearestMaterial,
-  normalizeMaterial, parseLibrary, serializeLibrary, slugId, STARTER_LIBRARY, uniqueId,
+  asHex, colorName, FINISH, finishOf, freshMaterialName, type MaterialDef,
+  materialsForColors, nearestMaterial, nodeColors, normalizeMaterial, parseLibrary,
+  serializeLibrary, slugId, STARTER_LIBRARY, uniqueId,
 } from "../../src/document/materials";
 
 describe("asHex", () => {
@@ -138,6 +139,96 @@ describe("parseLibrary", () => {
   it("keeps two rows that want the same id, rather than losing one", () => {
     const { materials } = parseLibrary('[{"name":"Ink","color":"#111111"},{"name":"Ink","color":"#222222"}]');
     expect(materials.map((m) => m.id)).toEqual(["m-ink", "m-ink-2"]);
+  });
+});
+
+describe("colorName", () => {
+  it("names a colour roughly, which is what makes a library row legible", () => {
+    expect(colorName("#b06a3b")).toBe("brown");
+    expect(colorName("#2244cc")).toBe("blue");
+    expect(colorName("#f4f4f4")).toBe("white");
+    expect(colorName("#101010")).toBe("black");
+  });
+
+  it("says so rather than guessing when it cannot read the colour", () => {
+    expect(colorName("nonsense")).toBe("colour");
+  });
+});
+
+describe("nodeColors", () => {
+  // A subassembly painted red holding parts with no colour of their own: the
+  // parts are red, and reading the leaf alone would throw that away.
+  const TREE = [
+    { name: "Robot", parent: null },
+    { name: "Arm", parent: 0, color: "#d23b30" },
+    { name: "Bracket", parent: 1 },
+    { name: "Pin", parent: 1, color: "#2244cc" },
+    { name: "Base", parent: 0 },
+  ];
+
+  it("inherits from the nearest coloured ancestor", () => {
+    expect(nodeColors(TREE)).toEqual([
+      undefined,   // the root says nothing
+      "#d23b30",   // its own
+      "#d23b30",   // inherited from Arm
+      "#2244cc",   // its own beats the ancestor's
+      undefined,   // nothing above it either
+    ]);
+  });
+
+  it("terminates on a cycle in a hand-edited manifest", () => {
+    expect(nodeColors([
+      { parent: 1 },
+      { parent: 0, color: "#010203" },
+    ])).toEqual(["#010203", "#010203"]);
+  });
+});
+
+describe("materialsForColors", () => {
+  const lib: MaterialDef[] = [
+    { id: "m-steel", name: "Steel", color: "#8f959b", metalness: 0.95 },
+  ];
+
+  it("reuses a material the document already has for that colour", () => {
+    const { add, byColor } = materialsForColors([{ color: "#909699" }], lib);
+    expect(add).toEqual([]);
+    expect(byColor.get("#909699")).toBe("m-steel");
+  });
+
+  it("mints one, named for the colour, when nothing is close", () => {
+    const { add, byColor } = materialsForColors([{ color: "#2244cc" }], lib);
+    expect(add).toEqual([{ id: "m-imported-blue", name: "Imported blue", color: "#2244cc" }]);
+    expect(byColor.get("#2244cc")).toBe("m-imported-blue");
+  });
+
+  it("prefers a name the file supplied", () => {
+    const { add } = materialsForColors([{ color: "#2244cc", name: "Anodised blue" }], lib);
+    expect(add[0]).toMatchObject({ id: "m-anodised-blue", name: "Anodised blue" });
+  });
+
+  it("does not mint two near-identical materials for one import", () => {
+    // The case this exists for: an assembly whose parts are two shades of the
+    // same grey would otherwise grow the library by one row per shade.
+    const { add } = materialsForColors(
+      [{ color: "#2244cc" }, { color: "#2345cd" }, { color: "#2244cc" }],
+      lib,
+    );
+    expect(add).toHaveLength(1);
+    // the control: a colour that is genuinely different does get its own
+    expect(materialsForColors([{ color: "#2244cc" }, { color: "#22cc44" }], lib).add).toHaveLength(2);
+  });
+
+  it("keeps names and ids distinct against the library and against each other", () => {
+    const clash: MaterialDef[] = [{ id: "m-imported-blue", name: "Imported blue", color: "#000000" }];
+    const { add } = materialsForColors([{ color: "#2244cc" }], clash);
+    expect(add[0]!.name).toBe("Imported blue 2");
+    expect(add[0]!.id).not.toBe("m-imported-blue");
+  });
+
+  it("skips a colour it cannot read rather than assigning something", () => {
+    const { add, byColor } = materialsForColors([{ color: "not a colour" }], lib);
+    expect(add).toEqual([]);
+    expect(byColor.size).toBe(0);
   });
 });
 

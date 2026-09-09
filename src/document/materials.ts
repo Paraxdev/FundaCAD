@@ -264,3 +264,107 @@ export function nearestMaterial(
   }
   return bestD <= tolerance ? best : null;
 }
+
+// --- what an imported file's own colours become -------------------------------
+
+/** Rough colour names, for naming a material nothing in the library matched.
+ *
+ *  A STEP file's colours have no names at all (XCAF stores an RGB triple per
+ *  product), so "Imported #b06a3b" is the honest alternative and it is a
+ *  terrible row to have in a library: unreadable, unsortable, and identical in
+ *  shape to the nine beside it. A rough name is wrong about the exact shade and
+ *  right about which row is which, which is what a list is for. The file's own
+ *  material name is preferred wherever it has one (3MF and glTF do). */
+const BASIC_COLORS: readonly [string, number][] = [
+  ["black", 0x1a1a1a], ["white", 0xf0f0f0], ["grey", 0x808080],
+  ["red", 0xd23b30], ["orange", 0xe07a1f], ["yellow", 0xe0c020],
+  ["green", 0x3aa04a], ["cyan", 0x30b0b8], ["blue", 0x3050c8],
+  ["purple", 0x7a3fb0], ["pink", 0xd88098], ["brown", 0x8a5a30],
+];
+
+/** A rough name for a colour, e.g. "#b06a3b" -> "brown". */
+export function colorName(hex: string): string {
+  const want = rgb(hex);
+  if (!want) return "colour";
+  let best = "colour";
+  let bestD = Infinity;
+  for (const [name, value] of BASIC_COLORS) {
+    const got: [number, number, number] = [(value >> 16) & 255, (value >> 8) & 255, value & 255];
+    const d = (want[0] - got[0]) ** 2 + (want[1] - got[1]) ** 2 + (want[2] - got[2]) ** 2;
+    if (d < bestD) {
+      bestD = d;
+      best = name;
+    }
+  }
+  return best;
+}
+
+/** Turn the colours an imported file carried into material assignments.
+ *
+ *  PURE, and the whole decision: which colours already have a material in this
+ *  document, and what to call the ones that do not. The IO half (running the
+ *  rebuild, finding which bodies the import produced, writing to the store)
+ *  stays in io/files.ts.
+ *
+ *  MATCHING FIRST, then minting. Importing two revisions of the same assembly
+ *  must not leave two libraries of near-identical greys, and a document whose
+ *  library already says what "aluminium" looks like should have the imported
+ *  aluminium parts wear that material rather than a second one called "Imported
+ *  grey". `nearestMaterial` has a tolerance for exactly this: close enough is
+ *  the same material, and anything else is genuinely new.
+ *
+ *  Returns the materials to add and a colour → material id map covering every
+ *  input colour it could read. A colour it could not read is absent from the map
+ *  rather than assigned something, because a body wearing a material nobody
+ *  chose is worse than a body left grey. */
+export function materialsForColors(
+  colors: readonly { color: string; name?: string | undefined }[],
+  library: readonly MaterialDef[],
+): { add: MaterialDef[]; byColor: Map<string, string> } {
+  const add: MaterialDef[] = [];
+  const byColor = new Map<string, string>();
+  const taken = new Set(library.map((m) => m.id));
+  const names = new Set(library.map((m) => m.name.toLowerCase()));
+  for (const entry of colors) {
+    const hex = asHex(entry.color);
+    if (!hex || byColor.has(hex)) continue;
+    const hit = nearestMaterial(hex, [...library, ...add]);
+    if (hit) {
+      byColor.set(hex, hit.id);
+      continue;
+    }
+    const base = (entry.name ?? "").trim() || `Imported ${colorName(hex)}`;
+    let name = base;
+    for (let n = 2; names.has(name.toLowerCase()); n++) name = `${base} ${n}`;
+    names.add(name.toLowerCase());
+    const id = uniqueId(slugId(name), taken);
+    taken.add(id);
+    add.push({ id, name, color: hex });
+    byColor.set(hex, id);
+  }
+  return { add, byColor };
+}
+
+/** The colour an assembly node shows, INHERITED from its nearest coloured
+ *  ancestor when it has none of its own.
+ *
+ *  XCAF stores a colour on the label that carries one and says nothing about the
+ *  labels below it, and a real assembly is coloured at the level somebody
+ *  bothered to colour: a subassembly painted red holds twenty parts with no
+ *  colour of their own, all of which are red. Reading the leaf alone throws away
+ *  most of what the file said, so the walk goes up.
+ *
+ *  Cycle-safe (a hand-edited manifest can loop) and bounded by the node count. */
+export function nodeColors(
+  nodes: readonly { parent: number | null; color?: string | undefined }[],
+): (string | undefined)[] {
+  return nodes.map((_, start) => {
+    const seen = new Set<number>();
+    for (let i: number | null = start; i !== null && i >= 0 && i < nodes.length && !seen.has(i); i = nodes[i]!.parent) {
+      seen.add(i);
+      const own = asHex(nodes[i]!.color);
+      if (own) return own;
+    }
+    return undefined;
+  });
+}

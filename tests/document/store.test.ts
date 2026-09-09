@@ -216,6 +216,49 @@ describe("elements (the user's folders over the bodies)", () => {
   });
 });
 
+describe("rebuildNow resolves when the RESULT is published", () => {
+  // The defect: rebuilds are serialized, and the "one is already in flight"
+  // branch returned at once. So `await rebuildNow()` right after addFeature,
+  // which is exactly when a caller wants the bodies a feature produced,
+  // resolved with buildState.result still pointing at the previous document.
+  // Both callers of it are import paths, and both do that.
+  it("waits for the in-flight drain instead of returning at once", async () => {
+    vi.useRealTimers(); // a real await, not a fake-timer one
+    let release: (() => void) | null = null;
+    const gate = new Promise<void>((r) => { release = r; });
+    let calls = 0;
+    const backend = {
+      async rebuild(): Promise<RebuildReply> {
+        calls++;
+        await gate;
+        return {
+          ok: true,
+          result: {
+            mesh: { positions: [0], indices: [], faceIds: [] },
+            edges: [],
+            bbox: { min: [0, 0, 0], max: [1, 1, 1] },
+            bodies: [{ id: "body1", name: "Bracket", faceStart: 0, faceCount: 1 }],
+          },
+        } as RebuildReply;
+      },
+      async init() {},
+      onStatus() { return () => {}; },
+      connected: true,
+    } as unknown as GeometryBackend;
+
+    const store = new DocumentStore(backend, doc());
+    // addFeature schedules an immediate rebuild, so one is in flight when the
+    // second caller arrives: the branch under test.
+    store.addFeature({ id: "b1", type: "box", length: 1, width: 1, height: 1 } as Feature);
+    const waited = store.rebuildNow();
+    expect(store.buildState.result?.bodies).toBeUndefined(); // nothing yet, as expected
+    release!();
+    await waited;
+    expect(store.buildState.result?.bodies?.[0]?.id).toBe("body1");
+    expect(calls).toBeGreaterThan(0);
+  });
+});
+
 describe("materials (what a body is made of, on screen)", () => {
   let store: DocumentStore;
   beforeEach(() => {
