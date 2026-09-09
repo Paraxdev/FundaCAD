@@ -216,6 +216,100 @@ describe("elements (the user's folders over the bodies)", () => {
   });
 });
 
+describe("materials (what a body is made of, on screen)", () => {
+  let store: DocumentStore;
+  beforeEach(() => {
+    vi.useFakeTimers();
+    store = new DocumentStore(stubBackend([]), doc());
+  });
+  afterEach(() => void vi.useRealTimers());
+
+  it("an untouched library with nothing assigned is left out of the file", () => {
+    expect(store.toJSON()).not.toContain('"materials"');
+    expect(store.toJSON()).not.toContain('"bodyMaterial"');
+    // the control: assigning one body is enough to make it worth writing
+    store.setBodiesMaterial(["body1"], "m-brass");
+    expect(store.toJSON()).toContain('"materials"');
+    expect(store.toJSON()).toContain('"bodyMaterial"');
+  });
+
+  it("round-trips a customised library and its assignments", () => {
+    store.updateMaterial("m-brass", { name: "Bronze", color: "#a06020" });
+    const mine = store.addMaterial({ name: "Anodised blue", color: "#2244cc", metalness: 0.7 });
+    store.setBodiesMaterial(["body1", "body2"], mine);
+
+    const reloaded = new DocumentStore(stubBackend([]), doc());
+    reloaded.load(store.toJSON());
+    expect(reloaded.materialLibrary.find((m) => m.id === "m-brass")).toMatchObject({
+      name: "Bronze", color: "#a06020",
+    });
+    expect(reloaded.bodyMaterialOf("body1")?.name).toBe("Anodised blue");
+    const again = new DocumentStore(stubBackend([]), doc());
+    again.load(reloaded.toJSON());
+    expect(again.toJSON()).toBe(reloaded.toJSON());
+  });
+
+  it("a reopened untouched document still writes no materials block", () => {
+    // The trap this is for: the library is normalised on load, so an entry that
+    // was not already in normal form would come back different and the
+    // "untouched" check would answer no for every document ever reopened.
+    const reloaded = new DocumentStore(stubBackend([]), doc());
+    reloaded.load(store.toJSON());
+    expect(reloaded.toJSON()).not.toContain('"materials"');
+  });
+
+  it("resolves an assignment, so a deleted material is the same as none", () => {
+    store.setBodiesMaterial(["body1"], "m-glass");
+    expect(store.bodyMaterialOf("body1")?.name).toBe("Glass");
+    store.removeMaterial("m-glass");
+    expect(store.bodyMaterialOf("body1")).toBeUndefined();
+    expect(store.bodyMaterialId("body1")).toBeUndefined(); // and the row is gone, not dangling
+  });
+
+  it("refuses an assignment to a material that is not in the library", () => {
+    store.setBodiesMaterial(["body1"], "m-nonexistent");
+    expect(store.bodyMaterialId("body1")).toBeUndefined();
+  });
+
+  it("hands the viewport only the bodies whose finish differs from the default", () => {
+    // Aluminium is metallic, so it has a finish worth sending.
+    store.setBodiesMaterial(["body1"], "m-aluminium");
+    expect(store.materialFinishes()).toEqual({
+      body1: { metalness: 0.9, roughness: 0.35, opacity: 1 },
+    });
+    expect(store.materialPaint()).toEqual({ body1: "#b8bcc0" });
+
+    // A material that says nothing about its finish is the app's own default,
+    // so there is nothing for the renderer to do and nothing is sent.
+    const plain = store.addMaterial({ name: "Plain", color: "#123456" });
+    store.setBodiesMaterial(["body1"], plain);
+    expect(store.materialFinishes()).toEqual({});
+    expect(store.materialPaint()).toEqual({ body1: "#123456" });
+  });
+
+  it("merges an imported library by id rather than replacing it", () => {
+    store.setBodiesMaterial(["body1"], "m-copper");
+    const before = store.materialLibrary.length;
+    const res = store.importMaterials([
+      { id: "m-copper", name: "Copper, polished", color: "#c07a4b" },
+      { id: "m-titanium", name: "Titanium", color: "#8d8f92" },
+    ]);
+    expect(res).toEqual({ added: 1, updated: 1 });
+    expect(store.materialLibrary).toHaveLength(before + 1);
+    // the body keeps its assignment and gets the incoming colour
+    expect(store.bodyMaterialOf("body1")?.color).toBe("#c07a4b");
+  });
+
+  it("never dirties the document for an assignment that changes nothing", () => {
+    store.setBodiesMaterial(["body1"], "m-steel");
+    store.markSaved("x.funda");
+    store.setBodiesMaterial(["body1"], "m-steel");
+    expect(store.dirty).toBe(false);
+    store.setBodiesMaterial(["body1"], null); // the control
+    expect(store.dirty).toBe(true);
+  });
+});
+
 describe("projected-entity persistence (byte stability)", () => {
   it("a doc with a projected entity round-trips byte-identically, stale omitted when false", () => {
     vi.useFakeTimers();

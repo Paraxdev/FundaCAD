@@ -11,6 +11,7 @@ import { clearRecovery } from "./recovery";
 import { noteRecent } from "./recentFiles";
 import { DOC_EXT, LEGACY_DOC_EXTS, isDocumentExt } from "./documentExt";
 import { announceImportedBody } from "../plugins/contrib";
+import { parseLibrary, serializeLibrary } from "../document/materials";
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -496,6 +497,74 @@ export function extToImportFormat(path: string): ImportFormat {
   return "step";  // TOTAL, like extToFormat above, see the note there
 }
 
+// --- material library ---
+//
+// A plain JSON file, not the document container: the point of a library is that
+// it travels between documents and between people, and a format only this app
+// can open would make "export" a word for "back up". See document/materials.ts
+// for the shape; both directions go through it, so what is written is what can
+// be read back.
+
+/** The extension a library file gets. Not `.json` alone, so a folder of them is
+ *  legible and the picker can default to the right thing. */
+export const MATERIAL_LIB_EXT = "fcmat.json";
+
+/** Write the document's material library to a file the user picks. */
+export async function exportMaterialLibrary(store: DocumentStore) {
+  const text = serializeLibrary(store.materialLibrary);
+  const name = `${store.fileName === "Untitled" ? "materials" : store.fileName}.${MATERIAL_LIB_EXT}`;
+  if (!isTauri()) {
+    downloadText(name, text);
+    return;
+  }
+  const { save } = await import("@tauri-apps/plugin-dialog");
+  const path = await save({
+    filters: [{ name: "Material library", extensions: ["json"] }],
+    defaultPath: name,
+  });
+  if (!path) return;
+  try {
+    await (await import("@tauri-apps/plugin-fs")).writeTextFile(path, text);
+  } catch (e) {
+    await reportError(`Couldn't write ${path}: ${errMsg(e)}`);
+  }
+}
+
+/** Read a library file and MERGE it into the document's, by id. Returns what
+ *  happened, so the caller can say so; null when the user cancelled.
+ *
+ *  Merging rather than replacing is the store's rule, see importMaterials, and
+ *  the reason is here: a replace would unassign every body wearing a material
+ *  the incoming file happens not to contain, which is a silent edit to the model
+ *  in exchange for a file the user only meant to add. */
+export async function importMaterialLibrary(
+  store: DocumentStore,
+): Promise<{ added: number; updated: number; problem: string | null } | null> {
+  let text: string | null = null;
+  if (isTauri()) {
+    const { open } = await import("@tauri-apps/plugin-dialog");
+    const path = await open({
+      multiple: false,
+      filters: [{ name: "Material library", extensions: ["json"] }],
+    });
+    if (typeof path !== "string") return null;
+    try {
+      text = await (await import("@tauri-apps/plugin-fs")).readTextFile(path);
+    } catch (e) {
+      await reportError(`Couldn't read ${path}: ${errMsg(e)}`);
+      return null;
+    }
+  } else {
+    text = await uploadJson();
+  }
+  if (text === null) return null;
+  const { materials, problem } = parseLibrary(text);
+  if (!materials.length) {
+    return { added: 0, updated: 0, problem: problem ?? "there were no materials in it" };
+  }
+  return { ...store.importMaterials(materials), problem };
+}
+
 // --- browser fallbacks ---
 function downloadText(name: string, text: string) {
   const blob = new Blob([text], { type: "application/json" });
@@ -504,6 +573,27 @@ function downloadText(name: string, text: string) {
   a.download = name;
   a.click();
   URL.revokeObjectURL(a.href);
+}
+
+/** The browser fallback for picking a JSON file. A twin of uploadText below
+ *  rather than a parameter on it: that one advertises document extensions, and
+ *  a picker that offers .funda when it wants a material library is a picker
+ *  that will be handed one. */
+function uploadJson(): Promise<string | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json,application/json";
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) return resolve(null);
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => resolve(null);
+      reader.readAsText(file);
+    };
+    input.click();
+  });
 }
 
 function uploadText(): Promise<string | null> {

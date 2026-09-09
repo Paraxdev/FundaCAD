@@ -194,6 +194,10 @@
   --panel-2: #ffffff;
   --raised: #e8ebef;
   --raised-2: #dde1e7;
+  /* The one theme that needs its own: a near-black 3D view under a white
+     window is the single loudest thing on screen, and the point of a light
+     theme is that nothing is. */
+  --viewport-bg: #cfd4db;
 
   --line: #dce0e6;
   --line-strong: #c2c8d1;

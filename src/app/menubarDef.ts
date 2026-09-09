@@ -96,6 +96,7 @@ export function buildMenubar(e: Engine): MenuDef[] {
           onClick: () => e.selectedFeature && e.store.toggleSuppress(e.selectedFeature),
         },
         { separator: true, label: "" },
+        { label: "Materials…", onClick: () => { useDialogStore().materials = true; } },
         { label: "Preferences…", shortcut: "Ctrl+,", onClick: () => { useDialogStore().preferences = true; } },
       ],
     },

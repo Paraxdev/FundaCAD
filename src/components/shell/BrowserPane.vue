@@ -34,7 +34,7 @@ import TreeFolder from "./TreeFolder.vue";
 import TreeRow from "./TreeRow.vue";
 import {
   bodyExtraMenu, buildBodyTree, collectGroupBodyIds, elementMoveMenu, elementPath,
-  type BodyRef, type TreeGroup,
+  materialMenu, type BodyRef, type TreeGroup,
 } from "../../ui/browserTree";
 import { ancestryOf } from "../../document/elements";
 import {
@@ -368,7 +368,12 @@ const nodes = useDocValue((doc): TreeNode[] => {
     // nobody chose and nobody can undo. The assignment stays in the document
     // either way.
     const slot = paintedBodies ? store.bodyColorSlot(b.id) : undefined;
-    const chip = slot != null ? store.colorPalette[slot]?.color : undefined;
+    // The palette slot wins the chip when there is one, for the same reason it
+    // wins on the model: a slot is a deliberate choice about a real print and a
+    // material is usually whatever the imported file said. With no slot the
+    // chip is the material, so a row says what the body is made of.
+    const chip = (slot != null ? store.colorPalette[slot]?.color : undefined)
+      ?? store.bodyMaterialOf(b.id)?.color;
     return {
       kind: "row",
       k: `b:${b.id}`,
@@ -383,12 +388,14 @@ const nodes = useDocValue((doc): TreeNode[] => {
       toggleVis: () => toggleBodyVis(b.id),
       extraMenu: [
         moveBodiesMenu(actOn(b.id), store.bodyElementOf(b.id)),
+        materialMenu(store.materialLibrary, actOn(b.id), store.bodyMaterialId(b.id),
+          (m) => store.setBodiesMaterial(actOn(b.id), m)),
         ...bodyExtraMenu(b.id),
       ],
       dragStart: () => browser.startDrag({ kind: "bodies", ids: actOn(b.id) }),
       rename: (name: string) => store.setBodyName(b.id, name),
       remove: () => store.removeBody(b.id),
-      title: "Click to select (Ctrl+click adds) · drag into an element · double-click to rename · right-click for Move / Color / Rename / Delete · eye to show/hide",
+      title: "Click to select (Ctrl+click adds) · drag into an element · double-click to rename · right-click for Move / Material / Rename / Delete · eye to show/hide",
     };
   };
 

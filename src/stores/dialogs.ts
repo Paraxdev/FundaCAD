@@ -30,6 +30,7 @@ export const useDialogStore = defineStore("dialogs", () => {
   const welcome = ref(false);
   const bugReport = ref(false);
   const preferences = ref(false);
+  const materials = ref(false);
 
   /** Supplied once by app/engine.ts's mountUi(). Until they arrive the welcome
    *  screen has nothing to call and the bug button has nothing to report on, so
@@ -41,6 +42,7 @@ export const useDialogStore = defineStore("dialogs", () => {
     welcome,
     bugReport,
     preferences,
+    materials,
     welcomeCallbacks,
     bugDeps,
     bindWelcome: (cb: WelcomeCallbacks) => { welcomeCallbacks.value = markRaw(cb); },

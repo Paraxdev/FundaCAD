@@ -1,0 +1,266 @@
+// Materials: what a body is made of, as far as the picture is concerned.
+//
+// WHAT THIS IS AND IS NOT. A material here is APPEARANCE, a colour and a
+// finish: how matt it is, how metallic, how much light goes through it. It is
+// not a physical property (no density, no modulus, nothing computes a mass from
+// it), and it is not geometry: assigning one changes what the viewport draws and
+// nothing else, so a document with every material deleted rebuilds
+// byte-identically to one that never had any.
+//
+// WHY IT IS NOT THE FILAMENT PALETTE. The document already carries a `palette`
+// of up to four slots, and those mean "print this part from the filament in
+// toolhead N". That is a manufacturing instruction with a physical machine
+// behind it, which is why it is capped at four and why the multi-colour
+// capability owns it. A material library has neither cap nor machine, is about
+// what a part LOOKS like, and is the thing an imported assembly's own colours
+// land in. They coexist: a body can carry both, and where it does the palette
+// slot wins on screen, because a slot is a deliberate choice about a real
+// print and a material is usually whatever the file said.
+//
+// This module is the pure half: no store, no Vue, no DOM, no file system. What
+// a material is, what its defaults are, how one is read back from a library file
+// somebody else wrote, and how an arbitrary colour finds the closest one.
+
+/** One material. Everything but id/name/color is optional and absent means the
+ *  app's own default finish (see FINISH below), so the common case, a colour
+ *  with nothing else said about it, is three fields on disk. */
+export interface MaterialDef {
+  id: string;
+  name: string;
+  /** "#rrggbb", lower case. The one field the viewport always uses. */
+  color: string;
+  /** 0..1. How metallic: 0 is a dielectric (plastic, paint), 1 is bare metal. */
+  metalness?: number;
+  /** 0..1. How rough: 0 is a mirror, 1 is chalk. */
+  roughness?: number;
+  /** 0..1. 1 is opaque, which is the default and is omitted when it holds. */
+  opacity?: number;
+}
+
+/** The finish an unspecified material has, which is exactly the one every body
+ *  in this app has always been drawn with (see viewport/render.ts). Sharing the
+ *  numbers is what makes "no material" and "a material that says nothing about
+ *  its finish" the same picture instead of two nearly identical ones. */
+export const FINISH = { metalness: 0.1, roughness: 0.55, opacity: 1 } as const;
+
+/** A material's finish with every default filled in. What the viewport wants:
+ *  three numbers, never undefined, so the render path has no branches in it. */
+export function finishOf(m: MaterialDef | undefined): {
+  metalness: number;
+  roughness: number;
+  opacity: number;
+} {
+  return {
+    metalness: m?.metalness ?? FINISH.metalness,
+    roughness: m?.roughness ?? FINISH.roughness,
+    opacity: m?.opacity ?? FINISH.opacity,
+  };
+}
+
+/** The library a new document starts with.
+ *
+ *  Generic engineering and print materials, named for the stuff and not for any
+ *  supplier's product. Deliberately short: a starter library is a set of
+ *  examples showing what the fields do, and a hundred rows nobody chose is a
+ *  list to scroll past rather than a library to work from. Adding to it is one
+ *  button.
+ *
+ *  EVERY ENTRY IS ALREADY IN NORMAL FORM, i.e. normalizeMaterial leaves it
+ *  alone, and materials.test.ts holds that. It is not cosmetic: a field holding
+ *  the same value as the default is dropped on read, so an entry carrying one
+ *  would fail to round-trip through an export, and the store's "is this still
+ *  the untouched library" check, which is what keeps an unstyled document from
+ *  writing a materials block at all, would answer no the moment the file was
+ *  reopened. */
+export const STARTER_LIBRARY: readonly MaterialDef[] = Object.freeze([
+  { id: "m-aluminium", name: "Aluminium", color: "#b8bcc0", metalness: 0.9, roughness: 0.35 },
+  { id: "m-steel", name: "Steel", color: "#8f959b", metalness: 0.95, roughness: 0.28 },
+  { id: "m-brass", name: "Brass", color: "#c9a227", metalness: 0.9, roughness: 0.3 },
+  { id: "m-copper", name: "Copper", color: "#b06a3b", metalness: 0.95, roughness: 0.25 },
+  { id: "m-plastic-white", name: "Plastic, white", color: "#e8e8e8", metalness: 0.02, roughness: 0.6 },
+  { id: "m-plastic-black", name: "Plastic, black", color: "#232323", metalness: 0.02, roughness: 0.5 },
+  { id: "m-rubber", name: "Rubber", color: "#1d1f22", metalness: 0.0, roughness: 0.95 },
+  { id: "m-wood", name: "Wood", color: "#9a6b3f", metalness: 0.0, roughness: 0.8 },
+  { id: "m-glass", name: "Glass", color: "#cfe4ee", metalness: 0.0, roughness: 0.05, opacity: 0.25 },
+  { id: "m-acrylic", name: "Acrylic, clear", color: "#dfeaf0", metalness: 0.0, roughness: 0.15, opacity: 0.45 },
+]);
+
+const HEX = /^#?[0-9a-f]{6}$/i;
+
+/** A colour string as "#rrggbb", or null when it is not one.
+ *
+ *  Three-digit hex is expanded rather than refused: it is what a person types
+ *  into a library file by hand, and refusing it would be refusing a colour over
+ *  its spelling. */
+export function asHex(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const t = raw.trim();
+  const short = /^#?([0-9a-f]{3})$/i.exec(t);
+  if (short) {
+    const [r, g, b] = short[1]!;
+    return `#${r}${r}${g}${g}${b}${b}`.toLowerCase();
+  }
+  return HEX.test(t) ? `#${t.replace(/^#/, "").toLowerCase()}` : null;
+}
+
+const clamp01 = (v: unknown): number | undefined =>
+  typeof v === "number" && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : undefined;
+
+/** One entry of a library file as this app understands it, or null.
+ *
+ *  Null for anything with no usable colour, because a material without one is
+ *  not a material that renders oddly, it is a row that can be assigned to a body
+ *  and then change nothing. Everything else is repaired rather than refused: an
+ *  out-of-range roughness is clamped, a missing name falls back to the id, and a
+ *  missing id is minted from the name, so a hand-written file that gets a field
+ *  wrong loses that field and not the material. */
+export function normalizeMaterial(raw: unknown, index = 0): MaterialDef | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const color = asHex(r["color"] ?? r["colour"] ?? r["hex"]);
+  if (!color) return null;
+  const name = typeof r["name"] === "string" && r["name"].trim() ? r["name"].trim() : "";
+  const id =
+    typeof r["id"] === "string" && r["id"].trim()
+      ? r["id"].trim()
+      : slugId(name || `material ${index + 1}`);
+  const out: MaterialDef = { id, name: name || id, color };
+  // Omit-when-default, so a plain colour round-trips as three fields and a
+  // library written by this app reads back byte-identically.
+  const metalness = clamp01(r["metalness"]);
+  const roughness = clamp01(r["roughness"]);
+  const opacity = clamp01(r["opacity"]);
+  if (metalness !== undefined && metalness !== FINISH.metalness) out.metalness = metalness;
+  if (roughness !== undefined && roughness !== FINISH.roughness) out.roughness = roughness;
+  if (opacity !== undefined && opacity !== FINISH.opacity) out.opacity = opacity;
+  return out;
+}
+
+/** A name to an id that is safe in a file name, a URL and a JSON key. */
+export function slugId(name: string): string {
+  const slug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return `m-${slug || "material"}`;
+}
+
+/** Make `id` unique against `taken`, by suffixing a number. */
+export function uniqueId(id: string, taken: ReadonlySet<string>): string {
+  if (!taken.has(id)) return id;
+  for (let n = 2; ; n++) {
+    const next = `${id}-${n}`;
+    if (!taken.has(next)) return next;
+  }
+}
+
+/** A name no other material uses, "Copper", then "Copper 2", … */
+export function freshMaterialName(
+  materials: readonly MaterialDef[],
+  base = "Material",
+): string {
+  const taken = new Set(materials.map((m) => m.name.toLowerCase()));
+  if (!taken.has(base.toLowerCase())) return base;
+  for (let n = 2; ; n++) {
+    const name = `${base} ${n}`;
+    if (!taken.has(name.toLowerCase())) return name;
+  }
+}
+
+/** What a library file holds, as this app writes it. `version` is there so a
+ *  later shape can be told from this one without guessing from the fields. */
+export interface MaterialLibraryFile {
+  version: 1;
+  materials: MaterialDef[];
+}
+
+/** Read a library file. Never throws: a file somebody else wrote is data, and
+ *  the useful answer to a broken one is the materials that were readable plus a
+ *  sentence about the rest, not an exception in a file dialog.
+ *
+ *  Both shapes are accepted, `{materials:[…]}` and a bare `[…]`, because the
+ *  bare array is what a person exports from a spreadsheet or writes by hand. */
+export function parseLibrary(json: string): { materials: MaterialDef[]; problem: string | null } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch (e) {
+    return { materials: [], problem: `not readable as JSON: ${(e as Error).message}` };
+  }
+  const rows = Array.isArray(parsed)
+    ? parsed
+    : Array.isArray((parsed as { materials?: unknown })?.materials)
+      ? (parsed as { materials: unknown[] }).materials
+      : null;
+  if (!rows) {
+    return { materials: [], problem: "no materials in it, expected a list or {\"materials\": [...]}" };
+  }
+  const out: MaterialDef[] = [];
+  const taken = new Set<string>();
+  let dropped = 0;
+  rows.forEach((row, i) => {
+    const m = normalizeMaterial(row, i);
+    if (!m) {
+      dropped++;
+      return;
+    }
+    m.id = uniqueId(m.id, taken);
+    taken.add(m.id);
+    out.push(m);
+  });
+  const problem = dropped
+    ? `${dropped} of ${rows.length} had no usable colour and ${dropped === 1 ? "was" : "were"} skipped`
+    : null;
+  return { materials: out, problem };
+}
+
+/** Write a library file, pretty, because the point of exporting one is that
+ *  somebody can open it. */
+export function serializeLibrary(materials: readonly MaterialDef[]): string {
+  const file: MaterialLibraryFile = { version: 1, materials: materials.map((m) => ({ ...m })) };
+  return JSON.stringify(file, null, 2);
+}
+
+function rgb(hex: string): [number, number, number] | null {
+  const h = asHex(hex);
+  if (!h) return null;
+  return [
+    parseInt(h.slice(1, 3), 16),
+    parseInt(h.slice(3, 5), 16),
+    parseInt(h.slice(5, 7), 16),
+  ];
+}
+
+/** The material closest to `hex`, or null when nothing is within `tolerance`.
+ *
+ *  A TOLERANCE, unlike the palette's nearest-slot match, which always answers.
+ *  The palette has four physical slots and every part has to print from one of
+ *  them, so "nearest" is the whole question. A library is open-ended, and the
+ *  useful answer to an imported colour nothing in the library resembles is "this
+ *  is a new material", not "here is the least wrong of the ten you had". The
+ *  default is a squared RGB distance of 24 per channel, close enough that two
+ *  shades of the same grey match and two greys apart do not.
+ *
+ *  Squared RGB and not a perceptual space, deliberately: what is being matched
+ *  is a colour a CAD system wrote into a file, usually one of a handful of round
+ *  numbers, and not two photographs. */
+export function nearestMaterial(
+  hex: string,
+  materials: readonly MaterialDef[],
+  tolerance = 24 * 24 * 3,
+): MaterialDef | null {
+  const want = rgb(hex);
+  if (!want) return null;
+  let best: MaterialDef | null = null;
+  let bestD = Infinity;
+  for (const m of materials) {
+    const got = rgb(m.color);
+    if (!got) continue;
+    const d = (want[0] - got[0]) ** 2 + (want[1] - got[1]) ** 2 + (want[2] - got[2]) ** 2;
+    if (d < bestD) {
+      bestD = d;
+      best = m;
+    }
+  }
+  return bestD <= tolerance ? best : null;
+}

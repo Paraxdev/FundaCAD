@@ -30,6 +30,15 @@ import {
   onLayoutPrefsChange,
   setLayoutPref,
 } from "../../ui/layoutPrefs";
+import {
+  asBackground,
+  asEnvironment,
+  MAX_BRIGHTNESS,
+  MIN_BRIGHTNESS,
+  onRenderPrefsChange,
+  renderPrefs,
+  setRenderPref,
+} from "../../ui/renderPrefs";
 
 const dialogs = useDialogStore();
 const close = () => { dialogs.preferences = false; };
@@ -42,6 +51,7 @@ const theme = ref(getTheme());
 const pack = ref(getIconPack());
 const unit = ref(getUnit());
 const layout = ref(layoutPrefs());
+const render = ref(renderPrefs());
 
 // The blocks the running plugins add. An "Assistants" block used to be written
 // out below, configuring what an assistant connected over MCP may do to the
@@ -57,6 +67,7 @@ onMounted(() => {
     onIconPackChange(() => { pack.value = getIconPack(); }),
     onUnitChange(() => { unit.value = getUnit(); }),
     onLayoutPrefsChange(() => { layout.value = layoutPrefs(); }),
+    onRenderPrefsChange(() => { render.value = renderPrefs(); }),
     onContribChange(() => { sections.value = contributedSettings(); }),
   );
 });
@@ -71,6 +82,9 @@ function onPack(ev: Event) { const v = asIconPackId(value(ev)); if (v) setIconPa
 function onUnit(ev: Event) { const v = asUnit(value(ev)); if (v) setUnit(v); }
 function onRibbon(ev: Event) { const v = asRibbonSide(value(ev)); if (v) setLayoutPref("ribbon", v); }
 function onHistory(ev: Event) { const v = asHistorySide(value(ev)); if (v) setLayoutPref("history", v); }
+function onEnvironment(ev: Event) { const v = asEnvironment(value(ev)); if (v) setRenderPref("environment", v); }
+function onBackground(ev: Event) { const v = asBackground(value(ev)); if (v) setRenderPref("background", v); }
+function onBrightness(ev: Event) { setRenderPref("brightness", Number.parseFloat(value(ev))); }
 </script>
 
 <template>
@@ -117,6 +131,42 @@ function onHistory(ev: Event) { const v = asHistorySide(value(ev)); if (v) setLa
         </select>
       </label>
       <div class="sm-hint">Applied straight away, and remembered.</div>
+
+      <div class="sm-section">Viewport</div>
+      <label class="prefs-row">
+        <span class="prefs-label">Reflections</span>
+        <select id="prefs-environment" class="sm-select" :value="render.environment" @change="onEnvironment">
+          <option value="studio">Studio</option>
+          <option value="none">None (flat)</option>
+        </select>
+      </label>
+      <div class="sm-hint">
+        A metal is almost entirely reflection, so with none it renders nearly
+        black. Flat is the clearer way to read shape.
+      </div>
+      <label class="prefs-row">
+        <span class="prefs-label">Background</span>
+        <select id="prefs-background" class="sm-select" :value="render.background" @change="onBackground">
+          <option value="theme">Follow the theme</option>
+          <option value="dark">Dark</option>
+          <option value="grey">Mid grey</option>
+          <option value="light">Light</option>
+        </select>
+      </label>
+      <label class="prefs-row">
+        <span class="prefs-label">Brightness</span>
+        <input
+          id="prefs-brightness"
+          class="sm-slider"
+          type="range"
+          :min="MIN_BRIGHTNESS"
+          :max="MAX_BRIGHTNESS"
+          step="0.05"
+          :value="render.brightness"
+          @input="onBrightness"
+        />
+      </label>
+      <div class="sm-hint">Lights and reflections together, so the two stay in step.</div>
 
       <!-- What the running plugins ask about. Each brings its own heading, so a
            plugin that is not installed leaves no gap where its block was. -->

@@ -734,6 +734,15 @@ export interface CadDocument {
    *  Positional body ids, exactly like `bodyNames` above, so an assignment
    *  re-attaches if an upstream feature is reordered. */
   bodyElement?: Record<string, string>;
+  /** The document's material library: what a body is made of, as far as the
+   *  picture is concerned. Display-only, like everything above it. Absent means
+   *  the app's starter library untouched, so a document nobody has restyled
+   *  saves no bigger than it did before this existed. See document/materials.ts,
+   *  and note this is NOT the filament `palette` below, which is up to four
+   *  physical toolhead slots and means something else entirely. */
+  materials?: { id: string; name: string; color: string; metalness?: number; roughness?: number; opacity?: number }[];
+  /** body id → material id. Positional body ids, like `bodyNames` above. */
+  bodyMaterial?: Record<string, string>;
   /** filament palette (≤4 slots for the U1 toolchanger); slot index → name+hex,
    *  plus an optional material type (e.g. "PLA") when synced from the printer. */
   palette?: { name: string; color: string; material?: string }[];

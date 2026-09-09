@@ -45,6 +45,10 @@ import { EdgeEmphasis } from "./edgeEmphasis";
 import { ViewCube, FACE_VIEWS } from "./viewCube";
 import { setPrompt } from "../ui/prompt";
 import type { DocumentStore } from "../document/store";
+import { FINISH } from "../document/materials";
+import { onRenderPrefsChange } from "../ui/renderPrefs";
+import { invalidateThemeColors } from "./themeColors";
+import { onThemeChange } from "../ui/theme";
 import type { ViewCubeSide } from "../types";
 
 /** A selection captured just before a rebuild replaces the Highlighter, held in
@@ -127,6 +131,25 @@ export function sameStringMap(
   const ka = Object.keys(av);
   if (ka.length !== Object.keys(bv).length) return false;
   for (const k of ka) if (av[k] !== bv[k]) return false;
+  return true;
+}
+
+/** Shallow equality for the id→finish map, the same bargain sameStringMap
+ *  strikes above: run on every build so an unchanged map costs no material
+ *  writes and no re-render. */
+function sameFinishMap(
+  a: Record<string, { metalness: number; roughness: number; opacity: number }>,
+  b: Record<string, { metalness: number; roughness: number; opacity: number }>,
+): boolean {
+  const ka = Object.keys(a);
+  if (ka.length !== Object.keys(b).length) return false;
+  for (const k of ka) {
+    const x = a[k];
+    const y = b[k];
+    if (!y || !x || x.metalness !== y.metalness || x.roughness !== y.roughness || x.opacity !== y.opacity) {
+      return false;
+    }
+  }
   return true;
 }
 
@@ -285,6 +308,22 @@ export class Viewport {
       this.requestRender();
     });
     this.installPointer();
+    // Lighting, reflections and the ground the model sits against. Applied once
+    // here and again on every change to either the render settings or the THEME,
+    // since the default ground is a theme token and themeColors caches what it
+    // resolved. Neither subscription is torn down: there is one Viewport for the
+    // life of the process, and it is destroyed with the window.
+    this.scene.applyRenderPrefs();
+    onRenderPrefsChange(() => { this.scene.applyRenderPrefs(); this.requestRender(); });
+    onThemeChange(() => {
+      // Explicitly, rather than relying on themeColors' own subscription having
+      // been registered first. It was (that module is imported at load, this
+      // runs in a constructor), but "the right colour depends on who subscribed
+      // first" is not a property worth having, and the call is a Map.clear().
+      invalidateThemeColors();
+      this.scene.applyRenderPrefs();
+      this.requestRender();
+    });
     this.loop();
   }
 
@@ -787,7 +826,7 @@ export class Viewport {
   setXray(on: boolean) {
     if (this.xray === on) return;
     this.xray = on;
-    this.applyBodyTransparency();
+    this.applyBodyFinish();
     this.onXrayChange?.(on);
     this.requestRender();
   }
@@ -814,27 +853,47 @@ export class Viewport {
   setStaleModel(on: boolean) {
     if (this.stale === on) return;
     this.stale = on;
-    this.applyBodyTransparency();
+    this.applyBodyFinish();
     this.requestRender();
   }
 
-  /** Re-apply see-through and the stale ghost to the CURRENT bodies. Called
-   *  again after a rebuild, which hands back new materials that know nothing
-   *  about either.
+  /** Write every body's SURFACE FINISH: what its material says it is made of,
+   *  with the two see-through overlays on top of that.
    *
-   *  One function for both, because they are two reasons to make the same
-   *  materials transparent and two functions would each undo the other's work
-   *  on whichever ran second. Stale wins the opacity when both are on: the
-   *  fainter of the two is the one that carries the warning. */
-  private applyBodyTransparency() {
+   *  ONE writer, deliberately. There are three reasons a body's material gets
+   *  written, an assigned material, x-ray, and the stale-model ghost, and as
+   *  three functions each would undo the others depending on which ran last.
+   *  That was already true of the two overlays before materials existed (hence
+   *  the single applyBodyTransparency this replaces); a glass material assigned
+   *  to a body is simply the third, and the one that has to survive a rebuild.
+   *
+   *  Opacity takes the FAINTEST of whatever applies: an overlay exists to say
+   *  something about the whole model, so it may not be argued out of by a
+   *  material, and stale wins over x-ray because stale is the one carrying a
+   *  warning.
+   *
+   *  Called again after every rebuild, which hands back fresh materials that
+   *  know nothing about any of this. */
+  private applyBodyFinish() {
     if (!this.model) return;
     const ghost = this.xray || this.stale;
-    const opacity = this.stale ? STALE_OPACITY : this.xray ? XRAY_OPACITY : 1;
+    const ghostOpacity = this.stale ? STALE_OPACITY : XRAY_OPACITY;
     for (const b of this.model.bodies) {
-      const mat = b.mesh.material as THREE.MeshStandardMaterial;
-      mat.transparent = ghost;
+      // The body's OWN material, which is not b.mesh.material while the zebra
+      // overlay is on: that one is shared by every body, so writing a finish to
+      // it would give the whole model one part's roughness.
+      const mat = this.savedMats.get(b.id) ?? b.mesh.material;
+      if (!(mat instanceof THREE.MeshStandardMaterial)) continue;
+      const f = this.bodyFinish[b.id];
+      mat.metalness = f ? f.metalness : FINISH.metalness;
+      mat.roughness = f ? f.roughness : FINISH.roughness;
+      const opacity = ghost ? Math.min(f ? f.opacity : 1, ghostOpacity) : f ? f.opacity : 1;
+      mat.transparent = opacity < 1;
       mat.opacity = opacity;
-      mat.depthWrite = !ghost;
+      // Off for anything see-through, so what is behind it is actually behind
+      // it. That is the whole point of a translucent body in CAD, and it is
+      // what x-ray already did.
+      mat.depthWrite = opacity >= 1;
     }
   }
 
@@ -1132,6 +1191,10 @@ export class Viewport {
   // per-body assigned colors (body id → hex) shown as the default base when no
   // analysis overlay is active; pushed from main.ts on color change + rebuild.
   private bodyPaint: Record<string, string> = {};
+  /** metalness/roughness/opacity per body, from the document's materials. Only
+   *  bodies that differ from the app's default finish are in it, so an unstyled
+   *  document leaves this empty and applyBodyFinish writes the defaults. */
+  private bodyFinish: Record<string, { metalness: number; roughness: number; opacity: number }> = {};
   private texturePaint: Record<number, string> = {};
   // zebra-stripe + curvature-comb overlays (display-only; re-applied on rebuild)
   private zebra = false;
@@ -1215,6 +1278,29 @@ export class Viewport {
     if (sameStringMap(this.bodyPaint, map)) return;
     this.bodyPaint = map;
     if (this.analysis === "none") this.applyAnalysis();
+  }
+
+  /** The bodies on screen, as the render layer holds them.
+   *
+   *  Read-only and for reading BACK: a body's finish lives on a THREE material,
+   *  so this is the only place a harness or a diagnostic can see what an
+   *  assigned material actually did. e2e/materials_e2e.cjs asserts against it,
+   *  because the alternative, comparing screenshots of a lit solid, is a test
+   *  that fails when a graphics driver changes. */
+  get bodyMeshes(): readonly BodyMesh[] {
+    return this.model?.bodies ?? [];
+  }
+
+  /** Set the per-body surface finish (body id → metalness/roughness/opacity),
+   *  the other half of a material. Colour travels separately, through
+   *  setBodyPaint above, because it is baked per VERTEX so a hover can recolour
+   *  one face without disturbing the lighting; a finish is per material, and
+   *  there is one material per body. */
+  setBodyFinish(map: Record<string, { metalness: number; roughness: number; opacity: number }>) {
+    if (sameFinishMap(this.bodyFinish, map)) return;
+    this.bodyFinish = map;
+    this.applyBodyFinish();
+    this.requestRender();
   }
 
   /** per-face texture-inlay colors (global face id → hex), from texture features
@@ -2170,7 +2256,10 @@ export class Viewport {
     // A rebuild hands back fresh materials that know nothing about see-through
     // or about the stale ghost, so both are re-applied here rather than only
     // where they are switched.
-    if (this.xray || this.stale) this.applyBodyTransparency();
+    // Unconditional, unlike the transparency-only version this replaces: a
+    // rebuild hands back materials wearing the app's default finish, so a body
+    // made of glass would come back plastic on every edit.
+    this.applyBodyFinish();
     if (fit) this.rig.fit(this.model.box, true);
     this.auditScene("commit");
   }

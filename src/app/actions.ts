@@ -6,6 +6,7 @@ import { choose } from "../ui/choice";
 import { SKETCH_TOOLS, SKETCH_MODIFY, NON_REPEATABLE } from "./actionTables";
 import { booleanOpOfAction } from "../features/booleanOps";
 import { useUiStore } from "../stores/ui";
+import { useDialogStore } from "../stores/dialogs";
 import { useSketchPaletteStore } from "../stores/sketchPalette";
 import type { Engine } from "./engine";
 import type { SketchTool } from "../sketch/sketchMode";
@@ -130,6 +131,9 @@ export function createActions(e: Engine): (action: string) => void {
         break;
       case "welcome":
         e.ui.welcome.open();
+        break;
+      case "materials":
+        useDialogStore().materials = true;
         break;
       case "revolve":
         void e.starters.startRevolve();

@@ -18,6 +18,7 @@ import OverhangPanel from "./components/overlays/OverhangPanel.vue";
 import ParamsDialog from "./components/overlays/ParamsDialog.vue";
 import WelcomeModal from "./components/overlays/WelcomeModal.vue";
 import PreferencesDialog from "./components/overlays/PreferencesDialog.vue";
+import MaterialsDialog from "./components/overlays/MaterialsDialog.vue";
 import BugReportButton from "./components/overlays/BugReportButton.vue";
 import BugReportDialog from "./components/overlays/BugReportDialog.vue";
 import SketchDimLayer from "./components/overlays/SketchDimLayer.vue";
@@ -119,6 +120,7 @@ onUnmounted(() => offContrib?.());
        they genuinely stack, the welcome screen opens sign-in over itself. -->
   <WelcomeModal v-if="dialogs.welcome && dialogs.welcomeCallbacks" />
   <PreferencesDialog v-if="dialogs.preferences" />
+  <MaterialsDialog v-if="dialogs.materials" />
   <BugReportButton />
   <BugReportDialog v-if="dialogs.bugReport && dialogs.bugDeps" />
 

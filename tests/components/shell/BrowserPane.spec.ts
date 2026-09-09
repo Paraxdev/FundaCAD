@@ -28,6 +28,7 @@ import { setBrowserFilter } from "../../../src/ui/browserFilter";
 import {
   descendantsOf, type ElementDef, freshElementName, reparented, withElementRemoved,
 } from "../../../src/document/elements";
+import type { MaterialDef } from "../../../src/document/materials";
 import type { Engine } from "../../../src/app/engine";
 import type { CadDocument, Feature } from "../../../src/types";
 
@@ -44,7 +45,31 @@ function makeEngine(doc: CadDocument, bodies: { id: string; name: string; nodeRe
   // about what a delete does would pass while the panel was broken.
   let elements: ElementDef[] = [];
   const bodyElement = new Map<string, string>();
+  // Materials, likewise a display overlay. The panel reads three of them: the
+  // library for the "Material" submenu, the raw id to grey out the current row,
+  // and the resolved material for the row's colour chip.
+  let materials: MaterialDef[] = [];
+  const bodyMaterial = new Map<string, string>();
   const store = {
+    get materialLibrary() { return materials; },
+    bodyMaterialId: (id: string) => bodyMaterial.get(id),
+    bodyMaterialOf: (id: string) => {
+      const held = bodyMaterial.get(id);
+      return held ? materials.find((m) => m.id === held) : undefined;
+    },
+    addMaterial(m: Partial<MaterialDef>) {
+      const def: MaterialDef = { id: m.id ?? `m${materials.length + 1}`, name: m.name ?? "M", color: m.color ?? "#808080" };
+      materials = [...materials, def];
+      buildVersion.value++;
+      return def.id;
+    },
+    setBodiesMaterial(ids: Iterable<string>, material: string | null) {
+      for (const id of ids) {
+        if (material === null) bodyMaterial.delete(id);
+        else bodyMaterial.set(id, material);
+      }
+      buildVersion.value++;
+    },
     get bodyElements() { return elements; },
     bodyElementOf: (id: string) => bodyElement.get(id),
     bodyElementMap: () => bodyElement,
