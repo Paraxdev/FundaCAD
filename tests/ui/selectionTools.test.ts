@@ -10,11 +10,13 @@ import { TOOL_CAPABILITIES, TOOL_IDS } from "../../src/features/toolCapabilities
 import { allCommands } from "../../src/ui/commands";
 import { iconPaths } from "../../src/ui/icons";
 import {
+  appearanceOffers,
   primaryKind,
   selectionOffers,
   toolbarOffers,
   type ToolOffer,
 } from "../../src/ui/selectionTools";
+import { applicableTools } from "../../src/features/toolCapabilities";
 
 const labels = (offers: ToolOffer[]) => offers.map((o) => o.tool);
 
@@ -151,5 +153,68 @@ describe("the toolbar's cut", () => {
     // menu. It is still in the OFFER, which is what a menu ranks from.
     expect(labels(toolbarOffers({ face: 1 }))).not.toContain("delete-face");
     expect(labels(selectionOffers({ face: 1 }))).toContain("delete-face");
+  });
+});
+
+describe("what a picked body is offered", () => {
+  it("offers both patterns, which used to be ribbon-only", () => {
+    // The gap this closed: Move and the three booleans consume the body
+    // selection and were on the bar, Pattern consumes it in exactly the same
+    // way (featureStarters.startPattern) and was not, so a picked part was one
+    // click from Subtract and a menu hunt from a repeat.
+    const one = labels(toolbarOffers({ body: 1 }));
+    expect(one).toContain("pattern-linear");
+    expect(one).toContain("pattern-circular");
+    expect(one).toContain("move");
+  });
+
+  it("keeps the patterns live on ONE body, unlike the booleans", () => {
+    // CONTROL, and the reason the rows carry no `min`: a pattern of one body is
+    // the ordinary case, a boolean of one is not. If these ever grew a minimum
+    // of two by being copied from the row above, this is the line that catches
+    // it.
+    const one = labels(toolbarOffers({ body: 1 }));
+    expect(one).not.toContain("boolean-union");
+    expect(labels(toolbarOffers({ body: 2 }))).toContain("boolean-union");
+  });
+});
+
+describe("the appearance half", () => {
+  it("offers a body its material and its visibility", () => {
+    expect(appearanceOffers({ body: 1 }).map((o) => o.id)).toEqual(["material", "hide", "isolate"]);
+  });
+
+  it("says how many bodies it is about, once there is more than one", () => {
+    // The bar has no room for a count of its own, so the verb carries it. A
+    // "Hide" that silently took four parts with it is the kind of thing you
+    // only notice two operations later.
+    const many = appearanceOffers({ body: 4 });
+    expect(many.map((o) => o.label)).toEqual(["Material for 4 bodies", "Hide 4 bodies", "Isolate 4 bodies"]);
+    expect(appearanceOffers({ body: 1 }).map((o) => o.label)).toEqual(["Material", "Hide body", "Isolate body"]);
+  });
+
+  it("offers nothing for a selection a body does not win", () => {
+    // "Hide" beside a picked face would be ambiguous about which of the two it
+    // meant, and there is no such thing as hiding one face.
+    for (const sel of [{}, { face: 3 }, { edge: 1 }, { "sketch-region": 2 }, { face: 2, body: 1 }]) {
+      expect(appearanceOffers(sel)).toEqual([]);
+    }
+  });
+
+  it("names marks ui/icons.ts actually draws", () => {
+    for (const o of appearanceOffers({ body: 1 })) {
+      expect(iconPaths(o.iconName), `${o.id} -> ${o.iconName}`).not.toBe("");
+    }
+  });
+
+  it("stays OUT of the capability table", () => {
+    // The line the split is on. features/toolCapabilities.ts answers "which
+    // tools would this selection feed", and every answer it gives adds a
+    // feature to the timeline. Material, Hide and Isolate write display-only
+    // overlays, so a caller acting on applicableTools() must never be handed
+    // one, and neither must the modelling half of the bar.
+    const ids = new Set<string>(applicableTools({ body: 2 }));
+    for (const o of appearanceOffers({ body: 2 })) expect(ids.has(o.id)).toBe(false);
+    expect(labels(toolbarOffers({ body: 2 }))).not.toContain("material");
   });
 });

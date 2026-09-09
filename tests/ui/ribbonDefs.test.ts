@@ -11,6 +11,7 @@
 
 import { describe, expect, it } from "vitest";
 import { MODEL, SKETCH, leavesOf, type Group } from "../../src/ui/ribbonDefs";
+import { allCommands } from "../../src/ui/commands";
 
 const actionsOf = (groups: Group[]) => groups.flatMap((g) => g.items).flatMap(leavesOf).map((t) => t.action);
 
@@ -30,6 +31,22 @@ describe("ribbon tool tables", () => {
       expect(t.label, `${t.action} label`).toBeTruthy();
       expect(t.iconName, `${t.action} icon`).toBeTruthy();
     }
+  });
+
+  it("names each command exactly once across the ribbon AND the global list", () => {
+    // The per-table check above cannot see this one: a command written out in
+    // commands.ts GLOBAL and then given a ribbon button is listed twice in the
+    // palette, one entry filed under "View" and one under its group, and
+    // whichever the user picks the other stays there looking like a second
+    // thing. Materials moved exactly that way, out of the Edit menu's shadow
+    // and onto the ribbon.
+    const ids = allCommands().map((c) => c.id);
+    const dupes = ids.filter((a, i) => ids.indexOf(a) !== i);
+    expect(dupes).toEqual([]);
+  });
+
+  it("keeps Materials reachable now that it is not only in a menu", () => {
+    expect(actionsOf(MODEL)).toContain("materials");
   });
 
   it("keeps every sketch drawing tool reachable after the rectangles and circles were folded", () => {

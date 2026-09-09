@@ -140,6 +140,14 @@ export const MODEL: Group[] = [
           { action: "component-colors", label: "Body Colors", iconName: "componentColors" },
         ],
       },
+      // Filed with the other "how does it look" tools rather than given a group
+      // of its own. It lived only in the Edit menu, which is where a user finds
+      // a command they already know the name of, not where they discover one,
+      // and a library of finishes is no use to somebody who never learns it is
+      // there. Its neighbours here are Zebra, Curvature and Body Colors, which
+      // are the same kind of thing: ways of looking at the model rather than
+      // changes to it.
+      { action: "materials", label: "Materials", iconName: "material" },
     ],
   },
   {

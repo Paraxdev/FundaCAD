@@ -23,11 +23,17 @@ import { computed, onMounted, onUnmounted, ref, shallowRef } from "vue";
 import * as THREE from "three";
 import Icon from "../shell/Icon.vue";
 import { useEngine } from "../../app/engineKey";
-import { toolbarOffers, type ToolOffer } from "../../ui/selectionTools";
+import {
+  appearanceOffers, primaryKind, toolbarOffers,
+  type AppearanceOffer, type ToolOffer,
+} from "../../ui/selectionTools";
+import { contextMenu } from "../../ui/menu";
+import { materialMenu } from "../../ui/browserTree";
 import type { SelectionCounts } from "../../features/toolCapabilities";
 import { handlePlacement } from "../../features/edgeNudge";
 import { regionAnchor } from "../../features/regionNudge";
 import { handleReachPx } from "../../features/manipulator";
+import { GIZMO_REACH_PX } from "../../features/moveTool";
 
 type Vec3 = [number, number, number];
 
@@ -51,7 +57,12 @@ const HALF_W_PX = 110;
 const counts = shallowRef<SelectionCounts>({});
 const screen = ref<{ x: number; y: number } | null>(null);
 const offers = computed(() => toolbarOffers(counts.value));
-const visible = computed(() => screen.value !== null && offers.value.length > 0);
+// The appearance half: Material, Hide, Isolate, for a body selection only. See
+// ui/selectionTools.appearanceOffers for why these are not capability rows.
+const looks = computed(() => appearanceOffers(counts.value));
+const visible = computed(
+  () => screen.value !== null && (offers.value.length > 0 || looks.value.length > 0),
+);
 
 // --- reading the selection ---------------------------------------------------
 
@@ -123,7 +134,13 @@ function refresh(): boolean {
   // because a tool can start from a shortcut, a menu, the palette or the
   // browser tree, and because this is what puts the bar BACK the instant the
   // tool ends with the selection intact.
-  if (!anchor || engine.toolBusy()) {
+  //
+  // toolOwnsScreen, NOT toolBusy: picking a body raises the Move gizmo by
+  // itself, so toolBusy() is true for as long as a body is selected at all and
+  // this bar could never appear over one. That is why body verbs were reachable
+  // only from a right-click while every face and edge verb was on the bar. See
+  // the note on Engine.toolOwnsScreen.
+  if (!anchor || engine.toolOwnsScreen()) {
     screen.value = null;
     return !!anchor;
   }
@@ -155,9 +172,16 @@ function refresh(): boolean {
 }
 
 /** How far the handle standing on the anchor reaches up the screen. Zero when
- *  there is no anchor to measure at, which is also when there is no bar. */
+ *  there is no anchor to measure at, which is also when there is no bar.
+ *
+ *  WHICH handle depends on the kind. An edge, a face or a profile carries the
+ *  drag handle, whose reach varies with the model, it is drawn at a constant
+ *  screen size only until it would dwarf the part. A body carries the Move
+ *  gizmo instead, which is a fixed screen size and a good deal bigger, and
+ *  measuring off the wrong one put the bar inside the rotation rings. */
 function barLiftPx(): number {
   if (!anchor) return 0;
+  if ((counts.value.body ?? 0) > 0 && primaryKind(counts.value) === "body") return GIZMO_REACH_PX;
   return handleReachPx(
     engine.viewport.modelDiagonal(),
     engine.viewport.pixelWorldSize(anchor),
@@ -209,12 +233,74 @@ function title(o: ToolOffer): string {
 }
 
 function run(o: ToolOffer) {
+  // The gizmo a body selection raises is not a tool the user started, and
+  // every command below would refuse while it is up. See Engine.dropBodyGizmo.
+  engine.dropBodyGizmo();
   if (engine.toolBusy()) return;
   // The one tool with no action id is dispatched through the engine, see
   // ui/selectionTools.ACTIONLESS and the note on "delete-face" in
   // features/toolCapabilities.ts.
   if (o.action) engine.handleAction(o.action);
   else if (o.tool === "delete-face") engine.deleteSelectedFace();
+}
+
+/** The bodies the appearance verbs act on: whatever is selected right now,
+ *  read at click time rather than from `counts`, which carries how many but not
+ *  which. */
+function selectedBodies(): string[] {
+  return engine.viewport.getSelectedBodies();
+}
+
+/** Run an appearance verb.
+ *
+ *  Not routed through handleAction: none of these is a command, each is a
+ *  direct write to a display-only overlay, and inventing three action ids so
+ *  they could travel through the dispatcher would also enrol them in "Repeat
+ *  last command", which repeats modelling, not tidying up.
+ *
+ *  Material opens the SAME submenu the body's right-click menu and its Browser
+ *  row carry, from the same builder, so the library is one list wherever it is
+ *  reached from. A dialog would be the wrong shape here, the bar is a place to
+ *  make a choice, not to open one. */
+function look(o: AppearanceOffer, ev: MouseEvent) {
+  // toolOwnsScreen, not toolBusy: see refresh(). None of these three is a
+  // command, so the ambient Move gizmo is no reason to refuse one.
+  if (engine.toolOwnsScreen()) return;
+  const ids = selectedBodies();
+  if (!ids.length) return;
+  const store = engine.store;
+  if (o.id === "material") {
+    const first = ids[0];
+    // One current material only when the whole selection agrees, otherwise
+    // nothing is ticked and every row stays live, which is the honest reading
+    // of a mixed selection.
+    const current = first !== undefined ? store.bodyMaterialId(first) : undefined;
+    const shared = ids.every((id) => store.bodyMaterialId(id) === current) ? current : undefined;
+    const item = materialMenu(store.materialLibrary, ids, shared, (m) => store.setBodiesMaterial(ids, m));
+    // The submenu's own rows, opened at the button: wrapping them in the
+    // "Material" parent again would cost a hover to reach a list that is
+    // already the whole reason the button was pressed.
+    contextMenu(ev.clientX, ev.clientY, item.children ?? []);
+    return;
+  }
+  if (o.id === "hide") {
+    // The gizmo first: it is standing on these bodies, and the line below is
+    // about to make them invisible and then let go of them. Left up, it would
+    // be a set of arrows floating over nothing, and it would also swallow the
+    // selection change (viewportWiring returns early while a tool is busy).
+    engine.dropBodyGizmo();
+    store.setBodiesVisibility(new Map(ids.map((id) => [id, false])));
+    // Drop the selection with it. A hidden body that is still selected leaves
+    // this bar floating over nothing, offering to fillet something the user
+    // just said they did not want to look at.
+    engine.viewport.setSelectedBodies([]);
+    return;
+  }
+  // Isolate: show only these. One batched write, one re-render, and the way
+  // back is Show All Bodies (Shift+H), same as the body context menu's.
+  const all = store.buildState.result?.bodies ?? [];
+  const keep = new Set(ids);
+  store.setBodiesVisibility(new Map(all.map((b) => [b.id, keep.has(b.id)])));
 }
 
 </script>
@@ -239,6 +325,22 @@ function run(o: ToolOffer) {
         :title="title(o)"
         :aria-label="title(o)"
         @click="run(o)"
+      >
+        <Icon :name="o.iconName" :size="18" />
+      </button>
+      <!-- A rule, not a gap: the verbs on the right change how the body looks,
+           the ones on the left change what it IS, and a bar that ran them
+           together would put "hide this" next to "subtract this". -->
+      <div v-if="offers.length && looks.length" class="seltool-sep" aria-hidden="true"></div>
+      <button
+        v-for="o in looks"
+        :key="o.id"
+        type="button"
+        class="seltool-btn"
+        :data-look="o.id"
+        :title="o.label"
+        :aria-label="o.label"
+        @click="look(o, $event)"
       >
         <Icon :name="o.iconName" :size="18" />
       </button>

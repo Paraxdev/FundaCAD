@@ -16,16 +16,19 @@ export interface Command {
   key?: string; // display hint
 }
 
-// File + View commands that aren't in the ribbon (menus / floating view controls).
+// File + View commands that aren't in the ribbon (menus / floating view
+// controls). NOT IN THE RIBBON is the whole rule: an id written out here that
+// also has a ribbon button is listed twice in the palette, once under File and
+// once under its group, and the second row looks like a second thing. Import
+// Mesh sat in both for as long as the INSERT group has existed; it is the
+// ribbon's now, and ribbonDefs.test.ts holds the list to the rule.
 const GLOBAL: Command[] = [
   { id: "new", label: "New", group: "File", context: "global", key: "Ctrl+N" },
   { id: "open", label: "Open…", group: "File", context: "global", key: "Ctrl+O" },
   { id: "save", label: "Save", group: "File", context: "global", key: "Ctrl+S" },
   { id: "saveas", label: "Save As…", group: "File", context: "global", key: "Ctrl+Shift+S" },
   { id: "export", label: "Export…", group: "File", context: "global", key: "Ctrl+E" },
-  { id: "import", label: "Import Mesh…", group: "File", context: "global" },
   { id: "welcome", label: "Welcome Screen", group: "Help", context: "global" },
-  { id: "materials", label: "Materials…", group: "View", context: "global" },
   { id: "undo", label: "Undo", group: "Edit", context: "global", key: "Ctrl+Z" },
   { id: "redo", label: "Redo", group: "Edit", context: "global", key: "Ctrl+Y" },
   { id: "fit", label: "Fit View", group: "View", context: "global", key: "Home / F6" },

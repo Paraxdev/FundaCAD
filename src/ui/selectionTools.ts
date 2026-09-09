@@ -89,6 +89,8 @@ const TOOL_ICON: Record<ToolId, string> = {
   loft: "loft",
   "delete-face": "deleteFace",
   move: "move",
+  "pattern-linear": "patternLinear",
+  "pattern-circular": "patternCircular",
   "boolean-union": "booleanUnion",
   "boolean-subtract": "booleanSubtract",
   "boolean-intersect": "booleanIntersect",
@@ -174,4 +176,52 @@ const BAR_EXCLUDED: ReadonlySet<string> = new Set<string>(["delete-face"]);
  *  else. */
 export function toolbarOffers(sel: SelectionCounts): ToolOffer[] {
   return selectionOffers(sel).filter((o) => o.enabled && !BAR_EXCLUDED.has(o.tool));
+}
+
+// --- appearance -------------------------------------------------------------
+//
+// The verbs that change how a body LOOKS, or whether it is looked at, kept apart
+// from the offers above rather than filed as capability rows.
+//
+// features/toolCapabilities.ts is the inventory of what each MODELLING tool can
+// act on: everything in it produces a feature, lands in the timeline and can be
+// undone. Material, Hide and Isolate do none of those things, they write the
+// document's display-only overlays (see document/store.ts). Giving them rows
+// would make `applicableTools()` answer a question it does not ask, and the
+// first caller to trust "these are the tools that would add a feature" would be
+// wrong.
+//
+// They are on the bar for the reason the bar exists at all. A body you have
+// just picked out of a three-thousand-part import is exactly the body you want
+// to colour, to get out of the way, or to be alone with, and all three were
+// reachable only by right-clicking it or by finding its row in the tree.
+
+/** The appearance verbs, by id. Not action strings: none of these is a command
+ *  the ribbon dispatches, each is a direct write the surface performs. */
+export type AppearanceId = "material" | "hide" | "isolate";
+
+export interface AppearanceOffer {
+  id: AppearanceId;
+  label: string;
+  iconName: string;
+}
+
+/** What the appearance half of the bar shows for this selection.
+ *
+ *  Bodies only, and only when the body kind is the one that WINS: a selection
+ *  of faces belongs to whatever solid is under them, and "Hide" next to a
+ *  picked face would be ambiguous about which of the two it meant. Empty
+ *  otherwise, which is what lets the bar decide whether to draw a divider by
+ *  looking at the length. */
+export function appearanceOffers(sel: SelectionCounts): AppearanceOffer[] {
+  if (primaryKind(sel) !== "body") return [];
+  const n = sel.body ?? 0;
+  const many = n > 1 ? ` ${n} bodies` : "";
+  return [
+    // Material first: it is the one that is not about visibility, and it is the
+    // one this bar was asked for.
+    { id: "material", label: many ? `Material for${many}` : "Material", iconName: "material" },
+    { id: "hide", label: many ? `Hide${many}` : "Hide body", iconName: "hidden" },
+    { id: "isolate", label: many ? `Isolate${many}` : "Isolate body", iconName: "isolate" },
+  ];
 }
