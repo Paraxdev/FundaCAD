@@ -43,15 +43,18 @@ import asyncio
 import base64
 import contextlib
 import copy
+import gzip
 import io
 import json
 import os
 import re
+import secrets
 import shutil
 import sys
 import tempfile
 import time
 import traceback
+import zipfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -132,13 +135,32 @@ def failure(s):
 IMPORT_FORMATS = ("step", "stl", "3mf", "obj", "brep", "glb")
 
 
-#: How much file one JSON-RPC message may carry. A TRANSPORT limit, not the
-#: reader's: the engine keeps its own per-format cap and applies it to the file
-#: on disk. Inline content arrives base64 in a single message this process holds
-#: whole, and holds three times over at the peak (the string, the decoded bytes,
-#: the write), so it is bounded well below what a file on disk may weigh. `path`
-#: has no such ceiling and is the answer for anything large.
+#: How much file may arrive inline, summed over every piece of one upload. A
+#: TRANSPORT limit, not the reader's: the engine keeps its own per-format cap and
+#: applies it to the file on disk. `path` has no ceiling at all and stays the
+#: answer for anything genuinely large.
 MAX_INLINE_BYTES = 64 * 1024 * 1024
+
+#: How much may be WRITTEN once an archive is opened. Deliberately above the
+#: engine's own 400 MiB STEP cap, so nothing is refused here that the reader
+#: would have accepted, and finite because the ratio between an archive and its
+#: contents has no upper bound: a few hundred bytes of gzip expands to a
+#: gigabyte of zeroes, and a limit only on what arrives is not a limit at all.
+MAX_UNPACKED_BYTES = 512 * 1024 * 1024
+
+#: When pieces nobody came back for are dropped. This process outlives any one
+#: conversation, so an upload abandoned halfway would otherwise hold its
+#: directory for as long as the host runs.
+UPLOAD_IDLE_SECONDS = 30 * 60
+
+#: Extensions that wrap a file rather than being one, and what is inside when
+#: the name is all there is to go on. `.stpZ` is ISO 10303-21's own spelling for
+#: a zipped STEP and carries no inner extension to read.
+ARCHIVE_SUFFIXES = {"gz": ("gzip", None), "gzip": ("gzip", None),
+                    "zip": ("zip", None), "stpz": ("zip", "step")}
+
+#: Spellings the file pickers accept that are not the format's own name.
+FORMAT_ALIASES = {"stp": "step"}
 
 
 def _safe_filename(name, fmt):
@@ -154,50 +176,283 @@ def _safe_filename(name, fmt):
     return base if base.strip(".") else f"imported.{fmt}"
 
 
-def _write_inline(content, encoding, filename):
-    """Inline bytes on their way to a file the engine can open.
+#: Read and written in multiples of 4, so that a base64 spool splits at
+#: character boundaries the decoder can take one block at a time. Padding only
+#: ever appears at the very end, which is what makes that legal.
+BLOCK = 4 * 1024 * 1024
 
-    Raises ValueError saying what to do about it, because this is the one layer
-    that knows both what went wrong and which argument would have avoided it.
+
+def _mib(n):
+    return f"{n / (1024 * 1024):.1f} MiB"
+
+
+class Upload:
+    """A file arriving inline, in one piece or in several.
+
+    The pieces are appended to a spool on disk rather than joined in memory:
+    what arrives may be four times the size of the file once it is decoded and
+    unpacked, and holding the payload, the bytes and the write at once is three
+    copies of something already at the edge of what a message can carry.
+
+    Everything about the file (its name, its format, how it is compressed) is
+    settled by the FIRST piece and is not revisited. A later piece that
+    contradicts it is refused rather than reconciled: the pieces are a transport
+    detail, and a file whose format changed halfway through is not one file.
     """
-    if not isinstance(content, str):
-        raise ValueError("content must be a string: base64, or the file's own "
-                         'text with encoding "text".')
-    enc = (encoding or "base64").lower()
-    if enc in ("text", "utf8", "utf-8"):
-        data = content.encode("utf-8")
-    elif enc == "base64":
-        # Whitespace first: base64 is routinely wrapped at 76 columns and
-        # validate=True refuses a newline, which would reject the well-formed
-        # payload far more often than the malformed one. What is left still
-        # rejects a text file, whose punctuation is not in the alphabet.
-        try:
-            data = base64.b64decode("".join(content.split()), validate=True)
-        except ValueError:
-            raise ValueError(
-                "content is not valid base64. A text format (STEP, OBJ, ASCII "
-                'STL) can be sent as it is with encoding "text".') from None
-    else:
-        raise ValueError(f"Unknown encoding {enc!r}. Use \"base64\" or \"text\".")
-    if not data:
-        raise ValueError("content is empty.")
-    if len(data) > MAX_INLINE_BYTES:
-        raise ValueError(
-            f"content is {len(data) / (1024 * 1024):.0f} MiB, too large to send "
-            f"inline (limit {MAX_INLINE_BYTES // (1024 * 1024)} MiB). Write it to "
-            "a file and pass path, which has no such limit.")
 
-    # A directory of its own, so the name above cannot collide with a concurrent
-    # import and one rmtree is the whole clean-up.
-    tmpdir = tempfile.mkdtemp(prefix="fundacad-import-")
-    try:
-        path = os.path.join(tmpdir, filename)
-        with open(path, "wb") as fh:
+    def __init__(self, args, parts):
+        name = args.get("name") or ""
+        inner, wrapped = _unwrap_name(name)
+
+        given = str(args.get("compression") or "").lower()
+        # Whether to look at the bytes at all. Saying "none" is the escape hatch
+        # for a file that really is called .gz and really is not compressed, so
+        # it has to overrule what the bytes look like too; half a switch would
+        # leave the argument meaning nothing on the one input it exists for.
+        self.sniff = given != "none"
+        if given == "none":
+            compression = None          # an explicit none overrules the name
+        elif given:
+            if given not in ("gzip", "zip"):
+                raise ValueError(f"Unknown compression {given!r}. "
+                                 'Use "gzip", "zip", or leave it out.')
+            compression = given
+        else:
+            compression = wrapped
+
+        self.encoding = str(args.get("encoding") or "base64").lower()
+        if self.encoding in ("utf8", "utf-8"):
+            self.encoding = "text"
+        if self.encoding not in ("base64", "text"):
+            raise ValueError(f"Unknown encoding {self.encoding!r}. "
+                             'Use "base64" or "text".')
+
+        # Where the format came from decides one later question: a plain `.zip`
+        # tells us nothing, so if nobody has said, the file inside gets to.
+        self.told_format = bool(args.get("format")) or _format_of(inner) is not None
+        fmt = str(args.get("format") or _import_format(inner)).lower()
+        if fmt not in IMPORT_FORMATS:
+            raise ValueError(f"Cannot import {fmt!r} files. "
+                             f"Formats: {', '.join(IMPORT_FORMATS)}.")
+
+        self.id = secrets.token_hex(3)
+        self.compression = compression
+        self.fmt = fmt
+        self.name = inner or f"imported.{fmt}"
+        self.filename = _safe_filename(inner, fmt)
+        self.parts = parts
+        self.got = 0
+        self.touched = time.monotonic()
+        # A directory of its own, so the name cannot collide with a concurrent
+        # import and one rmtree is the whole clean-up.
+        self.dir = tempfile.mkdtemp(prefix="fundacad-import-")
+        self.spool = os.path.join(self.dir, "spool")
+
+    @property
+    def spooled(self):
+        try:
+            return os.path.getsize(self.spool)
+        except OSError:
+            return 0
+
+    def write(self, content, part):
+        """Append one piece. Raises ValueError saying what to do about it,
+        because this is the one layer that knows both what went wrong and which
+        argument would have avoided it."""
+        if not isinstance(content, str):
+            raise ValueError("content must be a string: base64, or the file's "
+                             'own text with encoding "text".')
+        if self.encoding == "base64":
+            content = "".join(content.split())
+            # Whitespace goes first because base64 is routinely wrapped at 76
+            # columns, and a strict decode refuses a newline: validating what
+            # arrived verbatim would reject the well-formed payload far more
+            # often than the malformed one.
+            if part < self.parts and content.endswith("="):
+                raise ValueError(
+                    f"part {part} ends in base64 padding, so it looks separately "
+                    "encoded. Encode the whole file once and split the text that "
+                    "comes out, otherwise the pieces cannot be joined back into "
+                    "the file.")
+        if self.encoding == "text":
+            data = content.encode("utf-8")
+        else:
+            try:
+                data = content.encode("ascii")
+            except UnicodeEncodeError:
+                # Not base64 at all, and saying so beats a codec error naming a
+                # character offset in something the caller never sees as text.
+                raise ValueError(
+                    "content is not valid base64. A text format (STEP, OBJ, "
+                    'ASCII STL) can be sent as it is with encoding "text".'
+                ) from None
+
+        # A spool bound, not the real one: the exact limit is on the DECODED
+        # bytes and is checked as they are written. This exists only so that a
+        # caller ignoring the limit cannot spool without bound before finding out.
+        if self.spooled + len(data) > MAX_INLINE_BYTES // 3 * 4 + 64:
+            raise ValueError(_too_large(self.spooled * 3 // 4))
+        with open(self.spool, "ab") as fh:
             fh.write(data)
-    except OSError:
-        shutil.rmtree(tmpdir, ignore_errors=True)
-        raise
-    return path, tmpdir
+        self.got = part
+        self.touched = time.monotonic()
+
+
+def _too_large(size):
+    return (f"content reached {_mib(size)}, more than can be sent inline "
+            f"(limit {MAX_INLINE_BYTES // (1024 * 1024)} MiB). Send it gzipped "
+            "with compression=\"gzip\", which a STEP file typically shrinks "
+            "tenfold, or pass path instead, which has no limit at all.")
+
+
+def _decode_spool(up, out_path):
+    """The spool, as the bytes that were sent. Streamed a block at a time, and
+    the block is a multiple of 4, so each read is a whole number of base64
+    groups and decodes on its own."""
+    total = 0
+    with open(up.spool, "rb") as src, open(out_path, "wb") as dst:
+        while True:
+            block = src.read(BLOCK)
+            if not block:
+                break
+            if up.encoding == "text":
+                data = block
+            else:
+                try:
+                    data = base64.b64decode(block, validate=True)
+                except ValueError:
+                    raise ValueError(
+                        "content is not valid base64. A text format (STEP, OBJ, "
+                        'ASCII STL) can be sent as it is with encoding "text". '
+                        "Pieces have to be one file's base64 split into parts, "
+                        "not a part each.") from None
+            total += len(data)
+            if total > MAX_INLINE_BYTES:
+                raise ValueError(_too_large(total))
+            dst.write(data)
+    if not total:
+        raise ValueError("content is empty.")
+    return total
+
+
+def _sniff_compression(path):
+    """gzip, from its first two bytes, and gzip alone.
+
+    A 3MF IS a zip archive and the engine reads it as one, so unpacking anything
+    that merely looked like a zip would quietly turn a 3MF import into whatever
+    happened to sit inside it. A zip has to be declared, by the argument or by
+    the name; nothing we read begins 1f 8b, so gzip can be recognised on sight.
+    """
+    with open(path, "rb") as fh:
+        return "gzip" if fh.read(2) == b"\x1f\x8b" else None
+
+
+def _copy_capped(src, dst, what):
+    total = 0
+    while True:
+        block = src.read(BLOCK)
+        if not block:
+            return total
+        total += len(block)
+        if total > MAX_UNPACKED_BYTES:
+            raise ValueError(
+                f"{what} is over {_mib(MAX_UNPACKED_BYTES)} once unpacked, "
+                "which is more than "
+                "will be read from an archive. Send the file itself, or pass "
+                "path.")
+        dst.write(block)
+
+
+def _gunzip(src_path, dst_path):
+    try:
+        with gzip.open(src_path, "rb") as src, open(dst_path, "wb") as dst:
+            return _copy_capped(src, dst, "the file")
+    except (OSError, EOFError) as ex:
+        raise ValueError(f"the gzip data could not be read ({ex}). If the file "
+                         'is not compressed, leave compression out.') from None
+
+
+def _unzip_one(src_path, dst_path, fmt, told_format):
+    """Take the one file out of a zip, and say what it was called.
+
+    An archive holding several is refused rather than guessed at: which one was
+    meant is a question with a right answer that this process does not have, and
+    importing the wrong one looks like success until the measurements are wrong.
+    """
+    try:
+        with zipfile.ZipFile(src_path) as z:
+            entries = [i for i in z.infolist() if not i.is_dir()]
+            if not entries:
+                raise ValueError("the archive holds no files.")
+            if len(entries) == 1:
+                info = entries[0]
+            else:
+                # Only a format somebody actually stated may choose. `fmt` falls
+                # back to step whenever the name was silent, and letting that
+                # pick would answer the question with a default.
+                want = ([i for i in entries if _format_of(i.filename) == fmt]
+                        if told_format else [])
+                if len(want) != 1:
+                    names = ", ".join(sorted(i.filename for i in entries)[:8])
+                    raise ValueError(
+                        f"the archive holds {len(entries)} files ({names}). Send "
+                        "the one to import on its own, or name its format.")
+                info = want[0]
+            if info.file_size > MAX_UNPACKED_BYTES:
+                raise ValueError(
+                    f"{info.filename} is {_mib(info.file_size)} unpacked, more "
+                    f"than the {_mib(MAX_UNPACKED_BYTES)} an archive is read up "
+                    "to. Pass path.")
+            with z.open(info) as src, open(dst_path, "wb") as dst:
+                total = _copy_capped(src, dst, info.filename)
+            # Declared against actual. A zip states each entry's size in its own
+            # directory, so the two disagreeing means the archive is damaged,
+            # and a short read would otherwise import as a truncated file.
+            if total != info.file_size:
+                raise ValueError(
+                    f"{info.filename} says it is {info.file_size} bytes but "
+                    f"{total} came out, so the archive is damaged.")
+            return info.filename
+    except zipfile.BadZipFile as ex:
+        raise ValueError(f"the zip archive could not be read ({ex}). If the file "
+                         'is not compressed, leave compression out.') from None
+
+
+def _unpack(up):
+    """Everything spooled, as one file the engine can open. Returns its path."""
+    payload = os.path.join(up.dir, "payload")
+    _decode_spool(up, payload)
+    compression = up.compression
+    if compression is None and up.sniff:
+        compression = _sniff_compression(payload)
+    final = os.path.join(up.dir, up.filename)
+
+    if compression is None:
+        os.replace(payload, final)
+        return final
+    if compression == "gzip":
+        _gunzip(payload, final)
+    else:
+        inside = _unzip_one(payload, final, up.fmt, up.told_format)
+        # Nobody named a format and the archive's own extension could not, so
+        # the file inside is the only thing left that knows.
+        if not up.told_format and _format_of(inside):
+            up.fmt = _format_of(inside)
+    os.remove(payload)
+    return final
+
+
+def _format_of(name):
+    """The format an extension NAMES, or None when it names nothing we read.
+
+    Kept apart from the guess below because the difference matters in one
+    place: what to do about a plain `.zip`, whose own extension says nothing
+    about its contents. Knowing that the name was silent is what makes reading
+    the answer off the file inside it correct rather than a second guess.
+    """
+    ext = os.path.splitext(name)[1].lstrip(".").lower()
+    ext = FORMAT_ALIASES.get(ext, ext)
+    return ext if ext in IMPORT_FORMATS else None
 
 
 def _import_format(path):
@@ -209,8 +464,21 @@ def _import_format(path):
     did not know would turn the commonest import into the one that needs an
     argument. A file that is not one fails in the reader, which says so.
     """
-    ext = os.path.splitext(path)[1].lstrip(".").lower()
-    return ext if ext in IMPORT_FORMATS else "step"
+    return _format_of(path) or "step"
+
+
+def _unwrap_name(name):
+    """(the name of the file inside, how it is wrapped) for a name that may be
+    an archive. "asm.step.gz" is a STEP called asm.step; "asm.stpz" is one too,
+    and has to be told so, because the zip took its extension away."""
+    ext = os.path.splitext(name)[1].lstrip(".").lower()
+    if ext not in ARCHIVE_SUFFIXES:
+        return name, None
+    compression, inside = ARCHIVE_SUFFIXES[ext]
+    inner = os.path.splitext(name)[0]
+    if inside and not _format_of(inner):
+        inner += "." + inside
+    return inner, compression
 
 
 class Server:
@@ -227,6 +495,9 @@ class Server:
         #: done here: adopting the app's document replaces this one, which is
         #: right when nothing has been built and destructive when something has.
         self.private_edits = False
+        #: Uploads still arriving, by id. Empty except between the first piece
+        #: of a file and its last.
+        self.uploads = {}
         #: When the last re-probe ran, so a closed app costs one file stat per
         #: tool rather than one connect timeout (see _adopt_running_app).
         self._probed_at = 0.0
@@ -384,22 +655,41 @@ screen. Every edit you make appears in their window as it happens.
             "modelled against. Use it when asked to fit something to a part that "
             "exists as a file. Give `path` if this machine can open the file, or "
             "`content` if you are holding the file itself (an upload, a sandbox) "
-            "and have no path to give. The format comes from the extension unless "
+            "and have no path to give. Inline, gzip it and say so: a STEP file "
+            "shrinks about tenfold, and what fits in one message is the limit "
+            "worth spending. Too big for one message even so? Send it in pieces: "
+            "encode the WHOLE file once, split the text that comes out, and send "
+            "each piece with `part` and `parts`, quoting the `upload` id the "
+            "first reply gives you. The format comes from the extension unless "
             "given. A large STEP can take minutes: it is one read, so do it once "
             "and keep the document.",
             {"path": {"type": "string",
                       "description": "a file on the machine FundaCAD runs on"},
              "content": {"type": "string",
                          "description": "the file itself, base64, when there is "
-                                        "no path to give"},
+                                        "no path to give. One piece of it if "
+                                        "`part` says so"},
              "encoding": {"type": "string", "enum": ["base64", "text"],
                           "description": "how `content` is encoded, base64 by "
                                          "default. A text format (STEP, OBJ, "
                                          "ASCII STL) can be sent as \"text\""},
+             "compression": {"type": "string", "enum": ["gzip", "zip", "none"],
+                             "description": "what `content` is wrapped in, "
+                                            "before encoding. Implied by a name "
+                                            "ending .gz, .zip or .stpz, and gzip "
+                                            "is recognised on sight"},
              "name": {"type": "string",
-                      "description": "what the file is called, e.g. \"bracket.step\", "
-                                     "which is where `content` gets its format "
-                                     "and the body its name"},
+                      "description": "what the file is called, e.g. \"bracket.step\" "
+                                     "or \"bracket.step.gz\", which is where "
+                                     "`content` gets its format and the body its "
+                                     "name"},
+             "part": {"type": "integer",
+                      "description": "which piece this is, counting from 1"},
+             "parts": {"type": "integer",
+                       "description": "how many pieces there are altogether"},
+             "upload": {"type": "string",
+                        "description": "the id the first piece's reply gave you, "
+                                       "required on every piece after it"},
              "format": {"type": "string", "enum": list(IMPORT_FORMATS),
                         "description": "override what the extension says"},
              "at": {"type": "integer",
@@ -547,6 +837,65 @@ screen. Every edit you make appears in their window as it happens.
         return text(f"Opened {path}: {len(self.doc['features'])} features, "
                     f"{len(self.doc.get('paramDefs') or {})} parameters.{note}")
 
+    def _drop_upload(self, up):
+        self.uploads.pop(up.id, None)
+        shutil.rmtree(up.dir, ignore_errors=True)
+
+    def _spool(self, args):
+        """Take one piece of an inline file and return the upload it belongs to.
+
+        Order is required rather than reassembled. Buffering out-of-order pieces
+        would mean holding them until the gap filled, and a gap that never fills
+        is indistinguishable from one that has not filled yet; refusing by name
+        turns a lost piece into something the caller can act on immediately.
+        """
+        part, parts = args.get("part"), args.get("parts")
+        if (part is None) != (parts is None):
+            raise ValueError("part and parts go together: say which piece this "
+                             "is and how many there are altogether.")
+        if part is None:
+            part = parts = 1
+        for label, n in (("part", part), ("parts", parts)):
+            if not isinstance(n, int) or isinstance(n, bool) or n < 1:
+                raise ValueError(f"{label} must be a whole number from 1 up.")
+        if part > parts:
+            raise ValueError(f"part {part} of {parts} is more pieces in than "
+                             "there are pieces.")
+
+        if part == 1:
+            self._sweep_uploads()
+            up = Upload(args, parts)
+            self.uploads[up.id] = up
+        else:
+            up = self.uploads.get(args.get("upload"))
+            if up is None:
+                raise ValueError(
+                    "no upload is in progress under that id. Send part 1 again; "
+                    "every piece after it has to quote the id the first reply "
+                    "gave, and an upload nobody returns to is dropped after "
+                    f"{UPLOAD_IDLE_SECONDS // 60} minutes.")
+            if parts != up.parts:
+                raise ValueError(f"this upload was announced as {up.parts} "
+                                 f"pieces and part {part} says {parts}.")
+            if part != up.got + 1:
+                raise ValueError(f"expected part {up.got + 1} of {up.parts}, "
+                                 f"got part {part}. The pieces have to arrive "
+                                 "in order.")
+        try:
+            up.write(args["content"], part)
+        except (ValueError, OSError):
+            self._drop_upload(up)
+            raise
+        return up
+
+    def _sweep_uploads(self):
+        """Pieces nobody came back for."""
+        stale = [u for u in self.uploads.values()
+                 if time.monotonic() - u.touched > UPLOAD_IDLE_SECONDS]
+        for up in stale:
+            log(f"[mcp] dropping an unfinished upload of {up.name}")
+            self._drop_upload(up)
+
     async def t_doc_import(self, args):
         """Read a geometry file into an `import` feature.
 
@@ -565,6 +914,18 @@ screen. Every edit you make appears in their window as it happens.
         read returns: what the document keeps is `geom`, a hash into the blob
         store, so the bytes are already durable where it matters and a second
         copy of them would be litter that nothing would ever come back for.
+
+        Inline, the two things that decide whether a real part fits are stacked
+        on purpose. Compression is the bigger lever, a STEP file is text and
+        gzips about tenfold, so it is the difference between one message and ten.
+        Pieces are the other, because the ceiling on a single message is the
+        model's output and not this process's memory. Together they are what
+        makes a part that arrives as an upload importable at all.
+
+        Everything before the last piece changes nothing: the document is
+        untouched, which is what keeps a half-arrived file from reaching the
+        app as an edit (see `_call_live`, which offers nothing when a tool
+        changed nothing).
         """
         has_path, has_content = bool(args.get("path")), bool(args.get("content"))
         if has_path and has_content:
@@ -573,32 +934,39 @@ screen. Every edit you make appears in their window as it happens.
             return failure("Give either path (a file this machine can open) or "
                            "content (the file itself, base64) with name.")
 
-        fmt = str(args.get("format")
-                  or _import_format(args.get("name") or args.get("path") or "")).lower()
-        if fmt not in IMPORT_FORMATS:
-            return failure(
-                f"Cannot import {fmt!r} files. Formats: {', '.join(IMPORT_FORMATS)}.")
-
-        tmpdir = None
+        up = None
         if has_path:
             path = source = os.path.abspath(args["path"])
             if not os.path.isfile(path):
                 return failure(f"No such file: {path}")
+            fmt = str(args.get("format") or _import_format(path)).lower()
+            if fmt not in IMPORT_FORMATS:
+                return failure(f"Cannot import {fmt!r} files. "
+                               f"Formats: {', '.join(IMPORT_FORMATS)}.")
         else:
             try:
-                path, tmpdir = _write_inline(args["content"], args.get("encoding"),
-                                             _safe_filename(args.get("name"), fmt))
+                up = self._spool(args)
             except ValueError as ex:
                 return failure(str(ex))
+            if up.got < up.parts:
+                return text(
+                    f"Part {up.got} of {up.parts} received, {_mib(up.spooled)} "
+                    f"of {up.name} so far. Send part {up.got + 1} with "
+                    f'upload="{up.id}". Nothing is imported until the last piece.')
+            try:
+                path = _unpack(up)
+            except (ValueError, OSError) as ex:
+                self._drop_upload(up)
+                return failure(f"Could not read what was sent: {ex}")
             # Provenance, not a path. The temporary file is about to be gone, and
             # recording it would send whoever read the field back to nothing.
-            source = os.path.basename(path)
+            fmt, source = up.fmt, up.name
 
         try:
             reply = await self.link.call("import", path=path, format=fmt)
         finally:
-            if tmpdir:
-                shutil.rmtree(tmpdir, ignore_errors=True)
+            if up is not None:
+                self._drop_upload(up)
         if not reply.get("ok"):
             # The engine refuses for reasons an agent can act on (too large, too
             # many triangles, unreadable), so its message is the whole answer and
@@ -1015,6 +1383,11 @@ async def serve(read_line, write, server=None):
             if reply is not None:
                 write(json.dumps(reply))
     finally:
+        # Pieces of a file nobody finished sending. Not a substitute for the
+        # sweep, which is what covers the case that actually happens: a host
+        # kills its servers with TerminateProcess, and no finally runs then.
+        for up in list(getattr(server, "uploads", {}).values()):
+            server._drop_upload(up)
         if server.live is not None:
             await server.live.leave()
         await server.link.stop()

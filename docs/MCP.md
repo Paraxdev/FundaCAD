@@ -143,10 +143,50 @@ engine could not start on this computer".
 | `build` | rebuild, and say what came out and what failed |
 | `inspect` | exact volume, area, bbox, and every face and edge with a ready-made selector |
 | `view` | a PNG: orthographic, flat-shaded, with sections, body filtering and zoom |
-| `doc_import` | read a STEP, STL, 3MF, OBJ, BREP or GLB file in as a body to model against, by `path` or as inline `content` |
+| `doc_import` | read a STEP, STL, 3MF, OBJ, BREP or GLB file in as a body to model against, by `path` or as inline `content`, compressed and in pieces if it is large |
 | `export` | STEP, STL, 3MF, OBJ, BREP |
 
 `schema` is also served as an MCP resource at `fundacad://schema`.
+
+### Getting a file in when there is no path to it
+
+`doc_import` takes a `path`, which assumes the file is on the machine FundaCAD
+runs on. Often it is not: a host that hands its model an upload gives it the
+bytes and nothing else. So the file can be sent inline instead, as `content`.
+
+Three things make that practical for a real part rather than a toy one.
+
+**Encoding.** base64 by default, or `encoding: "text"` for a format that is
+already text (STEP, OBJ, ASCII STL), because re-encoding one is a step whose
+only purpose is to be undone on this side.
+
+**Compression.** `compression: "gzip"` or `"zip"`, or a name ending `.gz`,
+`.zip` or `.stpz`. A STEP file is text and gzips about tenfold, so this is the
+single biggest lever on whether a part fits in a message at all. gzip is also
+recognised from its first two bytes, since nothing we read begins `1f 8b`. A
+zip is never assumed, only ever declared: a 3MF **is** a zip archive and the
+engine reads it as one, so unpacking anything that merely looked like a zip
+would turn a 3MF import into whatever happened to sit inside it.
+
+**Pieces.** `part` and `parts`, quoting the `upload` id the first reply returns.
+The ceiling on one message is the model's output, not this process's memory, so
+the pieces are what lift it. Encode the whole file once and split the text that
+comes out; encoding each piece separately produces something that does not join
+back up, and a piece ending in base64 padding is refused for saying so.
+
+Nothing is imported until the last piece arrives, so a half-sent file never
+reaches the document, and in a live session it never reaches the app: the
+document is unchanged, and `_call_live` offers nothing when a tool changed
+nothing. The pieces are spooled to a temporary directory rather than joined in
+memory, and that directory is removed as soon as the read returns, or after 30
+minutes if nobody comes back for it.
+
+What arrives inline is capped at 64 MiB across all the pieces, and what comes
+out of an archive at 512 MiB, above the engine's own 400 MiB limit for a STEP so
+that nothing is refused here that the reader would have taken. The ratio between
+an archive and its contents has no upper bound, so a limit only on what arrives
+would be no limit at all. `path` has no ceiling and stays the answer for
+anything genuinely large.
 
 ### Why `inspect` returns selectors
 
