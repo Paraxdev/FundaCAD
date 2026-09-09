@@ -46,7 +46,10 @@ import copy
 import io
 import json
 import os
+import re
+import shutil
 import sys
+import tempfile
 import time
 import traceback
 
@@ -127,6 +130,74 @@ def failure(s):
 #: What `doc_import` will read. The same set the app's file pickers offer, and
 #: the same names the engine's importer switches on.
 IMPORT_FORMATS = ("step", "stl", "3mf", "obj", "brep", "glb")
+
+
+#: How much file one JSON-RPC message may carry. A TRANSPORT limit, not the
+#: reader's: the engine keeps its own per-format cap and applies it to the file
+#: on disk. Inline content arrives base64 in a single message this process holds
+#: whole, and holds three times over at the peak (the string, the decoded bytes,
+#: the write), so it is bounded well below what a file on disk may weigh. `path`
+#: has no such ceiling and is the answer for anything large.
+MAX_INLINE_BYTES = 64 * 1024 * 1024
+
+
+def _safe_filename(name, fmt):
+    """A filename for inline content, built rather than trusted.
+
+    `name` is whatever the agent called the file and it is about to become a
+    path on this machine, so basename() is the least of it: ".." survives that,
+    and a colon or a wildcard is simply unwritable on Windows, which would turn
+    an ordinary import into an OSError raised from the wrong layer entirely.
+    Only the extension is cosmetic here anyway, the format is decided before this.
+    """
+    base = re.sub(r"[^A-Za-z0-9._-]", "_", os.path.basename((name or "").strip()))
+    return base if base.strip(".") else f"imported.{fmt}"
+
+
+def _write_inline(content, encoding, filename):
+    """Inline bytes on their way to a file the engine can open.
+
+    Raises ValueError saying what to do about it, because this is the one layer
+    that knows both what went wrong and which argument would have avoided it.
+    """
+    if not isinstance(content, str):
+        raise ValueError("content must be a string: base64, or the file's own "
+                         'text with encoding "text".')
+    enc = (encoding or "base64").lower()
+    if enc in ("text", "utf8", "utf-8"):
+        data = content.encode("utf-8")
+    elif enc == "base64":
+        # Whitespace first: base64 is routinely wrapped at 76 columns and
+        # validate=True refuses a newline, which would reject the well-formed
+        # payload far more often than the malformed one. What is left still
+        # rejects a text file, whose punctuation is not in the alphabet.
+        try:
+            data = base64.b64decode("".join(content.split()), validate=True)
+        except ValueError:
+            raise ValueError(
+                "content is not valid base64. A text format (STEP, OBJ, ASCII "
+                'STL) can be sent as it is with encoding "text".') from None
+    else:
+        raise ValueError(f"Unknown encoding {enc!r}. Use \"base64\" or \"text\".")
+    if not data:
+        raise ValueError("content is empty.")
+    if len(data) > MAX_INLINE_BYTES:
+        raise ValueError(
+            f"content is {len(data) / (1024 * 1024):.0f} MiB, too large to send "
+            f"inline (limit {MAX_INLINE_BYTES // (1024 * 1024)} MiB). Write it to "
+            "a file and pass path, which has no such limit.")
+
+    # A directory of its own, so the name above cannot collide with a concurrent
+    # import and one rmtree is the whole clean-up.
+    tmpdir = tempfile.mkdtemp(prefix="fundacad-import-")
+    try:
+        path = os.path.join(tmpdir, filename)
+        with open(path, "wb") as fh:
+            fh.write(data)
+    except OSError:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+        raise
+    return path, tmpdir
 
 
 def _import_format(path):
@@ -311,15 +382,29 @@ screen. Every edit you make appears in their window as it happens.
             "Read an external geometry file (STEP, STL, 3MF, OBJ, BREP, GLB) into "
             "the timeline as a body, so it can be measured with `inspect` and "
             "modelled against. Use it when asked to fit something to a part that "
-            "exists as a file. The format comes from the extension unless given. "
-            "A large STEP can take minutes: it is one read, so do it once and "
-            "keep the document.",
-            {"path": {"type": "string", "description": "the file to read"},
+            "exists as a file. Give `path` if this machine can open the file, or "
+            "`content` if you are holding the file itself (an upload, a sandbox) "
+            "and have no path to give. The format comes from the extension unless "
+            "given. A large STEP can take minutes: it is one read, so do it once "
+            "and keep the document.",
+            {"path": {"type": "string",
+                      "description": "a file on the machine FundaCAD runs on"},
+             "content": {"type": "string",
+                         "description": "the file itself, base64, when there is "
+                                        "no path to give"},
+             "encoding": {"type": "string", "enum": ["base64", "text"],
+                          "description": "how `content` is encoded, base64 by "
+                                         "default. A text format (STEP, OBJ, "
+                                         "ASCII STL) can be sent as \"text\""},
+             "name": {"type": "string",
+                      "description": "what the file is called, e.g. \"bracket.step\", "
+                                     "which is where `content` gets its format "
+                                     "and the body its name"},
              "format": {"type": "string", "enum": list(IMPORT_FORMATS),
                         "description": "override what the extension says"},
              "at": {"type": "integer",
                     "description": "timeline position, appended by default"}},
-            ["path"], self.t_doc_import)
+            [], self.t_doc_import)
 
         add("doc_save",
             "Write the document to a .funda file, which the FundaCAD app opens "
@@ -471,16 +556,49 @@ screen. Every edit you make appears in their window as it happens.
         here, `geom` is its content hash in the engine's durable blob store,
         which is why this stays a small reply for a file of any size and why
         that store has to be the one the app reads (see SidecarLink.start).
+
+        The file arrives one of two ways. `path` is one this machine can already
+        open. `content` is the bytes themselves, for an agent holding a file its
+        host will not give a path to (an upload, its own sandbox), and they are
+        written to a temporary file because the engine's importer opens a path
+        and both processes are on this machine. That file goes as soon as the
+        read returns: what the document keeps is `geom`, a hash into the blob
+        store, so the bytes are already durable where it matters and a second
+        copy of them would be litter that nothing would ever come back for.
         """
-        path = os.path.abspath(args["path"])
-        if not os.path.isfile(path):
-            return failure(f"No such file: {path}")
-        fmt = str(args.get("format") or _import_format(path)).lower()
+        has_path, has_content = bool(args.get("path")), bool(args.get("content"))
+        if has_path and has_content:
+            return failure("Give path or content, not both.")
+        if not has_path and not has_content:
+            return failure("Give either path (a file this machine can open) or "
+                           "content (the file itself, base64) with name.")
+
+        fmt = str(args.get("format")
+                  or _import_format(args.get("name") or args.get("path") or "")).lower()
         if fmt not in IMPORT_FORMATS:
             return failure(
                 f"Cannot import {fmt!r} files. Formats: {', '.join(IMPORT_FORMATS)}.")
 
-        reply = await self.link.call("import", path=path, format=fmt)
+        tmpdir = None
+        if has_path:
+            path = source = os.path.abspath(args["path"])
+            if not os.path.isfile(path):
+                return failure(f"No such file: {path}")
+        else:
+            try:
+                path, tmpdir = _write_inline(args["content"], args.get("encoding"),
+                                             _safe_filename(args.get("name"), fmt))
+            except ValueError as ex:
+                return failure(str(ex))
+            # Provenance, not a path. The temporary file is about to be gone, and
+            # recording it would send whoever read the field back to nothing.
+            source = os.path.basename(path)
+
+        try:
+            reply = await self.link.call("import", path=path, format=fmt)
+        finally:
+            if tmpdir:
+                shutil.rmtree(tmpdir, ignore_errors=True)
         if not reply.get("ok"):
             # The engine refuses for reasons an agent can act on (too large, too
             # many triangles, unreadable), so its message is the whole answer and
@@ -489,14 +607,14 @@ screen. Every edit you make appears in their window as it happens.
                            + (reply.get("error") or {}).get("message", "unreadable file"))
         res = reply.get("result") or {}
         if not res.get("geom"):
-            return failure(f"The engine read {path} but returned no geometry.")
+            return failure(f"The engine read {source} but returned no geometry.")
 
         feature = {
             "type": "import",
             "format": fmt,
-            "name": res.get("name") or os.path.splitext(os.path.basename(path))[0],
+            "name": res.get("name") or os.path.splitext(os.path.basename(source))[0],
             "geom": res["geom"],
-            "source": path,
+            "source": source,
             "solid": bool(res.get("solid")),
         }
         # Spread, not defaulted, exactly as the app's import does: a file with no
@@ -511,7 +629,7 @@ screen. Every edit you make appears in their window as it happens.
         kind = "solid" if feature["solid"] else "surface body (not a solid)"
         parts = f", {len(res['parts'])} parts" if res.get("parts") else ""
         return text(self._state_line(
-            f"Imported {path} as {fid}: {feature['name']!r}, {kind}, "
+            f"Imported {source} as {fid}: {feature['name']!r}, {kind}, "
             f"{res.get('faces', '?')} faces{parts}.\n"
             "Run `build`, then `inspect` for its sizes and the selectors that "
             "address its faces and edges."))

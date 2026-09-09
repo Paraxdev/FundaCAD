@@ -376,8 +376,12 @@ FEATURES = {
                    "source": "the file it was read from, for reference",
                    "solid": "Bool, false means a surface body that cannot be cut"},
         "example": None,
-        "notes": "An imported body is ordinary geometry once it is in: `inspect` "
-                 "gives its faces and edges with selectors, and it can be cut, "
+        "notes": "The tool takes `path` when the file is one this machine can "
+                 "open, or `content` (the file itself, base64, with `name`) when "
+                 "you are holding the file and your host will not give you a "
+                 "path to it. A text format can go as it is with encoding "
+                 '"text". An imported body is ordinary geometry once it is in: '
+                 "`inspect` gives its faces and edges with selectors, and it can be cut, "
                  "filleted and measured against like anything else. `solid: false` "
                  "means the file did not close into a watertight solid, so a "
                  "boolean against it will disappoint: say so rather than press on.",
@@ -427,7 +431,9 @@ Asked to fit something to a part that exists as a file (STEP, STL, 3MF, OBJ,
 BREP, GLB)? `doc_import` it first, then `build` and `inspect` it: that gives the
 real sizes and the selectors for its faces and edges, which is what makes the
 next feature something other than a guess. Import once and keep the document, a
-large STEP is minutes of reading.
+large STEP is minutes of reading. If the file was given to you rather than left
+on this machine, send it as `content` and skip looking for a path that is not
+there.
 
 Things that are true here and not in every CAD:
  - Z is up. A sketch on XY is a floor plan; a sketch on XZ is a side elevation.
