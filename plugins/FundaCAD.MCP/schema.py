@@ -380,7 +380,14 @@ FEATURES = {
                  "open, or `content` (the file itself, base64, with `name`) when "
                  "you are holding the file and your host will not give you a "
                  "path to it. A text format can go as it is with encoding "
-                 '"text". An imported body is ordinary geometry once it is in: '
+                 '"text". Inline, gzip it first: STEP is text and shrinks about '
+                 "tenfold, which is the difference between one message and ten. "
+                 "Still too big? Encode the WHOLE file once, split the text that "
+                 "comes out, and send the pieces with `part` and `parts`, "
+                 "quoting the `upload` id the first reply gives back. Do not "
+                 "encode each piece separately, the halves of a base64 string "
+                 "join back up and separately encoded pieces do not. "
+                 "An imported body is ordinary geometry once it is in: "
                  "`inspect` gives its faces and edges with selectors, and it can be cut, "
                  "filleted and measured against like anything else. `solid: false` "
                  "means the file did not close into a watertight solid, so a "
@@ -433,7 +440,7 @@ real sizes and the selectors for its faces and edges, which is what makes the
 next feature something other than a guess. Import once and keep the document, a
 large STEP is minutes of reading. If the file was given to you rather than left
 on this machine, send it as `content` and skip looking for a path that is not
-there.
+there: gzipped, and in pieces if it is still too big for one message.
 
 Things that are true here and not in every CAD:
  - Z is up. A sketch on XY is a floor plan; a sketch on XZ is a side elevation.

@@ -13,9 +13,16 @@ reader could not check what happens when the read fails.
 
 A file can also arrive as `content`, for an agent whose host holds the file but
 will not give a path to it. Those bytes become a temporary file, because the
-engine opens paths, and the second half of this file is about that file: that it
+engine opens paths, and the middle of this file is about that file: that it
 holds what was sent, that the name it is given cannot be turned into a path
 somewhere else, and that it is gone afterwards whether the read worked or not.
+
+The last part is about the two things that decide whether a real part fits down
+that route. Compressed, a STEP file is a tenth of the size; split into pieces, it
+is not limited to one message at all. Both are ways of turning bytes back into
+the file, so both are tested the same way: the engine has to receive exactly what
+the file was, and anything short of that has to be refused rather than imported
+as a body that is quietly not the part.
 
 The end-to-end case is covered separately by driving the real server against
 sidecar/fixtures/asm_flat.step; this file is about the parts that are hard to
@@ -28,9 +35,14 @@ import _bootstrap  # noqa: F401
 import _run
 
 import asyncio
+import atexit
 import base64
+import gzip
+import io
 import os
+import re
 import tempfile
+import zipfile
 
 import model as M
 import server as S
@@ -65,10 +77,24 @@ PART = {"ok": True, "result": {"geom": "abc123", "solid": True, "faces": 15,
                                "name": "bracket"}}
 
 
+#: Every server these tests make. Several are left holding an upload on
+#: purpose (a piece refused, an order broken, a file nobody finished sending),
+#: and each of those is a directory in the temp folder that outlives the run.
+SERVERS = []
+
+
 def server_with(reply):
     srv = S.Server()
     srv.link = FakeLink(reply)
+    SERVERS.append(srv)
     return srv
+
+
+@atexit.register
+def _drop_what_the_tests_left():
+    for srv in SERVERS:
+        for up in list(srv.uploads.values()):
+            srv._drop_upload(up)
 
 
 def a_file(suffix=".step"):
@@ -278,6 +304,18 @@ def test_text_sent_as_base64_says_which_argument_would_have_worked():
     assert not srv.doc["features"]
 
 
+def test_content_that_is_not_even_ascii_still_says_base64():
+    # A codec error naming a character offset would be about a string the
+    # caller never sees as text. The answer is the same as for any other
+    # not-base64: say so, and name the argument that takes text.
+    srv = server_with(PART)
+    out = run(srv, {"content": "éééé", "name": "p.step"})
+    assert out.get("isError")
+    assert "base64" in text_of(out) and "text" in text_of(out), text_of(out)
+    assert not srv.link.calls
+    assert not srv.uploads
+
+
 def test_base64_wrapped_in_newlines_is_still_base64():
     # The control for the refusal above. Encoders wrap at 76 columns and a
     # strict decode refuses a newline, so validating what arrived verbatim would
@@ -374,6 +412,316 @@ def test_content_too_large_to_send_inline_points_at_path():
         assert not run(srv, {"content": b64(STL), "name": "p.stl"}).get("isError")
     finally:
         S.MAX_INLINE_BYTES = real
+
+
+# --- compressed ---------------------------------------------------------------
+
+def a_zip(entries):
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        for name, data in entries:
+            z.writestr(name, data)
+    return buf.getvalue()
+
+
+def test_a_gzipped_file_is_unpacked_before_the_engine_sees_it():
+    srv = server_with(PART)
+    out = run(srv, {"content": b64(gzip.compress(STL)), "name": "part.stl",
+                    "compression": "gzip"})
+    assert not out.get("isError"), text_of(out)
+    assert srv.link.saw[0] == STL, "the engine was handed the archive"
+
+
+def test_a_name_ending_gz_says_so_without_being_told():
+    # And the format has to come from what is INSIDE: "gz" is not a format, and
+    # a file called part.stl.gz is a part.stl.
+    srv = server_with(PART)
+    run(srv, {"content": b64(gzip.compress(STL)), "name": "part.stl.gz"})
+    op, payload = srv.link.calls[0]
+    assert payload["format"] == "stl", payload
+    assert srv.link.saw[0] == STL
+    assert srv.doc["features"][0]["source"] == "part.stl", srv.doc["features"][0]
+
+
+def test_gzip_is_recognised_on_sight():
+    # Nothing this reads begins 1f 8b, so a gzip can be spotted from its first
+    # two bytes. Worth doing because an agent that gzips a file and forgets to
+    # say so otherwise gets a reader error about a corrupt STEP.
+    srv = server_with(PART)
+    run(srv, {"content": b64(gzip.compress(STL)), "name": "part.stl"})
+    assert srv.link.saw[0] == STL
+
+
+def test_a_3mf_is_passed_through_although_it_is_a_zip():
+    # THE control for sniffing. A 3MF *is* a zip archive and the engine reads it
+    # as one, so unpacking anything that merely looked like a zip would turn a
+    # 3MF import into whatever happened to sit inside it. A zip is unpacked only
+    # when it is declared, which is why only gzip is recognised on sight.
+    blob = a_zip([("3D/3dmodel.model", b"<model/>")])
+    srv = server_with(PART)
+    run(srv, {"content": b64(blob), "name": "part.3mf"})
+    assert srv.link.calls[0][1]["format"] == "3mf"
+    assert srv.link.saw[0] == blob, "unpacked a 3MF and handed over its contents"
+
+
+def test_a_zipped_step_is_taken_out_of_the_archive():
+    step = b"ISO-10303-21;\nHEADER;\nENDSEC;\nEND-ISO-10303-21;\n"
+    srv = server_with(PART)
+    out = run(srv, {"content": b64(a_zip([("asm.step", step)])),
+                    "name": "asm.zip", "compression": "zip"})
+    assert not out.get("isError"), text_of(out)
+    assert srv.link.saw[0] == step
+
+
+def test_stpz_is_a_zipped_step_by_name():
+    # ISO 10303-21's own spelling for a zipped STEP. The zip took the inner
+    # extension away, so the suffix has to carry the format itself.
+    step = b"ISO-10303-21;\nEND-ISO-10303-21;\n"
+    srv = server_with(PART)
+    run(srv, {"content": b64(a_zip([("asm.stp", step)])), "name": "asm.stpz"})
+    assert srv.link.calls[0][1]["format"] == "step"
+    assert srv.link.saw[0] == step
+
+
+def test_the_format_comes_from_the_file_inside_a_plain_zip():
+    # A ".zip" says nothing about what it holds, and nobody said either, so the
+    # only thing left that knows is the entry's own name.
+    srv = server_with(PART)
+    run(srv, {"content": b64(a_zip([("thing.stl", STL)])), "name": "bundle.zip"})
+    assert srv.link.calls[0][1]["format"] == "stl", srv.link.calls
+
+
+def test_a_zip_of_several_files_is_refused_by_name():
+    # Which one was meant is a question with a right answer this process does
+    # not have, and importing the wrong one looks like success until the
+    # measurements come out wrong.
+    blob = a_zip([("a.step", b"ISO-10303-21;"), ("b.stl", STL)])
+    srv = server_with(PART)
+    out = run(srv, {"content": b64(blob), "name": "two.zip", "compression": "zip"})
+    assert out.get("isError")
+    assert "a.step" in text_of(out) and "b.stl" in text_of(out), text_of(out)
+    assert not srv.link.calls
+    assert not srv.doc["features"]
+
+    # The control: naming the format answers the question, so the same archive
+    # goes through. The refusal is the ambiguity, not the archive.
+    srv = server_with(PART)
+    out = run(srv, {"content": b64(blob), "name": "two.zip",
+                    "compression": "zip", "format": "stl"})
+    assert not out.get("isError"), text_of(out)
+    assert srv.link.saw[0] == STL
+
+
+def test_compression_none_overrules_a_name_that_says_otherwise():
+    # The escape hatch for a file that really is called .gz and really is not
+    # compressed. Without it the name would be the last word on the question.
+    blob = gzip.compress(STL)
+    srv = server_with(PART)
+    run(srv, {"content": b64(blob), "name": "part.stl.gz", "compression": "none"})
+    assert srv.link.saw[0] == blob, "unpacked it after being told not to"
+
+
+def test_a_gzip_that_is_not_one_is_refused_pointing_at_the_argument():
+    srv = server_with(PART)
+    out = run(srv, {"content": b64(STL), "name": "part.stl", "compression": "gzip"})
+    assert out.get("isError")
+    assert "compression" in text_of(out), text_of(out)
+    assert not srv.link.calls
+    assert not srv.doc["features"]
+
+
+def test_what_comes_out_of_an_archive_is_capped():
+    # The ratio between an archive and its contents has no upper bound: a few
+    # hundred bytes of gzip expands to a gigabyte of zeroes, so a limit on what
+    # ARRIVES is not a limit at all. Patched small, because the assertion is
+    # about the refusal and not about writing half a gigabyte.
+    fat = b"0" * 4096
+    srv = server_with(PART)
+    real, S.MAX_UNPACKED_BYTES = S.MAX_UNPACKED_BYTES, 1024
+    try:
+        out = run(srv, {"content": b64(gzip.compress(fat)), "name": "p.stl",
+                        "compression": "gzip"})
+        assert out.get("isError"), text_of(out)
+        assert not srv.link.calls
+
+        # The control: the same archive under a cap that fits goes through, so
+        # what was refused is the size and not the gzip.
+        S.MAX_UNPACKED_BYTES = len(fat)
+        srv = server_with(PART)
+        assert not run(srv, {"content": b64(gzip.compress(fat)), "name": "p.stl",
+                             "compression": "gzip"}).get("isError")
+        assert srv.link.saw[0] == fat
+    finally:
+        S.MAX_UNPACKED_BYTES = real
+
+
+# --- in pieces ----------------------------------------------------------------
+
+def upload_id(out):
+    m = re.search(r'upload="([0-9a-f]+)"', text_of(out))
+    assert m, text_of(out)
+    return m.group(1)
+
+
+def in_pieces(srv, blob, parts, **first):
+    """Encode the WHOLE file once and split the text, which is what the tool
+    asks for and what an agent splitting its own output does."""
+    enc = b64(blob)
+    step = -(-len(enc) // parts)
+    outs, uid = [], None
+    for i in range(parts):
+        args = {"content": enc[i * step:(i + 1) * step], "part": i + 1,
+                "parts": parts}
+        args.update(first if i == 0 else {"upload": uid})
+        outs.append(run(srv, args))
+        if i == 0 and not outs[0].get("isError") and parts > 1:
+            uid = upload_id(outs[0])
+    return outs
+
+
+def test_a_file_split_across_calls_arrives_whole():
+    srv = server_with(PART)
+    body = STL * 200
+    outs = in_pieces(srv, body, 4, name="part.stl")
+    assert not outs[-1].get("isError"), text_of(outs[-1])
+    assert len(srv.link.calls) == 1, "asked the engine more than once"
+    assert srv.link.saw[0] == body
+    assert len(srv.doc["features"]) == 1
+
+
+def test_nothing_is_imported_until_the_last_piece():
+    # What makes a half-arrived file safe in live mode: the document is
+    # untouched, so `_call_live` finds nothing changed and offers the app
+    # nothing. A partial upload that pushed would put a body that is not the
+    # part in front of the user.
+    srv = server_with(PART)
+    enc = b64(STL * 200)
+    out = run(srv, {"content": enc[:100], "part": 1, "parts": 3, "name": "p.stl"})
+    assert not out.get("isError"), text_of(out)
+    assert not srv.link.calls, "read a file that had not finished arriving"
+    assert not srv.doc["features"]
+    assert "part 2" in text_of(out).lower(), text_of(out)
+    assert upload_id(out) in srv.uploads
+
+
+def test_the_pieces_have_to_arrive_in_order():
+    # Buffering a gap would mean holding the pieces until it filled, and a gap
+    # that never fills looks exactly like one that has not filled yet.
+    srv = server_with(PART)
+    enc = b64(STL * 200)
+    first = run(srv, {"content": enc[:100], "part": 1, "parts": 3, "name": "p.stl"})
+    uid = upload_id(first)
+    out = run(srv, {"content": enc[100:200], "part": 3, "parts": 3, "upload": uid})
+    assert out.get("isError")
+    assert "part 2" in text_of(out), text_of(out)
+
+    # The control: the piece that WAS expected is taken, on the same upload.
+    out = run(srv, {"content": enc[100:200], "part": 2, "parts": 3, "upload": uid})
+    assert not out.get("isError"), text_of(out)
+
+
+def test_a_piece_that_names_no_upload_is_refused():
+    srv = server_with(PART)
+    enc = b64(STL * 200)
+    run(srv, {"content": enc[:100], "part": 1, "parts": 2, "name": "p.stl"})
+    out = run(srv, {"content": enc[100:], "part": 2, "parts": 2})
+    assert out.get("isError")
+    assert "upload" in text_of(out), text_of(out)
+    assert not srv.link.calls
+
+
+def test_a_piece_that_disagrees_about_how_many_there_are_is_refused():
+    # The declared count is what says the file is complete. A piece that
+    # renegotiated it could end an upload early, and a truncated STEP is a file
+    # the reader may well accept.
+    srv = server_with(PART)
+    enc = b64(STL * 200)
+    uid = upload_id(run(srv, {"content": enc[:100], "part": 1, "parts": 3,
+                              "name": "p.stl"}))
+    out = run(srv, {"content": enc[100:], "part": 2, "parts": 2, "upload": uid})
+    assert out.get("isError")
+    assert "3" in text_of(out), text_of(out)
+    assert not srv.link.calls
+
+
+def test_separately_encoded_pieces_are_caught_at_the_first_one():
+    # The other way to read "send it in pieces": encode each piece rather than
+    # split the encoding. Joining those back gives a file that is not the file,
+    # and base64 padding in the middle is the signature. Caught at the piece
+    # that carries it rather than at the end, where it would look like a
+    # corrupt STEP.
+    srv = server_with(PART)
+    out = run(srv, {"content": b64(STL), "part": 1, "parts": 2, "name": "p.stl"})
+    assert out.get("isError"), text_of(out)
+    assert "split" in text_of(out), text_of(out)
+    assert not srv.uploads, "left the upload open after refusing its first piece"
+
+
+def test_part_and_parts_go_together():
+    srv = server_with(PART)
+    out = run(srv, {"content": b64(STL), "part": 1, "name": "p.stl"})
+    assert out.get("isError")
+    assert "parts" in text_of(out)
+
+
+def test_an_upload_nobody_came_back_for_is_swept():
+    # This process outlives any one conversation, so an upload abandoned halfway
+    # would hold its directory for as long as the host runs.
+    srv = server_with(PART)
+    enc = b64(STL * 200)
+    first = run(srv, {"content": enc[:100], "part": 1, "parts": 9, "name": "p.stl"})
+    up = srv.uploads[upload_id(first)]
+    assert os.path.isdir(up.dir)
+
+    up.touched -= S.UPLOAD_IDLE_SECONDS + 1     # time passes
+    run(srv, {"content": enc[:100], "part": 1, "parts": 9, "name": "q.stl"})
+    assert up.id not in srv.uploads, "kept an upload nobody came back for"
+    assert not os.path.exists(up.dir), "left its directory behind"
+
+
+def test_a_refused_piece_leaves_nothing_open():
+    srv = server_with(PART)
+    enc = b64(STL * 200)
+    uid = upload_id(run(srv, {"content": enc[:100], "part": 1, "parts": 3,
+                              "name": "p.stl"}))
+    where = srv.uploads[uid].dir
+    out = run(srv, {"content": 12345, "part": 2, "parts": 3, "upload": uid})
+    assert out.get("isError")
+    assert uid not in srv.uploads
+    assert not os.path.exists(where)
+
+
+def test_the_inline_cap_counts_every_piece_and_not_each_one():
+    # Pieces are a transport detail, so they must not be a way around the limit
+    # on how much may arrive inline. WHERE it is refused is the assertion: at
+    # the piece that crosses the line, not after the whole thing has been
+    # spooled to disk. A cap that only counted at the end would let a caller
+    # ignoring it write without bound before finding out.
+    srv = server_with(PART)
+    body = STL * 200
+    real, S.MAX_INLINE_BYTES = S.MAX_INLINE_BYTES, len(body) // 2
+    try:
+        outs = in_pieces(srv, body, 4, name="part.stl")
+        first_bad = next(i for i, o in enumerate(outs) if o.get("isError"))
+        assert first_bad == 2, [text_of(o) for o in outs]
+        assert not srv.link.calls
+        assert not srv.uploads, "left the over-large upload open"
+    finally:
+        S.MAX_INLINE_BYTES = real
+
+
+def test_compressed_and_in_pieces_at_once():
+    # The combination is the point of both: a STEP file gzips about tenfold, and
+    # pieces lift the ceiling of one message, so together they are what makes a
+    # real part importable this way at all.
+    step = b"ISO-10303-21;\n" + b"#1=CARTESIAN_POINT('',(0.,0.,0.));\n" * 400
+    srv = server_with(PART)
+    packed = gzip.compress(step)
+    assert len(packed) < len(step) // 4, "the fixture does not compress"
+    outs = in_pieces(srv, packed, 3, name="asm.step.gz")
+    assert not outs[-1].get("isError"), text_of(outs[-1])
+    assert srv.link.calls[0][1]["format"] == "step"
+    assert srv.link.saw[0] == step
 
 
 def test_an_imported_feature_validates_clean():
