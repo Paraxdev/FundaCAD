@@ -127,6 +127,36 @@ export interface Engine {
    *  can't fire mid-sketch / mid-drag. Deliberately a plain function, not
    *  reactive state, it is only ever read at event time. */
   toolBusy(): boolean;
+  /** toolBusy(), minus the Move gizmo.
+   *
+   *  For an AMBIENT affordance, one the app raises off the selection rather
+   *  than one the user started: the selection toolbar, and anything else that
+   *  hides itself while a tool owns the screen.
+   *
+   *  The distinction exists because picking a body raises the Move gizmo by
+   *  itself (viewportWiring.onBodySelectionChange, "picking a body IS reaching
+   *  for it"), so for a body selection toolBusy() is true from the instant
+   *  there is a selection to offer anything about. That is the same kind of
+   *  thing as `nudge`, the handle a selection carries, and the note on `nudge`
+   *  says why such a thing must never read as busy: it is not a mode you
+   *  entered, and hiding the offer for it hides the offer always.
+   *
+   *  Every other entry still counts, including a Move started deliberately over
+   *  a selection that is not a body's, which is a mode. */
+  toolOwnsScreen(): boolean;
+  /** Stand the ambient Move gizmo down, so a body verb can run.
+   *
+   *  The other half of toolOwnsScreen. Showing an offer over a body is not
+   *  enough: `actions.ts` and every start* helper begin with their own
+   *  `if (toolBusy()) return`, and the gizmo a body selection raises makes that
+   *  true, so Pattern, the booleans and Remove Body were all refused with
+   *  "Finish the active tool first" from a menu that had just offered them.
+   *
+   *  A surface that acts on a body selection calls this first. Nothing is lost:
+   *  a drag that changed anything has already committed on pointerup
+   *  (MoveTool.onUp), so the gizmo this cancels is always an untouched one, and
+   *  cancelling leaves the selection it was raised on alone. */
+  dropBodyGizmo(): void;
   /** True when the current rebuild produced a solid body (something to modify). */
   hasBody(): boolean;
   planePick: boolean;
@@ -375,6 +405,8 @@ export function mountUi(e: Engine): void {
     sketch: e.sketch,
     measure: e.tools.measure,
     toolBusy: () => e.toolBusy(),
+    toolOwnsScreen: () => e.toolOwnsScreen(),
+    dropBodyGizmo: () => e.dropBodyGizmo(),
     setStatus: (t, c) => e.setStatus(t, c),
     selectFeature: (id) => e.selectFeature(id),
     editFeature: (id) => e.editFeature(id),

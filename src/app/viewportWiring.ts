@@ -124,7 +124,12 @@ export function installViewportWiring(e: Engine): void {
     return true;
   };
 
-  e.viewport.shouldOpenContextMenu = () => !e.toolBusy();
+  // toolOwnsScreen, not toolBusy: this is the FIRST of the two gates on the
+  // right-click, the second is inside openCanvasMenu. With a plain busy test a
+  // body you had ALREADY selected had no menu at all, because selecting a body
+  // is what raises the Move gizmo a dozen lines above. See
+  // Engine.toolOwnsScreen.
+  e.viewport.shouldOpenContextMenu = () => !e.toolOwnsScreen();
   e.viewport.onContextClick = (x, y) => e.menus.openCanvasMenu(x, y);
 
   // A left drag over empty canvas is an area selection, but only when nothing
