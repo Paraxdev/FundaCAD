@@ -21,9 +21,10 @@
 //
 // WHAT IS STILL NOT SERVED, and refuses by name rather than pretending:
 // `build`, `inspect`, `view` and `export` want the geometry engine, which a
-// plugin cannot reach yet. `doc_open` and `doc_save` are a different case and
-// will keep refusing: both take a PATH, which is the one thing a plugin may not
-// have, so their refusals name the ops to compose instead. A plugin holding
+// plugin cannot reach yet. `doc_open`, `doc_import` and `doc_save` are a
+// different case and will keep refusing: they take a PATH, which is the one
+// thing a plugin may not have, so their refusals name the ops to compose
+// instead. A plugin holding
 // `geometry.build` gets past the broker and then gets a refusal from here that
 // says which of the two stopped it. Two refusals with two reasons is worth more
 // than one that could mean either.
@@ -68,6 +69,8 @@ export const UNSERVED: Partial<Record<Op, string>> = {
   // do instead, because "not supported" would send somebody looking for a
   // version where it is, and there will not be one.
   doc_open:
+    "a plugin cannot name a file. Use file_pick, then file_read, then doc_set",
+  doc_import:
     "a plugin cannot name a file. Use file_pick, then file_read, then doc_set",
   doc_save: "a plugin cannot name a file. Use doc_get, then file_write",
   export:
@@ -290,6 +293,7 @@ export function appHost(opts: AppHostOptions): BrokerHost {
         // table does not compile until it is decided here. Unreachable: every
         // one of them is in UNSERVED above.
         case "doc_open":
+        case "doc_import":
         case "doc_save":
         case "build":
         case "inspect":

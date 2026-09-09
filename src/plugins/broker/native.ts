@@ -19,14 +19,14 @@
 // plugin could learn about somebody's disk is a file name they chose to show
 // it.
 //
-// AND THE SIX OPS THIS DOES NOT ADD. `doc_open` and `doc_save` still refuse,
-// and that is on purpose rather than unfinished: their signatures take a path,
-// which is exactly the thing a plugin may not have. What a plugin does instead
-// is compose, `file_pick` then `file_read` then `doc_set` to open and `doc_get`
-// then `file_write` to save, which is the same work with the person in it. The
-// alternative was to give those two ops a different meaning for a compute
-// plugin than they have over MCP, and one vocabulary that means two things is
-// worse than one vocabulary with a gap in it.
+// AND THE SEVEN OPS THIS DOES NOT ADD. `doc_open`, `doc_import` and `doc_save`
+// still refuse, and that is on purpose rather than unfinished: their signatures
+// take a path, which is exactly the thing a plugin may not have. What a plugin
+// does instead is compose, `file_pick` then `file_read` then `doc_set` to open
+// and `doc_get` then `file_write` to save, which is the same work with the
+// person in it. The alternative was to give those ops a different meaning for a
+// compute plugin than they have over MCP, and one vocabulary that means two
+// things is worse than one vocabulary with a gap in it.
 
 import type { Op } from "./ops";
 
