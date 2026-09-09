@@ -109,6 +109,16 @@ const SCALE_AT = ARROW_SHAFT + ARROW_HEAD + 11;
  *  reporting on. */
 const FIELDS_OFFSET_PX = SCALE_AT + 18;
 
+/** How far the gizmo reaches from its origin, in SCREEN pixels.
+ *
+ *  It is drawn at a constant screen size, so this is a constant. Exported for
+ *  the one thing that has to stand clear of it: the selection toolbar floats
+ *  above a picked body, and a body selection always carries this gizmo, so
+ *  measuring its lift off the edge handle's much shorter reach parked the bar
+ *  inside the rings. The value fields sit off to the SIDE (see start()), so
+ *  what has to be cleared vertically is the outermost drawn handle. */
+export const GIZMO_REACH_PX = SCALE_AT + SCALE_BOX;
+
 /** Which handle a press landed on. Two families, so they can be hit-tested
  *  separately and a ring behind an arrow can never steal the arrow's press. */
 type Grab = { kind: "axis" | "ring" | "origin" | "size"; index: number } | null;

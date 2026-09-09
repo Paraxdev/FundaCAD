@@ -55,3 +55,14 @@
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-tint);
 }
+
+/* Divider between the modelling verbs and the appearance ones. A hairline the
+   height of a button's face, not its box, so it reads as a rule between two
+   groups rather than as a tall stroke the bar has grown. */
+.seltool-sep {
+  flex: 0 0 auto;
+  width: 1px;
+  height: 20px;
+  margin: 0 var(--s-1);
+  background: var(--line-strong);
+}

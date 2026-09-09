@@ -70,6 +70,8 @@ export type ToolId =
   | "loft"
   | "delete-face"
   | "move"
+  | "pattern-linear"
+  | "pattern-circular"
   | "boolean-union"
   | "boolean-subtract"
   | "boolean-intersect"
@@ -127,6 +129,17 @@ export const TOOL_CAPABILITIES: Record<ToolId, ToolCapability> = {
   // wrong, which is the only question this table exists to answer.
   "delete-face": { label: "Delete Face", consumes: ["face"], source: "selection" },
   move: { label: "Move", consumes: ["body"], source: "selection" },
+  // The two patterns, on the same rule as Move: they repeat the SELECTED
+  // bodies, falling back to the active one when nothing is picked (see
+  // featureStarters.startPattern). They were reachable only from the ribbon
+  // while every other body verb was offered on the selection itself, so a
+  // picked part was one click from a boolean and a menu hunt from a pattern.
+  //
+  // Two rows, not one: linear and circular are different gestures, pull an
+  // arrow along an axis or sweep around one, which is why the ribbon splits
+  // them too. Collapsing them here would offer a button that has to ask.
+  "pattern-linear": { label: "Linear Pattern", consumes: ["body"], source: "selection" },
+  "pattern-circular": { label: "Circular Pattern", consumes: ["body"], source: "selection" },
   // The three booleans, each a command in its own right. One "Combine" entry
   // that opened a dialog would put a two-body selection one click from a
   // question instead of one click from an answer, which is the whole reason

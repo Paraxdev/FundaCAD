@@ -75,6 +75,13 @@ const FORGE_PATHS: Record<string, string> = {
   interference: `<circle cx="9" cy="12" r="6"/><circle cx="15" cy="12" r="6"/>`,
   zebra: `<path d="M3 21 L9 3"/><path d="M9 21 L15 3"/><path d="M15 21 L21 3"/>`,
   curvature: `<path d="M3 17 Q12 3 21 17" fill="none"/><line x1="7" y1="11" x2="6" y2="7"/><line x1="12" y1="8" x2="12" y2="3.5"/><line x1="17" y1="11" x2="18" y2="7"/>`,
+  // A lit sphere: the one shape whose whole job is to show a finish, which is
+  // what the material library's rows are previews of.
+  material: `<circle cx="12" cy="12" r="8.5"/><path d="M6.6 8.2a6.6 6.6 0 0 1 4.2-2.6"/><path d="M17.2 15.4a6.6 6.6 0 0 1-4.4 2.9"/>`,
+  // "Show only this one": a focus frame closing in on a single part. Not an eye,
+  // ui/icons already has `visible` for plain visibility and the two verbs sit
+  // side by side on the same bar.
+  isolate: `<path d="M3.5 8V4.5H7M17 4.5h3.5V8M20.5 16v3.5H17M7 19.5H3.5V16"/><rect x="8.5" y="8.5" width="7" height="7" rx="1.5"/>`,
 
   // sketch modify
   trim: `<path d="M5 5l6 6"/><path d="M19 5l-6 6"/><path d="M11 13l-6 6"/><circle cx="13" cy="13" r="2"/>`,
