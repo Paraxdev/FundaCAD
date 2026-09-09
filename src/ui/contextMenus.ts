@@ -8,7 +8,8 @@ import type { DocumentStore } from "../document/store";
 import type { Viewport } from "../viewport/viewport";
 import type { SketchMode } from "../sketch/sketchMode";
 import type { MeasureTool } from "../features/measureTool";
-import { bodyExtraMenu } from "./browserTree";
+import { bodyExtraMenu, elementMoveMenu } from "./browserTree";
+import { ancestryOf } from "../document/elements";
 import { useBrowserStore } from "../stores/browser";
 import { contextMenu, type CtxItem } from "./menu";
 import { isInspectorEditable } from "../document/numFields";
@@ -146,6 +147,27 @@ export function createContextMenus(deps: ContextMenusDeps) {
     contextMenu(x, y, items);
   }
 
+  /** "Move to" for the body under the cursor, and for the whole selection when
+   *  that body is part of it, the same rule the Browser row uses. */
+  function moveToElementMenu(bodyId: string): CtxItem {
+    const selected = viewport.getSelectedBodies();
+    const ids = selected.includes(bodyId) ? [...selected] : [bodyId];
+    return elementMoveMenu(store.bodyElements, ids, store.bodyElementOf(bodyId), {
+      toNew: () => {
+        const id = store.addElement();
+        store.setBodiesElement(ids, id);
+        // Open the tree to it and start the rename there: the element is made
+        // from the viewport, so without this the folder appears somewhere off
+        // screen in a panel the user was not looking at, wearing a default name.
+        const browser = useBrowserStore();
+        browser.expand("f:Bodies");
+        for (const key of ancestryOf(store.bodyElements, id)) browser.expand(`e:${key}`);
+        browser.beginRename(id);
+      },
+      to: (element) => store.setBodiesElement(ids, element),
+    });
+  }
+
   function openBodyMenu(x: number, y: number, bodyId: string) {
     if (!viewport.getSelectedBodies().includes(bodyId)) viewport.setSelectedBodies([bodyId]);
     contextMenu(x, y, [
@@ -166,6 +188,12 @@ export function createContextMenus(deps: ContextMenusDeps) {
       { label: "Show all bodies", shortcut: keyHint("show-all-bodies"), onClick: () => handleAction("show-all-bodies") },
       { separator: true, label: "" },
       { label: "Rename…", onClick: () => useBrowserStore().beginRename(bodyId) },
+      // The same submenu the Browser row carries, from the same builder. Filing
+      // a part away is worth reaching from the model as well as from the tree:
+      // on a large import the part you want to put somewhere is the one you just
+      // clicked on in the viewport, and finding its row among three thousand to
+      // right-click it is the work this feature exists to remove.
+      moveToElementMenu(bodyId),
       ...bodyExtraMenu(bodyId),
       { separator: true, label: "" },
       { label: "Remove body", danger: true, onClick: unlessBusy(() => store.removeBody(bodyId)) },

@@ -127,6 +127,95 @@ describe("palette persistence", () => {
   });
 });
 
+describe("elements (the user's folders over the bodies)", () => {
+  let store: DocumentStore;
+  beforeEach(() => {
+    vi.useFakeTimers();
+    store = new DocumentStore(stubBackend([]), doc());
+  });
+  afterEach(() => void vi.useRealTimers());
+
+  it("a document with no folders is byte-identical to one saved before they existed", () => {
+    const json = store.toJSON();
+    expect(json).not.toContain('"elements"');
+    expect(json).not.toContain('"bodyElement"');
+  });
+
+  it("round-trips the folders and what is in them", () => {
+    const rig = store.addElement("Rig");
+    const motor = store.addElement("Motor", rig);
+    store.setBodiesElement(["body1", "body2"], motor);
+
+    const reloaded = new DocumentStore(stubBackend([]), doc());
+    reloaded.load(store.toJSON());
+    expect(reloaded.bodyElements).toEqual([
+      { id: rig, name: "Rig" },
+      { id: motor, name: "Motor", parent: rig },
+    ]);
+    expect(reloaded.bodyElementOf("body1")).toBe(motor);
+    expect(reloaded.bodyElementOf("body3")).toBeUndefined();
+    // and a re-opened document re-saves byte-identically
+    const again = new DocumentStore(stubBackend([]), doc());
+    again.load(reloaded.toJSON());
+    expect(again.toJSON()).toBe(reloaded.toJSON());
+  });
+
+  it("numbers a fresh folder against its siblings", () => {
+    store.addElement();
+    const second = store.addElement();
+    expect(store.bodyElements.map((e) => e.name)).toEqual(["Element", "Element 2"]);
+    // the control: inside one of them the plain name is free again
+    const inside = store.addElement(undefined, second);
+    expect(store.bodyElements.find((e) => e.id === inside)!.name).toBe("Element");
+  });
+
+  it("deleting a folder keeps its bodies, it does not delete them", () => {
+    const rig = store.addElement("Rig");
+    const motor = store.addElement("Motor", rig);
+    store.setBodiesElement(["body1"], motor);
+    store.removeElement(motor);
+    expect(store.bodyElements.map((e) => e.id)).toEqual([rig]);
+    expect(store.bodyElementOf("body1")).toBe(rig); // lifted, not dropped
+
+    store.removeElement(rig);
+    expect(store.bodyElements).toEqual([]);
+    expect(store.bodyElementOf("body1")).toBeUndefined(); // an orphan again
+  });
+
+  it("refuses to bury a folder inside itself", () => {
+    const rig = store.addElement("Rig");
+    const motor = store.addElement("Motor", rig);
+    store.setElementParent(rig, motor);
+    expect(store.bodyElements.find((e) => e.id === rig)!.parent).toBeUndefined();
+    // the control: the move the other way round is legal and is taken
+    store.setElementParent(motor, null);
+    expect(store.bodyElements.find((e) => e.id === motor)!.parent).toBeUndefined();
+  });
+
+  it("never dirties the document for a move that changes nothing", () => {
+    const rig = store.addElement("Rig");
+    store.setBodiesElement(["body1"], rig);
+    store.markSaved("x.funda");
+    store.setBodiesElement(["body1"], rig);
+    expect(store.dirty).toBe(false);
+    // the control: a real move does dirty it
+    store.setBodiesElement(["body1"], null);
+    expect(store.dirty).toBe(true);
+  });
+
+  it("drops an element with no id rather than carrying a folder nothing can name", () => {
+    const reloaded = new DocumentStore(stubBackend([]), doc());
+    reloaded.load(JSON.stringify({
+      ...doc(),
+      elements: [{ name: "Nameless" }, { id: "e1", name: "" }, { id: "e2", name: "Rig" }],
+    }));
+    expect(reloaded.bodyElements).toEqual([
+      { id: "e1", name: "e1" }, // a blank name falls back to the id, still aimable
+      { id: "e2", name: "Rig" },
+    ]);
+  });
+});
+
 describe("projected-entity persistence (byte stability)", () => {
   it("a doc with a projected entity round-trips byte-identically, stale omitted when false", () => {
     vi.useFakeTimers();

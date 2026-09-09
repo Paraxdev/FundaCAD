@@ -723,6 +723,17 @@ export interface CadDocument {
   /** explicit per-body display-name overrides (body id → name). Body ids are
    *  positional, so a rename re-attaches if an upstream feature is reordered. */
   bodyNames?: Record<string, string>;
+  /** The user's own folders over the bodies, nestable, for making a large
+   *  import navigable. Display-only: nothing here reaches the sidecar and a
+   *  document with every element deleted rebuilds byte-identically. See
+   *  document/elements.ts. Absent = no folders, which is every document saved
+   *  before this existed. */
+  elements?: { id: string; name: string; parent?: string }[];
+  /** body id → element id. A body with no entry is an ORPHAN: it shows where it
+   *  always did, at the top level or under its import's own assembly node.
+   *  Positional body ids, exactly like `bodyNames` above, so an assignment
+   *  re-attaches if an upstream feature is reordered. */
+  bodyElement?: Record<string, string>;
   /** filament palette (≤4 slots for the U1 toolchanger); slot index → name+hex,
    *  plus an optional material type (e.g. "PLA") when synced from the printer. */
   palette?: { name: string; color: string; material?: string }[];

@@ -185,6 +185,10 @@ const FORGE_PATHS: Record<string, string> = {
   body: `<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5"/><line x1="12" y1="12" x2="12" y2="21"/>`,
   // An assembly node: a container holding parts, so a crate rather than a folder
   assembly: `<rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="M3 10h18"/><path d="M9 5v5M15 5v5"/>`,
+  // An element: the user's OWN folder over the bodies. A folder, which is
+  // exactly the mark the assembly crate above deliberately left free, the two
+  // sit side by side in the same tree and have to be told apart at a glance.
+  element: `<path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4L11 8.5h8.5A1.5 1.5 0 0 1 21 10v7.5A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z"/>`,
   // The filament palette head, swatch strips, matching what the section holds
   filament: `<rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M8.5 4v16M15.5 4v16"/>`,
 

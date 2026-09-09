@@ -7,6 +7,10 @@ import type { CadDocument, Feature, ParamTarget, PlaneSpec, ProjectedSource, Pro
 import { applyProjectionUpdate } from "../types";
 import type { GeometryBackend, ProjectionResult } from "../geometry/client";
 import { FORMAT_VERSION, migrateDocument } from "./migrate";
+import {
+  ancestryOf, descendantsOf, type ElementDef, freshElementName, reparented,
+  withElementRemoved,
+} from "./elements";
 import * as params from "../params/engine";
 import type { FieldKind } from "./numFields";
 import { writeTarget } from "./numFields";
@@ -179,6 +183,12 @@ export class DocumentStore {
   private bodyNames = new Overlay<string>("bodyNames"); // explicit per-body display-name overrides (id → name)
   private palette: { name: string; color: string; material?: string }[] = DEFAULT_PALETTE.map((s) => ({ ...s }));
   private bodyColors = new Overlay<number>("bodyColors"); // per-body palette-slot assignment (id → slot index)
+  private bodyElement = new Overlay<string>("bodyElement"); // per-body element assignment (id → element id)
+  /** The user's own folders over the bodies. A LIST rather than an overlay
+   *  because an element is not a property of anything: it exists before it holds
+   *  a body, it has a name and a parent of its own, and its order is what the
+   *  panel draws. See document/elements.ts for every operation on it. */
+  private elements: ElementDef[] = [];
   // static descriptor list driving toJSON/load below, in the exact on-disk key
   // order (palette piggybacks on bodyColors' condition, so isn't listed here).
   private readonly overlays: { overlay: Overlay<any>; mapValue?: (v: unknown) => any }[] = [
@@ -187,6 +197,7 @@ export class DocumentStore {
     { overlay: this.planeVis },
     { overlay: this.bodyNames },
     { overlay: this.bodyColors, mapValue: (v) => Number(v) },
+    { overlay: this.bodyElement },
   ];
   /** Un-committed features shown live (a fillet drag, a thread being sized).
    *  Never recorded in undo.
@@ -402,6 +413,8 @@ export class DocumentStore {
     this.bodyNames.clear();
     this.palette = DEFAULT_PALETTE.map((s) => ({ ...s }));
     this.bodyColors.clear();
+    this.bodyElement.clear();
+    this.elements = [];
     this.path = null;
     this.isDirty = false;
     this.discardModelForReplacement();
@@ -1087,6 +1100,134 @@ export class DocumentStore {
     this.markDirty();
     this.emitBuild();
   }
+  // --- elements: the user's own folders over the bodies ---------------------
+  //
+  // Display-only, like body names and body colours beside them, and for the same
+  // reason: organising an import must not be able to change it. Every setter
+  // here marks the document dirty and re-emits the BUILD (which is what repaints
+  // the Browser) and none of them schedules a rebuild, because the sidecar is
+  // never told any of this. See document/elements.ts for the pure operations.
+  //
+  // NOT ON THE UNDO STACK. Undo here is the feature timeline; these overlays
+  // have never been on it (rename a body, hide a body, assign a colour, none of
+  // them push), and putting one of them on it would make Ctrl+Z after an
+  // organising session step back through six hundred folder moves before it
+  // reached the modelling operation the user meant.
+
+  /** the document's elements, in list order. */
+  get bodyElements(): readonly ElementDef[] {
+    return this.elements;
+  }
+
+  /** Which element holds this body, or undefined for an orphan. */
+  bodyElementOf(id: string): string | undefined {
+    return this.bodyElement.get(id);
+  }
+
+  /** body id → element id, the whole map at once, for the Browser's tree
+   *  shaping. A Map rather than a plain object because the caller does nothing
+   *  with it but look bodies up, and on an assembly it is looking up thousands
+   *  of them on every repaint. */
+  bodyElementMap(): ReadonlyMap<string, string> {
+    return new Map(this.bodyElement.entries());
+  }
+
+  private nextElementId(): string {
+    const ids = new Set(this.elements.map((e) => e.id));
+    let n = ids.size + 1;
+    while (ids.has(`e${n}`)) n++;
+    return `e${n}`;
+  }
+
+  /** Make an element and return its id. `parent` of null is the top level; one
+   *  naming an element that is not there is treated as the top level rather than
+   *  refused, so a stale menu can't fail silently into nothing at all. */
+  addElement(name?: string, parent: string | null = null): string {
+    const under = parent !== null && this.elements.some((e) => e.id === parent) ? parent : null;
+    const id = this.nextElementId();
+    const label = (name ?? "").trim() || freshElementName(this.elements, under);
+    const next: ElementDef = { id, name: label };
+    if (under !== null) next.parent = under;
+    this.elements = [...this.elements, next];
+    this.markDirty();
+    this.emitBuild();
+    return id;
+  }
+
+  /** Rename an element. Blank is ignored: a folder with no name is a row the
+   *  user cannot aim at again. */
+  renameElement(id: string, name: string) {
+    const n = name.trim();
+    if (!n) return;
+    this.elements = this.elements.map((e) => (e.id === id ? { ...e, name: n } : e));
+    this.markDirty();
+    this.emitBuild();
+  }
+
+  /** Move an element under another (null = top level). A move that would bury a
+   *  folder inside itself is dropped, see elements.wouldCycle. */
+  setElementParent(id: string, parent: string | null) {
+    const cur = this.elements.find((e) => e.id === id);
+    if (!cur || (cur.parent ?? null) === parent) return;
+    const next = reparented(this.elements, id, parent);
+    // `reparented` hands back the same entry objects for everything it did not
+    // touch, and refuses an illegal move by returning them all, so identity is
+    // the whole test for "did anything happen".
+    if (next.every((e, i) => e === this.elements[i])) return;
+    this.elements = next;
+    this.markDirty();
+    this.emitBuild();
+  }
+
+  /** Delete an element, LIFTING its bodies and sub-elements into its own parent.
+   *  No body is ever removed from the document by this, see
+   *  elements.withElementRemoved. */
+  removeElement(id: string) {
+    const { elements, movedTo } = withElementRemoved(this.elements, id);
+    if (elements.length === this.elements.length) return;
+    this.elements = elements;
+    for (const [body, held] of [...this.bodyElement.entries()]) {
+      if (held !== id) continue;
+      if (movedTo === null) this.bodyElement.delete(body);
+      else this.bodyElement.set(body, movedTo);
+    }
+    this.markDirty();
+    this.emitBuild();
+  }
+
+  /** Every element id from `id` up to its root, nearest first. What the Browser
+   *  opens so a row it is about to rename is on screen. */
+  elementAncestry(id: string): string[] {
+    return ancestryOf(this.elements, id);
+  }
+
+  /** `id` and every element under it. */
+  elementSubtree(id: string): Set<string> {
+    return descendantsOf(this.elements, id);
+  }
+
+  /** Move bodies into an element (null = out, back to the top level).
+   *
+   *  Batched and emitting ONCE, which is the point: organising an import means
+   *  moving hundreds of bodies at a time, and a per-body emit would repaint the
+   *  panel and re-run the render bridge once per body. A call that changes
+   *  nothing neither dirties the document nor emits, so a drop onto the folder a
+   *  body is already in costs nothing. */
+  setBodiesElement(bodyIds: Iterable<string>, element: string | null) {
+    const target =
+      element !== null && this.elements.some((e) => e.id === element) ? element : null;
+    let changed = false;
+    for (const id of bodyIds) {
+      if ((this.bodyElement.get(id) ?? null) === target) continue;
+      if (target === null) this.bodyElement.delete(id);
+      else this.bodyElement.set(id, target);
+      changed = true;
+    }
+    if (!changed) return;
+    this.markDirty();
+    this.emitBuild();
+  }
+
   /** delete a body by appending a removeBody feature at the END of the timeline
    *  (so it operates on the final body list). Undoable like any feature. */
   removeBody(bodyId: string) {
@@ -1169,6 +1310,9 @@ export class DocumentStore {
     if (this.suppressed.size) out.suppressed = [...this.suppressed];
     if (this.rollback !== null) out.rollback = this.rollback;
     for (const { overlay } of this.overlays) overlay.writeJSON(out as unknown as Record<string, unknown>);
+    // Omitted when there are none, so a document that was never organised is
+    // byte-identical to one saved before elements existed.
+    if (this.elements.length) out.elements = this.elements.map((e) => ({ ...e }));
     // Persist the palette whenever it carries information: body assignments
     // reference it, and a synced/customized palette is project state in its own
     // right (the "design in loaded colors" premise) even with zero assignments.
@@ -1195,6 +1339,17 @@ export class DocumentStore {
     this.rollback = parsed.rollback ?? null;
     for (const { overlay, mapValue } of this.overlays) overlay.loadFrom(parsed as unknown as Record<string, unknown>, mapValue);
     this.palette = parsed.palette?.length ? parsed.palette.map((s) => ({ ...s })) : DEFAULT_PALETTE.map((s) => ({ ...s }));
+    // Anything without a usable id is dropped here rather than defended against
+    // at every reader: an element is addressed by id everywhere (the body map,
+    // the parent link, the collapse key), so one without a string id is not a
+    // folder that renders oddly, it is a folder nothing can name.
+    this.elements = (parsed.elements ?? [])
+      .filter((e) => e && typeof e.id === "string" && e.id)
+      .map((e) => ({
+        id: e.id,
+        name: typeof e.name === "string" && e.name.trim() ? e.name : e.id,
+        ...(typeof e.parent === "string" && e.parent ? { parent: e.parent } : {}),
+      }));
     this.doc = {
       parameters: parsed.parameters ?? {},
       ...(parsed.paramDefs ? { paramDefs: parsed.paramDefs } : {}),

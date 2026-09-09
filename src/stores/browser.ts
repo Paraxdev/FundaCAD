@@ -19,6 +19,17 @@ function collapsedByDefault(key: string): boolean {
   return key.startsWith("n:");
 }
 
+/** What is being dragged in the Browser right now.
+ *
+ *  Held here rather than in the drag event's `dataTransfer`, which sounds like
+ *  the right place and is not: dataTransfer is write-only until the drop, so a
+ *  row asked on `dragover` whether it is a legal target, the exact moment it has
+ *  to decide, cannot see what is coming. This never leaves the window, so there
+ *  is nothing for dataTransfer to carry anyway. */
+export type BrowserDrag =
+  | { kind: "bodies"; ids: readonly string[] }
+  | { kind: "element"; id: string };
+
 /** View state for the Browser panel, the parts that are neither in the document
  *  nor derivable from a rebuild. */
 export const useBrowserStore = defineStore("browser", () => {
@@ -48,6 +59,10 @@ export const useBrowserStore = defineStore("browser", () => {
    *  re-render for e2e/browser_tree_perf.cjs. */
   const viewTick = ref(0);
 
+  /** The in-flight Browser drag, or null. shallowRef because the value is
+   *  replaced wholesale and its `ids` are never edited in place. */
+  const drag = shallowRef<BrowserDrag | null>(null);
+
   function isCollapsed(key: string): boolean {
     return overrides.value.get(key) ?? collapsedByDefault(key);
   }
@@ -63,9 +78,15 @@ export const useBrowserStore = defineStore("browser", () => {
     selectedBodyIds,
     pendingRenameId,
     viewTick,
+    drag,
     isCollapsed,
     toggle,
     expand,
+    startDrag: (d: BrowserDrag) => { drag.value = d; },
+    // Called from dragend, which fires whether the drop landed or was abandoned
+    // over the desktop, so a cancelled drag cannot leave every folder still
+    // believing something is in flight.
+    endDrag: () => { drag.value = null; },
     setSelectedBodies: (ids: readonly string[]) => { selectedBodyIds.value = ids; },
     beginRename: (id: string) => { pendingRenameId.value = id; },
     bumpView: () => { viewTick.value++; },
