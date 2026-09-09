@@ -386,7 +386,10 @@ FEATURES = {
                  "comes out, and send the pieces with `part` and `parts`, "
                  "quoting the `upload` id the first reply gives back. Do not "
                  "encode each piece separately, the halves of a base64 string "
-                 "join back up and separately encoded pieces do not. "
+                 "join back up and separately encoded pieces do not. Remember "
+                 "that content is written by YOU: every piece is a message of "
+                 "your own output, so past a handful of pieces the answer is to "
+                 "ask for a path rather than to keep typing. "
                  "An imported body is ordinary geometry once it is in: "
                  "`inspect` gives its faces and edges with selectors, and it can be cut, "
                  "filleted and measured against like anything else. `solid: false` "
@@ -441,6 +444,16 @@ next feature something other than a guess. Import once and keep the document, a
 large STEP is minutes of reading. If the file was given to you rather than left
 on this machine, send it as `content` and skip looking for a path that is not
 there: gzipped, and in pieces if it is still too big for one message.
+
+If it is too big for even that, the answer is never to model against a
+simplified stand-in you made up. A part fitted to an approximation of the
+reference is wrong in a way nothing downstream can detect, because every
+measurement you take afterwards agrees with every other one. Ask instead. The
+person you are working with is at the machine FundaCAD is running on: they can
+give you the file's path there, or open it themselves with File, Import Mesh,
+after which it is in the document and `inspect` measures the real thing. Saying
+"I cannot reach this file, what is its path on your machine?" costs one message
+and gets the actual part.
 
 Things that are true here and not in every CAD:
  - Z is up. A sketch on XY is a floor plan; a sketch on XZ is a side elevation.

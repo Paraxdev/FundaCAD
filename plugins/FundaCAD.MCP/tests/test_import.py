@@ -724,6 +724,51 @@ def test_compressed_and_in_pieces_at_once():
     assert srv.link.saw[0] == step
 
 
+# --- what to do when the file cannot come this way ----------------------------
+
+def test_a_missing_path_says_what_to_do_about_it():
+    # An agent that cannot reach the file and is told only "no such file" has
+    # two moves left: give up, or invent a stand-in and model against that. The
+    # second is the expensive one, because everything measured afterwards is
+    # self-consistent and wrong. So the refusal carries the third move.
+    srv = server_with(PART)
+    out = run(srv, {"path": os.path.join(tempfile.gettempdir(), "nope.step")})
+    said = text_of(out)
+    assert out.get("isError")
+    assert "No such file" in said
+    assert "ask" in said.lower(), said
+    assert "Import Mesh" in said, said
+    assert "stand-in" in said, said
+
+
+def test_a_long_upload_is_told_what_it_is_costing():
+    # Inline content is written by the model, so the binding limit is its output
+    # and not this server's. Said on the first piece, while there is still
+    # something to decide.
+    srv = server_with(PART)
+    enc = b64(STL * 400)
+    first = run(srv, {"content": enc[:100], "part": 1, "parts": 9, "name": "p.stl"})
+    assert not first.get("isError")
+    assert "message" in text_of(first), text_of(first)
+    assert "Import Mesh" in text_of(first), text_of(first)
+
+    # Not again on the pieces after it: by then it would only be telling an
+    # agent that what it is halfway through was a bad idea.
+    second = run(srv, {"content": enc[100:200], "part": 2, "parts": 9,
+                       "upload": upload_id(first)})
+    assert "Import Mesh" not in text_of(second), text_of(second)
+
+
+def test_an_upload_of_a_few_pieces_is_left_alone():
+    # The control. Two or three pieces is what the feature is FOR, and warning
+    # about it would train an agent to ignore the warning that matters.
+    srv = server_with(PART)
+    enc = b64(STL * 400)
+    first = run(srv, {"content": enc[:100], "part": 1, "parts": 3, "name": "p.stl"})
+    assert not first.get("isError")
+    assert "Import Mesh" not in text_of(first), text_of(first)
+
+
 def test_an_imported_feature_validates_clean():
     # `geom` and `source` are strings in a document whose other string fields
     # name parameters, so without an exemption every import reported two
