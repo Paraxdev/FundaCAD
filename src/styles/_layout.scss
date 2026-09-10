@@ -91,6 +91,39 @@
   background: rgba(122, 162, 247, 0.06);
 }
 
+/* What the box will take, on the box. Above the band's own z-index so it is
+   never drawn under it, and never a pointer target: it follows the cursor, so a
+   chip that took events would take the pointerup that ends the drag. */
+.areachip {
+  position: fixed;
+  z-index: 41;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-1) var(--s-2);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text);
+  background: var(--bg-panel);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  white-space: nowrap;
+  user-select: none;
+}
+.areachip svg { color: var(--accent); }
+.areachip-what { font-weight: 600; }
+.areachip-how { color: var(--text-mute); }
+.areachip-key {
+  padding: 1px var(--s-1);
+  font: 10px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color: var(--text-mute);
+  background: var(--bg-sunken, rgba(0, 0, 0, 0.25));
+  border: 1px solid var(--line);
+  border-radius: 3px;
+}
+
 .gridscale {
   position: absolute;
   right: var(--s-4);

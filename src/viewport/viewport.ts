@@ -113,10 +113,31 @@ import {
   faceInBox,
   isAreaDrag,
   polylineInBox,
+  boxOf,
+  boxVerdict,
+  unionBox,
+  areaSelectionMode,
+  nextAreaFilter,
   type AreaFilter,
   type AreaMode,
+  type ScreenBox,
   type ScreenRect,
 } from "./areaSelect";
+
+/** One box drag in progress: where it started, whether it is adding, and the
+ *  selection as it was when it started.
+ *
+ *  The last part is what makes the drag repeatable. The box shows what it will
+ *  take by taking it, every frame, so each frame has to rebuild the answer from
+ *  the same starting point rather than from what the previous frame left. */
+export interface AreaDrag {
+  x: number;
+  y: number;
+  additive: boolean;
+  faces: readonly number[];
+  edges: readonly EdgeRef[];
+  bodies: readonly string[];
+}
 
 /** Shallow equality for the flat id→hex paint maps. Cheap enough to run on every
  *  build (microseconds at 3,000 entries) and it saves a full GPU colour upload
@@ -374,8 +395,19 @@ export class Viewport {
       // it for selection), so a left DRAG was the one gesture in the viewport
       // that did nothing at all. Shift is already the additive modifier for a
       // click, and it means the same thing here.
+      // The selection AS IT WAS. A box is shown while it is being dragged by
+      // actually making the selection, frame by frame, so every frame has to
+      // start from what shift is adding to rather than from what the previous
+      // frame happened to leave behind.
       this.areaDown = (this.canAreaSelect?.() ?? true)
-        ? { x: e.clientX, y: e.clientY, additive: e.shiftKey }
+        ? {
+            x: e.clientX,
+            y: e.clientY,
+            additive: e.shiftKey,
+            faces: this.highlighter?.getSelectedFaces() ?? [],
+            edges: this.highlighter?.getSelectedEdges() ?? [],
+            bodies: this.highlighter?.getSelectedBodies() ?? [],
+          }
         : null;
     });
     // Right-drag is orbit. Choose what it turns about NOW, from where the
@@ -398,6 +430,10 @@ export class Viewport {
       }
       const down = this.areaDown;
       if (down && (e.buttons & 1) && isAreaDrag(down.x, down.y, e.clientX, e.clientY)) {
+        // The moment a press becomes a BOX, once per drag. A press is still a
+        // click until it has travelled, so anything that reacts to a box has to
+        // wait until here rather than firing on every pointerdown.
+        if (!this.areaBox.visible) this.onAreaBegin?.();
         this.areaAt = { x: e.clientX, y: e.clientY };
         this.showAreaBox();
       }
@@ -422,8 +458,12 @@ export class Viewport {
         this.onAreaDrag?.(null);
         if (down && e.button === 0) {
           const { rect, mode } = dragBox(down.x, down.y, e.clientX, e.clientY);
-          this.selectInBox(rect, mode, down.additive);
+          // The same call the preview has been making all along, and this time
+          // it announces. That is the whole of the difference between the two:
+          // there is no second code path for the box to disagree with.
+          this.selectInBox(rect, mode, down, true);
         }
+        this.dropAreaProjection();
         return; // a box is not also a click
       }
       if (e.button !== 0 || this.dragMoved) return;
@@ -793,15 +833,26 @@ export class Viewport {
 
   /** Set by the app to withhold the gesture while a tool owns the pointer. */
   canAreaSelect: (() => boolean) | null = null;
+  /** Fires once, when a press has travelled far enough to be a box. The app
+   *  uses it to stand down anything that is up only because something is
+   *  selected, which a box is about to replace anyway. */
+  onAreaBegin: (() => void) | null = null;
   private areaAt: { x: number; y: number } | null = null;
-  private areaDown: { x: number; y: number; additive: boolean } | null = null;
+  private areaDown: AreaDrag | null = null;
   private areaBox = new AreaBox();
   /** What a box is allowed to take. Cycled with Tab WHILE the box is being
    *  dragged, which is the only moment the answer is worth anything, and kept
    *  afterwards, because someone who wanted edges once usually wants them
    *  again. A box over a filleted corner otherwise hands back the four faces
    *  around the edges you were after, and the fillet then has to be told which
-   *  of the two selections you meant. */
+   *  of the two selections you meant.
+   *
+   *  The filter also decides WHICH KIND of selection the box makes, so `bodies`
+   *  takes bodies from a viewport that is picking faces and `edges` takes edges
+   *  from one that is picking bodies (areaSelect's areaSelectionMode). Before
+   *  that, the box could only ever narrow what the current mode already took,
+   *  and reaching the parts of an assembly meant finding the Faces/Bodies
+   *  switch first. `all` still means "whatever I am already picking". */
   private areaFilter: AreaFilter = "all";
   private xray = false;
   /** Fires when see-through is switched, so the chrome can say it is on. */
@@ -817,6 +868,25 @@ export class Viewport {
     return this.areaFilter;
   }
 
+  /** The box being dragged right now, or null.
+   *
+   *  `from` is the corner the drag started at and `at` is the one under the
+   *  cursor, kept apart because the rectangle alone cannot say which is which
+   *  and the chip that names the filter has to stay on the far side of the
+   *  cursor from the box, whichever way the box was drawn. */
+  get areaDragState(): {
+    rect: ScreenRect;
+    mode: AreaMode;
+    from: { x: number; y: number };
+    at: { x: number; y: number };
+  } | null {
+    const from = this.areaDown;
+    const at = this.areaAt;
+    if (!from || !at || !this.areaBox.visible) return null;
+    const { rect, mode } = dragBox(from.x, from.y, at.x, at.y);
+    return { rect, mode, from: { x: from.x, y: from.y }, at };
+  }
+
   /** See-through: the model goes translucent and stops hiding its own far side
    *  from an area selection.
    *
@@ -826,6 +896,10 @@ export class Viewport {
   setXray(on: boolean) {
     if (this.xray === on) return;
     this.xray = on;
+    // See-through changes which triangles a box may reach, so a projection
+    // taken before it would answer for the wrong half of the model. Toggling it
+    // mid-drag is exactly what x-ray is for, so this is not a corner case.
+    this.dropAreaProjection();
     this.applyBodyFinish();
     this.onXrayChange?.(on);
     this.requestRender();
@@ -897,13 +971,42 @@ export class Viewport {
     }
   }
 
-  /** Everything the box takes, in the terms the selection is kept in. */
-  private collectInBox(rect: ScreenRect, mode: AreaMode): {
-    faces: number[];
-    edges: EdgeRef[];
-    bodies: string[];
-  } {
-    const out = { faces: [] as number[], edges: [] as EdgeRef[], bodies: [] as string[] };
+  /** The model projected to the screen ONCE, for the whole of one box drag.
+   *
+   *  The box has to be answered while it is still being dragged, so the
+   *  selection can be shown as it is made rather than announced after the fact,
+   *  and that means asking the same question of the same geometry every frame.
+   *  Two things make that affordable, and both live here.
+   *
+   *  The camera cannot move during a box: the left button draws the box and the
+   *  right button orbits, so the projection is a CONSTANT of the gesture. It is
+   *  computed on the first frame of the drag and thrown away on release, which
+   *  turns a matrix multiply per vertex per frame into one per vertex per drag.
+   *
+   *  And every face keeps its screen bounding box, which settles the whole
+   *  question for a window and rules most of the model out for a crossing (see
+   *  areaSelect's boxVerdict). What is left, a crossing box that really does
+   *  overlap, is the only case that walks triangles at all.
+   *
+   *  Dropped rather than updated by anything that changes what is on screen,
+   *  because a stale projection would answer for geometry that is no longer
+   *  there, and answer confidently. */
+  private areaProj: {
+    bodies: {
+      id: string;
+      box: ScreenBox;
+      faces: { faceId: number; tris: number[][]; box: ScreenBox }[];
+    }[];
+    edges: { ref: EdgeRef; flat: number[] | null; box: ScreenBox }[];
+  } | null = null;
+
+  /** Throw away the drag projection. */
+  private dropAreaProjection() {
+    this.areaProj = null;
+  }
+
+  private projectForArea(): NonNullable<Viewport["areaProj"]> {
+    const out: NonNullable<Viewport["areaProj"]> = { bodies: [], edges: [] };
     if (!this.model) return out;
     const view = this.canvas.getBoundingClientRect();
     const cam = this.rig.active;
@@ -950,6 +1053,9 @@ export class Viewport {
         sy[i] = view.top + ((-p.y / p.w) * 0.5 + 0.5) * view.height;
       }
 
+      const faces: { faceId: number; tris: number[][]; box: ScreenBox }[] = [];
+      let bodyBox: ScreenBox = [Infinity, Infinity, -Infinity, -Infinity];
+      let anyFace = false;
       for (const [faceId, tris] of body.faceTriangles) {
         const facing: number[][] = [];
         for (const t of tris) {
@@ -971,22 +1077,25 @@ export class Viewport {
           tri[4] = sx[i2] as number; tri[5] = sy[i2] as number;
           facing.push(tri.slice());
         }
-        if (faceInBox(facing, rect, mode)) {
-          out.faces.push(faceId);
-          if (!out.bodies.includes(body.id)) out.bodies.push(body.id);
+        let box: ScreenBox = facing.length ? [Infinity, Infinity, -Infinity, -Infinity] : null;
+        for (const t of facing) box = unionBox(box, boxOf(t));
+        faces.push({ faceId, tris: facing, box });
+        if (facing.length) {
+          anyFace = true;
+          bodyBox = unionBox(bodyBox, box);
         }
       }
+      out.bodies.push({ id: body.id, box: anyFace ? bodyBox : null, faces });
     }
 
     // Edges are already world coordinates and already polylines, so they are
     // projected straight rather than through a mesh. They are never culled by
     // facing: an edge is a boundary, and the one on the silhouette belongs to a
     // face pointing away as much as to the one pointing at you.
-    const flat: number[] = [];
     const q = new THREE.Vector4();
     for (const e of this.model.edges) {
       if (!e.draw.object.visible) continue;
-      flat.length = 0;
+      const flat: number[] = [];
       let usable = true;
       for (const pt of e.points) {
         q.set(pt[0], pt[1], pt[2], 1).applyMatrix4(vp);
@@ -996,7 +1105,44 @@ export class Viewport {
           view.top + ((-q.y / q.w) * 0.5 + 0.5) * view.height,
         );
       }
-      if (usable && polylineInBox(flat, rect, mode)) out.edges.push(e);
+      out.edges.push(usable
+        ? { ref: e, flat, box: boxOf(flat) }
+        : { ref: e, flat: null, box: null });
+    }
+    return out;
+  }
+
+  /** Everything the box takes, in the terms the selection is kept in.
+   *
+   *  A body is taken by a WINDOW only when the whole of it is inside, and by a
+   *  CROSSING as soon as one of its faces is touched. That is the same
+   *  distinction the two verdicts draw everywhere else, and it is what makes a
+   *  window thrown over a crowded assembly take the small parts and leave the
+   *  plate they sit on. It used to take a body as soon as one face was inside,
+   *  i.e. crossing semantics under both verdicts, which nothing noticed while
+   *  bodies could only be taken in bodies mode. */
+  private collectInBox(rect: ScreenRect, mode: AreaMode): {
+    faces: number[];
+    edges: EdgeRef[];
+    bodies: string[];
+  } {
+    const out = { faces: [] as number[], edges: [] as EdgeRef[], bodies: [] as string[] };
+    const proj = this.areaProj ?? this.projectForArea();
+    for (const body of proj.bodies) {
+      let touched = false;
+      for (const face of body.faces) {
+        const quick = boxVerdict(face.box, rect, mode);
+        if (!(quick === "look" ? faceInBox(face.tris, rect, mode) : quick)) continue;
+        out.faces.push(face.faceId);
+        touched = true;
+      }
+      const whole = mode === "window" ? boxVerdict(body.box, rect, "window") === true : touched;
+      if (whole) out.bodies.push(body.id);
+    }
+    for (const e of proj.edges) {
+      if (e.flat === null) continue;
+      const quick = boxVerdict(e.box, rect, mode);
+      if (quick === "look" ? polylineInBox(e.flat, rect, mode) : quick) out.edges.push(e.ref);
     }
     return out;
   }
@@ -1010,6 +1156,18 @@ export class Viewport {
     if (!down || !at) return;
     const { rect, mode } = dragBox(down.x, down.y, at.x, at.y);
     this.areaBox.show(rect.x0, rect.y0, rect.x1, rect.y1, mode);
+    // What the box would take, taken, so the answer is visible while there is
+    // still something to be done about it. A rectangle on its own says where the
+    // box is and nothing about what is in it, and the two are not the same
+    // question on an assembly: which side of a hidden edge the box fell, whether
+    // a crossing caught the plate behind the parts, whether the filter is the
+    // one you meant. All of that used to be answered on release.
+    //
+    // Silent: the selection is painted but nothing is told about it until the
+    // release, because everything that listens (the prompt, the drag handles,
+    // the floating toolbar) is about a selection somebody has FINISHED making.
+    this.areaProj ??= this.projectForArea();
+    this.selectInBox(rect, mode, down, false);
     this.onAreaDrag?.(mode);
   }
 
@@ -1017,7 +1175,7 @@ export class Viewport {
    *  whatever meaning it has everywhere else. */
   cycleAreaFilter(): boolean {
     if (!this.areaBox.visible) return false;
-    this.areaFilter = this.areaFilter === "all" ? "faces" : this.areaFilter === "faces" ? "edges" : "all";
+    this.areaFilter = nextAreaFilter(this.areaFilter);
     this.showAreaBox();
     return true;
   }
@@ -1118,18 +1276,46 @@ export class Viewport {
     this.requestRender();
   }
 
-  /** Take what the box covers. `additive` keeps what was already selected. */
-  selectInBox(rect: ScreenRect, mode: AreaMode, additive: boolean) {
+  /** Take what the box covers.
+   *
+   *  `from` is the drag: where it started, whether shift was held, and the
+   *  selection as it was at that moment. That last part is what lets this be
+   *  called repeatedly for the same drag, which is how the box previews itself,
+   *  an additive box has to add to what was there when the drag STARTED rather
+   *  than to whatever the previous frame left behind.
+   *
+   *  `announce` is false for those preview calls. The selection is painted
+   *  either way; what is withheld is telling the rest of the app, because every
+   *  listener (the prompt, the drag handles, the floating toolbar) is about a
+   *  selection somebody has finished making, and raising them sixty times a
+   *  second during a drag would put a toolbar under the cursor drawing it. */
+  selectInBox(rect: ScreenRect, mode: AreaMode, from: AreaDrag, announce: boolean) {
     const h = this.highlighter;
     if (!h || !this.model) return;
     const got = this.collectInBox(rect, mode);
-    if (this.selectionMode === "bodies") {
-      if (!additive) h.clearBodySelection();
+    // The FILTER decides what kind of selection this is, not the mode the
+    // viewport happens to be in; "all" is the one that follows the mode.
+    const kind = areaSelectionMode(this.areaFilter, this.selectionMode);
+    // On RELEASE only. Switching modes announces, and announcing a body
+    // selection raises the Move gizmo (viewportWiring.onBodySelectionChange), so
+    // a preview frame that did this would put a gizmo and its suspended picking
+    // in the middle of the drag still drawing the box. A preview paints the
+    // right kind without touching the mode, which the highlighter is perfectly
+    // willing to do, and the release reconciles the two.
+    if (announce && kind !== this.selectionMode) this.setSelectionMode(kind);
+    // BOTH kinds are cleared every frame, because Tab can change the filter
+    // mid-drag and the highlight the previous filter painted is not this one's.
+    h.clearSelection();
+    h.clearBodySelection();
+    if (kind === "bodies") {
+      if (from.additive) for (const id of from.bodies) h.selectBody(id);
       for (const id of got.bodies) h.selectBody(id);
-      this.onBodySelectionChange?.();
+      if (announce) this.onBodySelectionChange?.();
     } else {
-      if (!additive) {
-        h.clearSelection();
+      if (from.additive) {
+        for (const f of from.faces) h.selectFace(f);
+        for (const e of from.edges) h.selectEdge(e);
+      } else {
         this.edgeScope = { scope: "chain", reason: "tangent" };
       }
       if (this.areaFilter !== "edges") for (const f of got.faces) h.selectFace(f);
@@ -1141,7 +1327,7 @@ export class Viewport {
       if (got.edges.length && this.areaFilter !== "faces") {
         this.edgeScope = { scope: "single", reason: "shift" };
       }
-      this.onSelectionChange?.();
+      if (announce) this.onSelectionChange?.();
     }
     this.requestRender();
   }
@@ -2111,6 +2297,11 @@ export class Viewport {
   }
 
   setModel(result: RebuildResult, fit = false, hiddenBodies: string[] = []) {
+    // Any new geometry invalidates the box drag's cached projection, including
+    // the visibility-only fast path below: a body that just became hidden is a
+    // body a box must stop reaching. Cheap, and the alternative is a box that
+    // silently selects what is no longer on screen.
+    this.dropAreaProjection();
     const hidden = new Set(hiddenBodies);
     // VISIBILITY-ONLY fast path. An eye toggle changes no geometry: the store
     // re-emits the SAME RebuildResult object (setBodiesVisibility calls
@@ -2386,6 +2577,7 @@ export class Viewport {
   }
 
   clearModel() {
+    this.dropAreaProjection();
     this.faceBands = new Map();
     // A STREAM ENDS HERE TOO, and this is the only path that ends it this way:
     // `streaming` is otherwise cleared in setModel, and rebuildBridge routes a

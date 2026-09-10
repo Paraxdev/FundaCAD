@@ -190,6 +190,14 @@ const FORGE_PATHS: Record<string, string> = {
   origin: `<circle cx="12" cy="12" r="5"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>`,
   plane: `<path d="M3 9l9-4 9 4-9 4z"/>`,
   body: `<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5"/><line x1="12" y1="12" x2="12" y2="21"/>`,
+  // What a dragged box takes: the four filters, meant to be told apart at a
+  // glance in a chip on the box itself while it is still being dragged. Three
+  // of them are the SAME solid with a different part of it picked out, because
+  // that is the actual difference between them, and only the fourth changes
+  // shape, because "everything" is not one more kind of thing.
+  face: `<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5"/><path d="M12 12l8-4.5v9L12 21z" fill="currentColor" fill-opacity="0.45" stroke="none"/>`,
+  edge: `<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5"/><path d="M12 12v9" stroke-width="3.2"/>`,
+  "select-all": `<rect x="2.6" y="2.6" width="18.8" height="18.8" rx="2" stroke-dasharray="3 2.2"/><path d="M12 7.2l4.6 2.6v5.2L12 17.6l-4.6-2.6V9.8z"/>`,
   // An assembly node: a container holding parts, so a crate rather than a folder
   assembly: `<rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="M3 10h18"/><path d="M9 5v5M15 5v5"/>`,
   // An element: the user's OWN folder over the bodies. A folder, which is

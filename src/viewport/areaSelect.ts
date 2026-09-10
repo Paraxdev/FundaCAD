@@ -31,14 +31,54 @@ export type AreaMode = "window" | "crossing";
 /** WHICH KINDS a box takes. A box over a rounded corner covers the blend's
  *  edges and the four faces around them at once, and "select this region" is
  *  not the same request as "select these edges to fillet", so the gesture
- *  carries the answer instead of the next tool having to guess it. */
-export type AreaFilter = "all" | "faces" | "edges";
+ *  carries the answer instead of the next tool having to guess it.
+ *
+ *  `bodies` is the one that is NOT a narrowing of what a box already took: it
+ *  takes whole bodies, whatever the viewport is picking at the time. The
+ *  filter, not the current selection mode, decides what a box means, so a box
+ *  thrown over an assembly can take its parts without first having to find the
+ *  Faces/Bodies switch, and a box after that can take edges without switching
+ *  back. `all` is the exception that keeps the gesture's old behaviour: it
+ *  follows whatever mode you are already in. */
+export type AreaFilter = "all" | "faces" | "edges" | "bodies";
+
+/** The cycle Tab walks, in order. One list, so the chip on the box, the key,
+ *  and the prompt can never disagree about what comes next. */
+export const AREA_FILTERS: readonly AreaFilter[] = ["all", "faces", "edges", "bodies"];
+
+/** The next filter after `f`. */
+export function nextAreaFilter(f: AreaFilter): AreaFilter {
+  const i = AREA_FILTERS.indexOf(f);
+  return AREA_FILTERS[(i + 1) % AREA_FILTERS.length] as AreaFilter;
+}
 
 /** What to call the filter on screen. Reads as the object of a sentence,
- *  "taking EDGES fully inside the box", because that is the only place it is
- *  ever shown. */
+ *  "taking EDGES fully inside the box", because that is one of the two places
+ *  it is shown. */
 export function areaFilterLabel(f: AreaFilter): string {
-  return f === "all" ? "everything" : f === "faces" ? "faces" : "edges";
+  return f === "all" ? "everything" : f;
+}
+
+/** The mark for the filter, an icons.ts name. The other place it is shown is a
+ *  chip on the box itself, where a word would be read once and an icon is what
+ *  makes the state legible at a glance on the twentieth box. */
+export function areaFilterIcon(f: AreaFilter): string {
+  return f === "faces" ? "face" : f === "edges" ? "edge" : f === "bodies" ? "body" : "select-all";
+}
+
+/** WHAT a box with this filter selects: bodies, or faces and edges.
+ *
+ *  A selection is one or the other, never both (viewport.selectionMode), so a
+ *  box has to answer this before it can select anything, and the answer for
+ *  `all` is "whatever you are already picking". Pure, because the rule is the
+ *  thing worth pinning, the mode switch that follows from it is not. */
+export function areaSelectionMode(
+  f: AreaFilter,
+  current: "faces" | "bodies",
+): "faces" | "bodies" {
+  if (f === "bodies") return "bodies";
+  if (f === "all") return current;
+  return "faces";
 }
 
 /** An axis-aligned rectangle in CSS pixels, already normalised so x0 <= x1 and
@@ -147,6 +187,64 @@ function spansOverlap(pts: readonly number[], nx: number, ny: number, r: ScreenR
     if (d > rhi) rhi = d;
   }
   return !(hi < rlo || rhi < lo);
+}
+
+// ---- what a bounding box alone can settle -----------------------------------
+//
+// The box has to be answered while it is still being DRAGGED, so the same
+// question is asked of the same geometry sixty times a second. What makes that
+// affordable is that most of the model is nowhere near the box, and a screen
+// bounding box per face settles that without looking at a single triangle.
+//
+// For a WINDOW it settles the whole question, not just the cheap half: "every
+// point inside the rectangle" is exactly "the bounding box is inside the
+// rectangle", so a window never walks a triangle at all. For a CROSSING it can
+// only rule out, because two boxes overlapping does not mean the shapes do.
+
+/** A shape's screen extent as [x0, y0, x1, y1], or null when some of it is
+ *  behind the camera and has no honest screen position. */
+export type ScreenBox = readonly [number, number, number, number] | null;
+
+/** The extent of flat x,y pairs, or null if any of them is not finite. */
+export function boxOf(pts: readonly number[]): ScreenBox {
+  if (pts.length < 2) return null;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (let i = 0; i + 1 < pts.length; i += 2) {
+    const x = pts[i] as number;
+    const y = pts[i + 1] as number;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    if (x < x0) x0 = x;
+    if (y < y0) y0 = y;
+    if (x > x1) x1 = x;
+    if (y > y1) y1 = y;
+  }
+  return [x0, y0, x1, y1];
+}
+
+/** Grow a box to hold another. Either being null makes the result null: a shape
+ *  partly behind the camera has no extent, and pretending otherwise would let
+ *  the half that is on screen answer for the half that is not. */
+export function unionBox(a: ScreenBox, b: ScreenBox): ScreenBox {
+  if (a === null || b === null) return null;
+  return [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])];
+}
+
+/** The verdict the box alone gives: `true` taken, `false` not taken, or "look"
+ *  when only the triangles can say.
+ *
+ *  A null box is not taken by a window (a point behind the camera is not inside
+ *  anything) and is "look" for a crossing (the part of it that IS on screen may
+ *  well touch, and the per-triangle tests already refuse non-finite points). */
+export function boxVerdict(
+  b: ScreenBox,
+  r: ScreenRect,
+  mode: AreaMode,
+): boolean | "look" {
+  if (mode === "window") {
+    return b !== null && b[0] >= r.x0 && b[1] >= r.y0 && b[2] <= r.x1 && b[3] <= r.y1;
+  }
+  if (b === null) return "look";
+  return b[0] > r.x1 || b[2] < r.x0 || b[1] > r.y1 || b[3] < r.y0 ? false : "look";
 }
 
 /** Does a polyline, a model edge, projected, fall in the box?
