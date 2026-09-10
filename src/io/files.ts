@@ -14,6 +14,8 @@ import { announceImportedBody } from "../plugins/contrib";
 import {
   asHex, materialsForColors, nodeColors, parseLibrary, serializeLibrary,
 } from "../document/materials";
+import { decodeFaceColors, dominantFaceColor } from "../document/faceColors";
+import type { FaceColorRuns } from "../types";
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -407,7 +409,13 @@ export function importedBodyCount(res: { parts?: { node: number; faces: number }
 }
 
 
-async function importPath(store: DocumentStore, geometry: GeometryBackend, path: string) {
+/** Import the file at `path`: read it, add the feature, adopt what it looked
+ *  like. The whole of an import except choosing the file, which is why the
+ *  dialog above and the open-a-dropped-file path below both end here.
+ *
+ *  Exported for the harness that has a path and no dialog (e2e/*.cjs). Not a
+ *  second door: it is the same one, minus the picker. */
+export async function importPath(store: DocumentStore, geometry: GeometryBackend, path: string) {
   const fmt = extToImportFormat(path);
   // runBusy is what makes the operation VISIBLE and stoppable: an import used to
   // run with no busy state at all, so the timeline showed nothing and there was
@@ -499,7 +507,11 @@ async function importPath(store: DocumentStore, geometry: GeometryBackend, path:
 async function adoptImportedColors(
   store: DocumentStore,
   featureId: string,
-  res: { color?: string; nodes?: { name: string; parent: number | null; color?: string }[] },
+  res: {
+    color?: string;
+    nodes?: { name: string; parent: number | null; color?: string }[];
+    parts?: { node: number; faces: number; faceColors?: FaceColorRuns }[];
+  },
 ) {
   const perNode = res.nodes ? nodeColors(res.nodes) : null;
   // Normalised once, here, because it is the KEY into the map materialsForColors
@@ -511,6 +523,18 @@ async function adoptImportedColors(
     for (const c of perNode) if (c) wanted.push({ color: c });
   } else if (single) {
     wanted.push({ color: single });
+  }
+  // The file's FACE colours, which on a file written by a mechanical CAD system
+  // is where the colour actually is: the reference board styles all 1,803 of its
+  // faces and leaves its 29 products wearing a default nobody chose. Every one
+  // of them has to be in the library, not just the one each body wears, because
+  // the faces that DISAGREE with their body are the red circuit board.
+  for (const p of res.parts ?? []) {
+    if (!p.faceColors) continue;
+    for (const hex of p.faceColors.palette ?? []) {
+      const c = asHex(hex);
+      if (c) wanted.push({ color: c });
+    }
   }
   if (!wanted.length) return;
 
@@ -532,7 +556,14 @@ async function adoptImportedColors(
   for (const b of bodies) {
     const slash = b.nodeRef ? b.nodeRef.lastIndexOf("/") : -1;
     if (perNode && slash > 0 && b.nodeRef!.slice(0, slash) === featureId) {
-      claim(b.id, perNode[Number(b.nodeRef!.slice(slash + 1))]);
+      // The body's OWN faces first, and the product tree only when it has none.
+      // A product colour is what the file's author left in a dialog; a face
+      // colour is what they painted. Where both exist the faces are the answer,
+      // and the tree colour would put fifteen unrelated parts in one material.
+      const own = b.faceColors
+        ? dominantFaceColor(decodeFaceColors(b.faceColors, b.faceCount))
+        : null;
+      claim(b.id, asHex(own) ?? perNode[Number(b.nodeRef!.slice(slash + 1))]);
     } else if (!perNode && b.faceOwners?.some((owner) => owner === featureId)) {
       claim(b.id, single ?? undefined);
     }

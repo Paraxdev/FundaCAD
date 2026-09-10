@@ -61,6 +61,15 @@ class Assembly:
     #: can go down the historical path without paying for a SECOND full read,
     #: on a large single-part STEP that second read would double import time.
     roots: list[object] = field(default_factory=list)
+    #: Per-face colours for the leaves that have any: leaf index -> one entry
+    #: per face of that leaf, "#rrggbb" or None, in the leaf's own face order.
+    #:
+    #: Keyed rather than parallel because most leaves have none, and an absent
+    #: key has to mean "no colours" rather than "position 7 of a list somebody
+    #: forgot to grow". A mechanical CAD system colours faces, not products (see
+    #: face_colors.py), so for such a file this is where nearly all the colour
+    #: in the document actually is.
+    face_colors: dict[int, list] = field(default_factory=dict)
 
     @property
     def product_count(self) -> int:
@@ -121,6 +130,81 @@ def _label_color(label) -> str | None:
     return None
 
 
+def _shape_color(color_tool, shape) -> str | None:
+    """The colour attached to one SHAPE (a face, a solid), as '#rrggbb'.
+
+    The shape-keyed lookup, as against `_label_color`'s label-keyed one. XCAF
+    resolves it back to a label internally, and that resolution is sensitive to
+    the shape's Location: a face taken from a leaf this module has already
+    `.Moved()` into world position does not match the label it came from and
+    reads as uncoloured. So every caller here reads colours from the product's
+    OWN, unmoved shape and relies on face order to carry the answer across.
+    """
+    from OCP.Quantity import Quantity_Color, Quantity_ColorRGBA
+    from OCP.XCAFDoc import XCAFDoc_ColorType
+
+    rgba = Quantity_ColorRGBA()
+    for kind in (
+        XCAFDoc_ColorType.XCAFDoc_ColorSurf,
+        XCAFDoc_ColorType.XCAFDoc_ColorGen,
+        XCAFDoc_ColorType.XCAFDoc_ColorCurv,
+    ):
+        if not color_tool.GetColor(shape, kind, rgba):
+            continue
+        linear = rgba.GetRGB()
+        to_srgb = Quantity_Color.Convert_LinearRGB_To_sRGB_s  # per component
+        return "#{:02x}{:02x}{:02x}".format(
+            *(
+                max(0, min(255, round(to_srgb(v) * 255)))
+                for v in (linear.Red(), linear.Green(), linear.Blue())
+            )
+        )
+    return None
+
+
+def _faces_of(shape):
+    """Every face of a shape, in the order OCCT explores it.
+
+    The SAME order `Shape.faces()` yields downstream and the same order the
+    per-face arrays on the wire use, which is the whole reason a colour can be
+    carried as a bare positional list rather than as a map keyed by something
+    that would have to survive a B-rep round trip.
+    """
+    from OCP.TopAbs import TopAbs_FACE
+    from OCP.TopExp import TopExp_Explorer
+
+    out = []
+    exp = TopExp_Explorer(shape, TopAbs_FACE)
+    while exp.More():
+        out.append(exp.Current())
+        exp.Next()
+    return out
+
+
+def _product_face_colors(color_tool, shape):
+    """Per-face colours for a product's own (unmoved) shape, grouped by solid.
+
+    The returned list lines up with `_solids_of(shape)`, or, for a product with
+    no solids, holds one entry for the whole shape: exactly the two cases
+    `visit` turns into leaves, so the caller never has to re-derive the split.
+
+    None when the product carries no face colour at all, which keeps the
+    ordinary uncoloured STEP paying one map lookup per face and storing nothing.
+    """
+    groups = _solids_of(shape) or [shape]
+    out = []
+    colored = False
+    for g in groups:
+        row = []
+        for f in _faces_of(g):
+            c = _shape_color(color_tool, f)
+            if c:
+                colored = True
+            row.append(c)
+        out.append(row)
+    return out if colored else None
+
+
 def _solids_of(shape):
     """Every solid in a shape, each carrying its composed location."""
     from OCP.TopAbs import TopAbs_SOLID
@@ -142,8 +226,8 @@ def read_assembly(path: str) -> Assembly:
     """
     from OCP.IFSelect import IFSelect_ReturnStatus
     from OCP.STEPCAFControl import STEPCAFControl_Reader
-    from OCP.TCollection import TCollection_ExtendedString
-    from OCP.TDF import TDF_Label, TDF_LabelSequence
+    from OCP.TCollection import TCollection_AsciiString, TCollection_ExtendedString
+    from OCP.TDF import TDF_Label, TDF_LabelSequence, TDF_Tool
     from OCP.TDocStd import TDocStd_Document
     from OCP.TopLoc import TopLoc_Location
     from OCP.XCAFDoc import XCAFDoc_DocumentTool
@@ -159,7 +243,30 @@ def read_assembly(path: str) -> Assembly:
         raise ValueError("the STEP file was read but contained no transferable shape")
 
     shape_tool = XCAFDoc_DocumentTool.ShapeTool_s(doc.Main())
+    color_tool = XCAFDoc_DocumentTool.ColorTool_s(doc.Main())
     asm = Assembly()
+
+    # Does this file style anything at all? A STEP with no presentation entities
+    # is the common case, and asking it about every face would be a map lookup
+    # per face, six figures of them on a large assembly, to learn nothing.
+    styled = TDF_LabelSequence()
+    color_tool.GetColors(styled)
+    reads_faces = styled.Length() > 0
+    # Per PRODUCT, not per occurrence. A fastener instanced two hundred times is
+    # one walk over its faces; without this the walk is the import.
+    face_color_cache: dict[str, object] = {}
+
+    def product_face_colors(referred):
+        if not reads_faces:
+            return None
+        entry = TCollection_AsciiString()
+        TDF_Tool.Entry_s(referred, entry)
+        key = entry.ToCString()
+        if key not in face_color_cache:
+            face_color_cache[key] = _product_face_colors(
+                color_tool, shape_tool.GetShape_s(referred)
+            )
+        return face_color_cache[key]
 
     def resolve(label):
         """A component label points at the product it instances; a free shape is
@@ -199,10 +306,16 @@ def read_assembly(path: str) -> Assembly:
 
         shape = shape_tool.GetShape_s(referred).Moved(location)
         solids = _solids_of(shape)
-        if solids:
-            asm.leaves.extend((index, s) for s in solids)
-        else:
-            asm.leaves.append((index, shape))
+        # `.Moved()` rewrites the location and nothing else, so the moved shape
+        # explores its solids, and each solid its faces, in the very order the
+        # product's own shape did. That is what lets a colour read from the
+        # unmoved product be handed to the placed leaf by position.
+        by_solid = product_face_colors(referred)
+        for k, leaf in enumerate(solids or [shape]):
+            row = by_solid[k] if by_solid and k < len(by_solid) else None
+            if row and any(row):
+                asm.face_colors[len(asm.leaves)] = row
+            asm.leaves.append((index, leaf))
 
     roots = TDF_LabelSequence()
     shape_tool.GetFreeShapes(roots)

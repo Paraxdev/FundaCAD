@@ -1195,7 +1195,11 @@ export class Viewport {
    *  bodies that differ from the app's default finish are in it, so an unstyled
    *  document leaves this empty and applyBodyFinish writes the defaults. */
   private bodyFinish: Record<string, { metalness: number; roughness: number; opacity: number }> = {};
-  private texturePaint: Record<number, string> = {};
+  // per-FACE colours: a texture inlay's palette slot, or the colour an imported
+  // file put on that one face. One map because they answer the same question
+  // ("what colour is this face, whatever its body is") and a face can only have
+  // one answer; rebuildBridge decides which wins when both speak.
+  private facePaint: Record<number, string> = {};
   // zebra-stripe + curvature-comb overlays (display-only; re-applied on rebuild)
   private zebra = false;
   private zebraMat: THREE.ShaderMaterial | null = null;
@@ -1251,12 +1255,13 @@ export class Viewport {
         return beta < this.draftThreshold ? OVERHANG : WALL;
       }, only);
     } else {
-      // default appearance: per-face texture-inlay colors win over the body's
-      // assigned color, else the neutral shade. (component/draft overlays above
-      // deliberately mask both, analysis modes stay mutually exclusive.)
+      // default appearance: a face's OWN colour (a texture inlay, or what an
+      // imported file painted that face) wins over the body's assigned colour,
+      // else the neutral shade. (component/draft overlays above deliberately
+      // mask both, analysis modes stay mutually exclusive.)
       this.highlighter.setBase((fid) => {
-        const texHex = this.texturePaint[fid];
-        if (texHex) return new THREE.Color(texHex);
+        const own = this.facePaint[fid];
+        if (own) return new THREE.Color(own);
         const bid = this.faceIdToBodyId(fid);
         const hex = bid ? this.bodyPaint[bid] : undefined;
         return hex ? new THREE.Color(hex) : BASE_COLOR;
@@ -1269,7 +1274,7 @@ export class Viewport {
    *  overlay is currently masking them. */
   setBodyPaint(map: Record<string, string>) {
     // Skip the repaint when nothing actually changed. main.ts calls setModel,
-    // then setBodyPaint, then setTexturePaint on EVERY build, and each of the
+    // then setBodyPaint, then setFacePaint on EVERY build, and each of the
     // latter two runs a full colour re-upload (~40 MiB of attribute writes on
     // the reference assembly), 0.39 s of a 0.63 s no-op rebuild. setModel
     // already paints with the maps stored here, so if the map is unchanged its
@@ -1303,11 +1308,16 @@ export class Viewport {
     this.requestRender();
   }
 
-  /** per-face texture-inlay colors (global face id → hex), from texture features
-   *  carrying a colorSlot, same lifecycle as setBodyPaint. */
-  setTexturePaint(map: Record<number, string>) {
-    if (sameStringMap(this.texturePaint, map)) return;
-    this.texturePaint = map;
+  /** per-face colours (global face id → hex): texture inlays carrying a
+   *  colorSlot, and the colours an imported file put on individual faces. Same
+   *  lifecycle as setBodyPaint.
+   *
+   *  SPARSE by contract. A face whose colour is its body's colour is absent, not
+   *  written with the same value: the reference assembly has six figures of
+   *  faces and this map is rebuilt and compared on every rebuild. */
+  setFacePaint(map: Record<number, string>) {
+    if (sameStringMap(this.facePaint, map)) return;
+    this.facePaint = map;
     if (this.analysis === "none") this.applyAnalysis();
   }
 

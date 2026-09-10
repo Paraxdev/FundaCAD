@@ -3,6 +3,7 @@ import { logError } from "../ui/logStore";
 import { featureMeta } from "../ui/featureMeta";
 import { repairableDiagFor } from "../features/repickReference";
 import { contributedPaint, onContribChange } from "../plugins/contrib";
+import { importedFacePaint } from "../document/faceColors";
 import type { Engine } from "./engine";
 import { setPreviewError } from "../ui/previewError";
 
@@ -37,7 +38,20 @@ export function installRebuildBridge(e: Engine): void {
   // whatever an imported file said, so it loses.
   const paint = () => {
     const c = contributedPaint();
-    return { bodies: { ...e.store.materialPaint(), ...c.bodies }, faces: c.faces };
+    const bodies = { ...e.store.materialPaint(), ...c.bodies };
+    return {
+      bodies,
+      // A face can only be one colour, so the two sources of per-face colour are
+      // ordered rather than merged: a texture inlay is something the user put
+      // there in THIS document and wins over what an imported file said the
+      // face was. Import colours are sparse against `bodies` (see
+      // importedFacePaint), so an assembly whose parts are each one colour adds
+      // nothing here at all.
+      faces: {
+        ...importedFacePaint(e.store.buildState.result?.bodies, bodies),
+        ...c.faces,
+      },
+    };
   };
 
   // Starting or stopping a capability has to repaint what is already on screen.
@@ -47,7 +61,7 @@ export function installRebuildBridge(e: Engine): void {
   onContribChange(() => {
     const p = paint();
     e.viewport.setBodyPaint(p.bodies);
-    e.viewport.setTexturePaint(p.faces);
+    e.viewport.setFacePaint(p.faces);
     e.viewport.requestRender();
   });
 
@@ -105,7 +119,7 @@ export function installRebuildBridge(e: Engine): void {
         pendingFit = false;
         const p = paint();
         e.viewport.setBodyPaint(p.bodies); // per-body colours
-        e.viewport.setTexturePaint(p.faces); // + per-face inlay colours
+        e.viewport.setFacePaint(p.faces); // + per-face inlay colours
         e.viewport.setBodyFinish(e.store.materialFinishes()); // + how each is finished
       } else {
         e.viewport.clearModel();

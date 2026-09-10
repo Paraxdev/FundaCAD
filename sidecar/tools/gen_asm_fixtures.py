@@ -21,6 +21,10 @@ Each one isolates a case the import path has to get right:
                      build123d's inherited `.color` getter instead of the label.
   asm_empty_product  A named product with faces and ZERO solids, the shape of
                      the 11 products the importer silently drops today.
+  asm_face_colors    A product whose individual FACES are coloured, under a
+                     product colour that disagrees with them. This is what a
+                     mechanical CAD system actually writes, and reading only the
+                     product label renders it as one flat wrong colour.
 
 Run with the sidecar venv:
     .venv/bin/python tools/gen_asm_fixtures.py
@@ -66,6 +70,32 @@ def _color(color_tool, label, rgb):
         label,
         Quantity_Color(rgb[0], rgb[1], rgb[2], Quantity_TOC_sRGB),
         XCAFDoc_ColorType.XCAFDoc_ColorGen,
+    )
+
+
+def _faces_of(shape):
+    """Every face of a shape, in explorer order."""
+    from OCP.TopAbs import TopAbs_FACE
+    from OCP.TopExp import TopExp_Explorer
+
+    out = []
+    exp = TopExp_Explorer(shape, TopAbs_FACE)
+    while exp.More():
+        out.append(exp.Current())
+        exp.Next()
+    return out
+
+
+def _color_shape(color_tool, shape, rgb):
+    """Attach a colour to a SHAPE rather than a label, which is what makes it a
+    per-face style in the written file. XCAF mints the subshape label itself."""
+    from OCP.Quantity import Quantity_Color, Quantity_TOC_sRGB
+    from OCP.XCAFDoc import XCAFDoc_ColorType
+
+    color_tool.SetColor(
+        shape,
+        Quantity_Color(rgb[0], rgb[1], rgb[2], Quantity_TOC_sRGB),
+        XCAFDoc_ColorType.XCAFDoc_ColorSurf,
     )
 
 
@@ -241,12 +271,43 @@ def asm_empty_product(path):
     return {"products": 2, "solids": 1}
 
 
+def asm_face_colors(path):
+    """Colour on the FACES, disagreeing with the colour on the product.
+
+    The shape a real file has: the reference PN532 board styles all 1,803 of its
+    faces and leaves its 29 products wearing a default nobody chose, so a reader
+    that asks only the product tree draws a red circuit board flat grey. The
+    second product carries no colour at all, which is the control: it must come
+    back with no per-face packing rather than with an all-null one.
+    """
+    from build123d import Box, Pos
+
+    doc, st, ct = _doc()
+    root = _empty_assembly(st, "Painted Faces")
+    two_tone = Pos(0, 0, 0) * Box(10, 10, 10)
+    product = _part(st, root, two_tone.wrapped, "Two Tone Box")
+    _color(ct, product, (0.1, 0.1, 0.9))  # the product colour the faces overrule
+    # The faces off the label's OWN shape, and a subshape label for each before
+    # it is coloured. XCAF colours a label, not a shape: a face taken from the
+    # build123d object that was handed to AddComponent is not the face XCAF
+    # stored, AddSubShape answers with a null label, and the writer then emits
+    # the product colour alone, leaving a fixture that tests nothing.
+    faces = _faces_of(st.GetShape_s(product))
+    _color(ct, st.AddSubShape(product, faces[0]), (0.9, 0.1, 0.1))
+    _color(ct, st.AddSubShape(product, faces[1]), (1.0, 1.0, 1.0))
+    _part(st, root, (Pos(20, 0, 0) * Box(5, 5, 5)).wrapped, "Plain Box")
+    st.UpdateAssemblies()
+    _write(doc, path)
+    return {"products": 2, "solids": 2}
+
+
 FIXTURES = {
     "asm_flat": asm_flat,
     "asm_multisolid": asm_multisolid,
     "asm_nested": asm_nested,
     "asm_colors": asm_colors,
     "asm_empty_product": asm_empty_product,
+    "asm_face_colors": asm_face_colors,
 }
 
 

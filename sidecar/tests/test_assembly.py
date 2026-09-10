@@ -30,6 +30,7 @@ FIXTURE_NAMES = [
     "asm_nested",
     "asm_colors",
     "asm_empty_product",
+    "asm_face_colors",
 ]
 
 
@@ -321,6 +322,64 @@ def test_colour_is_read_per_label_not_inherited():
         f"a product with no colour of its own reported one: {by_name['Uncoloured Part']}"
     )
     print(f"  per-label colours: {by_name}")
+
+
+def test_colour_on_the_faces_beats_colour_on_the_product():
+    """What a real mechanical CAD export looks like.
+
+    The reference PN532 board attaches a style to all 1,803 of its FACES and
+    leaves its 29 products wearing a per-product default nobody chose: 15 of them
+    claim the same pale lavender, and reading only the product tree draws a red
+    circuit board flat grey. That is the fault this path exists to fix, so the
+    fixture reproduces its shape, a product colour that disagrees with the faces
+    under it.
+    """
+    import face_colors
+    from builder import import_geometry
+
+    res = import_geometry(os.path.join(FIXTURES, "asm_face_colors.step"), "step")
+    by_name = {n["name"]: n.get("color") for n in res["nodes"]}
+    assert by_name["Two Tone Box"] == "#1919e5", by_name  # the product's own
+
+    parts = res["parts"]
+    assert len(parts) == 2, parts
+    two_tone, plain = parts
+    assert "faceColors" in two_tone, (
+        f"the file's face styles were not read at all: {two_tone}"
+    )
+    colors = face_colors.decode(two_tone["faceColors"], two_tone["faces"])
+    assert colors == ["#e51919", "#ffffff", None, None, None, None], colors
+    # And the whole point: the body's colour comes from its faces, not from the
+    # blue the product claims.
+    assert face_colors.dominant(colors) == "#e51919"
+
+    # CONTROL. A product with no colour at all must not acquire an all-null
+    # packing: that key would be written into every saved document, diffed on
+    # every rebuild, and mean nothing.
+    assert "faceColors" not in plain, plain
+    print(f"  face colours {colors[:2]} overrule product colour {by_name['Two Tone Box']}")
+
+
+def test_face_colours_survive_the_blob_and_reach_the_body():
+    """The colours have to arrive on the BODY, having crossed canonicalization,
+    the base64 B-rep round trip and the manifest binding, or none of the above
+    matters. Read back where the renderer reads them: the body dict."""
+    from builder import import_geometry, rebuild
+
+    res = import_geometry(os.path.join(FIXTURES, "asm_face_colors.step"), "step")
+    doc = {"parameters": {}, "features": [{
+        "id": "im", "type": "import", "format": "step", "name": "Painted",
+        "geom": res["geom"], "nodes": res["nodes"], "parts": res["parts"],
+    }]}
+    _p, err, bodies = rebuild(doc)
+    assert not err, err
+    assert len(bodies) == 2, [b["name"] for b in bodies]
+    by_name = {b["name"]: b for b in bodies}
+    packed = by_name["Two Tone Box"].get("face_colors")
+    assert packed, f"the coloured body arrived with no colours: {by_name['Two Tone Box'].keys()}"
+    assert packed["palette"] == ["#e51919", "#ffffff"], packed
+    assert "face_colors" not in by_name["Plain Box"], by_name["Plain Box"].keys()
+    print(f"  body 'Two Tone Box' carries {packed}")
 
 
 def test_a_single_part_step_is_not_treated_as_an_assembly():
@@ -939,6 +998,8 @@ if __name__ == "__main__":
         test_multi_solid_product_stays_one_product_with_many_leaves,
         test_names_are_verbatim,
         test_colour_is_read_per_label_not_inherited,
+        test_colour_on_the_faces_beats_colour_on_the_product,
+        test_face_colours_survive_the_blob_and_reach_the_body,
         test_a_single_part_step_is_not_treated_as_an_assembly,
         test_rebuild_names_bodies_from_the_manifest,
         test_rebuild_keeps_each_occurrence_of_a_repeated_subassembly_distinct,

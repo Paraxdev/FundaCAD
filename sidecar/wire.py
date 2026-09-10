@@ -285,6 +285,11 @@ def _manifest_entry(b):
     e = {"id": b["id"], "name": b.get("name"), "etag": b.get("etag")}
     if b.get("nodeRef") is not None:
         e["nodeRef"] = b["nodeRef"]
+    # Before the `unchanged` early return, like nodeRef: a stub carries no
+    # payload at all, and the per-face colours are exactly the kind of thing a
+    # stub must still be able to change (see server._rebuild_job).
+    if b.get("faceColors") is not None:
+        e["faceColors"] = b["faceColors"]
     if b.get("unchanged"):
         e["unchanged"] = True
         return e

@@ -9,7 +9,7 @@
 // identical to the single-shot path, the plan is the same cumulative walk the
 // old single pass did, just hoisted out of the copy loop.
 
-import type { F32Wire, RebuildResult, U32Wire } from "../types";
+import type { FaceColorRuns, F32Wire, RebuildResult, U32Wire } from "../types";
 
 // --- Protocol-v2 wire shapes (see sidecar/server.py's _rebuild_job / _body_payload) ---
 // One body's per-body payload: either the full mesh (positions/indices/faceIds
@@ -22,6 +22,10 @@ export interface WireBodyFull {
   unchanged?: false;
   /** "<importFeatureId>/<nodeIndex>" for a body from an imported assembly tree. */
   nodeRef?: string;
+  /** Packed per-face colours the imported file carried (document/faceColors.ts).
+   *  In the ENVELOPE, beside nodeRef, not in the payload: the payload is
+   *  etag-cached on geometry, and these can change while geometry does not. */
+  faceColors?: FaceColorRuns;
   positions: F32Wire;
   indices: U32Wire;
   faceIds: U32Wire;
@@ -42,6 +46,7 @@ export interface WireBodyStub {
   name: string;
   etag: string;
   nodeRef?: string;
+  faceColors?: FaceColorRuns;
   unchanged: true;
 }
 export type WireBody = WireBodyFull | WireBodyStub;
@@ -92,6 +97,7 @@ export interface WireManifestEntry {
   name: string;
   etag: string;
   nodeRef?: string;
+  faceColors?: FaceColorRuns;
   unchanged?: true;
   faceCount?: number;
   nVerts3?: number;
@@ -128,6 +134,7 @@ export function manifestFromBodies(bodies: WireBody[]): WireManifestEntry[] {
   return bodies.map((b) => {
     const e: WireManifestEntry = { id: b.id, name: b.name, etag: b.etag };
     if (b.nodeRef !== undefined) e.nodeRef = b.nodeRef;
+    if (b.faceColors !== undefined) e.faceColors = b.faceColors;
     if (b.unchanged) {
       e.unchanged = true;
       return e;
@@ -229,7 +236,7 @@ export class RebuildAssembly {
     // they CAN change while geometry does not, a new diagnostic or
     // featureError must still produce a fresh object.
     const sig = manifest.length === 0 ? null : JSON.stringify([
-      sizes.map((m) => [m.id, m.etag, m.name, m.nodeRef, m.faceCount]),
+      sizes.map((m) => [m.id, m.etag, m.name, m.nodeRef, m.faceCount, m.faceColors]),
       head.bbox,
       head.diagnostics, head.featureError, head.featureErrors, head.projectionUpdates,
       // Datum planes belong to no body, so nothing about them reaches the etags
@@ -283,6 +290,7 @@ export class RebuildAssembly {
       faceStart: plan[i]!.faceBase, faceCount: m.faceCount ?? 0,
       ...(m.etag !== undefined ? { etag: m.etag } : {}),
       ...(m.nodeRef !== undefined ? { nodeRef: m.nodeRef } : {}),
+      ...(m.faceColors !== undefined ? { faceColors: m.faceColors } : {}),
     }));
     const out: RebuildResult = {
       mesh,

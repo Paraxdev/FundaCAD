@@ -6,6 +6,18 @@ export type Num = number | string; // literal or parameter name
 
 export type Vec3 = [number, number, number];
 
+/** Per-face colours an imported file carried, packed: a palette plus run-length
+ *  encoding over the shape's own face order. One entry per FACE is six figures
+ *  of them on a large assembly, and this rides in the saved document and in
+ *  every rebuild reply, so it travels packed and is unpacked only where it is
+ *  painted. Written by sidecar/face_colors.py, read by document/faceColors.ts,
+ *  which is where both halves are explained. */
+export interface FaceColorRuns {
+  palette: string[];
+  /** `[count, paletteIndex]`; index -1 means "no colour of its own". */
+  runs: [number, number][];
+}
+
 // A geometric "fingerprint" of an edge/face: enough scalar invariants to re-find
 // THIS one entity on a freshly rebuilt body, robust to small kernel drift and to
 // symmetric duplicates (which share some, but not all, invariants). The resolver
@@ -549,7 +561,7 @@ export type Feature =
       // wrong tree still builds and would just label parts with each other's
       // names. Rows are objects so a later phase can add fields to them.
       nodes?: { name: string; parent: number | null; color?: string }[];
-      parts?: { node: number; faces: number }[];
+      parts?: { node: number; faces: number; faceColors?: FaceColorRuns }[];
     }
   // Cut a body by a plane. keep=top/bottom keeps one side; keep=both splits it
   // into separate bodies. `body` targets a specific body (default: the active one);
@@ -793,7 +805,7 @@ export interface RebuildResult {
   // `etag` (when the backend supplies one) is a content fingerprint the render
   // layer diffs to decide whether a body needs rebuilding at all, absent means
   // "always rebuild" (e.g. the in-process Rust backend, which has no etag cache).
-  bodies?: { id: string; name: string; faceStart: number; faceCount: number; faceOwners?: (string | null)[]; faceBands?: number[][]; textureColorSlots?: (number | null)[]; etag?: string; nodeRef?: string }[];
+  bodies?: { id: string; name: string; faceStart: number; faceCount: number; faceOwners?: (string | null)[]; faceBands?: number[][]; textureColorSlots?: (number | null)[]; etag?: string; nodeRef?: string; faceColors?: FaceColorRuns }[];
   // selector-resolution diagnostics, when any selector resolved with low confidence.
   diagnostics?: ResolveDiag[];
   // set when features failed but the rest of the timeline still built, the
@@ -840,7 +852,7 @@ export type ImportReply =
       // present only for a STEP that carried a real assembly tree; see the
       // `import` feature above for what they mean
       nodes?: { name: string; parent: number | null; color?: string }[];
-      parts?: { node: number; faces: number }[] }
+      parts?: { node: number; faces: number; faceColors?: FaceColorRuns }[] }
   // `cancelled` = the user stopped it. Distinct from a failure so the UI can
   // dismiss quietly instead of showing an error the user already knows about.
   | { ok: false; cancelled?: boolean; message: string };

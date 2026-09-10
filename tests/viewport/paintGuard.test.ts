@@ -1,4 +1,4 @@
-// setBodyPaint/setTexturePaint skip their (expensive) colour re-upload when the
+// setBodyPaint/setFacePaint skip their (expensive) colour re-upload when the
 // map is unchanged, 0.39 s of a 0.63 s no-op rebuild on the reference assembly.
 // The guard has to be exact: a false "same" silently leaves the wrong colours on
 // screen, because setModel painted with the PREVIOUS map before these run.

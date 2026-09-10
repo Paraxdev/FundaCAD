@@ -325,10 +325,18 @@ export function materialsForColors(
   const byColor = new Map<string, string>();
   const taken = new Set(library.map((m) => m.id));
   const names = new Set(library.map((m) => m.name.toLowerCase()));
+  // A file's colour is a colour and nothing else. Matching it to a material
+  // that is SEE-THROUGH imports a claim the file never made, and the result is
+  // not a slightly wrong shade, it is a part you can no longer see: the
+  // reference board's pale lavender lands within tolerance of Glass, and every
+  // one of its fifteen occurrences opened at a quarter opacity, which reads as
+  // a broken import rather than as a material choice. Opaque candidates only;
+  // an imported colour that resembles glass mints its own opaque material.
+  const opaque = (m: MaterialDef) => (m.opacity ?? 1) >= 1;
   for (const entry of colors) {
     const hex = asHex(entry.color);
     if (!hex || byColor.has(hex)) continue;
-    const hit = nearestMaterial(hex, [...library, ...add]);
+    const hit = nearestMaterial(hex, [...library, ...add].filter(opaque));
     if (hit) {
       byColor.set(hex, hit.id);
       continue;
