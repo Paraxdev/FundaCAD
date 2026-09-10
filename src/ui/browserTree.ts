@@ -289,6 +289,12 @@ export function materialMenu(
   ids: readonly string[],
   current: string | undefined,
   apply: (material: string | null) => void,
+  /** How many of this body's own faces wear a material of their own, and how to
+   *  take them off. Offered only when there ARE some: an entry that is always
+   *  present and almost always does nothing is an entry read past every time.
+   *  It matters because a body assignment does NOT clear them, deliberately, so
+   *  without this a face dressed by a drag has no way back from the tree. */
+  faces?: { count: number; clear: () => void },
 ): CtxItem {
   const rows: CtxItem[] = materials.map((m) => ({
     label: m.name,
@@ -297,5 +303,12 @@ export function materialMenu(
     onClick: () => apply(m.id),
   }));
   rows.push({ label: "None", disabled: current === undefined, onClick: () => apply(null) });
+  if (faces?.count) {
+    rows.push({ separator: true, label: "" });
+    rows.push({
+      label: `Clear ${faces.count} dressed ${faces.count === 1 ? "face" : "faces"}`,
+      onClick: faces.clear,
+    });
+  }
   return { label: ids.length > 1 ? `Material for ${ids.length} bodies` : "Material", children: rows };
 }
