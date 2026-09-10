@@ -5,7 +5,7 @@
 // body's node chain to the root, keeping sibling identity straight, and refusing
 // to lose a body when the manifest is malformed.
 import { describe, expect, it } from "vitest";
-import { buildAssemblyGroups, buildBodyTree, type TreeGroup } from "../../src/ui/browserTree";
+import { buildAssemblyGroups, buildBodyTree, materialMenu, type TreeGroup } from "../../src/ui/browserTree";
 import type { ElementDef } from "../../src/document/elements";
 
 type Node = { name: string; parent: number | null };
@@ -217,5 +217,39 @@ describe("buildBodyTree", () => {
     );
     expect(out.groups.map((g) => g.kind)).toEqual(["element", "assembly"]);
     expect(out.loose.map((b) => b.id)).toEqual(["body1"]);
+  });
+});
+
+describe("materialMenu, the dressed-face row", () => {
+  const LIB = [
+    { id: "m-a", name: "A", color: "#111111" },
+    { id: "m-b", name: "B", color: "#222222" },
+  ];
+  const labels = (m: { children?: { label: string }[] }) =>
+    (m.children ?? []).map((c) => c.label);
+
+  it("offers nothing about faces when none are dressed", () => {
+    // An entry that is always there and almost always does nothing is an entry
+    // read past every time.
+    const m = materialMenu(LIB, ["body1"], undefined, () => {});
+    expect(labels(m)).toEqual(["A", "B", "None"]);
+  });
+
+  it("offers to clear them when there are some, and says how many", () => {
+    const m = materialMenu(LIB, ["body1"], undefined, () => {}, { count: 3, clear: () => {} });
+    expect(labels(m)).toContain("Clear 3 dressed faces");
+  });
+
+  it("counts in the singular for one", () => {
+    const m = materialMenu(LIB, ["body1"], undefined, () => {}, { count: 1, clear: () => {} });
+    expect(labels(m)).toContain("Clear 1 dressed face");
+  });
+
+  it("runs the clear it was handed", () => {
+    let ran = 0;
+    const m = materialMenu(LIB, ["body1"], undefined, () => {}, { count: 2, clear: () => { ran++; } });
+    const row = (m.children ?? []).find((c) => c.label.startsWith("Clear"));
+    row?.onClick?.();
+    expect(ran).toBe(1);
   });
 });

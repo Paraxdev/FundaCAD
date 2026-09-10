@@ -220,7 +220,11 @@ export function createContextMenus(deps: ContextMenusDeps) {
       // right-click it is the work this feature exists to remove.
       moveToElementMenu(bodyId),
       materialMenu(store.materialLibrary, bodiesUnder(bodyId), store.bodyMaterialId(bodyId),
-        (m) => store.setBodiesMaterial(bodiesUnder(bodyId), m)),
+        (m) => store.setBodiesMaterial(bodiesUnder(bodyId), m),
+        {
+          count: bodiesUnder(bodyId).reduce((n, id) => n + store.faceMaterialCount(id), 0),
+          clear: () => store.clearFaceMaterials(bodiesUnder(bodyId)),
+        }),
       ...bodyExtraMenu(bodyId),
       { separator: true, label: "" },
       { label: "Remove body", danger: true, onClick: unlessBusy(() => store.removeBody(bodyId)) },
