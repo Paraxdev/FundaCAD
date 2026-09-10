@@ -25,11 +25,16 @@ import ModalFrame from "./ModalFrame.vue";
 import { toast } from "../../ui/toast";
 import { exportMaterialLibrary, importMaterialLibrary } from "../../io/files";
 import { finishOf, type MaterialDef } from "../../document/materials";
+import { onRenderPrefsChange, renderPrefs } from "../../ui/renderPrefs";
 
 const engine = useEngine();
 const store = engine.store;
 const dialogs = useDialogStore();
 const browser = useBrowserStore();
+// Whether a glow will actually spill light. Watched rather than read once: the
+// Preferences dialog can be opened and the setting changed while this one is up.
+const bloomOn = ref(renderPrefs().bloom !== "off");
+onRenderPrefsChange(() => { bloomOn.value = renderPrefs().bloom !== "off"; });
 const close = () => { dialogs.materials = false; };
 
 // Full of text-sized targets and sliders, so single-letter tool keys must not
@@ -93,7 +98,10 @@ function removeSelected() {
 /** Push one edited field. Every control calls this, so there is one place where
  *  a value becomes a document change and one place that decides what a slider's
  *  raw string means. */
-function set(field: "name" | "color" | "metalness" | "roughness" | "opacity", raw: string) {
+function set(
+  field: "name" | "color" | "metalness" | "roughness" | "opacity" | "emissive",
+  raw: string,
+) {
   const m = selected.value;
   if (!m) return;
   if (field === "name") {
@@ -134,7 +142,8 @@ async function doImport() {
 
 /** The finish a row's swatch is drawn with, so the list reads as materials and
  *  not as a colour picker: a metal gets a sheen, glass shows the panel through
- *  it. Cheap and approximate on purpose, this is a 22px square, not a render. */
+ *  it, a lit part halos. Cheap and approximate on purpose, this is a 22px
+ *  square, not a render. */
 function swatchStyle(m: MaterialDef) {
   const f = finishOf(m);
   const sheen = Math.round(f.metalness * (1 - f.roughness) * 60);
@@ -143,6 +152,7 @@ function swatchStyle(m: MaterialDef) {
       ? `linear-gradient(135deg, rgba(255,255,255,${sheen / 100}) 0%, ${m.color} 55%)`
       : m.color,
     opacity: String(Math.max(0.25, f.opacity)),
+    boxShadow: f.emissive > 0 ? `0 0 ${Math.round(4 + f.emissive * 8)}px ${m.color}` : "",
   };
 }
 </script>
@@ -218,6 +228,22 @@ function swatchStyle(m: MaterialDef) {
               @input="set('opacity', ($event.target as HTMLInputElement).value)"
             />
           </label>
+          <label class="prefs-row">
+            <span class="prefs-label">Glow</span>
+            <input
+              class="sm-slider"
+              type="range" min="0" max="1" step="0.01"
+              :value="finishOf(selected).emissive"
+              @input="set('emissive', ($event.target as HTMLInputElement).value)"
+            />
+          </label>
+          <!-- Only where it applies. Bloom is what makes a glow read as light
+               rather than as a flat bright patch, and a slider that quietly
+               depends on a setting elsewhere is a slider that looks broken. -->
+          <div v-if="finishOf(selected).emissive > 0 && !bloomOn" class="sm-hint">
+            Glow is on for this material. Turn Bloom on in Preferences to see it
+            spill light.
+          </div>
           <div class="sm-hint">
             Changes land on the model as you make them, and on every body already
             wearing this material.

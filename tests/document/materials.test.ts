@@ -9,9 +9,21 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  asHex, colorName, FINISH, finishOf, freshMaterialName, type MaterialDef,
-  materialsForColors, nearestMaterial, nodeColors, normalizeMaterial, parseLibrary,
-  serializeLibrary, slugId, STARTER_LIBRARY, uniqueId,
+  FINISH,
+  STARTER_LIBRARY,
+  asHex,
+  colorName,
+  finishOf,
+  freshMaterialName,
+  materialsForColors,
+  nearestMaterial,
+  nodeColors,
+  normalizeMaterial,
+  parseLibrary,
+  serializeLibrary,
+  slugId,
+  type MaterialDef,
+  uniqueId,
 } from "../../src/document/materials";
 
 describe("asHex", () => {
@@ -283,5 +295,39 @@ describe("nearestMaterial", () => {
   it("is null on an empty library and on a colour it cannot read", () => {
     expect(nearestMaterial("#ffffff", [])).toBeNull();
     expect(nearestMaterial("not a colour", lib)).toBeNull();
+  });
+});
+
+describe("glow", () => {
+  it("is off unless a material says otherwise", () => {
+    expect(finishOf(undefined).emissive).toBe(0);
+    expect(finishOf({ id: "m", name: "M", color: "#808080" }).emissive).toBe(0);
+    expect(FINISH.emissive).toBe(0);
+  });
+
+  it("survives a library file round trip, and is dropped when it is the default", () => {
+    // Omit-when-default is what keeps a plain colour three fields on disk, and
+    // the starter library in normal form.
+    expect(normalizeMaterial({ id: "m-led", name: "LED", color: "#42e07a", emissive: 0.8 }))
+      .toEqual({ id: "m-led", name: "LED", color: "#42e07a", emissive: 0.8 });
+    expect(normalizeMaterial({ id: "m", name: "M", color: "#808080", emissive: 0 }))
+      .toEqual({ id: "m", name: "M", color: "#808080" });
+  });
+
+  it("clamps a value from a file somebody else wrote", () => {
+    expect(normalizeMaterial({ id: "m", name: "M", color: "#808080", emissive: 40 })!.emissive)
+      .toBe(1);
+    expect(normalizeMaterial({ id: "m", name: "M", color: "#808080", emissive: -3 }))
+      .toEqual({ id: "m", name: "M", color: "#808080" });
+    expect(normalizeMaterial({ id: "m", name: "M", color: "#808080", emissive: "bright" }))
+      .toEqual({ id: "m", name: "M", color: "#808080" });
+  });
+
+  it("has exactly one entry in the starter library that glows", () => {
+    // One, so the slider is discoverable, and only one, because a starter
+    // library is a set of examples and a part that emits light is not ordinary
+    // stuff.
+    const lit = STARTER_LIBRARY.filter((m) => (m.emissive ?? 0) > 0);
+    expect(lit.map((m) => m.name)).toEqual(["Indicator, lit"]);
   });
 });

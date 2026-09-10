@@ -318,7 +318,7 @@ describe("materials (what a body is made of, on screen)", () => {
     // Aluminium is metallic, so it has a finish worth sending.
     store.setBodiesMaterial(["body1"], "m-aluminium");
     expect(store.materialFinishes()).toEqual({
-      body1: { metalness: 0.9, roughness: 0.35, opacity: 1 },
+      body1: { metalness: 0.9, roughness: 0.35, opacity: 1, emissive: 0 },
     });
     expect(store.materialPaint()).toEqual({ body1: "#b8bcc0" });
 
@@ -328,6 +328,15 @@ describe("materials (what a body is made of, on screen)", () => {
     store.setBodiesMaterial(["body1"], plain);
     expect(store.materialFinishes()).toEqual({});
     expect(store.materialPaint()).toEqual({ body1: "#123456" });
+
+    // A material that only GLOWS is worth sending for that alone: everything
+    // else about it is the default, and a body left out of this map would be
+    // drawn unlit.
+    const lit = store.addMaterial({ name: "Lit", color: "#42e07a", emissive: 0.8 });
+    store.setBodiesMaterial(["body1"], lit);
+    expect(store.materialFinishes()).toEqual({
+      body1: { metalness: 0.1, roughness: 0.55, opacity: 1, emissive: 0.8 },
+    });
   });
 
   it("merges an imported library by id rather than replacing it", () => {

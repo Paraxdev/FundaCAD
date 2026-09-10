@@ -7,8 +7,17 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  asBackground, asBrightness, asEnvironment, asRenderPrefs, BACKGROUND_COLOR,
-  DEFAULT_RENDER, MAX_BRIGHTNESS, MIN_BRIGHTNESS,
+  BACKGROUND_COLOR,
+  BLOOM_SETTINGS,
+  DEFAULT_RENDER,
+  MAX_BRIGHTNESS,
+  MAX_EMISSIVE_INTENSITY,
+  MIN_BRIGHTNESS,
+  asBackground,
+  asBloom,
+  asBrightness,
+  asEnvironment,
+  asRenderPrefs,
 } from "../../src/ui/renderPrefs";
 
 describe("the field gates", () => {
@@ -33,11 +42,22 @@ describe("the field gates", () => {
 
 describe("asRenderPrefs", () => {
   it("sanitises PER FIELD, so one bad value costs only itself", () => {
-    expect(asRenderPrefs({ environment: "nonsense", background: "grey", brightness: 1.4 })).toEqual({
+    expect(asRenderPrefs({
+      environment: "nonsense", background: "grey", brightness: 1.4, bloom: "strong",
+    })).toEqual({
       environment: DEFAULT_RENDER.environment,
       background: "grey",
       brightness: 1.4,
+      bloom: "strong",
     });
+  });
+
+  it("fills in a field a stored setting predates", () => {
+    // Every user who has ever changed a render setting has a stored object
+    // written before this field existed, and it must read as the default rather
+    // than as undefined, which would reach the renderer as "no such level".
+    expect(asRenderPrefs({ environment: "none", background: "dark", brightness: 1 }).bloom)
+      .toBe(DEFAULT_RENDER.bloom);
   });
 
   it("falls back whole for anything that is not an object", () => {
@@ -60,5 +80,35 @@ describe("the defaults", () => {
   it("gives every fixed background a colour, and the theme one none", () => {
     expect(Object.keys(BACKGROUND_COLOR).sort()).toEqual(["dark", "grey", "light"]);
     expect("theme" in BACKGROUND_COLOR).toBe(false);
+  });
+});
+
+describe("bloom", () => {
+  it("names a level for each setting, and refuses anything else", () => {
+    for (const good of ["off", "subtle", "strong"]) expect(asBloom(good)).toBe(good);
+    for (const bad of ["SUBTLE", "", null, undefined, 1, {}, ["off"]]) {
+      expect(asBloom(bad)).toBeNull();
+    }
+  });
+
+  it("only spills light above full brightness, at the subtle level", () => {
+    // THE tuning, and the reason it is safe to leave bloom on by default. The
+    // pass runs on the LINEAR image before tone mapping, where an ordinary white
+    // part under a key light at intensity 2 already sits above 1: measured at a
+    // threshold of 0.85 the white test cylinder haloed as hard as the lit one
+    // and the whole viewport went pale.
+    expect(BLOOM_SETTINGS.subtle.threshold).toBeGreaterThan(1);
+    // ...and strong is the one that reaches an ordinary highlight, or it would
+    // be a second name for the same picture.
+    expect(BLOOM_SETTINGS.strong.threshold).toBeLessThan(BLOOM_SETTINGS.subtle.threshold);
+    expect(BLOOM_SETTINGS.strong.strength).toBeGreaterThan(BLOOM_SETTINGS.subtle.strength);
+  });
+
+  it("lets the Glow slider reach past the subtle threshold", () => {
+    // CONTROL on the two numbers above being set independently: if the slider
+    // could not push a material past the threshold, its top end would do
+    // visibly nothing and an emissive material would never bloom at all, which
+    // is the only thing bloom is for.
+    expect(MAX_EMISSIVE_INTENSITY).toBeGreaterThan(BLOOM_SETTINGS.subtle.threshold);
   });
 });

@@ -7,7 +7,7 @@ import { stickyFact } from "../diagnostics/breadcrumbs";
 import { niceStep } from "../ui/units";
 import { glyphWorldScale } from "./gizmoScale";
 import { EDGE_HOVER_COLOR } from "./highlight";
-import { BACKGROUND_COLOR, renderPrefs } from "../ui/renderPrefs";
+import { BACKGROUND_COLOR, BLOOM_SETTINGS, renderPrefs } from "../ui/renderPrefs";
 import { themeColor } from "./themeColors";
 import type { Axis3 } from "../types";
 
@@ -18,6 +18,11 @@ export interface SceneBundle {
   planes: Record<"XY" | "XZ" | "YZ", THREE.Mesh>;
   grid: AdaptiveGrid;
   triad: OriginTriad;
+  /** How a frame actually gets drawn: directly, or through the passes. Exposed
+   *  as the object rather than as two lambdas so a diagnostic can read back what
+   *  the chain is doing, which is the only way to tell that rendering through it
+   *  has not quietly given up the multisampling (see PostChain.samples). */
+  post: PostChain;
   /** Re-read ui/renderPrefs and apply it: lighting, what the model reflects,
    *  and what it is drawn against. Called once at construction and again from
    *  every change; the caller asks for a frame afterwards. */
@@ -153,6 +158,20 @@ const HEMI_INTENSITY = 0.6;
 export function createScene(canvas: HTMLCanvasElement): SceneBundle {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  // Tone mapping, always, and NEUTRAL of the several on offer.
+  //
+  // Without any, everything above full brightness clips flat: a specular
+  // highlight on polished metal, a light-coloured part under the key light and
+  // anything emissive all arrive as the same white, and the shape of the
+  // highlight (which is what tells you the surface is curved) is gone with it.
+  //
+  // Neutral rather than ACES or filmic because this is CAD. The other two are
+  // film looks: they shift hue and lift contrast across the whole image, so a
+  // part assigned #b06a3b is no longer drawn #b06a3b, which makes the material
+  // library lie. Neutral (the Khronos PBR tone mapper) is the identity through
+  // the range colours actually live in and only compresses the top end, so the
+  // highlight rolls off and the colour is still the colour.
+  renderer.toneMapping = THREE.NeutralToneMapping;
   recordGpu(renderer);
 
   const scene = new THREE.Scene();
@@ -192,10 +211,118 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
   const modelGroup = new THREE.Group();
   scene.add(modelGroup);
 
+  const post = new PostChain(renderer, scene);
+
   return {
-    renderer, scene, modelGroup, planes, grid, triad,
+    renderer, scene, modelGroup, planes, grid, triad, post,
     applyRenderPrefs: () => applyRenderPrefs(renderer, scene, { key, fill, hemi }),
   };
+}
+
+/** Drawing the frame, with or without the passes.
+ *
+ *  Two paths on purpose, and the direct one is the default. A composer renders
+ *  into an offscreen target and blits it back, which costs a full-screen copy
+ *  and, more to the point, gives up the canvas's own multisampling unless the
+ *  target asks for it. Everything that is not bloom is better off never leaving
+ *  the canvas, so with bloom off this is `renderer.render` and nothing else.
+ *
+ *  Built LAZILY and kept: the passes are a dynamic import (they are not small)
+ *  and a set of render targets, and the setting can be switched off and on
+ *  again. Until the import lands, the direct path draws, so the viewport is
+ *  never waiting on it for a frame, the model simply gains its bloom a beat
+ *  after the setting is switched on. */
+export class PostChain {
+  private composer: import("three/examples/jsm/postprocessing/EffectComposer.js").EffectComposer | null = null;
+  private bloom: import("three/examples/jsm/postprocessing/UnrealBloomPass.js").UnrealBloomPass | null = null;
+  private loading = false;
+  private size = new THREE.Vector2(1, 1);
+  private camera: THREE.Camera | null = null;
+
+  constructor(
+    private renderer: THREE.WebGLRenderer,
+    private scene: THREE.Scene,
+  ) {}
+
+  /** How many samples the offscreen buffer takes, or 0 when there is no buffer
+   *  because bloom is off and the canvas is being drawn straight to.
+   *
+   *  For reading BACK. A composer's default render target has no multisampling
+   *  at all, so turning bloom on would silently trade the antialiasing the
+   *  canvas was created with for a glow, and on a model made of straight edges
+   *  that is a bad trade nobody asked for. Cheaper to assert than to notice. */
+  get samples(): number {
+    return this.composer ? (this.composer.renderTarget1.samples ?? 0) : 0;
+  }
+
+  setSize(w: number, h: number) {
+    this.size.set(Math.max(1, w), Math.max(1, h));
+    this.composer?.setSize(this.size.x, this.size.y);
+    this.bloom?.setSize(this.size.x, this.size.y);
+  }
+
+  render(camera: THREE.Camera) {
+    const want = renderPrefs().bloom;
+    if (want === "off") {
+      this.renderer.render(this.scene, camera);
+      return;
+    }
+    if (!this.composer) {
+      void this.build();
+      this.renderer.render(this.scene, camera);
+      return;
+    }
+    // The pass chain is built once and re-aimed, rather than rebuilt whenever
+    // the camera object changes (it does: perspective and orthographic are two
+    // objects the rig swaps between).
+    if (this.camera !== camera) {
+      this.camera = camera;
+      const pass = this.composer.passes[0] as { camera?: THREE.Camera };
+      pass.camera = camera;
+    }
+    const b = BLOOM_SETTINGS[want];
+    if (this.bloom) {
+      this.bloom.strength = b.strength;
+      this.bloom.radius = b.radius;
+      this.bloom.threshold = b.threshold;
+    }
+    this.composer.render();
+  }
+
+  private async build() {
+    if (this.loading) return;
+    this.loading = true;
+    const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { OutputPass }] = await Promise.all([
+      import("three/examples/jsm/postprocessing/EffectComposer.js"),
+      import("three/examples/jsm/postprocessing/RenderPass.js"),
+      import("three/examples/jsm/postprocessing/UnrealBloomPass.js"),
+      import("three/examples/jsm/postprocessing/OutputPass.js"),
+    ]);
+    // Our own target, for the `samples`. EffectComposer's default target has
+    // none, so rendering through it would silently throw away the antialiasing
+    // the canvas was created with, and a CAD model is mostly straight edges:
+    // that reads as the whole viewport suddenly going jagged, which is a far
+    // worse trade than any glow is worth.
+    const buffer = new THREE.WebGLRenderTarget(this.size.x, this.size.y, {
+      type: THREE.HalfFloatType,
+      samples: 4,
+    });
+    const composer = new EffectComposer(this.renderer, buffer);
+    composer.setSize(this.size.x, this.size.y);
+    const render = new RenderPass(this.scene, this.camera ?? new THREE.PerspectiveCamera());
+    const b = BLOOM_SETTINGS.subtle;
+    const bloom = new UnrealBloomPass(this.size.clone(), b.strength, b.radius, b.threshold);
+    composer.addPass(render);
+    composer.addPass(bloom);
+    // LAST, and it is what makes the two paths agree: rendering into a target
+    // skips the tone mapping and the colour-space conversion the canvas path
+    // does in the material shader, and this pass is where they happen instead.
+    // Without it the whole viewport comes back washed out and over-bright.
+    composer.addPass(new OutputPass());
+    this.bloom = bloom;
+    this.composer = composer;
+    this.camera = null; // force the re-aim above on the next frame
+  }
 }
 
 /** The neutral room the model reflects, built once and kept.
