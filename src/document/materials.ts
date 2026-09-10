@@ -35,25 +35,40 @@ export interface MaterialDef {
   roughness?: number;
   /** 0..1. 1 is opaque, which is the default and is omitted when it holds. */
   opacity?: number;
+  /** 0..1. How much light the surface gives off ITSELF, on top of the light
+   *  falling on it. A screen, an indicator, a light guide: the parts of an
+   *  assembly that are not lit but lighting.
+   *
+   *  A number and not a second colour, deliberately. A material already has a
+   *  colour and a part that glows glows in its own colour; a separate emissive
+   *  colour is a second thing to keep in step with the first, and the case it
+   *  buys (a red part that glows green) is not one anybody has asked for. What
+   *  it costs is one slider instead of a slider and a picker. */
+  emissive?: number;
 }
 
 /** The finish an unspecified material has, which is exactly the one every body
  *  in this app has always been drawn with (see viewport/render.ts). Sharing the
  *  numbers is what makes "no material" and "a material that says nothing about
  *  its finish" the same picture instead of two nearly identical ones. */
-export const FINISH = { metalness: 0.1, roughness: 0.55, opacity: 1 } as const;
+export const FINISH = { metalness: 0.1, roughness: 0.55, opacity: 1, emissive: 0 } as const;
 
-/** A material's finish with every default filled in. What the viewport wants:
- *  three numbers, never undefined, so the render path has no branches in it. */
-export function finishOf(m: MaterialDef | undefined): {
+/** The four numbers the renderer wants, never undefined, so the render path has
+ *  no branches in it. Named because it now travels: the store hands a map of
+ *  them to the viewport on every build. */
+export interface BodyFinish {
   metalness: number;
   roughness: number;
   opacity: number;
-} {
+  emissive: number;
+}
+
+export function finishOf(m: MaterialDef | undefined): BodyFinish {
   return {
     metalness: m?.metalness ?? FINISH.metalness,
     roughness: m?.roughness ?? FINISH.roughness,
     opacity: m?.opacity ?? FINISH.opacity,
+    emissive: m?.emissive ?? FINISH.emissive,
   };
 }
 
@@ -83,6 +98,10 @@ export const STARTER_LIBRARY: readonly MaterialDef[] = Object.freeze([
   { id: "m-wood", name: "Wood", color: "#9a6b3f", metalness: 0.0, roughness: 0.8 },
   { id: "m-glass", name: "Glass", color: "#cfe4ee", metalness: 0.0, roughness: 0.05, opacity: 0.25 },
   { id: "m-acrylic", name: "Acrylic, clear", color: "#dfeaf0", metalness: 0.0, roughness: 0.15, opacity: 0.45 },
+  // The one entry that is not a material you could hold: a lit indicator. It is
+  // in the starter library because the emissive slider is otherwise a control
+  // whose effect nobody sees until they have already guessed what it does.
+  { id: "m-emitter", name: "Indicator, lit", color: "#42e07a", metalness: 0.0, roughness: 0.4, emissive: 0.8 },
 ]);
 
 const HEX = /^#?[0-9a-f]{6}$/i;
@@ -130,9 +149,11 @@ export function normalizeMaterial(raw: unknown, index = 0): MaterialDef | null {
   const metalness = clamp01(r["metalness"]);
   const roughness = clamp01(r["roughness"]);
   const opacity = clamp01(r["opacity"]);
+  const emissive = clamp01(r["emissive"]);
   if (metalness !== undefined && metalness !== FINISH.metalness) out.metalness = metalness;
   if (roughness !== undefined && roughness !== FINISH.roughness) out.roughness = roughness;
   if (opacity !== undefined && opacity !== FINISH.opacity) out.opacity = opacity;
+  if (emissive !== undefined && emissive !== FINISH.emissive) out.emissive = emissive;
   return out;
 }
 

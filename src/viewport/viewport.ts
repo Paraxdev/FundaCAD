@@ -45,7 +45,8 @@ import { EdgeEmphasis } from "./edgeEmphasis";
 import { ViewCube, FACE_VIEWS } from "./viewCube";
 import { setPrompt } from "../ui/prompt";
 import type { DocumentStore } from "../document/store";
-import { FINISH } from "../document/materials";
+import { type BodyFinish, FINISH } from "../document/materials";
+import { MAX_EMISSIVE_INTENSITY } from "../ui/renderPrefs";
 import { onRenderPrefsChange } from "../ui/renderPrefs";
 import { invalidateThemeColors } from "./themeColors";
 import { onThemeChange } from "../ui/theme";
@@ -159,15 +160,18 @@ export function sameStringMap(
  *  strikes above: run on every build so an unchanged map costs no material
  *  writes and no re-render. */
 function sameFinishMap(
-  a: Record<string, { metalness: number; roughness: number; opacity: number }>,
-  b: Record<string, { metalness: number; roughness: number; opacity: number }>,
+  a: Record<string, BodyFinish>,
+  b: Record<string, BodyFinish>,
 ): boolean {
   const ka = Object.keys(a);
   if (ka.length !== Object.keys(b).length) return false;
   for (const k of ka) {
     const x = a[k];
     const y = b[k];
-    if (!y || !x || x.metalness !== y.metalness || x.roughness !== y.roughness || x.opacity !== y.opacity) {
+    if (
+      !y || !x || x.metalness !== y.metalness || x.roughness !== y.roughness
+      || x.opacity !== y.opacity || x.emissive !== y.emissive
+    ) {
       return false;
     }
   }
@@ -961,6 +965,20 @@ export class Viewport {
       const f = this.bodyFinish[b.id];
       mat.metalness = f ? f.metalness : FINISH.metalness;
       mat.roughness = f ? f.roughness : FINISH.roughness;
+      // What the surface gives off itself. The body's own COLOUR is baked per
+      // vertex and a material has one emissive colour, so the emissive tint is
+      // read back off the paint map rather than off the material: a body wearing
+      // a green indicator glows green, and one with no colour of its own glows
+      // white rather than black (emissive black is emissive off, which would
+      // have made the slider do nothing at all on an unpainted body).
+      //
+      // Zero for a ghost. A see-through body that still glows is drawn as
+      // brightly as an opaque one, so x-ray would light the model up instead of
+      // fading it, and the stale-model ghost would be the most eye-catching
+      // thing on screen.
+      const glow = ghost ? 0 : (f?.emissive ?? FINISH.emissive);
+      mat.emissive.set(glow > 0 ? (this.bodyPaint[b.id] ?? 0xffffff) : 0x000000);
+      mat.emissiveIntensity = glow * MAX_EMISSIVE_INTENSITY;
       const opacity = ghost ? Math.min(f ? f.opacity : 1, ghostOpacity) : f ? f.opacity : 1;
       mat.transparent = opacity < 1;
       mat.opacity = opacity;
@@ -1380,7 +1398,7 @@ export class Viewport {
   /** metalness/roughness/opacity per body, from the document's materials. Only
    *  bodies that differ from the app's default finish are in it, so an unstyled
    *  document leaves this empty and applyBodyFinish writes the defaults. */
-  private bodyFinish: Record<string, { metalness: number; roughness: number; opacity: number }> = {};
+  private bodyFinish: Record<string, BodyFinish> = {};
   // per-FACE colours: a texture inlay's palette slot, or the colour an imported
   // file put on that one face. One map because they answer the same question
   // ("what colour is this face, whatever its body is") and a face can only have
@@ -1469,6 +1487,11 @@ export class Viewport {
     if (sameStringMap(this.bodyPaint, map)) return;
     this.bodyPaint = map;
     if (this.analysis === "none") this.applyAnalysis();
+    // A body that GLOWS glows in its own colour, which applyBodyFinish reads
+    // from the map just replaced, so the finish has to be rewritten whenever the
+    // colours change and not only when the finishes do. Cheap: a few scalars per
+    // body, beside the colour re-upload this call is already paying for.
+    this.applyBodyFinish();
   }
 
   /** The bodies on screen, as the render layer holds them.
@@ -1487,7 +1510,7 @@ export class Viewport {
    *  setBodyPaint above, because it is baked per VERTEX so a hover can recolour
    *  one face without disturbing the lighting; a finish is per material, and
    *  there is one material per body. */
-  setBodyFinish(map: Record<string, { metalness: number; roughness: number; opacity: number }>) {
+  setBodyFinish(map: Record<string, BodyFinish>) {
     if (sameFinishMap(this.bodyFinish, map)) return;
     this.bodyFinish = map;
     this.applyBodyFinish();
@@ -3485,6 +3508,10 @@ export class Viewport {
     const w = Math.max(1, rect.width);
     const h = Math.max(1, rect.height);
     this.scene.renderer.setSize(w, h, false);
+    // The post chain owns its own render targets and does not hear about this
+    // any other way; left unsized, bloom is sampled from a stale buffer and the
+    // glow lands in the wrong place after every resize.
+    this.scene.post.setSize(w, h);
     this.rig.resize(w, h);
     // LineMaterial.resolution must be in CSS pixels: that's the space its
     // `linewidth` and the Line2 raycast threshold are measured in. (Using the
@@ -3522,7 +3549,7 @@ export class Viewport {
   }
 
   screenshotPNG(): string {
-    this.scene.renderer.render(this.scene.scene, this.rig.active);
+    this.scene.post.render(this.rig.active);
     const url = this.canvas.toDataURL("image/png");
     this.requestRender(); // repaint with the ViewCube overlay
     return url;
@@ -3561,7 +3588,7 @@ export class Viewport {
         // ORIGIN rather than at the camera target, because that is where they
         // are drawn and a perspective pixel is a different size at each depth.
         this.scene.triad.update(this.pixelWorldSize(WORLD_ORIGIN), this.modelDiagonal());
-        this.scene.renderer.render(this.scene.scene, this.rig.active);
+        this.scene.post.render(this.rig.active);
         this.cube.render(this.rig.active); // draw the ViewCube overlay in the corner
         this.fps.frame();
         this.needsRender = false;

@@ -29,6 +29,43 @@ export type Environment = "studio" | "none";
  *  rather than at the app. */
 export type Background = "theme" | "dark" | "grey" | "light";
 
+/** How much light spills off the bright parts of the image.
+ *
+ *  Tuned around a HIGH threshold rather than a low strength, which is what makes
+ *  it safe to leave on: an ordinary matt part never gets bright enough to bloom
+ *  at all, so the setting costs an unlit model nothing but a pass, and a lit
+ *  indicator or a specular highlight on polished metal reads as light rather
+ *  than as a pale patch. */
+export type Bloom = "off" | "subtle" | "strong";
+
+/** What each level asks the bloom pass for. `threshold` is the luminance a
+ *  pixel has to reach before it spills at all, and it is the number that decides
+ *  whether this is a look or a haze.
+ *
+ *  ABOVE 1 for subtle, deliberately, and that is the whole tuning. The pass runs
+ *  on the LINEAR image before tone mapping, where an ordinary white part under a
+ *  key light at intensity 2 sits well over 1 already: at 0.85 the white plastic
+ *  test cylinder haloed as hard as the lit one and the whole viewport went pale.
+ *  Only something actually emitting gets past 1.15, which is what makes "on by
+ *  default" a defensible thing to do to somebody's matt grey part. */
+export const BLOOM_SETTINGS: Record<Exclude<Bloom, "off">, {
+  strength: number;
+  radius: number;
+  threshold: number;
+}> = {
+  subtle: { strength: 0.4, radius: 0.3, threshold: 2 },
+  strong: { strength: 0.7, radius: 0.55, threshold: 0.9 },
+};
+
+/** What the material's 0..1 Glow slider means in the renderer.
+ *
+ *  Not 1:1. `emissiveIntensity` is a multiplier on a linear colour, so a slider
+ *  that stopped at 1 could never push a mid-tone colour past the bloom threshold
+ *  above and the top of the slider would do visibly nothing. At 2 the top of the
+ *  slider is a part that unmistakably emits and the middle is one that is merely
+ *  lit from within. */
+export const MAX_EMISSIVE_INTENSITY = 4;
+
 export interface RenderPrefs {
   environment: Environment;
   background: Background;
@@ -36,6 +73,7 @@ export interface RenderPrefs {
    *  environment together, so the two cannot drift apart into a model that is
    *  lit from one side and reflecting from the other at a different exposure. */
   brightness: number;
+  bloom: Bloom;
 }
 
 export const DEFAULT_RENDER: RenderPrefs = {
@@ -45,6 +83,10 @@ export const DEFAULT_RENDER: RenderPrefs = {
   environment: "studio",
   background: "theme",
   brightness: 1,
+  // On, gently. It costs a pass whether or not anything is bright enough to
+  // use it, and it is what makes an emissive material read as a light instead
+  // of as a flat bright patch, which is the only reason to have one.
+  bloom: "subtle",
 };
 
 export const MIN_BRIGHTNESS = 0.4;
@@ -52,6 +94,7 @@ export const MAX_BRIGHTNESS = 2;
 
 const ENVIRONMENTS: Environment[] = ["studio", "none"];
 const BACKGROUNDS: Background[] = ["theme", "dark", "grey", "light"];
+const BLOOMS: Bloom[] = ["off", "subtle", "strong"];
 
 /** The fixed grounds, as 0xRRGGBB. "theme" is absent on purpose: it is answered
  *  by the stylesheet, not by a number here. */
@@ -71,6 +114,10 @@ export function asBackground(v: unknown): Background | null {
   return BACKGROUNDS.includes(v as Background) ? (v as Background) : null;
 }
 
+export function asBloom(v: unknown): Bloom | null {
+  return BLOOMS.includes(v as Bloom) ? (v as Bloom) : null;
+}
+
 /** Clamp a brightness into range, or null when it is not a number at all.
  *  Clamped rather than refused: a value out of range is a value somebody meant,
  *  and the nearest legal one is closer to it than the default is. */
@@ -87,6 +134,7 @@ export function asRenderPrefs(v: unknown): RenderPrefs {
     environment: asEnvironment(o["environment"]) ?? DEFAULT_RENDER.environment,
     background: asBackground(o["background"]) ?? DEFAULT_RENDER.background,
     brightness: asBrightness(o["brightness"]) ?? DEFAULT_RENDER.brightness,
+    bloom: asBloom(o["bloom"]) ?? DEFAULT_RENDER.bloom,
   };
 }
 
@@ -114,7 +162,8 @@ export function setRenderPref<K extends keyof RenderPrefs>(key: K, value: Render
   const ok =
     key === "environment" ? asEnvironment(value)
       : key === "background" ? asBackground(value)
-        : asBrightness(value);
+        : key === "bloom" ? asBloom(value)
+          : asBrightness(value);
   if (ok === null || current[key] === ok) return;
   // A fresh object rather than a mutation, so a subscriber may hold the result
   // of renderPrefs() and compare identity to decide it must redraw.

@@ -12,8 +12,8 @@ import {
   withElementRemoved,
 } from "./elements";
 import {
-  FINISH, finishOf, freshMaterialName, type MaterialDef, normalizeMaterial,
-  slugId, STARTER_LIBRARY, uniqueId,
+  type BodyFinish, FINISH, finishOf, freshMaterialName, type MaterialDef,
+  normalizeMaterial, slugId, STARTER_LIBRARY, uniqueId,
 } from "./materials";
 import * as params from "../params/engine";
 import type { FieldKind } from "./numFields";
@@ -1289,13 +1289,16 @@ export class DocumentStore {
    *  MeshStandardMaterial per body. Only bodies that differ from the app's
    *  default finish appear, so an unstyled document hands the viewport an empty
    *  map and it changes nothing. */
-  materialFinishes(): Record<string, { metalness: number; roughness: number; opacity: number }> {
-    const out: Record<string, { metalness: number; roughness: number; opacity: number }> = {};
+  materialFinishes(): Record<string, BodyFinish> {
+    const out: Record<string, BodyFinish> = {};
     for (const [body, id] of this.bodyMaterial.entries()) {
       const m = this.materials.find((x) => x.id === id);
       if (!m) continue;
       const f = finishOf(m);
-      if (f.metalness === FINISH.metalness && f.roughness === FINISH.roughness && f.opacity === FINISH.opacity) {
+      if (
+        f.metalness === FINISH.metalness && f.roughness === FINISH.roughness
+        && f.opacity === FINISH.opacity && f.emissive === FINISH.emissive
+      ) {
         continue;
       }
       out[body] = f;
