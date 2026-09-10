@@ -489,14 +489,32 @@ export function resetBodyAppearance(body: BodyMesh) {
   body.mesh.quaternion.identity();
   body.mesh.scale.set(1, 1, 1);
   body.mesh.updateMatrixWorld();
-  if (body.mesh.material instanceof THREE.MeshStandardMaterial) {
-    const mat = body.mesh.material;
+  for (const mat of bodyMaterials(body)) {
     mat.clippingPlanes = null;
     mat.transparent = false;
     mat.opacity = 1;
     mat.depthWrite = true;
   }
   body.edges.resetAppearance();
+}
+
+/** Every MeshStandardMaterial this body draws with: its own, plus the extra one
+ *  per finish that a material dropped on a FACE adds (viewport.ts builds those
+ *  as geometry groups over the same mesh).
+ *
+ *  The reason this exists rather than a cast at each call site: a body's
+ *  `mesh.material` used to be exactly one material and four places wrote to it
+ *  through a cast that quietly does nothing on an array. Each of those was a
+ *  display state that would simply stop applying to a part with a chrome ring on
+ *  it, x-ray, the sketch dim, the section clip and the rebuild reset, and none
+ *  of them would have failed loudly.
+ *
+ *  Skips a material that is not the body's own (the shared zebra shader), which
+ *  is the same thing the old `instanceof` check bought. */
+export function bodyMaterials(body: BodyMesh): THREE.MeshStandardMaterial[] {
+  const m = body.mesh.material;
+  const list = Array.isArray(m) ? m : [m];
+  return list.filter((x): x is THREE.MeshStandardMaterial => x instanceof THREE.MeshStandardMaterial);
 }
 
 function disposeBody(body: BodyMesh) {

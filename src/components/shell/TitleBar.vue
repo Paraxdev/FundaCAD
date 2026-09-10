@@ -9,6 +9,7 @@ import { iconPacks, getIconPack, setIconPack, asIconPackId, onIconPackChange } f
 import { buildMenubar } from "../../app/menubarDef";
 import { onContribChange } from "../../plugins/contrib";
 import Icon from "./Icon.vue";
+import WorkspaceToggle from "./WorkspaceToggle.vue";
 import MenuBar from "./MenuBar.vue";
 import LiveSessionPill from "./LiveSessionPill.vue";
 import brandLockup from "../../../assets/brand/fundacad-lockup-app.svg";
@@ -111,6 +112,10 @@ function onPackInput(ev: Event) {
          assistant is actually attached. -->
     <LiveSessionPill />
     <div class="spacer"></div>
+    <!-- Which arrangement of the window this is. Left of the three appearance
+         selects because it is the only control up here that changes what the
+         window is FOR, the rest change how it looks. -->
+    <WorkspaceToggle />
     <label class="units" title="Display units (geometry is stored in mm)">
       Units
       <select id="unit" :value="unit" @change="onUnitInput">

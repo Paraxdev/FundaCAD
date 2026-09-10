@@ -37,6 +37,7 @@ import {
   MAX_BRIGHTNESS,
   MIN_BRIGHTNESS,
   onRenderPrefsChange,
+  ENVIRONMENTS_LIST,
   renderPrefs,
   setRenderPref,
 } from "../../ui/renderPrefs";
@@ -138,8 +139,7 @@ function onBloom(ev: Event) { const v = asBloom(value(ev)); if (v) setRenderPref
       <label class="prefs-row">
         <span class="prefs-label">Reflections</span>
         <select id="prefs-environment" class="sm-select" :value="render.environment" @change="onEnvironment">
-          <option value="studio">Studio</option>
-          <option value="none">None (flat)</option>
+          <option v-for="e in ENVIRONMENTS_LIST" :key="e.id" :value="e.id">{{ e.label }}</option>
         </select>
       </label>
       <div class="sm-hint">

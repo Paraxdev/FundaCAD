@@ -1,0 +1,347 @@
+/* ============================================================================
+   RENDER DOCK, the Render workspace's own column
+   ============================================================================
+   Wider than the browser tree (232px) on purpose. This one holds a two-column
+   grid of rendered spheres with two lines of text under each; at the tree's
+   width that is one column, and a library you scroll one row at a time is a
+   list, not a library.
+   ============================================================================ */
+#renderdock {
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+}
+
+/* ---- tabs ---------------------------------------------------------------- */
+.rd-tabs {
+  display: flex;
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--line);
+}
+.rd-tab {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-1);
+  padding: var(--s-2) var(--s-1);
+  border: 0;
+  /* The selected tab is marked by a bar under it rather than by a filled
+     background: the panel below is the tab's own surface, so a filled tab and
+     the panel would read as one shape and the row would lose its rhythm. */
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  background: transparent;
+  color: var(--text-mute);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.rd-tab:hover {
+  color: var(--text-dim);
+  background: var(--raised);
+}
+.rd-tab.active {
+  color: var(--accent-hot);
+  border-bottom-color: var(--accent);
+}
+
+/* ---- the scrolling body -------------------------------------------------- */
+.rd-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--s-3) var(--s-3) var(--s-6);
+}
+.rd-section + .rd-section {
+  margin-top: var(--s-4);
+}
+.rd-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: 0 0 var(--s-2);
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-mute);
+}
+.rd-mini {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-0);
+  padding: 1px var(--s-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--panel-2);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 10.5px;
+  letter-spacing: 0;
+  text-transform: none;
+  cursor: pointer;
+}
+.rd-mini:hover {
+  background: var(--raised);
+  color: var(--text);
+}
+
+/* ---- search -------------------------------------------------------------- */
+.rd-search {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  margin-bottom: var(--s-3);
+  padding: 0 var(--s-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel-2);
+  color: var(--text-mute);
+}
+.rd-search input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: var(--s-1) 0;
+}
+.rd-search input:focus {
+  outline: none;
+}
+
+/* ---- the used-materials list --------------------------------------------- */
+.rd-used {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  width: 100%;
+  padding: var(--s-1);
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: grab;
+}
+.rd-used:hover {
+  background: var(--raised);
+}
+.rd-used.is-selected {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+}
+.rd-used-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.rd-used-name {
+  display: block;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rd-used-count {
+  flex: 0 0 auto;
+  font-size: 10px;
+  line-height: 1.25;
+  text-align: right;
+  color: var(--text-mute);
+}
+
+/* ---- the library grid ---------------------------------------------------- */
+.rd-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-2);
+}
+.rd-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  padding: var(--s-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  /* The cursor IS the affordance: nothing else on the tile says it can be
+     picked up and carried to the model, and a hint under every one of thirty
+     tiles would be thirty copies of one sentence. */
+  cursor: grab;
+}
+.rd-tile:hover {
+  border-color: var(--line-strong);
+  background: var(--raised);
+}
+.rd-tile.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-tint-2);
+}
+.rd-tile:active {
+  cursor: grabbing;
+}
+.rd-ball {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: var(--r-sm);
+  object-fit: cover;
+  background: #24272b;
+}
+.rd-ball.sm {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  aspect-ratio: auto;
+}
+/* The fallback when this machine would not give the preview renderer a context
+   at all: a flat square of the colour. Worse, and honestly worse, rather than an
+   empty box that reads as a failed image. */
+.rd-ball.flat {
+  border: 1px solid var(--line);
+}
+.rd-tile-name {
+  font-size: 11.5px;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rd-sub {
+  display: block;
+  font-size: 10px;
+  color: var(--text-mute);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rd-howto {
+  margin-top: var(--s-2);
+}
+
+/* ---- chips (background, bloom, render size) ------------------------------ */
+.rd-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1);
+  margin-bottom: var(--s-2);
+}
+.rd-chip {
+  padding: 3px var(--s-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--panel-2);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.rd-chip:hover {
+  background: var(--raised);
+  color: var(--text);
+}
+.rd-chip.active {
+  border-color: var(--accent);
+  background: var(--accent-tint-2);
+  color: var(--accent-hot);
+}
+
+/* A settings row with a READOUT after the control. .prefs-row is a two-column
+   grid (label, control), so a third child lands on a line of its own: the value
+   ended up under the slider rather than beside it, which reads as a caption for
+   the whole row instead of as the number the slider is currently at. Narrowed
+   here too, because 92px of label in a 300px column leaves a slider that cannot
+   be aimed. */
+#renderdock .prefs-row {
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  margin-bottom: var(--s-1);
+  gap: var(--s-2);
+}
+#renderdock .prefs-row > .sm-slider,
+#renderdock .prefs-row > .sm-select,
+#renderdock .prefs-row > .sm-input {
+  min-width: 0;
+}
+/* A row with only a label and a control still wants the control to run the full
+   width, so it spans the readout track it is not using. */
+#renderdock .prefs-row > :last-child:nth-child(2) {
+  grid-column: 2 / -1;
+}
+/* ...except a checkbox, which has a size of its own and would otherwise be
+   stretched across the whole track into a lozenge. */
+#renderdock .prefs-row > input[type="checkbox"] {
+  justify-self: start;
+}
+
+.rd-value {
+  flex: 0 0 auto;
+  min-width: 34px;
+  text-align: right;
+  font-size: 11px;
+  color: var(--text-mute);
+  font-variant-numeric: tabular-nums;
+}
+
+.rd-edit {
+  padding-top: var(--s-2);
+  border-top: 1px solid var(--line);
+}
+.rd-foot {
+  display: flex;
+  gap: var(--s-1);
+  margin-top: var(--s-4);
+  padding-top: var(--s-2);
+  border-top: 1px solid var(--line);
+}
+
+/* ---- the chip that follows a dragged material ---------------------------- */
+/* Teleported to <body>, so it is positioned in viewport coordinates and cannot
+   be clipped by the canvas or by the dock it started in. pointer-events off:
+   an element under the cursor during a drag would take the dragover events the
+   viewport needs to answer with. */
+.dropchip {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-1) var(--s-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--panel-2);
+  box-shadow: var(--shadow-2);
+  color: var(--text);
+  font-size: 11.5px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.dropchip .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line);
+}
+.dropchip .scope {
+  color: var(--accent-hot);
+  font-weight: 700;
+}
+.dropchip kbd {
+  padding: 0 var(--s-1);
+  border: 1px solid var(--line-strong);
+  border-bottom-width: 2px;
+  border-radius: var(--r-sm);
+  background: var(--bg);
+  color: var(--text-mute);
+  font: inherit;
+  font-size: 10px;
+}

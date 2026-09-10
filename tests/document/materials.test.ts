@@ -24,6 +24,7 @@ import {
   slugId,
   type MaterialDef,
   uniqueId,
+  finishLabel,
 } from "../../src/document/materials";
 
 describe("asHex", () => {
@@ -331,3 +332,50 @@ describe("glow", () => {
     expect(lit.map((m) => m.name)).toEqual(["Indicator, lit"]);
   });
 });
+
+describe("finishLabel", () => {
+  it("says how polished a surface is", () => {
+    expect(finishLabel({ id: "a", name: "A", color: "#888", roughness: 0.05 })).toBe("Glossy");
+    expect(finishLabel({ id: "a", name: "A", color: "#888", roughness: 0.3 })).toBe("Satin");
+    expect(finishLabel({ id: "a", name: "A", color: "#888", roughness: 0.9 })).toBe("Matte");
+  });
+
+  it("adds what KIND of stuff it is, when it is worth saying", () => {
+    expect(finishLabel({ id: "a", name: "A", color: "#888", metalness: 0.9, roughness: 0.1 }))
+      .toBe("Glossy, metallic");
+    expect(finishLabel({ id: "a", name: "A", color: "#888", opacity: 0.3, roughness: 0.1 }))
+      .toBe("Glossy, transparent");
+    expect(finishLabel({ id: "a", name: "A", color: "#888", emissive: 0.5, roughness: 0.3 }))
+      .toBe("Satin, lit");
+  });
+
+  it("picks ONE kind, most-visible first, rather than listing three", () => {
+    // Shiny and see-through and metallic on paper. A phrase saying all three is
+    // read by nobody, and what changes the picture most is that you can see
+    // through it.
+    expect(finishLabel({
+      id: "a", name: "A", color: "#888", metalness: 0.9, opacity: 0.3, roughness: 0.05,
+    })).toBe("Glossy, transparent");
+    // ...unless it is also giving off light, which beats everything.
+    expect(finishLabel({
+      id: "a", name: "A", color: "#888", metalness: 0.9, opacity: 0.3, emissive: 1, roughness: 0.05,
+    })).toBe("Glossy, lit");
+  });
+
+  it("describes a material that says nothing about itself by the app default", () => {
+    // FINISH is roughness 0.55, metalness 0.1: matt, and not metal.
+    expect(finishLabel({ id: "a", name: "A", color: "#888" })).toBe("Matte");
+    expect(finishLabel(undefined)).toBe("Matte");
+  });
+
+  it("never says a dash, which is the house rule for every string a user reads", () => {
+    // Written by code point so this file does not itself contain the character
+    // the repo hygiene check bans.
+    const EM = String.fromCharCode(0x2014);
+    for (const m of STARTER_LIBRARY) {
+      expect(finishLabel(m)).not.toContain(EM);
+      expect(finishLabel(m)).not.toContain(" - ");
+    }
+  });
+});
+

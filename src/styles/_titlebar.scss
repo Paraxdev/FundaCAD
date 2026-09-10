@@ -234,3 +234,43 @@
 .docname.dirty {
   color: var(--text);
 }
+
+/* ---- [ Model | Render ] workspace segment ------------------------------- */
+/* One control made of buttons, so the border is on the GROUP and the buttons
+   only carry a divider between them. Drawn as a single pill: two separately
+   bordered buttons read as two tools, which is the one thing this must not
+   say. */
+#workspace-toggle.segmented {
+  display: flex;
+  align-items: stretch;
+  margin-right: var(--s-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel-2);
+  overflow: hidden;
+}
+#workspace-toggle .seg-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  padding: 3px var(--s-2);
+  border: 0;
+  background: transparent;
+  color: var(--text-mute);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+#workspace-toggle .seg-btn + .seg-btn {
+  border-left: 1px solid var(--line);
+}
+#workspace-toggle .seg-btn:hover {
+  background: var(--raised);
+  color: var(--text-dim);
+}
+#workspace-toggle .seg-btn.active {
+  background: var(--accent-tint-2);
+  color: var(--accent-hot);
+}

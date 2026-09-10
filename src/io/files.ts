@@ -666,6 +666,50 @@ export async function importMaterialLibrary(
 }
 
 // --- browser fallbacks ---
+/** Write a rendered picture to a file the user picks.
+ *
+ *  Takes the data: URL the renderer produced rather than a canvas or a Blob,
+ *  because the pixels are only readable in the same task as the render that
+ *  made them (the renderer runs without preserveDrawingBuffer) and this function
+ *  is asynchronous from its first line. By the time a dialog has been answered
+ *  the buffer is long gone; the string is not.
+ *
+ *  Returns the path written, or null when the user cancelled, so the caller can
+ *  say where it went. */
+export async function saveRenderedImage(dataUrl: string, suggested: string): Promise<string | null> {
+  const comma = dataUrl.indexOf(",");
+  if (!dataUrl.startsWith("data:image/png;base64,") || comma < 0) {
+    await reportError("The render came back empty.");
+    return null;
+  }
+  const b64 = dataUrl.slice(comma + 1);
+  if (!isTauri()) {
+    const a = document.createElement("a");
+    a.href = dataUrl;
+    a.download = suggested;
+    a.click();
+    return suggested;
+  }
+  const { save } = await import("@tauri-apps/plugin-dialog");
+  const path = await save({
+    filters: [{ name: "PNG image", extensions: ["png"] }],
+    defaultPath: suggested,
+  });
+  if (!path) return null;
+  // Decoded here rather than sent as text: writeFile takes bytes, and a base64
+  // payload written as a string is a valid file of the wrong thing entirely.
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  try {
+    await (await import("@tauri-apps/plugin-fs")).writeFile(path, bytes);
+  } catch (e) {
+    await reportError(`Couldn't write ${path}: ${errMsg(e)}`);
+    return null;
+  }
+  return path;
+}
+
 function downloadText(name: string, text: string) {
   const blob = new Blob([text], { type: "application/json" });
   const a = document.createElement("a");

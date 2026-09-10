@@ -8,6 +8,8 @@ import { niceStep } from "../ui/units";
 import { glyphWorldScale } from "./gizmoScale";
 import { EDGE_HOVER_COLOR } from "./highlight";
 import { BACKGROUND_COLOR, BLOOM_SETTINGS, renderPrefs } from "../ui/renderPrefs";
+import { buildRoom, disposeRoom } from "./environments";
+import type { Environment } from "../ui/renderPrefs";
 import { themeColor } from "./themeColors";
 import type { Axis3 } from "../types";
 
@@ -235,9 +237,15 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
 export class PostChain {
   private composer: import("three/examples/jsm/postprocessing/EffectComposer.js").EffectComposer | null = null;
   private bloom: import("three/examples/jsm/postprocessing/UnrealBloomPass.js").UnrealBloomPass | null = null;
+  private bokeh: import("three/examples/jsm/postprocessing/BokehPass.js").BokehPass | null = null;
   private loading = false;
   private size = new THREE.Vector2(1, 1);
   private camera: THREE.Camera | null = null;
+  /** How far in front of the camera is sharp, in world units. Written by the
+   *  viewport once per frame from the orbit distance, because that is the point
+   *  the view is ABOUT: whatever you have centred is what stays in focus, which
+   *  needs no control of its own and is never wrong. */
+  focusDistance = 1;
 
   constructor(
     private renderer: THREE.WebGLRenderer,
@@ -255,15 +263,33 @@ export class PostChain {
     return this.composer ? (this.composer.renderTarget1.samples ?? 0) : 0;
   }
 
+  /** Whether the depth-of-field pass is currently drawing.
+   *
+   *  For reading BACK, like `samples` above. The pass is switched off on an
+   *  orthographic camera whatever the setting says, so "the slider is up" and
+   *  "the blur is happening" are two different facts and only this one is the
+   *  one a diagnostic wants. */
+  get bokehOn(): boolean {
+    return this.bokeh?.enabled ?? false;
+  }
+
   setSize(w: number, h: number) {
     this.size.set(Math.max(1, w), Math.max(1, h));
     this.composer?.setSize(this.size.x, this.size.y);
     this.bloom?.setSize(this.size.x, this.size.y);
   }
 
+  /** Whether anything in the settings needs a pass at all. The direct path is
+   *  the default and stays the default: a viewport with no bloom and no blur
+   *  never leaves the canvas, and never pays the full-screen copy. */
+  private wanted(): { bloom: boolean; blur: boolean } {
+    const p = renderPrefs();
+    return { bloom: p.bloom !== "off", blur: p.focusBlur > 0 };
+  }
+
   render(camera: THREE.Camera) {
-    const want = renderPrefs().bloom;
-    if (want === "off") {
+    const want = this.wanted();
+    if (!want.bloom && !want.blur) {
       this.renderer.render(this.scene, camera);
       return;
     }
@@ -277,14 +303,37 @@ export class PostChain {
     // objects the rig swaps between).
     if (this.camera !== camera) {
       this.camera = camera;
-      const pass = this.composer.passes[0] as { camera?: THREE.Camera };
-      pass.camera = camera;
+      for (const pass of this.composer.passes) {
+        const aimed = pass as { camera?: THREE.Camera };
+        if (aimed.camera) aimed.camera = camera;
+      }
     }
-    const b = BLOOM_SETTINGS[want];
+    const p = renderPrefs();
     if (this.bloom) {
-      this.bloom.strength = b.strength;
-      this.bloom.radius = b.radius;
-      this.bloom.threshold = b.threshold;
+      this.bloom.enabled = want.bloom;
+      if (want.bloom) {
+        const b = BLOOM_SETTINGS[p.bloom as Exclude<typeof p.bloom, "off">];
+        this.bloom.strength = b.strength;
+        this.bloom.radius = b.radius;
+        this.bloom.threshold = b.threshold;
+      }
+    }
+    if (this.bokeh) {
+      // OFF on an orthographic camera, whatever the setting says. Depth of field
+      // is an artefact of a lens, and a parallel projection has none; the pass
+      // would still blur by depth, which is a photograph of something no camera
+      // could take and is exactly the view chosen for measuring off.
+      const lens = want.blur && (camera as THREE.PerspectiveCamera).isPerspectiveCamera === true;
+      this.bokeh.enabled = lens;
+      if (lens) {
+        const u = this.bokeh.materialBokeh.uniforms;
+        u["focus"]!.value = this.focusDistance;
+        // The f-stop, inverted: a SMALLER number is a wider hole and less in
+        // focus, which is the one thing about aperture everybody already knows
+        // and the reason the control is in stops rather than in 0..1.
+        u["aperture"]!.value = (1 / p.aperture) * 0.006;
+        u["maxblur"]!.value = p.focusBlur * 0.012;
+      }
     }
     this.composer.render();
   }
@@ -292,10 +341,13 @@ export class PostChain {
   private async build() {
     if (this.loading) return;
     this.loading = true;
-    const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { OutputPass }] = await Promise.all([
+    const [
+      { EffectComposer }, { RenderPass }, { UnrealBloomPass }, { BokehPass }, { OutputPass },
+    ] = await Promise.all([
       import("three/examples/jsm/postprocessing/EffectComposer.js"),
       import("three/examples/jsm/postprocessing/RenderPass.js"),
       import("three/examples/jsm/postprocessing/UnrealBloomPass.js"),
+      import("three/examples/jsm/postprocessing/BokehPass.js"),
       import("three/examples/jsm/postprocessing/OutputPass.js"),
     ]);
     // Our own target, for the `samples`. EffectComposer's default target has
@@ -309,10 +361,18 @@ export class PostChain {
     });
     const composer = new EffectComposer(this.renderer, buffer);
     composer.setSize(this.size.x, this.size.y);
-    const render = new RenderPass(this.scene, this.camera ?? new THREE.PerspectiveCamera());
+    const camera = this.camera ?? new THREE.PerspectiveCamera();
+    const render = new RenderPass(this.scene, camera);
     const b = BLOOM_SETTINGS.subtle;
     const bloom = new UnrealBloomPass(this.size.clone(), b.strength, b.radius, b.threshold);
+    // BEFORE the bloom, deliberately. Blur first and bloom second is a light
+    // spilling off an out-of-focus highlight, which is what an open lens
+    // actually does; the other way round is a sharp glow pasted over a soft
+    // picture, and it reads as a mistake even to somebody who could not say why.
+    const bokeh = new BokehPass(this.scene, camera, { focus: 1, aperture: 0.0002, maxblur: 0.01 });
+    bokeh.enabled = false;
     composer.addPass(render);
+    composer.addPass(bokeh);
     composer.addPass(bloom);
     // LAST, and it is what makes the two paths agree: rendering into a target
     // skips the tone mapping and the colour-space conversion the canvas path
@@ -320,6 +380,7 @@ export class PostChain {
     // Without it the whole viewport comes back washed out and over-bright.
     composer.addPass(new OutputPass());
     this.bloom = bloom;
+    this.bokeh = bokeh;
     this.composer = composer;
     this.camera = null; // force the re-aim above on the next frame
   }
@@ -335,14 +396,43 @@ export class PostChain {
  *  Generated rather than loaded. An HDR file would be a network fetch (or an
  *  asset in the bundle) for something the renderer can produce from a handful of
  *  boxes, and the app deliberately fetches nothing at start-up. */
-let studioEnv: THREE.Texture | null = null;
-async function studioEnvironment(renderer: THREE.WebGLRenderer): Promise<THREE.Texture> {
-  if (studioEnv) return studioEnv;
-  const { RoomEnvironment } = await import("three/examples/jsm/environments/RoomEnvironment.js");
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  studioEnv = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-  pmrem.dispose();
-  return studioEnv;
+const envCache = new Map<Environment, THREE.Texture>();
+const envPending = new Map<Environment, Promise<THREE.Texture>>();
+
+async function environmentMap(
+  renderer: THREE.WebGLRenderer,
+  id: Environment,
+): Promise<THREE.Texture> {
+  const held = envCache.get(id);
+  if (held) return held;
+  // De-duplicated, not merely cached. Switching back and forth between two
+  // environments faster than a cubemap generates would otherwise start a second
+  // PMREM pass for one already in flight, and the loser's texture is leaked.
+  const inFlight = envPending.get(id);
+  if (inFlight) return inFlight;
+
+  const job = (async () => {
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    let tex: THREE.Texture;
+    if (id === "studio") {
+      // three's own, kept as it is: it is a Y-up room, which is a quarter turn
+      // from this app's world, and it has looked right since the day materials
+      // landed. Turning it upright would be changing what every existing
+      // document reflects to fix something nobody can see.
+      const { RoomEnvironment } = await import("three/examples/jsm/environments/RoomEnvironment.js");
+      tex = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    } else {
+      const room = buildRoom(id as Exclude<Environment, "studio" | "none">);
+      tex = pmrem.fromScene(room, 0.04).texture;
+      disposeRoom(room);
+    }
+    pmrem.dispose();
+    envCache.set(id, tex);
+    envPending.delete(id);
+    return tex;
+  })();
+  envPending.set(id, job);
+  return job;
 }
 
 /** Put the user's viewport settings on a scene.
@@ -379,11 +469,12 @@ function applyRenderPrefs(
     return;
   }
   scene.environmentIntensity = p.brightness;
-  void studioEnvironment(renderer).then((tex) => {
-    // Re-checked, not assumed: the setting may have been switched off again
-    // while the cubemap was being generated, and writing it then would turn
-    // reflections back on after the user turned them off.
-    if (renderPrefs().environment === "studio") scene.environment = tex;
+  const want = p.environment;
+  void environmentMap(renderer, want).then((tex) => {
+    // Re-checked, not assumed: the setting may have been changed again while the
+    // cubemap was being generated, and writing it then would put back the
+    // environment the user has just moved on from.
+    if (renderPrefs().environment === want) scene.environment = tex;
   });
 }
 

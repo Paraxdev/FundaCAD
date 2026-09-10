@@ -314,6 +314,59 @@ describe("materials (what a body is made of, on screen)", () => {
     expect(store.bodyMaterialId("body1")).toBeUndefined();
   });
 
+  // --- a material on ONE FACE ---------------------------------------------
+
+  it("keeps a per-face assignment, addressed by body and local face index", () => {
+    store.setFacesMaterial([{ body: "body1", face: 3 }], "m-chrome-less");
+    expect(store.faceMaterialId("body1", 3)).toBeUndefined(); // not in the library
+    store.setFacesMaterial([{ body: "body1", face: 3 }], "m-steel");
+    expect(store.faceMaterialId("body1", 3)).toBe("m-steel");
+    expect(store.faceMaterialCount("body1")).toBe(1);
+    expect(store.faceMaterialCount("body2")).toBe(0);
+  });
+
+  it("writes a face assignment to the file even with no body assignment at all", () => {
+    // The trap: the materials block is written when the library has been
+    // changed OR a body wears something. A document whose ONLY styling is on
+    // faces satisfies neither, and used to save as if nothing had been done.
+    store.setFacesMaterial([{ body: "body1", face: 0 }], "m-brass");
+    expect(store.toJSON()).toContain('"faceMaterials"');
+    expect(store.toJSON()).toContain('"materials"');
+    const reloaded = new DocumentStore(stubBackend([]), doc());
+    reloaded.load(store.toJSON());
+    expect(reloaded.faceMaterialId("body1", 0)).toBe("m-brass");
+    // Settled after ONE reload, exactly as the library round-trip above: the
+    // first load migrates a boolean feature's captured visibility, so the file
+    // it writes back is legitimately not byte-identical to the one it read.
+    const again = new DocumentStore(stubBackend([]), doc());
+    again.load(reloaded.toJSON());
+    expect(again.toJSON()).toBe(reloaded.toJSON());
+  });
+
+  it("takes a face assignment away with the material it names", () => {
+    store.setFacesMaterial([{ body: "body1", face: 2 }], "m-glass");
+    store.removeMaterial("m-glass");
+    expect(store.faceMaterialId("body1", 2)).toBeUndefined();
+    expect(store.toJSON()).not.toContain("m-glass");
+  });
+
+  it("clears every face of a body in one gesture, and only that body", () => {
+    store.setFacesMaterial([
+      { body: "body1", face: 0 }, { body: "body1", face: 1 }, { body: "body2", face: 0 },
+    ], "m-copper");
+    expect(store.faceMaterialCount("body1")).toBe(2);
+    store.clearFaceMaterials(["body1"]);
+    expect(store.faceMaterialCount("body1")).toBe(0);
+    expect(store.faceMaterialCount("body2")).toBe(1);
+  });
+
+  it("writes nothing and says nothing when the assignment is already what it is", () => {
+    store.setFacesMaterial([{ body: "body1", face: 0 }], "m-copper");
+    const before = store.toJSON();
+    store.setFacesMaterial([{ body: "body1", face: 0 }], "m-copper");
+    expect(store.toJSON()).toBe(before);
+  });
+
   it("hands the viewport only the bodies whose finish differs from the default", () => {
     // Aluminium is metallic, so it has a finish worth sending.
     store.setBodiesMaterial(["body1"], "m-aluminium");

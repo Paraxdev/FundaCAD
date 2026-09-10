@@ -3,7 +3,11 @@
    ============================================================================ */
 #main {
   display: grid;
-  grid-template-columns: 232px 1fr;
+  /* Three tracks, and the last one is `auto` so it VANISHES when nothing is in
+     it: the Render dock is the only thing that ever occupies it, and in the
+     Model workspace it is not mounted at all, which leaves the viewport exactly
+     the width it had before any of this existed. */
+  grid-template-columns: 232px minmax(0, 1fr) auto;
   /* The single row must be capped at #main's own height. Left implicit it is
      auto-sized, so the tallest panel's CONTENT set the row height (measured:
      #main 723px, row 811px) and the browser, viewport and canvas all stretched
