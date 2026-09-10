@@ -222,6 +222,14 @@ const FORGE_PATHS: Record<string, string> = {
   // minus at 14px on a list row reads as a separator, and a separator is not
   // something you press.
   minus: `<circle cx="12" cy="12" r="8.5"/><line x1="8" y1="12" x2="16" y2="12"/>`,
+  plus: `<circle cx="12" cy="12" r="8.5"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="12" y1="8" x2="12" y2="16"/>`,
+  // A magnifier, tilted the conventional way. The lens is off centre in the box
+  // so the handle has room to run to the corner without leaving the live area.
+  search: `<circle cx="10.5" cy="10.5" r="6"/><line x1="15" y1="15" x2="20" y2="20"/>`,
+  // A camera body with the pentaprism hump over the lens, which is the shape
+  // that says "photograph" at 14px; a plain rectangle with a circle in it reads
+  // as a washing machine.
+  camera: `<path d="M3.5 8.5h3.2l1.5-2.2h7.6l1.5 2.2h3.2v10H3.5z"/><circle cx="12" cy="13" r="3.5"/>`,
   // A dot, for "unsaved" and for a feature type this build has never heard of
   dot: `<circle cx="12" cy="12" r="4" fill="currentColor"/>`,
   warning: `<path d="M12 3.5L21.5 20H2.5z"/><line x1="12" y1="9.5" x2="12" y2="14"/><circle cx="12" cy="17" r="1.05" fill="currentColor"/>`,

@@ -14,6 +14,7 @@ import {
   buildBodyMesh,
   buildEdgeLines,
   buildSectionGhosts,
+  bodyMaterials,
   bodyOfFace,
   disposeBody,
   disposeModel,
@@ -47,7 +48,7 @@ import { setPrompt } from "../ui/prompt";
 import type { DocumentStore } from "../document/store";
 import { type BodyFinish, FINISH } from "../document/materials";
 import { MAX_EMISSIVE_INTENSITY } from "../ui/renderPrefs";
-import { onRenderPrefsChange } from "../ui/renderPrefs";
+import { onRenderPrefsChange, renderPrefs } from "../ui/renderPrefs";
 import { invalidateThemeColors } from "./themeColors";
 import { onThemeChange } from "../ui/theme";
 import type { ViewCubeSide } from "../types";
@@ -339,7 +340,15 @@ export class Viewport {
     // resolved. Neither subscription is torn down: there is one Viewport for the
     // life of the process, and it is destroyed with the window.
     this.scene.applyRenderPrefs();
-    onRenderPrefsChange(() => { this.scene.applyRenderPrefs(); this.requestRender(); });
+    onRenderPrefsChange(() => {
+      this.scene.applyRenderPrefs();
+      // The lens lives on the camera rather than in the scene, so it is applied
+      // here and not in applyRenderPrefs: a field of view is a property of the
+      // thing looking, and the rig owns every piece of framing arithmetic that
+      // depends on it.
+      this.rig.setFov(renderPrefs().fov);
+      this.requestRender();
+    });
     onThemeChange(() => {
       // Explicitly, rather than relying on themeColors' own subscription having
       // been registered first. It was (that module is imported at load, this
@@ -956,12 +965,27 @@ export class Viewport {
     if (!this.model) return;
     const ghost = this.xray || this.stale;
     const ghostOpacity = this.stale ? STALE_OPACITY : XRAY_OPACITY;
+    // Which faces of which body carry a material of their own. Bucketed here,
+    // once per pass, rather than by scanning each body's whole face range: the
+    // map is sparse by contract and a body has six figures of faces on the
+    // reference assembly.
+    const byBody = new Map<string, number[]>();
+    for (const k of Object.keys(this.faceFinish)) {
+      const fid = Number(k);
+      const bid = this.faceIdToBodyId(fid);
+      if (!bid) continue;
+      const list = byBody.get(bid);
+      if (list) list.push(fid);
+      else byBody.set(bid, [fid]);
+    }
     for (const b of this.model.bodies) {
       // The body's OWN material, which is not b.mesh.material while the zebra
       // overlay is on: that one is shared by every body, so writing a finish to
       // it would give the whole model one part's roughness.
-      const mat = this.savedMats.get(b.id) ?? b.mesh.material;
+      const own = this.savedMats.get(b.id) ?? b.mesh.material;
+      const mat = (Array.isArray(own) ? own[0] : own);
       if (!(mat instanceof THREE.MeshStandardMaterial)) continue;
+      this.syncFaceMaterials(b, mat, byBody.get(b.id));
       const f = this.bodyFinish[b.id];
       mat.metalness = f ? f.metalness : FINISH.metalness;
       mat.roughness = f ? f.roughness : FINISH.roughness;
@@ -986,7 +1010,139 @@ export class Viewport {
       // it. That is the whole point of a translucent body in CAD, and it is
       // what x-ray already did.
       mat.depthWrite = opacity >= 1;
+
+      // The per-face materials, by the SAME rules and in the same pass. That is
+      // the point of doing it here: x-ray, the stale ghost and the emissive
+      // colour are three things that have to be true of every material a body
+      // draws with, and a second writer for the extra ones would be a second
+      // place for them to disagree.
+      const extra = this.faceMatState.get(b.id);
+      if (extra) {
+        for (let i = 1; i < extra.mats.length; i++) {
+          const fm = extra.mats[i]!;
+          const ff = extra.finishes[i]!;
+          fm.metalness = ff.metalness;
+          fm.roughness = ff.roughness;
+          const fglow = ghost ? 0 : ff.emissive;
+          fm.emissive.set(fglow > 0 ? (extra.colors[i] ?? 0xffffff) : 0x000000);
+          fm.emissiveIntensity = fglow * MAX_EMISSIVE_INTENSITY;
+          const fo = ghost ? Math.min(ff.opacity, ghostOpacity) : ff.opacity;
+          fm.transparent = fo < 1;
+          fm.opacity = fo;
+          fm.depthWrite = fo >= 1;
+          fm.clippingPlanes = mat.clippingPlanes;
+        }
+      }
     }
+  }
+
+  /** Give one body the extra materials its per-face assignments need, as
+   *  geometry GROUPS over the mesh it already has.
+   *
+   *  Groups rather than a second mesh, and that is the whole design. A body is
+   *  one buffer with one face id per triangle; a group is a range of that
+   *  buffer drawn with a different material, so a chrome ring on a printed knob
+   *  costs one more material and no more geometry. Splitting the body into two
+   *  meshes would double its vertices, break the per-vertex colour buffer the
+   *  hover and the selection are painted into, and leave the picker with two
+   *  objects claiming the same faces.
+   *
+   *  The runs fall out of the triangle order rather than being imposed on it:
+   *  the tessellator emits a face's triangles together, so a handful of dressed
+   *  faces is a handful of groups, and nothing is reordered. Reordering would be
+   *  the alternative, and it would invalidate `faceTriangles`, which is what
+   *  every hover and every selection indexes the colour buffer through.
+   *
+   *  Colour still travels per VERTEX, exactly as it does for a body: what the
+   *  extra material carries is the FINISH. So a face given a plain colour needs
+   *  no material at all and gets none, and only the ones that are shinier,
+   *  rougher, see-through or lit than the body cost anything. */
+  private syncFaceMaterials(
+    b: BodyMesh,
+    base: THREE.MeshStandardMaterial,
+    fids: number[] | undefined,
+  ) {
+    const held = this.faceMatState.get(b.id);
+    if (!fids?.length) {
+      if (!held) return;
+      // Back to one material. The clones are ours and nothing else can be
+      // holding them, so they are disposed rather than left to the GC: they are
+      // GPU programs, not objects.
+      for (let i = 1; i < held.mats.length; i++) held.mats[i]!.dispose();
+      this.faceMatState.delete(b.id);
+      b.mesh.geometry.clearGroups();
+      this.setOwnMaterial(b, base);
+      return;
+    }
+    const sorted = [...fids].sort((x, y) => x - y);
+    // One slot per DISTINCT appearance, so a body with forty faces of the same
+    // brushed steel gets one extra material and forty groups pointing at it.
+    const slotKey = (fid: number) => {
+      const f = this.faceFinish[fid]!;
+      return `${f.metalness}|${f.roughness}|${f.opacity}|${f.emissive}|${this.facePaint[fid] ?? ""}`;
+    };
+    const sig = `${base.uuid};${sorted.map((f) => `${f}:${slotKey(f)}`).join(",")}`;
+    if (held?.sig === sig) return;
+    if (held) for (let i = 1; i < held.mats.length; i++) held.mats[i]!.dispose();
+
+    const mats: THREE.MeshStandardMaterial[] = [base];
+    const finishes: BodyFinish[] = [{ ...FINISH }];
+    const colors: (string | undefined)[] = [undefined];
+    const slotOf = new Map<string, number>();
+    const faceSlot = new Map<number, number>();
+    for (const fid of sorted) {
+      const k = slotKey(fid);
+      let slot = slotOf.get(k);
+      if (slot === undefined) {
+        slot = mats.length;
+        slotOf.set(k, slot);
+        // A clone of the body's own, so every setting that is not the finish
+        // (vertex colours, the polygon offset that keeps the edge lines crisp,
+        // double-sidedness) is inherited rather than restated here and able to
+        // drift from it.
+        const clone = base.clone();
+        mats.push(clone);
+        finishes.push(this.faceFinish[fid]!);
+        colors.push(this.facePaint[fid]);
+      }
+      faceSlot.set(fid, slot);
+    }
+
+    const geo = b.mesh.geometry;
+    geo.clearGroups();
+    const tri = b.faceIds;
+    let runStart = 0;
+    let runSlot = faceSlot.get(tri[0] ?? -1) ?? 0;
+    for (let t = 1; t <= tri.length; t++) {
+      const slot = t < tri.length ? (faceSlot.get(tri[t]!) ?? 0) : -1;
+      if (slot === runSlot) continue;
+      geo.addGroup(runStart * 3, (t - runStart) * 3, runSlot);
+      runStart = t;
+      runSlot = slot;
+    }
+    this.faceMatState.set(b.id, { sig, mats, finishes, colors });
+    this.setOwnMaterial(b, mats);
+  }
+
+  /** Let go of the extra per-face materials of every body `gone` says is gone,
+   *  disposing the GPU side. The state map is the only thing holding them. */
+  private dropFaceMaterials(gone: (bodyId: string) => boolean) {
+    for (const [id, held] of [...this.faceMatState]) {
+      if (!gone(id)) continue;
+      for (let i = 1; i < held.mats.length; i++) held.mats[i]!.dispose();
+      this.faceMatState.delete(id);
+    }
+  }
+
+  /** Write a body's OWN material, wherever it is being kept.
+   *
+   *  While the zebra overlay is on, `mesh.material` is a shader shared by every
+   *  body and the body's own is parked in `savedMats`; writing the mesh then
+   *  would paint one part's finish across the whole model and be undone the
+   *  moment the overlay was switched off. */
+  private setOwnMaterial(b: BodyMesh, m: THREE.Material | THREE.Material[]) {
+    if (this.savedMats.has(b.id)) this.savedMats.set(b.id, m);
+    else b.mesh.material = m;
   }
 
   /** The model projected to the screen ONCE, for the whole of one box drag.
@@ -1404,6 +1560,21 @@ export class Viewport {
   // ("what colour is this face, whatever its body is") and a face can only have
   // one answer; rebuildBridge decides which wins when both speak.
   private facePaint: Record<number, string> = {};
+  // per-FACE finish: the other half of a material dropped on one face. Sparse,
+  // and almost always empty, which is what keeps the group-building below off
+  // the path of every model that has never had a material dropped on a face.
+  private faceFinish: Record<number, BodyFinish> = {};
+  /** What each body's extra per-face materials currently are, so the geometry
+   *  groups are rebuilt only when the SET of faces or their finishes changed and
+   *  not on every repaint. Keyed by body id; `sig` covers the base material's
+   *  identity too, because a rebuild hands back a fresh one and the clones taken
+   *  from the old one would keep the old one's settings. */
+  private faceMatState = new Map<string, {
+    sig: string;
+    mats: THREE.MeshStandardMaterial[];
+    finishes: BodyFinish[];
+    colors: (string | undefined)[];
+  }>();
   // zebra-stripe + curvature-comb overlays (display-only; re-applied on rebuild)
   private zebra = false;
   private zebraMat: THREE.ShaderMaterial | null = null;
@@ -1528,6 +1699,104 @@ export class Viewport {
     if (sameStringMap(this.facePaint, map)) return;
     this.facePaint = map;
     if (this.analysis === "none") this.applyAnalysis();
+    // A face material's colour is its EMISSIVE tint as well as its base colour,
+    // and the tint lives on the extra material rather than in the vertex buffer,
+    // so a colour change has to reach the finish pass too. Costs nothing when no
+    // face carries a material of its own, which is the ordinary case.
+    if (Object.keys(this.faceFinish).length) this.applyBodyFinish();
+  }
+
+  /** Per-face SURFACE FINISH (global face id → metalness/roughness/opacity/glow),
+   *  the other half of a material dropped on one face.
+   *
+   *  Sparse by the same contract as setFacePaint: a face whose finish is its
+   *  body's is absent rather than written with the same numbers, so a model
+   *  nobody has dressed hands this an empty object and it builds no groups and
+   *  allocates no materials. */
+  setFaceFinish(map: Record<number, BodyFinish>) {
+    if (sameFinishMap(this.faceFinish, map)) return;
+    this.faceFinish = map;
+    this.applyBodyFinish();
+    this.requestRender();
+  }
+
+  // --- dropping something onto the model ------------------------------------
+
+  /** What is under the cursor, for a drag carrying a material.
+   *
+   *  Its own entry point rather than a reuse of the hover path, and the reason
+   *  is that a DRAG is not a hover. A drag has no pointermove on the canvas at
+   *  all, the browser sends dragover to the element instead, so the ordinary
+   *  hover never fires; and the answer wanted is a different one, a drag over a
+   *  sketch region or an edge is a drag over nothing, because neither can be
+   *  made of a material.
+   *
+   *  It HIGHLIGHTS as it answers, which is the whole point: the only way to know
+   *  where a dropped material will land is to see it lit up before letting go.
+   *  `scope` says which unit is being dressed, so the same gesture can promise a
+   *  face or the whole part and show exactly what it promised.
+   *
+   *  `localFace` is the face's index within its own body, which is how a per-face
+   *  assignment is addressed (document/faceMaterials.ts). */
+  dropTargetAt(
+    clientX: number,
+    clientY: number,
+    scope: "face" | "body",
+  ): { bodyId: string; faceId: number; localFace: number } | null {
+    if (!this.model || !this.highlighter) return null;
+    const rect = this.canvas.getBoundingClientRect();
+    const hit = this.picker.pick(clientX, clientY, rect, this.rig.active, this.model);
+    if (hit?.kind !== "face") {
+      this.clearDropTarget();
+      return null;
+    }
+    const body = bodyOfFace(this.model, hit.faceId);
+    if (!body) {
+      this.clearDropTarget();
+      return null;
+    }
+    if (scope === "body") {
+      this.highlighter.clearHover();
+      this.highlighter.hoverBody(body.id);
+    } else {
+      this.highlighter.hoverBody(null);
+      // The whole RUN, matching what the drop will take. A kernel-split face is
+      // one face to the person dropping on it, and dressing half a cylinder
+      // because the tessellation happened to split it there would be a result
+      // nobody could have predicted from what was highlighted.
+      this.highlighter.hoverFaceRun(expandToBand(hit.faceId, this.faceBands));
+    }
+    this.requestRender();
+    return { bodyId: body.id, faceId: hit.faceId, localFace: hit.faceId - body.faceStart };
+  }
+
+  /** Every face of one body, as local indices, for a drop that dresses the whole
+   *  part face by face. */
+  localFacesOf(bodyId: string): number[] {
+    const b = this.model?.bodies.find((x) => x.id === bodyId);
+    if (!b) return [];
+    return Array.from({ length: b.faceCount }, (_, i) => i);
+  }
+
+  /** The band a face belongs to, as LOCAL indices within its body: the run of
+   *  faces a pick on it takes. What a drop actually writes, so that dressing a
+   *  cylinder the kernel split in two dresses both halves. */
+  localFaceBand(faceId: number): { bodyId: string; faces: number[] } | null {
+    if (!this.model) return null;
+    const body = bodyOfFace(this.model, faceId);
+    if (!body) return null;
+    const run = expandToBand(faceId, this.faceBands);
+    const ids = (run.length ? run : [faceId]).map((f) => f - body.faceStart);
+    return { bodyId: body.id, faces: ids.filter((i) => i >= 0 && i < body.faceCount) };
+  }
+
+  /** Put back whatever the drag lit up. Called when the drag leaves the canvas
+   *  and after the drop, so a cancelled drag leaves nothing highlighted. */
+  clearDropTarget() {
+    if (!this.highlighter) return;
+    this.highlighter.clearHover();
+    this.highlighter.hoverBody(null);
+    this.requestRender();
   }
 
   /** Zebra-stripe continuity overlay: swaps the model material for a reflective
@@ -2374,6 +2643,11 @@ export class Viewport {
     const bodyMeta = result.bodies ?? [];
     this.faceBands = bandIndex(bodyMeta);
     const bodyIds = new Set(bodyMeta.map((b) => b.id));
+    // A body that is gone takes its extra face materials with it. They are GPU
+    // programs held in a map keyed by body id, so without this a document edited
+    // for an hour leaks one per deleted body and the map answers for bodies that
+    // no longer exist.
+    this.dropFaceMaterials((id) => !bodyIds.has(id));
     const { byBody, orphans } = groupEdgesByBody(result.edges, bodyIds);
 
     // bodies from the PREVIOUS model, keyed by id, consumed as we go; whatever
@@ -2601,6 +2875,7 @@ export class Viewport {
 
   clearModel() {
     this.dropAreaProjection();
+    this.dropFaceMaterials(() => true);
     this.faceBands = new Map();
     // A STREAM ENDS HERE TOO, and this is the only path that ends it this way:
     // `streaming` is otherwise cleared in setModel, and rebuildBridge routes a
@@ -2909,7 +3184,9 @@ export class Viewport {
     this.scene.renderer.localClippingEnabled = on;
     const planes = on ? [this.sectionPlane] : null;
     if (this.model) {
-      for (const b of this.model.bodies) (b.mesh.material as THREE.Material).clippingPlanes = planes;
+      for (const b of this.model.bodies) {
+        for (const mat of bodyMaterials(b)) mat.clippingPlanes = planes;
+      }
       for (const d of edgeObjects(this.model)) d.material.clippingPlanes = planes;
     }
     this.mountGhost();
@@ -3441,10 +3718,11 @@ export class Viewport {
   setModelDimmed(on: boolean) {
     if (!this.model) return;
     for (const b of this.model.bodies) {
-      const mat = b.mesh.material as THREE.MeshStandardMaterial;
-      mat.transparent = on;
-      mat.opacity = on ? SKETCH_DIM_OPACITY : 1;
-      mat.depthWrite = !on;
+      for (const mat of bodyMaterials(b)) {
+        mat.transparent = on;
+        mat.opacity = on ? SKETCH_DIM_OPACITY : 1;
+        mat.depthWrite = !on;
+      }
     }
     for (const d of edgeObjects(this.model)) {
       d.material.opacity = on ? SKETCH_DIM_EDGE_OPACITY : 1;
@@ -3555,6 +3833,81 @@ export class Viewport {
     return url;
   }
 
+  /** A picture of the part rather than a picture of the app: the same view, at
+   *  `scale` times the size, with the workshop furniture out of the way.
+   *
+   *  WHY THIS IS NOT JUST A BIGGER SCREENSHOT. Three things are on screen
+   *  because you are working, not because they are part of the model: the ground
+   *  grid, the origin arrows and the sketch planes. In a photograph they are
+   *  litter. Everything else, the lighting, the environment, the materials, the
+   *  bloom, is already exactly what the viewport is showing, which is the point
+   *  of tuning it there.
+   *
+   *  Bigger by RESIZING THE DRAWING BUFFER and not by rendering into a target of
+   *  our own. The canvas is what `toDataURL` reads, the post chain already draws
+   *  into it, and a second path through a render target would be a second set of
+   *  answers about tone mapping and colour space to keep in step with the first.
+   *  `updateStyle: false` is what makes it invisible: the CSS size is untouched,
+   *  so nothing reflows and the user sees one frame at a different resolution
+   *  they cannot perceive.
+   *
+   *  SYNCHRONOUS, and it has to be. The renderer runs without
+   *  preserveDrawingBuffer, so the pixels are only readable in the same task as
+   *  the render that produced them; an await anywhere in here returns a blank
+   *  image on the machines that clear most eagerly.
+   *
+   *  `scale` is capped: a buffer larger than the GPU's maximum texture size
+   *  fails silently and hands back an empty picture, which looks exactly like a
+   *  bug in the renderer and is not one.
+   *
+   *  `edges` defaults to OFF, and that is the one judgement call in here. A
+   *  black line on every silhouette is what makes a viewport readable while you
+   *  work, and it is also the single thing that most makes a picture look like a
+   *  screenshot of a CAD package rather than a photograph of a part. Anybody who
+   *  wants the technical look asks for it. */
+  renderStill(scale = 2, opts: { edges?: boolean } = {}): string {
+    const rect = this.canvas.getBoundingClientRect();
+    const w = Math.max(1, Math.round(rect.width));
+    const h = Math.max(1, Math.round(rect.height));
+    const cap = this.scene.renderer.capabilities.maxTextureSize || 4096;
+    const k = Math.max(1, Math.min(scale, cap / Math.max(w, h)));
+
+    const grid = this.scene.grid.group.visible;
+    const triad = this.scene.triad.group.visible;
+    const planes = Object.values(this.scene.planes).map((m) => m.visible);
+    const lines = this.model ? edgeObjects(this.model) : [];
+    const wereLit = lines.map((e) => e.object.visible);
+    const dpr = this.scene.renderer.getPixelRatio();
+    this.scene.grid.group.visible = false;
+    this.scene.triad.group.visible = false;
+    for (const m of Object.values(this.scene.planes)) m.visible = false;
+    // Hidden rather than removed: a body whose edges were already off (a hidden
+    // body's are) must come back off, which is what the saved flags are for.
+    if (!opts.edges) for (const e of lines) e.object.visible = false;
+
+    let url = "";
+    try {
+      this.scene.renderer.setPixelRatio(1);
+      this.scene.renderer.setSize(w * k, h * k, false);
+      this.scene.post.setSize(w * k, h * k);
+      this.scene.post.focusDistance = this.rig.active.position.distanceTo(this.cameraTarget());
+      this.scene.post.render(this.rig.active);
+      url = this.canvas.toDataURL("image/png");
+    } finally {
+      // Whatever happened, the viewport goes back to being the viewport. A throw
+      // between the resize and the restore would otherwise leave the canvas
+      // drawing at twice its size with no furniture on it and no way back.
+      this.scene.renderer.setPixelRatio(dpr);
+      this.scene.grid.group.visible = grid;
+      this.scene.triad.group.visible = triad;
+      Object.values(this.scene.planes).forEach((m, i) => { m.visible = planes[i] ?? false; });
+      lines.forEach((e, i) => { e.object.visible = wereLit[i] ?? true; });
+      this.resize();
+      this.requestRender();
+    }
+    return url;
+  }
+
   // Counts frames the loop ACTUALLY draws. Render-on-demand means most rAF
   // ticks draw nothing, so this is incremented at the draw, not at the tick.
   private fps = new FpsMeter();
@@ -3588,6 +3941,10 @@ export class Viewport {
         // ORIGIN rather than at the camera target, because that is where they
         // are drawn and a perspective pixel is a different size at each depth.
         this.scene.triad.update(this.pixelWorldSize(WORLD_ORIGIN), this.modelDiagonal());
+        // What stays sharp when the lens is open: whatever the view is centred
+        // on. Written every frame because the orbit distance changes every frame
+        // a wheel is turned, and it costs one subtraction.
+        this.scene.post.focusDistance = this.rig.active.position.distanceTo(t);
         this.scene.post.render(this.rig.active);
         this.cube.render(this.rig.active); // draw the ViewCube overlay in the corner
         this.fps.frame();

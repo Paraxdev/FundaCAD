@@ -16,6 +16,11 @@ import { MIN_PERSP_DIST, NEAR_AT_REST, orthoDepth, perspFar, perspNear } from ".
 
 CameraControls.install({ THREE });
 
+/** The perspective field of view the app opens with, in degrees. A starting
+ *  point now rather than a constant: the Render workspace can change it, and
+ *  every piece of framing arithmetic below reads the camera's LIVE fov instead
+ *  of this, or a wider lens would fit a part by the numbers of a narrower one
+ *  and leave it half out of frame. */
 const FOV = 45;
 /** Half-extent framed when there is nothing to frame (an empty document), in mm.
  *  Roughly a fist-sized part, so the ground grid lands at a legible scale rather
@@ -43,6 +48,12 @@ export interface CameraRig {
    *  natural scale for making input steps (SpaceMouse pan) zoom-proportional
    *  in BOTH projections, like wheel zoom already is. */
   viewScale(): number;
+  /** The perspective field of view in degrees, and the setter behind the Render
+   *  workspace's lens control. Orthographic views have no fov at all and are
+   *  unaffected; the value is kept so switching back to perspective keeps the
+   *  lens that was chosen. */
+  fov(): number;
+  setFov(deg: number): void;
   fit(box: THREE.Box3, enableTransition?: boolean): void;
   setStandardView(view: StandardView): void;
   /** orient to an arbitrary view direction (eye = target + dir·d), with a chosen
@@ -186,7 +197,7 @@ export function createCameraRig(
     to.quaternion.copy(from.quaternion);
     if (!usingOrtho) {
       // persp -> ortho: match ortho frustum to the perspective frustum height
-      const h = 2 * Math.tan((FOV * Math.PI) / 180 / 2) * dist;
+      const h = 2 * Math.tan((persp.fov * Math.PI) / 180 / 2) * dist;
       const aspect2 = (persp.aspect as number) || ortho.right / ortho.top || 1;
       ortho.top = h / 2;
       ortho.bottom = -h / 2;
@@ -203,7 +214,7 @@ export function createCameraRig(
       const halfH = (ortho.top - ortho.bottom) / 2 / ortho.zoom;
       const newDist = Math.max(
         MIN_PERSP_DIST,
-        halfH / Math.tan((FOV * Math.PI) / 360),
+        halfH / Math.tan((persp.fov * Math.PI) / 360),
       );
       usingOrtho = false;
       active = to;
@@ -408,11 +419,20 @@ export function createCameraRig(
       }
       return moved || swapped || rollAngle !== 0;
     },
+    fov() {
+      return persp.fov;
+    },
+    setFov(deg: number) {
+      const want = Math.min(90, Math.max(10, deg));
+      if (persp.fov === want) return;
+      persp.fov = want;
+      persp.updateProjectionMatrix();
+    },
     viewScale() {
       if (usingOrtho) {
         return (ortho.top - ortho.bottom) / 2 / ortho.zoom;
       }
-      return controls.distance * Math.tan((FOV * Math.PI) / 360);
+      return controls.distance * Math.tan((persp.fov * Math.PI) / 360);
     },
     zoomBy(factor: number, pivot?: THREE.Vector3) {
       // A wheel event during a flight would write a goal the flight overwrites
@@ -509,7 +529,7 @@ export function createCameraRig(
         ortho.updateProjectionMatrix();
         dist = Math.max(controls.distance, r * 2);
       } else {
-        dist = r / Math.sin((FOV * Math.PI) / 180 / 2);
+        dist = r / Math.sin((persp.fov * Math.PI) / 180 / 2);
       }
       controls.setTarget(center.x, center.y, center.z, enableTransition);
       controls.setPosition(

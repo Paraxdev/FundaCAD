@@ -1,4 +1,5 @@
 import { saveDocument, saveDocumentAs, exportModel, importModel } from "../io/files";
+import { setWorkspace } from "../ui/workspace";
 import { contributedAction } from "../plugins/contrib";
 import { openParamsDialog } from "../ui/paramsDialog";
 import { toggleShortcutHUD } from "../input/shortcuts";
@@ -6,7 +7,6 @@ import { choose } from "../ui/choice";
 import { SKETCH_TOOLS, SKETCH_MODIFY, NON_REPEATABLE } from "./actionTables";
 import { booleanOpOfAction } from "../features/booleanOps";
 import { useUiStore } from "../stores/ui";
-import { useDialogStore } from "../stores/dialogs";
 import { useSketchPaletteStore } from "../stores/sketchPalette";
 import type { Engine } from "./engine";
 import type { SketchTool } from "../sketch/sketchMode";
@@ -133,7 +133,11 @@ export function createActions(e: Engine): (action: string) => void {
         e.ui.welcome.open();
         break;
       case "materials":
-        useDialogStore().materials = true;
+        // Not a dialog any more. Materials are edited in the Render workspace,
+        // beside the part they are being judged against, so the command that
+        // used to open a window over the model now opens the workspace the
+        // window's contents live in. See ui/workspace.ts.
+        setWorkspace("render");
         break;
       case "revolve":
         void e.starters.startRevolve();

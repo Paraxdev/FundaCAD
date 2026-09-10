@@ -49,6 +49,9 @@ describe("asRenderPrefs", () => {
       background: "grey",
       brightness: 1.4,
       bloom: "strong",
+      fov: DEFAULT_RENDER.fov,
+      aperture: DEFAULT_RENDER.aperture,
+      focusBlur: DEFAULT_RENDER.focusBlur,
     });
   });
 

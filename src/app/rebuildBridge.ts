@@ -4,6 +4,7 @@ import { featureMeta } from "../ui/featureMeta";
 import { repairableDiagFor } from "../features/repickReference";
 import { contributedPaint, onContribChange } from "../plugins/contrib";
 import { importedFacePaint } from "../document/faceColors";
+import { faceMaterialFinishes, faceMaterialPaint, resolveFaceMaterials } from "../document/faceMaterials";
 import type { Engine } from "./engine";
 import { setPreviewError } from "../ui/previewError";
 
@@ -39,8 +40,21 @@ export function installRebuildBridge(e: Engine): void {
   const paint = () => {
     const c = contributedPaint();
     const bodies = { ...e.store.materialPaint(), ...c.bodies };
+    // The materials dropped on individual FACES, resolved against the model
+    // that is actually on screen: an assignment naming a body that is gone, or
+    // a face past the end of a body that got simpler, is dropped here rather
+    // than defended against in the renderer (see document/faceMaterials.ts).
+    const onFaces = resolveFaceMaterials(
+      e.store.faceMaterialEntries(),
+      e.store.buildState.result?.bodies,
+      e.store.materialLibrary,
+    );
     return {
       bodies,
+      // The finish half of those face materials. Colour goes in `faces` below
+      // with everything else that paints a face, because a face can only be one
+      // colour; a finish has nowhere else to come from, so it travels alone.
+      faceFinish: faceMaterialFinishes(onFaces),
       // A face can only be one colour, so the two sources of per-face colour are
       // ordered rather than merged: a texture inlay is something the user put
       // there in THIS document and wins over what an imported file said the
@@ -49,6 +63,9 @@ export function installRebuildBridge(e: Engine): void {
       // nothing here at all.
       faces: {
         ...importedFacePaint(e.store.buildState.result?.bodies, bodies),
+        // A material somebody dropped on this face beats what the file said it
+        // was, for the same reason a texture inlay does: it was chosen here.
+        ...faceMaterialPaint(onFaces),
         ...c.faces,
       },
     };
@@ -62,6 +79,7 @@ export function installRebuildBridge(e: Engine): void {
     const p = paint();
     e.viewport.setBodyPaint(p.bodies);
     e.viewport.setFacePaint(p.faces);
+    e.viewport.setFaceFinish(p.faceFinish);
     e.viewport.requestRender();
   });
 
@@ -120,6 +138,7 @@ export function installRebuildBridge(e: Engine): void {
         const p = paint();
         e.viewport.setBodyPaint(p.bodies); // per-body colours
         e.viewport.setFacePaint(p.faces); // + per-face inlay colours
+        e.viewport.setFaceFinish(p.faceFinish); // + a material dropped on one face
         e.viewport.setBodyFinish(e.store.materialFinishes()); // + how each is finished
       } else {
         e.viewport.clearModel();

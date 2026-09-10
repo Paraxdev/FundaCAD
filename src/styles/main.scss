@@ -31,6 +31,9 @@
 // it can't be confused with this entry file, which Sass would otherwise refuse
 // to disambiguate.
 @use "layout";
+// After _layout: the dock lives in #main's third grid track, which _layout
+// declares.
+@use "renderdock";
 @use "timeline";
 // Named for the docked panel it was written for, which is gone. What is left is
 // the .param-row / .panel-title vocabulary the feature values are still drawn

@@ -20,9 +20,58 @@
 
 import { readSetting } from "./storedSetting";
 
-/** What the model reflects. "studio" is a neutral room, generated in the
- *  renderer, no asset and no network. "none" is the flat lit look. */
-export type Environment = "studio" | "none";
+/** What the model reflects, and therefore most of what a metal LOOKS like.
+ *
+ *  Every one of these is GENERATED, in the renderer, from a handful of emissive
+ *  boxes: no HDR file, no asset in the bundle, no network at start-up. That is
+ *  the constraint the list is designed around and the reason the entries are
+ *  moods rather than places. A photograph of a real room would be a megabyte
+ *  fetched to make a chamfer shine; a soft box above and slightly to the left is
+ *  four rectangles, and it is what a product photograph is actually lit with.
+ *
+ *  "none" is the flat lit look, which is still the right one for reading
+ *  geometry: reflections are information about the surface, and while you are
+ *  looking for a misplaced hole they are noise over the thing you are reading. */
+export type Environment = "studio" | "softbox" | "warm" | "dusk" | "bright" | "none";
+
+/** The list, in the order it is offered, with what each is FOR. The note is
+ *  shown under the name: a row of six unlabelled greys is a row nobody can
+ *  choose from without trying all six.
+ *
+ *  `swatch` is a CSS gradient standing in for the room, not a render of it.
+ *  Rendering six previews means generating six cubemaps, which is six PMREM
+ *  passes to open a settings tab, and the thing a swatch has to communicate here
+ *  is a MOOD, where the light comes from and what colour it is. A gradient does
+ *  that in twenty bytes. It is a compile-time constant like everything else that
+ *  reaches the DOM as markup. */
+export const ENVIRONMENTS_LIST: readonly {
+  id: Environment; label: string; note: string; swatch: string;
+}[] = [
+  {
+    id: "studio", label: "Studio", note: "Neutral room, even light",
+    swatch: "radial-gradient(circle at 35% 28%, #f4f6f8 0%, #9aa3ad 45%, #3d4249 100%)",
+  },
+  {
+    id: "softbox", label: "Soft box", note: "One big light, product shot",
+    swatch: "radial-gradient(circle at 28% 22%, #ffffff 0%, #7d858e 38%, #14171b 100%)",
+  },
+  {
+    id: "warm", label: "Warm key", note: "Warm light, cool shade",
+    swatch: "radial-gradient(circle at 68% 26%, #ffd9a0 0%, #b98a55 42%, #2b3550 100%)",
+  },
+  {
+    id: "dusk", label: "Dusk", note: "Dark, with a bright rim",
+    swatch: "radial-gradient(circle at 50% 86%, #d8e8ff 0%, #2a3550 26%, #0a0c12 70%)",
+  },
+  {
+    id: "bright", label: "Bright room", note: "High key, white walls",
+    swatch: "radial-gradient(circle at 45% 30%, #ffffff 0%, #e6eaef 55%, #b9c0c8 100%)",
+  },
+  {
+    id: "none", label: "Flat", note: "No reflections, easiest to read",
+    swatch: "linear-gradient(160deg, #6a727b 0%, #4a5058 100%)",
+  },
+];
 
 /** What the model is drawn against. "theme" follows the app's palette, which is
  *  what it has always done; the rest are fixed grounds for looking at a part
@@ -74,7 +123,31 @@ export interface RenderPrefs {
    *  lit from one side and reflecting from the other at a different exposure. */
   brightness: number;
   bloom: Bloom;
+  /** The perspective lens, in degrees. 20 is a long lens that flattens a part
+   *  and keeps its edges parallel, 65 is a wide one that throws the near corner
+   *  at you. The orthographic views ignore it, having no lens at all. */
+  fov: number;
+  /** Depth of field, as an f-stop: 1.4 is a sliver of the part in focus and 22
+   *  is effectively everything. Only does anything while `focusBlur` is above
+   *  zero, exactly as a lens only shows its aperture when it is open. */
+  aperture: number;
+  /** How strong the out-of-focus blur is, 0 to 1. ZERO BY DEFAULT, and that is
+   *  the switch: at zero the depth-of-field pass is not built and not drawn, so
+   *  a viewport nobody has asked for a photograph from pays nothing at all.
+   *
+   *  A CAD viewport with permanent depth of field would be actively hostile,
+   *  half the model soft while you are trying to pick an edge on it. This is for
+   *  the picture at the end. */
+  focusBlur: number;
 }
+
+/** What the f-stop numbers mean to the blur pass, and the range the control
+ *  offers. Photographic values rather than 0..1 because everybody who has ever
+ *  held a camera knows which way f/2 is from f/11, and nobody knows what 0.3 of
+ *  an aperture is. */
+export const APERTURE_STOPS: readonly number[] = [1.4, 2, 2.8, 4, 5.6, 8, 11, 16, 22];
+export const MIN_FOV = 15;
+export const MAX_FOV = 70;
 
 export const DEFAULT_RENDER: RenderPrefs = {
   // On by default, unlike most settings that cost something: a metal that
@@ -87,12 +160,19 @@ export const DEFAULT_RENDER: RenderPrefs = {
   // use it, and it is what makes an emissive material read as a light instead
   // of as a flat bright patch, which is the only reason to have one.
   bloom: "subtle",
+  // The lens the app has always had, now written down.
+  fov: 45,
+  aperture: 4,
+  // OFF. See the field comment: this is the one render setting that would make
+  // the app harder to model in, so it starts at zero and stays there until
+  // somebody is deliberately taking a picture.
+  focusBlur: 0,
 };
 
 export const MIN_BRIGHTNESS = 0.4;
 export const MAX_BRIGHTNESS = 2;
 
-const ENVIRONMENTS: Environment[] = ["studio", "none"];
+const ENVIRONMENTS: Environment[] = ENVIRONMENTS_LIST.map((e) => e.id);
 const BACKGROUNDS: Background[] = ["theme", "dark", "grey", "light"];
 const BLOOMS: Bloom[] = ["off", "subtle", "strong"];
 
@@ -118,6 +198,26 @@ export function asBloom(v: unknown): Bloom | null {
   return BLOOMS.includes(v as Bloom) ? (v as Bloom) : null;
 }
 
+/** Clamp a number into range, or null when it is not one. The same bargain
+ *  asBrightness strikes, and for the same reason: a value out of range is a
+ *  value somebody meant. */
+function asClamped(v: unknown, lo: number, hi: number): number | null {
+  if (typeof v !== "number" || !Number.isFinite(v)) return null;
+  return Math.min(hi, Math.max(lo, v));
+}
+
+export function asFov(v: unknown): number | null {
+  return asClamped(v, MIN_FOV, MAX_FOV);
+}
+
+export function asAperture(v: unknown): number | null {
+  return asClamped(v, 1.4, 22);
+}
+
+export function asFocusBlur(v: unknown): number | null {
+  return asClamped(v, 0, 1);
+}
+
 /** Clamp a brightness into range, or null when it is not a number at all.
  *  Clamped rather than refused: a value out of range is a value somebody meant,
  *  and the nearest legal one is closer to it than the default is. */
@@ -135,6 +235,9 @@ export function asRenderPrefs(v: unknown): RenderPrefs {
     background: asBackground(o["background"]) ?? DEFAULT_RENDER.background,
     brightness: asBrightness(o["brightness"]) ?? DEFAULT_RENDER.brightness,
     bloom: asBloom(o["bloom"]) ?? DEFAULT_RENDER.bloom,
+    fov: asFov(o["fov"]) ?? DEFAULT_RENDER.fov,
+    aperture: asAperture(o["aperture"]) ?? DEFAULT_RENDER.aperture,
+    focusBlur: asFocusBlur(o["focusBlur"]) ?? DEFAULT_RENDER.focusBlur,
   };
 }
 
@@ -163,7 +266,10 @@ export function setRenderPref<K extends keyof RenderPrefs>(key: K, value: Render
     key === "environment" ? asEnvironment(value)
       : key === "background" ? asBackground(value)
         : key === "bloom" ? asBloom(value)
-          : asBrightness(value);
+          : key === "fov" ? asFov(value)
+            : key === "aperture" ? asAperture(value)
+              : key === "focusBlur" ? asFocusBlur(value)
+                : asBrightness(value);
   if (ok === null || current[key] === ok) return;
   // A fresh object rather than a mutation, so a subscriber may hold the result
   // of renderPrefs() and compare identity to decide it must redraw.

@@ -15,6 +15,7 @@ import {
   type BodyFinish, FINISH, finishOf, freshMaterialName, type MaterialDef,
   normalizeMaterial, slugId, STARTER_LIBRARY, uniqueId,
 } from "./materials";
+import { faceKey, parseFaceKey } from "./faceMaterials";
 import * as params from "../params/engine";
 import type { FieldKind } from "./numFields";
 import { writeTarget } from "./numFields";
@@ -189,6 +190,9 @@ export class DocumentStore {
   private bodyColors = new Overlay<number>("bodyColors"); // per-body palette-slot assignment (id → slot index)
   private bodyElement = new Overlay<string>("bodyElement"); // per-body element assignment (id → element id)
   private bodyMaterial = new Overlay<string>("bodyMaterial"); // per-body material assignment (id → material id)
+  /** per-FACE material assignment (`bodyId#localFaceIndex` → material id). See
+   *  document/faceMaterials.ts for what that key promises and what it does not. */
+  private faceMaterial = new Overlay<string>("faceMaterials");
   /** The document's material library. Starts as the shared starter set and is
    *  omitted from the saved file while it is still exactly that and nothing is
    *  assigned, the same bargain the filament palette strikes: a document nobody
@@ -209,6 +213,7 @@ export class DocumentStore {
     { overlay: this.bodyColors, mapValue: (v) => Number(v) },
     { overlay: this.bodyElement },
     { overlay: this.bodyMaterial },
+    { overlay: this.faceMaterial },
   ];
   /** Un-committed features shown live (a fillet drag, a thread being sized).
    *  Never recorded in undo.
@@ -1306,6 +1311,66 @@ export class DocumentStore {
     return out;
   }
 
+  // --- materials on ONE FACE -------------------------------------------------
+  //
+  // Same terms as the body assignment above, display-only and off the undo
+  // stack, and addressed by document/faceMaterials.ts's key.
+
+  /** The raw per-face assignment, for a menu that has to show what is there. */
+  faceMaterialId(bodyId: string, localFace: number): string | undefined {
+    return this.faceMaterial.get(faceKey(bodyId, localFace));
+  }
+
+  /** Every per-face assignment, as the pure resolver wants them. */
+  faceMaterialEntries(): [string, string][] {
+    return [...this.faceMaterial.entries()];
+  }
+
+  /** How many faces of this body carry a material of their own. What a browser
+   *  row and a body menu ask to decide whether "Clear face materials" is worth
+   *  offering at all. */
+  faceMaterialCount(bodyId: string): number {
+    let n = 0;
+    for (const [k] of this.faceMaterial.entries()) {
+      const p = parseFaceKey(k);
+      if (p && p.body === bodyId) n++;
+    }
+    return n;
+  }
+
+  /** Assign a material to faces (null clears them). Batched and emitting once,
+   *  for the reason setBodiesMaterial is: a drop can land on a run of faces. */
+  setFacesMaterial(faces: Iterable<{ body: string; face: number }>, material: string | null) {
+    const target = material !== null && this.materials.some((m) => m.id === material) ? material : null;
+    let changed = false;
+    for (const { body, face } of faces) {
+      const key = faceKey(body, face);
+      if ((this.faceMaterial.get(key) ?? null) === target) continue;
+      if (target === null) this.faceMaterial.delete(key);
+      else this.faceMaterial.set(key, target);
+      changed = true;
+    }
+    if (!changed) return;
+    this.markDirty();
+    this.emitBuild();
+  }
+
+  /** Drop every per-face assignment on these bodies, so a part that has been
+   *  fiddled with can be put back to one material in one gesture. */
+  clearFaceMaterials(bodyIds: Iterable<string>) {
+    const want = new Set(bodyIds);
+    let changed = false;
+    for (const [k] of [...this.faceMaterial.entries()]) {
+      const p = parseFaceKey(k);
+      if (!p || !want.has(p.body)) continue;
+      this.faceMaterial.delete(k);
+      changed = true;
+    }
+    if (!changed) return;
+    this.markDirty();
+    this.emitBuild();
+  }
+
   /** Add a material and return its id. */
   addMaterial(m?: Partial<MaterialDef>): string {
     const taken = new Set(this.materials.map((x) => x.id));
@@ -1344,6 +1409,9 @@ export class DocumentStore {
     this.materials = this.materials.filter((m) => m.id !== id);
     for (const [body, held] of [...this.bodyMaterial.entries()]) {
       if (held === id) this.bodyMaterial.delete(body);
+    }
+    for (const [key, held] of [...this.faceMaterial.entries()]) {
+      if (held === id) this.faceMaterial.delete(key);
     }
     this.markDirty();
     this.emitBuild();
@@ -1487,7 +1555,7 @@ export class DocumentStore {
     // Same bargain the palette strikes below: written whenever it carries
     // information, which is a library that has been changed OR any body wearing
     // one of its rows, and omitted while it is still the untouched starter set.
-    if (this.bodyMaterial.size || !this.materialsAreDefault()) {
+    if (this.bodyMaterial.size || this.faceMaterial.size || !this.materialsAreDefault()) {
       out.materials = this.materials.map((m) => ({ ...m }));
     }
     // Persist the palette whenever it carries information: body assignments

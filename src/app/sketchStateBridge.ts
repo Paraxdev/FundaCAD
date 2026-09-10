@@ -1,4 +1,5 @@
 import { setPrompt } from "../ui/prompt";
+import { setWorkspace } from "../ui/workspace";
 import { SKETCH_PROMPTS } from "./actionTables";
 import { useUiStore } from "../stores/ui";
 import { useSketchPaletteStore } from "../stores/sketchPalette";
@@ -14,7 +15,15 @@ export function installSketchStateBridge(e: Engine): void {
 
   let sketchWasActive = false;
   e.sketch.onState = () => {
-    if (e.sketch.active && !sketchWasActive) palette.emitAll(); // apply palette opts
+    if (e.sketch.active && !sketchWasActive) {
+      palette.emitAll(); // apply palette opts
+      // Out of the Render workspace, whichever one was up. A sketch is a mode
+      // with its own ribbon, its own escape and its own view lock, and drawing
+      // it with a materials column taking 300px of the plane being drawn on
+      // helps nobody. It does not come back on Finish Sketch, deliberately: what
+      // you do after finishing a sketch is look at the solid it made.
+      setWorkspace("model");
+    }
     sketchWasActive = e.sketch.active;
     ribbon.context = e.sketch.active ? "sketch" : "model";
     ribbon.activeSketchTool = e.sketch.tool;

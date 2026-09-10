@@ -3,6 +3,7 @@ import { contributedMenus } from "../plugins/contrib";
 import { toggleShortcutHUD } from "../input/shortcuts";
 import { checkForUpdates, showAbout } from "../ui/updates";
 import { useDialogStore } from "../stores/dialogs";
+import { setWorkspace } from "../ui/workspace";
 import { openExternal } from "../ui/welcome";
 import type { MenuDef } from "../ui/menu";
 import type { Engine } from "./engine";
@@ -96,7 +97,9 @@ export function buildMenubar(e: Engine): MenuDef[] {
           onClick: () => e.selectedFeature && e.store.toggleSuppress(e.selectedFeature),
         },
         { separator: true, label: "" },
-        { label: "Materials…", onClick: () => { useDialogStore().materials = true; } },
+        // No ellipsis any more: it opens a workspace, not a window, and the
+        // three dots are a promise that something will come up over this.
+        { label: "Materials", onClick: () => setWorkspace("render") },
         { label: "Preferences…", shortcut: "Ctrl+,", onClick: () => { useDialogStore().preferences = true; } },
       ],
     },

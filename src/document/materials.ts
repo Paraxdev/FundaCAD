@@ -72,6 +72,29 @@ export function finishOf(m: MaterialDef | undefined): BodyFinish {
   };
 }
 
+/** What a finish reads as, in words. "Glossy, metallic", "Matte", "Satin, lit".
+ *
+ *  For the list beside the rendered swatch, and it is not decoration: the sphere
+ *  says what the material looks like and this says what it IS, which is what a
+ *  search box can match on and what a screen reader gets instead of a picture.
+ *  Two parts, because they answer different questions, how polished the surface
+ *  is, and what kind of stuff it is.
+ *
+ *  The kinds are ordered rather than combined. A material can be shiny AND
+ *  see-through AND metallic on paper, but a phrase listing three qualities is
+ *  read by nobody; the one that is picked is the one that changes the picture
+ *  most. Something that gives off light is a light whatever else it is, and
+ *  something you can see through is see-through before it is anything else. */
+export function finishLabel(m: MaterialDef | undefined): string {
+  const f = finishOf(m);
+  const gloss = f.roughness <= 0.18 ? "Glossy" : f.roughness <= 0.45 ? "Satin" : "Matte";
+  const kind = f.emissive > 0 ? "lit"
+    : f.opacity < 1 ? "transparent"
+      : f.metalness >= 0.5 ? "metallic"
+        : "";
+  return kind ? `${gloss}, ${kind}` : gloss;
+}
+
 /** The library a new document starts with.
  *
  *  Generic engineering and print materials, named for the stuff and not for any

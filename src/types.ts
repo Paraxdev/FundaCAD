@@ -752,9 +752,16 @@ export interface CadDocument {
    *  saves no bigger than it did before this existed. See document/materials.ts,
    *  and note this is NOT the filament `palette` below, which is up to four
    *  physical toolhead slots and means something else entirely. */
-  materials?: { id: string; name: string; color: string; metalness?: number; roughness?: number; opacity?: number }[];
+  materials?: {
+    id: string; name: string; color: string;
+    metalness?: number; roughness?: number; opacity?: number; emissive?: number;
+  }[];
   /** body id → material id. Positional body ids, like `bodyNames` above. */
   bodyMaterial?: Record<string, string>;
+  /** `bodyId#localFaceIndex` → material id: a material on ONE FACE, for the
+   *  chrome ring on a printed knob. Display-only like everything above it, and
+   *  see document/faceMaterials.ts for what that key promises across an edit. */
+  faceMaterials?: Record<string, string>;
   /** filament palette (≤4 slots for the U1 toolchanger); slot index → name+hex,
    *  plus an optional material type (e.g. "PLA") when synced from the printer. */
   palette?: { name: string; color: string; material?: string }[];
