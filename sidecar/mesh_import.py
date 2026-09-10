@@ -648,6 +648,33 @@ def _read_glb(path):
     return wrapped
 
 
+def _realign_face_colors(before, after, colors):
+    """Carry a per-face colour list across canonical recognition.
+
+    `_canonicalize` rebuilds spline faces on analytic surfaces and sews the
+    result, so what comes out is the same shape made of different face objects
+    and a list read off the input can no longer be assumed to line up with the
+    output. The face fingerprint (quantized area plus world centre, defeature.py)
+    is invariant under exactly that rewrite, so match on it instead of trusting
+    position.
+
+    MEASURED on the reference 45-solid assembly: canonicalization touched one
+    solid, and 843 of its 843 fingerprints matched. A face that does not match
+    comes back uncoloured rather than wrongly coloured, and then wears its
+    body's own colour, which is the safe way round.
+    """
+    from defeature import _face_fp
+
+    src = list(before.faces())
+    if len(src) != len(colors):
+        return None
+    lookup = {}
+    for face, hexed in zip(src, colors):
+        if hexed:
+            lookup.setdefault(_face_fp(face), hexed)
+    return [lookup.get(_face_fp(face)) for face in after.faces()]
+
+
 def _assembly_payload(asm):
     """Turn a read STEP assembly into the flat blob shape plus its manifest.
 
@@ -664,20 +691,31 @@ def _assembly_payload(asm):
     structurally unpassable for any assembly shape. A single solid is exactly
     what those gates were written for.
     """
+    import face_colors as _face_colors
+
     leaves, parts = [], []
-    for node_index, topods in asm.leaves:
-        leaf = _wrap_topods(topods)
-        if leaf is None:
+    for leaf_index, (node_index, topods) in enumerate(asm.leaves):
+        raw = _wrap_topods(topods)
+        if raw is None:
             continue
-        if leaf.solids():
-            leaf = _canonicalize(leaf)
+        if raw.solids():
+            leaf = _canonicalize(raw)
         else:
             # A solid-less product (a bare face or shell) fails gate 1,
             # `len(solids) == max(1, len(shape.solids()))` compares 0 against 1,
             # so canonicalizing it can only waste time and never succeed.
-            pass
+            leaf = raw
+        colors = asm.face_colors.get(leaf_index)
+        if colors and leaf is not raw:
+            colors = _realign_face_colors(raw, leaf, colors)
         leaves.append(leaf)
-        parts.append({"node": node_index, "faces": len(leaf.faces())})
+        part = {"node": node_index, "faces": len(leaf.faces())}
+        # Packed, not raw: this list is one entry per face and it is going into
+        # the saved document. See face_colors.py for what that costs unpacked.
+        packed = _face_colors.encode(colors) if colors else None
+        if packed:
+            part["faceColors"] = packed
+        parts.append(part)
 
     nodes = [
         {

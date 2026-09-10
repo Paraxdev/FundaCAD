@@ -225,6 +225,33 @@ describe("materialsForColors", () => {
     expect(add[0]!.id).not.toBe("m-imported-blue");
   });
 
+  it("never lets an imported colour pick up a transparency the file never stated", () => {
+    // The fault this catches, measured on the reference assembly: its circuit
+    // board's pale lavender falls within tolerance of the stock Glass material,
+    // so all fifteen occurrences opened at a quarter opacity and the board could
+    // be seen through. A colour says nothing about transparency, so a see-through
+    // material is never the answer to one.
+    const glassy: MaterialDef[] = [
+      { id: "m-glass", name: "Glass", color: "#cfe4ee", opacity: 0.25 },
+    ];
+    const { add, byColor } = materialsForColors([{ color: "#cad1ee" }], glassy);
+    expect(add).toHaveLength(1);
+    expect(add[0]!.color).toBe("#cad1ee");
+    expect(add[0]!.opacity).toBeUndefined();
+    expect(byColor.get("#cad1ee")).toBe(add[0]!.id);
+  });
+
+  it("still reuses an OPAQUE material of the same colour (control)", () => {
+    // The control on the rule above: it must turn away see-through materials
+    // only, not stop the matching that keeps the library from growing a row per
+    // shade of grey.
+    const both: MaterialDef[] = [
+      { id: "m-glass", name: "Glass", color: "#cfe4ee", opacity: 0.25 },
+      { id: "m-pale", name: "Pale", color: "#cfe4ee" },
+    ];
+    expect(materialsForColors([{ color: "#cad1ee" }], both).byColor.get("#cad1ee")).toBe("m-pale");
+  });
+
   it("skips a colour it cannot read rather than assigning something", () => {
     const { add, byColor } = materialsForColors([{ color: "not a colour" }], lib);
     expect(add).toEqual([]);

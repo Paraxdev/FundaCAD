@@ -973,11 +973,18 @@ def _rebuild_job(document, tolerance, known=None):
         # geometry last changed. The stub branch matters most, on an assembly
         # rebuild almost every body is unchanged.
         node_ref = {"nodeRef": b["node_ref"]} if b.get("node_ref") else {}
+        # The imported file's per-face colours ride in the envelope for the same
+        # reason the tree node does, and it matters more here: a colour is
+        # display state that can change (a re-import, a document migration)
+        # while the geometry etag does not, and on an assembly rebuild almost
+        # every body arrives as a stub.
+        face_colors = {"faceColors": b["face_colors"]} if b.get("face_colors") else {}
         if known.get(b["id"]) == ent["etag"]:
             out.append({"id": b["id"], "name": b["name"], "etag": ent["etag"],
-                        **node_ref, "unchanged": True})
+                        **node_ref, **face_colors, "unchanged": True})
         else:
-            item = {"id": b["id"], "name": b["name"], "etag": ent["etag"], **node_ref}
+            item = {"id": b["id"], "name": b["name"], "etag": ent["etag"],
+                    **node_ref, **face_colors}
             item.update(ent["payload"])
             out.append(item)
     t_payload = time.monotonic() - t0
