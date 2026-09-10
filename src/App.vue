@@ -8,6 +8,7 @@ import ContextMenuHost from "./components/overlays/ContextMenuHost.vue";
 import TargetEditPanel from "./components/overlays/TargetEditPanel.vue";
 import ConsolePanel from "./components/overlays/ConsolePanel.vue";
 import SelectionToolbar from "./components/overlays/SelectionToolbar.vue";
+import AreaFilterChip from "./components/overlays/AreaFilterChip.vue";
 import CommandPalette from "./components/overlays/CommandPalette.vue";
 import RibbonBar from "./components/shell/RibbonBar.vue";
 import TimelineBar from "./components/shell/TimelineBar.vue";
@@ -92,6 +93,7 @@ onUnmounted(() => offContrib?.());
   <ConsolePanel />
   <TargetEditPanel />
   <SelectionToolbar />
+  <AreaFilterChip />
   <CommandPalette />
 
   <!-- Floating "measure-panel" popups. Independent of one another: Properties

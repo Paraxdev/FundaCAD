@@ -7,14 +7,24 @@
 import { describe, expect, it } from "vitest";
 import {
   allInsideRect,
+  areaFilterIcon,
+  areaFilterLabel,
+  areaSelectionMode,
+  AREA_FILTERS,
+  boxOf,
+  boxVerdict,
   convexTouchesRect,
   dragBox,
   faceInBox,
   isAreaDrag,
+  nextAreaFilter,
   polylineInBox,
   pointInRect,
+  unionBox,
+  type AreaFilter,
   type ScreenRect,
 } from "../../src/viewport/areaSelect";
+import { iconPaths } from "../../src/ui/icons";
 
 const rect = (x0: number, y0: number, x1: number, y1: number): ScreenRect => ({ x0, y0, x1, y1 });
 const R = rect(100, 100, 200, 200);
@@ -155,5 +165,103 @@ describe("faceInBox", () => {
     // side of the model.
     expect(faceInBox([], R, "window")).toBe(false);
     expect(faceInBox([], R, "crossing")).toBe(false);
+  });
+});
+
+// ---- what the FILTER means --------------------------------------------------
+//
+// The filter used to narrow what the current selection mode already took, so a
+// box could never reach bodies from faces mode or edges from bodies mode. Now
+// it decides, which is what makes four filters worth having.
+
+describe("the filter decides what kind of selection a box makes", () => {
+  it("takes what it names, from either mode", () => {
+    for (const current of ["faces", "bodies"] as const) {
+      expect(areaSelectionMode("bodies", current)).toBe("bodies");
+      expect(areaSelectionMode("faces", current)).toBe("faces");
+      expect(areaSelectionMode("edges", current)).toBe("faces");
+    }
+  });
+
+  it("leaves the mode alone for `all`", () => {
+    // The one that keeps the gesture's old behaviour: "everything" means
+    // everything of the kind you are already picking, so a box in bodies mode
+    // does not suddenly hand back four hundred faces.
+    expect(areaSelectionMode("all", "faces")).toBe("faces");
+    expect(areaSelectionMode("all", "bodies")).toBe("bodies");
+  });
+
+  it("cycles through every filter and comes back", () => {
+    const seen: AreaFilter[] = [];
+    let f: AreaFilter = "all";
+    for (let i = 0; i < AREA_FILTERS.length; i++) {
+      seen.push(f);
+      f = nextAreaFilter(f);
+    }
+    expect(new Set(seen).size).toBe(AREA_FILTERS.length);
+    expect(f).toBe("all"); // back where it started
+  });
+
+  it("gives every filter a label and a mark", () => {
+    // CONTROL on adding a fifth: the chip on the box renders whatever
+    // areaFilterIcon returns, and an icon name with no entry draws nothing at
+    // all rather than failing.
+    for (const f of AREA_FILTERS) {
+      expect(areaFilterLabel(f)).toBeTruthy();
+      expect(iconPaths(areaFilterIcon(f))).toBeTruthy();
+    }
+  });
+});
+
+// ---- the shortcut that makes a live preview affordable ----------------------
+//
+// The box is answered every frame while it is dragged, so most of the model has
+// to be ruled out without looking at a triangle. For a WINDOW the bounding box
+// settles it outright, which is the claim worth pinning: "every point inside the
+// rectangle" and "the bounding box inside the rectangle" are the same statement.
+
+describe("boxVerdict", () => {
+  const tri = (...pts: number[]) => pts;
+  // Its own shapes rather than the ones above, which are scoped to their
+  // describe: wholly in, wholly out, and one that hangs over a corner.
+  const inside = tri(110, 110, 150, 120, 130, 160);
+  const outside = tri(300, 300, 340, 300, 320, 340);
+  const clipping = tri(190, 190, 400, 190, 400, 400);
+
+  it("settles a window outright, both ways", () => {
+    expect(boxVerdict(boxOf(tri(110, 110, 150, 120, 130, 160)), R, "window")).toBe(true);
+    expect(boxVerdict(boxOf(tri(110, 110, 150, 120, 130, 260)), R, "window")).toBe(false);
+  });
+
+  it("agrees with the triangle walk it replaces, on every case above", () => {
+    // THE CONTROL, and the only one that matters: the shortcut is only sound if
+    // it never disagrees with the slow answer.
+    const shapes = [inside, outside, clipping];
+    for (const s of shapes) {
+      const quick = boxVerdict(boxOf(s), R, "window");
+      expect(quick).toBe(faceInBox([s], R, "window"));
+      const cross = boxVerdict(boxOf(s), R, "crossing");
+      if (cross !== "look") expect(cross).toBe(faceInBox([s], R, "crossing"));
+    }
+  });
+
+  it("only ever rules OUT for a crossing", () => {
+    // Two boxes overlapping does not mean the shapes do, so an overlap can only
+    // ask for a closer look.
+    expect(boxVerdict(boxOf(tri(300, 300, 340, 300, 320, 340)), R, "crossing")).toBe(false);
+    expect(boxVerdict(boxOf(clipping), R, "crossing")).toBe("look");
+  });
+
+  it("refuses a window for anything behind the camera, and looks closer for a crossing", () => {
+    // A null box is a shape some of which has no honest screen position.
+    expect(boxOf([110, NaN, 150, 120, 130, 160])).toBeNull();
+    expect(boxVerdict(null, R, "window")).toBe(false);
+    expect(boxVerdict(null, R, "crossing")).toBe("look");
+  });
+
+  it("loses the extent when a union takes in something with none", () => {
+    expect(unionBox([0, 0, 10, 10], [5, 5, 20, 20])).toEqual([0, 0, 20, 20]);
+    expect(unionBox([0, 0, 10, 10], null)).toBeNull();
+    expect(unionBox(null, [0, 0, 10, 10])).toBeNull();
   });
 });

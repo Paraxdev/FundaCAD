@@ -135,7 +135,18 @@ export function installViewportWiring(e: Engine): void {
   // A left drag over empty canvas is an area selection, but only when nothing
   // else owns the pointer. Every 3D tool drags a handle with the same button,
   // and a sketch has its own gesture for everything.
-  e.viewport.canAreaSelect = () => !e.toolBusy() && !e.sketch.active;
+  //
+  // toolOwnsScreen, not toolBusy: selecting a body raises the Move gizmo by
+  // itself (see Engine.toolOwnsScreen), so toolBusy is true for as long as any
+  // body is selected, and asking it here meant that after ONE box over bodies
+  // you could never draw another. The gizmo is not in the way, either: its
+  // handles take their press in the capture phase and stop it there
+  // (moveTool.onDown), so a press anywhere else was always free.
+  e.viewport.canAreaSelect = () => !e.toolOwnsScreen() && !e.sketch.active;
+  // ...and once the press really is a box, stand the gizmo down. The box is
+  // about to replace the selection that raised it, and a gizmo left standing
+  // over the middle of the new one would be pointing at the old centroid.
+  e.viewport.onAreaBegin = () => e.dropBodyGizmo();
   // The direction of the drag decides the verdict, and it decides it while the
   // drag is still running, so it has to be said while the drag is still
   // running. Restores whatever the selection prompt was on release.
