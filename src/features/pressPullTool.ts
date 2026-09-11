@@ -19,12 +19,35 @@ import { snap } from "../ui/units";
 import {
   axisDragDistance,
   createDragHandle,
+  createRotationArc,
   fluentRelease,
   HANDLE_UP,
   type DragHandle,
 } from "./manipulator";
+import { draftAngle, draftDelta } from "./draftMath";
 import { collapseDiameter, deltaForDiameter, radialDrag, type RoundFace } from "./radialDrag";
 import { CanvasGesture } from "./canvasGesture";
+
+/** Steepest taper the tool offers, degrees, just under the sidecar's 89 fold limit. */
+const MAX_PP_TAPER = 88;
+/** A taper needs travel to swing about; under this the arc is not offered. */
+const PP_TAPER_MIN = 1;
+/** How far above the pushed face the taper arc floats, in pixels. */
+const PP_TAPER_ABOVE_PX = 48;
+
+/** A deterministic unit vector lying IN the plane of a face with the given
+ *  normal: world X projected onto the plane, or world Y where the face points
+ *  along X. The taper arc runs along it and the inward drag is measured against
+ *  it. */
+function inPlaneAxis(normal: THREE.Vector3): THREE.Vector3 {
+  const x = new THREE.Vector3(1, 0, 0);
+  const u = x.sub(normal.clone().multiplyScalar(x.dot(normal)));
+  if (u.lengthSq() < 1e-6) {
+    const y = new THREE.Vector3(0, 1, 0);
+    return y.sub(normal.clone().multiplyScalar(y.dot(normal))).normalize();
+  }
+  return u.normalize();
+}
 
 type Phase = "pick" | "drag";
 
@@ -52,6 +75,22 @@ export class PressPullTool {
   private handle: DragHandle | null = null;
   private hovering = false;
   private grabbing = false;
+
+  // --- taper (lean the pushed walls), for a PLANAR by-distance push only ---
+  /** Degrees, positive narrows the far end. Only meaningful on the planar prism
+   *  path; a round resize or an up-to push never offers it. */
+  private taper = 0;
+  private taperArc: DragHandle | null = null;
+  private taperAxis = new THREE.Vector3(1, 0, 0);
+  private taperTop = new THREE.Vector3();
+  private taperHovering = false;
+  private taperGrabbing = false;
+  private taperGrabProj = 0;
+  private taperGrabInset = 0;
+  /** true while the exact tapered solid is previewed through the sidecar (the
+   *  instant frontend ghost cannot lean a wall), so the switch back knows to
+   *  clear it and restore the ghost. */
+  private taperPreviewOn = false;
   /** true when this drag began on the passive selection handle rather than on
    *  our own gizmo, a one-press gesture, so releasing it finishes (see onUp). */
   private fluentGrab = false;
@@ -129,6 +168,19 @@ export class PressPullTool {
       this.viewport.domElement.style.cursor = faceId != null ? "pointer" : "default";
       return;
     }
+    if (this.taperGrabbing) {
+      // Swing the wall over: a drag inward against the arc's axis leans it in, by
+      // atan(inset / travel), the same reading a draft takes (draftMath).
+      const depth = Math.abs(this.value);
+      const proj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.taperTop, this.taperAxis);
+      const inset = this.taperGrabInset + (this.taperGrabProj - proj);
+      const stepped = snap(draftAngle(inset, depth, MAX_PP_TAPER), e.shiftKey ? 0.1 : 1);
+      this.taper = Math.max(-MAX_PP_TAPER, Math.min(MAX_PP_TAPER, stepped));
+      this.dim.takeOver("taper");
+      this.dim.updateFromCursor({ taper: this.taper });
+      this.refreshPreview();
+      return;
+    }
     if (this.grabbing) {
       const proj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.anchor, this.axis);
       // Snapped to the zoom's own lattice (viewport/dragStep.ts), 0.1mm on a
@@ -141,9 +193,10 @@ export class PressPullTool {
       this.refreshPreview();
       return;
     }
-    // idle: highlight the handle when hovered so it reads as grabbable
-    this.hovering = this.hitGizmo(e.clientX, e.clientY);
-    this.viewport.domElement.style.cursor = this.hovering ? "grab" : "default";
+    // idle: highlight the handle (or the taper arc) when hovered so it reads as grabbable
+    this.taperHovering = this.hitTaper(e.clientX, e.clientY);
+    this.hovering = !this.taperHovering && this.hitGizmo(e.clientX, e.clientY);
+    this.viewport.domElement.style.cursor = this.hovering || this.taperHovering ? "grab" : "default";
   }
 
   private onDown(e: PointerEvent) {
@@ -186,6 +239,18 @@ export class PressPullTool {
       }
       return;
     }
+    // grabbing the taper arc swings the wall; tested before the push handle since
+    // it floats above it and setting the lean is never a commit.
+    if (this.hitTaper(e.clientX, e.clientY)) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      this.taperGrabbing = true;
+      this.downPos = { x: e.clientX, y: e.clientY };
+      this.taperGrabInset = draftDelta(this.taper, Math.abs(this.value), MAX_PP_TAPER);
+      this.taperGrabProj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.taperTop, this.taperAxis);
+      this.viewport.domElement.style.cursor = "grabbing";
+      return;
+    }
     // grabbing the handle scrubs; a clean click elsewhere commits
     this.downPos = { x: e.clientX, y: e.clientY };
     this.downOnGizmo = this.hitGizmo(e.clientX, e.clientY);
@@ -202,6 +267,15 @@ export class PressPullTool {
   private onUp(e: PointerEvent) {
     if (e.button !== 0 || this.phase !== "drag") return;
     if (this.pickingTarget) return; // T-mode clicks are fully handled in onDown
+    if (this.taperGrabbing) {
+      // Let go of the arc and the push is done, a grab-drag-release is one whole
+      // gesture. A press that never travelled is not a swing, so it stays put.
+      this.taperGrabbing = false;
+      const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
+      this.viewport.domElement.style.cursor = this.taperHovering ? "grab" : "default";
+      if (moved) this.commit();
+      return;
+    }
     if (this.grabbing) {
       this.grabbing = false;
       const release = fluentRelease({
@@ -276,10 +350,19 @@ export class PressPullTool {
     this.axis.copy(round?.radial ?? normal).normalize();
     this.phase = "drag";
     this.value = 0;
+    this.taper = 0;
     this.previewId = this.store.nextId();
     this.viewport.clearHover();
     this.buildGizmo();
-    this.dim.show([{ name: "distance", label: "D", kind: "length" }], () => this.commit(), () => this.cancel());
+    // The ∠ taper field rides beside the distance for a PLANAR push, the only one
+    // that leans a wall. A round resize has no wall to lean, so it is left off.
+    this.dim.show(
+      round
+        ? [{ name: "distance", label: "D", kind: "length" }]
+        : [{ name: "distance", label: "D", kind: "length" }, { name: "taper", label: "∠", kind: "angle" }],
+      () => this.commit(), () => this.cancel(),
+    );
+    if (!round) this.dim.updateFromCursor({ taper: 0 });
     const s = this.viewport.projectToScreen(this.anchor);
     this.dim.position(s.x, s.y);
     // A round face opens showing the size it ALREADY is, not a zero, the field
@@ -322,6 +405,7 @@ export class PressPullTool {
         hot: this.hovering || this.grabbing,
         tone: sign < 0 ? "cut" : "idle",
       });
+      this.placeTaperArc(dir, k);
       const s = this.viewport.projectToScreen(this.anchor);
       this.dim.position(s.x, s.y);
       if (!this.grabbing && this.dim.isUserDriven("distance")) {
@@ -337,6 +421,16 @@ export class PressPullTool {
           }
         }
       }
+      if (!this.taperGrabbing && this.dim.isUserDriven("taper")) {
+        const tv = this.dim.getValue("taper");
+        if (tv != null) {
+          const want = Math.max(-MAX_PP_TAPER, Math.min(MAX_PP_TAPER, tv));
+          if (Math.abs(want - this.taper) > 1e-6) {
+            this.taper = want;
+            this.refreshPreview();
+          }
+        }
+      }
       this.gesture.frame();
     }
   }
@@ -345,6 +439,19 @@ export class PressPullTool {
    *  kernel round-trip (that's why dragging feels immediate). The real OCCT geometry
    *  is computed once on commit. Near-zero distance clears the ghost. */
   private refreshPreview() {
+    // A leaning wall is not a prism, and the instant ghost cannot draw one, so a
+    // tapered push previews the EXACT solid through the sidecar, the way the
+    // extrude tool does. Straight pushes keep the instant ghost.
+    if (this.canTaper() && Math.abs(this.taper) >= 0.05) {
+      this.viewport.clearPressPullGhost();
+      this.store.setPreview(this.buildFeature());
+      this.taperPreviewOn = true;
+      return;
+    }
+    if (this.taperPreviewOn) {
+      this.store.setPreview(null);
+      this.taperPreviewOn = false;
+    }
     // Nothing to ghost once the drag is asking for the face to GO: the honest
     // preview of a removal is the healed body, which needs the kernel. The
     // readout dropping to 0 and the prompt saying so is what carries it instead.
@@ -369,6 +476,51 @@ export class PressPullTool {
     if (!this.gizmo) return false;
     const ray = this.viewport.rayFrom(x, y);
     return ray.intersectObjects(this.gizmo.children, false).length > 0;
+  }
+
+  /** A taper is offered only where a wall exists to lean: a PLANAR by-distance
+   *  push with real travel. A round resize has no wall, an up-to push lands on a
+   *  chosen surface that a lean would miss, and a target-pick is mid-question. */
+  private canTaper(): boolean {
+    return !this.round && !this.upTo && !this.pickingTarget && Math.abs(this.value) >= PP_TAPER_MIN;
+  }
+
+  /** Float the curved taper arc above the pushed face, swinging in the plane the
+   *  wall tips through. The same glyph and placement the extrude tool uses. */
+  private placeTaperArc(dir: THREE.Vector3, k: number) {
+    if (!this.canTaper()) {
+      this.disposeTaperArc();
+      return;
+    }
+    if (!this.taperArc) {
+      this.taperArc = createRotationArc();
+      this.viewport.addToScene(this.taperArc.group);
+    }
+    // A stable in-plane axis of the face: world X projected onto the face plane,
+    // or world Y where the face faces along X.
+    this.taperAxis.copy(inPlaneAxis(this.axis));
+    this.taperTop.copy(this.anchor).addScaledVector(dir, Math.abs(this.value));
+    const g = this.taperArc.group;
+    g.position.copy(this.taperTop).addScaledVector(dir, k * PP_TAPER_ABOVE_PX);
+    const z = new THREE.Vector3().crossVectors(this.taperAxis, dir).normalize();
+    g.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(this.taperAxis, dir, z));
+    g.scale.setScalar(k);
+    this.taperArc.paint({
+      hot: this.taperHovering || this.taperGrabbing,
+      tone: this.taper < 0 ? "cut" : "idle",
+    });
+  }
+
+  private hitTaper(x: number, y: number): boolean {
+    if (!this.taperArc) return false;
+    return this.viewport.rayFrom(x, y).intersectObjects(this.taperArc.group.children, false).length > 0;
+  }
+
+  private disposeTaperArc() {
+    if (!this.taperArc) return;
+    this.viewport.removeFromScene(this.taperArc.group);
+    this.taperArc.dispose();
+    this.taperArc = null;
   }
 
   private buildFeature(): Feature {
@@ -396,6 +548,11 @@ export class PressPullTool {
       operation: v >= 0 ? "join" : "cut",
       ...(this.bodyId != null ? { body: this.bodyId } : {}),
       ...(this.upTo ? { upTo: this.upTo } : {}),
+      // Taper rides a planar by-distance push only; the sidecar ignores it on a
+      // curved face and on an up-to push, and it is written only when it bites.
+      ...(!this.round && !this.upTo && Math.abs(this.taper) >= 0.05
+        ? { taper: Math.round(this.taper * 1000) / 1000 }
+        : {}),
     };
   }
 
@@ -418,7 +575,18 @@ export class PressPullTool {
       setPrompt(this.round ? "The diameter is unchanged" : "Nothing to commit yet");
       return;
     }
+    // A typed ∠ is the truth for the taper, the same rule the distance follows.
+    const tv = this.dim.getValue("taper");
+    if (tv != null && this.dim.isUserDriven("taper")) {
+      this.taper = Math.max(-MAX_PP_TAPER, Math.min(MAX_PP_TAPER, tv));
+    }
     const feature = this.buildFeature();
+    // Drop the live tapered preview before the real add: it carries the same id,
+    // so building both at once would duplicate it.
+    if (this.taperPreviewOn) {
+      this.store.setPreview(null);
+      this.taperPreviewOn = false;
+    }
     this.store.addFeature(feature);
     this.cleanup();
     this.onDone?.(feature.id);
@@ -443,12 +611,20 @@ export class PressPullTool {
     this.gesture.detach();
     el.style.cursor = "default";
     this.viewport.clearPressPullGhost();
+    if (this.taperPreviewOn) {
+      this.store.setPreview(null);
+      this.taperPreviewOn = false;
+    }
     this.dim.hide();
     this.disposeGizmo();
+    this.disposeTaperArc();
     this.viewport.clearHover();
     this.viewport.suspendPicking = false;
     this.active = false;
     this.grabbing = false;
+    this.taperGrabbing = false;
+    this.taperHovering = false;
+    this.taper = 0;
     this.fluentGrab = false;
     this.hovering = false;
     this.value = 0;
