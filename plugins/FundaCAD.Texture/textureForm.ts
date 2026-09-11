@@ -23,6 +23,7 @@ import type {
 
 export type TextureKind = "knurl" | "hex" | "waves" | "ribs" | "voronoi" | "noise" | "image";
 export type TextureMode = "faces" | "body";
+export type TextureProjection = "auto" | "triplanar" | "box";
 
 /** The patterns. One list, read by the tool panel and by the value rows that
  *  edit a texture after it is committed, so it reads the same before and after. */
@@ -47,6 +48,16 @@ export const ANGLE_KINDS: ReadonlySet<TextureKind> =
 export const SEED_KINDS: ReadonlySet<TextureKind> =
   new Set<TextureKind>(["voronoi", "noise"]);
 
+/** The projection selector, and its seam controls, mean something only for a
+ *  procedural pattern on a freeform face. A heightmap carries its own
+ *  orientation, so it is always the odd one out (the geometry keeps it on the
+ *  planar chart whatever this says), and the row is hidden rather than shown
+ *  doing nothing. plane/cylinder/cone faces keep their exact chart in every
+ *  mode, but the tool cannot know which faces are selected, so the control shows
+ *  for every non-image kind and simply has no effect where the chart is exact. */
+export const PROJECTION_KINDS: ReadonlySet<TextureKind> =
+  new Set<TextureKind>(["knurl", "hex", "waves", "ribs", "voronoi", "noise"]);
+
 /** Does this field mean anything, given what the feature's other fields say?
  *
  *  Governs the numeric rows as well as the dropdowns, which is the point of it:
@@ -64,6 +75,15 @@ export function textureFieldApplies(field: string, values: Record<string, unknow
     case "invert":
     case "imagePath":
       return kind === "image";
+    case "projection":
+      return PROJECTION_KINDS.has(kind);
+    case "seamBlend":
+      // triplanar's blend softness, meaningless outside triplanar (box has its
+      // own band control, auto has no seam to blend). Absent projection is the
+      // triplanar default.
+      return PROJECTION_KINDS.has(kind) && (values["projection"] ?? "triplanar") === "triplanar";
+    case "seamBand":
+      return PROJECTION_KINDS.has(kind) && values["projection"] === "box";
     case "sharpness":
       // The same slider means different things per surface, and for one pairing
       // it means nothing: a FACETED wave is a fixed eight-join polyline with no
@@ -110,6 +130,8 @@ export const TEXTURE_NUM_FIELDS: readonly [string, string, FieldKind][] = [
   ["boundaryInset", "Edge blend", "length"],
   ["grime", "Grime", "count"],
   ["smooth", "Soften", "count"],
+  ["seamBlend", "Seam blend", "count"],
+  ["seamBand", "Seam band", "count"],
   ["seed", "Seed", "count"],
 ];
 
@@ -158,6 +180,21 @@ export const TEXTURE_CHOICE_FIELDS: ChoiceField[] = [
     title: "Whether the pattern stands out of the surface, is cut into it, or is "
       + "centred on it.",
   },
+  {
+    field: "projection",
+    label: "Projection",
+    options: [
+      { value: "triplanar", label: "Triplanar" },
+      { value: "box", label: "Box" },
+      { value: "auto", label: "Planar" },
+    ],
+    fallback: "triplanar",
+    title: "How a curved (freeform) face lays out the pattern. Triplanar blends "
+      + "three world planes so the pattern keeps one size where the face curves; "
+      + "Box favours the nearest axis; Planar projects along one mean direction "
+      + "and foreshortens where the face turns away. Flat, cylindrical and "
+      + "conical faces use their exact chart regardless.",
+  },
 ];
 
 /** The switch a committed texture offers. */
@@ -193,6 +230,9 @@ export interface TextureValues {
   boundaryInset: number;
   grime: number; // 0 = none; a noise bleed onto the neighbouring faces
   smooth: number; // 0 = crisp; a low-pass blur of the height field before it displaces
+  projection: TextureProjection; // how a freeform face charts the pattern
+  seamBlend: number; // triplanar blend softness (0..1)
+  seamBand: number; // box axis-transition band (0..1)
   direction: "out" | "in" | "both";
   seed: number;
   invert: boolean;
@@ -231,6 +271,9 @@ export interface TextureFeature {
   boundaryInset?: Num;
   grime?: Num;
   smooth?: Num;
+  projection?: TextureProjection;
+  seamBlend?: Num;
+  seamBand?: Num;
   direction?: "out" | "in" | "both";
   seed?: Num;
   invert?: boolean;
@@ -274,6 +317,9 @@ export interface TextureForm {
   edgeBlend: string;
   grime: string;
   smooth: string;
+  projection: TextureProjection;
+  seamBlend: string;
+  seamBand: string;
 }
 
 export function initialTextureForm(initial: Partial<TextureValues>): TextureForm {
@@ -295,6 +341,11 @@ export function initialTextureForm(initial: Partial<TextureValues>): TextureForm
     edgeBlend: String(initial.boundaryInset ?? 0),
     grime: String(initial.grime ?? 0),
     smooth: String(initial.smooth ?? 0),
+    // Triplanar is the default for a freeform face: it keeps the pattern one size
+    // where a single planar projection would foreshorten it.
+    projection: initial.projection ?? "triplanar",
+    seamBlend: String(initial.seamBlend ?? 0.5),
+    seamBand: String(initial.seamBand ?? 0.5),
   };
 }
 
@@ -310,6 +361,9 @@ export function toTextureValues(f: TextureForm): TextureValues {
     boundaryInset: Math.max(0, parseFloat(f.edgeBlend) || 0),
     grime: Math.max(0, parseFloat(f.grime) || 0),
     smooth: Math.max(0, Math.min(1, parseFloat(f.smooth) || 0)),
+    projection: f.projection,
+    seamBlend: Math.max(0, Math.min(1, parseFloat(f.seamBlend) || 0)),
+    seamBand: Math.max(0, Math.min(1, parseFloat(f.seamBand) || 0)),
     direction: f.direction,
     seed: parseFloat(f.seed) || 1,
     invert: f.invert,
@@ -324,12 +378,17 @@ export function toTextureValues(f: TextureForm): TextureValues {
  *  field itself (out = h, in = h-1, both = centred), so EVERY kind honours it.
  *  Gating it behind ANGLE_KINDS left noise/voronoi/image able only to GROW the
  *  part, changing its dimensions instead of texturing the surface it sits on. */
-export function textureRows(f: Pick<TextureForm, "kind" | "profile">) {
+export function textureRows(
+  f: Pick<TextureForm, "kind" | "profile"> & { projection?: TextureProjection },
+) {
   const applies = (field: string) => textureFieldApplies(field, f);
   return {
     angle: applies("angle"),
     seed: applies("seed"),
     image: applies("imagePath"),
     sharpness: applies("sharpness"),
+    projection: applies("projection"),
+    seamBlend: applies("seamBlend"),
+    seamBand: applies("seamBand"),
   };
 }

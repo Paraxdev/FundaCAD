@@ -53,9 +53,12 @@ from texture_height import (  # noqa: F401
     _wave_phases,
     height_field,
     height_field_smoothed,
+    triplanar_field,
 )
 from texture_mesh import (  # noqa: F401
     LATTICE_SURFACES,
+    _tp_exponent,
+    _tp_weights,
     _aligned_grid_triangulation,
     _axis_lines,
     _boundary_edges,
@@ -83,6 +86,12 @@ _DIRECTIONS = {"out", "in", "both"}
 # "facet" = hard-surface (planar facets, real creases, the default, because it
 # is what a printer can actually resolve); "round" = the original smooth fields.
 _PROFILES = {"facet", "round"}
+# How a freeform face (fillet corner, sphere, blend) charts the pattern. Inert on
+# plane/cylinder/cone, which always use their exact metric chart, and on image,
+# which carries its own orientation. "triplanar" is the default: it blends the
+# three world planes so the pattern stays one size however the face curves.
+# "box" is the dominant-axis variant; "auto" is the older single planar chart.
+_PROJECTIONS = {"auto", "triplanar", "box"}
 
 # Export-tier safety net even when the caller passes density_cap=None, a
 # pathologically fine scale/depth combo must not be able to allocate unbounded
@@ -115,7 +124,13 @@ _DEFAULT_DENSITY_CAP = 2_000_000
 #    softening the relief. smooth>0 changes the displaced geometry; smooth=0 (or
 #    a document that predates the control) samples the field verbatim and is
 #    byte-identical to version 9.
-CODE_VERSION = 10
+# 11: a freeform face (fillet corner, sphere, blend) is textured by TRIPLANAR
+#    projection by default instead of the single planar chart, so the pattern no
+#    longer foreshortens where the face curves away from its mean normal. A
+#    texture on such a face changes shape (for the better); `projection: "auto"`
+#    restores the version 10 planar chart, and plane/cylinder/cone are untouched
+#    in every mode (they keep their exact metric chart).
+CODE_VERSION = 11
 
 #: The mesh-pass name this plugin registers under, stamped into every spec it
 #: makes. The registry reads `spec["pass"]` to route a face back here at
@@ -156,6 +171,13 @@ def validate_texture_spec(f):
     smooth = f.get("smooth", 0.0)
     if not isinstance(smooth, (int, float)) or isinstance(smooth, bool) or smooth < 0:
         raise ValueError("texture smooth must be zero or a positive number")
+    projection = f.get("projection", "triplanar")
+    if projection not in _PROJECTIONS:
+        raise ValueError(f"unknown texture projection: {projection!r} (expected auto, triplanar or box)")
+    for _seam in ("seamBlend", "seamBand"):
+        _sv = f.get(_seam, 0.5)
+        if not isinstance(_sv, (int, float)) or isinstance(_sv, bool) or _sv < 0:
+            raise ValueError(f"texture {_seam} must be zero or a positive number")
     image_path = f.get("imagePath")
     if kind == "image":
         if not image_path:
@@ -207,6 +229,17 @@ def validate_texture_spec(f):
     # displaced mesh, which is why CODE_VERSION carries it.
     if smooth and smooth > 0:
         spec["smooth"] = min(float(smooth), 1.0)
+    # Projection and its seam controls: kept out of the spec at their defaults so
+    # a document that predates them (or uses the default) hashes identically. The
+    # seam control that rides along is the one its mode reads, seamBlend for
+    # triplanar, seamBand for box, and only when it differs from the default, so a
+    # plain triplanar texture carries no extra fields at all.
+    if projection != "triplanar":
+        spec["projection"] = projection
+    if projection == "triplanar" and abs(float(f.get("seamBlend", 0.5)) - 0.5) > 1e-9:
+        spec["seamBlend"] = max(0.0, min(1.0, float(f.get("seamBlend", 0.5))))
+    if projection == "box" and abs(float(f.get("seamBand", 0.5)) - 0.5) > 1e-9:
+        spec["seamBand"] = max(0.0, min(1.0, float(f.get("seamBand", 0.5))))
     return spec
 
 
@@ -423,7 +456,15 @@ def _displacement_geometry(face, tri, loc, ident, spec, scale, target_edge_mm, c
     # runs along the true per-vertex `normals`; only the sampling frame changes.
     # See texture_mesh._planar_chart. Chartable surfaces (plane/cylinder/cone),
     # which the lattice tiers above rely on, are untouched.
-    if _surface_kind(surf) is None:
+    #
+    # `freeform` is the same test, carried on the skeleton: it is a property of
+    # the surface, not of the projection mode, so triplanar and the planar chart
+    # share this skeleton and switching between them does not re-mesh. The planar
+    # (u_mm, v_mm) below is what the "auto" projection samples; triplanar ignores
+    # it and samples in world space off `pts`, reusing the tangent frame here for
+    # its shading gradient.
+    freeform = _surface_kind(surf) is None
+    if freeform:
         u_mm, v_mm, t_u, t_v = _planar_chart(pts_arr, normals)
 
     flat_indices = []
@@ -435,7 +476,7 @@ def _displacement_geometry(face, tri, loc, ident, spec, scale, target_edge_mm, c
     return {
         "pts": pts_arr, "tris": len(tris), "flat_indices": flat_indices,
         "mean_edge": mean_edge, "u_mm": u_mm, "v_mm": v_mm,
-        "lattice": lattice_used,
+        "lattice": lattice_used, "freeform": freeform,
         "taper": taper, "manifold_ok": manifold_ok, "manifold_bad": manifold_bad,
         "normals": normals, "t_u": t_u, "t_v": t_v,
     }
@@ -540,22 +581,14 @@ def displace_face(face, tri, loc, ident, spec, density_cap, diag=None, feature_i
             })
 
     offset = float(spec.get("offset", 0.0))
-    u_mm = geom["u_mm"] + offset if offset else geom["u_mm"]
-    v_mm = geom["v_mm"]
-    u_range = (float(u_mm.min()), float(u_mm.max()))
-    v_range = (float(v_mm.min()), float(v_mm.max()))
 
     invert = bool(spec.get("invert"))
     direction = spec.get("direction", "out")
 
-    def signed_at(du, dv):
-        """The signed height field sampled at a (mm) offset from the vertices,
-        one function so the finite-difference gradient below differentiates the
-        SAME invert/direction-transformed AND smoothed field the displacement
-        uses. `height_field_smoothed` applies the `smooth` low-pass (or is
-        `height_field` verbatim when smooth is 0), so the shading normals track
-        the softened relief instead of the sharp one."""
-        hh = height_field_smoothed(kind, spec_h, u_mm + du, v_mm + dv, u_range, v_range)
+    def _transform(hh):
+        """Apply invert then direction to a raw [0,1] field, the same for both
+        sampling paths so the finite-difference gradient below differentiates the
+        SAME field the displacement uses."""
         if invert:
             hh = 1.0 - hh
         if direction == "in":
@@ -563,6 +596,34 @@ def displace_face(face, tri, loc, ident, spec, density_cap, diag=None, feature_i
         if direction == "both":
             return (hh - 0.5) * 2.0
         return hh
+
+    # A freeform face reads its pattern through TRIPLANAR (or box) projection by
+    # default: sample the field in world space and blend the three planes, which
+    # keeps the pattern one size where a single planar chart would foreshorten it.
+    # Chartable faces (plane/cylinder/cone) and image heightmaps never take this
+    # path, and `projection: "auto"` opts a freeform face back to the planar chart.
+    use_tp = (geom.get("freeform") and kind != "image"
+              and spec.get("projection", "triplanar") in ("triplanar", "box"))
+    if use_tp:
+        pts0 = pts_arr
+        tp_w = _tp_weights(normals, _tp_exponent(spec))
+
+        def signed_at(du, dv):
+            # offset the WORLD position along the surface tangent frame, so the
+            # gradient differences below are a true tangential derivative of the
+            # blended field; `height_field_smoothed` inside triplanar_field folds
+            # the `smooth` low-pass in per plane.
+            pq = pts0 + t_u * du + t_v * dv
+            return _transform(triplanar_field(kind, spec_h, pq, tp_w, offset))
+    else:
+        u_mm = geom["u_mm"] + offset if offset else geom["u_mm"]
+        v_mm = geom["v_mm"]
+        u_range = (float(u_mm.min()), float(u_mm.max()))
+        v_range = (float(v_mm.min()), float(v_mm.max()))
+
+        def signed_at(du, dv):
+            return _transform(
+                height_field_smoothed(kind, spec_h, u_mm + du, v_mm + dv, u_range, v_range))
 
     signed = signed_at(0.0, 0.0)
 

@@ -50,6 +50,8 @@ const editing = computed(() => panel.request.value?.editing ?? false);
 const sharpLabel = computed(() => sharpnessLabel(form.profile));
 const grimePct = computed(() => `${Math.round((parseFloat(form.grime) || 0) * 100)}%`);
 const smoothPct = computed(() => `${Math.round((parseFloat(form.smooth) || 0) * 100)}%`);
+const seamBlendPct = computed(() => `${Math.round((parseFloat(form.seamBlend) || 0) * 100)}%`);
+const seamBandPct = computed(() => `${Math.round((parseFloat(form.seamBand) || 0) * 100)}%`);
 
 function emitChange() {
   panel.request.value?.onChange(toTextureValues(form));
@@ -226,6 +228,38 @@ const noBtn: CSSProperties = { ...btn, background: "var(--raised, #555)", color:
           <option value="in">In (deboss)</option>
           <option value="both">Both</option>
         </select>
+      </div>
+
+      <!-- Projection: how a curved (freeform) face lays out the pattern.
+           Triplanar keeps the cells one size where a single planar projection
+           would foreshorten them; flat/cylindrical/conical faces use their exact
+           chart regardless of this. Hidden for a heightmap, which carries its own
+           orientation. -->
+      <div v-show="rows.projection" :style="row"
+        title="How a curved (freeform) face lays out the pattern. Triplanar keeps one size across the curve; Box favours the nearest axis; Planar projects along one direction and foreshortens. Flat, cylindrical and conical faces use their exact chart regardless.">
+        <label :style="lbl">Projection</label>
+        <select v-model="form.projection" :style="grow" @input="emitChange" @change="emitChange">
+          <option value="triplanar">Triplanar</option>
+          <option value="box">Box</option>
+          <option value="auto">Planar</option>
+        </select>
+      </div>
+
+      <!-- Seam blend (triplanar) / Seam band (box): how softly the three world
+           planes meet. Only the one the active mode reads is shown. -->
+      <div v-show="rows.seamBlend" :style="row"
+        title="How softly the three world planes blend on a triplanar projection. Higher is a broader, gentler blend.">
+        <label :style="lbl">Seam blend</label>
+        <input v-model="form.seamBlend" type="range" min="0" max="1" step="0.05"
+          :style="{ flex: '1', minWidth: '0' }" @input="emitChange" />
+        <span :style="[pathLabel, { flex: '0 0 auto', textAlign: 'right', minWidth: '2.6em' }]">{{ seamBlendPct }}</span>
+      </div>
+      <div v-show="rows.seamBand" :style="row"
+        title="How wide the transition band is where two box-projection axes meet. Higher is a wider, softer band.">
+        <label :style="lbl">Seam band</label>
+        <input v-model="form.seamBand" type="range" min="0" max="1" step="0.05"
+          :style="{ flex: '1', minWidth: '0' }" @input="emitChange" />
+        <span :style="[pathLabel, { flex: '0 0 auto', textAlign: 'right', minWidth: '2.6em' }]">{{ seamBandPct }}</span>
       </div>
 
       <!-- Grime: a noise bleed onto the faces next to this one, so the effect

@@ -12,7 +12,10 @@
 import { contributedPalette, setPrompt } from "fundacad";
 import type { DocumentStore, Feature, Num, Selector, Viewport } from "fundacad";
 import * as panel from "./panel";
-import { ANGLE_KINDS, SEED_KINDS, asTexture, type TextureMode, type TextureValues } from "./textureForm";
+import {
+  ANGLE_KINDS, PROJECTION_KINDS, SEED_KINDS, asTexture,
+  type TextureMode, type TextureValues,
+} from "./textureForm";
 
 // Warm texture ticks are ~10-70ms sidecar-side (geometry-skeleton cache), so a
 // short debounce keeps scrubbing responsive while still coalescing keystrokes.
@@ -29,6 +32,9 @@ const defaultValues = (): TextureValues => ({
   boundaryInset: 0,
   grime: 0,
   smooth: 0,
+  projection: "triplanar",
+  seamBlend: 0.5,
+  seamBand: 0.5,
   direction: "out",
   seed: 1,
   invert: false,
@@ -175,6 +181,9 @@ export class TextureTool {
       boundaryInset: (f.boundaryInset as number) ?? 0,
       grime: (f.grime as number) ?? 0,
       smooth: (f.smooth as number) ?? 0,
+      projection: f.projection ?? "triplanar",
+      seamBlend: (f.seamBlend as number) ?? 0.5,
+      seamBand: (f.seamBand as number) ?? 0.5,
       direction: f.direction ?? "out",
       seed: (f.seed as number) ?? 1,
       invert: f.invert ?? false,
@@ -394,6 +403,16 @@ export class TextureTool {
     // when non-zero to match the sidecar, which drops it from the spec at zero so
     // an untouched texture keeps its byte-for-byte geometry and cache identity.
     if (v.smooth) extra.smooth = v.smooth;
+    // Projection and its seam control apply to a procedural pattern on a freeform
+    // face (a heightmap keeps its own orientation, so it never carries them).
+    // Only the seam control the chosen mode reads is sent, and projection is
+    // omitted at its triplanar default so a plain texture stays lean, the sidecar
+    // then reproduces the default and old documents hash unchanged.
+    if (PROJECTION_KINDS.has(v.kind)) {
+      if (v.projection !== "triplanar") extra.projection = v.projection;
+      if (v.projection === "triplanar" && v.seamBlend !== 0.5) extra.seamBlend = v.seamBlend;
+      if (v.projection === "box" && v.seamBand !== 0.5) extra.seamBand = v.seamBand;
+    }
     // sharpness shapes the lattice/wave kinds under either profile, and under
     // FACET it also drives the cellular wall width and the terrace count, so
     // voronoi/noise/image need it too, which they never used to get.

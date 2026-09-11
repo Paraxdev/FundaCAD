@@ -49,6 +49,27 @@ describe("textureRows", () => {
     for (const k of [...ANGLE_KINDS]) expect(textureRows({ kind: k, profile: "round" }).angle).toBe(true);
     for (const k of [...SEED_KINDS]) expect(textureRows({ kind: k, profile: "round" }).seed).toBe(true);
   });
+
+  it("offers projection for every procedural kind but not the heightmap", () => {
+    for (const k of ["knurl", "hex", "waves", "ribs", "voronoi", "noise"] as const) {
+      expect(textureRows({ kind: k, profile: "facet" }).projection).toBe(true);
+    }
+    expect(textureRows({ kind: "image", profile: "facet" }).projection).toBe(false);
+  });
+
+  it("shows only the seam control the active projection reads", () => {
+    // triplanar reads seam blend, box reads seam band, planar/auto reads neither
+    const tri = textureRows({ kind: "knurl", profile: "facet", projection: "triplanar" });
+    expect([tri.seamBlend, tri.seamBand]).toEqual([true, false]);
+    const box = textureRows({ kind: "knurl", profile: "facet", projection: "box" });
+    expect([box.seamBlend, box.seamBand]).toEqual([false, true]);
+    const auto = textureRows({ kind: "knurl", profile: "facet", projection: "auto" });
+    expect([auto.seamBlend, auto.seamBand]).toEqual([false, false]);
+    // a missing projection is the triplanar default, so seam blend shows
+    expect(textureRows({ kind: "knurl", profile: "facet" }).seamBlend).toBe(true);
+    // never on a heightmap, whatever the projection says
+    expect(textureRows({ kind: "image", profile: "facet", projection: "triplanar" }).seamBlend).toBe(false);
+  });
 });
 
 describe("sharpnessLabel", () => {
@@ -97,10 +118,21 @@ describe("initialTextureForm / toTextureValues", () => {
   it("round-trips an existing texture feature", () => {
     const v = {
       kind: "voronoi", depth: 1.2, scale: 5, angle: 30, offset: 0.1, sharpness: 0.8,
-      profile: "round", boundaryInset: 0.25, grime: 0.4, smooth: 0.3, direction: "both", seed: 7, invert: true,
+      profile: "round", boundaryInset: 0.25, grime: 0.4, smooth: 0.3,
+      projection: "box", seamBlend: 0.35, seamBand: 0.65, direction: "both", seed: 7, invert: true,
       imagePath: "C:/x/y.png", colorSlot: 2,
     } as const;
     expect(toTextureValues(initialTextureForm(v))).toEqual(v);
+  });
+
+  it("defaults projection to triplanar and the seam knobs to their midpoint", () => {
+    const v = toTextureValues(initialTextureForm({}));
+    expect(v.projection).toBe("triplanar");
+    expect(v.seamBlend).toBe(0.5);
+    expect(v.seamBand).toBe(0.5);
+    const f = initialTextureForm({});
+    expect(toTextureValues({ ...f, seamBlend: "-1" }).seamBlend).toBe(0);
+    expect(toTextureValues({ ...f, seamBand: "3" }).seamBand).toBe(1);
   });
 
   it("defaults soften to zero and clamps it into 0..1", () => {

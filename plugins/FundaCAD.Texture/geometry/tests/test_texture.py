@@ -5,6 +5,7 @@ fields. Run: uv run python test_texture.py  (or: uv run pytest test_texture.py)
 
 import _bootstrap  # noqa: F401  (puts sidecar/ on sys.path)
 
+import math
 import os
 import tempfile
 
@@ -560,6 +561,7 @@ def test_freeform_corner_texture_is_planar_and_finely_resolved():
             {"kind": "edge", "by": "nearest", "point": [20, 0, 20]},
             {"kind": "edge", "by": "nearest", "point": [20, 20, 0]}]},
         {"id": "tex", "type": "texture", "kind": "knurl", "depth": 0.8, "scale": 3.0,
+         "projection": "auto",  # this test is about the planar chart specifically
          "faces": {"by": "nearest", "point": [15, 15, 15]}}]}
     _p, errs, bodies = rebuild(doc)
     assert not errs, errs
@@ -783,6 +785,164 @@ def test_smooth_zero_is_absent_from_the_spec():
     print(PASS, "smooth is absent at zero, clamped to 1, and rejects a negative")
 
 
+def _sphere_cap(theta_max_deg, n_phi=26, n_psi=60, R=10.0):
+    """Points, radial normals and an orthonormal surface tangent frame over a cap
+    of a sphere around +Z, out to `theta_max_deg` from the pole. Pure numpy, so
+    the projection charts can be exercised without OCCT."""
+    phi = np.linspace(0.02, math.radians(theta_max_deg), n_phi)
+    psi = np.linspace(0.0, 2 * np.pi, n_psi, endpoint=False)
+    PH, PS = np.meshgrid(phi, psi, indexing="ij")
+    ph, ps = PH.ravel(), PS.ravel()
+    sp, cp, ss, cs = np.sin(ph), np.cos(ph), np.sin(ps), np.cos(ps)
+    P = R * np.stack([sp * cs, sp * ss, cp], axis=1)
+    n = P / R
+    e_phi = np.stack([cp * cs, cp * ss, -sp], axis=1)   # unit, tangent
+    e_psi = np.stack([-ss, cs, np.zeros_like(ss)], axis=1)
+    return P, n, e_phi, e_psi, ph
+
+
+def test_triplanar_keeps_the_pattern_uniform_where_planar_foreshortens():
+    """The stretch triplanar exists to remove, measured on a spherical cap.
+
+    A single planar projection maps the surface orthographically, so where the
+    face tilts away from the projection axis the pattern is foreshortened and its
+    local frequency drops. Triplanar samples in world space, so the frequency
+    holds across the curve. Measure the pattern's frequency as the RMS surface
+    gradient of the field, in a pole cap (facing the axis) versus an edge ring
+    (tilted ~60 degrees away), and compare how much the two differ.
+
+    The control is the planar chart on the SAME geometry: it must show the drop
+    that triplanar does not, so a projection that did nothing could not pass."""
+    from texture_mesh import _tp_weights, _tp_exponent
+
+    P, n, e_phi, e_psi, ph = _sphere_cap(80.0, n_phi=34, n_psi=72)
+    spec = {"kind": "knurl", "scale": 3.0, "angle": 0.0, "profile": "round", "sharpness": 0.5}
+    center = np.zeros(3)
+    # planar chart's global axes, from the mean normal (~+Z here), the same
+    # construction _planar_chart uses
+    axis = n.mean(axis=0); axis = axis / np.linalg.norm(axis)
+    seed = np.eye(3)[int(np.argmin(np.abs(axis)))]
+    t = seed - axis * float(seed @ axis); t /= np.linalg.norm(t)
+    b = np.cross(axis, t)
+    mean = P.mean(axis=0)
+
+    def planar_h(Q):
+        return texture.height_field("knurl", spec, (Q - mean) @ t, (Q - mean) @ b)
+
+    k = _tp_exponent({"projection": "triplanar", "seamBlend": 0.5})
+
+    def tp_h(Q):
+        w = _tp_weights(Q / np.linalg.norm(Q, axis=1, keepdims=True), k)
+        return texture.triplanar_field("knurl", spec, Q, w)
+
+    eps = 0.04
+
+    def surface_grad_rms(h_of, mask):
+        gu = (h_of(P[mask] + eps * e_phi[mask]) - h_of(P[mask] - eps * e_phi[mask])) / (2 * eps)
+        gv = (h_of(P[mask] + eps * e_psi[mask]) - h_of(P[mask] - eps * e_psi[mask])) / (2 * eps)
+        return float(np.sqrt(np.mean(gu ** 2 + gv ** 2)))
+
+    pole = ph < math.radians(20)
+    edge = ph > math.radians(62)
+
+    planar_ratio = surface_grad_rms(planar_h, edge) / surface_grad_rms(planar_h, pole)
+    tp_ratio = surface_grad_rms(tp_h, edge) / surface_grad_rms(tp_h, pole)
+
+    # triplanar holds the frequency across the cap (ratio near 1); the planar
+    # chart loses it toward the tilted edge. The planar chart must show a clear
+    # drop, and triplanar must stay markedly closer to uniform.
+    assert 1.0 - planar_ratio > 0.1, f"planar did not foreshorten as expected (ratio {planar_ratio:.3f})"
+    assert abs(tp_ratio - 1.0) < abs(planar_ratio - 1.0) * 0.6, (
+        f"triplanar not more uniform than planar: tp ratio {tp_ratio:.3f}, "
+        f"planar ratio {planar_ratio:.3f}")
+    print(PASS, f"triplanar holds pattern frequency on a curved face "
+                f"(edge/pole {tp_ratio:.2f}) where planar foreshortens ({planar_ratio:.2f})")
+
+
+def test_triplanar_is_the_freeform_default_and_auto_restores_planar():
+    """Triplanar is the new default for a freeform face, and it actually reaches
+    the mesh: the displaced corner patch differs from `projection: "auto"` (the
+    old planar chart). A flat face is the control, projection is inert there, so
+    the top of the box is byte-identical whichever mode is asked for. Both build
+    clean, finite and manifold."""
+    def build(projection):
+        feats = [
+            {"id": "b", "type": "box", "length": 40, "width": 40, "height": 40},
+            {"id": "fx", "type": "fillet", "radius": 12, "edges": [
+                {"kind": "edge", "by": "nearest", "point": [0, 20, 20]},
+                {"kind": "edge", "by": "nearest", "point": [20, 0, 20]},
+                {"kind": "edge", "by": "nearest", "point": [20, 20, 0]}]},
+            # one texture on the freeform corner, one on the flat top (the control)
+            {"id": "tc", "type": "texture", "kind": "knurl", "depth": 0.6, "scale": 3.0,
+             **({"projection": projection} if projection else {}),
+             "faces": {"by": "nearest", "point": [15, 15, 15]}},
+            {"id": "tt", "type": "texture", "kind": "knurl", "depth": 0.6, "scale": 3.0,
+             **({"projection": projection} if projection else {}),
+             "faces": {"kind": "face", "by": "normal", "dir": [0, 0, 1]}}]
+        _p, errs, bodies = rebuild({"parameters": {}, "features": feats})
+        assert not errs, (projection, errs)
+        b = bodies[0]
+        resolved = plugin_geometry.resolve(b)
+        diag = []
+        pos, idx, fids = tessellate(b["shape"], 0.1, mesh_passes=resolved,
+                                    density_cap=texture._DEFAULT_DENSITY_CAP, diag=diag)
+        P = np.asarray(pos, dtype=float).reshape(-1, 3)
+        assert np.all(np.isfinite(P)), f"{projection}: non-finite"
+        assert not [d for d in diag if "non-manifold" in str(d.get("reason", ""))], f"{projection}: non-manifold"
+        fids = np.asarray(fids, dtype=int)
+        I = np.asarray(idx, dtype=int).reshape(-1, 3)
+        return P, I, fids
+
+    P_def, I_def, F_def = build(None)       # default (no projection field)
+    P_auto, I_auto, F_auto = build("auto")  # explicit planar
+    P_tri, I_tri, F_tri = build("triplanar")
+
+    # compare the displaced corner region (x,y,z all > 9) between modes
+    def corner_pts(P):
+        m = (P[:, 0] > 9) & (P[:, 1] > 9) & (P[:, 2] > 9)
+        q = P[m]
+        return q[np.lexsort((q[:, 2], q[:, 1], q[:, 0]))]
+    cd = corner_pts(P_tri); ca = corner_pts(P_auto)
+    # default == triplanar (same vertex count and positions), and both differ
+    # from auto in the corner
+    assert corner_pts(P_def).shape == cd.shape, "default corner mesh size differs from triplanar"
+    assert np.allclose(corner_pts(P_def), cd, atol=1e-9), "default is not triplanar"
+    changed = (ca.shape != cd.shape) or (not np.allclose(ca, cd, atol=1e-6))
+    assert changed, "triplanar corner is identical to the planar chart, projection had no effect"
+
+    # the flat top: identical across auto vs triplanar (projection inert on a
+    # plane). The embossed top rides just above z=40; take the whole band.
+    def top_pts(P):
+        q = P[P[:, 2] > 39.0]
+        return q[np.lexsort((q[:, 1], q[:, 0]))]
+    ta, tt = top_pts(P_auto), top_pts(P_tri)
+    assert ta.shape == tt.shape and np.allclose(ta, tt, atol=1e-9), \
+        "a flat face changed with projection; it must use its exact chart regardless"
+    print(PASS, "triplanar is the freeform default (auto restores planar); flat faces are unaffected")
+
+
+def test_projection_spec_omits_defaults_and_rejects_bad_values():
+    """projection and its seam controls hash-neutrally: absent at the default so
+    an untouched or older document is unchanged, present only when they bite."""
+    base = {"id": "t", "kind": "knurl", "faces": {"by": "all"}, "depth": 0.4, "scale": 2.0}
+    d = texture.validate_texture_spec(dict(base))
+    assert "projection" not in d and "seamBlend" not in d and "seamBand" not in d, d
+    assert texture.validate_texture_spec(dict(base, projection="triplanar")).get("projection") is None
+    assert texture.validate_texture_spec(dict(base, projection="auto"))["projection"] == "auto"
+    assert texture.validate_texture_spec(dict(base, projection="box"))["projection"] == "box"
+    # seam controls ride only with their own mode, and only off the default
+    assert "seamBlend" not in texture.validate_texture_spec(dict(base, seamBlend=0.5))
+    assert texture.validate_texture_spec(dict(base, seamBlend=0.8))["seamBlend"] == 0.8
+    assert "seamBlend" not in texture.validate_texture_spec(dict(base, projection="box", seamBlend=0.8))
+    assert texture.validate_texture_spec(dict(base, projection="box", seamBand=0.2))["seamBand"] == 0.2
+    try:
+        texture.validate_texture_spec(dict(base, projection="cylindrical"))
+        raise AssertionError("unknown projection should raise")
+    except ValueError:
+        pass
+    print(PASS, "projection/seam controls omit their defaults and reject a bad mode")
+
+
 def main():
     print("Surface-texture tests")
     test_validate_texture_spec_rejects_bad_input()
@@ -812,6 +972,9 @@ def main():
     test_smooth_low_passes_the_height_field()
     test_smooth_softens_the_displaced_relief()
     test_smooth_zero_is_absent_from_the_spec()
+    test_triplanar_keeps_the_pattern_uniform_where_planar_foreshortens()
+    test_triplanar_is_the_freeform_default_and_auto_restores_planar()
+    test_projection_spec_omits_defaults_and_rejects_bad_values()
     print("ALL PASS")
 
 

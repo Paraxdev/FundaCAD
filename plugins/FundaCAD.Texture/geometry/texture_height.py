@@ -466,6 +466,30 @@ def height_field_smoothed(kind, spec, u_mm, v_mm, u_range=None, v_range=None):
     return np.clip(acc, 0.0, 1.0)
 
 
+# --- triplanar / box sampling ------------------------------------------------
+
+
+def triplanar_field(kind, spec, P, W, offset=0.0, u_range=None, v_range=None):
+    """Blend the pattern sampled in the three world planes, weighted per vertex.
+
+    `P` is the (N,3) world position of each vertex and `W` the (N,3) axis weights
+    (`texture_mesh._tp_weights`). The pattern is sampled once per plane, in world
+    millimetres, so it stays one size along the surface however the face curves,
+    that is the whole point of triplanar over the single planar chart. The blend
+    weights make each vertex read mostly through the plane it faces.
+
+    Each plane's `u` carries the pattern `offset` and `angle` exactly as the flat
+    chart does (`height_field` rotates by `angle`); the smoothing low-pass rides
+    along too, since each plane goes through `height_field_smoothed`. Returns a
+    [0,1] field like `height_field`, ready for the caller's invert/direction and
+    the boundary taper."""
+    x, y, z = P[:, 0], P[:, 1], P[:, 2]
+    hx = height_field_smoothed(kind, spec, y + offset, z, u_range, v_range)  # project along X
+    hy = height_field_smoothed(kind, spec, z + offset, x, u_range, v_range)  # project along Y
+    hz = height_field_smoothed(kind, spec, x + offset, y, u_range, v_range)  # project along Z
+    return W[:, 0] * hx + W[:, 1] * hy + W[:, 2] * hz
+
+
 # --- UV -> mm (first fundamental form) ---------------------------------------
 
 
