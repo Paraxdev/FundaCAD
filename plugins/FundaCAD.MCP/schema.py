@@ -73,6 +73,18 @@ COMMON = {
         "them after a join: a join merges its targets into one body, which "
         "takes a fresh id."
     ),
+    "MateConnector": (
+        "One side of a joint: a coordinate frame, an origin, a z axis that is the "
+        "mating direction, and an optional x axis for rotational reference, named "
+        "one of four ways:\n"
+        '  {"body":"body2", "face": <Selector>}   the face centre, its outward normal is the axis\n'
+        '  {"body":"body2", "edge": <Selector>}   the edge midpoint, its direction is the axis\n'
+        '  {"datum": <datumAxis or datumPlane id>}   follows that datum\n'
+        '  {"origin":[x,y,z], "zdir":[x,y,z], "xdir":[x,y,z]}   an explicit world frame\n'
+        "A connector on geometry is a REFERENCE, re-resolved every rebuild, so the "
+        "joint tracks the part as it changes. Set `body` whenever you use `face` "
+        "or `edge`."
+    ),
 }
 
 #: type -> {summary, fields, example, notes}. `fields` is ordered and the
@@ -303,6 +315,37 @@ FEATURES = {
                  "primitive, since box/cylinder/sphere are always centred on the "
                  "origin.",
     },
+    "joint": {
+        "summary": "Position one body against another by aligning a mate connector "
+                   "on each, and re-resolve those connectors every rebuild so the "
+                   "assembly follows the parts.",
+        "fields": {
+            "moving": "body id of the body to reposition; nothing else moves",
+            "mate": "MateConnector on the MOVING body, the frame brought to meet `to`. "
+                    + COMMON["MateConnector"],
+            "to": "MateConnector on the body it mates against, held fixed",
+            "mode": '"rigid", "revolute" or "slider": which freedom the joint leaves, '
+                    "so the UI offers the matching handle. The placement is the same "
+                    "for all three.",
+            "flush": "optional bool. Two mating faces meet FACE TO FACE by default "
+                     "(their outward normals opposed); `flush` points the connector "
+                     "axes the same way instead, so the parts sit on the same side.",
+            "offset": "optional Num, mm along the mate axis (a slider's freedom)",
+            "angle": "optional Num, degrees about the mate axis (a revolute's freedom)",
+        },
+        "example": {"id": "j1", "type": "joint", "moving": "body2",
+                    "mate": {"body": "body2",
+                             "face": {"kind": "face", "by": "nearest",
+                                      "point": [50, 0, -3], "body": "body2"}},
+                    "to": {"body": "body1",
+                           "face": {"kind": "face", "by": "nearest",
+                                    "point": [0, 0, 10], "body": "body1"}}},
+        "notes": "Body ids are body1, body2, ... in creation order at build time, so "
+                 "read them from `build` or `inspect`. A mate reference that no "
+                 "longer resolves (a removed datum, a face a change deleted) leaves "
+                 "the moving body exactly where it is and records a diagnostic, "
+                 "rather than failing the build or teleporting the part.",
+    },
     "scale": {
         "summary": "Scale bodies, uniformly or per axis.",
         "fields": {"factor": "Num, uniform", "sx": "Num", "sy": "Num", "sz": "Num",
@@ -344,6 +387,24 @@ FEATURES = {
                    "name": "optional label", "face": "optional Selector to follow a body face",
                    "at": "optional [x,y,z] pick point, needed on a round face"},
         "example": {"id": "pl1", "type": "datumPlane", "plane": "XY", "offset": 25},
+    },
+    "datumPoint": {
+        "summary": "A reference point in space, a marker with no geometry that "
+                   "other features and the user can snap to.",
+        "fields": {"point": "[x,y,z] in world mm", "name": "optional label"},
+        "example": {"id": "dp1", "type": "datumPoint", "point": [0, 0, 25]},
+    },
+    "datumAxis": {
+        "summary": "A reference axis, an infinite construction line other features "
+                   "(revolve, circular pattern, mirror, a joint) can be aimed at by name.",
+        "fields": {"origin": "[x,y,z], a point on the line",
+                   "dir": "[x,y,z], its direction; need not be unit length",
+                   "axisEdge": "optional Selector anchoring the axis to a straight "
+                               "model EDGE; the sidecar re-resolves that edge every "
+                               "rebuild so the axis FOLLOWS the part, and "
+                               "origin/dir stay as the cache it falls back to",
+                   "name": "optional label"},
+        "example": {"id": "ax1", "type": "datumAxis", "origin": [0, 0, 0], "dir": [0, 0, 1]},
     },
 
     # --- patterns --------------------------------------------------------------
