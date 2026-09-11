@@ -524,10 +524,14 @@ export type CoreFeature =
   // and selected client-side, so no rebuild is needed to show or move one.
   | { id: string; type: "datumPoint"; point: Vec3; name?: string }
   // A reference AXIS: an infinite line, `origin` a point on it and `dir` its
-  // direction (need not be unit length). Same story as datumPoint, baked at
-  // creation, no geometry, drawn and picked client-side. It is the line a
-  // revolve, a circular pattern, or a mirror can be aimed at by name.
-  | { id: string; type: "datumAxis"; origin: Vec3; dir: Vec3; name?: string }
+  // direction (need not be unit length). It is the line a revolve, a circular
+  // pattern, or a mirror can be aimed at by name. `axisEdge` (optional) anchors
+  // it to a straight model EDGE by selector: the sidecar re-resolves that edge
+  // every rebuild and the axis FOLLOWS it, exactly as datumPlane.face makes a
+  // plane follow a face. `origin`/`dir` stay populated as the cache the follow
+  // falls back to (and the only source for a baked axis, one with no `axisEdge`,
+  // which is drawn and picked client-side with no resolution at all).
+  | { id: string; type: "datumAxis"; origin: Vec3; dir: Vec3; name?: string; axisEdge?: Selector }
   // An imported body (STL/3MF/STEP/OBJ/GLB). The sewn/native solid is embedded as
   // a base64 BREP string so the document is self-contained and rebuilds
   // deterministically without the original file. `solid` is false for a
@@ -912,7 +916,19 @@ export interface RebuildResult {
   // reason, the cache records the pick, and rewriting it every rebuild would
   // dirty documents nobody edited.
   sketchPlanes?: Record<string, PlaneDef>;
+  // Where each datum that FOLLOWS geometry resolved to this rebuild, keyed by
+  // feature id. Only the followed ones (a datum axis anchored to an edge): a
+  // baked datum sits at a coordinate the document already carries, so the reader
+  // falls back to that for every id absent here. Display state like datumPlanes
+  // above, and not written back into the document for the same reason.
+  datumMarks?: Record<string, DatumMark>;
 }
+
+/** The resolved placement of a datum that follows geometry, as it stands this
+ *  rebuild. An axis is a line (origin + direction); a point is one position. */
+export type DatumMark =
+  | { kind: "axis"; origin: Vec3; dir: Vec3 }
+  | { kind: "point"; position: Vec3 };
 
 export type RebuildReply =
   | { ok: true; result: RebuildResult }

@@ -123,6 +123,9 @@ export function createActions(e: Engine): (action: string) => void {
       case "datum-axis":
         e.starters.createDatumAxis();
         break;
+      case "datum-axis-edge":
+        e.starters.createDatumAxisOnEdge();
+        break;
       case "import":
         void importModel(e.store, e.geometry);
         break;

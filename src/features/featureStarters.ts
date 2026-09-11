@@ -402,6 +402,25 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     });
   }
 
+  // Datum Axis on an edge: pick a straight model edge and the axis becomes its
+  // line, and STAYS its line, the sidecar re-resolves the edge every rebuild so
+  // the axis follows the part (the datumPlane-on-a-face story, for an axis). The
+  // baked origin/dir written here are the cache the follow falls back to.
+  function createDatumAxisOnEdge() {
+    pickEdgeInteractive("Select a straight edge for the datum axis", (sel, points) => {
+      const line = axisFromEdge(points as Vec3[]);
+      if (!line) {
+        setStatus("A datum axis has to be a straight edge", "");
+        return;
+      }
+      const id = store.nextId();
+      store.addFeature({
+        id, type: "datumAxis", origin: line.origin, dir: line.dir, axisEdge: sel, name: "Axis",
+      } as Feature);
+      selectFeature(id);
+    });
+  }
+
   /** Collect `n` points on the model, snapping to what it actually has.
    *
    *  Every point taken so far is drawn, and so is the one under the cursor, so
@@ -1261,6 +1280,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     createPlaneThroughPoints,
     createDatumPoint,
     createDatumAxis,
+    createDatumAxisOnEdge,
     offsetPlaneFromFace,
     startSplit,
     startCutByPlane,
