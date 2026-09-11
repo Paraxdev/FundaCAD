@@ -502,6 +502,130 @@ def test_boundary_ring_is_dense_enough_to_carry_the_pattern():
     print(PASS, f"boundary ring subdivided to {max(seg):.2f}mm (period {scale}), still exactly on the face")
 
 
+def test_planar_chart_is_orthonormal_tangent_and_metric():
+    """The projection frame a freeform face is textured in (see _planar_chart).
+
+    Two properties the analytic-normal shading and the pattern layout both rely
+    on. The per-vertex basis must be an orthonormal frame TANGENT to the surface,
+    or the bumped normal picks up a component along the true normal and the
+    pattern reads muddy. And the in-plane coordinates must be true millimetres,
+    so a pattern set to a size is that size on the face."""
+    from texture_mesh import _planar_chart
+
+    # normals fanning through 90 degrees, a fillet corner in miniature
+    th = np.linspace(0.0, np.pi / 2, 7)
+    n = np.stack([np.cos(th), np.sin(th), np.zeros_like(th)], axis=1)
+    pts = n * 10.0
+    _u, _v, tu, tv = _planar_chart(pts, n)
+    assert np.allclose(np.linalg.norm(tu, axis=1), 1.0, atol=1e-9), "t_u not unit length"
+    assert np.allclose(np.linalg.norm(tv, axis=1), 1.0, atol=1e-9), "t_v not unit length"
+    assert np.allclose(np.sum(tu * n, axis=1), 0.0, atol=1e-6), "t_u must be tangent (perp to n)"
+    assert np.allclose(np.sum(tv * n, axis=1), 0.0, atol=1e-6), "t_v must be tangent (perp to n)"
+    assert np.allclose(np.sum(tu * tv, axis=1), 0.0, atol=1e-6), "frame must be orthogonal"
+
+    # metric: a flat patch reproduces its own spacing exactly, the projection is
+    # an isometry there
+    flat = np.array([[0, 0, 0], [3, 0, 0], [0, 5, 0], [3, 5, 0]], dtype=float)
+    fn = np.tile([0.0, 0.0, 1.0], (4, 1))
+    fu, fv, _, _ = _planar_chart(flat, fn)
+    assert abs((fu.max() - fu.min()) - 3.0) < 1e-9 and abs((fv.max() - fv.min()) - 5.0) < 1e-9, (
+        "planar coordinates are not true millimetres"
+    )
+    print(PASS, "planar chart: orthonormal tangent frame, metric in-plane coordinates")
+
+
+def test_freeform_corner_texture_is_planar_and_finely_resolved():
+    """A knurl on a big fillet corner, the case that reported as distorted.
+
+    The corner blend is a freeform face the mm chart cannot measure exactly. Two
+    things make it read cleanly there: it is sampled by planar projection along
+    its own mean normal (metric-faithful, so the cells are one size and do not
+    converge to the UV pole), and it is refined FINER than a charted face, so the
+    planar pattern is not aliased into mush by a mesh that is not aligned to it.
+
+    The control that must fail lives on both: drop the planar chart and the
+    span diverges from the true metric extent; drop the finer refinement and the
+    mean edge climbs back to the charted target and the pattern aliases."""
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepMesh import BRepMesh_IncrementalMesh
+    from OCP.TopLoc import TopLoc_Location
+    from texture_mesh import _surface_kind, _face_uv_to_mm, _planar_chart, _face_frame
+    from texture_height import _u_period
+
+    doc = {"parameters": {}, "features": [
+        {"id": "b", "type": "box", "length": 40, "width": 40, "height": 40},
+        {"id": "fx", "type": "fillet", "radius": 10, "edges": [
+            {"kind": "edge", "by": "nearest", "point": [0, 20, 20]},
+            {"kind": "edge", "by": "nearest", "point": [20, 0, 20]},
+            {"kind": "edge", "by": "nearest", "point": [20, 20, 0]}]},
+        {"id": "tex", "type": "texture", "kind": "knurl", "depth": 0.8, "scale": 3.0,
+         "faces": {"by": "nearest", "point": [15, 15, 15]}}]}
+    _p, errs, bodies = rebuild(doc)
+    assert not errs, errs
+    b = bodies[0]
+    sh = b["shape"]
+
+    # the freeform corner patch, near the +++ corner
+    corner_fid, corner_face = None, None
+    for fid, f in enumerate(sh.faces()):
+        surf = BRepAdaptor_Surface(f.wrapped)
+        if _surface_kind(surf) is not None:
+            continue
+        from OCP.GProp import GProp_GProps
+        from OCP.BRepGProp import BRepGProp
+        g = GProp_GProps(); BRepGProp.SurfaceProperties_s(f.wrapped, g); c = g.CentreOfMass()
+        if c.X() > 8 and c.Y() > 8 and c.Z() > 8:
+            corner_fid, corner_face = fid, f
+    assert corner_fid is not None, "no freeform corner patch found, the fixture is wrong"
+
+    resolved = plugin_geometry.resolve(b)
+    assert resolved and resolved[0][1], "the texture should resolve onto the corner patch"
+    pos, idx, fids = tessellate(sh, 0.1, mesh_passes=resolved, density_cap=texture._DEFAULT_DENSITY_CAP)
+    pos = np.asarray(pos, dtype=float).reshape(-1, 3)
+    idx = np.asarray(idx, dtype=int).reshape(-1, 3)
+    fids = np.asarray(fids, dtype=int)
+    tri = idx[fids == corner_fid]
+    assert len(tri) > 0, "the corner patch has no textured triangles"
+    e = np.concatenate([
+        np.linalg.norm(pos[tri[:, 0]] - pos[tri[:, 1]], axis=1),
+        np.linalg.norm(pos[tri[:, 1]] - pos[tri[:, 2]], axis=1),
+        np.linalg.norm(pos[tri[:, 2]] - pos[tri[:, 0]], axis=1)])
+    scale, target = 3.0, 3.0 / 4.0
+    assert e.mean() <= target * 0.75, (
+        f"freeform face not refined finer than a charted one: mean edge {e.mean():.3f}mm "
+        f"> {target * 0.75:.3f}mm, the planar pattern will alias"
+    )
+
+    # planar chart is more metric-faithful than the single-Jacobian UV fallback:
+    # its span tracks the face's true 3D extent, the reason the cells stop
+    # stretching. Read the corner face's own triangulation for the comparison.
+    BRepMesh_IncrementalMesh(sh.wrapped, 0.1, False, 0.5, True)
+    loc = TopLoc_Location()
+    t = BRep_Tool.Triangulation_s(corner_face.wrapped, loc)
+    trsf = loc.Transformation()
+    fp = []; fuv = []
+    for i in range(1, t.NbNodes() + 1):
+        p = t.Node(i)
+        if not loc.IsIdentity():
+            p = p.Transformed(trsf)
+        fp.append((p.X(), p.Y(), p.Z())); up = t.UVNode(i); fuv.append((up.X(), up.Y()))
+    fp = np.asarray(fp); fuv = np.asarray(fuv)
+    surf = BRepAdaptor_Surface(corner_face.wrapped)
+    true_diam = float(np.linalg.norm(fp[:, None, :] - fp[None, :, :], axis=2).max())
+    uo, vo = _face_uv_to_mm(surf, fuv[:, 0], fuv[:, 1], _u_period({"kind": "knurl"}, scale))
+    uv_diag = float(np.hypot(uo.max() - uo.min(), vo.max() - vo.min()))
+    nrm, _, _ = _face_frame(surf, fuv, False)
+    un, vn, _, _ = _planar_chart(fp, nrm)
+    pl_diag = float(np.hypot(un.max() - un.min(), vn.max() - vn.min()))
+    assert abs(pl_diag - true_diam) < abs(uv_diag - true_diam), (
+        f"planar chart ({pl_diag:.2f}) is no closer to the true extent ({true_diam:.2f}) "
+        f"than the single-Jacobian UV ({uv_diag:.2f}); the chart is not doing its job"
+    )
+    print(PASS, f"freeform corner: planar, metric ({pl_diag:.1f} vs true {true_diam:.1f}mm) and "
+                f"finely resolved (mean edge {e.mean():.2f}mm)")
+
+
 def main():
     print("Surface-texture tests")
     test_validate_texture_spec_rejects_bad_input()
@@ -524,6 +648,8 @@ def main():
     test_faceted_display_splits_creases_but_export_stays_indexed()
     test_every_kind_meshes_cleanly_at_the_faceted_default()
     test_boundary_ring_is_dense_enough_to_carry_the_pattern()
+    test_planar_chart_is_orthonormal_tangent_and_metric()
+    test_freeform_corner_texture_is_planar_and_finely_resolved()
     print("ALL PASS")
 
 

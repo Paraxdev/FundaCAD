@@ -67,6 +67,7 @@ from texture_mesh import (  # noqa: F401
     _force_cell_diagonals,
     _manifold_check,
     _pattern_axes,
+    _planar_chart,
     _points_in_polygon,
     _refine_face_triangulation,
     _revolved_reference_radius,
@@ -104,7 +105,12 @@ _DEFAULT_DENSITY_CAP = 2_000_000
 #    returned the same _trapezoid as ribs, so the two were byte-identical on the
 #    default profile; `sharpness` now picks its facet count. Existing documents
 #    change shape.
-CODE_VERSION = 8
+# 9: a face the chart cannot measure (fillet corner, sphere, freeform blend) is
+#    sampled by planar projection along its mean normal instead of through the
+#    single-Jacobian UV fallback, which folded the pattern into a crumple on a
+#    strongly curved patch. A texture on such a face changes shape (for the
+#    better); one on a plane/cylinder/cone is byte-identical.
+CODE_VERSION = 9
 
 #: The mesh-pass name this plugin registers under, stamped into every spec it
 #: makes. The registry reads `spec["pass"]` to route a face back here at
@@ -319,7 +325,13 @@ def _displacement_geometry(face, tri, loc, ident, spec, scale, target_edge_mm, c
                 pts = None
     if pts is None:
         lattice_used = False
-        pts, uv, tris = _refine_face_triangulation(surf, base_pts, base_uv, base_tris, target_edge_mm, cap)
+        # A freeform face (planar-charted below) has no pattern-aligned lattice,
+        # so the pattern is sampled on a generic subdivision. A diamond ridge that
+        # falls between mesh vertices aliases into mush, so this path is refined
+        # FINER than a charted face needs: the sampling frequency has to beat the
+        # pattern on a mesh that is not aligned to it.
+        refine_edge = target_edge_mm * 0.5 if _surface_kind(surf) is None else target_edge_mm
+        pts, uv, tris = _refine_face_triangulation(surf, base_pts, base_uv, base_tris, refine_edge, cap)
 
     pts_arr = np.asarray(pts, dtype=np.float64)
     uv_arr = np.asarray(uv, dtype=np.float64)
@@ -343,6 +355,16 @@ def _displacement_geometry(face, tri, loc, ident, spec, scale, target_edge_mm, c
     manifold_ok, manifold_bad = _manifold_check(edge_count)
 
     normals, t_u, t_v = _face_frame(surf, uv_arr, flip)
+
+    # A face the chart cannot measure (fillet corner, sphere, freeform blend) is
+    # sampled by planar projection along its own mean normal instead of through
+    # its distorted UV: the single-Jacobian fallback in _face_uv_to_mm folds a
+    # pattern into a crumple on a strongly curved patch. The displacement still
+    # runs along the true per-vertex `normals`; only the sampling frame changes.
+    # See texture_mesh._planar_chart. Chartable surfaces (plane/cylinder/cone),
+    # which the lattice tiers above rely on, are untouched.
+    if _surface_kind(surf) is None:
+        u_mm, v_mm, t_u, t_v = _planar_chart(pts_arr, normals)
 
     flat_indices = []
     for a, b, c in tris:
