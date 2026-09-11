@@ -83,44 +83,76 @@ async function browse() {
   emitChange();
 }
 
-// --- inline styles, carried over from the class verbatim ------------------
+// --- inline styles --------------------------------------------------------
+//
+// THE HEX USED TO BE HARDCODED HERE, one dark palette baked into a plugin that
+// draws inside an application whose theme the user can replace. So the panel
+// stayed graphite-on-charcoal under a light theme, the one surface in the window
+// that did not repaint. Every colour is a host token now, with the old literal
+// kept as the `var(--token, #fallback)` floor: the tokens are defined on :root
+// by the host stylesheet (see src/styles/_tokens.scss), the panel is teleported
+// into <body> under that :root, so the cascade reaches it exactly as it reaches
+// the application's own popups. The fallback is what a plugin owes a host it
+// cannot import: if a token is ever missing, the panel is the colour it always
+// was rather than unstyled.
+//
+// Still inline rather than a class, and still no `:hover`, for the reason the
+// template's comment gives: the one hook an e2e holds is `data-panel`, and a
+// stylesheet a plugin ships is a second place a colour can be wrong. `font` and
+// `color-scheme` are the two the panel deliberately does NOT set: it inherits
+// the document's, so the native <select>/checkbox render in whatever scheme the
+// active theme declared instead of being pinned to dark.
 const root: CSSProperties = {
   position: "fixed", top: "60px", right: "16px", zIndex: "50",
-  padding: "8px", background: "#20242c", border: "1px solid #3a4150", borderRadius: "6px",
-  boxShadow: "0 6px 20px rgba(0,0,0,0.4)", font: "12px system-ui, sans-serif",
-  color: "#dce3ee", width: "270px", maxWidth: "calc(100vw, 24px)", boxSizing: "border-box",
+  padding: "8px",
+  background: "var(--panel, #20242c)",
+  border: "1px solid var(--line-strong, #3a4150)",
+  borderRadius: "var(--r-md, 6px)",
+  boxShadow: "var(--shadow-2, 0 6px 20px rgba(0,0,0,0.4))",
+  font: "12px system-ui, sans-serif",
+  color: "var(--text, #dce3ee)",
+  width: "270px", maxWidth: "calc(100vw, 24px)", boxSizing: "border-box",
   maxHeight: "calc(100vh, 80px)", overflowY: "auto",
-  colorScheme: "dark", // native <select>/checkbox/number-spinner render dark
 };
 const row: CSSProperties = { display: "flex", gap: "6px", alignItems: "center", marginBottom: "6px" };
 const field: CSSProperties = {
-  background: "#161a20", color: "#dce3ee", border: "1px solid #3a4150",
-  borderRadius: "3px", padding: "3px 5px", font: "inherit",
+  background: "var(--panel-2, #161a20)",
+  color: "var(--text, #dce3ee)",
+  border: "1px solid var(--line-strong, #3a4150)",
+  borderRadius: "var(--r-sm, 3px)", padding: "3px 5px", font: "inherit",
 };
 const lbl: CSSProperties = { whiteSpace: "nowrap", cursor: "pointer" };
 const grow: CSSProperties = { ...field, flex: "1" };
 const num: CSSProperties = { ...field, width: "64px" };
 const title: CSSProperties = { fontWeight: "600", marginBottom: "6px" };
-const muted: CSSProperties = { color: "#8b93a3", marginBottom: "6px" };
+const muted: CSSProperties = { color: "var(--text-mute, #8b93a3)", marginBottom: "6px" };
 const modeBtn: CSSProperties = {
-  flex: "1", border: "1px solid #3a4150", borderRadius: "3px", padding: "4px 6px",
+  flex: "1", border: "1px solid var(--line-strong, #3a4150)",
+  borderRadius: "var(--r-sm, 3px)", padding: "4px 6px",
   cursor: "pointer", font: "inherit",
 };
-const modeOn: CSSProperties = { background: "#2b6", borderColor: "#2b6", color: "#fff" };
-const modeOff: CSSProperties = { background: "transparent", borderColor: "#3a4150", color: "#dce3ee" };
+const modeOn: CSSProperties = {
+  background: "var(--accent, #2b6)", borderColor: "var(--accent, #2b6)", color: "var(--on-accent, #fff)",
+};
+const modeOff: CSSProperties = {
+  background: "transparent", borderColor: "var(--line-strong, #3a4150)", color: "var(--text, #dce3ee)",
+};
 const smallBtn: CSSProperties = {
-  border: "1px solid #3a4150", borderRadius: "3px", padding: "3px 8px", cursor: "pointer", font: "inherit",
+  border: "1px solid var(--line-strong, #3a4150)", borderRadius: "var(--r-sm, 3px)",
+  padding: "3px 8px", cursor: "pointer", font: "inherit",
+  background: "transparent", color: "var(--text-dim, #dce3ee)",
 };
 const pathLabel: CSSProperties = {
-  flex: "1", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#8b93a3",
+  flex: "1", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+  color: "var(--text-mute, #8b93a3)",
 };
 const summaryStyle: CSSProperties = { cursor: "pointer", marginBottom: "4px" };
 const offsetRow: CSSProperties = { display: "flex", gap: "6px", alignItems: "center" };
-const note: CSSProperties = { color: "#8b93a3", fontStyle: "italic", margin: "8px 0" };
+const note: CSSProperties = { color: "var(--text-mute, #8b93a3)", fontStyle: "italic", margin: "8px 0" };
 const btnRow: CSSProperties = { ...row, marginBottom: "0", justifyContent: "flex-end" };
-const btn: CSSProperties = { color: "#fff", border: "none", borderRadius: "4px", padding: "4px 10px", cursor: "pointer", font: "inherit" };
-const okBtn: CSSProperties = { ...btn, background: "#2b6" };
-const noBtn: CSSProperties = { ...btn, background: "#555" };
+const btn: CSSProperties = { border: "none", borderRadius: "var(--r-sm, 4px)", padding: "4px 10px", cursor: "pointer", font: "inherit" };
+const okBtn: CSSProperties = { ...btn, background: "var(--accent, #2b6)", color: "var(--on-accent, #fff)" };
+const noBtn: CSSProperties = { ...btn, background: "var(--raised, #555)", color: "var(--text, #fff)" };
 </script>
 
 <template>
