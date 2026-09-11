@@ -32,6 +32,7 @@ API notes (verified against build123d 0.11.1, dual-compatible back to 0.10.x):
     tolerates both AttributeError (0.10) and AssertionError (0.11).
 """
 
+import copy
 import os
 import sys
 import time
@@ -1550,6 +1551,37 @@ def _handle_move(f, ctx):
         tgt["shape"] = sh
 
 
+def _handle_duplicate(f, ctx):
+    """Copy one or more bodies and place the copies with an optional transform.
+
+    Like move, but the originals stay put and each copy becomes a new body.
+    A ZERO transform still yields a genuinely independent body: the shape is
+    deep-copied first (build123d 0.11.1 has no Shape.copy, copy.deepcopy clones
+    the underlying OCCT topology), so a later feature that edits the original,
+    or the copy, cannot reach through a shared reference into the other."""
+    rx, ry, rz = ctx.val(f.get("rx", 0)), ctx.val(f.get("ry", 0)), ctx.val(f.get("rz", 0))
+    dx, dy, dz = ctx.val(f.get("dx", 0)), ctx.val(f.get("dy", 0)), ctx.val(f.get("dz", 0))
+    ids = f.get("bodies")
+    targets = [ctx.find_body(b) for b in ids] if ids else [ctx.require_active("Duplicate")]
+    for tgt in targets:
+        if tgt is None:
+            # stale id (upstream body removal/split renumbered it),
+            # a legitimate no-op, not a hard error
+            _skip_feature(ctx.diagnostics, f, "duplicate", "target body already consumed or missing")
+            continue
+        sh = copy.deepcopy(tgt["shape"])
+        # A disjoint body is a build123d ShapeList (no single `.wrapped`);
+        # Rot/Pos (Location.__mul__) only accept ONE Shape, so normalize to
+        # a Compound first, else "other must be a list of Locations".
+        if sh is not None and _wrapped_or_none(sh) is None:
+            sh = Compound(list(sh))
+        if rx or ry or rz:
+            sh = Rot(rx, ry, rz) * sh
+        if dx or dy or dz:
+            sh = Pos(dx, dy, dz) * sh
+        ctx.new_body(sh, f"{tgt['name']} copy")
+
+
 def _joint_body_shape(ctx, bid):
     """The single OCCT shape of a body a joint connector names, or None. A
     disjoint body is a ShapeList with no single `.wrapped`, so normalize to a
@@ -1722,6 +1754,7 @@ _FEATURE_HANDLERS = {
     "simplifyMesh": _handle_simplify_mesh,
     "scale": _handle_scale,
     "move": _handle_move,
+    "duplicate": _handle_duplicate,
     "joint": _handle_joint,
     "split": _handle_split,
     "boolean": _handle_boolean,

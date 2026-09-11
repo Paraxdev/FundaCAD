@@ -325,6 +325,16 @@ FEATURES = {
                  "primitive, since box/cylinder/sphere are always centred on the "
                  "origin.",
     },
+    "duplicate": {
+        "summary": "Copy bodies and place the copies, leaving the originals in place.",
+        "fields": {"dx": "Num", "dy": "Num", "dz": "Num",
+                   "rx": "Num, degrees", "ry": "Num, degrees", "rz": "Num, degrees",
+                   "bodies": "optional list of body ids; absent = the active body"},
+        "example": {"id": "dup1", "type": "duplicate", "dx": 0, "dy": 0, "dz": 30,
+                    "rx": 0, "ry": 0, "rz": 0},
+        "notes": "Like move, but the source bodies stay put and each copy becomes a "
+                 "new body. A zero transform still makes an independent copy.",
+    },
     "joint": {
         "summary": "Position one body against another by aligning a mate connector "
                    "on each, and re-resolve those connectors every rebuild so the "

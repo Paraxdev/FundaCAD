@@ -91,6 +91,7 @@ _PREFIXES = {
     "chamfer": "cha", "press-pull": "pp", "box": "bx", "cylinder": "cy",
     "sphere": "sp", "shell": "sh", "boolean": "bo", "mirror": "mir",
     "loft": "lo", "sweep": "sw", "datumPlane": "pl", "move": "mv",
+    "duplicate": "dup",
     "patternCircular": "pc", "patternLinear": "pln", "split": "spl",
 }
 

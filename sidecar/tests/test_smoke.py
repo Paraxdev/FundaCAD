@@ -1093,6 +1093,37 @@ def test_remove_body():
     print(f"  remove-body OK: 2 bodies → removeBody body2 → 1 body")
 
 
+def test_duplicate_body():
+    """duplicate copies a body and offsets the copy, leaving the original put.
+
+    The control is the ORIGINAL: a duplicate that transformed the source in
+    place (a shared shape reference, not a real copy) would move body1 too, so
+    the test pins body1's volume AND its Z span, then checks body2 is the same
+    size shifted by the offset. Without the handler a `duplicate` feature is an
+    unknown type, so the body count never reaches 2 and this fails."""
+    _s, base = _box(1, 20, 20, 10)  # 20×20×10 box = 4000 mm³, z=0..10
+    doc = {"parameters": {}, "features": base + [
+        {"id": "dup", "type": "duplicate", "dx": 0, "dy": 0, "dz": 30,
+         "rx": 0, "ry": 0, "rz": 0}]}
+    part, err, bodies = rebuild(doc)
+    assert not err, err
+    assert len(bodies) == 2, f"duplicate should take 1 body to 2, got {len(bodies)}"
+
+    orig = next(b for b in bodies if b["id"] == "body1")
+    copy_b = next(b for b in bodies if b["id"] == "body2")
+    ob, cb = bbox(orig["shape"]), bbox(copy_b["shape"])
+
+    # the original is untouched: same volume, still at its built Z (0..10)
+    assert abs(orig["shape"].volume - 4000) < 1, orig["shape"].volume
+    assert abs(ob["min"][2] - 0) < 0.5 and abs(ob["max"][2] - 10) < 0.5, ob
+
+    # the copy is the same solid, shifted +30 in Z (30..40)
+    assert abs(copy_b["shape"].volume - 4000) < 1, copy_b["shape"].volume
+    assert abs(cb["min"][2] - 30) < 0.5 and abs(cb["max"][2] - 40) < 0.5, cb
+    print(f"  duplicate OK: 1 body → 2; original at z {ob['min'][2]:.0f}..{ob['max'][2]:.0f}, "
+          f"copy at z {cb['min'][2]:.0f}..{cb['max'][2]:.0f}")
+
+
 def test_sketch_crossing_split():
     """Sketch profiles split at CROSSINGS and vertex-touches via the planar
     arrangement (builder._subdivide_faces / src/sketch/region.ts), so a line
@@ -1896,6 +1927,7 @@ if __name__ == "__main__":
     test_multibody_import_and_guards()
     test_interference()
     test_remove_body()
+    test_duplicate_body()
     test_pattern_linear_and_circular()
     test_pattern_names_its_bodies()
     test_pattern_count_guards()
