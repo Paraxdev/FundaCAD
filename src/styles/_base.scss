@@ -7,7 +7,7 @@ body {
   margin: 0;
   height: 100%;
   overflow: hidden;
-  font-family: "Inter", system-ui, sans-serif;
+  font-family: var(--ui, "Inter", system-ui, sans-serif);
   font-size: 13px;
   font-feature-settings: "cv11", "ss01", "tnum";
   -webkit-font-smoothing: antialiased;
@@ -50,7 +50,7 @@ body {
 #main { grid-area: main; }
 #timeline { grid-area: history; }
 
-/* --- shared focus ring (amber) --- */
+/* --- shared focus ring (accent) --- */
 :focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-glow);

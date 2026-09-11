@@ -54,7 +54,7 @@ export interface CustomTheme extends Theme {
 /** The one palette that ships. Lives on bare :root in _tokens.scss, so it needs
  *  no attribute, no inline property and no script, and survives a cold load
  *  with the stylesheet alone. */
-export const BUILTIN_THEME: Theme = { id: "fundacad", label: "FundaCAD", mode: "dark", custom: false };
+export const BUILTIN_THEME: Theme = { id: "fundacad", label: "FundaCAD Noir", mode: "dark", custom: false };
 
 /** The built-in theme's id, the value the setting falls back to whenever a
  *  stored id names nothing that currently exists (an uploaded theme that was
