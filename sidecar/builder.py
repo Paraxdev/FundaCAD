@@ -634,6 +634,14 @@ def _handle_press_pull(f, ctx):
             raise ValueError("Press/Pull: the 'up to' target surface wasn't found")
         tgt_pt, tgt_n = tf[0].center(), tf[0].normal_at()
     dist = ctx.val(f["distance"])
+    # `taper` leans the pushed walls as they travel (a moulded boss, an angled
+    # pocket), positive narrows the far end. Absent or 0 keeps the straight push,
+    # so an ordinary press/pull is byte-identical to before. It rides a fixed
+    # distance only: an up-to push already lands its walls on a chosen surface,
+    # and leaning them would miss it.
+    taper = ctx.val(f["taper"]) if f.get("taper") is not None else 0.0
+    if taper and not (-89 < taper < 89):
+        raise ValueError(f"Press/Pull: taper must be between -89 and 89 degrees (got {taper:g})")
     for sel in sels:
         found = resolve_faces(act["shape"], sel, diag=ctx.diagnostics, feature_id=f.get("id"))
         if not found:
@@ -642,7 +650,7 @@ def _handle_press_pull(f, ctx):
         d = _distance_to_target(src, tgt_pt, tgt_n) if up else dist
         # up-to distances are exact by construction, the inward
         # clamp would silently stop short of the chosen target
-        act["shape"] = _press_pull(act["shape"], src, d, clamp=(not up))
+        act["shape"] = _press_pull(act["shape"], src, d, clamp=(not up), taper=(0.0 if up else taper))
 
 
 def _handle_delete_face(f, ctx):

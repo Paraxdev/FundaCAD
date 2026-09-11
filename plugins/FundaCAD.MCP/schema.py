@@ -246,6 +246,10 @@ FEATURES = {
             "body": "optional body id",
             "upTo": "optional Selector naming a target face to stop at, instead "
                     "of using `distance`",
+            "taper": "optional Num, degrees. Leans a PLANAR push's walls as they "
+                     "travel (a moulded boss, an angled pocket); positive narrows "
+                     "the far end. Must be between -89 and 89. Ignored on a curved "
+                     "face and on an `upTo` push. Absent or 0 is a straight push",
         },
         "example": {"id": "pp1", "type": "press-pull",
                     "face": {"kind": "face", "by": "normal", "dir": [0, 0, 1], "body": "body1"},
