@@ -10,6 +10,7 @@ import tempfile
 
 import numpy as np
 
+import plugin_geometry
 import server
 import texture
 import texture_height
@@ -60,11 +61,11 @@ def test_whole_body_knurl_increases_triangles_and_bounds_displacement():
     part, errors, bodies = rebuild({"parameters": {}, "features": feats})
     assert not errors, errors
     b = bodies[0]
-    resolved = texture.resolve_body_textures(b)
+    resolved = plugin_geometry.resolve(b)
     assert resolved and resolved[0][1], "the 'all' selector should resolve to every face"
 
     pos_plain, idx_plain, _ = tessellate(b["shape"], 0.1)
-    pos_tex, idx_tex, _ = tessellate(b["shape"], 0.1, textures=resolved)
+    pos_tex, idx_tex, _ = tessellate(b["shape"], 0.1, mesh_passes=resolved)
     assert len(idx_tex) > len(idx_plain), "textured mesh should gain triangles from subdivision"
 
     p = np.array(pos_tex).reshape(-1, 3)
@@ -86,9 +87,9 @@ def test_selected_face_only_leaves_other_faces_unchanged():
     part, errors, bodies = rebuild({"parameters": {}, "features": feats})
     assert not errors, errors
     b = bodies[0]
-    resolved = texture.resolve_body_textures(b)
+    resolved = plugin_geometry.resolve(b)
     pos_p, idx_p, fid_p = tessellate(b["shape"], 0.1)
-    pos_t, idx_t, fid_t = tessellate(b["shape"], 0.1, textures=resolved)
+    pos_t, idx_t, fid_t = tessellate(b["shape"], 0.1, mesh_passes=resolved)
 
     def face_points(pos, idx, fids, target):
         P = np.array(pos).reshape(-1, 3)
@@ -154,9 +155,9 @@ def test_manifold_diagnostic_surfaces_from_displace_face():
     part, errors, bodies = rebuild({"parameters": {}, "features": feats})
     assert not errors, errors
     b = bodies[0]
-    resolved = texture.resolve_body_textures(b)
+    resolved = plugin_geometry.resolve(b)
     diag = []
-    pos, idx, fids = tessellate(b["shape"], 0.1, textures=resolved, density_cap=5000, diag=diag)
+    pos, idx, fids = tessellate(b["shape"], 0.1, mesh_passes=resolved, density_cap=5000, diag=diag)
     assert len(idx) > 0
     # the cap-bound case legitimately emits a "shown coarser than print detail"
     # note (frequency clamped to what the mesh can carry), only a MANIFOLD
@@ -181,11 +182,11 @@ def test_cache_key_changes_with_texture_params():
     b["id"] = "texcache-test-1"
     server._MESH_CACHE.pop(b["id"], None)
 
-    b["_textures"] = None
+    b[plugin_geometry.BODY_KEY] = None
     # a small document keeps full quality, see server._viewport_profile
     profile = server._viewport_profile(1)
     ent1 = server._body_payload(b, 0.1, profile)
-    b["_textures"] = [texture.validate_texture_spec(
+    b[plugin_geometry.BODY_KEY] = [texture.validate_texture_spec(
         {"kind": "knurl", "faces": {"by": "all"}, "depth": 0.4, "scale": 2.0}
     )]
     ent2 = server._body_payload(b, 0.1, profile)
@@ -257,10 +258,10 @@ def test_texture_selector_survives_downstream_fillet():
     part, errors, bodies = rebuild({"parameters": {}, "features": feats})
     assert not errors, errors
     b = bodies[0]
-    assert b.get("_textures"), "the texture spec should survive onto the body dict"
-    resolved = texture.resolve_body_textures(b)
+    assert b.get(plugin_geometry.BODY_KEY), "the texture spec should survive onto the body dict"
+    resolved = plugin_geometry.resolve(b)
     assert resolved and resolved[0][1], "the texture selector should still match a face after the fillet"
-    pos, idx, fids = tessellate(b["shape"], 0.1, textures=resolved)
+    pos, idx, fids = tessellate(b["shape"], 0.1, mesh_passes=resolved)
     assert len(idx) // 3 > 0
     print(PASS, "texture selector survives a downstream fillet edit")
 
@@ -294,7 +295,7 @@ def test_texture_targets_bound_body_not_active_in_multibody():
         {"id": "tex", "type": "texture", "kind": "knurl", "depth": 0.4, "scale": 2.0, "faces": sel}]})
     assert errors and "ambiguous face reference" in errors[0]["message"], errors
     by_id = {b["id"]: b for b in bodies}
-    assert not by_id["body1"].get("_textures") and not by_id["body2"].get("_textures"), \
+    assert not by_id["body1"].get(plugin_geometry.BODY_KEY) and not by_id["body2"].get(plugin_geometry.BODY_KEY), \
         "a refused selector must not texture ANY body"
 
     # body=body1 → honored, texture lands on the intended body
@@ -303,9 +304,9 @@ def test_texture_targets_bound_body_not_active_in_multibody():
          "body": "body1", "faces": sel}]})
     assert not errors, errors
     by_id = {b["id"]: b for b in bodies}
-    assert by_id["body1"].get("_textures") and not by_id["body2"].get("_textures"), \
+    assert by_id["body1"].get(plugin_geometry.BODY_KEY) and not by_id["body2"].get(plugin_geometry.BODY_KEY), \
         "with `body=body1`, the texture must land on body1, not the active body"
-    resolved = texture.resolve_body_textures(by_id["body1"])
+    resolved = plugin_geometry.resolve(by_id["body1"])
     assert resolved and resolved[0][1], "the bound-body selector must resolve to a face"
     print(PASS, "texture honors bound `body` over active-body fallback (multi-body)")
 
@@ -412,11 +413,11 @@ def test_faceted_display_splits_creases_but_export_stays_indexed():
          "depth": 0.4, "scale": 2.0, "angle": 45, "profile": "facet"}]}
     _p, errs, bodies = rebuild(doc)
     assert not errs, errs
-    tex = texture.resolve_body_textures(bodies[0])
+    tex = plugin_geometry.resolve(bodies[0])
 
     norms = []
-    d_pos, d_idx, _ = tessellate(bodies[0]["shape"], 0.05, textures=tex, normals_out=norms)
-    e_pos, e_idx, _ = tessellate(bodies[0]["shape"], 0.05, textures=tex, normals_out=None)
+    d_pos, d_idx, _ = tessellate(bodies[0]["shape"], 0.05, mesh_passes=tex, normals_out=norms)
+    e_pos, e_idx, _ = tessellate(bodies[0]["shape"], 0.05, mesh_passes=tex, normals_out=None)
 
     assert len(d_idx) == len(e_idx), "crease splitting must not change the TRIANGLE count"
     assert len(d_pos) > len(e_pos), "display should un-share vertices for flat shading"
@@ -438,10 +439,10 @@ def test_every_kind_meshes_cleanly_at_the_faceted_default():
              "depth": 0.3, "scale": 2.0, "seed": 3}]}
         _p, errs, bodies = rebuild(doc)
         assert not errs, f"{kind}: {errs}"
-        tex = texture.resolve_body_textures(bodies[0])
+        tex = plugin_geometry.resolve(bodies[0])
         assert tex, f"{kind}: texture did not resolve"
         diag = []
-        pos, idx, _ = tessellate(bodies[0]["shape"], 0.05, textures=tex, diag=diag, normals_out=[])
+        pos, idx, _ = tessellate(bodies[0]["shape"], 0.05, mesh_passes=tex, diag=diag, normals_out=[])
         assert np.all(np.isfinite(np.asarray(pos, dtype=float))), f"{kind}: non-finite positions"
         assert len(idx) > 0, f"{kind}: no triangles"
         bad = [d for d in diag if "non-manifold" in str(d.get("reason", ""))]
@@ -475,7 +476,7 @@ def test_boundary_ring_is_dense_enough_to_carry_the_pattern():
     assert not errs, errs
     shape = bodies[0]["shape"]
     BRepMesh_IncrementalMesh(shape.wrapped, 0.05, False, 0.5, True)
-    spec, faces = texture.resolve_body_textures(bodies[0])[0]
+    spec, faces = plugin_geometry.resolve(bodies[0])[0]
     face = faces[0]
     scale = float(spec["scale"])
     loc = TopLoc_Location()

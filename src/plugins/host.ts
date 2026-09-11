@@ -63,6 +63,12 @@ export type {
 // The shapes those two new points are written in. Types only: a plugin fills
 // them in, the application reads them, and neither needs anything at runtime.
 export type { ChoiceField, ChoiceOption, FileField, ToggleField } from "../document/optionFields";
+// The two row inventories a plugin that OWNS a feature type has to describe: the
+// numeric rows and the geometry-selection rows. Exported here for the same
+// reason ChoiceField is, a plugin cannot reach into src/ and these are the
+// shapes its contribution has to match.
+export type { FieldKind } from "../document/numFields";
+export type { TargetField } from "../features/selectionTargets";
 export type { FeatureMeta } from "../ui/featureMeta";
 export type { EntityKind, EntitySource } from "../features/toolCapabilities";
 

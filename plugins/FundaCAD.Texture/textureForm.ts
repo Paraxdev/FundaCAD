@@ -17,7 +17,9 @@
 // copies of "which kinds have an angle" is exactly how a tool panel and the rows
 // that edit the same feature afterwards come to disagree about it.
 
-import type { ChoiceField, FileField, ToggleField } from "fundacad";
+import type {
+  ChoiceField, Feature, FieldKind, FileField, Num, Selector, TargetField, ToggleField,
+} from "fundacad";
 
 export type TextureKind = "knurl" | "hex" | "waves" | "ribs" | "voronoi" | "noise" | "image";
 export type TextureMode = "faces" | "body";
@@ -83,6 +85,45 @@ export function sharpnessLabel(profile: unknown): { text: string; title: string 
 }
 
 /** The dropdowns a committed texture offers in the value rows. */
+/** The feature's parameter-drivable numeric rows.
+ *
+ *  MOVED OUT OF THE APPLICATION, and that move is the point. These seven rows
+ *  were the last thing in src/document/numFields.ts that named a texture: the
+ *  app knew a texture had a Depth and an Edge blend, in a table beside
+ *  extrude's Distance and fillet's Radius, because the feature type was in its
+ *  own union. It is not any more.
+ *
+ *  The kinds mean what they mean everywhere else: "length" is millimetres and
+ *  converts to the display unit, "angle" is degrees, and "count" is this
+ *  codebase's name for a real-valued unitless field, not an integer claim, so
+ *  Sharpness (0..1) and Seed share it.
+ *
+ *  Which of these a given pattern actually READS is a separate question and is
+ *  answered by `textureFieldApplies` below; a row that does not apply is not
+ *  drawn. */
+export const TEXTURE_NUM_FIELDS: readonly [string, string, FieldKind][] = [
+  ["depth", "Depth", "length"],
+  ["scale", "Scale", "length"],
+  ["angle", "Angle", "angle"],
+  ["offset", "Offset", "length"],
+  ["sharpness", "Sharpness", "count"],
+  ["boundaryInset", "Edge blend", "length"],
+  ["seed", "Seed", "count"],
+];
+
+/** The feature's editable geometry selection.
+ *
+ *  Empty is LEGAL here and means the whole body, which is a different statement
+ *  from "no faces" and has to be spelled out or the row shows "0 faces" for a
+ *  texture that covers everything. Moved out of
+ *  src/features/selectionTargets.ts for the same reason as the rows above. */
+export const TEXTURE_TARGETS: readonly TargetField[] = [
+  {
+    field: "faces", label: "Faces", kind: "face", shape: "selector", arity: "many",
+    whenEmpty: "the whole body",
+  },
+];
+
 export const TEXTURE_CHOICE_FIELDS: ChoiceField[] = [
   {
     field: "kind",
@@ -153,6 +194,53 @@ export interface TextureValues {
   invert: boolean;
   imagePath?: string;
   colorSlot?: number; // palette slot for a two-tone inlay; undefined = body color
+}
+
+/** A `texture` feature as it sits in the document.
+ *
+ *  THE SCHEMA LIVES HERE, and that is what owning a feature type means. It used
+ *  to be thirty-five lines of the application's own `Feature` union in
+ *  src/types.ts, which is why the app could describe, label and validate a
+ *  texture whether or not this plugin existed. The app now carries the feature
+ *  as a `PluginFeature`, two known keys and an index signature, and this is the
+ *  only description of what is actually in it.
+ *
+ *  Every field except `kind` is optional, mirroring what the geometry accepts:
+ *  register.py's validator supplies the same defaults, and a document written by
+ *  an older version of this plugin is missing whichever ones it predates.
+ *
+ *  `Num` rather than `number` for the parameter-drivable ones: a field may hold
+ *  a parameter NAME instead of a value, and the tool refuses to edit one that
+ *  does (see startEdit) rather than overwriting the equation with a literal. */
+export interface TextureFeature {
+  id: string;
+  type: "texture";
+  kind: TextureKind;
+  faces?: Selector | Selector[];
+  body?: string;
+  depth?: Num;
+  scale?: Num;
+  angle?: Num;
+  offset?: Num;
+  sharpness?: Num;
+  profile?: "facet" | "round";
+  boundaryInset?: Num;
+  direction?: "out" | "in" | "both";
+  seed?: Num;
+  invert?: boolean;
+  imagePath?: string;
+  colorSlot?: Num;
+}
+
+/** Read a document feature as a texture, or null.
+ *
+ *  The cast is the honest shape of the boundary: the app hands out a
+ *  `PluginFeature` because it genuinely does not know what the fields are, and
+ *  this plugin does. Checking `type` is the whole of the check that can be made
+ *  here; the geometry validates the values properly, on every build, and turns
+ *  the timeline row red when they are wrong. */
+export function asTexture(f: Feature | null | undefined): TextureFeature | null {
+  return f && f.type === "texture" ? (f as unknown as TextureFeature) : null;
 }
 
 export const KIND_OPTIONS: [TextureKind, string][] =

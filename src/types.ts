@@ -396,7 +396,7 @@ export type PlaneDef = {
 };
 export type PlaneSpec = Plane3 | PlaneDef;
 
-export type Feature =
+export type CoreFeature =
   // `planeId` (optional) is a by-id reference to a datumPlane feature, and takes
   // precedence over `plane` on rebuild. It follows the `split` precedent rather
   // than overloading `plane` with ids, because SketchPlane's string branch has
@@ -631,42 +631,87 @@ export type Feature =
   // drops the listed bodies from the model, the way to delete a body from the
   // browser. Body ids are positional, so this is appended at the end.
   | { id: string; type: "removeBody"; bodies: string[] }
-  // Printed surface texture: real mesh displacement (not appearance-only), computed
-  // by the sidecar at tessellation time. `faces` absent = whole body (then `body`
-  // names the target, required); present = the operated face set (mirrors
-  // shell/draft's `faces`, not press-pull's singular `face`).
-  | {
-      id: string;
-      type: "texture";
-      kind: "knurl" | "hex" | "waves" | "ribs" | "voronoi" | "noise" | "image";
-      faces?: Selector | Selector[];
-      body?: string; // required when faces is absent; optional disambiguator otherwise
-      depth: Num; // mm, displacement magnitude
-      scale: Num; // mm, pattern period / cell size
-      angle?: Num; // degrees, orientation (waves/ribs vertical vs diagonal; knurl/hex lattice rotation)
-      offset?: Num; // mm, phase shift (advanced)
-      // 0..1, reused per profile: under "facet" it is the flat-LAND fraction for
-      // the periodic kinds, the wall width for the cellular ones, and the
-      // terrace count for noise/image; under "round" it is the old power-curve
-      // crispness.
-      sharpness?: Num;
-      // Surface profile. "facet" (DEFAULT) = hard surface: planar facets and
-      // real creases, which is what actually survives a 3D print, a printer
-      // rounds a sub-millimetre sinusoid into mush. "round" = the original
-      // smooth fields.
-      profile?: "facet" | "round";
-      // mm the pattern fades to nothing over at a face boundary. 0 (default) =
-      // a clean machined cut-off. The boundary ring itself stays undisplaced
-      // either way, which is what keeps the mesh crack-free at the seam.
-      boundaryInset?: Num;
-      direction?: "out" | "in" | "both"; // procedural kinds: emboss/deboss/symmetric (default "out")
-      seed?: Num; // voronoi/noise
-      invert?: boolean; // image kind: emboss vs deboss sample reading
-      imagePath?: string; // image kind: absolute path, sidecar reads by path (like import's brep flow)
-      colorSlot?: Num; // palette slot the textured faces print in (two-tone inlay); absent = body's own color
-    };
+  // A feature this build of the application does not know: one whose tool,
+  // schema and geometry all belong to a PLUGIN.
+  //
+  // This variant is what makes a plugin able to own a feature type outright,
+  // and it is the reason uninstalling one does not cost you your document. The
+  // app can carry, save, reorder, parameter-drive and re-save a feature it
+  // cannot build, so the values survive on a machine where the plugin is not
+  // installed and mean exactly the same thing when it comes back. What it
+  // cannot do is BUILD one, and it says so: see document/missingPlugins.ts for
+  // the warning and sidecar/plugin_geometry.py for the half that names the
+  // plugin.
+  //
+  // `texture` used to be a variant of this union, thirty-five lines of fields
+  // the application had no other reason to know. It is
+  // plugins/FundaCAD.Texture's now, and it arrives here through this branch.
+  //
+  // The index signature is what makes the round trip lossless, and the `id` and
+  // `type` above it are the only two things the app needs of any feature. It is
+  // deliberately LAST in the union: every named variant above wins the
+  // discriminant, so this only ever matches a `type` none of them claimed.
+  ;
 
-export type FeatureType = Feature["type"];
+/** A feature whose `type` this build does not define: one whose tool, schema and
+ *  geometry all belong to a PLUGIN.
+ *
+ *  This is what lets a plugin own a feature type outright, and it is the reason
+ *  uninstalling one does not cost you your document. The app can carry, save,
+ *  reorder and re-save a feature it cannot build, so the values survive on a
+ *  machine where the plugin is absent and mean the same thing when it returns.
+ *  What it cannot do is BUILD one, and it says so rather than failing quietly:
+ *  see document/missingPlugins.ts, and sidecar/plugin_geometry.py for the half
+ *  that names the plugin on the timeline row.
+ *
+ *  `texture` used to be a variant of the union above, thirty-five lines of
+ *  fields the application had no other reason to know. It belongs to
+ *  plugins/FundaCAD.Texture now and reaches the app through here.
+ *
+ *  The index signature is what makes the round trip lossless; `id` and `type`
+ *  are the only two things the app needs of any feature at all. */
+export interface PluginFeature {
+  id: string;
+  type: string;
+  [field: string]: unknown;
+}
+
+/** Anything that can sit in a document's timeline.
+ *
+ *  PluginFeature is LAST so that every named variant wins the discriminant
+ *  first. It does not narrow away, though: `f.type === "sketch"` cannot rule
+ *  out a member whose `type` is `string`, so use `isFeature`/`asFeature` below
+ *  when you need one of the app's own variants. That is not a wart, it is the
+ *  type system insisting on the thing that is actually true, a feature in a
+ *  document need not be one this build knows. */
+export type Feature = CoreFeature | PluginFeature;
+
+/** The `type` of a feature the APPLICATION defines. A plugin's is just a string. */
+export type FeatureType = CoreFeature["type"];
+
+/** Narrow a feature to one of the application's own variants by type.
+ *
+ *  Use in place of a bare `f.type === "sketch"` wherever the fields are read
+ *  afterwards: the bare comparison is still true, it just does not convince the
+ *  compiler, because a PluginFeature could carry that type too. In practice it
+ *  cannot, a plugin may not claim a type the app already owns (the geometry
+ *  registry refuses it, and so does contributedFeature), so this guard is a
+ *  restatement of a rule enforced elsewhere rather than a new check. */
+export function isFeature<T extends FeatureType>(
+  f: Feature,
+  type: T,
+): f is Extract<CoreFeature, { type: T }> {
+  return f.type === type;
+}
+
+/** The same narrowing as a value: the feature if it has this type, else null.
+ *  For the `find`/`?.` shapes where a guard reads worse than a cast would. */
+export function asFeature<T extends FeatureType>(
+  f: Feature | null | undefined,
+  type: T,
+): Extract<CoreFeature, { type: T }> | null {
+  return f && f.type === type ? (f as Extract<CoreFeature, { type: T }>) : null;
+}
 
 // A redefined ViewCube side: the model face the user mapped to a cube side. The
 // stored face is oriented toward the camera when that side is clicked. `normal`

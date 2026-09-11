@@ -26,7 +26,8 @@ from OCP.TopLoc import TopLoc_Location
 
 # Bumped whenever this module's output changes shape or quality for the SAME
 # inputs, so server.py can put it in the disk mesh-artifact key and a cache
-# written by an older algorithm is never served. (Same trick texture.py uses.)
+# written by an older algorithm is never served. (Same trick a mesh pass's
+# code_version() uses.)
 #   1 -> fixed 24-segment edge polylines, absolute-only surface deflection
 #   2 -> deviation-bounded edge polylines + optional relative surface deflection
 #   3 -> the cached payload carries the body's mesh bbox (see mesh_bbox)
@@ -36,7 +37,7 @@ from OCP.TopLoc import TopLoc_Location
 CODE_VERSION = 5
 
 
-def tessellate(shape, tolerance=0.1, angular_tolerance=0.5, textures=None, density_cap=None,
+def tessellate(shape, tolerance=0.1, angular_tolerance=0.5, mesh_passes=None, density_cap=None,
                 diag=None, normals_out=None, relative=False, force_remesh=False):
     """Return (positions, indices, face_ids).
 
@@ -55,17 +56,17 @@ def tessellate(shape, tolerance=0.1, angular_tolerance=0.5, textures=None, densi
                   finer mesh than the ring's big flat faces, which is exactly
                   where faceting is visible. Callers must pass a tolerance in the
                   matching UNITS, see server._effective_tolerance.
-    textures    : optional [(spec, [Face,...]), ...] from
-                  texture.resolve_body_textures(), targeted faces get
-                  texture.displace_face()'s denser, displaced chunk instead of
+    mesh_passes : optional [(spec, [Face,...]), ...] from
+                  plugin_geometry.resolve(), targeted faces get the owning
+                  plugin's denser, displaced chunk instead of
                   the plain one below (same faceId tags, so faceTriangles
-                  grouping needs no changes for a subdivided textured face).
+                  grouping needs no changes for a subdivided displaced face).
     density_cap : per-face triangle budget passed through to displace_face
-                  (None = texture.py's own export-tier safety cap).
+                  (None = the owning plugin's export-tier safety cap).
     normals_out : optional list, receives (vertex_base, flat_normals) chunks
-                  for each TEXTURED face's analytic displaced normals, so the
+                  for each DISPLACED face's analytic normals, so the
                   viewport payload can shade coarse displacement smoothly
-                  (untextured faces are absent: the caller derives theirs from
+                  (undisplaced faces are absent: the caller derives theirs from
                   the triangles, same as the client always did).
     """
     # Mesh the entire solid at once, in parallel (isInParallel=True). This fills an
@@ -90,11 +91,11 @@ def tessellate(shape, tolerance=0.1, angular_tolerance=0.5, textures=None, densi
     face_ids = []
 
     face_specs = {}
-    if textures:
+    if mesh_passes:
         from builder import _face_fp
-        # later texture feature wins a face both target (timeline order = most
-        # recent edit takes effect, same intuition as any other re-applied op)
-        for spec, faces in textures:
+        # later feature wins a face both target (timeline order = most recent
+        # edit takes effect, same intuition as any other re-applied op)
+        for spec, faces in mesh_passes:
             for f in faces:
                 face_specs[_face_fp(f)] = spec
 
@@ -108,9 +109,10 @@ def tessellate(shape, tolerance=0.1, angular_tolerance=0.5, textures=None, densi
             from builder import _face_fp
             spec = face_specs.get(_face_fp(face))
             if spec is not None:
-                from texture import displace_face
+                import plugin_geometry
                 try:
-                    local_pos, local_idx, local_norm = displace_face(
+                    local_pos, local_idx, local_norm = plugin_geometry.displace(
+                        spec,
                         face, tri, loc, loc.IsIdentity(), spec, density_cap,
                         diag=diag, feature_id=spec.get("feature_id"),
                         # normals_out is the viewport payload's channel, so it is
@@ -126,11 +128,11 @@ def tessellate(shape, tolerance=0.1, angular_tolerance=0.5, textures=None, densi
                         normals_out.append((base, local_norm))
                     continue
                 except Exception as ex:
-                    # Never crash a rebuild on a texture bug: fall through to the
-                    # plain untextured path below for this face.
+                    # Never crash a rebuild on a plugin bug: fall through to
+                    # the plain undisplaced path below for this face.
                     #
                     # BUT SAY SO. This used to be a bare `pass`, and a bare pass
-                    # here is indistinguishable from a texture that worked: the
+                    # here is indistinguishable from a pass that worked: the
                     # feature is in the timeline, the timeline is green, the
                     # build reports no error, and the face is simply flat. There
                     # is then nothing anywhere, not on screen, not in the
@@ -139,14 +141,15 @@ def tessellate(shape, tolerance=0.1, angular_tolerance=0.5, textures=None, densi
                     # displacement threw". A lossy diagnostic is what every other
                     # best-effort path in the builder already emits, and it is
                     # what puts the feature's row in the timeline on notice.
-                    print(f"[texture] face {fid} fell back to flat: "
+                    kind = spec.get("pass") or "mesh pass"
+                    print(f"[{kind}] face {fid} fell back to flat: "
                           f"{type(ex).__name__}: {ex}", flush=True)
                     if diag is not None:
                         diag.append({
-                            "feature_id": spec.get("feature_id"), "kind": "texture",
+                            "feature_id": spec.get("feature_id"), "kind": kind,
                             "resolved": 0, "confidence": 0.0, "lossy": True,
-                            "reason": "the texture could not be applied to one face; "
-                                      "it is shown untextured",
+                            "reason": f"the {kind} could not be applied to one "
+                                      "face; it is shown undisplaced",
                         })
 
         trsf = loc.Transformation()  # face-local -> world placement
@@ -198,14 +201,14 @@ def tessellate_bodies(bodies, tolerance=0.1, density_cap=None, diag=None):
     meta = []
     face_base = 0
     from builder import _face_fp  # same fingerprint the provenance owner-map uses
-    import texture as _texture
+    import plugin_geometry as _pg
     import face_bands as _face_bands
     for b in bodies:
         sh = b.get("shape")
         if sh is None:
             continue
-        textures = _texture.resolve_body_textures(b, diag) if b.get("_textures") else None
-        pos, idx, fids = tessellate(sh, tolerance, textures=textures, density_cap=density_cap, diag=diag)
+        passes = _pg.resolve(b, diag)
+        pos, idx, fids = tessellate(sh, tolerance, mesh_passes=passes, density_cap=density_cap, diag=diag)
         vbase = len(positions) // 3
         positions.extend(pos)
         indices.extend(i + vbase for i in idx)
@@ -231,8 +234,8 @@ def tessellate_bodies(bodies, tolerance=0.1, density_cap=None, diag=None):
 def vertex_normals(positions, indices):
     """Area-weighted per-vertex normals for a whole mesh (flat lists in/out),
     the same accumulation three.js's computeVertexNormals does, run server-side
-    so a textured body's payload can carry normals for ALL its vertices: plain
-    faces get these, textured chunks are overwritten with texture.py's analytic
+    so a displaced body's payload can carry normals for ALL its vertices: plain
+    faces get these, displaced chunks are overwritten with the plugin's analytic
     displaced normals (smooth shading at coarse displacement density)."""
     import numpy as np
 

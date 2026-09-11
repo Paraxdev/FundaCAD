@@ -16,6 +16,7 @@
 // geometry that already existed when it was created.
 
 import * as THREE from "three";
+import { asFeature } from "../types";
 import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore } from "../document/store";
 import type { EdgeFingerprint, Feature, ProjectedSource } from "../types";
@@ -80,8 +81,7 @@ export class ProjectFlow {
 
   /** the committed sketch feature `id`, when it is a sketch */
   private sourceSketch(id: string): Extract<Feature, { type: "sketch" }> | null {
-    const f = this.host.store()?.document.features.find((x) => x.id === id);
-    return f && f.type === "sketch" ? f : null;
+    return asFeature(this.host.store()?.document.features.find((x) => x.id === id), "sketch");
   }
 
   /** a committed sketch's REAL entity by id, with its owning sketch feature,

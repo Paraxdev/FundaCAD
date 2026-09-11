@@ -6,13 +6,20 @@
 
 import type { CadDocument, Feature, ParamTarget, ParamUnit, SketchEntity, SketchPattern } from "../types";
 import { isDimConstraint } from "../sketch/id";
+import { contributedFeature } from "../plugins/contrib";
+import { asFeature } from "../types";
 
 /** What kind of quantity a numeric field holds, drives display-unit conversion
  *  (lengths mm↔display), suffixes (° / mm), and parameter unit coercion.
  *  Defined here (document layer); ui/units.ts re-exports it for its consumers. */
 export type FieldKind = "length" | "angle" | "count";
 
-/** [field, label, kind] rows per feature type. */
+/** [field, label, kind] rows per feature type, for the features the APPLICATION
+ *  owns. A plugin's feature type is not in here and cannot be: its geometry
+ *  lives in the plugin's own directory and its fields are whatever that code
+ *  reads. `featureNumFields()` below is what every consumer should call.
+ *
+ *  `texture` used to be the last row of this table. */
 export const FEATURE_NUM_FIELDS: Partial<Record<Feature["type"], [string, string, FieldKind][]>> = {
   extrude: [["distance", "Distance", "length"]],
   // profile is a dimensionless ratio in (-1, 1), "count" is this file's kind for
@@ -40,7 +47,6 @@ export const FEATURE_NUM_FIELDS: Partial<Record<Feature["type"], [string, string
   cleanUp: [["tolerance", "Tolerance", "length"]],
   scale: [["factor", "Factor", "count"], ["sx", "X factor", "count"], ["sy", "Y factor", "count"], ["sz", "Z factor", "count"]],
   move: [["dx", "Move X", "length"], ["dy", "Move Y", "length"], ["dz", "Move Z", "length"], ["rx", "Rotate X", "angle"], ["ry", "Rotate Y", "angle"], ["rz", "Rotate Z", "angle"]],
-  texture: [["depth", "Depth", "length"], ["scale", "Scale", "length"], ["angle", "Angle", "angle"], ["offset", "Offset", "length"], ["sharpness", "Sharpness", "count"], ["boundaryInset", "Edge blend", "length"], ["seed", "Seed", "count"]],
 };
 
 /** Whether selecting this feature type actually opens an editor (numeric fields
@@ -50,8 +56,47 @@ export const FEATURE_NUM_FIELDS: Partial<Record<Feature["type"], [string, string
  *  Lives here rather than beside the value rows because it is a fact about the field
  *  table above, and its other caller (ui/contextMenus.ts) has no other reason to
  *  reach into a panel. */
-export function isInspectorEditable(type: Feature["type"]): boolean {
-  return type === "sketch" || type in FEATURE_NUM_FIELDS;
+export function isInspectorEditable(type: string): boolean {
+  return type === "sketch" || featureNumFields(type).length > 0;
+}
+
+/** The numeric rows of a feature type: the app's own, else the owning plugin's.
+ *
+ *  WHY THE FALLBACK AT THE END IS NOT A DETAIL. A document may hold a feature
+ *  whose plugin is not installed, and it must still be possible to see and edit
+ *  its numbers, and a parameter bound to one of them must keep resolving.
+ *  Otherwise uninstalling a plugin does not merely disable a tool, it silently
+ *  drops values out of the properties panel and breaks every equation that
+ *  referenced them, and re-installing cannot bring them back because by then
+ *  something will have saved the document without them.
+ *
+ *  So an undescribed type gets its own numeric fields listed verbatim, labelled
+ *  by field name. That is uglier than the plugin's labels and it is the whole
+ *  point: the values are still there, still typed, still parameter-drivable,
+ *  and the panel says plainly that it does not know what they are called. */
+export function featureNumFields(
+  type: string,
+  values?: Record<string, unknown>,
+): readonly [string, string, FieldKind][] {
+  const own = FEATURE_NUM_FIELDS[type as Feature["type"]];
+  if (own) return own;
+  const contributed = contributedFeature(type)?.numFields;
+  if (contributed) return contributed;
+  return values ? rawNumFields(values) : [];
+}
+
+/** Every numeric-looking field on a feature nobody describes, in key order,
+ *  labelled by its own name. Ids, type and geometry selections are skipped:
+ *  they are not numbers and a spin box over one would corrupt the feature. */
+export function rawNumFields(
+  values: Record<string, unknown>,
+): [string, string, FieldKind][] {
+  const out: [string, string, FieldKind][] = [];
+  for (const [k, v] of Object.entries(values)) {
+    if (k === "id" || k === "type") continue;
+    if (typeof v === "number") out.push([k, k, "count"]);
+  }
+  return out;
 }
 
 /** Numeric fields on the solver-RIGID parametric shapes (the solver never writes
@@ -113,14 +158,18 @@ export interface ResolvedTarget {
  *  exists (deleted feature/entity/constraint, the caller decides what a
  *  dangling binding means). */
 export function resolveTarget(doc: CadDocument, target: ParamTarget): ResolvedTarget | null {
-  const sketchOf = (id: string) => {
-    const f = doc.features.find((x) => x.id === id);
-    return f && f.type === "sketch" ? f : null;
-  };
+  const sketchOf = (id: string) =>
+    asFeature(doc.features.find((x) => x.id === id), "sketch");
   switch (target.kind) {
     case "feature": {
       const f = doc.features.find((x) => x.id === target.feature);
-      const row = f && FEATURE_NUM_FIELDS[f.type]?.find(([field]) => field === target.field);
+      // featureNumFields, not the app's table alone: a parameter may be bound to
+      // a field of a PLUGIN's feature, and it has to keep resolving whether or
+      // not that plugin is loaded. The raw fallback is what makes the binding
+      // survive the plugin being uninstalled instead of quietly going dead.
+      const row = f
+        && featureNumFields(f.type, f as Record<string, unknown>)
+          .find(([field]) => field === target.field);
       if (!f || !row) return null;
       return { holder: f as unknown as Record<string, unknown>, field: target.field, kind: row[2] };
     }

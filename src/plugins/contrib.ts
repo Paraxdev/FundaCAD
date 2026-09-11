@@ -39,6 +39,8 @@ import type { CtxItem } from "../stores/contextMenu";
 import type { EntityKind, EntitySource } from "../features/toolCapabilities";
 import type { ChoiceField, FileField, ToggleField } from "../document/optionFields";
 import type { FeatureMeta } from "../ui/featureMeta";
+import type { FieldKind } from "../document/numFields";
+import type { TargetField } from "../features/selectionTargets";
 
 /** Undo a `contribute`. Idempotent: calling it twice is not an error. */
 export type Unregister = () => void;
@@ -219,6 +221,20 @@ export interface FeatureTypeContribution {
    *  tool-editable", a parameter-bound value, say, and the app falls back to
    *  the value rows, exactly as it does for its own tools. */
   edit?: (featureId: string, done: (id: string | null) => void) => boolean;
+  /** The feature's parameter-drivable numeric rows, as
+   *  `[field, label, kind]`, the same shape the app's own inventory uses.
+   *
+   *  A plugin that OWNS a feature type owns these too, because the app can no
+   *  longer know them: the type is not in its union and the geometry that reads
+   *  the fields is in the plugin's own directory. What the app keeps is the
+   *  guarantee underneath, a feature type nobody describes still round-trips
+   *  with its values intact and its parameter bindings unbroken (see
+   *  document/numFields.ts), so uninstalling a plugin cannot cost you the
+   *  numbers you typed. */
+  numFields?: readonly [string, string, FieldKind][];
+  /** The feature's editable geometry selections (the Faces/Edges/Bodies rows).
+   *  Owned by the plugin for the same reason as `numFields`. */
+  targets?: readonly TargetField[];
 }
 
 export interface Contribution {

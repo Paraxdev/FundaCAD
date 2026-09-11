@@ -307,23 +307,88 @@ already runs with the whole of the app's reach.
 
 ### The line a plugin may not cross
 
-**A plugin owns how something is CREATED and PRESENTED. It does not own whether a
-file you already saved still opens.**
+**A plugin owns a feature outright: its schema, its rows, and the geometry that
+builds it. What it may not do is make a file unreadable.**
 
-So `texture` stays in the `Feature` union in `src/types.ts`, the geometry that
-builds it stays in the sidecar, and `document/numFields.ts` keeps its numeric
-rows, that table is not a list of labels, it is the inventory of what a
-PARAMETER can drive, and `resolveTarget` reads it to answer what `texture1.depth`
-refers to. A parameter has to keep meaning the same thing on a machine where the
-plugin is switched off.
+That is the second version of this rule. The first said a plugin owned how
+something was CREATED and PRESENTED, and never whether a saved file still built,
+so `texture` stayed in the `Feature` union in `src/types.ts`, its geometry stayed
+in `sidecar/`, and `document/numFields.ts` kept its numeric rows. It sounded
+generous and it described something worse: an application that built textures
+whether or not the plugin existed, and a plugin that was a panel in front of it.
+Uninstalling changed nothing about what FundaCAD could do.
 
-With the plugin gone, a document with a texture in it opens, rebuilds, renders
-and exports; its numbers stay editable and stay parameter-drivable; and its row
-in the history falls back to a grey dot and the raw type, which is honest,
-because that is exactly what it is to that build. What you lose is the panel that
-makes one. `e2e/texture_plugin.cjs` ends by switching the plugin off and
-rebuilding the document, because this is the claim most worth checking against a
-running app rather than against a test that could be measuring its own fake.
+So the boundary moved, and it now runs where the honest cost is:
+
+| | owner |
+| --- | --- |
+| the feature's fields and rows (`textureForm.ts`) | the plugin |
+| the displacement (`geometry/*.py`, registered into the engine) | the plugin |
+| the rebuild-time handler for the `texture` type | the plugin |
+| carrying, saving and re-saving a feature nobody can build | the app |
+| saying which plugin is missing, by name | the app |
+
+**What the app still guarantees.** It can hold a feature whose type it does not
+define: `PluginFeature` in `src/types.ts` is two known keys and an index
+signature, so the values round-trip untouched through a load and a save. They
+stay in the value rows, listed by their own field names since nothing else knows
+what to call them, and a parameter bound to one keeps resolving
+(`featureNumFields` falls back to the raw fields for exactly this). Uninstalling
+a plugin costs you the building, never the numbers.
+
+**What it costs.** A document that uses a plugin's feature needs that plugin.
+The build reports it per feature, with the plugin named
+(`sidecar/plugin_geometry.py`'s `unregistered`), and the app says it once at the
+document level when the file opens (`src/document/missingPlugins.ts`). Both
+sentences lead with the reassurance that nothing has been lost, because the
+question a person actually has is whether their part survived.
+
+**Switched off is not uninstalled.** The toggle in Plugins means "stop this
+running without removing it", and it is usually reached for to find out whether
+something is causing a problem. It takes away every window surface the plugin
+contributes, and it leaves the geometry registered, because the plugin's files
+are still on disk and the toggle's one standing rule is that it never touches
+your document. Toggling a plugin off to diagnose a UI problem must not silently
+rebuild your model smooth. Uninstalling is the removal that costs the building,
+and that is the one the warning is for.
+
+`e2e/texture_plugin.cjs` ends by switching the plugin off, because this is the
+claim most worth checking against a running app rather than against a test that
+could be measuring its own fake.
+
+### Owning a feature type
+
+Two declarations in `manifest.json`, and they answer two different questions:
+
+```json
+{
+  "featureTypes": ["texture"],
+  "geometry": "geometry/register.py"
+}
+```
+
+`featureTypes` is read when the plugin is **not** running, off the manifest
+rather than off any contribution, which is the whole point: a plugin that is
+uninstalled or switched off contributes nothing, and this is what lets the
+warning name it anyway.
+
+`geometry` names a Python module the geometry engine imports at startup. Its
+`register(engine, plugin_id)` claims a feature handler (a rebuild-time verb,
+same signature as everything in `builder._FEATURE_HANDLERS`) and, if it needs
+one, a mesh pass (a tessellation-time hook that runs against the FINAL shape, so
+the effect survives the booleans and fillets applied after it). See
+`sidecar/plugin_geometry.py` for both contracts.
+
+On the window side the plugin contributes `numFields` and `targets` alongside
+the dropdowns it already contributed, because `document/numFields.ts` and
+`features/selectionTargets.ts` no longer name a type they do not own.
+
+**Registered geometry is not sandboxed.** It is imported into the geometry
+worker and runs with everything that process has. There is no cage and there is
+not going to be one: geometry code that cannot call the kernel is not geometry
+code, which is the bargain Blender, Rhino and Fusion all make.
+`sandboxNote("builtin")` is where a person is told, in the words they read
+before they install.
 
 ### Two plugins that need each other
 
@@ -931,7 +996,7 @@ written against. What the move cost, measured rather than asserted:
 
 | | |
 | --- | --- |
-| new contribution points | three |
+| new contribution points | three, then two more (`numFields`, `targets`) |
 | core files that stopped naming a texture | twenty-three |
 | main chunk | 4,183.29 kB -> 4,150.99 kB (932.01 -> 925.49 gzipped) |
 | tests | 2,028 -> 2,118 |
@@ -939,6 +1004,17 @@ written against. What the move cost, measured rather than asserted:
 The bundle got smaller, which is the arithmetic working the right way round: the
 tool, its panel and its form logic left the app, and nothing was added to replace
 them but three readers of a table that was already there.
+
+**And then the move finished, because the first pass had not.** Every number
+above was true and the headline was still wrong: the geometry stayed in
+`sidecar/`, the `texture` variant stayed in the `Feature` union, and the value
+rows and the Faces row stayed in the app's own tables. Nothing imported the
+plugin, so `coreIndependence.test.ts` passed, and it was measuring the import
+graph while the coupling lived in plain text. The second pass moved the schema
+and the 1,992 lines of displacement into the plugin, added the geometry registry
+the engine loads them through, and added the rule that would have caught it: the
+core may not NAME a feature type a plugin declares. That rule is a grep, it is
+cruder than the import graph, and it is the one that fails.
 
 Where the checks are:
 

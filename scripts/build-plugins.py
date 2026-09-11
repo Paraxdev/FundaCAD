@@ -10,11 +10,17 @@ entire rule. Adding a plugin means adding a directory, not editing this file,
 and a directory without a manifest is skipped rather than packaged into
 something that cannot be installed.
 
-EXCEPT the builtins, which are skipped. A plugin of kind "builtin" is the app's
-own code, shipped inside the app and only turned on and off; there is no zip for
-it to arrive in and nothing that could install one. Packaging it would put an
-asset on the release that nothing can consume, under a name the app would then
-be entitled to offer as a download.
+Every kind is packaged, builtins included. `builtin` describes REACH, that the
+plugin runs in the application's own JavaScript context, and never where it came
+from; see the ENTRY table below and src/plugins/shipped.ts, which says the same
+thing from the app's side. (This paragraph used to say builtins were skipped
+because they shipped inside the app. They have not for some time.)
+
+A plugin may carry PYTHON as well, under a path its manifest names in
+`geometry`. That is code the geometry engine imports so the plugin can own a
+feature type outright, rather than presenting one the application builds either
+way, and it is packaged like any other source: `check()` refuses a bundle that
+declares geometry and does not carry it.
 
 The bundle is a zip with manifest.json and the plugin's sources at the TOP level,
 because the app runs `<plugin dir>/<entry>` and the entry point puts its own
@@ -191,6 +197,26 @@ def check(pid, src):
     on_disk = "main.ts" if kind == BUILTIN else entry
     if not os.path.isfile(os.path.join(src, on_disk)):
         sys.exit(f"plugins/{pid} is kind {kind} and has no {on_disk}")
+
+    # A plugin may also own GEOMETRY: Python the sidecar imports so the plugin
+    # can build a feature type of its own (see sidecar/plugin_geometry.py). Two
+    # things are checked here rather than left to the install to discover,
+    # because both produce the same silent result, a feature that is in the
+    # document, has values, and reports its plugin missing on a machine where it
+    # is plainly installed.
+    geometry = manifest.get("geometry")
+    if geometry:
+        gpath = os.path.join(src, *str(geometry).split("/"))
+        if not os.path.isfile(gpath):
+            sys.exit(f"plugins/{pid}/{MANIFEST} names geometry {geometry!r}, which is not there")
+        if not manifest.get("featureTypes"):
+            # The types are how the app names this plugin in the warning when it
+            # is NOT running, so geometry without them means a document full of
+            # features that can only say "unknown feature type".
+            sys.exit(
+                f"plugins/{pid}/{MANIFEST} ships geometry but declares no "
+                "featureTypes, so nothing could name it when it is missing"
+            )
     return manifest
 
 

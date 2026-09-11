@@ -81,7 +81,7 @@ from geom_select import (
     _edge_curve,
     _edge_dedup_key,
 )
-import texture
+import plugin_geometry
 from conic_blend import PROFILE_EPS, clamp_profile
 
 # Split out of this file when it passed seven thousand lines. Re-exported rather
@@ -277,6 +277,16 @@ class _RebuildCtx:
     # that follow a face. Only the ones that MOVED: a sketch still sitting on
     # its cached plane says nothing, and the frontend reads the cache anyway.
     sketch_planes: dict = None
+
+    def stash(self, body, spec):
+        """Put a tessellation-time spec on a body, for a PLUGIN's handler.
+
+        A method on the ctx rather than something the plugin imports, so that a
+        registered handler needs nothing from this package except the object it
+        was handed. See plugin_geometry.stash for why it rebinds the list rather
+        than appending to it.
+        """
+        plugin_geometry.stash(body, spec)
 
 
 # --- feature handlers ---------------------------------------------------------
@@ -1313,28 +1323,6 @@ def _handle_draft(f, ctx):
         body["shape"] = shape
 
 
-def _handle_texture(f, ctx):
-    # Two-phase, like every other selector feature but lazier: validate NOW
-    # (so a bad kind/param/image path shows red on the timeline immediately)
-    # against the CURRENT shape via a THROWAWAY resolve, but never touch
-    # act["shape"], the spec is stored raw and re-resolved once, lazily,
-    # against the FINAL shape at tessellation/export time (texture.py's
-    # resolve_body_textures), so it survives downstream topology changes the
-    # same way every other lossy-tolerant selector already does.
-    act = ctx.find_body(f["body"]) if f.get("body") else ctx.require_active("Texture")
-    if act is None:
-        raise ValueError("Texture: the target body no longer exists")
-    sel = f.get("faces") or {"by": "all"}
-    found = texture._resolve_texture_faces(act["shape"], sel)
-    if not found:
-        raise ValueError("no face found for texture")
-    spec = texture.validate_texture_spec(f)
-    # REBIND, never mutate in place: body dicts are shallow-copied by
-    # _snapshot() (dict(b)), so appending to an EXISTING list would corrupt
-    # any earlier snapshot's view of "_textures" through the shared reference.
-    act["_textures"] = (act.get("_textures") or []) + [spec]
-
-
 def _handle_pattern_rect(f, ctx):
     act = ctx.require_active("Pattern")
     cx, cy = ctx.val(f["countX"]), ctx.val(f["countY"])
@@ -1499,9 +1487,14 @@ def _handle_remove_body(f, ctx):
     ctx.bodies[:] = [b for b in ctx.bodies if b["id"] not in ids]
 
 
-# type string -> handler. Unknown types are NOT in this dict, the rebuild loop
-# below raises the exact same "unknown feature type" ValueError the old trailing
-# `else` branch did.
+# type string -> handler, for the verbs the APPLICATION owns. A type that is in
+# neither this dict nor plugin_geometry's registry is reported by
+# plugin_geometry.unregistered(), which names the plugin when it can.
+#
+# `texture` used to be a key here, and the two thousand lines behind it used to
+# be in this package. It is registered by plugins/FundaCAD.Texture now, which is
+# what makes that plugin the owner of the feature rather than a panel in front
+# of code that shipped either way.
 _FEATURE_HANDLERS = {
     "sketch": _handle_sketch,
     "datumPlane": _handle_datum_plane,
@@ -1523,7 +1516,6 @@ _FEATURE_HANDLERS = {
     "offsetFace": _handle_offset_face,
     "thicken": _handle_thicken,
     "draft": _handle_draft,
-    "texture": _handle_texture,
     "patternRect": _handle_pattern_rect,
     "patternLinear": _handle_pattern_linear,
     "patternCircular": _handle_pattern_circular,
@@ -1775,9 +1767,17 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
             pre_owners_all = ChainMap(*reversed(list(pre_owners_by_id.values())))
         try:
             t = f["type"]
-            handler = _FEATURE_HANDLERS.get(t)
+            # The application's own verbs first, then the ones a plugin
+            # registered. The order settles nothing in practice, a plugin may
+            # not claim a type this table already has, but reading the built-in
+            # table first keeps a broken plugin from shadowing the core.
+            handler = _FEATURE_HANDLERS.get(t) or plugin_geometry.handler_for(t)
             if handler is None:
-                raise ValueError(f"unknown feature type: {t}")
+                # NOT "unknown feature type". The document is fine and the
+                # feature is kept; what is missing is the plugin that knows how
+                # to build it, and the message names it so that the answer is
+                # "install this" rather than "your file is broken".
+                raise ValueError(plugin_geometry.unregistered(t))
             handler(f, ctx)
 
         except ValueError as ex:  # name the feature so the timeline can flag it red
@@ -1852,11 +1852,11 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
             sh = _drop_debris(sh)
         entry = {"id": b["id"], "name": b["name"], "shape": sh,
                  "owners": b.get("_owners") or {},
-                 "_textures": b.get("_textures")}
+                 plugin_geometry.BODY_KEY: b.get(plugin_geometry.BODY_KEY)}
         # Rebuilt from an explicit key set, so anything new on the body dict has
         # to be listed here or it is silently dropped between rebuild and the
-        # wire, which is how `_textures` was lost once already. Added only when
-        # set, so a body from a non-assembly import stays byte-identical.
+        # wire, which is how the pass specs were lost once already. Added only
+        # when set, so a body from a non-assembly import stays byte-identical.
         if b.get("node_ref"):
             entry["node_ref"] = b["node_ref"]
         if b.get("face_colors"):

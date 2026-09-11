@@ -1,14 +1,21 @@
 """Printed surface texture: knurl/hex/waves/ribs/voronoi/noise/image height fields,
 displaced into a face's triangulation at tessellation/export time.
 
-Two-phase design (mirrors selector-v2's own resolve-lazily pattern): builder.py's
-_handle_texture validates the spec against the CURRENT shape (for red-timeline
-feedback) and appends the raw spec to body["_textures"], it never touches
+THIS FILE IS PART OF THE PLUGIN, not of the application. It is imported into the
+geometry engine when the plugin is installed, by the registration in
+./register.py, which is what the sidecar's plugin_geometry registry calls. None
+of it used to be here: it lived in sidecar/ and was dispatched from a table that
+named "texture" in plain text, so the application built textures whether the
+plugin was installed or not and the plugin was a panel in front of it.
+
+Two-phase design (mirrors selector-v2's own resolve-lazily pattern):
+register._handle_texture validates the spec against the CURRENT shape (for
+red-timeline feedback) and stashes it on the body, it never touches
 body["shape"]. The actual face selectors are resolved lazily, ONCE, against the
-FINAL shape by resolve_body_textures() below, called from tessellate.py right
-before meshing. This sidesteps every downstream-feature topology change the same
-way every other selector-based feature already does (best-effort nearest-match +
-diagnostic on drift, never a hard failure).
+FINAL shape by register._resolve, called through the registry from tessellate.py
+right before meshing. This sidesteps every downstream-feature topology change the
+same way every other selector-based feature already does (best-effort
+nearest-match + diagnostic on drift, never a hard failure).
 
 Displacement never edits the BRep (no variable-offset API in OCCT for this); it
 subdivides + displaces the MESH at tessellation time. See displace_face().
@@ -18,8 +25,8 @@ import math
 
 import numpy as np
 
-# Split out when this file passed 1,900 lines. Re-exported because builder.py,
-# tessellate.py and the texture tests reach for several of these by name.
+# Split out when this file passed 1,900 lines. Re-exported because register.py
+# and the texture tests reach for several of these by name.
 from texture_height import (  # noqa: F401
     _HEX_CORNERS,
     _facet_wave,
@@ -99,11 +106,21 @@ _DEFAULT_DENSITY_CAP = 2_000_000
 #    change shape.
 CODE_VERSION = 8
 
+#: The mesh-pass name this plugin registers under, stamped into every spec it
+#: makes. The registry reads `spec["pass"]` to route a face back here at
+#: tessellation time, so a spec without it is inert: it rides along on the body
+#: and displaces nothing. Set HERE, by the function that builds the spec, rather
+#: than by the caller, because a caller that forgets produces exactly that
+#: silent nothing. See register.py.
+PASS = "texture"
+
 
 def validate_texture_spec(f):
-    """Validate a raw texture feature dict and return the CLEANED spec stored on
-    body["_textures"]. Raises ValueError with a user-facing message, the same
-    convention every other handler uses (see _handle_shell/_handle_draft)."""
+    """Validate a raw texture feature dict and return the CLEANED spec the
+    handler stashes on the body. Raises ValueError with a user-facing message,
+    the same convention every other handler uses (see _handle_shell/_handle_draft).
+
+    The caller adds `spec["pass"]`; see register.py."""
     kind = f.get("kind")
     if kind not in TEXTURE_KINDS:
         raise ValueError(f"unknown texture kind: {kind!r}")
@@ -134,6 +151,7 @@ def validate_texture_spec(f):
         except Exception as ex:
             raise ValueError(f"can't read texture image {image_path!r}: {ex}") from ex
     spec = {
+        "pass": PASS,
         "feature_id": f.get("id"),
         "kind": kind,
         "faces": f.get("faces") or {"by": "all"},
@@ -174,28 +192,6 @@ def _resolve_texture_faces(shape, sel, diag=None, feature_id=None):
         for face in resolve_faces(shape, s, diag=diag, feature_id=feature_id):
             seen.setdefault(_face_fp(face), face)
     return list(seen.values())
-
-
-def resolve_body_textures(body, diag=None):
-    """Lazily resolve every texture spec on `body` against its FINAL shape. Returns
-    [(spec, [Face, ...]), ...], specs whose selector now matches zero faces (the
-    targeted face was fully consumed downstream) are dropped, same best-effort
-    behavior as every other selector-based feature."""
-    specs = body.get("_textures") or []
-    if not specs:
-        return []
-    shape = body.get("shape")
-    if shape is None:
-        return []
-    out = []
-    for spec in specs:
-        faces = _resolve_texture_faces(
-            shape, spec.get("faces") or {"by": "all"}, diag, spec.get("feature_id")
-        )
-        if faces:
-            out.append((spec, faces))
-    return out
-
 
 
 _GEOM_CACHE = {}

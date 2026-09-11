@@ -104,7 +104,13 @@ const CODE: &str = "main.js";
 // on disk
 // ---------------------------------------------------------------------------
 
-fn plugins_root(app: &AppHandle) -> Result<PathBuf, String> {
+/// Where installed plugins live, one directory each.
+///
+/// `pub(crate)` because the sidecar needs it too: a plugin may ship geometry the
+/// engine imports (see sidecar/plugin_geometry.py), and Rust tells it this path
+/// rather than letting Python guess, for the same reason it does for the blob
+/// store. The two must agree exactly, and only one of them installs anything.
+pub(crate) fn plugins_root(app: &AppHandle) -> Result<PathBuf, String> {
     let dir = app
         .path()
         .app_data_dir()

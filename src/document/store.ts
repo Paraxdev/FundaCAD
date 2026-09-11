@@ -4,6 +4,7 @@
 // listeners (viewport, timeline, tree).
 
 import type { CadDocument, Feature, ParamTarget, PlaneSpec, ProjectedSource, ProjectionUpdate, RebuildReply, RebuildResult, ViewCubeSide, ViewOverride } from "../types";
+import { asFeature } from "../types";
 import { applyProjectionUpdate } from "../types";
 import type { GeometryBackend, ProjectionResult } from "../geometry/client";
 import { FORMAT_VERSION, migrateDocument } from "./migrate";
@@ -605,7 +606,10 @@ export class DocumentStore {
     // an older snapshot, so a sketch/entity may have been deleted since, drop
     // dangling entries rather than resurrecting them.
     const sketchOf = new Map<string, Extract<Feature, { type: "sketch" }>>();
-    for (const f of this.doc.features) if (f.type === "sketch") sketchOf.set(f.id, f);
+    for (const f of this.doc.features) {
+      const sk = asFeature(f, "sketch");
+      if (sk) sketchOf.set(sk.id, sk);
+    }
     const valid = updates.filter((u) => {
       const f = sketchOf.get(u.sketch);
       return !!f && f.entities.some((e) => e.type === "projected" && e.id === u.entity);

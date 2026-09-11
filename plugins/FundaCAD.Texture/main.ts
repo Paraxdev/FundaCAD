@@ -27,13 +27,24 @@
 // through points that already existed, which is the result worth having: adding
 // a tool needed three new points, not eleven.
 //
-// WHAT STAYED IN THE APPLICATION, and why it is not a hedge. The `texture`
-// feature is part of the document format and the geometry that builds it is part
-// of the sidecar. A file with a texture in it opens, rebuilds, renders and
-// exports on a machine where this was never installed; its numbers stay in the
-// value rows and stay parameter-drivable. Uninstalling this costs you the panel
-// that makes one. It does not cost you the ones you already made, and a plugin
-// boundary that could take those away would be a worse bargain than a checkbox.
+// WHAT STAYED IN THE APPLICATION, and what did not. Nothing about a texture
+// stayed. The feature's schema is in textureForm.ts, its rows and its Faces
+// target are contributed from here, and the geometry that builds it is in
+// geometry/, registered into the engine when this plugin is installed.
+//
+// That is the second version of this paragraph. The first said the schema and
+// the geometry were the application's, so that a file with a texture in it
+// would build on a machine where this was never installed, and called the line
+// deliberate. It was, and it was the wrong line: what it actually described was
+// a plugin that owned a panel in front of a feature the application had anyway,
+// which is a checkbox rather than a boundary.
+//
+// So the cost is real and it is paid where it can be seen. A document that uses
+// this needs this. What the application guarantees instead is that it can CARRY
+// a feature it cannot build: the values survive, unlabelled but typed and still
+// parameter-drivable, a save writes them back untouched, and the build names the
+// plugin rather than shrugging. See src/document/missingPlugins.ts and
+// sidecar/plugin_geometry.py, which are the two halves of saying so.
 
 import { contribute } from "fundacad";
 import type { Engine } from "fundacad";
@@ -43,6 +54,8 @@ import * as panel from "./panel";
 import {
   TEXTURE_CHOICE_FIELDS,
   TEXTURE_FILE_FIELDS,
+  TEXTURE_NUM_FIELDS,
+  TEXTURE_TARGETS,
   TEXTURE_TOGGLE_FIELDS,
   sharpnessLabel,
   textureFieldApplies,
@@ -116,10 +129,15 @@ export async function activate(e: Engine): Promise<() => void> {
       choiceFields: TEXTURE_CHOICE_FIELDS,
       fileFields: TEXTURE_FILE_FIELDS,
       toggleFields: TEXTURE_TOGGLE_FIELDS,
-      // Governs the numeric rows too, which is the whole reason this is worth
-      // contributing: the application owns `depth`, `scale`, `seed` and the rest
-      // because a parameter can drive them, and this decides which of them a
-      // given pattern actually reads.
+      // The numeric rows and the Faces row, which the application used to hold
+      // in two tables of its own beside extrude's Distance and fillet's Edges.
+      // They are here because the feature type is here: nothing in the app
+      // knows a texture has a Depth, so nothing in the app can label one.
+      numFields: TEXTURE_NUM_FIELDS,
+      targets: TEXTURE_TARGETS,
+      // Which of those rows a given pattern actually reads. Separate from the
+      // inventory above because every row is always parameter-drivable and only
+      // some are ever drawn: a voronoi has a Seed, a knurl does not.
       fieldApplies: textureFieldApplies,
       fieldLabel: (field, values) =>
         field === "sharpness" ? sharpnessLabel(values["profile"]) : null,

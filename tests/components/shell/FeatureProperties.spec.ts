@@ -20,6 +20,8 @@ import { contribute, resetContributions } from "../../../src/plugins/contrib";
 import {
   TEXTURE_CHOICE_FIELDS,
   TEXTURE_FILE_FIELDS,
+  TEXTURE_NUM_FIELDS,
+  TEXTURE_TARGETS,
   TEXTURE_TOGGLE_FIELDS,
   sharpnessLabel,
   textureFieldApplies,
@@ -29,13 +31,18 @@ import type { CadDocument, Feature } from "../../../src/types";
 
 /** Register the Texture plugin's description of its own feature type.
  *
- *  The four texture cases below used to need nothing: the pattern dropdown, the
+ *  The texture cases below used to need nothing: the pattern dropdown, the
  *  invert switch, the rule that hides a Seed on a knurl and the name of the
  *  shape slider were all tables in src/document/optionFields.ts. None of them is
  *  now, a plugin contributes them, so these tests say so by contributing the
  *  same thing the plugin does. The `no plugin, no rows` control below is the
  *  other half: without this call the rows are genuinely gone, which is what
- *  makes the four that follow it measure something. */
+ *  makes the ones that follow it measure something.
+ *
+ *  `numFields` and `targets` joined this list when the feature's SCHEMA moved
+ *  too. Depth, Scale and the Faces row were the application's own tables until
+ *  then, so a texture drew its numbers here whether or not anything described
+ *  it, and only the dropdowns needed a plugin. Now nothing does. */
 function withTexturePlugin() {
   return contribute("FundaCAD.Texture", {
     features: [{
@@ -44,6 +51,8 @@ function withTexturePlugin() {
       choiceFields: TEXTURE_CHOICE_FIELDS,
       fileFields: TEXTURE_FILE_FIELDS,
       toggleFields: TEXTURE_TOGGLE_FIELDS,
+      numFields: TEXTURE_NUM_FIELDS,
+      targets: TEXTURE_TARGETS,
       fieldApplies: textureFieldApplies,
       fieldLabel: (field, values) =>
         field === "sharpness" ? sharpnessLabel(values["profile"]) : null,
@@ -336,27 +345,32 @@ describe("FeatureProperties", () => {
     expect(rows(render(fake, "l1"))).toContainEqual(["Operation", "", "new"]);
   });
 
-  // CONTROL for the four cases that follow. Everything they assert comes from a
+  // CONTROL for the cases that follow. Everything they assert comes from a
   // plugin now, so if it were somehow still in the application they would all
   // pass whether or not the contribution was made, and would be measuring
   // nothing.
-  it("shows a plugin's feature no dropdowns and no switch when it is not running", () => {
+  it("still shows a missing plugin's feature its own numbers, unlabelled", () => {
     const fake = makeEngine({
       parameters: {},
       features: [{ id: "t1", type: "texture", kind: "image", depth: 0.4, scale: 2 } as unknown as Feature],
     });
     const l = labels(render(fake, "t1"));
-    // The numbers are the application's, a parameter can drive them, so they
-    // stay whatever is installed, and they are still here.
-    expect(l).toContain("Depth");
-    expect(l).toContain("Scale");
-    // The presentation is the plugin's, and it is not.
+    // THE PROMISE THIS KEEPS. The plugin owns the schema now, so the app does
+    // not know this feature has a field called Depth, let alone what to call
+    // it. What it must not do is drop the values: they are still here, still
+    // editable, still parameter-drivable, listed by their own field names.
+    // Anything less and uninstalling a plugin would quietly eat the numbers
+    // somebody typed, and the next save would make that permanent.
+    expect(l).toContain("depth");
+    expect(l).toContain("scale");
+    // Labelled, ordered and filtered is the plugin's job, and it is not here.
+    expect(l).not.toContain("Depth");
     expect(l).not.toContain("Pattern");
     expect(l).not.toContain("Invert heights");
-    // And with no rule to say otherwise, every numeric row shows, which is the
-    // documented default rather than a guess about what a heightmap reads.
-    expect(l).toContain("Seed");
-    expect(l).toContain("Angle");
+    // Nothing is invented either: `kind` is a string, not a number, so it gets
+    // no spin box. A row over it would write a number into a field the geometry
+    // reads as a pattern name.
+    expect(l).not.toContain("kind");
   });
 
   it("puts the choices above the numbers they govern", () => {

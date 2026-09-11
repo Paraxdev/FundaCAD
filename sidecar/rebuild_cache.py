@@ -18,6 +18,7 @@ import json
 import os
 
 import appenv
+import plugin_geometry
 import font_guard  # noqa: F401  MUST precede build123d, see font_guard.py
 
 from progress import progress_tick
@@ -361,8 +362,8 @@ def _save_checkpoint(persist, i, bodies, datums, errors, counter_n, diagnostics=
             progress_tick()
             sh = b.get("shape")
             # The assembly-tree node this body came from. Body metadata that is
-            # NOT recoverable from the shape, exactly like `_owners` and
-            # `_textures` below, and an import always blows the checkpoint
+            # NOT recoverable from the shape, exactly like `_owners` and the
+            # plugin mesh-pass specs below, and an import always blows the checkpoint
             # budget, so a disk resume is the NORMAL way an assembly document
             # reopens. Omitting it here would flatten the tree on every reopen,
             # with no error and nothing for `_body_fingerprint` to catch, since
@@ -377,7 +378,7 @@ def _save_checkpoint(persist, i, bodies, datums, errors, counter_n, diagnostics=
             # pass delete legitimate small parts on every disk resume, which is
             # the NORMAL way an assembly document reopens, since an import always
             # blows the checkpoint budget. Third time this key set has bitten:
-            # `_textures`, then `node_ref`, now this.
+            # the pass specs, then `node_ref`, now this.
             if b.get("_intact"):
                 entry["_intact"] = True
             # Fourth. The imported file's per-face colours (packed, see
@@ -397,13 +398,14 @@ def _save_checkpoint(persist, i, bodies, datums, errors, counter_n, diagnostics=
             manifest.append(entry)
             fps.append(_body_fingerprint(sh))
             owners[b["id"]] = [[list(k), v] for k, v in (b.get("_owners") or {}).items()]
-            # `_textures` is body state that is NOT in the shape: _handle_texture
-            # stores the raw spec and displacement happens lazily at tessellation.
-            # Without persisting it, a disk resume past the texture feature returned
-            # an untextured body with no error, the mesh AND the export silently
-            # lost the texture. Same class of state as `_owners` above.
-            if b.get("_textures"):
-                textures[b["id"]] = b["_textures"]
+            # A plugin's mesh-pass specs are body state that is NOT in the
+            # shape: the plugin's handler stores the raw spec and displacement
+            # happens lazily at tessellation. Without persisting them, a disk
+            # resume past the feature returned an undisplaced body with no
+            # error, the mesh AND the export silently lost it. Same class of
+            # state as `_owners` above.
+            if b.get(plugin_geometry.BODY_KEY):
+                textures[b["id"]] = b[plugin_geometry.BODY_KEY]
         state = json.dumps({
             "datums": datums,
             # Rides with `datums` for the same reason, and one more: the resume
@@ -485,11 +487,11 @@ def _restore_from_disk(store, chain_keys):
                     for k, v in state.get("owners", {}).get(ent["body_id"], [])
                 },
             }
-            # only set the key when the body really is textured, so a plain body's
-            # dict stays exactly as it was before textures were persisted
+            # only set the key when the body really carries a pass, so a plain
+            # body's dict stays exactly as it was before these were persisted
             tex = state.get("textures", {}).get(ent["body_id"])
             if tex:
-                body["_textures"] = tex
+                body[plugin_geometry.BODY_KEY] = tex
             # same rule for the assembly-tree node: absent on every body that did
             # not come from a manifest-bound import, and on every checkpoint
             # written before this existed

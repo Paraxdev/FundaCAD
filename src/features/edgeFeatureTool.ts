@@ -18,6 +18,7 @@
 // last one stands.
 
 import * as THREE from "three";
+import { asFeature } from "../types";
 import { Line2 } from "three/examples/jsm/lines/Line2.js";
 import type { EdgeRef } from "../viewport/edgeLines";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
@@ -353,8 +354,9 @@ export class EdgeFeatureTool {
    *  without a point), the caller falls back to the value rows. */
   startEdit(featureId: string, onDone: (id: string | null) => void): boolean {
     if (this.active) return false;
-    const f = this.store.document.features.find((x) => x.id === featureId);
-    if (!f || (f.type !== "fillet" && f.type !== "chamfer")) return false;
+    const raw = this.store.document.features.find((x) => x.id === featureId);
+    const f = asFeature(raw, "fillet") ?? asFeature(raw, "chamfer");
+    if (!f) return false;
     const value = f.type === "fillet" ? f.radius : f.distance;
     const field = f.type === "fillet" ? "radius" : "distance";
     if (typeof value !== "number" || this.store.isParamBound({ kind: "feature", feature: f.id, field }))

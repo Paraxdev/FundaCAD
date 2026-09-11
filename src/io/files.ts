@@ -5,6 +5,7 @@
 // writes the file directly (no fs round-trip through the webview).
 
 import type { DocumentStore } from "../document/store";
+import { asFeature } from "../types";
 import type { GeometryBackend } from "../geometry/client";
 import type { CadDocument, ExportFormat, Feature, ImportFormat } from "../types";
 import { clearRecovery } from "./recovery";
@@ -15,6 +16,7 @@ import {
   asHex, materialsForColors, nodeColors, parseLibrary, serializeLibrary,
 } from "../document/materials";
 import { decodeFaceColors, dominantFaceColor } from "../document/faceColors";
+import { missingPluginMessage, missingPlugins } from "../document/missingPlugins";
 import type { FaceColorRuns } from "../types";
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;
@@ -26,7 +28,8 @@ const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 function referencedHashes(store: DocumentStore): string[] {
   const out = new Set<string>();
   for (const f of store.document.features ?? []) {
-    if (f.type === "import" && f.geom) out.add(f.geom);
+    const imp = asFeature(f, "import");
+    if (imp?.geom) out.add(imp.geom);
   }
   return [...out];
 }
@@ -120,6 +123,7 @@ export async function openDocument(store: DocumentStore, geometry: GeometryBacke
     if (text) {
       try {
         store.load(text);
+        await warnAboutMissingPlugins(store);
       } catch (e) {
         await reportError(`Couldn't open document: ${errMsg(e)}`);
       }
@@ -196,6 +200,28 @@ async function migrateInlineGeometry(text: string, geometry: GeometryBackend): P
  *  PREVIOUS document's path. That is harmless here only because geometry is
  *  resolved by content hash out of the blob store, which needs no path at all.
  *  Do not add anything to the rebuild path that depends on `store.filePath`. */
+/** Tell the person, once, that this document uses a plugin they do not have.
+ *
+ *  WHY A TOAST AND NOT A REFUSAL. The document is fine. Every value is in it,
+ *  the save path writes them back untouched, and the features that do not need
+ *  the plugin build exactly as they always did. What is missing is the code that
+ *  turns one kind of feature into geometry, so the honest report is a heads-up
+ *  with the plugin's name in it, not a dialog in the way of a file that opens.
+ *
+ *  Once per open, at the document level, rather than per feature. The build
+ *  already turns each affected row red with the same explanation (see
+ *  sidecar/plugin_geometry.py), and thirty red rows do not tell you what to
+ *  install any better than one sentence does.
+ *
+ *  Longer than the default timeout on purpose: this one has an instruction in
+ *  it, and a notice you are meant to ACT on has to outlast the glance. */
+async function warnAboutMissingPlugins(store: DocumentStore) {
+  const missing = missingPlugins(store.document);
+  if (!missing.length) return;
+  const { toast } = await import("../ui/toast");
+  for (const m of missing) toast(missingPluginMessage(m), { kind: "info", timeout: 12000 });
+}
+
 export async function openDocumentAtPath(
   store: DocumentStore,
   path: string,
@@ -240,6 +266,11 @@ export async function openDocumentAtPath(
     return "unreadable";
   }
   store.markSaved(path); // freshly opened == clean, with a known path
+  // AFTER markSaved, so a document that needs a plugin still opens CLEAN. The
+  // notice is about what this build can do with the file, never about the file
+  // having been changed, and a freshly-opened document marked dirty would offer
+  // to save over the original on the way out.
+  await warnAboutMissingPlugins(store);
   noteRecent(path);
   return "ok";
 }

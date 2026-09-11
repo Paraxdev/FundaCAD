@@ -121,6 +121,20 @@ export interface PluginManifest {
    *  Read forward and never written back: the new id is what gets saved the next
    *  time anything changes, and until then the old value keeps answering. */
   formerIds: string[];
+  /** The `type` values of the document features this plugin OWNS: the ones whose
+   *  schema and geometry are the plugin's, not the application's.
+   *
+   *  Declared in the manifest rather than inferred from what the plugin
+   *  contributes at runtime, because the one moment this has to be readable is
+   *  the moment the plugin is NOT running. A document full of features nobody
+   *  can build is exactly the case that needs a name to put in the warning, and
+   *  a plugin that is switched off or uninstalled contributes nothing to ask.
+   *  See document/missingPlugins.ts, and plugin_geometry.py for the half of the
+   *  same question the geometry engine answers.
+   *
+   *  Empty for a plugin that adds no feature of its own, which is most of them:
+   *  a panel, a device, a printer connection all leave the document alone. */
+  featureTypes: string[];
 }
 
 export type ParseResult =
@@ -211,6 +225,22 @@ export function parseManifest(raw: unknown): ParseResult {
     formerIds.push(f);
   }
 
+  // Not run through the id pattern either: a feature type is a document token
+  // ("press-pull"), not a plugin id, and the format has never constrained it
+  // beyond being a non-empty string.
+  const typesRaw = r.featureTypes === undefined ? [] : r.featureTypes;
+  if (!Array.isArray(typesRaw)) return { ok: false, why: "featureTypes must be a list" };
+  const featureTypes: string[] = [];
+  for (const t of typesRaw) {
+    if (typeof t !== "string" || !t) {
+      return { ok: false, why: `not a feature type: ${JSON.stringify(t)}` };
+    }
+    if (featureTypes.includes(t)) {
+      return { ok: false, why: `featureTypes repeats ${JSON.stringify(t)}` };
+    }
+    featureTypes.push(t);
+  }
+
   const hostsRaw = r.hosts === undefined ? [] : r.hosts;
   if (!Array.isArray(hostsRaw)) return { ok: false, why: "hosts must be a list" };
   const hosts = hostsRaw.map(str);
@@ -240,6 +270,7 @@ export function parseManifest(raw: unknown): ParseResult {
       hosts,
       enabledByDefault: r.enabledByDefault !== false,
       formerIds,
+      featureTypes,
     },
   };
 }

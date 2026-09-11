@@ -1,4 +1,5 @@
 import type { Engine } from "./engine";
+import { asFeature } from "../types";
 
 /** Sketch visibility, MCAD-style: a sketch consumed by a feature hides by
  *  default so the solid's edges stay clear; toggle from the browser tree. The
@@ -12,8 +13,10 @@ export function createSketchVisibility(
         (f.type === "extrude" && f.sketch === id) ||
         (f.type === "revolve" && f.sketch === id) ||
         (f.type === "sweep" && (f.profile === id || f.path === id)) ||
-        (f.type === "loft" &&
-          (!!f.sketches?.includes(id) || !!f.profiles?.some((p) => p.sketch === id))),
+        !!(() => {
+          const l = asFeature(f, "loft");
+          return l && (l.sketches?.includes(id) || l.profiles?.some((p) => p.sketch === id));
+        })(),
     );
 
   const isSketchVisible = (id: string): boolean => {

@@ -92,16 +92,22 @@ jobs:
       # incidents sat here passing locally and never running in CI. Globbing means
       # a new test is covered the moment it exists; SKIP is the only way out and
       # every entry needs a reason.
-      - name: Sidecar and MCP tests
+      - name: Sidecar and plugin tests
         working-directory: sidecar
         run: |
           SKIP="test_conic_fuzz.py"  # minutes-long blend sweep; runs in the eval job
           fail=0
-          # ../plugins/FundaCAD.MCP/tests too: the MCP server runs on this same venv (websockets,
-          # numpy and pillow are all sidecar dependencies) and its tests are the
-          # same kind of __main__ script. Globbing both is what stops the second
-          # directory from repeating the history the comment above records.
-          for t in tests/test_*.py ../plugins/FundaCAD.MCP/tests/test_*.py; do
+          # The plugins' tests too, on this same venv: the MCP server's (websockets,
+          # numpy and pillow are all sidecar dependencies) and the geometry tests
+          # of any plugin that SHIPS geometry, which since the texture move is
+          # where a good deal of the engine's own behaviour is checked from.
+          # Globbing rather than listing is what stops these directories from
+          # repeating the history the comment above records; the plugin glob is
+          # a wildcard for the same reason, so a new plugin's geometry tests run
+          # the day they exist.
+          for t in tests/test_*.py ../plugins/*/tests/test_*.py \
+                   ../plugins/*/geometry/tests/test_*.py; do
+            [ -e "$t" ] || continue   # a glob that matched nothing stays literal
             case " $SKIP " in *" $(basename "$t") "*) echo "skip $t"; continue;; esac
             echo "::group::$t"
             uv run python "$t" || fail=1

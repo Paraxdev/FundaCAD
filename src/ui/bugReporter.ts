@@ -21,6 +21,7 @@ import { hasFaults, pipelineLog } from "../diagnostics/pipelineLog";
 import { useDialogStore } from "../stores/dialogs";
 import type { Viewport } from "../viewport/viewport";
 import type { SketchMode } from "../sketch/sketchMode";
+import { asFeature } from "../types";
 import type { Feature } from "../types";
 
 export interface BugReportDeps {
@@ -89,8 +90,9 @@ function documentWithOpenSketch(store: DocumentStore, live: Feature | null): str
 function openSketchCrumb(store: DocumentStore, live: Feature | null): string | null {
   if (!live) return null;
   const isEdit = JSON.parse(store.toJSON()).features.some((f: Feature) => f.id === live.id);
-  const ents = live.type === "sketch" ? live.entities.length : 0;
-  const cons = live.type === "sketch" ? (live.constraints?.length ?? 0) : 0;
+  const sketch = asFeature(live, "sketch");
+  const ents = sketch ? sketch.entities.length : 0;
+  const cons = sketch?.constraints?.length ?? 0;
   return `sketch OPEN when reported (${isEdit ? `editing ${live.id}` : "new, uncommitted"}): ` +
     `${ents} entities, ${cons} constraints`;
 }

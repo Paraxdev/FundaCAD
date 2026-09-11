@@ -237,9 +237,25 @@ async function view(page) {
   check("cancelling the edit closes the panel and releases the window",
     (await page.evaluate(() => window.__fundacad.toolBusy())) === false);
 
-  // --- 4. and it rebuilds with the plugin switched off ---------------------
-  // The line the whole split is drawn on: uninstalling may cost you the panel
-  // that makes one. It may not cost you the ones you already made.
+  // --- 4. and it rebuilds with the plugin switched OFF ---------------------
+  // SWITCHED OFF IS NOT UNINSTALLED, and the difference is the point of this
+  // step. The toggle in Plugins is "stop this running without removing it",
+  // usually reached for to find out whether something is causing a problem and
+  // usually temporarily (see src/plugins/registry.ts). The plugin's window
+  // surfaces go, every one of them, checked in step 2. Its GEOMETRY is still
+  // installed on disk, so the engine still has it registered and a document
+  // that uses it still builds.
+  //
+  // That is deliberate. A person toggling a plugin off to diagnose a UI problem
+  // must not find their model silently rebuilt smooth, and the toggle's one
+  // standing rule is that it never touches the document.
+  //
+  // UNINSTALLING is the other half and it does cost the building: the geometry
+  // goes with the bundle, the feature stops building, and the app names the
+  // plugin (src/document/missingPlugins.ts, and plugin_geometry.unregistered on
+  // the engine side). That half is checked where it can be: tests/document/
+  // missingPlugins.test.ts for the sentence, and the texture plugin's own
+  // geometry/tests/test_texture_export.py for the build.
   await setEnabled(page, false);
   await settle(page);
   const rebuilt = await page.evaluate(async () => {
@@ -253,7 +269,8 @@ async function view(page) {
     };
   });
   check("off: the texture is still in the document", rebuilt.stillThere);
-  check("off: the document still builds", rebuilt.built && !rebuilt.error);
+  check("off: the document still builds (off is not uninstalled)",
+    rebuilt.built && !rebuilt.error);
 
   await browser.close();
   if (failures.length) {

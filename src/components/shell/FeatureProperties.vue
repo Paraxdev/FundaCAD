@@ -44,7 +44,7 @@ import { commonUnits, toUnit, tryParseMeasure, unitById, type Dim, type Measured
 import { contextMenu } from "../../ui/menu";
 import { resolveEntities, toSketchEntity } from "../../sketch/resolve";
 import { entityDims } from "../../sketch/entityDims";
-import { FEATURE_NUM_FIELDS as NUM_FIELDS, featureWithTarget, type FieldKind } from "../../document/numFields";
+import { featureNumFields, featureWithTarget, type FieldKind } from "../../document/numFields";
 import {
   choiceFieldsFor,
   choiceValue,
@@ -222,9 +222,13 @@ function setOption(field: string, value: string | boolean) {
 const featureRows = useDocValue((doc) => {
   const f = doc.features.find((x) => x.id === props.featureId);
   if (!f || f.type === "sketch") return [];
-  const fields = NUM_FIELDS[f.type];
-  if (!fields) return [];
   const values = f as unknown as Record<string, unknown>;
+  // featureNumFields, not the app's own table: a plugin owns the rows of the
+  // feature types it owns, and a type nobody describes falls back to its own
+  // numeric fields listed verbatim, so the numbers stay visible and editable on
+  // a machine where the plugin that made them is not installed.
+  const fields = featureNumFields(f.type, values);
+  if (!fields.length) return [];
   // A row for a field this feature will never read is a control with nothing on
   // the other end of it: turn the Seed on a knurl and the model does not move,
   // and nothing says why. The rule lives with the field inventory so the tool
