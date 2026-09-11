@@ -883,6 +883,22 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
    *  whether or not anything has been built yet. */
   function pickAxisInteractive(onPick: (axis: AxisSpec, edge?: Selector) => void) {
     if (toolBusy()) return;
+    // A selected DATUM AXIS is already the answer to "which line", so use it and
+    // skip the pick, exactly as a selected datum plane feeds Split (startSplit).
+    // Its baked origin/dir are an AxisLine as-is, the same inline shape the
+    // revolve records for an arbitrary axis.
+    const selId = getSelectedFeature();
+    const selAxis = selId
+      ? store.document.features.find(
+          (f): f is Extract<Feature, { type: "datumAxis" }> =>
+            f.id === selId && f.type === "datumAxis",
+        )
+      : undefined;
+    if (selAxis) {
+      setStatus(`Revolving about ${selAxis.name || "the datum axis"}`, "");
+      requestAnimationFrame(() => onPick({ origin: selAxis.origin, dir: selAxis.dir }));
+      return;
+    }
     const triad = viewport.scene.triad;
     // The hit lands on a shaft, a head or the arm's undrawn hit sleeve, so walk
     // up to whichever ancestor carries the tag rather than assuming a depth.
