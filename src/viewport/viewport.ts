@@ -259,6 +259,12 @@ export class Viewport {
    *  direction of the drag has decided. */
   onAreaDrag: ((mode: AreaMode | null) => void) | null = null;
   onPickDatum: ((id: string) => void) | null = null; // fired when a datum plane quad is clicked
+  /** A genuine double-click landed on the model at these client coords. The app
+   *  resolves it to the feature that owns the face under the cursor and opens
+   *  that feature's own edit, the viewport-side twin of double-clicking its
+   *  history entry. The gate on tools and sketch mode is the app handler's to
+   *  make, not this listener's. */
+  onDoubleClick: ((x: number, y: number) => void) | null = null;
   // Right-click context menu: fires only on a genuine right-CLICK (press +
   // release without movement, right-drag is camera pan). `shouldOpenContextMenu`
   // is the app-level gate: when it returns false (a tool or sketch owns the
@@ -538,6 +544,14 @@ export class Viewport {
     // DOLLY didn't zoom in perspective under WebKitGTK). deltaMode-normalized so
     // line/page-mode wheels (some webviews) still produce a sensible step.
     c.addEventListener("wheel", (e) => this.wheelZoom(e), { passive: false });
+    // Double-click a face to edit the feature that made it. The two single
+    // clicks underneath have already selected that feature (handleClick →
+    // onHit); this only adds the "open its edit" half. The ViewCube owns a
+    // double-click on its own corner, same as it owns a single one.
+    c.addEventListener("dblclick", (e) => {
+      if (this.cubeHitsRegion(e.clientX, e.clientY)) return;
+      this.onDoubleClick?.(e.clientX, e.clientY);
+    });
   }
 
   /** One wheel notch, wherever it was caught. */
@@ -3341,6 +3355,17 @@ export class Viewport {
 
   /** Raycast the solid and hover-highlight the face under the cursor; returns
    *  the faceId (for plane/offset face selection feedback). */
+  /** The faceId under (x, y), or null off the model. Pure: unlike hoverFaceAt
+   *  it leaves the hover highlight alone, so a resolver (double-click to edit)
+   *  can ask which face was hit without flickering the highlight the pointer
+   *  already painted. */
+  faceIdAt(clientX: number, clientY: number): number | null {
+    if (!this.model) return null;
+    const ray = this.rayFrom(clientX, clientY);
+    const hit = ray.intersectObjects(visibleBodyMeshes(this.model), false)[0];
+    return hit ? faceIdOfHit(hit) : null;
+  }
+
   hoverFaceAt(clientX: number, clientY: number): number | null {
     this.highlighter?.clearHover();
     this.requestRender();
