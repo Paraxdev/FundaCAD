@@ -1,135 +1,127 @@
 /* ============================================================================
-   FundaCAD, "APOLLO", the default
+   FundaCAD, the one theme
    ============================================================================
 
-   Square corners, visible structure, and the Apollo palette
-   (lospec.com/palette-list/apollo). The chrome is meant to read as panels
-   butted against each other rather than as cards floating on a page: nothing is
-   rounded, nothing glows, and every edge that separates two things is a line
-   you can see.
+   There used to be six palettes behind a picker. There is one now, baked here
+   on :root, and everything else a user might want is a palette they UPLOAD
+   (ui/theme.ts), layered over this one as inline custom properties at runtime.
+   So this file is no longer "the default among several", it is the whole of the
+   app's colour, and the only [data-theme] blocks that ever exist are the ones a
+   user's own file puts there.
 
-   Apollo is a 46-colour pixel-art palette, which is far more than a UI needs,
-   and taking colours out of it at random is how a palette stops looking like
-   one. Each token below therefore names WHICH of its ramps it came from and
-   why, so a colour added later can be argued with rather than guessed at.
+   The look is deliberate: Adobe After Effects 4.0, that late-90s platinum
+   brutalism, panels butted hard against each other, every seam a line you can
+   see, group boxes with their own titled frames, and not one rounded corner or
+   soft glow anywhere. Rendered dark: a neutral graphite ramp with NO blue cast
+   (the blue-tinted "Apollo" default this replaces read as the same sloppy blue
+   every CAD tool ships, which is exactly what we are getting away from), one
+   confident amber accent, and text pushed to high contrast so the density reads
+   as precise rather than murky.
 
-   The SHAPE lives here and is shared by every theme, radii, the spacing ramp,
-   borders, shadows and motion. Only the PALETTE varies (_themes.scss). That
-   split is deliberate and predates this look: a theme is a repaint, never a
-   relayout, so a palette can be added without re-checking every layout against
-   it. Changing the app's shape is therefore a change to this file, once.
+   The SHAPE lives here too, radii, the spacing ramp, borders, shadows, motion,
+   and is the same for a user's uploaded palette: a theme is a repaint, never a
+   relayout, so an uploaded palette can only move COLOUR and every layout still
+   holds against it. Changing the app's shape is a change to this file, once.
    ============================================================================ */
 
 :root {
   /* Every NATIVE control, a <select> and its popup list, scrollbars, the focus
      ring on form fields, is drawn by the engine, not by us, and defaults to the
-     LIGHT palette however dark the page around it is. That is why the Units
-     dropdown came out white with near-invisible grey text on a black title bar.
-     Declaring the scheme is what makes the engine draw them dark; the rules on
-     the selects below then only have to handle the closed control's shape. */
+     LIGHT palette however dark the page around it is. Declaring the scheme is
+     what makes the engine draw them dark; the rules on the selects below then
+     only have to handle the closed control's shape. */
   color-scheme: dark;
 
   /* --- surfaces (dark → light, back → front) ---
-     The palette's own neutral ramp, in order: #090a14 #10141f #151d28 #202e37
-     #394a50. They carry a slight blue cast rather than being true grey, which
-     is what keeps a five-step ramp this close together readable as five steps.
-     Structure is still carried by the BORDERS, as in every theme here. */
-  --bg: #090a14;          /* app background, deepest */
-  --panel: #10141f;       /* docked panels (browser/inspector/ribbon/timeline) */
-  --panel-2: #151d28;     /* nested surfaces, inputs, popups */
-  --raised: #202e37;      /* hover / raised interactive surface */
-  --raised-2: #394a50;    /* pressed / stronger hover */
-  /* The 3D view's own ground. Read by the Three side (viewport/themeColors
-     -> scene.applyRenderPrefs), not by any CSS rule, which is why it is not
-     one of the surfaces above: it sits BEHIND lit geometry rather than
-     behind chrome, and a panel colour used there reads as a fog. The value
-     is what the viewport has always been, so no theme changes by gaining
-     this token; a theme that wants its own says so. */
-  --viewport-bg: #1a1d21;
+     A neutral graphite ramp, true grey, no blue and no warm cast: the point of
+     the look is that colour is spent on the ONE accent and nowhere else, so the
+     chrome has to stay achromatic or the accent stops being the loudest thing.
+     The steps sit close together because structure is carried by the BORDERS
+     here, not by luminance, a panel does not glow to prove it is a panel, it is
+     ruled off from its neighbour by a line. */
+  --bg: #141414;          /* app background, deepest */
+  --panel: #1e1e1e;       /* docked panels (browser/inspector/ribbon/timeline) */
+  --panel-2: #262626;     /* nested surfaces, inputs, popups */
+  --raised: #303030;      /* hover / raised interactive surface */
+  --raised-2: #3d3d3d;    /* pressed / stronger hover */
+  /* The 3D view's own ground. Read by the Three side (viewport/themeColors ->
+     scene.applyRenderPrefs), not by any CSS rule: it sits BEHIND lit geometry
+     rather than behind chrome, and a panel colour used there reads as a fog.
+     A touch off --bg so the viewport is distinguishable from the frame around
+     it even before anything is in it. */
+  --viewport-bg: #1b1b1b;
 
   /* --- borders ---
-     From the BLUE ramp, not the neutral one. The neutral rungs are already
-     spoken for by the five surfaces above, so a divider taken from them would
-     be one of those surfaces and read as a seam between two panels rather than
-     as a line. The blues are the coolest thing in the palette and sit a clear
-     step off every surface they can land on. */
-  --line: #253a5e;        /* divider, visible, not a hairline */
-  --line-strong: #3c5e8b; /* stronger border (focusable controls, popups) */
+     Lifted well clear of every surface they can land on, because the whole look
+     is the seams. A hairline you infer would undo it. --line rules two panels
+     apart; --line-strong is the heavier frame around a control or a group box,
+     the titled-frame edge the AE dialogs were built out of. */
+  --line: #3a3a3a;        /* divider, visible, not a hairline */
+  --line-strong: #565656; /* stronger border (focusable controls, group boxes) */
 
-  /* --- text --- */
-  --text: #ebede9;        /* primary */
-  --text-dim: #a8b5b2;    /* secondary / labels */
-  --text-mute: #819796;   /* tertiary / hints */
+  /* --- text ---
+     Pushed to high contrast on purpose. A dense brutalist panel is only legible
+     if the type is unambiguous against it; a dim primary here would read as
+     grime rather than as restraint. */
+  --text: #f2f2f2;        /* primary */
+  --text-dim: #b8b8b8;    /* secondary / labels */
+  --text-mute: #868686;   /* tertiary / hints */
 
-  /* --- accent: the palette's signature blue ---
-     #73bed3 rather than the darker #4f8fba below it. The accent is what a
-     selected edge, a dimension and a manipulator handle are drawn in, over
-     shaded geometry as often as over chrome, so it has to hold up against a lit
-     face as well as against a panel. */
-  --accent: #73bed3;
-  --accent-hot: #a4dddb;
-  --accent-tint: rgba(115, 190, 211, 0.14);
-  --accent-tint-2: rgba(115, 190, 211, 0.24);
-  --accent-glow: rgba(115, 190, 211, 0.35);
-  --on-accent: #090a14;   /* text on a filled accent surface */
+  /* --- accent: one amber, spent sparingly ---
+     Amber, not blue, and it is the only chromatic thing in the app's chrome. It
+     is what a selected edge, a dimension and a manipulator handle are drawn in,
+     over shaded geometry as often as over a panel, so it has to hold up against
+     a lit grey face as well as against grey chrome, which amber over graphite
+     does far better than one more blue would. */
+  --accent: #f0982d;
+  --accent-hot: #ffb14e;
+  --accent-tint: rgba(240, 152, 45, 0.14);
+  --accent-tint-2: rgba(240, 152, 45, 0.24);
+  --accent-glow: rgba(240, 152, 45, 0.35);
+  --on-accent: #140d02;   /* text on a filled accent surface */
 
   /* --- semantic ---
-     Green, amber and red from the palette's own families. The red is #cf573c
-     and not the deeper #a53030: an error is the one colour that must be legible
-     at a glance on the darkest surface here, and #a53030 on #090a14 is not. */
-  --ok: #a8ca58;
-  --warn: #de9e41;
-  --error: #cf573c;
-  --error-tint: rgba(207, 87, 60, 0.14);
+     Kept clear of the accent so none of the three reads as "selected". The warn
+     yellow is pulled cooler and paler than the amber accent for exactly that
+     reason, at amber it would be a second accent. */
+  --ok: #7ec850;
+  --warn: #e6c34a;
+  --error: #f0564a;
+  --error-tint: rgba(240, 86, 74, 0.14);
 
   /* legacy alias (kept so any stray reference still resolves) */
   --accent-blue: var(--accent);
 
   /* --- radii ---
-     Small, not absent. ~200 rules name these rungs and each says what size of
-     thing it is on, so the whole scale turns from one place.
+     Zero. Not "small", zero. This is the one place the new look departs from
+     the shape the six palettes shared, and it is the heart of the brutalism:
+     the AE 4.0 chrome had no rounded corner anywhere, a control is a rectangle
+     ruled off from the surface behind it, not a lozenge floating on it. The
+     rungs are kept as separate tokens (rather than collapsed to one) so a
+     future softening is one edit here and not a hunt through ~200 rules.
        xs   badges, swatches and grips
        sm   controls: inputs, buttons, chips, menu rows
        md   containers: popups, cards, the ribbon button
        lg   dialogs and the docked palette
-       pill fully-rounded capsules and thin bars
-     These were all 0 for one release and it was too far: at 0 a control and the
-     surface behind it are the same shape, so a button reads as a painted region
-     rather than something to press, and every corner in a dense panel lands as
-     an identical hard point. 2-6px is enough to separate the two without the
-     card-floating-on-a-page look a large radius gives, the panels themselves
-     stay square, because a panel IS a region of the surface. */
-  --r-xs: 2px;
-  --r-sm: 3px;
-  --r-md: 4px;
-  --r-lg: 6px;
-  --r-pill: 999px;
+       pill capsules and thin bars (square now; the bar is still a bar) */
+  --r-xs: 0;
+  --r-sm: 0;
+  --r-md: 0;
+  --r-lg: 0;
+  --r-pill: 0;
 
   /* --- spacing scale ---
-     Every gap, padding and margin in the app comes from this ramp. It is not a
-     style preference: a survey of the stylesheet found the same intent written
-     as 5px, 6px and 7px in three neighbouring panels, and 9/10/11/12 in four
-     more, which is what made the UI read as arbitrary rather than dense.
-     Density is right for a CAD tool, the fix is one rung, not more air.
-
-     Roughly geometric so adjacent rungs are distinguishable but never jarring:
+     Unchanged from the six-palette era: this is proportion, not colour, and the
+     density was right. Every gap, padding and margin in the app comes from this
+     ramp so the whole thing tightens or loosens from one place.
        s-0  2px  hairline, items that must read as ONE control strip
-                 (the view-control pill's buttons, the timeline transport, the
-                 ribbon's tool row). New rung: 2px was the third most common
-                 literal in the sheet and had nowhere to live.
        s-1  4px  inside a small control; popup shell padding
        s-2  8px  list-row and field padding (vertical), icon-to-label
        s-3  12px the workhorse, row padding (horizontal), control padding
        s-4  16px panel padding, bar padding, popup row padding (horizontal)
        s-5  20px dialog padding, major gaps between groups
        s-6  28px card padding
-       s-7  36px section-level separation inside a dialog
-
-     Every rung from s-2 up is one step larger than it was. Density is still
-     right for a CAD tool, so the two smallest are untouched: they are what
-     holds a segmented control together, and loosening them would break the
-     reading that those buttons are ONE thing. The air goes where it is read as
-     structure instead, row padding, panel padding, the gaps between groups. */
+       s-7  36px section-level separation inside a dialog */
   --s-0: 2px;
   --s-1: 4px;
   --s-2: 8px;
@@ -140,15 +132,14 @@
   --s-7: 36px;
 
   /* --- elevation ---
-     Hard offsets, zero blur. A blurred shadow is how a surface says it is
-     floating above the page; these say the popup is a solid object with
-     something behind it. --shadow-1 is gone to nothing rather than kept small:
-     it was on things that sit IN the layout (rows, chips), and those are
-     separated by their borders now. */
+     Hard offsets, zero blur, which the brutalist look wants anyway: a blurred
+     shadow is how a surface says it is floating above the page; these say the
+     popup is a solid object with something behind it. --shadow-1 stays gone,
+     the things it was on sit IN the layout and are separated by their borders. */
   --shadow-1: none;
-  --shadow-2: 3px 3px 0 rgba(0, 0, 0, 0.55);
-  --shadow-3: 6px 6px 0 rgba(0, 0, 0, 0.65);
-  --shadow-pill: 3px 3px 0 rgba(0, 0, 0, 0.55);
+  --shadow-2: 3px 3px 0 rgba(0, 0, 0, 0.6);
+  --shadow-3: 6px 6px 0 rgba(0, 0, 0, 0.7);
+  --shadow-pill: 3px 3px 0 rgba(0, 0, 0, 0.6);
 
   /* --- motion --- */
   --ease: cubic-bezier(0.2, 0.6, 0.2, 1);
