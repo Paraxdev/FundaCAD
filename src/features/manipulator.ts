@@ -437,3 +437,88 @@ export function createDragHandle(tone: HandleTone = "idle"): DragHandle {
     },
   };
 }
+
+/** Radius of the rotation arc, in pixels (its own units). */
+const ARC_R = 16;
+/** How far the arc sweeps, in radians. Just over a third of a turn: enough curve
+ *  to read as a rotation, short enough to sit as a cap above a straight handle. */
+const ARC_SWEEP = 2.2;
+
+/** A curved double-headed arrow: the rotation counterpart to createDragHandle,
+ *  for a control that SWINGS rather than slides (an extrude's taper). It is a
+ *  DragHandle like the straight one, same theme tokens and same paint/dispose
+ *  shape, so the two read as one family.
+ *
+ *  Modelled in PIXELS in its local XY plane, the arc centred on local +Y and
+ *  lying in local XY, so a caller orients it with a full basis (local X, Y, Z ->
+ *  the plane it should swing in) and scales it by pixelWorldSize, exactly as the
+ *  straight handle is scaled. Drawn THROUGH the model (depthTest off) like every
+ *  other manipulator, so a control over a cut is never buried in the material. */
+export function createRotationArc(tone: HandleTone = "idle"): DragHandle {
+  const group = new THREE.Group();
+  group.renderOrder = 999;
+  // TorusGeometry sweeps its arc from local +X; rotate the meshes so the sweep is
+  // centred on local +Y instead, which is the axis a caller aims.
+  const start = Math.PI / 2 - ARC_SWEEP / 2;
+
+  const body = new THREE.MeshLambertMaterial({
+    color: idleColor(), emissive: idleColor(), emissiveIntensity: 0.5,
+    depthTest: false, depthWrite: false, transparent: true, opacity: 1,
+  });
+  const arcGeo = new THREE.TorusGeometry(ARC_R, 2.0, 10, 40, ARC_SWEEP);
+  const arc = new THREE.Mesh(arcGeo, body);
+  arc.rotation.z = start;
+  arc.renderOrder = 999;
+
+  // A cone at each end, tangent to the circle, so the glyph says "swing either
+  // way" the way the straight handle's two heads say "slide either way".
+  const headGeos: THREE.ConeGeometry[] = [];
+  const makeHead = (angle: number, sign: number) => {
+    const g = new THREE.ConeGeometry(4.5, 9, 12);
+    headGeos.push(g);
+    const m = new THREE.Mesh(g, body);
+    m.position.set(Math.cos(angle) * ARC_R, Math.sin(angle) * ARC_R, 0);
+    const tan = new THREE.Vector3(-Math.sin(angle), Math.cos(angle), 0).multiplyScalar(sign);
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tan);
+    m.renderOrder = 999;
+    return m;
+  };
+  const head1 = makeHead(start, -1);
+  const head2 = makeHead(start + ARC_SWEEP, 1);
+
+  // A fat invisible arc, the grab target, a direct child so a caller hit-tests
+  // group.children exactly as it does the straight handle's volumes.
+  const hidden = new THREE.MeshBasicMaterial({ visible: false, depthTest: false });
+  const grabGeo = new THREE.TorusGeometry(ARC_R, 9, 6, 32, ARC_SWEEP);
+  const grab = new THREE.Mesh(grabGeo, hidden);
+  grab.rotation.z = start;
+
+  group.add(arc, head1, head2, grab);
+
+  let hot = false;
+  let currentTone: HandleTone = tone;
+  const apply = () => {
+    const base = currentTone === "cut" ? cutColor() : idleColor();
+    const c = hot ? hotColor() : base;
+    body.color.set(c);
+    body.emissive.set(c);
+  };
+  apply();
+
+  return {
+    group,
+    paint(opts) {
+      if (opts.hot !== undefined) hot = opts.hot;
+      if (opts.tone !== undefined) currentTone = opts.tone;
+      if (opts.hot !== undefined || opts.tone !== undefined) apply();
+      if (opts.opacity !== undefined) body.opacity = opts.opacity;
+    },
+    dispose() {
+      arcGeo.dispose();
+      grabGeo.dispose();
+      for (const g of headGeos) g.dispose();
+      body.dispose();
+      hidden.dispose();
+    },
+  };
+}

@@ -27,6 +27,7 @@ import { snap } from "../ui/units";
 import {
   axisDragDistance,
   createDragHandle,
+  createRotationArc,
   fluentRelease,
   HANDLE_UP,
   type DragHandle,
@@ -52,10 +53,10 @@ const TAPER_MIN_DEPTH = 1;
  *  far is the kernel's call, surfaced as a readable refusal in the readout. */
 const MAX_TAPER_DEG = 88;
 
-/** How far off the top-centre the taper handle floats, in pixels: clear of the
- *  depth handle (which runs along the normal, perpendicular to this) and out
- *  where the wall it leans actually is. */
-const TAPER_OFFSET_PX = 46;
+/** How far ABOVE the far face the taper arc floats, in pixels, along the normal:
+ *  clear of the depth handle's head (~45px), so the rotation control caps the
+ *  depth control rather than crowding it. */
+const TAPER_ABOVE_PX = 48;
 
 type Phase = "pick" | "drag";
 type Op = ExtrudeOp;
@@ -695,14 +696,15 @@ export class ExtrudeTool {
     // Red while the push removes material (a cut), amber while it adds.
     this.placeHandle(this.depthHandle, this.taperTop, dir, px, this.hovering || this.grabbing, sign < 0);
 
-    this.updateTaperHandle(plane, px);
+    this.updateTaperHandle(plane, dir, px);
   }
 
-  /** The chunky slider you swing to lean the walls, floating beside the far face.
+  /** The curved arrow you swing to lean the walls, capping the depth handle above
+   *  the far face. A rotation reads as a rotation glyph, distinct from the depth
+   *  handle's straight one, the translate-vs-rotate language every gizmo uses.
    *  Offered once there is depth to swing about, for a new extrude AND for one
-   *  reopened by double-click, so editing a taper is the same easy grab as making
-   *  it. */
-  private updateTaperHandle(plane: WorldRegion["plane"], px: number) {
+   *  reopened by double-click, so editing a taper is the same easy grab. */
+  private updateTaperHandle(plane: WorldRegion["plane"], dir: THREE.Vector3, px: number) {
     // A taper needs depth to swing about (angle = atan(inset / depth)); with too
     // little the lever is unreadable and the handle is not offered.
     if (Math.abs(this.distance) < TAPER_MIN_DEPTH) {
@@ -710,17 +712,31 @@ export class ExtrudeTool {
       return;
     }
     if (!this.taperHandle) {
-      this.taperHandle = createDragHandle();
+      this.taperHandle = createRotationArc();
       this.viewport.addToScene(this.taperHandle.group);
     }
-    // The sketch's local +X, in world space: a deterministic in-plane axis to
-    // run the slider along and to measure the inward drag against.
+    // The sketch's local +X, in world space: a deterministic in-plane axis to run
+    // the drag against (moving the top edge in leans the wall in).
     const o = plane.to3D(0, 0);
     this.taperAxis.copy(plane.to3D(1, 0)).sub(o).normalize();
-    const at = this.taperTop.clone().addScaledVector(this.taperAxis, px * TAPER_OFFSET_PX);
+    const g = this.taperHandle.group;
+    // Float it a head's height above the far-face centre, along the normal, so it
+    // caps the depth handle rather than crowding it.
+    g.position.copy(this.taperTop).addScaledVector(dir, px * TAPER_ABOVE_PX);
+    // The arc swings in the plane the wall actually tips through, spanned by the
+    // in-plane drag axis and the normal: local X -> taperAxis, local Y (the arc's
+    // centre) -> the normal so it arches upward, local Z the plane's own normal.
+    const z = new THREE.Vector3().crossVectors(this.taperAxis, dir).normalize();
+    g.quaternion.setFromRotationMatrix(
+      new THREE.Matrix4().makeBasis(this.taperAxis, dir, z),
+    );
+    g.scale.setScalar(px);
     // Red once the walls undercut (a negative taper, which no mould can draw),
     // amber otherwise.
-    this.placeHandle(this.taperHandle, at, this.taperAxis, px, this.taperHovering || this.taperGrabbing, this.taper < 0);
+    this.taperHandle.paint({
+      hot: this.taperHovering || this.taperGrabbing,
+      tone: this.taper < 0 ? "cut" : "idle",
+    });
   }
 
   /** Orient, size, and tint one chunky slider at `at`, lying along `axis`. The
