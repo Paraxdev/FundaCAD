@@ -477,10 +477,102 @@ def _push_diag(diag, feature_id, kind, resolved, confidence, lossy, reason, at=N
     diag.append(entry)
 
 
+# A `by:"nearest"` face tie can be caused by two faces sharing the edge that the
+# saved point projects onto, both then report the byte-identical bounded distance
+# and _nearest_one refuses at margin 0. That is what a face does when the sketch
+# under it moves, an `up to` face slides sideways off the stored pick point. The
+# recovery below re-scores such a tie on the UNBOUNDED surfaces, which do
+# separate them, and keeps the face the point is still ON.
+SHARED_POINT_TOL = 1e-6   # two tied faces' closest points are the same point
+ON_SURFACE_TOL = 1e-4     # the point still lies in a face's underlying surface
+
+REASON_SLID_OUT = (
+    "this face moved out from under the saved pick point, it was recovered by "
+    "the surface it still lies in, re-pick it if this is not the right face"
+)
+
+
+def _unbounded_surface_dist(f, point):
+    """Distance from `point` to the face's underlying surface, IGNORING its trim.
+
+    math.inf when the projection is degenerate, a point on a cylinder's axis has
+    no nearest surface point (GeomAPI returns none), and "no answer" must never
+    win a tie-break.
+    """
+    from OCP.BRep import BRep_Tool
+    from OCP.GeomAPI import GeomAPI_ProjectPointOnSurf
+    from OCP.gp import gp_Pnt
+
+    try:
+        proj = GeomAPI_ProjectPointOnSurf(
+            gp_Pnt(float(point.X), float(point.Y), float(point.Z)),
+            BRep_Tool.Surface_s(f.wrapped),
+        )
+        if proj.NbPoints() < 1:
+            return math.inf
+        return float(proj.LowerDistance())
+    except Exception:  # noqa: BLE001, a probe must never break the caller
+        return math.inf
+
+
+def _slid_out_winner(tied, point):
+    """The face a `nearest` tie belongs to when the point has slid OFF it, or None.
+
+    Bounded point-to-face distance cannot separate two faces that meet at an edge
+    the point projects onto, the closest point on each is the SAME point of that
+    shared edge, so both report the identical distance and _nearest_one refuses
+    at margin 0. That is not exotic geometry, it is what a face does when the
+    sketch under it moves, an `up to` face slides out from under the feature's
+    stored point and the feature silently becomes a no-op.
+
+    The UNBOUNDED surfaces do separate them, the point is still dead in one
+    face's plane while the wall it ties with is millimetres off. Re-scoring the
+    tied set on that metric picks the face the point is still ON.
+
+    Strictly narrower than the refusal it replaces, it fires ONLY when:
+      - every tied face's closest point is the same point, so the tie really is a
+        shared boundary (this alone is not a safety property, only what kind of
+        tie it is),
+      - the winner's surface still contains the point (ON_SURFACE_TOL), so a
+        point adrift of everything cannot elect a nearest-of-the-wrong,
+      - every other tied face's surface does NOT contain it, so a genuine
+        coincidence of surfaces still refuses,
+      - the winner clears NEAREST_TIE_BAND on the new metric too.
+    Faces only, an edge tie is a shared vertex and an edge has no underlying
+    surface whose extension means "the point is still on this one".
+
+    Returns (face, margin), or (None, 0.0) when the tie must stand.
+    """
+    if len(tied) < 2:
+        return None, 0.0
+    try:
+        closest = [f.distance_to_with_closest_points(point)[1] for f in tied]
+    except Exception:  # noqa: BLE001, a face we cannot measure must not change the outcome
+        return None, 0.0
+    first = closest[0]
+    if any((c - first).length > SHARED_POINT_TOL for c in closest[1:]):
+        return None, 0.0
+
+    scored = sorted(((_unbounded_surface_dist(f, point), f) for f in tied),
+                    key=lambda t: t[0])
+    best_d, best = scored[0]
+    runner = scored[1][0]
+    # Written as positive tests so inf and nan fail them rather than pass.
+    if not (best_d <= ON_SURFACE_TOL):
+        return None, 0.0
+    if not (runner > ON_SURFACE_TOL):
+        return None, 0.0
+    margin = (runner - best_d) / (runner + 1e-9) if math.isfinite(runner) else 1.0
+    if margin < NEAREST_TIE_BAND:
+        return None, 0.0
+    return best, margin
+
+
 # --- public API --------------------------------------------------------------
 
 
-def _nearest_one(cands, dist_of, key_fn, describe, kind, sel, diag, feature_id):
+def _nearest_one(cands, dist_of, key_fn, describe, kind, sel, diag, feature_id,
+                 tie_breaker=None):
     """Resolve a `by:"nearest"` selector, or REFUSE, when the pick is ambiguous.
 
     A bare `min()` over the candidates cannot fail. It returns the closest entity
@@ -545,6 +637,20 @@ def _nearest_one(cands, dist_of, key_fn, describe, kind, sel, diag, feature_id):
         return tied[nth]
 
     pt = sel.get("point") or []
+    # The one second look at a tie: a face that has slid off its saved point onto
+    # a shared edge is recovered by the surface it still lies in (faces only, see
+    # _slid_out_winner). Not silent: the point no longer lands on the face, so the
+    # reference IS drifting even though we found it. lossy=True puts the amber chip
+    # on the timeline and `code` lights the Re-pick button, repairableDiagFor gates
+    # on the code, not on resolved==0, so the recovery still offers the one gesture
+    # that repairs it.
+    if tie_breaker is not None:
+        won, won_margin = tie_breaker(tied)
+        if won is not None:
+            _push_diag(diag, feature_id, kind, 1, won_margin, True, REASON_SLID_OUT,
+                       at=pt, code=CODE_AMBIGUOUS_REFERENCE)
+            return won
+
     where = ", ".join(f"{float(v):.2f}" for v in pt)
     described = [describe(c) for c in tied[:3]]
     _push_diag(diag, feature_id, kind, 0, margin, True, "ambiguous nearest pick",
@@ -686,7 +792,8 @@ def resolve_faces(part, sel, diag=None, feature_id=None):
         except Exception:
             dist_of = lambda f: _dist(f.center(), p)
         return [_nearest_one(faces, dist_of, _canonical_key_face, _describe_face,
-                             "face", sel, diag, feature_id)]
+                             "face", sel, diag, feature_id,
+                             tie_breaker=lambda tied: _slid_out_winner(tied, p))]
     if by == "all":
         return list(part.faces())
     if by == "match":
