@@ -666,6 +666,11 @@ export type CoreFeature =
   // Move the active body, or the bodies listed in `bodies` (multi-select), :
   // translate (dx,dy,dz mm) + rotate (rx,ry,rz degrees, about origin).
   | { id: string; type: "move"; dx: Num; dy: Num; dz: Num; rx: Num; ry: Num; rz: Num; bodies?: string[] }
+  // Copy the active body, or the bodies listed in `bodies` (multi-select), and
+  // place the copies with the same optional rigid transform as move (translate
+  // dx,dy,dz mm + rotate rx,ry,rz degrees about origin). The originals stay put;
+  // each copy becomes a new body. A zero transform still makes an independent copy.
+  | { id: string; type: "duplicate"; dx: Num; dy: Num; dz: Num; rx: Num; ry: Num; rz: Num; bodies?: string[] }
   // Position `moving` against another body by aligning a mate connector on each
   // (origin + axis). The connectors are references, re-resolved every rebuild,
   // so the assembly follows the parts. The mating faces meet flush (axes
