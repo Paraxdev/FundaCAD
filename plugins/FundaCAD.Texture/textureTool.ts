@@ -38,6 +38,8 @@ const defaultValues = (): TextureValues => ({
   amplitude: 1,
   slopeMin: 0,
   slopeMax: 180,
+  targetEdge: 0,
+  triBudget: 0,
   direction: "out",
   seed: 1,
   invert: false,
@@ -190,6 +192,8 @@ export class TextureTool {
       amplitude: (f.amplitude as number) ?? 1,
       slopeMin: (f.slopeMin as number) ?? 0,
       slopeMax: (f.slopeMax as number) ?? 180,
+      targetEdge: (f.targetEdge as number) ?? 0,
+      triBudget: (f.triBudget as number) ?? 0,
       direction: f.direction ?? "out",
       seed: (f.seed as number) ?? 1,
       invert: f.invert ?? false,
@@ -424,6 +428,9 @@ export class TextureTool {
     if (v.amplitude !== 1) extra.amplitude = v.amplitude;
     if (v.slopeMin !== 0) extra.slopeMin = v.slopeMin;
     if (v.slopeMax !== 180) extra.slopeMax = v.slopeMax;
+    // mesh detail (target edge length) and a hard triangle budget, off by default
+    if (v.targetEdge > 0) extra.targetEdge = v.targetEdge;
+    if (v.triBudget > 0) extra.triBudget = v.triBudget;
     // sharpness shapes the lattice/wave kinds under either profile, and under
     // FACET it also drives the cellular wall width and the terrace count, so
     // voronoi/noise/image need it too, which they never used to get.

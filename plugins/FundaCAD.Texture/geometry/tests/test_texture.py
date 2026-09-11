@@ -1105,6 +1105,48 @@ def test_overlap_warning_fires_only_when_depth_is_large_for_the_part():
     print(PASS, "overlap advisory fires only when the depth is large versus the part")
 
 
+def test_target_edge_and_triangle_budget_control_the_mesh():
+    """targetEdge sets the sampling mesh density and triBudget caps it, both off
+    at their defaults (absent from the spec), both keeping the mesh finite and
+    manifold. A coarser edge or a tighter budget yields fewer triangles."""
+    base = {"kind": "knurl", "faces": {"by": "all"}, "depth": 0.4, "scale": 2.0}
+    assert "targetEdge" not in texture.validate_texture_spec(dict(base))
+    assert "triBudget" not in texture.validate_texture_spec(dict(base))
+    assert texture.validate_texture_spec(dict(base, targetEdge=0.2))["targetEdge"] == 0.2
+    assert texture.validate_texture_spec(dict(base, triBudget=12345))["triBudget"] == 12345
+
+    # a SAMPLED kind (noise), not a crease-aligned lattice: a lattice's density is
+    # set by the pattern period, on purpose, so targetEdge barely moves it. The
+    # sampled kinds are where the mesh controls bite.
+    def tri_count(extra):
+        feats = [
+            {"id": "b", "type": "box", "length": 30, "width": 30, "height": 10},
+            {"id": "t", "type": "texture", "kind": "noise", "depth": 0.4, "scale": 2.0, "seed": 3,
+             "faces": {"kind": "face", "by": "normal", "dir": [0, 0, 1]}, **extra}]
+        _p, errs, bodies = rebuild({"parameters": {}, "features": feats})
+        assert not errs, errs
+        b = bodies[0]
+        resolved = plugin_geometry.resolve(b)
+        diag = []
+        pos, idx, fids = tessellate(b["shape"], 0.1, mesh_passes=resolved,
+                                    density_cap=texture._DEFAULT_DENSITY_CAP, diag=diag)
+        assert np.all(np.isfinite(np.asarray(pos, dtype=float))), extra
+        assert not [d for d in diag if "non-manifold" in str(d.get("reason", ""))], (extra, diag)
+        fids = np.asarray(fids, dtype=int)
+        top = max((int(f) for f in np.unique(fids)), key=lambda f: int((fids == f).sum()))
+        return int((fids == top).sum())
+
+    auto = tri_count({})
+    fine = tri_count({"targetEdge": 0.25})   # finer than scale/4 = 0.5
+    coarse = tri_count({"targetEdge": 1.5})  # coarser
+    assert fine > auto > coarse, f"targetEdge did not scale mesh density: {fine} !> {auto} !> {coarse}"
+
+    budgeted = tri_count({"triBudget": 2000})
+    assert budgeted <= 2000 + 2, f"triangle budget not respected: {budgeted} > 2000"
+    assert budgeted < auto, "the budget should cut the automatic mesh down"
+    print(PASS, f"mesh detail scales tris ({coarse} < {auto} < {fine}); budget caps to {budgeted}")
+
+
 def main():
     print("Surface-texture tests")
     test_validate_texture_spec_rejects_bad_input()
@@ -1143,6 +1185,7 @@ def main():
     test_amplitude_scales_the_relief_and_is_absent_at_full()
     test_slope_mask_suppresses_off_band_normals_and_stays_crack_safe()
     test_overlap_warning_fires_only_when_depth_is_large_for_the_part()
+    test_target_edge_and_triangle_budget_control_the_mesh()
     print("ALL PASS")
 
 

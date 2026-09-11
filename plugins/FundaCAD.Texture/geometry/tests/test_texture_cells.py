@@ -306,11 +306,11 @@ def test_geometry_cache_key_separates_lattices():
     loc = TopLoc_Location()
     tri = BRep_Tool.Triangulation_s(face.wrapped, loc)
     base = _spec("ribs", 0.5)
-    key = texture._geometry_key(face, tri, False, base, SCALE, 0.0, 0.0, BIG_CAP)
+    key = texture._geometry_key(face, tri, False, base, SCALE, 0.0, 0.0, BIG_CAP, SCALE / 4.0)
     for field, value in (("kind", "hex"), ("sharpness", 0.9),
                          ("profile", "round"), ("offset", 0.37)):
         other = dict(base, **{field: value})
-        assert texture._geometry_key(face, tri, False, other, SCALE, 0.0, 0.0, BIG_CAP) != key, \
+        assert texture._geometry_key(face, tri, False, other, SCALE, 0.0, 0.0, BIG_CAP, SCALE / 4.0) != key, \
             f"{field} must take part in the geometry cache key"
     print(PASS, "geometry cache key separates kind/sharpness/profile/offset")
 

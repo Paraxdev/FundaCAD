@@ -356,6 +356,19 @@ const noBtn: CSSProperties = { ...btn, background: "var(--raised, #555)", color:
           <label :style="lbl">to</label>
           <input v-model="form.slopeMax" type="number" step="5" min="0" max="180" :style="num" @input="emitChange" @change="emitChange" />
         </div>
+        <!-- Mesh: the target edge length of the sampling mesh (0 = automatic,
+             from the scale) and a hard per-face triangle budget (0 = off). A
+             finer edge or a larger budget carries more detail; a coarser edge or
+             a tighter budget keeps a heavy texture from ballooning the mesh. -->
+        <div
+          :style="[offsetRow, { marginTop: '6px' }]"
+          title="Mesh detail: target edge length in mm for the sampling mesh (0 = automatic). Max triangles: a hard per-face budget (0 = off). Lower detail or a tighter budget keeps a heavy texture light."
+        >
+          <label :style="lbl">Mesh mm</label>
+          <input v-model="form.targetEdge" type="number" step="0.05" min="0" :style="num" @input="emitChange" @change="emitChange" />
+          <label :style="lbl">Max tris</label>
+          <input v-model="form.triBudget" type="number" step="1000" min="0" :style="num" @input="emitChange" @change="emitChange" />
+        </div>
       </details>
 
       <div :style="note">Preview is real geometry at display resolution, exports keep full detail.</div>
