@@ -417,6 +417,55 @@ def height_field(kind, spec, u_mm, v_mm, u_range=None, v_range=None):
     raise ValueError(f"unknown texture kind: {kind}")
 
 
+# --- smoothing (a low-pass of the height field before it displaces) ----------
+
+# A 3x3 field-space Gaussian stencil: the pattern is resampled at these taps
+# (in units of the blur radius) around each (u,v) and the results are averaged
+# by these weights. Blurring the [0,1] FIELD, rather than the displaced mesh,
+# is what keeps the boundary taper's zero pinned, so a softened texture is still
+# crack-free at the rim. sigma = radius, taps at +/-1 sigma, the standard cheap
+# discrete Gaussian.
+_SMOOTH_TAPS = np.array(
+    [(dx, dy) for dy in (-1.0, 0.0, 1.0) for dx in (-1.0, 0.0, 1.0)],
+    dtype=np.float64,
+)
+_SMOOTH_W = np.exp(-0.5 * (_SMOOTH_TAPS[:, 0] ** 2 + _SMOOTH_TAPS[:, 1] ** 2))
+_SMOOTH_W = _SMOOTH_W / _SMOOTH_W.sum()
+
+
+def _smooth_radius(spec):
+    """Blur radius in millimetres, from `smooth` (0..1) and the pattern scale.
+
+    At smooth=1 it reaches half a pattern period, enough to visibly round the
+    relief without erasing it; 0 is no blur at all."""
+    s = max(0.0, min(1.0, float(spec.get("smooth", 0.0))))
+    scale = max(float(spec.get("scale", 2.0)), 0.05)
+    return s * scale * 0.5
+
+
+def height_field_smoothed(kind, spec, u_mm, v_mm, u_range=None, v_range=None):
+    """`height_field` with an optional Gaussian low-pass of the result.
+
+    `spec["smooth"]` (0..1) blurs the height field h(u,v) in FIELD SPACE before
+    it is returned: the pattern is resampled on a small stencil of mm offsets
+    around each vertex and Gaussian-averaged. For a procedural kind that softens
+    the pattern itself; for an image heightmap it is the same as blurring the
+    sampled texel grid, because texels map linearly to millimetres. smooth<=0 is
+    `height_field` exactly, byte-for-byte, so a texture without the control (or
+    with the slider at zero) is unchanged.
+
+    Returns a [0,1] field like `height_field`. It runs on the raw field, ahead
+    of the invert/direction transform and the boundary taper the caller applies,
+    so the taper still pins the rim to zero and the result stays crack-free."""
+    r = _smooth_radius(spec)
+    if r <= 0.0:
+        return height_field(kind, spec, u_mm, v_mm, u_range, v_range)
+    acc = np.zeros(np.shape(u_mm), dtype=np.float64)
+    for (dx, dy), w in zip(_SMOOTH_TAPS, _SMOOTH_W):
+        acc = acc + w * height_field(kind, spec, u_mm + dx * r, v_mm + dy * r, u_range, v_range)
+    return np.clip(acc, 0.0, 1.0)
+
+
 # --- UV -> mm (first fundamental form) ---------------------------------------
 
 

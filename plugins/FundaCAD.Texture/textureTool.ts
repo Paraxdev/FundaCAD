@@ -28,6 +28,7 @@ const defaultValues = (): TextureValues => ({
   profile: "facet",
   boundaryInset: 0,
   grime: 0,
+  smooth: 0,
   direction: "out",
   seed: 1,
   invert: false,
@@ -173,6 +174,7 @@ export class TextureTool {
       profile: f.profile ?? "facet",
       boundaryInset: (f.boundaryInset as number) ?? 0,
       grime: (f.grime as number) ?? 0,
+      smooth: (f.smooth as number) ?? 0,
       direction: f.direction ?? "out",
       seed: (f.seed as number) ?? 1,
       invert: f.invert ?? false,
@@ -387,6 +389,11 @@ export class TextureTool {
     // kind honours it. It used to ride along with the angle, which left
     // noise/voronoi/image permanently embossing outward.
     extra.direction = v.direction;
+    // smooth low-passes the height field before it displaces, generic across
+    // every kind (image included), so it rides here like direction. Emitted only
+    // when non-zero to match the sidecar, which drops it from the spec at zero so
+    // an untouched texture keeps its byte-for-byte geometry and cache identity.
+    if (v.smooth) extra.smooth = v.smooth;
     // sharpness shapes the lattice/wave kinds under either profile, and under
     // FACET it also drives the cellular wall width and the terrace count, so
     // voronoi/noise/image need it too, which they never used to get.

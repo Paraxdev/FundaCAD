@@ -312,7 +312,7 @@ describe("TextureTool", () => {
       await tick();
       panel.commit({
         kind: "hex", depth: 1, scale: 3, angle: 0, offset: 0, sharpness: 0.5,
-        profile: "facet", boundaryInset: 0, grime: 0, direction: "out", seed: 1, invert: false,
+        profile: "facet", boundaryInset: 0, grime: 0, smooth: 0, direction: "out", seed: 1, invert: false,
       });
 
       expect(calls.added).toHaveLength(1);
@@ -337,7 +337,7 @@ describe("TextureTool", () => {
       await tick();
       panel.commit({
         kind: "knurl", depth: 1, scale: 3, angle: 0, offset: 0, sharpness: 0.5,
-        profile: "facet", boundaryInset: 0, grime: 0, direction: "out", seed: 1, invert: false,
+        profile: "facet", boundaryInset: 0, grime: 0, smooth: 0, direction: "out", seed: 1, invert: false,
       });
       const f = calls.added[0] as unknown as { body: string; faces: unknown };
       expect(f.body).toBe("body1");
@@ -363,7 +363,7 @@ describe("TextureTool", () => {
       state.faceIds = []; // the installment's empty moment
       panel.commit({
         kind: "knurl", depth: 0.4, scale: 2, angle: 0, offset: 0, sharpness: 0.5,
-        profile: "facet", boundaryInset: 0, grime: 0, direction: "out", seed: 1, invert: false,
+        profile: "facet", boundaryInset: 0, grime: 0, smooth: 0, direction: "out", seed: 1, invert: false,
       });
       expect(calls.added).toHaveLength(0); // held, not refused
       expect(tool.active).toBe(true);
@@ -390,7 +390,7 @@ describe("TextureTool", () => {
       state.faceIds = [];
       panel.commit({
         kind: "knurl", depth: 0.4, scale: 2, angle: 0, offset: 0, sharpness: 0.5,
-        profile: "facet", boundaryInset: 0, grime: 0, direction: "out", seed: 1, invert: false,
+        profile: "facet", boundaryInset: 0, grime: 0, smooth: 0, direction: "out", seed: 1, invert: false,
       });
       landBuild(); // and the face really is gone
       expect(calls.added).toHaveLength(0);
@@ -406,7 +406,7 @@ describe("TextureTool", () => {
       tool.start(done);
       panel.commit({
         kind: "knurl", depth: 1, scale: 3, angle: 0, offset: 0, sharpness: 0.5,
-        profile: "facet", boundaryInset: 0, grime: 0, direction: "out", seed: 1, invert: false,
+        profile: "facet", boundaryInset: 0, grime: 0, smooth: 0, direction: "out", seed: 1, invert: false,
       });
       expect(calls.added).toEqual([]);
       expect(tool.active).toBe(true);
@@ -424,7 +424,7 @@ describe("TextureTool", () => {
       await tick();
       panel.commit({
         kind: "knurl", depth: 1, scale: 3, angle: 30, offset: 0, sharpness: 0.5,
-        profile: "facet", boundaryInset: 0, grime: 0, direction: "out", seed: 99, invert: false,
+        profile: "facet", boundaryInset: 0, grime: 0, smooth: 0, direction: "out", seed: 99, invert: false,
       });
       const f = calls.added[0] as unknown as Record<string, unknown>;
       expect(f["angle"]).toBe(30);   // a knurl has a lattice to rotate
@@ -512,7 +512,7 @@ describe("TextureTool", () => {
       state.faceIds = [1];
       panel.commit({
         kind: "waves", depth: 2, scale: 4, angle: 0, offset: 0, sharpness: 0.5,
-        profile: "round", boundaryInset: 0, grime: 0, direction: "out", seed: 1, invert: false,
+        profile: "round", boundaryInset: 0, grime: 0, smooth: 0, direction: "out", seed: 1, invert: false,
       });
       expect(calls.added).toEqual([]);
       expect(calls.replaced).toHaveLength(1);

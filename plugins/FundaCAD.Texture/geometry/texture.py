@@ -52,6 +52,7 @@ from texture_height import (  # noqa: F401
     _wave_levels,
     _wave_phases,
     height_field,
+    height_field_smoothed,
 )
 from texture_mesh import (  # noqa: F401
     LATTICE_SURFACES,
@@ -110,7 +111,11 @@ _DEFAULT_DENSITY_CAP = 2_000_000
 #    single-Jacobian UV fallback, which folded the pattern into a crumple on a
 #    strongly curved patch. A texture on such a face changes shape (for the
 #    better); one on a plane/cylinder/cone is byte-identical.
-CODE_VERSION = 9
+# 10: a `smooth` control (0..1) low-passes the height field before it displaces,
+#    softening the relief. smooth>0 changes the displaced geometry; smooth=0 (or
+#    a document that predates the control) samples the field verbatim and is
+#    byte-identical to version 9.
+CODE_VERSION = 10
 
 #: The mesh-pass name this plugin registers under, stamped into every spec it
 #: makes. The registry reads `spec["pass"]` to route a face back here at
@@ -148,6 +153,9 @@ def validate_texture_spec(f):
     grime = f.get("grime", 0.0)
     if not isinstance(grime, (int, float)) or isinstance(grime, bool) or grime < 0:
         raise ValueError("texture grime must be zero or a positive number")
+    smooth = f.get("smooth", 0.0)
+    if not isinstance(smooth, (int, float)) or isinstance(smooth, bool) or smooth < 0:
+        raise ValueError("texture smooth must be zero or a positive number")
     image_path = f.get("imagePath")
     if kind == "image":
         if not image_path:
@@ -192,6 +200,13 @@ def validate_texture_spec(f):
     # (texture_key) and its geometry is byte-for-byte what it always was.
     if grime and grime > 0:
         spec["grime"] = min(float(grime), 1.0)
+    # Smooth: a Gaussian low-pass of the height field before it displaces, so the
+    # relief reads soft and rounded instead of crisp. Like grime, kept out of the
+    # spec when zero so a document without it hashes identically (texture_key) and
+    # its geometry is byte-for-byte what it always was. smooth>0 DOES change the
+    # displaced mesh, which is why CODE_VERSION carries it.
+    if smooth and smooth > 0:
+        spec["smooth"] = min(float(smooth), 1.0)
     return spec
 
 
@@ -536,8 +551,11 @@ def displace_face(face, tri, loc, ident, spec, density_cap, diag=None, feature_i
     def signed_at(du, dv):
         """The signed height field sampled at a (mm) offset from the vertices,
         one function so the finite-difference gradient below differentiates the
-        SAME invert/direction-transformed field the displacement uses."""
-        hh = height_field(kind, spec_h, u_mm + du, v_mm + dv, u_range, v_range)
+        SAME invert/direction-transformed AND smoothed field the displacement
+        uses. `height_field_smoothed` applies the `smooth` low-pass (or is
+        `height_field` verbatim when smooth is 0), so the shading normals track
+        the softened relief instead of the sharp one."""
+        hh = height_field_smoothed(kind, spec_h, u_mm + du, v_mm + dv, u_range, v_range)
         if invert:
             hh = 1.0 - hh
         if direction == "in":
