@@ -368,6 +368,12 @@ export class ExtrudeTool {
       e.stopImmediatePropagation();
       this.taperGrabbing = true;
       this.downPos = { x: e.clientX, y: e.clientY };
+      // Freeze the depth the instant the taper is taken hold of. Otherwise the
+      // depth free-tracks the cursor, so letting go of the taper and moving the
+      // hand would collapse the solid to wherever the pointer landed, which read
+      // as the extrude closing the moment you tried to adjust the lean. The depth
+      // arrow still takes it back (takeOver) for a deliberate depth drag.
+      this.dim.seed("distance", this.distance);
       this.taperGrabInset = draftDelta(this.taper, Math.abs(this.distance));
       this.taperGrabProj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.taperTop, this.taperAxis);
       this.viewport.domElement.style.cursor = "grabbing";
