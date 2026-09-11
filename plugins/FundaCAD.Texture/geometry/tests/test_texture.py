@@ -943,6 +943,67 @@ def test_projection_spec_omits_defaults_and_rejects_bad_values():
     print(PASS, "projection/seam controls omit their defaults and reject a bad mode")
 
 
+_NEW_KINDS = ["stripes", "grid", "dots", "brick", "basket", "carbon", "isogrid", "grip", "leather"]
+
+
+def test_new_kinds_stay_in_range_and_respond_to_their_controls():
+    """Every added kind is a valid [0,1] field under both profiles, the oriented
+    ones actually rotate with angle, and leather follows its seed like the other
+    random kinds."""
+    rng = np.random.default_rng(1)
+    U = rng.uniform(-8, 8, 3000)
+    V = rng.uniform(-8, 8, 3000)
+    for kind in _NEW_KINDS:
+        for profile in ("facet", "round"):
+            spec = {"kind": kind, "scale": 2.5, "angle": 20.0, "sharpness": 0.4,
+                    "seed": 3, "octaves": 3, "profile": profile}
+            h = np.asarray(texture.height_field(kind, spec, U, V), dtype=float)
+            assert np.all(np.isfinite(h)), f"{kind}/{profile}: non-finite"
+            assert h.min() >= -1e-9 and h.max() <= 1 + 1e-9, f"{kind}/{profile}: {h.min()}..{h.max()}"
+
+    # the oriented kinds move when rotated (a control that did nothing would tie)
+    for kind in ("stripes", "grid", "dots", "brick", "basket", "carbon", "isogrid", "grip"):
+        s0 = {"kind": kind, "scale": 2.5, "angle": 0.0, "sharpness": 0.4, "profile": "facet"}
+        s30 = dict(s0, angle=30.0)
+        a = np.asarray(texture.height_field(kind, s0, U, V), float)
+        b = np.asarray(texture.height_field(kind, s30, U, V), float)
+        assert np.abs(a - b).max() > 1e-3, f"{kind}: angle did not rotate the pattern"
+
+    # leather is seed-driven
+    sa = {"kind": "leather", "scale": 3.0, "seed": 1, "octaves": 3, "profile": "round"}
+    la = np.asarray(texture.height_field("leather", sa, U, V), float)
+    lb = np.asarray(texture.height_field("leather", dict(sa, seed=2), U, V), float)
+    assert np.abs(la - lb).max() > 1e-3, "leather ignored its seed"
+    print(PASS, f"the {len(_NEW_KINDS)} added kinds stay in [0,1] and honour angle/seed")
+
+
+def test_new_kinds_mesh_cleanly_on_a_real_face():
+    """No added kind may crash, go non-manifold, or produce NaNs when displaced
+    onto a real face (the faceted default)."""
+    for kind in _NEW_KINDS:
+        doc = {"parameters": {}, "features": [
+            {"id": "b", "type": "box", "length": 20, "width": 20, "height": 10},
+            {"id": "t", "type": "texture", "kind": kind, "depth": 0.3, "scale": 2.5,
+             "seed": 3, "faces": {"kind": "face", "by": "normal", "dir": [0, 0, 1]}}]}
+        _p, errs, bodies = rebuild(doc)
+        assert not errs, f"{kind}: {errs}"
+        tex = plugin_geometry.resolve(bodies[0])
+        assert tex, f"{kind}: did not resolve"
+        diag = []
+        pos, idx, _ = tessellate(bodies[0]["shape"], 0.05, mesh_passes=tex, diag=diag, normals_out=[])
+        assert np.all(np.isfinite(np.asarray(pos, dtype=float))), f"{kind}: non-finite positions"
+        assert len(idx) > 0, f"{kind}: no triangles"
+        assert not [d for d in diag if "non-manifold" in str(d.get("reason", ""))], f"{kind}: non-manifold"
+    print(PASS, "every added kind meshes cleanly, finite and manifold, on a real face")
+
+
+def test_validate_accepts_the_new_kinds():
+    for kind in _NEW_KINDS:
+        spec = texture.validate_texture_spec({"kind": kind, "depth": 0.3, "scale": 2.0})
+        assert spec["kind"] == kind
+    print(PASS, "validate_texture_spec accepts every added kind")
+
+
 def main():
     print("Surface-texture tests")
     test_validate_texture_spec_rejects_bad_input()
@@ -975,6 +1036,9 @@ def main():
     test_triplanar_keeps_the_pattern_uniform_where_planar_foreshortens()
     test_triplanar_is_the_freeform_default_and_auto_restores_planar()
     test_projection_spec_omits_defaults_and_rejects_bad_values()
+    test_new_kinds_stay_in_range_and_respond_to_their_controls()
+    test_new_kinds_mesh_cleanly_on_a_real_face()
+    test_validate_accepts_the_new_kinds()
     print("ALL PASS")
 
 

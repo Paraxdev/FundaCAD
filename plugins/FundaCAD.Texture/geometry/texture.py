@@ -81,7 +81,9 @@ from texture_mesh import (  # noqa: F401
     _uncharter,
 )
 
-TEXTURE_KINDS = {"knurl", "hex", "waves", "ribs", "voronoi", "noise", "image"}
+TEXTURE_KINDS = {"knurl", "hex", "waves", "ribs", "voronoi", "noise", "image",
+                 "stripes", "grid", "dots", "brick", "basket", "carbon",
+                 "isogrid", "grip", "leather"}
 _DIRECTIONS = {"out", "in", "both"}
 # "facet" = hard-surface (planar facets, real creases, the default, because it
 # is what a printer can actually resolve); "round" = the original smooth fields.

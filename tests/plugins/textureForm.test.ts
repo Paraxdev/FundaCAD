@@ -6,7 +6,8 @@
 
 import { describe, it, expect } from "vitest";
 import {
-  ANGLE_KINDS, SEED_KINDS, basename, initialTextureForm, sharpnessLabel, textureRows, toTextureValues,
+  ANGLE_KINDS, SEED_KINDS, TEXTURE_KINDS, TEXTURE_KIND_GROUPS,
+  basename, initialTextureForm, sharpnessLabel, textureRows, toTextureValues,
 } from "../../plugins/FundaCAD.Texture/textureForm";
 
 describe("textureRows", () => {
@@ -69,6 +70,38 @@ describe("textureRows", () => {
     expect(textureRows({ kind: "knurl", profile: "facet" }).seamBlend).toBe(true);
     // never on a heightmap, whatever the projection says
     expect(textureRows({ kind: "image", profile: "facet", projection: "triplanar" }).seamBlend).toBe(false);
+  });
+});
+
+describe("the grouped kind picker", () => {
+  it("flattens the groups into the kind list with no gaps or repeats", () => {
+    const grouped = TEXTURE_KIND_GROUPS.flatMap((g) => g.kinds.map((k) => k.value));
+    const flat = TEXTURE_KINDS.map((k) => k.value);
+    expect(flat).toEqual(grouped);
+    expect(new Set(flat).size).toBe(flat.length); // no kind listed twice
+    expect(flat).toContain("image");
+    // the sixteen kinds are all present
+    expect(flat.length).toBe(16);
+  });
+
+  it("puts every added kind under a category and keeps the heightmap its own", () => {
+    const byGroup = Object.fromEntries(TEXTURE_KIND_GROUPS.map((g) => [g.label, g.kinds.map((k) => k.value)]));
+    for (const k of ["stripes", "grid", "dots", "brick", "isogrid", "basket", "carbon"]) {
+      expect(byGroup["Geometric"]).toContain(k);
+    }
+    expect(byGroup["Organic"]).toContain("leather");
+    expect(byGroup["Functional"]).toContain("grip");
+    expect(byGroup["Image"]).toEqual(["image"]);
+  });
+
+  it("gives the oriented new kinds an angle and leaves leather on its seed", () => {
+    for (const k of ["stripes", "grid", "dots", "brick", "basket", "carbon", "isogrid", "grip"] as const) {
+      expect(textureRows({ kind: k, profile: "facet" }).angle).toBe(true);
+    }
+    expect(textureRows({ kind: "leather", profile: "round" }).angle).toBe(false);
+    expect(textureRows({ kind: "leather", profile: "round" }).seed).toBe(true);
+    expect(ANGLE_KINDS.has("grip")).toBe(true);
+    expect(SEED_KINDS.has("leather")).toBe(true);
   });
 });
 
