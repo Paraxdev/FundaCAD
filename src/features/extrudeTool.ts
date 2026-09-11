@@ -604,31 +604,41 @@ export class ExtrudeTool {
     const depth = Math.abs(this.distance);
     // A leaning wall is not a prism, and THREE.ExtrudeGeometry cannot taper one,
     // so the instant frontend preview only serves the straight case. Once the
-    // taper matters the exact solid comes from the kernel (store.setPreview),
-    // exactly as Draft and Press/Pull already do.
-    // New extrudes only: an EDIT already holds the model rolled back through
-    // beginEditPreview, and a second preduce through setPreview on top of that
-    // would fight it. Editing a committed extrude's taper is the Properties row's
-    // job, which previews it correctly through the edit path.
-    const tapering = !this.editId && depth > 1e-6 && Math.abs(this.taper) >= TAPER_EPS;
+    // taper matters the exact solid comes from the kernel, exactly as Draft and
+    // Press/Pull do: a NEW extrude previews through store.setPreview, an EDIT
+    // through beginEditPreview(id, feature), which varies the committed feature
+    // in place instead of stacking a second preview on the rolled-back model.
+    const tapering = depth > 1e-6 && Math.abs(this.taper) >= TAPER_EPS;
     if (tapering) {
       this.disposePreviewGeom(); // the straight prism, if one is up, is now a lie
       this.previewKey = "";
       const key = `${depth.toFixed(3)}:${sign}:${this.taper.toFixed(2)}:${this.symmetric ? "s" : "o"}:${this.selectionIds()}`;
       if (key !== this.taperKey) {
         this.taperKey = key;
-        this.store.setPreview(this.buildFeature());
+        this.pushTaperPreview();
       }
       this.taperPreviewOn = true;
     } else {
-      if (this.taperPreviewOn) {
-        this.store.setPreview(null); // back to straight, drop the kernel preview
-        this.taperPreviewOn = false;
-        this.taperKey = "";
-      }
+      if (this.taperPreviewOn) this.clearTaperPreview();
       this.updatePrism(sign, depth);
     }
     this.updateManipulators(sign, depth);
+  }
+
+  /** Send the exact tapered solid to the kernel: as a floating preview for a new
+   *  extrude, as a varied edit for a committed one. */
+  private pushTaperPreview() {
+    if (this.editId) this.store.beginEditPreview(this.editId, this.buildFeature());
+    else this.store.setPreview(this.buildFeature());
+  }
+
+  /** Take the tapered preview back down: a new extrude drops its floating
+   *  preview, an edit returns to the rolled-back model the straight prism draws on. */
+  private clearTaperPreview() {
+    if (this.editId) this.store.beginEditPreview(this.editId);
+    else this.store.setPreview(null);
+    this.taperPreviewOn = false;
+    this.taperKey = "";
   }
 
   /** The instant translucent prism for the STRAIGHT extrude, no kernel round-trip
@@ -729,15 +739,15 @@ export class ExtrudeTool {
   }
 
   /** The chunky slider you swing to lean the walls, floating beside the far face.
-   *  Offered only once there is depth to swing about, and never in edit mode
-   *  (a committed taper is edited from the Properties row). Modelled in pixels
-   *  like every other manipulator, so a constant `pixelWorldSize` scale holds its
-   *  on-screen size at any zoom. */
+   *  Offered once there is depth to swing about, for a new extrude AND for one
+   *  reopened by double-click, so editing a taper is the same easy grab as making
+   *  it. Modelled in pixels like every other manipulator, so a constant
+   *  `pixelWorldSize` scale holds its on-screen size at any zoom. */
   private updateTaperHandle(
     plane: WorldRegion["plane"], anchor: THREE.Vector3, dir: THREE.Vector3,
     depth: number, px: number,
   ) {
-    if (depth < TAPER_MIN_DEPTH || this.editId) {
+    if (depth < TAPER_MIN_DEPTH) {
       this.disposeTaperHandle();
       return;
     }
@@ -910,11 +920,13 @@ export class ExtrudeTool {
     // the thing that was on screen. See buildFeature.
     const feature = this.buildFeature();
     const id = feature.id;
-    // Drop any live taper preview before the real write: it carries the same id,
-    // so building both at once would put a duplicate into the model.
+    // Drop any live taper preview before the real write. A new extrude's floating
+    // preview carries the same id, so building both at once would duplicate it;
+    // an edit's preview is torn down by endEditPreview below instead.
     if (this.taperPreviewOn) {
-      this.store.setPreview(null);
+      if (!this.editId) this.store.setPreview(null);
       this.taperPreviewOn = false;
+      this.taperKey = "";
     }
     if (this.editId) {
       this.store.endEditPreview(false); // replaceFeature triggers the rebuild
@@ -957,13 +969,11 @@ export class ExtrudeTool {
     }
     this.disposeGrabProxy();
     this.disposeTaperHandle();
-    // A create-mode cancel or commit can leave a live taper preview up (edit
-    // mode's is torn down by endEditPreview instead); drop it so the model
-    // returns to what is actually committed.
-    if (this.taperPreviewOn) {
-      this.store.setPreview(null);
-      this.taperPreviewOn = false;
-    }
+    // A create-mode cancel or commit can leave a live floating taper preview up;
+    // drop it so the model returns to what is actually committed. An edit's taper
+    // preview is torn down by endEditPreview in cancel()/commit() instead.
+    if (this.taperPreviewOn && !this.editId) this.store.setPreview(null);
+    this.taperPreviewOn = false;
     this.taperKey = "";
     this.taper = 0;
     this.taperGrabbing = false;
