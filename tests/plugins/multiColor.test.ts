@@ -103,7 +103,7 @@ describe("what the viewport is told to paint", () => {
     // faceStart 4 and a slot on the body's third face is global face 6, which is
     // the whole reason this is not just a copy of the array.
     const p = paintFrom(
-      store([{ id: "b1", faceStart: 4, textureColorSlots: [null, null, 0, 1] }], {}),
+      store([{ id: "b1", faceStart: 4, faceColorSlots: [null, null, 0, 1] }], {}),
     );
     expect(p.faces).toEqual({ 6: "#e8e8e8", 7: "#d23b30" });
   });

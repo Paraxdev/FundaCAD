@@ -29,14 +29,25 @@ export interface WireBodyFull {
   positions: F32Wire;
   indices: U32Wire;
   faceIds: U32Wire;
-  // present only for a body with texture features: analytic displaced normals
-  // (plain faces carry the same accumulation the client would compute)
+  // present only for a body some plugin's mesh pass displaced: analytic normals
+  // computed against the displacement (plain faces carry the same accumulation
+  // the client would compute)
   normals?: F32Wire;
   faceOwners?: (string | null)[];
   /** Runs of LOCAL face indices that are pieces of one surface (face_bands.py).
    *  Absent on the ordinary body, which has no run. */
   faceBands?: number[][];
-  textureColorSlots?: (number | null)[];
+  /** Per-face palette slot, dense over the body's faces, from whichever mesh
+   *  pass covers each face. The core carries the number and never looks up what
+   *  colour it means; the capability that owns a palette does that.
+   *
+   *  THE NAME IS A CONTRACT with sidecar/server.py, which writes this key into
+   *  the payload. It was `textureColorSlots` on both sides until the surface
+   *  texture became a plugin and the sidecar half was renamed, at which point
+   *  this half went on reading a key nothing sent and every two-tone inlay
+   *  silently stopped being painted. tests/geometry/wireKeys.test.ts is what now
+   *  fails if the two halves drift apart again. */
+  faceColorSlots?: (number | null)[];
   edges?: WireEdgeList;
   faceCount?: number;
 }
@@ -359,7 +370,7 @@ export class RebuildAssembly {
     const m = bodies![i]!;
     if (p.faceOwners !== undefined) m.faceOwners = p.faceOwners;
     if (p.faceBands !== undefined) m.faceBands = p.faceBands;
-    if (p.textureColorSlots !== undefined) m.textureColorSlots = p.textureColorSlots;
+    if (p.faceColorSlots !== undefined) m.faceColorSlots = p.faceColorSlots;
 
     if (!this.written[i]) { this.written[i] = true; this.left--; }
     return true;
