@@ -4,7 +4,6 @@ import { markRaw, ref, onMounted, onUnmounted } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useUiStore } from "../../stores/ui";
 import { getUnit, setUnit, asUnit, onUnitChange, type Unit } from "../../ui/units";
-import { THEMES, getTheme, setTheme, asThemeId, onThemeChange } from "../../ui/theme";
 import { iconPacks, getIconPack, setIconPack, asIconPackId, onIconPackChange } from "../../ui/icons";
 import { buildMenubar } from "../../app/menubarDef";
 import { onContribChange } from "../../plugins/contrib";
@@ -54,25 +53,19 @@ function onUnitInput(ev: Event) {
   if (u) setUnit(u);
 }
 
-// Theme and icon pack are the same shape of setting as units, a module-level
-// observable with a listener set and localStorage behind it, so they are
-// mirrored the same way rather than through Pinia. The viewport reads the theme
-// synchronously while painting manipulators, which is the same reason units is
-// not in the store.
-const theme = ref(getTheme());
+// The icon pack is the same shape of setting as units, a module-level
+// observable with a listener set and localStorage behind it, so it is mirrored
+// the same way rather than through Pinia. The theme used to sit up here beside
+// it, one <select> per palette; it is gone from the title bar now that the app
+// ships a single theme, and the one control that theme still needs, uploading
+// your own, belongs on the Preferences surface with the rest of appearance.
 const pack = ref(getIconPack());
-let offTheme: (() => void) | null = null;
 let offPack: (() => void) | null = null;
 onMounted(() => {
-  offTheme = onThemeChange(() => { theme.value = getTheme(); });
   offPack = onIconPackChange(() => { pack.value = getIconPack(); });
 });
-onUnmounted(() => { offTheme?.(); offPack?.(); });
+onUnmounted(() => { offPack?.(); });
 
-function onThemeInput(ev: Event) {
-  const id = asThemeId((ev.target as HTMLSelectElement).value);
-  if (id) setTheme(id);
-}
 function onPackInput(ev: Event) {
   const id = asIconPackId((ev.target as HTMLSelectElement).value);
   if (id) setIconPack(id);
@@ -122,12 +115,6 @@ function onPackInput(ev: Event) {
         <option value="mm">mm</option>
         <option value="cm">cm</option>
         <option value="in">in</option>
-      </select>
-    </label>
-    <label class="units" title="Colour theme">
-      Theme
-      <select id="theme" :value="theme" @change="onThemeInput">
-        <option v-for="t in THEMES" :key="t.id" :value="t.id">{{ t.label }}</option>
       </select>
     </label>
     <label class="units" title="Icon set">

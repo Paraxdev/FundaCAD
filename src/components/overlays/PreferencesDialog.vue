@@ -14,13 +14,22 @@
 // bound with v-model, because those modules are deliberately Vue-free (that is
 // what lets the headless suite import them) and so nothing tracks them.
 
-import { onMounted, onUnmounted, ref, shallowRef } from "vue";
+import { computed, onMounted, onUnmounted, ref, shallowRef } from "vue";
 import { contributedSettings, onContribChange } from "../../plugins/contrib";
 import { useDialogStore } from "../../stores/dialogs";
 import { useModalGate } from "../../composables/useModalGate";
 import ModalFrame from "./ModalFrame.vue";
 import PluginsSection from "./PluginsSection.vue";
-import { THEMES, asThemeId, getTheme, onThemeChange, setTheme } from "../../ui/theme";
+import {
+  addCustomTheme,
+  asThemeId,
+  BUILTIN_THEME,
+  getTheme,
+  onThemeChange,
+  removeCustomTheme,
+  setTheme,
+  themes,
+} from "../../ui/theme";
 import { asIconPackId, getIconPack, iconPacks, onIconPackChange, setIconPack } from "../../ui/icons";
 import { asUnit, getUnit, onUnitChange, setUnit } from "../../ui/units";
 import {
@@ -50,6 +59,14 @@ const close = () => { dialogs.preferences = false; };
 useModalGate();
 
 const theme = ref(getTheme());
+// The roster is no longer a constant, uploading and removing a palette grows and
+// shrinks it, so it is mirrored in a ref and re-read whenever the library moves.
+const themeList = ref(themes());
+// The last upload's rejection reason, shown under the picker. Empty when the
+// last upload was fine or there has not been one.
+const themeError = ref("");
+const fileInput = ref<HTMLInputElement | null>(null);
+const activeIsCustom = computed(() => theme.value !== BUILTIN_THEME.id);
 const pack = ref(getIconPack());
 const unit = ref(getUnit());
 const layout = ref(layoutPrefs());
@@ -65,7 +82,7 @@ const sections = shallowRef(contributedSettings());
 const stops: (() => void)[] = [];
 onMounted(() => {
   stops.push(
-    onThemeChange(() => { theme.value = getTheme(); }),
+    onThemeChange(() => { theme.value = getTheme(); themeList.value = themes(); }),
     onIconPackChange(() => { pack.value = getIconPack(); }),
     onUnitChange(() => { unit.value = getUnit(); }),
     onLayoutPrefsChange(() => { layout.value = layoutPrefs(); }),
@@ -80,6 +97,46 @@ const value = (ev: Event) => (ev.target as HTMLSelectElement).value;
 // Every write goes through the module's own gate, so an <option> that no longer
 // matches anything is refused at the same place a corrupt stored value is.
 function onTheme(ev: Event) { const v = asThemeId(value(ev)); if (v) setTheme(v); }
+
+// Opening the native file picker from a real button, the <input> itself is
+// hidden: a bare file input reads as a mystery control on a settings screen,
+// and "Upload theme…" says what it is for.
+function pickThemeFile() { themeError.value = ""; fileInput.value?.click(); }
+
+async function onUpload(ev: Event) {
+  const input = ev.target as HTMLInputElement;
+  const file = input.files?.[0];
+  // Reset immediately so choosing the SAME file twice fires change again, the
+  // usual gotcha with a file input, someone re-picks after fixing the file and
+  // nothing happens.
+  input.value = "";
+  if (!file) return;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await file.text());
+  } catch {
+    themeError.value = "That file is not valid JSON.";
+    return;
+  }
+  const res = addCustomTheme(parsed, file.name);
+  if (!res.ok) {
+    themeError.value = res.error;
+    return;
+  }
+  themeError.value = "";
+  themeList.value = themes();
+  // Adding a palette does not switch to it (the module leaves that to us), and a
+  // user who just uploaded one wants to see it, so make it active.
+  setTheme(res.theme.id);
+}
+
+function onRemoveTheme() {
+  themeError.value = "";
+  // Only the active theme can be the one on screen to remove; removing it falls
+  // back to the built-in palette inside the module, which fires onThemeChange
+  // and refreshes both refs.
+  if (activeIsCustom.value) removeCustomTheme(theme.value);
+}
 function onPack(ev: Event) { const v = asIconPackId(value(ev)); if (v) setIconPack(v); }
 function onUnit(ev: Event) { const v = asUnit(value(ev)); if (v) setUnit(v); }
 function onRibbon(ev: Event) { const v = asRibbonSide(value(ev)); if (v) setLayoutPref("ribbon", v); }
@@ -99,9 +156,30 @@ function onBloom(ev: Event) { const v = asBloom(value(ev)); if (v) setRenderPref
       <label class="prefs-row">
         <span class="prefs-label">Theme</span>
         <select id="prefs-theme" class="sm-select" :value="theme" @change="onTheme">
-          <option v-for="t in THEMES" :key="t.id" :value="t.id">{{ t.label }}</option>
+          <option v-for="t in themeList" :key="t.id" :value="t.id">{{ t.label }}</option>
         </select>
       </label>
+      <div class="prefs-row">
+        <span class="prefs-label"></span>
+        <div class="prefs-actions">
+          <input
+            ref="fileInput"
+            id="prefs-theme-file"
+            class="hidden"
+            type="file"
+            accept="application/json,.json"
+            @change="onUpload"
+          />
+          <button type="button" class="btn" @click="pickThemeFile">Upload theme…</button>
+          <button v-if="activeIsCustom" type="button" class="btn" @click="onRemoveTheme">Remove</button>
+        </div>
+      </div>
+      <div v-if="themeError" class="sm-hint prefs-theme-error">{{ themeError }}</div>
+      <div class="sm-hint">
+        One theme ships with FundaCAD. Upload a JSON palette to add your own, it
+        is stored in this browser's preferences. Keys are colour tokens like
+        <code>--bg</code> and <code>--accent</code>, values are hex or rgb().
+      </div>
       <label class="prefs-row">
         <span class="prefs-label">Icons</span>
         <select id="prefs-iconpack" class="sm-select" :value="pack" @change="onPack">

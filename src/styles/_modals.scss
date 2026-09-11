@@ -298,6 +298,19 @@
   font-size: 12px;
   color: var(--text-dim, #9aa3af);
 }
+/* Upload / Remove for a user's own theme, sitting in the control column of a
+   row whose label column is left empty, so the buttons line up under the theme
+   picker above them. */
+.prefs-actions {
+  display: flex;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+/* The one hint that reports a refused upload rather than describing a setting,
+   so it is coloured as the error it is instead of as ordinary help text. */
+.prefs-theme-error {
+  color: var(--error, #f0564a);
+}
 
 /* --- Preferences, Plugins section ---
    A plugin row is a name, one line about it, and one button. When an install is
