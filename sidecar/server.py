@@ -934,6 +934,17 @@ def _apply_doc_ops(payload):
     return doc
 
 
+def _err_wire(e):
+    """Project an internal error dict to its wire shape, carrying the machine
+    `code` only when the refusal set one (errors.py) so the frontend can branch
+    on the category instead of matching the human message. Mirrors what
+    ResolveDiag already does for recoverable diagnostics."""
+    w = {"message": e["message"], "feature_id": e.get("feature_id")}
+    if e.get("code"):
+        w["code"] = e["code"]
+    return w
+
+
 def _rebuild_job(document, tolerance, known=None):
     """Worker: rebuild the document and tessellate. Returns a result dict; a
     feature failure comes back INSIDE the result as "featureError" (with the
@@ -962,8 +973,7 @@ def _rebuild_job(document, tolerance, known=None):
     t_rebuild = time.monotonic() - t0
     if errors and part is None and not bodies:
         # nothing built at all, the document is unusable, surface as fatal
-        e = errors[0]
-        return {"error": {"message": e["message"], "feature_id": e.get("feature_id")}}
+        return {"error": _err_wire(errors[0])}
     if part is None:
         # no solid yet (e.g. only sketches exist), not an error; the frontend
         # still renders sketch overlays. Projection refresh entries still ride
@@ -1078,13 +1088,8 @@ def _rebuild_job(document, tolerance, known=None):
         # failing feature upstream, the user's newest action is what they need
         # to see, not the same old error masking it. All errors ride along in
         # "featureErrors" for richer UI later.
-        result["featureError"] = {
-            "message": errors[-1]["message"],
-            "feature_id": errors[-1].get("feature_id"),
-        }
-        result["featureErrors"] = [
-            {"message": e["message"], "feature_id": e.get("feature_id")} for e in errors
-        ]
+        result["featureError"] = _err_wire(errors[-1])
+        result["featureErrors"] = [_err_wire(e) for e in errors]
     return result
 
 
@@ -1149,11 +1154,11 @@ def _export_job(document, fmt, path, body=None, separate=False,
     # hostage). Only a document where nothing built at all is a hard error.
     if errors and part is None and not live:
         e = errors[0]
-        return {"error": {"message": e["message"], "feature_id": e.get("feature_id")}}
+        return {"error": _err_wire(e)}
     if part is None and not live:
         return {"error": {"message": "nothing to export, no bodies built yet"}}
     warnings = [
-        {"message": e["message"], "feature_id": e.get("feature_id")} for e in errors
+        _err_wire(e) for e in errors
     ]
     any_displaced = any(plugin_geometry.specs(b) for b in live)
     if fmt == "step" and any_displaced:
@@ -1351,7 +1356,7 @@ def _export_project_job(document, path, palette, body_colors, body_names, settin
     if not live:
         if errors:
             e = errors[0]
-            return {"error": {"message": e["message"], "feature_id": e.get("feature_id")}}
+            return {"error": _err_wire(e)}
         return {"error": {"message": "nothing to export, no bodies built yet"}}
 
     palette, body_colors, body_names = sanitize_inputs(palette, body_colors, body_names)
@@ -1379,7 +1384,7 @@ def _export_project_job(document, path, palette, body_colors, body_names, settin
     res = {"path": write_project_3mf(meshed, path, palette, body_colors, body_names, settings)}
     if errors:
         res["warnings"] = [
-            {"message": e["message"], "feature_id": e.get("feature_id")} for e in errors
+            _err_wire(e) for e in errors
         ]
     return res
 
@@ -1423,7 +1428,7 @@ def _interference_job(document):
     # feature must not block clash-checking an otherwise-valid assembly
     if errors and not live:
         e = errors[0]
-        return {"error": {"message": e["message"], "feature_id": e.get("feature_id")}}
+        return {"error": _err_wire(e)}
     # ONE bbox per body, not one per pair. The sweep is quadratic in pairs but
     # linear in distinct shapes, so computing the box inside the pair test did
     # 9,360,540 OCCT bounding-box walks at 3,060 bodies to learn 3,060 things.
@@ -1492,8 +1497,7 @@ def _inspect_job(document, detail=True, bodies_filter=None, max_faces=None, max_
             max_faces=MAX_FACES if max_faces is None else int(max_faces),
             max_edges=MAX_EDGES if max_edges is None else int(max_edges),
         ),
-        "errors": [{"message": e["message"], "feature_id": e.get("feature_id")}
-                   for e in (errors or [])],
+        "errors": [_err_wire(e) for e in (errors or [])],
     }
 
 
