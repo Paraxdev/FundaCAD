@@ -278,6 +278,12 @@ class _RebuildCtx:
     # that follow a face. Only the ones that MOVED: a sketch still sitting on
     # its cached plane says nothing, and the frontend reads the cache anyway.
     sketch_planes: dict = None
+    # datum axis/point feature id -> its RESOLVED placement, for datums that
+    # FOLLOW model geometry (an axis anchored to an edge). Only the followed
+    # ones: a baked datum sits at coordinates the frontend already has in the
+    # document, so it says nothing here. Same arrangement, and same reason, as
+    # sketch_planes and datums above.
+    datum_marks: dict = None
 
     def stash(self, body, spec):
         """Put a tessellation-time spec on a body, for a PLUGIN's handler.
@@ -453,11 +459,44 @@ def _handle_datum_point(f, ctx):
     f["point"]
 
 
+def _edge_line(sel, ctx, fid=None):
+    """The (origin, dir) tuples of the STRAIGHT model edge a datum or revolve is
+    aimed at, re-resolved against the bodies as they stand now, or None when it
+    resolves to nothing or to a curve. Resolution is GLOBAL across bodies for the
+    reason recorded on _revolve_axis: body ids are positional, so an upstream
+    split or boolean renumbers them and a body-scoped match would silently re-aim
+    at some distant edge on the wrong piece."""
+    for b in getattr(ctx, "bodies", None) or []:
+        shape = b.get("shape")
+        if shape is None:
+            continue
+        try:
+            edges = resolve_edges(shape, sel, getattr(ctx, "diagnostics", None), fid)
+        except Exception:
+            continue
+        for e in edges or []:
+            if e is not None and _edge_curve(e) == "line":
+                a, d = _edge_mid(e), _edge_dir(e)
+                return (a.X, a.Y, a.Z), (d.X, d.Y, d.Z)
+    return None
+
+
 def _handle_datum_axis(f, ctx):
-    # Reference geometry, no body, same as _handle_datum_point. Touch the two
-    # required fields so a malformed axis flags here rather than silently
-    # drawing nothing.
+    # Reference geometry, no body. Touch the two required fields so a malformed
+    # axis flags here. If the axis is anchored to a model EDGE, re-resolve that
+    # edge to its line every rebuild and emit the resolved line, so the axis
+    # FOLLOWS the part; the baked origin/dir stay as the cache the follow falls
+    # back to (the datumPlane.face pattern). A baked axis (no edge) needs nothing
+    # here, the frontend already has its coordinates in the document.
     f["origin"], f["dir"]
+    sel = f.get("axisEdge")
+    if sel and ctx.datum_marks is not None:
+        line = _edge_line(sel, ctx, f.get("id"))
+        if line is not None:
+            (ox, oy, oz), (dx, dy, dz) = line
+            ctx.datum_marks[f["id"]] = {
+                "kind": "axis", "origin": [ox, oy, oz], "dir": [dx, dy, dz],
+            }
 
 
 def _handle_extrude(f, ctx):
@@ -1577,7 +1616,8 @@ def _make_val(params):
 
 
 def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist=None,
-            projections=None, datums_out=None, sketch_planes_out=None):
+            projections=None, datums_out=None, sketch_planes_out=None,
+            datum_marks_out=None):
     """Return (part, errors, bodies).
 
     part    : the merged build123d solid/compound of all bodies, or None.
@@ -1636,6 +1676,7 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
     sketches = {}
     datums = {}  # datumPlane feature id -> PlaneSpec (resolved lazily by _plane_of)
     sketch_planes = {}  # sketch feature id -> the face-followed PlaneSpec it used
+    datum_marks = {}  # datum axis/point feature id -> resolved {kind, origin, dir} (followed only)
     bodies = []  # ordered [{id, name, shape}]
     counter = {"n": 0}
     errors = []
@@ -1697,6 +1738,12 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
             # plane while a full build put them on the face, the same document
             # giving two different solids depending on the cache.
             "sketch_planes": {k: dict(v) for k, v in sketch_planes.items()},
+            # The resolved placement of every datum that FOLLOWS geometry, riding
+            # with the snapshot for the same reason `datums` and `sketch_planes`
+            # do: an incremental resume that starts PAST a followed datum would
+            # otherwise drop it from the header, and the frontend would snap the
+            # datum back to its stale baked cache on that rebuild.
+            "datum_marks": {k: dict(v) for k, v in datum_marks.items()},
             "n": counter["n"],
             # errors travel with the snapshot: an incremental resume PAST a failed
             # feature must still re-report its error (else the banner would clear
@@ -1728,6 +1775,11 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
         # key, and degrades to the old behaviour rather than raising.
         sketch_planes.clear()
         sketch_planes.update({k: dict(v) for k, v in (snap.get("sketch_planes") or {}).items()})
+        # .get for the same reason as sketch_planes: a disk checkpoint (whose
+        # _save_checkpoint predates this) reconstructs a snapshot without the
+        # key, and degrades to the baked fallback rather than raising.
+        datum_marks.clear()
+        datum_marks.update({k: dict(v) for k, v in (snap.get("datum_marks") or {}).items()})
         counter["n"] = snap["n"]
         err_src = snap["errors_ref"]
         if err_src is not errors:
@@ -1772,7 +1824,7 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
         diagnostics=diagnostics, hidden_bodies=hidden_bodies,
         new_body=new_body, active=active, require_active=require_active,
         find_body=find_body, features=features, projections=projections,
-        sketch_planes=sketch_planes,
+        sketch_planes=sketch_planes, datum_marks=datum_marks,
     )
 
     for i in range(start, len(features)):
@@ -1900,6 +1952,8 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
         datums_out.update(datums)
     if sketch_planes_out is not None:
         sketch_planes_out.update(sketch_planes)
+    if datum_marks_out is not None:
+        datum_marks_out.update(datum_marks)
 
     return part, errors, out_bodies
 
@@ -1929,7 +1983,7 @@ def reset_cache():
 
 
 def rebuild_cached(document, diagnostics=None, projections=None, datums_out=None,
-                   sketch_planes_out=None):
+                   sketch_planes_out=None, datum_marks_out=None):
     """Incremental rebuild: reuse cached per-feature state for the unchanged document
     PREFIX and re-run only from the first changed feature. Resume sources, deepest
     wins: (1) in-RAM per-feature snapshots from the previous build in this worker,
@@ -2060,6 +2114,7 @@ def rebuild_cached(document, diagnostics=None, projections=None, datums_out=None
         document, diagnostics=diagnostics, resume=resume,
         snapshots_out=snaps_out, persist=persist, projections=projections,
         datums_out=datums_out, sketch_planes_out=sketch_planes_out,
+        datum_marks_out=datum_marks_out,
     )
     elapsed = time.monotonic() - t_build
 

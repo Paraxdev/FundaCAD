@@ -127,6 +127,7 @@ export const MODEL: Group[] = [
         children: [
           { action: "datum-point", label: "Datum Point", iconName: "datumPoint" },
           { action: "datum-axis", label: "Datum Axis", iconName: "datumAxis" },
+          { action: "datum-axis-edge", label: "Axis on Edge", iconName: "datumAxis" },
         ],
       },
     ],

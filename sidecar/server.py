@@ -952,11 +952,12 @@ def _rebuild_job(document, tolerance, known=None):
     proj = []
     datums = {}
     sketch_planes = {}
+    datum_marks = {}
     known = known or {}
     t0 = time.monotonic()
     part, errors, bodies = rebuild_cached(
         document, diagnostics=diag, projections=proj, datums_out=datums,
-        sketch_planes_out=sketch_planes,
+        sketch_planes_out=sketch_planes, datum_marks_out=datum_marks,
     )
     t_rebuild = time.monotonic() - t0
     if errors and part is None and not bodies:
@@ -976,6 +977,10 @@ def _rebuild_job(document, tolerance, known=None):
             result["datumPlanes"] = datums
         if sketch_planes:
             result["sketchPlanes"] = sketch_planes
+        # Datum axes/points that follow geometry resolve without a solid too (an
+        # axis can follow an edge of a body that IS the only body). Same path.
+        if datum_marks:
+            result["datumMarks"] = datum_marks
         return result
 
     live_ids = set()
@@ -1057,6 +1062,10 @@ def _rebuild_job(document, tolerance, known=None):
         # cache is still where the build put it, which is what every
         # frontend reader already falls back to.
         result["sketchPlanes"] = sketch_planes
+    if datum_marks:
+        # Only the datums that FOLLOW geometry, and the frontend falls back to
+        # the baked coordinate for every id absent here, the same as sketchPlanes.
+        result["datumMarks"] = datum_marks
     if diag:  # only attach when a selector resolved with low confidence
         result["diagnostics"] = diag
     if proj:  # only attach when the projection refresh found real changes
