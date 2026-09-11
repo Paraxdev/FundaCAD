@@ -6,6 +6,22 @@
 // client is back in the bundle every machine parses at startup while the
 // Preferences switch that says it is off goes on saying it.
 //
+// AND THE SENTENCE USED TO BE FALSE, which is worth recording here because this
+// file is where somebody goes to find out whether to believe it. Every rule
+// below reads STATIC IMPORTS and nothing else, and for a long time that was the
+// whole test. It caught a core file reaching into plugins/, and it could not
+// catch the thing that was actually happening: the core carrying its own copy
+// of what a plugin's feature IS. `texture` was a variant of the Feature union
+// in src/types.ts, a row of numeric fields in document/numFields.ts, a
+// selection row in features/selectionTargets.ts, a handler in the sidecar's
+// dispatch table and two thousand lines of geometry in sidecar/. Not one line
+// of that imported the plugin, so every rule here passed, and the plugin was a
+// panel in front of code that shipped whether it was installed or not.
+//
+// So there is a second kind of rule at the bottom now: the core may not NAME a
+// type a plugin owns. It is a grep, it is cruder than the import graph, and it
+// is the one that would have failed.
+//
 // So the rule is checked rather than remembered. Each capability owns a set of
 // files. A file outside that set may not STATICALLY import a file inside it.
 // Dynamic `import()` is fine and is the point: that is how a capability is
@@ -62,11 +78,14 @@ const CAPABILITIES: Record<string, (path: string) => boolean> = {
   "the printer connection": (p) => p.includes("/plugins/FundaCAD.Printing/"),
   "the 3D mouse": (p) => p.includes("/plugins/FundaCAD.SpaceMouse/"),
   "multiple colours": (p) => p.includes("/plugins/FundaCAD.MultiColor/"),
-  // The one that was hardest to get out, and so the one this rule is worth the
-  // most on. A surface texture was a MODELING TOOL: twenty-three files under
-  // src/ named it, from the engine that constructed it to the dispatcher that
-  // ran it to the properties panel that decided its Seed row was worth drawing.
-  // Every one of those was the application knowing what a texture is.
+  // The one that was hardest to get out, and so the one these rules are worth
+  // the most on. A surface texture was a MODELING TOOL: files under src/ named
+  // it, from the union that defined it to the dispatcher that ran it to the
+  // properties panel that decided its Seed row was worth drawing, and the
+  // geometry that built it lived in sidecar/. Every one of those was the
+  // application knowing what a texture is. It owns all of it now, the schema,
+  // the rows, the handler and the mesh, which is what makes uninstalling it
+  // mean something.
   "a surface texture": (p) => p.includes("/plugins/FundaCAD.Texture/"),
 };
 
@@ -162,6 +181,52 @@ describe("the core does not depend on the capabilities it can turn off", () => {
       // and each one really is a plugin directory, not a chance substring
       expect(mine.every((p) => p.includes("/plugins/")), name).toBe(true);
     }
+  });
+
+  it("does not name a feature type a plugin owns", () => {
+    // THE RULE THAT WOULD HAVE FAILED. Every check above reads the import graph,
+    // and the coupling that actually mattered left no import behind: the core
+    // simply knew, in its own files, what a `texture` was. So this one greps.
+    //
+    // The types are read out of the plugins' manifests, which is also where the
+    // app and the geometry engine read them from, so adding a plugin-owned type
+    // extends this rule automatically and there is no second list to forget.
+    //
+    // What may still say the word: the plugins' own files, this test, and a
+    // COMMENT anywhere (a note saying where something used to live is how the
+    // history stays legible, and a comment compiles to nothing). What may not is
+    // a string or an identifier in the app's own code.
+    const manifests = import.meta.glob("../../plugins/*/manifest.json", {
+      eager: true,
+      import: "default",
+    }) as Record<string, { id: string; featureTypes?: string[] }>;
+
+    const owned: { type: string; plugin: string }[] = [];
+    for (const m of Object.values(manifests)) {
+      for (const t of m.featureTypes ?? []) owned.push({ type: t, plugin: m.id });
+    }
+    // The control: a rule over an empty list is a rule about nothing, and this
+    // whole test would pass on a repository where every manifest had quietly
+    // dropped its featureTypes.
+    expect(owned.length, "no plugin declares a feature type").toBeGreaterThan(0);
+
+    const offenders: string[] = [];
+    for (const [file, src] of Object.entries(sources)) {
+      if (!file.includes("/src/")) continue;
+      const lines = src.split("\n");
+      for (const { type, plugin } of owned) {
+        // The word as a STRING LITERAL or a bare property key, which is how a
+        // feature type is actually written when code is acting on it. A looser
+        // match would catch the word inside prose and make the rule unusable.
+        const re = new RegExp(`(["'\`]${type}["'\`]|^\\s*${type}\\s*:)`);
+        lines.forEach((line, i) => {
+          const code = line.replace(/\/\/.*$/, "");
+          if (/^\s*[*]/.test(line) || /^\s*\/\//.test(line)) return; // comment
+          if (re.test(code)) offenders.push(`${file}:${i + 1} names ${plugin}'s ${type}`);
+        });
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 
   it("leaves no capability code in the app's own tree", () => {

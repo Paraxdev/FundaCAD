@@ -3,6 +3,7 @@
 // and on-canvas dimension input, then Finish to commit the sketch feature.
 
 import * as THREE from "three";
+import { asFeature } from "../types";
 import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore } from "../document/store";
 import type { Feature, ParamTarget, PlaneSpec, ProjectionUpdate, Selector, SketchConstraint, SketchPattern } from "../types";
@@ -480,21 +481,22 @@ export class SketchMode {
     this.conflict = false;
     if (editId) {
       const f = store.document.features.find((x) => x.id === editId);
-      if (f && f.type === "sketch") {
+      const sk = asFeature(f, "sketch");
+      if (sk) {
         // real entities only, derived pattern copies are NEVER stored in
         // this.entities (see derivedEntities()); doing so would persist them
         // as real geometry on the next finish() and bake in duplicates (§1.2).
-        this.entities = resolveRealEntities(f, store.document.parameters);
-        this.constraints = f.constraints ? f.constraints.map((c) => ({ ...c })) : [];
-        this.patterns = f.patterns ? f.patterns.map((p) => ({ ...p })) : [];
+        this.entities = resolveRealEntities(sk, store.document.parameters);
+        this.constraints = sk.constraints ? sk.constraints.map((c) => ({ ...c })) : [];
+        this.patterns = sk.patterns ? sk.patterns.map((p) => ({ ...p })) : [];
         // keep an existing datum link across a re-edit (the caller only passes
         // planeId when it just created the datum)
-        if (f.planeId) this.planeId = f.planeId;
+        if (sk.planeId) this.planeId = sk.planeId;
         // ...and the same for the face anchor: re-editing a sketch must not
         // strip the reference that makes it follow. The caller passes one only
         // when the sketch is being CREATED on a face.
-        if (f.face) {
-          this.face = { selector: f.face, at: (f.at ?? [0, 0, 0]) as [number, number, number] };
+        if (sk.face) {
+          this.face = { selector: sk.face, at: (sk.at ?? [0, 0, 0]) as [number, number, number] };
         }
         for (const p of this.patterns) notePatternId(p.id); // reserve ids so new ones don't collide
       }

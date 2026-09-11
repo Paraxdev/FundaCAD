@@ -35,6 +35,7 @@
 // scene.
 
 import type { Feature, FeatureType, Selector } from "../types";
+import { contributedFeature } from "../plugins/contrib";
 
 /** What a target holds, one entry at a time. "area" is a closed region of a
  *  sketch, the word the extrude prompts already use for the thing you click. */
@@ -69,8 +70,12 @@ export interface TargetField {
   alsoReads?: string;
 }
 
-/** The inventory. A feature type absent from this table has no editable
- *  selection, a primitive, a scale, a datum plane.
+/** The inventory, for the features the APPLICATION owns. A feature type absent
+ *  from this table and undescribed by any plugin has no editable selection: a
+ *  primitive, a scale, a datum plane. `targetsOf()` below asks the plugins too,
+ *  and is what every consumer should call.
+ *
+ *  `texture` used to be in here, with "the whole body" for its empty case.
  *
  *  Declaration order is row order, and it is the order the feature reads in:
  *  what is kept before what is consumed, what is operated on before what it is
@@ -95,10 +100,6 @@ export const FEATURE_TARGETS: Partial<Record<FeatureType, readonly TargetField[]
     whenEmpty: "the whole body",
   }],
   draft: [{ field: "faces", label: "Faces", kind: "face", shape: "selector", arity: "many" }],
-  texture: [{
-    field: "faces", label: "Faces", kind: "face", shape: "selector", arity: "many",
-    whenEmpty: "the whole body",
-  }],
   // Two body targets with opposite fates, so they are labelled by fate. Which
   // body is kept is the whole meaning of a Subtract, and it was previously
   // decided by which one you happened to click first and then never shown.
@@ -132,9 +133,17 @@ export const FEATURE_TARGETS: Partial<Record<FeatureType, readonly TargetField[]
   }],
 };
 
-/** The targets this feature has, or an empty list. */
+/** The targets this feature has, or an empty list.
+ *
+ *  The app's own inventory first, then whichever plugin owns the type. A type
+ *  nobody describes gets nothing, and that is the right answer rather than a
+ *  gap: a selection row is a viewport gesture against a named field, and
+ *  guessing which field of an unknown feature holds a selector would offer to
+ *  overwrite something the app cannot interpret. Its numbers still show (see
+ *  document/numFields.ts), because those can be round-tripped safely and a
+ *  selector cannot. */
 export function targetsOf(type: string): readonly TargetField[] {
-  return FEATURE_TARGETS[type as FeatureType] ?? [];
+  return FEATURE_TARGETS[type as FeatureType] ?? contributedFeature(type)?.targets ?? [];
 }
 
 /** One entry of a target: a selector, a body id, or a profile point. The three

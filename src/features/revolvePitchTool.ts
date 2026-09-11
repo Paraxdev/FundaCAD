@@ -40,6 +40,7 @@
 // preview is not an undo step, so the value box stays the thing that commits.
 
 import * as THREE from "three";
+import { asFeature } from "../types";
 import type { Viewport } from "../viewport/viewport";
 import type { SketchOverlay } from "../sketch/overlay";
 import type { DocumentStore } from "../document/store";
@@ -265,12 +266,13 @@ export class RevolvePitchTool {
   private profileHeight(sketchId: string): number {
     const doc = this.store.document;
     const sk = doc.features.find((x) => x.id === sketchId);
-    if (!sk || sk.type !== "sketch") return 0;
+    const sketch = asFeature(sk, "sketch");
+    if (!sketch) return 0;
     let regions;
     let plane;
     try {
-      plane = this.overlay.planeFor(sk.plane);
-      regions = detectRegions(sk.id, resolveEntities(sk, doc.parameters));
+      plane = this.overlay.planeFor(sketch.plane);
+      regions = detectRegions(sketch.id, resolveEntities(sketch, doc.parameters));
     } catch {
       return 0; // a sketch that will not resolve is not this tool's problem
     }

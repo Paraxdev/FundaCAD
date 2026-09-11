@@ -8,6 +8,7 @@
 // geometry only and leaves the shared materials intact.
 
 import * as THREE from "three";
+import { asFeature } from "../types";
 import type { CadDocument, PlaneDef, PlaneSpec } from "../types";
 import { planeOf } from "../document/planeOf";
 import { SketchPlane } from "./plane";
@@ -185,8 +186,9 @@ export class SketchOverlay {
     this.clearGroup(this.fills);
     this.regions = [];
 
-    for (const f of doc.features) {
-      if (f.type !== "sketch") continue;
+    for (const raw of doc.features) {
+      const f = asFeature(raw, "sketch");
+      if (!f) continue;
       if (f.id === hiddenSketchId) continue; // active sketch drawn by the editor
       if (!this.sketchVisible(f.id)) continue; // hidden (e.g. consumed by a feature)
       // Where the BUILD put it, not where the pick recorded it. For a sketch

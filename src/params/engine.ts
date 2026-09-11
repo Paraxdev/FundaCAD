@@ -14,6 +14,7 @@
 //    load-time breakage (hand-edited files) keeps the cached value and is
 //    reported in `issues`.
 
+import { asFeature } from "../types";
 import type { CadDocument, ParamDef, ParamTarget } from "../types";
 import { ExprError, isIdentName, isNumericLiteral, isReservedName, parseExpr, refsOfNode, renameRefs } from "./parse";
 import type { ExprNode } from "./parse";
@@ -336,11 +337,12 @@ function eachBareNameRef(doc: CadDocument, name: string, hit: (label: string, se
         hit(`${f.type} ${f.id} · ${k}`, (nv) => ((f as unknown as Record<string, unknown>)[k] = nv));
       }
     }
-    if (f.type !== "sketch") continue;
-    for (const e of f.entities) {
+    const sketch = asFeature(f, "sketch");
+    if (!sketch) continue;
+    for (const e of sketch.entities) {
       for (const [k, v] of Object.entries(e)) {
         if (v === name && !NON_NUM_STRING_FIELDS.has(k)) {
-          hit(`${e.type} in ${f.id} · ${k}`, (nv) => ((e as unknown as Record<string, unknown>)[k] = nv));
+          hit(`${e.type} in ${sketch.id} · ${k}`, (nv) => ((e as unknown as Record<string, unknown>)[k] = nv));
         }
       }
     }

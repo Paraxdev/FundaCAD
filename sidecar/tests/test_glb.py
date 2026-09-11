@@ -10,10 +10,14 @@ format, each of which produces a file that still LOADS:
     round-tripping through our own reader (a Y-up or metre mistake made in both
     directions cancels out and a round trip passes),
   - normals: smooth within a curved face, sharp between faces,
-  - per-body colour, one glTF material per body,
-  - textured bodies exporting their DISPLACED mesh, displacement lives in the
-    mesh, not in body["shape"], so the whole reason write_glb exists instead of
-    OCCT's RWGltf_CafWriter is that the latter would silently drop it.
+  - per-body colour, one glTF material per body.
+
+A body carrying a plugin's mesh displacement exports its DISPLACED mesh, which
+is the whole reason write_glb exists instead of OCCT's RWGltf_CafWriter: that
+displacement lives in the mesh and not in body["shape"], so a shape-based writer
+drops it silently. That case is checked by the plugin that owns the
+displacement, in plugins/FundaCAD.Texture/geometry/tests/, because reaching for
+a plugin feature here would make this file fail whenever that plugin is absent.
 """
 
 import _bootstrap  # noqa: F401  (puts sidecar/ on sys.path)
@@ -170,36 +174,6 @@ def test_one_material_per_body_with_its_palette_colour():
     print(PASS, "one material per body, colours linearised for glTF")
 
 
-def test_textured_body_exports_its_displaced_mesh():
-    """The trap write_glb exists to avoid: texture displacement lives in the mesh,
-    never in body["shape"], so any shape-based writer drops it silently."""
-    plain = _entry("Plain", Box(20, 20, 5))
-    smooth_tris = len(plain["indices"]) // 3
-
-    doc = {"parameters": {}, "features": [
-        {"id": "s1", "type": "sketch", "plane": "XY",
-         "entities": [{"id": "r1", "type": "rectangle", "width": 20, "height": 20, "x": 0, "y": 0}]},
-        {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 5, "operation": "new"},
-        {"id": "t1", "type": "texture", "kind": "knurl", "faces": {"by": "all"},
-         "depth": 0.4, "scale": 2.0},
-    ]}
-    _part, errors, bodies = builder.rebuild(doc)
-    assert not errors, errors
-    body = bodies[0]
-    assert body.get("_textures"), "the fixture should be textured"
-
-    import server
-    pos, idx = server._export_mesh(body)
-    p = os.path.join(tempfile.mkdtemp(), "tex.glb")
-    mesh_writers.write_glb([{"name": "Knurled", "positions": pos,
-                             "indices": idx, "color": "#e8e8e8"}], p)
-    gdoc, _blob = _read_glb_raw(p)
-    ntri = gdoc["accessors"][gdoc["meshes"][0]["primitives"][0]["indices"]]["count"] // 3
-    assert ntri > smooth_tris * 5, (
-        f"only {ntri} triangles vs {smooth_tris} for the smooth box, the texture was dropped")
-    print(PASS, f"textured body exports its displaced mesh ({ntri:,} triangles)")
-
-
 def test_export_job_routes_glb_and_threads_colours():
     """The wiring: _export_job must route glb to the per-body writer (never through
     exporters.export, which serialises body["shape"]) and resolve palette slots."""
@@ -279,7 +253,6 @@ def main():
     test_round_trip_preserves_size()
     test_normals_are_smooth_within_a_face_and_sharp_between()
     test_one_material_per_body_with_its_palette_colour()
-    test_textured_body_exports_its_displaced_mesh()
     test_export_job_routes_glb_and_threads_colours()
     test_import_recovers_a_solid_not_a_surface_body()
     test_import_reads_the_dominant_material_colour()

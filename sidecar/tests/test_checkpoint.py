@@ -64,14 +64,19 @@ DIAG_DOC = {
 # A textured body with a feature AFTER the texture, so a resume can start past it.
 # The texture spec lives on the body dict, not in its shape, which is exactly why
 # it needs explicit persistence.
+# A document whose third feature belongs to a PLUGIN. The feature type and its
+# handler are registered by this test (see _register_probe_pass), not by
+# anything in this package: the point is to check the core's own checkpoint
+# plumbing against a plugin-owned feature, without depending on which plugins
+# happen to be installed. It used to use `texture`, back when the application
+# owned that type.
 TEX_DOC = {
     "parameters": {},
     "features": [
         {"id": "t1", "type": "sketch", "plane": "XY",
          "entities": [{"id": "r1", "type": "rectangle", "width": 20, "height": 20, "x": 0, "y": 0}]},
         {"id": "t2", "type": "extrude", "sketch": "t1", "distance": 5, "operation": "new"},
-        {"id": "t3", "type": "texture", "kind": "knurl", "faces": {"by": "all"},
-         "depth": 0.4, "scale": 2.0},
+        {"id": "t3", "type": "probePass", "amount": 3},
         {"id": "t4", "type": "fillet",
          "edges": {"kind": "edge", "by": "axis", "axis": "Z"}, "radius": 1},
     ],
@@ -233,18 +238,50 @@ def test_every_diagnostic_shape_is_json_safe():
     print(PASS, "every diagnostic shape survives json.dumps (disk cache stays alive)")
 
 
-def test_textures_survive_disk_resume():
-    """A disk resume must keep a body's `_textures` spec list.
+def _register_probe_pass():
+    """A minimal plugin-owned feature, registered the way a real plugin does.
 
-    `_handle_texture` never touches the body's OCCT shape, it appends the raw spec
-    to `body["_textures"]` and displacement happens lazily at tessellation/export
-    time. RAM snapshots keep the key for free (`_snapshot` does `dict(b)`), but the
-    disk checkpoint serialises named fields only, so the spec used to vanish: a
-    100% disk hit returned an UNTEXTURED body with no error, meaning reopening a
-    textured document in a fresh session silently dropped the texture from what got
+    Deliberately not the texture plugin. This test is about the CORE checkpoint
+    plumbing carrying state that a plugin put on a body, and borrowing a real
+    plugin to prove it would make the test fail for a second reason (that plugin
+    not being installed) and pass for a wrong one (that plugin being special).
+    A pass that stashes one integer exercises exactly the path that matters.
+    """
+    import plugin_geometry
+
+    if plugin_geometry.handler_for("probePass") is not None:
+        return
+    plugin_geometry.register_feature(
+        "probePass", "Test.ProbePass",
+        lambda f, ctx: ctx.stash(
+            ctx.require_active("Probe"),
+            {"pass": "probe", "feature_id": f["id"], "amount": f["amount"]},
+        ),
+    )
+    plugin_geometry.register_mesh_pass(
+        "probe", "Test.ProbePass",
+        resolve=lambda body, spec, diag=None: [],
+        displace=lambda *a, **k: (_ for _ in ()).throw(AssertionError("not meshed here")),
+        code_version=lambda: 1,
+    )
+
+
+def test_plugin_pass_specs_survive_disk_resume():
+    """A disk resume must keep the mesh-pass specs a plugin put on a body.
+
+    A plugin's feature handler never touches the body's OCCT shape: it stashes a
+    raw spec and displacement happens lazily at tessellation/export time. RAM
+    snapshots keep the key for free (`_snapshot` does `dict(b)`), but the disk
+    checkpoint serialises named fields only, so the spec used to vanish: a 100%
+    disk hit returned an UNDISPLACED body with no error, meaning reopening such a
+    document in a fresh session silently dropped the effect from what got
     rendered AND exported. `_owners` is the same kind of state and was already
     persisted; this is the one that was missed."""
     import geomstore
+    import plugin_geometry
+
+    _register_probe_pass()
+    KEY = plugin_geometry.BODY_KEY
 
     tmp = tempfile.mkdtemp(prefix="funda_tex_ckpt_")
     orig_store = builder._disk_store
@@ -259,25 +296,25 @@ def test_textures_survive_disk_resume():
                      "acc_ms": 0.0, "budget_ms": 0.0},
         )
         assert not errors, errors
-        cold = bodies[0].get("_textures")
-        assert cold, "the cold build should carry the texture spec"
+        cold = bodies[0].get(KEY)
+        assert cold, "the cold build should carry the plugin's spec"
 
         hit = builder._restore_from_disk(store, keys)
         assert hit is not None, "no restorable checkpoint was written"
         restored = hit[1]["bodies"][0]
-        assert restored.get("_textures") == cold, \
-            f"the checkpoint dropped _textures: {restored.get('_textures')!r}"
+        assert restored.get(KEY) == cold, \
+            f"the checkpoint dropped the pass specs: {restored.get(KEY)!r}"
 
         # production path: RAM cleared, so this resumes from disk
         builder.reset_cache()
         _p2, _e2, b2 = builder.rebuild_cached(TEX_DOC)
-        assert b2[0].get("_textures") == cold, \
-            f"a disk-resumed build returned an untextured body: {b2[0].get('_textures')!r}"
+        assert b2[0].get(KEY) == cold, \
+            f"a disk-resumed build lost the pass specs: {b2[0].get(KEY)!r}"
     finally:
         builder._disk_store = orig_store
         builder.reset_cache()
         shutil.rmtree(tmp, ignore_errors=True)
-    print(PASS, "textures survive a DISK-checkpoint resume")
+    print(PASS, "a plugin's mesh-pass specs survive a DISK-checkpoint resume")
 
 
 def test_body_fingerprint_carries_topology():
@@ -345,7 +382,7 @@ def main():
     test_resume_equals_full()
     test_diagnostics_survive_resume()
     test_diagnostics_survive_disk_resume()
-    test_textures_survive_disk_resume()
+    test_plugin_pass_specs_survive_disk_resume()
     test_every_diagnostic_shape_is_json_safe()
     test_body_fingerprint_carries_topology()
     test_env_sig_tracks_tuning()

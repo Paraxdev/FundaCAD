@@ -112,7 +112,7 @@ def test_an_untouched_tree_costs_nothing():
     _reset()
     with tree():
         pool = _light_pool()
-        server._pool_src = server._src_stamp()
+        server._pool_src = server._watched_stamp()
         gen = server._pool_gen
         workers = _workers(pool)
         for _ in range(3):
@@ -129,7 +129,7 @@ def test_editing_a_source_file_retires_the_worker_that_imported_it():
     made = []
     with tree() as t:
         pool = _light_pool()
-        server._pool_src = server._src_stamp()
+        server._pool_src = server._watched_stamp()
         gen = server._pool_gen
         workers = _workers(pool)
         assert workers, "no worker to retire"

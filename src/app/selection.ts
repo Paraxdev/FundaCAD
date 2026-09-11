@@ -1,4 +1,5 @@
 import { setPrompt } from "../ui/prompt";
+import { asFeature } from "../types";
 import { contributedFeature } from "../plugins/contrib";
 import { useSelectionStore } from "../stores/selection";
 import type { Engine } from "./engine";
@@ -82,14 +83,16 @@ export function createSelection(
       if (cid) selectFeature(cid);
     };
     switch (f.type) {
-      case "sketch":
+      case "sketch": {
+        const sk = asFeature(f, "sketch")!;
         // The plane the last build actually used, not the feature's cache. For a
         // sketch that follows a face those differ the moment anything upstream
         // moves, and reopening at the cache would re-bake it into the feature on
         // the next commit and silently undo the follow. An unfollowed sketch has
         // no entry and reads its own plane, as before.
-        e.sketch.enter(e.store.buildState.result?.sketchPlanes?.[id] ?? f.plane, e.store, id);
+        e.sketch.enter(e.store.buildState.result?.sketchPlanes?.[id] ?? sk.plane, e.store, id);
         break;
+      }
       case "fillet":
       case "chamfer":
         // false = not tool-editable (parameter value / structural selectors).

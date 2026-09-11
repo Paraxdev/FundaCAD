@@ -13,6 +13,7 @@
 //   being baked into the origin). Also pure additions; `plane` is still written
 //   alongside `planeId` as a resolved cache, so older builds still place the sketch.
 
+import { asFeature } from "../types";
 import type { CadDocument, ParamDef, ParamTarget } from "../types";
 import { FEATURE_NUM_FIELDS, RIGID_ENTITY_NUM_FIELDS, kindUnit } from "./numFields";
 import { isDimConstraint, newConstraintId, noteConstraintId } from "../sketch/id";
@@ -139,8 +140,9 @@ export function migrateDocument(parsed: CadDocument): string[] {
 
   // --- v1: polygon.angle radians → degrees ---
   if (version < 2) {
-    for (const f of features) {
-      if (f.type !== "sketch") continue;
+    for (const raw of features) {
+      const f = asFeature(raw, "sketch");
+      if (!f) continue;
       for (const e of f.entities) {
         if (e.type === "polygon" && typeof e.angle === "number") {
           e.angle = (e.angle * 180) / Math.PI;
@@ -150,7 +152,7 @@ export function migrateDocument(parsed: CadDocument): string[] {
   }
 
   // --- stamp dimension-constraint ids (reserve all loaded ones first) ---
-  const dims = features.flatMap((f) => (f.type === "sketch" ? (f.constraints ?? []).filter(isDimConstraint) : []));
+  const dims = features.flatMap((f) => asFeature(f, "sketch")?.constraints?.filter(isDimConstraint) ?? []);
   for (const c of dims) noteConstraintId(c.id);
   for (const c of dims) c.id ??= newConstraintId();
 
@@ -173,8 +175,9 @@ export function migrateDocument(parsed: CadDocument): string[] {
     for (const [field, , kind] of FEATURE_NUM_FIELDS[f.type] ?? []) {
       bind(f, field, kindUnit(kind), { kind: "feature", feature: f.id, field });
     }
-    if (f.type !== "sketch") continue;
-    for (const e of f.entities) {
+    const sketch = asFeature(f, "sketch");
+    if (!sketch) continue;
+    for (const e of sketch.entities) {
       // Only solver-rigid shapes may be owned by a parameter; other entities'
       // bare names stay on the legacy resolveNum/val() path untouched.
       const fields = RIGID_ENTITY_NUM_FIELDS[e.type];

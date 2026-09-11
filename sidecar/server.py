@@ -50,6 +50,7 @@ import websockets
 import appenv
 import live_session
 import occt_smp
+import plugin_geometry
 
 HOST = "127.0.0.1"
 # Env-overridable so a test/benchmark instance can run beside the app's own
@@ -225,6 +226,28 @@ def _src_stamp(directory=None):
     return tuple(sorted(out)) or None
 
 
+def _watched_stamp():
+    """Everything the worker imported that can go stale: this package, and the
+    geometry of every installed plugin.
+
+    Separate from _src_stamp because they are two trees with two answers, and
+    because _src_stamp's contract is about the directory it is handed: a caller
+    asking after an empty tree must still be told there is nothing to watch,
+    rather than being handed some other tree's stamp.
+
+    A plugin's geometry is code this same worker imported and has exactly the
+    staleness problem the docstring above describes. Without watching it,
+    editing a plugin's geometry during development changes nothing until the app
+    is restarted, with nothing anywhere to say why.
+    """
+    own = _src_stamp()
+    plug = plugin_geometry.source_stamp()
+    if not plug:
+        return own
+    extra = tuple(("plugin:" + n, m, sz) for n, m, sz in plug)
+    return tuple(sorted((own or ()) + extra)) or None
+
+
 _INIT_FAIL_MSG = (
     "the geometry engine could not start on this computer, this is an "
     "installation or environment problem, not a problem with your model. "
@@ -274,6 +297,17 @@ def _worker_init(hb=None, hb_idx=None, err_buf=None, mesh=None, mesh_total=None)
         font_guard.ensure()
         import builder  # noqa: F401  (warm the import)
         import tessellate  # noqa: F401
+
+        # Plugin geometry, in the process that will actually run it. This is a
+        # SPAWNED worker, so nothing the parent imported is inherited: without
+        # this call the registry in here is empty and every plugin feature in
+        # every document reports its plugin missing. Never raises; a plugin that
+        # will not import is recorded and named on the features that needed it.
+        plugin_geometry.discover()
+        loaded, broken = plugin_geometry.loaded_plugins(), plugin_geometry.broken_plugins()
+        if loaded or broken:
+            print(f"[plugin-geometry] loaded {loaded}"
+                  + (f", broken {broken}" if broken else ""), flush=True)
 
         # Warm the OCCT font subsystem (~1.6 s cold on the first glyph build) at startup so
         # the user's first sketch-text/tessellateText isn't laggy.
@@ -394,7 +428,7 @@ _MESH_PERSIST_MIN_MS = 50.0
 # document skips re-tessellating every body at 0.02mm.
 _EXPORT_TOL = 0.02
 _EXPORT_ANG_TOL = 0.3
-_EXPORT_MESH_CACHE = {}  # body id -> {"shape", "texture_key", "positions", "indices"}
+_EXPORT_MESH_CACHE = {}  # body id -> {"shape", "pass_key", "positions", "indices"}
 
 
 def _export_mesh(b, tol=None):
@@ -404,7 +438,6 @@ def _export_mesh(b, tol=None):
     import pickle
 
     from tessellate import tessellate
-    from texture import resolve_body_textures
     from progress import progress_tick
 
     # Unlike the viewport twin, this ticks on EVERY tier including a RAM hit,
@@ -414,11 +447,10 @@ def _export_mesh(b, tol=None):
     progress_tick()
     tol = _EXPORT_TOL if tol is None else tol
     bid, sh = b["id"], b["shape"]
-    if b.get("_textures"):
-        from texture import CODE_VERSION as _tex_ver
-        texture_key = "v%d:%s" % (_tex_ver, json.dumps(b.get("_textures"), sort_keys=True))
-    else:
-        texture_key = None
+    # Covers every plugin mesh pass on this body, each pass's own code version
+    # included, so an algorithm change cannot be served a mesh its previous
+    # version displaced. None when the body has no pass on it at all.
+    pass_key = plugin_geometry.cache_key(b)
     ent = _EXPORT_MESH_CACHE.get(bid)
     # TOLERANCE IS PART OF THE KEY. Without it a coarser retry (a tolerance
     # backoff after a triangle-budget refusal) would be handed the mesh from the
@@ -426,7 +458,7 @@ def _export_mesh(b, tol=None):
     # succeed while changing nothing, and the export would blow the same budget
     # a second time with no way to tell why.
     if (ent is not None and ent["shape"] is sh
-            and ent["texture_key"] == texture_key and ent["tol"] == tol):
+            and ent["pass_key"] == pass_key and ent["tol"] == tol):
         return ent["positions"], ent["indices"]
     # This body was last meshed at a DIFFERENT tolerance. OCCT keeps the
     # triangulation on the shape and considers an existing finer mesh adequate
@@ -438,8 +470,8 @@ def _export_mesh(b, tol=None):
     mesh_key = None
     if b.get("meshKey"):
         mesh_key = "%s-export-t%s" % (b["meshKey"], tol)
-        if texture_key:
-            mesh_key += "-x%s" % hashlib.sha1(texture_key.encode()).hexdigest()[:16]
+        if pass_key:
+            mesh_key += "-x%s" % hashlib.sha1(pass_key.encode()).hexdigest()[:16]
     mesh = None
     if mesh_key:
         try:
@@ -451,10 +483,10 @@ def _export_mesh(b, tol=None):
             mesh = None
     if mesh is None:
         t0 = time.monotonic()
-        textures = resolve_body_textures(b) if b.get("_textures") else None
+        passes = plugin_geometry.resolve(b)
         pos, idx, _fids = tessellate(
             sh, tolerance=tol, angular_tolerance=_EXPORT_ANG_TOL,
-            textures=textures, density_cap=EXPORT_DENSITY_CAP_PER_FACE,
+            mesh_passes=passes, density_cap=EXPORT_DENSITY_CAP_PER_FACE,
             force_remesh=retolerance,
         )
         mesh = (pos, idx)
@@ -475,7 +507,7 @@ def _export_mesh(b, tol=None):
     positions = np.asarray(mesh[0], dtype=np.float64)
     indices = np.asarray(mesh[1], dtype=np.int32)
     _EXPORT_MESH_CACHE[bid] = {
-        "shape": sh, "texture_key": texture_key, "tol": tol,
+        "shape": sh, "pass_key": pass_key, "tol": tol,
         "positions": positions, "indices": indices,
     }
     return positions, indices
@@ -712,29 +744,26 @@ def _body_payload(b, tolerance, profile):
     body whose bbox changed) must not share a cache slot keyed by a tolerance
     neither was actually tessellated at.
 
-    A body's mesh also depends on its "_textures" spec list, which the shape
-    identity check CANNOT see (texture never mutates body["shape"], see
-    texture.py's module docstring). Both the RAM identity check and the disk
-    mesh_key additionally key on a hash of that spec list, so scrubbing a
-    texture-only parameter (depth/scale/…) can't serve a stale pre-edit mesh."""
+    A body's mesh also depends on the plugin mesh-pass specs stashed on it,
+    which the shape identity check CANNOT see (a pass never mutates
+    body["shape"], see plugin_geometry's module docstring). Both the RAM
+    identity check and the disk mesh_key additionally key on a hash of that spec
+    list, so scrubbing a pass-only parameter (a texture's depth/scale/…) can't
+    serve a stale pre-edit mesh."""
     import pickle
     import uuid as _uuid
 
     from tessellate import tessellate, edge_polylines_by_body, mesh_bbox
     from builder import _face_fp
     import progress
-    from texture import resolve_body_textures
 
     bid, sh = b["id"], b.get("shape")
     requested = tolerance
     size_scale, ang_tol = profile
-    if b.get("_textures"):
-        from texture import CODE_VERSION as _tex_ver
-        # code version rides in the key: a texture-algorithm update must not
-        # serve meshes displaced by the previous version from the disk cache
-        texture_key = "v%d:%s" % (_tex_ver, json.dumps(b.get("_textures"), sort_keys=True))
-    else:
-        texture_key = None
+    # Each contributing pass's code version rides in the key: a plugin
+    # algorithm update must not serve meshes displaced by the previous version
+    # from the disk cache.
+    pass_key = plugin_geometry.cache_key(b)
     ent = _MESH_CACHE.get(bid)
     # RAM hit BEFORE _effective_tolerance: it's a pure function of (shape,
     # requested), so identical shape identity + identical request imply an
@@ -746,7 +775,7 @@ def _body_payload(b, tolerance, profile):
         and ent["shape"] is sh
         and ent["requested"] == requested
         and ent.get("profile") == profile
-        and ent.get("texture_key") == texture_key
+        and ent.get("pass_key") == pass_key
     ):
         return ent
     if sh is not None:
@@ -764,8 +793,8 @@ def _body_payload(b, tolerance, profile):
         mesh_key = "%s-tv%d-%s%s-a%s" % (mk, _tess_ver,
                                          "r" if _VIEWPORT_RELATIVE else "a", tolerance,
                                          ang_tol)
-        if texture_key:
-            mesh_key += "-x%s" % hashlib.sha1(texture_key.encode()).hexdigest()[:16]
+        if pass_key:
+            mesh_key += "-x%s" % hashlib.sha1(pass_key.encode()).hexdigest()[:16]
     payload = None
     if mesh_key:
         try:
@@ -777,10 +806,10 @@ def _body_payload(b, tolerance, profile):
             payload = None
     if payload is None:
         t0 = time.monotonic()
-        textures = resolve_body_textures(b) if b.get("_textures") else None
-        norm_chunks = [] if textures else None
+        passes = plugin_geometry.resolve(b)
+        norm_chunks = [] if passes else None
         pos, idx, fids = tessellate(sh, tolerance, angular_tolerance=ang_tol,
-                                    textures=textures,
+                                    mesh_passes=passes,
                                     density_cap=VIEWPORT_DENSITY_CAP,
                                     normals_out=norm_chunks,
                                     relative=_VIEWPORT_RELATIVE)
@@ -788,17 +817,23 @@ def _body_payload(b, tolerance, profile):
         face_owners = [owners_map.get(_face_fp(face)) for face in sh.faces()]
         # Two-tone inlay preview: dense per-face palette-slot array, same
         # sh.faces() enumeration the fid convention uses. Sparse-by-convention,
-        # None (omitted key) when no texture on this body carries a colorSlot.
-        tex_color_slots = None
-        if textures:
+        # None (omitted key) when no pass on this body tagged a face.
+        #
+        # `colorSlot` is read off whatever spec covers the face, whichever
+        # plugin put it there. That generality is the point: the payload field
+        # was called textureColorSlots and this branch tested for textures, so
+        # the one plugin that happened to exist was the only one that could ever
+        # paint an inlay.
+        face_color_slots = None
+        if passes:
             face_specs = {}
-            for spec, faces in textures:
+            for spec, faces in passes:
                 for f in faces:
                     face_specs[_face_fp(f)] = spec  # later feature wins, like tessellate
-            tex_color_slots = [(face_specs.get(_face_fp(face)) or {}).get("colorSlot")
-                               for face in sh.faces()]
-            if not any(s is not None for s in tex_color_slots):
-                tex_color_slots = None
+            face_color_slots = [(face_specs.get(_face_fp(face)) or {}).get("colorSlot")
+                                for face in sh.faces()]
+            if not any(s is not None for s in face_color_slots):
+                face_color_slots = None
         edges = edge_polylines_by_body([b])
         for e in edges:
             e.pop("id", None)  # ids are assigned client-side after assembly
@@ -819,12 +854,12 @@ def _body_payload(b, tolerance, profile):
         }
         if bands:
             payload["faceBands"] = bands
-        if tex_color_slots:
-            payload["textureColorSlots"] = tex_color_slots
+        if face_color_slots:
+            payload["faceColorSlots"] = face_color_slots
         if norm_chunks:
-            # a textured body ships explicit normals: plain faces get the same
-            # area-weighted accumulation the client would compute, textured
-            # chunks the analytic displaced normals, coarse displacement then
+            # a displaced body ships explicit normals: plain faces get the same
+            # area-weighted accumulation the client would compute, displaced
+            # chunks the plugin's analytic normals, coarse displacement then
             # SHADES smoothly instead of showing triangle-grain.
             from tessellate import vertex_normals
             norms = vertex_normals(pos, idx)
@@ -853,7 +888,7 @@ def _body_payload(b, tolerance, profile):
     # unchanged body, walking the merged compound was neither.
     ent = {"shape": sh, "requested": requested, "tolerance": tolerance,
            "profile": profile, "bbox": payload.get("bbox"),
-           "etag": _uuid.uuid4().hex, "payload": payload, "texture_key": texture_key}
+           "etag": _uuid.uuid4().hex, "payload": payload, "pass_key": pass_key}
     _MESH_CACHE[bid] = ent
     progress.progress_tick()  # tessellation progress counts as progress
     return ent
@@ -1111,9 +1146,14 @@ def _export_job(document, fmt, path, body=None, separate=False,
     warnings = [
         {"message": e["message"], "feature_id": e.get("feature_id")} for e in errors
     ]
-    any_textured = any(b.get("_textures") for b in live)
-    if fmt == "step" and any_textured:
-        warnings.append({"message": "texture is not represented in STEP exports"})
+    any_displaced = any(plugin_geometry.specs(b) for b in live)
+    if fmt == "step" and any_displaced:
+        # Named generically because the sentence has to stay true for whatever
+        # plugin put the displacement there, not just the one that shipped first.
+        warnings.append({
+            "message": "surface displacement from a plugin is not represented "
+                       "in STEP exports"
+        })
 
     def _done(res):
         if warnings:
@@ -1536,7 +1576,7 @@ def _new_pool():
         return None
     # BEFORE the spawn, so a file edited while the worker is starting is caught
     # on the next request rather than being baked in as if it were already there.
-    _pool_src = _src_stamp()
+    _pool_src = _watched_stamp()
     _pool_gen += 1
     gen = _pool_gen
     _warm = None
@@ -1669,7 +1709,7 @@ def _pool_available():
     if _env_broken:
         return {"error": {"message": _INIT_FAIL_MSG}}
     if _pool is not None and _pool_src is not None:
-        now = _src_stamp()
+        now = _watched_stamp()
         if now is not None and now != _pool_src:
             # The worker is running code this package no longer contains. Retire
             # it: the next job spawns a worker that imports what is on disk. This

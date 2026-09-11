@@ -15,6 +15,7 @@
 // for a while), so the answer is both visible before and changeable after.
 
 import * as THREE from "three";
+import { asFeature } from "../types";
 import type { Viewport } from "../viewport/viewport";
 import type { SketchOverlay, WorldRegion } from "../sketch/overlay";
 import type { DocumentStore } from "../document/store";
@@ -169,8 +170,8 @@ export class ExtrudeTool {
    *  (the value rows' job). */
   startEdit(featureId: string, onDone: (id: string | null) => void): boolean {
     if (this.active) return false;
-    const f = this.store.document.features.find((x) => x.id === featureId);
-    if (!f || f.type !== "extrude") return false;
+    const f = asFeature(this.store.document.features.find((x) => x.id === featureId), "extrude");
+    if (!f) return false;
     if (typeof f.distance !== "number" || this.store.isParamBound({ kind: "feature", feature: f.id, field: "distance" }))
       return false; // parameter-driven distance, the value rows' job
 

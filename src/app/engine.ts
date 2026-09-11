@@ -12,6 +12,7 @@
 // several of them encode bugs that took multiple rounds to find.
 
 import { Viewport } from "../viewport/viewport";
+import { asFeature } from "../types";
 import { Geometry, type GeometryBackend } from "../geometry/client";
 import { TauriGeometry } from "../geometry/tauriClient";
 import { DocumentStore, EMPTY_DOCUMENT } from "../document/store";
@@ -292,8 +293,8 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
     section: new SectionTool(e.viewport, {
       toolBusy: () => e.toolBusy(),
       datumDef: (id) => {
-        const f = e.store.document.features.find((x) => x.id === id);
-        return f?.type === "datumPlane" ? e.datumPlaneDef(f) : null;
+        const f = asFeature(e.store.document.features.find((x) => x.id === id), "datumPlane");
+        return f ? e.datumPlaneDef(f) : null;
       },
     }),
     planeOffset: new PlaneOffsetTool(e.viewport),

@@ -28,12 +28,27 @@ SIDECAR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
 
 
 def builder_types():
-    """The feature types the sidecar actually handles, read from its own table."""
+    """Every feature type the engine can actually build, from both sources.
+
+    The application's own table, AND whatever the installed plugins registered:
+    a plugin may own a feature type outright now, geometry included, so reading
+    builder._FEATURE_HANDLERS alone would report `texture` as undocumentable the
+    day it moved into plugins/FundaCAD.Texture, which is exactly what it did.
+
+    discover() is what the engine calls at worker startup, so this reads the same
+    set the engine would have. In a checkout that means every plugin in
+    plugins/; on a machine it means every plugin installed. The schema below is
+    a fixed list, so a plugin-owned entry in it is a claim that this build ships
+    that plugin, which is true of the ones here and worth failing on if it ever
+    stops being.
+    """
     if SIDECAR not in sys.path:
         sys.path.insert(0, SIDECAR)
     import builder
+    import plugin_geometry
 
-    return set(builder._FEATURE_HANDLERS)
+    plugin_geometry.discover()
+    return set(builder._FEATURE_HANDLERS) | set(plugin_geometry._FEATURES)
 
 
 def test_every_documented_type_is_one_the_builder_handles():

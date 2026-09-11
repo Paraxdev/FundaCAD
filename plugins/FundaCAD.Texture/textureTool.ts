@@ -12,7 +12,7 @@
 import { contributedPalette, setPrompt } from "fundacad";
 import type { DocumentStore, Feature, Num, Selector, Viewport } from "fundacad";
 import * as panel from "./panel";
-import { ANGLE_KINDS, SEED_KINDS, type TextureMode, type TextureValues } from "./textureForm";
+import { ANGLE_KINDS, SEED_KINDS, asTexture, type TextureMode, type TextureValues } from "./textureForm";
 
 // Warm texture ticks are ~10-70ms sidecar-side (geometry-skeleton cache), so a
 // short debounce keeps scrubbing responsive while still coalescing keystrokes.
@@ -147,8 +147,8 @@ export class TextureTool {
    *  expression (not tool-editable), the caller falls back to the value rows. */
   startEdit(featureId: string, onDone: (id: string | null) => void): boolean {
     if (this.active) return false;
-    const f = this.store.document.features.find((x) => x.id === featureId);
-    if (!f || f.type !== "texture") return false;
+    const f = asTexture(this.store.document.features.find((x) => x.id === featureId));
+    if (!f) return false;
     const numeric = [f.depth, f.scale, f.angle, f.offset, f.sharpness, f.boundaryInset, f.seed];
     if (numeric.some((v) => v !== undefined && typeof v !== "number")) return false; // parameter, the value rows' job
     const fields = ["depth", "scale", "angle", "offset", "sharpness", "boundaryInset", "seed"];

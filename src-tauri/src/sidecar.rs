@@ -288,7 +288,13 @@ fn spawn_supervisor(
 /// Split out from `spawn` so a test can assert it: this is packaging behaviour
 /// that only misfires on machines nobody here builds on, which is exactly how
 /// the NixOS failure below shipped unnoticed.
-fn configure_env(cmd: &mut Command, rt: &Runtime, token: &str, blobs: Option<&std::path::Path>) {
+fn configure_env(
+    cmd: &mut Command,
+    rt: &Runtime,
+    token: &str,
+    blobs: Option<&std::path::Path>,
+    plugins: Option<&std::path::Path>,
+) {
     cmd.env("FUNDACAD_SIDECAR_TOKEN", token) // hand the secret to the sidecar
         .env("PYTHONDONTWRITEBYTECODE", "1") // read-only bundle: never write .pyc
         // NixOS, issue #3: `appimage-run` exports PYTHONHOME=<AppDir>/usr, and an
@@ -317,6 +323,16 @@ fn configure_env(cmd: &mut Command, rt: &Runtime, token: &str, blobs: Option<&st
     if let Some(dir) = blobs {
         cmd.env("FUNDACAD_BLOB_DIR", dir);
     }
+    // Where installed plugins are, so the engine can import the geometry any of
+    // them ship (sidecar/plugin_geometry.py). Told rather than guessed for the
+    // same reason as the blob store above: Rust is what unpacks a bundle into
+    // this directory, so Rust is the only thing that knows where it ended up.
+    // Absent (a bare `python server.py`) is not a failure, the engine falls back
+    // to the repository's own plugins/, which is what makes a dev checkout build
+    // the same documents the installed app does.
+    if let Some(dir) = plugins {
+        cmd.env("FUNDACAD_PLUGIN_DIR", dir);
+    }
 }
 
 impl Sidecar {
@@ -329,7 +345,13 @@ impl Sidecar {
             .current_dir(&rt.cwd)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
-        configure_env(&mut cmd, &rt, &token, crate::container::blob_dir(app).ok().as_deref());
+        configure_env(
+            &mut cmd,
+            &rt,
+            &token,
+            crate::container::blob_dir(app).ok().as_deref(),
+            crate::plugins::plugins_root(app).ok().as_deref(),
+        );
 
         // own process group so we can SIGTERM the whole tree at once (Unix)
         #[cfg(unix)]
@@ -617,7 +639,7 @@ mod tests {
             pythonpath: Some(PathBuf::from("/opt/app/sidecar-runtime/site-packages")),
         };
         let mut cmd = Command::new(&rt.python);
-        configure_env(&mut cmd, &rt, "tok", Some(std::path::Path::new("/data/blobs")));
+        configure_env(&mut cmd, &rt, "tok", Some(std::path::Path::new("/data/blobs")), None);
 
         let envs: Vec<_> = cmd.get_envs().collect();
         let find = |k: &str| envs.iter().find(|(n, _)| *n == std::ffi::OsStr::new(k));
@@ -649,7 +671,7 @@ mod tests {
             pythonpath: None,
         };
         let mut cmd = Command::new(&rt.python);
-        configure_env(&mut cmd, &rt, "tok", Some(std::path::Path::new("/data/blobs")));
+        configure_env(&mut cmd, &rt, "tok", Some(std::path::Path::new("/data/blobs")), None);
         let envs: Vec<_> = cmd.get_envs().collect();
         let dir = envs
             .iter()
@@ -661,12 +683,45 @@ mod tests {
         // An empty value would make the sidecar's `or` fallback fire on a value
         // it was explicitly given, which is a confusing state to debug.
         let mut bare = Command::new(&rt.python);
-        configure_env(&mut bare, &rt, "tok", None);
+        configure_env(&mut bare, &rt, "tok", None, None);
         assert!(
             !bare
                 .get_envs()
                 .any(|(n, _)| n == std::ffi::OsStr::new("FUNDACAD_BLOB_DIR")),
             "no store => the variable must be absent, not empty"
+        );
+    }
+
+    /// A plugin may ship geometry the engine imports, so the engine has to be
+    /// told where installed plugins are. Same seam and same rule as the blob
+    /// store above: Rust unpacks the bundles, so Rust is the only side that
+    /// knows the path, and a disagreement here reads as the plugin being
+    /// missing on a machine where it is plainly installed.
+    #[test]
+    fn sidecar_env_carries_the_plugin_dir() {
+        let rt = Runtime {
+            python: PathBuf::from("/opt/app/python3.12"),
+            script: PathBuf::from("server.py"),
+            cwd: PathBuf::from("/opt/app"),
+            pythonpath: None,
+        };
+        let mut cmd = Command::new(&rt.python);
+        configure_env(&mut cmd, &rt, "tok", None, Some(std::path::Path::new("/data/plugins")));
+        let dir = cmd
+            .get_envs()
+            .find(|(n, _)| *n == std::ffi::OsStr::new("FUNDACAD_PLUGIN_DIR"))
+            .expect("FUNDACAD_PLUGIN_DIR must be passed when the root resolves");
+        assert_eq!(dir.1, Some(std::ffi::OsStr::new("/data/plugins")));
+
+        // Absent rather than empty when it does not resolve, so the sidecar's
+        // fallback to the repository's plugins/ fires on a real miss.
+        let mut bare = Command::new(&rt.python);
+        configure_env(&mut bare, &rt, "tok", None, None);
+        assert!(
+            !bare
+                .get_envs()
+                .any(|(n, _)| n == std::ffi::OsStr::new("FUNDACAD_PLUGIN_DIR")),
+            "no plugin root => the variable must be absent, not empty"
         );
     }
 
