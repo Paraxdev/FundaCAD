@@ -56,6 +56,7 @@ import {
   toggleValue,
 } from "../../document/optionFields";
 import { targetsOf } from "../../features/selectionTargets";
+import { asFeature } from "../../types";
 import type { Feature, Num, ParamTarget } from "../../types";
 
 const props = defineProps<{ featureId: string; unit: string }>();
@@ -140,8 +141,8 @@ function measure(raw: string, showing: UnitDef | null, dim: Dim): Measured | str
 // labels). Editing entity i serialises just that entity back to numbers and
 // leaves the others (and their parameter references) untouched. ---
 const sketchRows = useDocValue((doc) => {
-  const f = feature.value;
-  if (f?.type !== "sketch") return [];
+  const f = asFeature(feature.value, "sketch");
+  if (!f) return [];
   const resolved = resolveEntities(f, doc.parameters);
   const out: { key: string; label: string; unit: string; value: string; index: number; field: string }[] = [];
   resolved.forEach((e, i) => {
@@ -165,8 +166,8 @@ function commitSketchDim(row: { key: string; index: number; field: string }, raw
   const m = measure(raw, unitOf(row.key, "length"), "length");
   if (typeof m === "string") return m;
   if (!m) return "not a value";
-  const f = feature.value;
-  if (f?.type !== "sketch") return null;
+  const f = asFeature(feature.value, "sketch");
+  if (!f) return null;
   const copy = resolveEntities(f, store.document.parameters)[row.index];
   if (!copy) return null;
   entityDims(copy).find((x) => x.field === row.field)?.write(m.value);

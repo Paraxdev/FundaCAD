@@ -44,6 +44,7 @@ import {
 import type { CtxItem } from "../../ui/menu";
 import { contributedBrowserSections, contributedPalette, onContribChange } from "../../plugins/contrib";
 import type { Component } from "vue";
+import { featuresOf } from "../../types";
 import type { CadDocument, Feature, Plane3 } from "../../types";
 
 const engine = useEngine();
@@ -293,8 +294,8 @@ const nodes = useDocValue((doc): TreeNode[] => {
 
   const errId = store.buildState.errorFeatureId;
   const bodies = bodyList();
-  const sketches = doc.features.filter((f) => f.type === "sketch");
-  const datums = doc.features.filter((f) => f.type === "datumPlane");
+  const sketches = featuresOf(doc.features, "sketch");
+  const datums = featuresOf(doc.features, "datumPlane");
   const selectedIds = new Set(browser.selectedBodyIds);
   const out: TreeNode[] = [];
   // Whether anything claims this document's bodies have colours. The swatch on a

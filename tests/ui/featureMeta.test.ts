@@ -20,12 +20,12 @@ import type { Feature, FeatureType } from "../../src/types";
 
 afterEach(() => resetContributions());
 
-/** Every feature type in the document format.
+/** Every feature type the APPLICATION defines.
  *
  *  Typed as a total Record so the compiler still catches a NEW type with no
  *  entry, the check that was lost when FEATURE_META became partial, moved to
  *  where it can also say who is expected to draw the thing. */
-const DRAWN_BY: Record<FeatureType, "app" | "FundaCAD.Texture"> = {
+const DRAWN_BY_APP: Record<FeatureType, "app"> = {
   sketch: "app",
   extrude: "app",
   fillet: "app",
@@ -55,10 +55,22 @@ const DRAWN_BY: Record<FeatureType, "app" | "FundaCAD.Texture"> = {
   scale: "app",
   move: "app",
   removeBody: "app",
+};
+
+/** The types a plugin in this repository declares.
+ *
+ *  A separate table BECAUSE they are not in FeatureType, which is the app's own
+ *  union and is exactly what a plugin owning a feature outright takes a type out
+ *  of. Listing them by hand rather than reading the manifests is the point: the
+ *  assertion below is that nothing in the application draws them, and a table
+ *  built from the same manifests the application reads could not say that. */
+const DRAWN_BY_PLUGIN: Record<string, string> = {
   texture: "FundaCAD.Texture",
 };
 
-const TYPES = Object.keys(DRAWN_BY) as FeatureType[];
+const DRAWN_BY: Record<string, string> = { ...DRAWN_BY_APP, ...DRAWN_BY_PLUGIN };
+
+const TYPES = Object.keys(DRAWN_BY);
 
 describe("coverage of the document format", () => {
   it("draws every feature type from the application or from a named plugin", () => {

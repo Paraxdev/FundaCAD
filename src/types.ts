@@ -713,6 +713,19 @@ export function asFeature<T extends FeatureType>(
   return f && f.type === type ? (f as Extract<CoreFeature, { type: T }>) : null;
 }
 
+/** Every feature of one of the application's own types, narrowed.
+ *
+ *  The list shape of the two above. `features.filter((f) => f.type === "sketch")`
+ *  hands back `Feature[]` rather than a list of sketches, which then fails on
+ *  the first field read, and the failure lands several lines away from the
+ *  filter that caused it. */
+export function featuresOf<T extends FeatureType>(
+  features: readonly Feature[],
+  type: T,
+): Extract<CoreFeature, { type: T }>[] {
+  return features.filter((f): f is Extract<CoreFeature, { type: T }> => f.type === type);
+}
+
 // A redefined ViewCube side: the model face the user mapped to a cube side. The
 // stored face is oriented toward the camera when that side is clicked. `normal`
 // faces out of the model surface; `up` is the in-view up direction (screen +Y).
