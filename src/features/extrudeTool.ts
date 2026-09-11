@@ -233,6 +233,10 @@ export class ExtrudeTool {
     const el = this.viewport.domElement;
     el.addEventListener("pointermove", this.boundMove);
     el.addEventListener("pointerdown", this.boundDown);
+    // pointerup as well, which create mode has always wired but edit mode never
+    // did: without it, releasing a handle in an edit does nothing, so a taper (or
+    // depth) swung open by double-click could never be committed by letting go.
+    el.addEventListener("pointerup", this.boundUp);
     window.addEventListener("keydown", this.boundKey, true);
 
     // roll the model back so the pre-extrude state is what previews/op-guesses
