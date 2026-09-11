@@ -21,7 +21,7 @@ export type FieldKind = "length" | "angle" | "count";
  *
  *  `texture` used to be the last row of this table. */
 export const FEATURE_NUM_FIELDS: Partial<Record<Feature["type"], [string, string, FieldKind][]>> = {
-  extrude: [["distance", "Distance", "length"]],
+  extrude: [["distance", "Distance", "length"], ["taper", "Taper", "angle"]],
   // profile is a dimensionless ratio in (-1, 1), "count" is this file's kind for
   // real-valued unitless fields (see scale.factor, texture.sharpness), not an
   // integer claim; INTEGER_FIELDS below is what marks those.
