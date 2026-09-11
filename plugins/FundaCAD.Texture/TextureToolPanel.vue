@@ -21,7 +21,7 @@
 
 import { computed, reactive, watch, type CSSProperties } from "vue";
 import {
-  KIND_OPTIONS, basename, initialTextureForm, sharpnessLabel, textureRows, toTextureValues,
+  TEXTURE_KIND_GROUPS, basename, initialTextureForm, sharpnessLabel, textureRows, toTextureValues,
   type TextureMode,
 } from "./textureForm";
 import { Icon } from "fundacad/ui";
@@ -185,7 +185,9 @@ const noBtn: CSSProperties = { ...btn, background: "var(--raised, #555)", color:
       <div :style="row">
         <label :style="lbl">Kind</label>
         <select v-model="form.kind" :style="grow" @change="emitChange">
-          <option v-for="[value, text] in KIND_OPTIONS" :key="value" :value="value">{{ text }}</option>
+          <optgroup v-for="g in TEXTURE_KIND_GROUPS" :key="g.label" :label="g.label">
+            <option v-for="k in g.kinds" :key="k.value" :value="k.value">{{ k.label }}</option>
+          </optgroup>
         </select>
       </div>
 

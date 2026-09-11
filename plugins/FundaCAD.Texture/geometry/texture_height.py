@@ -384,6 +384,147 @@ def _height_image(u, v, image_path, u_range, v_range):
     return top * (1 - ty) + bot * ty
 
 
+# --- additional kinds --------------------------------------------------------
+#
+# These are sampled on the generic grid, not a crease-aligned lattice (their
+# `_pattern_axes` is None, like noise and voronoi), so they are written as plain
+# height functions and refined to beat their own frequency rather than meshed
+# exactly. `facet` gives the piecewise-linear form a printer resolves and `round`
+# a smoothed one; every kind stays in [0,1].
+
+
+def _ridge(x, period, width):
+    """A raised line every `period`, `width` (0..1 of the half-period) wide,
+    piecewise linear: 1 on the line, ramping to 0 by `width` away from it. The
+    building block for grid and isogrid."""
+    t = (x % period) / period
+    d = np.minimum(t, 1.0 - t) * 2.0            # 0 on the line, 1 at the cell centre
+    return np.clip(1.0 - d / max(width, 1e-6), 0.0, 1.0)
+
+
+def _ridge_width(sharpness):
+    """Line/wall width (fraction of the half-period) from the shared slider:
+    crisper is narrower, matching what sharpness does for the other kinds."""
+    s = max(0.0, min(1.0, float(sharpness)))
+    return 0.2 + 0.5 * (1.0 - s)
+
+
+def _height_stripes(u, v, scale, angle, sharpness, facet=True):
+    """Flat-topped raised bands, a corrugated panel: distinct from ribs, whose
+    default is a sharper triangular groove. Under facet the crest is a wide land;
+    round is a smooth sine."""
+    u1, _ = _rotate(u, v, angle)
+    if facet:
+        return _trapezoid(u1, scale, max(float(sharpness), 0.6))
+    return _sharpen(0.5 + 0.5 * np.sin(2 * np.pi * u1 / scale), sharpness)
+
+
+def _height_grid(u, v, scale, angle, sharpness, facet=True):
+    """A waffle: raised ridges along BOTH axes, square pockets between them.
+    max() of two line-ridge families, so the walls stand and the cell floors
+    drop."""
+    u1, v1 = _rotate(u, v, angle)
+    w = _ridge_width(sharpness)
+    h = np.maximum(_ridge(u1, scale, w), _ridge(v1, scale, w))
+    return h if facet else _smooth01(h)
+
+
+def _height_dots(u, v, scale, angle, sharpness, facet=True):
+    """Bumps (round) or studs (facet) on a square lattice: distance to the
+    nearest lattice point, clipped to a disc."""
+    u1, v1 = _rotate(u, v, angle)
+    du = ((u1 / scale + 0.5) % 1.0) - 0.5
+    dv = ((v1 / scale + 0.5) % 1.0) - 0.5
+    r = np.sqrt(du * du + dv * dv) * 2.0        # 0 at a stud centre
+    radius = 0.5 + 0.45 * (1.0 - max(0.0, min(1.0, sharpness)))
+    h = np.clip(1.0 - r / max(radius, 1e-6), 0.0, 1.0)
+    return h if facet else _smooth01(h)
+
+
+def _height_brick(u, v, scale, angle, sharpness, facet=True):
+    """Running-bond brick: flat brick tops with mortar grooves, every other
+    course offset by half a brick. Bricks are 2:1."""
+    u1, v1 = _rotate(u, v, angle)
+    bw, bh = scale * 2.0, scale
+    row = np.floor(v1 / bh)
+    uoff = u1 + (row % 2.0) * bw * 0.5
+    mortar = scale * (0.10 + 0.18 * (1.0 - max(0.0, min(1.0, sharpness))))
+    dv = np.minimum(v1 % bh, bh - (v1 % bh))
+    du = np.minimum(uoff % bw, bw - (uoff % bw))
+    h = np.clip(np.minimum(du, dv) / max(mortar, 1e-6), 0.0, 1.0)
+    return h if facet else _smooth01(h)
+
+
+def _height_basket(u, v, scale, angle, sharpness, facet=True):
+    """Basket weave: a checkerboard of cells whose strands run along u in one
+    colour and along v in the other, so the two sets read as over-and-under."""
+    u1, v1 = _rotate(u, v, angle)
+    ci = np.floor(u1 / scale)
+    cj = np.floor(v1 / scale)
+    horiz = ((ci + cj) % 2.0) < 1.0
+    strand_u = 1.0 - np.abs(((u1 / scale) % 1.0) - 0.5) * 2.0   # ridge across u
+    strand_v = 1.0 - np.abs(((v1 / scale) % 1.0) - 0.5) * 2.0
+    h = np.where(horiz, strand_v, strand_u)
+    if facet:
+        return h
+    return _smooth01(h)
+
+
+def _height_carbon(u, v, scale, angle, sharpness, facet=True):
+    """A 2x2 twill weave, the carbon-fibre look: warp and weft floats step
+    diagonally in bands, so the strand direction shifts every two cells along the
+    diagonal."""
+    u1, v1 = _rotate(u, v, angle)
+    ci = np.floor(u1 / scale)
+    cj = np.floor(v1 / scale)
+    over = (np.floor(ci - cj) % 4.0) < 2.0       # diagonal float bands
+    strand_u = 1.0 - np.abs(((u1 / scale) % 1.0) - 0.5) * 2.0
+    strand_v = 1.0 - np.abs(((v1 / scale) % 1.0) - 0.5) * 2.0
+    h = np.where(over, strand_v, strand_u)
+    return h if facet else _smooth01(h)
+
+
+def _height_isogrid(u, v, scale, angle, sharpness, facet=True):
+    """Triangular rib lattice: three ridge families at 0, 60 and 120 degrees, so
+    the raised ribs bound triangular pockets, the classic lightweighting grid."""
+    w = _ridge_width(sharpness)
+    h = None
+    for a in (0.0, 60.0, 120.0):
+        ua, _ = _rotate(u, v, angle + a)
+        r = _ridge(ua, scale, w)
+        h = r if h is None else np.maximum(h, r)
+    return h if facet else _smooth01(h)
+
+
+def _height_grip(u, v, scale, angle, sharpness, facet=True):
+    """Chevron / herringbone tread: rib grooves that fold into a V every course,
+    a directional grip pattern. The phase of the u-ribs is shifted by a triangle
+    wave of v, which bends the straight ribs into chevrons."""
+    u1, v1 = _rotate(u, v, angle)
+    zig = (1.0 - np.abs(((v1 / (scale * 2.0)) % 1.0) * 2.0 - 1.0)) * scale
+    x = u1 + zig
+    if facet:
+        return _trapezoid(x, scale, sharpness)
+    return _sharpen(_tri_wave(x, scale), sharpness)
+
+
+def _height_leather(u, v, scale, seed, octaves, facet=True):
+    """Organic pebbled grain: a coarse noise for the swells plus a finer one for
+    the wrinkles, blended. Follows its seed like the other random kinds; under
+    facet it terraces into hard-surface plateaus."""
+    coarse = _height_noise(u, v, scale, int(seed), max(3, int(octaves)))
+    fine = _height_noise(u, v, scale * 0.4, int(seed) + 7, 3)
+    h = np.clip(0.6 * coarse + 0.4 * fine, 0.0, 1.0)
+    return _terrace(h, _steps_from(0.6)) if facet else h
+
+
+def _smooth01(h):
+    """Smoothstep a [0,1] field, the `round` counterpart to the piecewise-linear
+    facet form for the kinds whose facet version is already in [0,1]."""
+    h = np.clip(h, 0.0, 1.0)
+    return h * h * (3.0 - 2.0 * h)
+
+
 def height_field(kind, spec, u_mm, v_mm, u_range=None, v_range=None):
     """Return a [0,1] "raggedness" field (0=valley, 1=peak) for the given kind, as a
     plain vectorized numpy computation over the u_mm/v_mm coordinate arrays.
@@ -408,6 +549,24 @@ def height_field(kind, spec, u_mm, v_mm, u_range=None, v_range=None):
         return _height_ribs(u_mm, v_mm, scale, angle, sharpness, facet)
     if kind == "voronoi":
         return _height_voronoi(u_mm, v_mm, scale, spec.get("seed", 0), sharpness, facet)
+    if kind == "stripes":
+        return _height_stripes(u_mm, v_mm, scale, angle, sharpness, facet)
+    if kind == "grid":
+        return _height_grid(u_mm, v_mm, scale, angle, sharpness, facet)
+    if kind == "dots":
+        return _height_dots(u_mm, v_mm, scale, angle, sharpness, facet)
+    if kind == "brick":
+        return _height_brick(u_mm, v_mm, scale, angle, sharpness, facet)
+    if kind == "basket":
+        return _height_basket(u_mm, v_mm, scale, angle, sharpness, facet)
+    if kind == "carbon":
+        return _height_carbon(u_mm, v_mm, scale, angle, sharpness, facet)
+    if kind == "isogrid":
+        return _height_isogrid(u_mm, v_mm, scale, angle, sharpness, facet)
+    if kind == "grip":
+        return _height_grip(u_mm, v_mm, scale, angle, sharpness, facet)
+    if kind == "leather":
+        return _height_leather(u_mm, v_mm, scale, spec.get("seed", 0), spec.get("octaves", 3), facet)
     if kind == "noise":
         h = _height_noise(u_mm, v_mm, scale, spec.get("seed", 0), spec.get("octaves", 3))
         return _terrace(h, _steps_from(sharpness)) if facet else h

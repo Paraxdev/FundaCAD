@@ -21,32 +21,63 @@ import type {
   ChoiceField, Feature, FieldKind, FileField, Num, Selector, TargetField, ToggleField,
 } from "fundacad";
 
-export type TextureKind = "knurl" | "hex" | "waves" | "ribs" | "voronoi" | "noise" | "image";
+export type TextureKind =
+  | "knurl" | "hex" | "waves" | "ribs" | "voronoi" | "noise" | "image"
+  | "stripes" | "grid" | "dots" | "brick" | "basket" | "carbon"
+  | "isogrid" | "grip" | "leather";
 export type TextureMode = "faces" | "body";
 export type TextureProjection = "auto" | "triplanar" | "box";
 
-/** The patterns. One list, read by the tool panel and by the value rows that
- *  edit a texture after it is committed, so it reads the same before and after. */
-export const TEXTURE_KINDS: { value: TextureKind; label: string }[] = [
-  { value: "knurl", label: "Knurl" },
-  { value: "hex", label: "Hex" },
-  { value: "waves", label: "Waves" },
-  { value: "ribs", label: "Ribs" },
-  { value: "voronoi", label: "Voronoi" },
-  { value: "noise", label: "Perlin noise" },
-  { value: "image", label: "Heightmap" },
+/** The patterns, grouped so a picker of sixteen stays legible. Read by the tool
+ *  panel (as option groups) and, flattened, by the value rows that edit a texture
+ *  after it is committed, so it reads the same before and after. Categories are
+ *  geometric / organic / functional / image. */
+export const TEXTURE_KIND_GROUPS: { label: string; kinds: { value: TextureKind; label: string }[] }[] = [
+  {
+    label: "Geometric",
+    kinds: [
+      { value: "knurl", label: "Knurl" },
+      { value: "hex", label: "Hex" },
+      { value: "waves", label: "Waves" },
+      { value: "ribs", label: "Ribs" },
+      { value: "stripes", label: "Stripes" },
+      { value: "grid", label: "Grid" },
+      { value: "dots", label: "Dots" },
+      { value: "brick", label: "Brick" },
+      { value: "isogrid", label: "Isogrid" },
+      { value: "basket", label: "Basket weave" },
+      { value: "carbon", label: "Carbon fibre" },
+    ],
+  },
+  {
+    label: "Organic",
+    kinds: [
+      { value: "voronoi", label: "Voronoi" },
+      { value: "noise", label: "Perlin noise" },
+      { value: "leather", label: "Leather" },
+    ],
+  },
+  { label: "Functional", kinds: [{ value: "grip", label: "Grip" }] },
+  { label: "Image", kinds: [{ value: "image", label: "Heightmap" }] },
 ];
 
+/** The flat pattern list, derived from the groups so the two cannot drift. */
+export const TEXTURE_KINDS: { value: TextureKind; label: string }[] =
+  TEXTURE_KIND_GROUPS.flatMap((g) => g.kinds);
+
 /** Kinds with a lattice or wave orientation to rotate. The others are isotropic
- *  (voronoi, noise) or carry their own orientation in the file (image), so an
- *  Angle on them would be a control that does nothing. */
+ *  or seed-driven (voronoi, noise, leather) or carry their own orientation in the
+ *  file (image), so an Angle on them would be a control that does nothing. */
 export const ANGLE_KINDS: ReadonlySet<TextureKind> =
-  new Set<TextureKind>(["knurl", "hex", "waves", "ribs"]);
+  new Set<TextureKind>([
+    "knurl", "hex", "waves", "ribs",
+    "stripes", "grid", "dots", "brick", "basket", "carbon", "isogrid", "grip",
+  ]);
 
 /** Kinds generated from a pseudo-random field, and so the only ones a Seed
  *  changes. */
 export const SEED_KINDS: ReadonlySet<TextureKind> =
-  new Set<TextureKind>(["voronoi", "noise"]);
+  new Set<TextureKind>(["voronoi", "noise", "leather"]);
 
 /** The projection selector, and its seam controls, mean something only for a
  *  procedural pattern on a freeform face. A heightmap carries its own
@@ -56,7 +87,7 @@ export const SEED_KINDS: ReadonlySet<TextureKind> =
  *  mode, but the tool cannot know which faces are selected, so the control shows
  *  for every non-image kind and simply has no effect where the chart is exact. */
 export const PROJECTION_KINDS: ReadonlySet<TextureKind> =
-  new Set<TextureKind>(["knurl", "hex", "waves", "ribs", "voronoi", "noise"]);
+  new Set<TextureKind>(TEXTURE_KINDS.map((k) => k.value).filter((v) => v !== "image"));
 
 /** Does this field mean anything, given what the feature's other fields say?
  *
@@ -291,9 +322,6 @@ export interface TextureFeature {
 export function asTexture(f: Feature | null | undefined): TextureFeature | null {
   return f && f.type === "texture" ? (f as unknown as TextureFeature) : null;
 }
-
-export const KIND_OPTIONS: [TextureKind, string][] =
-  TEXTURE_KINDS.map((o) => [o.value, o.label]);
 
 export function basename(path: string): string {
   return path.split(/[\\/]/).pop() ?? path;
