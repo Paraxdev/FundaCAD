@@ -35,20 +35,6 @@ import { draftAngle, draftDelta, MAX_DRAFT_DEG } from "./draftMath";
 import { regionAnchor } from "./regionNudge";
 import { OP_WORD, plannedOperation, type ExtrudeOp } from "./extrudeOperation";
 
-/** How far off the arrow a press still counts as grabbing it, in pixels. The
- *  shared handle's stem proxy is 11px for the same reason (manipulator.ts):
- *  aiming at drawn geometry a pixel or two wide is not an affordance. */
-const GRAB_PX = 12;
-
-/** The lathe axis every cylinder in three.js is built around, so a proxy can be
- *  aimed with one setFromUnitVectors instead of a matrix. */
-const Y_AXIS = new THREE.Vector3(0, 1, 0);
-
-/** The shortest grab target worth offering, in pixels. A depth near zero draws
- *  a stub of an arrow, and that is exactly when somebody wants to take hold of
- *  it and pull, so the target does not shrink with it. */
-const MIN_GRAB_PX = 26;
-
 /** Below this taper the extrude is treated as straight: the frontend prism draws
  *  instantly and no kernel preview is asked for. Above it the walls lean and the
  *  exact solid can only come from OCCT. */
@@ -59,8 +45,8 @@ const TAPER_EPS = 0.05;
 const TAPER_MIN_DEPTH = 1;
 
 /** How far off the top-centre the taper handle floats, in pixels: clear of the
- *  depth arrow (which runs along the normal, perpendicular to this) and out where
- *  the wall it leans actually is. */
+ *  depth handle (which runs along the normal, perpendicular to this) and out
+ *  where the wall it leans actually is. */
 const TAPER_OFFSET_PX = 46;
 
 type Phase = "pick" | "drag";
@@ -78,16 +64,15 @@ export class ExtrudeTool {
   private preview: THREE.Group | null = null;
   private previewMat: THREE.MeshStandardMaterial | null = null;
   private previewKey = ""; // depth+sign+selection of the built preview geometry
-  private arrow: THREE.ArrowHelper | null = null;
-  /** Invisible cylinder along the arrow, the thing the cursor actually hits.
-   *  The arrow's own geometry is a 1px line and a small cone, which is not a
-   *  target anyone can aim at; manipulator.ts makes the same point about the
-   *  shared handle and solves it the same way. Unit-sized and scaled per move,
-   *  so its grab radius stays a constant number of PIXELS at any zoom. */
-  private grabProxy: THREE.Mesh | null = null;
+  /** The chunky slider at the far face you pull along the normal to set depth.
+   *  The same glyph the taper handle, the fillet/chamfer and the press/pull tools
+   *  use, its own generous invisible grab volumes and all, so the whole app grabs
+   *  one shape. Its constant screen size and its being drawn THROUGH the model
+   *  (so a cut's handle is not buried in the material it removes) come with it. */
+  private depthHandle: DragHandle | null = null;
   private hovering = false;
   private grabbing = false;
-  /** The distance at the moment the arrow was taken hold of. The drag is
+  /** The distance at the moment the handle was taken hold of. The drag is
    *  relative to it, so grabbing an existing 40 mm extrude does not snap it to
    *  wherever the cursor happens to project. */
   private grabValue = 0;
@@ -409,20 +394,15 @@ export class ExtrudeTool {
       this.selected = this.overlay.selectedRegions();
       if (!this.selected.length) {
         // Every area taken off. There is nothing to extrude and nothing for the
-        // arrow to hang from, so drop back to picking rather than hold a drag
-        // over an empty set.
+        // handles to hang from, so drop back to picking rather than hold a drag
+        // over an empty set. updatePreview early-returns on an empty set, so a
+        // handle left alone would float in the air off nothing.
         this.phase = "pick";
         this.dim.hide();
         this.disposePreviewGeom();
         this.previewKey = "";
-        // The arrow too: updatePreview early-returns on an empty set, so left
-        // alone it would hang in the air pointing out of nothing.
-        if (this.arrow) {
-          this.viewport.removeFromScene(this.arrow);
-          this.arrow.dispose();
-          this.arrow = null;
-        }
-        this.disposeGrabProxy(); // it hung off the arrow, and there is none now
+        this.disposeDepthHandle();
+        this.disposeTaperHandle();
         setPrompt("Click a profile area · Esc");
         return;
       }
@@ -681,73 +661,42 @@ export class ExtrudeTool {
     this.previewMat?.color.set(cut ? 0xff5c5c : 0x5b9bff);
   }
 
-  /** The depth arrow, its grab proxy, and the taper handle. Shown in both preview
-   *  modes: they are the controls, not the geometry. */
+  /** The two controls, the depth handle and the taper handle, shown in both
+   *  preview modes because they are the controls and not the geometry. Both are
+   *  the SAME glyph oriented to their own axis: pull the depth handle along the
+   *  normal to set depth, swing the taper handle in-plane to lean the walls, so
+   *  the two degrees of freedom read as one design. */
   private updateManipulators(sign: number, depth: number) {
-    // arrow manipulator along the (shared) normal, anchored at the selection center
     const first = this.selected[0];
     if (!first) return;
     const plane = first.plane;
     const anchor = this.anchor();
     const dir = plane.n.clone().multiplyScalar(sign);
-    // Symmetric has no one direction, so the arrow spans the whole extent
-    // instead of half of it: it starts a depth BEHIND the plane and runs to the
-    // far face. An arrow that still measured one side would say the solid is
-    // half as long as the one being previewed underneath it.
-    const tail = this.symmetric ? anchor.clone().addScaledVector(dir, -depth) : anchor;
-    const len = Math.max(this.symmetric ? depth * 2 : depth, 1);
-    if (!this.arrow) {
-      this.arrow = new THREE.ArrowHelper(dir, tail, len, 0xffd24a, 6, 3);
-      // Drawn THROUGH the model, like every other manipulator in the app (see
-      // createDragHandle). An extrude that pushes into material puts its own
-      // arrow inside the solid, and a depth-tested arrow is then invisible for
-      // the whole of the gesture that needs it: the control disappears exactly
-      // when the operation is a cut.
-      // ArrowHelper types its parts' material as Material | Material[]; both are
-      // built as a single LineBasicMaterial/MeshBasicMaterial and never an array.
-      for (const m of [this.arrow.line.material, this.arrow.cone.material]) {
-        const mat = m as THREE.Material;
-        mat.depthTest = false;
-        mat.depthWrite = false;
-      }
-      this.arrow.line.renderOrder = 999;
-      this.arrow.cone.renderOrder = 999;
-      this.viewport.addToScene(this.arrow);
-    } else {
-      this.arrow.position.copy(tail);
-      this.arrow.setDirection(dir);
-      this.arrow.setLength(len, 6, 3);
-    }
-
-    // The grab target. A unit cylinder scaled per update, so its radius is a
-    // constant number of pixels however far the camera is: a world-sized proxy
-    // would be un-hittable zoomed out and would swallow the viewport zoomed in.
-    if (!this.grabProxy) {
-      this.grabProxy = new THREE.Mesh(
-        new THREE.CylinderGeometry(1, 1, 1, 8),
-        new THREE.MeshBasicMaterial({ visible: false, depthTest: false }),
-      );
-      this.viewport.addToScene(this.grabProxy);
-    }
     const px = this.viewport.pixelWorldSize(anchor);
-    const span = Math.max(len, px * MIN_GRAB_PX);
-    this.grabProxy.position.copy(tail).addScaledVector(dir, span / 2);
-    this.grabProxy.quaternion.setFromUnitVectors(Y_AXIS, dir);
-    this.grabProxy.scale.set(px * GRAB_PX, span, px * GRAB_PX);
+    // The centre of the far face: the depth handle stands here (pull it along the
+    // normal), the taper handle floats beside it. True for one-sided AND
+    // symmetric, whose near half sits a depth behind the plane, so its far face
+    // lands here too, and the taper drag measures its inward pull against it.
+    this.taperTop.copy(anchor).addScaledVector(dir, depth);
 
-    this.updateTaperHandle(plane, anchor, dir, depth, px);
+    if (!this.depthHandle) {
+      this.depthHandle = createDragHandle();
+      this.viewport.addToScene(this.depthHandle.group);
+    }
+    // Red while the push removes material (a cut), amber while it adds.
+    this.placeHandle(this.depthHandle, this.taperTop, dir, px, this.hovering || this.grabbing, sign < 0);
+
+    this.updateTaperHandle(plane, px);
   }
 
   /** The chunky slider you swing to lean the walls, floating beside the far face.
    *  Offered once there is depth to swing about, for a new extrude AND for one
    *  reopened by double-click, so editing a taper is the same easy grab as making
-   *  it. Modelled in pixels like every other manipulator, so a constant
-   *  `pixelWorldSize` scale holds its on-screen size at any zoom. */
-  private updateTaperHandle(
-    plane: WorldRegion["plane"], anchor: THREE.Vector3, dir: THREE.Vector3,
-    depth: number, px: number,
-  ) {
-    if (depth < TAPER_MIN_DEPTH) {
+   *  it. */
+  private updateTaperHandle(plane: WorldRegion["plane"], px: number) {
+    // A taper needs depth to swing about (angle = atan(inset / depth)); with too
+    // little the lever is unreadable and the handle is not offered.
+    if (Math.abs(this.distance) < TAPER_MIN_DEPTH) {
       this.disposeTaperHandle();
       return;
     }
@@ -759,27 +708,32 @@ export class ExtrudeTool {
     // run the slider along and to measure the inward drag against.
     const o = plane.to3D(0, 0);
     this.taperAxis.copy(plane.to3D(1, 0)).sub(o).normalize();
-    // Centre of the far face (true for one-sided AND symmetric: the symmetric
-    // arrow's tail sits a depth behind, so its far tip lands here too).
-    this.taperTop.copy(anchor).addScaledVector(dir, depth);
-    const g = this.taperHandle.group;
-    g.position.copy(this.taperTop).addScaledVector(this.taperAxis, px * TAPER_OFFSET_PX);
-    g.quaternion.setFromUnitVectors(HANDLE_UP, this.taperAxis);
-    g.scale.setScalar(px);
-    // Red once the walls undercut (a negative taper), which no mould can draw and
-    // is worth flagging while it is being set; amber otherwise.
-    this.taperHandle.paint({
-      hot: this.taperHovering || this.taperGrabbing,
-      tone: this.taper < 0 ? "cut" : "idle",
-    });
+    const at = this.taperTop.clone().addScaledVector(this.taperAxis, px * TAPER_OFFSET_PX);
+    // Red once the walls undercut (a negative taper, which no mould can draw),
+    // amber otherwise.
+    this.placeHandle(this.taperHandle, at, this.taperAxis, px, this.taperHovering || this.taperGrabbing, this.taper < 0);
   }
 
-  private disposeGrabProxy() {
-    if (!this.grabProxy) return;
-    this.viewport.removeFromScene(this.grabProxy);
-    this.grabProxy.geometry.dispose();
-    (this.grabProxy.material as THREE.Material).dispose();
-    this.grabProxy = null;
+  /** Orient, size, and tint one chunky slider at `at`, lying along `axis`. The
+   *  one place the depth and taper handles are placed, so they cannot drift into
+   *  two shapes or two screen-size rules: constant `pixelWorldSize` scale, glyph
+   *  laid along its axis, amber or red for its state. */
+  private placeHandle(
+    handle: DragHandle, at: THREE.Vector3, axis: THREE.Vector3, px: number,
+    hot: boolean, cut: boolean,
+  ) {
+    const g = handle.group;
+    g.position.copy(at);
+    g.quaternion.setFromUnitVectors(HANDLE_UP, axis);
+    g.scale.setScalar(px);
+    handle.paint({ hot, tone: cut ? "cut" : "idle" });
+  }
+
+  private disposeDepthHandle() {
+    if (!this.depthHandle) return;
+    this.viewport.removeFromScene(this.depthHandle.group);
+    this.depthHandle.dispose();
+    this.depthHandle = null;
   }
 
   private disposeTaperHandle() {
@@ -789,18 +743,15 @@ export class ExtrudeTool {
     this.taperHandle = null;
   }
 
-  /** Is the cursor on the arrow? Tested against the invisible proxy, never the
-   *  drawn geometry. Three's raycaster tests layers rather than `visible`, so an
-   *  invisible mesh is still a hit target, which is what manipulator.ts relies
-   *  on for the shared handle. */
+  /** Is the cursor on the depth handle? Tested against the glyph's own generous
+   *  invisible grab volumes (direct children of the group), never the drawn
+   *  shape, the convention every createDragHandle caller shares. */
   private hitGizmo(x: number, y: number): boolean {
-    if (!this.grabProxy || this.phase !== "drag") return false;
-    return this.viewport.rayFrom(x, y).intersectObject(this.grabProxy, false).length > 0;
+    if (!this.depthHandle || this.phase !== "drag") return false;
+    return this.viewport.rayFrom(x, y).intersectObjects(this.depthHandle.group.children, false).length > 0;
   }
 
-  /** Is the cursor on the taper handle? Its generous invisible grab volumes are
-   *  direct children of the group, the same convention createDragHandle's other
-   *  callers hit-test against. */
+  /** Is the cursor on the taper handle? Same convention as the depth handle. */
   private hitTaper(x: number, y: number): boolean {
     if (!this.taperHandle || this.phase !== "drag") return false;
     return this.viewport.rayFrom(x, y).intersectObjects(this.taperHandle.group.children, false).length > 0;
@@ -962,12 +913,7 @@ export class ExtrudeTool {
     this.previewMat?.dispose();
     this.previewMat = null;
     this.previewKey = "";
-    if (this.arrow) {
-      this.viewport.removeFromScene(this.arrow);
-      this.arrow.dispose();
-      this.arrow = null;
-    }
-    this.disposeGrabProxy();
+    this.disposeDepthHandle();
     this.disposeTaperHandle();
     // A create-mode cancel or commit can leave a live floating taper preview up;
     // drop it so the model returns to what is actually committed. An edit's taper
