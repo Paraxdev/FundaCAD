@@ -17,7 +17,7 @@ cd "$(dirname "$0")/.."/sidecar
 PY="${PY:-uv run python}"
 
 # Coverage RATCHET, not a target: real-server op coverage may never drop below
-# what it is today. It is currently 33 of 33, every unit in the universe is
+# what it is today. It is currently 34 of 34, every unit in the universe is
 # covered by an EXPLICIT check that asserts a precomputed numeric geometric
 # invariant against a real spawned server.
 #
@@ -43,6 +43,14 @@ PY="${PY:-uv run python}"
 # Raised 33 -> 34: the `inspect` op joined the universe and arrived with its own
 # explicit check (check_inspect), which asserts pi*r^2*h against the B-rep
 # volume, a closed form, so it needs no fixture and no tolerance argument.
+#
+# HELD AT 34 when `texture` moved out of builder.py into plugins/FundaCAD.Texture.
+# The universe was parsed from _FEATURE_HANDLERS alone, so it silently lost that
+# unit and the harness reported a clean 33/33: the same coverage over one unit
+# fewer, which is exactly the decay this floor exists to catch, arriving as good
+# news. e2e_coverage now adds the feature types a plugin REGISTERS, so a feature
+# the engine really builds is counted wherever its code lives, and check_texture
+# keeps asserting its measured constant against a real spawned server.
 COVERAGE_FLOOR=34
 
 # The fillet/chamfer corpus was driven to zero failures by the Norn loop

@@ -194,6 +194,30 @@ def parse_feature_handler_keys():
     return set(re.findall(r'"([^"]+)"\s*:\s*_handle_', m.group(1)))
 
 
+def plugin_feature_type_keys():
+    """The feature types an installed plugin registers with the geometry engine.
+
+    The builder's dispatch table stopped being the whole story when a plugin
+    could own a feature outright: `texture` left _FEATURE_HANDLERS for
+    plugins/FundaCAD.Texture, and a universe parsed from builder.py alone would
+    have quietly shrunk by one, which reads as "we cover everything" rather than
+    "we stopped counting something".
+
+    Taken from the live registry after discovery rather than from the manifests,
+    for the reason parse_server_ops guards against: a type a manifest declares
+    but whose code does not register is a type nothing can exercise, and a unit
+    nothing can ever cover trains the reader to ignore the UNCOVERED list. The
+    harness discovers from the same roots as the server it spawns, so the two
+    agree by construction.
+    """
+    if SIDECAR_DIR not in sys.path:
+        sys.path.insert(0, SIDECAR_DIR)
+    import plugin_geometry
+
+    plugin_geometry.discover()
+    return set(plugin_geometry.feature_types())
+
+
 def parse_server_ops():
     """The op strings server.py dispatches, scraped from its dispatch branches
     AT RUNTIME.
