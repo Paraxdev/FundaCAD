@@ -443,6 +443,23 @@ def _handle_datum_plane(f, ctx):
     }
 
 
+def _handle_datum_point(f, ctx):
+    # Reference geometry, no body. `point` is a baked world coordinate the
+    # frontend draws and picks entirely on its own, so there is nothing to
+    # resolve here. The handler exists only so the type is KNOWN: an
+    # unregistered type raises "install the plugin that builds this", which is
+    # the wrong thing to say about a datum the core owns. Touch the field so a
+    # malformed one (no point) still flags at its own feature.
+    f["point"]
+
+
+def _handle_datum_axis(f, ctx):
+    # Reference geometry, no body, same as _handle_datum_point. Touch the two
+    # required fields so a malformed axis flags here rather than silently
+    # drawing nothing.
+    f["origin"], f["dir"]
+
+
 def _handle_extrude(f, ctx):
     # A missing sketch is almost always an UPSTREAM failure, not a broken
     # reference: the sketch feature raised (bad profile, non-planar wires) and so
@@ -1504,6 +1521,8 @@ def _handle_remove_body(f, ctx):
 _FEATURE_HANDLERS = {
     "sketch": _handle_sketch,
     "datumPlane": _handle_datum_plane,
+    "datumPoint": _handle_datum_point,
+    "datumAxis": _handle_datum_axis,
     "extrude": _handle_extrude,
     "fillet": _handle_fillet,
     "chamfer": _handle_chamfer,
@@ -1766,7 +1785,7 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
         # 12.7% of a cold rebuild). The merged view is a lazy ChainMap over the
         # per-body dicts; reversed so duplicate fingerprints resolve like the
         # old last-body-wins dict.update() merge.
-        prov = f.get("type") not in ("sketch", "datumPlane")
+        prov = f.get("type") not in ("sketch", "datumPlane", "datumPoint", "datumAxis")
         if prov:
             pre_shape = {id(b): b.get("shape") for b in bodies}
             pre_owners_by_id = {id(b): (b.get("_owners") or {}) for b in bodies}

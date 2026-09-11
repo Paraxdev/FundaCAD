@@ -117,6 +117,12 @@ export function createActions(e: Engine): (action: string) => void {
       case "plane-points":
         e.starters.createPlaneThroughPoints();
         break;
+      case "datum-point":
+        e.starters.createDatumPoint();
+        break;
+      case "datum-axis":
+        e.starters.createDatumAxis();
+        break;
       case "import":
         void importModel(e.store, e.geometry);
         break;

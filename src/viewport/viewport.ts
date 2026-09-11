@@ -245,6 +245,11 @@ export class Viewport {
   // persistent construction/datum planes (translucent quads, click to select)
   private datumGroup = new THREE.Group();
   private datumQuads: THREE.Mesh[] = [];
+  // datum POINTS (small spheres) and AXES (thin long cylinders). Kept apart from
+  // datumQuads because those are sketchable PLANES a plane-picking tool consumes,
+  // and a point or an axis is neither: it selects, but "sketch on this" or "cut
+  // by this" must never resolve to it.
+  private datumMarkers: THREE.Mesh[] = [];
   private hoveredDatum: string | null = null;
   private selectedDatum: string | null = null;
   private dragMoved = false;
@@ -734,9 +739,12 @@ export class Viewport {
     // sketch-first). An EDGE hit is more specific and still wins; face selection resumes
     // once the sketch is hidden/consumed (its regions vanish from overlay.regions).
     if (hit?.kind !== "edge" && this.regionPickAt?.(e.clientX, e.clientY, e.ctrlKey || e.metaKey || e.shiftKey)) return;
-    // a click on a construction plane (where it doesn't overlap the body) selects it
-    if (!hit && this.datumQuads.length) {
-      const dh = this.rayFrom(e.clientX, e.clientY).intersectObjects(this.datumQuads, false)[0];
+    // a click on a construction plane, datum point or datum axis (where it does
+    // not overlap the body) selects it. Markers are raycast alongside the quads,
+    // so the nearest reference geometry under the cursor wins by depth.
+    if (!hit && (this.datumQuads.length || this.datumMarkers.length)) {
+      const dh = this.rayFrom(e.clientX, e.clientY)
+        .intersectObjects([...this.datumQuads, ...this.datumMarkers], false)[0];
       if (dh) {
         this.onPickDatum?.(dh.object.userData.datumId as string);
         return;
@@ -1899,10 +1907,12 @@ export class Viewport {
     this.requestRender();
   }
 
-  /** right-click hit-test against the construction-plane quads. */
+  /** right-click hit-test against the construction-plane quads and the datum
+   *  point/axis markers. */
   pickDatumAt(clientX: number, clientY: number): string | null {
-    if (!this.datumQuads.length) return null;
-    const dh = this.rayFrom(clientX, clientY).intersectObjects(this.datumQuads, false)[0];
+    if (!this.datumQuads.length && !this.datumMarkers.length) return null;
+    const dh = this.rayFrom(clientX, clientY)
+      .intersectObjects([...this.datumQuads, ...this.datumMarkers], false)[0];
     return dh ? (dh.object.userData.datumId as string) : null;
   }
 
@@ -2038,6 +2048,52 @@ export class Viewport {
     this.highlightDatum(this.selectedDatum);
   }
 
+  /** Render the document's datum POINTS (small spheres) and datum AXES (thin
+   *  long cylinders) as pickable reference geometry. Sized against the model so
+   *  they read at any zoom, and drawn in the same construction lilac as the
+   *  planes so the three kinds of datum look like one family. */
+  setDatumMarkers(
+    points: { id: string; point: [number, number, number] }[],
+    axes: { id: string; origin: [number, number, number]; dir: [number, number, number] }[],
+  ) {
+    for (const m of this.datumMarkers) {
+      this.datumGroup.remove(m);
+      m.geometry.dispose();
+      (m.material as THREE.Material).dispose();
+    }
+    this.datumMarkers = [];
+    // A world size to draw at: a fraction of the model, so a datum on a 5 mm part
+    // and one on a 5 m part both read. Fallback for an empty document.
+    const diag = this.modelDiagonal() ?? 100;
+    const r = Math.max(0.4, diag * 0.012);
+    const mk = (geom: THREE.BufferGeometry, id: string) => {
+      const mat = new THREE.MeshBasicMaterial({
+        color: 0xb98cff, transparent: true, opacity: 0.85, depthWrite: false,
+      });
+      const mesh = new THREE.Mesh(geom, mat);
+      mesh.userData.datumId = id;
+      mesh.renderOrder = 3; // over the surface, so a datum on a face stays visible
+      this.datumGroup.add(mesh);
+      this.datumMarkers.push(mesh);
+      return mesh;
+    };
+    for (const p of points) {
+      const mesh = mk(new THREE.SphereGeometry(r, 16, 12), p.id);
+      mesh.position.set(p.point[0], p.point[1], p.point[2]);
+    }
+    const up = new THREE.Vector3(0, 1, 0); // the cylinder's own axis
+    for (const a of axes) {
+      const dir = new THREE.Vector3(a.dir[0], a.dir[1], a.dir[2]);
+      if (dir.lengthSq() < 1e-12) continue; // a zero direction names no line
+      dir.normalize();
+      const len = diag * 3 + 50; // long enough to read as "infinite" at any fit
+      const mesh = mk(new THREE.CylinderGeometry(r * 0.3, r * 0.3, len, 12), a.id);
+      mesh.position.set(a.origin[0], a.origin[1], a.origin[2]);
+      mesh.quaternion.setFromUnitVectors(up, dir);
+    }
+    this.paintDatums();
+  }
+
   /** Brighten the selected construction plane; others stay faint. */
   highlightDatum(id: string | null) {
     this.selectedDatum = id;
@@ -2049,6 +2105,14 @@ export class Viewport {
       const id = q.userData.datumId as string;
       (q.material as THREE.MeshBasicMaterial).opacity =
         id === this.selectedDatum ? 0.32 : id === this.hoveredDatum ? 0.24 : 0.12;
+    }
+    // A point/axis is a solid mark, not a translucent wash like a plane, so it
+    // brightens rather than fades: full on when selected or hovered, still
+    // clearly visible otherwise.
+    for (const m of this.datumMarkers) {
+      const id = m.userData.datumId as string;
+      (m.material as THREE.MeshBasicMaterial).opacity =
+        id === this.selectedDatum || id === this.hoveredDatum ? 1 : 0.7;
     }
     this.requestRender();
   }

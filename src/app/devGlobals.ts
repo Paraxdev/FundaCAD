@@ -48,6 +48,10 @@ export function installDevGlobals(e: Engine): void {
     // feature's Properties has to say WHICH, and the timeline chip that normally
     // does it is a click on a scrolling strip.
     selectFeature: (id: string | null) => e.selectFeature(id),
+    // Which feature is selected right now, the read that pairs with the setter
+    // above: a harness that clicks something in the viewport has no other way to
+    // ask what the click selected.
+    selectedFeature: () => e.selectedFeature,
     // Selecting a feature opens its values; EDITING it opens whatever
     // manipulator that feature has. They are different doors and a harness that
     // wants the second one cannot get there through the first.

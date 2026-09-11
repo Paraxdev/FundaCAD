@@ -368,6 +368,40 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     });
   }
 
+  // Datum Point: one click on the model, snapped to what it actually has (the
+  // same snap the gizmo origin and plane-through-points use), saved as a named
+  // reference point. It builds no geometry, it exists to be measured to, snapped
+  // to, and named. Like a midplane, the coordinate is BAKED and does not yet
+  // follow the geometry it was picked on.
+  function createDatumPoint() {
+    pickPointsInteractive(1, "Select a point for the datum point", (pts) => {
+      const [p] = pts;
+      if (!p) return;
+      const id = store.nextId();
+      store.addFeature({ id, type: "datumPoint", point: p, name: "Point" } as Feature);
+      selectFeature(id);
+    });
+  }
+
+  // Datum Axis: two clicks name the line through them, `origin` the first point
+  // and `dir` the second minus the first. It is the line a revolve, a circular
+  // pattern or a mirror can be aimed at by name. Same baked-coordinate limit as
+  // the datum point above.
+  function createDatumAxis() {
+    pickPointsInteractive(2, "Select two points for the datum axis", (pts) => {
+      const [a, b] = pts;
+      if (!a || !b) return;
+      const dir: Vec3 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+      if (Math.hypot(dir[0], dir[1], dir[2]) < 1e-6) {
+        setStatus("Datum axis: those two points are the same", "");
+        return;
+      }
+      const id = store.nextId();
+      store.addFeature({ id, type: "datumAxis", origin: a, dir, name: "Axis" } as Feature);
+      selectFeature(id);
+    });
+  }
+
   /** Collect `n` points on the model, snapping to what it actually has.
    *
    *  Every point taken so far is drawn, and so is the one under the cursor, so
@@ -1209,6 +1243,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     createDatumPlane,
     createMidplane,
     createPlaneThroughPoints,
+    createDatumPoint,
+    createDatumAxis,
     offsetPlaneFromFace,
     startSplit,
     startCutByPlane,
