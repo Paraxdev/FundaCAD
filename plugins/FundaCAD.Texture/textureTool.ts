@@ -35,6 +35,9 @@ const defaultValues = (): TextureValues => ({
   projection: "triplanar",
   seamBlend: 0.5,
   seamBand: 0.5,
+  amplitude: 1,
+  slopeMin: 0,
+  slopeMax: 180,
   direction: "out",
   seed: 1,
   invert: false,
@@ -184,6 +187,9 @@ export class TextureTool {
       projection: f.projection ?? "triplanar",
       seamBlend: (f.seamBlend as number) ?? 0.5,
       seamBand: (f.seamBand as number) ?? 0.5,
+      amplitude: (f.amplitude as number) ?? 1,
+      slopeMin: (f.slopeMin as number) ?? 0,
+      slopeMax: (f.slopeMax as number) ?? 180,
       direction: f.direction ?? "out",
       seed: (f.seed as number) ?? 1,
       invert: f.invert ?? false,
@@ -413,6 +419,11 @@ export class TextureTool {
       if (v.projection === "triplanar" && v.seamBlend !== 0.5) extra.seamBlend = v.seamBlend;
       if (v.projection === "box" && v.seamBand !== 0.5) extra.seamBand = v.seamBand;
     }
+    // amplitude and the slope mask apply to every kind and ride only off their
+    // defaults, so an untouched texture carries none of them.
+    if (v.amplitude !== 1) extra.amplitude = v.amplitude;
+    if (v.slopeMin !== 0) extra.slopeMin = v.slopeMin;
+    if (v.slopeMax !== 180) extra.slopeMax = v.slopeMax;
     // sharpness shapes the lattice/wave kinds under either profile, and under
     // FACET it also drives the cellular wall width and the terrace count, so
     // voronoi/noise/image need it too, which they never used to get.

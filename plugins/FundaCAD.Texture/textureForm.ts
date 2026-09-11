@@ -163,6 +163,9 @@ export const TEXTURE_NUM_FIELDS: readonly [string, string, FieldKind][] = [
   ["smooth", "Soften", "count"],
   ["seamBlend", "Seam blend", "count"],
   ["seamBand", "Seam band", "count"],
+  ["amplitude", "Amplitude", "count"],
+  ["slopeMin", "Slope min", "angle"],
+  ["slopeMax", "Slope max", "angle"],
   ["seed", "Seed", "count"],
 ];
 
@@ -264,6 +267,9 @@ export interface TextureValues {
   projection: TextureProjection; // how a freeform face charts the pattern
   seamBlend: number; // triplanar blend softness (0..1)
   seamBand: number; // box axis-transition band (0..1)
+  amplitude: number; // master depth trim (0..1; 1 = full depth)
+  slopeMin: number; // keep texture only where the normal's angle from +Z is >= this (deg)
+  slopeMax: number; // ... and <= this (deg); 0..180 masks nothing
   direction: "out" | "in" | "both";
   seed: number;
   invert: boolean;
@@ -305,6 +311,9 @@ export interface TextureFeature {
   projection?: TextureProjection;
   seamBlend?: Num;
   seamBand?: Num;
+  amplitude?: Num;
+  slopeMin?: Num;
+  slopeMax?: Num;
   direction?: "out" | "in" | "both";
   seed?: Num;
   invert?: boolean;
@@ -348,6 +357,9 @@ export interface TextureForm {
   projection: TextureProjection;
   seamBlend: string;
   seamBand: string;
+  amplitude: string;
+  slopeMin: string;
+  slopeMax: string;
 }
 
 export function initialTextureForm(initial: Partial<TextureValues>): TextureForm {
@@ -374,7 +386,17 @@ export function initialTextureForm(initial: Partial<TextureValues>): TextureForm
     projection: initial.projection ?? "triplanar",
     seamBlend: String(initial.seamBlend ?? 0.5),
     seamBand: String(initial.seamBand ?? 0.5),
+    amplitude: String(initial.amplitude ?? 1),
+    slopeMin: String(initial.slopeMin ?? 0),
+    slopeMax: String(initial.slopeMax ?? 180),
   };
+}
+
+/** Parse a numeric field, clamp to [lo, hi], and fall back to `def` when it is
+ *  blank or unparseable. Unlike `parseFloat(x) || def`, a real 0 survives. */
+function clampOr(s: string, def: number, lo: number, hi: number): number {
+  const n = parseFloat(s);
+  return Number.isNaN(n) ? def : Math.max(lo, Math.min(hi, n));
 }
 
 export function toTextureValues(f: TextureForm): TextureValues {
@@ -392,6 +414,11 @@ export function toTextureValues(f: TextureForm): TextureValues {
     projection: f.projection,
     seamBlend: Math.max(0, Math.min(1, parseFloat(f.seamBlend) || 0)),
     seamBand: Math.max(0, Math.min(1, parseFloat(f.seamBand) || 0)),
+    // clamp with a NaN-safe fallback, not `|| default`, so a legitimate 0
+    // amplitude is not read back as full depth
+    amplitude: clampOr(f.amplitude, 1, 0, 1),
+    slopeMin: clampOr(f.slopeMin, 0, 0, 180),
+    slopeMax: clampOr(f.slopeMax, 180, 0, 180),
     direction: f.direction,
     seed: parseFloat(f.seed) || 1,
     invert: f.invert,

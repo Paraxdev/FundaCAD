@@ -72,6 +72,14 @@ def _resolve(body, spec, diag=None):
         shape, spec.get("faces") or {"by": "all"}, diag, spec.get("feature_id")
     )
     fid = spec.get("feature_id")
+    # Soft overlap caution: a deep relief on a thin part can break through. Not an
+    # error, the build proceeds; it rides the same diagnostic channel the timeline
+    # advisory chip reads (src/ui/featureNotes.ts).
+    if primary and diag is not None:
+        reason = texture._overlap_reason(shape, spec)
+        if reason:
+            diag.append({"feature_id": fid, "kind": "texture",
+                         "reason": reason, "confidence": 1.0, "lossy": False})
     if not primary or float(spec.get("grime", 0.0)) <= 0.0:
         texture._GRIME_PRIMARY.pop(fid, None)
         return primary

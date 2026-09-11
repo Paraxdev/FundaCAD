@@ -52,6 +52,7 @@ const grimePct = computed(() => `${Math.round((parseFloat(form.grime) || 0) * 10
 const smoothPct = computed(() => `${Math.round((parseFloat(form.smooth) || 0) * 100)}%`);
 const seamBlendPct = computed(() => `${Math.round((parseFloat(form.seamBlend) || 0) * 100)}%`);
 const seamBandPct = computed(() => `${Math.round((parseFloat(form.seamBand) || 0) * 100)}%`);
+const amplitudePct = computed(() => `${Math.round((parseFloat(form.amplitude) || 0) * 100)}%`);
 
 function emitChange() {
   panel.request.value?.onChange(toTextureValues(form));
@@ -295,6 +296,17 @@ const noBtn: CSSProperties = { ...btn, background: "var(--raised, #555)", color:
         <span :style="[pathLabel, { flex: '0 0 auto', textAlign: 'right', minWidth: '2.6em' }]">{{ smoothPct }}</span>
       </div>
 
+      <!-- Amplitude: a master trim on the depth, for tuning the whole relief
+           without editing the mm depth. 100% is full depth. -->
+      <div :style="row" title="Master trim on the depth: 100% is the full depth, lower scales the whole relief down.">
+        <label :style="lbl">Amplitude</label>
+        <input
+          v-model="form.amplitude" type="range" min="0" max="1" step="0.05"
+          :style="{ flex: '1', minWidth: '0' }" @input="emitChange"
+        />
+        <span :style="[pathLabel, { flex: '0 0 auto', textAlign: 'right', minWidth: '2.6em' }]">{{ amplitudePct }}</span>
+      </div>
+
       <div v-show="rows.seed" :style="row">
         <label :style="lbl">Seed</label>
         <input v-model="form.seed" type="number" step="1" :style="num" @input="emitChange" @change="emitChange" />
@@ -331,6 +343,18 @@ const noBtn: CSSProperties = { ...btn, background: "var(--raised, #555)", color:
           <input v-model="form.offset" type="number" step="0.01" :style="num" @input="emitChange" @change="emitChange" />
           <label :style="lbl">Edge blend</label>
           <input v-model="form.edgeBlend" type="number" step="0.05" min="0" :style="num" @input="emitChange" @change="emitChange" />
+        </div>
+        <!-- Slope mask: keep the texture only where the face normal's angle from
+             +Z (up) is in this band, so a near-horizontal top or bottom can be
+             left clean. 0 to 180 masks nothing. -->
+        <div
+          :style="[offsetRow, { marginTop: '6px' }]"
+          title="Keep the texture only where the surface's angle from up (0 = a flat top, 90 = a vertical wall, 180 = a flat underside) is in this band. 0 to 180 masks nothing."
+        >
+          <label :style="lbl">Slope°</label>
+          <input v-model="form.slopeMin" type="number" step="5" min="0" max="180" :style="num" @input="emitChange" @change="emitChange" />
+          <label :style="lbl">to</label>
+          <input v-model="form.slopeMax" type="number" step="5" min="0" max="180" :style="num" @input="emitChange" @change="emitChange" />
         </div>
       </details>
 

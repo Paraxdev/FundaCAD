@@ -187,6 +187,29 @@ def _tp_exponent(spec):
     return 1.0 + 7.0 * (1.0 - blend)
 
 
+def _slope_mask(normals, spec, border_deg=15.0):
+    """A 0..1 per-vertex mask that keeps the texture only where the vertex
+    normal's angle from +Z lies in [slopeMin, slopeMax] degrees, smoothstepping
+    to zero over `border_deg` outside that band. None when the band is the full
+    0..180 (masks nothing), so the caller keeps its fast path.
+
+    A near-horizontal top faces +Z (angle ~0); a bottom faces -Z (angle ~180); a
+    vertical wall is ~90. So a band of [45,135] keeps only the walls, and a band
+    up to 160 drops the top. It multiplies the boundary taper, which already pins
+    the rim to zero, so a masked texture stays crack-free."""
+    lo = float(spec.get("slopeMin", 0.0))
+    hi = float(spec.get("slopeMax", 180.0))
+    if lo <= 1e-9 and hi >= 180.0 - 1e-9:
+        return None
+    n = np.asarray(normals, dtype=np.float64)
+    nz = np.clip(n[:, 2] / np.maximum(np.linalg.norm(n, axis=1), 1e-12), -1.0, 1.0)
+    ang = np.degrees(np.arccos(nz))            # 0 at +Z, 180 at -Z
+    b = max(border_deg, 1e-3)
+    m_lo = _smoothstep(np.clip((ang - (lo - b)) / b, 0.0, 1.0))   # rises to 1 by `lo`
+    m_hi = _smoothstep(np.clip(((hi + b) - ang) / b, 0.0, 1.0))   # 1 until `hi`, then falls
+    return np.clip(np.minimum(m_lo, m_hi), 0.0, 1.0)
+
+
 def _tp_weights(normals, k):
     """Per-vertex axis blend weights (N,3), columns (|nx|,|ny|,|nz|)^k normalised
     to sum to one, so a vertex facing +Z is textured almost entirely through the
