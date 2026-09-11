@@ -34,6 +34,22 @@ export function installViewportWiring(e: Engine): void {
     }
   };
 
+  // Double-click a face to open the edit of the feature that made it, the
+  // viewport twin of double-clicking that feature's history entry. Faces only:
+  // a face resolves to exactly one owning feature (the build's faceOwners), and
+  // a face selection leaves toolBusy() false, so editFeature's own guard lets
+  // it through and reopens whatever manipulator that feature carries. A body is
+  // many features and already raises the Move gizmo, so it keeps that. Gated on
+  // no tool and no sketch: mid-drag or inside a sketch a double-click means
+  // something else entirely and must not reach an edit here.
+  e.viewport.onDoubleClick = (x, y) => {
+    if (e.toolBusy() || e.sketch.active) return;
+    const faceId = e.viewport.faceIdAt(x, y);
+    if (faceId == null) return;
+    const owner = e.featureForFace(faceId);
+    if (owner) e.editFeature(owner);
+  };
+
   // -------------------------------------------------------------------------
   // Viewport right-click: context-aware menus, one provider per target (datum
   // plane / edge / face / whole body / empty space), all on the shared engine in
