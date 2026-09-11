@@ -1478,6 +1478,18 @@ export class DocumentStore {
     this.addFeature(feat, this.doc.features.length);
   }
 
+  /** copy a body by appending a duplicate feature at the END of the timeline (so
+   *  it copies the final body), offset a little in X so the copy is not hidden
+   *  inside the original. Move it afterwards, or edit the offset in Properties.
+   *  Undoable like any feature. */
+  duplicateBody(bodyId: string) {
+    const feat: Feature = {
+      id: this.nextId(), type: "duplicate",
+      dx: 20, dy: 0, dz: 0, rx: 0, ry: 0, rz: 0, bodies: [bodyId],
+    };
+    this.addFeature(feat, this.doc.features.length);
+  }
+
   // --- color palette + per-body color (multi-color; display + export metadata) -
   /** the project's filament palette (≤4 slots map to U1 toolheads). */
   get colorPalette(): { name: string; color: string; material?: string }[] {
