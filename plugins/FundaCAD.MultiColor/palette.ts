@@ -85,7 +85,7 @@ export function paintFrom(store: DocumentStore): {
     if (slot != null && pal[slot]) bodies[b.id] = pal[slot].color;
     // two-tone texture inlays: the sidecar's dense per-body face array becomes a
     // sparse global-face-index key.
-    const slots = b.textureColorSlots;
+    const slots = b.faceColorSlots;
     if (!slots) continue;
     for (let i = 0; i < slots.length; i++) {
       const s = slots[i];
