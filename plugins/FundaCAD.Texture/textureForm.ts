@@ -108,6 +108,7 @@ export const TEXTURE_NUM_FIELDS: readonly [string, string, FieldKind][] = [
   ["offset", "Offset", "length"],
   ["sharpness", "Sharpness", "count"],
   ["boundaryInset", "Edge blend", "length"],
+  ["grime", "Grime", "count"],
   ["seed", "Seed", "count"],
 ];
 
@@ -189,6 +190,7 @@ export interface TextureValues {
   sharpness: number;
   profile: "facet" | "round";
   boundaryInset: number;
+  grime: number; // 0 = none; a noise bleed onto the neighbouring faces
   direction: "out" | "in" | "both";
   seed: number;
   invert: boolean;
@@ -225,6 +227,7 @@ export interface TextureFeature {
   sharpness?: Num;
   profile?: "facet" | "round";
   boundaryInset?: Num;
+  grime?: Num;
   direction?: "out" | "in" | "both";
   seed?: Num;
   invert?: boolean;
@@ -266,6 +269,7 @@ export interface TextureForm {
   colorSlot: string; // "" = the body colour
   offset: string;
   edgeBlend: string;
+  grime: string;
 }
 
 export function initialTextureForm(initial: Partial<TextureValues>): TextureForm {
@@ -285,6 +289,7 @@ export function initialTextureForm(initial: Partial<TextureValues>): TextureForm
     colorSlot: initial.colorSlot != null ? String(initial.colorSlot) : "",
     offset: String(initial.offset ?? 0),
     edgeBlend: String(initial.boundaryInset ?? 0),
+    grime: String(initial.grime ?? 0),
   };
 }
 
@@ -298,6 +303,7 @@ export function toTextureValues(f: TextureForm): TextureValues {
     sharpness: parseFloat(f.sharpness) || 0,
     profile: f.profile,
     boundaryInset: Math.max(0, parseFloat(f.edgeBlend) || 0),
+    grime: Math.max(0, parseFloat(f.grime) || 0),
     direction: f.direction,
     seed: parseFloat(f.seed) || 1,
     invert: f.invert,

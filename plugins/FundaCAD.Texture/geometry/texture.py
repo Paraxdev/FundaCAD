@@ -145,6 +145,9 @@ def validate_texture_spec(f):
     inset = f.get("boundaryInset", 0.0)
     if not isinstance(inset, (int, float)) or inset < 0:
         raise ValueError("texture edge blend must be zero or a positive number")
+    grime = f.get("grime", 0.0)
+    if not isinstance(grime, (int, float)) or isinstance(grime, bool) or grime < 0:
+        raise ValueError("texture grime must be zero or a positive number")
     image_path = f.get("imagePath")
     if kind == "image":
         if not image_path:
@@ -182,6 +185,13 @@ def validate_texture_spec(f):
     color_slot = f.get("colorSlot")
     if isinstance(color_slot, (int, float)) and not isinstance(color_slot, bool) and int(color_slot) >= 0:
         spec["colorSlot"] = int(color_slot)
+    # Grime: a noise-driven bleed of the texture onto the faces next to the ones
+    # it was applied to, so an effect stops looking like it was masked to a
+    # boundary and starts looking like wear or dirt that crept off the edge.
+    # Kept out of the spec when zero so a document without it hashes identically
+    # (texture_key) and its geometry is byte-for-byte what it always was.
+    if grime and grime > 0:
+        spec["grime"] = min(float(grime), 1.0)
     return spec
 
 
@@ -202,6 +212,41 @@ def _resolve_texture_faces(shape, sel, diag=None, feature_id=None):
 
 _GEOM_CACHE = {}
 _GEOM_CACHE_MAX = 8
+
+#: Grime bleed: which face fingerprints a feature applied its texture to
+#: DIRECTLY (as opposed to the neighbours the bleed reaches). Keyed by feature
+#: id, written by register._resolve when it adds the neighbours, read by
+#: displace_face to tell a full-pattern face from a bleed one.
+#:
+#: A side channel rather than a spec field because the spec is JSON-hashed for
+#: the mesh cache key and a set of fingerprints is neither JSON nor stable to
+#: hash on. It is safe because resolve() always runs immediately before the
+#: displace() loop over the faces it returned (tessellate.py), in the same
+#: worker, so the map is current every time displace reads it; a stale entry
+#: from an earlier build is inert because displace only consults it when the
+#: live spec still carries grime and the face is one this feature bled onto.
+_GRIME_PRIMARY = {}
+
+
+def _adjacent_faces(shape, primary_faces):
+    """The faces sharing an edge with any of `primary_faces`, minus the primary
+    faces themselves. Returned as build123d Faces, the shape the mesh pass hands
+    to displace_face. `topo_adj.FaceAdjacency` is the shared "share an EDGE, same
+    TShape" definition, so two bodies merely touching are not neighbours."""
+    from builder import _face_fp
+    from topo_adj import FaceAdjacency
+
+    adj = FaceAdjacency(shape)
+    primary_idx = {adj.index_of(f) for f in primary_faces}
+    primary_idx.discard(0)
+    out = {}
+    for pi in primary_idx:
+        for j in adj.neighbors(pi):
+            if j in primary_idx:
+                continue
+            face = adj.face(j)
+            out.setdefault(_face_fp(face), face)
+    return list(out.values())
 
 
 def _geometry_key(face, tri, flip, spec, scale, angle, inset_mm, cap):
@@ -421,6 +466,26 @@ def displace_face(face, tri, loc, ident, spec, density_cap, diag=None, feature_i
     from OCP.TopAbs import TopAbs_Orientation
 
     flip = face.wrapped.Orientation() == TopAbs_Orientation.TopAbs_REVERSED
+
+    # GRIME BLEED. A face this feature did not texture directly, only reached by
+    # bleeding off a neighbour it did (register._resolve added it, and this
+    # feature's fingerprint set says which is which). It carries a fading NOISE,
+    # never the base pattern: grime is dirt and wear, not a second copy of the
+    # knurl. The noise is coarser than the pattern and shallower in proportion to
+    # the grime amount, and it rides the ordinary boundary taper, so it pins to
+    # zero at every edge of the bleed face, the shared one included, and cannot
+    # crack against the clean neighbour on the far side.
+    if float(spec.get("grime", 0.0)) > 0.0 and feature_id in _GRIME_PRIMARY:
+        from builder import _face_fp
+        if _face_fp(face) not in _GRIME_PRIMARY[feature_id]:
+            g = float(spec.get("grime", 0.0))
+            spec = dict(
+                spec, kind="noise", direction="out",
+                depth=float(spec.get("depth", 0.4)) * g,
+                scale=max(float(spec.get("scale", 2.0)) * 1.6, 0.05),
+                profile="round",  # grime is not a machined facet
+            )
+
     kind = spec["kind"]
     scale = max(float(spec.get("scale", 2.0)), 0.05)
     target_edge_mm = max(scale / 4.0, 0.05)  # ~4 samples per pattern wavelength
