@@ -325,7 +325,7 @@ def validate(doc):
                                                 "sketch", "profile", "path", "body",
                                                 "target", "keep", "axis", "text",
                                                 "planeId", "plane", "format",
-                                                "geom", "source"):
+                                                "geom", "source", "moving", "mode"):
                 if v in params:
                     continue
                 # An EXPRESSION in a feature field is the mistake worth naming

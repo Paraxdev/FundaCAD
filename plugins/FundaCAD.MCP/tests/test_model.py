@@ -184,5 +184,32 @@ def test_a_string_in_a_numeric_field_must_name_a_parameter():
     assert M.validate(d) == [], M.validate(d)
 
 
+def test_a_joints_body_id_and_mode_are_not_mistaken_for_parameters():
+    """`moving` names a body and `mode` is an enum, neither is a numeric field,
+    so a healthy joint reports nothing. The control: `offset` IS numeric, so a
+    string there that names no parameter still flags, the rule is not switched
+    off for the whole feature."""
+    def face(p, body):
+        return {"kind": "face", "by": "nearest", "point": p, "body": body}
+
+    def boxes():
+        d = M.new_document()
+        M.add_feature(d, {"id": "a", "type": "box", "length": 20, "width": 20, "height": 20})
+        M.add_feature(d, {"id": "b", "type": "box", "length": 6, "width": 6, "height": 6})
+        return d
+
+    joint = {"id": "j", "type": "joint", "moving": "body2", "mode": "revolute",
+             "mate": {"body": "body2", "face": face([50, 0, -3], "body2")},
+             "to": {"body": "body1", "face": face([0, 0, 10], "body1")}}
+
+    d = boxes()
+    M.add_feature(d, dict(joint))
+    assert M.validate(d) == [], M.validate(d)
+
+    d2 = boxes()
+    M.add_feature(d2, dict(joint, offset="nope"))
+    assert any("offset" in p and "nope" in p for p in M.validate(d2)), M.validate(d2)
+
+
 if __name__ == "__main__":
     _run.run(globals(), "document model")
