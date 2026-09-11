@@ -152,10 +152,23 @@ describe("initialTextureForm / toTextureValues", () => {
     const v = {
       kind: "voronoi", depth: 1.2, scale: 5, angle: 30, offset: 0.1, sharpness: 0.8,
       profile: "round", boundaryInset: 0.25, grime: 0.4, smooth: 0.3,
-      projection: "box", seamBlend: 0.35, seamBand: 0.65, direction: "both", seed: 7, invert: true,
+      projection: "box", seamBlend: 0.35, seamBand: 0.65,
+      amplitude: 0.7, slopeMin: 30, slopeMax: 150, direction: "both", seed: 7, invert: true,
       imagePath: "C:/x/y.png", colorSlot: 2,
     } as const;
     expect(toTextureValues(initialTextureForm(v))).toEqual(v);
+  });
+
+  it("defaults amplitude to full and the slope band to the full range", () => {
+    const v = toTextureValues(initialTextureForm({}));
+    expect(v.amplitude).toBe(1);
+    expect(v.slopeMin).toBe(0);
+    expect(v.slopeMax).toBe(180);
+    const f = initialTextureForm({});
+    // a real 0 amplitude must survive, not fall back to full depth
+    expect(toTextureValues({ ...f, amplitude: "0" }).amplitude).toBe(0);
+    expect(toTextureValues({ ...f, amplitude: "" }).amplitude).toBe(1);
+    expect(toTextureValues({ ...f, slopeMin: "45", slopeMax: "200" }).slopeMax).toBe(180);
   });
 
   it("defaults projection to triplanar and the seam knobs to their midpoint", () => {

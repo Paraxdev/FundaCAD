@@ -57,6 +57,7 @@ from texture_height import (  # noqa: F401
 )
 from texture_mesh import (  # noqa: F401
     LATTICE_SURFACES,
+    _slope_mask,
     _tp_exponent,
     _tp_weights,
     _aligned_grid_triangulation,
@@ -180,6 +181,13 @@ def validate_texture_spec(f):
         _sv = f.get(_seam, 0.5)
         if not isinstance(_sv, (int, float)) or isinstance(_sv, bool) or _sv < 0:
             raise ValueError(f"texture {_seam} must be zero or a positive number")
+    amplitude = f.get("amplitude", 1.0)
+    if not isinstance(amplitude, (int, float)) or isinstance(amplitude, bool) or amplitude < 0:
+        raise ValueError("texture amplitude must be zero or a positive number")
+    for _slope in ("slopeMin", "slopeMax"):
+        _av = f.get(_slope, 0.0)
+        if not isinstance(_av, (int, float)) or isinstance(_av, bool) or _av < 0:
+            raise ValueError(f"texture {_slope} must be zero or a positive number")
     image_path = f.get("imagePath")
     if kind == "image":
         if not image_path:
@@ -242,7 +250,43 @@ def validate_texture_spec(f):
         spec["seamBlend"] = max(0.0, min(1.0, float(f.get("seamBlend", 0.5))))
     if projection == "box" and abs(float(f.get("seamBand", 0.5)) - 0.5) > 1e-9:
         spec["seamBand"] = max(0.0, min(1.0, float(f.get("seamBand", 0.5))))
+    # Amplitude master: a 0..1 trim on depth, for tuning relief without editing
+    # the mm depth. Kept out of the spec at 1.0 (full depth) so an untouched
+    # texture is unchanged.
+    if abs(float(amplitude) - 1.0) > 1e-9:
+        spec["amplitude"] = max(0.0, min(1.0, float(amplitude)))
+    # Slope mask: keep the texture only where the surface normal's angle from +Z
+    # falls in [slopeMin, slopeMax] degrees, fading over a soft border, so a
+    # near-horizontal top or bottom can be left clean. Absent at the full 0..180
+    # range, which masks nothing.
+    slope_min = max(0.0, min(180.0, float(f.get("slopeMin", 0.0))))
+    slope_max = max(0.0, min(180.0, float(f.get("slopeMax", 180.0))))
+    if slope_min > 1e-9:
+        spec["slopeMin"] = slope_min
+    if slope_max < 180.0 - 1e-9:
+        spec["slopeMax"] = slope_max
     return spec
+
+
+def _overlap_reason(shape, spec):
+    """A soft caution when the texture depth is large versus the part, or None.
+
+    The smallest bounding-box dimension stands in for the part's thinnest wall; a
+    relief deeper than about a tenth of it risks poking through. Advisory only,
+    never an error, the geometry is built either way."""
+    try:
+        bb = shape.bounding_box()
+        dims = [float(bb.max.X - bb.min.X), float(bb.max.Y - bb.min.Y), float(bb.max.Z - bb.min.Z)]
+    except Exception:
+        return None
+    thin = min((d for d in dims if d > 1e-9), default=0.0)
+    if thin <= 0.0:
+        return None
+    depth = float(spec.get("depth", 0.4)) * float(spec.get("amplitude", 1.0))
+    if depth > 0.1 * thin:
+        return (f"texture depth {depth:.2g}mm is large for this part "
+                f"(over a tenth of its {thin:.2g}mm thinnest span); it may break through a thin wall")
+    return None
 
 
 def _resolve_texture_faces(shape, sel, diag=None, feature_id=None):
@@ -563,6 +607,15 @@ def displace_face(face, tri, loc, ident, spec, density_cap, diag=None, feature_i
     normals, t_u, t_v = geom["normals"], geom["t_u"], geom["t_v"]
     mean_edge = geom["mean_edge"]
 
+    # Slope mask: fade the texture out where the face normal's angle from +Z is
+    # outside [slopeMin, slopeMax], so a near-horizontal top or bottom can be left
+    # clean. It rides the boundary taper (which already pins the rim to zero), so
+    # the result stays crack-free. Computed here, not in the skeleton, so the mask
+    # can be scrubbed without a re-mesh.
+    slope = _slope_mask(normals, spec)
+    if slope is not None:
+        taper = taper * slope
+
     spec_h = spec
     if kind != "image" and not geom.get("lattice") and mean_edge > target_edge_mm * 1.25:
         # the density cap stopped refinement short of the target sampling,
@@ -629,7 +682,9 @@ def displace_face(face, tri, loc, ident, spec, density_cap, diag=None, feature_i
 
     signed = signed_at(0.0, 0.0)
 
-    depth = float(spec.get("depth", 0.4))
+    # amplitude is a master trim on the mm depth (1.0 = full), so the whole relief
+    # can be tuned without editing the depth row.
+    depth = float(spec.get("depth", 0.4)) * float(spec.get("amplitude", 1.0))
     disp = pts_arr + normals * (depth * signed * taper)[:, None]
 
     # Analytic displaced normals (the whole reason coarse displacement can still

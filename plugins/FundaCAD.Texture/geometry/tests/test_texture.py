@@ -1004,6 +1004,107 @@ def test_validate_accepts_the_new_kinds():
     print(PASS, "validate_texture_spec accepts every added kind")
 
 
+def test_amplitude_scales_the_relief_and_is_absent_at_full():
+    """The amplitude master trims the whole relief. At 1.0 (or absent) it is the
+    texture exactly; at 0.5 the displacement is half as deep; the field is out of
+    the spec at 1.0 so an untouched texture is unchanged."""
+    assert "amplitude" not in texture.validate_texture_spec(
+        {"kind": "ribs", "depth": 0.5, "scale": 2.0})
+    assert texture.validate_texture_spec(
+        {"kind": "ribs", "depth": 0.5, "scale": 2.0, "amplitude": 0.5})["amplitude"] == 0.5
+
+    def top_relief(amp):
+        feats = [
+            {"id": "b", "type": "box", "length": 30, "width": 30, "height": 10},
+            {"id": "t", "type": "texture", "kind": "ribs", "depth": 0.6, "scale": 2.0,
+             "faces": {"kind": "face", "by": "normal", "dir": [0, 0, 1]},
+             **({"amplitude": amp} if amp is not None else {})}]
+        _p, errs, bodies = rebuild({"parameters": {}, "features": feats})
+        assert not errs, errs
+        b = bodies[0]
+        resolved = plugin_geometry.resolve(b)
+        pos, idx, fids = tessellate(b["shape"], 0.1, mesh_passes=resolved,
+                                    density_cap=texture._DEFAULT_DENSITY_CAP)
+        P = np.asarray(pos, float).reshape(-1, 3)
+        fids = np.asarray(fids, dtype=int)
+        I = np.asarray(idx, dtype=int).reshape(-1, 3)
+        counts = {int(f): int((fids == f).sum()) for f in np.unique(fids)}
+        tf = max(counts, key=counts.get)
+        z = P[np.unique(I[fids == tf].ravel()), 2]
+        return float(z.max() - z.min())
+
+    full = top_relief(None)
+    half = top_relief(0.5)
+    assert abs(half - 0.5 * full) < 0.06 * full, f"amplitude 0.5 not ~half the relief: {half:.3f} vs {full:.3f}"
+    print(PASS, f"amplitude scales the relief ({full:.3f} -> {half:.3f}mm at 0.5); absent at full")
+
+
+def test_slope_mask_suppresses_off_band_normals_and_stays_crack_safe():
+    """The slope mask zeroes the displacement where the surface normal's angle
+    from +Z is outside [slopeMin, slopeMax], with a smooth border, and never
+    breaks the crack-free rim (it only multiplies the taper down)."""
+    from texture_mesh import _slope_mask
+    # normals from straight up (+Z, angle 0) to straight out (+X, angle 90)
+    th = np.linspace(0.0, np.pi, 19)
+    n = np.stack([np.sin(th), np.zeros_like(th), np.cos(th)], axis=1)
+    # keep only walls: band [60, 120] degrees
+    m = _slope_mask(n, {"slopeMin": 60.0, "slopeMax": 120.0})
+    ang = np.degrees(th)
+    assert m[np.argmin(np.abs(ang - 0))] < 1e-6, "a +Z (top) normal should be fully masked out"
+    assert m[np.argmin(np.abs(ang - 180))] < 1e-6, "a -Z (bottom) normal should be masked out"
+    assert m[np.argmin(np.abs(ang - 90))] > 0.99, "a vertical wall (90 deg) should be kept"
+    assert m.min() >= 0.0 and m.max() <= 1.0, "mask left [0,1]"
+    # default band masks nothing (fast path returns None)
+    assert _slope_mask(n, {}) is None
+
+    # end to end: masking the top face of a box zeroes its displacement, and the
+    # mesh stays finite and manifold
+    feats = [
+        {"id": "b", "type": "box", "length": 20, "width": 20, "height": 10},
+        {"id": "t", "type": "texture", "kind": "knurl", "depth": 0.4, "scale": 2.0,
+         "faces": {"kind": "face", "by": "normal", "dir": [0, 0, 1]},
+         "slopeMin": 60.0, "slopeMax": 120.0}]  # top face normal is 0 deg -> masked
+    _p, errs, bodies = rebuild({"parameters": {}, "features": feats})
+    assert not errs, errs
+    b = bodies[0]
+    resolved = plugin_geometry.resolve(b)
+    diag = []
+    pos_m, idx_m, fids_m = tessellate(b["shape"], 0.1, mesh_passes=resolved,
+                                      density_cap=texture._DEFAULT_DENSITY_CAP, diag=diag)
+    P = np.asarray(pos_m, float).reshape(-1, 3)
+    assert np.all(np.isfinite(P))
+    assert not [d for d in diag if "non-manifold" in str(d.get("reason", ""))]
+    # the masked top face is still meshed but must not displace: its relief is
+    # flat. Isolate it as the face that gained the most triangles.
+    fids_m = np.asarray(fids_m, dtype=int)
+    Im = np.asarray(idx_m, dtype=int).reshape(-1, 3)
+    counts = {int(f): int((fids_m == f).sum()) for f in np.unique(fids_m)}
+    tf = max(counts, key=counts.get)
+    z = P[np.unique(Im[fids_m == tf].ravel()), 2]
+    assert float(z.max() - z.min()) < 1e-6, f"slope-masked face displaced (spread {z.max()-z.min():.4f})"
+    print(PASS, "slope mask keeps only the in-band normals and stays crack-safe")
+
+
+def test_overlap_warning_fires_only_when_depth_is_large_for_the_part():
+    """A deep relief on a thin part raises a soft advisory (a diag with a reason),
+    not an error; a shallow one on the same part is quiet."""
+    def warn_for(depth):
+        feats = [
+            {"id": "b", "type": "box", "length": 40, "width": 40, "height": 4},  # 4mm thin
+            {"id": "t", "type": "texture", "kind": "knurl", "depth": depth, "scale": 2.0,
+             "faces": {"kind": "face", "by": "normal", "dir": [0, 0, 1]}}]
+        _p, errs, bodies = rebuild({"parameters": {}, "features": feats})
+        assert not errs, errs
+        diag = []
+        plugin_geometry.resolve(bodies[0], diag)
+        return [d for d in diag if "break through" in str(d.get("reason", ""))]
+
+    assert not warn_for(0.3), "a shallow texture on a 4mm part should not warn"
+    hits = warn_for(1.2)  # 1.2mm > 10% of 4mm
+    assert hits and hits[0].get("feature_id") == "t", f"a deep texture should raise the advisory, got {hits}"
+    print(PASS, "overlap advisory fires only when the depth is large versus the part")
+
+
 def main():
     print("Surface-texture tests")
     test_validate_texture_spec_rejects_bad_input()
@@ -1039,6 +1140,9 @@ def main():
     test_new_kinds_stay_in_range_and_respond_to_their_controls()
     test_new_kinds_mesh_cleanly_on_a_real_face()
     test_validate_accepts_the_new_kinds()
+    test_amplitude_scales_the_relief_and_is_absent_at_full()
+    test_slope_mask_suppresses_off_band_normals_and_stays_crack_safe()
+    test_overlap_warning_fires_only_when_depth_is_large_for_the_part()
     print("ALL PASS")
 
 
