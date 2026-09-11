@@ -1,3 +1,14 @@
+// The NeoNoir type pair, self-hosted (Fontsource, bundled by Vite), so the look
+// does not depend on the OS having these installed and works offline in the
+// Tauri shell. Latin subset, and only the weights the chrome actually uses:
+// Space Grotesk for UI text and headings, JetBrains Mono for numbers and code.
+// Imported before the stylesheet so the @font-face rules are registered by the
+// time the first painted text asks for the family.
+import "@fontsource/space-grotesk/latin-400.css";
+import "@fontsource/space-grotesk/latin-500.css";
+import "@fontsource/space-grotesk/latin-700.css";
+import "@fontsource/jetbrains-mono/latin-400.css";
+import "@fontsource/jetbrains-mono/latin-500.css";
 import "./styles/main.scss";
 import { initTheme } from "./ui/theme";
 import { initLayoutPrefs } from "./ui/layoutPrefs";

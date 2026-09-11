@@ -1,127 +1,127 @@
 /* ============================================================================
-   FundaCAD, the one theme
+   FundaCAD, the one theme, ported from NeoNoir
    ============================================================================
 
-   There used to be six palettes behind a picker. There is one now, baked here
-   on :root, and everything else a user might want is a palette they UPLOAD
-   (ui/theme.ts), layered over this one as inline custom properties at runtime.
-   So this file is no longer "the default among several", it is the whole of the
-   app's colour, and the only [data-theme] blocks that ever exist are the ones a
-   user's own file puts there.
+   The look is NeoNoir (github.com/Paraxdev/NeoNoirMainsailTheme) brought over
+   to FundaCAD's token system: a neo-brutalist cyberpunk skin, near-black canvas
+   with a distinct PURPLE cast rather than flat grey, dark violet-charcoal panels
+   raised off it, warm cream text, and one loud mint-green neon accent. Depth is
+   physical, hard black offset shadows and visible edges, not glow and not
+   gradients. The earlier flat-graphite pass read as murky and dead; the purple
+   in the surfaces and the green on top are what make this one feel lit.
 
-   The look is deliberate: Adobe After Effects 4.0, that late-90s platinum
-   brutalism, panels butted hard against each other, every seam a line you can
-   see, group boxes with their own titled frames, and not one rounded corner or
-   soft glow anywhere. Rendered dark: a neutral graphite ramp with NO blue cast
-   (the blue-tinted "Apollo" default this replaces read as the same sloppy blue
-   every CAD tool ships, which is exactly what we are getting away from), one
-   confident amber accent, and text pushed to high contrast so the density reads
-   as precise rather than murky.
+   Palette mapping from NeoNoir's tokens:
+     --nn-ink   #050409  -> --bg          (deepest, behind everything)
+     --nn-void  #1b1826  -> --panel        (docked panels)
+     --nn-card  #272233  -> --panel-2      (nested surfaces, inputs, popups)
+     --nn-text  #f6f0e4  -> --text         (cream)
+     --nn-green #4bf9bc  -> --accent        (the neon that every screenshot leads with)
+     --nn-amber #ffab2e  -> --warn
+     --nn-red   #ff5c5c  -> --error
+   NeoNoir's default identity accent is actually the purple (#7b5cff); its own
+   screenshots run mint-green because Mainsail's primary was set that way, and
+   that green-on-violet is the feel being matched here. Swapping --accent (and
+   its tints/on-accent) to the purple is a one-block edit if the identity colour
+   is wanted over the screenshot look.
 
-   The SHAPE lives here too, radii, the spacing ramp, borders, shadows, motion,
-   and is the same for a user's uploaded palette: a theme is a repaint, never a
-   relayout, so an uploaded palette can only move COLOUR and every layout still
-   holds against it. Changing the app's shape is a change to this file, once.
+   The one built-in theme lives on :root, so it is on screen before a line of
+   script runs; a user's OWN palette is still uploaded at runtime and layered
+   over this as inline custom properties (ui/theme.ts). The SHAPE below (radii,
+   spacing, shadows, motion, type) is shared with an uploaded palette, which can
+   only move COLOUR: a theme is a repaint, never a relayout.
    ============================================================================ */
 
 :root {
-  /* Every NATIVE control, a <select> and its popup list, scrollbars, the focus
-     ring on form fields, is drawn by the engine, not by us, and defaults to the
-     LIGHT palette however dark the page around it is. Declaring the scheme is
-     what makes the engine draw them dark; the rules on the selects below then
-     only have to handle the closed control's shape. */
+  /* Native controls (a <select> popup, scrollbars, the form focus ring) are
+     drawn by the engine and default to a LIGHT scheme however dark the page is.
+     Declaring it dark is what makes them match. */
   color-scheme: dark;
 
   /* --- surfaces (dark → light, back → front) ---
-     A neutral graphite ramp, true grey, no blue and no warm cast: the point of
-     the look is that colour is spent on the ONE accent and nowhere else, so the
-     chrome has to stay achromatic or the accent stops being the loudest thing.
-     The steps sit close together because structure is carried by the BORDERS
-     here, not by luminance, a panel does not glow to prove it is a panel, it is
-     ruled off from its neighbour by a line. */
-  --bg: #141414;          /* app background, deepest */
-  --panel: #1e1e1e;       /* docked panels (browser/inspector/ribbon/timeline) */
-  --panel-2: #262626;     /* nested surfaces, inputs, popups */
-  --raised: #303030;      /* hover / raised interactive surface */
-  --raised-2: #3d3d3d;    /* pressed / stronger hover */
+     A violet-black ramp, NOT neutral grey: the purple cast is the point, it is
+     what stops the dark from reading as dead, and it is the half of NeoNoir the
+     green accent needs behind it to pop. The steps are carried apart by the
+     borders and the hard shadows below, not by luminance alone. */
+  --bg: #050409;          /* app background, deepest (nn-ink) */
+  --panel: #1b1826;       /* docked panels (browser/inspector/ribbon/timeline) (nn-void) */
+  --panel-2: #272233;     /* nested surfaces, inputs, popups (nn-card) */
+  --raised: #322c42;      /* hover / raised interactive surface */
+  --raised-2: #3d3651;    /* pressed / stronger hover */
   /* The 3D view's own ground. Read by the Three side (viewport/themeColors ->
-     scene.applyRenderPrefs), not by any CSS rule: it sits BEHIND lit geometry
-     rather than behind chrome, and a panel colour used there reads as a fog.
-     A touch off --bg so the viewport is distinguishable from the frame around
-     it even before anything is in it. */
-  --viewport-bg: #1b1b1b;
+     scene.applyRenderPrefs), not by any CSS rule. A hair off --bg and carrying
+     the same violet so the viewport belongs to the same room as the chrome. */
+  --viewport-bg: #0b0912;
 
   /* --- borders ---
-     Lifted well clear of every surface they can land on, because the whole look
-     is the seams. A hairline you infer would undo it. --line rules two panels
-     apart; --line-strong is the heavier frame around a control or a group box,
-     the titled-frame edge the AE dialogs were built out of. */
-  --line: #3a3a3a;        /* divider, visible, not a hairline */
-  --line-strong: #565656; /* stronger border (focusable controls, group boxes) */
+     A violet hairline for the seams, and a clearly stronger one for the edges
+     that ring a control or a popup, which is where NeoNoir's brutalist stroke
+     lives. Kept off pure black on purpose: --line-strong also draws the
+     scrollbar thumb (_base.scss), and a black thumb on a dark page is an
+     invisible one. */
+  --line: #322c42;        /* divider, visible, not a hairline */
+  --line-strong: #5c5470; /* stronger border (focusable controls, popups) (nn-hairline) */
 
   /* --- text ---
-     Pushed to high contrast on purpose. A dense brutalist panel is only legible
-     if the type is unambiguous against it; a dim primary here would read as
-     grime rather than as restraint. */
-  --text: #f2f2f2;        /* primary */
-  --text-dim: #b8b8b8;    /* secondary / labels */
-  --text-mute: #868686;   /* tertiary / hints */
+     Cream, not white: the warm off-white is a load-bearing part of the noir
+     feel and reads softer on the violet-black than a pure #fff would. */
+  --text: #f6f0e4;        /* primary (nn-text) */
+  --text-dim: #aaa1b5;    /* secondary / labels (nn-muted) */
+  --text-mute: #7d7590;   /* tertiary / hints */
 
-  /* --- accent: one amber, spent sparingly ---
-     Amber, not blue, and it is the only chromatic thing in the app's chrome. It
-     is what a selected edge, a dimension and a manipulator handle are drawn in,
-     over shaded geometry as often as over a panel, so it has to hold up against
-     a lit grey face as well as against grey chrome, which amber over graphite
-     does far better than one more blue would. */
-  --accent: #f0982d;
-  --accent-hot: #ffb14e;
-  --accent-tint: rgba(240, 152, 45, 0.14);
-  --accent-tint-2: rgba(240, 152, 45, 0.24);
-  --accent-glow: rgba(240, 152, 45, 0.35);
-  --on-accent: #140d02;   /* text on a filled accent surface */
+  /* --- accent: the mint-green neon ---
+     #4bf9bc, the colour every NeoNoir screenshot leads with: the active nav
+     item, the line on top of a card, a slider fill. It is also what a selected
+     edge, a dimension and a manipulator handle are drawn in over shaded
+     geometry, and this green holds up against a lit grey face as brightly as it
+     does against a violet panel. */
+  --accent: #4bf9bc;
+  --accent-hot: #7dffd4;
+  --accent-tint: rgba(75, 249, 188, 0.14);
+  --accent-tint-2: rgba(75, 249, 188, 0.24);
+  --accent-glow: rgba(75, 249, 188, 0.35);
+  --on-accent: #00140d;   /* near-black text on a filled accent surface */
 
   /* --- semantic ---
-     Kept clear of the accent so none of the three reads as "selected". The warn
-     yellow is pulled cooler and paler than the amber accent for exactly that
-     reason, at amber it would be a second accent. */
-  --ok: #7ec850;
-  --warn: #e6c34a;
-  --error: #f0564a;
-  --error-tint: rgba(240, 86, 74, 0.14);
+     NeoNoir's own success/warning/error. The success green is pulled a step
+     deeper than the accent so an "ok" badge and a selection are not the exact
+     same green sitting next to each other. */
+  --ok: #17c99a;
+  --warn: #ffab2e;
+  --error: #ff5c5c;
+  --error-tint: rgba(255, 92, 92, 0.14);
 
   /* legacy alias (kept so any stray reference still resolves) */
   --accent-blue: var(--accent);
 
+  /* --- type ---
+     NeoNoir's pairing, self-hosted (see main.ts): Space Grotesk for UI and
+     headings, JetBrains Mono for numbers, coordinates and code. Both fall back
+     to Inter / the platform stack if a weight fails to load, so text is never
+     unstyled. --mono was already referenced by _modals.scss with a fallback and
+     now has a real value. */
+  --ui: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
   /* --- radii ---
-     Zero. Not "small", zero. This is the one place the new look departs from
-     the shape the six palettes shared, and it is the heart of the brutalism:
-     the AE 4.0 chrome had no rounded corner anywhere, a control is a rectangle
-     ruled off from the surface behind it, not a lozenge floating on it. The
-     rungs are kept as separate tokens (rather than collapsed to one) so a
-     future softening is one edit here and not a hunt through ~200 rules.
+     Small, not zero. Zero was the graphite pass's mistake, razor corners on
+     every control read as unfinished rather than as brutalist. NeoNoir is
+     brutalist WITH a 3-4px round and full pills on bars and thumbs, which is
+     what keeps a chunky black-shadowed control from looking like a raw div.
        xs   badges, swatches and grips
-       sm   controls: inputs, buttons, chips, menu rows
-       md   containers: popups, cards, the ribbon button
+       sm   controls: inputs, buttons, chips, menu rows (nn-r-sm)
+       md   containers: popups, cards, the ribbon button (nn-r)
        lg   dialogs and the docked palette
-       pill capsules and thin bars (square now; the bar is still a bar) */
-  --r-xs: 0;
-  --r-sm: 0;
-  --r-md: 0;
-  --r-lg: 0;
-  --r-pill: 0;
+       pill fully-rounded capsules, sliders and thin bars */
+  --r-xs: 2px;
+  --r-sm: 3px;
+  --r-md: 4px;
+  --r-lg: 5px;
+  --r-pill: 999px;
 
   /* --- spacing scale ---
-     Unchanged from the six-palette era: this is proportion, not colour, and the
-     density was right. Every gap, padding and margin in the app comes from this
-     ramp so the whole thing tightens or loosens from one place.
-       s-0  2px  hairline, items that must read as ONE control strip
-       s-1  4px  inside a small control; popup shell padding
-       s-2  8px  list-row and field padding (vertical), icon-to-label
-       s-3  12px the workhorse, row padding (horizontal), control padding
-       s-4  16px panel padding, bar padding, popup row padding (horizontal)
-       s-5  20px dialog padding, major gaps between groups
-       s-6  28px card padding
-       s-7  36px section-level separation inside a dialog */
+     Proportion, not colour, and unchanged: every gap, padding and margin comes
+     from this ramp so the whole thing tightens or loosens from one place.
+       s-0 2px  s-1 4px  s-2 8px  s-3 12px  s-4 16px  s-5 20px  s-6 28px  s-7 36px */
   --s-0: 2px;
   --s-1: 4px;
   --s-2: 8px;
@@ -132,17 +132,18 @@
   --s-7: 36px;
 
   /* --- elevation ---
-     Hard offsets, zero blur, which the brutalist look wants anyway: a blurred
-     shadow is how a surface says it is floating above the page; these say the
-     popup is a solid object with something behind it. --shadow-1 stays gone,
-     the things it was on sit IN the layout and are separated by their borders. */
+     Hard black offsets, zero blur, the defining NeoNoir move: a control is a
+     solid object with a black shadow thrown down and to the right, not a card
+     hazily floating. Near-opaque black so it still reads where it falls on the
+     violet panels rather than on the near-black page. --shadow-1 stays gone;
+     things that sit in the layout are separated by their borders. */
   --shadow-1: none;
-  --shadow-2: 3px 3px 0 rgba(0, 0, 0, 0.6);
-  --shadow-3: 6px 6px 0 rgba(0, 0, 0, 0.7);
-  --shadow-pill: 3px 3px 0 rgba(0, 0, 0, 0.6);
+  --shadow-2: 4px 4px 0 rgba(0, 0, 0, 0.85);
+  --shadow-3: 6px 6px 0 rgba(0, 0, 0, 0.9);
+  --shadow-pill: 4px 4px 0 rgba(0, 0, 0, 0.85);
 
   /* --- motion --- */
-  --ease: cubic-bezier(0.2, 0.6, 0.2, 1);
-  --t-fast: 120ms;
+  --ease: cubic-bezier(0.2, 0, 0.15, 1);
+  --t-fast: 110ms;
   --t-med: 160ms;
 }
