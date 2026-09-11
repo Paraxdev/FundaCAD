@@ -71,6 +71,7 @@ from build123d import (
 
 import face_plane
 import geom_select
+from errors import BAD_REQUEST
 from geom_select import (
     resolve_edges,
     resolve_faces,
@@ -1865,8 +1866,12 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
             # whole downstream timeline, so nothing the user added after it ever
             # executed.) Owner attribution is skipped for the failed feature.
             # ValueErrors are hand-authored for users ("no edge found to
-            # fillet", …), surface them verbatim.
-            errors.append({"feature_id": f.get("id"), "message": str(ex)})
+            # fillet", …), surface them verbatim. A GeomError additionally
+            # carries a machine `code` (errors.py); getattr reads it back for
+            # the plain ValueErrors that carry none, so the wire shape is the
+            # same either way and the frontend can branch on the category.
+            errors.append({"feature_id": f.get("id"), "message": str(ex),
+                           "code": getattr(ex, "code", None)})
         except KeyError as ex:
             # A feature missing a required field. This lands here rather than in
             # the ValueError arm because the handlers index `f` directly, and the
@@ -1881,6 +1886,7 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
                 errors.append({
                     "feature_id": f.get("id"),
                     "message": f'{label} is missing the field "{key}"',
+                    "code": BAD_REQUEST,
                 })
             else:
                 print(f"feature {f.get('id')} ({label}) failed:", file=sys.stderr)

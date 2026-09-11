@@ -894,8 +894,12 @@ export interface RebuildResult {
   // is the LAST (most downstream) failure, the one closest to the user's
   // latest action; featureErrors lists them all, timeline order. The reply is
   // still ok:true so the model renders alongside the error banner.
-  featureError?: { feature_id?: string; message: string };
-  featureErrors?: { feature_id?: string; message: string }[];
+  // `code` is a stable machine category (e.g. "referenceNotFound",
+  // "ambiguousReference") the sidecar sets when a failure is one the UI can act
+  // on; absent for ordinary failures. Lets the frontend branch on the category
+  // instead of matching the human message.
+  featureError?: { feature_id?: string; message: string; code?: string };
+  featureErrors?: { feature_id?: string; message: string; code?: string }[];
   // projected-curve refresh entries from this rebuild (absent at steady state);
   // the store lands them via a derived, no-undo commit, see
   // DocumentStore.commitProjectionRefresh.

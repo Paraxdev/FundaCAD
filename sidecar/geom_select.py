@@ -55,6 +55,8 @@ import font_guard  # noqa: F401  MUST precede build123d, see font_guard.py
 
 from build123d import Axis, Vector, GeomType
 
+from errors import GeomError, AMBIGUOUS_REFERENCE, REFERENCE_NOT_FOUND
+
 AXES = {"X": Axis.X, "Y": Axis.Y, "Z": Axis.Z}
 
 # --- tunable scoring constants -----------------------------------------------
@@ -596,7 +598,7 @@ def _nearest_one(cands, dist_of, key_fn, describe, kind, sel, diag, feature_id,
     """
     cands = list(cands)
     if not cands:
-        raise ValueError(f"no {kind} to select from")
+        raise GeomError(f"no {kind} to select from", code=REFERENCE_NOT_FOUND)
     # Collapse candidates that no pick could tell apart. Two entities sharing a
     # canonical key sit in the same place at the same size, so the refusal below,
     # "re-pick, the saved reference no longer identifies one", asks for
@@ -655,10 +657,11 @@ def _nearest_one(cands, dist_of, key_fn, describe, kind, sel, diag, feature_id,
     described = [describe(c) for c in tied[:3]]
     _push_diag(diag, feature_id, kind, 0, margin, True, "ambiguous nearest pick",
                at=pt, candidates=described)
-    raise ValueError(
+    raise GeomError(
         f"ambiguous {kind} reference at ({where}): "
         + " and ".join(described)
-        + f" are equally close ({best_d:.3f}mm vs {runner:.3f}mm), re-pick the {kind}"
+        + f" are equally close ({best_d:.3f}mm vs {runner:.3f}mm), re-pick the {kind}",
+        code=AMBIGUOUS_REFERENCE,
     )
 
 
@@ -816,11 +819,14 @@ def _faces_matching(part, fp, diag, feature_id, nth=None):
 # The codes a face-anchored plane can report. Flat lowerCamel, matching the
 # shipped ResolveDiag.kind value "edgeOpFailed", and read by
 # features/repickReference.ts to decide whether a pick can repair the reference.
-# Constants at both ends so rewording the prose beside them cannot silently
-# unhook the button.
-CODE_AMBIGUOUS_REFERENCE = "ambiguousReference"  # the selector matched several faces
-CODE_REFERENCE_NOT_FOUND = "referenceNotFound"   # the selector matched nothing
-CODE_PLANE_TILTED = "planeTilted"                # the face is no longer parallel
+# Sourced from the one vocabulary in errors.py so a diagnostic and a hard
+# failure of the same category carry the SAME string; the CODE_* aliases keep
+# every existing caller in this module unchanged.
+from errors import (  # noqa: E402  the vocabulary is a leaf module, no cycle
+    AMBIGUOUS_REFERENCE as CODE_AMBIGUOUS_REFERENCE,
+    REFERENCE_NOT_FOUND as CODE_REFERENCE_NOT_FOUND,
+    PLANE_TILTED as CODE_PLANE_TILTED,
+)
 
 # How far a face's normal may drift from the cached plane's and still be "the
 # same face": 1 - |dot| <= 1e-3, about 2.6 degrees. A PLANAR face tessellates
