@@ -264,6 +264,18 @@ def has_pass(spec):
     return spec.get("pass") in _PASSES
 
 
+def feature_types():
+    """Feature types a plugin has actually REGISTERED, sorted.
+
+    Registered, not declared: what a manifest lists in `featureTypes` is what
+    lets a warning name the plugin while its code is not running, so that list
+    includes types nothing can currently build. This one is the set builder can
+    dispatch right now, which is what the eval harnesses count as the universe
+    of units that ought to be exercised end to end.
+    """
+    return sorted(_FEATURES)
+
+
 def loaded_plugins():
     """Plugin ids whose geometry is registered, sorted. For the log and tests."""
     return sorted(_LOADED)

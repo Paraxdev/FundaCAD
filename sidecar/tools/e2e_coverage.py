@@ -2,8 +2,14 @@
 
 Computes the universe U of units that ought to be exercised end-to-end:
     U = _FEATURE_HANDLERS keys (parsed at runtime from builder.py)
+        + feature types an installed plugin registers (plugin_geometry)
         + ops dispatched by server.py
         - {rebuild, ping, exportProject, import}   # covered by other harnesses
+
+A plugin's feature type counts exactly like a built-in one. It has to: the whole
+point of a plugin owning its geometry is that the engine really builds it, and a
+universe that only read builder.py would have SHRUNK when `texture` moved out,
+scoring the same coverage over one unit fewer.
 and reports which are NOT yet covered by a real check.
 
 A unit earns coverage ONLY through a check that, hardcoded here:
@@ -658,8 +664,9 @@ async def _credit_corpus(ws):
 
 async def _main():
     handler_keys = H.parse_feature_handler_keys()
+    plugin_keys = H.plugin_feature_type_keys()
     ops = H.parse_server_ops()
-    universe = (handler_keys | ops) - EXCLUDED_OPS
+    universe = (handler_keys | plugin_keys | ops) - EXCLUDED_OPS
     with H.SpawnedServer() as srv:
         print(f"server child pid={srv.pid} {srv.listening_line}")
         async with websockets.connect(srv.url, max_size=H._MAX_WS) as ws:

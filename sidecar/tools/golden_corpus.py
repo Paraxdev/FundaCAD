@@ -218,7 +218,10 @@ async def _check():
     if not golden:
         print("no golden.json, run --capture first")
         return 2
-    handler_keys = H.parse_feature_handler_keys()
+    # Plugin-owned feature types count as units here for the same reason they do
+    # in e2e_coverage: the engine really builds them, so a corpus document that
+    # exercises one has covered something.
+    handler_keys = H.parse_feature_handler_keys() | H.plugin_feature_type_keys()
 
     results = {}  # key -> ("PASS"|"FAIL"|"UPDATE", [diff lines])
     with H.SpawnedServer() as srv:
