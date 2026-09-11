@@ -188,6 +188,12 @@ def validate_texture_spec(f):
         _av = f.get(_slope, 0.0)
         if not isinstance(_av, (int, float)) or isinstance(_av, bool) or _av < 0:
             raise ValueError(f"texture {_slope} must be zero or a positive number")
+    target_edge = f.get("targetEdge", 0.0)
+    if not isinstance(target_edge, (int, float)) or isinstance(target_edge, bool) or target_edge < 0:
+        raise ValueError("texture mesh detail (targetEdge) must be zero or a positive number")
+    tri_budget = f.get("triBudget", 0)
+    if not isinstance(tri_budget, (int, float)) or isinstance(tri_budget, bool) or tri_budget < 0:
+        raise ValueError("texture triangle budget must be zero or a positive number")
     image_path = f.get("imagePath")
     if kind == "image":
         if not image_path:
@@ -265,6 +271,14 @@ def validate_texture_spec(f):
         spec["slopeMin"] = slope_min
     if slope_max < 180.0 - 1e-9:
         spec["slopeMax"] = slope_max
+    # Mesh controls: a target edge length for the sampling mesh (0 = automatic,
+    # from the scale) and a hard per-face triangle budget (0 = off). Both feed
+    # the existing crack-safe refinement, and both are kept out of the spec at
+    # their off values so an untouched texture meshes exactly as before.
+    if target_edge and target_edge > 0:
+        spec["targetEdge"] = float(target_edge)
+    if tri_budget and tri_budget > 0:
+        spec["triBudget"] = int(tri_budget)
     return spec
 
 
@@ -343,7 +357,7 @@ def _adjacent_faces(shape, primary_faces):
     return list(out.values())
 
 
-def _geometry_key(face, tri, flip, spec, scale, angle, inset_mm, cap):
+def _geometry_key(face, tri, flip, spec, scale, angle, inset_mm, cap, target_edge_mm):
     """Cache key for the height-INDEPENDENT skeleton.
 
     It must carry every spec field the SAMPLING geometry depends on. Before
@@ -359,6 +373,7 @@ def _geometry_key(face, tri, flip, spec, scale, angle, inset_mm, cap):
         flip, round(scale, 6), round(angle, 6), round(inset_mm, 6), cap,
         spec["kind"], round(float(spec.get("sharpness", 0.5)), 6),
         spec.get("profile", "facet"), round(float(spec.get("offset", 0.0)), 6),
+        round(target_edge_mm, 6),
     )
 
 
@@ -590,11 +605,22 @@ def displace_face(face, tri, loc, ident, spec, density_cap, diag=None, feature_i
 
     kind = spec["kind"]
     scale = max(float(spec.get("scale", 2.0)), 0.05)
-    target_edge_mm = max(scale / 4.0, 0.05)  # ~4 samples per pattern wavelength
+    # ~4 samples per pattern wavelength by default; a targetEdge override lets the
+    # user set the sampling mesh's edge length directly (finer or coarser).
+    target_edge_mm = max(scale / 4.0, 0.05)
+    te = float(spec.get("targetEdge", 0.0))
+    if te > 0.0:
+        target_edge_mm = max(te, 0.02)
     cap = density_cap if density_cap else _DEFAULT_DENSITY_CAP
+    # a per-face triangle budget bounds display AND export; min() so it can only
+    # tighten the incoming cap, never loosen the export safety net.
+    tb = int(spec.get("triBudget", 0))
+    if tb > 0:
+        cap = min(cap, tb)
     inset_mm = max(float(spec.get("boundaryInset", 0.0)), 0.0)
 
-    key = _geometry_key(face, tri, flip, spec, scale, float(spec.get("angle", 0.0)), inset_mm, cap)
+    key = _geometry_key(face, tri, flip, spec, scale, float(spec.get("angle", 0.0)),
+                        inset_mm, cap, target_edge_mm)
     geom = _GEOM_CACHE.pop(key, None)
     if geom is None:
         geom = _displacement_geometry(face, tri, loc, ident, spec, scale, target_edge_mm, cap, flip)

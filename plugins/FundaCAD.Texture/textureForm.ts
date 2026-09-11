@@ -166,6 +166,8 @@ export const TEXTURE_NUM_FIELDS: readonly [string, string, FieldKind][] = [
   ["amplitude", "Amplitude", "count"],
   ["slopeMin", "Slope min", "angle"],
   ["slopeMax", "Slope max", "angle"],
+  ["targetEdge", "Mesh detail", "length"],
+  ["triBudget", "Max triangles", "count"],
   ["seed", "Seed", "count"],
 ];
 
@@ -270,6 +272,8 @@ export interface TextureValues {
   amplitude: number; // master depth trim (0..1; 1 = full depth)
   slopeMin: number; // keep texture only where the normal's angle from +Z is >= this (deg)
   slopeMax: number; // ... and <= this (deg); 0..180 masks nothing
+  targetEdge: number; // sampling mesh target edge length in mm (0 = automatic)
+  triBudget: number; // hard per-face triangle budget (0 = off)
   direction: "out" | "in" | "both";
   seed: number;
   invert: boolean;
@@ -314,6 +318,8 @@ export interface TextureFeature {
   amplitude?: Num;
   slopeMin?: Num;
   slopeMax?: Num;
+  targetEdge?: Num;
+  triBudget?: Num;
   direction?: "out" | "in" | "both";
   seed?: Num;
   invert?: boolean;
@@ -360,6 +366,8 @@ export interface TextureForm {
   amplitude: string;
   slopeMin: string;
   slopeMax: string;
+  targetEdge: string;
+  triBudget: string;
 }
 
 export function initialTextureForm(initial: Partial<TextureValues>): TextureForm {
@@ -389,6 +397,8 @@ export function initialTextureForm(initial: Partial<TextureValues>): TextureForm
     amplitude: String(initial.amplitude ?? 1),
     slopeMin: String(initial.slopeMin ?? 0),
     slopeMax: String(initial.slopeMax ?? 180),
+    targetEdge: String(initial.targetEdge ?? 0),
+    triBudget: String(initial.triBudget ?? 0),
   };
 }
 
@@ -419,6 +429,8 @@ export function toTextureValues(f: TextureForm): TextureValues {
     amplitude: clampOr(f.amplitude, 1, 0, 1),
     slopeMin: clampOr(f.slopeMin, 0, 0, 180),
     slopeMax: clampOr(f.slopeMax, 180, 0, 180),
+    targetEdge: Math.max(0, parseFloat(f.targetEdge) || 0),
+    triBudget: Math.max(0, Math.round(parseFloat(f.triBudget) || 0)),
     direction: f.direction,
     seed: parseFloat(f.seed) || 1,
     invert: f.invert,
