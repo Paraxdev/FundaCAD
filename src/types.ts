@@ -487,7 +487,10 @@ export type CoreFeature =
   // offset the surface (e.g. resize a hole). With several faces, each is pushed by
   // the same `distance` along its own normal. `upTo` (a target face selector), when
   // set, extrudes each face up to that surface instead of by `distance`.
-  | { id: string; type: "press-pull"; face: Selector | Selector[]; distance: Num; operation: "join" | "cut"; body?: string; upTo?: Selector }
+  // `taper` (degrees) leans a PLANAR push's walls as they travel (a moulded boss,
+  // an angled pocket); positive narrows the far end. Absent or 0 is a straight
+  // push; ignored on curved faces and on an `upTo` push. Byte-identical when absent.
+  | { id: string; type: "press-pull"; face: Selector | Selector[]; distance: Num; operation: "join" | "cut"; body?: string; upTo?: Selector; taper?: Num }
   | { id: string; type: "deleteFace"; face: Selector | Selector[]; body?: string }
   | { id: string; type: "mirror"; plane: Plane3 }
   // `operation` is threaded through the same New/Join/Cut/Intersect boolean as

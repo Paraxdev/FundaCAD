@@ -697,6 +697,40 @@ def test_extrude_taper():
     print(f"  extrude taper OK: straight {straight_vol:.0f}, +12 narrows, -12 widens")
 
 
+def test_press_pull_taper():
+    """A tapered press/pull leans the pushed wall as it travels, so a boss draws
+    like a moulded one. Control: the same push with no taper keeps the face's full
+    size, and an up-to push ignores taper (its walls must land on the target)."""
+    def top_area(part):
+        return max(part.faces(), key=lambda fc: fc.center().Z).area
+
+    _s, base = _box(1, 20, 20, 10)  # 20×20×10, top at z=10, area 400
+    top = {"kind": "face", "by": "normal", "dir": [0, 0, 1]}
+
+    def build(**extra):
+        return rebuild({"parameters": {}, "features": base + [
+            {"id": "pp", "type": "press-pull", "face": top, "distance": 6,
+             "operation": "join", **extra}]})
+
+    # control: straight boss, its top stays the full 20×20 = 400
+    p, e, _ = build()
+    assert not e, e
+    assert abs(top_area(p) - 400) < 1, f"straight boss top {top_area(p):.0f}"
+    straight_vol = p.volume
+
+    # tapered boss: the top narrows and the boss holds less than the straight prism
+    p, e, _ = build(taper=15)
+    assert not e, e
+    assert top_area(p) < 399 and p.volume < straight_vol, (
+        f"taper 15 should narrow the boss: top {top_area(p):.0f}, vol {p.volume:.0f}")
+
+    # past vertical is a named refusal, not a kernel crash
+    _p, e, _ = build(taper=90)
+    assert e and any("taper" in x.get("message", "").lower() for x in e), (
+        f"taper 90 should be refused by name, got {e!r}")
+    print(f"  press/pull taper OK: straight top 400, tapered narrows")
+
+
 def test_offset_face_and_thicken():
     """Offset Face moves selected faces along their normals (single and multi-face,
     the latter exercising resolve_faces' list branch); Thicken gives faces a wall.
@@ -1848,6 +1882,7 @@ if __name__ == "__main__":
     test_primitives()
     test_modify_tools()
     test_extrude_taper()
+    test_press_pull_taper()
     test_offset_face_and_thicken()
     test_face_selector_on_concentric_cylinders()
     test_simplify_mesh()
