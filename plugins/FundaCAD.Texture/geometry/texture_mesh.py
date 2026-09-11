@@ -161,6 +161,42 @@ def _planar_chart(pts, normals):
     return u_mm, v_mm, t_u, t_v
 
 
+# --- triplanar / box projection weights --------------------------------------
+#
+# The planar chart above lays the pattern in ONE plane, so where a freeform face
+# turns away from that plane the pattern foreshortens (a controlled shrink, worst
+# at a corner that curves through ninety degrees). Triplanar removes it: sample
+# the pattern in all three world planes and blend the three by how squarely the
+# surface faces each, so every vertex is textured through the plane it faces most
+# directly and the cells stay one size. Box is the same sampler pushed toward
+# winner-take-all (a dominant-axis projection) with a soft band where two axes
+# meet. Both share one exponent knob; only its range differs.
+
+
+def _tp_exponent(spec):
+    """The blend exponent k for the |normal|^k axis weights.
+
+    triplanar's `seamBlend` spans a broad blend (k=1, the plain |n| weighting) to
+    a fairly crisp one (k=8); box's `seamBand` spans a wide transition band (k=4)
+    to a near-hard dominant-axis pick (k=40). Higher slider = softer, so the knob
+    reads the same way in both modes: more blend."""
+    if spec.get("projection") == "box":
+        band = max(0.0, min(1.0, float(spec.get("seamBand", 0.5))))
+        return 4.0 + 36.0 * (1.0 - band)
+    blend = max(0.0, min(1.0, float(spec.get("seamBlend", 0.5))))
+    return 1.0 + 7.0 * (1.0 - blend)
+
+
+def _tp_weights(normals, k):
+    """Per-vertex axis blend weights (N,3), columns (|nx|,|ny|,|nz|)^k normalised
+    to sum to one, so a vertex facing +Z is textured almost entirely through the
+    XY plane and a 45 degree vertex splits between two."""
+    a = np.abs(np.asarray(normals, dtype=np.float64)) ** float(k)
+    s = a.sum(axis=1, keepdims=True)
+    s[s < 1e-12] = 1.0
+    return a / s
+
+
 # --- mesh refinement + displacement ------------------------------------------
 
 

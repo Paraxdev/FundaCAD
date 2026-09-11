@@ -158,7 +158,7 @@ describe("the Texture plugin, switched on and off", () => {
 
     it("has the dropdowns and the switch its values are edited with", () => {
       expect(hasOptionFields("texture")).toBe(true);
-      expect(choiceFieldsFor("texture").map((c) => c.field)).toEqual(["kind", "profile", "direction"]);
+      expect(choiceFieldsFor("texture").map((c) => c.field)).toEqual(["kind", "profile", "direction", "projection"]);
       expect(toggleFieldsFor("texture").map((t) => t.field)).toEqual(["invert"]);
     });
 
