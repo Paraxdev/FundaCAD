@@ -352,6 +352,15 @@ export class SketchOverlay {
     this.selectedRegionPoints = points.map((p) => [p[0], p[1], p[2]]);
     this.recolorFills();
   }
+  /** Interior anchor of every committed area of one sketch. A whole-sketch
+   *  extrude (one that saved no explicit regions) reopens onto these: it stands
+   *  for the whole sketch, so editing it reselects the whole sketch rather than
+   *  nothing. Same shape selectRegionsByPoints consumes. */
+  regionPointsForSketch(sketchId: string): [number, number, number][] {
+    return this.regions
+      .filter((wr) => wr.sketchId === sketchId)
+      .map((wr) => [wr.interior3D.x, wr.interior3D.y, wr.interior3D.z]);
+  }
   /** Hover-highlight one region's fill (or clear with null). */
   setHoverRegion(wr: WorldRegion | null) {
     if (this.hovered === wr) return;
