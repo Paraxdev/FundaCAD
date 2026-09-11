@@ -49,6 +49,7 @@ const palette = computed(() => panel.request.value?.palette ?? []);
 const editing = computed(() => panel.request.value?.editing ?? false);
 const sharpLabel = computed(() => sharpnessLabel(form.profile));
 const grimePct = computed(() => `${Math.round((parseFloat(form.grime) || 0) * 100)}%`);
+const smoothPct = computed(() => `${Math.round((parseFloat(form.smooth) || 0) * 100)}%`);
 
 function emitChange() {
   panel.request.value?.onChange(toTextureValues(form));
@@ -240,6 +241,22 @@ const noBtn: CSSProperties = { ...btn, background: "var(--raised, #555)", color:
           :style="{ flex: '1', minWidth: '0' }" @input="emitChange"
         />
         <span :style="[pathLabel, { flex: '0 0 auto', textAlign: 'right', minWidth: '2.6em' }]">{{ grimePct }}</span>
+      </div>
+
+      <!-- Soften: a low-pass blur of the height field before it displaces, so
+           the relief reads soft and rounded rather than crisp. Named apart from
+           the "Smooth" profile above, which is a different thing (the continuous
+           field vs the faceted one). 0 = the crisp relief, unchanged. -->
+      <div
+        :style="row"
+        title="Blurs the height field before it displaces: 0 = crisp relief, higher = softer and more rounded."
+      >
+        <label :style="lbl">Soften</label>
+        <input
+          v-model="form.smooth" type="range" min="0" max="1" step="0.05"
+          :style="{ flex: '1', minWidth: '0' }" @input="emitChange"
+        />
+        <span :style="[pathLabel, { flex: '0 0 auto', textAlign: 'right', minWidth: '2.6em' }]">{{ smoothPct }}</span>
       </div>
 
       <div v-show="rows.seed" :style="row">

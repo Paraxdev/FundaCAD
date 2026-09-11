@@ -697,6 +697,92 @@ def test_grime_zero_is_absent_from_the_spec():
     print(PASS, "grime is absent at zero, clamped to 1, and rejects a negative")
 
 
+def test_smooth_low_passes_the_height_field():
+    """The `smooth` control blurs the height field BEFORE it displaces. Two
+    claims, each with its own control: smooth absent (or zero) is byte-identical
+    to no control at all, and smooth=1 is a genuine low-pass, less amplitude and
+    less high-frequency energy, so the relief reads softer."""
+    x = np.linspace(0.0, 12.0, 600)
+    y = np.zeros_like(x)
+    base = {"kind": "ribs", "scale": 2.0, "angle": 0.0, "sharpness": 0.0, "profile": "facet"}
+
+    ident = np.asarray(texture.height_field("ribs", dict(base), x, y), dtype=float)
+    absent = np.asarray(texture_height.height_field_smoothed("ribs", dict(base), x, y), dtype=float)
+    zero = np.asarray(texture_height.height_field_smoothed("ribs", dict(base, smooth=0.0), x, y), dtype=float)
+    assert np.array_equal(absent, ident), "smooth absent must equal height_field exactly"
+    assert np.array_equal(zero, ident), "smooth=0 must equal height_field exactly"
+
+    soft = np.asarray(texture_height.height_field_smoothed("ribs", dict(base, smooth=1.0), x, y), dtype=float)
+    tv = lambda h: float(np.abs(np.diff(h)).sum())
+    assert soft.std() < ident.std() * 0.9, f"smooth=1 did not reduce amplitude: {soft.std():.4f} vs {ident.std():.4f}"
+    assert tv(soft) < tv(ident) * 0.9, f"smooth=1 did not reduce total variation: {tv(soft):.3f} vs {tv(ident):.3f}"
+    # still a valid [0,1] field, and a blur is DC-neutral so the mean holds
+    assert soft.min() >= -1e-9 and soft.max() <= 1 + 1e-9, f"smoothed field left [0,1]: {soft.min()}..{soft.max()}"
+    assert abs(soft.mean() - ident.mean()) < 0.05, "a blur should preserve the mean height"
+    print(PASS, "smooth low-passes the height field; smooth=0 is byte-identical")
+
+
+def test_smooth_softens_the_displaced_relief():
+    """End to end through displace_face: smooth=1 pulls the displaced relief in
+    (a softer surface) against smooth=0 on the same texture, and the smoothed mesh
+    is still finite and manifold. smooth=0 is the control, it must reproduce the
+    sharp relief exactly, so a no-op smooth could not pass this."""
+    def top_relief(smooth):
+        feats = [
+            {"id": "b", "type": "box", "length": 30, "width": 30, "height": 10},
+            {"id": "t", "type": "texture", "kind": "ribs", "depth": 0.5, "scale": 2.0,
+             "faces": {"kind": "face", "by": "normal", "dir": [0, 0, 1]},
+             **({"smooth": smooth} if smooth else {})}]
+        _p, errs, bodies = rebuild({"parameters": {}, "features": feats})
+        assert not errs, errs
+        b = bodies[0]
+        resolved = plugin_geometry.resolve(b)
+        diag = []
+        pos, idx, fids = tessellate(b["shape"], 0.1, mesh_passes=resolved,
+                                    density_cap=texture._DEFAULT_DENSITY_CAP, diag=diag)
+        P = np.asarray(pos, dtype=float).reshape(-1, 3)
+        assert np.all(np.isfinite(P)), "smoothed texture produced non-finite positions"
+        bad = [d for d in diag if "non-manifold" in str(d.get("reason", ""))]
+        assert not bad, f"smoothed texture went non-manifold: {bad}"
+        # isolate the textured face: the one that gained the most triangles
+        fids = np.asarray(fids, dtype=int)
+        I = np.asarray(idx, dtype=int).reshape(-1, 3)
+        counts = {int(f): int((fids == f).sum()) for f in np.unique(fids)}
+        tf = max(counts, key=counts.get)
+        z = P[np.unique(I[fids == tf].ravel()), 2]
+        return float(z.max() - z.min())
+
+    sharp = top_relief(0.0)
+    soft = top_relief(1.0)
+    assert soft < sharp * 0.9, f"smooth=1 did not soften the relief: peak-to-peak {soft:.3f}mm vs {sharp:.3f}mm"
+    print(PASS, f"smooth softens the displaced relief ({sharp:.3f} -> {soft:.3f}mm peak-to-peak)")
+
+
+def test_smooth_zero_is_absent_from_the_spec():
+    """A texture with no soften hashes and builds exactly as it always did.
+
+    smooth rides in the spec ONLY when non-zero (like grime and colorSlot), so a
+    document written before the control existed, or with the slider at zero, keeps
+    its old mesh-cache identity and byte-for-byte geometry. smooth>0 is the case
+    that DOES move geometry, which is what CODE_VERSION 10 records."""
+    spec0 = texture.validate_texture_spec(
+        {"id": "t", "kind": "knurl", "faces": {"by": "all"}, "depth": 0.4, "scale": 2.0})
+    assert "smooth" not in spec0, "smooth 0 must not appear in the spec"
+    specs = texture.validate_texture_spec(
+        {"id": "t", "kind": "knurl", "faces": {"by": "all"}, "depth": 0.4, "scale": 2.0, "smooth": 0.5})
+    assert specs.get("smooth") == 0.5, specs
+    # clamped into 0..1 and validated as a number
+    assert texture.validate_texture_spec(
+        {"id": "t", "kind": "knurl", "depth": 0.4, "scale": 2.0, "smooth": 9})["smooth"] == 1.0
+    try:
+        texture.validate_texture_spec(
+            {"id": "t", "kind": "knurl", "depth": 0.4, "scale": 2.0, "smooth": -1})
+        raise AssertionError("negative smooth should be rejected")
+    except ValueError:
+        pass
+    print(PASS, "smooth is absent at zero, clamped to 1, and rejects a negative")
+
+
 def main():
     print("Surface-texture tests")
     test_validate_texture_spec_rejects_bad_input()
@@ -723,6 +809,9 @@ def main():
     test_freeform_corner_texture_is_planar_and_finely_resolved()
     test_grime_bleeds_onto_neighbours_and_zero_grime_does_not()
     test_grime_zero_is_absent_from_the_spec()
+    test_smooth_low_passes_the_height_field()
+    test_smooth_softens_the_displaced_relief()
+    test_smooth_zero_is_absent_from_the_spec()
     print("ALL PASS")
 
 
