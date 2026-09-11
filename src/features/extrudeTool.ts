@@ -201,6 +201,18 @@ export class ExtrudeTool {
     ) as [number, number, number][];
     this.overlay.selectRegionsByPoints(saved);
     this.selected = this.overlay.selectedRegions();
+    // A whole-sketch extrude saved no region anchors, so there was nothing to
+    // match and the selection is empty, which is NOT "its areas are gone", it is
+    // the whole sketch. Reselect every area of it so the edit reopens previewing
+    // and draggable, exactly as it was created. Only when NOTHING was saved:
+    // an extrude that named specific areas which no longer resolve genuinely has
+    // lost them, and that keeps the honest prompt below. Commit writes explicit
+    // regions either way, as it always has, so this reselection changes no
+    // geometry.
+    if (!this.selected.length && !saved.length) {
+      this.overlay.selectRegionsByPoints(this.overlay.regionPointsForSketch(f.sketch));
+      this.selected = this.overlay.selectedRegions();
+    }
     if (this.selected.length) {
       this.beginDrag();
     } else {
