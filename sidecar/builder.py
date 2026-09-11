@@ -64,6 +64,7 @@ from build123d import (
     revolve,
     loft,
     sweep,
+    Transition,
     thicken,
     scale,
 )
@@ -921,7 +922,12 @@ def _handle_sweep(f, ctx):
     path = _require_sketch(ctx, f.get("path"), "sweep").get("wire")
     if path is None:
         raise ValueError("sweep path sketch has no curve to follow")
-    solid = sweep(sections=prof, path=path)
+    # RIGHT (mitred) corners, not the default TRANSFORMED: on a path with a sharp
+    # corner TRANSFORMED silently sweeps only the FIRST segment and drops the rest
+    # (an L path came out a straight stub of the first leg, still a valid solid, so
+    # nothing downstream flagged it). RIGHT follows the whole path with mitred
+    # joints, and is identical to the default on a straight or smooth path.
+    solid = sweep(sections=prof, path=path, transition=Transition.RIGHT)
     # Same New/Join/Cut boolean path as extrude/revolve/loft: booleans against
     # every visible overlapping body, with the loud no-op guards. (Sweep used to
     # inline `act["shape"] + solid` / `- solid` against only the active body,
