@@ -565,14 +565,27 @@ def _build_sketch(f, val, datums=None, plane=None):
     return {"sketch": sk, "faces": located_faces, "wire": path_wire, "plane": plane}
 
 
+# Stitch tolerance for combining a sweep path's free edges. Wire.combine defaults
+# to 1e-9 mm, so two edges meant to be continuous but parted by a sub-micron gap
+# (a projected or round-tripped path, where the kernel that rebuilt it disagrees
+# with the one that authored it by a hair) split into separate wires. The old
+# code then swept only the LONGEST of them and silently dropped the rest, an L
+# path came out a straight stub of one leg. 1e-3 mm is a micron, a hundredth of a
+# printed layer and far below any real feature, so it rejoins those fragments
+# while leaving genuinely separate paths (millimetres apart) as they are.
+PATH_STITCH_TOL = 1e-3
+
+
 def _path_wire(edges, plane):
     """Combine a sketch's free line/arc/spline edges into ONE located wire (open or
-    closed) for use as a sweep path. Picks the longest wire if the edges form
-    several; returns None when there are no free edges."""
+    closed) for use as a sweep path. Stitches fragments parted by a sub-micron gap
+    (see PATH_STITCH_TOL) so the whole path is followed; falls back to the longest
+    wire only when the edges form GENUINELY separate paths; returns None when there
+    are no free edges."""
     if not edges:
         return None
     try:
-        wires = Wire.combine(edges)
+        wires = Wire.combine(edges, tol=PATH_STITCH_TOL)
     except Exception:
         return None
     if not wires:
