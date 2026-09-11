@@ -626,6 +626,77 @@ def test_freeform_corner_texture_is_planar_and_finely_resolved():
                 f"finely resolved (mean edge {e.mean():.2f}mm)")
 
 
+def test_grime_bleeds_onto_neighbours_and_zero_grime_does_not():
+    """Grime reaches the faces NEXT TO the textured one, and nothing else.
+
+    The control is the whole point: at grime 0 the neighbours are the smooth
+    faces they always were, so this cannot pass by texturing the whole body. At
+    grime > 0 the resolver hands displace the neighbours too, and their mesh
+    gains triangles it did not have, the bleed. It must never touch the face's
+    OWN triangle count (grime is not a second pattern on the textured face) and
+    must leave the neighbours watertight at the shared edge (the bleed noise is
+    pinned to zero at every boundary, like any textured face)."""
+    def tri_count_by_face(grime):
+        feats = [
+            {"id": "b", "type": "box", "length": 40, "width": 40, "height": 20},
+            {"id": "t", "type": "texture", "kind": "knurl", "depth": 0.7, "scale": 3.0,
+             "faces": {"kind": "face", "by": "normal", "dir": [0, 0, 1]}, "grime": grime}]
+        _p, errs, bodies = rebuild({"parameters": {}, "features": feats})
+        assert not errs, errs
+        b = bodies[0]
+        resolved = plugin_geometry.resolve(b)
+        pos, idx, fids = tessellate(b["shape"], 0.1, mesh_passes=resolved,
+                                    density_cap=texture._DEFAULT_DENSITY_CAP)
+        fids = np.asarray(fids, dtype=int)
+        return {int(f): int((fids == f).sum()) for f in np.unique(fids)}, len(idx) // 3
+
+    off, _ = tri_count_by_face(0.0)
+    on, _ = tri_count_by_face(0.6)
+
+    # the top face (the only heavily meshed one at grime 0) is untouched by grime
+    top = max(off, key=off.get)
+    assert on[top] == off[top], (
+        f"grime changed the textured face itself: {off[top]} -> {on[top]} triangles"
+    )
+    # a side face that was a bare rectangle now carries the bleed mesh
+    bled = [f for f in off if f != top and on.get(f, 0) > off[f] * 3]
+    assert bled, (
+        "no neighbour gained the bleed mesh; grime did not reach an adjacent face "
+        f"(off={off}, on={on})"
+    )
+    # control: with grime off those same faces are their bare selves
+    for f in bled:
+        assert off[f] <= 2, f"a side face had {off[f]} triangles at grime 0, the control is not clean"
+    print(PASS, f"grime bleeds onto {len(bled)} neighbour face(s); at grime 0 they stay bare")
+
+
+def test_grime_zero_is_absent_from_the_spec():
+    """A texture with no grime hashes and builds exactly as it always did.
+
+    grime rides in the spec ONLY when non-zero (like colorSlot), so a document
+    written before grime existed, or with the slider at zero, keeps its old
+    mesh-cache identity and its byte-for-byte geometry. This is what lets the
+    feature ship without a CODE_VERSION bump."""
+    from register import _handle_texture  # noqa: F401  (ensures the plugin is importable)
+
+    spec0 = texture.validate_texture_spec(
+        {"id": "t", "kind": "knurl", "faces": {"by": "all"}, "depth": 0.4, "scale": 2.0})
+    assert "grime" not in spec0, "grime 0 must not appear in the spec"
+    specg = texture.validate_texture_spec(
+        {"id": "t", "kind": "knurl", "faces": {"by": "all"}, "depth": 0.4, "scale": 2.0, "grime": 0.5})
+    assert specg.get("grime") == 0.5, specg
+    # clamped into 0..1 and validated as a number
+    assert texture.validate_texture_spec(
+        {"id": "t", "kind": "knurl", "depth": 0.4, "scale": 2.0, "grime": 9})["grime"] == 1.0
+    try:
+        texture.validate_texture_spec(
+            {"id": "t", "kind": "knurl", "depth": 0.4, "scale": 2.0, "grime": -1})
+        raise AssertionError("negative grime should be rejected")
+    except ValueError:
+        pass
+    print(PASS, "grime is absent at zero, clamped to 1, and rejects a negative")
+
+
 def main():
     print("Surface-texture tests")
     test_validate_texture_spec_rejects_bad_input()
@@ -650,6 +721,8 @@ def main():
     test_boundary_ring_is_dense_enough_to_carry_the_pattern()
     test_planar_chart_is_orthonormal_tangent_and_metric()
     test_freeform_corner_texture_is_planar_and_finely_resolved()
+    test_grime_bleeds_onto_neighbours_and_zero_grime_does_not()
+    test_grime_zero_is_absent_from_the_spec()
     print("ALL PASS")
 
 

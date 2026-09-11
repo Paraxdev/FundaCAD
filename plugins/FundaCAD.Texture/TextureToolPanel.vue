@@ -48,6 +48,7 @@ const rows = computed(() => textureRows(form));
 const palette = computed(() => panel.request.value?.palette ?? []);
 const editing = computed(() => panel.request.value?.editing ?? false);
 const sharpLabel = computed(() => sharpnessLabel(form.profile));
+const grimePct = computed(() => `${Math.round((parseFloat(form.grime) || 0) * 100)}%`);
 
 function emitChange() {
   panel.request.value?.onChange(toTextureValues(form));
@@ -224,6 +225,21 @@ const noBtn: CSSProperties = { ...btn, background: "var(--raised, #555)", color:
           <option value="in">In (deboss)</option>
           <option value="both">Both</option>
         </select>
+      </div>
+
+      <!-- Grime: a noise bleed onto the faces next to this one, so the effect
+           reads as wear or dirt that crept off the edge rather than something
+           masked to a clean boundary. Zero is the old behaviour exactly. -->
+      <div
+        :style="row"
+        title="Bleeds a fading noise onto the faces next to the textured ones, like dirt or wear that crept off the edge. 0 = a clean boundary."
+      >
+        <label :style="lbl">Grime</label>
+        <input
+          v-model="form.grime" type="range" min="0" max="1" step="0.05"
+          :style="{ flex: '1', minWidth: '0' }" @input="emitChange"
+        />
+        <span :style="[pathLabel, { flex: '0 0 auto', textAlign: 'right', minWidth: '2.6em' }]">{{ grimePct }}</span>
       </div>
 
       <div v-show="rows.seed" :style="row">

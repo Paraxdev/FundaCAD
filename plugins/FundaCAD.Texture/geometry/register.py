@@ -56,13 +56,27 @@ def _resolve(body, spec, diag=None):
     A spec whose selector now matches nothing is dropped by returning an empty
     list: the targeted face was consumed downstream, which is best-effort
     behaviour every other selector-based feature already has.
+
+    With GRIME on, the faces edge-adjacent to the resolved ones are added too, so
+    the bleed has somewhere to land. They ride the same spec; displace_face tells
+    a bled-onto neighbour from a directly-textured face through the fingerprint
+    set recorded here (texture._GRIME_PRIMARY), because the two get different
+    displacement, the full pattern on one and a fading noise on the other.
     """
+    from builder import _face_fp
+
     shape = body.get("shape")
     if shape is None:
         return []
-    return texture._resolve_texture_faces(
+    primary = texture._resolve_texture_faces(
         shape, spec.get("faces") or {"by": "all"}, diag, spec.get("feature_id")
     )
+    fid = spec.get("feature_id")
+    if not primary or float(spec.get("grime", 0.0)) <= 0.0:
+        texture._GRIME_PRIMARY.pop(fid, None)
+        return primary
+    texture._GRIME_PRIMARY[fid] = {_face_fp(f) for f in primary}
+    return primary + texture._adjacent_faces(shape, primary)
 
 
 def register(engine, plugin_id):
