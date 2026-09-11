@@ -316,17 +316,23 @@ export class ExtrudeTool {
     const cur = this.viewport.domElement.style.cursor;
     if (this.hovering || this.taperHovering) this.viewport.domElement.style.cursor = "grab";
     else if (cur === "grab") this.viewport.domElement.style.cursor = "default";
-    if (!this.dim.isUserDriven("distance")) {
+    if (!this.dim.isUserDriven("distance") && !this.hovering && !this.taperHovering) {
+      // The depth free-tracks the cursor UNTIL it is over a handle. Without that
+      // last guard, reaching for the taper arc (or the depth handle) would move
+      // the depth, which moves the handle, so the press lands where the handle no
+      // longer is and commits instead of grabbing. Freezing on hover holds the
+      // handle still to be taken hold of.
       const proj = axisDragDistance(this.viewport, e.clientX, e.clientY, anchor, plane.n);
       // Relative once the handle has been grabbed, absolute otherwise, see
       // grabProj. Both come off the same projection; only the origin differs.
       const d = this.grabProj == null ? proj : proj - this.grabProj;
       this.distance = d;
       this.dim.updateFromCursor({ distance: Math.abs(d) });
-    } else {
+    } else if (this.dim.isUserDriven("distance")) {
       const v = this.dim.getValue("distance");
       if (v != null) this.distance = v; // the field is the truth: typed sign wins
     }
+    // else hovering a handle: the depth holds so the handle can be grabbed.
     this.positionDim(anchor);
     this.updatePreview();
   }
