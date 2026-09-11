@@ -426,24 +426,25 @@ export class ExtrudeTool {
    *  click that onDown already handled. */
   private onUp(e: PointerEvent) {
     if (e.button !== 0 || this.phase !== "drag") return;
+    const moved = Math.abs(e.clientX - this.downPos.x) > 3
+      || Math.abs(e.clientY - this.downPos.y) > 3;
     if (this.taperGrabbing) {
-      // Letting go of the taper handle just stops the swing, it never commits:
-      // the lean is one part of the extrude, not the whole of it, so the gesture
-      // stays open for the depth or a clean click to finish.
+      // Let go of the taper arc and the extrude is done: a grab-drag-release is
+      // one whole gesture, so the release finishes it rather than leaving it open
+      // for a second click nobody expects to have to make. A press that never
+      // travelled is not a swing, so it stays put (double-click reopens to tune).
       this.taperGrabbing = false;
       this.viewport.domElement.style.cursor = this.taperHovering ? "grab" : "default";
+      if (moved) this.commit();
       return;
     }
     if (this.grabbing) {
+      // Same rule for the depth handle: pull it, let go, done. A click that never
+      // travelled commits too (it is how you accept the depth the cursor set),
+      // so either way releasing the handle finishes the extrude.
       this.grabbing = false;
       this.viewport.domElement.style.cursor = this.hovering ? "grab" : "default";
-      // A press that never travelled is the click it looks like, and a click in
-      // this tool's drag phase commits, wherever it lands. Without this the
-      // arrow would be the one place on screen where clicking to accept the
-      // depth silently did nothing, which is worse than not being grabbable.
-      const moved = Math.abs(e.clientX - this.downPos.x) > 3
-        || Math.abs(e.clientY - this.downPos.y) > 3;
-      if (!moved) this.commit();
+      this.commit();
       return;
     }
     if (!this.fluentGrab) return;
