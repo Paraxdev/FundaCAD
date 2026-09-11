@@ -31,7 +31,7 @@ import {
   HANDLE_UP,
   type DragHandle,
 } from "./manipulator";
-import { draftAngle, draftDelta, MAX_DRAFT_DEG } from "./draftMath";
+import { draftAngle, draftDelta } from "./draftMath";
 import { regionAnchor } from "./regionNudge";
 import { OP_WORD, plannedOperation, type ExtrudeOp } from "./extrudeOperation";
 
@@ -43,6 +43,14 @@ const TAPER_EPS = 0.05;
 /** A taper needs depth to swing about (angle = atan(inset / depth)); under this
  *  the lever is too short to read and the handle is not offered. */
 const TAPER_MIN_DEPTH = 1;
+
+/** Steepest taper the tool offers, degrees. Just under the sidecar's own limit
+ *  (it refuses at or past 89, where a wall folds through itself), so a value the
+ *  handle or field allows is always one the kernel will attempt. Unlike Draft
+ *  this is not held to 60: an extrude taper has no neutral line to outswing, and
+ *  a deep pocket wants the steeper walls. Whether a given profile survives that
+ *  far is the kernel's call, surfaced as a readable refusal in the readout. */
+const MAX_TAPER_DEG = 88;
 
 /** How far off the top-centre the taper handle floats, in pixels: clear of the
  *  depth handle (which runs along the normal, perpendicular to this) and out
@@ -275,8 +283,8 @@ export class ExtrudeTool {
       const depth = Math.abs(this.distance);
       const proj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.taperTop, this.taperAxis);
       const inset = this.taperGrabInset + (this.taperGrabProj - proj);
-      const stepped = snap(draftAngle(inset, depth), e.shiftKey ? 0.1 : 1);
-      this.taper = Math.max(-MAX_DRAFT_DEG, Math.min(MAX_DRAFT_DEG, stepped));
+      const stepped = snap(draftAngle(inset, depth, MAX_TAPER_DEG), e.shiftKey ? 0.1 : 1);
+      this.taper = Math.max(-MAX_TAPER_DEG, Math.min(MAX_TAPER_DEG, stepped));
       this.dim.takeOver("taper"); // the handle owns the ∠ field while it is held
       this.dim.updateFromCursor({ taper: this.taper });
       this.updatePreview();
@@ -359,7 +367,7 @@ export class ExtrudeTool {
       // as the extrude closing the moment you tried to adjust the lean. The depth
       // arrow still takes it back (takeOver) for a deliberate depth drag.
       this.dim.seed("distance", this.distance);
-      this.taperGrabInset = draftDelta(this.taper, Math.abs(this.distance));
+      this.taperGrabInset = draftDelta(this.taper, Math.abs(this.distance), MAX_TAPER_DEG);
       this.taperGrabProj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.taperTop, this.taperAxis);
       this.viewport.domElement.style.cursor = "grabbing";
       return;
@@ -578,7 +586,7 @@ export class ExtrudeTool {
     // A typed ∠ wins over the last dragged taper, the same way a typed depth does.
     if (this.dim.isUserDriven("taper")) {
       const tv = this.dim.getValue("taper");
-      if (tv != null) this.taper = Math.max(-MAX_DRAFT_DEG, Math.min(MAX_DRAFT_DEG, tv));
+      if (tv != null) this.taper = Math.max(-MAX_TAPER_DEG, Math.min(MAX_TAPER_DEG, tv));
     }
     const sign = this.distance >= 0 ? 1 : -1;
     const depth = Math.abs(this.distance);
@@ -862,7 +870,7 @@ export class ExtrudeTool {
     // A typed ∠ is the truth for the taper, the same rule the depth follows.
     const tv = this.dim.getValue("taper");
     if (tv != null && this.dim.isUserDriven("taper")) {
-      this.taper = Math.max(-MAX_DRAFT_DEG, Math.min(MAX_DRAFT_DEG, tv));
+      this.taper = Math.max(-MAX_TAPER_DEG, Math.min(MAX_TAPER_DEG, tv));
     }
     const first = this.selected[0];
     if (!first) return;
