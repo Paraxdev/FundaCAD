@@ -23,7 +23,15 @@ import type { Feature } from "../types";
 import { pointInRegion } from "../sketch/region";
 import { DimInput } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
-import { axisDragDistance, fluentRelease } from "./manipulator";
+import { snap } from "../ui/units";
+import {
+  axisDragDistance,
+  createDragHandle,
+  fluentRelease,
+  HANDLE_UP,
+  type DragHandle,
+} from "./manipulator";
+import { draftAngle, draftDelta, MAX_DRAFT_DEG } from "./draftMath";
 import { regionAnchor } from "./regionNudge";
 import { OP_WORD, plannedOperation, type ExtrudeOp } from "./extrudeOperation";
 
@@ -40,6 +48,20 @@ const Y_AXIS = new THREE.Vector3(0, 1, 0);
  *  a stub of an arrow, and that is exactly when somebody wants to take hold of
  *  it and pull, so the target does not shrink with it. */
 const MIN_GRAB_PX = 26;
+
+/** Below this taper the extrude is treated as straight: the frontend prism draws
+ *  instantly and no kernel preview is asked for. Above it the walls lean and the
+ *  exact solid can only come from OCCT. */
+const TAPER_EPS = 0.05;
+
+/** A taper needs depth to swing about (angle = atan(inset / depth)); under this
+ *  the lever is too short to read and the handle is not offered. */
+const TAPER_MIN_DEPTH = 1;
+
+/** How far off the top-centre the taper handle floats, in pixels: clear of the
+ *  depth arrow (which runs along the normal, perpendicular to this) and out where
+ *  the wall it leans actually is. */
+const TAPER_OFFSET_PX = 46;
 
 type Phase = "pick" | "drag";
 type Op = ExtrudeOp;
@@ -89,6 +111,33 @@ export class ExtrudeTool {
   private grabProj: number | null = null;
   private fluentGrab = false;
   private downPos = { x: 0, y: 0 };
+
+  // --- taper (lean the walls as the extrude climbs) ---
+  /** Degrees, positive narrows the far face. Zero is the plain straight prism. */
+  private taper = 0;
+  /** The chunky slider you swing to set the taper, at the top rim of the solid.
+   *  Only built once there is depth to swing about, and never in edit mode (the
+   *  Properties row edits a committed taper). */
+  private taperHandle: DragHandle | null = null;
+  /** In-plane drag axis the taper handle runs along (the sketch's local +X). A
+   *  drag of `inset` mm inward means atan(inset / depth). */
+  private taperAxis = new THREE.Vector3(1, 0, 0);
+  /** World point the taper handle floats beside: the centre of the far face. */
+  private taperTop = new THREE.Vector3();
+  private taperHovering = false;
+  private taperGrabbing = false;
+  private taperGrabProj = 0;
+  private taperGrabInset = 0;
+  /** Stable id for the sidecar preview AND the committed feature, one per gesture
+   *  so a tapered preview replaces itself instead of piling up. */
+  private previewId = "";
+  /** true while the exact tapered solid is being previewed through the sidecar
+   *  (the frontend prism is hidden), so the switch back to straight knows to
+   *  clear it. */
+  private taperPreviewOn = false;
+  /** depth+sign+taper+selection of the tapered preview last asked of the sidecar,
+   *  so an unchanged drag does not re-trigger an OCCT rebuild. */
+  private taperKey = "";
 
   private boundMove: (e: PointerEvent) => void;
   private boundDown: (e: PointerEvent) => void;
@@ -183,6 +232,7 @@ export class ExtrudeTool {
     this.editHiddenBodies = f.hiddenBodies;
     this.distance = f.distance;
     this.symmetric = f.symmetric === true;
+    this.taper = typeof f.taper === "number" ? f.taper : 0;
     this.forcedSketchId = f.sketch;
 
     this.viewport.suspendPicking = true;
@@ -233,6 +283,20 @@ export class ExtrudeTool {
     if (!first) return;
     const plane = first.plane;
     const anchor = this.anchor();
+    if (this.taperGrabbing) {
+      // Swing the far face over: a drag inward (against the handle's axis) leans
+      // the walls in, and how far it leans per millimetre depends on the depth it
+      // has to climb, exactly the atan(inset / lever) a draft reads (draftMath).
+      const depth = Math.abs(this.distance);
+      const proj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.taperTop, this.taperAxis);
+      const inset = this.taperGrabInset + (this.taperGrabProj - proj);
+      const stepped = snap(draftAngle(inset, depth), e.shiftKey ? 0.1 : 1);
+      this.taper = Math.max(-MAX_DRAFT_DEG, Math.min(MAX_DRAFT_DEG, stepped));
+      this.dim.takeOver("taper"); // the handle owns the ∠ field while it is held
+      this.dim.updateFromCursor({ taper: this.taper });
+      this.updatePreview();
+      return;
+    }
     if (this.grabbing) {
       // A deliberate drag on the arrow outranks a typed value. That is the
       // exception DimInput.seed documents in as many words and takeOver()
@@ -247,11 +311,12 @@ export class ExtrudeTool {
       this.updatePreview();
       return;
     }
-    // Not dragging, but the arrow is a target: say so, or the only affordance
-    // is that the depth happens to follow the cursor.
-    this.hovering = this.hitGizmo(e.clientX, e.clientY);
+    // Not dragging, but the arrow and the taper handle are targets: say so, or
+    // the only affordance is that the depth happens to follow the cursor.
+    this.taperHovering = this.hitTaper(e.clientX, e.clientY);
+    this.hovering = !this.taperHovering && this.hitGizmo(e.clientX, e.clientY);
     const cur = this.viewport.domElement.style.cursor;
-    if (this.hovering) this.viewport.domElement.style.cursor = "grab";
+    if (this.hovering || this.taperHovering) this.viewport.domElement.style.cursor = "grab";
     else if (cur === "grab") this.viewport.domElement.style.cursor = "default";
     if (!this.dim.isUserDriven("distance")) {
       const proj = axisDragDistance(this.viewport, e.clientX, e.clientY, anchor, plane.n);
@@ -296,6 +361,18 @@ export class ExtrudeTool {
       return;
     }
     e.preventDefault();
+    // Taking hold of the taper handle, tested first: it floats to the side of
+    // the depth arrow and setting the lean is never a commit either. A drag on
+    // it swings the walls; the depth stays put.
+    if (!e.ctrlKey && !e.metaKey && !e.shiftKey && this.hitTaper(e.clientX, e.clientY)) {
+      e.stopImmediatePropagation();
+      this.taperGrabbing = true;
+      this.downPos = { x: e.clientX, y: e.clientY };
+      this.taperGrabInset = draftDelta(this.taper, Math.abs(this.distance));
+      this.taperGrabProj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.taperTop, this.taperAxis);
+      this.viewport.domElement.style.cursor = "grabbing";
+      return;
+    }
     // Taking hold of the arrow, tested before the modifier and commit branches
     // below: a press on the handle is the start of a drag and never a commit,
     // and a tool whose handle committed on contact could not be used at all.
@@ -355,6 +432,14 @@ export class ExtrudeTool {
    *  click that onDown already handled. */
   private onUp(e: PointerEvent) {
     if (e.button !== 0 || this.phase !== "drag") return;
+    if (this.taperGrabbing) {
+      // Letting go of the taper handle just stops the swing, it never commits:
+      // the lean is one part of the extrude, not the whole of it, so the gesture
+      // stays open for the depth or a clean click to finish.
+      this.taperGrabbing = false;
+      this.viewport.domElement.style.cursor = this.taperHovering ? "grab" : "default";
+      return;
+    }
     if (this.grabbing) {
       this.grabbing = false;
       this.viewport.domElement.style.cursor = this.hovering ? "grab" : "default";
@@ -424,8 +509,18 @@ export class ExtrudeTool {
   private beginDrag() {
     this.phase = "drag";
     this.overlay.setHoverRegion(null);
+    // One id for the whole gesture: the sidecar taper preview and the committed
+    // feature share it, so a live tapered preview replaces itself each rebuild
+    // rather than accumulating a new body per drag step.
+    this.previewId = this.editId ?? this.store.nextId();
+    // A fresh gesture starts straight; an edit keeps whatever taper was saved
+    // (the arrow is not offered in edit mode, so this only feeds the ∠ field).
+    this.taper = this.editId ? this.taper : 0;
     this.dim.show(
-      [{ name: "distance", label: "D" }],
+      // The ∠ field rides beside the depth: the depth free-tracks the cursor,
+      // the taper is set by its own handle or typed here, and the two never
+      // clobber each other because updateFromCursor only ever pushes `distance`.
+      [{ name: "distance", label: "D" }, { name: "taper", label: "∠", kind: "angle" }],
       () => this.commit(),
       () => this.cancel(),
       {
@@ -435,6 +530,7 @@ export class ExtrudeTool {
         onChange: (on) => this.setSymmetric(on),
       },
     );
+    this.dim.updateFromCursor({ taper: this.taper });
     if (this.editId) {
       // seed the SIGNED saved distance and lock the field (userDriven): extrude's
       // onMove free-tracks the cursor and would clobber the seed on the first
@@ -482,17 +578,58 @@ export class ExtrudeTool {
     return regionAnchor(this.selected);
   }
 
+  /** A stable key for the selected areas, so a preview keyed on depth+selection
+   *  can tell a real change from a repaint. */
+  private selectionIds(): string {
+    return this.selected
+      .map((s) => `${s.sketchId}:${s.interior3D.x.toFixed(2)},${s.interior3D.y.toFixed(2)}`)
+      .join("|");
+  }
+
   private updatePreview() {
     if (!this.selected.length) return;
     this.refreshPrompt();
+    // A typed ∠ wins over the last dragged taper, the same way a typed depth does.
+    if (this.dim.isUserDriven("taper")) {
+      const tv = this.dim.getValue("taper");
+      if (tv != null) this.taper = Math.max(-MAX_DRAFT_DEG, Math.min(MAX_DRAFT_DEG, tv));
+    }
     const sign = this.distance >= 0 ? 1 : -1;
     const depth = Math.abs(this.distance);
-    const cut = sign < 0;
+    // A leaning wall is not a prism, and THREE.ExtrudeGeometry cannot taper one,
+    // so the instant frontend preview only serves the straight case. Once the
+    // taper matters the exact solid comes from the kernel (store.setPreview),
+    // exactly as Draft and Press/Pull already do.
+    // New extrudes only: an EDIT already holds the model rolled back through
+    // beginEditPreview, and a second preduce through setPreview on top of that
+    // would fight it. Editing a committed extrude's taper is the Properties row's
+    // job, which previews it correctly through the edit path.
+    const tapering = !this.editId && depth > 1e-6 && Math.abs(this.taper) >= TAPER_EPS;
+    if (tapering) {
+      this.disposePreviewGeom(); // the straight prism, if one is up, is now a lie
+      this.previewKey = "";
+      const key = `${depth.toFixed(3)}:${sign}:${this.taper.toFixed(2)}:${this.symmetric ? "s" : "o"}:${this.selectionIds()}`;
+      if (key !== this.taperKey) {
+        this.taperKey = key;
+        this.store.setPreview(this.buildFeature());
+      }
+      this.taperPreviewOn = true;
+    } else {
+      if (this.taperPreviewOn) {
+        this.store.setPreview(null); // back to straight, drop the kernel preview
+        this.taperPreviewOn = false;
+        this.taperKey = "";
+      }
+      this.updatePrism(sign, depth);
+    }
+    this.updateManipulators(sign, depth);
+  }
 
-    const ids = this.selected
-      .map((s) => `${s.sketchId}:${s.interior3D.x.toFixed(2)},${s.interior3D.y.toFixed(2)}`)
-      .join("|");
-    const key = `${depth.toFixed(3)}:${sign}:${this.symmetric ? "sym" : "one"}:${ids}`;
+  /** The instant translucent prism for the STRAIGHT extrude, no kernel round-trip
+   *  (that is what makes depth dragging feel immediate). */
+  private updatePrism(sign: number, depth: number) {
+    const cut = sign < 0;
+    const key = `${depth.toFixed(3)}:${sign}:${this.symmetric ? "sym" : "one"}:${this.selectionIds()}`;
     if (key !== this.previewKey) {
       this.previewKey = key;
       this.disposePreviewGeom();
@@ -526,7 +663,11 @@ export class ExtrudeTool {
       this.viewport.addToScene(this.preview);
     }
     this.previewMat?.color.set(cut ? 0xff5c5c : 0x5b9bff);
+  }
 
+  /** The depth arrow, its grab proxy, and the taper handle. Shown in both preview
+   *  modes: they are the controls, not the geometry. */
+  private updateManipulators(sign: number, depth: number) {
     // arrow manipulator along the (shared) normal, anchored at the selection center
     const first = this.selected[0];
     if (!first) return;
@@ -577,6 +718,44 @@ export class ExtrudeTool {
     this.grabProxy.position.copy(tail).addScaledVector(dir, span / 2);
     this.grabProxy.quaternion.setFromUnitVectors(Y_AXIS, dir);
     this.grabProxy.scale.set(px * GRAB_PX, span, px * GRAB_PX);
+
+    this.updateTaperHandle(plane, anchor, dir, depth, px);
+  }
+
+  /** The chunky slider you swing to lean the walls, floating beside the far face.
+   *  Offered only once there is depth to swing about, and never in edit mode
+   *  (a committed taper is edited from the Properties row). Modelled in pixels
+   *  like every other manipulator, so a constant `pixelWorldSize` scale holds its
+   *  on-screen size at any zoom. */
+  private updateTaperHandle(
+    plane: WorldRegion["plane"], anchor: THREE.Vector3, dir: THREE.Vector3,
+    depth: number, px: number,
+  ) {
+    if (depth < TAPER_MIN_DEPTH || this.editId) {
+      this.disposeTaperHandle();
+      return;
+    }
+    if (!this.taperHandle) {
+      this.taperHandle = createDragHandle();
+      this.viewport.addToScene(this.taperHandle.group);
+    }
+    // The sketch's local +X, in world space: a deterministic in-plane axis to
+    // run the slider along and to measure the inward drag against.
+    const o = plane.to3D(0, 0);
+    this.taperAxis.copy(plane.to3D(1, 0)).sub(o).normalize();
+    // Centre of the far face (true for one-sided AND symmetric: the symmetric
+    // arrow's tail sits a depth behind, so its far tip lands here too).
+    this.taperTop.copy(anchor).addScaledVector(dir, depth);
+    const g = this.taperHandle.group;
+    g.position.copy(this.taperTop).addScaledVector(this.taperAxis, px * TAPER_OFFSET_PX);
+    g.quaternion.setFromUnitVectors(HANDLE_UP, this.taperAxis);
+    g.scale.setScalar(px);
+    // Red once the walls undercut (a negative taper), which no mould can draw and
+    // is worth flagging while it is being set; amber otherwise.
+    this.taperHandle.paint({
+      hot: this.taperHovering || this.taperGrabbing,
+      tone: this.taper < 0 ? "cut" : "idle",
+    });
   }
 
   private disposeGrabProxy() {
@@ -587,6 +766,13 @@ export class ExtrudeTool {
     this.grabProxy = null;
   }
 
+  private disposeTaperHandle() {
+    if (!this.taperHandle) return;
+    this.viewport.removeFromScene(this.taperHandle.group);
+    this.taperHandle.dispose();
+    this.taperHandle = null;
+  }
+
   /** Is the cursor on the arrow? Tested against the invisible proxy, never the
    *  drawn geometry. Three's raycaster tests layers rather than `visible`, so an
    *  invisible mesh is still a hit target, which is what manipulator.ts relies
@@ -594,6 +780,33 @@ export class ExtrudeTool {
   private hitGizmo(x: number, y: number): boolean {
     if (!this.grabProxy || this.phase !== "drag") return false;
     return this.viewport.rayFrom(x, y).intersectObject(this.grabProxy, false).length > 0;
+  }
+
+  /** Is the cursor on the taper handle? Its generous invisible grab volumes are
+   *  direct children of the group, the same convention createDragHandle's other
+   *  callers hit-test against. */
+  private hitTaper(x: number, y: number): boolean {
+    if (!this.taperHandle || this.phase !== "drag") return false;
+    return this.viewport.rayFrom(x, y).intersectObjects(this.taperHandle.group.children, false).length > 0;
+  }
+
+  /** The feature this gesture would commit (also what the sidecar previews while
+   *  a taper is being swung). `taper` is written only when it bites, so a plain
+   *  extrude's JSON is byte-identical to what earlier builds wrote. */
+  private buildFeature(): Feature {
+    const first = this.selected[0]!;
+    const hiddenBodies = this.editId ? this.editHiddenBodies : this.store.hiddenBodyIds();
+    return {
+      id: this.previewId,
+      type: "extrude",
+      sketch: first.sketchId,
+      distance: Math.round(this.distance * 1000) / 1000,
+      operation: this.plannedOperation(),
+      regions: this.selected.map((wr) => [wr.interior3D.x, wr.interior3D.y, wr.interior3D.z]),
+      ...(this.symmetric ? { symmetric: true } : {}),
+      ...(Math.abs(this.taper) >= TAPER_EPS ? { taper: Math.round(this.taper * 1000) / 1000 } : {}),
+      ...(hiddenBodies !== undefined ? { hiddenBodies } : {}),
+    };
   }
 
   // Does the extrude direction push INTO existing material? One of the four facts
@@ -666,7 +879,7 @@ export class ExtrudeTool {
     setPrompt(
       this.editId
         ? `${word} · Ctrl-click areas · drag or type a value${sym} · click to apply · Esc`
-        : `${word} · drag or type a depth, negative cuts${sym} · click to commit · Esc`,
+        : `${word} · drag or type a depth, negative cuts${sym} · side handle tapers · click to commit · Esc`,
     );
   }
 
@@ -679,28 +892,24 @@ export class ExtrudeTool {
     // Typed values (userDriven) carry their own sign and win.
     if (v != null && this.dim.isUserDriven("distance")) this.distance = v;
     if (Math.abs(this.distance) < 1e-3) return; // ignore zero
-    const op = this.plannedOperation();
+    // A typed ∠ is the truth for the taper, the same rule the depth follows.
+    const tv = this.dim.getValue("taper");
+    if (tv != null && this.dim.isUserDriven("taper")) {
+      this.taper = Math.max(-MAX_DRAFT_DEG, Math.min(MAX_DRAFT_DEG, tv));
+    }
     const first = this.selected[0];
     if (!first) return;
-    const hiddenBodies = this.editId ? this.editHiddenBodies : this.store.hiddenBodyIds();
-    const feature: Feature = {
-      id: this.editId ?? this.store.nextId(),
-      type: "extrude",
-      sketch: first.sketchId,
-      distance: Math.round(this.distance * 1000) / 1000,
-      operation: op,
-      regions: this.selected.map((wr) => [wr.interior3D.x, wr.interior3D.y, wr.interior3D.z]),
-      // Written only when true, the way every other persisted flag here is: an
-      // ordinary extrude's JSON is byte-identical to the one this build wrote
-      // before the field existed.
-      ...(this.symmetric ? { symmetric: true } : {}),
-      // capture the participants NOW: bodies hidden at creation stay excluded
-      // from this boolean forever; later eye toggles are pure display. When
-      // EDITING, the ORIGINAL capture is kept, re-capturing here would let
-      // display toggles rewrite committed boolean history.
-      ...(hiddenBodies !== undefined ? { hiddenBodies } : {}),
-    };
+    // Feature construction (id, regions, symmetric, taper, captured participants)
+    // is shared with the live sidecar preview, so the thing committed is exactly
+    // the thing that was on screen. See buildFeature.
+    const feature = this.buildFeature();
     const id = feature.id;
+    // Drop any live taper preview before the real write: it carries the same id,
+    // so building both at once would put a duplicate into the model.
+    if (this.taperPreviewOn) {
+      this.store.setPreview(null);
+      this.taperPreviewOn = false;
+    }
     if (this.editId) {
       this.store.endEditPreview(false); // replaceFeature triggers the rebuild
       this.store.replaceFeature(this.editId, feature);
@@ -741,6 +950,18 @@ export class ExtrudeTool {
       this.arrow = null;
     }
     this.disposeGrabProxy();
+    this.disposeTaperHandle();
+    // A create-mode cancel or commit can leave a live taper preview up (edit
+    // mode's is torn down by endEditPreview instead); drop it so the model
+    // returns to what is actually committed.
+    if (this.taperPreviewOn) {
+      this.store.setPreview(null);
+      this.taperPreviewOn = false;
+    }
+    this.taperKey = "";
+    this.taper = 0;
+    this.taperGrabbing = false;
+    this.taperHovering = false;
     this.hovering = false;
     this.grabbing = false;
     this.overlay.setHoverRegion(null);
