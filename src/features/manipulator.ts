@@ -438,11 +438,16 @@ export function createDragHandle(tone: HandleTone = "idle"): DragHandle {
   };
 }
 
-/** Radius of the rotation arc, in pixels (its own units). */
-const ARC_R = 16;
+/** Radius of the rotation arc, in pixels (its own units). Sized to read clearly
+ *  as a rotation control capping the straight handle, not a faint hair above it. */
+const ARC_R = 21;
 /** How far the arc sweeps, in radians. Just over a third of a turn: enough curve
  *  to read as a rotation, short enough to sit as a cap above a straight handle. */
-const ARC_SWEEP = 2.2;
+const ARC_SWEEP = 2.3;
+/** Tube radius and cone size of the arc, in pixels. */
+const ARC_TUBE = 2.4;
+const ARC_HEAD_R = 5.2;
+const ARC_HEAD_LEN = 10;
 
 /** A curved double-headed arrow: the rotation counterpart to createDragHandle,
  *  for a control that SWINGS rather than slides (an extrude's taper). It is a
@@ -465,7 +470,7 @@ export function createRotationArc(tone: HandleTone = "idle"): DragHandle {
     color: idleColor(), emissive: idleColor(), emissiveIntensity: 0.5,
     depthTest: false, depthWrite: false, transparent: true, opacity: 1,
   });
-  const arcGeo = new THREE.TorusGeometry(ARC_R, 2.0, 10, 40, ARC_SWEEP);
+  const arcGeo = new THREE.TorusGeometry(ARC_R, ARC_TUBE, 10, 40, ARC_SWEEP);
   const arc = new THREE.Mesh(arcGeo, body);
   arc.rotation.z = start;
   arc.renderOrder = 999;
@@ -474,7 +479,7 @@ export function createRotationArc(tone: HandleTone = "idle"): DragHandle {
   // way" the way the straight handle's two heads say "slide either way".
   const headGeos: THREE.ConeGeometry[] = [];
   const makeHead = (angle: number, sign: number) => {
-    const g = new THREE.ConeGeometry(4.5, 9, 12);
+    const g = new THREE.ConeGeometry(ARC_HEAD_R, ARC_HEAD_LEN, 12);
     headGeos.push(g);
     const m = new THREE.Mesh(g, body);
     m.position.set(Math.cos(angle) * ARC_R, Math.sin(angle) * ARC_R, 0);
