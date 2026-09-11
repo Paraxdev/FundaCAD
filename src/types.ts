@@ -467,6 +467,12 @@ export type CoreFeature =
       // on the plane is the same solid whichever way the arrow pointed. Absent
       // means false, so every extrude saved before this rebuilds unchanged.
       symmetric?: boolean;
+      // Lean every wall in by this many degrees as it climbs, so one gesture
+      // makes an angled boss, a countersink, or a draw-ready wall instead of a
+      // straight prism. Positive narrows the far face (the way a part pulls out
+      // of a mould), negative widens it (an undercut). Absent or 0 is the plain
+      // straight extrude, so a document made before this rebuilds byte-for-byte.
+      taper?: Num;
     }
   // `profile` shapes the blend's SECTION without moving where it meets the
   // supporting faces: 0 (or absent) is the circular fillet, -1 flattens it to a

@@ -535,7 +535,23 @@ def _handle_extrude(f, ctx):
     target = _region_target(pts, entry, ctx)
     if target is None:
         target = sk  # nothing selected: the whole sketch
-    solid = extrude(target, amount=ctx.val(f["distance"]), both=both)
+    # `taper` leans every wall in by this many degrees as it climbs, so one
+    # extrude gesture makes an angled boss, a countersink, or a draw-ready wall
+    # instead of a straight prism. Positive narrows toward the far end (the way a
+    # part pulls out of a mould), negative widens it (an undercut). Absent or 0
+    # keeps the plain straight path, so an ordinary extrude's geometry and JSON
+    # are byte-identical to what this build made before the field existed.
+    taper = ctx.val(f["taper"]) if f.get("taper") is not None else 0.0
+    if taper and not (-89 < taper < 89):
+        # At or past vertical a wall folds through itself; OCCT hands back a
+        # self-intersecting solid. Name it rather than let the kernel raise a
+        # bare Standard_ConstructionError against the wrong feature.
+        raise ValueError(f"Extrude: taper must be between -89 and 89 degrees (got {taper:g})")
+    solid = (
+        extrude(target, amount=ctx.val(f["distance"]), both=both, taper=taper)
+        if taper
+        else extrude(target, amount=ctx.val(f["distance"]), both=both)
+    )
     # Captured-visibility semantics: an extrude that carries
     # `hiddenBodies` uses THAT set (participants decided at feature
     # creation, MCAD-style, later eye toggles are pure display).

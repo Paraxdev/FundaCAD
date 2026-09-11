@@ -151,6 +151,12 @@ FEATURES = {
                          "sketch on a datum plane inside a body wants",
             "operation": COMMON["operation"],
             "targets": COMMON["targets"],
+            "taper": "optional Num, degrees. Leans every wall in as the extrude "
+                     "climbs, so one feature makes an angled boss, a countersink, "
+                     "or a draw-ready wall. Positive narrows the far face (the way "
+                     "a part pulls out of a mould), negative widens it (an "
+                     "undercut). Must be between -89 and 89. Absent or 0 is a "
+                     "straight prism",
             "regions": "optional; " + COMMON["region"],
             "region": "legacy single-area form of `regions`",
         },

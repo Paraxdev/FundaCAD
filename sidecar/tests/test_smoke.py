@@ -651,6 +651,52 @@ def test_modify_tools():
     print(f"  modify-tools OK: shell {shell_vol:.0f}, rect×3, circular×4, draft {p.volume:.0f}")
 
 
+def test_extrude_taper():
+    """A tapered extrude leans its walls in (or out) as it climbs, so one gesture
+    makes an angled boss instead of a straight prism. The control is the same
+    extrude with no taper: the far face keeps the profile's size, and the JSON is
+    the one this build always wrote."""
+    def top_area(part):
+        face = max(part.faces(), key=lambda fc: fc.center().Z)
+        return face.area
+
+    def build(**extra):
+        return rebuild({"parameters": {}, "features": [
+            {"id": "s", "type": "sketch", "plane": "XY",
+             "entities": [{"type": "rectangle", "width": 20, "height": 20}]},
+            {"id": "e", "type": "extrude", "sketch": "s", "distance": 10,
+             "operation": "new", **extra}]})
+
+    # control: no taper -> far face is the full 20×20 = 400, prism vol 4000
+    p, e, _ = build()
+    assert not e, e
+    assert abs(p.volume - 4000) < 1 and abs(top_area(p) - 400) < 1, (
+        f"straight extrude: vol {p.volume:.0f}, top {top_area(p):.0f}")
+    straight_vol = p.volume
+
+    # positive taper narrows the far face and drops the volume below the prism
+    p, e, _ = build(taper=12)
+    assert not e, e
+    assert p.volume < straight_vol and top_area(p) < 399, (
+        f"taper 12 should narrow the top: vol {p.volume:.0f}, top {top_area(p):.0f}")
+
+    # negative taper widens it and adds volume: the two signs are distinct
+    p, e, _ = build(taper=-12)
+    assert not e, e
+    assert p.volume > straight_vol and top_area(p) > 401, (
+        f"taper -12 should widen the top: vol {p.volume:.0f}, top {top_area(p):.0f}")
+
+    # an explicit 0 is the straight path, byte for byte the same solid
+    p, e, _ = build(taper=0)
+    assert not e and abs(p.volume - straight_vol) < 1, f"taper 0 == straight, got {p.volume:.0f}"
+
+    # past vertical the wall folds through itself: a named refusal, not a kernel crash
+    _p, e, _ = build(taper=90)
+    assert e and any("taper" in x.get("message", "").lower() for x in e), (
+        f"taper 90 should be refused by name, got {e!r}")
+    print(f"  extrude taper OK: straight {straight_vol:.0f}, +12 narrows, -12 widens")
+
+
 def test_offset_face_and_thicken():
     """Offset Face moves selected faces along their normals (single and multi-face,
     the latter exercising resolve_faces' list branch); Thicken gives faces a wall.
@@ -1801,6 +1847,7 @@ if __name__ == "__main__":
     test_extrude_noop_guards()
     test_primitives()
     test_modify_tools()
+    test_extrude_taper()
     test_offset_face_and_thicken()
     test_face_selector_on_concentric_cylinders()
     test_simplify_mesh()
