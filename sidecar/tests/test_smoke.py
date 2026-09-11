@@ -759,6 +759,28 @@ def test_sweep():
     print(f"  sweep OK: arc pipe vol {part.volume:.0f}, {len(part.faces())} faces")
 
 
+def test_sweep_follows_a_sharp_corner():
+    """A sweep along a path with a sharp corner must follow the WHOLE path, not
+    just the first leg. build123d's default TRANSFORMED transition silently swept
+    only the first segment past a corner and returned a valid stub, so nothing
+    downstream flagged it; RIGHT (mitred) corners follow the whole path.
+
+    Control: an L path of two 15mm legs, a radius-2 circle. The truncated stub is
+    one straight 15mm pipe (pi*4*15 = 188.5); the correct full sweep is ~377."""
+    doc = {"parameters": {}, "features": [
+        {"id": "prof", "type": "sketch", "plane": "XY", "entities": [{"type": "circle", "radius": 2}]},
+        {"id": "path", "type": "sketch", "plane": "XZ", "entities": [
+            {"id": "a", "type": "line", "x1": 0, "y1": 0, "x2": 0, "y2": 15},
+            {"id": "b", "type": "line", "x1": 0, "y1": 15, "x2": 15, "y2": 15}]},
+        {"id": "sw", "type": "sweep", "profile": "prof", "path": "path", "operation": "new"}]}
+    part, err, bodies = rebuild(doc)
+    assert not err, err
+    assert len(bodies) == 1, bodies
+    # the whole L (both legs), not the 188.5 stub of just the first
+    assert part.volume > 340, f"sweep truncated at the corner: vol {part.volume:.1f} (stub is ~188.5)"
+    print(f"  sweep follows a sharp corner OK: vol {part.volume:.0f}, {len(part.faces())} faces")
+
+
 def test_revolve_loft_operation():
     """Revolve/Loft used to always do `act["shape"] = solid` onto the active body
     when one existed -- silently DISCARDING it, no boolean, no warning. They now
@@ -1783,6 +1805,7 @@ if __name__ == "__main__":
     test_face_selector_on_concentric_cylinders()
     test_simplify_mesh()
     test_sweep()
+    test_sweep_follows_a_sharp_corner()
     test_revolve_loft_operation()
     test_loft_profiles_keeps_holes_as_tube()
     test_boolean_guards_bodies_and_sweep()
