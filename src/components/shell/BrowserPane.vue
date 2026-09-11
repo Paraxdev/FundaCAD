@@ -348,6 +348,32 @@ const nodes = useDocValue((doc): TreeNode[] => {
     })));
   }
 
+  // --- Datum points and axes (only when present) ---
+  // Reference geometry that builds no body, so it sits with the planes rather
+  // than among the bodies, under the same "planes" filter section. Each row
+  // carries its own mark (a point or an axis) so the two kinds read apart.
+  const refGeom = doc.features.filter(
+    (f): f is Extract<Feature, { type: "datumPoint" | "datumAxis" }> =>
+      f.type === "datumPoint" || f.type === "datumAxis",
+  );
+  if (refGeom.length && show("planes")) {
+    folder("Datums", "datumPoint", refGeom.map((f, i) => ({
+      kind: "row" as const,
+      k: `d:${f.id}`,
+      depth: 0,
+      label: f.name || (f.type === "datumAxis" ? `Axis${i + 1}` : `Point${i + 1}`),
+      icon: f.type === "datumAxis" ? "datumAxis" : "datumPoint",
+      selected: selection.featureId === f.id,
+      error: errId === f.id,
+      visible: store.isPlaneVisible(f.id),
+      activate: () => engine.selectFeature(f.id),
+      toggleVis: () => togglePlaneVis(f.id),
+      rename: (name: string) => store.updateFeature(f.id, { name } as Partial<Feature>),
+      remove: () => store.removeFeature(f.id),
+      title: "Reference geometry · select to use as a mate or measure reference · right-click to Rename / Delete · eye to show/hide",
+    })));
+  }
+
   // --- what the plugins add, between the document's structure and its bodies ---
   //
   // Here rather than at the end, because the one section that exists is about

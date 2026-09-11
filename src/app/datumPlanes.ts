@@ -58,6 +58,18 @@ export function createDatumPlanes(e: Engine): Pick<Engine, "datumPlaneDef" | "sy
         return { id: f.id, origin: def.origin, normal: def.normal, xdir: def.xdir };
       });
     e.viewport.setDatumPlanes(planes);
+    // Datum points and axes ride the same visibility gate and the same rebuild
+    // pass. Their coordinates are baked into the feature, so this reads them
+    // straight off the document, no resolution needed.
+    const points = e.store.document.features
+      .filter((f): f is Extract<Feature, { type: "datumPoint" }> => f.type === "datumPoint")
+      .filter((f) => e.store.isPlaneVisible(f.id))
+      .map((f) => ({ id: f.id, point: f.point }));
+    const axes = e.store.document.features
+      .filter((f): f is Extract<Feature, { type: "datumAxis" }> => f.type === "datumAxis")
+      .filter((f) => e.store.isPlaneVisible(f.id))
+      .map((f) => ({ id: f.id, origin: f.origin, dir: f.dir }));
+    e.viewport.setDatumMarkers(points, axes);
     e.viewport.highlightDatum(e.selectedFeature);
   };
 

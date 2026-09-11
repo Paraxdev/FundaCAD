@@ -44,6 +44,8 @@ export const FEATURE_META: Partial<Record<FeatureType, FeatureMeta>> = {
   loft: { icon: "loft", label: "Loft" },
   sweep: { icon: "sweep", label: "Sweep" },
   datumPlane: { icon: "datumPlane", label: "Datum Plane" },
+  datumPoint: { icon: "datumPoint", label: "Datum Point" },
+  datumAxis: { icon: "datumAxis", label: "Datum Axis" },
   import: { icon: "import", label: "Import" },
   split: { icon: "split", label: "Split Body" },
   // The type-level entry for the booleans, and the one nothing should reach in

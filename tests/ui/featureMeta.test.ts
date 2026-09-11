@@ -37,6 +37,8 @@ const DRAWN_BY_APP: Record<FeatureType, "app"> = {
   loft: "app",
   sweep: "app",
   datumPlane: "app",
+  datumPoint: "app",
+  datumAxis: "app",
   import: "app",
   split: "app",
   boolean: "app",

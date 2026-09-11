@@ -122,6 +122,13 @@ export const MODEL: Group[] = [
           { action: "plane-points", label: "Plane, 3 Pts", iconName: "planePoints" },
         ],
       },
+      {
+        label: "Datum",
+        children: [
+          { action: "datum-point", label: "Datum Point", iconName: "datumPoint" },
+          { action: "datum-axis", label: "Datum Axis", iconName: "datumAxis" },
+        ],
+      },
     ],
   },
   {

@@ -516,6 +516,18 @@ export type CoreFeature =
   // so the tangent plane is a different plane at every point on it and the pick
   // location is part of the definition rather than incidental to it.
   | { id: string; type: "datumPlane"; plane: PlaneSpec; offset?: number; name?: string; face?: Selector; at?: Vec3 }
+  // A reference POINT in space. `point` is a baked world coordinate (the point
+  // picker snaps it onto model geometry at creation, but nothing about it is
+  // re-resolved on rebuild yet, the same known limit a midplane or a
+  // plane-through-points datum has). It builds no geometry: it exists to be
+  // named, measured to, snapped to, and later used as a mate reference. Drawn
+  // and selected client-side, so no rebuild is needed to show or move one.
+  | { id: string; type: "datumPoint"; point: Vec3; name?: string }
+  // A reference AXIS: an infinite line, `origin` a point on it and `dir` its
+  // direction (need not be unit length). Same story as datumPoint, baked at
+  // creation, no geometry, drawn and picked client-side. It is the line a
+  // revolve, a circular pattern, or a mirror can be aimed at by name.
+  | { id: string; type: "datumAxis"; origin: Vec3; dir: Vec3; name?: string }
   // An imported body (STL/3MF/STEP/OBJ/GLB). The sewn/native solid is embedded as
   // a base64 BREP string so the document is self-contained and rebuilds
   // deterministically without the original file. `solid` is false for a

@@ -143,6 +143,10 @@ const FORGE_PATHS: Record<string, string> = {
   // insert / construct
   import: `<path d="M12 3v11m0 0l-4-4m4 4l4-4"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/>`,
   datumPlane: `<path d="M3 9l9-4 9 4-9 4z"/><line x1="12" y1="13" x2="12" y2="20"/><circle cx="12" cy="20" r="1.4" fill="currentColor"/>`,
+  // A single reference point, cross-haired so it reads as a located mark.
+  datumPoint: `<circle cx="12" cy="12" r="2.4" fill="currentColor"/><line x1="12" y1="3" x2="12" y2="7"/><line x1="12" y1="17" x2="12" y2="21"/><line x1="3" y1="12" x2="7" y2="12"/><line x1="17" y1="12" x2="21" y2="12"/>`,
+  // A reference line with its two end nubs, an axis to spin or mirror about.
+  datumAxis: `<line x1="4" y1="18" x2="20" y2="6"/><circle cx="4" cy="18" r="1.6" fill="currentColor"/><circle cx="20" cy="6" r="1.6" fill="currentColor"/>`,
   // Two parallel plates with the plane between them drawn through the middle.
   midplane: `<path d="M3 7l9-3 9 3-9 3z"/><path d="M3 18l9-3 9 3-9 3z"/><line x1="3" y1="12.5" x2="21" y2="12.5" stroke-dasharray="3 2"/>`,
   // Three points with the plane they name laid through them.
