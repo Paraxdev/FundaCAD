@@ -95,6 +95,72 @@ def _face_uv_to_mm(surf, u, v, period=None):
     return (u - u0) * su, (v - v0) * sv
 
 
+def _planar_chart(pts, normals):
+    """A planar (normal-projection) mm chart for a face `_face_uv_to_mm` cannot
+    chart exactly: fillet corners, spheres, and every freeform blend.
+
+    WHY THIS EXISTS. Those faces have no metrically faithful UV, so the fallback
+    in `_face_uv_to_mm` scales (u,v) by a single Jacobian sampled at the face
+    centroid. On a strongly doubly-curved patch the true Jacobian swings across
+    the face, and one sample turns a regular pattern into a folded, overlapping
+    crumple, which is exactly what a knurl on a big fillet corner looked like.
+
+    So the pattern is laid out in a PLANE instead of in the surface parameters:
+    the mean surface normal is the projection axis, the mm coordinates are the
+    3D positions measured in an orthonormal in-plane basis, and the field is
+    sampled there. The lattice is then metrically uniform, the size the user set,
+    everywhere. The cost is the honest one of any planar projection: where the
+    face turns away from the axis the pattern foreshortens, most at a corner that
+    curves through ninety degrees. That is a controlled shrink, not a fold, and
+    it is what "project the texture along the normal" means.
+
+    Returns (u_mm, v_mm, t_u, t_v) matching `_face_uv_to_mm` + `_face_frame`:
+    per-vertex mm coordinates and the per-vertex in-plane basis the analytic
+    normal gradient differentiates in. The displacement DIRECTION stays the true
+    per-vertex surface normal the caller already holds; only the sampling frame
+    is planar."""
+    n = np.asarray(normals, dtype=np.float64)
+    axis = n.mean(axis=0)
+    mag = float(np.linalg.norm(axis))
+    if mag < 1e-9:
+        axis = np.array([0.0, 0.0, 1.0])  # degenerate: normals cancelled, any plane
+    else:
+        axis = axis / mag
+    # Seed the in-plane basis from the world axis LEAST aligned with the normal,
+    # so the tangent is well conditioned and the choice is repeatable rather than
+    # depending on vertex order.
+    seed = np.eye(3)[int(np.argmin(np.abs(axis)))]
+    t = seed - axis * float(np.dot(seed, axis))
+    t /= max(float(np.linalg.norm(t)), 1e-9)
+    b = np.cross(axis, t)
+    p = np.asarray(pts, dtype=np.float64)
+    d = p - p.mean(axis=0)
+    u_mm = d @ t
+    v_mm = d @ b
+    # The SAMPLING is planar (u_mm, v_mm above): that is what makes the cells one
+    # size across the face. The GRADIENT basis the analytic normal differentiates
+    # in must be TANGENT to the surface at each vertex, though, or the shading
+    # normal picks up a component along the true normal and the pattern reads
+    # muddy instead of crisp. So project the two planar axes onto each vertex's
+    # own tangent plane and re-orthonormalise; where an axis grazes the normal
+    # (the projection collapses) fall back to the other axis crossed with n, so
+    # the frame stays defined right up to the silhouette.
+    n = n / np.maximum(np.linalg.norm(n, axis=1, keepdims=True), 1e-12)
+    t_u = t - (n @ t)[:, None] * n
+    lu = np.linalg.norm(t_u, axis=1)
+    t_v = b - (n @ b)[:, None] * n
+    lv = np.linalg.norm(t_v, axis=1)
+    weak = lu < 1e-6
+    if weak.any():
+        t_u[weak] = np.cross(t_v[weak], n[weak])
+        lu = np.linalg.norm(t_u, axis=1)
+    t_u /= np.maximum(lu, 1e-12)[:, None]
+    # v completes a right-handed tangent frame with u and n, which keeps it
+    # orthonormal even where the b projection was the weak one.
+    t_v = np.cross(n, t_u)
+    return u_mm, v_mm, t_u, t_v
+
+
 # --- mesh refinement + displacement ------------------------------------------
 
 
