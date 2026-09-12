@@ -613,6 +613,17 @@ export type CoreFeature =
   // `bodies` cuts every listed body (used for "cut all visible bodies"). The
   // cutting plane is either an inline `plane` or `planeId` (a datum plane by id).
   | { id: string; type: "split"; plane?: PlaneSpec; planeId?: string; keep: "top" | "bottom" | "both"; body?: string; bodies?: string[]; groupSides?: boolean }
+  // Divide a face: imprint a sketch's curves onto the face it was drawn on,
+  // splitting that face into separate, independently selectable faces (each can
+  // then be pressed, painted or offset on its own). No material is added or
+  // removed, the split only adds face boundaries, so the body stays one
+  // watertight solid and its volume is unchanged. Curves that reach across the
+  // face divide it (a "+" turns one top face into four); curves that stop short
+  // of the boundary form no closed sub-region and divide nothing, which is an
+  // advisory, not a failure. It inherits its target face from `sketch` (that
+  // sketch's own `face` reference), so it follows the same face the sketch does;
+  // `body` pins the owning body for the rare case where more than one resolves.
+  | { id: string; type: "imprint"; sketch: string; body?: string }
   // A boolean between bodies: union, subtract or intersect. The target is
   // modified in place; tool bodies are consumed unless keepOriginals. Omitted
   // target/tools default to "all bodies".

@@ -522,6 +522,18 @@ def _build_sketch(f, val, datums=None, plane=None):
     # the located open/closed path wire from the free edges (for sweep paths)
     path_wire = _path_wire(edges, plane)
 
+    # Every entity's boundary as LOCATED 3D edges, in the sketch's plane. This is
+    # what a Divide (imprint) feature cuts the underlying face with: the whole
+    # arrangement, crossing lines included, not just the closed loops. Located
+    # here, once, so the imprint handler never re-derives geometry (it stays
+    # body-free, like the rest of this module) and so a checkpoint replay that
+    # rebuilds the sketch registry carries the tool edges too.
+    tool_edges = []
+    for le in all_edges:
+        if _wrapped_or_none(le) is None:
+            continue
+        tool_edges.append(plane * le)
+
     # Region-pick faces = the planar ARRANGEMENT of every sketch edge: a line
     # crossing a profile carves it into separately-selectable sub-areas (mainstream MCAD
     # parity), and touching/overlapping loops split at the shared boundaries. This
@@ -557,12 +569,14 @@ def _build_sketch(f, val, datums=None, plane=None):
         if _wrapped_or_none(sk) is None:
             sk = Compound(list(sk))
     else:
-        return {"sketch": None, "faces": [], "wire": path_wire, "plane": plane}
+        return {"sketch": None, "faces": [], "wire": path_wire, "plane": plane,
+                "edges": tool_edges}
 
     # `plane` rides along for _region_cells: a consuming feature has to cut these
     # cells where the model under them ends, and needs to know which plane that
     # model has to lie in.
-    return {"sketch": sk, "faces": located_faces, "wire": path_wire, "plane": plane}
+    return {"sketch": sk, "faces": located_faces, "wire": path_wire, "plane": plane,
+            "edges": tool_edges}
 
 
 # Stitch tolerance for combining a sweep path's free edges. Wire.combine defaults

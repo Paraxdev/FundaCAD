@@ -119,6 +119,8 @@ const FORGE_PATHS: Record<string, string> = {
   // which part is filled, at a polite 30% the blob, the crescent and the lens
   // were three grey smudges.
   split: `<rect x="4" y="7" width="16" height="10" rx="2"/><line x1="12" y1="3" x2="12" y2="21" stroke-dasharray="2 2"/>`,
+  // Divide a face: the face, and the sketch cross that cuts it into quarters.
+  imprint: `<rect x="4" y="4" width="16" height="16" rx="1.5"/><line x1="12" y1="4" x2="12" y2="20"/><line x1="4" y1="12" x2="20" y2="12"/>`,
   // Both circles, wound the same way, nonzero: the lens has winding 2 and is
   // still simply inside, so the union shades evenly.
   booleanUnion: `<path d="M3.5 12a6 6 0 1 0 12 0a6 6 0 1 0-12 0M8.5 12a6 6 0 1 0 12 0a6 6 0 1 0-12 0" fill="currentColor" fill-opacity="0.85" stroke="none"/><circle cx="9.5" cy="12" r="6"/><circle cx="14.5" cy="12" r="6"/>`,

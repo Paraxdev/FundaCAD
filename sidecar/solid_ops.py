@@ -69,6 +69,51 @@ def _shell(shape, thickness, openings):
         )
 
 
+def _imprint(shape, edges):
+    """Imprint sketch curves onto a solid, splitting the faces they lie on into
+    separate faces. `edges` are LOCATED build123d Edges sitting in the face's
+    plane; each one that reaches across a face divides it, so a "+" drawn on a
+    box top hands back the same solid with four top faces instead of one.
+
+    No material is added or removed: the split only adds face boundaries, so the
+    body stays watertight and its volume is unchanged (verified to 1e-6). Runs
+    through the BOP splitter, which is robust where BRepFeat_SplitShape is fussy
+    about tool endpoints that land mid-edge on the existing boundary.
+
+    A no-op by construction when nothing lies on a face to cut: curves that don't
+    reach the boundary form no closed sub-region, and the splitter drops such
+    dangling edges rather than leaving a seam that bounds nothing. The caller
+    reads the face count to tell a real divide from that no-op."""
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Splitter
+    from OCP.TopTools import TopTools_ListOfShape
+
+    tools = TopTools_ListOfShape()
+    n = 0
+    for e in edges:
+        w = _wrapped_or_none(e)
+        if w is None:
+            continue
+        tools.Append(w)
+        n += 1
+    if n == 0:
+        return shape
+    args = TopTools_ListOfShape()
+    args.Append(shape.wrapped)
+    sp = BRepAlgoAPI_Splitter()
+    sp.SetArguments(args)
+    sp.SetTools(tools)
+    # Leave the argument solid untouched, we hand back a fresh split shape and
+    # keep the original the body still points at until we reassign it.
+    sp.SetNonDestructive(True)
+    sp.Build()
+    if not sp.IsDone():
+        raise ValueError(
+            "Divide: the sketch curves could not be imprinted onto the face"
+        )
+    out = _wrap_topods(sp.Shape())
+    return out if out is not None else shape
+
+
 def _rot_for(axis, deg):
     """A build123d Rotation of `deg` degrees about the named global axis."""
     if axis == "X":

@@ -41,6 +41,7 @@ const DRAWN_BY_APP: Record<FeatureType, "app"> = {
   datumAxis: "app",
   import: "app",
   split: "app",
+  imprint: "app",
   boolean: "app",
   box: "app",
   cylinder: "app",

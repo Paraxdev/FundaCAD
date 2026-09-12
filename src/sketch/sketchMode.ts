@@ -564,9 +564,37 @@ export class SketchMode {
         store.replaceFeature(this.editingId, sketch, this.drainBindings(sketch.id));
       } else {
         store.addFeature(sketch, undefined, this.drainBindings(sketch.id));
+        // Drawn ACROSS a solid face, with curves that divide it but close no
+        // region of their own (a "+", a line straight across, an open cut), a
+        // sketch is a request to split that face, not a profile to extrude. So
+        // imprint it onto the face, turning the pieces into separate, selectable
+        // faces, the way drawing across a face is expected to behave. Only on
+        // creation: an edit rebuilds the Divide already sitting after the sketch,
+        // and adding a second here would stack duplicates.
+        this.maybeDivideFace(sketch);
       }
     }
     this.cleanup();
+  }
+
+  /** Append a Divide Face feature when the just-finished sketch is an imprint,
+   *  not a profile: it sits on a real body face and its own curves close no
+   *  area, so the only way it bounds anything is against that face. A rectangle
+   *  or a circle closes a region on its own and is left alone (the user will
+   *  extrude it); a "+" or a lone line does not, and is what this catches.
+   *  Called before cleanup(), while `this.face` and `this.entities` still hold. */
+  private maybeDivideFace(sketch: Feature) {
+    if (sketch.type !== "sketch" || !this.face || !this.store) return;
+    const ents = [...this.entities, ...this.derivedEntities()];
+    const hasEdge = ents.some(
+      (e) => !e.construction && e.type !== "point" && e.type !== "text",
+    );
+    if (!hasEdge) return;
+    // With NO footprint, so the question is whether the CURVES close an area,
+    // not whether they carve up the face they lie on (they do, and that is the
+    // whole point). A profile closes one here; an open cut closes none.
+    if (detectRegions(sketch.id, ents, undefined).length > 0) return;
+    this.store.addFeature({ id: this.store.nextId(), type: "imprint", sketch: sketch.id });
   }
 
   cancel() {

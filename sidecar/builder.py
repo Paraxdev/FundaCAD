@@ -231,6 +231,7 @@ from solid_ops import (  # noqa: F401
     _distance_to_target,
     _draft,
     _guard_offsetable,
+    _imprint,
     _offset_face,
     _offset_faces,
     _pattern_circular,
@@ -1772,6 +1773,67 @@ def _handle_joint(f, ctx):
     mv["shape"] = move_loc * sh
 
 
+def _sketch_face_selector(f, ctx):
+    """The face selector of the sketch a Divide feature consumes, or None. A Divide
+    inherits its target face from the sketch it is drawn on, so the sketch's own
+    `face` reference is what says which body's face to split."""
+    sid = f.get("sketch")
+    for sf in (ctx.features or []):
+        if sf.get("id") == sid:
+            return sf.get("face")
+    return None
+
+
+def _imprint_target(f, ctx):
+    """The body a Divide splits: an explicit `body` if the feature records one,
+    else the body that owns the sketch's anchor face, else the active body.
+
+    Resolving the owner from the sketch's face selector (rather than trusting a
+    stored id) keeps the Divide following the same face its sketch follows, so an
+    upstream edit that renumbers bodies can't silently re-aim it at the wrong
+    piece, the reason recorded on _face_anchor_plane."""
+    if f.get("body"):
+        return ctx.find_body(f["body"])
+    sel = _sketch_face_selector(f, ctx)
+    if sel is not None:
+        for b in ctx.bodies:
+            if b.get("shape") is None:
+                continue
+            try:
+                found = resolve_faces(b["shape"], sel, diag=None, feature_id=f.get("id"))
+            except Exception:
+                found = None
+            if found:
+                return b
+    return ctx.require_active("Divide")
+
+
+def _handle_imprint(f, ctx):
+    # Split the face a sketch sits on into separate faces, by imprinting the
+    # sketch's curves onto it. The face becomes several independently selectable
+    # faces (each can then be pressed, painted or offset on its own) with no
+    # material added or removed. Curves that don't reach the face boundary form
+    # no closed sub-region and leave the face whole, which is an advisory, not a
+    # failure: the sketch is a legitimate imprint that simply didn't divide
+    # anything yet.
+    entry = _require_sketch(ctx, f.get("sketch"), "divide")
+    edges = entry.get("edges") or []
+    if not edges:
+        _skip_feature(ctx.diagnostics, f, "imprint",
+                      "this sketch has no curves to divide a face with")
+        return
+    act = _imprint_target(f, ctx)
+    if act is None or act.get("shape") is None:
+        raise ValueError("Divide: the face to split is no longer in the model")
+    before = len(_as_compound(act["shape"]).faces())
+    act["shape"] = _imprint(act["shape"], edges)
+    after = len(_as_compound(act["shape"]).faces())
+    if after <= before:
+        _skip_feature(ctx.diagnostics, f, "imprint",
+                      "these curves don't divide the face, extend them across it "
+                      "to its edges")
+
+
 def _handle_split(f, ctx):
     _do_split(f, ctx.bodies, ctx.find_body, ctx.active, ctx.new_body, ctx.datums)
 
@@ -1839,6 +1901,7 @@ _FEATURE_HANDLERS = {
     "duplicate": _handle_duplicate,
     "joint": _handle_joint,
     "split": _handle_split,
+    "imprint": _handle_imprint,
     "boolean": _handle_boolean,
     "removeBody": _handle_remove_body,
 }

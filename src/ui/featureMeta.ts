@@ -48,6 +48,7 @@ export const FEATURE_META: Partial<Record<FeatureType, FeatureMeta>> = {
   datumAxis: { icon: "datumAxis", label: "Datum Axis" },
   import: { icon: "import", label: "Import" },
   split: { icon: "split", label: "Split Body" },
+  imprint: { icon: "imprint", label: "Divide Face" },
   // The type-level entry for the booleans, and the one nothing should reach in
   // practice: `featureMeta` below reads the operation and names the actual
   // command. It stays because this table is a Record over the whole union and a
