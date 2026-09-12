@@ -75,17 +75,19 @@ const EDGE_PICKABLE = new THREE.Color(0xd98a4a); // muted ember "selectable" edg
 const SKETCH_DIM_OPACITY = 0.55;
 const SKETCH_DIM_EDGE_OPACITY = 0.5;
 
-// Emissive bodies that cast light (syncEmitterLights). At most this many real
-// lights, the brightest emitters winning, so a document cannot exceed the WebGL
-// light budget. How far and how bright each one is lives in emitters.ts.
-const MAX_EMITTER_LIGHTS = 6;
+// Emissive bodies and faces that cast light (syncEmitterLights). At most this
+// many rectangle lights, the brightest patches winning: every one is evaluated
+// for every lit pixel, so this is the budget, not a formality. How each patch is
+// shaped and how bright it is lives in emitters.ts.
+const MAX_AREA_LIGHTS = 12;
+const MAX_AREA_LIGHTS_LOW_POWER = 4;
 /** Only the brightest few emitters cast a SHADOW: a point-light shadow is a cube
  *  map (six renders), so this is the real cost of the effect, kept to the lights
  *  that carry the look. Zero on a weak machine (renderer.shadowMap.enabled off). */
 const MAX_SHADOW_EMITTERS = 2;
-/** One emitter to place a light for: a whole body or a single face, each carrying
- *  its own light position and size so syncEmitterLights treats them alike. */
-type EmitterMap = Map<string, { color: string | number; glow: number; position: THREE.Vector3; size: number }>;
+/** One glowing patch to light: its fitted rectangle, and the glow and colour of
+ *  the faces it covers, area weighted. */
+interface EmitterPatch { key: string; e: AreaEmitter; glow: number; color: THREE.Color }
 /** How far the face being sketched ON is lifted back ABOVE the rest, as added
  *  white. Small: the job is to separate it from its neighbours, not to make it
  *  a light source. */
@@ -117,7 +119,8 @@ import { faceSketchPlane } from "../sketch/sketchView";
 import { viewSideNormal } from "./viewFlight";
 import { themeColor } from "./themeColors";
 import { AreaBox } from "./areaBox";
-import { emitterIntensity, emitterReach, emitterShadowNear, faceEmitterShapes } from "./emitters";
+import { type AreaEmitter, areaEmitters, emitterLuminance, emitterShadowNear, emitterStandoff } from "./emitters";
+import { installAreaLights } from "./areaLightShadows";
 import { auditIsClean, auditLine, auditScene } from "../diagnostics/sceneAudit";
 import { pipe, pipeFault } from "../diagnostics/pipelineLog";
 import {
@@ -1008,8 +1011,10 @@ export class Viewport {
    *
    *  Called again after every rebuild, which hands back fresh materials that
    *  know nothing about any of this. */
-  private emitterLights = new Map<string, THREE.PointLight>();
-  private readonly emitterScratch = new THREE.Vector3();
+  /** The rectangle light per glowing patch, and the shadow only point light
+   *  paired with it when it is one of the few that cast shadows. */
+  private emitterLights = new Map<string, { area: THREE.RectAreaLight; shadow: THREE.PointLight | null }>();
+  private emitterGroup: THREE.Group | null = null;
 
   private applyBodyFinish() {
     if (!this.model) return;
@@ -1031,7 +1036,7 @@ export class Viewport {
     // Emissive bodies that should also THROW light on their neighbours (the glow
     // is a lamp, not just a bright skin), collected here and reconciled into real
     // lights after the pass, see syncEmitterLights.
-    const emitters: EmitterMap = new Map();
+    const emitters: EmitterPatch[] = [];
     for (const b of this.model.bodies) {
       // The body's OWN material, which is not b.mesh.material while the zebra
       // overlay is on: that one is shared by every body, so writing a finish to
@@ -1057,21 +1062,6 @@ export class Viewport {
       const glow = ghost ? 0 : (f?.emissive ?? FINISH.emissive);
       mat.emissive.set(glow > 0 ? (this.bodyPaint[b.id] ?? 0xffffff) : 0x000000);
       mat.emissiveIntensity = glow * MAX_EMISSIVE_INTENSITY;
-      // A glowing body is the lamp, and a lamp's own shell must not stand between
-      // its light and the room. Its light sits at the body's centre, so while the
-      // body cast shadows the brightest emitters (the ones given a shadow map) lit
-      // nothing at all: every ray left from inside a closed shadow caster.
-      let shadowless = glow > 0;
-      if (glow > 0) {
-        const geo = b.mesh.geometry;
-        if (!geo.boundingBox) geo.computeBoundingBox();
-        const box = geo.boundingBox;
-        if (box) emitters.set(b.id, {
-          color: this.bodyPaint[b.id] ?? 0xffffff, glow,
-          position: box.getCenter(new THREE.Vector3()),
-          size: box.getSize(this.emitterScratch).length() || 1,
-        });
-      }
       applyClearcoat(mat, ghost ? 0 : (f?.clearcoat ?? FINISH.clearcoat));
       // A node graph wins over a single generator; both use one shader slot, so
       // only the active one is applied and switching clears the other.
@@ -1095,8 +1085,8 @@ export class Viewport {
       // draws with, and a second writer for the extra ones would be a second
       // place for them to disagree.
       const extra = this.faceMatState.get(b.id);
+      let faceGlow = false;
       if (extra) {
-        let faceGlow = false;
         for (let i = 1; i < extra.mats.length; i++) {
           const fm = extra.mats[i]!;
           const ff = extra.finishes[i]!;
@@ -1117,97 +1107,130 @@ export class Viewport {
           }
           fm.clippingPlanes = mat.clippingPlanes;
         }
-        // A glowing FACE also throws light, at the face's own centroid, so a lit
-        // panel or an inset LED lights its surroundings the way a whole emissive
-        // body does. Only walked when a face actually glows (the common case pays
-        // nothing), and the lights share the body emitters' rank-and-cap budget.
-        if (faceGlow && this.addFaceEmitters(b, emitters)) shadowless = true;
       }
-      b.mesh.castShadow = !shadowless;
+      // A glowing body, or a body with a glowing face, throws light from its own
+      // surface. Only walked when something on it glows, so the common case pays
+      // nothing.
+      if (glow > 0 || faceGlow) this.collectEmitters(b, glow, ghost, emitters);
     }
     this.syncEmitterLights(emitters);
     // The model may have moved or grown; re-aim the optional key-light shadow.
     this.scene.frameShadows();
   }
 
-  /** Emissive bodies also cast light: a lamp glows AND lights the wall by it, so
-   *  a lit indicator or an LED next to a part throws its colour onto it. A real
-   *  point light per emitter, placed at the body's centre, its colour the body's
-   *  own and its brightness the glow slider. Kept honest and cheap rather than
-   *  ray-traced: only the brightest few get a shadow map, and the set is CAPPED,
-   *  because every light is a shader uniform and the
-   *  brightest few carry the look, so the rest are dropped rather than blowing
-   *  the WebGL light budget on a document that painted forty things emissive.
+  /** Emissive bodies and faces cast light: a lamp glows AND lights the wall by
+   *  it. Each glowing patch is a real rectangle light the shape of the patch
+   *  (emitters.ts), so a lit strip throws a long soft pool and not a round
+   *  hotspot. The brightest few also cast shadows, through a point light of zero
+   *  intensity paired with each (areaLightShadows.ts explains the pairing, which
+   *  is why the lights are re-added in rank order every pass).
    *
-   *  Reconciled, not rebuilt: a light per emitter is reused across passes and one
-   *  is torn down only when its body stops glowing or leaves, so toggling x-ray
-   *  or nudging the slider does not churn the scene's lights. */
-  private syncEmitterLights(emitters: EmitterMap) {
-    const cap = isRenderLowPower() ? 2 : MAX_EMITTER_LIGHTS;
-    const ranked = [...emitters.entries()]
-      .sort((a, b) => b[1].glow - a[1].glow)
-      .slice(0, cap);
-    const keep = new Set(ranked.map(([id]) => id));
-    for (const [id, light] of this.emitterLights) {
-      if (keep.has(id)) continue;
-      this.removeFromScene(light);
-      this.emitterLights.delete(id);
+   *  CAPPED, because every rectangle light is evaluated per pixel: the brightest
+   *  patches carry the look and the rest are dropped, rather than a document that
+   *  painted forty things emissive grinding the viewport.
+   *
+   *  Reconciled, not rebuilt: a patch's lights are reused across passes and torn
+   *  down only when it stops glowing or leaves, so toggling x-ray or nudging the
+   *  slider does not churn the scene. */
+  private syncEmitterLights(patches: EmitterPatch[]) {
+    const low = isRenderLowPower();
+    const ranked = patches
+      .map((p) => ({ p, power: emitterLuminance(p.glow, p.e) * p.e.width * p.e.height }))
+      .sort((a, b) => b.power - a.power)
+      .slice(0, low ? MAX_AREA_LIGHTS_LOW_POWER : MAX_AREA_LIGHTS)
+      .map((r) => r.p);
+    const keep = new Set(ranked.map((p) => p.key));
+    for (const [key, held] of this.emitterLights) {
+      if (keep.has(key)) continue;
+      held.area.dispose();
+      held.shadow?.dispose();
+      this.emitterLights.delete(key);
     }
-    const shadowCap = isRenderLowPower() ? 0 : MAX_SHADOW_EMITTERS;
-    ranked.forEach(([id, { color, glow, position, size }], rank) => {
-      let light = this.emitterLights.get(id);
-      if (!light) {
-        light = new THREE.PointLight(0xffffff, 0, 0, 2); // decay 2 (inverse-square)
-        light.shadow.mapSize.set(1024, 1024);
-        light.shadow.bias = -0.004; // kill the self-shadow acne on flat CAD faces
-        light.shadow.radius = 4; // soft PCF edges, so the shadow reads as cast light not a hard stencil
-        this.emitterLights.set(id, light);
-        this.addToScene(light);
+    if (!ranked.length && !this.emitterGroup) return;
+    if (!this.emitterGroup) {
+      installAreaLights();
+      this.emitterGroup = new THREE.Group();
+      this.emitterGroup.name = "emitters";
+      this.addToScene(this.emitterGroup);
+    }
+    const group = this.emitterGroup;
+    group.clear();
+
+    const shadowCap = low || !this.scene.renderer.shadowMap.enabled ? 0 : MAX_SHADOW_EMITTERS;
+    const shadows: THREE.PointLight[] = [];
+    ranked.forEach(({ key, e, glow, color }, rank) => {
+      let held = this.emitterLights.get(key);
+      if (!held) {
+        held = { area: new THREE.RectAreaLight(), shadow: null };
+        this.emitterLights.set(key, held);
       }
-      light.position.copy(position);
-      light.color.set(color);
-      light.distance = emitterReach(size);
-      light.intensity = emitterIntensity(glow, size);
-      // The brightest few also occlude: real light AND a shadow, the point of
-      // this over a flat emissive tint.
-      light.castShadow = rank < shadowCap;
-      if (light.castShadow) {
-        const cam = light.shadow.camera;
-        cam.near = emitterShadowNear(size);
-        cam.far = light.distance;
+      const { area } = held;
+      area.color.copy(color);
+      area.intensity = emitterLuminance(glow, e);
+      area.width = e.width;
+      area.height = e.height;
+      area.position.set(...e.center);
+      // The light shines down its local -Z with its width along X, so build that
+      // frame from the patch's normal and width direction.
+      const x = new THREE.Vector3(...e.xAxis);
+      const z = new THREE.Vector3(...e.normal).negate();
+      const y = new THREE.Vector3().crossVectors(z, x);
+      area.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z));
+      group.add(area);
+
+      if (rank < shadowCap) {
+        if (!held.shadow) {
+          held.shadow = new THREE.PointLight(0xffffff, 0);
+          held.shadow.castShadow = true;
+          held.shadow.shadow.mapSize.set(1024, 1024);
+          held.shadow.shadow.bias = -0.004; // kill the self-shadow acne on flat CAD faces
+          held.shadow.shadow.radius = 4; // soft PCF edges, closer to an area light's soft shadow
+        }
+        const n = e.normal;
+        const lift = emitterStandoff(e.size);
+        held.shadow.position.set(e.center[0] + n[0] * lift, e.center[1] + n[1] * lift, e.center[2] + n[2] * lift);
+        const cam = held.shadow.shadow.camera;
+        cam.near = emitterShadowNear(e.size);
+        cam.far = Math.max(e.size * 40, cam.near * 10);
         cam.updateProjectionMatrix();
+        shadows.push(held.shadow);
+      } else if (held.shadow) {
+        held.shadow.dispose();
+        held.shadow = null;
       }
     });
+    // After every area light, in the same rank order: shadowed area light i and
+    // shadow i are one emitter.
+    for (const light of shadows) group.add(light);
+    this.requestRender();
   }
 
-  /** Add one emitter per glowing FACE of `b`, placed just in front of the face
-   *  (see emitters.faceEmitterShapes), so a lit panel lights its surroundings like
-   *  an emissive body does. Local geometry space, matching the body emitters (both
-   *  feed light.position directly); a face's own paint tints it, falling back to
-   *  the body's colour then white.
-   *
-   *  Returns true when a glowing face is closed (a whole sphere), whose light has
-   *  no front to stand in and sits inside the body, so the body must not cast
-   *  shadows either. */
-  private addFaceEmitters(b: { id: string; mesh: THREE.Mesh; faceIds: number[] }, emitters: EmitterMap): boolean {
+  /** The glowing patches of one body. A face with a material of its own glows by
+   *  that material; every other face by the body's. Colour is the face's paint,
+   *  else the body's, else white, averaged by area across a patch that merged
+   *  several faces. */
+  private collectEmitters(b: { id: string; mesh: THREE.Mesh; faceIds: number[] }, bodyGlow: number, ghost: boolean, out: EmitterPatch[]) {
     const geo = b.mesh.geometry;
     const pos = geo.getAttribute("position") as THREE.BufferAttribute | undefined;
-    if (!b.faceIds || !pos) return false;
-    const shapes = faceEmitterShapes(
-      pos.array, geo.getIndex()?.array ?? null, b.faceIds,
-      (fid) => (this.faceFinish[fid]?.emissive ?? 0) > 0,
-    );
-    let inside = false;
-    for (const [fid, s] of shapes) {
-      if (!s.normal[0] && !s.normal[1] && !s.normal[2]) inside = true;
-      emitters.set(`${b.id}:f${fid}`, {
-        color: this.facePaint[fid] ?? this.bodyPaint[b.id] ?? 0xffffff,
-        glow: this.faceFinish[fid]!.emissive,
-        position: new THREE.Vector3(...s.position),
-        size: s.size,
-      });
+    if (!b.faceIds || !pos) return;
+    const glowOf = (fid: number) => {
+      const ff = this.faceFinish[fid];
+      return ff ? (ghost ? 0 : ff.emissive) : bodyGlow;
+    };
+    const tint = new THREE.Color();
+    for (const e of areaEmitters(pos.array, geo.getIndex()?.array ?? null, b.faceIds, (fid) => glowOf(fid) > 0)) {
+      let glow = 0;
+      const color = new THREE.Color(0, 0, 0);
+      for (const [fid, a] of e.faces) {
+        const w = a / e.area;
+        glow += glowOf(fid) * w;
+        tint.set(this.facePaint[fid] ?? this.bodyPaint[b.id] ?? 0xffffff);
+        color.r += tint.r * w;
+        color.g += tint.g * w;
+        color.b += tint.b * w;
+      }
+      out.push({ key: `${b.id}:${e.key}`, e, glow, color });
     }
-    return inside;
   }
 
   /** Give one body the extra materials its per-face assignments need, as
