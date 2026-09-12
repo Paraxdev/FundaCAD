@@ -9,6 +9,7 @@
 import * as THREE from "three";
 import { bodyOfFace, edgeObjects, type BodyMesh, type ModelView } from "./render";
 import type { EdgeRef } from "./edgeLines";
+import { makeSelectionGlow, type GlowKind } from "./selectionGlow";
 
 const EDGE_BASE = new THREE.Color(0x1b1f24);
 const HOVER = new THREE.Color(0xffd089); // pale hot amber (under cursor)
@@ -54,6 +55,11 @@ export class Highlighter {
    *  viewport.setModel() builds a fresh ModelView AND a fresh Highlighter
    *  together, so `view` never changes under an instance. */
   private byId: Map<string, BodyMesh> | null = null;
+
+  /** Live selection/hover overlay per body (see selectionGlow.ts). Parented to
+   *  the body mesh, so it follows a move-ghost drag and is torn down with the
+   *  model; keyed here so a hover-then-select swaps the intensity cleanly. */
+  private bodyGlows = new Map<string, THREE.Mesh>();
 
   private bodyById(bodyId: string): BodyMesh | undefined {
     if (!this.byId) {
@@ -193,10 +199,12 @@ export class Highlighter {
   toggleSelectBody(bodyId: string) {
     if (this.selectedBodies.has(bodyId)) {
       this.selectedBodies.delete(bodyId);
-      this.restoreBody(bodyId);
+      // if the cursor is still on it, drop back to the hover glow rather than none
+      if (this.hoveredBody === bodyId) this.showBodyGlow(bodyId, "hover");
+      else this.hideBodyGlow(bodyId);
     } else {
       this.selectedBodies.add(bodyId);
-      this.paintBody(bodyId, SELECT);
+      this.showBodyGlow(bodyId, "select");
     }
   }
 
@@ -208,10 +216,10 @@ export class Highlighter {
   hoverBody(bodyId: string | null) {
     if (this.hoveredBody === bodyId) return;
     if (this.hoveredBody !== null && !this.selectedBodies.has(this.hoveredBody)) {
-      this.restoreBody(this.hoveredBody);
+      this.hideBodyGlow(this.hoveredBody);
     }
     this.hoveredBody = bodyId;
-    if (bodyId !== null && !this.selectedBodies.has(bodyId)) this.paintBody(bodyId, HOVER);
+    if (bodyId !== null && !this.selectedBodies.has(bodyId)) this.showBodyGlow(bodyId, "hover");
   }
 
   /** select exactly this body (clearing any other body selection). */
@@ -225,25 +233,39 @@ export class Highlighter {
   }
 
   clearBodySelection() {
-    for (const id of this.selectedBodies) this.restoreBody(id);
+    for (const id of this.selectedBodies) {
+      // Keep the hovered body's glow, but drop it to the fainter hover intensity.
+      if (id === this.hoveredBody) this.showBodyGlow(id, "hover");
+      else this.hideBodyGlow(id);
+    }
     this.selectedBodies.clear();
-    // The hover was suppressed while the body was selected, so re-apply it or
-    // the body under the cursor comes back to base colour and stays there until
-    // the pointer moves off it and back.
-    if (this.hoveredBody !== null) this.paintBody(this.hoveredBody, HOVER);
+    // A body under the cursor that was never selected still needs its hover glow.
+    if (this.hoveredBody !== null && !this.bodyGlows.has(this.hoveredBody)) {
+      this.showBodyGlow(this.hoveredBody, "hover");
+    }
   }
 
-  /** paint every vertex of the body's own (already-isolated) buffer. A body's
-   *  geometry holds only its own vertices now, so "the whole body" IS the
-   *  whole buffer, no faceId-range scan needed (unlike paintFace below, this
-   *  never needs to scope to a sub-range within a shared buffer). */
-  private paintBody(bodyId: string, color: THREE.Color) {
+  /** Show a body's selection/hover glow: a fresnel overlay child of its mesh
+   *  (selectionGlow.ts), replacing any glow already on it so a hover that turns
+   *  into a selection swaps intensity rather than stacking two draws. Nothing is
+   *  written to the vertex buffer, so there is nothing to leave behind. */
+  private showBodyGlow(bodyId: string, kind: GlowKind) {
     const body = this.bodyById(bodyId);
     if (!body) return;
-    const colorAttr = body.mesh.geometry.getAttribute("color") as THREE.BufferAttribute;
-    if (!colorAttr) return;
-    for (let v = 0; v < colorAttr.count; v++) colorAttr.setXYZ(v, color.r, color.g, color.b);
-    this.uploadRange(colorAttr, [0, colorAttr.count - 1]);
+    this.hideBodyGlow(bodyId);
+    const glow = makeSelectionGlow(body.mesh.geometry, kind);
+    body.mesh.add(glow);
+    this.bodyGlows.set(bodyId, glow);
+  }
+
+  /** Remove a body's glow and free its own material (the geometry is the body's,
+   *  so it is never disposed here). */
+  private hideBodyGlow(bodyId: string) {
+    const glow = this.bodyGlows.get(bodyId);
+    if (!glow) return;
+    glow.removeFromParent();
+    (glow.material as THREE.Material).dispose();
+    this.bodyGlows.delete(bodyId);
   }
 
   private paintFace(faceId: number, color: THREE.Color) {
@@ -274,21 +296,6 @@ export class Highlighter {
       if (r !== undefined && g !== undefined && b !== undefined) colorAttr.setXYZ(v, r, g, b);
     });
     if (range) this.uploadRange(colorAttr, range);
-  }
-
-  /** Restore every face of a body to its base color (the whole buffer, see
-   *  paintBody's note on why no range scan is needed here). */
-  private restoreBody(bodyId: string) {
-    const body = this.bodyById(bodyId);
-    if (!body) return;
-    const colorAttr = body.mesh.geometry.getAttribute("color") as THREE.BufferAttribute;
-    if (!colorAttr) return;
-    const base = body.baseColors;
-    for (let v = 0; v < colorAttr.count; v++) {
-      const r = base[v * 3], g = base[v * 3 + 1], b = base[v * 3 + 2];
-      if (r !== undefined && g !== undefined && b !== undefined) colorAttr.setXYZ(v, r, g, b);
-    }
-    this.uploadRange(colorAttr, [0, colorAttr.count - 1]);
   }
 
   /** Run `fn` over every vertex of the given triangle indices, returning the
@@ -353,12 +360,12 @@ export class Highlighter {
         }
       }
       // This is a full-buffer rewrite (every face), not a scoped one, clear any
-      // pending partial ranges a prior paintFace/paintBody left queued so the
+      // pending partial ranges a prior paintFace left queued so the
       // renderer does a full upload here instead of replaying a stale sub-range.
       colorAttr.clearUpdateRanges();
       colorAttr.needsUpdate = true;
     }
-    // whole-body selections paint on top of the base, re-apply them
-    for (const id of this.selectedBodies) this.paintBody(id, SELECT);
+    // Whole-body selections are a fresnel overlay now, independent of the base
+    // colours this rewrites, so there is nothing to re-apply on top.
   }
 }
