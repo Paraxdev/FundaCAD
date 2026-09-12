@@ -104,6 +104,14 @@ const ORIGIN_IDLE = 0xdfe6ee;
 /** The resize cube, past the arrowhead so the two never share a pixel. */
 const SCALE_BOX = 9;
 const SCALE_AT = ARROW_SHAFT + ARROW_HEAD + 11;
+/** The planar-move square: a small quad sitting in the quadrant between two
+ *  axes, dragged to slide the selection across the plane those two span (its
+ *  normal is the THIRD axis). PLANE_AT is the square's centre offset along each
+ *  spanning axis; drawn well inside the rings and clear of the origin dot, and
+ *  the invisible hit quad is fatter so a small square is still an easy target. */
+const PLANE_AT = 25;
+const PLANE_SIZE = 14;
+const PLANE_HIT = 21;
 /** How far the value fields sit off the gizmo's centre, in SCREEN pixels.
  *  Clear of the outermost handle, so the boxes never cover the thing they are
  *  reporting on. */
@@ -121,7 +129,12 @@ export const GIZMO_REACH_PX = SCALE_AT + SCALE_BOX;
 
 /** Which handle a press landed on. Two families, so they can be hit-tested
  *  separately and a ring behind an arrow can never steal the arrow's press. */
-type Grab = { kind: "axis" | "ring" | "origin" | "size"; index: number } | null;
+type Grab = { kind: "axis" | "ring" | "origin" | "size" | "plane"; index: number } | null;
+
+/** The two world axes a plane spans, given the axis its normal is. */
+function planeAxes(normal: number): [number, number] {
+  return [(normal + 1) % 3, (normal + 2) % 3];
+}
 
 export class MoveTool {
   active = false;
@@ -137,6 +150,11 @@ export class MoveTool {
   private arrows: { group: THREE.Group; mat: THREE.MeshBasicMaterial; axis: number }[] = [];
   private rings: { mesh: THREE.Mesh; grab: THREE.Mesh; mat: THREE.MeshBasicMaterial; axis: number }[] = [];
   private cubes: { mesh: THREE.Mesh; mat: THREE.MeshBasicMaterial; axis: number }[] = [];
+  private planes: { mesh: THREE.Mesh; hit: THREE.Mesh; mat: THREE.MeshBasicMaterial; axis: number }[] = [];
+  /** where the cursor met the drag plane when a planar handle was grabbed, and
+   *  the translation the selection already carried at that moment */
+  private grabPlanePoint = new THREE.Vector3();
+  private grabT = new THREE.Vector3();
   /** per-axis resize about `anchor`, 1 meaning untouched */
   private scl = new THREE.Vector3(1, 1, 1);
   private grabScale = 1;
@@ -210,7 +228,7 @@ export class MoveTool {
     this.dim.position(s.x + FIELDS_OFFSET_PX, s.y);
     this.dim.updateFromCursor({ move: 0, turn: 0, size: 1 });
     setPrompt(
-      "Drag an arrow to slide, a ring to turn, a cube to resize, the centre to move what those act about · Enter · Esc",
+      "Drag an arrow to slide, a square to slide in a plane, a ring to turn, a cube to resize, the centre to move what those act about · Enter · Esc",
     );
     this.gesture.frame();
   }
@@ -293,6 +311,26 @@ export class MoveTool {
       this.refreshPreview();
       return;
     }
+    if (g?.kind === "plane") {
+      const p = this.planeDragPoint(g.index, e.clientX, e.clientY);
+      if (!p) return; // view went edge-on to the plane mid-drag; hold the value
+      const delta = p.clone().sub(this.grabPlanePoint);
+      const step = this.viewport.snapStep(this.anchor, e.shiftKey);
+      const [u, v] = planeAxes(g.index);
+      let changed = false;
+      for (const j of [u, v]) {
+        const aj = AXES[j];
+        if (!aj) continue;
+        const stepped = snap(this.grabT.getComponent(j) + delta.dot(aj.dir), step);
+        if (stepped !== this.comp(j)) { this.setComp(j, stepped); changed = true; }
+      }
+      if (!changed) return;
+      const du = this.comp(u) - this.grabT.getComponent(u);
+      const dv = this.comp(v) - this.grabT.getComponent(v);
+      this.dim.updateFromCursor({ move: Math.hypot(du, dv) }); // in-plane distance, as feedback
+      this.refreshPreview();
+      return;
+    }
     if (g?.kind === "origin") {
       const hit = this.viewport.pointAt(e.clientX, e.clientY);
       // Off the model entirely: slide the origin in the plane facing the
@@ -350,6 +388,12 @@ export class MoveTool {
       this.grabRot.copy(this.rot);
       this.ringDeg = 0;
       this.dim.updateFromCursor({ turn: 0 });
+    } else if (hit.kind === "plane") {
+      const p = this.planeDragPoint(hit.index, e.clientX, e.clientY);
+      if (!p) return; // the plane went edge-on to the view; leave the press alone
+      this.grabPlanePoint.copy(p);
+      this.grabT.copy(this.t);
+      this.dim.updateFromCursor({ move: 0 });
     } else {
       const ax = AXES[hit.index];
       if (!ax) return;
@@ -425,6 +469,24 @@ export class MoveTool {
     });
   }
 
+  /** Where the cursor meets the drag plane of the planar handle for `axis`: the
+   *  plane through the gizmo whose normal is that world axis. Null when the plane
+   *  is edge-on to the view, where a pixel of motion is an unbounded slide.
+   *
+   *  Read live rather than frozen at grab time, which is safe: a planar drag only
+   *  moves the gizmo WITHIN this plane, so the plane it defines never changes. */
+  private planeDragPoint(axis: number, clientX: number, clientY: number): THREE.Vector3 | null {
+    const ax = AXES[axis];
+    if (!ax) return null;
+    // Bail if the axis (the plane's normal) is nearly across the screen, the same
+    // degeneracy ringDragDegenerate guards for a ring viewed edge-on.
+    const view = this.viewport.camera.getWorldDirection(new THREE.Vector3());
+    if (Math.abs(view.dot(ax.dir)) < 0.12) return null;
+    const at = this.anchor.clone().applyMatrix4(this.transform());
+    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(ax.dir, at);
+    return this.viewport.screenToPlane(clientX, clientY, plane);
+  }
+
   /** Where the cursor is, in the plane through the gizmo that faces the camera.
    *  The fallback when the pointer is over no geometry at all. */
   private freePivotPoint(clientX: number, clientY: number): THREE.Vector3 | null {
@@ -465,6 +527,13 @@ export class MoveTool {
     for (const c of this.cubes) {
       const ax = AXES[c.axis];
       if (ax) c.mat.color.set(lit("size", c.axis) ? HOT : ax.color);
+    }
+    for (const p of this.planes) {
+      const ax = AXES[p.axis];
+      if (!ax) continue;
+      const hot = lit("plane", p.axis);
+      p.mat.color.set(hot ? HOT : ax.color);
+      p.mat.opacity = hot ? 0.85 : 0.5; // firm up on hover, so it reads as grabbable
     }
     if (this.origin) {
       const hot = lit("origin", 0);
@@ -631,6 +700,36 @@ export class MoveTool {
       cube.userData.size = i;
       g.add(cube);
       this.cubes.push({ mesh: cube, mat: cmat, axis: i });
+
+      // One planar handle per axis, coloured by that axis and lying in the plane
+      // it is normal to: a translucent square in the quadrant between the OTHER
+      // two arrows, dragged to slide the selection across their plane. Faint so
+      // it never hides a ring behind it, DoubleSide so it reads from either face.
+      const [u, v] = planeAxes(i);
+      const au = AXES[u], av = AXES[v];
+      if (!au || !av) continue;
+      const centre = au.dir.clone().multiplyScalar(PLANE_AT)
+        .add(av.dir.clone().multiplyScalar(PLANE_AT));
+      const pmat = new THREE.MeshBasicMaterial({
+        color: a.color, depthTest: false, depthWrite: false,
+        side: THREE.DoubleSide, transparent: true, opacity: 0.5,
+      });
+      const quad = new THREE.Mesh(new THREE.PlaneGeometry(PLANE_SIZE, PLANE_SIZE), pmat);
+      quad.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), a.dir);
+      quad.position.copy(centre);
+      // Over the rings and arrows it sits among (all depthTest:false), so the
+      // square always reads as a foreground handle rather than half-behind a ring.
+      quad.renderOrder = 1000;
+      // Fatter invisible target, same idea as the arrow sleeve and ring band.
+      const phit = new THREE.Mesh(
+        new THREE.PlaneGeometry(PLANE_HIT, PLANE_HIT),
+        new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide }),
+      );
+      phit.quaternion.copy(quad.quaternion);
+      phit.position.copy(centre);
+      phit.userData.plane = i;
+      g.add(quad, phit);
+      this.planes.push({ mesh: quad, hit: phit, mat: pmat, axis: i });
     }
     const omat = new THREE.MeshBasicMaterial({
       color: ORIGIN_IDLE, depthTest: false, depthWrite: false,
@@ -669,6 +768,11 @@ export class MoveTool {
       while (o && o.userData.axis === undefined) o = o.parent;
       if (o) return { kind: "axis", index: o.userData.axis as number };
     }
+    // Planes before cubes and rings: they sit in the open quadrants between the
+    // arrows, so nothing else is competing for those pixels, and after the arrows
+    // so a square never steals a press meant for the arrow root beside it.
+    const onPlane = ray.intersectObjects(this.planes.map((p) => p.hit), false)[0];
+    if (onPlane) return { kind: "plane", index: onPlane.object.userData.plane as number };
     const onCube = ray.intersectObjects(this.cubes.map((c) => c.mesh), false)[0];
     if (onCube) return { kind: "size", index: onCube.object.userData.size as number };
     const onRing = ray.intersectObjects(this.rings.map((r) => r.grab), false)[0];
@@ -735,10 +839,17 @@ export class MoveTool {
         c.mesh.geometry.dispose();
         c.mat.dispose();
       }
+      for (const p of this.planes) {
+        p.mesh.geometry.dispose();
+        p.hit.geometry.dispose();
+        (p.hit.material as THREE.Material).dispose();
+        p.mat.dispose();
+      }
       this.gizmo = null;
       this.arrows = [];
       this.rings = [];
       this.cubes = [];
+      this.planes = [];
     }
     this.viewport.suspendPicking = false;
     this.active = false;
