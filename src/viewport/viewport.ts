@@ -82,6 +82,9 @@ const SKETCH_DIM_EDGE_OPACITY = 0.5;
 const MAX_EMITTER_LIGHTS = 6;
 const EMITTER_REACH = 8;
 const EMITTER_LIGHT_GAIN = 6;
+/** One emitter to place a light for: a whole body or a single face, each carrying
+ *  its own centre and size so syncEmitterLights treats them alike. */
+type EmitterMap = Map<string, { color: string | number; glow: number; center: THREE.Vector3; size: number }>;
 /** How far the face being sketched ON is lifted back ABOVE the rest, as added
  *  white. Small: the job is to separate it from its neighbours, not to make it
  *  a light source. */
@@ -1025,7 +1028,7 @@ export class Viewport {
     // Emissive bodies that should also THROW light on their neighbours (the glow
     // is a lamp, not just a bright skin), collected here and reconciled into real
     // lights after the pass, see syncEmitterLights.
-    const emitters = new Map<string, { color: string | number; glow: number }>();
+    const emitters: EmitterMap = new Map();
     for (const b of this.model.bodies) {
       // The body's OWN material, which is not b.mesh.material while the zebra
       // overlay is on: that one is shared by every body, so writing a finish to
@@ -1051,7 +1054,16 @@ export class Viewport {
       const glow = ghost ? 0 : (f?.emissive ?? FINISH.emissive);
       mat.emissive.set(glow > 0 ? (this.bodyPaint[b.id] ?? 0xffffff) : 0x000000);
       mat.emissiveIntensity = glow * MAX_EMISSIVE_INTENSITY;
-      if (glow > 0) emitters.set(b.id, { color: this.bodyPaint[b.id] ?? 0xffffff, glow });
+      if (glow > 0) {
+        const geo = b.mesh.geometry;
+        if (!geo.boundingBox) geo.computeBoundingBox();
+        const box = geo.boundingBox;
+        if (box) emitters.set(b.id, {
+          color: this.bodyPaint[b.id] ?? 0xffffff, glow,
+          center: box.getCenter(new THREE.Vector3()),
+          size: box.getSize(this.emitterScratch).length() || 1,
+        });
+      }
       applyClearcoat(mat, ghost ? 0 : (f?.clearcoat ?? FINISH.clearcoat));
       // A node graph wins over a single generator; both use one shader slot, so
       // only the active one is applied and switching clears the other.
@@ -1076,12 +1088,14 @@ export class Viewport {
       // place for them to disagree.
       const extra = this.faceMatState.get(b.id);
       if (extra) {
+        let faceGlow = false;
         for (let i = 1; i < extra.mats.length; i++) {
           const fm = extra.mats[i]!;
           const ff = extra.finishes[i]!;
           fm.metalness = ff.metalness;
           fm.roughness = ff.roughness;
           const fglow = ghost ? 0 : ff.emissive;
+          if (fglow > 0) faceGlow = true;
           fm.emissive.set(fglow > 0 ? (extra.colors[i] ?? 0xffffff) : 0x000000);
           fm.emissiveIntensity = fglow * MAX_EMISSIVE_INTENSITY;
           applyClearcoat(fm, ghost ? 0 : ff.clearcoat);
@@ -1095,6 +1109,11 @@ export class Viewport {
           }
           fm.clippingPlanes = mat.clippingPlanes;
         }
+        // A glowing FACE also throws light, at the face's own centroid, so a lit
+        // panel or an inset LED lights its surroundings the way a whole emissive
+        // body does. Only walked when a face actually glows (the common case pays
+        // nothing), and the lights share the body emitters' rank-and-cap budget.
+        if (faceGlow) this.addFaceEmitters(b, emitters);
       }
     }
     this.syncEmitterLights(emitters);
@@ -1112,7 +1131,7 @@ export class Viewport {
    *  Reconciled, not rebuilt: a light per emitter is reused across passes and one
    *  is torn down only when its body stops glowing or leaves, so toggling x-ray
    *  or nudging the slider does not churn the scene's lights. */
-  private syncEmitterLights(emitters: Map<string, { color: string | number; glow: number }>) {
+  private syncEmitterLights(emitters: EmitterMap) {
     const cap = isRenderLowPower() ? 2 : MAX_EMITTER_LIGHTS;
     const ranked = [...emitters.entries()]
       .sort((a, b) => b[1].glow - a[1].glow)
@@ -1123,27 +1142,59 @@ export class Viewport {
       this.removeFromScene(light);
       this.emitterLights.delete(id);
     }
-    for (const [id, { color, glow }] of ranked) {
-      const body = this.model?.bodies.find((b) => b.id === id);
-      if (!body) continue;
-      const geo = body.mesh.geometry;
-      if (!geo.boundingBox) geo.computeBoundingBox();
-      const box = geo.boundingBox;
-      if (!box) continue;
+    for (const [id, { color, glow, center, size }] of ranked) {
       let light = this.emitterLights.get(id);
       if (!light) {
         light = new THREE.PointLight(0xffffff, 0, 0, 2); // decay 2 (inverse-square)
         this.emitterLights.set(id, light);
         this.addToScene(light);
       }
-      box.getCenter(light.position);
+      light.position.copy(center);
       light.color.set(color);
-      // Reach a few body-sizes so a neighbour a part away is lit but the whole
+      // Reach a few emitter-sizes so a neighbour a part away is lit but the whole
       // scene is not washed; brightness rides the glow slider, scaled up because
       // an inverse-square point light falls off fast over CAD millimetres.
-      const size = box.getSize(this.emitterScratch).length() || 1;
       light.distance = size * EMITTER_REACH;
       light.intensity = glow * EMITTER_LIGHT_GAIN * size;
+    }
+  }
+
+  /** Add one emitter per glowing FACE of `b`, at the face's centroid, so a lit
+   *  panel lights its surroundings like an emissive body does. Local geometry
+   *  space, matching the body emitters (both feed light.position directly); a
+   *  face's own paint tints it, falling back to the body's colour then white. */
+  private addFaceEmitters(b: { id: string; mesh: THREE.Mesh; faceIds: number[] }, emitters: EmitterMap) {
+    const fids = b.faceIds;
+    const pos = b.mesh.geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+    if (!fids || !pos) return;
+    const acc = new Map<number, { c: THREE.Vector3; n: number; min: THREE.Vector3; max: THREE.Vector3 }>();
+    for (let t = 0; t < fids.length; t++) {
+      const fid = fids[t]!;
+      const ff = this.faceFinish[fid];
+      if (!ff || ff.emissive <= 0) continue;
+      let a = acc.get(fid);
+      if (!a) {
+        a = { c: new THREE.Vector3(), n: 0, min: new THREE.Vector3(Infinity, Infinity, Infinity), max: new THREE.Vector3(-Infinity, -Infinity, -Infinity) };
+        acc.set(fid, a);
+      }
+      for (let k = 0; k < 3; k++) {
+        const idx = t * 3 + k;
+        const x = pos.getX(idx), y = pos.getY(idx), z = pos.getZ(idx);
+        a.c.x += x; a.c.y += y; a.c.z += z; a.n++;
+        this.emitterScratch.set(x, y, z);
+        a.min.min(this.emitterScratch);
+        a.max.max(this.emitterScratch);
+      }
+    }
+    for (const [fid, a] of acc) {
+      if (a.n === 0) continue;
+      const ff = this.faceFinish[fid]!;
+      emitters.set(`${b.id}:f${fid}`, {
+        color: this.facePaint[fid] ?? this.bodyPaint[b.id] ?? 0xffffff,
+        glow: ff.emissive,
+        center: a.c.multiplyScalar(1 / a.n),
+        size: a.max.sub(a.min).length() || 1,
+      });
     }
   }
 
