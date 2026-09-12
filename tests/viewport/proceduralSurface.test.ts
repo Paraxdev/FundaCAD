@@ -20,9 +20,23 @@ const graph: SurfaceGraph = {
 describe("compileGraph", () => {
   it("emits a generator call per generator node with its baked params", () => {
     const glsl = compileGraph(graph);
-    expect(glsl).toContain("float g_n1 = sGen(wp, wn, 0,"); // noise = kind 0
+    // noise has its own richer generator (detail/roughness/warp) via sFbmP
+    expect(glsl).toContain("float g_n1 = sFbmP(wp / max(6.00000, 0.001),");
     expect(glsl).toContain("float g_s1 = sGen(wp, wn, 1,"); // scratches = kind 1
     expect(glsl).toContain("6.00000"); // the noise scale, baked
+  });
+
+  it("bakes the noise node's detail, roughness and warp with sensible defaults", () => {
+    // an unset detail/roughness/distortion falls back to 4 octaves, 0.5 falloff, no warp
+    expect(compileGraph(graph)).toContain("sFbmP(wp / max(6.00000, 0.001), 4, 0.50000, 2.0, 0.00000)");
+    const tuned: SurfaceGraph = {
+      output: "out",
+      nodes: [
+        { id: "n1", type: "noise", params: { scale: 3, detail: 6, roughness: 0.7, distortion: 0.4 } },
+        { id: "out", type: "output", params: {}, in: { roughness: "n1" } },
+      ],
+    };
+    expect(compileGraph(tuned)).toContain("sFbmP(wp / max(3.00000, 0.001), 6, 0.70000, 2.0, 0.40000)");
   });
 
   it("wires each output port to its source node's variable", () => {

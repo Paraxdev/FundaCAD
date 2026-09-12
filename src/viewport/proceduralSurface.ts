@@ -53,6 +53,22 @@ float sNoise(vec3 x){
              mix(mix(n001,n101,f.x), mix(n011,n111,f.x), f.y), f.z);
 }
 float sFbm(vec3 p){ float a = 0.5, s = 0.0; for (int i = 0; i < 4; i++){ s += a * sNoise(p); p *= 2.03; a *= 0.5; } return s; }
+// Parameterised fBm for the noise NODE: octaves (detail), per-octave falloff
+// (roughness), lacunarity, and an optional domain distortion that warps the
+// sample point first. Normalised to [0,1] so roughness changes the texture,
+// not the overall brightness. The loop runs to a constant bound and breaks, so a
+// baked (graph) or a uniform octave count both compile under WebGL2.
+float sFbmP(vec3 p, int oct, float gain, float lac, float distort){
+  if (distort > 0.0){
+    p += distort * vec3(sNoise(p + 13.1), sNoise(p + 51.7), sNoise(p + 29.3));
+  }
+  float a = 0.5, s = 0.0, norm = 0.0;
+  for (int i = 0; i < 8; i++){
+    if (i >= oct) break;
+    s += a * sNoise(p); norm += a; p *= lac; a *= gain;
+  }
+  return norm > 0.0 ? s / norm : 0.0;
+}
 float sStreaks(vec2 uv, float freq, float sharp, float angle){
   float c = cos(angle), s = sin(angle);
   vec2 r = vec2(uv.x * c - uv.y * s, uv.x * s + uv.y * c);
@@ -289,11 +305,20 @@ export function compileGraph(graph: SurfaceGraph): string {
   };
   const inFloat = (n: SurfaceNode, port: string, d: string) => (n.in?.[port] ? varOf(n.in[port]!) : d);
 
+  const int = (v: unknown, d: number, lo: number, hi: number) =>
+    String(Math.max(lo, Math.min(hi, Math.round(typeof v === "number" && isFinite(v) ? v : d))));
+
   const lines: string[] = [];
   let out: SurfaceNode | undefined;
   for (const n of order) {
     const p = n.params ?? {};
-    if (n.type in GEN_KIND) {
+    if (n.type === "noise") {
+      // The richer noise node: detail (octaves), roughness (per-octave falloff)
+      // and distortion, over the shared parameterised fBm. Sampled in world space
+      // and scaled the same way sGen does, so it lines up with the other
+      // generators. lacunarity is fixed at 2 (the usual doubling).
+      lines.push(`float ${varOf(n.id)} = sFbmP(wp / max(${flt(p["scale"], 6)}, 0.001), ${int(p["detail"], 4, 1, 8)}, ${flt(p["roughness"], 0.5)}, 2.0, ${flt(p["distortion"], 0)});`);
+    } else if (n.type in GEN_KIND) {
       lines.push(`float ${varOf(n.id)} = sGen(wp, wn, ${GEN_KIND[n.type]}, ${flt(p["scale"], 6)}, ${flt(p["angle"], 0)});`);
     } else if (n.type === "fresnel") {
       // rises toward 1 at grazing angles: 1 - (N . V), raised to a power. cameraPosition
