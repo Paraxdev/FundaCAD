@@ -384,8 +384,10 @@ def test_face_colours_survive_the_blob_and_reach_the_body():
 
 def test_a_single_part_step_is_not_treated_as_an_assembly():
     """The manifest path must be opt-in on the file actually carrying a tree.
-    Ordinary part files stay on the historical import path with nothing changed,
-    every .step already committed here is one of these."""
+    An ordinary SINGLE-SOLID part file stays on the historical import path with
+    nothing changed. (A single-product file owning SEVERAL solids does now group,
+    see test_a_flat_multisolid_part_is_grouped_under_its_name; these local files
+    are single-solid parts, so they stay flat.)"""
     from step_assembly import read_assembly
 
     for name in ("parts3-Split.step", "RAM1-ddr_1.step"):
@@ -394,12 +396,99 @@ def test_a_single_part_step_is_not_treated_as_an_assembly():
             print(f"  (skipped {name}: not present)")
             continue
         asm = read_assembly(path)
+        if len(asm.leaves) > len(asm.nodes):
+            print(f"  ({name}: multi-solid part, groups by design, skipped)")
+            continue
         assert not asm.is_assembly, (
-            f"{name} is a single-part file but was classified as an assembly "
+            f"{name} is a single-solid part file but was classified as an assembly "
             f"({asm.product_count} products), this would change the import path "
             f"for every ordinary STEP"
         )
         print(f"  {name}: is_assembly=False ({asm.product_count} product)")
+
+
+def _write_flat_step(compound, name, path):
+    """Write `compound` as ONE named product, no assembly structure (occ == 0).
+    This is the shape a real CAD system writes for a single part that happens to
+    hold several disjoint solids, which OCCT's own STEPControl_Writer will not
+    emit (it wraps any compound into an assembly). AddShape with makeAssembly
+    False keeps it as one product; the whole point of the fixture."""
+    from OCP.STEPCAFControl import STEPCAFControl_Writer
+    from OCP.STEPControl import STEPControl_StepModelType
+    from OCP.TCollection import TCollection_ExtendedString
+    from OCP.TDataStd import TDataStd_Name
+    from OCP.TDocStd import TDocStd_Document
+    from OCP.XCAFDoc import XCAFDoc_DocumentTool
+
+    doc = TDocStd_Document(TCollection_ExtendedString("XCAF"))
+    st = XCAFDoc_DocumentTool.ShapeTool_s(doc.Main())
+    label = st.AddShape(compound.wrapped, False, False)  # makeAssembly=False
+    TDataStd_Name.Set_s(label, TCollection_ExtendedString(name))
+    st.UpdateAssemblies()
+    writer = STEPCAFControl_Writer()
+    writer.SetNameMode(True)
+    writer.Transfer(doc, STEPControl_StepModelType.STEPControl_AsIs)
+    writer.Write(path)
+
+
+def test_a_flat_multisolid_part_is_grouped_under_its_name():
+    """A single-product STEP that owns SEVERAL solids files them under one folder
+    named after the part, rather than spilling them loose at the top level. The
+    real case is a part exported with a few disjoint bodies, which used to import
+    as N nameless top-level bodies; a folder of named sub-bodies is what every
+    other CAD tool shows and what the browser tree already knows how to draw.
+
+    A single-SOLID part is the control: it must stay flat, no folder wrapped
+    around one lonely body."""
+    import tempfile
+
+    from build123d import Box, Compound, Pos
+    from step_assembly import read_assembly
+    from builder import import_geometry, rebuild
+
+    with tempfile.TemporaryDirectory() as d:
+        multi = os.path.join(d, "bracket_pair.step")
+        _write_flat_step(
+            Compound(children=[Pos(0, 0, 0) * Box(10, 10, 10), Pos(20, 0, 0) * Box(6, 6, 6)]),
+            "Bracket Pair", multi,
+        )
+        one = os.path.join(d, "single.step")
+        _write_flat_step(Compound(children=[Box(10, 10, 10)]), "Solo", one)
+
+        # read: the multi-solid part is now an assembly of one node with 2 leaves;
+        # the file genuinely carries no assembly structure (occ == 0), so this is
+        # the leaves-per-node rule doing the classifying, not product nesting.
+        asm = read_assembly(multi)
+        assert open(multi).read().count("NEXT_ASSEMBLY_USAGE_OCCURRENCE") == 0, \
+            "fixture unexpectedly carries assembly occurrences, it tests the wrong path"
+        assert asm.is_assembly and len(asm.nodes) == 1 and len(asm.leaves) == 2, \
+            f"flat multi-solid not grouped: is_asm={asm.is_assembly} nodes={len(asm.nodes)} leaves={len(asm.leaves)}"
+        assert not read_assembly(one).is_assembly, "a single-solid part was wrongly grouped"
+
+        # rebuild: two bodies, both filed under the one product node, named from it.
+        pay = import_geometry(multi, "step")
+        doc = {"parameters": {}, "features": [
+            {"id": "im", "type": "import", "format": "step", "name": pay["name"],
+             "geom": pay["geom"], "nodes": pay.get("nodes"), "parts": pay.get("parts")}]}
+        _p, err, bodies = rebuild(doc)
+        assert not err, err
+        assert len(bodies) == 2, f"expected 2 sub-bodies, got {len(bodies)}"
+        refs = {b.get("node_ref") for b in bodies}
+        assert refs == {"im/0"}, f"both bodies should file under node 0, got {refs}"
+        assert all(b["name"].startswith("Bracket Pair") for b in bodies), \
+            f"sub-bodies not named from the product: {[b['name'] for b in bodies]}"
+        vol = sum(b["shape"].volume for b in bodies)
+        assert abs(vol - (1000 + 216)) < 1.0, f"geometry not preserved, vol {vol:.1f}"
+
+        # the single-solid control rebuilds as one loose body, no folder.
+        pay1 = import_geometry(one, "step")
+        doc1 = {"parameters": {}, "features": [
+            {"id": "im", "type": "import", "format": "step", "name": pay1["name"],
+             "geom": pay1["geom"], "nodes": pay1.get("nodes"), "parts": pay1.get("parts")}]}
+        _p1, err1, bodies1 = rebuild(doc1)
+        assert not err1 and len(bodies1) == 1, f"single part should be one body: {err1}"
+        assert not bodies1[0].get("node_ref"), "a single-solid part was filed into a folder"
+    print("  flat multi-solid grouped under its product name; single-solid stays flat")
 
 
 def _import_doc(fixture):
@@ -1001,6 +1090,7 @@ if __name__ == "__main__":
         test_colour_on_the_faces_beats_colour_on_the_product,
         test_face_colours_survive_the_blob_and_reach_the_body,
         test_a_single_part_step_is_not_treated_as_an_assembly,
+        test_a_flat_multisolid_part_is_grouped_under_its_name,
         test_rebuild_names_bodies_from_the_manifest,
         test_rebuild_keeps_each_occurrence_of_a_repeated_subassembly_distinct,
         test_rebuild_keeps_the_solid_less_product_as_a_body,

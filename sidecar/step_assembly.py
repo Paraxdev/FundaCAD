@@ -328,8 +328,13 @@ def read_assembly(path: str) -> Assembly:
         visit(label, None, location)
 
     # More products than roots means there is real structure to keep. A single
-    # unnested product is an ordinary part file and must stay on the historical
-    # import path, unchanged.
-    if len(asm.nodes) > roots.Length():
+    # unnested product owning ONE solid is an ordinary part file and stays on the
+    # historical flat path, unchanged. But a single product owning SEVERAL solids
+    # is a part whose bodies belong together under its name, not spilled loose at
+    # the top level: more leaves than nodes means at least one node carries a
+    # bunch of solids, so group it too. _bind_assembly then files each solid as a
+    # numbered body inside the one folder, and a lone-solid part is untouched
+    # because its leaves equal its nodes.
+    if len(asm.nodes) > roots.Length() or len(asm.leaves) > len(asm.nodes):
         asm.is_assembly = True
     return asm
