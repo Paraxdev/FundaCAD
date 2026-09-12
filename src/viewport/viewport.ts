@@ -71,6 +71,14 @@ const EDGE_PICKABLE = new THREE.Color(0xd98a4a); // muted ember "selectable" edg
  *  much of its edges. Both were far lower; see setModelDimmed. */
 const SKETCH_DIM_OPACITY = 0.55;
 const SKETCH_DIM_EDGE_OPACITY = 0.5;
+
+// Emissive bodies that cast light (syncEmitterLights). At most this many real
+// lights, the brightest emitters winning, so a document cannot exceed the WebGL
+// light budget. Reach is in body-sizes; gain turns the 0..1 glow slider into an
+// inverse-square point light bright enough to read over CAD millimetres.
+const MAX_EMITTER_LIGHTS = 6;
+const EMITTER_REACH = 8;
+const EMITTER_LIGHT_GAIN = 6;
 /** How far the face being sketched ON is lifted back ABOVE the rest, as added
  *  white. Small: the job is to separate it from its neighbours, not to make it
  *  a light source. */
@@ -984,6 +992,9 @@ export class Viewport {
    *
    *  Called again after every rebuild, which hands back fresh materials that
    *  know nothing about any of this. */
+  private emitterLights = new Map<string, THREE.PointLight>();
+  private readonly emitterScratch = new THREE.Vector3();
+
   private applyBodyFinish() {
     if (!this.model) return;
     const ghost = this.xray || this.stale;
@@ -1001,6 +1012,10 @@ export class Viewport {
       if (list) list.push(fid);
       else byBody.set(bid, [fid]);
     }
+    // Emissive bodies that should also THROW light on their neighbours (the glow
+    // is a lamp, not just a bright skin), collected here and reconciled into real
+    // lights after the pass, see syncEmitterLights.
+    const emitters = new Map<string, { color: string | number; glow: number }>();
     for (const b of this.model.bodies) {
       // The body's OWN material, which is not b.mesh.material while the zebra
       // overlay is on: that one is shared by every body, so writing a finish to
@@ -1026,6 +1041,7 @@ export class Viewport {
       const glow = ghost ? 0 : (f?.emissive ?? FINISH.emissive);
       mat.emissive.set(glow > 0 ? (this.bodyPaint[b.id] ?? 0xffffff) : 0x000000);
       mat.emissiveIntensity = glow * MAX_EMISSIVE_INTENSITY;
+      if (glow > 0) emitters.set(b.id, { color: this.bodyPaint[b.id] ?? 0xffffff, glow });
       // A clear, non-metal finish becomes real glass (refraction); anything else,
       // and every ghost, keeps the plain fade below.
       if (!applyGlassLook(mat, f ? f.opacity : 1, f ? f.metalness : FINISH.metalness, ghost)) {
@@ -1062,6 +1078,53 @@ export class Viewport {
           fm.clippingPlanes = mat.clippingPlanes;
         }
       }
+    }
+    this.syncEmitterLights(emitters);
+  }
+
+  /** Emissive bodies also cast light: a lamp glows AND lights the wall by it, so
+   *  a lit indicator or an LED next to a part throws its colour onto it. A real
+   *  point light per emitter, placed at the body's centre, its colour the body's
+   *  own and its brightness the glow slider. Kept honest and cheap rather than
+   *  ray-traced: no shadows (occlusion in a small assembly reads as GI leak more
+   *  than as wrong), and CAPPED, because every light is a shader uniform and the
+   *  brightest few carry the look, so the rest are dropped rather than blowing
+   *  the WebGL light budget on a document that painted forty things emissive.
+   *
+   *  Reconciled, not rebuilt: a light per emitter is reused across passes and one
+   *  is torn down only when its body stops glowing or leaves, so toggling x-ray
+   *  or nudging the slider does not churn the scene's lights. */
+  private syncEmitterLights(emitters: Map<string, { color: string | number; glow: number }>) {
+    const ranked = [...emitters.entries()]
+      .sort((a, b) => b[1].glow - a[1].glow)
+      .slice(0, MAX_EMITTER_LIGHTS);
+    const keep = new Set(ranked.map(([id]) => id));
+    for (const [id, light] of this.emitterLights) {
+      if (keep.has(id)) continue;
+      this.removeFromScene(light);
+      this.emitterLights.delete(id);
+    }
+    for (const [id, { color, glow }] of ranked) {
+      const body = this.model?.bodies.find((b) => b.id === id);
+      if (!body) continue;
+      const geo = body.mesh.geometry;
+      if (!geo.boundingBox) geo.computeBoundingBox();
+      const box = geo.boundingBox;
+      if (!box) continue;
+      let light = this.emitterLights.get(id);
+      if (!light) {
+        light = new THREE.PointLight(0xffffff, 0, 0, 2); // decay 2 (inverse-square)
+        this.emitterLights.set(id, light);
+        this.addToScene(light);
+      }
+      box.getCenter(light.position);
+      light.color.set(color);
+      // Reach a few body-sizes so a neighbour a part away is lit but the whole
+      // scene is not washed; brightness rides the glow slider, scaled up because
+      // an inverse-square point light falls off fast over CAD millimetres.
+      const size = box.getSize(this.emitterScratch).length() || 1;
+      light.distance = size * EMITTER_REACH;
+      light.intensity = glow * EMITTER_LIGHT_GAIN * size;
     }
   }
 
