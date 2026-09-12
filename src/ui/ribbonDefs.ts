@@ -66,6 +66,7 @@ export const MODEL: Group[] = [
           { action: "move", label: "Move", iconName: "move", key: "M" },
           { action: "scale", label: "Scale", iconName: "scale" },
           { action: "mirror", label: "Mirror", iconName: "mirror" },
+          { action: "joint", label: "Joint", iconName: "assembly" },
           // Two entries, not one that asks. Linear and circular are different
           // gestures, pull an arrow along an axis, or sweep around one, so
           // the choice belongs on the button rather than in a dialog the

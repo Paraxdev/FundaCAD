@@ -49,6 +49,7 @@ export const FEATURE_NUM_FIELDS: Partial<Record<Feature["type"], [string, string
   cleanUp: [["tolerance", "Tolerance", "length"]],
   scale: [["factor", "Factor", "count"], ["sx", "X factor", "count"], ["sy", "Y factor", "count"], ["sz", "Z factor", "count"]],
   move: [["dx", "Move X", "length"], ["dy", "Move Y", "length"], ["dz", "Move Z", "length"], ["rx", "Rotate X", "angle"], ["ry", "Rotate Y", "angle"], ["rz", "Rotate Z", "angle"]],
+  joint: [["offset", "Offset", "length"], ["angle", "Angle", "angle"]],
   duplicate: [["dx", "Move X", "length"], ["dy", "Move Y", "length"], ["dz", "Move Z", "length"], ["rx", "Rotate X", "angle"], ["ry", "Rotate Y", "angle"], ["rz", "Rotate Z", "angle"]],
 };
 

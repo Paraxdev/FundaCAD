@@ -1195,6 +1195,41 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     });
   }
 
+  // Joint: pick a face on the body to MOVE, then the face to mate it against. The
+  // first body is re-placed so its face sits flush on the second, and it FOLLOWS,
+  // both connectors are re-resolved every rebuild, so editing either part carries
+  // the joined body along. Offset/angle tune it in the value rows; the two faces
+  // must be on different bodies (mating a body to itself is not a move).
+  function startJoint() {
+    if (toolBusy()) return;
+    if (!hasBody()) {
+      setStatus("Create or import a body first", "");
+      return;
+    }
+    pickFaceInteractive("Joint: pick a face on the body to MOVE · Esc to cancel", (mateSel) => {
+      const movingBody = (mateSel as { body?: string }).body;
+      if (!movingBody) {
+        setStatus("Joint: that face has no body, pick another", "");
+        return;
+      }
+      pickFaceInteractive("Joint: pick the face to mate it TO · Esc to cancel", (toSel) => {
+        const toBody = (toSel as { body?: string }).body;
+        if (toBody === movingBody) {
+          setStatus("Joint: pick a face on a DIFFERENT body to mate to", "");
+          return;
+        }
+        store.addFeature({
+          id: store.nextId(),
+          type: "joint",
+          moving: movingBody,
+          mate: { body: movingBody, face: mateSel },
+          to: { body: toBody, face: toSel },
+          mode: "rigid",
+        } as Feature);
+      });
+    });
+  }
+
   // Draft: pick a face to taper by 5° about the body's base (pull +Z; edit the
   // angle in the value rows).
   // Pattern: repeat the selected bodies along an axis or around one, set up in
@@ -1300,6 +1335,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     startSweep,
     startPrimitive,
     startShell,
+    startJoint,
     startPattern,
     startExtrude,
     grabRegionHandle,

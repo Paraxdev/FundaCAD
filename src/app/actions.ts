@@ -163,6 +163,9 @@ export function createActions(e: Engine): (action: string) => void {
       case "shell":
         e.starters.startShell();
         break;
+      case "joint":
+        e.starters.startJoint();
+        break;
       case "offset-face":
         startFaceOffset("offsetFace");
         break;
