@@ -95,6 +95,7 @@ interface FolderNode {
   visible?: boolean | undefined;
   vis?: VisTag | undefined;
   eyeDown?: ((e: PointerEvent) => void) | undefined;
+  toggleVis?: (() => void) | undefined;
   eyeOver?: (() => void) | undefined;
   /** An element's id: what a programmatic rename aims at, see TreeFolder. */
   id?: string | undefined;
@@ -119,6 +120,7 @@ interface RowNode {
   visible?: boolean | undefined;
   vis?: VisTag | undefined;
   eyeDown?: ((e: PointerEvent) => void) | undefined;
+  toggleVis?: (() => void) | undefined;
   eyeOver?: (() => void) | undefined;
   title?: string | undefined;
   activate?: ((e: MouseEvent) => void) | undefined;
@@ -239,6 +241,9 @@ function eye(tag: VisTag, visible: boolean) {
     visible,
     eyeDown: (e: PointerEvent) => eyeDown(tag, visible, e),
     eyeOver: () => eyeOver(tag),
+    // A click that no pointer pressed: the keyboard, a screen reader, a script.
+    // It shows or hides the one row, as a press would, and paints nothing.
+    toggleVis: () => { paint.begin(tag.category, tag.key, visible); paint.end(); },
   };
 }
 
@@ -789,6 +794,7 @@ onUnmounted(() => root.value?.removeEventListener("wheel", onWheel));
         :collapsed="n.collapsed"
         :visible="n.visible"
         :eye-down="n.eyeDown"
+        :toggle-vis="n.toggleVis"
         :eye-over="n.eyeOver"
         :id="n.id"
         :rename="n.rename"
@@ -813,6 +819,7 @@ onUnmounted(() => root.value?.removeEventListener("wheel", onWheel));
         :title="n.title"
         :activate="n.activate"
         :eye-down="n.eyeDown"
+        :toggle-vis="n.toggleVis"
         :eye-over="n.eyeOver"
         :edit="n.edit"
         :rename="n.rename"

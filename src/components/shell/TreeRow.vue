@@ -127,8 +127,12 @@ function onEyeDown(e: PointerEvent) {
   if (el?.hasPointerCapture?.(e.pointerId)) el.releasePointerCapture(e.pointerId);
   props.eyeDown(e);
 }
-function onEyeClick() {
-  if (!props.eyeDown) props.toggleVis?.();
+/** A pointer's click on the eye was already handled by its press (onEyeDown).
+ *  A click with no pointer behind it (detail 0: the keyboard, assistive tech,
+ *  element.click()) still has to toggle, or the eye works for a mouse only. */
+function onEyeClick(e: MouseEvent) {
+  if (props.eyeDown && e.detail > 0) return;
+  props.toggleVis?.();
 }
 function onDragStart(e: DragEvent) {
   if (browser.painting) {

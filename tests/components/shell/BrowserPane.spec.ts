@@ -241,7 +241,9 @@ async function clickEye(el: Found, init: PointerEventInit = {}) {
   const eye = el.find(".tree-eye");
   await eye.trigger("pointerdown", { button: 0, ...init });
   window.dispatchEvent(new Event("pointerup"));
-  await eye.trigger("click");
+  // detail 1, as a real pointer's click carries: a click with detail 0 is the
+  // keyboard's, and toggles on its own (see the test for it below)
+  await eye.trigger("click", { detail: 1 });
   await nextTick();
 }
 
@@ -332,6 +334,22 @@ describe("BrowserPane", () => {
     await back.trigger("dragstart");
     await folderNamed(w, "Bodies")!.trigger("drop");
     expect(fake.store.bodyElementOf("body1")).toBeUndefined();
+  });
+
+  it("toggles an eye clicked with no pointer behind it, and dims a hidden row's label", async () => {
+    const fake = makeEngine({ parameters: {}, features: [] }, [{ id: "body1", name: "Bracket" }]);
+    const w = render(fake);
+    await nextTick();
+
+    // the keyboard, a screen reader or element.click(): no pointerdown, detail 0
+    await rowNamed(w, "Bracket").find(".tree-eye").trigger("click");
+    await nextTick();
+    expect(fake.store.isBodyVisible("body1")).toBe(false);
+    expect(rowNamed(w, "Bracket").find(".tree-label").attributes("style") ?? "").toContain("opacity");
+
+    // the control: a pointer's own click after its press does not toggle again
+    await clickEye(rowNamed(w, "Bracket"));
+    expect(fake.store.isBodyVisible("body1")).toBe(true);
   });
 
   it("groups a body dropped onto another body, into the target's element when it has one", async () => {
