@@ -1041,19 +1041,24 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     store.addFeature({ id: store.nextId(), type: "sweep", profile: wr.sketchId, path: pathId, operation: "new" } as Feature);
   }
 
-  // Primitive: drop a Box / Cylinder / Sphere body at the origin (edit its size in
-  // the value rows). Useful as a starting block or as a boolean tool body.
+  // Primitive: drop a Box / Cylinder / Cone / Sphere / Torus body at the origin
+  // (edit its size in the value rows). Useful as a starting block or a boolean
+  // tool body.
   async function startPrimitive() {
     if (toolBusy()) return;
-    const shape = await choose<"box" | "cylinder" | "sphere">("Create primitive", [
+    const shape = await choose<"box" | "cylinder" | "cone" | "sphere" | "torus">("Create primitive", [
       { value: "box", label: "Box", hint: "l×w×h" },
       { value: "cylinder", label: "Cylinder", hint: "r, h" },
+      { value: "cone", label: "Cone", hint: "r1, r2, h" },
       { value: "sphere", label: "Sphere", hint: "r" },
+      { value: "torus", label: "Torus", hint: "ring, tube" },
     ]);
     if (!shape) return;
     const id = store.nextId();
     if (shape === "box") store.addFeature({ id, type: "box", length: 20, width: 20, height: 20 } as Feature);
     else if (shape === "cylinder") store.addFeature({ id, type: "cylinder", radius: 10, height: 20 } as Feature);
+    else if (shape === "cone") store.addFeature({ id, type: "cone", bottomRadius: 10, topRadius: 0, height: 20 } as Feature);
+    else if (shape === "torus") store.addFeature({ id, type: "torus", majorRadius: 15, minorRadius: 5 } as Feature);
     else store.addFeature({ id, type: "sphere", radius: 10 } as Feature);
   }
 

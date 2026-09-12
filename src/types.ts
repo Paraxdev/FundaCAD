@@ -630,7 +630,9 @@ export type CoreFeature =
   // dimensions in the inspector. Handy as boolean tool bodies.
   | { id: string; type: "box"; length: Num; width: Num; height: Num; operation?: "new" | "join" | "cut" | "intersect"; targets?: string[] }
   | { id: string; type: "cylinder"; radius: Num; height: Num; operation?: "new" | "join" | "cut" | "intersect"; targets?: string[] }
+  | { id: string; type: "cone"; bottomRadius: Num; topRadius: Num; height: Num; operation?: "new" | "join" | "cut" | "intersect"; targets?: string[] }
   | { id: string; type: "sphere"; radius: Num; operation?: "new" | "join" | "cut" | "intersect"; targets?: string[] }
+  | { id: string; type: "torus"; majorRadius: Num; minorRadius: Num; operation?: "new" | "join" | "cut" | "intersect"; targets?: string[] }
   // Hollow the active body to a wall thickness, removing the selected faces
   // (none = a fully closed hollow).
   | { id: string; type: "shell"; thickness: Num; faces?: Selector | Selector[] }

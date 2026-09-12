@@ -107,12 +107,29 @@ FEATURES = {
         "example": {"id": "cy1", "type": "cylinder", "radius": 8, "height": 60},
         "notes": "Spans -height/2 .. +height/2 in Z. Use a `move` feature to place it.",
     },
+    "cone": {
+        "summary": "A cone or frustum on the Z axis, CENTRED ON THE ORIGIN.",
+        "fields": {"bottomRadius": "Num, at -height/2", "topRadius": "Num, at +height/2 (0 for a point tip)",
+                   "height": "Num, along Z",
+                   "operation": COMMON["operation"],
+                   "targets": COMMON["targets"]},
+        "example": {"id": "cn1", "type": "cone", "bottomRadius": 10, "topRadius": 0, "height": 20},
+        "notes": "The two radii must differ (equal radii is a cylinder). Spans -height/2 .. +height/2 in Z.",
+    },
     "sphere": {
         "summary": "A sphere centred on the origin.",
         "fields": {"radius": "Num",
                    "operation": COMMON["operation"],
                    "targets": COMMON["targets"]},
         "example": {"id": "sp1", "type": "sphere", "radius": 12},
+    },
+    "torus": {
+        "summary": "A torus (ring) around the Z axis, CENTRED ON THE ORIGIN.",
+        "fields": {"majorRadius": "Num, centre of the tube to the origin", "minorRadius": "Num, the tube (< majorRadius)",
+                   "operation": COMMON["operation"],
+                   "targets": COMMON["targets"]},
+        "example": {"id": "to1", "type": "torus", "majorRadius": 15, "minorRadius": 5},
+        "notes": "The tube radius must be smaller than the ring radius. Lies in the XY plane.",
     },
 
     # --- sketches and what is made from them -----------------------------------

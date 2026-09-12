@@ -47,7 +47,9 @@ import font_guard  # noqa: F401  MUST precede build123d, see font_guard.py
 from build123d import (
     Box,
     Cylinder,
+    Cone,
     Sphere,
+    Torus,
     Pos,
     Rot,
     Plane,
@@ -1337,6 +1339,35 @@ def _handle_sphere(f, ctx):
     _combine(f, ctx, Sphere(r), name="Sphere")
 
 
+def _handle_cone(f, ctx):
+    # A cone tapers `bottomRadius` to `topRadius` over `height`. topRadius 0 is a
+    # true point-tipped cone, a positive one is a frustum; both are what the
+    # taper-extrude reaches in more steps, so the primitive is the shortcut.
+    rb, rt, h = ctx.val(f["bottomRadius"]), ctx.val(f["topRadius"]), ctx.val(f["height"])
+    _require_positive("Cone", height=h)
+    if rb < 0 or rt < 0:
+        raise ValueError("Cone: radii must not be negative")
+    if rb == rt:
+        # Equal radii is a cylinder, not a cone; OCCT builds a zero-slant frustum
+        # that meshes as debris. Name it rather than ship the sliver.
+        raise ValueError("Cone: the two radii must differ (equal radii is a cylinder)")
+    if rb <= 0 and rt <= 0:
+        raise ValueError("Cone: at least one radius must be greater than 0")
+    _combine(f, ctx, Cone(rb, rt, h), name="Cone")
+
+
+def _handle_torus(f, ctx):
+    # A ring: `majorRadius` is the centre circle, `minorRadius` the tube. The tube
+    # has to fit inside the ring or the surface passes through the axis and self
+    # intersects, which OCCT reports as a bare construction error on the wrong
+    # feature, so gate it here with a message that names the real cause.
+    big, small = ctx.val(f["majorRadius"]), ctx.val(f["minorRadius"])
+    _require_positive("Torus", majorRadius=big, minorRadius=small)
+    if small >= big:
+        raise ValueError("Torus: the tube radius must be smaller than the ring radius")
+    _combine(f, ctx, Torus(big, small), name="Torus")
+
+
 def _handle_shell(f, ctx):
     # Hollow each body that owns a selected opening face, the selectors carry
     # their own body (see _group_sels_by_body), so a multi-body model shells the
@@ -1779,7 +1810,9 @@ _FEATURE_HANDLERS = {
     "import": _handle_import,
     "box": _handle_box,
     "cylinder": _handle_cylinder,
+    "cone": _handle_cone,
     "sphere": _handle_sphere,
+    "torus": _handle_torus,
     "shell": _handle_shell,
     "offsetFace": _handle_offset_face,
     "thicken": _handle_thicken,

@@ -89,6 +89,7 @@ def add_feature(doc, feature, at=None):
 _PREFIXES = {
     "sketch": "sk", "extrude": "ex", "revolve": "rev", "fillet": "fil",
     "chamfer": "cha", "press-pull": "pp", "box": "bx", "cylinder": "cy",
+    "cone": "cn", "torus": "to",
     "sphere": "sp", "shell": "sh", "boolean": "bo", "mirror": "mir",
     "loft": "lo", "sweep": "sw", "datumPlane": "pl", "move": "mv",
     "duplicate": "dup",

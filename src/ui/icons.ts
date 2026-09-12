@@ -183,7 +183,9 @@ const FORGE_PATHS: Record<string, string> = {
   // --- primitives & body ops -----------------------------------------------
   box: `<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5"/><line x1="12" y1="12" x2="12" y2="21"/>`,
   cylinder: `<ellipse cx="12" cy="6.5" rx="7" ry="3"/><path d="M5 6.5v11a7 3 0 0 0 14 0v-11"/>`,
+  cone: `<ellipse cx="12" cy="18" rx="7" ry="2.8"/><path d="M12 3 5 18M12 3l7 15"/>`,
   sphere: `<circle cx="12" cy="12" r="8.5"/><ellipse cx="12" cy="12" rx="8.5" ry="3.4"/>`,
+  torus: `<ellipse cx="12" cy="12" rx="9" ry="5.6"/><ellipse cx="12" cy="12" rx="3.4" ry="1.9"/>`,
   // Delete Face: a solid with one facet lifted away
   deleteFace: `<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5" stroke-dasharray="2 2"/><path d="M9 10l6 6M15 10l-6 6"/>`,
   removeBody: `<path d="M5 7h14"/><path d="M10 7V4.6a.6.6 0 0 1 .6-.6h2.8a.6.6 0 0 1 .6.6V7"/><path d="M6.5 7l.9 12a1 1 0 0 0 1 .95h7.2a1 1 0 0 0 1-.95l.9-12"/><line x1="10.5" y1="10.5" x2="10.5" y2="16.5"/><line x1="13.5" y1="10.5" x2="13.5" y2="16.5"/>`,

@@ -616,7 +616,18 @@ def test_primitives():
     assert 6200 < part.volume < 6700, f"box with a drilled hole ≈ 6429, got {part.volume:.0f}"
     sp, serr, sb = rebuild({"parameters": {}, "features": [{"id": "s", "type": "sphere", "radius": 8}]})
     assert not serr and 2000 < sp.volume < 2300, f"sphere r8 ≈ 2145, got {sp.volume:.0f}"
-    print(f"  primitives OK: box−cylinder hole vol {part.volume:.0f}, sphere vol {sp.volume:.0f}")
+    # cone (point tip) r10 h20 ≈ 2094; torus ring15 tube5 ≈ 7402
+    cn, cerr, _ = rebuild({"parameters": {}, "features": [{"id": "c", "type": "cone", "bottomRadius": 10, "topRadius": 0, "height": 20}]})
+    assert not cerr and 2050 < cn.volume < 2150, f"cone r10 h20 ≈ 2094, got {cn.volume:.0f}"
+    to, terr, _ = rebuild({"parameters": {}, "features": [{"id": "t", "type": "torus", "majorRadius": 15, "minorRadius": 5}]})
+    assert not terr and 7250 < to.volume < 7550, f"torus 15/5 ≈ 7402, got {to.volume:.0f}"
+    # guards: a cone with equal radii is a cylinder, a torus tube must fit the ring
+    _p, eq_err, _b = rebuild({"parameters": {}, "features": [{"id": "c", "type": "cone", "bottomRadius": 8, "topRadius": 8, "height": 10}]})
+    assert any("radii must differ" in x["message"] for x in eq_err), f"equal-radii cone not refused: {eq_err}"
+    _p, fat_err, _b = rebuild({"parameters": {}, "features": [{"id": "t", "type": "torus", "majorRadius": 5, "minorRadius": 8}]})
+    assert any("smaller than the ring" in x["message"] for x in fat_err), f"oversized torus tube not refused: {fat_err}"
+    print(f"  primitives OK: box−cylinder hole vol {part.volume:.0f}, sphere {sp.volume:.0f}, "
+          f"cone {cn.volume:.0f}, torus {to.volume:.0f}; degenerate cone/torus refused")
 
 
 def test_modify_tools():
