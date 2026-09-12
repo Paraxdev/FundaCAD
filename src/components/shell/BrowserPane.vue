@@ -497,6 +497,31 @@ const nodes = useDocValue((doc): TreeNode[] => {
     }
   }
 
+  // --- Joints (only when present) ---
+  // How the bodies are held together. Listed with the bodies because a joint is
+  // about them, and selecting one raises its offset/angle handles on the mate
+  // axis, the same as editing it from the timeline.
+  const joints = doc.features.filter(
+    (f): f is Extract<Feature, { type: "joint" }> => f.type === "joint",
+  );
+  if (joints.length && show("bodies")) {
+    const nameOf = (id: string | undefined) => bodies.find((b) => b.id === id)?.name ?? id ?? "?";
+    folder("Joints", "assembly", joints.map((f, i) => ({
+      kind: "row" as const,
+      k: `j:${f.id}`,
+      depth: 0,
+      label: f.name || `${nameOf(f.moving)} → ${nameOf(f.to?.body)}`,
+      icon: "assembly",
+      selected: selection.featureId === f.id,
+      error: errId === f.id,
+      activate: () => engine.selectFeature(f.id),
+      edit: () => engine.editFeature(f.id),
+      rename: (name: string) => store.updateFeature(f.id, { name } as Partial<Feature>),
+      remove: () => store.removeFeature(f.id),
+      title: `Joint ${i + 1} · select or double-click to adjust its offset/angle handles · right-click to Rename / Delete`,
+    })));
+  }
+
   // --- Sketches ---
   if (show("sketches")) folder("Sketches", "sketch", sketches.map((f, i) => ({
     kind: "row" as const,

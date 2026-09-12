@@ -681,7 +681,7 @@ export type CoreFeature =
   // joint drive. `mode` records which degree of freedom the joint offers; the
   // sidecar placement is the same for all three (see sidecar/builder _handle_joint).
   | { id: string; type: "joint"; moving: string; mate: MateConnector; to: MateConnector;
-      mode?: JointMode; flush?: boolean; offset?: Num; angle?: Num }
+      mode?: JointMode; flush?: boolean; offset?: Num; angle?: Num; name?: string }
   // Repair boolean rot on a body, or all bodies when `body` is omitted: unify
   // glued/overlapping solids left by joins of ragged imports, then collapse
   // facet debris (slivers, near-coplanar staircases). Parametric because
