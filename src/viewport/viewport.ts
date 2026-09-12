@@ -1121,6 +1121,8 @@ export class Viewport {
       }
     }
     this.syncEmitterLights(emitters);
+    // The model may have moved or grown; re-aim the optional key-light shadow.
+    this.scene.frameShadows();
   }
 
   /** Emissive bodies also cast light: a lamp glows AND lights the wall by it, so

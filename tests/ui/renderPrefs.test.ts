@@ -55,6 +55,7 @@ describe("asRenderPrefs", () => {
       aperture: DEFAULT_RENDER.aperture,
       focusBlur: DEFAULT_RENDER.focusBlur,
       performanceMode: true,
+      shadows: DEFAULT_RENDER.shadows,
     });
   });
 

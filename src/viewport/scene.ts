@@ -36,6 +36,9 @@ export interface SceneBundle {
    *  and what it is drawn against. Called once at construction and again from
    *  every change; the caller asks for a frame afterwards. */
   applyRenderPrefs: () => void;
+  /** Re-aim and re-size the key light's shadow to the current model. Called after
+   *  a rebuild (the model moved or grew) and when the shadows setting changes. */
+  frameShadows: () => void;
 }
 
 /** How many minor cells the ground grid spans, for a viewport `diagonalPx`
@@ -226,6 +229,15 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
   const key = new THREE.DirectionalLight(0xffffff, KEY_INTENSITY);
   key.position.set(40, -60, 80);
   scene.add(key);
+  // The key light can OPTIONALLY cast a grounded shadow (renderPrefs.shadows). Set
+  // up its shadow map once; the ortho frustum is framed to the model by
+  // frameKeyShadow whenever the model or the setting changes. The target is added
+  // so the light can be re-aimed at the model centre without moving its DIRECTION.
+  scene.add(key.target);
+  key.shadow.mapSize.set(2048, 2048);
+  key.shadow.bias = -0.0006;
+  key.shadow.normalBias = 0.6; // CAD faces are flat and large; a world-space nudge beats acne
+  key.shadow.radius = 3;
   const fill = new THREE.DirectionalLight(0xffffff, FILL_INTENSITY);
   fill.position.set(-50, 40, 20);
   scene.add(fill);
@@ -259,13 +271,43 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
 
   const post = new PostChain(renderer, scene);
 
+  const frameShadows = () => {
+    key.castShadow = renderPrefs().shadows;
+    if (key.castShadow) frameKeyShadow(key, modelGroup);
+  };
+
   return {
     renderer, scene, modelGroup, planes, grid, triad, post, lowPower: autoLowPower,
     applyRenderPrefs: () => {
       applyPowerTier(); // pick up a toggled performance-mode pref
       applyRenderPrefs(renderer, scene, { key, fill, hemi });
+      frameShadows();
     },
+    frameShadows,
   };
+}
+
+/** Aim the key light's shadow camera at the model and size its ortho frustum to
+ *  fit, so a small part gets a crisp shadow and a large one is not clipped. The
+ *  light's DIRECTION is preserved (it is re-placed along its existing direction,
+ *  the target moved to the model centre), so only the shadow changes, not the
+ *  lighting. Cheap: it reads each body's cached bounding box, not its vertices. */
+const _shadowBox = new THREE.Box3();
+const _shadowSphere = new THREE.Sphere();
+const _shadowDir = new THREE.Vector3(40, -60, 80).normalize();
+function frameKeyShadow(key: THREE.DirectionalLight, modelGroup: THREE.Group): void {
+  _shadowBox.setFromObject(modelGroup);
+  if (_shadowBox.isEmpty()) return;
+  _shadowBox.getBoundingSphere(_shadowSphere);
+  const r = Math.max(_shadowSphere.radius, 1);
+  key.position.copy(_shadowSphere.center).addScaledVector(_shadowDir, r * 3);
+  key.target.position.copy(_shadowSphere.center);
+  key.target.updateMatrixWorld();
+  const cam = key.shadow.camera;
+  cam.left = -r * 1.25; cam.right = r * 1.25;
+  cam.top = r * 1.25; cam.bottom = -r * 1.25;
+  cam.near = r * 0.5; cam.far = r * 6;
+  cam.updateProjectionMatrix();
 }
 
 /** Drawing the frame, with or without the passes.

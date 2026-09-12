@@ -113,6 +113,23 @@ const onBloom = (e: Event) =>
     </section>
 
     <section class="rd-section">
+      <h3 class="rd-head">Shadows</h3>
+      <div class="rd-chips" role="group" aria-label="Shadows">
+        <button
+          class="rd-chip"
+          :class="{ active: prefs.shadows }"
+          data-shadows="mode"
+          :aria-pressed="prefs.shadows"
+          @click="setRenderPref('shadows', !prefs.shadows)"
+        >{{ prefs.shadows ? "On" : "Off" }}</button>
+      </div>
+      <div class="sm-hint">
+        Ground every part with a real cast shadow from the key light, not just the
+        soft light an emissive part throws. Off on the lightweight render.
+      </div>
+    </section>
+
+    <section class="rd-section">
       <h3 class="rd-head">Performance</h3>
       <div class="rd-chips" role="group" aria-label="Performance mode">
         <button

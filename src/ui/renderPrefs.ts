@@ -146,6 +146,11 @@ export interface RenderPrefs {
    *  dedicated GPU that reports a real name (so `detectLowPower` passes it) but
    *  still stutters on the heavy effects, this is the manual escape hatch. */
   performanceMode: boolean;
+  /** Ground the model with real cast shadows from the key light, not just the
+   *  soft occlusion an emissive part throws. OFF by default: a shadow under every
+   *  part is a look, and the app has always drawn a clean, shadowless product
+   *  view, so this is opt-in. Ignored on the lightweight tier (no shadow map). */
+  shadows: boolean;
 }
 
 /** What the f-stop numbers mean to the blur pass, and the range the control
@@ -177,6 +182,8 @@ export const DEFAULT_RENDER: RenderPrefs = {
   // OFF: the auto-detect already spares the machines that genuinely cannot cope,
   // so this stays off until someone whose GPU slipped past it turns it on.
   performanceMode: false,
+  // OFF: opt-in grounded shadows, see the field comment.
+  shadows: false,
 };
 
 export const MIN_BRIGHTNESS = 0.4;
@@ -252,6 +259,7 @@ export function asRenderPrefs(v: unknown): RenderPrefs {
     aperture: asAperture(o["aperture"]) ?? DEFAULT_RENDER.aperture,
     focusBlur: asFocusBlur(o["focusBlur"]) ?? DEFAULT_RENDER.focusBlur,
     performanceMode: typeof o["performanceMode"] === "boolean" ? o["performanceMode"] : DEFAULT_RENDER.performanceMode,
+    shadows: typeof o["shadows"] === "boolean" ? o["shadows"] : DEFAULT_RENDER.shadows,
   };
 }
 
@@ -284,7 +292,8 @@ export function setRenderPref<K extends keyof RenderPrefs>(key: K, value: Render
             : key === "aperture" ? asAperture(value)
               : key === "focusBlur" ? asFocusBlur(value)
                 : key === "performanceMode" ? (typeof value === "boolean" ? value : null)
-                  : asBrightness(value);
+                  : key === "shadows" ? (typeof value === "boolean" ? value : null)
+                    : asBrightness(value);
   if (ok === null || current[key] === ok) return;
   // A fresh object rather than a mutation, so a subscriber may hold the result
   // of renderPrefs() and compare identity to decide it must redraw.
