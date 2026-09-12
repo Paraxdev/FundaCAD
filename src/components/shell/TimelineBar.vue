@@ -222,8 +222,19 @@ function chipTitle(f: { id: string; type: string }, i: number) {
     // that failed), so this reads as one line either way rather than as a
     // feature accused of two different things.
     (err ? `\nFailed: ${err}` : note ? `\nNote: ${note}` : "") +
-    "\ndouble-click to edit · right-click for more"
+    "\ndouble-click to roll here · right-click to edit"
   );
+}
+
+// Double-click a chip to ROLL the model to just after that feature, so you see
+// the part exactly as it stood then with every later step dimmed. Double-click
+// the same step again to release back to the tip, so it reads as a quick peek in
+// time, not a mode to escape from. Editing moved to the right-click menu (and
+// the values panel under a selected chip): scrubbing the history is what the
+// double-click is reached for far more often than reopening a feature's form.
+function rollToInspect(i: number) {
+  const here = i + 1; // build features[0..i] INCLUSIVE: the state as of this one
+  store.setRollback(rollback.value === here ? features.value.length : here);
 }
 
 // --- scrolling -----------------------------------------------------------
@@ -393,7 +404,7 @@ function openMenu(e: MouseEvent, id: string, i: number) {
                 :title="chipTitle(f, i)"
                 draggable="true"
                 @click="timeline.select(f.id)"
-                @dblclick="timeline.edit(f.id)"
+                @dblclick="rollToInspect(i)"
                 @contextmenu="openMenu($event, f.id, i)"
                 @dragstart="onDragStart(f.id, $event)"
                 @dragover="onDragOver(f.id, $event)"
