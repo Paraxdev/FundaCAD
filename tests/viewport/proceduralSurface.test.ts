@@ -66,6 +66,34 @@ describe("compileGraph", () => {
     expect(glsl).toContain("o.rough = g_m1;");
   });
 
+  it("emits a fresnel term from the surface point and normal", () => {
+    const g: SurfaceGraph = {
+      output: "out",
+      nodes: [
+        { id: "fr", type: "fresnel", params: { power: 4 } },
+        { id: "out", type: "output", in: { roughness: "fr" } },
+      ],
+    };
+    const glsl = compileGraph(g);
+    expect(glsl).toContain("normalize(cameraPosition - wp)");
+    expect(glsl).toContain("4.00000)"); // the baked power
+    expect(glsl).toContain("o.rough = g_fr;");
+  });
+
+  it("compiles a colorramp into a piecewise mix across its stops", () => {
+    const g: SurfaceGraph = {
+      output: "out",
+      nodes: [
+        { id: "n1", type: "noise", params: { scale: 6 } },
+        { id: "cr", type: "colorramp", params: { stops: "0:#000000;0.5:#ff0000;1:#ffffff" }, in: { t: "n1" } },
+        { id: "out", type: "output", in: { color: "cr" } },
+      ],
+    };
+    const glsl = compileGraph(g);
+    expect(glsl).toContain("vec3 g_cr = mix(mix(vec3(0.0000, 0.0000, 0.0000)");
+    expect(glsl).toContain("o.tint = g_cr;");
+  });
+
   it("uses the constant param for a math port that is left unwired", () => {
     const g: SurfaceGraph = {
       output: "out",

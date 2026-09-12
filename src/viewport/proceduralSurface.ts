@@ -227,6 +227,42 @@ function writeUniforms(u: Record<string, THREE.IUniform>, spec: SurfaceSpec): vo
 // --- the compiler -----------------------------------------------------------
 const GEN_KIND: Record<string, number> = { noise: 0, scratches: 1, brushed: 2, voronoi: 3, wave: 4 };
 
+/** A colorramp's stops live as a "pos:hex;pos:hex;..." string. Parse and sort
+ *  them, then emit a piecewise-linear evaluation at `tExpr`: start at the first
+ *  stop's colour and, for each later stop, mix toward it across its segment. A
+ *  malformed or empty string falls back to a plain black-to-white ramp. */
+function colorRampGLSL(raw: unknown, tExpr: string): string {
+  const glslCol = (hex: string) => {
+    const c = new THREE.Color(hex);
+    return `vec3(${c.r.toFixed(4)}, ${c.g.toFixed(4)}, ${c.b.toFixed(4)})`;
+  };
+  const stops = parseStops(raw);
+  const t = `clamp(${tExpr}, 0.0, 1.0)`;
+  let expr = glslCol(stops[0]!.hex);
+  for (let i = 1; i < stops.length; i++) {
+    const p0 = stops[i - 1]!.pos, p1 = stops[i]!.pos;
+    const span = Math.max(p1 - p0, 1e-4);
+    expr = `mix(${expr}, ${glslCol(stops[i]!.hex)}, clamp((${t} - ${p0.toFixed(4)}) / ${span.toFixed(4)}, 0.0, 1.0))`;
+  }
+  return expr;
+}
+
+/** "pos:hex;pos:hex" -> sorted [{pos,hex}], always at least two stops. */
+export function parseStops(raw: unknown): { pos: number; hex: string }[] {
+  const out: { pos: number; hex: string }[] = [];
+  if (typeof raw === "string") {
+    for (const part of raw.split(";")) {
+      const i = part.indexOf(":");
+      if (i < 0) continue;
+      const pos = Number.parseFloat(part.slice(0, i));
+      const hex = part.slice(i + 1).trim();
+      if (Number.isFinite(pos) && /^#[0-9a-fA-F]{6}$/.test(hex)) out.push({ pos: Math.min(Math.max(pos, 0), 1), hex });
+    }
+  }
+  if (out.length < 2) return [{ pos: 0, hex: "#000000" }, { pos: 1, hex: "#ffffff" }];
+  return out.sort((a, b) => a.pos - b.pos);
+}
+
 /** Walk the graph from its output, emit one GLSL statement per node in
  *  dependency order, and return the `SurfOut sGraph(vec3 wp, vec3 wn)` function.
  *  Params are baked as literals (so a graph change recompiles); a missing wire
@@ -259,8 +295,14 @@ export function compileGraph(graph: SurfaceGraph): string {
     const p = n.params ?? {};
     if (n.type in GEN_KIND) {
       lines.push(`float ${varOf(n.id)} = sGen(wp, wn, ${GEN_KIND[n.type]}, ${flt(p["scale"], 6)}, ${flt(p["angle"], 0)});`);
+    } else if (n.type === "fresnel") {
+      // rises toward 1 at grazing angles: 1 - (N . V), raised to a power. cameraPosition
+      // is a built-in fragment uniform, wp/wn are the surface point and normal.
+      lines.push(`float ${varOf(n.id)} = pow(1.0 - clamp(dot(normalize(wn), normalize(cameraPosition - wp)), 0.0, 1.0), ${flt(p["power"], 3)});`);
     } else if (n.type === "ramp") {
       lines.push(`vec3 ${varOf(n.id)} = mix(${vec(p["colorA"], "#000000")}, ${vec(p["colorB"], "#ffffff")}, clamp(${inFloat(n, "t", "0.0")}, 0.0, 1.0));`);
+    } else if (n.type === "colorramp") {
+      lines.push(`vec3 ${varOf(n.id)} = ${colorRampGLSL(p["stops"], inFloat(n, "t", "0.0"))};`);
     } else if (n.type === "mix") {
       const t = n.in?.["t"] ? varOf(n.in["t"]!) : flt(p["t"], 0.5);
       lines.push(`float ${varOf(n.id)} = mix(${inFloat(n, "a", "0.0")}, ${inFloat(n, "b", "0.0")}, ${t});`);

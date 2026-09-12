@@ -24,18 +24,18 @@ const store = useEngine().store;
 type NodeType = SurfaceNode["type"];
 const LABEL: Record<NodeType, string> = {
   noise: "Noise", scratches: "Scratches", brushed: "Brushed", voronoi: "Wear", wave: "Bands",
-  ramp: "Ramp", mix: "Mix", math: "Math", output: "Output",
+  fresnel: "Fresnel", ramp: "Ramp", colorramp: "Color Ramp", mix: "Mix", math: "Math", output: "Output",
 };
-const ADDABLE: NodeType[] = ["noise", "scratches", "brushed", "voronoi", "wave", "ramp", "mix", "math"];
+const ADDABLE: NodeType[] = ["noise", "scratches", "brushed", "voronoi", "wave", "fresnel", "ramp", "colorramp", "mix", "math"];
 const MATH_OPS = ["multiply", "add", "subtract", "min", "max", "pow"];
 // input ports per type, and the output type each node produces (for wiring rules)
 const INPUTS: Record<NodeType, string[]> = {
-  noise: [], scratches: [], brushed: [], voronoi: [], wave: [],
-  ramp: ["t"], mix: ["a", "b", "t"], math: ["a", "b"], output: ["roughness", "bump", "color"],
+  noise: [], scratches: [], brushed: [], voronoi: [], wave: [], fresnel: [],
+  ramp: ["t"], colorramp: ["t"], mix: ["a", "b", "t"], math: ["a", "b"], output: ["roughness", "bump", "color"],
 };
 const OUT_TYPE: Record<NodeType, "float" | "vec3" | "none"> = {
-  noise: "float", scratches: "float", brushed: "float", voronoi: "float", wave: "float",
-  ramp: "vec3", mix: "float", math: "float", output: "none",
+  noise: "float", scratches: "float", brushed: "float", voronoi: "float", wave: "float", fresnel: "float",
+  ramp: "vec3", colorramp: "vec3", mix: "float", math: "float", output: "none",
 };
 // what each INPUT port expects, so a float cannot be wired into a colour port
 // (which would be a shader type error)
@@ -54,6 +54,8 @@ function defaultGraph(): SurfaceGraph {
 }
 function defaults(type: NodeType): Record<string, number | string> {
   if (type === "ramp") return { colorA: "#201810", colorB: "#e0a060" };
+  if (type === "colorramp") return { stops: "0:#201810;0.5:#a06030;1:#e0d0b0" };
+  if (type === "fresnel") return { power: 3 };
   if (type === "mix") return { t: 0.5 };
   if (type === "math") return { op: "multiply", a: 0.5, b: 0.5 };
   if (type === "scratches" || type === "brushed" || type === "wave") return { scale: 6, angle: 0 };
@@ -137,7 +139,9 @@ const NUM_PARAMS: Record<NodeType, { key: string; label: string; min: number; ma
   mix: [{ key: "t", label: "Mix", min: 0, max: 1, step: 0.01 }],
   // a/b sliders show only for the ports left unwired; the op is a select below
   math: [{ key: "a", label: "A", min: 0, max: 1, step: 0.01 }, { key: "b", label: "B", min: 0, max: 1, step: 0.01 }],
+  fresnel: [{ key: "power", label: "Power", min: 0.5, max: 8, step: 0.1 }],
   ramp: [],
+  colorramp: [],
   output: [
     { key: "roughAmount", label: "Rough", min: 0, max: 1, step: 0.01 },
     { key: "bumpAmount", label: "Bump", min: 0, max: 1, step: 0.01 },
@@ -146,6 +150,32 @@ const NUM_PARAMS: Record<NodeType, { key: string; label: string; min: number; ma
 };
 const pnum = (n: SurfaceNode, key: string, d = 0) => (typeof n.params?.[key] === "number" ? (n.params[key] as number) : d);
 const pcol = (n: SurfaceNode, key: string, d: string) => (typeof n.params?.[key] === "string" ? (n.params[key] as string) : d);
+
+// --- colorramp stops: "pos:hex;pos:hex" kept in edit order (the compiler sorts) -
+type Stop = { pos: number; hex: string };
+function rampStops(n: SurfaceNode): Stop[] {
+  const raw = typeof n.params?.["stops"] === "string" ? (n.params["stops"] as string) : "";
+  const out: Stop[] = [];
+  for (const part of raw.split(";")) {
+    const i = part.indexOf(":");
+    if (i < 0) continue;
+    const pos = Number.parseFloat(part.slice(0, i));
+    const hex = part.slice(i + 1).trim();
+    if (Number.isFinite(pos) && /^#[0-9a-fA-F]{6}$/.test(hex)) out.push({ pos: Math.min(Math.max(pos, 0), 1), hex });
+  }
+  return out.length >= 2 ? out : [{ pos: 0, hex: "#000000" }, { pos: 1, hex: "#ffffff" }];
+}
+function writeStops(id: string, stops: Stop[]) {
+  setParam(id, "stops", stops.map((s) => `${s.pos.toFixed(3)}:${s.hex}`).join(";"), false);
+}
+function setStopColor(id: string, i: number, hex: string) { const s = rampStops(node(id)!); const st = s[i]; if (st) { st.hex = hex; writeStops(id, s); } }
+function setStopPos(id: string, i: number, pos: number) { const s = rampStops(node(id)!); const st = s[i]; if (st) { st.pos = Math.min(Math.max(pos, 0), 1); writeStops(id, s); } }
+function addStop(id: string) { const s = rampStops(node(id)!); s.push({ pos: 0.5, hex: "#808080" }); writeStops(id, s); }
+function removeStop(id: string, i: number) { const s = rampStops(node(id)!); if (s.length > 2) { s.splice(i, 1); writeStops(id, s); } }
+function rampGradient(n: SurfaceNode): string {
+  const s = [...rampStops(n)].sort((a, b) => a.pos - b.pos);
+  return `linear-gradient(to right, ${s.map((x) => `${x.hex} ${(x.pos * 100).toFixed(1)}%`).join(", ")})`;
+}
 
 // --- pan / zoom ------------------------------------------------------------
 const canvasEl = ref<HTMLElement | null>(null);
@@ -349,6 +379,17 @@ const pending = computed(() => {
                 <input class="mats-color" type="color" :value="pcol(n, 'colorB', '#e0a060')"
                   @input="setParam(n.id, 'colorB', ($event.target as HTMLInputElement).value, false)" /></label>
             </template>
+            <template v-if="n.type === 'colorramp'">
+              <div class="ne-ramp-bar" :style="{ background: rampGradient(n) }"></div>
+              <div v-for="(st, si) in rampStops(n)" :key="si" class="ne-prow ne-stop">
+                <input class="mats-color" type="color" :value="st.hex"
+                  @input="setStopColor(n.id, si, ($event.target as HTMLInputElement).value)" />
+                <input class="sm-slider" type="range" min="0" max="1" step="0.01" :value="st.pos"
+                  @input="setStopPos(n.id, si, Number(($event.target as HTMLInputElement).value))" />
+                <button class="ne-x" @pointerdown.stop @click="removeStop(n.id, si)">×</button>
+              </div>
+              <button class="rd-chip ne-addstop" @click="addStop(n.id)">+ stop</button>
+            </template>
           </div>
         </div>
       </div>
@@ -383,6 +424,11 @@ const pending = computed(() => {
 .ne-prow > span { width: 46px; color: var(--text-dim); }
 .ne-select { flex: 1; background: var(--panel); color: var(--text); border: 1px solid var(--line);
   border-radius: var(--r-sm); font-size: 11px; padding: 1px 4px; }
+.ne-ramp-bar { height: 12px; border-radius: var(--r-sm); border: 1px solid var(--line); margin-bottom: 2px; }
+.ne-stop { gap: 4px; }
+.ne-stop .mats-color { width: 22px; flex: none; }
+.ne-stop .sm-slider { flex: 1; }
+.ne-addstop { align-self: flex-start; padding: 1px 6px; font-size: 11px; }
 .ne-port { position: absolute; display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-dim); cursor: pointer; }
 .ne-in { left: -6px; }
 .ne-out { right: -6px; flex-direction: row-reverse; top: 14px; }
