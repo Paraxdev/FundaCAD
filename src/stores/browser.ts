@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 import { ref, shallowRef } from "vue";
+import { EMPTY_SELECTION, type RowSelection } from "../ui/rowSelection";
 
 /** Collapsed by default? Assembly nodes ("n:<featureId>/<index>") are, built-in
  *  folders ("f:Bodies", "Palette") are not.
@@ -63,6 +64,22 @@ export const useBrowserStore = defineStore("browser", () => {
    *  replaced wholesale and its `ids` are never edited in place. */
   const drag = shallowRef<BrowserDrag | null>(null);
 
+  /** A drag across the eyes is in progress (see ui/visibilityPaint.ts). Rows read
+   *  it to refuse starting their own HTML5 drag: a body row is draggable, and a
+   *  press on its eye followed by a move would otherwise pick the body up. */
+  const painting = ref(false);
+
+  /** The sketches picked in the Browser. A sketch selection is otherwise the ONE
+   *  feature in stores/selection.ts, which the timeline and the inspector follow;
+   *  this is the several the Browser's Ctrl and Shift clicks gather, kept beside
+   *  it and resynced when that one changes from anywhere else. */
+  const sketchSelection = shallowRef<RowSelection<string>>(EMPTY_SELECTION);
+
+  /** Where a Shift-click on a body row measures its run from. The body selection
+   *  itself lives in the viewport (selectedBodyIds mirrors it); only the anchor
+   *  is the Browser's own. */
+  const bodyAnchor = ref<string | null>(null);
+
   function isCollapsed(key: string): boolean {
     return overrides.value.get(key) ?? collapsedByDefault(key);
   }
@@ -79,6 +96,9 @@ export const useBrowserStore = defineStore("browser", () => {
     pendingRenameId,
     viewTick,
     drag,
+    painting,
+    sketchSelection,
+    bodyAnchor,
     isCollapsed,
     toggle,
     expand,

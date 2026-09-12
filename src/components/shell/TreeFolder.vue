@@ -28,9 +28,13 @@ const props = defineProps<{
   count: number;
   depth: number;
   collapsed: boolean;
-  /** Eye state. Omit `toggleVis` to render no eye at all. */
+  /** Eye state. Omit both `toggleVis` and `eyeDown` to render no eye at all. */
   visible?: boolean | undefined;
   toggleVis?: (() => void) | undefined;
+  /** A press on the eye, which replaces the click toggle when given; see TreeRow. */
+  eyeDown?: ((e: PointerEvent) => void) | undefined;
+  /** The pointer entered this head, which is how a paint drag reaches it. */
+  eyeOver?: (() => void) | undefined;
   /** Stable id (an element's), so a head can be renamed programmatically the
    *  way a row can, through the store's pendingRenameId. */
   id?: string | undefined;
@@ -88,6 +92,25 @@ function openMenu(e: MouseEvent) {
   contextMenu(e.clientX, e.clientY, items);
 }
 
+// --- the eye, same handling as TreeRow's -----------------------------------
+function onEyeDown(e: PointerEvent) {
+  if (!props.eyeDown || e.button !== 0) return;
+  e.preventDefault();
+  const el = e.currentTarget as Element | null;
+  if (el?.hasPointerCapture?.(e.pointerId)) el.releasePointerCapture(e.pointerId);
+  props.eyeDown(e);
+}
+function onEyeClick() {
+  if (!props.eyeDown) props.toggleVis?.();
+}
+function onDragStart(e: DragEvent) {
+  if (browser.painting) {
+    e.preventDefault();
+    return;
+  }
+  props.dragStart?.();
+}
+
 // --- drag and drop -------------------------------------------------------
 //
 // A COUNTER rather than a flag: dragenter/dragleave also fire as the pointer
@@ -129,12 +152,13 @@ function onDrop(e: DragEvent) {
     :draggable="!!dragStart"
     @click="$emit('toggle')"
     @contextmenu="openMenu"
-    @dragstart="dragStart?.()"
+    @dragstart="onDragStart"
     @dragend="browser.endDrag()"
     @dragenter="onEnter"
     @dragleave="onLeave"
     @dragover="onOver"
     @drop="onDrop"
+    @pointerenter="eyeOver?.()"
   >
     <span class="tree-caret"><Icon :name="collapsed ? 'caretRight' : 'caretDown'" :size="11" /></span>
     <span class="feature-icon"><Icon :name="icon" :size="14" /></span>
@@ -143,7 +167,13 @@ function onDrop(e: DragEvent) {
     <span class="tree-count">{{ count || "" }}</span>
     <!-- .stop: the eye sits inside the head, and a bare click would also
          collapse the section it is trying to hide. -->
-    <span v-if="toggleVis" class="tree-eye" title="Show/hide" @click.stop="toggleVis()">
+    <span
+      v-if="toggleVis || eyeDown"
+      class="tree-eye"
+      title="Show/hide · drag across eyes to show or hide many · Alt+click to show only this"
+      @pointerdown.stop="onEyeDown"
+      @click.stop="onEyeClick"
+    >
       <Icon :name="visible === false ? 'hidden' : 'visible'" :size="13" />
     </span>
   </div>

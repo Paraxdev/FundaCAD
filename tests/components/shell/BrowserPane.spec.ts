@@ -25,6 +25,8 @@ import BrowserPane from "../../../src/components/shell/BrowserPane.vue";
 import { ENGINE } from "../../../src/app/engineKey";
 import { contribute, resetContributions } from "../../../src/plugins/contrib";
 import { setBrowserFilter } from "../../../src/ui/browserFilter";
+import { contextMenu, type CtxItem } from "../../../src/ui/menu";
+import { useBrowserStore } from "../../../src/stores/browser";
 import {
   descendantsOf, type ElementDef, freshElementName, reparented, withElementRemoved,
 } from "../../../src/document/elements";
@@ -32,12 +34,22 @@ import type { MaterialDef } from "../../../src/document/materials";
 import type { Engine } from "../../../src/app/engine";
 import type { CadDocument, Feature } from "../../../src/types";
 
+// The menu is read, not drawn: what matters is which rows a menu entry acts on.
+vi.mock("../../../src/ui/menu", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../src/ui/menu")>()),
+  contextMenu: vi.fn(),
+}));
+
 /** The narrowest engine BrowserPane actually touches. The document is a plain
  *  raw object mutated in place, exactly as DocumentStore.mutate() leaves it. */
 function makeEngine(doc: CadDocument, bodies: { id: string; name: string; nodeRef?: string }[] = []) {
   const docVersion = ref(0);
   const buildVersion = ref(0);
   const hidden = new Set<string>();
+  const hiddenSketches = new Set<string>();
+  /** Every batched body visibility write, to count re-renders by. */
+  const bodyWrites: Map<string, boolean>[] = [];
+  let selectedBodies: string[] = [];
   const slots = new Map<string, number>();
   // Elements are a display overlay in the real store, not part of the document
   // object, so the fake keeps them the same way. The PURE half is imported
@@ -118,9 +130,11 @@ function makeEngine(doc: CadDocument, bodies: { id: string; name: string; nodeRe
     isPlaneVisible: () => true,
     isBodyVisible: (id: string) => !hidden.has(id),
     setBodiesVisibility: (vis: Map<string, boolean>) => {
+      bodyWrites.push(new Map(vis));
       for (const [id, v] of vis) v ? hidden.delete(id) : hidden.add(id);
       buildVersion.value++;
     },
+    setSketchVisibility: (id: string, v: boolean) => { v ? hiddenSketches.delete(id) : hiddenSketches.add(id); },
     bodyName: () => undefined,
     bodyColorSlot: (id: string) => slots.get(id),
     setBodyColorSlot: (id: string, slot: number | null) => {
@@ -133,12 +147,20 @@ function makeEngine(doc: CadDocument, bodies: { id: string; name: string; nodeRe
     docVersion,
     buildVersion,
     store,
+    bodyWrites,
+    isSketchVisible: (id: string) => !hiddenSketches.has(id),
     /** Edit in place, identity is preserved on purpose. */
     edit(fn: (d: CadDocument) => void) { fn(doc); docVersion.value++; },
     engine: {
       store,
       bridge: { docVersion, buildVersion },
-      isSketchVisible: () => true,
+      isSketchVisible: (id: string) => !hiddenSketches.has(id),
+      sketch: { active: false },
+      overlay: { update: () => {} },
+      viewport: {
+        getSelectedBodies: () => [...selectedBodies],
+        setSelectedBodies: (ids: string[]) => { selectedBodies = [...ids]; },
+      },
       selectFeature: () => {},
       editFeature: () => {},
       syncDatumPlanes: () => {},
@@ -204,6 +226,30 @@ const iconIn = (el: ReturnType<typeof folderNamed>, sel: string) =>
 const caretName = (el: ReturnType<typeof folderNamed>) => iconIn(el, ".tree-caret");
 const eyeName = (el: ReturnType<typeof folderNamed>) => iconIn(el, ".tree-eye");
 
+type Found = NonNullable<ReturnType<typeof folderNamed>>;
+
+/** A row by its label. */
+function rowNamed(w: VueWrapper, label: string): Found {
+  const row = w.findAll(".feature-row").find((el) => el.find(".tree-label").text() === label);
+  if (!row) throw new Error(`no row "${label}"`);
+  return row;
+}
+
+/** Press an eye the way a mouse does: the press acts, then the click that
+ *  follows must not act a second time. */
+async function clickEye(el: Found, init: PointerEventInit = {}) {
+  const eye = el.find(".tree-eye");
+  await eye.trigger("pointerdown", { button: 0, ...init });
+  window.dispatchEvent(new Event("pointerup"));
+  await eye.trigger("click");
+  await nextTick();
+}
+
+/** Press an eye and keep the button down. */
+async function pressEye(el: Found, init: PointerEventInit = {}) {
+  await el.find(".tree-eye").trigger("pointerdown", { button: 0, ...init });
+}
+
 const sketch = (id: string, name?: string): Feature =>
   ({ id, type: "sketch", plane: "XY", entities: [], ...(name ? { name } : {}) }) as Feature;
 
@@ -262,7 +308,7 @@ describe("BrowserPane", () => {
     await nextTick();
 
     expect(eyeName(folderNamed(w, "Rig"))).toBe("visible");
-    await folderNamed(w, "Rig")!.find(".tree-eye").trigger("click");
+    await clickEye(folderNamed(w, "Rig")!);
     expect(fake.store.isBodyVisible("body1")).toBe(false);
     expect(fake.store.isBodyVisible("body2")).toBe(false);
     await nextTick();
@@ -520,10 +566,9 @@ describe("BrowserPane", () => {
       [{ id: "b1", name: "a", nodeRef: "imp1/1" }, { id: "b2", name: "b", nodeRef: "imp1/2" }],
     );
     const w = render(fake);
-    const eye = folderNamed(w, "Robot")!.find(".tree-eye");
     expect(eyeName(folderNamed(w, "Robot"))).toBe("visible");
 
-    await eye.trigger("click");
+    await clickEye(folderNamed(w, "Robot")!);
 
     expect(fake.engine.store.isBodyVisible("b1")).toBe(false);
     expect(fake.engine.store.isBodyVisible("b2")).toBe(false);
@@ -531,5 +576,112 @@ describe("BrowserPane", () => {
     const robot = folderNamed(w, "Robot");
     expect(caretName(robot)).toBe("caretRight");
     expect(eyeName(robot)).toBe("hidden");
+  });
+  // --- showing and hiding many rows at once ----------------------------------
+
+  it("paints a press on one sketch eye across every sketch the drag crosses, skipped rows too", async () => {
+    const fake = makeEngine({ parameters: {}, features: ["a", "b", "c", "d", "e"].map((n) => sketch(n, n.toUpperCase())) });
+    const w = render(fake);
+    await pressEye(rowNamed(w, "A"));
+    // one frame of a fast drag: straight from A into D, never entering B or C
+    await rowNamed(w, "D").trigger("pointerenter");
+    expect(["a", "b", "c", "d", "e"].map(fake.isSketchVisible)).toEqual([false, false, false, false, true]);
+    // the button comes up anywhere, and the drag is over
+    window.dispatchEvent(new Event("pointerup"));
+    await rowNamed(w, "E").trigger("pointerenter");
+    expect(fake.isSketchVisible("e")).toBe(true);
+  });
+
+  it("gives every crossed row the pressed row's NEW state instead of flipping each one", async () => {
+    const fake = makeEngine({ parameters: {}, features: [sketch("a", "A"), sketch("b", "B"), sketch("c", "C")] });
+    fake.store.setSketchVisibility("b", false);
+    const w = render(fake);
+    await pressEye(rowNamed(w, "A"));
+    await rowNamed(w, "C").trigger("pointerenter");
+    window.dispatchEvent(new Event("pointerup"));
+    expect(["a", "b", "c"].map(fake.isSketchVisible)).toEqual([false, false, false]);
+  });
+
+  it("leaves the bodies alone when a sketch drag runs on into them", async () => {
+    const fake = makeEngine({ parameters: {}, features: [sketch("a", "A"), sketch("b", "B")] }, [{ id: "body1", name: "Bracket" }]);
+    const w = render(fake);
+    await pressEye(rowNamed(w, "A"));
+    await rowNamed(w, "Bracket").trigger("pointerenter");
+    window.dispatchEvent(new Event("pointerup"));
+    expect(fake.store.isBodyVisible("body1")).toBe(true);
+    expect(fake.bodyWrites).toHaveLength(0);
+  });
+
+  it("paints across bodies in one batched write per step, however many rows a step crossed", async () => {
+    const names = ["A", "B", "C", "D", "E"];
+    const fake = makeEngine({ parameters: {}, features: [] }, names.map((n, i) => ({ id: `b${i + 1}`, name: n })));
+    const w = render(fake);
+    await pressEye(rowNamed(w, "A"));
+    await rowNamed(w, "E").trigger("pointerenter");
+    window.dispatchEvent(new Event("pointerup"));
+    // every body hidden, and the whole model re-rendered twice, not five times
+    expect(names.map((_, i) => fake.store.isBodyVisible(`b${i + 1}`))).toEqual([false, false, false, false, false]);
+    expect(fake.bodyWrites).toHaveLength(2);
+  });
+
+  it("shows only the Alt-pressed sketch, and puts the rest back on a second Alt-press", async () => {
+    const fake = makeEngine({ parameters: {}, features: [sketch("a", "A"), sketch("b", "B"), sketch("c", "C")] });
+    fake.store.setSketchVisibility("c", false);
+    const w = render(fake);
+    await clickEye(rowNamed(w, "B"), { altKey: true });
+    expect(["a", "b", "c"].map(fake.isSketchVisible)).toEqual([false, true, false]);
+    await clickEye(rowNamed(w, "B"), { altKey: true });
+    expect(["a", "b", "c"].map(fake.isSketchVisible)).toEqual([true, true, false]);
+  });
+
+  it("does not pick a body up when a press on its eye turns into a drag", async () => {
+    const fake = makeEngine({ parameters: {}, features: [] }, [{ id: "body1", name: "Bracket" }]);
+    const w = render(fake);
+    const browser = useBrowserStore();
+    await pressEye(rowNamed(w, "Bracket"));
+    await rowNamed(w, "Bracket").trigger("dragstart");
+    expect(browser.drag).toBeNull();
+    window.dispatchEvent(new Event("pointerup"));
+    // an ordinary drag of the row still files the body
+    await rowNamed(w, "Bracket").trigger("dragstart");
+    expect(browser.drag).not.toBeNull();
+  });
+
+  // --- selecting several rows --------------------------------------------------
+
+  it("takes a Shift-click run of sketches and offers to hide the whole run", async () => {
+    const fake = makeEngine({ parameters: {}, features: ["a", "b", "c", "d"].map((n) => sketch(n, n.toUpperCase())) });
+    const w = render(fake);
+    await rowNamed(w, "A").trigger("click");
+    await rowNamed(w, "C").trigger("click", { shiftKey: true });
+    await nextTick();
+    expect(["A", "B", "C", "D"].map((n) => rowNamed(w, n).classes("selected"))).toEqual([true, true, true, false]);
+
+    await rowNamed(w, "B").trigger("contextmenu");
+    const items = vi.mocked(contextMenu).mock.calls.at(-1)![2] as CtxItem[];
+    const visibility = items.find((i) => i.label === "Visibility");
+    visibility!.children!.find((c) => c.label === "Hide these 3")!.onClick!();
+    expect(["a", "b", "c", "d"].map(fake.isSketchVisible)).toEqual([false, false, false, true]);
+  });
+
+  it("Ctrl adds a sketch to the selection and takes it back out", async () => {
+    const fake = makeEngine({ parameters: {}, features: [sketch("a", "A"), sketch("b", "B")] });
+    const w = render(fake);
+    await rowNamed(w, "A").trigger("click");
+    await rowNamed(w, "B").trigger("click", { ctrlKey: true });
+    await nextTick();
+    expect(["A", "B"].map((n) => rowNamed(w, n).classes("selected"))).toEqual([true, true]);
+    await rowNamed(w, "A").trigger("click", { ctrlKey: true });
+    await nextTick();
+    expect(["A", "B"].map((n) => rowNamed(w, n).classes("selected"))).toEqual([false, true]);
+  });
+
+  it("takes a Shift-click run of bodies into the viewport's selection", async () => {
+    const fake = makeEngine({ parameters: {}, features: [] }, ["A", "B", "C", "D"].map((n, i) => ({ id: `b${i + 1}`, name: n })));
+    const w = render(fake);
+    await rowNamed(w, "A").trigger("click");
+    await rowNamed(w, "C").trigger("click", { shiftKey: true });
+    const viewport = (fake.engine as unknown as { viewport: { getSelectedBodies(): string[] } }).viewport;
+    expect(viewport.getSelectedBodies()).toEqual(["b1", "b2", "b3"]);
   });
 });

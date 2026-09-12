@@ -27,11 +27,17 @@ const props = defineProps<{
   dim?: boolean | undefined;
   selected?: boolean | undefined;
   error?: boolean | undefined;
-  /** Eye state. Omit `toggleVis` to render no eye at all. */
+  /** Eye state. Omit both `toggleVis` and `eyeDown` to render no eye at all. */
   visible?: boolean | undefined;
   title?: string | undefined;
   activate?: ((e: MouseEvent) => void) | undefined;
   toggleVis?: (() => void) | undefined;
+  /** A press on the eye. When given it replaces the click toggle: the press
+   *  itself shows or hides the row and starts a drag that paints the same state
+   *  across the rows it crosses (see ui/visibilityPaint.ts). */
+  eyeDown?: ((e: PointerEvent) => void) | undefined;
+  /** The pointer entered this row, which is how a paint drag reaches it. */
+  eyeOver?: (() => void) | undefined;
   /** "Edit" action (sketches), also double-click. */
   edit?: (() => void) | undefined;
   /** "Rename", also double-click when there is no `edit`. */
@@ -102,6 +108,37 @@ function openMenu(e: MouseEvent) {
   e.preventDefault();
   contextMenu(e.clientX, e.clientY, items);
 }
+
+// --- the eye ---------------------------------------------------------------
+function onEyeDown(e: PointerEvent) {
+  if (!props.eyeDown || e.button !== 0) return;
+  // No text selection and no body drag out of a press that is about to paint.
+  e.preventDefault();
+  // A pen or a finger captures its pointer to the element it pressed, and a
+  // captured pointer never enters the rows below, so the paint could not reach
+  // them. Hand the capture back.
+  const el = e.currentTarget as Element | null;
+  if (el?.hasPointerCapture?.(e.pointerId)) el.releasePointerCapture(e.pointerId);
+  props.eyeDown(e);
+}
+function onEyeClick() {
+  if (!props.eyeDown) props.toggleVis?.();
+}
+function onDragStart(e: DragEvent) {
+  if (browser.painting) {
+    e.preventDefault();
+    return;
+  }
+  props.dragStart?.();
+}
+
+/** A Shift-click takes a run of rows, and the browser's own reading of the same
+ *  gesture is to extend a TEXT selection across every label between, which then
+ *  sits highlighted over the rows that were just picked. Not inside a label being
+ *  renamed, where Shift-click extending the selection is exactly right. */
+function onMouseDown(e: MouseEvent) {
+  if (e.shiftKey && !(e.target as HTMLElement | null)?.closest?.("[contenteditable='true']")) e.preventDefault();
+}
 </script>
 
 <template>
@@ -111,18 +148,27 @@ function openMenu(e: MouseEvent) {
     :style="style"
     :title="title"
     :draggable="!!dragStart"
+    @mousedown="onMouseDown"
     @click="activate?.($event)"
     @dblclick="onDblClick"
     @contextmenu="openMenu"
-    @dragstart="dragStart?.()"
+    @dragstart="onDragStart"
     @dragend="browser.endDrag()"
+    @pointerenter="eyeOver?.()"
   >
     <span class="feature-icon"><Icon :name="icon" :size="14" /></span>
     <span v-if="swatch" class="tree-swatch" :style="{ ...swatchStyle, background: swatch }"></span>
     <InlineLabel ref="labelEl" :text="label" :rename="rename" :label-style="labelStyle" />
     <span style="flex: 1"></span>
     <!-- .stop so the eye neither selects nor edits the row it sits in -->
-    <span v-if="toggleVis" class="tree-eye" title="Show/hide" @click.stop="toggleVis()">
+    <span
+      v-if="toggleVis || eyeDown"
+      class="tree-eye"
+      title="Show/hide · drag across eyes to show or hide many · Alt+click to show only this"
+      @pointerdown.stop="onEyeDown"
+      @click.stop="onEyeClick"
+      @dblclick.stop
+    >
       <Icon :name="visible === false ? 'hidden' : 'visible'" :size="13" />
     </span>
   </div>

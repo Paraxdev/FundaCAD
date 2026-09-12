@@ -25,7 +25,7 @@
 // readable pass instead of a recursive component whose props thread through
 // every level.
 
-import { onMounted, onUnmounted, ref, shallowRef, useTemplateRef, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, shallowRef, useTemplateRef, watch } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useDocValue } from "../../app/useDoc";
 import { useSelectionStore } from "../../stores/selection";
@@ -42,6 +42,8 @@ import {
   onBrowserFilterChange, sectionVisible, setBrowserFilter, type BrowserSection,
 } from "../../ui/browserFilter";
 import type { CtxItem } from "../../ui/menu";
+import { actOn as actOnSelection, EMPTY_SELECTION, modsOf, selectRow } from "../../ui/rowSelection";
+import { VisibilityPaint } from "../../ui/visibilityPaint";
 import { contributedBrowserSections, contributedPalette, onContribChange } from "../../plugins/contrib";
 import type { Component } from "vue";
 import { featuresOf } from "../../types";
@@ -68,6 +70,19 @@ function onFilterInput(ev: Event) {
 
 // --- the node model ------------------------------------------------------
 
+/** The lists whose eyes paint together: a drag started on a sketch's eye shows
+ *  or hides sketches and nothing else. Element and assembly heads are bodies. */
+type VisCategory = "bodies" | "sketches" | "planes" | "datums";
+
+/** What a row's eye stands for. `key` is the row within its category, a body or
+ *  feature id, or `g:<collapse key>` for a folder head, whose eye stands for
+ *  every body in `ids`. */
+interface VisTag {
+  category: VisCategory;
+  key: string;
+  ids?: readonly string[];
+}
+
 interface FolderNode {
   kind: "folder";
   k: string; // v-for key
@@ -78,7 +93,9 @@ interface FolderNode {
   depth: number;
   collapsed: boolean;
   visible?: boolean | undefined;
-  toggleVis?: (() => void) | undefined;
+  vis?: VisTag | undefined;
+  eyeDown?: ((e: PointerEvent) => void) | undefined;
+  eyeOver?: (() => void) | undefined;
   /** An element's id: what a programmatic rename aims at, see TreeFolder. */
   id?: string | undefined;
   rename?: ((name: string) => void) | undefined;
@@ -100,9 +117,11 @@ interface RowNode {
   selected?: boolean | undefined;
   error?: boolean | undefined;
   visible?: boolean | undefined;
+  vis?: VisTag | undefined;
+  eyeDown?: ((e: PointerEvent) => void) | undefined;
+  eyeOver?: (() => void) | undefined;
   title?: string | undefined;
   activate?: ((e: MouseEvent) => void) | undefined;
-  toggleVis?: (() => void) | undefined;
   edit?: (() => void) | undefined;
   rename?: ((name: string) => void) | undefined;
   remove?: (() => void) | undefined;
@@ -129,30 +148,150 @@ function sketchOnPlane(plane: Plane3) {
   engine.sketch.enter(plane, store);
 }
 
-function toggleSketchVis(id: string) {
-  store.setSketchVisibility(id, !engine.isSketchVisible(id));
-  if (!engine.sketch.active) engine.overlay.update(store.document);
-  browser.bumpView(); // sketch overrides are display-only: the store emits nothing
+// --- showing and hiding ----------------------------------------------------
+//
+// Every eye in the panel goes through setVisibility, one write per gesture
+// step, whether that step is a click, a stretch of a paint drag or a solo. The
+// three kinds of thing are shown and hidden three different ways underneath,
+// which is exactly why they meet here and nowhere else.
+
+/** Set each row of `category` in `changes`, as ONE write. */
+function setVisibility(category: string, changes: ReadonlyMap<string, boolean>) {
+  if (!changes.size) return;
+  if (category === "bodies") {
+    // A folder head's key stands for every body under it. One batched store call
+    // however many bodies: each call re-renders the whole model (setModel plus
+    // the flush-seam pass), so a per-body loop would repaint it once per body.
+    // Visibility, names and colours re-emit the build, so buildVersion carries
+    // the refresh.
+    const vis = new Map<string, boolean>();
+    for (const [key, v] of changes) {
+      for (const id of visIndex.value.ids.get(key) ?? [key]) vis.set(id, v);
+    }
+    store.setBodiesVisibility(vis);
+    return;
+  }
+  if (category === "sketches") {
+    for (const [id, v] of changes) store.setSketchVisibility(id, v);
+    if (!engine.sketch.active) engine.overlay.update(store.document);
+  } else {
+    for (const [id, v] of changes) store.setPlaneVisibility(id, v);
+    engine.syncDatumPlanes();
+  }
+  browser.bumpView(); // sketch and plane overrides are display-only: the store emits nothing
 }
 
-function togglePlaneVis(id: string) {
-  store.setPlaneVisibility(id, !store.isPlaneVisible(id));
-  engine.syncDatumPlanes();
-  browser.bumpView(); // ditto, a plane toggle just re-syncs the quads
+/** Every row of a category with its current state, drawn or not: a body inside a
+ *  collapsed folder is still one of the bodies "show only this" hides. */
+function visRows(category: VisCategory): Map<string, boolean> {
+  const doc = store.document;
+  if (category === "bodies") return new Map(bodyList().map((b) => [b.id, store.isBodyVisible(b.id)]));
+  if (category === "sketches") {
+    return new Map(featuresOf(doc.features, "sketch").map((f) => [f.id, engine.isSketchVisible(f.id)]));
+  }
+  const kinds = category === "planes" ? ["datumPlane"] : ["datumPoint", "datumAxis"];
+  return new Map(doc.features.filter((f) => kinds.includes(f.type)).map((f) => [f.id, store.isPlaneVisible(f.id)]));
 }
 
-// Body visibility, names and colours all re-emit the build, so they need no
-// explicit refresh: buildVersion carries them.
-function toggleBodyVis(id: string) {
-  store.setBodyVisibility(id, !store.isBodyVisible(id));
+function showOnly(category: VisCategory, keys: readonly string[]) {
+  const changes = new Map([...visRows(category).keys()].map((k) => [k, false]));
+  for (const k of keys) changes.set(k, true);
+  setVisibility(category, changes);
 }
 
-function selectBody(id: string, additive: boolean) {
-  const cur = new Set(engine.viewport.getSelectedBodies());
-  if (additive) cur.has(id) ? cur.delete(id) : cur.add(id);
-  else { cur.clear(); cur.add(id); }
-  engine.viewport.setSelectedBodies([...cur]); // fires back into browser.selectedBodyIds
+const paint = new VisibilityPaint(setVisibility);
+
+function endPaint() {
+  paint.end();
+  browser.painting = false;
+  window.removeEventListener("pointerup", endPaint);
+  window.removeEventListener("pointercancel", endPaint);
+  window.removeEventListener("blur", endPaint);
 }
+onUnmounted(endPaint);
+
+/** A press on an eye: show or hide that row and start painting, or with Alt
+ *  show only that row (and put the rest back on a second Alt-click). */
+function eyeDown(tag: VisTag, visible: boolean, e: PointerEvent) {
+  if (e.altKey) {
+    paint.toggleSolo(tag.category, tag.key, visRows(tag.category));
+    return;
+  }
+  paint.begin(tag.category, tag.key, visible);
+  browser.painting = true;
+  // On the window, not the row: the button usually comes up over some other row,
+  // or outside the panel entirely, and the drag has to end wherever it does.
+  window.addEventListener("pointerup", endPaint);
+  window.addEventListener("pointercancel", endPaint);
+  window.addEventListener("blur", endPaint);
+}
+
+function eyeOver(tag: VisTag) {
+  if (paint.active) paint.over(tag.category, tag.key, visIndex.value.order.get(tag.category) ?? []);
+}
+
+/** The eye fields of a node that shows or hides as `tag`. */
+function eye(tag: VisTag, visible: boolean) {
+  return {
+    vis: tag,
+    visible,
+    eyeDown: (e: PointerEvent) => eyeDown(tag, visible, e),
+    eyeOver: () => eyeOver(tag),
+  };
+}
+
+/** The Visibility submenu for `keys`, the same for every list: show or hide the
+ *  lot when there are several, show only them, or bring the whole list back. */
+function visibilityMenu(category: VisCategory, keys: readonly string[], plural: string): CtxItem {
+  const n = keys.length;
+  const children: CtxItem[] = [];
+  if (n > 1) {
+    children.push({ label: `Show these ${n}`, onClick: () => setVisibility(category, new Map(keys.map((k) => [k, true]))) });
+    children.push({ label: `Hide these ${n}`, onClick: () => setVisibility(category, new Map(keys.map((k) => [k, false]))) });
+  }
+  children.push({ label: n > 1 ? `Show only these ${n}` : "Show only this", onClick: () => showOnly(category, keys) });
+  children.push({
+    label: `Show all ${plural}`,
+    onClick: () => setVisibility(category, new Map([...visRows(category).keys()].map((k) => [k, true]))),
+  });
+  return { label: "Visibility", children };
+}
+
+// --- selecting -------------------------------------------------------------
+
+/** Click, Ctrl-click or Shift-click a body row. The run is over the body rows as
+ *  drawn; the selection itself goes to the viewport, which owns it. */
+function selectBody(id: string, e: MouseEvent) {
+  const order = (visIndex.value.order.get("bodies") ?? []).filter((k) => !k.startsWith("g:"));
+  const next = selectRow(
+    { keys: engine.viewport.getSelectedBodies(), anchor: browser.bodyAnchor }, order, id, modsOf(e),
+  );
+  browser.bodyAnchor = next.anchor;
+  engine.viewport.setSelectedBodies([...next.keys]); // fires back into browser.selectedBodyIds
+}
+
+/** Click, Ctrl-click or Shift-click a sketch row. The one feature the timeline
+ *  and inspector follow is the row just clicked while it is still selected; a
+ *  Ctrl-click that takes the current one out hands that role to another. */
+function selectSketch(id: string, e: MouseEvent) {
+  const order = featuresOf(store.document.features, "sketch").map((f) => f.id);
+  const next = selectRow(browser.sketchSelection, order, id, modsOf(e));
+  browser.sketchSelection = next;
+  if (next.keys.includes(id)) engine.selectFeature(id);
+  else if (selection.featureId === id) engine.selectFeature(next.keys.at(-1) ?? null);
+}
+
+// A feature picked anywhere else (the timeline, the viewport) replaces the
+// Browser's sketch selection, unless it is one of the sketches already in it,
+// which is what the line above does to itself.
+watch(
+  () => selection.featureId,
+  (id) => {
+    if (id !== null && browser.sketchSelection.keys.includes(id)) return;
+    const isSketch = id !== null && store.document.features.some((f) => f.id === id && f.type === "sketch");
+    browser.sketchSelection = isSketch ? { keys: [id], anchor: id } : EMPTY_SELECTION;
+  },
+);
 
 // --- shaping -------------------------------------------------------------
 
@@ -204,8 +343,7 @@ const bodyAncestors = useDocValue((doc) => {
  *  organising an import means moving hundreds of parts, and a menu that silently
  *  acted on one of a selection of two hundred would be worse than no menu. */
 function actOn(bodyId: string): string[] {
-  const sel = browser.selectedBodyIds;
-  return sel.includes(bodyId) ? [...sel] : [bodyId];
+  return actOnSelection(browser.selectedBodyIds, bodyId);
 }
 
 /** Put `ids` in a brand new element and start naming it. The element is made
@@ -338,10 +476,12 @@ const nodes = useDocValue((doc): TreeNode[] => {
       icon: "plane",
       selected: selection.featureId === f.id,
       error: errId === f.id,
-      visible: store.isPlaneVisible(f.id),
+      ...eye({ category: "planes", key: f.id }, store.isPlaneVisible(f.id)),
       activate: () => engine.selectFeature(f.id),
-      toggleVis: () => togglePlaneVis(f.id),
-      extraMenu: [{ label: "Cut all bodies", onClick: () => void engine.starters.startCutByPlane(f.id) }],
+      extraMenu: [
+        { label: "Cut all bodies", onClick: () => void engine.starters.startCutByPlane(f.id) },
+        visibilityMenu("planes", [f.id], "planes"),
+      ],
       rename: (name: string) => store.updateFeature(f.id, { name } as Partial<Feature>),
       remove: () => store.removeFeature(f.id),
       title: "Construction plane, select then Split Body cuts by it · right-click for Cut / Rename / Delete · eye to show/hide",
@@ -365,9 +505,9 @@ const nodes = useDocValue((doc): TreeNode[] => {
       icon: f.type === "datumAxis" ? "datumAxis" : "datumPoint",
       selected: selection.featureId === f.id,
       error: errId === f.id,
-      visible: store.isPlaneVisible(f.id),
+      ...eye({ category: "datums", key: f.id }, store.isPlaneVisible(f.id)),
       activate: () => engine.selectFeature(f.id),
-      toggleVis: () => togglePlaneVis(f.id),
+      extraMenu: [visibilityMenu("datums", [f.id], "datums")],
       rename: (name: string) => store.updateFeature(f.id, { name } as Partial<Feature>),
       remove: () => store.removeFeature(f.id),
       title: "Reference geometry · select to use as a mate or measure reference · right-click to Rename / Delete · eye to show/hide",
@@ -410,19 +550,19 @@ const nodes = useDocValue((doc): TreeNode[] => {
       icon: "body",
       ...(chip ? { swatch: chip } : {}),
       selected: selectedIds.has(b.id),
-      visible: store.isBodyVisible(b.id),
-      activate: (e: MouseEvent) => selectBody(b.id, e.ctrlKey || e.metaKey),
-      toggleVis: () => toggleBodyVis(b.id),
+      ...eye({ category: "bodies", key: b.id }, store.isBodyVisible(b.id)),
+      activate: (e: MouseEvent) => selectBody(b.id, e),
       extraMenu: [
         moveBodiesMenu(actOn(b.id), store.bodyElementOf(b.id)),
         materialMenu(store.materialLibrary, actOn(b.id), store.bodyMaterialId(b.id),
           (m) => store.setBodiesMaterial(actOn(b.id), m)),
+        visibilityMenu("bodies", actOn(b.id), "bodies"),
         ...bodyExtraMenu(b.id),
       ],
       dragStart: () => browser.startDrag({ kind: "bodies", ids: actOn(b.id) }),
       rename: (name: string) => store.setBodyName(b.id, name),
       remove: () => store.removeBody(b.id),
-      title: "Click to select (Ctrl+click adds) · drag into an element · double-click to rename · right-click for Move / Material / Rename / Delete · eye to show/hide",
+      title: "Click to select (Ctrl+click adds, Shift+click takes a run) · drag into an element · double-click to rename · right-click for Move / Material / Visibility / Rename / Delete · drag across eyes to show or hide many",
     };
   };
 
@@ -446,10 +586,9 @@ const nodes = useDocValue((doc): TreeNode[] => {
     out.push({
       kind: "folder", k: g.key, key: g.key, label: g.label,
       icon: g.kind === "element" ? "element" : "assembly",
-      count: g.total, depth, collapsed, visible: anyVisible,
-      // ONE batched write: a per-body loop would re-render the whole model once
-      // per body (setModel plus the flush-seam pass each time).
-      toggleVis: () => store.setBodiesVisibility(new Map(ids.map((id) => [id, !anyVisible]))),
+      count: g.total, depth, collapsed,
+      // The head's eye stands for every body under it, see setVisibility.
+      ...eye({ category: "bodies", key: `g:${g.key}`, ids }, anyVisible),
       // Everything below is an element's, and absent on an assembly node, which
       // is a fact about a file: it cannot be renamed, deleted or dropped into,
       // and TreeFolder renders no menu at all when given none of them.
@@ -523,24 +662,42 @@ const nodes = useDocValue((doc): TreeNode[] => {
   }
 
   // --- Sketches ---
+  const pickedSketches = browser.sketchSelection.keys;
   if (show("sketches")) folder("Sketches", "sketch", sketches.map((f, i) => ({
     kind: "row" as const,
     k: `s:${f.id}`,
     depth: 0,
     label: f.name || `Sketch${i + 1}`,
     icon: "sketch",
-    selected: selection.featureId === f.id,
+    selected: pickedSketches.includes(f.id) || selection.featureId === f.id,
     error: errId === f.id,
-    visible: engine.isSketchVisible(f.id),
-    activate: () => engine.selectFeature(f.id),
+    ...eye({ category: "sketches", key: f.id }, engine.isSketchVisible(f.id)),
+    activate: (e: MouseEvent) => selectSketch(f.id, e),
     edit: () => engine.editFeature(f.id),
-    toggleVis: () => toggleSketchVis(f.id),
+    extraMenu: [visibilityMenu("sketches", actOnSelection(pickedSketches, f.id), "sketches")],
     rename: (name: string) => store.updateFeature(f.id, { name } as Partial<Feature>),
     remove: () => store.removeFeature(f.id),
-    title: "Double-click to edit · right-click for Edit / Rename / Delete · eye to show/hide",
+    title: "Click to select (Ctrl+click adds, Shift+click takes a run) · double-click to edit · right-click for Visibility / Edit / Rename / Delete · drag across eyes to show or hide many",
   })));
 
   return out;
+});
+
+/** Each category's eyes in the order they are drawn, which is what a paint drag
+ *  fills across and a Shift-click measures a run over, plus the bodies behind
+ *  each folder head's key. Derived from the node list itself so it can never
+ *  disagree with what is on screen. */
+const visIndex = computed(() => {
+  const order = new Map<VisCategory, string[]>();
+  const ids = new Map<string, readonly string[]>();
+  for (const n of nodes.value) {
+    if ((n.kind !== "row" && n.kind !== "folder") || !n.vis) continue;
+    let list = order.get(n.vis.category);
+    if (!list) order.set(n.vis.category, (list = []));
+    list.push(n.vis.key);
+    if (n.vis.ids) ids.set(n.vis.key, n.vis.ids);
+  }
+  return { order, ids };
 });
 
 // "Rename…" on the viewport's body menu: open the Bodies folder and every
@@ -604,7 +761,8 @@ onUnmounted(() => root.value?.removeEventListener("wheel", onWheel));
         :depth="n.depth"
         :collapsed="n.collapsed"
         :visible="n.visible"
-        :toggle-vis="n.toggleVis"
+        :eye-down="n.eyeDown"
+        :eye-over="n.eyeOver"
         :id="n.id"
         :rename="n.rename"
         :remove="n.remove"
@@ -627,7 +785,8 @@ onUnmounted(() => root.value?.removeEventListener("wheel", onWheel));
         :visible="n.visible"
         :title="n.title"
         :activate="n.activate"
-        :toggle-vis="n.toggleVis"
+        :eye-down="n.eyeDown"
+        :eye-over="n.eyeOver"
         :edit="n.edit"
         :rename="n.rename"
         :remove="n.remove"
