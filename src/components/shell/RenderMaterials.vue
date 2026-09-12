@@ -484,13 +484,17 @@ async function doImport() {
       <button class="btn" @click="doImport()">Import…</button>
       <button class="btn" @click="exportMaterialLibrary(store)">Export…</button>
     </div>
-  </div>
 
-  <Teleport to="body">
-    <SurfaceNodeEditor
-      v-if="editingGraph && selected"
-      :material-id="selected.id"
-      @close="editingGraph = false"
-    />
-  </Teleport>
+    <!-- Inside the one root, not beside it. RenderDock hides the tabs it is not
+         showing with v-show, which only reaches a component with a single root
+         element; a second root (this Teleport) made v-show a silent no op and
+         left the material list drawn under the Environment and Camera tabs. -->
+    <Teleport to="body">
+      <SurfaceNodeEditor
+        v-if="editingGraph && selected"
+        :material-id="selected.id"
+        @close="editingGraph = false"
+      />
+    </Teleport>
+  </div>
 </template>
