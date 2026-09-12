@@ -50,6 +50,7 @@ import { ViewCube, FACE_VIEWS } from "./viewCube";
 import { setPrompt } from "../ui/prompt";
 import type { DocumentStore } from "../document/store";
 import { type BodyFinish, FINISH } from "../document/materials";
+import { applySurface, surfaceKey } from "./proceduralSurface";
 import { MAX_EMISSIVE_INTENSITY } from "../ui/renderPrefs";
 import { onRenderPrefsChange, renderPrefs } from "../ui/renderPrefs";
 import { invalidateThemeColors } from "./themeColors";
@@ -183,6 +184,7 @@ function sameFinishMap(
     if (
       !y || !x || x.metalness !== y.metalness || x.roughness !== y.roughness
       || x.opacity !== y.opacity || x.emissive !== y.emissive
+      || x.clearcoat !== y.clearcoat || surfaceKey(x.surface) !== surfaceKey(y.surface)
     ) {
       return false;
     }
@@ -1050,6 +1052,7 @@ export class Viewport {
       mat.emissiveIntensity = glow * MAX_EMISSIVE_INTENSITY;
       if (glow > 0) emitters.set(b.id, { color: this.bodyPaint[b.id] ?? 0xffffff, glow });
       applyClearcoat(mat, ghost ? 0 : (f?.clearcoat ?? FINISH.clearcoat));
+      applySurface(mat, ghost ? undefined : f?.surface);
       // A clear, non-metal finish becomes real glass (refraction); anything else,
       // and every ghost, keeps the plain fade below.
       if (!applyGlassLook(mat, f ? f.opacity : 1, f ? f.metalness : FINISH.metalness, ghost)) {
@@ -1078,6 +1081,7 @@ export class Viewport {
           fm.emissive.set(fglow > 0 ? (extra.colors[i] ?? 0xffffff) : 0x000000);
           fm.emissiveIntensity = fglow * MAX_EMISSIVE_INTENSITY;
           applyClearcoat(fm, ghost ? 0 : ff.clearcoat);
+          applySurface(fm, ghost ? undefined : ff.surface);
           if (!applyGlassLook(fm, ff.opacity, ff.metalness, ghost)) {
             const fo = ghost ? Math.min(ff.opacity, ghostOpacity) : ff.opacity;
             fm.transparent = fo < 1;

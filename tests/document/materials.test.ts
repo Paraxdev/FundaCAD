@@ -88,6 +88,17 @@ describe("normalizeMaterial", () => {
     expect(normalizeMaterial({ name: "Glazed", color: "#eeeeee", clearcoat: 5 })!.clearcoat).toBe(1); // clamped
     expect("clearcoat" in normalizeMaterial({ name: "Plain", color: "#eeeeee", clearcoat: 0 })!).toBe(false);
   });
+
+  it("carries a valid procedural surface and drops a broken one", () => {
+    const m = normalizeMaterial({
+      name: "Scratched", color: "#888888",
+      surface: { kind: "scratches", scale: 8, amount: 0.6, bump: 0.5, color: "#111111", colorAmount: 0.4, angle: 1 },
+    })!;
+    expect(m.surface).toEqual({ kind: "scratches", scale: 8, amount: 0.6, bump: 0.5, color: "#111111", colorAmount: 0.4, angle: 1 });
+    // a bad kind or a non-positive scale is not a surface
+    expect(normalizeMaterial({ name: "X", color: "#888888", surface: { kind: "sparkles", scale: 8, amount: 0.5 } })!.surface).toBeUndefined();
+    expect(normalizeMaterial({ name: "X", color: "#888888", surface: { kind: "noise", scale: 0, amount: 0.5 } })!.surface).toBeUndefined();
+  });
 });
 
 describe("slugId / uniqueId / freshMaterialName", () => {

@@ -24,6 +24,20 @@
 /** One material. Everything but id/name/color is optional and absent means the
  *  app's own default finish (see FINISH below), so the common case, a colour
  *  with nothing else said about it, is three fields on disk. */
+/** A procedural surface pattern on a material: noise, scratches, brushed streaks
+ *  or cellular wear, computed in the shader (viewport/proceduralSurface.ts) and
+ *  driving roughness, a bump and a colour tint. Triplanar, so it needs no UVs.
+ *  The eventual node editor produces a richer form of this. */
+export interface SurfaceSpec {
+  kind: "noise" | "scratches" | "brushed" | "voronoi";
+  scale: number;      // feature size in mm
+  amount: number;     // 0..1, roughness push
+  angle?: number;     // radians, scratch/brushed direction
+  bump?: number;      // 0..1, relief
+  color?: string;     // "#rrggbb" tint
+  colorAmount?: number; // 0..1
+}
+
 export interface MaterialDef {
   id: string;
   name: string;
@@ -51,6 +65,9 @@ export interface MaterialDef {
    *  sheen) and adds the hard bright highlight of the coat on top. A physical-PBR
    *  feature, so it is dropped on the lightweight render like glass is. */
   clearcoat?: number;
+  /** Procedural surface detail (noise / scratches / brushed / wear). Absent for
+   *  a plain material. */
+  surface?: SurfaceSpec;
 }
 
 /** The finish an unspecified material has, which is exactly the one every body
@@ -68,6 +85,9 @@ export interface BodyFinish {
   opacity: number;
   emissive: number;
   clearcoat: number;
+  /** Carried straight through when a material has one, so the viewport can build
+   *  the procedural shader. Undefined is the common case. */
+  surface?: SurfaceSpec;
 }
 
 export function finishOf(m: MaterialDef | undefined): BodyFinish {
@@ -77,6 +97,7 @@ export function finishOf(m: MaterialDef | undefined): BodyFinish {
     opacity: m?.opacity ?? FINISH.opacity,
     emissive: m?.emissive ?? FINISH.emissive,
     clearcoat: m?.clearcoat ?? FINISH.clearcoat,
+    ...(m?.surface ? { surface: m.surface } : {}),
   };
 }
 
@@ -195,6 +216,33 @@ export function normalizeMaterial(raw: unknown, index = 0): MaterialDef | null {
   if (opacity !== undefined && opacity !== FINISH.opacity) out.opacity = opacity;
   if (emissive !== undefined && emissive !== FINISH.emissive) out.emissive = emissive;
   if (clearcoat !== undefined && clearcoat !== FINISH.clearcoat) out.clearcoat = clearcoat;
+  const surface = normalizeSurface(r["surface"]);
+  if (surface) out.surface = surface;
+  return out;
+}
+
+const SURFACE_KINDS: readonly SurfaceSpec["kind"][] = ["noise", "scratches", "brushed", "voronoi"];
+
+/** Narrow an untrusted surface object, or drop it. A bad kind or a non-positive
+ *  scale is not a surface, so the material reads back as plain rather than as a
+ *  shader that does nothing or throws. */
+export function normalizeSurface(raw: unknown): SurfaceSpec | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const r = raw as Record<string, unknown>;
+  const kind = SURFACE_KINDS.find((k) => k === r["kind"]);
+  const scale = typeof r["scale"] === "number" && r["scale"] > 0 ? r["scale"] : undefined;
+  const amount = clamp01(r["amount"]);
+  if (!kind || scale === undefined || amount === undefined) return undefined;
+  const out: SurfaceSpec = { kind, scale, amount };
+  if (typeof r["angle"] === "number") out.angle = r["angle"];
+  const bump = clamp01(r["bump"]);
+  if (bump !== undefined && bump > 0) out.bump = bump;
+  const color = asHex(r["color"]);
+  const colorAmount = clamp01(r["colorAmount"]);
+  if (color && colorAmount !== undefined && colorAmount > 0) {
+    out.color = color;
+    out.colorAmount = colorAmount;
+  }
   return out;
 }
 
