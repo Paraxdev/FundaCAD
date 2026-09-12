@@ -42,6 +42,21 @@ const OUT_TYPE: Record<NodeType, "float" | "vec3" | "none"> = {
 const PORT_TYPE: Record<string, "float" | "vec3"> = {
   t: "float", a: "float", b: "float", roughness: "float", bump: "float", color: "vec3",
 };
+// A data type reads at a glance: a value (float) is a blue circle, a colour
+// (vec3) an amber square, on the ports AND on the wire between them, so "what
+// this outputs" and "what this input needs" are visible without reading a label.
+const outClass = (t: NodeType) => `t-${OUT_TYPE[t]}`;
+const inClass = (port: string) => `t-${PORT_TYPE[port] ?? "float"}`;
+// A small glyph per node, so a card is recognised by shape not only by its name.
+const ICON: Record<NodeType, string> = {
+  noise: "≋", scratches: "╱", brushed: "≣", voronoi: "⬡", wave: "∿",
+  fresnel: "◐", ramp: "◧", colorramp: "▦", mix: "⋈", math: "±", output: "◉",
+};
+// Node families, for the coloured stripe down a card's left edge.
+const CATEGORY: Record<NodeType, string> = {
+  noise: "tex", scratches: "tex", brushed: "tex", voronoi: "tex", wave: "tex",
+  fresnel: "input", ramp: "color", colorramp: "color", mix: "conv", math: "conv", output: "out",
+};
 
 const NODE_W = 150;
 const clone = (g: SurfaceGraph): SurfaceGraph => JSON.parse(JSON.stringify(g));
@@ -59,6 +74,7 @@ function defaults(type: NodeType): Record<string, number | string> {
   if (type === "mix") return { t: 0.5 };
   if (type === "math") return { op: "multiply", a: 0.5, b: 0.5 };
   if (type === "scratches" || type === "brushed" || type === "wave") return { scale: 6, angle: 0 };
+  if (type === "noise") return { scale: 6, detail: 4, roughness: 0.5, distortion: 0 };
   return { scale: 6 };
 }
 
@@ -168,22 +184,30 @@ function setParam(id: string, key: string, raw: string, numeric: boolean) {
   (n.params ??= {})[key] = v;
   sync();
 }
-const NUM_PARAMS: Record<NodeType, { key: string; label: string; min: number; max: number; step: number }[]> = {
-  noise: [{ key: "scale", label: "Scale", min: 0.5, max: 30, step: 0.5 }],
-  voronoi: [{ key: "scale", label: "Scale", min: 0.5, max: 30, step: 0.5 }],
-  scratches: [{ key: "scale", label: "Scale", min: 0.5, max: 30, step: 0.5 }, { key: "angle", label: "Angle", min: 0, max: 3.14, step: 0.01 }],
-  brushed: [{ key: "scale", label: "Scale", min: 0.5, max: 30, step: 0.5 }, { key: "angle", label: "Angle", min: 0, max: 3.14, step: 0.01 }],
-  wave: [{ key: "scale", label: "Scale", min: 0.5, max: 30, step: 0.5 }, { key: "angle", label: "Angle", min: 0, max: 3.14, step: 0.01 }],
-  mix: [{ key: "t", label: "Mix", min: 0, max: 1, step: 0.01 }],
+type NumParam = { key: string; label: string; min: number; max: number; step: number; def: number };
+const SCALE: NumParam = { key: "scale", label: "Scale", min: 0.5, max: 30, step: 0.5, def: 6 };
+const ANGLE: NumParam = { key: "angle", label: "Angle", min: 0, max: 3.14, step: 0.01, def: 0 };
+const NUM_PARAMS: Record<NodeType, NumParam[]> = {
+  noise: [
+    SCALE,
+    { key: "detail", label: "Detail", min: 1, max: 8, step: 1, def: 4 },
+    { key: "roughness", label: "Rough", min: 0, max: 1, step: 0.05, def: 0.5 },
+    { key: "distortion", label: "Warp", min: 0, max: 2, step: 0.05, def: 0 },
+  ],
+  voronoi: [SCALE],
+  scratches: [SCALE, ANGLE],
+  brushed: [SCALE, ANGLE],
+  wave: [SCALE, ANGLE],
+  mix: [{ key: "t", label: "Mix", min: 0, max: 1, step: 0.01, def: 0.5 }],
   // a/b sliders show only for the ports left unwired; the op is a select below
-  math: [{ key: "a", label: "A", min: 0, max: 1, step: 0.01 }, { key: "b", label: "B", min: 0, max: 1, step: 0.01 }],
-  fresnel: [{ key: "power", label: "Power", min: 0.5, max: 8, step: 0.1 }],
+  math: [{ key: "a", label: "A", min: 0, max: 1, step: 0.01, def: 0.5 }, { key: "b", label: "B", min: 0, max: 1, step: 0.01, def: 0.5 }],
+  fresnel: [{ key: "power", label: "Power", min: 0.5, max: 8, step: 0.1, def: 3 }],
   ramp: [],
   colorramp: [],
   output: [
-    { key: "roughAmount", label: "Rough", min: 0, max: 1, step: 0.01 },
-    { key: "bumpAmount", label: "Bump", min: 0, max: 1, step: 0.01 },
-    { key: "colorAmount", label: "Colour", min: 0, max: 1, step: 0.01 },
+    { key: "roughAmount", label: "Rough", min: 0, max: 1, step: 0.01, def: 0.5 },
+    { key: "bumpAmount", label: "Bump", min: 0, max: 1, step: 0.01, def: 0.4 },
+    { key: "colorAmount", label: "Colour", min: 0, max: 1, step: 0.01, def: 0.4 },
   ],
 };
 const pnum = (n: SurfaceNode, key: string, d = 0) => (typeof n.params?.[key] === "number" ? (n.params[key] as number) : d);
@@ -323,12 +347,12 @@ function bez(x1: number, y1: number, x2: number, y2: number) {
   return `M ${x1} ${y1} C ${x1 + 44} ${y1}, ${x2 - 44} ${y2}, ${x2} ${y2}`;
 }
 const wires = computed(() => {
-  const out: { d: string }[] = [];
+  const out: { d: string; t: string }[] = [];
   for (const n of g.value.nodes) {
     INPUTS[n.type].forEach((port, i) => {
       const src = n.in?.[port];
       const s = src ? node(src) : undefined;
-      if (s) { const a = outPos(s), b = inPos(n, i); out.push({ d: bez(a.x, a.y, b.x, b.y) }); }
+      if (s) { const a = outPos(s), b = inPos(n, i); out.push({ d: bez(a.x, a.y, b.x, b.y), t: OUT_TYPE[s.type] }); }
     });
   }
   return out;
@@ -337,7 +361,7 @@ const pending = computed(() => {
   const s = armed.value ? node(armed.value) : undefined;
   if (!s) return null;
   const a = outPos(s);
-  return bez(a.x, a.y, cursor.value.x, cursor.value.y);
+  return { d: bez(a.x, a.y, cursor.value.x, cursor.value.y), t: OUT_TYPE[s.type] };
 });
 </script>
 
@@ -348,6 +372,7 @@ const pending = computed(() => {
       <span class="ne-title-main">Surface graph · {{ material?.name }}</span>
       <button v-for="t in ADDABLE" :key="t" class="rd-chip" :data-add="t" @click="addNode(t)">+ {{ LABEL[t] }}</button>
       <span class="ne-hint">Shift+A</span>
+      <span class="ne-legend"><span class="ne-dot t-float"></span>value<span class="ne-dot t-vec3"></span>colour</span>
       <span class="ne-spacer"></span>
       <button class="rd-chip" @click="fit">Fit</button>
       <button class="rd-chip" @click="clearGraph">Clear</button>
@@ -363,8 +388,8 @@ const pending = computed(() => {
     >
       <div class="ne-world" :style="worldStyle">
         <svg class="ne-wires" width="4000" height="3000">
-          <path v-for="(w, i) in wires" :key="i" :d="w.d" class="ne-wire" />
-          <path v-if="pending" :d="pending" class="ne-wire ne-wire-pending" />
+          <path v-for="(w, i) in wires" :key="i" :d="w.d" class="ne-wire" :class="'w-' + w.t" />
+          <path v-if="pending" :d="pending.d" class="ne-wire ne-wire-pending" :class="'w-' + pending.t" />
         </svg>
         <div
           v-for="n in g.nodes"
@@ -373,30 +398,33 @@ const pending = computed(() => {
           :class="{ 'ne-output': n.type === 'output' }"
           :style="{ left: (n.x ?? 0) + 'px', top: (n.y ?? 0) + 'px', width: NODE_W + 'px' }"
           :data-node-type="n.type"
+          :data-cat="CATEGORY[n.type]"
         >
           <div class="ne-node-head" @pointerdown="startDrag(n, $event)">
-            {{ LABEL[n.type] }}
+            <span class="ne-icon">{{ ICON[n.type] }}</span>{{ LABEL[n.type] }}
             <button v-if="n.type !== 'output'" class="ne-x" @pointerdown.stop @click="removeNode(n.id)">×</button>
           </div>
-          <!-- input ports -->
+          <!-- input ports (dot colour + shape says what type this port needs) -->
           <div
             v-for="(port, i) in INPUTS[n.type]"
             :key="port"
             class="ne-port ne-in"
             :style="{ top: (30 + i * 20) + 'px' }"
             :data-in="n.id + ':' + port"
+            :title="PORT_TYPE[port] === 'vec3' ? port + ' (colour)' : port + ' (value)'"
             @pointerup.stop="wire && wire.moved ? tryWire(n.id, port, wire.from) : null"
             @click="n.in?.[port] ? disconnect(n.id, port) : clickInput(n.id, port)"
-          ><span class="ne-dot"></span>{{ port }}</div>
-          <!-- output port -->
+          ><span class="ne-dot" :class="inClass(port)"></span>{{ port }}</div>
+          <!-- output port (dot colour + shape says what type this node outputs) -->
           <div
             v-if="OUT_TYPE[n.type] !== 'none'"
             class="ne-port ne-out"
             :class="{ armed: armed === n.id }"
             :data-out="n.id"
+            :title="OUT_TYPE[n.type] === 'vec3' ? 'outputs a colour' : 'outputs a value'"
             @pointerdown.stop="startWire(n.id, $event)"
             @click="armed = armed === n.id ? null : n.id"
-          >out<span class="ne-dot"></span></div>
+          >out<span class="ne-dot" :class="outClass(n.type)"></span></div>
           <!-- params -->
           <div class="ne-params" :style="{ paddingTop: (INPUTS[n.type].length ? INPUTS[n.type].length * 20 + 8 : 6) + 'px' }">
             <label v-if="n.type === 'math'" class="ne-prow">
@@ -410,7 +438,7 @@ const pending = computed(() => {
             <label v-for="p in NUM_PARAMS[n.type]" v-show="!(n.type === 'math' && n.in?.[p.key])" :key="p.key" class="ne-prow">
               <span>{{ p.label }}</span>
               <input class="sm-slider" type="range" :min="p.min" :max="p.max" :step="p.step"
-                :value="pnum(n, p.key, p.key === 'roughAmount' ? 0.5 : 0)"
+                :value="pnum(n, p.key, p.def)"
                 @input="setParam(n.id, p.key, ($event.target as HTMLInputElement).value, true)" />
             </label>
             <template v-if="n.type === 'ramp'">
@@ -485,9 +513,24 @@ const pending = computed(() => {
 .ne-port { position: absolute; display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-dim); cursor: pointer; }
 .ne-in { left: -6px; }
 .ne-out { right: -6px; flex-direction: row-reverse; top: 14px; }
-.ne-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--line-strong); border: 1px solid var(--accent); }
+.ne-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--line-strong); border: 1px solid var(--accent); flex: none; }
 .ne-dot:hover { background: var(--accent); }
 .ne-out.armed .ne-dot { background: var(--accent); }
+/* data type by colour AND shape: a value is a blue circle, a colour an amber square */
+.ne-dot.t-float { border-color: #5aa9f0; }
+.ne-dot.t-vec3 { border-color: #f0b45a; border-radius: 2px; }
+.ne-dot.t-float:hover, .ne-out.armed .ne-dot.t-float { background: #5aa9f0; }
+.ne-dot.t-vec3:hover, .ne-out.armed .ne-dot.t-vec3 { background: #f0b45a; }
+.ne-wire.w-float { stroke: #5aa9f0; }
+.ne-wire.w-vec3 { stroke: #f0b45a; }
+.ne-icon { display: inline-block; width: 14px; margin-right: 4px; text-align: center; opacity: 0.8; }
+.ne-legend { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-dim); }
+/* a coloured stripe down the left edge names the node's family at a glance */
+.ne-node[data-cat="tex"] { border-left: 3px solid #5aa9f0; }
+.ne-node[data-cat="color"] { border-left: 3px solid #f0b45a; }
+.ne-node[data-cat="input"] { border-left: 3px solid #c58af0; }
+.ne-node[data-cat="conv"] { border-left: 3px solid #8ad0b0; }
+.ne-node[data-cat="out"] { border-left: 3px solid var(--accent); }
 .ne-zoom { position: absolute; right: 8px; bottom: 6px; font-size: 11px; color: var(--text-dim);
   background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 1px 6px; pointer-events: none; }
 .ne-hint { font-size: 11px; color: var(--text-dim); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 1px 6px; }
