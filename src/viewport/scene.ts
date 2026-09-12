@@ -193,10 +193,15 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
   // draw, the surest way to a dropped context. 2 elsewhere keeps edges crisp
   // without going to native 3x. Applied once here for the frames before the
   // first pref-apply lands.
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   const applyPowerTier = () => {
     const low = autoLowPower || renderPrefs().performanceMode;
     setRenderLowPower(low);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, low ? 1 : 2));
+    // Emitter shadows are the one expensive lighting extra; a weak machine drops
+    // them (the emitter still lights, it just does not occlude). Flipping this
+    // makes the lights and materials recompile, which the pref-apply already does.
+    renderer.shadowMap.enabled = !low;
   };
   applyPowerTier();
   // Tone mapping, always, and NEUTRAL of the several on offer.

@@ -82,6 +82,10 @@ const SKETCH_DIM_EDGE_OPACITY = 0.5;
 const MAX_EMITTER_LIGHTS = 6;
 const EMITTER_REACH = 8;
 const EMITTER_LIGHT_GAIN = 6;
+/** Only the brightest few emitters cast a SHADOW: a point-light shadow is a cube
+ *  map (six renders), so this is the real cost of the effect, kept to the lights
+ *  that carry the look. Zero on a weak machine (renderer.shadowMap.enabled off). */
+const MAX_SHADOW_EMITTERS = 2;
 /** One emitter to place a light for: a whole body or a single face, each carrying
  *  its own centre and size so syncEmitterLights treats them alike. */
 type EmitterMap = Map<string, { color: string | number; glow: number; center: THREE.Vector3; size: number }>;
@@ -1142,10 +1146,13 @@ export class Viewport {
       this.removeFromScene(light);
       this.emitterLights.delete(id);
     }
-    for (const [id, { color, glow, center, size }] of ranked) {
+    const shadowCap = isRenderLowPower() ? 0 : MAX_SHADOW_EMITTERS;
+    ranked.forEach(([id, { color, glow, center, size }], rank) => {
       let light = this.emitterLights.get(id);
       if (!light) {
         light = new THREE.PointLight(0xffffff, 0, 0, 2); // decay 2 (inverse-square)
+        light.shadow.mapSize.set(1024, 1024);
+        light.shadow.bias = -0.004; // kill the self-shadow acne on flat CAD faces
         this.emitterLights.set(id, light);
         this.addToScene(light);
       }
@@ -1156,7 +1163,16 @@ export class Viewport {
       // an inverse-square point light falls off fast over CAD millimetres.
       light.distance = size * EMITTER_REACH;
       light.intensity = glow * EMITTER_LIGHT_GAIN * size;
-    }
+      // The brightest few also occlude: real light AND a shadow, the point of
+      // this over a flat emissive tint.
+      light.castShadow = rank < shadowCap;
+      if (light.castShadow) {
+        const cam = light.shadow.camera;
+        cam.near = Math.max(size * 0.1, 0.5);
+        cam.far = light.distance;
+        cam.updateProjectionMatrix();
+      }
+    });
   }
 
   /** Add one emitter per glowing FACE of `b`, at the face's centroid, so a lit

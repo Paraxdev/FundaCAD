@@ -353,6 +353,11 @@ export function buildBodyMesh(
 
   const mesh = new THREE.Mesh(geo, mat);
   mesh.name = "model";
+  // Cast and receive shadows so an emissive body/face lights AND shadows its
+  // neighbours. Costs nothing unless the renderer's shadow map is on and a light
+  // is a shadow-caster (syncEmitterLights, only off the brightest emitter).
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
   // Hover picking raycasts this mesh on every pointermove; without a BVH that
   // is a full triangle scan (2.60ms median on a 50k-triangle textured body).
   scheduleRaycastIndex(geo); // built after the first paint, see raycastIndex.ts
