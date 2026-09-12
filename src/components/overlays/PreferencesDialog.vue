@@ -144,7 +144,7 @@ function onHistory(ev: Event) { const v = asHistorySide(value(ev)); if (v) setLa
 function onEnvironment(ev: Event) { const v = asEnvironment(value(ev)); if (v) setRenderPref("environment", v); }
 function onBackground(ev: Event) { const v = asBackground(value(ev)); if (v) setRenderPref("background", v); }
 function onBrightness(ev: Event) { setRenderPref("brightness", Number.parseFloat(value(ev))); }
-function onBloom(ev: Event) { const v = asBloom(value(ev)); if (v) setRenderPref("bloom", v); }
+function onBloom(ev: Event) { const v = asBloom(value(ev)); if (v !== null) setRenderPref("bloom", v); }
 </script>
 
 <template>
@@ -249,16 +249,14 @@ function onBloom(ev: Event) { const v = asBloom(value(ev)); if (v) setRenderPref
       <div class="sm-hint">Lights and reflections together, so the two stay in step.</div>
       <label class="prefs-row">
         <span class="prefs-label">Bloom</span>
-        <select id="prefs-bloom" class="sm-select" :value="render.bloom" @change="onBloom">
-          <option value="off">Off</option>
-          <option value="subtle">Subtle</option>
-          <option value="strong">Strong</option>
-        </select>
+        <input id="prefs-bloom" class="sm-slider" type="range" min="0" max="1" step="0.05"
+          :value="render.bloom" @input="onBloom" />
       </label>
       <div class="sm-hint">
-        Light spilling off the brightest parts of the image. Subtle reaches a
-        material with Glow turned up and a hard specular highlight, and nothing
-        else, so an ordinary part looks the same either way.
+        Light spilling off the brightest parts of the image. The lower half reaches
+        a material with Glow turned up and a hard specular highlight and nothing
+        else, so an ordinary part looks the same; turn it up to catch everyday
+        highlights too.
       </div>
 
       <!-- What the running plugins ask about. Each brings its own heading, so a

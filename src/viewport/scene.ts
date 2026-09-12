@@ -8,7 +8,7 @@ import { niceStep } from "../ui/units";
 import { glyphWorldScale } from "./gizmoScale";
 import { EDGE_HOVER_COLOR } from "./highlight";
 import { setRenderLowPower } from "./render";
-import { BACKGROUND_COLOR, BLOOM_SETTINGS, renderPrefs } from "../ui/renderPrefs";
+import { BACKGROUND_COLOR, bloomSettings, renderPrefs } from "../ui/renderPrefs";
 import { buildRoom, disposeRoom } from "./environments";
 import type { Environment } from "../ui/renderPrefs";
 import { themeColor } from "./themeColors";
@@ -331,7 +331,7 @@ export class PostChain {
    *  never leaves the canvas, and never pays the full-screen copy. */
   private wanted(): { bloom: boolean; blur: boolean } {
     const p = renderPrefs();
-    return { bloom: p.bloom !== "off", blur: p.focusBlur > 0 };
+    return { bloom: p.bloom > 0, blur: p.focusBlur > 0 };
   }
 
   render(camera: THREE.Camera) {
@@ -359,7 +359,7 @@ export class PostChain {
     if (this.bloom) {
       this.bloom.enabled = want.bloom;
       if (want.bloom) {
-        const b = BLOOM_SETTINGS[p.bloom as Exclude<typeof p.bloom, "off">];
+        const b = bloomSettings(p.bloom);
         this.bloom.strength = b.strength;
         this.bloom.radius = b.radius;
         this.bloom.threshold = b.threshold;
@@ -410,7 +410,7 @@ export class PostChain {
     composer.setSize(this.size.x, this.size.y);
     const camera = this.camera ?? new THREE.PerspectiveCamera();
     const render = new RenderPass(this.scene, camera);
-    const b = BLOOM_SETTINGS.subtle;
+    const b = bloomSettings(renderPrefs().bloom);
     const bloom = new UnrealBloomPass(this.size.clone(), b.strength, b.radius, b.threshold);
     // BEFORE the bloom, deliberately. Blur first and bloom second is a light
     // spilling off an out-of-focus highlight, which is what an open lens

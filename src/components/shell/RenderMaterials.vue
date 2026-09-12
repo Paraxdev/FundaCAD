@@ -35,12 +35,12 @@ const browser = useBrowserStore();
  *  the reflections arrive a beat after the panel opens (they are a dynamic
  *  import plus a cubemap) and every swatch is worth asking for again. */
 const previewTick = ref(0);
-const bloomOn = ref(renderPrefs().bloom !== "off");
+const bloomOn = ref(renderPrefs().bloom > 0);
 let offPreview: (() => void) | null = null;
 let offPrefs: (() => void) | null = null;
 onMounted(() => {
   offPreview = onPreviewsChanged(() => { previewTick.value++; });
-  offPrefs = onRenderPrefsChange(() => { bloomOn.value = renderPrefs().bloom !== "off"; });
+  offPrefs = onRenderPrefsChange(() => { bloomOn.value = renderPrefs().bloom > 0; });
 });
 onUnmounted(() => { offPreview?.(); offPrefs?.(); });
 

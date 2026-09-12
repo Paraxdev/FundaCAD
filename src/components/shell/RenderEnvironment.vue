@@ -13,9 +13,9 @@
 
 import { onMounted, onUnmounted, ref } from "vue";
 import {
-  BLOOM_SETTINGS, ENVIRONMENTS_LIST, MAX_BRIGHTNESS, MIN_BRIGHTNESS,
+  ENVIRONMENTS_LIST, MAX_BRIGHTNESS, MIN_BRIGHTNESS,
   onRenderPrefsChange, renderPrefs, setRenderPref,
-  type Background, type Bloom, type Environment,
+  type Background, type Environment,
 } from "../../ui/renderPrefs";
 
 const prefs = ref({ ...renderPrefs() });
@@ -30,15 +30,11 @@ const BACKGROUNDS: { id: Background; label: string }[] = [
   { id: "light", label: "Light" },
 ];
 
-const BLOOMS: { id: Bloom; label: string }[] = [
-  { id: "off", label: "Off" },
-  { id: "subtle", label: "Subtle" },
-  { id: "strong", label: "Strong" },
-];
-
 const pickEnv = (id: Environment) => setRenderPref("environment", id);
 const onBrightness = (e: Event) =>
   setRenderPref("brightness", Number.parseFloat((e.target as HTMLInputElement).value));
+const onBloom = (e: Event) =>
+  setRenderPref("bloom", Number.parseFloat((e.target as HTMLInputElement).value));
 </script>
 
 <template>
@@ -97,22 +93,22 @@ const onBrightness = (e: Event) =>
 
     <section class="rd-section">
       <h3 class="rd-head">Bloom</h3>
-      <div class="rd-chips" role="group" aria-label="Bloom">
-        <button
-          v-for="b in BLOOMS"
-          :key="b.id"
-          class="rd-chip"
-          :class="{ active: prefs.bloom === b.id }"
-          :data-bloom="b.id"
-          @click="setRenderPref('bloom', b.id)"
-        >{{ b.label }}</button>
-      </div>
+      <label class="prefs-row">
+        <span class="prefs-label">Amount</span>
+        <input
+          id="rd-bloom"
+          class="sm-slider"
+          type="range"
+          min="0" max="1" step="0.05"
+          :value="prefs.bloom"
+          :data-bloom="prefs.bloom"
+          @input="onBloom"
+        />
+      </label>
       <div class="sm-hint">
-        Light spilling off the brightest parts of the image. Subtle only reaches
-        a material with Glow turned up and a hard specular highlight
-        <template v-if="prefs.bloom === 'subtle'">
-          (anything brighter than {{ BLOOM_SETTINGS.subtle.threshold }})</template>, so
-        an ordinary part looks the same either way.
+        Light spilling off the brightest parts of the image. The lower half only
+        reaches a material with Glow up and a hard specular highlight, so an
+        ordinary part looks the same; turn it up to catch everyday highlights too.
       </div>
     </section>
 

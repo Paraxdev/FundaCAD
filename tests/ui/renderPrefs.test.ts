@@ -8,13 +8,14 @@
 import { describe, expect, it } from "vitest";
 import {
   BACKGROUND_COLOR,
-  BLOOM_SETTINGS,
+  DEFAULT_BLOOM,
   DEFAULT_RENDER,
   MAX_BRIGHTNESS,
   MAX_EMISSIVE_INTENSITY,
   MIN_BRIGHTNESS,
   asBackground,
   asBloom,
+  bloomSettings,
   asBrightness,
   asEnvironment,
   asRenderPrefs,
@@ -43,13 +44,13 @@ describe("the field gates", () => {
 describe("asRenderPrefs", () => {
   it("sanitises PER FIELD, so one bad value costs only itself", () => {
     expect(asRenderPrefs({
-      environment: "nonsense", background: "grey", brightness: 1.4, bloom: "strong",
+      environment: "nonsense", background: "grey", brightness: 1.4, bloom: 0.7,
       performanceMode: true,
     })).toEqual({
       environment: DEFAULT_RENDER.environment,
       background: "grey",
       brightness: 1.4,
-      bloom: "strong",
+      bloom: 0.7,
       fov: DEFAULT_RENDER.fov,
       aperture: DEFAULT_RENDER.aperture,
       focusBlur: DEFAULT_RENDER.focusBlur,
@@ -96,31 +97,40 @@ describe("the defaults", () => {
 });
 
 describe("bloom", () => {
-  it("names a level for each setting, and refuses anything else", () => {
-    for (const good of ["off", "subtle", "strong"]) expect(asBloom(good)).toBe(good);
-    for (const bad of ["SUBTLE", "", null, undefined, 1, {}, ["off"]]) {
+  it("clamps the amount into 0..1 and migrates the old named levels", () => {
+    expect(asBloom(0)).toBe(0);
+    expect(asBloom(0.6)).toBe(0.6);
+    expect(asBloom(5)).toBe(1); // clamped
+    expect(asBloom(-2)).toBe(0);
+    // documents written before the slider existed
+    expect(asBloom("off")).toBe(0);
+    expect(asBloom("subtle")).toBe(DEFAULT_BLOOM);
+    expect(asBloom("strong")).toBe(1);
+    for (const bad of ["SUBTLE", "", null, undefined, {}, [1]]) {
       expect(asBloom(bad)).toBeNull();
     }
   });
 
-  it("only spills light above full brightness, at the subtle level", () => {
+  it("only spills light above full brightness in the lower half of the slider", () => {
     // THE tuning, and the reason it is safe to leave bloom on by default. The
     // pass runs on the LINEAR image before tone mapping, where an ordinary white
     // part under a key light at intensity 2 already sits above 1: measured at a
-    // threshold of 0.85 the white test cylinder haloed as hard as the lit one
-    // and the whole viewport went pale.
-    expect(BLOOM_SETTINGS.subtle.threshold).toBeGreaterThan(1);
-    // ...and strong is the one that reaches an ordinary highlight, or it would
-    // be a second name for the same picture.
-    expect(BLOOM_SETTINGS.strong.threshold).toBeLessThan(BLOOM_SETTINGS.subtle.threshold);
-    expect(BLOOM_SETTINGS.strong.strength).toBeGreaterThan(BLOOM_SETTINGS.subtle.strength);
+    // threshold of 0.85 the white test cylinder haloed as hard as the lit one and
+    // the whole viewport went pale.
+    expect(bloomSettings(DEFAULT_BLOOM).threshold).toBeGreaterThan(1);
+    // ...and the top of the slider reaches an ordinary highlight, or it would be
+    // a second name for the same picture: threshold falls and strength rises.
+    expect(bloomSettings(1).threshold).toBeLessThan(bloomSettings(DEFAULT_BLOOM).threshold);
+    expect(bloomSettings(1).strength).toBeGreaterThan(bloomSettings(DEFAULT_BLOOM).strength);
+    // off is genuinely off
+    expect(bloomSettings(0).strength).toBe(0);
   });
 
-  it("lets the Glow slider reach past the subtle threshold", () => {
-    // CONTROL on the two numbers above being set independently: if the slider
-    // could not push a material past the threshold, its top end would do
-    // visibly nothing and an emissive material would never bloom at all, which
-    // is the only thing bloom is for.
-    expect(MAX_EMISSIVE_INTENSITY).toBeGreaterThan(BLOOM_SETTINGS.subtle.threshold);
+  it("lets the Glow slider reach past the default bloom threshold", () => {
+    // CONTROL on the numbers being set independently: if the slider could not
+    // push a material past the threshold, its top end would do visibly nothing
+    // and an emissive material would never bloom at all, which is the only thing
+    // bloom is for.
+    expect(MAX_EMISSIVE_INTENSITY).toBeGreaterThan(bloomSettings(DEFAULT_BLOOM).threshold);
   });
 });

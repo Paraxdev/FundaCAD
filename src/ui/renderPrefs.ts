@@ -85,26 +85,27 @@ export type Background = "theme" | "dark" | "grey" | "light";
  *  at all, so the setting costs an unlit model nothing but a pass, and a lit
  *  indicator or a specular highlight on polished metal reads as light rather
  *  than as a pale patch. */
-export type Bloom = "off" | "subtle" | "strong";
+/** Bloom amount, 0 (off) to 1 (full). A continuous slider rather than named
+ *  levels: "subtle" and "strong" were only two points on this line. */
+export type Bloom = number;
 
-/** What each level asks the bloom pass for. `threshold` is the luminance a
+export const DEFAULT_BLOOM = 0.4;
+
+/** What a given bloom AMOUNT asks the pass for. `threshold` is the luminance a
  *  pixel has to reach before it spills at all, and it is the number that decides
  *  whether this is a look or a haze.
  *
- *  ABOVE 1 for subtle, deliberately, and that is the whole tuning. The pass runs
- *  on the LINEAR image before tone mapping, where an ordinary white part under a
- *  key light at intensity 2 sits well over 1 already: at 0.85 the white plastic
- *  test cylinder haloed as hard as the lit one and the whole viewport went pale.
- *  Only something actually emitting gets past 1.15, which is what makes "on by
- *  default" a defensible thing to do to somebody's matt grey part. */
-export const BLOOM_SETTINGS: Record<Exclude<Bloom, "off">, {
-  strength: number;
-  radius: number;
-  threshold: number;
-}> = {
-  subtle: { strength: 0.4, radius: 0.3, threshold: 2 },
-  strong: { strength: 0.7, radius: 0.55, threshold: 0.9 },
-};
+ *  Threshold runs HIGH to LOW as the slider rises, and that is the whole tuning.
+ *  The pass runs on the LINEAR image before tone mapping, where an ordinary white
+ *  part under a key light at intensity 2 sits well over 1 already: at 0.85 the
+ *  white plastic test cylinder haloed as hard as the lit one and the viewport
+ *  went pale. So the lower half of the slider keeps the threshold ABOVE 1, where
+ *  only something actually emitting spills, and only the top of the slider reaches
+ *  an ordinary highlight. That is what makes leaving it on by default defensible. */
+export function bloomSettings(amount: number): { strength: number; radius: number; threshold: number } {
+  const a = Math.min(1, Math.max(0, amount));
+  return { strength: a * 0.85, radius: 0.3 + a * 0.3, threshold: 2.0 - a * 1.2 };
+}
 
 /** What the material's 0..1 Glow slider means in the renderer.
  *
@@ -165,7 +166,7 @@ export const DEFAULT_RENDER: RenderPrefs = {
   // On, gently. It costs a pass whether or not anything is bright enough to
   // use it, and it is what makes an emissive material read as a light instead
   // of as a flat bright patch, which is the only reason to have one.
-  bloom: "subtle",
+  bloom: DEFAULT_BLOOM,
   // The lens the app has always had, now written down.
   fov: 45,
   aperture: 4,
@@ -183,7 +184,6 @@ export const MAX_BRIGHTNESS = 2;
 
 const ENVIRONMENTS: Environment[] = ENVIRONMENTS_LIST.map((e) => e.id);
 const BACKGROUNDS: Background[] = ["theme", "dark", "grey", "light"];
-const BLOOMS: Bloom[] = ["off", "subtle", "strong"];
 
 /** The fixed grounds, as 0xRRGGBB. "theme" is absent on purpose: it is answered
  *  by the stylesheet, not by a number here. */
@@ -204,7 +204,11 @@ export function asBackground(v: unknown): Background | null {
 }
 
 export function asBloom(v: unknown): Bloom | null {
-  return BLOOMS.includes(v as Bloom) ? (v as Bloom) : null;
+  // Migrate the old named levels to points on the 0..1 slider.
+  if (v === "off") return 0;
+  if (v === "subtle") return DEFAULT_BLOOM;
+  if (v === "strong") return 1;
+  return asClamped(v, 0, 1);
 }
 
 /** Clamp a number into range, or null when it is not one. The same bargain
