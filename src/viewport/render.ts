@@ -359,7 +359,8 @@ export function buildBodyMesh(
   mesh.name = "model";
   // Cast and receive shadows so an emissive body/face lights AND shadows its
   // neighbours. Costs nothing unless the renderer's shadow map is on and a light
-  // is a shadow-caster (syncEmitterLights, only off the brightest emitter).
+  // is a shadow-caster (syncEmitterLights, only off the brightest emitter). A body
+  // that glows stops casting (viewport.applyBodyFinish): its light is inside it.
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   // Hover picking raycasts this mesh on every pointermove; without a BVH that
