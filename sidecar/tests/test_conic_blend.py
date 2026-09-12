@@ -534,17 +534,16 @@ def test_the_slider_stops_where_the_mesh_still_holds():
           f"{mild_n} at -0.9)")
 
 
-def test_a_refused_profile_does_not_read_as_a_failed_fillet():
-    """A blend outside the conic family must reach the user saying so, not
-    wearing the generic "Fillet failed on Body1" jacket _blend_edges puts on
-    real breakage.
+def test_a_refused_profile_falls_back_to_a_plain_fillet():
+    """A profile the geometry cannot carry rounds with the plain section instead
+    of failing the feature, and says so on an amber chip rather than a red one.
 
-    The distinction is the whole point of the exception: the radius is fine and
-    the plain fillet at it builds, so a message about the fillet failing sends
-    someone hunting for a size problem that does not exist. _blend_edges catches
-    Exception broadly to fall back to per-edge blending, which is right for
-    kernel failures and wrong for this one, the retry can only arrive at the
-    same refusal, and then hides why."""
+    The radius is fine and the plain fillet at it builds, conic_blend rounds
+    first and only then reweights, so ConicNotApplicable means the profile, not
+    the rounding, gave up. Failing the whole feature would leave a corner that
+    rounds perfectly well unrounded and send the user hunting for a size problem
+    that does not exist. So the corner gets its plain round and a non-fatal
+    diagnostic carries the reason to featureNotes' amber tooltip."""
     import builder
     from builder import rebuild
     from conic_blend import ConicNotApplicable
@@ -553,30 +552,33 @@ def test_a_refused_profile_does_not_read_as_a_failed_fillet():
            "features": [
                {"id": "f1", "type": "box", "length": 40, "width": 30, "height": 20},
                {"id": "f2", "type": "fillet", "radius": 4, "profile": 0.6,
-                "edges": {"by": "nearest", "point": [20.0, 0.0, 10.0]}},
+                "edges": {"by": "nearest", "point": [20.0, 15.0, 10.0]}},
            ]}
 
-    # Driven through the real rebuild rather than by handing _blend_edges a stub
-    # context: what is being checked is the sentence that reaches the toast, and
-    # that is decided by the whole chain of handlers between here and there. The
-    # geometry that genuinely provokes this is a boolean about one in thirty, so
-    # the refusal is injected instead, the message's journey is the subject, not
-    # the surface that produces it.
+    # Driven through the real rebuild, but the refusal is injected: the geometry
+    # that genuinely provokes it is a boolean about one in thirty, and what is
+    # under test is the handler's response to the exception, not the surface that
+    # raises it. The fallback then runs the REAL plain fillet on the box.
     real = builder._conic_fillet
     builder._conic_fillet = lambda *_a, **_k: (_ for _ in ()).throw(
         ConicNotApplicable("this blend is cut across its section, use profile 0 here"))
     try:
-        _part, errors, _bodies = rebuild(doc)
+        diag = []
+        _part, errors, bodies = rebuild(doc, diagnostics=diag)
     finally:
         builder._conic_fillet = real
 
-    assert errors, "a refused profile reported no error at all"
-    said = " ".join(str(e) for e in errors)
-    assert "cut across its section" in said, f"refusal lost its own words: {said}"
-    assert "Fillet failed" not in said, (
-        f"refusal was dressed as a failed fillet, which sends the user hunting "
-        f"for a radius problem that is not there: {said}")
-    print("conic refusal keeps its own message OK")
+    assert not errors, f"a refused profile failed the feature instead of rounding it: {errors}"
+    assert bodies, "the fallback produced no body"
+    notes = [d for d in diag if d.get("feature_id") == "f2" and d.get("reason")]
+    assert notes, "the fallback rounded silently, with no amber note to explain it"
+    said = notes[0]["reason"]
+    assert "Fillet failed" not in said and "radius" not in said, (
+        f"the note reads as a radius problem, which is exactly what it is not: {said}")
+    # A body that really carries the plain round: its faces outnumber the box's
+    # six, one fillet face added.
+    assert len(bodies[0]["shape"].faces()) > 6, "the fallback left the edge sharp"
+    print("conic refusal falls back to a plain fillet with an amber note OK")
 
 
 def test_a_tangent_chain_of_two_kinds_of_blend():
@@ -643,5 +645,5 @@ if __name__ == "__main__":
     test_a_tangent_chain_of_two_kinds_of_blend()
     test_the_slider_stops_where_the_mesh_still_holds()
     test_rebuilds_through_a_real_document()
-    test_a_refused_profile_does_not_read_as_a_failed_fillet()
+    test_a_refused_profile_falls_back_to_a_plain_fillet()
     print("\nall conic blend tests passed")

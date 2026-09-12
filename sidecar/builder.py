@@ -86,7 +86,7 @@ from geom_select import (
     _edge_dedup_key,
 )
 import plugin_geometry
-from conic_blend import PROFILE_EPS, clamp_profile
+from conic_blend import ConicNotApplicable, PROFILE_EPS, clamp_profile
 
 # Split out of this file when it passed seven thousand lines. Re-exported rather
 # than referenced through the module, because `builder._unify_body` and friends
@@ -573,14 +573,50 @@ def _handle_fillet(f, ctx):
     # Absent or 0 keeps the plain build123d path, so nothing that worked before
     # now routes through the reweighting machinery.
     p = clamp_profile(ctx.val(f["profile"])) if f.get("profile") is not None else 0.0
-    if abs(p) < PROFILE_EPS:
+
+    def plain():
         _blend_edges(f, ctx, "Fillet",
                      lambda s, es: fillet(es, radius=r),
                      lambda s, e, size: fillet([e], radius=size), r)
+
+    if abs(p) < PROFILE_EPS:
+        plain()
         return
-    _blend_edges(f, ctx, "Fillet",
-                 lambda s, es: _conic_fillet(s, es, r, p),
-                 lambda s, e, size: _conic_fillet(s, [e], size, p), r)
+    try:
+        _blend_edges(f, ctx, "Fillet",
+                     lambda s, es: _conic_fillet(s, es, r, p),
+                     lambda s, e, size: _conic_fillet(s, [e], size, p), r)
+    except ConicNotApplicable:
+        # The plain fillet at this radius builds fine, conic_blend makes it first
+        # and only then reweights it; ConicNotApplicable means the reweight, not
+        # the rounding, gave up (most often a spherical patch where three rounded
+        # edges meet, which has no single section to re-solve). Failing the whole
+        # feature would leave the body unrounded over a corner that rounds
+        # perfectly well, so fall back to the plain section and flag the chip
+        # amber with the reason instead. _blend_edges stages every body and
+        # assigns none until all succeed, so the abandoned conic attempt mutated
+        # nothing and this second pass starts from the same clean state.
+        plain()
+        _note_profile_fallback(ctx, f)
+
+
+def _note_profile_fallback(ctx, f):
+    """Amber advisory (not a red failure) that a variable-profile fillet rounded
+    with the plain circular section because the profile could not be carried
+    here. Shares featureNotes' one-reason-per-chip channel with selector
+    diagnostics; no `at` and no repairable `code`, so it lights the chip and its
+    tooltip without offering a re-pick that would make no sense."""
+    if ctx.diagnostics is None:
+        return
+    ctx.diagnostics.append({
+        "feature_id": f.get("id"),
+        "kind": "edge",
+        "resolved": 1,
+        "confidence": 1.0,
+        "lossy": False,
+        "reason": "the variable profile can't wrap this junction, so the fillet "
+                  "used its plain rounded section here",
+    })
 
 
 def _handle_chamfer(f, ctx):
