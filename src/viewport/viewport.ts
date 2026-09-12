@@ -81,7 +81,7 @@ const SKETCH_DIM_EDGE_OPACITY = 0.5;
 // inverse-square point light bright enough to read over CAD millimetres.
 const MAX_EMITTER_LIGHTS = 6;
 const EMITTER_REACH = 8;
-const EMITTER_LIGHT_GAIN = 6;
+const EMITTER_LIGHT_GAIN = 8;
 /** Only the brightest few emitters cast a SHADOW: a point-light shadow is a cube
  *  map (six renders), so this is the real cost of the effect, kept to the lights
  *  that carry the look. Zero on a weak machine (renderer.shadowMap.enabled off). */
@@ -1153,6 +1153,7 @@ export class Viewport {
         light = new THREE.PointLight(0xffffff, 0, 0, 2); // decay 2 (inverse-square)
         light.shadow.mapSize.set(1024, 1024);
         light.shadow.bias = -0.004; // kill the self-shadow acne on flat CAD faces
+        light.shadow.radius = 4; // soft PCF edges, so the shadow reads as cast light not a hard stencil
         this.emitterLights.set(id, light);
         this.addToScene(light);
       }
