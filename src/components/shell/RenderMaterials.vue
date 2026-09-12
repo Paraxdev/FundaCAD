@@ -21,7 +21,7 @@ import { useBuildValue } from "../../app/useDoc";
 import Icon from "./Icon.vue";
 import { toast } from "../../ui/toast";
 import { exportMaterialLibrary, importMaterialLibrary } from "../../io/files";
-import { finishLabel, finishOf, type MaterialDef } from "../../document/materials";
+import { finishLabel, finishOf, type MaterialDef, type SurfaceSpec } from "../../document/materials";
 import { materialPreview, onPreviewsChanged } from "../../viewport/materialPreview";
 import { beginMaterialDrag, endMaterialDrag, MATERIAL_MIME } from "../../ui/materialDrag";
 import { onRenderPrefsChange, renderPrefs } from "../../ui/renderPrefs";
@@ -137,7 +137,7 @@ function removeSelected() {
 /** Push one edited field. Every control calls this, so there is one place where
  *  a value becomes a document change. */
 function set(
-  field: "name" | "color" | "metalness" | "roughness" | "opacity" | "emissive",
+  field: "name" | "color" | "metalness" | "roughness" | "opacity" | "emissive" | "clearcoat",
   raw: string,
 ) {
   const m = selected.value;
@@ -153,6 +153,43 @@ function set(
   }
   const n = Number.parseFloat(raw);
   if (Number.isFinite(n)) store.updateMaterial(m.id, { [field]: n });
+}
+
+// --- procedural surface: pick a generator, then tune it. A separate path from
+// `set` above because the surface is one nested object, not a flat field: the
+// picker builds a fresh one with sensible defaults, and the sliders merge into
+// the one already there. "None" removes it, so the material reads back plain.
+const SURFACE_KINDS = ["none", "noise", "scratches", "brushed", "voronoi"] as const;
+const SURFACE_LABEL: Record<string, string> = {
+  none: "None", noise: "Noise", scratches: "Scratches", brushed: "Brushed", voronoi: "Wear",
+};
+
+function pickSurface(kind: string) {
+  const m = selected.value;
+  if (!m) return;
+  if (kind === "none") {
+    store.updateMaterial(m.id, { surface: undefined } as unknown as Partial<Omit<MaterialDef, "id">>);
+    return;
+  }
+  const k = kind as SurfaceSpec["kind"];
+  const cur = m.surface;
+  const next: SurfaceSpec = cur ? { ...cur, kind: k } : { kind: k, scale: 6, amount: 0.5, bump: 0.4 };
+  store.updateMaterial(m.id, { surface: next });
+}
+
+function setSurface(field: "scale" | "amount" | "bump" | "angle" | "colorAmount", raw: string) {
+  const m = selected.value;
+  if (!m?.surface) return;
+  const n = Number.parseFloat(raw);
+  if (Number.isFinite(n)) store.updateMaterial(m.id, { surface: { ...m.surface, [field]: n } });
+}
+
+function setSurfaceColor(raw: string) {
+  const m = selected.value;
+  if (!m?.surface) return;
+  store.updateMaterial(m.id, {
+    surface: { ...m.surface, color: raw, colorAmount: m.surface.colorAmount || 0.5 },
+  });
 }
 
 /** The faces the viewport has selected, as the store addresses them. Goes
@@ -355,6 +392,63 @@ async function doImport() {
       <div v-if="finishOf(selected).emissive > 0 && !bloomOn" class="sm-hint">
         Glow is on for this material. Turn Bloom on under Environment to see it
         spill light.
+      </div>
+      <label class="prefs-row">
+        <span class="prefs-label">Clearcoat</span>
+        <input
+          class="sm-slider"
+          type="range" min="0" max="1" step="0.01"
+          :value="finishOf(selected).clearcoat"
+          @input="set('clearcoat', ($event.target as HTMLInputElement).value)"
+        />
+      </label>
+
+      <!-- Procedural surface: a generator plus a few knobs. Triplanar (no UVs),
+           driving roughness, a bump and a tint, see viewport/proceduralSurface.ts. -->
+      <div class="rd-surface">
+        <span class="prefs-label">Surface</span>
+        <div class="rd-chips" role="group" aria-label="Surface">
+          <button
+            v-for="k in SURFACE_KINDS"
+            :key="k"
+            class="rd-chip"
+            :class="{ active: (selected.surface?.kind ?? 'none') === k }"
+            :data-surface="k"
+            @click="pickSurface(k)"
+          >{{ SURFACE_LABEL[k] }}</button>
+        </div>
+        <template v-if="selected.surface">
+          <label class="prefs-row">
+            <span class="prefs-label">Scale</span>
+            <input class="sm-slider" type="range" min="0.5" max="30" step="0.5"
+              :value="selected.surface.scale" @input="setSurface('scale', ($event.target as HTMLInputElement).value)" />
+          </label>
+          <label class="prefs-row">
+            <span class="prefs-label">Amount</span>
+            <input class="sm-slider" type="range" min="0" max="1" step="0.01"
+              :value="selected.surface.amount" @input="setSurface('amount', ($event.target as HTMLInputElement).value)" />
+          </label>
+          <label class="prefs-row">
+            <span class="prefs-label">Bump</span>
+            <input class="sm-slider" type="range" min="0" max="1" step="0.01"
+              :value="selected.surface.bump ?? 0" @input="setSurface('bump', ($event.target as HTMLInputElement).value)" />
+          </label>
+          <label v-if="selected.surface.kind === 'scratches' || selected.surface.kind === 'brushed'" class="prefs-row">
+            <span class="prefs-label">Angle</span>
+            <input class="sm-slider" type="range" min="0" max="3.14" step="0.01"
+              :value="selected.surface.angle ?? 0" @input="setSurface('angle', ($event.target as HTMLInputElement).value)" />
+          </label>
+          <label class="prefs-row">
+            <span class="prefs-label">Tint</span>
+            <input class="mats-color" type="color"
+              :value="selected.surface.color ?? '#000000'" @input="setSurfaceColor(($event.target as HTMLInputElement).value)" />
+          </label>
+          <label class="prefs-row">
+            <span class="prefs-label">Tint amount</span>
+            <input class="sm-slider" type="range" min="0" max="1" step="0.01"
+              :value="selected.surface.colorAmount ?? 0" @input="setSurface('colorAmount', ($event.target as HTMLInputElement).value)" />
+          </label>
+        </template>
       </div>
 
       <div class="mats-actions">
