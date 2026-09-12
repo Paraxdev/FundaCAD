@@ -26,6 +26,7 @@ from build123d import (
     Circle,
     Compound,
     Edge,
+    Ellipse,
     Face,
     FontStyle,
     Polyline,
@@ -52,6 +53,8 @@ def _translate_entity(e, dx, dy, eid, val):
         return {"type": "rectangle", "id": eid, "width": val(e["width"]), "height": val(e["height"]), "x": val(e.get("x", 0)) + dx, "y": val(e.get("y", 0)) + dy, **c}
     if t == "circle":
         return {"type": "circle", "id": eid, "radius": val(e["radius"]), "x": val(e.get("x", 0)) + dx, "y": val(e.get("y", 0)) + dy, **c}
+    if t == "ellipse":
+        return {"type": "ellipse", "id": eid, "rx": val(e["rx"]), "ry": val(e["ry"]), "angle": val(e.get("angle", 0)), "x": val(e.get("x", 0)) + dx, "y": val(e.get("y", 0)) + dy, **c}
     if t == "arc":
         return {"type": "arc", "id": eid, "x1": val(e["x1"]) + dx, "y1": val(e["y1"]) + dy, "x2": val(e["x2"]) + dx, "y2": val(e["y2"]) + dy, "mx": val(e["mx"]) + dx, "my": val(e["my"]) + dy, **c}
     if t == "spline":
@@ -71,6 +74,9 @@ def _rotate_entity(e, cx, cy, ang, eid, val):
     if t == "circle":
         x, y = R(val(e.get("x", 0)), val(e.get("y", 0)))
         return [{"type": "circle", "id": eid, "radius": val(e["radius"]), "x": x, "y": y, **c}]
+    if t == "ellipse":
+        x, y = R(val(e.get("x", 0)), val(e.get("y", 0)))
+        return [{"type": "ellipse", "id": eid, "rx": val(e["rx"]), "ry": val(e["ry"]), "angle": val(e.get("angle", 0)) + math.degrees(ang), "x": x, "y": y, **c}]
     if t == "point":
         x, y = R(val(e["x"]), val(e["y"]))
         return [{"type": "point", "id": eid, "x": x, "y": y, **c}]
@@ -218,6 +224,14 @@ def _entity_edges(e, val):
             (val(e["x2"]), val(e["y2"]), 0))]
     if t == "circle":
         return [Pos(val(e.get("x", 0)), val(e.get("y", 0))) * Edge.make_circle(val(e["radius"]))]
+    if t == "ellipse":
+        # A true, closed ellipse. One clean curve, so a lofted stack of these is
+        # smooth where a many-arc approximation of the same ellipse ridges.
+        el = Edge.make_ellipse(val(e["rx"]), val(e["ry"]))
+        ang = val(e.get("angle", 0))
+        if ang:
+            el = Rot(0, 0, ang) * el
+        return [Pos(val(e.get("x", 0)), val(e.get("y", 0))) * el]
     if t == "spline":
         pts = [(val(p["x"]), val(p["y"]), 0) for p in e.get("points", [])]
         return [Edge.make_spline(pts)] if len(pts) >= 2 else []
@@ -469,6 +483,11 @@ def _build_sketch(f, val, datums=None, plane=None):
                 f"a circle in this sketch has a radius of {val(e['radius']):g}, "
                 "give it a radius greater than 0, or delete it"
             )
+        if et == "ellipse" and not (val(e["rx"]) > 0 and val(e["ry"]) > 0):
+            raise ValueError(
+                "an ellipse in this sketch has a zero rx or ry, "
+                "give it two radii greater than 0, or delete it"
+            )
         if et == "rectangle" and not (val(e["width"]) > 0 and val(e["height"]) > 0):
             raise ValueError(
                 "a rectangle in this sketch has a zero width or height, "
@@ -483,6 +502,13 @@ def _build_sketch(f, val, datums=None, plane=None):
             all_edges.extend(_entity_edges(e, val))
         elif et == "circle":
             faces.append(Pos(val(e.get("x", 0)), val(e.get("y", 0))) * Circle(val(e["radius"])))
+            all_edges.extend(_entity_edges(e, val))
+        elif et == "ellipse":
+            faces.append(
+                Pos(val(e.get("x", 0)), val(e.get("y", 0)))
+                * Rot(0, 0, val(e.get("angle", 0)))
+                * Ellipse(val(e["rx"]), val(e["ry"]))
+            )
             all_edges.extend(_entity_edges(e, val))
         elif et in ("line", "arc", "spline", "polygon", "slot"):
             # free-form curves + parametric outlines: boundary edges join the

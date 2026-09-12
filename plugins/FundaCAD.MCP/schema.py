@@ -500,6 +500,9 @@ FEATURES = {
 SKETCH_ENTITIES = {
     "line": {"x1": "Num", "y1": "Num", "x2": "Num", "y2": "Num"},
     "circle": {"radius": "Num", "x": "Num (default 0)", "y": "Num (default 0)"},
+    "ellipse": {"rx": "Num, radius along local x", "ry": "Num, radius along local y",
+                "x": "Num centre (default 0)", "y": "Num centre (default 0)",
+                "angle": "Num, degrees (default 0)"},
     "arc": {"x1": "Num", "y1": "Num", "x2": "Num", "y2": "Num",
             "mx": "Num, a point ON the arc between the ends", "my": "Num"},
     "rectangle": {"width": "Num", "height": "Num", "x": "Num centre", "y": "Num centre",
