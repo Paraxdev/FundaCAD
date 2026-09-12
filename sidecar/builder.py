@@ -1741,6 +1741,19 @@ def _handle_joint(f, ctx):
                       "a mate reference no longer resolves, the body was left in place")
         return
 
+    # Publish the mate axis (the fixed connector's origin + z) so the frontend can
+    # stand its offset/angle handles on the real line the joint slides and turns
+    # about, wherever the parts have moved it. Rides the existing datum-mark
+    # channel keyed by feature id, so no new wire plumbing: an axis mark on a
+    # joint id, which the datum-plane sync ignores (it only reads datum features).
+    if ctx.datum_marks is not None:
+        o, z = f_fix.origin, f_fix.z_dir
+        ctx.datum_marks[f["id"]] = {
+            "kind": "axis",
+            "origin": [o.X, o.Y, o.Z],
+            "dir": [z.X, z.Y, z.Z],
+        }
+
     offset = ctx.val(f.get("offset", 0))
     angle = ctx.val(f.get("angle", 0))
     # The adjustment lives in the FIXED connector's local frame: translate along

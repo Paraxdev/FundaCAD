@@ -39,6 +39,7 @@ import { MeasureTool } from "../features/measureTool";
 import { SectionTool } from "../features/sectionTool";
 import { PlaneOffsetTool } from "../features/planeOffsetTool";
 import { RevolvePitchTool } from "../features/revolvePitchTool";
+import { JointTool } from "../features/jointTool";
 import { createFeatureStarters } from "../features/featureStarters";
 import { createContextMenus } from "../ui/contextMenus";
 import { createPanels } from "../ui/panels";
@@ -87,6 +88,7 @@ export interface EngineTools {
   section: SectionTool;
   planeOffset: PlaneOffsetTool;
   revolvePitch: RevolvePitchTool;
+  joint: JointTool;
 }
 
 export interface EngineUi {
@@ -299,6 +301,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
     }),
     planeOffset: new PlaneOffsetTool(e.viewport),
     revolvePitch: new RevolvePitchTool(e.viewport, e.store, e.overlay),
+    joint: new JointTool(e.viewport, e.store),
   };
 
   // Reads e.toolBusy, assigned below, hence the thunk, the same late binding

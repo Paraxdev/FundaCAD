@@ -29,7 +29,7 @@ export function createToolBusy(
       t.faceOffset.active || t.draft.active || t.thread.active || t.loft.active || t.planeOffset.active ||
       (moveCounts && t.move.active) || t.pattern.active ||
       t.measure.active || t.section.picking || t.targetEdit.active ||
-      t.revolvePitch.active ||
+      t.revolvePitch.active || t.joint.active ||
       e.planePick || isChoiceOpen() ||
       // A plugin's tool holds the window exactly as one of the above does.
       // Without this the app believes it is idle while a contributed tool

@@ -110,6 +110,12 @@ export function createSelection(
         // parameter drives, and those fall through to the rows as before.
         if (!e.tools.revolvePitch.startEdit(id, done)) e.setStatus(VALUES_IN_HISTORY, "");
         break;
+      case "joint":
+        // The arrow slides the joined body along the mate axis (its offset). It
+        // stands down when a parameter drives the offset or the sidecar could not
+        // place the axis this build, and those fall through to the rows.
+        if (!e.tools.joint.startEdit(id, done)) e.setStatus(VALUES_IN_HISTORY, "");
+        break;
       default:
         // A feature type the app has no tool for may still have one: a plugin
         // that contributes a tool contributes how to REOPEN what the tool made,

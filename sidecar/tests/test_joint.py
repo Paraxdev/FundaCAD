@@ -77,6 +77,22 @@ def test_offset_slides_along_the_mate_axis():
     print(PASS, "offset slides the moving body along the mate axis")
 
 
+def test_the_mate_axis_is_published_for_the_handle():
+    """The offset/angle handles stand on the mate axis, which only the sidecar
+    can place, so the joint publishes it in datumMarks keyed by its own id. Here
+    the fixed face is body1's top (z=10, +Z), so the axis sits at (0,0,10) up Z."""
+    marks = {}
+    _p, errors, _b = rebuild(
+        {"parameters": {}, "features": base_features(_joint())}, datum_marks_out=marks)
+    assert errors == [], errors
+    m = marks.get("j")
+    assert m and m["kind"] == "axis", f"joint published no axis mark: {marks}"
+    o, d = m["origin"], m["dir"]
+    assert abs(o[0]) < 1e-6 and abs(o[1]) < 1e-6 and abs(o[2] - 10.0) < 1e-6, f"axis origin {o}, expected (0,0,10)"
+    assert abs(d[0]) < 1e-6 and abs(d[1]) < 1e-6 and abs(abs(d[2]) - 1.0) < 1e-6, f"axis dir {d}, expected +/-Z"
+    print(PASS, "the joint publishes its mate axis for the offset handle")
+
+
 def test_angle_spins_about_the_mate_axis():
     """A revolute's degree of freedom: a 45 degree turn about the mate axis
     swings the 6mm cube's corner out to its half-diagonal, ~4.243mm."""
@@ -116,6 +132,7 @@ def test_a_stale_mate_reference_leaves_the_body_in_place():
 def main():
     test_a_face_mate_stacks_one_body_on_another()
     test_offset_slides_along_the_mate_axis()
+    test_the_mate_axis_is_published_for_the_handle()
     test_angle_spins_about_the_mate_axis()
     test_flush_puts_the_parts_on_the_same_side()
     test_a_stale_mate_reference_leaves_the_body_in_place()
