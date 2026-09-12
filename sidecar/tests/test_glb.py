@@ -131,6 +131,33 @@ def test_round_trip_preserves_size():
     print(PASS, "round trip preserves millimetre size and Z-up orientation")
 
 
+def test_a_units_as_millimetres_glb_imports_at_its_millimetre_size():
+    """Most meshes off the internet ignore glTF's metres and store millimetres as
+    plain numbers: a 210 mm radio is "210". Read as metres that is a 210 m model.
+    The importer reads the metres the spec declares (the round trip above) and
+    falls back to millimetres only for a model too large to be a part.
+
+    Control: the SAME file with a metres reading forced (the fallback threshold
+    raised out of reach) comes in x1000 too big, so the fallback is what fixed it."""
+    p = os.path.join(tempfile.mkdtemp(), "mm_units.glb")
+    e = _entry("Radio", Box(210, 120, 150))
+    e["positions"] = [v * 1000.0 for v in e["positions"]]  # the file now says 210 "metres"
+    mesh_writers.write_glb([e], p)
+    bb = builder._read_glb(p).bounding_box()
+    assert abs((bb.max.X - bb.min.X) - 210.0) < 1e-2, bb
+    assert abs((bb.max.Z - bb.min.Z) - 150.0) < 1e-2, bb
+
+    import mesh_import
+    keep = mesh_import.GLB_MM_AS_UNITS_ABOVE
+    try:
+        mesh_import.GLB_MM_AS_UNITS_ABOVE = float("inf")
+        bb = builder._read_glb(p).bounding_box()
+        assert abs((bb.max.X - bb.min.X) - 210_000.0) < 10, bb
+    finally:
+        mesh_import.GLB_MM_AS_UNITS_ABOVE = keep
+    print(PASS, "a units-as-millimetres glb imports at its millimetre size, a metres glb at its own")
+
+
 def test_normals_are_smooth_within_a_face_and_sharp_between():
     """The design claim behind having NO crease-angle parameter: tessellate never
     welds vertices across B-rep faces, so averaging can only run within one face."""
@@ -251,6 +278,7 @@ def main():
     test_container_is_structurally_valid()
     test_orientation_and_unit_are_glTF_native()
     test_round_trip_preserves_size()
+    test_a_units_as_millimetres_glb_imports_at_its_millimetre_size()
     test_normals_are_smooth_within_a_face_and_sharp_between()
     test_one_material_per_body_with_its_palette_colour()
     test_export_job_routes_glb_and_threads_colours()

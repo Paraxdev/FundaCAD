@@ -619,6 +619,34 @@ def _read_glb(path):
     The result is a faceted mesh body with the same limits as the STL/OBJ path:
     glTF carries triangles, not B-rep, so there is nothing prismatic to recover.
     """
+    shape = _read_glb_scaled(path, 0.001)
+    # glTF DECLARES metres, which is how FundaCAD's own GLB export writes a part,
+    # so the file is read that way first (the system unit is a millimetre, and
+    # OCCT converts file units to it). But nearly every mesh off the internet is
+    # authored units-as-millimetres: a 210 mm radio saved as "210" reads as 210 m.
+    # No part modelled here is the size of a building, so a model that comes out
+    # larger than that is taken to be in millimetres and read again as such. Read
+    # again rather than scaled: the reader hands back triangulation only faces,
+    # and a scaling transform does not reliably carry the triangles with it.
+    if _max_extent(shape) > GLB_MM_AS_UNITS_ABOVE:
+        shape = _read_glb_scaled(path, 1.0)
+    # _wrap_topods, not Shape.cast: the reader hands back a raw TopoDS_COMPOUND,
+    # which Shape.cast() turns into None (see its docstring).
+    wrapped = _wrap_topods(shape)
+    if wrapped is None:
+        raise ValueError("couldn't interpret the geometry in this glTF file")
+    return wrapped
+
+
+# A glTF model larger than this (in mm, after reading the file as the metres the
+# spec says it is in) is taken to be a units-as-millimetres file. 10 m: well over
+# anything modelled here, and far under the 210 m a 210 mm part reads as.
+GLB_MM_AS_UNITS_ABOVE = 10_000.0
+
+
+def _read_glb_scaled(path, system_unit):
+    """One OCCT glTF read with the system length unit given in metres (0.001 for
+    millimetres). Y-up in the file, Z-up out."""
     from OCP.Message import Message_ProgressRange
     from OCP.RWGltf import RWGltf_CafReader
     from OCP.RWMesh import RWMesh_CoordinateSystem
@@ -629,7 +657,7 @@ def _read_glb(path):
     reader = RWGltf_CafReader()
     reader.SetDocument(doc)
     reader.SetParallel(True)
-    reader.SetSystemLengthUnit(0.001)  # our documents are millimetres
+    reader.SetSystemLengthUnit(system_unit)
     reader.SetSystemCoordinateSystem(RWMesh_CoordinateSystem.RWMesh_CoordinateSystem_Zup)
     reader.SetFileCoordinateSystem(RWMesh_CoordinateSystem.RWMesh_CoordinateSystem_Yup)
     if not reader.Perform(TCollection_AsciiString(path), Message_ProgressRange()):
@@ -637,12 +665,20 @@ def _read_glb(path):
     shape = reader.SingleShape()
     if shape is None or shape.IsNull():
         raise ValueError("no geometry found in the glTF file")
-    # _wrap_topods, not Shape.cast: the reader hands back a raw TopoDS_COMPOUND,
-    # which Shape.cast() turns into None (see its docstring).
-    wrapped = _wrap_topods(shape)
-    if wrapped is None:
-        raise ValueError("couldn't interpret the geometry in this glTF file")
-    return wrapped
+    return shape
+
+
+def _max_extent(shape):
+    """The largest side of a raw shape's bounding box, from its triangulation."""
+    from OCP.Bnd import Bnd_Box
+    from OCP.BRepBndLib import BRepBndLib
+
+    box = Bnd_Box()
+    BRepBndLib.Add_s(shape, box, True)
+    if box.IsVoid():
+        return 0.0
+    x0, y0, z0, x1, y1, z1 = box.Get()
+    return max(x1 - x0, y1 - y0, z1 - z0)
 
 
 def _realign_face_colors(before, after, colors):
