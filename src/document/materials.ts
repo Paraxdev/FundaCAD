@@ -49,6 +49,10 @@ export interface SurfaceNode {
   type: "noise" | "scratches" | "brushed" | "voronoi" | "ramp" | "mix" | "output";
   params?: Record<string, number | string>;
   in?: Record<string, string>;
+  /** Canvas position in the node editor. Layout only, ignored by the compiler
+   *  and by graphKey, so dragging a node never recompiles the shader. */
+  x?: number;
+  y?: number;
 }
 
 export interface SurfaceGraph {
@@ -267,6 +271,8 @@ export function normalizeGraph(raw: unknown): SurfaceGraph | undefined {
     const node: SurfaceNode = { id: o["id"], type };
     if (o["params"] && typeof o["params"] === "object") node.params = o["params"] as Record<string, number | string>;
     if (o["in"] && typeof o["in"] === "object") node.in = o["in"] as Record<string, string>;
+    if (typeof o["x"] === "number") node.x = o["x"];
+    if (typeof o["y"] === "number") node.y = o["y"];
     nodes.push(node);
   }
   if (!nodes.some((n) => n.id === r["output"])) return undefined;

@@ -29,7 +29,11 @@ export function surfaceKey(s: SurfaceSpec | undefined): string {
 }
 
 export function graphKey(g: SurfaceGraph | undefined): string {
-  return g ? "g:" + JSON.stringify(g) : "";
+  // Only the parts that reach the shader: node layout (x/y) is deliberately left
+  // out, so dragging a node in the editor never recompiles the material.
+  if (!g) return "";
+  const nodes = g.nodes.map((n) => ({ id: n.id, type: n.type, params: n.params, in: n.in }));
+  return "g:" + JSON.stringify({ output: g.output, nodes });
 }
 
 // --- shared GLSL: the generator functions, parameterised so the picker (via

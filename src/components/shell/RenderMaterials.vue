@@ -25,6 +25,7 @@ import { finishLabel, finishOf, type MaterialDef, type SurfaceSpec } from "../..
 import { materialPreview, onPreviewsChanged } from "../../viewport/materialPreview";
 import { beginMaterialDrag, endMaterialDrag, MATERIAL_MIME } from "../../ui/materialDrag";
 import { onRenderPrefsChange, renderPrefs } from "../../ui/renderPrefs";
+import SurfaceNodeEditor from "./SurfaceNodeEditor.vue";
 
 const engine = useEngine();
 const store = engine.store;
@@ -191,6 +192,10 @@ function setSurfaceColor(raw: string) {
     surface: { ...m.surface, color: raw, colorAmount: m.surface.colorAmount || 0.5 },
   });
 }
+
+// The full node graph: opens the canvas editor over the app. A material with a
+// graph ignores the single-generator picker above it (the graph wins).
+const editingGraph = ref(false);
 
 /** The faces the viewport has selected, as the store addresses them. Goes
  *  through the viewport's band expansion so that dressing a cylinder the kernel
@@ -449,6 +454,8 @@ async function doImport() {
               :value="selected.surface.colorAmount ?? 0" @input="setSurface('colorAmount', ($event.target as HTMLInputElement).value)" />
           </label>
         </template>
+        <button class="rd-chip" data-editgraph style="margin-top:6px" @click="editingGraph = true">Edit graph…</button>
+        <div v-if="selected.surfaceGraph" class="sm-hint">Using a node graph, the picker above is ignored while it is set.</div>
       </div>
 
       <div class="mats-actions">
@@ -478,4 +485,12 @@ async function doImport() {
       <button class="btn" @click="exportMaterialLibrary(store)">Export…</button>
     </div>
   </div>
+
+  <Teleport to="body">
+    <SurfaceNodeEditor
+      v-if="editingGraph && selected"
+      :material-id="selected.id"
+      @close="editingGraph = false"
+    />
+  </Teleport>
 </template>
