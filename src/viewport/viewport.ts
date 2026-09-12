@@ -392,6 +392,7 @@ export class Viewport {
       // runs in a constructor), but "the right colour depends on who subscribed
       // first" is not a property worth having, and the call is a Map.clear().
       invalidateThemeColors();
+      this.scene.grid.applyTheme();
       this.scene.applyRenderPrefs();
       this.requestRender();
     });

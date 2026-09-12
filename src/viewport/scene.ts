@@ -101,8 +101,8 @@ export class AdaptiveGrid {
         uMajor: { value: 5 },
         uHalf: { value: 1 },
         uCenter: { value: new THREE.Vector2() },
-        uMinor: { value: new THREE.Color(0x23272e) },
-        uMajorC: { value: new THREE.Color(0x3a4048) },
+        uMinor: { value: new THREE.Color(0x3a414d) },
+        uMajorC: { value: new THREE.Color(0x5c6b7a) },
       },
       vertexShader: /* glsl */ `
         varying vec2 vWorld;
@@ -146,6 +146,23 @@ export class AdaptiveGrid {
     this.mesh.frustumCulled = false; // recentred on the target every frame, always in view
     this.group.add(this.mesh);
     scene.add(this.group);
+    this.applyTheme();
+  }
+
+  /** Re-read the grid's line colours from the theme. Minor lines a legible cool
+   *  grey so the lattice reads at a glance instead of sinking into the ground;
+   *  major lines carry a hint of the theme accent so every fifth line stands out
+   *  and the grid belongs to the app rather than being anonymous chrome. The
+   *  accent is pulled most of the way back down to the major grey, so a major
+   *  line is clearly tinted without glowing over the model. Called at
+   *  construction and again on every theme change (viewport wires it), because
+   *  the viewport cannot re-cascade CSS the way the chrome does. */
+  applyTheme() {
+    const minor = new THREE.Color(themeColor("--grid-minor", 0x3a414d));
+    const major = new THREE.Color(themeColor("--grid-major", 0x5c6b7a));
+    const accent = new THREE.Color(themeColor("--accent", 0x4bf9bc));
+    (this.mat.uniforms.uMinor!.value as THREE.Color).copy(minor);
+    (this.mat.uniforms.uMajorC!.value as THREE.Color).copy(major.lerp(accent, 0.4));
   }
 
   /** worldPerPixel = world mm covered by one screen pixel at the target.
