@@ -19,6 +19,7 @@ import {
   nearestMaterial,
   nodeColors,
   normalizeMaterial,
+  normalizeGraph,
   parseLibrary,
   serializeLibrary,
   slugId,
@@ -98,6 +99,16 @@ describe("normalizeMaterial", () => {
     // a bad kind or a non-positive scale is not a surface
     expect(normalizeMaterial({ name: "X", color: "#888888", surface: { kind: "sparkles", scale: 8, amount: 0.5 } })!.surface).toBeUndefined();
     expect(normalizeMaterial({ name: "X", color: "#888888", surface: { kind: "noise", scale: 0, amount: 0.5 } })!.surface).toBeUndefined();
+  });
+
+  it("carries a shaped surface graph and drops a broken one", () => {
+    const g = { output: "out", nodes: [{ id: "n", type: "noise" }, { id: "out", type: "output", in: { roughness: "n" } }] };
+    expect(normalizeGraph(g)).toEqual(g);
+    // dropped: output names no node, nodes not an array, unknown node type filtered
+    expect(normalizeGraph({ output: "missing", nodes: [{ id: "n", type: "noise" }] })).toBeUndefined();
+    expect(normalizeGraph({ output: "out", nodes: "nope" })).toBeUndefined();
+    const filtered = normalizeGraph({ output: "out", nodes: [{ id: "bad", type: "sparkle" }, { id: "out", type: "output" }] });
+    expect(filtered!.nodes.map((n) => n.id)).toEqual(["out"]);
   });
 });
 

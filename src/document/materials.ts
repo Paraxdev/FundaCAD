@@ -38,6 +38,24 @@ export interface SurfaceSpec {
   colorAmount?: number; // 0..1
 }
 
+/** One node of a material's surface graph, the general form the node editor
+ *  produces. A generator (noise/scratches/brushed/voronoi) reads world space and
+ *  gives a float; `ramp` turns a float into a colour; `mix` blends two floats;
+ *  `output` is the sink with roughness / bump / colour ports. Params are baked
+ *  into the compiled shader (numbers, or "#rrggbb"); `in` wires an input port to
+ *  another node's id. See viewport/proceduralSurface.ts for the compiler. */
+export interface SurfaceNode {
+  id: string;
+  type: "noise" | "scratches" | "brushed" | "voronoi" | "ramp" | "mix" | "output";
+  params?: Record<string, number | string>;
+  in?: Record<string, string>;
+}
+
+export interface SurfaceGraph {
+  nodes: SurfaceNode[];
+  output: string; // id of the output node
+}
+
 export interface MaterialDef {
   id: string;
   name: string;
@@ -66,8 +84,11 @@ export interface MaterialDef {
    *  feature, so it is dropped on the lightweight render like glass is. */
   clearcoat?: number;
   /** Procedural surface detail (noise / scratches / brushed / wear). Absent for
-   *  a plain material. */
+   *  a plain material. The single-generator form the picker writes. */
   surface?: SurfaceSpec;
+  /** The full node graph, what the node editor produces. Takes precedence over
+   *  `surface` when present. Absent for a plain or single-generator material. */
+  surfaceGraph?: SurfaceGraph;
 }
 
 /** The finish an unspecified material has, which is exactly the one every body
@@ -88,6 +109,7 @@ export interface BodyFinish {
   /** Carried straight through when a material has one, so the viewport can build
    *  the procedural shader. Undefined is the common case. */
   surface?: SurfaceSpec;
+  surfaceGraph?: SurfaceGraph;
 }
 
 export function finishOf(m: MaterialDef | undefined): BodyFinish {
@@ -98,6 +120,7 @@ export function finishOf(m: MaterialDef | undefined): BodyFinish {
     emissive: m?.emissive ?? FINISH.emissive,
     clearcoat: m?.clearcoat ?? FINISH.clearcoat,
     ...(m?.surface ? { surface: m.surface } : {}),
+    ...(m?.surfaceGraph ? { surfaceGraph: m.surfaceGraph } : {}),
   };
 }
 
@@ -218,7 +241,36 @@ export function normalizeMaterial(raw: unknown, index = 0): MaterialDef | null {
   if (clearcoat !== undefined && clearcoat !== FINISH.clearcoat) out.clearcoat = clearcoat;
   const surface = normalizeSurface(r["surface"]);
   if (surface) out.surface = surface;
+  const graph = normalizeGraph(r["surfaceGraph"]);
+  if (graph) out.surfaceGraph = graph;
   return out;
+}
+
+const NODE_TYPES: readonly SurfaceNode["type"][] = [
+  "noise", "scratches", "brushed", "voronoi", "ramp", "mix", "output",
+];
+
+/** Narrow an untrusted surface graph, or drop it. Structural only: a node needs
+ *  an id and a known type; the output must name a node. The compiler treats a
+ *  missing wire or param as a default, so a partial-but-shaped graph is kept
+ *  rather than refused. */
+export function normalizeGraph(raw: unknown): SurfaceGraph | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const r = raw as Record<string, unknown>;
+  if (!Array.isArray(r["nodes"]) || typeof r["output"] !== "string") return undefined;
+  const nodes: SurfaceNode[] = [];
+  for (const n of r["nodes"] as unknown[]) {
+    if (!n || typeof n !== "object") continue;
+    const o = n as Record<string, unknown>;
+    const type = NODE_TYPES.find((t) => t === o["type"]);
+    if (typeof o["id"] !== "string" || !type) continue;
+    const node: SurfaceNode = { id: o["id"], type };
+    if (o["params"] && typeof o["params"] === "object") node.params = o["params"] as Record<string, number | string>;
+    if (o["in"] && typeof o["in"] === "object") node.in = o["in"] as Record<string, string>;
+    nodes.push(node);
+  }
+  if (!nodes.some((n) => n.id === r["output"])) return undefined;
+  return { nodes, output: r["output"] };
 }
 
 const SURFACE_KINDS: readonly SurfaceSpec["kind"][] = ["noise", "scratches", "brushed", "voronoi"];
