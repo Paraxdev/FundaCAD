@@ -1258,9 +1258,19 @@ export class Viewport {
     const sorted = [...fids].sort((x, y) => x - y);
     // One slot per DISTINCT appearance, so a body with forty faces of the same
     // brushed steel gets one extra material and forty groups pointing at it.
+    //
+    // Every field that changes how the face is DRAWN belongs here, or a change to
+    // one the key omits leaves `sig` equal, this returns early, and the finish the
+    // material was built from is never refreshed: that is exactly how editing a
+    // face's clearcoat or its procedural surface/graph used to do nothing at all
+    // (the slot was cached against a key that could not see the change). Mirror
+    // sameFinishMap's field set.
     const slotKey = (fid: number) => {
       const f = this.faceFinish[fid]!;
-      return `${f.metalness}|${f.roughness}|${f.opacity}|${f.emissive}|${this.facePaint[fid] ?? ""}`;
+      return [
+        f.metalness, f.roughness, f.opacity, f.emissive, f.clearcoat,
+        surfaceKey(f.surface), graphKey(f.surfaceGraph), this.facePaint[fid] ?? "",
+      ].join("|");
     };
     const sig = `${base.uuid};${sorted.map((f) => `${f}:${slotKey(f)}`).join(",")}`;
     if (held?.sig === sig) return;
