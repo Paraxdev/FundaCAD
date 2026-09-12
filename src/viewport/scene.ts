@@ -73,17 +73,78 @@ const GROUND_COVER = 3;
 const MIN_GROUND_CELLS = 40;
 const MAX_GROUND_CELLS = 600;
 
-/** A ground grid (XY plane) whose spacing snaps to nice 1/2/5×10ⁿ mm values and
+/** A ground grid (XY plane) whose spacing snaps to nice 1/2/5x10^n mm values and
  *  rescales with zoom, recentred on the camera target so it always fills the view
- *  with round-number lines. Two layers: dim minor + brighter major (every 5th). */
+ *  with round-number lines. Dim minor lines and brighter major ones every 5th.
+ *
+ *  Drawn as ONE shader plane, not two GridHelpers. A GL_LINES primitive is a 1px
+ *  line with no anti-aliasing of its own, so it shimmered as it reprojected under
+ *  an orbit, which was the grid's flicker. The shader derives each line's width
+ *  from its own screen-space derivative (fwidth), so a line is a soft one-pixel
+ *  band that holds still while the camera turns, at any zoom or angle. The plane
+ *  fades out toward its own edge so the finite quad shows no border. */
 export class AdaptiveGrid {
   readonly group = new THREE.Group();
   step = 1; // current minor-line spacing in mm
-  private minor: THREE.GridHelper | null = null;
-  private major: THREE.GridHelper | null = null;
+  private mesh: THREE.Mesh;
+  private mat: THREE.ShaderMaterial;
   private key = "";
 
   constructor(scene: THREE.Scene) {
+    this.mat = new THREE.ShaderMaterial({
+      // fwidth is core in the WebGL2 GLSL this renderer targets, no extension.
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      uniforms: {
+        uCell: { value: 1 },
+        uMajor: { value: 5 },
+        uHalf: { value: 1 },
+        uCenter: { value: new THREE.Vector2() },
+        uMinor: { value: new THREE.Color(0x23272e) },
+        uMajorC: { value: new THREE.Color(0x3a4048) },
+      },
+      vertexShader: /* glsl */ `
+        varying vec2 vWorld;
+        void main() {
+          vec4 wp = modelMatrix * vec4(position, 1.0);
+          vWorld = wp.xy;
+          gl_Position = projectionMatrix * viewMatrix * wp;
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        varying vec2 vWorld;
+        uniform float uCell;
+        uniform float uMajor;
+        uniform float uHalf;
+        uniform vec2 uCenter;
+        uniform vec3 uMinor;
+        uniform vec3 uMajorC;
+        // Coverage of the nearest line of the given spacing: 1 on the line,
+        // falling to 0 one pixel off it, measured in the fragment's own units.
+        float gridLine(vec2 p, float cell) {
+          vec2 c = p / cell;
+          vec2 g = abs(fract(c - 0.5) - 0.5) / fwidth(c);
+          return 1.0 - clamp(min(g.x, g.y), 0.0, 1.0);
+        }
+        void main() {
+          float mn = gridLine(vWorld, uCell);
+          float mj = gridLine(vWorld, uMajor);
+          vec3 col = mix(uMinor, uMajorC, mj);
+          float a = max(mn, mj);
+          if (a <= 0.002) discard;
+          // radial fade to the plane edge, so the quad has no hard border
+          float d = length(vWorld - uCenter);
+          a *= 1.0 - smoothstep(uHalf * 0.6, uHalf * 0.98, d);
+          if (a <= 0.002) discard;
+          gl_FragColor = vec4(col, a);
+        }
+      `,
+    });
+    this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.mat);
+    this.mesh.renderOrder = -2;
+    this.mesh.frustumCulled = false; // recentred on the target every frame, always in view
+    this.group.add(this.mesh);
     scene.add(this.group);
   }
 
@@ -98,36 +159,17 @@ export class AdaptiveGrid {
     const cx = Math.round(targetX / majorCell) * majorCell;
     const cy = Math.round(targetY / majorCell) * majorCell;
     const cells = groundGridCells(worldPerPixel, diagonalPx, cell);
+    const size = cell * cells;
     const k = `${cell}:${cx}:${cy}:${cells}`;
     if (k === this.key) return;
     this.key = k;
     this.step = cell;
-    this.rebuild(cell, cells);
     this.group.position.set(cx, cy, gridZ);
-  }
-
-  private rebuild(cell: number, cells: number) {
-    this.dispose();
-    // center-line color == grid color so GridHelper draws no misplaced axes
-    // (the world AxesHelper shows the real origin axes).
-    this.minor = new THREE.GridHelper(cell * cells, cells, 0x23272e, 0x23272e);
-    this.major = new THREE.GridHelper(cell * cells, cells / 5, 0x3a4048, 0x3a4048);
-    for (const g of [this.minor, this.major]) {
-      g.rotateX(Math.PI / 2); // GridHelper is XZ by default → lay flat on XY
-      (g.material as THREE.Material).depthWrite = false;
-      g.renderOrder = -2;
-      this.group.add(g);
-    }
-  }
-
-  private dispose() {
-    for (const g of [this.minor, this.major]) {
-      if (!g) continue;
-      this.group.remove(g);
-      g.geometry.dispose();
-      (g.material as THREE.Material).dispose();
-    }
-    this.minor = this.major = null;
+    this.mesh.scale.set(size, size, 1);
+    this.mat.uniforms.uCell!.value = cell;
+    this.mat.uniforms.uMajor!.value = majorCell;
+    this.mat.uniforms.uHalf!.value = size / 2;
+    (this.mat.uniforms.uCenter!.value as THREE.Vector2).set(cx, cy);
   }
 }
 
