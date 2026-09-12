@@ -1095,9 +1095,10 @@ export class Viewport {
    *  is torn down only when its body stops glowing or leaves, so toggling x-ray
    *  or nudging the slider does not churn the scene's lights. */
   private syncEmitterLights(emitters: Map<string, { color: string | number; glow: number }>) {
+    const cap = this.scene.lowPower ? 2 : MAX_EMITTER_LIGHTS;
     const ranked = [...emitters.entries()]
       .sort((a, b) => b[1].glow - a[1].glow)
-      .slice(0, MAX_EMITTER_LIGHTS);
+      .slice(0, cap);
     const keep = new Set(ranked.map(([id]) => id));
     for (const [id, light] of this.emitterLights) {
       if (keep.has(id)) continue;

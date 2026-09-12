@@ -7,6 +7,7 @@ import { stickyFact } from "../diagnostics/breadcrumbs";
 import { niceStep } from "../ui/units";
 import { glyphWorldScale } from "./gizmoScale";
 import { EDGE_HOVER_COLOR } from "./highlight";
+import { setRenderLowPower } from "./render";
 import { BACKGROUND_COLOR, BLOOM_SETTINGS, renderPrefs } from "../ui/renderPrefs";
 import { buildRoom, disposeRoom } from "./environments";
 import type { Environment } from "../ui/renderPrefs";
@@ -25,6 +26,10 @@ export interface SceneBundle {
    *  the chain is doing, which is the only way to tell that rendering through it
    *  has not quietly given up the multisampling (see PostChain.samples). */
   post: PostChain;
+  /** True on a machine too weak for the expensive effects (see detectLowPower):
+   *  glass has already been dropped to plain alpha and the pixel ratio capped,
+   *  and the viewport reads this to keep the emitter-light count small. */
+  lowPower: boolean;
   /** Re-read ui/renderPrefs and apply it: lighting, what the model reflects,
    *  and what it is drawn against. Called once at construction and again from
    *  every change; the caller asks for a frame afterwards. */
@@ -157,9 +162,33 @@ const KEY_INTENSITY = 2.0;
 const FILL_INTENSITY = 0.6;
 const HEMI_INTENSITY = 0.6;
 
+/** A machine that must not be asked for the expensive effects (transmission, a
+ *  high pixel ratio, a pile of lights): a software rasteriser or the basic
+ *  fallback adapter, or a device reporting very little RAM. Deliberately narrow,
+ *  it only fires on the machines that genuinely can't cope, so a normal
+ *  integrated GPU keeps the full look; the cost of guessing WRONG here is a
+ *  plainer picture, not a crash. */
+function detectLowPower(renderer: THREE.WebGLRenderer): boolean {
+  try {
+    const gl = renderer.getContext();
+    const dbg = gl.getExtension("WEBGL_debug_renderer_info");
+    const name = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)) : "";
+    if (/swiftshader|llvmpipe|software|basic render|microsoft basic/i.test(name)) return true;
+  } catch {
+    /* no debug-info extension: fall through to the RAM check */
+  }
+  const mem = (navigator as { deviceMemory?: number }).deviceMemory;
+  return typeof mem === "number" && mem <= 2;
+}
+
 export function createScene(canvas: HTMLCanvasElement): SceneBundle {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  const lowPower = detectLowPower(renderer);
+  setRenderLowPower(lowPower); // glass falls back to alpha on a weak machine
+  // Cap the pixel ratio HARD on a weak machine: a retina panel over a software
+  // rasteriser is four times the pixels it can draw, the surest way to a dropped
+  // context. 2 elsewhere keeps text and edges crisp without going to native 3x.
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, lowPower ? 1 : 2));
   // Tone mapping, always, and NEUTRAL of the several on offer.
   //
   // Without any, everything above full brightness clips flat: a specular
@@ -216,7 +245,7 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
   const post = new PostChain(renderer, scene);
 
   return {
-    renderer, scene, modelGroup, planes, grid, triad, post,
+    renderer, scene, modelGroup, planes, grid, triad, post, lowPower,
     applyRenderPrefs: () => applyRenderPrefs(renderer, scene, { key, fill, hemi }),
   };
 }

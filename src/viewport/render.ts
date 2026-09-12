@@ -321,7 +321,21 @@ export function buildBodyMesh(
   }
   geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
 
-  const mat = new THREE.MeshPhysicalMaterial({
+  // Physical (so glass can refract) on a capable machine; plain Standard on a
+  // weak one, where glass is alpha anyway, so it never pays for the physical
+  // BRDF it cannot use. The finish code only ever asks for transmission through
+  // applyGlassLook, which no-ops on a non-physical material, so both are safe.
+  const mat = (renderLowPower ? new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    vertexColors: true,
+    metalness: FINISH.metalness,
+    roughness: FINISH.roughness,
+    flatShading: false,
+    polygonOffset: true,
+    polygonOffsetFactor: 1,
+    polygonOffsetUnits: 1,
+    side: THREE.DoubleSide,
+  }) : new THREE.MeshPhysicalMaterial({
     color: 0xffffff,
     vertexColors: true,
     // The one definition of the app's default finish, shared with materials so
@@ -335,7 +349,7 @@ export function buildBodyMesh(
     polygonOffsetFactor: 1,
     polygonOffsetUnits: 1,
     side: THREE.DoubleSide,
-  });
+  }));
 
   const mesh = new THREE.Mesh(geo, mat);
   mesh.name = "model";
@@ -522,6 +536,19 @@ export function bodyMaterials(body: BodyMesh): THREE.MeshStandardMaterial[] {
 // the range of sizes a printed part runs to without a per-body measurement.
 export const GLASS_THICKNESS = 3;
 
+// A weak machine (software rasteriser, tiny RAM) cannot afford transmission: it
+// re-renders the scene into a buffer for every glass draw, which is where a
+// low-end GPU stalls or drops the context. On such a machine glass falls back to
+// plain alpha, still see-through, just not refractive. Set once at renderer
+// creation (scene.detectLowPower); a scene with no glass pays nothing either way.
+let renderLowPower = false;
+export function setRenderLowPower(v: boolean): void {
+  renderLowPower = v;
+}
+export function isRenderLowPower(): boolean {
+  return renderLowPower;
+}
+
 /** Give a translucent, non-metallic finish REAL glass: transmission (refraction)
  *  rather than flat alpha, so what is behind bends and the surface catches the
  *  light a sheet of glass does. Returns true when it took, so the caller leaves
@@ -544,7 +571,7 @@ export function applyGlassLook(
 ): boolean {
   const phys = mat as THREE.MeshPhysicalMaterial;
   if (!(phys as { isMeshPhysicalMaterial?: boolean }).isMeshPhysicalMaterial) return false;
-  const glassy = !ghost && opacity < 1 && metalness < 0.5;
+  const glassy = !ghost && !renderLowPower && opacity < 1 && metalness < 0.5;
   const was = phys.transmission > 0;
   if (glassy) {
     // A clearer material (lower opacity) transmits more; the +0.25 keeps even a
