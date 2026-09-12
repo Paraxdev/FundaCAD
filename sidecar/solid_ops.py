@@ -183,11 +183,17 @@ def _draft(shape, faces, angle_deg, axis):
 OFFSETTABLE_CURVED = (GeomType.CYLINDER, GeomType.CONE, GeomType.SPHERE, GeomType.TORUS)
 
 
-def _press_pull(part, face, d, clamp=True):
+def _press_pull(part, face, d, clamp=True, taper=0.0):
     """Push/pull a single solid face by signed distance `d` (mm): +d grows the body
     (boss), -d cuts inward (pocket). `clamp=False` skips the inward-push safety
     cap: the up-to-surface path computes an EXACT distance to a user-chosen
     target, and capping at 90% of local thickness silently stopped short.
+
+    `taper` (degrees) leans the pushed walls as they travel, so a boss draws like
+    a moulded one and a pocket gets angled walls, positive narrows the far end.
+    It rides the PLANAR prism path only, the one operation that is a straight
+    extrude and can carry a taper; a curved face is a surface resize with no wall
+    to lean, and there taper is ignored.
 
     PLANAR faces extrude the face region into a prism and boolean it (union for +d,
     subtract for -d). This is far more robust than a local surface offset
@@ -233,7 +239,7 @@ def _press_pull(part, face, d, clamp=True):
         dd = _clamp_planar(part, face, d) if clamp else d  # cap an inward push so it can't go through
         if abs(dd) < 1e-9:
             return part
-        prism = extrude(face, dd)  # +dd outward (boss), -dd inward (pocket)
+        prism = extrude(face, dd, taper=taper) if taper else extrude(face, dd)  # +dd boss, -dd pocket
         return (part + prism) if dd > 0 else (part - prism)
     # Curved. The radius cap applies only where a radius is what runs out: pushing
     # a cylinder or a cone inward past its own axis collapses it, and OCCT does

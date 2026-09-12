@@ -63,17 +63,21 @@ export function draftLever(
 
 /** The angle, in degrees, that a drag of `delta` mm along the face normal means
  *  on a face grabbed `lever` mm above the neutral plane. 0 when there is no
- *  lever to swing about. */
-export function draftAngle(delta: number, lever: number): number {
+ *  lever to swing about.
+ *
+ *  `maxDeg` caps it. Draft's own ceiling (its default) is where OCCT starts
+ *  handing back self-intersecting walls; an extrude taper has no neutral line to
+ *  outswing and reuses this same math with a higher cap of its own. */
+export function draftAngle(delta: number, lever: number, maxDeg: number = MAX_DRAFT_DEG): number {
   if (!Number.isFinite(delta) || !(lever > MIN_LEVER)) return 0;
   const deg = (Math.atan2(delta, lever) * 180) / Math.PI;
-  return Math.max(-MAX_DRAFT_DEG, Math.min(MAX_DRAFT_DEG, deg));
+  return Math.max(-maxDeg, Math.min(maxDeg, deg));
 }
 
 /** The inverse: how far the grab point moves for a typed angle. Lets the heads-up
- *  field and the drag drive the same number. */
-export function draftDelta(angleDeg: number, lever: number): number {
+ *  field and the drag drive the same number. `maxDeg` as in draftAngle. */
+export function draftDelta(angleDeg: number, lever: number, maxDeg: number = MAX_DRAFT_DEG): number {
   if (!Number.isFinite(angleDeg) || !(lever > MIN_LEVER)) return 0;
-  const clamped = Math.max(-MAX_DRAFT_DEG, Math.min(MAX_DRAFT_DEG, angleDeg));
+  const clamped = Math.max(-maxDeg, Math.min(maxDeg, angleDeg));
   return Math.tan((clamped * Math.PI) / 180) * lever;
 }

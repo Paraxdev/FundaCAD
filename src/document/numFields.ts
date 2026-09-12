@@ -21,13 +21,13 @@ export type FieldKind = "length" | "angle" | "count";
  *
  *  `texture` used to be the last row of this table. */
 export const FEATURE_NUM_FIELDS: Partial<Record<Feature["type"], [string, string, FieldKind][]>> = {
-  extrude: [["distance", "Distance", "length"]],
+  extrude: [["distance", "Distance", "length"], ["taper", "Taper", "angle"]],
   // profile is a dimensionless ratio in (-1, 1), "count" is this file's kind for
   // real-valued unitless fields (see scale.factor, texture.sharpness), not an
   // integer claim; INTEGER_FIELDS below is what marks those.
   fillet: [["radius", "Radius", "length"], ["profile", "Profile", "count"]],
   chamfer: [["distance", "Length", "length"]],
-  "press-pull": [["distance", "Distance", "length"]],
+  "press-pull": [["distance", "Distance", "length"], ["taper", "Taper", "angle"]],
   // Pitch is how far one full turn climbs, not how far the whole revolve does,
   // so a thread's pitch is typed straight off its spec and stays right however
   // many turns are wound on. Empty means no climb: the flat revolve.
@@ -47,6 +47,7 @@ export const FEATURE_NUM_FIELDS: Partial<Record<Feature["type"], [string, string
   cleanUp: [["tolerance", "Tolerance", "length"]],
   scale: [["factor", "Factor", "count"], ["sx", "X factor", "count"], ["sy", "Y factor", "count"], ["sz", "Z factor", "count"]],
   move: [["dx", "Move X", "length"], ["dy", "Move Y", "length"], ["dz", "Move Z", "length"], ["rx", "Rotate X", "angle"], ["ry", "Rotate Y", "angle"], ["rz", "Rotate Z", "angle"]],
+  duplicate: [["dx", "Move X", "length"], ["dy", "Move Y", "length"], ["dz", "Move Z", "length"], ["rx", "Rotate X", "angle"], ["ry", "Rotate Y", "angle"], ["rz", "Rotate Z", "angle"]],
 };
 
 /** Whether selecting this feature type actually opens an editor (numeric fields

@@ -56,6 +56,8 @@ const DRAWN_BY_APP: Record<FeatureType, "app"> = {
   cleanUp: "app",
   scale: "app",
   move: "app",
+  duplicate: "app",
+  joint: "app",
   removeBody: "app",
 };
 

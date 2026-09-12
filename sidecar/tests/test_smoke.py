@@ -651,6 +651,86 @@ def test_modify_tools():
     print(f"  modify-tools OK: shell {shell_vol:.0f}, rect×3, circular×4, draft {p.volume:.0f}")
 
 
+def test_extrude_taper():
+    """A tapered extrude leans its walls in (or out) as it climbs, so one gesture
+    makes an angled boss instead of a straight prism. The control is the same
+    extrude with no taper: the far face keeps the profile's size, and the JSON is
+    the one this build always wrote."""
+    def top_area(part):
+        face = max(part.faces(), key=lambda fc: fc.center().Z)
+        return face.area
+
+    def build(**extra):
+        return rebuild({"parameters": {}, "features": [
+            {"id": "s", "type": "sketch", "plane": "XY",
+             "entities": [{"type": "rectangle", "width": 20, "height": 20}]},
+            {"id": "e", "type": "extrude", "sketch": "s", "distance": 10,
+             "operation": "new", **extra}]})
+
+    # control: no taper -> far face is the full 20×20 = 400, prism vol 4000
+    p, e, _ = build()
+    assert not e, e
+    assert abs(p.volume - 4000) < 1 and abs(top_area(p) - 400) < 1, (
+        f"straight extrude: vol {p.volume:.0f}, top {top_area(p):.0f}")
+    straight_vol = p.volume
+
+    # positive taper narrows the far face and drops the volume below the prism
+    p, e, _ = build(taper=12)
+    assert not e, e
+    assert p.volume < straight_vol and top_area(p) < 399, (
+        f"taper 12 should narrow the top: vol {p.volume:.0f}, top {top_area(p):.0f}")
+
+    # negative taper widens it and adds volume: the two signs are distinct
+    p, e, _ = build(taper=-12)
+    assert not e, e
+    assert p.volume > straight_vol and top_area(p) > 401, (
+        f"taper -12 should widen the top: vol {p.volume:.0f}, top {top_area(p):.0f}")
+
+    # an explicit 0 is the straight path, byte for byte the same solid
+    p, e, _ = build(taper=0)
+    assert not e and abs(p.volume - straight_vol) < 1, f"taper 0 == straight, got {p.volume:.0f}"
+
+    # past vertical the wall folds through itself: a named refusal, not a kernel crash
+    _p, e, _ = build(taper=90)
+    assert e and any("taper" in x.get("message", "").lower() for x in e), (
+        f"taper 90 should be refused by name, got {e!r}")
+    print(f"  extrude taper OK: straight {straight_vol:.0f}, +12 narrows, -12 widens")
+
+
+def test_press_pull_taper():
+    """A tapered press/pull leans the pushed wall as it travels, so a boss draws
+    like a moulded one. Control: the same push with no taper keeps the face's full
+    size, and an up-to push ignores taper (its walls must land on the target)."""
+    def top_area(part):
+        return max(part.faces(), key=lambda fc: fc.center().Z).area
+
+    _s, base = _box(1, 20, 20, 10)  # 20×20×10, top at z=10, area 400
+    top = {"kind": "face", "by": "normal", "dir": [0, 0, 1]}
+
+    def build(**extra):
+        return rebuild({"parameters": {}, "features": base + [
+            {"id": "pp", "type": "press-pull", "face": top, "distance": 6,
+             "operation": "join", **extra}]})
+
+    # control: straight boss, its top stays the full 20×20 = 400
+    p, e, _ = build()
+    assert not e, e
+    assert abs(top_area(p) - 400) < 1, f"straight boss top {top_area(p):.0f}"
+    straight_vol = p.volume
+
+    # tapered boss: the top narrows and the boss holds less than the straight prism
+    p, e, _ = build(taper=15)
+    assert not e, e
+    assert top_area(p) < 399 and p.volume < straight_vol, (
+        f"taper 15 should narrow the boss: top {top_area(p):.0f}, vol {p.volume:.0f}")
+
+    # past vertical is a named refusal, not a kernel crash
+    _p, e, _ = build(taper=90)
+    assert e and any("taper" in x.get("message", "").lower() for x in e), (
+        f"taper 90 should be refused by name, got {e!r}")
+    print(f"  press/pull taper OK: straight top 400, tapered narrows")
+
+
 def test_offset_face_and_thicken():
     """Offset Face moves selected faces along their normals (single and multi-face,
     the latter exercising resolve_faces' list branch); Thicken gives faces a wall.
@@ -1011,6 +1091,37 @@ def test_remove_body():
     assert len(bodies) == 1, f"removeBody should leave 1 body, got {len(bodies)}"
     assert bodies[0]["id"] == "body1", f"wrong body kept: {bodies[0]['id']}"
     print(f"  remove-body OK: 2 bodies → removeBody body2 → 1 body")
+
+
+def test_duplicate_body():
+    """duplicate copies a body and offsets the copy, leaving the original put.
+
+    The control is the ORIGINAL: a duplicate that transformed the source in
+    place (a shared shape reference, not a real copy) would move body1 too, so
+    the test pins body1's volume AND its Z span, then checks body2 is the same
+    size shifted by the offset. Without the handler a `duplicate` feature is an
+    unknown type, so the body count never reaches 2 and this fails."""
+    _s, base = _box(1, 20, 20, 10)  # 20×20×10 box = 4000 mm³, z=0..10
+    doc = {"parameters": {}, "features": base + [
+        {"id": "dup", "type": "duplicate", "dx": 0, "dy": 0, "dz": 30,
+         "rx": 0, "ry": 0, "rz": 0}]}
+    part, err, bodies = rebuild(doc)
+    assert not err, err
+    assert len(bodies) == 2, f"duplicate should take 1 body to 2, got {len(bodies)}"
+
+    orig = next(b for b in bodies if b["id"] == "body1")
+    copy_b = next(b for b in bodies if b["id"] == "body2")
+    ob, cb = bbox(orig["shape"]), bbox(copy_b["shape"])
+
+    # the original is untouched: same volume, still at its built Z (0..10)
+    assert abs(orig["shape"].volume - 4000) < 1, orig["shape"].volume
+    assert abs(ob["min"][2] - 0) < 0.5 and abs(ob["max"][2] - 10) < 0.5, ob
+
+    # the copy is the same solid, shifted +30 in Z (30..40)
+    assert abs(copy_b["shape"].volume - 4000) < 1, copy_b["shape"].volume
+    assert abs(cb["min"][2] - 30) < 0.5 and abs(cb["max"][2] - 40) < 0.5, cb
+    print(f"  duplicate OK: 1 body → 2; original at z {ob['min'][2]:.0f}..{ob['max'][2]:.0f}, "
+          f"copy at z {cb['min'][2]:.0f}..{cb['max'][2]:.0f}")
 
 
 def test_sketch_crossing_split():
@@ -1801,6 +1912,8 @@ if __name__ == "__main__":
     test_extrude_noop_guards()
     test_primitives()
     test_modify_tools()
+    test_extrude_taper()
+    test_press_pull_taper()
     test_offset_face_and_thicken()
     test_face_selector_on_concentric_cylinders()
     test_simplify_mesh()
@@ -1814,6 +1927,7 @@ if __name__ == "__main__":
     test_multibody_import_and_guards()
     test_interference()
     test_remove_body()
+    test_duplicate_body()
     test_pattern_linear_and_circular()
     test_pattern_names_its_bodies()
     test_pattern_count_guards()

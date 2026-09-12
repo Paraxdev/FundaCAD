@@ -227,6 +227,7 @@ export function createContextMenus(deps: ContextMenusDeps) {
         }),
       ...bodyExtraMenu(bodyId),
       { separator: true, label: "" },
+      { label: "Duplicate body", onClick: unlessBusy(() => store.duplicateBody(bodyId)) },
       { label: "Remove body", danger: true, onClick: unlessBusy(() => store.removeBody(bodyId)) },
     ]);
   }

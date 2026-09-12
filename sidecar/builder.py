@@ -32,6 +32,7 @@ API notes (verified against build123d 0.11.1, dual-compatible back to 0.10.x):
     tolerates both AttributeError (0.10) and AssertionError (0.11).
 """
 
+import copy
 import os
 import sys
 import time
@@ -50,6 +51,7 @@ from build123d import (
     Pos,
     Rot,
     Plane,
+    Location,
     Axis,
     Vector,
     Edge,
@@ -71,7 +73,7 @@ from build123d import (
 
 import face_plane
 import geom_select
-from errors import BAD_REQUEST
+from errors import GeomError, BAD_REQUEST, REFERENCE_NOT_FOUND
 from geom_select import (
     resolve_edges,
     resolve_faces,
@@ -534,7 +536,23 @@ def _handle_extrude(f, ctx):
     target = _region_target(pts, entry, ctx)
     if target is None:
         target = sk  # nothing selected: the whole sketch
-    solid = extrude(target, amount=ctx.val(f["distance"]), both=both)
+    # `taper` leans every wall in by this many degrees as it climbs, so one
+    # extrude gesture makes an angled boss, a countersink, or a draw-ready wall
+    # instead of a straight prism. Positive narrows toward the far end (the way a
+    # part pulls out of a mould), negative widens it (an undercut). Absent or 0
+    # keeps the plain straight path, so an ordinary extrude's geometry and JSON
+    # are byte-identical to what this build made before the field existed.
+    taper = ctx.val(f["taper"]) if f.get("taper") is not None else 0.0
+    if taper and not (-89 < taper < 89):
+        # At or past vertical a wall folds through itself; OCCT hands back a
+        # self-intersecting solid. Name it rather than let the kernel raise a
+        # bare Standard_ConstructionError against the wrong feature.
+        raise ValueError(f"Extrude: taper must be between -89 and 89 degrees (got {taper:g})")
+    solid = (
+        extrude(target, amount=ctx.val(f["distance"]), both=both, taper=taper)
+        if taper
+        else extrude(target, amount=ctx.val(f["distance"]), both=both)
+    )
     # Captured-visibility semantics: an extrude that carries
     # `hiddenBodies` uses THAT set (participants decided at feature
     # creation, MCAD-style, later eye toggles are pure display).
@@ -617,6 +635,14 @@ def _handle_press_pull(f, ctx):
             raise ValueError("Press/Pull: the 'up to' target surface wasn't found")
         tgt_pt, tgt_n = tf[0].center(), tf[0].normal_at()
     dist = ctx.val(f["distance"])
+    # `taper` leans the pushed walls as they travel (a moulded boss, an angled
+    # pocket), positive narrows the far end. Absent or 0 keeps the straight push,
+    # so an ordinary press/pull is byte-identical to before. It rides a fixed
+    # distance only: an up-to push already lands its walls on a chosen surface,
+    # and leaning them would miss it.
+    taper = ctx.val(f["taper"]) if f.get("taper") is not None else 0.0
+    if taper and not (-89 < taper < 89):
+        raise ValueError(f"Press/Pull: taper must be between -89 and 89 degrees (got {taper:g})")
     for sel in sels:
         found = resolve_faces(act["shape"], sel, diag=ctx.diagnostics, feature_id=f.get("id"))
         if not found:
@@ -625,7 +651,7 @@ def _handle_press_pull(f, ctx):
         d = _distance_to_target(src, tgt_pt, tgt_n) if up else dist
         # up-to distances are exact by construction, the inward
         # clamp would silently stop short of the chosen target
-        act["shape"] = _press_pull(act["shape"], src, d, clamp=(not up))
+        act["shape"] = _press_pull(act["shape"], src, d, clamp=(not up), taper=(0.0 if up else taper))
 
 
 def _handle_delete_face(f, ctx):
@@ -1525,6 +1551,147 @@ def _handle_move(f, ctx):
         tgt["shape"] = sh
 
 
+def _handle_duplicate(f, ctx):
+    """Copy one or more bodies and place the copies with an optional transform.
+
+    Like move, but the originals stay put and each copy becomes a new body.
+    A ZERO transform still yields a genuinely independent body: the shape is
+    deep-copied first (build123d 0.11.1 has no Shape.copy, copy.deepcopy clones
+    the underlying OCCT topology), so a later feature that edits the original,
+    or the copy, cannot reach through a shared reference into the other."""
+    rx, ry, rz = ctx.val(f.get("rx", 0)), ctx.val(f.get("ry", 0)), ctx.val(f.get("rz", 0))
+    dx, dy, dz = ctx.val(f.get("dx", 0)), ctx.val(f.get("dy", 0)), ctx.val(f.get("dz", 0))
+    ids = f.get("bodies")
+    targets = [ctx.find_body(b) for b in ids] if ids else [ctx.require_active("Duplicate")]
+    for tgt in targets:
+        if tgt is None:
+            # stale id (upstream body removal/split renumbered it),
+            # a legitimate no-op, not a hard error
+            _skip_feature(ctx.diagnostics, f, "duplicate", "target body already consumed or missing")
+            continue
+        sh = copy.deepcopy(tgt["shape"])
+        # A disjoint body is a build123d ShapeList (no single `.wrapped`);
+        # Rot/Pos (Location.__mul__) only accept ONE Shape, so normalize to
+        # a Compound first, else "other must be a list of Locations".
+        if sh is not None and _wrapped_or_none(sh) is None:
+            sh = Compound(list(sh))
+        if rx or ry or rz:
+            sh = Rot(rx, ry, rz) * sh
+        if dx or dy or dz:
+            sh = Pos(dx, dy, dz) * sh
+        ctx.new_body(sh, f"{tgt['name']} copy")
+
+
+def _joint_body_shape(ctx, bid):
+    """The single OCCT shape of a body a joint connector names, or None. A
+    disjoint body is a ShapeList with no single `.wrapped`, so normalize to a
+    Compound first, the way _handle_move does before it transforms one."""
+    b = ctx.find_body(bid)
+    if b is None:
+        return None
+    sh = b.get("shape")
+    if sh is None:
+        return None
+    return sh if _wrapped_or_none(sh) is not None else Compound(list(sh))
+
+
+def _joint_frame(spec, ctx, fid):
+    """Resolve a mate connector to a Plane: an origin plus a z axis (the mating
+    direction) and an x axis (the rotational reference). A connector is one of:
+      - explicit  {"origin":[x,y,z], "zdir":[...], "xdir":[...]}   world frame
+      - a datum   {"datum": <datumId>}                            follows the datum
+      - a face    {"body": <id>, "face": <selector>}   centre + outward normal
+      - an edge   {"body": <id>, "edge": <selector>}   midpoint + direction
+    A connector on geometry is a REFERENCE, re-resolved every rebuild, so the
+    joint follows the parts as they change (the whole point of a mate over a
+    baked Move). Returns None when a geometry reference no longer resolves, the
+    caller then leaves the moving body where it is rather than failing the build.
+    """
+    def plane(o, z, x=None):
+        z = Vector(*z)
+        if z.length < 1e-9:
+            raise GeomError("joint: a connector's axis is zero length", BAD_REQUEST)
+        if x is not None:
+            xv = Vector(*x)
+            if xv.length > 1e-9:
+                return Plane(origin=tuple(o), x_dir=tuple(xv.normalized()),
+                             z_dir=tuple(z.normalized()))
+        return Plane(origin=tuple(o), z_dir=tuple(z.normalized()))
+
+    if "origin" in spec:
+        return plane(spec["origin"], spec.get("zdir", [0, 0, 1]), spec.get("xdir"))
+
+    if spec.get("datum") is not None:
+        d = ctx.datums.get(spec["datum"])
+        if not d:
+            return None  # the datum was removed or has not built; leave the body put
+        return plane(d["origin"], d.get("normal") or d.get("dir") or [0, 0, 1], d.get("xdir"))
+
+    shape = _joint_body_shape(ctx, spec.get("body"))
+    if shape is None:
+        return None
+    if spec.get("face") is not None:
+        faces = resolve_faces(shape, spec["face"], ctx.diagnostics, fid)
+        if not faces:
+            return None
+        fc = faces[0]
+        c, n = fc.center(), _face_normal(fc)
+        return plane((c.X, c.Y, c.Z), (n.X, n.Y, n.Z))
+    if spec.get("edge") is not None:
+        edges = resolve_edges(shape, spec["edge"], ctx.diagnostics, fid)
+        if not edges:
+            return None
+        e = edges[0]
+        m, dr = _edge_mid(e), _edge_dir(e)
+        return plane((m.X, m.Y, m.Z), (dr.X, dr.Y, dr.Z))
+
+    raise GeomError(
+        "joint: a connector needs one of origin, datum, face or edge", BAD_REQUEST)
+
+
+def _handle_joint(f, ctx):
+    """Position one body relative to another by aligning a mate connector on each.
+
+    The MOVING body is rigidly re-placed so its connector meets the fixed
+    connector; nothing else about it changes and no other body is touched. The
+    two connectors are brought together facing each other (their z axes opposed,
+    so two outward face normals meet flush), unless `flush` asks for the axes to
+    point the same way. `offset` then slides the moving body along the mate axis
+    and `angle` spins it about that axis, which is what a slider and a revolute
+    joint drive respectively; `mode` records which of those the joint is so the
+    UI knows which handle to offer, the placement math is the same for all three.
+    """
+    mv = ctx.find_body(f.get("moving"))
+    if mv is None or mv.get("shape") is None:
+        _skip_feature(ctx.diagnostics, f, "joint",
+                      "the body to position is missing or was consumed")
+        return
+
+    f_move = _joint_frame(f["mate"], ctx, f.get("id"))
+    f_fix = _joint_frame(f["to"], ctx, f.get("id"))
+    if f_move is None or f_fix is None:
+        _skip_feature(ctx.diagnostics, f, "joint",
+                      "a mate reference no longer resolves, the body was left in place")
+        return
+
+    offset = ctx.val(f.get("offset", 0))
+    angle = ctx.val(f.get("angle", 0))
+    # The adjustment lives in the FIXED connector's local frame: translate along
+    # its z by offset, spin about its z by angle, and (unless flush) turn the
+    # moving connector to face it by a half turn about x. Composed onto the fixed
+    # frame and stripped of the moving frame, this is the world placement to
+    # apply to the moving body.
+    adj = Location((0, 0, offset), (0, 0, angle))
+    if not f.get("flush"):
+        adj = adj * Location((0, 0, 0), (180, 0, 0))
+    move_loc = (f_fix.location * adj) * f_move.location.inverse()
+
+    sh = mv["shape"]
+    if _wrapped_or_none(sh) is None:
+        sh = Compound(list(sh))
+    mv["shape"] = move_loc * sh
+
+
 def _handle_split(f, ctx):
     _do_split(f, ctx.bodies, ctx.find_body, ctx.active, ctx.new_body, ctx.datums)
 
@@ -1587,6 +1754,8 @@ _FEATURE_HANDLERS = {
     "simplifyMesh": _handle_simplify_mesh,
     "scale": _handle_scale,
     "move": _handle_move,
+    "duplicate": _handle_duplicate,
+    "joint": _handle_joint,
     "split": _handle_split,
     "boolean": _handle_boolean,
     "removeBody": _handle_remove_body,

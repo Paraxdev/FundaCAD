@@ -396,6 +396,26 @@ export type PlaneDef = {
 };
 export type PlaneSpec = Plane3 | PlaneDef;
 
+/** Which degree of freedom a joint leaves free: `rigid` fixes the parts
+ *  together, `revolute` lets `angle` turn about the mate axis, `slider` lets
+ *  `offset` travel along it. The sidecar applies whatever offset/angle the
+ *  feature carries regardless; the mode tells the UI which handle to offer. */
+export type JointMode = "rigid" | "revolute" | "slider";
+
+/** One side of a joint: a coordinate frame (origin + z axis + optional x axis)
+ *  named on a body's geometry, on a datum, or given outright. A geometry
+ *  connector is a re-resolved reference, so the joint follows the part. `body`
+ *  is the body the `face`/`edge` selector resolves against. */
+export interface MateConnector {
+  body?: string;
+  face?: Selector;
+  edge?: Selector;
+  datum?: string;
+  origin?: Vec3;
+  zdir?: Vec3;
+  xdir?: Vec3;
+}
+
 export type CoreFeature =
   // `planeId` (optional) is a by-id reference to a datumPlane feature, and takes
   // precedence over `plane` on rebuild. It follows the `split` precedent rather
@@ -447,6 +467,12 @@ export type CoreFeature =
       // on the plane is the same solid whichever way the arrow pointed. Absent
       // means false, so every extrude saved before this rebuilds unchanged.
       symmetric?: boolean;
+      // Lean every wall in by this many degrees as it climbs, so one gesture
+      // makes an angled boss, a countersink, or a draw-ready wall instead of a
+      // straight prism. Positive narrows the far face (the way a part pulls out
+      // of a mould), negative widens it (an undercut). Absent or 0 is the plain
+      // straight extrude, so a document made before this rebuilds byte-for-byte.
+      taper?: Num;
     }
   // `profile` shapes the blend's SECTION without moving where it meets the
   // supporting faces: 0 (or absent) is the circular fillet, -1 flattens it to a
@@ -461,7 +487,10 @@ export type CoreFeature =
   // offset the surface (e.g. resize a hole). With several faces, each is pushed by
   // the same `distance` along its own normal. `upTo` (a target face selector), when
   // set, extrudes each face up to that surface instead of by `distance`.
-  | { id: string; type: "press-pull"; face: Selector | Selector[]; distance: Num; operation: "join" | "cut"; body?: string; upTo?: Selector }
+  // `taper` (degrees) leans a PLANAR push's walls as they travel (a moulded boss,
+  // an angled pocket); positive narrows the far end. Absent or 0 is a straight
+  // push; ignored on curved faces and on an `upTo` push. Byte-identical when absent.
+  | { id: string; type: "press-pull"; face: Selector | Selector[]; distance: Num; operation: "join" | "cut"; body?: string; upTo?: Selector; taper?: Num }
   | { id: string; type: "deleteFace"; face: Selector | Selector[]; body?: string }
   | { id: string; type: "mirror"; plane: Plane3 }
   // `operation` is threaded through the same New/Join/Cut/Intersect boolean as
@@ -637,6 +666,20 @@ export type CoreFeature =
   // Move the active body, or the bodies listed in `bodies` (multi-select), :
   // translate (dx,dy,dz mm) + rotate (rx,ry,rz degrees, about origin).
   | { id: string; type: "move"; dx: Num; dy: Num; dz: Num; rx: Num; ry: Num; rz: Num; bodies?: string[] }
+  // Copy the active body, or the bodies listed in `bodies` (multi-select), and
+  // place the copies with the same optional rigid transform as move (translate
+  // dx,dy,dz mm + rotate rx,ry,rz degrees about origin). The originals stay put;
+  // each copy becomes a new body. A zero transform still makes an independent copy.
+  | { id: string; type: "duplicate"; dx: Num; dy: Num; dz: Num; rx: Num; ry: Num; rz: Num; bodies?: string[] }
+  // Position `moving` against another body by aligning a mate connector on each
+  // (origin + axis). The connectors are references, re-resolved every rebuild,
+  // so the assembly follows the parts. The mating faces meet flush (axes
+  // opposed) unless `flush`; `offset` then slides `moving` along the mate axis
+  // and `angle` spins it about that axis, the placements a slider and a revolute
+  // joint drive. `mode` records which degree of freedom the joint offers; the
+  // sidecar placement is the same for all three (see sidecar/builder _handle_joint).
+  | { id: string; type: "joint"; moving: string; mate: MateConnector; to: MateConnector;
+      mode?: JointMode; flush?: boolean; offset?: Num; angle?: Num }
   // Repair boolean rot on a body, or all bodies when `body` is omitted: unify
   // glued/overlapping solids left by joins of ragged imports, then collapse
   // facet debris (slivers, near-coplanar staircases). Parametric because
