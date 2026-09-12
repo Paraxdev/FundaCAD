@@ -48,14 +48,18 @@ MAX_IMPORT_FACES = 2_000        # after merge: more faces than this = organic/cu
                                 # parts, and charging a two-object project file the SUM
                                 # of its bodies refused files whose bodies each passed
                                 # (1,850 + 1,737 against a 2,000 limit).
-# The whole-file backstop that per-body limiting needs. This is a VIEWPORT COST
-# guard, not an editability judgement: MAX_IMPORT_FACES asks "is this one body a
-# clean CAD part", this one asks "can we draw all of it at once". Without it a
-# genuinely organic file split into 50 sub-2,000-face bodies walks straight in at
-# ~100k faces. 20,000 is a FIRST GUESS, not a measured ceiling, nobody has
-# measured where the viewport actually starts to hurt, so treat it as a number to
-# revisit with a real measurement, not as a calibrated one.
-MAX_IMPORT_TOTAL_FACES = 20_000
+# The whole-file backstop. This is a VIEWPORT COST guard, not an editability
+# judgement: MAX_IMPORT_FACES asks "is this one body a clean CAD part", this one
+# asks "can we draw all of it at once". It is now the ONLY hard limit on a mesh
+# that stays faceted: an organic/scanned/decorative mesh is no longer refused for
+# failing to reduce (people need such a mesh in the scene as a REFERENCE to model
+# against, see _sew_mesh_file), it is imported as a faceted reference body up to
+# this ceiling. Raised from a very conservative 20,000: three.js draws hundreds of
+# thousands of triangles without trouble, and the real cost is the sidecar
+# re-tessellating the body each rebuild, which is tolerable for a reference the
+# user deletes once they are done comparing. Still a number to revisit with a real
+# measurement, not a calibrated one.
+MAX_IMPORT_TOTAL_FACES = 60_000
 # Untrusted-input guards (an import path or embedded BREP comes from a .funda doc
 # the user opened, which may be hostile). Caps bound the worst case BEFORE a heavy
 # read/parse, so a crafted file can't OOM the worker or aim a parser fuzz at OCCT.
@@ -461,30 +465,23 @@ def _sew_mesh_file(path):
     # import is genuinely editable, crisp faces, crisp edges (best-effort;
     # returns the input unchanged on any doubt)
     shape = _refacet_clean(shape)
-    # Judged PER BODY. "Did this reduce to something editable" is a question
-    # about ONE part, and a project file from Bambu, Orca or PrusaSlicer is
-    # inherently several parts, so summing them charged a multi-object plate N
-    # times the budget of the same parts imported one at a time.
+    # A mesh whose bodies each reduce to few faces is a clean, editable CAD part.
+    # A mesh that stays faceted (organic, scanned, or a decorative model grabbed
+    # off the internet) is NOT cleanly editable, but refusing it outright was the
+    # wrong call: people legitimately need such a mesh in the scene as a REFERENCE
+    # to model against, or to split their own part off. So a faceted mesh is now
+    # IMPORTED (as a reference body the user can ghost or recolour), not rejected.
+    # MAX_IMPORT_FACES still classifies "clean part vs faceted reference" for the
+    # caller, it just no longer refuses; the only hard stop is the viewport budget.
     bodies = _explode_solids(shape) or [shape]
     per_body = [len(b.faces()) for b in bodies]
-    nf = max(per_body)
-    if nf > MAX_IMPORT_FACES:
-        # Name the offending body: with twelve objects in the file, a bare
-        # number says nothing about WHICH one is the organic mesh.
-        which = (f"body {per_body.index(nf) + 1} of {len(per_body)} has "
-                 f"{nf:,} faces" if len(per_body) > 1 else f"{nf:,} faces")
-        raise ValueError(
-            f"This mesh didn't reduce to a clean editable model ({which}; a "
-            f"curved/organic surface stays faceted). FundaCAD edits prismatic "
-            f"CAD models; import a STEP or a flat-faced part."
-        )
     total = sum(per_body)
     if total > MAX_IMPORT_TOTAL_FACES:
         raise ValueError(
-            f"This file has too much detail to open ({total:,} faces across "
-            f"{len(per_body):,} bodies, the limit is {MAX_IMPORT_TOTAL_FACES:,}). "
-            f"Each part is simple enough on its own, so import fewer objects at "
-            f"a time."
+            f"This mesh is too dense to import ({total:,} faces across "
+            f"{len(per_body):,} {'body' if len(per_body) == 1 else 'bodies'}, the "
+            f"limit is {MAX_IMPORT_TOTAL_FACES:,}). Decimate or retopologise it "
+            f"first (fewer triangles), then import."
         )
     return shape
 

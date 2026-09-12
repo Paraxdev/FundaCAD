@@ -1,16 +1,13 @@
 """What an imported mesh file is allowed to be.
 
-Two gates, and they ask different questions.
+A faceted mesh (organic, scanned, or decorative) no longer gets REFUSED for
+failing to reduce to a clean CAD part: people need such a mesh in the scene as a
+reference to model against, so it imports as a reference body. MAX_IMPORT_FACES
+still classifies "clean part vs faceted reference" but no longer refuses.
 
-MAX_IMPORT_FACES asks "is this ONE body a clean CAD part". It was compared
-against the sum over every body in the file, which is the wrong denominator for
-a project file: a two-object plate whose bodies are 1,850 and 1,737 faces was
-refused at their total of 3,587, while either part imported on its own walked
-in. Per body now, and the refusal names the body.
-
-MAX_IMPORT_TOTAL_FACES is the backstop that per-body limiting needs, and it asks
-a different question: "can the viewport draw all of this at once". Without it an
-organic file split into fifty sub-2,000-face bodies would stroll in at ~100k.
+MAX_IMPORT_TOTAL_FACES is the one hard limit left, and it asks a different
+question: "can the viewport draw all of this at once". Without it an organic file
+split into fifty bodies would stroll in unbounded.
 
 The 3MF counter is the third thing here, and it was blind in a way nothing else
 would have caught: every counter read the FIRST .model part, and in the
@@ -94,41 +91,38 @@ def test_a_3mf_is_counted_over_every_part():
     print(PASS, "a 3MF counts every .model part, not just the first")
 
 
-def test_the_face_limit_is_per_body_with_a_whole_file_backstop():
-    """Two clean six-faced boxes in one file. Squeeze MAX_IMPORT_FACES to 8: the
-    sum is 12 and would be refused, the largest single body is 6 and is not.
+def test_a_faceted_mesh_imports_and_only_the_viewport_backstop_refuses():
+    """A mesh that stays faceted is no longer REFUSED for it, it comes in as a
+    reference body. What used to be the per-body editability refusal is gone:
+    people need an organic/decorative mesh in the scene to model against, so it
+    imports. The only hard stop left is the viewport budget.
 
-    Two controls, one for each gate. A limit of 4 refuses the SAME file, and the
-    message names which body, so the per-body gate is still a gate. And with
-    the per-body limit left open, a whole-file limit of 10 refuses it, so the
-    backstop is load-bearing rather than decorative."""
+    Two clean six-faced boxes in one file (total 12). Squeeze MAX_IMPORT_FACES to
+    4, which before refused "body 1 of 2 has 6 faces": now it imports, both boxes
+    intact. Then a whole-file limit of 10 refuses the same 12 faces, so the
+    viewport backstop is still load-bearing."""
     faces, total = mesh_import.MAX_IMPORT_FACES, mesh_import.MAX_IMPORT_TOTAL_FACES
     with tempfile.TemporaryDirectory() as d:
         p = os.path.join(d, "two.stl")
         box_stl(p, [(0.0, 10.0), (40.0, 10.0)])
         try:
-            mesh_import.MAX_IMPORT_FACES, mesh_import.MAX_IMPORT_TOTAL_FACES = 8, 10_000
+            # A per-body count over MAX_IMPORT_FACES no longer refuses: it imports.
+            mesh_import.MAX_IMPORT_FACES, mesh_import.MAX_IMPORT_TOTAL_FACES = 4, 10_000
             shape = builder._sew_mesh_file(p)
             per = [len(b.faces()) for b in builder._explode_solids(shape)]
             assert per == [6, 6], per
 
-            mesh_import.MAX_IMPORT_FACES = 4
-            try:
-                builder._sew_mesh_file(p)
-                raise AssertionError("a 6-face body passed a 4-face limit")
-            except ValueError as ex:
-                assert "body 1 of 2 has 6 faces" in str(ex), str(ex)
-
-            mesh_import.MAX_IMPORT_FACES, mesh_import.MAX_IMPORT_TOTAL_FACES = 8, 10
+            # The viewport backstop still refuses, and still names the count.
+            mesh_import.MAX_IMPORT_TOTAL_FACES = 10
             try:
                 builder._sew_mesh_file(p)
                 raise AssertionError("12 faces passed a 10-face whole-file limit")
             except ValueError as ex:
-                assert "too much detail" in str(ex), str(ex)
+                assert "too dense to import" in str(ex), str(ex)
                 assert "12 faces across 2 bodies" in str(ex), str(ex)
         finally:
             mesh_import.MAX_IMPORT_FACES, mesh_import.MAX_IMPORT_TOTAL_FACES = faces, total
-    print(PASS, "the face limit is per body, and the whole file has its own")
+    print(PASS, "a faceted mesh imports; only the viewport backstop refuses")
 
 
 def main():

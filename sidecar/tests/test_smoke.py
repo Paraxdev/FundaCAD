@@ -1046,8 +1046,9 @@ def test_scale_and_move():
 
 
 def test_multibody_import_and_guards():
-    """A two-object file imports as TWO separate bodies; an organic mesh is
-    rejected with a clear message instead of timing out."""
+    """A two-object file imports as TWO separate bodies; an organic mesh imports
+    as a faceted REFERENCE body (it is no longer refused for staying faceted, so
+    a mesh grabbed off the internet lands in the scene to model against)."""
     from build123d import Box, Pos, Sphere
     d = tempfile.mkdtemp()
     two = Box(10, 10, 10) + Pos(30, 0, 0) * Box(10, 10, 10)
@@ -1061,12 +1062,9 @@ def test_multibody_import_and_guards():
         assert not e and len(bodies) == 2, f"{fmt} two-object import → {len(bodies)} bodies, want 2"
     sp = os.path.join(d, "sphere.stl")
     export(Sphere(20), "stl", sp)
-    try:
-        import_geometry(sp, "stl")
-        assert False, "organic sphere should be rejected"
-    except ValueError as ex:
-        assert "clean editable" in str(ex) or "dense" in str(ex), ex
-    print("  multibody-import OK: 2-object STL+3MF → 2 bodies each; organic mesh rejected cleanly")
+    pay = import_geometry(sp, "stl")  # organic now imports rather than being refused
+    assert pay["faces"] > 100, f"organic sphere should stay faceted, got {pay['faces']} faces"
+    print("  multibody-import OK: 2-object STL+3MF → 2 bodies each; organic mesh imports as reference")
 
 
 def test_interference():
