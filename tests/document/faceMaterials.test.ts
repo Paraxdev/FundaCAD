@@ -96,7 +96,7 @@ describe("the two maps the renderer wants", () => {
 
   it("fills every finish field, so the render path has no branches in it", () => {
     const f = faceMaterialFinishes(resolved);
-    expect(f[0]).toEqual({ metalness: 0.95, roughness: 0.08, opacity: 1, emissive: 0 });
+    expect(f[0]).toEqual({ metalness: 0.95, roughness: 0.08, opacity: 1, emissive: 0, clearcoat: 0 });
     // Glass says nothing about metalness, so it wears the app's default.
     expect(f[9]!.metalness).toBe(FINISH.metalness);
     expect(f[9]!.opacity).toBe(0.25);

@@ -536,6 +536,23 @@ export function bodyMaterials(body: BodyMesh): THREE.MeshStandardMaterial[] {
 // the range of sizes a printed part runs to without a per-body measurement.
 export const GLASS_THICKNESS = 3;
 
+// How glossy the clear lacquer itself is (its own roughness, not the base's). A
+// low value is a wet, hard, freshly-waxed coat, which is what a clearcoat is for.
+export const CLEARCOAT_ROUGHNESS = 0.08;
+
+/** Put a clear lacquer over the surface: the second glossy layer of car paint,
+ *  glazed ceramic or a coated plastic. Physical-PBR only, so it no-ops on the
+ *  plain Standard material a weak machine draws with (like glass). Toggling it
+ *  across zero flips USE_CLEARCOAT, so it recompiles only on the crossing. */
+export function applyClearcoat(mat: THREE.MeshStandardMaterial, amount: number): void {
+  const phys = mat as THREE.MeshPhysicalMaterial;
+  if (!(phys as { isMeshPhysicalMaterial?: boolean }).isMeshPhysicalMaterial) return;
+  const was = phys.clearcoat > 0;
+  phys.clearcoat = amount;
+  phys.clearcoatRoughness = CLEARCOAT_ROUGHNESS;
+  if (was !== (amount > 0)) phys.needsUpdate = true;
+}
+
 // A weak machine (software rasteriser, tiny RAM) cannot afford transmission: it
 // re-renders the scene into a buffer for every glass draw, which is where a
 // low-end GPU stalls or drops the context. On such a machine glass falls back to

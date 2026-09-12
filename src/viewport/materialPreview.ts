@@ -23,7 +23,7 @@
 
 import * as THREE from "three";
 import { finishOf, type MaterialDef } from "../document/materials";
-import { applyGlassLook } from "./render";
+import { applyClearcoat, applyGlassLook } from "./render";
 
 /** Rendered at this many pixels square, then shown at whatever size the CSS
  *  asks for. Deliberately larger than the ~56px it is drawn at: this is one
@@ -37,7 +37,7 @@ const SIZE = 160;
  *  cache miss. */
 export function previewKey(m: MaterialDef): string {
   const f = finishOf(m);
-  return [m.color, f.metalness, f.roughness, f.opacity, f.emissive].join("|");
+  return [m.color, f.metalness, f.roughness, f.opacity, f.emissive, f.clearcoat].join("|");
 }
 
 interface Rig {
@@ -170,6 +170,7 @@ export function materialPreview(m: MaterialDef): string | null {
   r.material.color.set(m.color);
   r.material.metalness = f.metalness;
   r.material.roughness = f.roughness;
+  applyClearcoat(r.material, f.clearcoat);
   // A clear, non-metal finish previews as real glass too (refraction against the
   // room environment), so the swatch matches what the body will look like.
   if (!applyGlassLook(r.material, f.opacity, f.metalness, false)) {

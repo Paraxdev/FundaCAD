@@ -371,7 +371,7 @@ describe("materials (what a body is made of, on screen)", () => {
     // Aluminium is metallic, so it has a finish worth sending.
     store.setBodiesMaterial(["body1"], "m-aluminium");
     expect(store.materialFinishes()).toEqual({
-      body1: { metalness: 0.9, roughness: 0.35, opacity: 1, emissive: 0 },
+      body1: { metalness: 0.9, roughness: 0.35, opacity: 1, emissive: 0, clearcoat: 0 },
     });
     expect(store.materialPaint()).toEqual({ body1: "#b8bcc0" });
 
@@ -388,7 +388,7 @@ describe("materials (what a body is made of, on screen)", () => {
     const lit = store.addMaterial({ name: "Lit", color: "#42e07a", emissive: 0.8 });
     store.setBodiesMaterial(["body1"], lit);
     expect(store.materialFinishes()).toEqual({
-      body1: { metalness: 0.1, roughness: 0.55, opacity: 1, emissive: 0.8 },
+      body1: { metalness: 0.1, roughness: 0.55, opacity: 1, emissive: 0.8, clearcoat: 0 },
     });
   });
 
@@ -397,7 +397,7 @@ describe("materials (what a body is made of, on screen)", () => {
     const before = store.materialLibrary.length;
     const res = store.importMaterials([
       { id: "m-copper", name: "Copper, polished", color: "#c07a4b" },
-      { id: "m-titanium", name: "Titanium", color: "#8d8f92" },
+      { id: "m-inconel", name: "Inconel", color: "#8d8f92" }, // not in the starter library
     ]);
     expect(res).toEqual({ added: 1, updated: 1 });
     expect(store.materialLibrary).toHaveLength(before + 1);

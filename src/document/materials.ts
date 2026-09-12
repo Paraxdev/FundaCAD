@@ -45,13 +45,19 @@ export interface MaterialDef {
    *  buys (a red part that glows green) is not one anybody has asked for. What
    *  it costs is one slider instead of a slider and a picker. */
   emissive?: number;
+  /** 0..1. A clear lacquer over the surface: a second, glossy, dielectric layer
+   *  the way car paint, glazed ceramic or a coated plastic has one. It keeps the
+   *  base colour and roughness (a matte base stays matte UNDER a wet-looking
+   *  sheen) and adds the hard bright highlight of the coat on top. A physical-PBR
+   *  feature, so it is dropped on the lightweight render like glass is. */
+  clearcoat?: number;
 }
 
 /** The finish an unspecified material has, which is exactly the one every body
  *  in this app has always been drawn with (see viewport/render.ts). Sharing the
  *  numbers is what makes "no material" and "a material that says nothing about
  *  its finish" the same picture instead of two nearly identical ones. */
-export const FINISH = { metalness: 0.1, roughness: 0.55, opacity: 1, emissive: 0 } as const;
+export const FINISH = { metalness: 0.1, roughness: 0.55, opacity: 1, emissive: 0, clearcoat: 0 } as const;
 
 /** The four numbers the renderer wants, never undefined, so the render path has
  *  no branches in it. Named because it now travels: the store hands a map of
@@ -61,6 +67,7 @@ export interface BodyFinish {
   roughness: number;
   opacity: number;
   emissive: number;
+  clearcoat: number;
 }
 
 export function finishOf(m: MaterialDef | undefined): BodyFinish {
@@ -69,6 +76,7 @@ export function finishOf(m: MaterialDef | undefined): BodyFinish {
     roughness: m?.roughness ?? FINISH.roughness,
     opacity: m?.opacity ?? FINISH.opacity,
     emissive: m?.emissive ?? FINISH.emissive,
+    clearcoat: m?.clearcoat ?? FINISH.clearcoat,
   };
 }
 
@@ -115,6 +123,14 @@ export const STARTER_LIBRARY: readonly MaterialDef[] = Object.freeze([
   { id: "m-steel", name: "Steel", color: "#8f959b", metalness: 0.95, roughness: 0.28 },
   { id: "m-brass", name: "Brass", color: "#c9a227", metalness: 0.9, roughness: 0.3 },
   { id: "m-copper", name: "Copper", color: "#b06a3b", metalness: 0.95, roughness: 0.25 },
+  { id: "m-gold", name: "Gold", color: "#d4af37", metalness: 1, roughness: 0.22 },
+  { id: "m-chrome", name: "Chrome", color: "#e8ecf0", metalness: 1, roughness: 0.03 },
+  { id: "m-titanium", name: "Titanium", color: "#9a9ea3", metalness: 0.9, roughness: 0.42 },
+  // Clearcoat pair: a metallic-flake base under a hard clear lacquer, and a matte
+  // dielectric under a glaze. Both keep their base roughness and gain the coat's
+  // bright sheen, which is the whole point of the field.
+  { id: "m-carpaint", name: "Car paint, red", color: "#a51321", metalness: 0.55, roughness: 0.38, clearcoat: 1 },
+  { id: "m-ceramic", name: "Ceramic, glazed", color: "#eceae4", metalness: 0.0, roughness: 0.32, clearcoat: 1 },
   { id: "m-plastic-white", name: "Plastic, white", color: "#e8e8e8", metalness: 0.02, roughness: 0.6 },
   { id: "m-plastic-black", name: "Plastic, black", color: "#232323", metalness: 0.02, roughness: 0.5 },
   { id: "m-rubber", name: "Rubber", color: "#1d1f22", metalness: 0.0, roughness: 0.95 },
@@ -173,10 +189,12 @@ export function normalizeMaterial(raw: unknown, index = 0): MaterialDef | null {
   const roughness = clamp01(r["roughness"]);
   const opacity = clamp01(r["opacity"]);
   const emissive = clamp01(r["emissive"]);
+  const clearcoat = clamp01(r["clearcoat"]);
   if (metalness !== undefined && metalness !== FINISH.metalness) out.metalness = metalness;
   if (roughness !== undefined && roughness !== FINISH.roughness) out.roughness = roughness;
   if (opacity !== undefined && opacity !== FINISH.opacity) out.opacity = opacity;
   if (emissive !== undefined && emissive !== FINISH.emissive) out.emissive = emissive;
+  if (clearcoat !== undefined && clearcoat !== FINISH.clearcoat) out.clearcoat = clearcoat;
   return out;
 }
 

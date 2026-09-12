@@ -82,6 +82,12 @@ describe("normalizeMaterial", () => {
     expect(m.id).toBe("m-material-5");
     expect(m.name).toBe("m-material-5");
   });
+
+  it("carries a clearcoat when it is set, and drops it at the default", () => {
+    expect(normalizeMaterial({ name: "Glazed", color: "#eeeeee", clearcoat: 1 })!.clearcoat).toBe(1);
+    expect(normalizeMaterial({ name: "Glazed", color: "#eeeeee", clearcoat: 5 })!.clearcoat).toBe(1); // clamped
+    expect("clearcoat" in normalizeMaterial({ name: "Plain", color: "#eeeeee", clearcoat: 0 })!).toBe(false);
+  });
 });
 
 describe("slugId / uniqueId / freshMaterialName", () => {

@@ -12,6 +12,7 @@ import {
 } from "./cameras";
 import {
   buildBodyMesh,
+  applyClearcoat,
   applyGlassLook,
   isRenderLowPower,
   buildEdgeLines,
@@ -1048,6 +1049,7 @@ export class Viewport {
       mat.emissive.set(glow > 0 ? (this.bodyPaint[b.id] ?? 0xffffff) : 0x000000);
       mat.emissiveIntensity = glow * MAX_EMISSIVE_INTENSITY;
       if (glow > 0) emitters.set(b.id, { color: this.bodyPaint[b.id] ?? 0xffffff, glow });
+      applyClearcoat(mat, ghost ? 0 : (f?.clearcoat ?? FINISH.clearcoat));
       // A clear, non-metal finish becomes real glass (refraction); anything else,
       // and every ghost, keeps the plain fade below.
       if (!applyGlassLook(mat, f ? f.opacity : 1, f ? f.metalness : FINISH.metalness, ghost)) {
@@ -1075,6 +1077,7 @@ export class Viewport {
           const fglow = ghost ? 0 : ff.emissive;
           fm.emissive.set(fglow > 0 ? (extra.colors[i] ?? 0xffffff) : 0x000000);
           fm.emissiveIntensity = fglow * MAX_EMISSIVE_INTENSITY;
+          applyClearcoat(fm, ghost ? 0 : ff.clearcoat);
           if (!applyGlassLook(fm, ff.opacity, ff.metalness, ghost)) {
             const fo = ghost ? Math.min(ff.opacity, ghostOpacity) : ff.opacity;
             fm.transparent = fo < 1;
