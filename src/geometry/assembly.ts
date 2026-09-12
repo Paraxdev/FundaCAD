@@ -29,9 +29,9 @@ export interface WireBodyFull {
   positions: F32Wire;
   indices: U32Wire;
   faceIds: U32Wire;
-  // present only for a body some plugin's mesh pass displaced: analytic normals
-  // computed against the displacement (plain faces carry the same accumulation
-  // the client would compute)
+  // true surface normals per vertex, sent at shipping quality and for any body a
+  // plugin's mesh pass displaced (a displaced face carries the plugin's normals);
+  // absent on a large document's coarsened tier
   normals?: F32Wire;
   faceOwners?: (string | null)[];
   /** Runs of LOCAL face indices that are pieces of one surface (face_bands.py).
@@ -287,9 +287,9 @@ export class RebuildAssembly {
       vOff += nVerts3; iOff += nIdx; tOff += nTris; faceBase += faceCount; edgeBase += nEdges;
     }
 
-    // sidecar sends explicit normals only for textured bodies; bodies without
-    // keep their zero-initialized slice, and render.ts falls back to
-    // computeVertexNormals for an all-zero slice.
+    // the sidecar sends explicit normals at shipping quality and for textured
+    // bodies; a body without them keeps its zero-initialized slice, and render.ts
+    // falls back to computeVertexNormals for an all-zero slice.
     const anyNormals = sizes.some((m) => m.hasNormals);
     const arrays = {
       positions: new Float32Array(vOff),

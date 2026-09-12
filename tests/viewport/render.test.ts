@@ -199,6 +199,51 @@ describe("buildBodyMesh with a partition", () => {
     // welded: 6 de-indexed vertices collapse to the 4 distinct corners
     expect(scanned.mesh.geometry.getAttribute("position").count).toBe(4);
   });
+
+  it("shades an ordinary indexed body with the sidecar's surface normals, untouched", () => {
+    // A strip of a curved face: 4 triangles over 6 shared vertices, the way an
+    // ordinary (untextured) face arrives. Its normals are the SURFACE's, which a
+    // coarse strip's own facets do not reproduce, so the attribute must be exactly
+    // what was sent, not recomputed from the triangles and not re-keyed.
+    const s = Math.SQRT1_2;
+    const strip: RebuildResult = {
+      mesh: {
+        positions: [0, 0, 0, 0, 1, 0, /**/ 1, 0, 0.3, 1, 1, 0.3, /**/ 2, 0, 1, 2, 1, 1],
+        indices: [0, 2, 1, 1, 2, 3, /**/ 2, 4, 3, 3, 4, 5],
+        faceIds: [0, 0, 0, 0],
+        normals: [0, 0, 1, 0, 0, 1, /**/ -s, 0, s, -s, 0, s, /**/ -1, 0, 0.01, -1, 0, 0.01],
+      },
+      edges: [],
+      bbox: { min: [0, 0, 0], max: [2, 1, 1] },
+      bodies: [{ id: "c", name: "c", faceStart: 0, faceCount: 1 }],
+    };
+    const built = buildBodyMesh(strip, strip.bodies![0]!, [], RES, undefined);
+    const geo = built.mesh.geometry;
+    const pos = geo.getAttribute("position");
+    const nrm = geo.getAttribute("normal");
+    const sentPos = strip.mesh.positions as number[];
+    const sentNrm = strip.mesh.normals as number[];
+    // vertices are renumbered body-locally, so match each one back by position
+    // (within float32 rounding, the attribute stores 0.3 as 0.30000001)
+    const near = (a: number, b: number) => Math.abs(a - b) < 1e-6;
+    const original = (local: number): number => {
+      for (let v = 0; v < sentPos.length / 3; v++) {
+        if (near(sentPos[v * 3]!, pos.getX(local)) && near(sentPos[v * 3 + 1]!, pos.getY(local))
+          && near(sentPos[v * 3 + 2]!, pos.getZ(local))) return v;
+      }
+      return -1;
+    };
+    expect(pos.count).toBe(6); // nothing merged, nothing duplicated
+    for (let local = 0; local < pos.count; local++) {
+      const v = original(local);
+      expect(nrm.getX(local)).toBeCloseTo(sentNrm[v * 3]!, 5);
+      expect(nrm.getY(local)).toBeCloseTo(sentNrm[v * 3 + 1]!, 5);
+      expect(nrm.getZ(local)).toBeCloseTo(sentNrm[v * 3 + 2]!, 5);
+    }
+    // same triangles, over the same points
+    const tris = Array.from(geo.getIndex()!.array).map(original);
+    expect(tris).toEqual(strip.mesh.indices);
+  });
 });
 
 /** `bodies` bodies of `trisPerBody` triangles each, every body owning its own

@@ -272,11 +272,14 @@ export function buildBodyMesh(
   // hover-painting one would bleed into the other.
   //
   // Triangle ORDER is untouched, so localFaceIds and faceTriangles stay valid. Only
-  // runs when the sidecar shipped normals, everything else arrives at ~1.02
-  // verts/tri and welding would change what computeVertexNormals averages over.
+  // runs for a DE-INDEXED body. Every body now ships normals (true surface normals,
+  // with the sidecar already welding seam duplicates), and an ordinary indexed body
+  // arrives at ~1 vertex per triangle or fewer: running this string-keyed pass over
+  // it would find nothing to merge and cost a Map insert per index on every
+  // live-preview tick.
   let posOut = localPositions;
   let nrmOut = localNormals;
-  if (anyNormal && localIndices.length) {
+  if (anyNormal && localIndices.length && localPositions.length > localIndices.length * 1.5) {
     const q = 1e4; // 0.1µm position buckets, 1e-3 on the unit normal
     const seen = new Map<string, number>();
     const wp: number[] = [];
@@ -304,9 +307,10 @@ export function buildBodyMesh(
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(posOut, 3));
   geo.setIndex(localIndices);
-  // a textured body ships sidecar-computed normals (analytic on displaced
-  // faces, smooth shading at coarse displacement density); everything else
-  // keeps the usual client-side accumulation.
+  // The sidecar ships true surface normals at shipping quality (a displaced face
+  // its plugin's), so shading does not depend on how fine the mesh is. A body
+  // without them, a large document's coarsened tier, keeps the client-side
+  // accumulation.
   if (anyNormal) geo.setAttribute("normal", new THREE.Float32BufferAttribute(nrmOut, 3));
   else geo.computeVertexNormals();
 

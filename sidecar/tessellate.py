@@ -12,6 +12,8 @@ Python loop, single-threaded and GIL-bound. On a 6-sphere union @0.01mm that was
 ~670ms; the parallel path below is ~85ms on a 5900X.)
 """
 
+from itertools import chain
+
 import numpy as np
 
 from OCP.Bnd import Bnd_Box
@@ -34,7 +36,9 @@ from OCP.TopLoc import TopLoc_Location
 #   4 -> the cached payload carries faceBands (see face_bands.py)
 #   5 -> the mesh bbox is the box of the VERTICES SENT, not BRepBndLib's box of
 #        the triangulation enlarged by the shape's tolerance (see mesh_bbox)
-CODE_VERSION = 5
+#   6 -> the display tessellation carries true surface normals for every face
+#        and welds a curved face's seam duplicates (see _display_face)
+CODE_VERSION = 6
 
 
 def tessellate(shape, tolerance=0.1, angular_tolerance=0.5, mesh_passes=None, density_cap=None,
@@ -63,11 +67,12 @@ def tessellate(shape, tolerance=0.1, angular_tolerance=0.5, mesh_passes=None, de
                   grouping needs no changes for a subdivided displaced face).
     density_cap : per-face triangle budget passed through to displace_face
                   (None = the owning plugin's export-tier safety cap).
-    normals_out : optional list, receives (vertex_base, flat_normals) chunks
-                  for each DISPLACED face's analytic normals, so the
-                  viewport payload can shade coarse displacement smoothly
-                  (undisplaced faces are absent: the caller derives theirs from
-                  the triangles, same as the client always did).
+    normals_out : optional list, receives (vertex_base, flat_normals) chunks.
+                  Passing it is what marks this as the DISPLAY tessellation:
+                  every face then gets its true surface normals (a displaced
+                  face its plugin's), and a curved face's seam duplicates are
+                  welded, see _display_face. Export never passes it, so an
+                  exported mesh is unchanged by any of that.
     """
     # Mesh the entire solid at once, in parallel (isInParallel=True). This fills an
     # incremental triangulation onto every TopoDS_Face, which we read back below.
@@ -154,36 +159,117 @@ def tessellate(shape, tolerance=0.1, angular_tolerance=0.5, mesh_passes=None, de
 
         trsf = loc.Transformation()  # face-local -> world placement
         base = len(positions) // 3
-        # batched readback: bind lookups once and extend in one call per face,
-        # the per-triangle Python cost was ~60 µs/tri, dominated by attribute
-        # dispatch, and this loop runs for every freshly (re)built body
+        # batched readback: bind lookups once and read each node or triangle in
+        # ONE call. The per-triangle Python cost was ~60 µs/tri, dominated by
+        # attribute dispatch, and this loop runs for every freshly (re)built body.
+        # Coord() hands back all three components at once: 97 -> 68 ms reading the
+        # 73,615 nodes of a filleted plate, against Node(i) and then X(), Y(), Z().
         node = tri.Node
         ident = loc.IsIdentity()  # skip the per-node Transformed() when unplaced
         if ident:
-            pts = [node(i) for i in range(1, tri.NbNodes() + 1)]
+            coords = [node(i).Coord() for i in range(1, tri.NbNodes() + 1)]
         else:
-            pts = [node(i).Transformed(trsf) for i in range(1, tri.NbNodes() + 1)]
-        flat = []
-        for p in pts:
-            flat.append(p.X()); flat.append(p.Y()); flat.append(p.Z())
-        positions.extend(flat)
+            coords = [node(i).Transformed(trsf).Coord() for i in range(1, tri.NbNodes() + 1)]
+        get_tri = tri.Triangle
+        ntri = tri.NbTriangles()
+        T = np.array([get_tri(i).Get() for i in range(1, ntri + 1)], dtype=np.int64).reshape(-1, 3) - 1
         # A face flagged REVERSED has its triangles wound the opposite way; flip the
         # winding so client-side computeVertexNormals() yields outward normals.
         flip = face.wrapped.Orientation() == TopAbs_Orientation.TopAbs_REVERSED
-        get_tri = tri.Triangle
-        ntri = tri.NbTriangles()
-        tri_flat = []
-        for i in range(1, ntri + 1):
-            a, b, c = get_tri(i).Get()
-            if flip:
-                b, c = c, b
-            tri_flat.append(base + a - 1)
-            tri_flat.append(base + b - 1)
-            tri_flat.append(base + c - 1)
-        indices.extend(tri_flat)
+        if flip:
+            T = T[:, (0, 2, 1)]
+        if normals_out is not None:
+            flat, T, norms = _display_face(face, tri, trsf, ident, flip, coords, T)
+            positions.extend(flat)
+            normals_out.append((base, norms))
+        else:
+            positions.extend(chain.from_iterable(coords))
+        indices.extend((T.ravel() + base).tolist())
         face_ids.extend([fid] * ntri)
 
     return positions, indices, face_ids
+
+
+def _display_face(face, tri, trsf, ident, flip, coords, T):
+    """One face of the DISPLAY tessellation, with its true surface normals and its
+    seam duplicates welded. `coords` is the face's node positions as (x, y, z)
+    tuples, `T` its (n, 3) node-index triangles already wound outward. Returns
+    (flat_positions, T, flat_normals) with T renumbered to the welded nodes.
+
+    Why normals at all. Without them the client averages each vertex's facet
+    normals, which on a freeform face is only as smooth as the mesh is fine: a
+    lofted dome at viewport density shaded with a ripple across its crown, while
+    the same surface meshed 9x finer was clean. The surface knows the exact normal
+    at every node, so this makes the shading stop depending on mesh density.
+
+    Why the weld. A closed curved face (a cylinder, a revolve, a loft through
+    closed rings) is meshed with its seam nodes duplicated, one copy per side of
+    the parameter seam. The client averaged each copy over its own side only, and
+    that drew a shading line down the seam: 7.3 degrees on a lofted dome, 406 split
+    vertices on a filleted box. The copies are one surface point with one true
+    normal, so they merge back into one vertex. Only copies whose normals AGREE
+    merge, so a cone apex or a degenerate pole keeps its copies, and the weld never
+    crosses a face, so per-face colour and picking are untouched.
+
+    Orientation is not taken on trust. OCCT's computed normals follow the
+    underlying surface and ignore the face's REVERSED flag (every reversed face
+    came back pointing inward when this was measured), so they flip with the
+    winding and are then checked against the winding's own facet normals. A node
+    the surface cannot give a sound normal for keeps its facet average, which is
+    exactly what the client drew before. A plane needs no evaluation at all, its
+    facet average IS its normal."""
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.BRepLib import BRepLib_ToolTriangulatedShape
+    from OCP.GeomAbs import GeomAbs_Plane
+
+    n = len(coords)
+    P = np.array(coords, dtype=np.float64).reshape(-1, 3)
+    fn = np.cross(P[T[:, 1]] - P[T[:, 0]], P[T[:, 2]] - P[T[:, 0]])  # length ∝ area
+
+    if BRepAdaptor_Surface(face.wrapped).GetType() == GeomAbs_Plane:
+        s = fn.sum(axis=0)
+        ln = float(np.linalg.norm(s))
+        unit = [float(v) for v in s / ln] if ln > 1e-12 else [0.0, 0.0, 1.0]
+        return list(chain.from_iterable(coords)), T, unit * n
+
+    # area-weighted facet average per node, the client's own normal, as the
+    # orientation reference and the fallback (bincount: np.add.at is ~10x slower)
+    acc = np.empty((n, 3))
+    for c in range(3):
+        w = fn[:, c]
+        acc[:, c] = (np.bincount(T[:, 0], w, n) + np.bincount(T[:, 1], w, n)
+                     + np.bincount(T[:, 2], w, n))
+    ln = np.linalg.norm(acc, axis=1)
+    acc /= np.where(ln < 1e-12, 1.0, ln)[:, None]
+
+    BRepLib_ToolTriangulatedShape.ComputeNormals_s(face.wrapped, tri)
+    normal = tri.Normal
+    if ident:
+        N = np.array([normal(i).Coord() for i in range(1, n + 1)], dtype=np.float64)
+    else:
+        N = np.array([normal(i).Transformed(trsf).Coord() for i in range(1, n + 1)], dtype=np.float64)
+    N = N.reshape(-1, 3)
+    if flip:
+        N = -N
+    if np.einsum("ij,ij->", N, acc) < 0:  # still against the winding: trust the winding
+        N = -N
+    bad = (~np.isfinite(N).all(axis=1)
+           | (np.abs(np.linalg.norm(N, axis=1) - 1.0) > 1e-3)
+           | (np.einsum("ij,ij->i", N, acc) < 0))
+    if bad.any():
+        N[bad] = acc[bad]
+
+    # Coincident nodes, found by their rounded coordinates as one byte key per row
+    # (`+ 0.0` folds -0.0 into 0.0, whose bytes would otherwise differ).
+    key = np.ascontiguousarray(np.round(P, 6) + 0.0)
+    key = key.view(np.dtype((np.void, key.dtype.itemsize * 3))).ravel()
+    _, first, inv = np.unique(key, return_index=True, return_inverse=True)
+    if len(first) < n:
+        rep = first[inv.ravel()]
+        rep = np.where(np.einsum("ij,ij->i", N, N[rep]) > 0.9999, rep, np.arange(n))
+        keep, remap = np.unique(rep, return_inverse=True)
+        P, N, T = P[keep], N[keep], remap.ravel()[T]
+    return P.ravel().tolist(), T, N.ravel().tolist()
 
 
 def tessellate_bodies(bodies, tolerance=0.1, density_cap=None, diag=None):

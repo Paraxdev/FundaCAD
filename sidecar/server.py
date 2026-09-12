@@ -807,7 +807,12 @@ def _body_payload(b, tolerance, profile):
     if payload is None:
         t0 = time.monotonic()
         passes = plugin_geometry.resolve(b)
-        norm_chunks = [] if passes else None
+        # True surface normals ride the payload at shipping quality (see
+        # tessellate._display_face for what they fix). They add 12 bytes a
+        # vertex, so the coarsened large-document tiers, which exist only to fit
+        # the frame cap, leave them out and keep client-side normals, unless a
+        # mesh pass needs them for its displacement.
+        norm_chunks = [] if (passes or profile[0] == 1.0) else None
         pos, idx, fids = tessellate(sh, tolerance, angular_tolerance=ang_tol,
                                     mesh_passes=passes,
                                     density_cap=VIEWPORT_DENSITY_CAP,
@@ -857,12 +862,16 @@ def _body_payload(b, tolerance, profile):
         if face_color_slots:
             payload["faceColorSlots"] = face_color_slots
         if norm_chunks:
-            # a displaced body ships explicit normals: plain faces get the same
-            # area-weighted accumulation the client would compute, displaced
-            # chunks the plugin's analytic normals, coarse displacement then
-            # SHADES smoothly instead of showing triangle-grain.
-            from tessellate import vertex_normals
-            norms = vertex_normals(pos, idx)
+            # Every face normally contributes a chunk (its true surface normals,
+            # a displaced face its plugin's), so the chunks tile the whole vertex
+            # range. The area-weighted accumulation the client would compute is
+            # only the floor under a face that produced no chunk.
+            covered = sum(len(chunk) for _vbase, chunk in norm_chunks)
+            if covered == len(pos):
+                norms = [0.0] * len(pos)
+            else:
+                from tessellate import vertex_normals
+                norms = vertex_normals(pos, idx)
             for vbase, chunk in norm_chunks:
                 norms[vbase * 3:vbase * 3 + len(chunk)] = chunk
             payload["normals"] = norms
