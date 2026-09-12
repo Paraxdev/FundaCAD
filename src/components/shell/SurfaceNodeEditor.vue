@@ -13,7 +13,7 @@
 // The graph is held locally and synced to the store on each change: this is the
 // only editor of it open at a time, so a local copy is the source of truth and
 // avoids a round trip through the document on every keystroke.
-import { computed, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useEngine } from "../../app/engineKey";
 import type { MaterialDef, SurfaceGraph, SurfaceNode } from "../../document/materials";
 
@@ -70,18 +70,56 @@ function sync() {
 }
 function node(id: string): SurfaceNode | undefined { return g.value.nodes.find((n) => n.id === id); }
 
-function addNode(type: NodeType) {
-  // drop it into the middle of the current view, in world coordinates. The view
-  // centre is element-relative (half the canvas), so unproject it directly rather
-  // than through toWorld, which expects page coordinates.
-  const cw = canvasEl.value?.clientWidth ?? 600, ch = canvasEl.value?.clientHeight ?? 300;
-  const wx = (cw / 2 - pan.value.x) / zoom.value, wy = (ch / 2 - pan.value.y) / zoom.value;
-  // cascade each new node off the centre so successive adds do not stack exactly
-  // on top of one another (which would bury the lower ones' ports).
-  const off = (g.value.nodes.length % 6) * 26;
-  g.value.nodes.push({ id: uid(), type, x: Math.round(wx - NODE_W / 2 + off), y: Math.round(wy - 20 + off), params: defaults(type) });
+function addNode(type: NodeType, at?: { x: number; y: number }) {
+  let x: number, y: number;
+  if (at) {
+    // dropped at a chosen world point (the Shift+A menu), centred on it
+    x = Math.round(at.x - NODE_W / 2);
+    y = Math.round(at.y - 20);
+  } else {
+    // middle of the current view. The view centre is element-relative (half the
+    // canvas), so unproject it directly rather than through toWorld, which
+    // expects page coordinates. Cascade off the centre so successive adds do not
+    // stack exactly on top of one another (which would bury the lower ports).
+    const cw = canvasEl.value?.clientWidth ?? 600, ch = canvasEl.value?.clientHeight ?? 300;
+    const off = (g.value.nodes.length % 6) * 26;
+    x = Math.round((cw / 2 - pan.value.x) / zoom.value - NODE_W / 2 + off);
+    y = Math.round((ch / 2 - pan.value.y) / zoom.value - 20 + off);
+  }
+  g.value.nodes.push({ id: uid(), type, x, y, params: defaults(type) });
   sync();
 }
+
+// --- Shift+A add menu, grouped like Blender's -------------------------------
+const ADD_GROUPS: { label: string; items: NodeType[] }[] = [
+  { label: "Texture", items: ["noise", "scratches", "brushed", "voronoi", "wave"] },
+  { label: "Input", items: ["fresnel"] },
+  { label: "Color", items: ["ramp", "colorramp"] },
+  { label: "Converter", items: ["math", "mix"] },
+];
+const addMenu = ref<{ x: number; y: number; wx: number; wy: number } | null>(null);
+const screenCursor = ref({ x: 0, y: 0 });
+function openAddMenu() {
+  const r = canvasEl.value?.getBoundingClientRect();
+  let sx = screenCursor.value.x, sy = screenCursor.value.y;
+  if (sx === 0 && sy === 0) { sx = (canvasEl.value?.clientWidth ?? 600) / 2; sy = (canvasEl.value?.clientHeight ?? 300) / 2; }
+  addMenu.value = {
+    x: (r?.left ?? 0) + sx, y: (r?.top ?? 0) + sy,
+    wx: (sx - pan.value.x) / zoom.value, wy: (sy - pan.value.y) / zoom.value,
+  };
+}
+function pickAdd(type: NodeType) {
+  addNode(type, { x: addMenu.value?.wx ?? 0, y: addMenu.value?.wy ?? 0 });
+  addMenu.value = null;
+}
+function onKey(e: KeyboardEvent) {
+  const t = e.target as HTMLElement | null;
+  if (t && (t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA")) return;
+  if (e.shiftKey && (e.key === "a" || e.key === "A")) { e.preventDefault(); openAddMenu(); }
+  else if (e.key === "Escape" && addMenu.value) { addMenu.value = null; e.stopPropagation(); }
+}
+onMounted(() => window.addEventListener("keydown", onKey));
+onUnmounted(() => window.removeEventListener("keydown", onKey));
 function removeNode(id: string) {
   if (id === g.value.output) return; // the output stays
   g.value.nodes = g.value.nodes.filter((n) => n.id !== id);
@@ -229,11 +267,14 @@ function onCanvasDown(e: PointerEvent) {
   const t = e.target as HTMLElement;
   if (t !== canvasEl.value && !t.classList.contains("ne-world")) return;
   armed.value = null;
+  addMenu.value = null;
   canvasEl.value?.setPointerCapture(e.pointerId);
   panning.value = { sx: e.clientX, sy: e.clientY, px: pan.value.x, py: pan.value.y };
 }
 const cursor = ref({ x: 0, y: 0 });
 function onMove(e: PointerEvent) {
+  const r = canvasEl.value?.getBoundingClientRect();
+  screenCursor.value = { x: e.clientX - (r?.left ?? 0), y: e.clientY - (r?.top ?? 0) };
   cursor.value = toWorld(e.clientX, e.clientY);
   if (wire.value) wire.value.moved = true;
   if (panning.value) {
@@ -306,6 +347,7 @@ const pending = computed(() => {
     <div class="ne-bar">
       <span class="ne-title-main">Surface graph · {{ material?.name }}</span>
       <button v-for="t in ADDABLE" :key="t" class="rd-chip" :data-add="t" @click="addNode(t)">+ {{ LABEL[t] }}</button>
+      <span class="ne-hint">Shift+A</span>
       <span class="ne-spacer"></span>
       <button class="rd-chip" @click="fit">Fit</button>
       <button class="rd-chip" @click="clearGraph">Clear</button>
@@ -395,6 +437,17 @@ const pending = computed(() => {
       </div>
       <div class="ne-zoom">{{ Math.round(zoom * 100) }}%</div>
     </div>
+    <!-- Shift+A add menu, grouped -->
+    <template v-if="addMenu">
+      <div class="ne-addbackdrop" @pointerdown="addMenu = null"></div>
+      <div class="ne-addmenu" :style="{ left: addMenu.x + 'px', top: addMenu.y + 'px' }" @pointerdown.stop>
+        <div class="ne-addhead">Add</div>
+        <div v-for="grp in ADD_GROUPS" :key="grp.label" class="ne-addgrp">
+          <div class="ne-addgrp-label">{{ grp.label }}</div>
+          <button v-for="t in grp.items" :key="t" class="ne-additem" :data-add-menu="t" @click="pickAdd(t)">{{ LABEL[t] }}</button>
+        </div>
+      </div>
+    </template>
   </div>
 </template>
 
@@ -437,4 +490,14 @@ const pending = computed(() => {
 .ne-out.armed .ne-dot { background: var(--accent); }
 .ne-zoom { position: absolute; right: 8px; bottom: 6px; font-size: 11px; color: var(--text-dim);
   background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 1px 6px; pointer-events: none; }
+.ne-hint { font-size: 11px; color: var(--text-dim); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 1px 6px; }
+.ne-addbackdrop { position: fixed; inset: 0; z-index: 70; }
+.ne-addmenu { position: fixed; z-index: 71; min-width: 130px; max-height: 70vh; overflow-y: auto;
+  background: var(--panel-2); border: 1px solid var(--line-strong); border-radius: var(--r-md); box-shadow: var(--shadow-2); padding: 4px; }
+.ne-addhead { font-weight: 600; font-size: 11px; color: var(--text-dim); padding: 2px 6px 4px; }
+.ne-addgrp { border-top: 1px solid var(--line); padding-top: 2px; margin-top: 2px; }
+.ne-addgrp-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); padding: 2px 6px; }
+.ne-additem { display: block; width: 100%; text-align: left; background: none; border: none; color: var(--text);
+  font-size: 12px; padding: 3px 8px; border-radius: var(--r-sm); cursor: pointer; }
+.ne-additem:hover { background: var(--accent); color: #fff; }
 </style>
