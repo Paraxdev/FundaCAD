@@ -57,7 +57,23 @@ def _shell(shape, thickness, openings):
     try:
         if openings:
             return offset(shape, amount=amt, openings=list(openings), kind=Kind.INTERSECTION)
-        return offset(shape, amount=amt, kind=Kind.INTERSECTION)
+        # No faces removed: a SEALED hollow. build123d's offset with no openings
+        # shrinks the solid inward (a Minkowski offset) instead of hollowing it,
+        # and OCCT's MakeThickSolid cannot seal a void it has no open face to
+        # reach through, so both silently leave a smaller SOLID and the wall
+        # never appears (a 40x40x20 box came back a 35x35x15 solid, no error).
+        # Carve the shrunk inner solid out of the original instead: outer minus
+        # inner is the wall, a sealed hollow with the outer surface intact (that
+        # box keeps its 40x40x20 envelope and drops 32000 -> 13625 mm3, two
+        # shells). A wall thicker than the body collapses the inner offset to
+        # nothing, which falls into the "too thick" message below.
+        inner = offset(shape, amount=amt, kind=Kind.INTERSECTION)
+        if _wrapped_or_none(inner) is None:
+            raise ValueError("the wall leaves no interior to hollow")
+        hollow = shape - inner
+        if _wrapped_or_none(hollow) is None:
+            raise ValueError("hollowing removed the whole body")
+        return hollow
     except Exception as ex:
         # A wall thicker than the solid's own narrowest span has nowhere to go;
         # OCCT surfaces that as a bare RuntimeError, which told the user nothing
