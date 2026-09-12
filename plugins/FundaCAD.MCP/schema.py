@@ -413,6 +413,17 @@ FEATURES = {
                    "groupSides": "optional bool"},
         "example": {"id": "spl1", "type": "split", "plane": "XY", "keep": "both"},
     },
+    "imprint": {
+        "summary": "Divide a face into separate faces along a sketch drawn on it, "
+                   "adding and removing no material.",
+        "fields": {"sketch": "id of a sketch drawn ON the face to divide",
+                   "body": "optional body id; default the body owning the "
+                           "sketch's face"},
+        "example": {"id": "im1", "type": "imprint", "sketch": "sk2"},
+        "notes": "The curves must reach the face's edges to cut off a region; ones "
+                 "that don't leave the face whole and report an advisory. Each new "
+                 "face can then be pressed, painted or offset on its own.",
+    },
     "removeBody": {
         "summary": "Delete bodies.",
         "fields": {"bodies": "list of body ids"},
