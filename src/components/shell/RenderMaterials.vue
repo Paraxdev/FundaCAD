@@ -160,9 +160,9 @@ function set(
 // `set` above because the surface is one nested object, not a flat field: the
 // picker builds a fresh one with sensible defaults, and the sliders merge into
 // the one already there. "None" removes it, so the material reads back plain.
-const SURFACE_KINDS = ["none", "noise", "scratches", "brushed", "voronoi"] as const;
+const SURFACE_KINDS = ["none", "noise", "scratches", "brushed", "voronoi", "wave"] as const;
 const SURFACE_LABEL: Record<string, string> = {
-  none: "None", noise: "Noise", scratches: "Scratches", brushed: "Brushed", voronoi: "Wear",
+  none: "None", noise: "Noise", scratches: "Scratches", brushed: "Brushed", voronoi: "Wear", wave: "Bands",
 };
 
 function pickSurface(kind: string) {
@@ -438,7 +438,7 @@ async function doImport() {
             <input class="sm-slider" type="range" min="0" max="1" step="0.01"
               :value="selected.surface.bump ?? 0" @input="setSurface('bump', ($event.target as HTMLInputElement).value)" />
           </label>
-          <label v-if="selected.surface.kind === 'scratches' || selected.surface.kind === 'brushed'" class="prefs-row">
+          <label v-if="selected.surface.kind === 'scratches' || selected.surface.kind === 'brushed' || selected.surface.kind === 'wave'" class="prefs-row">
             <span class="prefs-label">Angle</span>
             <input class="sm-slider" type="range" min="0" max="3.14" step="0.01"
               :value="selected.surface.angle ?? 0" @input="setSurface('angle', ($event.target as HTMLInputElement).value)" />

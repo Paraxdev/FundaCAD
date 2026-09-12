@@ -29,10 +29,10 @@
  *  driving roughness, a bump and a colour tint. Triplanar, so it needs no UVs.
  *  The eventual node editor produces a richer form of this. */
 export interface SurfaceSpec {
-  kind: "noise" | "scratches" | "brushed" | "voronoi";
+  kind: "noise" | "scratches" | "brushed" | "voronoi" | "wave";
   scale: number;      // feature size in mm
   amount: number;     // 0..1, roughness push
-  angle?: number;     // radians, scratch/brushed direction
+  angle?: number;     // radians, scratch/brushed/wave direction
   bump?: number;      // 0..1, relief
   color?: string;     // "#rrggbb" tint
   colorAmount?: number; // 0..1
@@ -47,7 +47,7 @@ export interface SurfaceSpec {
  *  See viewport/proceduralSurface.ts for the compiler. */
 export interface SurfaceNode {
   id: string;
-  type: "noise" | "scratches" | "brushed" | "voronoi" | "ramp" | "mix" | "math" | "output";
+  type: "noise" | "scratches" | "brushed" | "voronoi" | "wave" | "ramp" | "mix" | "math" | "output";
   params?: Record<string, number | string>;
   in?: Record<string, string>;
   /** Canvas position in the node editor. Layout only, ignored by the compiler
@@ -252,7 +252,7 @@ export function normalizeMaterial(raw: unknown, index = 0): MaterialDef | null {
 }
 
 const NODE_TYPES: readonly SurfaceNode["type"][] = [
-  "noise", "scratches", "brushed", "voronoi", "ramp", "mix", "math", "output",
+  "noise", "scratches", "brushed", "voronoi", "wave", "ramp", "mix", "math", "output",
 ];
 
 /** Narrow an untrusted surface graph, or drop it. Structural only: a node needs
@@ -280,7 +280,7 @@ export function normalizeGraph(raw: unknown): SurfaceGraph | undefined {
   return { nodes, output: r["output"] };
 }
 
-const SURFACE_KINDS: readonly SurfaceSpec["kind"][] = ["noise", "scratches", "brushed", "voronoi"];
+const SURFACE_KINDS: readonly SurfaceSpec["kind"][] = ["noise", "scratches", "brushed", "voronoi", "wave"];
 
 /** Narrow an untrusted surface object, or drop it. A bad kind or a non-positive
  *  scale is not a surface, so the material reads back as plain rather than as a

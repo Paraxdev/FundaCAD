@@ -23,18 +23,18 @@ const store = useEngine().store;
 
 type NodeType = SurfaceNode["type"];
 const LABEL: Record<NodeType, string> = {
-  noise: "Noise", scratches: "Scratches", brushed: "Brushed", voronoi: "Wear",
+  noise: "Noise", scratches: "Scratches", brushed: "Brushed", voronoi: "Wear", wave: "Bands",
   ramp: "Ramp", mix: "Mix", math: "Math", output: "Output",
 };
-const ADDABLE: NodeType[] = ["noise", "scratches", "brushed", "voronoi", "ramp", "mix", "math"];
+const ADDABLE: NodeType[] = ["noise", "scratches", "brushed", "voronoi", "wave", "ramp", "mix", "math"];
 const MATH_OPS = ["multiply", "add", "subtract", "min", "max", "pow"];
 // input ports per type, and the output type each node produces (for wiring rules)
 const INPUTS: Record<NodeType, string[]> = {
-  noise: [], scratches: [], brushed: [], voronoi: [],
+  noise: [], scratches: [], brushed: [], voronoi: [], wave: [],
   ramp: ["t"], mix: ["a", "b", "t"], math: ["a", "b"], output: ["roughness", "bump", "color"],
 };
 const OUT_TYPE: Record<NodeType, "float" | "vec3" | "none"> = {
-  noise: "float", scratches: "float", brushed: "float", voronoi: "float",
+  noise: "float", scratches: "float", brushed: "float", voronoi: "float", wave: "float",
   ramp: "vec3", mix: "float", math: "float", output: "none",
 };
 // what each INPUT port expects, so a float cannot be wired into a colour port
@@ -56,7 +56,7 @@ function defaults(type: NodeType): Record<string, number | string> {
   if (type === "ramp") return { colorA: "#201810", colorB: "#e0a060" };
   if (type === "mix") return { t: 0.5 };
   if (type === "math") return { op: "multiply", a: 0.5, b: 0.5 };
-  if (type === "scratches" || type === "brushed") return { scale: 6, angle: 0 };
+  if (type === "scratches" || type === "brushed" || type === "wave") return { scale: 6, angle: 0 };
   return { scale: 6 };
 }
 
@@ -133,6 +133,7 @@ const NUM_PARAMS: Record<NodeType, { key: string; label: string; min: number; ma
   voronoi: [{ key: "scale", label: "Scale", min: 0.5, max: 30, step: 0.5 }],
   scratches: [{ key: "scale", label: "Scale", min: 0.5, max: 30, step: 0.5 }, { key: "angle", label: "Angle", min: 0, max: 3.14, step: 0.01 }],
   brushed: [{ key: "scale", label: "Scale", min: 0.5, max: 30, step: 0.5 }, { key: "angle", label: "Angle", min: 0, max: 3.14, step: 0.01 }],
+  wave: [{ key: "scale", label: "Scale", min: 0.5, max: 30, step: 0.5 }, { key: "angle", label: "Angle", min: 0, max: 3.14, step: 0.01 }],
   mix: [{ key: "t", label: "Mix", min: 0, max: 1, step: 0.01 }],
   // a/b sliders show only for the ports left unwired; the op is a select below
   math: [{ key: "a", label: "A", min: 0, max: 1, step: 0.01 }, { key: "b", label: "B", min: 0, max: 1, step: 0.01 }],

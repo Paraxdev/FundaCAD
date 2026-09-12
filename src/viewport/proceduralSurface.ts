@@ -20,7 +20,7 @@ import * as THREE from "three";
 import type { SurfaceGraph, SurfaceNode, SurfaceSpec } from "../document/materials";
 
 const SURF_KIND: Record<SurfaceSpec["kind"], number> = {
-  noise: 0, scratches: 1, brushed: 2, voronoi: 3,
+  noise: 0, scratches: 1, brushed: 2, voronoi: 3, wave: 4,
 };
 
 export function surfaceKey(s: SurfaceSpec | undefined): string {
@@ -75,6 +75,13 @@ float sGen(vec3 wp, vec3 wn, int kind, float scale, float angle){
   vec3 w = normalize(abs(wn) + 1e-4); w /= (w.x + w.y + w.z);
   if (kind == 0) return sFbm(p);
   if (kind == 3) return sVoronoi(p);
+  if (kind == 4){ // wave: smooth parallel bands along a rotated axis, triplanar
+    float c = cos(angle), s = sin(angle);
+    float wx = 0.5 + 0.5 * sin((p.y * c - p.z * s) * 6.2831853);
+    float wy = 0.5 + 0.5 * sin((p.z * c - p.x * s) * 6.2831853);
+    float wz = 0.5 + 0.5 * sin((p.x * c - p.y * s) * 6.2831853);
+    return wx * w.x + wy * w.y + wz * w.z;
+  }
   float freq = 6.0, sharp = kind == 1 ? 40.0 : 3.0;
   float sx = sStreaks(p.yz, freq, sharp, angle), sy = sStreaks(p.zx, freq, sharp, angle), sz = sStreaks(p.xy, freq, sharp, angle);
   float v = sx * w.x + sy * w.y + sz * w.z;
@@ -218,7 +225,7 @@ function writeUniforms(u: Record<string, THREE.IUniform>, spec: SurfaceSpec): vo
 }
 
 // --- the compiler -----------------------------------------------------------
-const GEN_KIND: Record<string, number> = { noise: 0, scratches: 1, brushed: 2, voronoi: 3 };
+const GEN_KIND: Record<string, number> = { noise: 0, scratches: 1, brushed: 2, voronoi: 3, wave: 4 };
 
 /** Walk the graph from its output, emit one GLSL statement per node in
  *  dependency order, and return the `SurfOut sGraph(vec3 wp, vec3 wn)` function.
