@@ -13,6 +13,7 @@ import {
 import {
   buildBodyMesh,
   applyGlassLook,
+  isRenderLowPower,
   buildEdgeLines,
   buildSectionGhosts,
   bodyMaterials,
@@ -361,12 +362,17 @@ export class Viewport {
     // life of the process, and it is destroyed with the window.
     this.scene.applyRenderPrefs();
     onRenderPrefsChange(() => {
-      this.scene.applyRenderPrefs();
+      const wasLow = isRenderLowPower();
+      this.scene.applyRenderPrefs(); // re-applies the power tier (performance mode)
       // The lens lives on the camera rather than in the scene, so it is applied
       // here and not in applyRenderPrefs: a field of view is a property of the
       // thing looking, and the rig owns every piece of framing arithmetic that
       // depends on it.
       this.rig.setFov(renderPrefs().fov);
+      // Only when the tier actually flipped: the finishes decide glass vs alpha
+      // and how many emitter lights to draw off it, and re-running them on every
+      // brightness nudge would walk every body's materials for nothing.
+      if (isRenderLowPower() !== wasLow) this.applyBodyFinish();
       this.requestRender();
     });
     onThemeChange(() => {
@@ -1095,7 +1101,7 @@ export class Viewport {
    *  is torn down only when its body stops glowing or leaves, so toggling x-ray
    *  or nudging the slider does not churn the scene's lights. */
   private syncEmitterLights(emitters: Map<string, { color: string | number; glow: number }>) {
-    const cap = this.scene.lowPower ? 2 : MAX_EMITTER_LIGHTS;
+    const cap = isRenderLowPower() ? 2 : MAX_EMITTER_LIGHTS;
     const ranked = [...emitters.entries()]
       .sort((a, b) => b[1].glow - a[1].glow)
       .slice(0, cap);

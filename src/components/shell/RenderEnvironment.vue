@@ -115,5 +115,23 @@ const onBrightness = (e: Event) =>
         an ordinary part looks the same either way.
       </div>
     </section>
+
+    <section class="rd-section">
+      <h3 class="rd-head">Performance</h3>
+      <div class="rd-chips" role="group" aria-label="Performance mode">
+        <button
+          class="rd-chip"
+          :class="{ active: prefs.performanceMode }"
+          data-perf="mode"
+          :aria-pressed="prefs.performanceMode"
+          @click="setRenderPref('performanceMode', !prefs.performanceMode)"
+        >{{ prefs.performanceMode ? "On" : "Off" }}</button>
+      </div>
+      <div class="sm-hint">
+        Drop the heavy effects, glass refraction, a high pixel ratio and the
+        extra emitter lights, for a lighter render. On automatically on a weak
+        GPU; turn it on by hand if the viewport stutters or a laptop runs hot.
+      </div>
+    </section>
   </div>
 </template>

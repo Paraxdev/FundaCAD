@@ -44,6 +44,7 @@ describe("asRenderPrefs", () => {
   it("sanitises PER FIELD, so one bad value costs only itself", () => {
     expect(asRenderPrefs({
       environment: "nonsense", background: "grey", brightness: 1.4, bloom: "strong",
+      performanceMode: true,
     })).toEqual({
       environment: DEFAULT_RENDER.environment,
       background: "grey",
@@ -52,7 +53,15 @@ describe("asRenderPrefs", () => {
       fov: DEFAULT_RENDER.fov,
       aperture: DEFAULT_RENDER.aperture,
       focusBlur: DEFAULT_RENDER.focusBlur,
+      performanceMode: true,
     });
+  });
+
+  it("keeps performance mode only as a real boolean", () => {
+    // A non-boolean (an old truthy "on" string, say) must not slip through as
+    // the render tier, it decides glass vs alpha and the pixel ratio.
+    expect(asRenderPrefs({ performanceMode: "yes" }).performanceMode).toBe(false);
+    expect(asRenderPrefs({ performanceMode: true }).performanceMode).toBe(true);
   });
 
   it("fills in a field a stored setting predates", () => {

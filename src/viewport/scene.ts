@@ -26,9 +26,11 @@ export interface SceneBundle {
    *  the chain is doing, which is the only way to tell that rendering through it
    *  has not quietly given up the multisampling (see PostChain.samples). */
   post: PostChain;
-  /** True on a machine too weak for the expensive effects (see detectLowPower):
-   *  glass has already been dropped to plain alpha and the pixel ratio capped,
-   *  and the viewport reads this to keep the emitter-light count small. */
+  /** The AUTO hardware detection (see detectLowPower): true on a machine the app
+   *  judged too weak for the expensive effects. The EFFECTIVE tier that gates
+   *  glass, pixel ratio and light count is this OR the manual performance-mode
+   *  pref, and lives in render.isRenderLowPower(); this field is just the
+   *  hardware half, for anything that wants to know what the machine is. */
   lowPower: boolean;
   /** Re-read ui/renderPrefs and apply it: lighting, what the model reflects,
    *  and what it is drawn against. Called once at construction and again from
@@ -183,12 +185,20 @@ function detectLowPower(renderer: THREE.WebGLRenderer): boolean {
 
 export function createScene(canvas: HTMLCanvasElement): SceneBundle {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  const lowPower = detectLowPower(renderer);
-  setRenderLowPower(lowPower); // glass falls back to alpha on a weak machine
-  // Cap the pixel ratio HARD on a weak machine: a retina panel over a software
-  // rasteriser is four times the pixels it can draw, the surest way to a dropped
-  // context. 2 elsewhere keeps text and edges crisp without going to native 3x.
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, lowPower ? 1 : 2));
+  const autoLowPower = detectLowPower(renderer);
+  // The effective tier is the auto detection OR the manual "performance mode"
+  // pref, re-applied on every pref change (the bundle's applyRenderPrefs below):
+  // glass falls back to alpha (no transmission pass), and the pixel ratio is
+  // capped HARD, a retina panel over a weak GPU is four times the pixels it can
+  // draw, the surest way to a dropped context. 2 elsewhere keeps edges crisp
+  // without going to native 3x. Applied once here for the frames before the
+  // first pref-apply lands.
+  const applyPowerTier = () => {
+    const low = autoLowPower || renderPrefs().performanceMode;
+    setRenderLowPower(low);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, low ? 1 : 2));
+  };
+  applyPowerTier();
   // Tone mapping, always, and NEUTRAL of the several on offer.
   //
   // Without any, everything above full brightness clips flat: a specular
@@ -245,8 +255,11 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
   const post = new PostChain(renderer, scene);
 
   return {
-    renderer, scene, modelGroup, planes, grid, triad, post, lowPower,
-    applyRenderPrefs: () => applyRenderPrefs(renderer, scene, { key, fill, hemi }),
+    renderer, scene, modelGroup, planes, grid, triad, post, lowPower: autoLowPower,
+    applyRenderPrefs: () => {
+      applyPowerTier(); // pick up a toggled performance-mode pref
+      applyRenderPrefs(renderer, scene, { key, fill, hemi });
+    },
   };
 }
 

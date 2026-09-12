@@ -139,6 +139,12 @@ export interface RenderPrefs {
    *  half the model soft while you are trying to pick an edge on it. This is for
    *  the picture at the end. */
   focusBlur: number;
+  /** Force the lightweight render even on a machine the auto-detect thinks is
+   *  capable: glass falls back to flat alpha (no transmission pass), the pixel
+   *  ratio is capped low, and fewer emitter lights are drawn. For an older
+   *  dedicated GPU that reports a real name (so `detectLowPower` passes it) but
+   *  still stutters on the heavy effects, this is the manual escape hatch. */
+  performanceMode: boolean;
 }
 
 /** What the f-stop numbers mean to the blur pass, and the range the control
@@ -167,6 +173,9 @@ export const DEFAULT_RENDER: RenderPrefs = {
   // the app harder to model in, so it starts at zero and stays there until
   // somebody is deliberately taking a picture.
   focusBlur: 0,
+  // OFF: the auto-detect already spares the machines that genuinely cannot cope,
+  // so this stays off until someone whose GPU slipped past it turns it on.
+  performanceMode: false,
 };
 
 export const MIN_BRIGHTNESS = 0.4;
@@ -238,6 +247,7 @@ export function asRenderPrefs(v: unknown): RenderPrefs {
     fov: asFov(o["fov"]) ?? DEFAULT_RENDER.fov,
     aperture: asAperture(o["aperture"]) ?? DEFAULT_RENDER.aperture,
     focusBlur: asFocusBlur(o["focusBlur"]) ?? DEFAULT_RENDER.focusBlur,
+    performanceMode: typeof o["performanceMode"] === "boolean" ? o["performanceMode"] : DEFAULT_RENDER.performanceMode,
   };
 }
 
@@ -269,7 +279,8 @@ export function setRenderPref<K extends keyof RenderPrefs>(key: K, value: Render
           : key === "fov" ? asFov(value)
             : key === "aperture" ? asAperture(value)
               : key === "focusBlur" ? asFocusBlur(value)
-                : asBrightness(value);
+                : key === "performanceMode" ? (typeof value === "boolean" ? value : null)
+                  : asBrightness(value);
   if (ok === null || current[key] === ok) return;
   // A fresh object rather than a mutation, so a subscriber may hold the result
   // of renderPrefs() and compare identity to decide it must redraw.
