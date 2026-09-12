@@ -41,12 +41,13 @@ export interface SurfaceSpec {
 /** One node of a material's surface graph, the general form the node editor
  *  produces. A generator (noise/scratches/brushed/voronoi) reads world space and
  *  gives a float; `ramp` turns a float into a colour; `mix` blends two floats;
- *  `output` is the sink with roughness / bump / colour ports. Params are baked
- *  into the compiled shader (numbers, or "#rrggbb"); `in` wires an input port to
- *  another node's id. See viewport/proceduralSurface.ts for the compiler. */
+ *  `math` combines two floats (multiply/add/min/max/pow); `output` is the sink
+ *  with roughness / bump / colour ports. Params are baked into the compiled
+ *  shader (numbers, or "#rrggbb"); `in` wires an input port to another node's id.
+ *  See viewport/proceduralSurface.ts for the compiler. */
 export interface SurfaceNode {
   id: string;
-  type: "noise" | "scratches" | "brushed" | "voronoi" | "ramp" | "mix" | "output";
+  type: "noise" | "scratches" | "brushed" | "voronoi" | "ramp" | "mix" | "math" | "output";
   params?: Record<string, number | string>;
   in?: Record<string, string>;
   /** Canvas position in the node editor. Layout only, ignored by the compiler
@@ -251,7 +252,7 @@ export function normalizeMaterial(raw: unknown, index = 0): MaterialDef | null {
 }
 
 const NODE_TYPES: readonly SurfaceNode["type"][] = [
-  "noise", "scratches", "brushed", "voronoi", "ramp", "mix", "output",
+  "noise", "scratches", "brushed", "voronoi", "ramp", "mix", "math", "output",
 ];
 
 /** Narrow an untrusted surface graph, or drop it. Structural only: a node needs

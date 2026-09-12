@@ -257,6 +257,20 @@ export function compileGraph(graph: SurfaceGraph): string {
     } else if (n.type === "mix") {
       const t = n.in?.["t"] ? varOf(n.in["t"]!) : flt(p["t"], 0.5);
       lines.push(`float ${varOf(n.id)} = mix(${inFloat(n, "a", "0.0")}, ${inFloat(n, "b", "0.0")}, ${t});`);
+    } else if (n.type === "math") {
+      // combine two floats; an unlinked port falls back to its constant param.
+      // Result is clamped to [0,1] so it stays a well-behaved height downstream.
+      const a = n.in?.["a"] ? varOf(n.in["a"]!) : flt(p["a"], 0.5);
+      const b = n.in?.["b"] ? varOf(n.in["b"]!) : flt(p["b"], 0.5);
+      const op = typeof p["op"] === "string" ? p["op"] : "multiply";
+      const expr =
+        op === "add" ? `${a} + ${b}` :
+        op === "subtract" ? `${a} - ${b}` :
+        op === "min" ? `min(${a}, ${b})` :
+        op === "max" ? `max(${a}, ${b})` :
+        op === "pow" ? `pow(max(${a}, 0.0), ${b})` :
+        `${a} * ${b}`;
+      lines.push(`float ${varOf(n.id)} = clamp(${expr}, 0.0, 1.0);`);
     } else if (n.type === "output") {
       out = n;
     }

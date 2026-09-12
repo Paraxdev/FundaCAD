@@ -24,17 +24,18 @@ const store = useEngine().store;
 type NodeType = SurfaceNode["type"];
 const LABEL: Record<NodeType, string> = {
   noise: "Noise", scratches: "Scratches", brushed: "Brushed", voronoi: "Wear",
-  ramp: "Ramp", mix: "Mix", output: "Output",
+  ramp: "Ramp", mix: "Mix", math: "Math", output: "Output",
 };
-const ADDABLE: NodeType[] = ["noise", "scratches", "brushed", "voronoi", "ramp", "mix"];
+const ADDABLE: NodeType[] = ["noise", "scratches", "brushed", "voronoi", "ramp", "mix", "math"];
+const MATH_OPS = ["multiply", "add", "subtract", "min", "max", "pow"];
 // input ports per type, and the output type each node produces (for wiring rules)
 const INPUTS: Record<NodeType, string[]> = {
   noise: [], scratches: [], brushed: [], voronoi: [],
-  ramp: ["t"], mix: ["a", "b", "t"], output: ["roughness", "bump", "color"],
+  ramp: ["t"], mix: ["a", "b", "t"], math: ["a", "b"], output: ["roughness", "bump", "color"],
 };
 const OUT_TYPE: Record<NodeType, "float" | "vec3" | "none"> = {
   noise: "float", scratches: "float", brushed: "float", voronoi: "float",
-  ramp: "vec3", mix: "float", output: "none",
+  ramp: "vec3", mix: "float", math: "float", output: "none",
 };
 // what each INPUT port expects, so a float cannot be wired into a colour port
 // (which would be a shader type error)
@@ -54,6 +55,7 @@ function defaultGraph(): SurfaceGraph {
 function defaults(type: NodeType): Record<string, number | string> {
   if (type === "ramp") return { colorA: "#201810", colorB: "#e0a060" };
   if (type === "mix") return { t: 0.5 };
+  if (type === "math") return { op: "multiply", a: 0.5, b: 0.5 };
   if (type === "scratches" || type === "brushed") return { scale: 6, angle: 0 };
   return { scale: 6 };
 }
@@ -72,7 +74,10 @@ function addNode(type: NodeType) {
   // than through toWorld, which expects page coordinates.
   const cw = canvasEl.value?.clientWidth ?? 600, ch = canvasEl.value?.clientHeight ?? 300;
   const wx = (cw / 2 - pan.value.x) / zoom.value, wy = (ch / 2 - pan.value.y) / zoom.value;
-  g.value.nodes.push({ id: uid(), type, x: Math.round(wx - NODE_W / 2), y: Math.round(wy - 20), params: defaults(type) });
+  // cascade each new node off the centre so successive adds do not stack exactly
+  // on top of one another (which would bury the lower ones' ports).
+  const off = (g.value.nodes.length % 6) * 26;
+  g.value.nodes.push({ id: uid(), type, x: Math.round(wx - NODE_W / 2 + off), y: Math.round(wy - 20 + off), params: defaults(type) });
   sync();
 }
 function removeNode(id: string) {
@@ -129,6 +134,8 @@ const NUM_PARAMS: Record<NodeType, { key: string; label: string; min: number; ma
   scratches: [{ key: "scale", label: "Scale", min: 0.5, max: 30, step: 0.5 }, { key: "angle", label: "Angle", min: 0, max: 3.14, step: 0.01 }],
   brushed: [{ key: "scale", label: "Scale", min: 0.5, max: 30, step: 0.5 }, { key: "angle", label: "Angle", min: 0, max: 3.14, step: 0.01 }],
   mix: [{ key: "t", label: "Mix", min: 0, max: 1, step: 0.01 }],
+  // a/b sliders show only for the ports left unwired; the op is a select below
+  math: [{ key: "a", label: "A", min: 0, max: 1, step: 0.01 }, { key: "b", label: "B", min: 0, max: 1, step: 0.01 }],
   ramp: [],
   output: [
     { key: "roughAmount", label: "Rough", min: 0, max: 1, step: 0.01 },
@@ -319,7 +326,15 @@ const pending = computed(() => {
           >out<span class="ne-dot"></span></div>
           <!-- params -->
           <div class="ne-params" :style="{ paddingTop: (INPUTS[n.type].length ? INPUTS[n.type].length * 20 + 8 : 6) + 'px' }">
-            <label v-for="p in NUM_PARAMS[n.type]" :key="p.key" class="ne-prow">
+            <label v-if="n.type === 'math'" class="ne-prow">
+              <span>Op</span>
+              <select class="ne-select" :value="pcol(n, 'op', 'multiply')"
+                @change="setParam(n.id, 'op', ($event.target as HTMLSelectElement).value, false)">
+                <option v-for="o in MATH_OPS" :key="o" :value="o">{{ o }}</option>
+              </select>
+            </label>
+            <!-- a/b constant only matters while that port is unwired -->
+            <label v-for="p in NUM_PARAMS[n.type]" v-show="!(n.type === 'math' && n.in?.[p.key])" :key="p.key" class="ne-prow">
               <span>{{ p.label }}</span>
               <input class="sm-slider" type="range" :min="p.min" :max="p.max" :step="p.step"
                 :value="pnum(n, p.key, p.key === 'roughAmount' ? 0.5 : 0)"
@@ -365,6 +380,8 @@ const pending = computed(() => {
 .ne-params { padding: 6px 8px; display: flex; flex-direction: column; gap: 4px; }
 .ne-prow { display: flex; align-items: center; gap: 6px; }
 .ne-prow > span { width: 46px; color: var(--text-dim); }
+.ne-select { flex: 1; background: var(--panel); color: var(--text); border: 1px solid var(--line);
+  border-radius: var(--r-sm); font-size: 11px; padding: 1px 4px; }
 .ne-port { position: absolute; display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-dim); cursor: pointer; }
 .ne-in { left: -6px; }
 .ne-out { right: -6px; flex-direction: row-reverse; top: 14px; }

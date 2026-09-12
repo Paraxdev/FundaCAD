@@ -50,4 +50,33 @@ describe("compileGraph", () => {
     expect(graphKey(graph)).toBe(graphKey(JSON.parse(JSON.stringify(graph))));
     expect(graphKey(undefined)).toBe("");
   });
+
+  it("combines two floats with the chosen math op, clamped to [0,1]", () => {
+    const g: SurfaceGraph = {
+      output: "out",
+      nodes: [
+        { id: "n1", type: "noise", params: { scale: 6 } },
+        { id: "n2", type: "voronoi", params: { scale: 4 } },
+        { id: "m1", type: "math", params: { op: "multiply", a: 0.5, b: 0.5 }, in: { a: "n1", b: "n2" } },
+        { id: "out", type: "output", in: { roughness: "m1" } },
+      ],
+    };
+    const glsl = compileGraph(g);
+    expect(glsl).toContain("float g_m1 = clamp(g_n1 * g_n2, 0.0, 1.0);");
+    expect(glsl).toContain("o.rough = g_m1;");
+  });
+
+  it("uses the constant param for a math port that is left unwired", () => {
+    const g: SurfaceGraph = {
+      output: "out",
+      nodes: [
+        { id: "n1", type: "noise", params: { scale: 6 } },
+        { id: "m1", type: "math", params: { op: "pow", b: 3 }, in: { a: "n1" } },
+        { id: "out", type: "output", in: { roughness: "m1" } },
+      ],
+    };
+    const glsl = compileGraph(g);
+    // a is wired to n1, b falls back to its baked constant 3
+    expect(glsl).toContain("float g_m1 = clamp(pow(max(g_n1, 0.0), 3.00000), 0.0, 1.0);");
+  });
 });
