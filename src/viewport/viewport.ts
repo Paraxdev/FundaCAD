@@ -12,6 +12,7 @@ import {
 } from "./cameras";
 import {
   buildBodyMesh,
+  applyGlassLook,
   buildEdgeLines,
   buildSectionGhosts,
   bodyMaterials,
@@ -1025,13 +1026,17 @@ export class Viewport {
       const glow = ghost ? 0 : (f?.emissive ?? FINISH.emissive);
       mat.emissive.set(glow > 0 ? (this.bodyPaint[b.id] ?? 0xffffff) : 0x000000);
       mat.emissiveIntensity = glow * MAX_EMISSIVE_INTENSITY;
-      const opacity = ghost ? Math.min(f ? f.opacity : 1, ghostOpacity) : f ? f.opacity : 1;
-      mat.transparent = opacity < 1;
-      mat.opacity = opacity;
-      // Off for anything see-through, so what is behind it is actually behind
-      // it. That is the whole point of a translucent body in CAD, and it is
-      // what x-ray already did.
-      mat.depthWrite = opacity >= 1;
+      // A clear, non-metal finish becomes real glass (refraction); anything else,
+      // and every ghost, keeps the plain fade below.
+      if (!applyGlassLook(mat, f ? f.opacity : 1, f ? f.metalness : FINISH.metalness, ghost)) {
+        const opacity = ghost ? Math.min(f ? f.opacity : 1, ghostOpacity) : f ? f.opacity : 1;
+        mat.transparent = opacity < 1;
+        mat.opacity = opacity;
+        // Off for anything see-through, so what is behind it is actually behind
+        // it. That is the whole point of a translucent body in CAD, and it is
+        // what x-ray already did.
+        mat.depthWrite = opacity >= 1;
+      }
 
       // The per-face materials, by the SAME rules and in the same pass. That is
       // the point of doing it here: x-ray, the stale ghost and the emissive
@@ -1048,10 +1053,12 @@ export class Viewport {
           const fglow = ghost ? 0 : ff.emissive;
           fm.emissive.set(fglow > 0 ? (extra.colors[i] ?? 0xffffff) : 0x000000);
           fm.emissiveIntensity = fglow * MAX_EMISSIVE_INTENSITY;
-          const fo = ghost ? Math.min(ff.opacity, ghostOpacity) : ff.opacity;
-          fm.transparent = fo < 1;
-          fm.opacity = fo;
-          fm.depthWrite = fo >= 1;
+          if (!applyGlassLook(fm, ff.opacity, ff.metalness, ghost)) {
+            const fo = ghost ? Math.min(ff.opacity, ghostOpacity) : ff.opacity;
+            fm.transparent = fo < 1;
+            fm.opacity = fo;
+            fm.depthWrite = fo >= 1;
+          }
           fm.clippingPlanes = mat.clippingPlanes;
         }
       }

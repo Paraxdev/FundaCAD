@@ -23,6 +23,7 @@
 
 import * as THREE from "three";
 import { finishOf, type MaterialDef } from "../document/materials";
+import { applyGlassLook } from "./render";
 
 /** Rendered at this many pixels square, then shown at whatever size the CSS
  *  asks for. Deliberately larger than the ~56px it is drawn at: this is one
@@ -105,7 +106,7 @@ function build(): Rig | null {
   const camera = new THREE.PerspectiveCamera(28, 1, 0.1, 100);
   camera.position.set(0, 0, 4.6);
 
-  const material = new THREE.MeshStandardMaterial({ color: 0xffffff });
+  const material = new THREE.MeshPhysicalMaterial({ color: 0xffffff });
   const ball = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 32), material);
   scene.add(ball);
 
@@ -169,9 +170,13 @@ export function materialPreview(m: MaterialDef): string | null {
   r.material.color.set(m.color);
   r.material.metalness = f.metalness;
   r.material.roughness = f.roughness;
-  r.material.opacity = f.opacity;
-  r.material.transparent = f.opacity < 1;
-  r.material.depthWrite = f.opacity >= 1;
+  // A clear, non-metal finish previews as real glass too (refraction against the
+  // room environment), so the swatch matches what the body will look like.
+  if (!applyGlassLook(r.material, f.opacity, f.metalness, false)) {
+    r.material.opacity = f.opacity;
+    r.material.transparent = f.opacity < 1;
+    r.material.depthWrite = f.opacity >= 1;
+  }
   // The emissive tint is the material's OWN colour, as the viewport does it, so
   // a lit indicator previews as a glowing ball of the right hue rather than a
   // white one. There is no bloom out here, so the slider shows as a surface that

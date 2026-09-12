@@ -321,7 +321,7 @@ export function buildBodyMesh(
   }
   geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
 
-  const mat = new THREE.MeshStandardMaterial({
+  const mat = new THREE.MeshPhysicalMaterial({
     color: 0xffffff,
     vertexColors: true,
     // The one definition of the app's default finish, shared with materials so
@@ -515,6 +515,53 @@ export function bodyMaterials(body: BodyMesh): THREE.MeshStandardMaterial[] {
   const m = body.mesh.material;
   const list = Array.isArray(m) ? m : [m];
   return list.filter((x): x is THREE.MeshStandardMaterial => x instanceof THREE.MeshStandardMaterial);
+}
+
+// mm of virtual wall a glass body refracts through. Fixed rather than measured:
+// transmission's bend scales with thickness, and a few mm reads as glass across
+// the range of sizes a printed part runs to without a per-body measurement.
+export const GLASS_THICKNESS = 3;
+
+/** Give a translucent, non-metallic finish REAL glass: transmission (refraction)
+ *  rather than flat alpha, so what is behind bends and the surface catches the
+ *  light a sheet of glass does. Returns true when it took, so the caller leaves
+ *  the plain opacity/transparent/depthWrite path alone.
+ *
+ *  Ghosts opt out: x-ray and the stale-model preview are see-through EFFECTS
+ *  over the whole model, and bending the very thing the user is trying to look
+ *  past is the opposite of the point, they keep the plain fade. A metal is never
+ *  glass however thin its alpha, so a translucent chrome stays a tinted mirror.
+ *
+ *  Toggling transmission across zero flips the USE_TRANSMISSION shader define, so
+ *  it recompiles the material, done only on the crossing, and applyBodyFinish
+ *  runs on material CHANGES, not per frame, so the recompile is not a per-frame
+ *  cost. */
+export function applyGlassLook(
+  mat: THREE.MeshStandardMaterial,
+  opacity: number,
+  metalness: number,
+  ghost: boolean,
+): boolean {
+  const phys = mat as THREE.MeshPhysicalMaterial;
+  if (!(phys as { isMeshPhysicalMaterial?: boolean }).isMeshPhysicalMaterial) return false;
+  const glassy = !ghost && opacity < 1 && metalness < 0.5;
+  const was = phys.transmission > 0;
+  if (glassy) {
+    // A clearer material (lower opacity) transmits more; the +0.25 keeps even a
+    // frosted 0.6 visibly glassy, since flat alpha at that opacity already read
+    // as glass and transmission must not look LESS clear than the fade it replaces.
+    phys.transmission = Math.min(1, 1 - opacity + 0.25);
+    phys.ior = 1.5;
+    phys.thickness = GLASS_THICKNESS;
+    phys.transparent = false; // transmission carries the see-through, not alpha
+    phys.opacity = 1;
+    phys.depthWrite = true;
+  } else {
+    phys.transmission = 0;
+    phys.thickness = 0;
+  }
+  if (was !== glassy) phys.needsUpdate = true;
+  return glassy;
 }
 
 function disposeBody(body: BodyMesh) {
