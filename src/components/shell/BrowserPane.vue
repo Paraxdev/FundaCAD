@@ -127,6 +127,8 @@ interface RowNode {
   remove?: (() => void) | undefined;
   extraMenu?: CtxItem[] | undefined;
   dragStart?: (() => void) | undefined;
+  acceptDrop?: (() => boolean) | undefined;
+  dropHere?: (() => void) | undefined;
 }
 interface EmptyNode { kind: "empty"; k: string; text: string }
 /** A section some plugin contributed, drawn as its own component. The panel
@@ -388,6 +390,29 @@ function moveElementMenu(id: string): CtxItem {
   return { label: "Move to", children: rows };
 }
 
+/** Drop the dragged bodies onto ANOTHER body to group them. If the target is
+ *  already in an element, the dragged bodies join it; otherwise a fresh element
+ *  is made holding the target and the dragged bodies together. This is the
+ *  "parent one thing under another" gesture people reach for before they find
+ *  the Move-to-element menu, so it does the sensible thing rather than nothing. */
+function dropOntoBody(targetId: string) {
+  const d = browser.drag;
+  browser.endDrag();
+  if (!d || d.kind !== "bodies") return;
+  const ids = d.ids.filter((id) => id !== targetId);
+  if (!ids.length) return;
+  const el = store.bodyElementOf(targetId);
+  if (el) store.setBodiesElement(ids, el);
+  else fileIntoNewElement([targetId, ...ids]);
+}
+
+/** Would dropping the in-flight drag onto this body do anything? Only a body
+ *  drag that is not just the target itself. */
+function canDropOntoBody(targetId: string): boolean {
+  const d = browser.drag;
+  return !!d && d.kind === "bodies" && d.ids.some((id) => id !== targetId);
+}
+
 /** Take the in-flight drag into `element` (null = the top level). Both drop
  *  kinds land here so the two targets, a folder head and the Bodies head,
  *  cannot drift apart. */
@@ -560,9 +585,11 @@ const nodes = useDocValue((doc): TreeNode[] => {
         ...bodyExtraMenu(b.id),
       ],
       dragStart: () => browser.startDrag({ kind: "bodies", ids: actOn(b.id) }),
+      acceptDrop: () => canDropOntoBody(b.id),
+      dropHere: () => dropOntoBody(b.id),
       rename: (name: string) => store.setBodyName(b.id, name),
       remove: () => store.removeBody(b.id),
-      title: "Click to select (Ctrl+click adds, Shift+click takes a run) · drag into an element · double-click to rename · right-click for Move / Material / Visibility / Rename / Delete · drag across eyes to show or hide many",
+      title: "Click to select (Ctrl+click adds, Shift+click takes a run) · drag onto another body to group them, or into an element · double-click to rename · right-click for Move / Material / Visibility / Rename / Delete · drag across eyes to show or hide many",
     };
   };
 
@@ -792,6 +819,8 @@ onUnmounted(() => root.value?.removeEventListener("wheel", onWheel));
         :remove="n.remove"
         :extra-menu="n.extraMenu"
         :drag-start="n.dragStart"
+        :accept-drop="n.acceptDrop"
+        :drop-here="n.dropHere"
       />
       <div v-else-if="n.kind === 'empty'" class="empty-state tree-child">{{ n.text }}</div>
 

@@ -68,7 +68,8 @@
    the head already changes background on hover, and the pointer is by
    definition over it during a drag, so a second background is a state the user
    cannot tell from the one they get by moving the mouse. */
-.tree-folder.drop-into {
+.tree-folder.drop-into,
+.feature-row.drop-into {
   box-shadow: inset 0 0 0 1px var(--accent);
   background: var(--accent-tint);
 }

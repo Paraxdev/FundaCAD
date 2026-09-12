@@ -7,7 +7,7 @@
 // esc() on every one of them; putting esc() back would double-escape and show
 // "Bracket & Plate" as "Bracket &amp; Plate".
 
-import { computed, nextTick, useTemplateRef, watch } from "vue";
+import { computed, nextTick, ref, useTemplateRef, watch } from "vue";
 import Icon from "./Icon.vue";
 import InlineLabel from "./InlineLabel.vue";
 import { indent } from "../../ui/browserTree";
@@ -49,6 +49,12 @@ const props = defineProps<{
   /** Begin dragging this row (a body being filed into an element). Omit and the
    *  row is not draggable at all, which is what every non-body row stays. */
   dragStart?: (() => void) | undefined;
+  /** Can what is being dragged land on THIS row? Read off the store, not the
+   *  event, for the same reason as TreeFolder: dataTransfer is unreadable until
+   *  the drop. Dropping a body onto another body groups them into an element. */
+  acceptDrop?: (() => boolean) | undefined;
+  /** Take the drop. */
+  dropHere?: (() => void) | undefined;
 }>();
 
 const browser = useBrowserStore();
@@ -139,12 +145,38 @@ function onDragStart(e: DragEvent) {
 function onMouseDown(e: MouseEvent) {
   if (e.shiftKey && !(e.target as HTMLElement | null)?.closest?.("[contenteditable='true']")) e.preventDefault();
 }
+
+// --- drop target (a body dropped onto this body groups them) --------------
+// Same counter-not-flag and read-the-store-not-the-event reasoning as
+// TreeFolder; see there.
+const inside = ref(0);
+const canTake = computed(() => !!props.dropHere && props.acceptDrop?.() !== false);
+
+function onOver(e: DragEvent) {
+  if (!canTake.value) return;
+  e.preventDefault();
+  e.stopPropagation();
+  if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+}
+function onEnter() {
+  if (canTake.value) inside.value++;
+}
+function onLeave() {
+  if (inside.value > 0) inside.value--;
+}
+function onDrop(e: DragEvent) {
+  inside.value = 0;
+  if (!canTake.value) return;
+  e.preventDefault();
+  e.stopPropagation();
+  props.dropHere?.();
+}
 </script>
 
 <template>
   <div
     class="feature-row tree-child"
-    :class="{ selected: selected, error: error }"
+    :class="{ selected: selected, error: error, 'drop-into': inside > 0 }"
     :style="style"
     :title="title"
     :draggable="!!dragStart"
@@ -154,6 +186,10 @@ function onMouseDown(e: MouseEvent) {
     @contextmenu="openMenu"
     @dragstart="onDragStart"
     @dragend="browser.endDrag()"
+    @dragenter="onEnter"
+    @dragleave="onLeave"
+    @dragover="onOver"
+    @drop="onDrop"
     @pointerenter="eyeOver?.()"
   >
     <span class="feature-icon"><Icon :name="icon" :size="14" /></span>

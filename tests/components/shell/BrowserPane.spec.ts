@@ -334,6 +334,37 @@ describe("BrowserPane", () => {
     expect(fake.store.bodyElementOf("body1")).toBeUndefined();
   });
 
+  it("groups a body dropped onto another body, into the target's element when it has one", async () => {
+    const fake = makeEngine({ parameters: {}, features: [] }, [
+      { id: "body1", name: "Bracket" },
+      { id: "body2", name: "Plate" },
+      { id: "body3", name: "Screw" },
+    ]);
+    const w = render(fake);
+    await nextTick();
+
+    // a lone target: both bodies land together in a fresh element
+    await rowNamed(w, "Bracket").trigger("dragstart");
+    await rowNamed(w, "Plate").trigger("dragover");
+    await rowNamed(w, "Plate").trigger("drop");
+    const made = fake.store.bodyElementOf("body2");
+    expect(made).toBeDefined();
+    expect(fake.store.bodyElementOf("body1")).toBe(made);
+
+    // a target already in an element: the dropped body joins that one
+    await nextTick();
+    await rowNamed(w, "Screw").trigger("dragstart");
+    await rowNamed(w, "Plate").trigger("drop");
+    expect(fake.store.bodyElementOf("body3")).toBe(made);
+    expect(fake.store.bodyElements).toHaveLength(1);
+
+    // the control: a body dropped onto itself does nothing
+    await nextTick();
+    await rowNamed(w, "Screw").trigger("dragstart");
+    await rowNamed(w, "Screw").trigger("drop");
+    expect(fake.store.bodyElements).toHaveLength(1);
+  });
+
   it("refuses a drop that would bury an element inside its own child", async () => {
     const fake = makeEngine({ parameters: {}, features: [] }, []);
     const w = render(fake);
