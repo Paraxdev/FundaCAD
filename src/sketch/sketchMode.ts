@@ -2002,12 +2002,8 @@ export class SketchMode {
   // --- point: a single click drops a reference/snap point ---------------
   private pointClick(p: THREE.Vector2) {
     const ent: ResolvedEntity = { type: "point", id: newEntityId(), x: p.x, y: p.y };
-    if (this.constructionMode) ent.construction = true;
-    this.entities.push(ent);
-    this.refreshActive();
     this.overlay.setPreview([]);
-    this.requestSolve();
-    this.onState?.();
+    this.addDrawn(ent);
   }
 
   /** the smallest rectangle entity that contains `p`, or null, used to format text
@@ -2200,8 +2196,13 @@ export class SketchMode {
       type: "polygon", id: newEntityId(), x: center.x, y: center.y,
       radius: r, sides: Math.max(3, Math.round(this.polygonSides)), angle,
     };
-    if (this.constructionMode) e.construction = true;
-    this.entities.push(e);
+    this.addDrawn(e);
+  }
+
+  /** Add a drawn entity, as construction geometry when that mode is on. */
+  private addDrawn(ent: ResolvedEntity) {
+    if (this.constructionMode) ent.construction = true;
+    this.entities.push(ent);
     this.refreshActive();
     this.requestSolve();
     this.onState?.();
@@ -2240,11 +2241,7 @@ export class SketchMode {
     // w is the half-width (distance from the axis); the slot entity stores overall width
     if (a.distanceTo(b) < 1e-4 || w < 1e-4) return;
     const e: ResolvedEntity = { type: "slot", id: newEntityId(), x1: a.x, y1: a.y, x2: b.x, y2: b.y, width: 2 * w };
-    if (this.constructionMode) e.construction = true;
-    this.entities.push(e);
-    this.refreshActive();
-    this.requestSolve();
-    this.onState?.();
+    this.addDrawn(e);
   }
 
   // --- circle by 2 points (diameter endpoints) --------------------------
@@ -2281,11 +2278,7 @@ export class SketchMode {
   private commitCircle(center: THREE.Vector2, r: number) {
     if (r < 1e-4) return;
     const ent: ResolvedEntity = { type: "circle", id: newEntityId(), radius: r, x: center.x, y: center.y };
-    if (this.constructionMode) ent.construction = true;
-    this.entities.push(ent);
-    this.refreshActive();
-    this.requestSolve();
-    this.onState?.();
+    this.addDrawn(ent);
   }
 
   // --- center rectangle: click center, then a corner --------------------
@@ -2303,11 +2296,7 @@ export class SketchMode {
     if (w < 1e-4 || h < 1e-4) return;
     this.dim.hide();
     const ent: ResolvedEntity = { type: "rectangle", id: newEntityId(), width: w, height: h, x: center.x, y: center.y };
-    if (this.constructionMode) ent.construction = true;
-    this.entities.push(ent);
-    this.refreshActive();
-    this.requestSolve();
-    this.onState?.();
+    this.addDrawn(ent);
   }
 
   // --- three-point rectangle: click one full EDGE, then its thickness -----
@@ -2373,11 +2362,7 @@ export class SketchMode {
       // is byte-identical to one drawn with the others.
       ...(r.angle ? { angle: r.angle } : {}),
     };
-    if (this.constructionMode) ent.construction = true;
-    this.entities.push(ent);
-    this.refreshActive();
-    this.requestSolve();
-    this.onState?.();
+    this.addDrawn(ent);
   }
 
   // --- mirror: click a line; reflect the multi-selection across it -------
