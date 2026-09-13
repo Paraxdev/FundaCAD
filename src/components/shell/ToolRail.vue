@@ -11,7 +11,7 @@ import { useCommandPaletteStore } from "../../stores/commandPalette";
 import { useSketchPaletteStore } from "../../stores/sketchPalette";
 import { onContribChange } from "../../plugins/contrib";
 import {
-  faceOf, familyOf, modelRail, sketchRail,
+  faceOf, familyOf, modelRail, sketchRail, sketchTool,
   type RailEntry, type RailFamily, type RailTool,
 } from "../../ui/railDefs";
 import { HOLD_MS, IDLE, holdStep, type HoldEvent, type HoldPhase } from "../../ui/holdGesture";
@@ -59,7 +59,9 @@ const entries = computed<RailEntry[]>(() => {
   pluginTick.value;
   if (mode.value === "sketch") return sketchRail();
   if (mode.value === "selection") {
+    const onFace = sel.kind.value === "face" && engine.viewport.selectedFaceSketchPlane() ? sketchTool() : null;
     return [
+      ...(onFace ? [onFace] : []),
       ...sel.offers.value.map((o): RailTool => ({
         kind: "tool", action: `offer:${o.tool}`, label: o.label, icon: o.iconName, ...(o.hint ? { keys: o.hint } : {}),
       })),

@@ -70,6 +70,12 @@ export function modelRail(groups: Group[] = modelGroups()): RailEntry[] {
   return out;
 }
 
+/** The Sketch tool as the model rail carries it, for offering on a flat face. */
+export function sketchTool(groups: Group[] = modelGroups()): RailTool | null {
+  const leaf = groups.flatMap((g) => g.items.flatMap(leavesOf)).find((t) => t.action === "sketch");
+  return leaf ? railTool(leaf) : null;
+}
+
 function sketchLeaf(action: string): ToolItem {
   for (const g of SKETCH) for (const it of g.items) for (const leaf of leavesOf(it)) if (leaf.action === action) return leaf;
   throw new Error(`sketch rail names an unknown tool: ${action}`);
