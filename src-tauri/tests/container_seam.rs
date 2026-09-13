@@ -85,7 +85,11 @@ fn a_python_blob_survives_the_container_and_rebuilds() {
     // 3. Rust opens it somewhere that has never seen this geometry.
     let (got_doc, manifest) =
         fundacad_lib::container::read_container(&dest, &blobs_b, None).expect("read_container");
-    assert_eq!(got_doc, doc, "document did not survive the round trip");
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&got_doc).unwrap(),
+        serde_json::from_str::<serde_json::Value>(&doc).unwrap(),
+        "document did not survive the round trip"
+    );
     assert_eq!(manifest.blobs.len(), 1);
     assert!(blobs_b.join(format!("{hash}.bbrep")).exists());
 

@@ -48,6 +48,16 @@ pub struct Layout {
 
 pub const SMALL_LAYOUT: Layout = Layout { shard_size: 4096, data_shards: 8, parity_shards: 4 };
 pub const LARGE_LAYOUT: Layout = Layout { shard_size: 1 << 16, data_shards: 32, parity_shards: 4 };
+const MIN_SHARD: u32 = 64;
+
+/// A section smaller than one full group gets smaller and fewer data shards, so
+/// a 70 KB part is not padded out to a 2 MB group. The parity count stays.
+pub fn fit_layout(most: Layout, stored_len: u64) -> Layout {
+    let k_max = most.data_shards as u64;
+    let shard = stored_len.div_ceil(k_max).clamp(MIN_SHARD as u64, most.shard_size as u64);
+    let k = stored_len.div_ceil(shard).clamp(1, k_max);
+    Layout { shard_size: shard as u32, data_shards: k as u16, parity_shards: most.parity_shards }
+}
 
 /// Cap on what one section may expand to, checked against the declared sizes
 /// before anything is inflated.
@@ -185,7 +195,7 @@ fn write_section<W: Write + Seek>(out: &mut W, spec: &SectionSpec) -> Result<Ent
     let mut raw_hash = [0u8; 16];
     raw_hash.copy_from_slice(&hasher.finalize());
 
-    let layout = spec.layout;
+    let layout = fit_layout(spec.layout, stored.len() as u64);
     let offset = out.stream_position().map_err(io)?;
     let entry = Entry {
         kind: spec.kind,
@@ -719,6 +729,18 @@ mod tests {
         bytes[geom.offset as usize + 3] ^= 1;
         std::fs::write(&path, &bytes).unwrap();
         assert_eq!(verify(&path).unwrap().repaired_shards, 1);
+    }
+
+    #[test]
+    fn a_small_section_is_fitted_instead_of_padded_to_a_group() {
+        let dir = tmpdir("fitted");
+        let (path, _, geometry) = sample(&dir);
+        let entries = read_index(&mut File::open(&path).unwrap(), &mut RepairReport::default()).unwrap();
+        let geom = entries.iter().find(|e| e.kind == KIND_GEOMETRY).unwrap();
+        assert_eq!(geom.layout.parity_shards, LARGE_LAYOUT.parity_shards);
+        assert!(std::fs::metadata(&path).unwrap().len() < geometry.len() as u64 * 2);
+        assert_eq!(fit_layout(LARGE_LAYOUT, 1 << 30), LARGE_LAYOUT);
+        assert_eq!(fit_layout(SMALL_LAYOUT, 0), Layout { shard_size: MIN_SHARD, data_shards: 1, parity_shards: 4 });
     }
 
     #[test]

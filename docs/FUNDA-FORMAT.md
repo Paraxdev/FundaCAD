@@ -179,14 +179,20 @@ The writer builds the file at a temporary path beside the target, flushes it to
 stable storage, and renames it over the target, so a crash leaves the old file
 or the new one and never a torn one.
 
-Layouts FundaCAD uses, chosen per section:
+Layouts FundaCAD uses, at most, per section:
 
 | Sections | shard_size | k | m | Overhead | Repairs per group |
 |---|---|---|---|---|---|
 | info, document | 4 KiB | 8 | 4 | 50% | any 4 of 12 shards |
 | geometry, mesh | 64 KiB | 32 | 4 | 12.5% | any 4 of 36 shards |
 
-A reader must accept any layout within the limits in the table above.
+A section shorter than one full group is fitted to its encoded length instead of
+padded: `shard_size = clamp(ceil(stored_len / k_max), 64, shard_max)`, then
+`k = clamp(ceil(stored_len / shard_size), 1, k_max)`, and `m` stays as in the
+table. A 70 KB geometry blob is 32 shards of 2,188 bytes plus 4 parity, not one
+2.3 MB group.
+
+A reader must accept any layout within the limits of the section table.
 
 ## Reading
 
