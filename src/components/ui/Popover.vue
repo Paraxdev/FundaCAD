@@ -4,6 +4,7 @@
 
 import { nextTick, onMounted, onUnmounted, ref, useTemplateRef } from "vue";
 import { placeBeside, type Side } from "../../ui/anchor";
+import { claimEscape } from "../../ui/escapeClaim";
 
 const props = withDefaults(
   defineProps<{
@@ -13,8 +14,10 @@ const props = withDefaults(
     gap?: number;
     /** extra class for the card */
     kind?: string;
+    /** an element beside the anchor the card must also stay clear of */
+    clear?: HTMLElement | null;
   }>(),
-  { side: "right", align: "start", gap: 8, kind: "" },
+  { side: "right", align: "start", gap: 8, kind: "", clear: null },
 );
 const emit = defineEmits<{ close: [] }>();
 
@@ -25,8 +28,10 @@ function place() {
   const a = props.anchor;
   const box = el.value;
   if (!a || !box) return;
+  const r = a.getBoundingClientRect();
+  const c = props.clear?.getBoundingClientRect();
   const p = placeBeside(
-    a.getBoundingClientRect(),
+    c ? { left: Math.min(r.left, c.left), top: r.top, right: Math.max(r.right, c.right), bottom: r.bottom } : r,
     { width: box.offsetWidth, height: box.offsetHeight },
     props.side,
     { width: window.innerWidth, height: window.innerHeight },
@@ -51,6 +56,7 @@ function onKey(e: KeyboardEvent) {
 }
 
 let ro: ResizeObserver | null = null;
+const releaseEscape = claimEscape();
 onMounted(async () => {
   await nextTick();
   place();
@@ -61,6 +67,7 @@ onMounted(async () => {
   window.addEventListener("keydown", onKey, true);
 });
 onUnmounted(() => {
+  releaseEscape();
   ro?.disconnect();
   window.removeEventListener("resize", place);
   document.removeEventListener("pointerdown", onDown, true);

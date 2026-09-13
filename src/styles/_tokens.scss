@@ -151,15 +151,28 @@
      The cards, rail tiles and popovers that sit over the viewport. Softer and
      rounder than the docked chrome on purpose: they float over a lit model, and
      a hard offset shadow there reads as a hole cut in the scene. */
-  --float-bg: rgba(27, 24, 38, 0.9);
-  --float-bg-solid: #1f1b2b;
-  --float-line: rgba(92, 84, 112, 0.55);
-  --float-radius: 10px;
-  --float-tile-radius: 8px;
-  --float-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-  --float-blur: blur(14px) saturate(1.2);
+  --float-bg: color-mix(in srgb, var(--panel) 72%, transparent);
+  --float-bg-solid: color-mix(in srgb, var(--panel) 92%, transparent);
+  --float-line: rgba(255, 255, 255, 0.09);
+  --float-radius: 16px;
+  --float-tile-radius: 11px;
+  --float-chip-radius: 8px;
+  --float-shadow: 0 18px 40px -14px rgba(0, 0, 0, 0.65), 0 3px 10px rgba(0, 0, 0, 0.3);
+  --float-blur: blur(24px) saturate(1.7);
   --float-gap: 12px;
   --rail-tile: 40px;
+
+  /* Glass without refraction: a tinted fill over a heavy blur, a sheen across
+     the top, a lit top edge, and a rim that catches the accent at the far corner. */
+  --glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0) 46%);
+  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 -1px 0 rgba(0, 0, 0, 0.22);
+  --glass-rim: linear-gradient(
+    150deg,
+    rgba(255, 255, 255, 0.28),
+    rgba(255, 255, 255, 0.05) 34%,
+    rgba(255, 255, 255, 0) 62%,
+    color-mix(in srgb, var(--accent) 34%, transparent)
+  );
 
   /* --- stacking, back to front --- */
   --z-float: 20;
@@ -167,4 +180,13 @@
   --z-menu: 3000;
   --z-modal: 4000;
   --z-toast: 5000;
+}
+
+/* A squircle needs a larger radius than a circular corner to look the same size. */
+@supports (corner-shape: squircle) {
+  :root {
+    --float-radius: 26px;
+    --float-tile-radius: 17px;
+    --float-chip-radius: 12px;
+  }
 }

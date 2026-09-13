@@ -370,6 +370,7 @@ function toggleIsolate() {
     <Popover
       v-if="flyout"
       :anchor="flyout.anchor"
+      :clear="railEl"
       side="right"
       :gap="6"
       kind="rail-flyout"
@@ -377,8 +378,9 @@ function toggleIsolate() {
     >
       <div class="rail-flyout-grid" :style="{ gridTemplateRows: `repeat(${flyoutRows}, auto)` }">
       <RailButton
-        v-for="t in flyout.items"
+        v-for="(t, i) in flyout.items"
         :key="t.action"
+        :style="{ '--i': i }"
         :icon="t.icon"
         :label="t.label"
         :keys="t.keys"

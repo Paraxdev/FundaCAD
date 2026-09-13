@@ -1,0 +1,241 @@
+/* ============================================================================
+   GLASS, the finish on everything that floats over the viewport: squircle
+   corners, a blurred tinted fill with a sheen, a lit rim that catches the accent
+   at its far corner, and a neon core on whatever is switched on.
+   Loaded after the files that lay these surfaces out, so it only repaints them.
+   ============================================================================ */
+
+.float-card,
+.float-group,
+.float-popover,
+.rail-tile,
+.rail-pill,
+.context-menu,
+.choice-card,
+.float-right .palette,
+#viewport .prompt,
+.dim-field,
+.dim-btn,
+.dim-unit-menu {
+  corner-shape: squircle;
+  background: var(--glass-sheen), var(--float-bg);
+  -webkit-backdrop-filter: var(--float-blur);
+          backdrop-filter: var(--float-blur);
+  border: 1px solid var(--float-line);
+  box-shadow: var(--glass-inset), var(--float-shadow);
+}
+
+.float-popover,
+.context-menu,
+.choice-card,
+.dim-unit-menu {
+  background: var(--glass-sheen), var(--float-bg-solid);
+}
+
+.float-card,
+.float-group,
+.float-popover,
+.choice-card,
+.float-right .palette {
+  border-radius: var(--float-radius);
+}
+.rail-tile,
+.context-menu {
+  border-radius: var(--float-tile-radius);
+}
+.rail-pill,
+.dim-field,
+.dim-btn,
+.dim-unit-menu {
+  border-radius: var(--float-chip-radius);
+}
+
+.float-card,
+.choice-card,
+.float-right .palette {
+  position: relative;
+}
+
+.float-card::after,
+.float-group::after,
+.float-popover:not(.rail-flyout)::after,
+.rail-tile::after,
+.context-menu::after,
+.choice-card::after,
+.float-right .palette::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  corner-shape: inherit;
+  background: var(--glass-rim);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  pointer-events: none;
+}
+.float-group {
+  position: relative;
+}
+
+/* ---- rail -------------------------------------------------------------------- */
+
+.rail-tile {
+  transition:
+    transform var(--t-fast) var(--ease),
+    background var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
+}
+.rail-btn:hover .rail-tile {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.02) 62%), var(--float-bg);
+  transform: translateY(-1px);
+}
+.rail-btn:active .rail-tile {
+  transform: scale(0.94);
+}
+.rail-btn.active .rail-tile,
+.rail-btn.holding .rail-tile,
+.icon-btn.active {
+  background:
+    radial-gradient(120% 100% at 50% 0%, color-mix(in srgb, var(--accent) 44%, transparent), color-mix(in srgb, var(--accent) 8%, transparent) 72%),
+    var(--float-bg);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  color: var(--accent-hot);
+  box-shadow:
+    var(--glass-inset),
+    0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent),
+    0 8px 22px -8px var(--accent-glow);
+}
+.rail-pill {
+  padding: 3px 9px;
+}
+.rail-btn:hover .rail-pill {
+  border-color: rgba(255, 255, 255, 0.16);
+}
+.rail-corner {
+  right: 4px;
+  bottom: 4px;
+  border-left-width: 4px;
+  border-bottom-width: 4px;
+}
+
+.float-popover:not(.rail-flyout) {
+  animation: glass-in var(--t-med) var(--ease);
+}
+.rail-flyout-grid > .rail-btn {
+  animation: glass-in var(--t-med) var(--ease) both;
+  animation-delay: calc(var(--i, 0) * 16ms);
+}
+@keyframes glass-in {
+  from {
+    opacity: 0;
+    transform: translateX(-4px) scale(0.97);
+  }
+}
+
+/* ---- controls and rows inside the glass ----------------------------------------- */
+
+.icon-btn,
+.float-card-close,
+.float-card-more,
+.feature-row,
+.tree-folder,
+#timeline .timeline-node,
+.ctx-item,
+.opt-row,
+.pop-wide,
+.choice-btn,
+.choice-check,
+#browser .browser-filter,
+.dim-unit,
+.key-chip kbd {
+  corner-shape: squircle;
+}
+.icon-btn {
+  border-radius: calc(var(--float-radius) - 4px);
+}
+.feature-row,
+.tree-folder,
+#timeline .timeline-node,
+.ctx-item,
+.opt-row,
+.pop-wide,
+.choice-btn,
+.choice-check,
+#browser .browser-filter {
+  border-radius: var(--float-chip-radius);
+}
+.key-chip kbd {
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.feature-row.selected,
+#timeline .timeline-node.selected,
+.opt-row.selected {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 22%, transparent), color-mix(in srgb, var(--accent) 6%, transparent));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent);
+  color: var(--accent-hot);
+}
+.opt-row.selected::before {
+  display: none;
+}
+
+.context-menu {
+  padding: 5px;
+}
+.ctx-item:hover {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.dim-field.typed {
+  border-color: color-mix(in srgb, var(--accent) 70%, transparent);
+  box-shadow: var(--glass-inset), 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent), var(--float-shadow);
+}
+.dim-btn.dim-toggle.on {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.pop-wide,
+.palette-btn {
+  corner-shape: squircle;
+  border-radius: var(--float-chip-radius);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.pop-wide:hover,
+.palette-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.pop-wide.ghost {
+  background: none;
+  box-shadow: none;
+}
+
+/* ---- the small chooser ------------------------------------------------------- */
+
+.choice-backdrop {
+  background: rgba(5, 4, 9, 0.35);
+  -webkit-backdrop-filter: blur(6px) saturate(1.2);
+          backdrop-filter: blur(6px) saturate(1.2);
+}
+.choice-card {
+  padding: 18px;
+  animation: glass-in var(--t-med) var(--ease);
+}
+.choice-btn {
+  min-width: 64px;
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.choice-btn:hover {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+}

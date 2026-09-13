@@ -213,9 +213,9 @@ async function screenshot() {
           v-for="v in VIEWS"
           :key="v.view"
           type="button"
-          class="choice-row"
+          class="opt-row"
           @click="engine.viewport.setStandardView(v.view)"
-        ><span class="choice-label">{{ v.label }}</span></button>
+        ><span class="opt-label">{{ v.label }}</span></button>
       </template>
       <template v-else>
         <div class="pop-section">Projection</div>

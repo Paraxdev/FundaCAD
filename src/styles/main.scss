@@ -44,6 +44,7 @@
 @use "welcome";
 // After the panels it restyles as floating cards (_layout, _timeline, _browser).
 @use "float";
+@use "glass";
 @use "targetedit";
 @use "console";
 // Last on purpose, see the header of _icons.scss.
