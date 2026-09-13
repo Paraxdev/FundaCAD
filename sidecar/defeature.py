@@ -51,6 +51,32 @@ def _fp_world(area, cx, cy, cz, loc):
     return (round(area, 2), round(p.X(), 1), round(p.Y(), 1), round(p.Z(), 1))
 
 
+def _area_and_centre(w):
+    """(area, cx, cy, cz) exactly as build123d's `Face.area` and `Face.center()`
+    compute them, without their overhead: `center()` of a planar face repeats the
+    surface integration `area` already did, and builds a Plane object in Python
+    just to answer whether the face is planar."""
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepGProp import BRepGProp, BRepGProp_Face
+    from OCP.BRepTools import BRepTools
+    from OCP.GeomLib import GeomLib_IsPlanarSurface
+    from OCP.GProp import GProp_GProps
+    from OCP.gp import gp_Pnt, gp_Vec
+    from OCP.TopoDS import TopoDS
+    from build123d.geometry import TOLERANCE
+
+    face = TopoDS.Face_s(w)
+    props = GProp_GProps()
+    BRepGProp.SurfaceProperties_s(face, props)
+    if GeomLib_IsPlanarSurface(BRep_Tool.Surface_s(face), TOLERANCE).IsPlanar():
+        c = props.CentreOfMass()
+    else:
+        u0, u1, v0, v1 = BRepTools.UVBounds_s(face)
+        c, n = gp_Pnt(), gp_Vec()
+        BRepGProp_Face(face).Normal(0.5 * (u0 + u1), 0.5 * (v0 + v1), c, n)
+    return (props.Mass(), c.X(), c.Y(), c.Z())
+
+
 def _face_fp(face):
     """Quantized (area, centre) fingerprint, memoized by the face's TShape.
 
@@ -91,14 +117,12 @@ def _face_fp(face):
         # world and separately caching a local copy: that did TWO GProp
         # integrations per miss and measured 43.6 s -> 82.1 s on the first pass,
         # eating the whole benefit. One integration, same as before the memo.
-        lf = face
+        lw = w
         if loc is not None and not loc.IsIdentity():
             from OCP.TopLoc import TopLoc_Location
-            from build123d import Face
 
-            lf = Face(w.Located(TopLoc_Location()))
-        c = lf.center()
-        local = (lf.area, c.X, c.Y, c.Z)
+            lw = w.Located(TopLoc_Location())
+        local = _area_and_centre(lw)
         fp = _fp_world(*local, loc)
     except Exception:
         return None
