@@ -24,6 +24,7 @@
 import * as THREE from "three";
 import { finishOf, type MaterialDef } from "../document/materials";
 import { applyClearcoat, applyGlassLook } from "./render";
+import { LruCache } from "../lib/lruCache";
 
 /** Rendered at this many pixels square, then shown at whatever size the CSS
  *  asks for. Deliberately larger than the ~56px it is drawn at: this is one
@@ -50,7 +51,9 @@ interface Rig {
 
 let rig: Rig | null = null;
 let dead = false; // context creation failed once; stop trying
-const cache = new Map<string, string>();
+// Keyed by appearance, so every step of a slider drag is a new entry, and each
+// is a PNG data URL of tens of kilobytes.
+const cache = new LruCache<string, string>(160);
 const ready = new Set<() => void>();
 
 /** The ground the sphere sits against: a soft top-to-bottom gradient, drawn
@@ -140,7 +143,9 @@ async function loadEnvironment(): Promise<void> {
   try {
     const { RoomEnvironment } = await import("three/examples/jsm/environments/RoomEnvironment.js");
     const pmrem = new THREE.PMREMGenerator(rig.renderer);
-    rig.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    const room = new RoomEnvironment();
+    rig.scene.environment = pmrem.fromScene(room, 0.04).texture;
+    room.dispose();
     pmrem.dispose();
   } catch {
     return; // no reflections; a metal reads dark, which is survivable

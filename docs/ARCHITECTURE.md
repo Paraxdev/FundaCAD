@@ -101,6 +101,47 @@ reason, not a quick patch.
    The keymap dispatcher, the command palette, and the `?` shortcut HUD all read from
    this one table so they can't disagree about what a key does.
 
+## Frontend structure, state and lifetimes
+
+The frontend passes its core objects down by parameter. There is no service
+locator and no container.
+
+- **The composition root** is `src/app/engine.ts`. It builds the `Viewport`, the
+  `DocumentStore`, the `SketchOverlay`, `SketchMode` and every tool once, and holds
+  them on one `Engine` record.
+- **Tools and modes take what they use in their constructor**, for example
+  `new MoveTool(viewport, store)` or `new SectionTool(viewport, { toolBusy })`. A
+  dependency that would be circular is passed as a late-bound function
+  (`toolBusy: () => e.toolBusy()`) rather than as the object.
+- **Behaviour spread over the engine** is a factory that takes the engine and
+  returns functions: `createToolBusy(e)`, `createFeatureStarters({...})`,
+  `installViewportWiring(e)`.
+- **Vue components** get the engine through `useEngine()` and talk to each other
+  through Pinia stores, which carry primitives and ids, never engine objects.
+
+Where state may live:
+
+| Kind of state | Where | Examples |
+|---|---|---|
+| The document and anything saved with it | `DocumentStore` | features, overlays, materials, versions |
+| One viewport's view of the model | `Viewport` | selection, section view, emitter lights |
+| A user preference | a settings module read with `storedSetting` and a change listener | `renderPrefs`, `units`, `theme` |
+| A cache keyed by what it describes | module level, bounded with `LruCache` | material previews, glyph outlines |
+| UI state shared between components | a Pinia store | `shell`, `selection`, `timeline` |
+
+A module-level `let` is acceptable only for the last three. Anything tied to a
+document or a viewport belongs to the object with that lifetime, so that
+replacing the document or closing a sketch can release it.
+
+Cleanup has one owner per lifetime. A session that attaches listeners, frames or
+three.js objects registers each with a `Disposer` (`src/lib/disposer.ts`) as it
+creates it, and releases them all with one `dispose()` when it ends; an open
+sketch is the model (`SketchMode.session`). Geometry that leaves the scene goes
+through `disposeObject3D`, which walks the whole subtree, because a text is a
+group of lines and a direct-children loop leaves them on the GPU.
+`e2e/memory_e2e.cjs` replaces a document over and over and fails when the
+renderer's geometry or texture count, or the heap, does not come back.
+
 ## The rebuild pipeline
 
 1. The frontend sends the document (or, once a baseline is established, just the

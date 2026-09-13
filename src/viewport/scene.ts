@@ -581,7 +581,9 @@ async function environmentMap(
       // landed. Turning it upright would be changing what every existing
       // document reflects to fix something nobody can see.
       const { RoomEnvironment } = await import("three/examples/jsm/environments/RoomEnvironment.js");
-      tex = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+      const room = new RoomEnvironment();
+      tex = pmrem.fromScene(room, 0.04).texture;
+      room.dispose();
     } else {
       const room = buildRoom(id as Exclude<Environment, "studio" | "none">);
       tex = pmrem.fromScene(room, 0.04).texture;

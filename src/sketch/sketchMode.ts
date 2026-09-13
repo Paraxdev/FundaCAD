@@ -37,6 +37,7 @@ import { candidatesFromEntities, showsSnapMarker, snap, type SnapGuide, type Sna
 import type { ResolvedEntity } from "./snap";
 import { detectRegions, entityPolyline, rectCorners, rectFromThreePoints } from "./region";
 import { AreaBox } from "../viewport/areaBox";
+import { Disposer } from "../lib/disposer";
 import { allInsideRect, convexTouchesRect, dragBox, isAreaDrag, pointInRect, type AreaMode, type ScreenRect } from "../viewport/areaSelect";
 import { loopsFromEdgePolys, planeEdgePolys } from "./faceFootprint";
 import { boundaryAnchors, footprintAnchors } from "./anchors";
@@ -314,6 +315,8 @@ export class SketchMode {
   private dim: DimInput;
   private dims: SketchDimensions;
   private glyphs: SketchGlyphs;
+  /** Everything one open sketch attaches, released together when it closes. */
+  private session = new Disposer();
   private boundDown: (e: PointerEvent) => void;
   private boundMove: (e: PointerEvent) => void;
   private boundUp: (e: PointerEvent) => void;
@@ -529,13 +532,19 @@ export class SketchMode {
     this.addGrid();
     if (!this.raf) this.raf = requestAnimationFrame(this.boundTick);
 
+    this.session.dispose();
+    const session = (this.session = new Disposer());
     const el = this.viewport.domElement;
-    el.addEventListener("pointerdown", this.boundDown);
-    el.addEventListener("pointermove", this.boundMove);
-    el.addEventListener("pointerup", this.boundUp);
-    el.addEventListener("contextmenu", this.boundContext);
-    el.addEventListener("pointerleave", this.boundLeave);
-    window.addEventListener("keydown", this.boundKey, true);
+    session.listen(el, "pointerdown", this.boundDown);
+    session.listen(el, "pointermove", this.boundMove);
+    session.listen(el, "pointerup", this.boundUp);
+    session.listen(el, "contextmenu", this.boundContext);
+    session.listen(el, "pointerleave", this.boundLeave);
+    session.listen(window, "keydown", this.boundKey, true);
+    session.add(() => {
+      if (this.raf) cancelAnimationFrame(this.raf);
+      this.raf = 0;
+    });
 
     this.overlay.update(store.document, this.editingId ?? "__active__");
     this.refreshActive();
@@ -622,16 +631,8 @@ export class SketchMode {
   }
 
   private cleanup() {
-    const el = this.viewport.domElement;
     this.pendingBindings.clear();
-    el.removeEventListener("pointerdown", this.boundDown);
-    el.removeEventListener("pointermove", this.boundMove);
-    el.removeEventListener("pointerup", this.boundUp);
-    el.removeEventListener("contextmenu", this.boundContext);
-    el.removeEventListener("pointerleave", this.boundLeave);
-    window.removeEventListener("keydown", this.boundKey, true);
-    if (this.raf) cancelAnimationFrame(this.raf);
-    this.raf = 0;
+    this.session.dispose();
     dismissContextMenu();
     this.selected.clear();
     this.dragFrom = null;

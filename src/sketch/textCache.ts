@@ -5,10 +5,12 @@
 
 import type { GeometryBackend, TextFace } from "../geometry/client";
 import type { ResolvedEntity } from "./snap";
+import { LruCache } from "../lib/lruCache";
 
 type TextEntity = Extract<ResolvedEntity, { type: "text" }>;
 
-const cache = new Map<string, TextFace[]>();
+// A rotate or resize drag asks for a new outline every frame.
+const cache = new LruCache<string, TextFace[]>(256);
 const pending = new Set<string>();
 let backend: { geom: GeometryBackend; rerender: () => void } | null = null;
 

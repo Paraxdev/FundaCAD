@@ -8,6 +8,7 @@
 // geometry only and leaves the shared materials intact.
 
 import * as THREE from "three";
+import { disposeObject3D } from "../lib/disposer";
 import { asFeature } from "../types";
 import type { CadDocument, PlaneDef, PlaneSpec } from "../types";
 import { planeOf } from "../document/planeOf";
@@ -558,11 +559,8 @@ export class SketchOverlay {
 
   /** geometry is per-object (dispose); materials are module-shared (keep). */
   private clearGroup(g: THREE.Group) {
-    for (const c of [...g.children]) {
-      g.remove(c);
-      // a text is a group of glyph lines, so the geometry can sit a level down
-      c.traverse((o) => (o as Partial<THREE.Mesh>).geometry?.dispose());
-    }
+    // a text is a group of glyph lines, so the geometry can sit a level down
+    for (const c of [...g.children]) disposeObject3D(c);
   }
 }
 
