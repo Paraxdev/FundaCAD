@@ -425,6 +425,7 @@ export class MoveTool {
     }
     this.hover = this.hitHandle(e.clientX, e.clientY);
     this.viewport.domElement.style.cursor = this.hover ? "grab" : "default";
+    if (e.buttons === 0) this.viewport.hoverThrough(this.hover ? null : e.clientX, e.clientY);
   }
 
   private onDown(e: PointerEvent) {
@@ -470,6 +471,7 @@ export class MoveTool {
     }
     e.preventDefault();
     e.stopImmediatePropagation();
+    this.viewport.hoverThrough(null);
     this.grab = hit;
     this.last = hit;
     this.viewport.domElement.style.cursor = "grabbing";

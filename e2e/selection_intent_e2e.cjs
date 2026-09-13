@@ -129,7 +129,7 @@ const check = (name, ok, detail) => {
         for (let a = 0; a < 24; a++) {
           const x = cx + Math.cos(a * 0.26) * rad, y = cy + Math.sin(a * 0.26) * rad;
           const id = window.viewport.bodyIdAt(x, y);
-          if (id) return { x, y, id };
+          if (id && window.viewport.pickEntity(x, y)?.kind === "face") return { x, y, id };
         }
       }
       return null;
@@ -166,6 +166,70 @@ const check = (name, ok, detail) => {
     check("a click on the selected body takes a face or edge", second.mode === "faces" && second.bodies === 0 && second.faces + second.edges > 0,
       JSON.stringify(second));
     await page.screenshot({ path: path.join(OUT, "3-face.png") });
+
+    // --- hover intent ----------------------------------------------------------
+    const reset = async () => {
+      await page.keyboard.press("Escape");
+      await page.evaluate(() => { window.__fundacad.move.cancel(); window.viewport.setSelectedBodies([]); window.viewport.clearSelection?.(); });
+      await page.mouse.move(700, 880);
+      await page.waitForTimeout(300);
+    };
+    const glows = () => page.evaluate(() => {
+      let n = 0;
+      window.viewport.scene.modelGroup.traverse((o) => { if (o.name === "selection-glow") n++; });
+      return n;
+    });
+    await reset();
+    await page.mouse.move(spot.x - 2, spot.y);
+    await page.mouse.move(spot.x, spot.y);
+    await page.waitForTimeout(150);
+    const arrived = await page.evaluate(() => ({ body: window.viewport.highlighter.hoveredBody, faces: window.viewport.highlighter.hoveredFaces.length }));
+    check("arriving on a body lights the body", arrived.body === spot.id && arrived.faces === 0, JSON.stringify(arrived));
+    await page.waitForTimeout(700);
+    const dwelt = await page.evaluate(() => ({ body: window.viewport.highlighter.hoveredBody, faces: window.viewport.highlighter.hoveredFaces.length }));
+    check("staying on it lights the face instead", dwelt.body === null && dwelt.faces > 0, JSON.stringify(dwelt));
+    await page.screenshot({ path: path.join(OUT, "5-dwell.png") });
+    await page.mouse.down();
+    await page.mouse.up();
+    await page.waitForTimeout(300);
+    const took = await page.evaluate(() => ({ mode: window.viewport.selecting, faces: window.viewport.getSelectedFaceIds().length, bodies: window.viewport.getSelectedBodies().length }));
+    check("a click then takes the lit face", took.mode === "faces" && took.faces > 0 && took.bodies === 0, JSON.stringify(took));
+
+    await reset();
+    const edgeSpot = await page.evaluate(() => {
+      const r = window.viewport.domElement.getBoundingClientRect();
+      for (let x = r.left + 300; x < r.right - 60; x += 2) {
+        for (let y = r.top + 60; y < r.bottom - 60; y += 2) {
+          if (document.elementFromPoint(x, y) !== window.viewport.domElement) continue;
+          const hit = window.viewport.pickEntity(x, y);
+          if (hit?.kind !== "edge" || !hit.edge.body) continue;
+          if (window.viewport.pickableEdgeCandidates(x, y, r).length > 1) continue;
+          return { x, y, body: hit.edge.body };
+        }
+      }
+      return null;
+    });
+    check("found an edge on screen", !!edgeSpot);
+    if (edgeSpot) {
+      await page.mouse.click(edgeSpot.x, edgeSpot.y);
+      await page.waitForTimeout(300);
+      const edge = await page.evaluate(() => ({ edges: window.viewport.selectedEdgeLines().length, bodies: window.viewport.getSelectedBodies().length,
+        menu: !!document.querySelector(".context-menu") }));
+      check("a click right on an edge takes the edge, not the body", edge.edges > 0 && edge.bodies === 0, JSON.stringify(edge));
+    }
+
+    await reset();
+    await page.mouse.click(spot.x, spot.y);
+    await page.waitForTimeout(400);
+    await page.evaluate(() => { window.viewport.setModel(window.store.buildState.result); window.viewport.setModel(window.store.buildState.result); });
+    await page.waitForTimeout(300);
+    const after = await glows();
+    const sel = await page.evaluate(() => window.viewport.getSelectedBodies().length);
+    check("a rebuild leaves one glow per selected body, none stuck", after === sel, `${after} glows, ${sel} selected`);
+    await reset();
+    await page.evaluate(() => window.viewport.setModel(window.store.buildState.result));
+    await page.waitForTimeout(300);
+    check("nothing selected leaves no glow after a rebuild", (await glows()) === 0);
 
     // --- the rotate dial -----------------------------------------------------
     await page.evaluate(() => { window.viewport.clearSelection?.(); });

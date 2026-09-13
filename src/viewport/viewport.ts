@@ -77,6 +77,8 @@ const EDGE_PICKABLE = new THREE.Color(0xd98a4a); // muted ember "selectable" edg
  *  much of its edges. Both were far lower; see setModelDimmed. */
 const SKETCH_DIM_OPACITY = 0.55;
 const SKETCH_DIM_EDGE_OPACITY = 0.5;
+/** How long the cursor stays on a body before its faces, not the body, are lit. */
+const INTENT_DWELL_MS = 450;
 
 // Emissive bodies and faces that cast light (syncEmitterLights). At most this
 // many rectangle lights, the brightest patches winning: every one is evaluated
@@ -511,6 +513,9 @@ export class Viewport {
       this.requestRender();
       this.queueHover(e);
     });
+    c.addEventListener("pointerleave", () => {
+      if (!this.pickSuppressed) this.clearIntentHover();
+    });
     c.addEventListener("pointerup", (e) => {
       // The drag suppressed hover (see queueHover); re-establish it for wherever
       // the cursor actually ended up, so the face under it lights straight away
@@ -692,8 +697,14 @@ export class Viewport {
   // the last position is ever shown. Keep the newest event and pick ONCE per
   // animation frame. Independent of the BVH: that makes each pick cheap, this
   // makes the number of picks match the number of frames.
-  private hoverPending: PointerEvent | null = null;
+  private hoverPending: { clientX: number; clientY: number; force: boolean } | null = null;
   private hoverRaf = 0;
+  /** The body the cursor arrived on and when. Under the auto policy a body lights
+   *  whole on arrival and its face or edge takes over once the cursor has stayed
+   *  on it for INTENT_DWELL_MS, and a click takes whichever is lit. */
+  private intent: { bodyId: string; since: number } | null = null;
+  private intentTimer = 0;
+  private lastHover: { clientX: number; clientY: number; force: boolean } | null = null;
 
   private queueHover(e: PointerEvent) {
     // A held button means the user is orbiting/panning or dragging a tool, not
@@ -707,6 +718,7 @@ export class Viewport {
       // clear once so a stale highlight doesn't ride along through the orbit;
       // hoverFace(null) early-returns after the first call, so this is free.
       this.highlighter?.clearHover();
+      if (!this.pickSuppressed) this.highlighter?.hoverBody(null);
       return;
     }
     // Judged HERE, not when the deferred pass runs. The pass is a frame later,
@@ -715,36 +727,76 @@ export class Viewport {
     // suppressed move land as a hover on the model it was just released from:
     // one face of the body left painted amber under the next step's prompt.
     if (this.pickSuppressed) return;
-    this.hoverPending = e;
+    this.scheduleHover(e.clientX, e.clientY, false);
+  }
+
+  private scheduleHover(clientX: number, clientY: number, force: boolean) {
+    this.hoverPending = { clientX, clientY, force };
     if (this.hoverRaf) return;
     this.hoverRaf = requestAnimationFrame(() => {
       this.hoverRaf = 0;
       const ev = this.hoverPending;
       this.hoverPending = null;
-      if (ev) this.handleHover(ev);
+      if (ev) this.handleHover(ev, ev.force);
     });
   }
 
-  private handleHover(e: PointerEvent) {
+  /** Hover for a tool that holds the pointer but not this spot, the move gizmo
+   *  away from its handles. Null clears whatever is lit. */
+  hoverThrough(clientX: number | null, clientY = 0) {
+    if (clientX === null) {
+      this.clearIntentHover();
+      return;
+    }
+    this.scheduleHover(clientX, clientY, true);
+  }
+
+  private clearIntentHover() {
+    this.hoverPending = null;
+    this.intent = null;
+    clearTimeout(this.intentTimer);
+    this.highlighter?.clearHover();
+    this.highlighter?.hoverBody(null);
+    this.requestRender();
+  }
+
+  private noteIntent(bodyId: string | null) {
+    if (bodyId === null) {
+      this.intent = null;
+      clearTimeout(this.intentTimer);
+      return;
+    }
+    if (this.intent?.bodyId === bodyId) return;
+    this.intent = { bodyId, since: performance.now() };
+    clearTimeout(this.intentTimer);
+    this.intentTimer = window.setTimeout(() => {
+      const at = this.lastHover;
+      if (at && this.intent?.bodyId === bodyId) this.scheduleHover(at.clientX, at.clientY, at.force);
+    }, INTENT_DWELL_MS + 20);
+  }
+
+  private dwelt(bodyId: string): boolean {
+    return this.intent?.bodyId === bodyId && performance.now() - this.intent.since >= INTENT_DWELL_MS;
+  }
+
+  /** Under the auto policy, whether a hit takes its body whole: a face hit on a
+   *  body the cursor has not stayed on, which is not the one already chosen. */
+  private hitTakesBody(hit: Hit | null, additive: boolean): string | null {
+    const bodyId = this.bodyOfHit(hit);
+    if (!bodyId || hit?.kind !== "face" || this.dwelt(bodyId)) return null;
+    return this.takesBody(bodyId, additive) ? bodyId : null;
+  }
+
+  private handleHover(e: { clientX: number; clientY: number }, force = false) {
     // while redefining a cube side, hover-highlight the model face under the
     // cursor (so the user sees which face they'll capture).
     if (this.setOverrideSide) {
       this.hoverFaceAt(e.clientX, e.clientY);
       return;
     }
-    if (this.pickSuppressed) return;
-    if (this.selectPolicy === "auto" && this.model && this.highlighter) {
-      const hit = this.picker.pick(e.clientX, e.clientY, this.canvas.getBoundingClientRect(), this.rig.active, this.model);
-      const bodyId = this.bodyOfHit(hit);
-      if (bodyId && this.takesBody(bodyId, false) && !this.regionHoverAt?.(e.clientX, e.clientY)) {
-        this.highlighter.clearHover();
-        this.highlighter.hoverBody(bodyId);
-        this.requestRender();
-        return;
-      }
-      this.highlighter.hoverBody(null);
-    }
-    if (this.selectionMode === "bodies") return; // no face hover while picking bodies
+    if (this.pickSuppressed && !force) return;
+    const auto = this.selectPolicy === "auto";
+    if (this.selectionMode === "bodies" && !auto) return; // no face hover while picking bodies
     // NO MODEL IS NOT NO TARGETS, and this is where hover used to stop. A
     // document holding one sketch and no extrude has no solid at all, so
     // rebuildBridge calls clearModel() and `model` is null, while the sketch's
@@ -761,6 +813,16 @@ export class Viewport {
       : null;
     this.highlighter?.clearHover();
     this.requestRender();
+    if (auto && this.highlighter) {
+      this.lastHover = { clientX: e.clientX, clientY: e.clientY, force };
+      this.noteIntent(this.bodyOfHit(hit));
+      const whole = this.hitTakesBody(hit, false);
+      if (whole && !this.regionHoverAt?.(e.clientX, e.clientY)) {
+        this.highlighter.hoverBody(whole);
+        return;
+      }
+      this.highlighter.hoverBody(null);
+    }
     if (hit?.kind === "edge") { this.highlighter?.hoverEdge(hit.edge); this.regionHoverAt?.(-1, -1); return; }
     // Sketch has PRIORITY over the body: hover a visible sketch's region if one is
     // under the cursor; only fall back to the solid face when no region is there.
@@ -826,8 +888,7 @@ export class Viewport {
   bodyClickAt(clientX: number, clientY: number): string | null {
     if (this.selectPolicy !== "auto" || !this.model) return null;
     const hit = this.picker.pick(clientX, clientY, this.canvas.getBoundingClientRect(), this.rig.active, this.model);
-    const bodyId = this.bodyOfHit(hit);
-    return bodyId && this.takesBody(bodyId, false) ? bodyId : null;
+    return this.hitTakesBody(hit, false);
   }
 
   private clickAt(clientX: number, clientY: number, ctrl: boolean, shift: boolean) {
@@ -844,8 +905,8 @@ export class Viewport {
       : null;
 
     if (this.selectPolicy === "auto" && this.model && this.highlighter) {
-      const bodyId = this.bodyOfHit(hit);
-      if (bodyId && this.takesBody(bodyId, ctrl || shift)) {
+      const bodyId = this.hitTakesBody(hit, ctrl || shift);
+      if (bodyId) {
         if (this.regionPickAt?.(clientX, clientY, ctrl || shift)) return;
         this.setSelectionMode("bodies");
         if (ctrl || shift) this.highlighter.toggleSelectBody(bodyId);
