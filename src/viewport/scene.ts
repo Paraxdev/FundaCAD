@@ -4,7 +4,7 @@
 
 import * as THREE from "three";
 import { stickyFact } from "../diagnostics/breadcrumbs";
-import { niceStep } from "../ui/units";
+import { gridStep } from "../sketch/planeGrid";
 import { glyphWorldScale } from "./gizmoScale";
 import { EDGE_HOVER_COLOR } from "./highlight";
 import { setRenderLowPower } from "./render";
@@ -171,7 +171,7 @@ export class AdaptiveGrid {
    *  or 0 when empty). */
   update(targetX: number, targetY: number, worldPerPixel: number, diagonalPx: number, gridZ = 0) {
     this.group.position.z = gridZ; // track the model floor every frame, even if x/y/cell are cached
-    const cell = niceStep(worldPerPixel * 64); // ~64px minor cells
+    const cell = gridStep(worldPerPixel, 0);
     const majorCell = cell * 5;
     const cx = Math.round(targetX / majorCell) * majorCell;
     const cy = Math.round(targetY / majorCell) * majorCell;

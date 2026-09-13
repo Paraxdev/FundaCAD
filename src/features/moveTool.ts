@@ -34,7 +34,8 @@ import type { DocumentStore } from "../document/store";
 import type { Feature } from "../types";
 import { DimInput } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
-import { snap } from "../ui/units";
+import { fmtLength, snap } from "../ui/units";
+import { gizmoMoveStep, gizmoRotateStep, snapScaleFactor } from "../viewport/gizmoStep";
 import { axisDragDistance } from "./manipulator";
 import {
   angleDelta,
@@ -46,7 +47,6 @@ import {
   scaleAbout,
   snapDegrees,
   MIN_SCALE,
-  ROTATE_SNAP_DEG,
 } from "./transformGizmo";
 import { CanvasGesture } from "./canvasGesture";
 
@@ -131,6 +131,9 @@ export const GIZMO_REACH_PX = SCALE_AT + SCALE_BOX;
  *  separately and a ring behind an arrow can never steal the arrow's press. */
 type Grab = { kind: "axis" | "ring" | "origin" | "size" | "plane"; index: number } | null;
 
+const IDLE_PROMPT =
+  "Drag an arrow to slide, a square to slide in a plane, a ring to turn, a cube to resize, the centre to move what those act about · Enter · Esc";
+
 /** The two world axes a plane spans, given the axis its normal is. */
 function planeAxes(normal: number): [number, number] {
   return [(normal + 1) % 3, (normal + 2) % 3];
@@ -175,6 +178,10 @@ export class MoveTool {
   /** total turn on the grabbed ring, degrees, the value the field shows */
   private ringDeg = 0;
   private downPos = { x: 0, y: 0 };
+  /** the selection's world box when the session opened, what rotate and resize
+   *  steps are measured against */
+  private box: THREE.Box3 | null = null;
+  private stepLabel = "";
 
   private dim = new DimInput();
   private onDone: ((id: string | null) => void) | null = null;
@@ -210,6 +217,7 @@ export class MoveTool {
     this.scaleId = "";
     this.scl.set(1, 1, 1);
     this.anchor.copy(this.viewport.bodiesCentroid(bodies));
+    this.box = this.viewport.bodiesBox(bodies);
     this.viewport.beginBodyMoveGhost(bodies); // live transform during drag (no rebuild)
     this.viewport.suspendPicking = true;
     this.gesture.attach();
@@ -227,10 +235,37 @@ export class MoveTool {
     const s = this.viewport.projectToScreen(this.anchor);
     this.dim.position(s.x + FIELDS_OFFSET_PX, s.y);
     this.dim.updateFromCursor({ move: 0, turn: 0, size: 1 });
-    setPrompt(
-      "Drag an arrow to slide, a square to slide in a plane, a ring to turn, a cube to resize, the centre to move what those act about · Enter · Esc",
-    );
+    setPrompt(IDLE_PROMPT);
+    this.stepLabel = "";
     this.gesture.frame();
+  }
+
+  /** The slide step at the gizmo's current zoom. */
+  private moveStep(fine: boolean): number {
+    const at = this.gizmo?.position ?? this.anchor;
+    return gizmoMoveStep(this.viewport.pixelWorldSize(at), fine);
+  }
+
+  /** How far the farthest corner of the selection sits from the pivot. */
+  private reach(): number {
+    const b = this.box;
+    if (!b) return 0;
+    let far = 0;
+    for (let i = 0; i < 8; i++) {
+      const corner = new THREE.Vector3(
+        i & 1 ? b.max.x : b.min.x,
+        i & 2 ? b.max.y : b.min.y,
+        i & 4 ? b.max.z : b.min.z,
+      );
+      far = Math.max(far, corner.distanceTo(this.anchor));
+    }
+    return far;
+  }
+
+  private showStep(label: string) {
+    if (label === this.stepLabel) return;
+    this.stepLabel = label;
+    setPrompt(`Step ${label} · Shift for finer`);
   }
 
   private comp(i: number): number {
@@ -304,7 +339,9 @@ export class MoveTool {
       if (!ax) return;
       const proj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.anchor, ax.dir);
       const raw = this.grabVal + (proj - this.grabProj);
-      const stepped = snap(raw, this.viewport.snapStep(this.anchor, e.shiftKey));
+      const step = this.moveStep(e.shiftKey);
+      this.showStep(fmtLength(step));
+      const stepped = snap(raw, step);
       if (stepped === this.comp(g.index)) return;
       this.setComp(g.index, stepped);
       this.dim.updateFromCursor({ move: stepped });
@@ -315,7 +352,8 @@ export class MoveTool {
       const p = this.planeDragPoint(g.index, e.clientX, e.clientY);
       if (!p) return; // view went edge-on to the plane mid-drag; hold the value
       const delta = p.clone().sub(this.grabPlanePoint);
-      const step = this.viewport.snapStep(this.anchor, e.shiftKey);
+      const step = this.moveStep(e.shiftKey);
+      this.showStep(fmtLength(step));
       const [u, v] = planeAxes(g.index);
       let changed = false;
       for (const j of [u, v]) {
@@ -351,15 +389,19 @@ export class MoveTool {
       // depends on the zoom. A difference would resize by an amount that
       // changed with how far in you were.
       if (Math.abs(this.grabProj) < 1e-9) return;
-      this.applySize(g.index, this.grabScale * (proj / this.grabProj));
+      const step = this.moveStep(e.shiftKey);
+      this.showStep(fmtLength(step));
+      const extent = this.box ? this.box.max.getComponent(g.index) - this.box.min.getComponent(g.index) : 0;
+      this.applySize(g.index, snapScaleFactor(this.grabScale * (proj / this.grabProj), extent, step));
       return;
     }
     if (g?.kind === "ring") {
       const now = this.ringAngle(g.index, e.clientX, e.clientY);
       if (now === null) return; // the view went edge-on mid-drag; hold the value
       const turned = (angleDelta(this.grabAngle, now) * 180) / Math.PI;
-      // Shift lifts the step, the same way it lifts the translation step.
-      const deg = snapDegrees(turned, e.shiftKey ? 0 : ROTATE_SNAP_DEG);
+      const stepDeg = gizmoRotateStep(this.moveStep(false), this.reach(), e.shiftKey);
+      this.showStep(`${stepDeg}°`);
+      const deg = snapDegrees(turned, stepDeg);
       if (Math.abs(deg - this.ringDeg) < 1e-9) return;
       this.applyRing(g.index, deg);
       return;
@@ -411,6 +453,8 @@ export class MoveTool {
     if (e.button !== 0) return;
     if (this.grab) {
       this.grab = null;
+      this.stepLabel = "";
+      setPrompt(IDLE_PROMPT);
       this.viewport.domElement.style.cursor = this.hover ? "grab" : "default";
       // Each drag is its own row in the timeline. Writing it here rather than
       // at the end of the session is what makes an undo undo the LAST nudge
