@@ -54,28 +54,43 @@ const INTENSITY = {
 
 export type GlowKind = keyof typeof INTENSITY;
 
+// One material per intensity, shared by every glow and never disposed by the
+// highlighter. Disposing the last material that uses a program makes three
+// delete the program, so a fresh material per hovered body relinked the shader
+// each time the cursor crossed into another part, which is what made a body
+// scope material drag stutter on a large assembly. A disposer that does free a
+// shared one on teardown is harmless: three re-initialises it on its next use.
+const materials = new Map<GlowKind, THREE.ShaderMaterial>();
+
+function glowMaterial(kind: GlowKind): THREE.ShaderMaterial {
+  let mat = materials.get(kind);
+  if (!mat) {
+    const { fill, rim } = INTENSITY[kind];
+    mat = new THREE.ShaderMaterial({
+      uniforms: {
+        uColor: { value: new THREE.Color() },
+        uFill: { value: fill },
+        uRim: { value: rim },
+      },
+      vertexShader: VERT,
+      fragmentShader: FRAG,
+      transparent: true,
+      // Draw on top of the shaded body without writing depth, so the coincident
+      // overlay never z-fights and never occludes the edge lines that sit above it.
+      depthWrite: false,
+      side: THREE.FrontSide,
+      blending: THREE.NormalBlending,
+    });
+    materials.set(kind, mat);
+  }
+  (mat.uniforms.uColor!.value as THREE.Color).set(themeColor("--accent", 0x4bf9bc));
+  return mat;
+}
+
 /** Build the overlay mesh for a body: a second draw of its geometry, non-pickable
- *  and shadow-free, in the current theme accent. The material is its own (not a
- *  shared singleton) so the generic disposer frees it correctly when the model is
- *  torn down with the glow still parented. Not yet added to a parent. */
+ *  and shadow-free, in the current theme accent. Not yet added to a parent. */
 export function makeSelectionGlow(geometry: THREE.BufferGeometry, kind: GlowKind): THREE.Mesh {
-  const { fill, rim } = INTENSITY[kind];
-  const mat = new THREE.ShaderMaterial({
-    uniforms: {
-      uColor: { value: new THREE.Color(themeColor("--accent", 0x4bf9bc)) },
-      uFill: { value: fill },
-      uRim: { value: rim },
-    },
-    vertexShader: VERT,
-    fragmentShader: FRAG,
-    transparent: true,
-    // Draw on top of the shaded body without writing depth, so the coincident
-    // overlay never z-fights and never occludes the edge lines that sit above it.
-    depthWrite: false,
-    side: THREE.FrontSide,
-    blending: THREE.NormalBlending,
-  });
-  const mesh = new THREE.Mesh(geometry, mat);
+  const mesh = new THREE.Mesh(geometry, glowMaterial(kind));
   mesh.name = "selection-glow";
   mesh.raycast = () => {}; // never a pick target
   mesh.castShadow = false;

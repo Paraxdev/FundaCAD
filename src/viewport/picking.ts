@@ -55,7 +55,11 @@ export interface EdgeCandidate extends EdgeHit {
 }
 
 export class Picker {
-  private raycaster = new THREE.Raycaster();
+  // firstHitOnly is read by three-mesh-bvh: every mesh query here wants only the
+  // nearest face, and collecting every hit along the ray through a whole
+  // assembly only to sort and drop them was most of a pick's cost. Line picks
+  // ignore the flag.
+  private raycaster = Object.assign(new THREE.Raycaster(), { firstHitOnly: true });
   private ndc = new THREE.Vector2();
   private scratch = new THREE.Vector3();
   // screen-space distance (px) of the best edge hit from the last pickEdge(),

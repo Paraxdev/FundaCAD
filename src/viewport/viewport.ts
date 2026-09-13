@@ -44,6 +44,7 @@ import { sceneStats } from "../diagnostics/sceneStats";
 import { makeZebraMaterial, buildCurvatureCombs } from "./overlays";
 import { Picker, occludedEdge, type EdgeCandidate, type Hit, type EdgeHit, type PickMods } from "./picking";
 import { bandIndex, expandToBand, type BandIndex } from "./faceBands";
+import { flushRaycastIndex } from "./raycastIndex";
 import { GhostLayer } from "./ghosts";
 import { hideFlushSeams } from "./flushSeams";
 import { EdgeEmphasis } from "./edgeEmphasis";
@@ -1995,31 +1996,42 @@ export class Viewport {
     scope: "face" | "body",
   ): { bodyId: string; faceId: number; localFace: number } | null {
     if (!this.model || !this.highlighter) return null;
-    const rect = this.canvas.getBoundingClientRect();
-    const hit = this.picker.pick(clientX, clientY, rect, this.rig.active, this.model);
-    if (hit?.kind !== "face") {
-      this.clearDropTarget();
+    // Faces only, nearest hit only. The general pick also raycasts every body's
+    // edge lines, which have no BVH and which a drop would throw away anyway.
+    flushRaycastIndex();
+    const ray = this.rayFrom(clientX, clientY);
+    const hitOnly = ray as THREE.Raycaster & { firstHitOnly?: boolean };
+    hitOnly.firstHitOnly = true;
+    const fh = ray.intersectObjects(visibleBodyMeshes(this.model), false)[0];
+    hitOnly.firstHitOnly = false;
+    const faceId = fh ? faceIdOfHit(fh) : null;
+    const body = faceId === null ? null : bodyOfFace(this.model, faceId);
+    if (faceId === null || !body) {
+      if (this.dropKey) this.clearDropTarget();
       return null;
     }
-    const body = bodyOfFace(this.model, hit.faceId);
-    if (!body) {
-      this.clearDropTarget();
-      return null;
+    // A still cursor keeps firing dragover, and re-highlighting the same target
+    // redrew the whole scene with its shadows for the entire drag.
+    const key = scope === "body" ? `b:${body.id}` : `f:${faceId}`;
+    if (key !== this.dropKey) {
+      this.dropKey = key;
+      if (scope === "body") {
+        this.highlighter.clearHover();
+        this.highlighter.hoverBody(body.id);
+      } else {
+        this.highlighter.hoverBody(null);
+        // The whole RUN, matching what the drop will take. A kernel-split face is
+        // one face to the person dropping on it, and dressing half a cylinder
+        // because the tessellation happened to split it there would be a result
+        // nobody could have predicted from what was highlighted.
+        this.highlighter.hoverFaceRun(expandToBand(faceId, this.faceBands));
+      }
+      this.requestRender();
     }
-    if (scope === "body") {
-      this.highlighter.clearHover();
-      this.highlighter.hoverBody(body.id);
-    } else {
-      this.highlighter.hoverBody(null);
-      // The whole RUN, matching what the drop will take. A kernel-split face is
-      // one face to the person dropping on it, and dressing half a cylinder
-      // because the tessellation happened to split it there would be a result
-      // nobody could have predicted from what was highlighted.
-      this.highlighter.hoverFaceRun(expandToBand(hit.faceId, this.faceBands));
-    }
-    this.requestRender();
-    return { bodyId: body.id, faceId: hit.faceId, localFace: hit.faceId - body.faceStart };
+    return { bodyId: body.id, faceId, localFace: faceId - body.faceStart };
   }
+
+  private dropKey = "";
 
   /** Every face of one body, as local indices, for a drop that dresses the whole
    *  part face by face. */
@@ -2044,6 +2056,7 @@ export class Viewport {
   /** Put back whatever the drag lit up. Called when the drag leaves the canvas
    *  and after the drop, so a cancelled drag leaves nothing highlighted. */
   clearDropTarget() {
+    this.dropKey = "";
     if (!this.highlighter) return;
     this.highlighter.clearHover();
     this.highlighter.hoverBody(null);
@@ -2888,6 +2901,7 @@ export class Viewport {
   private adoptProgressiveView(view: ModelView) {
     this.model = view;
     this.highlighter = new Highlighter(view);
+    this.dropKey = "";
     this.picker.invalidate();
     // Put the selection back on the installment that just landed. Re-tried on
     // every one of them rather than once, because the body a selected face
@@ -3045,6 +3059,7 @@ export class Viewport {
     for (const d of edgeObjects(this.model)) d.flush();
     this.picker.invalidate(); // edge geometry just changed, drop cached targets
     this.highlighter = new Highlighter(this.model);
+    this.dropKey = "";
     // Before applyAnalysis, not after: setBase() reads the selected set so it
     // can leave those faces' highlight alone while refreshing what they restore
     // to, and re-applies body selections on top of the new base. Restoring

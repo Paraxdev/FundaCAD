@@ -50,20 +50,45 @@ function carrying(e: DragEvent): boolean {
   return !!draggingMaterial() && (e.dataTransfer?.types.includes(MATERIAL_MIME) ?? false);
 }
 
+// dragover arrives far faster than frames, and keeps arriving while the cursor is
+// still, so the pick runs once per frame and only when the aim actually moved.
+let pendingAim: { x: number; y: number; scope: DropScope } | null = null;
+let aimFrame = 0;
+let lastAim = "";
+
 function onDragOver(e: DragEvent) {
-  const held = draggingMaterial();
-  if (!held || !carrying(e)) return;
+  if (!draggingMaterial() || !carrying(e)) return;
   // Accepting the drag is what makes the browser show a copy cursor and send a
   // drop at all. Without the preventDefault this element is not a target and
   // the whole gesture ends in the desktop's "no" cursor.
   e.preventDefault();
   if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
-  const scope = dropScopeFor(e);
-  const target = engine.viewport.dropTargetAt(e.clientX, e.clientY, scope);
+  pendingAim = { x: e.clientX, y: e.clientY, scope: dropScopeFor(e) };
+  if (!aimFrame) aimFrame = requestAnimationFrame(aim);
+}
+
+function aim() {
+  aimFrame = 0;
+  const held = draggingMaterial();
+  const p = pendingAim;
+  pendingAim = null;
+  if (!held || !p) return;
+  const key = `${p.x},${p.y},${p.scope}`;
+  if (key === lastAim) return;
+  lastAim = key;
+  const target = engine.viewport.dropTargetAt(p.x, p.y, p.scope);
   chip.value = {
-    x: e.clientX, y: e.clientY, name: held.name, color: held.color,
-    scope, hit: !!target,
+    x: p.x, y: p.y, name: held.name, color: held.color,
+    scope: p.scope, hit: !!target,
   };
+}
+
+function stopAiming() {
+  if (aimFrame) cancelAnimationFrame(aimFrame);
+  aimFrame = 0;
+  pendingAim = null;
+  lastAim = "";
+  chip.value = null;
 }
 
 function onDragLeave(e: DragEvent) {
@@ -73,13 +98,13 @@ function onDragLeave(e: DragEvent) {
   // outside the pane is actually a leave.
   const to = e.relatedTarget as Node | null;
   if (to && host.value?.contains(to)) return;
-  chip.value = null;
+  stopAiming();
   engine.viewport.clearDropTarget();
 }
 
 function onDrop(e: DragEvent) {
   const held = draggingMaterial();
-  chip.value = null;
+  stopAiming();
   if (!held || !carrying(e)) return;
   e.preventDefault();
   const scope = dropScopeFor(e);

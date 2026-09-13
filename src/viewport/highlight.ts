@@ -258,13 +258,12 @@ export class Highlighter {
     this.bodyGlows.set(bodyId, glow);
   }
 
-  /** Remove a body's glow and free its own material (the geometry is the body's,
-   *  so it is never disposed here). */
+  /** Remove a body's glow. Neither half is disposed: the geometry is the body's
+   *  and the material is shared by every glow (selectionGlow.ts). */
   private hideBodyGlow(bodyId: string) {
     const glow = this.bodyGlows.get(bodyId);
     if (!glow) return;
     glow.removeFromParent();
-    (glow.material as THREE.Material).dispose();
     this.bodyGlows.delete(bodyId);
   }
 
