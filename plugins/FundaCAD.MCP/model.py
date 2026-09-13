@@ -148,6 +148,9 @@ def move_feature(doc, fid, to):
 # --- parameters ---------------------------------------------------------------
 
 
+_PANEL_KEYS = ("control", "group", "hidden")
+
+
 def set_parameter(doc, name, expr, unit="mm", comment=None):
     """Define or redefine one parameter and recompute the whole table.
 
@@ -163,6 +166,11 @@ def set_parameter(doc, name, expr, unit="mm", comment=None):
     defs[name] = {"expr": str(expr), "value": 0.0, "unit": unit}
     if comment:
         defs[name]["comment"] = comment
+    # How the app's parameters panel edits and files this parameter. Not the
+    # agent's to lose by redefining the value.
+    for key in _PANEL_KEYS:
+        if before and key in before:
+            defs[name][key] = before[key]
     issues = recompute_parameters(doc)
     if name in issues:
         # Put the table back exactly as it was: a refused edit that left a
@@ -182,9 +190,17 @@ def remove_parameter(doc, name):
         raise DocumentError(f"no parameter {name!r}, have {sorted(defs)}")
     users = [n for n, d in defs.items()
              if n != name and name in _safe_refs(d.get("expr"))]
+    extras = doc.get("paramExtras") or {}
+    users += [f'check "{c.get("message")}"' for c in extras.get("checks") or []
+              if name in _safe_refs(c.get("expr"))]
+    for cfg in extras.get("configurations") or []:
+        users += [f"configuration {cfg.get('name')} . {p}" for p, e in (cfg.get("values") or {}).items()
+                  if p != name and name in _safe_refs(e)]
     if users:
         raise DocumentError(f"{name} is used by {', '.join(sorted(users))}")
     defs.pop(name)
+    for cfg in extras.get("configurations") or []:
+        (cfg.get("values") or {}).pop(name, None)
     recompute_parameters(doc)
 
 

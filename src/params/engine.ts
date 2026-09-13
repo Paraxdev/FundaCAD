@@ -350,16 +350,43 @@ function eachBareNameRef(doc: CadDocument, name: string, hit: (label: string, se
   }
 }
 
-/** Everything that references `name`: other params' expressions, plus legacy
- *  bare-name strings still sitting in feature/entity fields. */
+/** Everything that references `name`: other params' expressions, checks and
+ *  configuration values that read it, plus legacy bare-name strings still
+ *  sitting in feature/entity fields. A configuration that merely SETS `name` is
+ *  not a reference; deleting the parameter drops that entry instead. */
 export function referencesTo(doc: CadDocument, name: string): string[] {
   const defs = defsOf(doc);
   const out: string[] = [];
   for (const [n, def] of Object.entries(defs)) {
     if (n !== name && refsOf(def, defs).includes(name)) out.push(n);
   }
+  const extras = doc.paramExtras;
+  for (const c of extras?.checks ?? []) {
+    if (exprRefs(c.expr).includes(name)) out.push(`check "${c.message}"`);
+  }
+  for (const cfg of extras?.configurations ?? []) {
+    for (const [param, expr] of Object.entries(cfg.values)) {
+      if (param !== name && exprRefs(expr).includes(name)) out.push(`configuration ${cfg.name} · ${param}`);
+    }
+  }
   eachBareNameRef(doc, name, (label) => out.push(label));
   return out;
+}
+
+function exprRefs(expr: string): string[] {
+  try {
+    return refsOfNode(parseExpr(expr));
+  } catch {
+    return [];
+  }
+}
+
+function renameIn(expr: string, from: string, to: string): string {
+  try {
+    return renameRefs(expr, from, to);
+  } catch {
+    return expr; // an unparsable expr can't reference anything
+  }
 }
 
 /** Why `name` can't be deleted right now, or null when it's free. */
@@ -373,6 +400,7 @@ export function deleteBlockers(doc: CadDocument, name: string): string | null {
 /** Remove a parameter. Check deleteBlockers FIRST, this trusts its input. */
 export function commitDeleteParam(doc: CadDocument, name: string): void {
   delete defsOf(doc)[name];
+  for (const cfg of doc.paramExtras?.configurations ?? []) delete cfg.values[name];
 }
 
 /** Rename a parameter, rewriting every referencing expression via the
@@ -380,14 +408,18 @@ export function commitDeleteParam(doc: CadDocument, name: string): void {
  *  FIRST (`from` exists + validateName(to)), this trusts its input. */
 export function commitRenameParam(doc: CadDocument, from: string, to: string): void {
   const defs = defsOf(doc);
-  for (const def of Object.values(defs)) {
-    try {
-      def.expr = renameRefs(def.expr, from, to);
-    } catch {
-      // an unparsable expr can't reference anything; leave it as-is
-    }
+  for (const def of Object.values(defs)) def.expr = renameIn(def.expr, from, to);
+  // Rebuilt rather than reassigned in place, so a renamed parameter keeps its
+  // position in the table and in whatever panel lists it in table order.
+  const renamed = Object.fromEntries(Object.entries(defs).map(([n, d]) => [n === from ? to : n, d]));
+  for (const n of Object.keys(defs)) delete defs[n];
+  Object.assign(defs, renamed);
+  const extras = doc.paramExtras;
+  for (const c of extras?.checks ?? []) c.expr = renameIn(c.expr, from, to);
+  for (const cfg of extras?.configurations ?? []) {
+    cfg.values = Object.fromEntries(
+      Object.entries(cfg.values).map(([n, e]) => [n === from ? to : n, renameIn(e, from, to)]),
+    );
   }
-  defs[to] = defs[from]!;
-  delete defs[from];
   eachBareNameRef(doc, from, (_label, set) => set(to));
 }

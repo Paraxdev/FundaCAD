@@ -105,6 +105,23 @@ export { readSetting } from "../ui/storedSetting";
 // --- the document, as a name rather than as content --------------------------
 export { stripDocumentExt } from "../io/documentExt";
 
+// --- the parameter table's controls, configurations and checks ----------------
+//
+// The data is the document's (types.ts ParamDef and ParamExtras) so a rename or
+// a delete keeps it right with no plugin loaded. What a panel over it computes
+// lives with the engine, so the panel and the store's commits cannot disagree.
+export {
+  captureConfiguration,
+  checkResults,
+  clampToControl,
+  configurationDrift,
+  controlProblem,
+  trialConfiguration,
+} from "../params/extras";
+export type { CheckResult } from "../params/extras";
+export { evalExpr } from "../params/eval";
+export type { ParamCheck, ParamConfiguration, ParamControl, ParamDef, ParamExtras } from "../types";
+
 // --- reading the app's live state from inside a component --------------------
 export { useEngine } from "../app/engineKey";
 export { useBuildValue, useDocValue } from "../app/useDoc";

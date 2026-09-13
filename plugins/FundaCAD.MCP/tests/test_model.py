@@ -132,6 +132,39 @@ def test_a_parameter_still_in_use_cannot_be_removed():
     raise AssertionError("a parameter with a dependent was removed")
 
 
+def test_redefining_a_parameter_keeps_how_the_panel_shows_it():
+    """The app's parameters panel stores a control, a group and a hidden flag
+    on the definition. An agent changing the VALUE must not strip them, the
+    slider would quietly turn back into a text box."""
+    d = M.new_document()
+    M.set_parameter(d, "rings", 22, unit="count")
+    d["paramDefs"]["rings"].update({"control": {"kind": "slider", "min": 1, "max": 40},
+                                    "group": "g1", "hidden": True})
+    M.set_parameter(d, "rings", 30, unit="count")
+    kept = d["paramDefs"]["rings"]
+    assert kept["control"] == {"kind": "slider", "min": 1, "max": 40}, kept
+    assert kept["group"] == "g1" and kept["hidden"] is True, kept
+    assert kept["value"] == 30, kept
+
+
+def test_a_check_that_reads_a_parameter_blocks_its_removal_and_a_configuration_entry_goes_with_it():
+    d = M.new_document()
+    M.set_parameter(d, "gap", 0.5)
+    M.set_parameter(d, "rings", 22, unit="count")
+    d["paramExtras"] = {
+        "checks": [{"id": "k1", "expr": "gap >= 0.3", "message": "gap too small", "level": "warning"}],
+        "configurations": [{"id": "c1", "name": "Dense", "values": {"rings": "30"}}],
+    }
+    try:
+        M.remove_parameter(d, "gap")
+    except M.DocumentError as ex:
+        assert "gap too small" in str(ex), str(ex)
+    else:
+        raise AssertionError("a parameter a check reads was removed")
+    M.remove_parameter(d, "rings")
+    assert d["paramExtras"]["configurations"][0]["values"] == {}, d["paramExtras"]
+
+
 def test_a_reserved_name_is_refused():
     d = M.new_document()
     for name in ("sin", "mm", "PI"):

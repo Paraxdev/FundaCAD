@@ -17,7 +17,7 @@ import {
   type VersionDiff,
   type VersionRepo,
 } from "./versions";
-import type { CadDocument, Feature, ImportColorSource, ParamTarget, PlaneSpec, ProjectedSource, ProjectionUpdate, RebuildReply, RebuildResult, ViewCubeSide, ViewOverride } from "../types";
+import type { CadDocument, Feature, ImportColorSource, ParamControl, ParamExtras, ParamTarget, PlaneSpec, ProjectedSource, ProjectionUpdate, RebuildReply, RebuildResult, ViewCubeSide, ViewOverride } from "../types";
 import { asFeature } from "../types";
 import { applyProjectionUpdate } from "../types";
 import type { GeometryBackend, ProjectionResult } from "../geometry/client";
@@ -32,6 +32,7 @@ import {
 } from "./materials";
 import { faceKey, parseFaceKey } from "./faceMaterials";
 import * as params from "../params/engine";
+import { extrasEmpty, trialConfiguration } from "../params/extras";
 import type { FieldKind } from "./numFields";
 import { writeTarget } from "./numFields";
 
@@ -561,6 +562,8 @@ export class DocumentStore {
       d.parameters = draft.parameters;
       if (draft.paramDefs) d.paramDefs = draft.paramDefs;
       else delete d.paramDefs;
+      if (draft.paramExtras) d.paramExtras = draft.paramExtras;
+      else delete d.paramExtras;
       d.features = draft.features;
     });
     this.onParamsApplied?.();
@@ -774,6 +777,52 @@ export class DocumentStore {
     const blocked = params.deleteBlockers(this.doc, name);
     if (blocked) return blocked;
     this.mutate((d) => void params.commitDeleteParam(d, name));
+    return null;
+  }
+
+  /** Set or clear how a parameter is edited, grouped and shown. A null clears
+   *  that key; an absent key is left as it is. */
+  setParamMeta(name: string, patch: { control?: ParamControl | null; group?: string | null; hidden?: boolean }) {
+    if (!params.defsOf(this.doc)[name]) return;
+    this.mutate((d) => {
+      const def = params.defsOf(d)[name];
+      if (!def) return;
+      if (patch.control === null) delete def.control;
+      else if (patch.control) def.control = patch.control;
+      if (patch.group === null) delete def.group;
+      else if (patch.group !== undefined) def.group = patch.group;
+      if (patch.hidden === false) delete def.hidden;
+      else if (patch.hidden) def.hidden = true;
+    });
+  }
+
+  /** Edit groups, configurations and checks as one undo step. Deleting a group
+   *  also ungroups its parameters, so no parameter names a group that is gone. */
+  updateParamExtras(fn: (x: ParamExtras) => void) {
+    this.mutate((d) => {
+      const x: ParamExtras = structuredClone(d.paramExtras ?? {});
+      fn(x);
+      const groups = new Set((x.groups ?? []).map((g) => g.id));
+      for (const def of Object.values(params.defsOf(d))) {
+        if (def.group !== undefined && !groups.has(def.group)) delete def.group;
+      }
+      if (extrasEmpty(x)) delete d.paramExtras;
+      else d.paramExtras = x;
+    });
+  }
+
+  /** Write every value of a configuration into its parameter, as one undo step
+   *  with the usual cascade. Refused, changing nothing, when any value does not
+   *  fit the document as it is now. */
+  applyConfiguration(id: string): string | null {
+    const cfg = this.doc.paramExtras?.configurations?.find((c) => c.id === id);
+    if (!cfg) return `no configuration "${id}"`;
+    const trial = trialConfiguration(this.doc, cfg);
+    if (!trial.ok) return trial.error;
+    this.queueParamCommit((d) => {
+      for (const [name, expr] of Object.entries(cfg.values)) params.commitParamExpr(d, name, expr);
+      d.paramExtras = { ...(d.paramExtras ?? {}), activeConfiguration: id };
+    });
     return null;
   }
 
@@ -1774,6 +1823,7 @@ export class DocumentStore {
     this.doc = {
       parameters: parsed.parameters ?? {},
       ...(parsed.paramDefs ? { paramDefs: parsed.paramDefs } : {}),
+      ...(parsed.paramExtras ? { paramExtras: parsed.paramExtras } : {}),
       features: parsed.features ?? [],
       ...(parsed.viewOverrides ? { viewOverrides: parsed.viewOverrides } : {}),
     };

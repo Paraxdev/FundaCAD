@@ -861,6 +861,48 @@ export interface ParamDef {
   target?: ParamTarget;
   /** RESERVED (unimplemented): driven-dim params are geometry→value sources. */
   driven?: boolean;
+  /** How the parameter is edited and what range it is kept in. The app carries
+   *  and saves these; FundaCAD.ExtraParameters draws them. The build and the
+   *  evaluator never read them, so a document builds the same without the plugin. */
+  control?: ParamControl;
+  /** id of a `paramExtras.groups` row; absent = ungrouped. */
+  group?: string;
+  /** a helper the person tuning the model should not have to scroll past. */
+  hidden?: boolean;
+}
+
+export type ParamControl =
+  | { kind: "number"; min?: number; max?: number; step?: number }
+  | { kind: "slider"; min: number; max: number; step?: number }
+  | { kind: "toggle" }
+  | { kind: "choice"; choices: { label: string; value: number }[] };
+
+/** One named set of parameter values, applied together ("Classic", "Solid core"). */
+export interface ParamConfiguration {
+  id: string;
+  name: string;
+  /** parameter name → expression, written into that parameter when applied. */
+  values: Record<string, string>;
+}
+
+/** A rule the parameters must satisfy. `expr` is expected to be non-zero; when
+ *  it is 0 (or does not evaluate) the plugin shows `message`. */
+export interface ParamCheck {
+  id: string;
+  expr: string;
+  message: string;
+  level: "warning" | "error";
+}
+
+/** Document-level parameter organisation. Every name in here is a parameter
+ *  name, and the params engine renames and deletes through it, so it stays
+ *  right whether or not the plugin that edits it is installed. */
+export interface ParamExtras {
+  groups?: { id: string; name: string }[];
+  configurations?: ParamConfiguration[];
+  /** id of the configuration last applied, for the picker to show. */
+  activeConfiguration?: string;
+  checks?: ParamCheck[];
 }
 
 export interface CadDocument {
@@ -869,6 +911,8 @@ export interface CadDocument {
    *  derived name→value cache regenerated from this on save/send, so the sidecar
    *  and pre-v2 readers keep working off plain numbers. Absent = legacy doc. */
   paramDefs?: Record<string, ParamDef>;
+  /** Groups, configurations and checks over the parameter table. Absent until used. */
+  paramExtras?: ParamExtras;
   features: Feature[];
   // optional per-side ViewCube redefinitions; persisted with the document.
   viewOverrides?: Partial<Record<ViewCubeSide, ViewOverride>>;
