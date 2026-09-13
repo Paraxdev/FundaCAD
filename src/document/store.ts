@@ -1457,16 +1457,36 @@ export class DocumentStore {
   /** Delete a material. Bodies wearing it become unassigned and go back to the
    *  default grey; nothing about them is otherwise touched. */
   removeMaterial(id: string) {
-    if (!this.materials.some((m) => m.id === id)) return;
-    this.materials = this.materials.filter((m) => m.id !== id);
-    for (const [body, held] of [...this.bodyMaterial.entries()]) {
-      if (held === id) this.bodyMaterial.delete(body);
-    }
-    for (const [key, held] of [...this.faceMaterial.entries()]) {
-      if (held === id) this.faceMaterial.delete(key);
-    }
+    this.removeMaterials([id]);
+  }
+
+  /** Delete several materials as one change, so the model repaints once. */
+  removeMaterials(ids: Iterable<string>) {
+    const gone = new Set(ids);
+    if (!this.materials.some((m) => gone.has(m.id))) return;
+    this.materials = this.materials.filter((m) => !gone.has(m.id));
+    this.dropMaterialUses(gone);
     this.markDirty();
     this.emitBuild();
+  }
+
+  /** Take materials off every body and face wearing them, keeping them in the
+   *  library. */
+  unassignMaterials(ids: Iterable<string>) {
+    if (!this.dropMaterialUses(new Set(ids))) return;
+    this.markDirty();
+    this.emitBuild();
+  }
+
+  private dropMaterialUses(ids: ReadonlySet<string>): boolean {
+    let changed = false;
+    for (const [body, held] of [...this.bodyMaterial.entries()]) {
+      if (ids.has(held)) { this.bodyMaterial.delete(body); changed = true; }
+    }
+    for (const [key, held] of [...this.faceMaterial.entries()]) {
+      if (ids.has(held)) { this.faceMaterial.delete(key); changed = true; }
+    }
+    return changed;
   }
 
   /** Merge a library in, by ID.

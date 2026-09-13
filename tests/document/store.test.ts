@@ -309,6 +309,24 @@ describe("materials (what a body is made of, on screen)", () => {
     expect(store.bodyMaterialId("body1")).toBeUndefined(); // and the row is gone, not dangling
   });
 
+  it("deletes several materials at once, and what wore them goes bare", () => {
+    store.setBodiesMaterial(["body1"], "m-glass");
+    store.setFacesMaterial([{ body: "body2", face: 0 }], "m-steel");
+    store.removeMaterials(["m-glass", "m-steel"]);
+    expect(store.materialLibrary.some((m) => m.id === "m-glass" || m.id === "m-steel")).toBe(false);
+    expect(store.bodyMaterialId("body1")).toBeUndefined();
+    expect(store.faceMaterialId("body2", 0)).toBeUndefined();
+  });
+
+  it("takes materials off the model but keeps them in the library", () => {
+    store.setBodiesMaterial(["body1"], "m-glass");
+    store.setFacesMaterial([{ body: "body2", face: 0 }], "m-glass");
+    store.unassignMaterials(["m-glass"]);
+    expect(store.materialLibrary.some((m) => m.id === "m-glass")).toBe(true);
+    expect(store.bodyMaterialId("body1")).toBeUndefined();
+    expect(store.faceMaterialId("body2", 0)).toBeUndefined();
+  });
+
   it("refuses an assignment to a material that is not in the library", () => {
     store.setBodiesMaterial(["body1"], "m-nonexistent");
     expect(store.bodyMaterialId("body1")).toBeUndefined();

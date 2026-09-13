@@ -26,6 +26,9 @@ import { materialPreview, onPreviewsChanged } from "../../viewport/materialPrevi
 import { beginMaterialDrag, endMaterialDrag, MATERIAL_MIME } from "../../ui/materialDrag";
 import { onRenderPrefsChange, renderPrefs } from "../../ui/renderPrefs";
 import SurfaceNodeEditor from "./SurfaceNodeEditor.vue";
+import { contextMenu, type CtxItem } from "../../ui/menu";
+import { choose } from "../../ui/choice";
+import { modsOf, selectRow } from "../../ui/rowSelection";
 
 const engine = useEngine();
 const store = engine.store;
@@ -49,11 +52,14 @@ function preview(m: MaterialDef): string | null {
   return materialPreview(m);
 }
 
-/** Which row the editor is showing. An id and not the object: the store hands
- *  back fresh objects on every edit so a subscriber can compare identity, and
- *  holding the object would freeze the editor on the material as it was before
- *  the last keystroke. */
-const selectedId = ref<string | null>(null);
+/** The picked materials, as ids and not objects: the store hands back fresh
+ *  objects on every edit, and holding one would freeze the editor on the
+ *  material as it was before the last keystroke. The editor shows the one
+ *  picked when exactly one is. */
+const selectedIds = ref<string[]>([]);
+const anchorId = ref<string | null>(null);
+const selectedSet = computed(() => new Set(selectedIds.value));
+const selectedId = computed(() => (selectedIds.value.length === 1 ? selectedIds.value[0]! : null));
 const search = ref("");
 
 const library = useBuildValue(() => [...store.materialLibrary]);
@@ -112,8 +118,76 @@ onMounted(() => {
 });
 onUnmounted(() => { if (facePoll !== null) window.clearInterval(facePoll); });
 
-function pick(id: string) {
-  selectedId.value = selectedId.value === id ? null : id;
+function selectOnly(id: string | null) {
+  selectedIds.value = id ? [id] : [];
+  anchorId.value = id;
+}
+
+/** Click, Ctrl-click or Shift-click a material in `order`, the list it is in. A
+ *  plain click on the one material already picked puts it down again. */
+function pick(id: string, e: MouseEvent, order: readonly MaterialDef[]) {
+  const mods = modsOf(e);
+  if (!mods.toggle && !mods.range && selectedId.value === id) {
+    selectOnly(null);
+    return;
+  }
+  const next = selectRow({ keys: selectedIds.value, anchor: anchorId.value }, order.map((m) => m.id), id, mods);
+  selectedIds.value = [...next.keys];
+  anchorId.value = next.anchor;
+}
+
+async function deleteSelected() {
+  const ids = [...selectedIds.value];
+  if (!ids.length) return;
+  const worn = ids.filter((id) => usage.value.has(id)).length;
+  if (worn) {
+    const what = ids.length === 1 ? "this material" : `these ${ids.length} materials`;
+    const answer = await choose(`Delete ${what}? What wears ${worn === 1 && ids.length === 1 ? "it" : "them"} goes back to the default grey.`, [
+      { value: "delete", label: "Delete" },
+      { value: "cancel", label: "Cancel" },
+    ]);
+    if (answer !== "delete") return;
+  }
+  store.removeMaterials(ids);
+  selectOnly(null);
+}
+
+function openMenu(e: MouseEvent, m: MaterialDef) {
+  e.preventDefault();
+  if (!selectedSet.value.has(m.id)) selectOnly(m.id);
+  const ids = [...selectedIds.value];
+  const n = ids.length;
+  const items: CtxItem[] = [];
+  const target = faceCount.value
+    ? `${faceCount.value} ${faceCount.value === 1 ? "face" : "faces"}`
+    : selectionCount.value
+      ? `${selectionCount.value} ${selectionCount.value === 1 ? "body" : "bodies"}`
+      : "";
+  if (n === 1) {
+    items.push({ label: target ? `Apply to ${target}` : "Apply to selection", disabled: !target, onClick: () => applyToSelection() });
+    items.push({ label: "Duplicate", onClick: () => addMaterial() });
+  }
+  const worn = ids.filter((id) => usage.value.has(id));
+  items.push({
+    label: n === 1 ? "Remove from the model" : `Remove ${n} from the model`,
+    disabled: !worn.length,
+    onClick: () => store.unassignMaterials(worn),
+  });
+  items.push({ separator: true, label: "" });
+  items.push({ label: n === 1 ? "Delete" : `Delete ${n} materials`, danger: true, shortcut: "Del", onClick: () => void deleteSelected() });
+  contextMenu(e.clientX, e.clientY, items);
+}
+
+function onKey(e: KeyboardEvent) {
+  if (e.key !== "Delete" && e.key !== "Backspace") return;
+  const t = e.target as HTMLElement | null;
+  if (t?.closest("input, textarea, select, [contenteditable='true']")) return;
+  if (!selectedIds.value.length) return;
+  e.preventDefault();
+  // The window's own Delete removes a selected face or feature; this one is the
+  // panel's.
+  e.stopPropagation();
+  void deleteSelected();
 }
 
 function addMaterial() {
@@ -125,14 +199,7 @@ function addMaterial() {
     ...(from ? { ...from, name: `${from.name} copy` } : {}),
     id: undefined as unknown as string,
   });
-  selectedId.value = id;
-}
-
-function removeSelected() {
-  const m = selected.value;
-  if (!m) return;
-  store.removeMaterial(m.id);
-  selectedId.value = null;
+  selectOnly(id);
 }
 
 /** Push one edited field. Every control calls this, so there is one place where
@@ -252,7 +319,7 @@ async function doImport() {
 </script>
 
 <template>
-  <div class="rd-scroll">
+  <div class="rd-scroll" @keydown="onKey">
     <label class="rd-search">
       <Icon name="search" :size="13" />
       <input
@@ -272,10 +339,11 @@ async function doImport() {
         v-for="m in used"
         :key="m.id"
         class="rd-used"
-        :class="{ 'is-selected': m.id === selectedId }"
+        :class="{ 'is-selected': selectedSet.has(m.id) }"
         draggable="true"
-        :title="`${m.name}, ${finishLabel(m)}. Drag onto a face.`"
-        @click="pick(m.id)"
+        :title="`${m.name}, ${finishLabel(m)}. Drag onto a face. Ctrl or Shift click picks several, right-click for Delete.`"
+        @click="pick(m.id, $event, used)"
+        @contextmenu="openMenu($event, m)"
         @dragstart="onDragStart($event, m)"
         @dragend="endMaterialDrag()"
       >
@@ -308,14 +376,15 @@ async function doImport() {
           v-for="m in all"
           :key="m.id"
           class="rd-tile"
-          :class="{ 'is-selected': m.id === selectedId }"
+          :class="{ 'is-selected': selectedSet.has(m.id) }"
           role="option"
-          :aria-selected="m.id === selectedId"
+          :aria-selected="selectedSet.has(m.id)"
           draggable="true"
           :data-material="m.id"
-          :title="`${m.name}, ${finishLabel(m)}. Drag onto a face, hold Shift for the whole body.`"
-          @click="pick(m.id)"
-          @dblclick="pick(m.id); applyToSelection()"
+          :title="`${m.name}, ${finishLabel(m)}. Drag onto a face, hold Shift for the whole body. Ctrl or Shift click picks several, right-click for Delete.`"
+          @click="pick(m.id, $event, all)"
+          @dblclick="selectOnly(m.id); applyToSelection()"
+          @contextmenu="openMenu($event, m)"
           @dragstart="onDragStart($event, m)"
           @dragend="endMaterialDrag()"
         >
@@ -332,6 +401,15 @@ async function doImport() {
         Drag a material onto a face to dress just that face. Hold Shift while you
         drop to dress the whole body.
       </p>
+    </section>
+
+    <section v-if="selectedIds.length > 1" class="rd-section rd-edit">
+      <h3 class="rd-head">{{ selectedIds.length }} materials picked</h3>
+      <div class="mats-actions">
+        <button class="btn" @click="store.unassignMaterials(selectedIds)">Remove from the model</button>
+        <button class="btn" @click="deleteSelected()">Delete</button>
+        <button class="btn" @click="selectOnly(null)">Deselect</button>
+      </div>
     </section>
 
     <!-- the editor for the one that is selected -->
@@ -476,7 +554,7 @@ async function doImport() {
           :disabled="!selectionCount && !faceCount"
           @click="clearOnSelection()"
         >Clear</button>
-        <button class="btn" @click="removeSelected()">Delete</button>
+        <button class="btn" @click="deleteSelected()">Delete</button>
       </div>
     </section>
 
