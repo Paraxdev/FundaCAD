@@ -75,6 +75,41 @@ def test_a_mirrored_instance_is_built_from_scratch():
     print("  mirrored instance is not reused")
 
 
+def test_helper_payloads_match_the_serial_ones():
+    """Bodies meshed in helper processes carry exactly the payload the serial
+    loop builds, faceOwners included."""
+    from build123d import Sphere
+
+    sphere = Sphere(9)
+    shapes = [sphere.moved(Location((x, 0, 0))) for x in (0, 30, 60, 90)]
+    shapes += [_part().moved(Location((0, 50 + 30 * k, 0), (0, 0, 1), 11 * k)) for k in range(3)]
+    shapes += [Box(5 + k, 6, 7).moved(Location((0, -40, 10 * k))) for k in range(4)]
+    body_list = [{"id": f"body{i + 1}", "name": f"B{i}", "shape": s, "owners": {}} for i, s in enumerate(shapes)]
+
+    def run(min_faces):
+        server._MESH_CACHE.clear()
+        old = server._PARALLEL_MIN_FACES
+        server._PARALLEL_MIN_FACES = min_faces
+        try:
+            server._INSTANCE_PAYLOADS.clear()
+            server._parallel_payloads(body_list, TOL, PROFILE)
+            got = len(server._PRECOMPUTED)
+            out = {b["id"]: server._body_payload(b, TOL, PROFILE)["payload"] for b in body_list}
+            server._PRECOMPUTED.clear()
+            return got, out
+        finally:
+            server._PARALLEL_MIN_FACES = old
+
+    helped, parallel = run(0)
+    assert helped >= 2, f"the helpers built {helped} payloads, the test did not exercise them"
+    unhelped, serial = run(10**9)
+    assert unhelped == 0
+    for bid in serial:
+        _compare(parallel[bid], serial[bid])
+        assert parallel[bid]["faceOwners"] == serial[bid]["faceOwners"], bid
+    print(f"  {helped} helper payloads match the serial loop")
+
+
 def main():
     failed = 0
     for name, fn in sorted(globals().items()):
