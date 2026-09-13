@@ -25,6 +25,8 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **Unsaved changes show a star, and closing asks about them.** The window title and the name in the title bar read `bracket.funda*` while there are changes that are not saved. Closing the window then asks whether to save, not save, or stay; a Save As that is cancelled keeps the window open rather than losing the work.
+
 - **Reset camera**, a button beside Views and Shift+Home, puts the view back where a fresh window opens: level, looking in from the front right corner and framed on the model. New does the same, looking at the origin.
 
 - **Click a body, then click it again for a face.** The first click on a body selects the whole body and raises the move gizmo; a click on the body you already have selects the face or edge under the cursor, and further clicks on that body keep picking faces. Clicking another body takes that body whole. Resting on a body for a moment highlights the face under the pointer instead, and a click takes whatever is highlighted; how long that moment is sits in Preferences, Accessibility, Hover delay. This is the new default, called Body, then face, beside Faces and Bodies in the selection menu, and 3 on the keyboard.

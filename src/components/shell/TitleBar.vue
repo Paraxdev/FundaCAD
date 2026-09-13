@@ -60,11 +60,9 @@ onUnmounted(() => offPlugins?.());
       {{ ui.sketchActive ? "SKETCH" : "SOLID" }}
     </span>
     <span id="docname" class="docname" :class="{ dirty: ui.dirty }">
-      <!-- The unsaved mark is an ICON in its own slot, not a character glued
-           to the front of the name: as a prefix it moved the whole filename
-           sideways the instant the document went dirty, which is a jump the eye
-           reads as the name having changed. -->
-      <Icon v-if="ui.dirty" name="dot" :size="8" class="dirty-dot" />{{ ui.docName }}
+      <!-- After the name, never before it: a prefix moved the whole filename
+           sideways the instant the document went dirty. -->
+      {{ ui.docName }}<span v-if="ui.dirty" class="dirty-mark" title="Unsaved changes">*</span>
     </span>
     <!-- Beside the document name, because what it is saying is about THIS
          document: someone else is in it. It renders nothing at all unless an
