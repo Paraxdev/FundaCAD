@@ -3,7 +3,7 @@ import { logError } from "../ui/logStore";
 import { featureMeta } from "../ui/featureMeta";
 import { repairableDiagFor } from "../features/repickReference";
 import { contributedPaint, onContribChange } from "../plugins/contrib";
-import { importedFacePaint } from "../document/faceColors";
+import { importedBodyColors, importedFacePaint } from "../document/faceColors";
 import { faceMaterialFinishes, faceMaterialPaint, resolveFaceMaterials } from "../document/faceMaterials";
 import type { Engine } from "./engine";
 import { setPreviewError } from "../ui/previewError";
@@ -62,7 +62,15 @@ export function installRebuildBridge(e: Engine): void {
       // importedFacePaint), so an assembly whose parts are each one colour adds
       // nothing here at all.
       faces: {
-        ...importedFacePaint(e.store.buildState.result?.bodies, bodies),
+        ...importedFacePaint(
+          e.store.buildState.result?.bodies,
+          bodies,
+          importedBodyColors(
+            e.store.buildState.result?.bodies,
+            e.store.document.features,
+            (id) => e.store.importColorSource(id),
+          ),
+        ),
         // A material somebody dropped on this face beats what the file said it
         // was, for the same reason a texture inlay does: it was chosen here.
         ...faceMaterialPaint(onFaces),

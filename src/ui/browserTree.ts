@@ -10,6 +10,7 @@ import type { CtxItem } from "./menu";
 import { contributedBodyMenu } from "../plugins/contrib";
 import { ancestryOf, childrenByParent, type ElementDef } from "../document/elements";
 import type { MaterialDef } from "../document/materials";
+import type { ImportColorSource } from "../types";
 
 /** The rows a plugin adds to a body's right-click menu.
  *
@@ -311,4 +312,19 @@ export function materialMenu(
     });
   }
   return { label: ids.length > 1 ? `Material for ${ids.length} bodies` : "Material", children: rows };
+}
+
+/** Where an imported assembly's parts take their colours from, for a file that
+ *  styles a part's body one colour and its faces another. */
+export function importColorMenu(
+  current: ImportColorSource,
+  apply: (source: ImportColorSource) => void,
+): CtxItem {
+  return {
+    label: "Imported colors",
+    children: [
+      { label: "From bodies", disabled: current === "bodies", onClick: () => apply("bodies") },
+      { label: "From faces", disabled: current === "faces", onClick: () => apply("faces") },
+    ],
+  };
 }

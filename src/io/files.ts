@@ -16,7 +16,7 @@ import { announceImportedBody } from "../plugins/contrib";
 import {
   asHex, materialsForColors, nodeColors, parseLibrary, serializeLibrary,
 } from "../document/materials";
-import { decodeFaceColors, dominantFaceColor } from "../document/faceColors";
+import { importedBodyColors } from "../document/faceColors";
 import { missingPluginMessage, missingPlugins } from "../document/missingPlugins";
 import type { FaceColorRuns } from "../types";
 
@@ -555,13 +555,13 @@ export async function importPath(store: DocumentStore, geometry: GeometryBackend
  *
  *  Assignments are display-only overlays, so this adds no second undo step on
  *  top of the import itself. */
-async function adoptImportedColors(
+export async function adoptImportedColors(
   store: DocumentStore,
   featureId: string,
   res: {
-    color?: string;
-    nodes?: { name: string; parent: number | null; color?: string }[];
-    parts?: { node: number; faces: number; faceColors?: FaceColorRuns }[];
+    color?: string | undefined;
+    nodes?: { name: string; parent: number | null; color?: string }[] | undefined;
+    parts?: { node: number; faces: number; faceColors?: FaceColorRuns; color?: string }[] | undefined;
   },
 ) {
   const perNode = res.nodes ? nodeColors(res.nodes) : null;
@@ -581,6 +581,8 @@ async function adoptImportedColors(
   // of them has to be in the library, not just the one each body wears, because
   // the faces that DISAGREE with their body are the red circuit board.
   for (const p of res.parts ?? []) {
+    const own = asHex(p.color);
+    if (own) wanted.push({ color: own });
     if (!p.faceColors) continue;
     for (const hex of p.faceColors.palette ?? []) {
       const c = asHex(hex);
@@ -594,6 +596,8 @@ async function adoptImportedColors(
 
   await store.rebuildNow();
   const bodies = store.buildState.result?.bodies ?? [];
+  const feature = store.document.features.find((f) => f.id === featureId);
+  const picks = importedBodyColors(bodies, feature ? [feature] : [], (id) => store.importColorSource(id));
   // One batched write per material, not one per body: an assembly is thousands
   // of bodies and every write re-emits the build.
   const byMaterial = new Map<string, string[]>();
@@ -607,14 +611,10 @@ async function adoptImportedColors(
   for (const b of bodies) {
     const slash = b.nodeRef ? b.nodeRef.lastIndexOf("/") : -1;
     if (perNode && slash > 0 && b.nodeRef!.slice(0, slash) === featureId) {
-      // The body's OWN faces first, and the product tree only when it has none.
-      // A product colour is what the file's author left in a dialog; a face
-      // colour is what they painted. Where both exist the faces are the answer,
-      // and the tree colour would put fifteen unrelated parts in one material.
-      const own = b.faceColors
-        ? dominantFaceColor(decodeFaceColors(b.faceColors, b.faceCount))
-        : null;
-      claim(b.id, asHex(own) ?? perNode[Number(b.nodeRef!.slice(slash + 1))]);
+      // Body against faces is decided in document/faceColors.ts, by the
+      // feature's colorSource.
+      const pick = picks.get(b.id);
+      claim(b.id, asHex(pick?.color) ?? perNode[Number(b.nodeRef!.slice(slash + 1))]);
     } else if (!perNode && b.faceOwners?.some((owner) => owner === featureId)) {
       claim(b.id, single ?? undefined);
     }

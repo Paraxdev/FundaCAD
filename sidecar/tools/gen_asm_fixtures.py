@@ -301,6 +301,31 @@ def asm_face_colors(path):
     return {"products": 2, "solids": 2}
 
 
+def asm_solid_colors(path):
+    """Colour on each SOLID of a two-solid product, with a different colour on
+    one face of the first. A SolidWorks export writes a part's appearance on its
+    solid and leaves stale feature colours on its faces, which is how the SV08
+    printer's black frame came in red."""
+    doc, st, ct = _doc()
+    root = _empty_assembly(st, "Painted Solids")
+    product = _part(st, root, _boxes((10, 10, 10, 0, 0, 0), (4, 4, 4, 20, 0, 0)).wrapped, "Pair")
+    shape = st.GetShape_s(product)
+    from OCP.TopAbs import TopAbs_SOLID
+    from OCP.TopExp import TopExp_Explorer
+
+    solids = []
+    exp = TopExp_Explorer(shape, TopAbs_SOLID)
+    while exp.More():
+        solids.append(exp.Current())
+        exp.Next()
+    _color(ct, st.AddSubShape(product, solids[0]), (0.2, 0.2, 0.2))
+    _color(ct, st.AddSubShape(product, solids[1]), (0.1, 0.6, 0.9))
+    _color(ct, st.AddSubShape(product, _faces_of(solids[0])[0]), (0.9, 0.1, 0.1))
+    st.UpdateAssemblies()
+    _write(doc, path)
+    return {"products": 1, "solids": 2}
+
+
 FIXTURES = {
     "asm_flat": asm_flat,
     "asm_multisolid": asm_multisolid,
@@ -308,6 +333,7 @@ FIXTURES = {
     "asm_colors": asm_colors,
     "asm_empty_product": asm_empty_product,
     "asm_face_colors": asm_face_colors,
+    "asm_solid_colors": asm_solid_colors,
 }
 
 

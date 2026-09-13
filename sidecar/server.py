@@ -1038,6 +1038,8 @@ def _rebuild_job(document, tolerance, known=None):
         # while the geometry etag does not, and on an assembly rebuild almost
         # every body arrives as a stub.
         face_colors = {"faceColors": b["face_colors"]} if b.get("face_colors") else {}
+        if b.get("part_color"):
+            face_colors["partColor"] = b["part_color"]
         if known.get(b["id"]) == ent["etag"]:
             out.append({"id": b["id"], "name": b["name"], "etag": ent["etag"],
                         **node_ref, **face_colors, "unchanged": True})

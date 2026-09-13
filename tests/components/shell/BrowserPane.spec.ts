@@ -82,6 +82,8 @@ function makeEngine(doc: CadDocument, bodies: { id: string; name: string; nodeRe
       }
       buildVersion.value++;
     },
+    importColorSource: (_id: string) => "bodies" as const,
+    setImportColorSource() {},
     get bodyElements() { return elements; },
     bodyElementOf: (id: string) => bodyElement.get(id),
     bodyElementMap: () => bodyElement,

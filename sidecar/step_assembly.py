@@ -26,8 +26,14 @@ This module owns no geometry operations; it reads and returns shapes.
 """
 from __future__ import annotations
 
+import time
 import unicodedata
 from dataclasses import dataclass, field
+
+#: Seconds spent in each phase of the most recent `read_assembly`, for
+#: tools/bench_import.py. OCP holds the GIL through ReadFile and Transfer, so
+#: these are the only view inside the read.
+last_timings: dict[str, float] = {}
 
 
 @dataclass
@@ -70,6 +76,11 @@ class Assembly:
     #: face_colors.py), so for such a file this is where nearly all the colour
     #: in the document actually is.
     face_colors: dict[int, list] = field(default_factory=dict)
+    #: The colour styled on a leaf's SOLID, leaf index -> "#rrggbb", for leaves
+    #: that have one. Neither the product label nor any face carries it: a
+    #: SolidWorks export puts the part's appearance here and leaves stale feature
+    #: colours (Boss-Extrude yellow, Cut-Extrude red) on the faces.
+    solid_colors: dict[int, str] = field(default_factory=dict)
 
     @property
     def product_count(self) -> int:
@@ -237,10 +248,16 @@ def read_assembly(path: str) -> Assembly:
     reader.SetNameMode(True)
     reader.SetColorMode(True)
     reader.SetLayerMode(True)
+    last_timings.clear()
+    t0 = time.perf_counter()
     if reader.ReadFile(path) != IFSelect_ReturnStatus.IFSelect_RetDone:
         raise ValueError("could not read the STEP file (it may be truncated or not STEP)")
+    t1 = time.perf_counter()
+    last_timings["read_file"] = t1 - t0
     if not reader.Transfer(doc):
         raise ValueError("the STEP file was read but contained no transferable shape")
+    t2 = time.perf_counter()
+    last_timings["transfer"] = t2 - t1
 
     shape_tool = XCAFDoc_DocumentTool.ShapeTool_s(doc.Main())
     color_tool = XCAFDoc_DocumentTool.ColorTool_s(doc.Main())
@@ -255,18 +272,33 @@ def read_assembly(path: str) -> Assembly:
     # Per PRODUCT, not per occurrence. A fastener instanced two hundred times is
     # one walk over its faces; without this the walk is the import.
     face_color_cache: dict[str, object] = {}
+    solid_color_cache: dict[str, list] = {}
+
+    def entry_of(label) -> str:
+        entry = TCollection_AsciiString()
+        TDF_Tool.Entry_s(label, entry)
+        return entry.ToCString()
 
     def product_face_colors(referred):
         if not reads_faces:
             return None
-        entry = TCollection_AsciiString()
-        TDF_Tool.Entry_s(referred, entry)
-        key = entry.ToCString()
+        key = entry_of(referred)
         if key not in face_color_cache:
             face_color_cache[key] = _product_face_colors(
                 color_tool, shape_tool.GetShape_s(referred)
             )
         return face_color_cache[key]
+
+    def product_solid_colors(referred):
+        if not reads_faces:
+            return []
+        key = entry_of(referred)
+        if key not in solid_color_cache:
+            solid_color_cache[key] = [
+                _shape_color(color_tool, s)
+                for s in _solids_of(shape_tool.GetShape_s(referred))
+            ]
+        return solid_color_cache[key]
 
     def resolve(label):
         """A component label points at the product it instances; a free shape is
@@ -311,10 +343,13 @@ def read_assembly(path: str) -> Assembly:
         # product's own shape did. That is what lets a colour read from the
         # unmoved product be handed to the placed leaf by position.
         by_solid = product_face_colors(referred)
+        solid_colors = product_solid_colors(referred) if solids else []
         for k, leaf in enumerate(solids or [shape]):
             row = by_solid[k] if by_solid and k < len(by_solid) else None
             if row and any(row):
                 asm.face_colors[len(asm.leaves)] = row
+            if k < len(solid_colors) and solid_colors[k]:
+                asm.solid_colors[len(asm.leaves)] = solid_colors[k]
             asm.leaves.append((index, leaf))
 
     roots = TDF_LabelSequence()
@@ -337,4 +372,5 @@ def read_assembly(path: str) -> Assembly:
     # because its leaves equal its nodes.
     if len(asm.nodes) > roots.Length() or len(asm.leaves) > len(asm.nodes):
         asm.is_assembly = True
+    last_timings["walk"] = time.perf_counter() - t2
     return asm

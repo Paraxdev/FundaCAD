@@ -11,7 +11,9 @@ import { describe, expect, it } from "vitest";
 import {
   decodeFaceColors,
   dominantFaceColor,
+  importedBodyColors,
   importedFacePaint,
+  pickBodyColor,
 } from "../../src/document/faceColors";
 import type { FaceColorRuns } from "../../src/types";
 
@@ -149,6 +151,15 @@ describe("importedFacePaint", () => {
     expect(importedFacePaint(undefined, {})).toEqual({});
   });
 
+  it("paints no faces of a body whose own colour won", () => {
+    const paint = importedFacePaint(
+      [{ id: "body1", faceStart: 0, faceCount: 4, faceColors: board }],
+      { body1: GREY },
+      new Map([["body1", { color: GREY, bodyWins: true }]]),
+    );
+    expect(paint).toEqual({});
+  });
+
   it("costs nothing for a body the file painted one colour", () => {
     // The ordinary imported part, and the other half of the control above: 42
     // of the reference assembly's 45 solids are a single colour throughout.
@@ -157,5 +168,49 @@ describe("importedFacePaint", () => {
       [{ id: "body1", faceStart: 0, faceCount: 900, faceColors: plain }],
       { body1: "#232323" },
     )).toEqual({});
+  });
+});
+
+describe("pickBodyColor", () => {
+  // The SV08 printer's shape: a black solid whose faces still wear a SolidWorks
+  // Cut-Extrude red.
+  const stale = [RED, RED, RED, null];
+
+  it("lets the body's own colour win with bodies", () => {
+    expect(pickBodyColor({ partColor: GREY, faceColors: stale }, "bodies")).toEqual({ color: GREY, bodyWins: true });
+    expect(pickBodyColor({ ownColor: GREY, faceColors: stale }, "bodies")).toEqual({ color: GREY, bodyWins: true });
+  });
+
+  it("lets the faces win with faces", () => {
+    expect(pickBodyColor({ partColor: GREY, faceColors: stale }, "faces")).toEqual({ color: RED, bodyWins: false });
+  });
+
+  it("does not let a default nobody picked beat painted faces", () => {
+    // The PN532 board: products in SolidWorks' default lavender, faces painted.
+    expect(pickBodyColor({ ownColor: "#cad1ee", faceColors: stale }, "bodies")).toEqual({ color: RED, bodyWins: false });
+  });
+
+  it("falls back through the part, then the tree, when no face is coloured", () => {
+    expect(pickBodyColor({ partColor: "#cad1ee", inheritedColor: WHITE }, "faces").color).toBe("#cad1ee");
+    expect(pickBodyColor({ inheritedColor: WHITE }, "bodies")).toEqual({ color: WHITE, bodyWins: false });
+    expect(pickBodyColor({}, "bodies")).toEqual({ color: null, bodyWins: false });
+  });
+});
+
+describe("importedBodyColors", () => {
+  const features = [{
+    id: "im", type: "import",
+    nodes: [{ parent: null, color: WHITE }, { parent: 0 }],
+  }];
+  const bodies = [
+    { id: "body1", faceCount: 4, nodeRef: "im/1", partColor: GREY, faceColors: { palette: [RED], runs: [[4, 0]] } as FaceColorRuns },
+    { id: "body2", faceCount: 4 },
+  ];
+
+  it("reads the source per import and skips bodies from anything else", () => {
+    const bodiesWin = importedBodyColors(bodies, features, () => "bodies");
+    expect(bodiesWin.get("body1")).toEqual({ color: GREY, bodyWins: true });
+    expect(bodiesWin.has("body2")).toBe(false);
+    expect(importedBodyColors(bodies, features, () => "faces").get("body1")).toEqual({ color: RED, bodyWins: false });
   });
 });

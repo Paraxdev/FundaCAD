@@ -21,8 +21,9 @@
 // in front of them: `palette` is the distinct colours, `runs` is [count,
 // paletteIndex] in face order, and an index of -1 means those faces carry no
 // colour of their own.
-import type { FaceColorRuns } from "../types";
-export type { FaceColorRuns };
+import type { FaceColorRuns, ImportColorSource } from "../types";
+import { nodeColors } from "./materials";
+export type { FaceColorRuns, ImportColorSource };
 
 /** Unpack to exactly `count` entries, "#rrggbb" or null.
  *
@@ -106,16 +107,112 @@ export function importedFacePaint(
     faceColors?: FaceColorRuns;
   }[] | undefined,
   bodyPaint: Readonly<Record<string, string>>,
+  picks?: ReadonlyMap<string, BodyColorPick>,
 ): Record<number, string> {
   const out: Record<number, string> = {};
   for (const b of bodies ?? []) {
     if (!b.faceColors) continue;
+    // The body's own colour was chosen over its faces, so they are not painted.
+    if (picks?.get(b.id)?.bodyWins) continue;
     const colors = decodeFaceColors(b.faceColors, b.faceCount);
     const covered = bodyPaint[b.id] ? dominantFaceColor(colors) : null;
     for (let i = 0; i < colors.length; i++) {
       const c = colors[i];
       if (c && c !== covered) out[b.faceStart + i] = c;
     }
+  }
+  return out;
+}
+
+// --- a body's colour against its faces' -------------------------------------
+//
+// A file can style a part twice and disagree with itself. The SV08 printer, a
+// SolidWorks export, styles every solid with the part's real appearance (black,
+// cyan) and ALSO leaves its faces wearing SolidWorks' feature colours, yellow
+// on a boss and red on a cut, which nobody meant as the look of the part.
+// Reading the faces there turns a black frame red. The reference PN532 board
+// is the opposite case: its faces are the real colours and its products wear a
+// default. So which one wins is a choice per import (the store's
+// importColorSource), and "bodies" is the default.
+
+/** Colours a CAD system writes when nobody picked one, which say nothing about
+ *  the part and must not beat a face that was painted. #cad1ee is SolidWorks'
+ *  default part colour, the pale lavender on fifteen of the board's products. */
+const UNCHOSEN_COLORS = new Set(["#cad1ee"]);
+
+function chosen(hex: string | undefined | null): string | null {
+  return hex && !UNCHOSEN_COLORS.has(hex.toLowerCase()) ? hex : null;
+}
+
+export interface BodyColorPick {
+  /** The colour the body wears, or null when the file gave it none. */
+  color: string | null;
+  /** True when that colour is the body's own and its face colours are ignored. */
+  bodyWins: boolean;
+}
+
+/** Which colour one imported body wears.
+ *
+ *  `partColor` is the style on the body's solid, `ownColor` the style on its
+ *  product, `inheritedColor` its nearest coloured ancestor's. With "bodies" a
+ *  chosen body or product colour wins outright; everything else falls back to
+ *  the faces, which is also the whole rule with "faces". */
+export function pickBodyColor(
+  input: {
+    partColor?: string | undefined;
+    ownColor?: string | undefined;
+    inheritedColor?: string | undefined;
+    faceColors?: readonly (string | null)[] | undefined;
+  },
+  source: ImportColorSource,
+): BodyColorPick {
+  if (source === "bodies") {
+    const own = chosen(input.partColor) ?? chosen(input.ownColor);
+    if (own) return { color: own, bodyWins: true };
+  }
+  const faces = input.faceColors ? dominantFaceColor(input.faceColors) : null;
+  return {
+    color: faces ?? input.partColor ?? input.inheritedColor ?? null,
+    bodyWins: false,
+  };
+}
+
+/** `pickBodyColor` for every body of a build that came from an imported
+ *  assembly, keyed by body id. Bodies from anything else are absent. */
+export function importedBodyColors(
+  bodies: readonly {
+    id: string;
+    faceCount: number;
+    nodeRef?: string | undefined;
+    faceColors?: FaceColorRuns | undefined;
+    partColor?: string | undefined;
+  }[] | undefined,
+  features: readonly {
+    id: string;
+    type: string;
+    nodes?: readonly { parent: number | null; color?: string | undefined }[] | undefined;
+  }[],
+  sourceOf: (featureId: string) => ImportColorSource,
+): Map<string, BodyColorPick> {
+  const out = new Map<string, BodyColorPick>();
+  const trees = new Map<string, { source: ImportColorSource; nodes: NonNullable<(typeof features)[number]["nodes"]>; inherited: (string | undefined)[] }>();
+  for (const f of features) {
+    if (f.type !== "import" || !f.nodes) continue;
+    trees.set(f.id, { source: sourceOf(f.id), nodes: f.nodes, inherited: nodeColors(f.nodes) });
+  }
+  if (!trees.size) return out;
+  for (const b of bodies ?? []) {
+    const slash = b.nodeRef ? b.nodeRef.lastIndexOf("/") : -1;
+    if (slash <= 0) continue;
+    const tree = trees.get(b.nodeRef!.slice(0, slash));
+    if (!tree) continue;
+    const index = Number(b.nodeRef!.slice(slash + 1));
+    out.set(b.id, pickBodyColor({
+      partColor: b.partColor,
+      ownColor: tree.nodes[index]?.color,
+      inheritedColor: tree.inherited[index],
+      faceColors: b.faceColors ? decodeFaceColors(b.faceColors, b.faceCount) : undefined,
+    }, tree.source));
   }
   return out;
 }

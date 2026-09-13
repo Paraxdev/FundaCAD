@@ -37,8 +37,9 @@ import { useShellStore } from "../../stores/shell";
 import { contextMenu } from "../../ui/menu";
 import {
   bodyExtraMenu, buildBodyTree, collectGroupBodyIds, elementMoveMenu, elementPath,
-  materialMenu, type BodyRef, type TreeGroup,
+  importColorMenu, materialMenu, type BodyRef, type TreeGroup,
 } from "../../ui/browserTree";
+import { adoptImportedColors } from "../../io/files";
 import { ancestryOf } from "../../document/elements";
 import {
   BROWSER_FILTERS, asBrowserFilter, getBrowserFilter, isBrowserSection,
@@ -390,6 +391,21 @@ function moveBodiesMenu(ids: readonly string[], from: string | undefined): CtxIt
   });
 }
 
+/** The menu on an imported assembly's folder head, keyed "n:<featureId>/<node>". */
+function assemblyMenu(key: string): CtxItem[] {
+  const slash = key.lastIndexOf("/");
+  if (!key.startsWith("n:") || slash < 0) return [];
+  const featureId = key.slice(2, slash);
+  const feature = store.document.features.find(
+    (f): f is Extract<Feature, { type: "import" }> => f.id === featureId && f.type === "import",
+  );
+  if (!feature) return [];
+  return [importColorMenu(store.importColorSource(featureId), (source) => {
+    store.setImportColorSource(featureId, source);
+    void adoptImportedColors(store, featureId, feature);
+  })];
+}
+
 /** The "Move to element" submenu for an element itself (reparenting a folder).
  *  Its own subtree is left out: a folder cannot go inside itself, and offering
  *  the move only to refuse it is a menu that lies. */
@@ -656,7 +672,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
             acceptDrop: () => canDropInto(element),
             dropHere: () => dropInto(element),
           }
-        : {}),
+        : { extraMenu: assemblyMenu(g.key) }),
     });
     if (collapsed) return;
     for (const c of g.children) groupNode(c, depth + 1);

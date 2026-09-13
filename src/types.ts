@@ -18,6 +18,10 @@ export interface FaceColorRuns {
   runs: [number, number][];
 }
 
+/** Where an imported part's colour comes from when its body and its faces
+ *  disagree. See document/faceColors.ts. */
+export type ImportColorSource = "bodies" | "faces";
+
 // A geometric "fingerprint" of an edge/face: enough scalar invariants to re-find
 // THIS one entity on a freshly rebuilt body, robust to small kernel drift and to
 // symmetric duplicates (which share some, but not all, invariants). The resolver
@@ -606,7 +610,8 @@ export type CoreFeature =
       // wrong tree still builds and would just label parts with each other's
       // names. Rows are objects so a later phase can add fields to them.
       nodes?: { name: string; parent: number | null; color?: string }[];
-      parts?: { node: number; faces: number; faceColors?: FaceColorRuns }[];
+      // `color` is the colour styled on the part's solid, beside the product's.
+      parts?: { node: number; faces: number; faceColors?: FaceColorRuns; color?: string }[];
       // A body read in from another FundaCAD document that is kept in step with
       // it: the file, and a fingerprint of what it held when it was last read.
       link?: { path: string; stamp: string };
@@ -898,6 +903,9 @@ export interface CadDocument {
    *  chrome ring on a printed knob. Display-only like everything above it, and
    *  see document/faceMaterials.ts for what that key promises across an edit. */
   faceMaterials?: Record<string, string>;
+  /** import feature id → "faces" where an import's parts wear their face
+   *  colours over their body colours. Absent means "bodies". */
+  importColorSource?: Record<string, ImportColorSource>;
   /** filament palette (≤4 slots for the U1 toolchanger); slot index → name+hex,
    *  plus an optional material type (e.g. "PLA") when synced from the printer. */
   palette?: { name: string; color: string; material?: string }[];
@@ -948,7 +956,7 @@ export interface RebuildResult {
   // `etag` (when the backend supplies one) is a content fingerprint the render
   // layer diffs to decide whether a body needs rebuilding at all, absent means
   // "always rebuild" (e.g. the in-process Rust backend, which has no etag cache).
-  bodies?: { id: string; name: string; faceStart: number; faceCount: number; faceOwners?: (string | null)[]; faceBands?: number[][]; faceColorSlots?: (number | null)[]; etag?: string; nodeRef?: string; faceColors?: FaceColorRuns }[];
+  bodies?: { id: string; name: string; faceStart: number; faceCount: number; faceOwners?: (string | null)[]; faceBands?: number[][]; faceColorSlots?: (number | null)[]; etag?: string; nodeRef?: string; faceColors?: FaceColorRuns; partColor?: string }[];
   // selector-resolution diagnostics, when any selector resolved with low confidence.
   diagnostics?: ResolveDiag[];
   // set when features failed but the rest of the timeline still built, the
@@ -1011,7 +1019,7 @@ export type ImportReply =
       // present only for a STEP that carried a real assembly tree; see the
       // `import` feature above for what they mean
       nodes?: { name: string; parent: number | null; color?: string }[];
-      parts?: { node: number; faces: number; faceColors?: FaceColorRuns }[] }
+      parts?: { node: number; faces: number; faceColors?: FaceColorRuns; color?: string }[] }
   // `cancelled` = the user stopped it. Distinct from a failure so the UI can
   // dismiss quietly instead of showing an error the user already knows about.
   | { ok: false; cancelled?: boolean; message: string };

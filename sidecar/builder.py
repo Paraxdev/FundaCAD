@@ -1112,24 +1112,24 @@ def _bind_assembly(f, ctx, shape, nodes, parts):
                 f"geometry has {len(w.faces())}, falling back to unnamed bodies",
             )
             return False
-        wrapped.append((w, node_index, part.get("faceColors")))
+        wrapped.append((w, node_index, part.get("faceColors"), part.get("color")))
 
     # A product owning several solids numbers them; one owning a single solid
     # keeps its bare name. Same convention the anonymous path already used.
     owned = {}
-    for _w, node_index, _colors in wrapped:
+    for _w, node_index, _colors, _color in wrapped:
         owned[node_index] = owned.get(node_index, 0) + 1
 
     base = f.get("name") or "Imported"
     feature_id = f.get("id")
     seen = {}
-    for w, node_index, colors in wrapped:
+    for w, node_index, colors, color in wrapped:
         label = (nodes[node_index] or {}).get("name") or base
         if owned[node_index] > 1:
             seen[node_index] = seen.get(node_index, 0) + 1
             label = f"{label} {seen[node_index]}"
         ctx.new_body(w, label, node_ref=f"{feature_id}/{node_index}",
-                     face_colors=colors)
+                     face_colors=colors, part_color=color)
     return True
 
 
@@ -1996,7 +1996,7 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
     counter = {"n": 0}
     errors = []
 
-    def new_body(shape, name=None, node_ref=None, face_colors=None):
+    def new_body(shape, name=None, node_ref=None, face_colors=None, part_color=None):
         counter["n"] += 1
         entry = {
             "id": f"body{counter['n']}",
@@ -2014,6 +2014,9 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
         # per rebuild to hand straight to the wire would be pure cost.
         if face_colors:
             entry["face_colors"] = face_colors
+        # The colour the file styled on this body's solid (step_assembly.py).
+        if part_color:
+            entry["part_color"] = part_color
         bodies.append(entry)
         return bodies[-1]
 
@@ -2258,6 +2261,8 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
             entry["node_ref"] = b["node_ref"]
         if b.get("face_colors"):
             entry["face_colors"] = b["face_colors"]
+        if b.get("part_color"):
+            entry["part_color"] = b["part_color"]
         out_bodies.append(entry)
 
     shapes = [b["shape"] for b in out_bodies if b["shape"] is not None]

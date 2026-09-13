@@ -17,7 +17,7 @@ import {
   type VersionDiff,
   type VersionRepo,
 } from "./versions";
-import type { CadDocument, Feature, ParamTarget, PlaneSpec, ProjectedSource, ProjectionUpdate, RebuildReply, RebuildResult, ViewCubeSide, ViewOverride } from "../types";
+import type { CadDocument, Feature, ImportColorSource, ParamTarget, PlaneSpec, ProjectedSource, ProjectionUpdate, RebuildReply, RebuildResult, ViewCubeSide, ViewOverride } from "../types";
 import { asFeature } from "../types";
 import { applyProjectionUpdate } from "../types";
 import type { GeometryBackend, ProjectionResult } from "../geometry/client";
@@ -217,6 +217,9 @@ export class DocumentStore {
   /** per-FACE material assignment (`bodyId#localFaceIndex` → material id). See
    *  document/faceMaterials.ts for what that key promises and what it does not. */
   private faceMaterial = new Overlay<string>("faceMaterials");
+  /** import feature id → "faces" for an import whose parts wear their face
+   *  colours over their body colours (document/faceColors.ts). Absent is "bodies". */
+  private importColors = new Overlay<ImportColorSource>("importColorSource");
   /** The document's material library. Starts as the shared starter set and is
    *  omitted from the saved file while it is still exactly that and nothing is
    *  assigned, the same bargain the filament palette strikes: a document nobody
@@ -240,6 +243,7 @@ export class DocumentStore {
     { overlay: this.bodyElement },
     { overlay: this.bodyMaterial },
     { overlay: this.faceMaterial },
+    { overlay: this.importColors },
   ];
   /** Un-committed features shown live (a fillet drag, a thread being sized).
    *  Never recorded in undo.
@@ -1505,6 +1509,21 @@ export class DocumentStore {
       changed = true;
     }
     if (!changed) return;
+    this.markDirty();
+    this.emitBuild();
+  }
+
+  /** Whether an import's parts wear their body colours or their face colours
+   *  where the file gave both. Display-only and off the undo stack, like the
+   *  material assignments it steers. */
+  importColorSource(featureId: string): ImportColorSource {
+    return this.importColors.get(featureId) === "faces" ? "faces" : "bodies";
+  }
+
+  setImportColorSource(featureId: string, source: ImportColorSource) {
+    if (this.importColorSource(featureId) === source) return;
+    if (source === "faces") this.importColors.set(featureId, "faces");
+    else this.importColors.delete(featureId);
     this.markDirty();
     this.emitBuild();
   }

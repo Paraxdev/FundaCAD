@@ -26,6 +26,9 @@ export interface WireBodyFull {
    *  In the ENVELOPE, beside nodeRef, not in the payload: the payload is
    *  etag-cached on geometry, and these can change while geometry does not. */
   faceColors?: FaceColorRuns;
+  /** The colour the imported file styled on this body's solid. Envelope, same
+   *  reason as faceColors. */
+  partColor?: string;
   positions: F32Wire;
   indices: U32Wire;
   faceIds: U32Wire;
@@ -58,6 +61,7 @@ export interface WireBodyStub {
   etag: string;
   nodeRef?: string;
   faceColors?: FaceColorRuns;
+  partColor?: string;
   unchanged: true;
 }
 export type WireBody = WireBodyFull | WireBodyStub;
@@ -112,6 +116,7 @@ export interface WireManifestEntry {
   etag: string;
   nodeRef?: string;
   faceColors?: FaceColorRuns;
+  partColor?: string;
   unchanged?: true;
   faceCount?: number;
   nVerts3?: number;
@@ -149,6 +154,7 @@ export function manifestFromBodies(bodies: WireBody[]): WireManifestEntry[] {
     const e: WireManifestEntry = { id: b.id, name: b.name, etag: b.etag };
     if (b.nodeRef !== undefined) e.nodeRef = b.nodeRef;
     if (b.faceColors !== undefined) e.faceColors = b.faceColors;
+    if (b.partColor !== undefined) e.partColor = b.partColor;
     if (b.unchanged) {
       e.unchanged = true;
       return e;
@@ -250,7 +256,7 @@ export class RebuildAssembly {
     // they CAN change while geometry does not, a new diagnostic or
     // featureError must still produce a fresh object.
     const sig = manifest.length === 0 ? null : JSON.stringify([
-      sizes.map((m) => [m.id, m.etag, m.name, m.nodeRef, m.faceCount, m.faceColors]),
+      sizes.map((m) => [m.id, m.etag, m.name, m.nodeRef, m.faceCount, m.faceColors, m.partColor]),
       head.bbox,
       head.diagnostics, head.featureError, head.featureErrors, head.projectionUpdates,
       // Datum planes belong to no body, so nothing about them reaches the etags
@@ -309,6 +315,7 @@ export class RebuildAssembly {
       ...(m.etag !== undefined ? { etag: m.etag } : {}),
       ...(m.nodeRef !== undefined ? { nodeRef: m.nodeRef } : {}),
       ...(m.faceColors !== undefined ? { faceColors: m.faceColors } : {}),
+      ...(m.partColor !== undefined ? { partColor: m.partColor } : {}),
     }));
     const out: RebuildResult = {
       mesh,

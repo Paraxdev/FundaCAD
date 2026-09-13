@@ -290,6 +290,8 @@ def _manifest_entry(b):
     # stub must still be able to change (see server._rebuild_job).
     if b.get("faceColors") is not None:
         e["faceColors"] = b["faceColors"]
+    if b.get("partColor") is not None:
+        e["partColor"] = b["partColor"]
     if b.get("unchanged"):
         e["unchanged"] = True
         return e

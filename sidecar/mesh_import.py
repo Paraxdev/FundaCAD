@@ -748,6 +748,9 @@ def _assembly_payload(asm):
         packed = _face_colors.encode(colors) if colors else None
         if packed:
             part["faceColors"] = packed
+        solid_color = asm.solid_colors.get(leaf_index)
+        if solid_color:
+            part["color"] = solid_color
         parts.append(part)
 
     nodes = [
@@ -825,6 +828,7 @@ def import_geometry(path, fmt):
         )
     _refuse_if_memory_is_short(size)
     manifest = None
+    single_color = None
     if fmt in ("step", "stp"):
         # Read the XCAF product tree ourselves rather than through
         # build123d.import_step: that helper mangles every product name
@@ -854,6 +858,7 @@ def import_geometry(path, fmt):
                 shape = _canonicalize(_wrap_topods(asm.roots[0]))
             else:
                 shape = _canonicalize_roots(asm.roots)
+            single_color = asm.solid_colors.get(0) or (asm.nodes[0].color if asm.nodes else None)
     elif fmt == "brep":
         shape = import_brep(path)
     elif fmt in ("stl", "3mf", "obj"):
@@ -905,12 +910,15 @@ def import_geometry(path, fmt):
         "faces": len(shape.faces()),
         "name": name,
     }
-    # Only glTF carries a material colour worth honouring. Omitted (not null) when
-    # there is none, so the frontend can tell "no colour in the file" from black.
+    # Omitted (not null) when there is none, so the frontend can tell "no colour
+    # in the file" from black. A single-part STEP's colour is its solid's, else
+    # its product's; an assembly carries its colours per part instead.
     if fmt == "glb":
         colour = _glb_dominant_color(path)
         if colour:
             out["color"] = colour
+    elif single_color:
+        out["color"] = single_color
     # The assembly tree, when the file carried one. Absent for every other
     # import, which is what keeps the historical rebuild path byte-identical.
     if manifest:

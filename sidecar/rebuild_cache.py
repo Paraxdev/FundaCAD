@@ -388,6 +388,8 @@ def _save_checkpoint(persist, i, bodies, datums, errors, counter_n, diagnostics=
             # fix and would look like the fix never worked.
             if b.get("face_colors"):
                 entry["face_colors"] = b["face_colors"]
+            if b.get("part_color"):
+                entry["part_color"] = b["part_color"]
             if sh is None or _wrapped_or_none(sh) is None:
                 manifest.append(entry)
                 fps.append(None)
@@ -463,6 +465,8 @@ def _restore_from_disk(store, chain_keys):
                     shapeless["_intact"] = True
                 if ent.get("face_colors"):
                     shapeless["face_colors"] = ent["face_colors"]
+                if ent.get("part_color"):
+                    shapeless["part_color"] = ent["part_color"]
                 bodies.append(shapeless)
                 continue
             raw = store.get_blob(ent["blob_key"])
@@ -501,6 +505,8 @@ def _restore_from_disk(store, chain_keys):
                 body["_intact"] = True
             if ent.get("face_colors"):
                 body["face_colors"] = ent["face_colors"]
+            if ent.get("part_color"):
+                body["part_color"] = ent["part_color"]
             bodies.append(body)
             mod[ent["body_id"]] = (shape, ent["blob_key"])
         snap = {

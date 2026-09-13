@@ -360,6 +360,36 @@ def test_colour_on_the_faces_beats_colour_on_the_product():
     print(f"  face colours {colors[:2]} overrule product colour {by_name['Two Tone Box']}")
 
 
+def test_colour_on_a_solid_is_read_and_reaches_the_body():
+    """A SolidWorks export styles the SOLID with the part's appearance and leaves
+    feature colours on its faces. The solid's colour used to be read by nothing,
+    so the SV08 printer's black parts came in wearing their stale face red."""
+    import tempfile
+
+    import face_colors
+    from builder import import_geometry, rebuild
+    from tools.gen_asm_fixtures import asm_solid_colors
+
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "asm_solid_colors.step")
+        asm_solid_colors(path)
+        res = import_geometry(path, "step")
+    first, second = res["parts"]
+    assert first.get("color") == "#333333", first
+    assert second.get("color") == "#1999e5", second
+    # The faces keep their own colour beside it, so an import can still choose them.
+    colors = face_colors.decode(first["faceColors"], first["faces"])
+    assert colors[0] == "#e51919" and colors[1:] == [None] * (first["faces"] - 1), colors
+
+    doc = {"parameters": {}, "features": [{
+        "id": "im", "type": "import", "format": "step", "name": "Painted",
+        "geom": res["geom"], "nodes": res["nodes"], "parts": res["parts"],
+    }]}
+    _p, err, bodies = rebuild(doc)
+    assert not err, err
+    assert [b.get("part_color") for b in bodies] == ["#333333", "#1999e5"], bodies
+
+
 def test_face_colours_survive_the_blob_and_reach_the_body():
     """The colours have to arrive on the BODY, having crossed canonicalization,
     the base64 B-rep round trip and the manifest binding, or none of the above
@@ -1088,6 +1118,7 @@ if __name__ == "__main__":
         test_names_are_verbatim,
         test_colour_is_read_per_label_not_inherited,
         test_colour_on_the_faces_beats_colour_on_the_product,
+        test_colour_on_a_solid_is_read_and_reaches_the_body,
         test_face_colours_survive_the_blob_and_reach_the_body,
         test_a_single_part_step_is_not_treated_as_an_assembly,
         test_a_flat_multisolid_part_is_grouped_under_its_name,
