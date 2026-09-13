@@ -10,9 +10,9 @@ purpose: this project began as a fork of the first, shipped for a while under
 the second, and those entries describe builds that really were called that.
 Rewriting them would misattribute the work and misdate the name.
 
-Builds are versioned `0.1.<build number>` and every green `main` produces one, so
+Builds are versioned `0.2.<build number>` (`0.1.` before the floating shell) and every green `main` produces one, so
 most entries land under Unreleased and stay there until a milestone is worth
-naming. To draw that line, rename the heading to `## 0.1.NN (YYYY-MM-DD)` and
+naming. To draw that line, rename the heading to `## 0.2.NN (YYYY-MM-DD)` and
 open a fresh `## Unreleased` above it. Cutting in the same commit as the last
 change is tidiest, but not required: when Unreleased is empty the release job
 falls back to the newest named section, so the build carrying a cut still
@@ -24,6 +24,12 @@ This file starts on 2026-08-03. For anything before that, see the
 ## Unreleased
 
 ### Added
+
+- **Click a body, then click it again for a face.** The first click on a body selects the whole body and raises the move gizmo; a click on the body you already have selects the face or edge under the cursor, and further clicks on that body keep picking faces. Clicking another body takes that body whole. This is the new default, called Body, then face, beside Faces and Bodies in the selection menu, and 3 on the keyboard.
+
+- **Clicking a folder in the item tree selects everything in it**, its subfolders and their bodies included. Ctrl or Shift adds the folder to the selection, or takes it out again when all of it was already in. The caret opens and closes a folder, and so does a double-click.
+
+- **Turning with the move gizmo shows a dial.** While a ring is held, a dashed circle in the ring's plane carries a tick every step, the swept angle is shaded, and a badge at its leading edge reads the angle. A turn now goes in 15 degree steps, 1 with Shift, and one drag can go past half a turn.
 
 - **Two document formats, picked by the extension.** `.funda` is readable JSON again, something you can open in an editor, diff and keep in version control, with any imported geometry carried in one `geometry` block at the end. `.fundab` is the compact binary file with error correction, the way `.bgcode` sits beside `.gcode`. Save As offers both. Opening reads the format from the file itself, so every document saved so far still opens, including binary files named `.funda` by the release before this one; saving one of those writes JSON unless you Save As `.fundab`.
 
@@ -55,12 +61,26 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Changed
 
+- **The version line moves to 0.2** with the floating shell. Builds are `0.2.<build number>` from here, and the updater sees every one of them as newer than any 0.1 build.
+
+- **Importing a large STEP assembly is about three times faster.** A 1,097 body printer assembly went from 258 s to about 85 s: parts used more than once are meshed once and moved to their other places, the unique ones are meshed across several processes at the same time, spline faces are simplified once per part, and the pass that groups split faces for picking runs eight times faster with the same result.
+
+- The item tree indents one caret per level, so a folder's contents sit visibly inside it and a body lines up with the folders beside it.
+
 - Two heavy geometry operations from two different clients can no longer run at the same time. The rule that they must not was in place and was enforced per connection, so it held only while exactly one program was ever connected.
 
 - Clicking a body now opens the move gizmo on it. Picking a body IS reaching for it, so the obvious gesture, click the thing, drag it, no longer needs a second command first. A plain click elsewhere moves the gizmo to the next body, or puts it away over empty space, in one click rather than two.
 - Each drag of the move gizmo is its own row in the timeline, so an undo takes back the last nudge instead of the whole sitting, and the next drag starts from the pose the last one produced.
 
 ### Fixed
+
+- **A zoomed out assembly no longer z-fights.** The near clipping plane stayed at 0.1 mm however far the camera went, which left a printer seen from two metres with depth steps of 2.4 mm. It now moves out with the camera's distance from the model, never past the model's nearest point.
+
+- **Imported STEP colours come in as the part was coloured.** A colour a STEP file gives a whole solid now wins over the face colours SolidWorks leaves behind from features, which turned black and cyan printer parts red. Right-click an imported assembly, Imported colors, to take the face colours instead.
+
+- Hovering a dragged material over the model no longer stutters: the target is picked once per frame and the view redraws only when it changes.
+
+- A `.fundab` file of a small part is no longer padded to 2.4 MB. Every section was cut into a full group of shards whatever its size; a section now gets shards fitted to its length, with the same parity.
 
 - **Something added to the timeline can now be acted on straight away.** Internally, a step that added a feature and then wanted the bodies it made had to wait for the rebuild first, and waiting did not actually wait: when a rebuild was already running, which it always is at that moment, the wait returned at once and the next step ran against the previous state. Nothing you could see was wrong, because the only two things doing this were the import paths that put an imported file's colours on the bodies it produced, and they quietly put them on nothing. Both work now.
 

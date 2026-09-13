@@ -199,12 +199,13 @@ jobs:
           echo "vendored lib dirs:"; echo "$dirs" | tr ':' '\n'
 
       # Rolling-beta versioning: the updater compares semver, and every build being
-      # 0.1.0 would mean "never an update". CI builds get 0.1.<run_number>; local
-      # dev builds stay at the checked-in 0.1.0.
+      # 0.2.0 would mean "never an update". CI builds get 0.2.<run_number>; local
+      # dev builds stay at the checked-in 0.2.0. The minor went from 1 to 2 with the
+      # floating shell, and semver keeps every 0.2 build newer than any 0.1 one.
       - name: Stamp rolling version
         shell: bash
         run: |
-          v="0.1.${{ github.run_number }}"
+          v="0.2.${{ github.run_number }}"
           node -e "const fs=require('fs');const f='src-tauri/tauri.conf.json';const j=JSON.parse(fs.readFileSync(f));j.version='$v';fs.writeFileSync(f,JSON.stringify(j,null,2)+'\n')"
           echo "stamped $v"
 
@@ -547,7 +548,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          v="0.1.${{ github.run_number }}"
+          v="0.2.${{ github.run_number }}"
           base="https://github.com/${{ github.repository }}/releases/download/beta"
           d="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           jq -n --arg v "$v" --arg d "$d" '{version:$v, pub_date:$d, platforms:{}}' > latest.json

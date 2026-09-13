@@ -22,7 +22,7 @@ async function updatesSupported(): Promise<boolean> {
 }
 
 /** the packaged app's version ("dev" in a plain-browser session). CI stamps
- *  packaged builds 0.1.<run>; local builds carry tauri.conf.json's 0.1.0. */
+ *  packaged builds 0.2.<run>; local builds carry tauri.conf.json's 0.2.0. */
 export async function appVersion(): Promise<string> {
   if (!isTauri()) return "dev";
   try {
