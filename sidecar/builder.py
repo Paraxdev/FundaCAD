@@ -1,17 +1,10 @@
-"""document -> build123d. The heart of the sidecar.
+"""document -> build123d.
 
-Re-runs the whole feature tree from scratch on every rebuild (no incremental
-regeneration, no persistent state). build123d's algebra mode IS the parametric
-engine.
+The feature tree is replayed in order, resuming from cached per-feature state
+where the prefix is unchanged (rebuild_cache.py). The model is an ordered list of
+bodies; most features act on the last one, the "active" body.
 
-The model is **multi-body**: the rebuild keeps an ordered list of named bodies
-with an "active" body (the last one created/edited). Most features operate on the
-active body, so a document with no body-splitting ops behaves exactly like the
-old single-body code. Import adds a body; Split can produce two; a union fuses
-bodies together. The merged shape (a Compound of all bodies) is what gets
-tessellated, measured and exported, so every downstream consumer stays uniform.
-
-API notes (verified against build123d 0.11.1, dual-compatible back to 0.10.x):
+build123d quirks (0.11.1, compatible back to 0.10.x):
   - extrude(sketch, amount=...)            free function, algebra mode
   - fillet(edges, radius=...)              radius kwarg
   - chamfer(edges, length=...)             length kwarg (NOT distance)
@@ -82,19 +75,12 @@ from geom_select import (
 import plugin_geometry
 from conic_blend import ConicNotApplicable, PROFILE_EPS, clamp_profile
 
-# Split out of this file when it passed seven thousand lines. Re-exported rather
-# than referenced through the module, because `builder._unify_body` and friends
-# are reached for by name from the tests, from server.py and from tessellate.py,
-# and a split is only safe if it is invisible to every one of them.
+# Re-exported: tests, server.py and tessellate.py reach these through `builder.`.
 import progress
 from progress import progress_tick  # noqa: F401
 
-# `on_feature_tick` is deliberately NOT re-exported: it is a mutable hook, and a
-# re-exported copy would go stale the moment anyone rebound it. Set it through
-# progress.py, `builder.on_feature_tick = cb` would bind a fresh attribute
-# nothing reads. The MAX_IMPORT_* caps are left out of the re-export below for
-# the same reason: a test that squeezes a limit has to squeeze it where the code
-# reading it lives.
+# Mutable hooks and limits (on_feature_tick, MAX_IMPORT_*) are not re-exported:
+# rebinding a copy here changes nothing. Patch them where they live.
 from mesh_import import (  # noqa: F401
     IMPORT_RSS_PER_FILE_BYTE,
     _canonical_ok,
@@ -310,11 +296,7 @@ class _RebuildCtx:
     # that follow a face. Only the ones that MOVED: a sketch still sitting on
     # its cached plane says nothing, and the frontend reads the cache anyway.
     sketch_planes: dict = None
-    # datum axis/point feature id -> its RESOLVED placement, for datums that
-    # FOLLOW model geometry (an axis anchored to an edge). Only the followed
-    # ones: a baked datum sits at coordinates the frontend already has in the
-    # document, so it says nothing here. Same arrangement, and same reason, as
-    # sketch_planes and datums above.
+    # datum axis/point feature id -> resolved placement, only for datums that follow geometry
     datum_marks: dict = None
 
     def stash(self, body, spec):
@@ -329,18 +311,11 @@ class _RebuildCtx:
 
 
 # --- feature handlers ---------------------------------------------------------
-# One function per feature type, dispatched from the rebuild() loop below. Each
-# handler is the exact body of the old inline if/elif branch (same logic, same
-# comments, same error messages), the loop still owns the try/except/errors.append
-# and the no-op-continue semantics; handlers just raise like the old branches did.
+# One per feature type. They raise; the rebuild() loop records the error.
 
 
 def _handle_sketch(f, ctx):
-    # A sketch picked on a body face follows that face. Resolved HERE rather than
-    # inside _build_sketch because only the handler has a ctx to resolve against,
-    # and the answer is reported so the overlay and the sketch editor draw where
-    # the build put it: reopening a sketch at the stale cache would re-bake that
-    # cache on the next commit and quietly undo the follow.
+    # Reported back, or reopening the sketch at its stale cache would undo the follow.
     followed = _face_anchor_plane(f, ctx, "Sketch")
     if followed is not None and ctx.sketch_planes is not None:
         ctx.sketch_planes[f["id"]] = followed
@@ -353,42 +328,19 @@ def _handle_sketch(f, ctx):
 
 
 def _face_anchor_plane(f, ctx, label):
-    """The plane of the face a sketch or datum was made from, re-resolved against
-    the bodies as they stand now, or None when the feature references no face.
+    """The plane of the face a sketch or datum was made from, re-resolved now, or None
+    when the feature names no face. The frozen `plane` is the fallback cache.
 
-    This is what makes a sketch or datum placed on a face follow that face rather
-    than record where the face used to be. Grow the box under a sketch from 10 to
-    20 and the sketch stayed at 10: a join then added nothing, which raises, but a
-    CUT carved a sealed cavity inside the part with no error at all. Measured on
-    that document: 40x40x20 came out at 30994.7 mm3 in TWO shells, and the build
-    was green.
-
-    The frozen `plane` stays as a CACHE. The frontend draws from it, an older
-    build opening the file still places the sketch correctly, and it is what the
-    resolution falls back to. Once `face` is present it is this that decides.
-
-    Resolution is GLOBAL across bodies, for the reason recorded on
-    _handle_delete_face: a body id can come to name a different piece (a split's
-    pieces, an older file numbered by position), and a body-scoped match would silently re-aim the anchor at
-    some distant face on the wrong piece.
-
-    A face that stops resolving is NOT an error. A sketch is a root: raise here
-    and it never registers, every extrude and revolve downstream quietly becomes
-    a no-op, and one drifted reference takes the whole document with it. So doubt
-    falls back to the cached plane, the geometry is exactly what it is today and
-    never worse, and the feature gets an amber chip saying which of the three
-    things went wrong and, where a pick can repair it, a Re-pick button.
+    Resolution is global across bodies (see _handle_delete_face). A face that stops
+    resolving is not an error: a sketch is a root, and raising would turn everything
+    downstream into no-ops. It falls back to the cache with an amber diagnostic.
     """
     sel = f.get("face")
     cached = f.get("plane")
     cached = cached if isinstance(cached, dict) else None
     if not sel or cached is None:
         return None  # nothing to follow, or nothing to judge candidates against
-    # getattr rather than ctx.bodies: _collect_datums replays datum features
-    # against a ctx carrying nothing but the registry, because it exists to
-    # answer "where are this document's planes" without building any geometry.
-    # There is no body to resolve against there, so the anchor falls back to its
-    # cache, which is exactly what that caller wants.
+    # getattr: _collect_datums passes a ctx with no bodies, and wants the cache.
     shapes = [b["shape"] for b in (getattr(ctx, "bodies", None) or [])
               if b.get("shape") is not None]
     if not shapes:
@@ -397,10 +349,7 @@ def _face_anchor_plane(f, ctx, label):
     fid = f.get("id")
     at = f.get("at")
 
-    # Held back rather than pushed. The planar resolver reports "the face is
-    # gone" for a datum anchored to a CYLINDER, which is the wrong question
-    # asked of the right document, so its answer is only committed once the
-    # cylinder arm below has also declined.
+    # Held back: the planar resolver calls a cylinder anchor gone before the cylinder arm runs.
     scratch = []
     face = geom_select.resolve_face_on_plane(part, sel, cached["normal"], label,
                                              scratch, fid)
@@ -412,10 +361,7 @@ def _face_anchor_plane(f, ctx, label):
         plane = face_plane.with_x_dir(plane, cached.get("xdir"))
         return face_plane.agree_with(plane, cached)
 
-    # A cylinder has no plane of its own, so a datum made from one is the tangent
-    # plane where it was touched, read off the analytic surface (exact) rather
-    # than fitted from the triangles the frontend had to work from. Reached only
-    # when the planar arm found nothing, since a planar anchor never wants this.
+    # A cylinder's datum is the tangent plane where it was touched, from the exact surface.
     if at:
         found = _nearest_cylinder_face(part, sel)
         if found is not None:
@@ -466,10 +412,7 @@ def _vec3(v):
 
 
 def _handle_datum_plane(f, ctx):
-    # No geometry, register the (optionally offset) plane so sketches
-    # / splits can reference it by id. Validate it resolves here so a
-    # bad datum flags at its own feature. `offset` shifts the source
-    # plane along its normal; we store the resolved offset plane.
+    # Registered for sketches and splits to reference; validated here so a bad one flags itself.
     followed = _face_anchor_plane(f, ctx, "Plane")
     base = _plane_of(followed or f["plane"], ctx.datums)
     off = f.get("offset") or 0
@@ -482,12 +425,7 @@ def _handle_datum_plane(f, ctx):
 
 
 def _handle_datum_point(f, ctx):
-    # Reference geometry, no body. `point` is a baked world coordinate the
-    # frontend draws and picks entirely on its own, so there is nothing to
-    # resolve here. The handler exists only so the type is KNOWN: an
-    # unregistered type raises "install the plugin that builds this", which is
-    # the wrong thing to say about a datum the core owns. Touch the field so a
-    # malformed one (no point) still flags at its own feature.
+    # Nothing to build; the handler exists so the type is known rather than "missing plugin".
     f["point"]
 
 
@@ -514,12 +452,7 @@ def _edge_line(sel, ctx, fid=None):
 
 
 def _handle_datum_axis(f, ctx):
-    # Reference geometry, no body. Touch the two required fields so a malformed
-    # axis flags here. If the axis is anchored to a model EDGE, re-resolve that
-    # edge to its line every rebuild and emit the resolved line, so the axis
-    # FOLLOWS the part; the baked origin/dir stay as the cache the follow falls
-    # back to (the datumPlane.face pattern). A baked axis (no edge) needs nothing
-    # here, the frontend already has its coordinates in the document.
+    # An axis anchored to an edge re-resolves it each rebuild; origin/dir are the fallback cache.
     f["origin"], f["dir"]
     sel = f.get("axisEdge")
     if sel and ctx.datum_marks is not None:
@@ -532,12 +465,6 @@ def _handle_datum_axis(f, ctx):
 
 
 def _handle_extrude(f, ctx):
-    # A missing sketch is almost always an UPSTREAM failure, not a broken
-    # reference: the sketch feature raised (bad profile, non-planar wires) and so
-    # never registered. Indexing ctx.sketches raw turned that into `KeyError:
-    # 'f1'`, which the generic handler surfaced as "extrude failed (KeyError)",
-    # burying the real cause behind an internal error and making the user chase
-    # the wrong feature. Name the sketch instead and say it didn't build.
     entry = _require_sketch(ctx, f.get("sketch"), "extrude")
     sk = entry["sketch"]
     if sk is None:
@@ -546,16 +473,7 @@ def _handle_extrude(f, ctx):
     # Standard_ConstructionError. Negative IS meaningful (extrude the other way).
     if ctx.val(f["distance"]) == 0:
         raise ValueError("Extrude: distance must not be 0")
-    # `symmetric` sweeps the profile BOTH ways off its plane, `distance` each
-    # way, so the result is 2x distance long and centred on the sketch. It is
-    # the answer to a sketch made on a datum plane INSIDE a body: there is
-    # material on both sides of that plane, so one direction is a guess, and a
-    # cut that guesses wrong either misses the body entirely or opens a sealed
-    # void in the middle of it, which looks from outside like nothing happened.
-    #
-    # The SIGN stops meaning anything under it, which is right rather than
-    # sloppy: build123d sweeps |amount| each way, and a solid centred on the
-    # plane is the same solid whichever way the arrow was pointing.
+    # `symmetric` goes `distance` each way, so the sign no longer matters.
     both = bool(f.get("symmetric"))
     # region points (one per selected area) pick + combine specific
     # profiles; a ring (annulus) keeps its hole, several areas union.
@@ -565,12 +483,7 @@ def _handle_extrude(f, ctx):
     target = _region_target(pts, entry, ctx)
     if target is None:
         target = sk  # nothing selected: the whole sketch
-    # `taper` leans every wall in by this many degrees as it climbs, so one
-    # extrude gesture makes an angled boss, a countersink, or a draw-ready wall
-    # instead of a straight prism. Positive narrows toward the far end (the way a
-    # part pulls out of a mould), negative widens it (an undercut). Absent or 0
-    # keeps the plain straight path, so an ordinary extrude's geometry and JSON
-    # are byte-identical to what this build made before the field existed.
+    # `taper` degrees: positive narrows toward the far end. 0 keeps the plain path.
     taper = ctx.val(f["taper"]) if f.get("taper") is not None else 0.0
     if taper and not (-89 < taper < 89):
         # At or past vertical a wall folds through itself; OCCT hands back a
@@ -582,11 +495,7 @@ def _handle_extrude(f, ctx):
         if taper
         else extrude(target, amount=ctx.val(f["distance"]), both=both)
     )
-    # Captured-visibility semantics: an extrude that carries
-    # `hiddenBodies` uses THAT set (participants decided at feature
-    # creation, MCAD-style, later eye toggles are pure display).
-    # A legacy feature without the field keeps the old behavior:
-    # gated by the document's live visibility map.
+    # `hiddenBodies` is captured at creation; a legacy extrude without it reads the live map.
     hid = (
         frozenset(f["hiddenBodies"])
         if "hiddenBodies" in f
@@ -597,10 +506,7 @@ def _handle_extrude(f, ctx):
 
 def _handle_fillet(f, ctx):
     r = ctx.val(f["radius"])
-    # `profile` slides the section between a chamfer (-1) and a sharp corner
-    # (+1), with 0 the circular fillet every existing document already means.
-    # Absent or 0 keeps the plain build123d path, so nothing that worked before
-    # now routes through the reweighting machinery.
+    # `profile`: -1 chamfer, 0 circular (the plain path), +1 sharp.
     p = clamp_profile(ctx.val(f["profile"])) if f.get("profile") is not None else 0.0
 
     def plain():
@@ -616,15 +522,8 @@ def _handle_fillet(f, ctx):
                      lambda s, es: _conic_fillet(s, es, r, p),
                      lambda s, e, size: _conic_fillet(s, [e], size, p), r)
     except ConicNotApplicable:
-        # The plain fillet at this radius builds fine, conic_blend makes it first
-        # and only then reweights it; ConicNotApplicable means the reweight, not
-        # the rounding, gave up (most often a spherical patch where three rounded
-        # edges meet, which has no single section to re-solve). Failing the whole
-        # feature would leave the body unrounded over a corner that rounds
-        # perfectly well, so fall back to the plain section and flag the chip
-        # amber with the reason instead. _blend_edges stages every body and
-        # assigns none until all succeed, so the abandoned conic attempt mutated
-        # nothing and this second pass starts from the same clean state.
+        # The reweight gave up (often where three rounds meet), not the rounding: fall back
+        # to circular with a warning. _blend_edges assigns nothing until all succeed.
         plain()
         _note_profile_fallback(ctx, f)
 
@@ -662,10 +561,7 @@ def _handle_press_pull(f, ctx):
     act = ctx.find_body(f["body"]) if f.get("body") else ctx.require_active("Press/Pull")
     if act is None:
         raise ValueError("Press/Pull: the target body no longer exists")
-    # one or many faces, each pushed by the same distance along its own
-    # normal. Re-resolve every selector against the EVOLVING shape, each
-    # push renumbers topology, and the selectors are geometric, so this
-    # stays correct (the tool emits one by:"nearest" selector per face).
+    # Re-resolved against the evolving shape: each push renumbers topology.
     sels = f["face"] if isinstance(f["face"], list) else [f["face"]]
     # `upTo`: extrude each face UP TO a target surface instead of by a
     # fixed distance. Capture the target plane once (point + normal) so
@@ -700,11 +596,7 @@ def _handle_press_pull(f, ctx):
             raise ValueError("Press/Pull: the 'up to' target surface wasn't found")
         tgt_pt, tgt_n = tf[0].center(), tf[0].normal_at()
     dist = ctx.val(f["distance"])
-    # `taper` leans the pushed walls as they travel (a moulded boss, an angled
-    # pocket), positive narrows the far end. Absent or 0 keeps the straight push,
-    # so an ordinary press/pull is byte-identical to before. It rides a fixed
-    # distance only: an up-to push already lands its walls on a chosen surface,
-    # and leaning them would miss it.
+    # Fixed distances only: a tapered up-to push would miss its target surface.
     taper = ctx.val(f["taper"]) if f.get("taper") is not None else 0.0
     if taper and not (-89 < taper < 89):
         raise ValueError(f"Press/Pull: taper must be between -89 and 89 degrees (got {taper:g})")
@@ -720,15 +612,8 @@ def _handle_press_pull(f, ctx):
 
 
 def _handle_delete_face(f, ctx):
-    # Remove the picked face(s) and heal the solid (defeaturing), deletes
-    # an imported chamfer/fillet or a protrusion, where there's no feature
-    # to remove. Parametric: the face selector re-resolves each rebuild.
-    # A body id can come to name a different piece (a split's pieces, an
-    # older file numbered by position), silently re-aiming a saved deleteFace at the wrong piece (its nearest
-    # match is then some distant face; the delete fails or worse). So
-    # nearest-point picks resolve GLOBALLY: the face nearest the recorded
-    # point wins across ALL bodies, and a win on a different body than the
-    # named one re-targets there with a lossy diagnostic.
+    # Nearest picks resolve across all bodies, since a body id can come to name another
+    # piece; a win on a different body re-targets there with a diagnostic.
     act = ctx.find_body(f["body"]) if f.get("body") else ctx.require_active("Delete Face")
     sels = f["face"] if isinstance(f["face"], list) else [f["face"]]
     act, faces = _retarget_delete_faces(
@@ -742,17 +627,8 @@ def _handle_delete_face(f, ctx):
 
 
 def _handle_clean_up(f, ctx):
-    # Repair boolean rot on a body, exposed as a PARAMETRIC feature
-    # because downstream booleans re-manufacture it: first collapse
-    # per-solid facet debris (slivers + near-coplanar staircases,
-    # the same pass that runs at mesh import), then
-    # unify the body's glued/overlapping solids (_unify_body, joins
-    # of ragged bodies GLUE solids together instead of merging
-    # them). Order matters: fusing the raw sliver-ridden solids
-    # collapses to garbage (which the unify gates refuse), while the
-    # refacet-cleaned solids fuse cleanly, measured on the DDR
-    # document. Both best-effort: a body that can't confidently be
-    # cleaned stays unchanged.
+    # Refacet first, then unify: fusing raw sliver-ridden solids collapses to garbage.
+    # Best effort; an uncertain body is left unchanged.
     targets = (
         [ctx.find_body(f["body"])] if f.get("body") else list(ctx.bodies)
     )
@@ -775,11 +651,7 @@ def _handle_mirror(f, ctx):
 
 
 def _handle_loft(f, ctx):
-    # Fusion flow: loft through the SELECTED profile regions (each on its own
-    # sketch, in the order given). Resolving the region anchor to a Face, the
-    # same region picking extrude uses, keeps a ring's HOLE, and build123d's
-    # loft blends faces-with-holes into a tube natively. The legacy `sketches`
-    # path lofts whole un-consumed sketch profiles (ribbon fallback).
+    # Regions as faces keep a ring's hole; the legacy `sketches` path lofts whole profiles.
     profs = f.get("profiles")
     if profs:
         sections = []
@@ -817,24 +689,12 @@ def _handle_sweep(f, ctx):
     path = _require_sketch(ctx, f.get("path"), "sweep").get("wire")
     if path is None:
         raise ValueError("sweep path sketch has no curve to follow")
-    # RIGHT (mitred) corners, not the default TRANSFORMED: on a path with a sharp
-    # corner TRANSFORMED silently sweeps only the FIRST segment and drops the rest
-    # (an L path came out a straight stub of the first leg, still a valid solid, so
-    # nothing downstream flagged it). RIGHT follows the whole path with mitred
-    # joints, and is identical to the default on a straight or smooth path.
+    # RIGHT, not TRANSFORMED: on a sharp corner TRANSFORMED silently sweeps only the first leg.
     solid = sweep(sections=prof, path=path, transition=Transition.RIGHT)
-    # Same New/Join/Cut boolean path as extrude/revolve/loft: booleans against
-    # every visible overlapping body, with the loud no-op guards. (Sweep used to
-    # inline `act["shape"] + solid` / `- solid` against only the active body,
-    # unguarded, and a Cut with no active body silently created a new body.)
     _combine(f, ctx, solid)
 
 
-# A primitive creates material like an extrude does, so it goes through
-# `_combine` and honours `operation` and `targets` for the same reason. It used
-# to call `new_body` directly, which made an "operation": "join" on a box a
-# field the builder read past in silence: a separate body appeared, no error was
-# raised, and the only way to find out was to measure the result.
+# Primitives go through `_combine` so `operation` and `targets` apply to them too.
 def _handle_box(f, ctx):
     l, w, h = ctx.val(f["length"]), ctx.val(f["width"]), ctx.val(f["height"])
     _require_positive("Box", length=l, width=w, height=h)
@@ -871,10 +731,7 @@ def _handle_cone(f, ctx):
 
 
 def _handle_torus(f, ctx):
-    # A ring: `majorRadius` is the centre circle, `minorRadius` the tube. The tube
-    # has to fit inside the ring or the surface passes through the axis and self
-    # intersects, which OCCT reports as a bare construction error on the wrong
-    # feature, so gate it here with a message that names the real cause.
+    # A tube wider than the ring self-intersects, which OCCT reports unhelpfully.
     big, small = ctx.val(f["majorRadius"]), ctx.val(f["minorRadius"])
     _require_positive("Torus", majorRadius=big, minorRadius=small)
     if small >= big:
@@ -883,10 +740,7 @@ def _handle_torus(f, ctx):
 
 
 def _handle_shell(f, ctx):
-    # Hollow each body that owns a selected opening face, the selectors carry
-    # their own body (see _group_sels_by_body), so a multi-body model shells the
-    # body clicked, not bodies[-1]. No faces at all = hollow the active body
-    # closed, which is the ribbon's "shell with no opening" path.
+    # Shells the body each opening face belongs to; no faces hollows the active body closed.
     t = ctx.val(f["thickness"])
     # A zero wall is not a shell; OCCT reports it as a bare RuntimeError. A
     # NEGATIVE thickness is legitimate (it shells outward) and is left alone.
@@ -905,10 +759,7 @@ def _handle_shell(f, ctx):
 
 
 def _handle_offset_face(f, ctx):
-    # Offset Face: move the selected faces along their own normals, keeping the
-    # body closed (the neighbouring faces stretch to follow). Targets the body
-    # that OWNS the picked faces, like press-pull, NOT require_active, which
-    # only ever sees bodies[-1] and would edit the wrong body on a multi-body model.
+    # The body that owns the faces, not the active body.
     act = ctx.find_body(f["body"]) if f.get("body") else ctx.require_active("Offset face")
     if act is None:
         raise ValueError("Offset face: the target body no longer exists")
@@ -932,14 +783,8 @@ def _handle_offset_face(f, ctx):
         return
     except Exception:
         pass
-    # One BRepOffset pass over the whole body is the good answer when it runs:
-    # adjacent offsets close against each other. When it does not run it refuses
-    # every face at once, including ones that move fine on their own, so retry
-    # face by face through the press/pull primitive.
-    #
-    # Re-resolved against the EVOLVING shape rather than reusing `faces`, each
-    # move renumbers the topology, and a Face object from the shape before it is
-    # a reference into a solid that no longer exists.
+    # One BRepOffset pass refuses every face if it fails, so retry face by face,
+    # re-resolving against the evolving shape.
     shape = act["shape"]
     for sel in (f["faces"] if isinstance(f["faces"], list) else [f["faces"]]):
         for fc in resolve_faces(shape, sel, diag=ctx.diagnostics, feature_id=f.get("id")):
@@ -1048,21 +893,8 @@ def _handle_simplify_mesh(f, ctx):
 
 
 def _handle_scale(f, ctx):
-    """Resize bodies, uniformly or per axis, about a chosen point.
-
-    `factor` is the whole of the old feature and still the default for every
-    axis, so a document written before this reads the same. `sx`/`sy`/`sz`
-    override it one axis at a time, that is what a gizmo handle dragged along
-    one arrow means, and build123d carries it through to a GTransform.
-
-    `about` is the point the resize holds still. Absent, build123d scales about
-    each object's OWN LOCATION, the world origin for a body as built, and
-    wherever a `move` put it afterwards, which is exactly what this feature did
-    before, so a document without one stays where it was. The gizmo always sends
-    a point, because "grow this from that corner" is the request people have and
-    "grow this about wherever the body's location happens to sit" is not one
-    anybody could aim.
-    """
+    """Resize bodies by `factor`, or per axis with `sx`/`sy`/`sz`, holding `about` still.
+    Without `about`, build123d scales about each body's own location."""
     from OCP.BRepTools import BRepTools
 
     ids = f.get("bodies")
@@ -1089,20 +921,8 @@ def _handle_scale(f, ctx):
             continue
         kw = {"about": Vector(*about)} if about else {}
         out = scale(tgt["shape"], by=by, **kw)
-        # Drop whatever triangulation the faces are carrying.
-        #
-        # A body that has been drawn once comes back out of the per-body cache
-        # still holding the tessellator's mesh, and a non-uniform scale goes
-        # through BRepBuilderAPI_GTransform, which returns correct GEOMETRY with
-        # that mesh still attached and no longer describing it. Everything
-        # downstream reads the mesh. Measured on a 20mm cube stretched 2x in x
-        # about a corner: the kernel had it at -10..30 and the reply carried
-        # -20..20, so the part on screen was not the part in the document, and
-        # nothing anywhere raised.
-        #
-        # Cleaning costs a re-mesh the tessellator was going to do anyway, and
-        # it is done on every path rather than only the non-uniform one so the
-        # rule is simply "a scaled body leaves here with no mesh on it".
+        # GTransform keeps the old triangulation attached to the new geometry, and
+        # everything downstream reads the mesh, so drop it on every path.
         if out.wrapped is not None:
             BRepTools.Clean_s(out.wrapped)
         tgt["shape"] = out
@@ -1199,13 +1019,7 @@ def _imprint_target(f, ctx):
 
 
 def _handle_imprint(f, ctx):
-    # Split the face a sketch sits on into separate faces, by imprinting the
-    # sketch's curves onto it. The face becomes several independently selectable
-    # faces (each can then be pressed, painted or offset on its own) with no
-    # material added or removed. Curves that don't reach the face boundary form
-    # no closed sub-region and leave the face whole, which is an advisory, not a
-    # failure: the sketch is a legitimate imprint that simply didn't divide
-    # anything yet.
+    # Curves that divide nothing leave the face whole: an advisory, not a failure.
     entry = _require_sketch(ctx, f.get("sketch"), "divide")
     edges = entry.get("edges") or []
     if not edges:
@@ -1236,10 +1050,6 @@ def _handle_remove_body(f, ctx):
     # delete bodies by id (mainstream MCAD "Remove"); drop them from the list so
     # they're not tessellated/exported.
     ids = set(f.get("bodies") or [])
-    # An id that matches nothing used to be ignored in silence, so a Remove whose
-    # target had been renumbered by an upstream edit reported success having
-    # deleted nothing, the timeline showed a healthy feature over a stale
-    # reference. Name the ids instead.
     missing = sorted(ids - {b["id"] for b in ctx.bodies})
     if missing:
         raise ValueError(
@@ -1249,14 +1059,7 @@ def _handle_remove_body(f, ctx):
     ctx.bodies[:] = [b for b in ctx.bodies if b["id"] not in ids]
 
 
-# type string -> handler, for the verbs the APPLICATION owns. A type that is in
-# neither this dict nor plugin_geometry's registry is reported by
-# plugin_geometry.unregistered(), which names the plugin when it can.
-#
-# `texture` used to be a key here, and the two thousand lines behind it used to
-# be in this package. It is registered by plugins/FundaCAD.Texture now, which is
-# what makes that plugin the owner of the feature rather than a panel in front
-# of code that shipped either way.
+# The core's feature types. Plugins register theirs through plugin_geometry.
 _FEATURE_HANDLERS = {
     "sketch": _handle_sketch,
     "datumPlane": _handle_datum_plane,
@@ -1351,48 +1154,19 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
             datum_marks_out=None, body_ids_out=None):
     """Return (part, errors, bodies).
 
-    part    : the merged build123d solid/compound of all bodies, or None.
-    errors  : list of {feature_id, message}; a failing feature is recorded as a
-              NO-OP and the build CONTINUES (MCAD-style, the timeline flags
-              the feature red but everything after it still runs; one
-              permanently-failing feature must not kill the rest of the
-              document).
-    bodies  : ordered list of {id, name, shape}, one per live body (for per-body
-              tessellation and the browser tree).
+    part    : the merged shape of all bodies, or None.
+    errors  : [{feature_id, message}]; a failing feature is a no-op and the build continues.
+    bodies  : [{id, name, shape}], one per live body.
 
-    diagnostics : optional list; when given, low-confidence selector-v2 (`by:"match"`)
-              resolutions append a ResolveDiag dict to it. Resolution is best-effort
-              and never fails the build on a shaky match, so callers that don't pass a
-              list are completely unaffected.
+    Optional outputs, each filled when passed: `diagnostics` (low-confidence selector
+    matches), `datums_out` and `sketch_planes_out` (where face-following datums and
+    sketches landed, only moved sketches), `datum_marks_out`, `body_ids_out` (the
+    document's id map after this build), and `projections` (refresh entries, none in
+    the steady state, which is what ends the frontend's refresh loop).
 
-    datums_out : optional dict; filled with the RESOLVED plane of every datum
-              feature, keyed by feature id. The frontend caches each datum's
-              plane on the feature and draws its quad from that cache, so a datum
-              that follows a face has to report where the face actually put it or
-              the drawn plane and the plane sketches land on drift apart.
-
-    sketch_planes_out : optional dict; filled with the plane the build actually
-              used for every sketch that FOLLOWS a face, keyed by feature id.
-              Same reason as datums_out one paragraph up: the frontend places a
-              sketch from the cache frozen at pick time, and a sketch that has
-              followed its face is no longer there. Only moved sketches appear,
-              so an absent id means "the cache is still right".
-
-    projections : optional list; when given, each sketch handler re-resolves its
-              projected entities against the prefix state and appends refresh
-              entries (see _recompute_projections). Steady state appends NOTHING,
-              that convergence contract is what terminates the frontend's
-              associative refresh loop.
-
-    Incremental-rebuild hooks (both default off → identical to a plain full rebuild):
-      resume        : (start_index, snapshot), restore the build state captured
-                      after feature[start_index-1] and run only features[start_index:].
-      snapshots_out : if a list is given, append (feature_index, snapshot) after each
-                      successfully-built feature, so a caller can cache per-feature
-                      state and resume from the longest unchanged prefix next time.
-    A snapshot copies the body dicts (sharing OCCT shape refs, no geometry copy) plus
-    the sketches/datums/body ids, and is restored by mutating those containers IN
-    PLACE so the new_body/active/find_body closures stay bound to them.
+    `resume=(start, snapshot)` restores the state after feature start-1; `snapshots_out`
+    collects one snapshot per feature. Snapshots share OCCT shapes and are restored by
+    mutating the containers in place, so the closures below stay bound to them.
     """
     params = document.get("parameters", {})
     # Bodies the user has hidden, excluded from extrude booleans (never edit a
@@ -1424,10 +1198,7 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
         # every other body dict is byte-identical to what it was before.
         if node_ref:
             entry["node_ref"] = node_ref
-        # The colours the imported file put on this body's FACES, still packed
-        # (face_colors.py). Carried, never unpacked here: the sidecar has no use
-        # for them, they are for the renderer, and unpacking six figures of them
-        # per rebuild to hand straight to the wire would be pure cost.
+        # Still packed (face_colors.py); only the renderer unpacks them.
         if face_colors:
             entry["face_colors"] = face_colors
         # The colour the file styled on this body's solid (step_assembly.py).
@@ -1464,31 +1235,15 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
             "bodies": [dict(b) for b in bodies],
             "sketches_ref": sketches, "n_sketches": len(sketches),
             "datums": {k: dict(v) for k, v in datums.items()},
-            # The plane each face-anchored sketch actually resolved to. It rides
-            # with the snapshot for the same reason `datums` does, and for one
-            # more: the disk-resume path REPLAYS the prefix's sketches, and a
-            # replay has no bodies to resolve a face against. Without this a
-            # resumed build would rebuild those sketches on their stale cached
-            # plane while a full build put them on the face, the same document
-            # giving two different solids depending on the cache.
+            # A disk resume replays sketches with no bodies to resolve a face against.
             "sketch_planes": {k: dict(v) for k, v in sketch_planes.items()},
-            # The resolved placement of every datum that FOLLOWS geometry, riding
-            # with the snapshot for the same reason `datums` and `sketch_planes`
-            # do: an incremental resume that starts PAST a followed datum would
-            # otherwise drop it from the header, and the frontend would snap the
-            # datum back to its stale baked cache on that rebuild.
             "datum_marks": {k: dict(v) for k, v in datum_marks.items()},
             "ids_ref": ids.events, "n_ids": ids.mark(),
             # errors travel with the snapshot: an incremental resume PAST a failed
             # feature must still re-report its error (else the banner would clear
             # while the feature is still broken)
             "errors_ref": errors, "n_errors": len(errors),
-            # diagnostics travel for the SAME reason, and it is not cosmetic: the
-            # frontend offers "Re-pick face" only when the build carries an
-            # `ambiguous nearest pick` diagnostic, so a resume that replayed the
-            # error without it left the user a dead-end toast on every reopened
-            # document. `diagnostics` is None for callers that don't collect them
-            # (exports, interference), those still resume, so guard it.
+            # "Re-pick face" is offered only when the ambiguity diagnostic comes back too.
             "diags_ref": diagnostics, "n_diags": len(diagnostics or ()),
         }
 
@@ -1519,10 +1274,6 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
             errors[:] = [dict(e) for e in err_src[: snap["n_errors"]]]
         else:
             del errors[snap["n_errors"]:]
-        # same two branches as errors: a snapshot from a PREVIOUS run (RAM cache)
-        # or from disk holds a foreign list, so copy its prefix in; a same-run
-        # snapshot already shares the list, so just truncate to the mark. A
-        # snapshot taken before diagnostics were collected has none to restore.
         dg_src = snap.get("diags_ref")
         if diagnostics is not None and dg_src is not None:
             if dg_src is not diagnostics:
@@ -1538,11 +1289,7 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
         if not ids.restore(snap["ids_ref"][: snap["n_ids"]]):
             raise ValueError("resumed a cached prefix the document numbers differently")
         if snap.get("replay_sketches") and start > 0:
-            # disk checkpoints persist bodies/datums/errors but NOT the sketch
-            # registry (build123d rehydration is unproven; sketches are cheap:
-            # 0.19 s total on the 125-feature doc). Replay them instead, sound
-            # because _build_sketch reads only params + the datums registry
-            # (write-once, id-keyed, fully restored), never body geometry.
+            # Disk checkpoints do not store sketches; replaying is cheap and reads no bodies.
             for f2 in features[:start]:
                 if f2.get("type") == "sketch":
                     try:
@@ -1573,13 +1320,8 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
     for i in range(start, len(features)):
         f = features[i]
         t_feat = time.monotonic()
-        # provenance: capture each body's shape identity + owner map before the
-        # feature, so afterwards we can attribute newly-created faces to it.
-        # sketch/datumPlane never touch bodies, skip capture AND attribution
-        # for them (the eager owners merge alone was O(total faces) per feature,
-        # 12.7% of a cold rebuild). The merged view is a lazy ChainMap over the
-        # per-body dicts; reversed so duplicate fingerprints resolve like the
-        # old last-body-wins dict.update() merge.
+        # Capture shapes and owners before the feature to attribute its new faces.
+        # Skipped for features that touch no bodies; it was 12.7% of a cold rebuild.
         ids.start_feature(f.get("id"))
         prov = (f.get("type") not in ("sketch", "datumPlane", "datumPoint", "datumAxis")
                 and f.get("id") not in inactive)
@@ -1591,43 +1333,20 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
             t = f["type"]
             if _is_inactive(f, val):
                 raise _Inactive
-            # The application's own verbs first, then the ones a plugin
-            # registered. The order settles nothing in practice, a plugin may
-            # not claim a type this table already has, but reading the built-in
-            # table first keeps a broken plugin from shadowing the core.
             handler = _FEATURE_HANDLERS.get(t) or plugin_geometry.handler_for(t)
             if handler is None:
-                # NOT "unknown feature type". The document is fine and the
-                # feature is kept; what is missing is the plugin that knows how
-                # to build it, and the message names it so that the answer is
-                # "install this" rather than "your file is broken".
                 raise ValueError(plugin_geometry.unregistered(t))
             handler(f, ctx)
 
         except _Inactive:
             pass
         except ValueError as ex:  # name the feature so the timeline can flag it red
-            # MCAD-style: a failed feature is a recorded NO-OP and the build
-            # CONTINUES, the body state stays as it was and every feature after
-            # it still runs. (It used to `break` here: one permanently-failing
-            # feature, e.g. a deleteFace OCCT can't heal, silently killed the
-            # whole downstream timeline, so nothing the user added after it ever
-            # executed.) Owner attribution is skipped for the failed feature.
-            # ValueErrors are hand-authored for users ("no edge found to
-            # fillet", …), surface them verbatim. A GeomError additionally
-            # carries a machine `code` (errors.py); getattr reads it back for
-            # the plain ValueErrors that carry none, so the wire shape is the
-            # same either way and the frontend can branch on the category.
+            # A failed feature is a no-op and the build continues. ValueErrors are written
+            # for users; a GeomError also carries a machine `code` (errors.py).
             errors.append({"feature_id": f.get("id"), "message": str(ex),
                            "code": getattr(ex, "code", None)})
         except KeyError as ex:
-            # A feature missing a required field. This lands here rather than in
-            # the ValueError arm because the handlers index `f` directly, and the
-            # raw KeyError stringifies to the field name in quotes and nothing
-            # else, so it used to surface as "box failed (KeyError)", the one
-            # word that would have helped, left out. Only claim a missing field
-            # when the key really is absent from the feature; a KeyError raised
-            # anywhere deeper is still an internal failure and says so.
+            # Handlers index `f` directly; name the field only when it really is absent.
             key = ex.args[0] if ex.args else None
             label = f.get("name") or f.get("type") or "feature"
             if isinstance(key, str) and key not in f:
@@ -1643,10 +1362,7 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
                                "message": f"{label} failed (KeyError)"})
 
         except Exception as ex:
-            # Anything NOT a hand-authored ValueError is an unexpected internal
-            # failure (OCCT crash, KeyError, …), the raw message is meaningless
-            # to a user, so surface the feature + exception type instead and log
-            # the full traceback to stderr for debugging.
+            # An internal failure: name the feature and exception type, log the traceback.
             label = f.get("name") or f.get("type") or "feature"
             print(f"feature {f.get('id')} ({label}) failed:", file=sys.stderr)
             traceback.print_exc()
@@ -1709,10 +1425,7 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
         entry = {"id": b["id"], "name": b["name"], "shape": sh,
                  "owners": b.get("_owners") or {},
                  plugin_geometry.BODY_KEY: b.get(plugin_geometry.BODY_KEY)}
-        # Rebuilt from an explicit key set, so anything new on the body dict has
-        # to be listed here or it is silently dropped between rebuild and the
-        # wire, which is how the pass specs were lost once already. Added only
-        # when set, so a body from a non-assembly import stays byte-identical.
+        # An explicit key set: anything new on the body dict must be listed here.
         if b.get("node_ref"):
             entry["node_ref"] = b["node_ref"]
         if b.get("face_colors"):
@@ -1741,26 +1454,13 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
     return part, errors, out_bodies
 
 
-# --- incremental rebuild cache (persistent-worker-local) --------------------
-# The sidecar runs one long-lived worker process, so a per-feature snapshot cache
-# lives in its module memory and survives between rebuilds. On a worker respawn
-# (25 s timeout / kernel crash → the pool recreates the worker) this module reloads
-# and the cache is empty, so recovery is a clean full rebuild. Only rebuild_cached()
-# touches it; plain rebuild() (used by export/interference) is unaffected.
+# --- incremental rebuild cache (worker memory, empty again after a respawn) ---
 _RAM_SNAP_WINDOW = int(appenv.get("RAM_SNAP_WINDOW", "300"))
 
 
 def reset_cache():
-    """Forget the in-process prefix cache, so the next build starts cold.
-
-    The one way to say it. The dict's shape is this module's business and it has
-    changed before; a caller writing the literal gets no error when a key moves,
-    because an unrecognised cache reads as an empty one, which is the same thing
-    a reset asks for. So the mistake never surfaces, it just quietly stops being
-    a reset of anything in particular.
-
-    The disk checkpoints are untouched. This clears what THIS worker remembers,
-    which is what a cold-path test wants and what a Compute All means."""
+    """Forget this worker's prefix cache; disk checkpoints are untouched. Use this
+    rather than assigning `_CACHE`, whose shape has changed before."""
     global _CACHE
     _CACHE = {"snaps": [], "keys": []}
 
@@ -1782,31 +1482,11 @@ def rebuild_cached(document, diagnostics=None, projections=None, datums_out=None
     features = document.get("features", [])
     new_sigs = _feature_sigs(features)
     store = _disk_store()
-    # Computed for BOTH tiers now, not just the disk one. They are what the RAM
-    # cache compares below, and they are cheap: a blake2b per feature over sigs
-    # that are themselves identity-memoized, with the per-feature parameter
-    # scope memoized alongside them.
     keys = _chain_keys_scoped(document, new_sigs)
 
-    # RESUME CAP (projection soundness): when the caller collects projection
-    # refresh entries, never resume PAST the first sketch carrying projected
-    # entities. Emission is transient, an update from a previous build that the
-    # frontend never applied (preview active, redo, doc reopened mid-refresh) is
-    # not re-derivable from document state, so a deep resume would skip the
-    # sketch handler and let a stale cached curve stick silently. Applies to
-    # BOTH resume tiers. Callers without a projections list (aux ops, exports)
-    # keep full-depth resume.
-    #
-    # QUIET-PROOF exception (RAM tier only, the steady-state perf escape):
-    # when the PREVIOUS build in this worker ran a projection pass that emitted
-    # NOTHING, it proved fresh == cached for every projected sketch it built,
-    # and an unapplied pending diff is impossible after a quiet pass (pending
-    # diffs re-emit on every build until applied). If the sigs through the
-    # projected sketch are also unchanged (k > proj_cap covers indices
-    # 0..proj_cap, including the sketch itself, so its inputs AND cached curves
-    # are the proven ones), a deep resume is sound. Any emitting or
-    # accumulator-less build clears the proof; disk tier and worker restarts
-    # stay conservative (no proof survives them).
+    # Never resume past the first sketch with projected entities when collecting
+    # projections: an unapplied update is not derivable from the document. The RAM
+    # tier may, when the previous build here emitted nothing (a quiet proof).
     proj_cap = None
     if projections is not None:
         for pi, pf in enumerate(features):
@@ -1820,34 +1500,8 @@ def rebuild_cached(document, diagnostics=None, projections=None, datums_out=None
     resume = None
     from_disk = False
     disk_mod = {}
-    # Resume at the longest common prefix of the CHAIN KEYS, which is the same
-    # test the disk tier makes and a strictly better one than the pair it
-    # replaces (a whole-document parameter signature, plus per-feature sigs).
-    #
-    # The old gate was all-or-nothing on parameters: `_global_sig` hashed every
-    # parameter in the document, so touching ANY of them threw the entire RAM
-    # prefix away and rebuilt from feature zero. That is the slider drag, the
-    # one edit a person makes dozens of times a second, and it was the most
-    # expensive edit in the app. Measured on a 400x300 plate with 60 holes and
-    # one fillet whose radius is the document's only parameter, read by nothing
-    # else: dragging that parameter cost 0.914 s a tick, against 0.141 s for
-    # typing the identical number into the same fillet as a literal. Same
-    # geometry, same one feature to redo, 6.5x apart, and the disk tier did not
-    # rescue it (0.906 s with the checkpoints on).
-    #
-    # A chain key already folds in exactly what the old pair did AND the scoping
-    # that fixes this: key_i = H(key_{i-1} + sig_i + scope_i), where scope_i is
-    # the raw value of every parameter feature i can reach through an expression
-    # (plus the visibility map, for the legacy extrudes that consult it). So a
-    # parameter edit now invalidates from the first feature that actually reads
-    # that parameter, and features above it keep their snapshots.
-    #
-    # It is not a weakening. The scope scan is a word-boundary superset of the
-    # names a feature could reference, so it over-invalidates rather than under,
-    # and a matching prefix of these keys is already the condition on which the
-    # disk tier restores real geometry from a blob store. The RAM tier has the
-    # easier job of the two: it hands back the very objects it built, where the
-    # disk tier has to deserialize and fingerprint them.
+    # Resume at the longest common prefix of the parameter-scoped chain keys, so a
+    # parameter edit only rebuilds from the first feature that reads it.
     if _CACHE.get("keys") and _CACHE["snaps"]:
         old_keys = _CACHE["keys"]
         k = 0
@@ -1860,10 +1514,6 @@ def rebuild_cached(document, diagnostics=None, projections=None, datums_out=None
             if _ids_resumable(document, _CACHE["snaps"][k - 1]):
                 resume = (k, _CACHE["snaps"][k - 1])  # restore state after feature k-1
     if resume is None and store is not None:
-        # Checkpoint restore reads every prefix body from disk, on a large
-        # document that is a long phase, and these two calls only bracket it.
-        # Bracketing is NOT what keeps it alive: the gap the stall watchdog sees
-        # is the one INSIDE, which is why _restore_from_disk ticks per body.
         progress_tick()
         hit = _restore_from_disk(store, keys if proj_cap is None else keys[:proj_cap])
         progress_tick()
@@ -1887,10 +1537,6 @@ def rebuild_cached(document, diagnostics=None, projections=None, datums_out=None
 
     t_build = time.monotonic()
     snaps_out = []
-    # Diagnostic: WHERE the incremental resume started. resume_from == 0 (or src=full)
-    # means the whole history replayed (checkpoint miss), the usual cause of a
-    # surprise multi-second rebuild; a high resume_from means only the tail features
-    # (e.g. one expensive boolean) ran, so the cost is genuine OCCT geometry.
     if features:
         _rp = resume[0] if resume else 0
         print(
@@ -1906,11 +1552,7 @@ def rebuild_cached(document, diagnostics=None, projections=None, datums_out=None
     )
     elapsed = time.monotonic() - t_build
 
-    # Builds WITH feature errors are cached too: failed features are recorded
-    # no-ops, snapshots carry the accumulated errors (so a resume past a broken
-    # feature re-reports it), and OCCT failures are deterministic. Refusing to
-    # cache here would force a slow full rebuild on EVERY edit of a document
-    # with one permanently-failing feature.
+    # Builds with errors are cached too: snapshots carry the errors, and OCCT failures are deterministic.
     start = resume[0] if resume else 0
     if from_disk:
         merged = [None] * start  # no per-feature RAM snaps for the disk prefix
@@ -1925,11 +1567,7 @@ def rebuild_cached(document, diagnostics=None, projections=None, datums_out=None
               # conservative
               "proj_quiet": projections is not None and not projections}
 
-    # Tip checkpoint: make the just-built state instantly restorable by the next
-    # process (app restart, worker respawn). The final snapshot carries exactly
-    # the loop state to persist. Debounced by build cost, trivial warm edits
-    # (<0.5 s) don't spam the store; anything that cost real time is worth the
-    # ~15 ms/body write.
+    # Tip checkpoint for the next process, skipped for cheap builds.
     if (persist is not None and merged and merged[-1] is not None
             and (elapsed >= 0.5 or persist["acc_ms"] >= 500.0)):
         tip = merged[-1]
@@ -1950,13 +1588,9 @@ def rebuild_cached(document, diagnostics=None, projections=None, datums_out=None
     return part, errors, bodies
 
 
-# --- face provenance: which feature created/last-modified each face --------
-# Lets the UI map a picked face back to its feature (click a chamfer face → select
-# the chamfer). Each body carries `_owners`: {face-fingerprint → feature id}. After
-# every feature we re-fingerprint the CHANGED bodies; a face whose fingerprint is new
-# (not carried over from before) is attributed to the current feature, while
-# unchanged faces keep their owner. A move transforms the fingerprint keys so
-# provenance survives it. Fingerprint = (area, centre) quantized.
+# --- face provenance --------------------------------------------------------
+# `_owners` maps a quantized (area, centre) face fingerprint to the feature that
+# last made it. A move transforms the keys so provenance survives it.
 
 def _update_owners(f, val, bodies, pre_shape, pre_owners_by_id, pre_owners_all):
     """Attribute each face of every CHANGED body to a feature. Unchanged bodies (same
@@ -2005,17 +1639,11 @@ def _collect_datums(document):
 
 
 def project_geometry(document, plane_spec, sources):
-    """The projectGeometry aux-op: resolve each source against the PREFIX document
-    (the frontend truncates at the sketch's timeline position) and project the
-    resolved edges onto the target plane. Resolution is STRICT, a missing body/
-    sketch/entity, a zero-edge or low-confidence selector match all produce a
-    per-source error entry (pick time wants a clear refusal; the lenient
-    keep-last-shape path is the rebuild refresh handler's job). Read-only:
-    rebuild_cached gives warm prefix bodies without mutating anything.
+    """Project sources onto a plane against the prefix document the frontend sends.
+    Strict: anything unresolved or low-confidence is a per-source error.
 
-    Returns {"results": [{source_index, ok, curves: [{fp?, curve}], error?}]},
-    `fp` (a sidecar-authored edge fingerprint for a by:"match" selector) only
-    for body-edge sources; sketch curves are tracked by stable ids."""
+    Returns {"results": [{source_index, ok, curves: [{fp?, curve}], error?}]}, `fp`
+    only for body-edge sources."""
     _part, _errors, bodies = rebuild_cached(document)
     datums = _collect_datums(document)
     plane = _plane_of(plane_spec, datums)
