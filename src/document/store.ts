@@ -171,6 +171,15 @@ class Overlay<T> {
   }
 }
 
+/** A history step's name is for people, except on an import, where it names the
+ *  bodies. Kept out of the build so renaming a step does not invalidate the
+ *  geometry cache for it and everything after it. */
+export function withoutDisplayName(f: Feature): Feature {
+  if (f.type === "import" || !("name" in f)) return f;
+  const { name: _name, ...rest } = f as Feature & { name?: string };
+  return rest as Feature;
+}
+
 export class DocumentStore {
   private doc: CadDocument;
   private undoStack: CadDocument[] = [];
@@ -863,6 +872,20 @@ export class DocumentStore {
     this.mutate((d) => {
       const i = d.features.findIndex((f) => f.id === id);
       if (i >= 0) d.features[i] = { ...d.features[i], ...patch } as Feature;
+    });
+  }
+
+  /** Give a history step a name of its own. Blank goes back to the default. */
+  renameFeature(id: string, name: string) {
+    const current = this.doc.features.find((f) => f.id === id) as (Feature & { name?: string }) | undefined;
+    if (!current) return;
+    const next = name.trim();
+    if ((current.name ?? "") === next) return;
+    this.mutate((d) => {
+      const i = d.features.findIndex((f) => f.id === id);
+      if (i < 0) return;
+      const { name: _old, ...rest } = d.features[i] as Feature & { name?: string };
+      d.features[i] = (next ? { ...rest, name: next } : rest) as Feature;
     });
   }
 
@@ -1673,6 +1696,7 @@ export class DocumentStore {
       if (this.editPreview.feature) features.push(this.editPreview.feature);
     }
     if (this.preview) features.push(...this.preview);
+    features = features.map(withoutDisplayName);
     // Body visibility travels with the rebuild so the sidecar can keep hidden
     // bodies out of extrude booleans (a hidden body is protected from edits).
     const bodyVisibility = this.bodyVis.size ? Object.fromEntries(this.bodyVis.entries()) : undefined;

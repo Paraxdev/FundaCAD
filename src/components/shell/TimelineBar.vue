@@ -178,9 +178,41 @@ function onPeekKey(e: KeyboardEvent) {
   if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
   if (peek.release()) e.preventDefault();
 }
-onMounted(() => window.addEventListener("keydown", onPeekKey));
+// --- renaming ------------------------------------------------------------
+const renamingId = ref<string | null>(null);
+function hasOwnName(id: string): boolean {
+  return !!(store.document.features.find((f) => f.id === id) as { name?: string } | undefined)?.name;
+}
+function startRename(id: string) {
+  renamingId.value = id;
+  void nextTick(() => {
+    const el = track.value?.querySelector<HTMLInputElement>(".t-rename");
+    el?.focus();
+    el?.select();
+  });
+}
+function finishRename(e: Event, save: boolean) {
+  const id = renamingId.value;
+  if (!id) return;
+  renamingId.value = null;
+  if (save) store.renameFeature(id, (e.target as HTMLInputElement).value);
+}
+function onRenameKey(e: KeyboardEvent) {
+  if (e.key !== "F2" || renamingId.value || !selection.featureId) return;
+  const t = e.target as HTMLElement | null;
+  if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+  if (!features.value.some((f) => f.id === selection.featureId)) return;
+  e.preventDefault();
+  startRename(selection.featureId);
+}
+
+onMounted(() => {
+  window.addEventListener("keydown", onPeekKey);
+  window.addEventListener("keydown", onRenameKey);
+});
 onUnmounted(() => {
   window.removeEventListener("keydown", onPeekKey);
+  window.removeEventListener("keydown", onRenameKey);
   clicks.cancel();
 });
 
@@ -288,6 +320,8 @@ function openMenu(e: MouseEvent, id: string, i: number) {
   contextMenu(e.clientX, e.clientY, [
     ...repick,
     { label: "Edit", onClick: () => timeline.edit(id) },
+    { label: "Rename", shortcut: "F2", onClick: () => startRename(id) },
+    ...(hasOwnName(id) ? [{ label: "Reset name", onClick: () => store.renameFeature(id, "") }] : []),
     {
       label: suppressed.value.has(id) ? "Unsuppress" : "Suppress",
       onClick: () => store.toggleSuppress(id),
@@ -358,7 +392,19 @@ function openMenu(e: MouseEvent, id: string, i: number) {
                 @drop="onDrop(f.id, i, $event)"
               >
                 <span class="glyph"><Icon :name="metaFor(f).icon" :size="18" /></span>
-                <span class="t-name">{{ f.name || metaFor(f).label }}</span>
+                <input
+                  v-if="renamingId === f.id"
+                  class="t-rename"
+                  :value="f.name || metaFor(f).label"
+                  :placeholder="metaFor(f).label"
+                  spellcheck="false"
+                  @click.stop
+                  @dblclick.stop
+                  @pointerdown.stop
+                  @keydown.stop="$event.key === 'Enter' ? finishRename($event, true) : $event.key === 'Escape' ? finishRename($event, false) : undefined"
+                  @blur="finishRename($event, true)"
+                />
+                <span v-else class="t-name">{{ f.name || metaFor(f).label }}</span>
                 <Icon class="t-caret" :name="selection.featureId === f.id ? 'caretDown' : 'caretRight'" :size="12" />
               </div>
               <!-- The feature's own values, under the chip you clicked. The
