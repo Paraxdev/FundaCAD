@@ -239,3 +239,165 @@
   background: color-mix(in srgb, var(--accent) 16%, transparent);
   border-color: color-mix(in srgb, var(--accent) 55%, transparent);
 }
+
+/* ---- every other surface: dialogs, menus, toasts, docks, panels ---------------- */
+
+.modal-panel,
+.cmdk-card,
+.menu-popup,
+.toast,
+.logcon,
+.measure-panel,
+.tgt-panel,
+.shortcut-hud-card,
+#renderdock,
+.ne-overlay,
+.areachip {
+  corner-shape: squircle;
+  background: var(--glass-sheen), var(--float-bg-solid);
+  -webkit-backdrop-filter: var(--float-blur);
+          backdrop-filter: var(--float-blur);
+  border: 1px solid var(--float-line);
+  box-shadow: var(--glass-inset), var(--float-shadow);
+}
+.modal-panel,
+.cmdk-card,
+.logcon,
+.measure-panel,
+.tgt-panel,
+.shortcut-hud-card,
+#renderdock,
+.ne-overlay {
+  border-radius: var(--float-radius);
+}
+.menu-popup,
+.toast {
+  border-radius: var(--float-tile-radius);
+}
+.areachip {
+  border-radius: var(--float-chip-radius);
+}
+.modal-panel,
+.toast,
+#renderdock {
+  position: relative;
+}
+.modal-panel::after,
+.cmdk-card::after,
+.menu-popup::after,
+.toast::after,
+.logcon::after,
+.measure-panel::after,
+.tgt-panel::after,
+.shortcut-hud-card::after,
+#renderdock::after,
+.ne-overlay::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  corner-shape: inherit;
+  background: var(--glass-rim);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  pointer-events: none;
+}
+
+/* A dock and a drawer float like the cards do, clear of the window edges. */
+#renderdock {
+  margin: var(--s-3) var(--s-3) var(--s-3) 0;
+  overflow: hidden;
+}
+.ne-overlay {
+  left: var(--s-3);
+  right: var(--s-3);
+  bottom: var(--s-3);
+  overflow: hidden;
+}
+
+.toast.toast-error {
+  background: var(--glass-sheen), color-mix(in srgb, var(--error) 22%, var(--float-bg-solid));
+  border-color: color-mix(in srgb, var(--error) 70%, transparent);
+}
+.toast.toast-warning {
+  background: var(--glass-sheen), color-mix(in srgb, #d2a83b 20%, var(--float-bg-solid));
+  border-color: color-mix(in srgb, #d2a83b 70%, transparent);
+}
+
+.modal-overlay,
+.cmdk-backdrop {
+  background: rgba(5, 4, 9, 0.35);
+  -webkit-backdrop-filter: blur(6px) saturate(1.2);
+          backdrop-filter: blur(6px) saturate(1.2);
+}
+
+/* ---- controls in those surfaces ------------------------------------------------ */
+
+.btn,
+.sm-input,
+.sm-select,
+.rd-chip,
+.rd-mini,
+.rd-used,
+.rd-tile,
+.toast-action,
+.menu-item,
+.cmdk-item,
+.tb-btn,
+.seg-btn {
+  corner-shape: squircle;
+}
+.btn,
+.sm-input,
+.sm-select,
+.rd-chip,
+.rd-mini,
+.rd-used,
+.toast-action,
+.menu-item,
+.cmdk-item {
+  border-radius: var(--float-chip-radius);
+}
+.rd-tile {
+  border-radius: var(--float-tile-radius);
+}
+
+.btn {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 8px 22px -10px var(--accent-glow);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hot);
+  border-color: var(--accent-hot);
+}
+
+.sm-input,
+.sm-select {
+  background-color: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+.sm-input:focus,
+.sm-select:focus {
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.sm-select option {
+  background: var(--panel-2);
+}
+
+.menu-item:hover,
+.cmdk-item.active {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}

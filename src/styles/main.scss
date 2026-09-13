@@ -44,8 +44,9 @@
 @use "welcome";
 // After the panels it restyles as floating cards (_layout, _timeline, _browser).
 @use "float";
-@use "glass";
 @use "targetedit";
 @use "console";
+// After every surface it repaints, so its finish is the one that shows.
+@use "glass";
 // Last on purpose, see the header of _icons.scss.
 @use "icons";

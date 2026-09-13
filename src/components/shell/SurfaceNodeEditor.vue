@@ -481,8 +481,7 @@ const pending = computed(() => {
 </template>
 
 <style scoped>
-.ne-overlay { position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; display: flex; flex-direction: column;
-  background: var(--bg); border-top: 1px solid var(--line-strong); box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.35); }
+.ne-overlay { position: fixed; z-index: 60; display: flex; flex-direction: column; }
 .ne-resize { height: 7px; margin-top: -3px; cursor: ns-resize; flex: none; }
 .ne-resize::after { content: ""; display: block; width: 46px; height: 3px; margin: 2px auto 0;
   border-radius: 2px; background: var(--line-strong); }
@@ -495,8 +494,8 @@ const pending = computed(() => {
 .ne-wires { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
 .ne-wire { fill: none; stroke: var(--accent); stroke-width: 2; opacity: 0.85; }
 .ne-wire-pending { stroke-dasharray: 4 3; opacity: 0.6; }
-.ne-node { position: absolute; background: var(--panel-2); border: 1px solid var(--line-strong);
-  border-radius: var(--r-md); box-shadow: var(--shadow-2); font-size: 12px; user-select: none; }
+.ne-node { position: absolute; background: var(--glass-sheen), var(--float-bg-solid); border: 1px solid var(--float-line);
+  border-radius: var(--float-tile-radius); corner-shape: squircle; box-shadow: var(--glass-inset), var(--float-shadow); font-size: 12px; user-select: none; }
 .ne-node.ne-output { border-color: var(--accent); }
 .ne-node-head { padding: 4px 8px; font-weight: 600; cursor: grab; border-bottom: 1px solid var(--line);
   display: flex; justify-content: space-between; align-items: center; }
@@ -504,8 +503,8 @@ const pending = computed(() => {
 .ne-params { padding: 6px 8px; display: flex; flex-direction: column; gap: 4px; }
 .ne-prow { display: flex; align-items: center; gap: 6px; }
 .ne-prow > span { width: 46px; color: var(--text-dim); }
-.ne-select { flex: 1; background: var(--panel); color: var(--text); border: 1px solid var(--line);
-  border-radius: var(--r-sm); font-size: 11px; padding: 1px 4px; }
+.ne-select { flex: 1; background: rgba(255, 255, 255, 0.04); color: var(--text); border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--float-chip-radius); corner-shape: squircle; font-size: 11px; padding: 1px 4px; }
 .ne-ramp-bar { height: 12px; border-radius: var(--r-sm); border: 1px solid var(--line); margin-bottom: 2px; }
 .ne-stop { gap: 4px; }
 .ne-stop .mats-color { width: 22px; flex: none; }
@@ -533,15 +532,16 @@ const pending = computed(() => {
 .ne-node[data-cat="conv"] { border-left: 3px solid #8ad0b0; }
 .ne-node[data-cat="out"] { border-left: 3px solid var(--accent); }
 .ne-zoom { position: absolute; right: 8px; bottom: 6px; font-size: 11px; color: var(--text-dim);
-  background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 1px 6px; pointer-events: none; }
-.ne-hint { font-size: 11px; color: var(--text-dim); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 1px 6px; }
+  background: var(--float-bg-solid); border: 1px solid var(--float-line); border-radius: var(--float-chip-radius); corner-shape: squircle; padding: 1px 6px; pointer-events: none; }
+.ne-hint { font-size: 11px; color: var(--text-dim); border: 1px solid var(--float-line); border-radius: var(--float-chip-radius); corner-shape: squircle; padding: 1px 6px; }
 .ne-addbackdrop { position: fixed; inset: 0; z-index: 70; }
 .ne-addmenu { position: fixed; z-index: 71; min-width: 130px; max-height: 70vh; overflow-y: auto;
-  background: var(--panel-2); border: 1px solid var(--line-strong); border-radius: var(--r-md); box-shadow: var(--shadow-2); padding: 4px; }
+  background: var(--glass-sheen), var(--float-bg-solid); -webkit-backdrop-filter: var(--float-blur); backdrop-filter: var(--float-blur);
+  border: 1px solid var(--float-line); border-radius: var(--float-tile-radius); corner-shape: squircle; box-shadow: var(--glass-inset), var(--float-shadow); padding: 5px; }
 .ne-addhead { font-weight: 600; font-size: 11px; color: var(--text-dim); padding: 2px 6px 4px; }
 .ne-addgrp { border-top: 1px solid var(--line); padding-top: 2px; margin-top: 2px; }
 .ne-addgrp-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); padding: 2px 6px; }
 .ne-additem { display: block; width: 100%; text-align: left; background: none; border: none; color: var(--text);
-  font-size: 12px; padding: 3px 8px; border-radius: var(--r-sm); cursor: pointer; }
-.ne-additem:hover { background: var(--accent); color: #fff; }
+  font-size: 12px; padding: 3px 8px; border-radius: var(--float-chip-radius); corner-shape: squircle; cursor: pointer; }
+.ne-additem:hover { background: color-mix(in srgb, var(--accent) 16%, transparent); }
 </style>

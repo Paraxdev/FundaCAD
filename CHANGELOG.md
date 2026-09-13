@@ -25,6 +25,8 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **Pick several materials and delete them together.** In the Render workspace's material list Ctrl and Shift click pick several, and a right-click offers Delete and Remove from the model, which takes a material off every body and face wearing it while keeping it in the library. The Delete key works on the picked materials too, and deleting one the model is wearing asks first.
+
 - **Unsaved changes show a star, and closing asks about them.** The window title and the name in the title bar read `bracket.funda*` while there are changes that are not saved. Closing the window then asks whether to save, not save, or stay; a Save As that is cancelled keeps the window open rather than losing the work.
 
 - **Reset camera**, a button beside Views and Shift+Home, puts the view back where a fresh window opens: level, looking in from the front right corner and framed on the model. New does the same, looking at the origin.
@@ -64,6 +66,10 @@ This file starts on 2026-08-03. For anything before that, see the
 - **An AI assistant can now work on the document you have open, instead of on a copy.** Connected through MCP, its edits appear in the window as it makes them, each one a single undo, and a badge next to the document name says who is connected and what they last did. Before this, an assistant started a geometry engine of its own and handed its work back as a file you had to open, so nothing it did was visible while it did it. Preferences has an Assistants section with three settings: don't share, share read-only, or share and allow edits. It can only ever *offer* an edit, the window decides whether to take it, and refuses one written against a model that has since changed, so an assistant cannot overwrite what you did while it was thinking.
 
 ### Changed
+
+- **One finish across the whole app.** Dialogs, the command palette, the menu bar's menus, toasts, the console, the parameters and shortcut sheets, the welcome screen, the render dock and the surface graph editor now wear the same glass as the floating shell: squircle corners, a blurred tinted fill and a lit rim, with buttons, fields and selects to match.
+
+- **Every right-click menu is FundaCAD's.** A right-click the app has no menu for no longer opens the webview's own menu, and text fields get a Cut, Copy, Paste and Select all menu in the same style.
 
 - **The version line moves to 0.2** with the floating shell. Builds are `0.2.<build number>` from here, and the updater sees every one of them as newer than any 0.1 build.
 
