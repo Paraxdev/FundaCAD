@@ -78,6 +78,22 @@ const check = (name, ok, detail) => {
   await page.waitForTimeout(400);
   await page.evaluate(() => window.sketch.setTool("select"));
 
+  // the text dragged straight by its letters
+  {
+    const textAt = () => page.evaluate(() => { const t = window.sketch.entities.find((e) => e.id === "t1"); return { x: t.x, y: t.y }; });
+    const from = await page.evaluate(() => window.viewport.projectToScreen(window.sketch.overlay.activeRegions.find((w) => w.entityId === "t1").interior3D));
+    const before = await textAt();
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    for (let n = 1; n <= 10; n++) { await page.mouse.move(from.x + 4 * n, from.y + 3 * n); await page.waitForTimeout(16); }
+    await page.mouse.up();
+    await page.waitForTimeout(500);
+    const after = await textAt();
+    check("the text drags by its letters", after.x > before.x && after.y < before.y, JSON.stringify({ before, after }));
+    await page.evaluate(() => window.sketch.undoEdit());
+    await page.waitForTimeout(500);
+  }
+
   // window box around the rectangle only
   let a = await scr(-31, -12), b = await scr(-5, 12);
   await page.mouse.click(700, 800);

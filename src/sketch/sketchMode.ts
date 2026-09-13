@@ -229,6 +229,8 @@ export class SketchMode {
     started: boolean;
     shift: boolean;
     stretch: ((dx: number, dy: number) => void)[]; // filled when the move starts
+    /** a text is grabbed by its letters, and a click on it still picks that letter's area */
+    region?: WorldRegion | null;
   } | null = null;
   private solveBusy = false; // a solve is in flight (drag or constraint)
   // the solver WASM failed to come up: stop pumping and say so ONCE, rather
@@ -1691,6 +1693,21 @@ export class SketchMode {
           started: false,
           shift: e.shiftKey,
           stretch: [],
+        };
+        try { this.viewport.domElement.setPointerCapture(e.pointerId); } catch { /* capture optional */ }
+        return;
+      }
+      // A text has no segments for pickEntity, so it is grabbed anywhere in its block.
+      const text = this.textEntityAt(raw);
+      if (text) {
+        this.moveDrag = {
+          idx: this.entities.indexOf(text),
+          startClient: { x: e.clientX, y: e.clientY },
+          last: raw.clone(),
+          started: false,
+          shift: e.shiftKey || e.ctrlKey || e.metaKey,
+          stretch: [],
+          region: this.overlay.activeRegionAt(raw),
         };
         try { this.viewport.domElement.setPointerCapture(e.pointerId); } catch { /* capture optional */ }
         return;
@@ -3540,6 +3557,11 @@ export class SketchMode {
       if (!md.started) {
         // never moved: this was a click, the original (de)select behavior
         this.dragSnapshot = null;
+        if (ent?.type === "text") {
+          if (md.region) this.overlay.toggleRegionSelection(md.region, md.shift);
+          else if (!md.shift) this.overlay.clearRegionSelection();
+          return;
+        }
         if (ent) {
           if (md.shift) {
             if (!this.selected.delete(ent.id)) this.selected.add(ent.id);
