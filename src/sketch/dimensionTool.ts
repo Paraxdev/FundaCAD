@@ -352,6 +352,7 @@ function buildPlan(spec: {
   kind: DimPlan["kind"];
   field: string;
   label: string;
+  icon?: string;
   fieldKind: "length" | "angle";
   value: number;
   anchors: { a: V; b: V } | null;
@@ -362,7 +363,7 @@ function buildPlan(spec: {
   implyConcentric?: { c1: string; c2: string };
   hint: string;
 }): DimPlan {
-  const fields: DimFieldDef[] = [{ name: spec.field, label: spec.label, kind: spec.fieldKind }];
+  const fields: DimFieldDef[] = [{ name: spec.field, label: spec.label, ...(spec.icon ? { icon: spec.icon } : {}), kind: spec.fieldKind }];
   const anchors = spec.anchors;
   const labelAnchor = spec.labelAnchor;
   return {
@@ -615,7 +616,7 @@ function resolveSingle(t: DimTarget, opts: DimOptions): DimResolution {
     const eid = e.id;
     if (opts.roundPref === "radius") return roundValuePlan(eid, e.radius, v(e.x, e.y), "Circle");
     return buildPlan({
-      kind: "diameter", field: "diameter", label: "⌀", fieldKind: "length",
+      kind: "diameter", field: "diameter", label: "Diameter", icon: "diameter", fieldKind: "length",
       value: e.radius * 2,
       anchors: { a: v(e.x - e.radius, e.y), b: v(e.x + e.radius, e.y) },
       labelAnchor: null, // `diameter` renders through entityDims, no place slot
@@ -630,7 +631,7 @@ function resolveSingle(t: DimTarget, opts: DimOptions): DimResolution {
     const c = v(rd.x, rd.y);
     if (opts.roundPref === "diameter") {
       return buildPlan({
-        kind: "diameter", field: "diameter", label: "⌀", fieldKind: "length",
+        kind: "diameter", field: "diameter", label: "Diameter", icon: "diameter", fieldKind: "length",
         value: rd.r * 2,
         anchors: { a: v(rd.x - rd.r, rd.y), b: v(rd.x + rd.r, rd.y) },
         labelAnchor: null, // `diameter` has no place slot (see types.ts)
@@ -724,7 +725,7 @@ function lineLine(l1: LineOp, l2: LineOp, forceDriven: boolean, drivenHint: stri
     const m2 = v((s2.x1 + s2.x2) / 2, (s2.y1 + s2.y2) / 2);
     const id1 = l1.opId, id2 = l2.opId;
     return buildPlan({
-      kind: "angle", field: "angle", label: "∠", fieldKind: "angle",
+      kind: "angle", field: "angle", label: "Angle", icon: "angle", fieldKind: "angle",
       value: signedAngleDeg(s1, s2),
       anchors: null, // an angle dim renders as a bare value (see entityDims)
       labelAnchor: mid(m1, m2),

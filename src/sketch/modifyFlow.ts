@@ -289,7 +289,7 @@ export class ModifyFlow {
   rotateClick(p: THREE.Vector2) {
     if (!this.host.selected().size) { toast("Select entities first, then Rotate"); return; }
     const cx = p.x, cy = p.y;
-    this.host.dim().show([{ name: "angle", label: "∠", kind: "angle" }], () => {
+    this.host.dim().show([{ name: "angle", label: "Angle", icon: "angle", kind: "angle" }], () => {
       const ang = ((this.host.dim().getValue("angle") ?? 0) * Math.PI) / 180;
       this.host.dim().hide();
       this.transformSelection((e) => this.reid(rotated(e, cx, cy, ang, e.id)));
@@ -301,7 +301,7 @@ export class ModifyFlow {
   scaleClick(p: THREE.Vector2) {
     if (!this.host.selected().size) { toast("Select entities first, then Scale"); return; }
     const cx = p.x, cy = p.y;
-    this.host.dim().show([{ name: "factor", label: "×", kind: "count" }], () => {
+    this.host.dim().show([{ name: "factor", label: "Factor", icon: "scale", kind: "count" }], () => {
       const f = this.host.dim().getValue("factor") ?? 1;
       this.host.dim().hide();
       if (f > 0) this.transformSelection((e) => [scaled(e, cx, cy, f, e.id)]);

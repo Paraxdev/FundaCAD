@@ -39,9 +39,9 @@ describe("entityLabel", () => {
 
 describe("constraintFace matches the canvas glyphs", () => {
   // The panel and the badge on the drawing are two views of one thing. If they
-  // pick different characters for the same constraint the user has to learn the
+  // pick different icons for the same constraint the user has to learn the
   // set twice, and there is nothing to stop them drifting except this.
-  it("uses the same symbol the glyph layer draws, for every glyphed constraint", () => {
+  it("uses the same icon the glyph layer draws, for every glyphed constraint", () => {
     const ents = [
       line("l1", 0, 0, 10, 0),
       line("l2", 0, 5, 10, 5),
@@ -67,7 +67,7 @@ describe("constraintFace matches the canvas glyphs", () => {
     const glyphs = constraintGlyphs(ents, cs);
     expect(glyphs.length).toBe(cs.length); // every one of them is glyphed
     for (const g of glyphs) {
-      expect(constraintFace(cs[g.cIndex]!).symbol).toBe(g.label);
+      expect(constraintFace(cs[g.cIndex]!).icon).toBe(g.icon);
     }
   });
 
@@ -114,7 +114,7 @@ describe("relationRows", () => {
   it("puts the drawn constraints first and the implied ones after", () => {
     const rows = relationRows(TRIANGLE, [{ type: "vertical", line: "e3" }], NONE, NONE);
     expect(rows).toHaveLength(4);
-    expect(rows[0]).toMatchObject({ index: 0, symbol: "V", name: "Vertical", detail: "Line 3" });
+    expect(rows[0]).toMatchObject({ index: 0, icon: "vertical", name: "Vertical", detail: "Line 3" });
     expect(rows.slice(1).every((r) => r.implied)).toBe(true);
   });
 

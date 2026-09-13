@@ -28,8 +28,8 @@ const viewport = {
   forwardWheel,
 } as unknown as Viewport;
 
-const glyph = (cIndex: number, label = "⊥"): ConstraintGlyph =>
-  ({ cIndex, label, pos: new THREE.Vector2(cIndex, cIndex) });
+const glyph = (cIndex: number, icon = "perpendicular"): ConstraintGlyph =>
+  ({ cIndex, icon, pos: new THREE.Vector2(cIndex, cIndex) });
 
 const badges = () => document.querySelectorAll<HTMLElement>(".sketch-glyph");
 
@@ -40,11 +40,11 @@ describe("SketchGlyphLayer", () => {
     document.body.innerHTML = "";
   });
 
-  it("renders one badge per glyph, showing the constraint's symbol", async () => {
+  it("renders one badge per glyph, showing the constraint's icon", async () => {
     mount(SketchGlyphLayer, { attachTo: document.body });
-    new SketchGlyphs(viewport).show([glyph(0, "="), glyph(1, "⊥")], plane, new Set(), new Set());
+    new SketchGlyphs(viewport).show([glyph(0, "equal"), glyph(1, "perpendicular")], plane, new Set(), new Set());
     await nextTick();
-    expect([...badges()].map((el) => el.textContent)).toEqual(["=", "⊥"]);
+    expect([...badges()].map((el) => el.querySelector("svg")?.dataset.icon)).toEqual(["equal", "perpendicular"]);
   });
 
   it("colours conflicting red and redundant amber, with conflict winning", async () => {

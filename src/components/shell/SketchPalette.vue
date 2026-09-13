@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Icon from "./Icon.vue";
 import { useSketchPaletteStore, PALETTE_TOGGLES } from "../../stores/sketchPalette";
 import { useSketchRelationsStore } from "../../stores/sketchRelations";
 import type { RelationRow } from "../../sketch/relations";
@@ -58,7 +59,7 @@ function rowTitle(r: RelationRow): string {
           @pointerenter="rel.hover(i)"
           @click="rel.hooks?.select(r.entities)"
         >
-          <span class="rel-sym">{{ r.symbol }}</span>
+          <Icon class="rel-sym" :name="r.icon" :size="14" />
           <span class="rel-text">
             <!-- Two elements rather than one with a space between them: Vue
                  condenses whitespace in a template, so the space was being
@@ -75,7 +76,7 @@ function rowTitle(r: RelationRow): string {
             class="rel-del"
             title="Delete this constraint"
             @click.stop="rel.hooks?.del(r.index)"
-          >&#215;</button>
+          ><Icon name="close" :size="12" /></button>
         </li>
       </ul>
     </template>

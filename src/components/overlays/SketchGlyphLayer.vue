@@ -7,6 +7,7 @@
 // SketchMode talks to. Read that file's header for the split; the short version
 // is that Vue owns WHICH glyphs exist and the rAF loop below owns WHERE they are.
 
+import Icon from "../shell/Icon.vue";
 import * as THREE from "three";
 import { onUnmounted, watch } from "vue";
 import { camHash } from "../../viewport/camHash";
@@ -112,7 +113,7 @@ function onWheel(e: WheelEvent) {
         :title="g.title"
         @pointerdown="onDown"
         @click="onClick($event, g)"
-      >{{ g.label }}</div>
+      ><Icon :name="g.icon" :size="12" /></div>
     </div>
   </Teleport>
 </template>

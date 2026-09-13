@@ -8,7 +8,7 @@ describe("constraintGlyphs", () => {
   it("places an H glyph at the line midpoint for a horizontal constraint", () => {
     const g = constraintGlyphs([line], [{ type: "horizontal", line: "l" }]);
     expect(g.length).toBe(1);
-    expect(g[0]!.label).toBe("H");
+    expect(g[0]!.icon).toBe("horizontal");
     expect(g[0]!.cIndex).toBe(0);
     expect(g[0]!.pos.x).toBeCloseTo(5);
     expect(g[0]!.pos.y).toBeCloseTo(0);
@@ -22,7 +22,7 @@ describe("constraintGlyphs", () => {
   it("places a fix glyph at the resolved endpoint", () => {
     const g = constraintGlyphs([line], [{ type: "fix", e: "l", p: 1 }]);
     expect(g.length).toBe(1);
-    expect(g[0]!.label).toBe("F");
+    expect(g[0]!.icon).toBe("fix");
     expect(g[0]!.pos.x).toBeCloseTo(10); // endpoint index 1
   });
 
@@ -31,7 +31,7 @@ describe("constraintGlyphs", () => {
     const b: ResolvedEntity = { type: "line", id: "b", x1: 5, y1: 0, x2: 5, y2: 5 };
     const g = constraintGlyphs([a, b], [{ type: "coincident", e1: "a", p1: 1, e2: "b", p2: 0 }]);
     expect(g.length).toBe(1);
-    expect(g[0]!.label).toBe("⊙");
+    expect(g[0]!.icon).toBe("coincident");
     expect(g[0]!.pos.x).toBeCloseTo(5);
     expect(g[0]!.pos.y).toBeCloseTo(0);
   });

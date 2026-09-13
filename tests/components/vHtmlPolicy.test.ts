@@ -3,8 +3,9 @@
 // needed ~37 hand-placed esc() calls to stay safe; interpolation now does that
 // automatically EXCEPT inside v-html.
 //
-// Exactly one component may use it: Icon.vue, over icons.ts's compile-time
-// constant path table. This test is the enforcement.
+// Exactly one component may use it: Icon.vue, over the SVG files icons.ts
+// bundles at build time (checked by tests/ui/iconFiles.test.ts). This test is
+// the enforcement.
 //
 // Sources come from import.meta.glob rather than node:fs so the check needs no
 // @types/node and no __dirname, it is Vite reading the same files it builds.

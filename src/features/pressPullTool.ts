@@ -359,7 +359,7 @@ export class PressPullTool {
     this.dim.show(
       round
         ? [{ name: "distance", label: "D", kind: "length" }]
-        : [{ name: "distance", label: "D", kind: "length" }, { name: "taper", label: "∠", kind: "angle" }],
+        : [{ name: "distance", label: "D", kind: "length" }, { name: "taper", label: "Angle", icon: "angle", kind: "angle" }],
       () => this.commit(), () => this.cancel(),
     );
     if (!round) this.dim.updateFromCursor({ taper: 0 });

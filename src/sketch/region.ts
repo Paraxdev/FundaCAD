@@ -129,7 +129,7 @@ export interface RectDef {
   angle: number;
 }
 
-/** The rectangle through three points: `a`→`b` is one full EDGE, and `c` sets
+/** The rectangle through three points: `a` to `b` is one full EDGE, and `c` sets
  *  how far the opposite edge lies from it. The exact inverse of rectCorners, and
  *  what the three-point rectangle tool commits.
  *

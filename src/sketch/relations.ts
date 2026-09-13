@@ -36,9 +36,9 @@ export interface RelationRow {
   /** Index into the constraint array, and so the delete target. Null for an
    *  implied relation, which has no record behind it to remove. */
   index: number | null;
-  /** The same character the canvas glyph uses, so the two never disagree about
+  /** The same icon the canvas glyph uses, so the two never disagree about
    *  what a constraint looks like. */
-  symbol: string;
+  icon: string;
   /** What it is called, in the words the ribbon buttons use. */
   name: string;
   /** What it acts on: "Line 1 and Line 3". Empty when it acts on nothing that
@@ -116,7 +116,7 @@ export function impliedJoins(ents: ResolvedEntity[]): RelationRow[] {
     if (ids.length < 2) continue;
     out.push({
       index: null,
-      symbol: "⊙",
+      icon: "coincident",
       name: "Coincident",
       detail: ids.map((id) => entityLabel(ents, id)).filter(Boolean).join(" and "),
       entities: ids,
@@ -141,7 +141,7 @@ export function constraintRows(
     const driven = isDriven(c);
     const row: RelationRow = {
       index: i,
-      symbol: face.symbol,
+      icon: face.icon,
       name: face.name,
       detail: labels.join(" and "),
       entities: face.operands.map((o) => o.split("~")[0] ?? o),

@@ -133,10 +133,10 @@ export class PatternFlow {
   }
 
   private patternDimDefs(type: SketchPattern["type"]) {
-    if (type === "boltCircle") return [{ name: "count", label: "N" }, { name: "diameter", label: "⌀" }];
-    if (type === "gridHoles") return [{ name: "countX", label: "Nx" }, { name: "countY", label: "Ny" }, { name: "diameter", label: "⌀" }];
-    if (type === "hexHoles" || type === "honeycomb") return [{ name: "rings", label: "Rings" }, { name: "diameter", label: "⌀" }];
-    if (type === "patternCircular") return [{ name: "count", label: "N" }, { name: "angle", label: "∠", kind: "angle" as const }];
+    if (type === "boltCircle") return [{ name: "count", label: "N" }, { name: "diameter", label: "Diameter", icon: "diameter" }];
+    if (type === "gridHoles") return [{ name: "countX", label: "Nx" }, { name: "countY", label: "Ny" }, { name: "diameter", label: "Diameter", icon: "diameter" }];
+    if (type === "hexHoles" || type === "honeycomb") return [{ name: "rings", label: "Rings" }, { name: "diameter", label: "Diameter", icon: "diameter" }];
+    if (type === "patternCircular") return [{ name: "count", label: "N" }, { name: "angle", label: "Angle", icon: "angle", kind: "angle" as const }];
     return [{ name: "countX", label: "Nx" }, { name: "countY", label: "Ny" }]; // patternRect
   }
 

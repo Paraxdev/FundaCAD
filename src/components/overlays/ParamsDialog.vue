@@ -5,6 +5,7 @@
 // display units for lengths; EXPRESSIONS are always canonical (mm / deg), the
 // same rule as every other expression surface.
 
+import Icon from "../shell/Icon.vue";
 import { computed, ref } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useDocValue } from "../../app/useDoc";
@@ -133,7 +134,7 @@ function add() {
           :class="{ 'input-error': !!delError[r.name] }"
           :title="delError[r.name] ?? `Delete ${r.name}`"
           @click="del(r.name)"
-        >×</button>
+        ><Icon name="close" :size="14" /></button>
       </div>
 
       <div class="params-row params-add">

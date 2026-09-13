@@ -1,10 +1,10 @@
 <script setup lang="ts">
 // The one sanctioned v-html in the app.
 //
-// It is safe for a reason that has to hold for it to stay safe: every value in
-// icons.ts's pack tables is a compile-time string constant in that file. No
-// document data, no file name, no network payload ever reaches it. Nothing else
-// may use v-html, see the CI grep.
+// It is safe for a reason that has to hold for it to stay safe: every value
+// comes from an SVG file in src/assets/icons bundled at build time. No document
+// data, no file name, no network payload ever reaches it. Nothing else may use
+// v-html, see the CI grep.
 //
 // Renders the <svg> element ITSELF rather than wrapping one, because the layout
 // rules select `.ribbon-btn svg` / `.ctx-item svg` directly and a wrapper span

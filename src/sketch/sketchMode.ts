@@ -1846,7 +1846,7 @@ export class SketchMode {
     const t = this.tool;
     const defs =
       t === "circle2"
-        ? [{ name: "diameter", label: "⌀" }]
+        ? [{ name: "diameter", label: "Diameter", icon: "diameter" }]
         : t === "polygon"
           ? [{ name: "radius", label: "R" }, { name: "sides", label: "N", kind: "count" as const }]
           : t === "centerRectangle"
@@ -2727,10 +2727,10 @@ export class SketchMode {
       this.tool === "rectangle"
         ? [{ name: "width", label: "W" }, { name: "height", label: "H" }]
         : this.tool === "circle"
-          ? [{ name: "diameter", label: "⌀" }]
+          ? [{ name: "diameter", label: "Diameter", icon: "diameter" }]
           : [
               { name: "length", label: "L" },
-              { name: "angle", label: "∠", kind: "angle" as const },
+              { name: "angle", label: "Angle", icon: "angle", kind: "angle" as const },
             ];
     this.dim.show(defs, () => this.commitFromCursor(this.lastCursor));
   }

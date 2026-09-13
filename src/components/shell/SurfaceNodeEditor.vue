@@ -13,6 +13,7 @@
 // The graph is held locally and synced to the store on each change: this is the
 // only editor of it open at a time, so a local copy is the source of truth and
 // avoids a round trip through the document on every keystroke.
+import Icon from "./Icon.vue";
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useEngine } from "../../app/engineKey";
 import type { MaterialDef, SurfaceGraph, SurfaceNode } from "../../document/materials";
@@ -47,10 +48,10 @@ const PORT_TYPE: Record<string, "float" | "vec3"> = {
 // this outputs" and "what this input needs" are visible without reading a label.
 const outClass = (t: NodeType) => `t-${OUT_TYPE[t]}`;
 const inClass = (port: string) => `t-${PORT_TYPE[port] ?? "float"}`;
-// A small glyph per node, so a card is recognised by shape not only by its name.
+// A small icon per node, so a card is recognised by shape not only by its name.
 const ICON: Record<NodeType, string> = {
-  noise: "≋", scratches: "╱", brushed: "≣", voronoi: "⬡", wave: "∿",
-  fresnel: "◐", ramp: "◧", colorramp: "▦", mix: "⋈", math: "±", output: "◉",
+  noise: "node-noise", scratches: "node-scratches", brushed: "node-brushed", voronoi: "node-voronoi", wave: "node-wave",
+  fresnel: "node-fresnel", ramp: "node-ramp", colorramp: "node-colorramp", mix: "node-mix", math: "node-math", output: "node-output",
 };
 // Node families, for the coloured stripe down a card's left edge.
 const CATEGORY: Record<NodeType, string> = {
@@ -401,8 +402,8 @@ const pending = computed(() => {
           :data-cat="CATEGORY[n.type]"
         >
           <div class="ne-node-head" @pointerdown="startDrag(n, $event)">
-            <span class="ne-icon">{{ ICON[n.type] }}</span>{{ LABEL[n.type] }}
-            <button v-if="n.type !== 'output'" class="ne-x" @pointerdown.stop @click="removeNode(n.id)">×</button>
+            <Icon class="ne-icon" :name="ICON[n.type]" :size="12" />{{ LABEL[n.type] }}
+            <button v-if="n.type !== 'output'" class="ne-x" @pointerdown.stop @click="removeNode(n.id)"><Icon name="close" :size="12" /></button>
           </div>
           <!-- input ports (dot colour + shape says what type this port needs) -->
           <div
@@ -456,7 +457,7 @@ const pending = computed(() => {
                   @input="setStopColor(n.id, si, ($event.target as HTMLInputElement).value)" />
                 <input class="sm-slider" type="range" min="0" max="1" step="0.01" :value="st.pos"
                   @input="setStopPos(n.id, si, Number(($event.target as HTMLInputElement).value))" />
-                <button class="ne-x" @pointerdown.stop @click="removeStop(n.id, si)">×</button>
+                <button class="ne-x" @pointerdown.stop @click="removeStop(n.id, si)"><Icon name="close" :size="12" /></button>
               </div>
               <button class="rd-chip ne-addstop" @click="addStop(n.id)">+ stop</button>
             </template>

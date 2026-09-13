@@ -202,7 +202,7 @@ export class DraftTool {
     this.previewId = this.store.nextId();
     this.viewport.clearHover();
     this.buildGizmo();
-    this.dim.show([{ name: "angle", label: "∠", kind: "angle" }], () => this.commit(), () => this.cancel());
+    this.dim.show([{ name: "angle", label: "Angle", icon: "angle", kind: "angle" }], () => this.commit(), () => this.cancel());
     const s = this.viewport.projectToScreen(this.anchor);
     this.dim.position(s.x, s.y);
     this.dim.updateFromCursor({ angle: 0 });

@@ -17,6 +17,7 @@
 // leaves a feature that fails every rebuild, and Clear is the way back to a
 // pattern that builds.
 
+import Icon from "./Icon.vue";
 import { openDialog } from "../../plugins/host";
 import { toast } from "../../ui/toast";
 
@@ -61,7 +62,7 @@ async function browse() {
         class="file-clear"
         title="Clear the file"
         @click="commit('')"
-      >&times;</button>
+      ><Icon name="close" :size="12" /></button>
     </div>
   </div>
 </template>

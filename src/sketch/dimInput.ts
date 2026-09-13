@@ -13,7 +13,9 @@ import { commonUnits, toUnit, tryParseMeasure, unitById, type UnitDef } from "..
 
 export interface DimFieldDef {
   name: string;
+  /** a short word, or the tooltip when `icon` is given */
   label: string;
+  icon?: string;
   kind?: "length" | "angle" | "count"; // default length; count = raw number, no unit
 }
 
@@ -170,7 +172,12 @@ export class DimInput {
       wrap.className = "dim-field";
       const name = document.createElement("span");
       name.className = "dim-name";
-      name.textContent = def.label;
+      if (def.icon) {
+        name.appendChild(iconElement(def.icon, 12));
+        name.title = def.label;
+      } else {
+        name.textContent = def.label;
+      }
       wrap.appendChild(name);
       const input = document.createElement("input");
       input.type = "text";

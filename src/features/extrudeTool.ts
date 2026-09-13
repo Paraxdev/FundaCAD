@@ -526,7 +526,7 @@ export class ExtrudeTool {
       // The ∠ field rides beside the depth: the depth free-tracks the cursor,
       // the taper is set by its own handle or typed here, and the two never
       // clobber each other because updateFromCursor only ever pushes `distance`.
-      [{ name: "distance", label: "D" }, { name: "taper", label: "∠", kind: "angle" }],
+      [{ name: "distance", label: "D" }, { name: "taper", label: "Angle", icon: "angle", kind: "angle" }],
       () => this.commit(),
       () => this.cancel(),
       {

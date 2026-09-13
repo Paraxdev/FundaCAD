@@ -415,7 +415,7 @@ function title(it: ToolItem) {
         :class="{ hidden: !collapsedGroups.length }"
         title="More tools"
         @click.stop="toggleOverflow()"
-      >⋯</button>
+      ><Icon name="more" :size="18" /></button>
     </div>
 
     <RibbonPopup
