@@ -382,6 +382,14 @@ function frameKeyShadow(key: THREE.DirectionalLight, modelGroup: THREE.Group): v
  *  again. Until the import lands, the direct path draws, so the viewport is
  *  never waiting on it for a frame, the model simply gains its bloom a beat
  *  after the setting is switched on. */
+/** A threshold above 1 only lets through what is brighter than a fully lit white
+ *  surface, so with nothing glowing or shiny on screen the whole pass would draw
+ *  the image unchanged. */
+export function bloomWanted(amount: number, bloomable: boolean): boolean {
+  if (!(amount > 0)) return false;
+  return bloomable || bloomSettings(amount).threshold < 1;
+}
+
 export class PostChain {
   private composer: import("three/examples/jsm/postprocessing/EffectComposer.js").EffectComposer | null = null;
   private bloom: import("three/examples/jsm/postprocessing/UnrealBloomPass.js").UnrealBloomPass | null = null;
@@ -394,6 +402,10 @@ export class PostChain {
    *  the view is ABOUT: whatever you have centred is what stays in focus, which
    *  needs no control of its own and is never wrong. */
   focusDistance = 1;
+  /** Whether anything on screen can reach the bloom threshold: something that
+   *  glows, or a shiny finish that throws a hot highlight. Written by the viewport
+   *  with each finish pass. */
+  bloomable = true;
 
   constructor(
     private renderer: THREE.WebGLRenderer,
@@ -432,7 +444,7 @@ export class PostChain {
    *  never leaves the canvas, and never pays the full-screen copy. */
   private wanted(): { bloom: boolean; blur: boolean } {
     const p = renderPrefs();
-    return { bloom: p.bloom > 0, blur: p.focusBlur > 0 };
+    return { bloom: bloomWanted(p.bloom, this.bloomable), blur: p.focusBlur > 0 };
   }
 
   render(camera: THREE.Camera) {

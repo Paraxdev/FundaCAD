@@ -101,4 +101,17 @@ describe("replacing the document", () => {
     // cancelBusy short-circuits when nothing is running, so no pool is killed
     expect(h.cancels()).toBe(0);
   });
+
+  it("leaves nothing of the old document's materials behind on File → New", async () => {
+    const h = backend();
+    const store = new DocumentStore(h.be, DOC);
+    await store.rebuildNow();
+    const id = store.addMaterial({ name: "Old red", color: "#ff0000" } as never);
+    store.setBodiesMaterial(["b1"], id);
+    store.setFacesMaterial([{ body: "b1", face: 0 }], id);
+    store.newDocument();
+    expect(store.faceMaterialEntries()).toEqual([]);
+    expect(store.bodyMaterialId("b1")).toBeUndefined();
+    expect(store.materialLibrary.some((m) => m.id === id)).toBe(false);
+  });
 });

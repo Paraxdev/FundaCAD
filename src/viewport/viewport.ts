@@ -50,7 +50,7 @@ import { EdgeEmphasis } from "./edgeEmphasis";
 import { ViewCube, FACE_VIEWS } from "./viewCube";
 import { setPrompt } from "../ui/prompt";
 import type { DocumentStore } from "../document/store";
-import { type BodyFinish, FINISH } from "../document/materials";
+import { type BodyFinish, FINISH, isShiny } from "../document/materials";
 import { applySurface, applySurfaceGraph, graphKey, surfaceKey } from "./proceduralSurface";
 import { MAX_EMISSIVE_INTENSITY } from "../ui/renderPrefs";
 import { onRenderPrefsChange, renderPrefs } from "../ui/renderPrefs";
@@ -1017,6 +1017,13 @@ export class Viewport {
   private emitterLights = new Map<string, { area: THREE.RectAreaLight; shadow: THREE.PointLight | null }>();
   private emitterGroup: THREE.Group | null = null;
 
+  private modelBloomable = false;
+
+  /** A sketch dims the model to a backdrop, so nothing on it is worth a glow. */
+  private syncBloomable() {
+    this.scene.post.bloomable = this.modelBloomable && !this.sketchDimmed;
+  }
+
   private applyBodyFinish() {
     if (!this.model) return;
     const ghost = this.xray || this.stale;
@@ -1038,6 +1045,7 @@ export class Viewport {
     // is a lamp, not just a bright skin), collected here and reconciled into real
     // lights after the pass, see syncEmitterLights.
     const emitters: EmitterPatch[] = [];
+    let shiny = false;
     for (const b of this.model.bodies) {
       // The body's OWN material, which is not b.mesh.material while the zebra
       // overlay is on: that one is shared by every body, so writing a finish to
@@ -1049,6 +1057,7 @@ export class Viewport {
       const f = this.bodyFinish[b.id];
       mat.metalness = f ? f.metalness : FINISH.metalness;
       mat.roughness = f ? f.roughness : FINISH.roughness;
+      if (!ghost && f && isShiny(f)) shiny = true;
       // What the surface gives off itself. The body's own COLOUR is baked per
       // vertex and a material has one emissive colour, so the emissive tint is
       // read back off the paint map rather than off the material: a body wearing
@@ -1093,6 +1102,7 @@ export class Viewport {
           const ff = extra.finishes[i]!;
           fm.metalness = ff.metalness;
           fm.roughness = ff.roughness;
+          if (!ghost && isShiny(ff)) shiny = true;
           const fglow = ghost ? 0 : ff.emissive;
           if (fglow > 0) faceGlow = true;
           fm.emissive.set(fglow > 0 ? (extra.colors[i] ?? 0xffffff) : 0x000000);
@@ -1115,6 +1125,8 @@ export class Viewport {
       if (glow > 0 || faceGlow) this.collectEmitters(b, glow, ghost, emitters);
     }
     this.syncEmitterLights(emitters);
+    this.modelBloomable = shiny || emitters.length > 0;
+    this.syncBloomable();
     // The model may have moved or grown; re-aim the optional key-light shadow.
     this.scene.frameShadows();
   }
@@ -3169,6 +3181,12 @@ export class Viewport {
     }
     this.targetGridZ = 0; // no model → grid back on the world XY plane
     this.savedMats.clear(); // materials died with the model
+    // The lights a glowing face threw belong to the model too; left up they light
+    // the next document's first preview and vanish at its first finish pass.
+    this.syncEmitterLights([]);
+    this.caps.clear();
+    this.modelBloomable = false;
+    this.syncBloomable();
     this.ghostMeshes = []; // ...as did the meshes the ghosts hung off
     if (this.combsObj) {
       this.scene.modelGroup.remove(this.combsObj);
@@ -3974,6 +3992,8 @@ export class Viewport {
     });
     this.scene.grid.group.visible = false; // hide the world ground grid; only the sketch grid shows
     this.setModelDimmed(true);
+    this.sketchDimmed = true;
+    this.syncBloomable();
     this.requestRender();
   }
   /** Flat, orthographic view for 2D precision (no perspective convergence). It
@@ -4002,10 +4022,13 @@ export class Viewport {
     this.scene.grid.group.visible = true;
     this.rig.restoreUp();
     this.setModelDimmed(false);
+    this.sketchDimmed = false;
+    this.syncBloomable();
     this.requestRender();
   }
   private sketchPrevMode: ProjectionMode = "auto";
   private sketchOrtho = false; // currently in the sketch's forced flat (ortho) view
+  private sketchDimmed = false;
 
   /** How much of the model survives while a sketch is open on it.
    *

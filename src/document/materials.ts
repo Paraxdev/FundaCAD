@@ -119,6 +119,12 @@ export interface BodyFinish {
   surfaceGraph?: SurfaceGraph;
 }
 
+/** A finish that can throw a highlight bright enough to bloom. A node graph is
+ *  counted as shiny because it can drive emission. */
+export function isShiny(f: BodyFinish): boolean {
+  return f.emissive > 0 || f.metalness >= 0.5 || f.roughness < 0.3 || f.clearcoat > 0 || f.opacity < 1 || !!f.surfaceGraph;
+}
+
 export function finishOf(m: MaterialDef | undefined): BodyFinish {
   return {
     metalness: m?.metalness ?? FINISH.metalness,
