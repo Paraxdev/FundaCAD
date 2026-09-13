@@ -18,6 +18,7 @@ import type { GeometryBackend } from "../geometry/client";
 import { migrateDocument } from "../document/migrate";
 import type { CadDocument, Feature, ImportReply } from "../types";
 import { asFeature } from "../types";
+import { contentHash } from "../document/contentHash";
 
 export type FundaInsertMode = "append" | "link";
 
@@ -33,17 +34,9 @@ export interface FundaSource {
   text: string;
 }
 
-/** A cheap fingerprint of a document's text. It decides whether a linked file
- *  changed, not whether it is trustworthy, so it does not need to be a digest. */
+/** A fingerprint of a document's text, to tell whether a linked file changed. */
 export function documentStamp(text: string): string {
-  let a = 0x811c9dc5;
-  let b = 0x01000193;
-  for (let i = 0; i < text.length; i++) {
-    const c = text.charCodeAt(i);
-    a = Math.imul(a ^ c, 0x01000193) >>> 0;
-    b = Math.imul(b + c, 0x5bd1e995) >>> 0;
-  }
-  return `${a.toString(16).padStart(8, "0")}${b.toString(16).padStart(8, "0")}${text.length.toString(16)}`;
+  return contentHash(text);
 }
 
 /** The document the source would build: its features up to its own rollback,

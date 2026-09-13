@@ -16,6 +16,7 @@ import { saveRenderedImage } from "../../io/files";
 import { toast } from "../../ui/toast";
 import type { ProjectionMode } from "../../viewport/cameras";
 import IconButton from "../ui/IconButton.vue";
+import VersionsPanel from "./VersionsPanel.vue";
 import Popover from "../ui/Popover.vue";
 import Toggle from "../ui/Toggle.vue";
 import ChoiceList from "../ui/ChoiceList.vue";
@@ -159,6 +160,7 @@ async function screenshot() {
     <div class="float-group">
       <IconButton icon="shaded" title="Display" :active="isOpen('display') || ui.xray" @click="open('display', $event)" />
       <IconButton icon="camera" title="Screenshot" :active="saving" @click="screenshot()" />
+      <IconButton icon="versions" title="Versions" :active="isOpen('versions')" @click="open('versions', $event)" />
       <IconButton
         icon="history"
         title="History (Ctrl Alt H)"
@@ -170,6 +172,10 @@ async function screenshot() {
     <div v-if="dialogs.bugDeps" class="float-group">
       <IconButton icon="bug" title="Report a bug" @click="dialogs.bugReport = true" />
     </div>
+
+    <Popover v-if="isOpen('versions')" :anchor="anchorOf('versions')" side="left" kind="vc-pop versions-pop" @close="shell.closePopover()">
+      <VersionsPanel />
+    </Popover>
 
     <Popover v-if="isOpen('snap')" :anchor="anchorOf('snap')" side="left" kind="vc-pop" @close="shell.closePopover()">
       <div class="pop-section">Snap to</div>

@@ -3,6 +3,20 @@
 // client so any mutation re-runs the tree; results + errors are pushed to
 // listeners (viewport, timeline, tree).
 
+import {
+  commit as commitVersion,
+  createBranch as createVersionBranch,
+  diffAgainstWorking,
+  emptyRepo,
+  headOf,
+  normalizeRepo,
+  snapshotOf,
+  switchBranch as switchVersionBranch,
+  type Snapshot,
+  type Version,
+  type VersionDiff,
+  type VersionRepo,
+} from "./versions";
 import type { CadDocument, Feature, ParamTarget, PlaneSpec, ProjectedSource, ProjectionUpdate, RebuildReply, RebuildResult, ViewCubeSide, ViewOverride } from "../types";
 import { asFeature } from "../types";
 import { applyProjectionUpdate } from "../types";
@@ -213,6 +227,8 @@ export class DocumentStore {
    *  a body, it has a name and a parent of its own, and its order is what the
    *  panel draws. See document/elements.ts for every operation on it. */
   private elements: ElementDef[] = [];
+  /** Saved versions of this document. Null until the first one. */
+  private repo: VersionRepo | null = null;
   // static descriptor list driving toJSON/load below, in the exact on-disk key
   // order (palette piggybacks on bodyColors' condition, so isn't listed here).
   private readonly overlays: { overlay: Overlay<any>; mapValue?: (v: unknown) => any }[] = [
@@ -437,6 +453,7 @@ export class DocumentStore {
     this.palette = DEFAULT_PALETTE.map((s) => ({ ...s }));
     this.elements = [];
     this.materials = STARTER_LIBRARY.map((m) => ({ ...m }));
+    this.repo = null;
     this.path = null;
     this.isDirty = false;
     this.discardModelForReplacement();
@@ -1584,7 +1601,7 @@ export class DocumentStore {
    *  writes (geometry doc + suppress set, rollback, overlays, palette).
    *  Autosave embeds this directly in its envelope so the multi-MB document
    *  is stringified ONCE, not pretty-printed/re-parsed/re-stringified. */
-  toObject(): CadDocument {
+  toObject(withVersions = true): CadDocument {
     // Persist the geometry doc PLUS the non-geometry project state that lives in
     // the store (suppress set, rollback marker, sketch visibility) so reopening
     // restores the full session. Empty state is omitted to keep files clean.
@@ -1605,7 +1622,63 @@ export class DocumentStore {
     // reference it, and a synced/customized palette is project state in its own
     // right (the "design in loaded colors" premise) even with zero assignments.
     if (this.bodyColors.size || !this.paletteIsDefault()) out.palette = this.palette;
+    if (withVersions && this.repo) out.versions = this.repo;
     return out;
+  }
+
+  // --- versions (document/versions.ts) ---
+
+  get versionRepo(): Readonly<VersionRepo> | null {
+    return this.repo;
+  }
+
+  /** The document as a version records it. */
+  workingSnapshot(): Snapshot {
+    return JSON.parse(JSON.stringify(this.toObject(false))) as Snapshot;
+  }
+
+  /** Save the document as it is now as a version on the current branch. Null
+   *  when nothing changed since that branch's newest version. */
+  saveVersion(message: string): Version | null {
+    const repo = this.repo ?? emptyRepo();
+    const v = commitVersion(repo, this.workingSnapshot(), message, Date.now());
+    if (!v) return null;
+    this.repo = repo;
+    this.markDirty();
+    this.emitMeta();
+    return v;
+  }
+
+  /** What changed since the current branch's newest version, or null with no versions. */
+  changesSinceVersion(): VersionDiff | null {
+    const head = this.repo ? headOf(this.repo) : undefined;
+    return head && this.repo ? diffAgainstWorking(this.repo, head.id, this.workingSnapshot()) : null;
+  }
+
+  /** Put a version's document back in front of the user. Undoable like any
+   *  other replacement of the document, and the versions are untouched. */
+  restoreVersion(id: string) {
+    const repo = this.repo;
+    if (!repo) return;
+    const snapshot = snapshotOf(repo, id);
+    this.load(JSON.stringify(snapshot));
+    this.repo = repo;
+    this.emitMeta();
+  }
+
+  /** Start a branch at a version and move onto it. */
+  branchFromVersion(id: string, name: string): string {
+    if (!this.repo) throw new Error("save a version first");
+    const clean = createVersionBranch(this.repo, name, id);
+    this.switchVersionBranch(clean);
+    return clean;
+  }
+
+  /** Move onto a branch, bringing back its newest version. */
+  switchVersionBranch(name: string) {
+    if (!this.repo) return;
+    const head = switchVersionBranch(this.repo, name);
+    this.restoreVersion(head.id);
   }
   toJSON(): string {
     return JSON.stringify(this.toObject(), null, 2);
@@ -1633,6 +1706,7 @@ export class DocumentStore {
     // folder that renders oddly, it is a folder nothing can name.
     // A material with no usable colour is dropped, see normalizeMaterial: it
     // is a row that can be assigned to a body and then change nothing.
+    this.repo = normalizeRepo(parsed.versions);
     this.materials = parsed.materials?.length
       ? parsed.materials
           .map((m, i) => normalizeMaterial(m, i))

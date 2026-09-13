@@ -9,6 +9,7 @@ import { asFeature } from "../types";
 import type { GeometryBackend } from "../geometry/client";
 import type { CadDocument, ExportFormat, Feature, ImportFormat } from "../types";
 import { clearRecovery } from "./recovery";
+import { referencedGeometry } from "../document/versions";
 import { noteRecent } from "./recentFiles";
 import { DOC_EXT, LEGACY_DOC_EXTS, isDocumentExt } from "./documentExt";
 import { announceImportedBody } from "../plugins/contrib";
@@ -31,6 +32,7 @@ function referencedHashes(store: DocumentStore): string[] {
     const imp = asFeature(f, "import");
     if (imp?.geom) out.add(imp.geom);
   }
+  if (store.versionRepo) for (const h of referencedGeometry(store.versionRepo)) out.add(h);
   return [...out];
 }
 

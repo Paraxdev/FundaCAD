@@ -857,6 +857,9 @@ export interface CadDocument {
   version?: number;
   /** feature ids currently suppressed (skipped on rebuild). */
   suppressed?: string[];
+  /** Saved versions and branches of this document, see document/versions.ts.
+   *  Absent until the first version is saved. */
+  versions?: import("./document/versions").VersionRepo;
   /** timeline rollback marker: count of active features; absent/null = all built. */
   rollback?: number | null;
   /** explicit per-sketch show/hide overrides (id → visible). */
