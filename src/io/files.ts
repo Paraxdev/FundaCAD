@@ -272,6 +272,7 @@ export async function openDocumentAtPath(
   // to save over the original on the way out.
   await warnAboutMissingPlugins(store);
   noteRecent(path);
+  if (geometry) void import("./fundaLinks").then((m) => m.checkLinks(store, geometry));
   return "ok";
 }
 

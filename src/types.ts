@@ -607,6 +607,9 @@ export type CoreFeature =
       // names. Rows are objects so a later phase can add fields to them.
       nodes?: { name: string; parent: number | null; color?: string }[];
       parts?: { node: number; faces: number; faceColors?: FaceColorRuns }[];
+      // A body read in from another FundaCAD document that is kept in step with
+      // it: the file, and a fingerprint of what it held when it was last read.
+      link?: { path: string; stamp: string };
     }
   // Cut a body by a plane. keep=top/bottom keeps one side; keep=both splits it
   // into separate bodies. `body` targets a specific body (default: the active one);

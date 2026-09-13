@@ -129,6 +129,9 @@ export function createActions(e: Engine): (action: string) => void {
       case "import":
         void importModel(e.store, e.geometry);
         break;
+      case "insert-document":
+        void import("../io/fundaLinks").then((m) => m.insertDocumentFromDialog(e.store, e.geometry));
+        break;
       case "save":
         void saveDocument(e.store);
         break;

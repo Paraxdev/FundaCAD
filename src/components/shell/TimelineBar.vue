@@ -180,6 +180,9 @@ function onPeekKey(e: KeyboardEvent) {
 }
 // --- renaming ------------------------------------------------------------
 const renamingId = ref<string | null>(null);
+function linkedPath(id: string): string | null {
+  return (store.document.features.find((f) => f.id === id) as { link?: { path: string } } | undefined)?.link?.path ?? null;
+}
 function hasOwnName(id: string): boolean {
   return !!(store.document.features.find((f) => f.id === id) as { name?: string } | undefined)?.name;
 }
@@ -321,6 +324,12 @@ function openMenu(e: MouseEvent, id: string, i: number) {
     ...repick,
     { label: "Edit", onClick: () => timeline.edit(id) },
     { label: "Rename", shortcut: "F2", onClick: () => startRename(id) },
+    ...(linkedPath(id)
+      ? [
+          { label: "Update from linked file", onClick: () => void import("../../io/fundaLinks").then((m) => m.refreshLink(store, engine.geometry, id)) },
+          { label: "Unlink", onClick: () => void import("../../io/fundaLinks").then((m) => m.unlink(store, id)) },
+        ]
+      : []),
     ...(hasOwnName(id) ? [{ label: "Reset name", onClick: () => store.renameFeature(id, "") }] : []),
     {
       label: suppressed.value.has(id) ? "Unsuppress" : "Suppress",

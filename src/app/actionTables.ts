@@ -41,7 +41,7 @@ export const SKETCH_MODIFY: Record<string, SketchTool> = {
  *  real command. Navigation / view / file actions aren't commands you repeat, so
  *  they don't overwrite it. */
 export const NON_REPEATABLE = new Set([
-  "new", "open", "save", "saveas", "export", "import",
+  "new", "open", "save", "saveas", "export", "import", "insert-document",
   "welcome", "ta-publish",
   "undo", "redo", "compute-all", "shortcut-help", "finish", "palette",
   "fit", "iso", "top", "front", "right", "persp",

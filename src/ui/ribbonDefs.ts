@@ -163,6 +163,7 @@ export const MODEL: Group[] = [
     label: "INSERT",
     items: [
       { action: "import", label: "Import Mesh", iconName: "import" },
+      { action: "insert-document", label: "Insert Document", iconName: "insertDocument" },
       { action: "simplify-mesh", label: "Simplify Mesh", iconName: "simplifyMesh" },
       { action: "clean-up", label: "Clean Up", iconName: "cleanUp", key: "U" },
       { action: "compute-all", label: "Compute All", iconName: "computeAll" },
