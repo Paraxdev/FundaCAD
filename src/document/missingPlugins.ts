@@ -24,8 +24,7 @@
 
 import { contributedFeatureTypes } from "../plugins/contrib";
 import { shippedPlugins } from "../plugins/shipped";
-import type { CadDocument, Feature } from "../types";
-import { FEATURE_NUM_FIELDS } from "./numFields";
+import { isCoreFeatureType, type CadDocument, type Feature } from "../types";
 
 /** One plugin a document needs and does not have. */
 export interface MissingPlugin {
@@ -63,7 +62,7 @@ function declaredOwners(): Map<string, { id: string; name: string }> {
 
 /** Whether this build can build a feature of this type right now. */
 function buildable(type: string, live: ReadonlySet<string>): boolean {
-  return type in FEATURE_NUM_FIELDS || type === "sketch" || live.has(type);
+  return isCoreFeatureType(type) || live.has(type);
 }
 
 /** Every plugin this document needs and does not have, worst first.

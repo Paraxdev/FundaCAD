@@ -26,6 +26,11 @@ describe("a document whose plugin is missing", () => {
     expect(missingPlugins({ features: box })).toEqual([]);
   });
 
+  it("knows its own feature types that have no numbers to edit", () => {
+    const own = ["boolean", "import", "loft", "sweep", "mirror", "split", "removeBody", "imprint", "press-pull"];
+    expect(missingPlugins({ features: own.map((t, i) => f(`x${i}`, t)) })).toEqual([]);
+  });
+
   it("names the plugin that owns the feature type", () => {
     const [m] = missingPlugins({ features: [...box, f("t1", "texture", { kind: "knurl" })] });
     expect(m?.id).toBe("FundaCAD.Texture");

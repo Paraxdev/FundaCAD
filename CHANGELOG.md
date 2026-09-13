@@ -76,6 +76,8 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Fixed
 
+- **Opening a document no longer claims its booleans, imports or lofts need a missing plugin.** The check for feature types this build cannot make only recognised types with a number to edit, so every boolean, import, loft, sweep, mirror, split and press/pull set off a "features of a kind this build does not know" notice. Those were never at risk and built as normal.
+
 - **A plane a tool asks for is no longer hidden inside the part.** While Sketch, a datum plane or Split asks for a plane, the origin and datum planes draw over the model and a click on one takes it even with a body behind or in front of it, so an imported assembly that swallows the origin no longer hides the planes it is built around.
 
 - **A zoomed out assembly no longer z-fights.** The near clipping plane stayed at 0.1 mm however far the camera went, which left a printer seen from two metres with depth steps of 2.4 mm. It now moves out with the camera's distance from the model, never past the model's nearest point.

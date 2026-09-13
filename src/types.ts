@@ -769,6 +769,22 @@ export type Feature = CoreFeature | PluginFeature;
 /** The `type` of a feature the APPLICATION defines. A plugin's is just a string. */
 export type FeatureType = CoreFeature["type"];
 
+/** Every feature type the application builds itself, at runtime. `satisfies`
+ *  makes a type added to CoreFeature and missed here a compile error. */
+const CORE_FEATURE_TYPES = {
+  boolean: true, box: true, chamfer: true, cleanUp: true, cone: true, cylinder: true,
+  datumAxis: true, datumPlane: true, datumPoint: true, deleteFace: true, draft: true,
+  duplicate: true, extrude: true, fillet: true, import: true, imprint: true, joint: true,
+  loft: true, mirror: true, move: true, offsetFace: true, patternCircular: true,
+  patternLinear: true, patternRect: true, "press-pull": true, removeBody: true, revolve: true, scale: true,
+  shell: true, simplifyMesh: true, sketch: true, sphere: true, split: true, sweep: true,
+  thicken: true, torus: true,
+} as const satisfies Record<FeatureType, true>;
+
+export function isCoreFeatureType(type: string): type is FeatureType {
+  return Object.prototype.hasOwnProperty.call(CORE_FEATURE_TYPES, type);
+}
+
 /** Narrow a feature to one of the application's own variants by type.
  *
  *  Use in place of a bare `f.type === "sketch"` wherever the fields are read
