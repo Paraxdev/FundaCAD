@@ -16,6 +16,7 @@ import type { EdgeFeatureTool } from "./edgeFeatureTool";
 import type { PressPullTool } from "./pressPullTool";
 import type { LoftTool } from "./loftTool";
 import type { MoveTool } from "./moveTool";
+import { sketchFeatureTarget } from "./sketchMoveTarget";
 import type { PatternKind, PatternTool } from "./patternTool";
 import type { PlaneOffsetTool } from "./planeOffsetTool";
 import { pickPlaneTarget, planeSpecOf, type FacePlanePick } from "./facePlanePick";
@@ -746,16 +747,29 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     setStatus("Scale added, set the factor in the value rows", "");
   }
 
-  // Move: translate / rotate the active body. Defaults to no-op, set the offsets
-  // and angles in the value rows.
+  // Move: translate / rotate the selected bodies and sketches with the gizmo.
   function startMove() {
     if (toolBusy()) return;
+    const done = (id: string | null) => { noteCommitted(id); if (id) selectFeature(id); };
+    let ids = viewport.getSelectedBodies();
+    const sketches = new Set(overlay.selectedRegions().map((r) => r.sketchId));
+    const picked = getSelectedFeature();
+    if (!ids.length && !sketches.size && picked && store.document.features.find((f) => f.id === picked)?.type === "sketch") {
+      sketches.add(picked);
+    }
+    if (sketches.size) {
+      const target = sketchFeatureTarget(viewport, store, overlay, [...sketches], ids);
+      if (target) {
+        overlay.clearRegionSelection();
+        moveTool.startTarget(target, done);
+        return;
+      }
+    }
     if (!hasBody()) {
-      setStatus("Move: create or import a body first", "");
+      setStatus("Move: select a body or a sketch first", "");
       return;
     }
     const bodies = store.buildState.result?.bodies ?? [];
-    let ids = viewport.getSelectedBodies();
     if (!ids.length && bodies.length) {
       const lastBody = bodies[bodies.length - 1];
       if (lastBody) ids = [lastBody.id]; // none selected → active body
@@ -764,7 +778,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       setStatus("Move: select a body first (Select: Bodies)", "");
       return;
     }
-    moveTool.start(ids, (id) => { noteCommitted(id); if (id) selectFeature(id); });
+    moveTool.start(ids, done);
   }
 
   // Mirror: choose the symmetry plane (the backend honors XY/XZ/YZ; the old tool

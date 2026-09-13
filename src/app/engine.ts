@@ -304,9 +304,16 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
     joint: new JointTool(e.viewport, e.store),
   };
 
+  const move = e.tools.move;
+  e.sketch.gizmo = {
+    start: (target, done) => move.startTarget(target, () => done()),
+    cancel: () => move.cancel(),
+    get active() { return move.active; },
+  };
+
   // Reads e.toolBusy, assigned below, hence the thunk, the same late binding
   // every other block in this file uses.
-  e.nudge = new SelectionNudge(e.viewport, { toolBusy: () => e.toolBusy() });
+  e.nudge =new SelectionNudge(e.viewport, { toolBusy: () => e.toolBusy() });
 
   // Warm up the constraint solver WASM. Deliberately ignores failure: initSolver
   // resolves false rather than rejecting, so a runtime that cannot compile the

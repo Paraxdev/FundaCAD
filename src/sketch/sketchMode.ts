@@ -48,6 +48,8 @@ import { DimFlow, type DimHost } from "./dimFlow";
 import { ProjectPanel } from "./projectPanel";
 import { ProjectFlow, type ProjectHost } from "./projectFlow";
 import { ModifyFlow, type ModifyHost } from "./modifyFlow";
+import type { MoveTarget } from "../features/moveTarget";
+import { sketchEntityTarget, type SketchGizmoHost } from "../features/sketchMoveTarget";
 import { sketchEscapeAction } from "./escapeLayers";
 import { gridReach, gridStep, SketchPlaneGrid, snapLatticeStep } from "./planeGrid";
 import { INFER_TOL_DEG, inferLineDirection } from "./inferLine";
@@ -156,6 +158,12 @@ export class SketchMode {
   /** The body face this sketch is anchored to, when it was drawn on one. */
   private face: { selector: Selector; at: [number, number, number] } | null = null;
   onState: (() => void) | null = null; // notify UI (tool/active changed)
+  /** Injected by the engine: the move gizmo, which lives outside sketch mode. */
+  gizmo: {
+    start(target: MoveTarget, done: () => void): void;
+    cancel(): void;
+    readonly active: boolean;
+  } | null = null;
 
   private plane = new SketchPlane("XY");
 
@@ -556,6 +564,7 @@ export class SketchMode {
 
   finish(commit = true) {
     if (!this.active) return;
+    if (this.gizmo?.active) this.gizmo.cancel();
     const store = this.store!;
     this.patternFlow.flushOnFinish(); // may add patterns, must precede the snapshot
     const sketch = commit ? this.snapshotFeature() : null;
@@ -598,6 +607,7 @@ export class SketchMode {
   }
 
   cancel() {
+    if (this.gizmo?.active) this.gizmo.cancel();
     this.cleanup();
   }
 
@@ -657,6 +667,16 @@ export class SketchMode {
 
   // --- tools -------------------------------------------------------------
   setTool(t: SketchTool) {
+    if (this.gizmo?.active) this.gizmo.cancel();
+    // With something selected, move, rotate and scale are one gizmo on it; the
+    // click flows below are what they fall back to with nothing selected.
+    if ((t === "move" || t === "rotate" || t === "scale") && this.active && this.gizmo && this.selected.size) {
+      const target = sketchEntityTarget(this.gizmoHost());
+      if (target) {
+        this.gizmo.start(target, () => this.onState?.());
+        return;
+      }
+    }
     // Mirror operates on the current multi-selection, so keep it; every other
     // tool starts from a clean slate.
     // Mirror + the transform tools (move/copy/rotate/scale) operate on the
@@ -703,6 +723,16 @@ export class SketchMode {
     this.dims.setInteractive(annotationsLive);
     this.glyphs.setInteractive(annotationsLive);
     this.onState?.();
+  }
+
+  private gizmoHost(): SketchGizmoHost {
+    return {
+      plane: () => this.plane,
+      selection: () => this.entities.filter((e) => this.selected.has(e.id) && e.type !== "projected"),
+      showPreview: (ents) =>
+        this.overlay.setPreview(ents ? curveObjects(ents, this.plane, PREVIEW_COLOR, true) : []),
+      apply: (map, copy) => this.modifyFlow.applyTransform(map, copy),
+    };
   }
 
   /** Public re-draw hook: e.g. async glyph outlines for a text entity just arrived,

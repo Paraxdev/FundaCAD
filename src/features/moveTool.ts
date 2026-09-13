@@ -31,8 +31,8 @@
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore } from "../document/store";
-import type { Feature } from "../types";
 import { DimInput } from "../sketch/dimInput";
+import { WORLD_FRAME, bodyMoveTarget, type Frame, type MoveCommit, type MoveTarget } from "./moveTarget";
 import { setPrompt } from "../ui/prompt";
 import { fmtLength, snap } from "../ui/units";
 import { gizmoMoveStep, gizmoRotateStep, snapScaleFactor } from "../viewport/gizmoStep";
@@ -131,8 +131,10 @@ export const GIZMO_REACH_PX = SCALE_AT + SCALE_BOX;
  *  separately and a ring behind an arrow can never steal the arrow's press. */
 type Grab = { kind: "axis" | "ring" | "origin" | "size" | "plane"; index: number } | null;
 
-const IDLE_PROMPT =
-  "Drag an arrow to slide, a square to slide in a plane, a ring to turn, a cube to resize, the centre to move what those act about · Enter · Esc";
+function idlePrompt(canResize: boolean): string {
+  const resize = canResize ? " a cube to resize," : "";
+  return `Drag an arrow to slide, a square to slide in a plane, a ring to turn,${resize} the centre to move what those act about · Enter · Esc`;
+}
 
 /** The two world axes a plane spans, given the axis its normal is. */
 function planeAxes(normal: number): [number, number] {
@@ -141,13 +143,15 @@ function planeAxes(normal: number): [number, number] {
 
 export class MoveTool {
   active = false;
-  private bodies: string[] = [];
+  private target: MoveTarget | null = null;
+  private frame: Frame = WORLD_FRAME;
+  private copy = false;
+  private suspendedBefore = false;
   /** the gizmo's origin: what the arrows start from and what the rings turn
    *  about. The selection centroid, and fixed for the session. */
   private anchor = new THREE.Vector3();
   private t = new THREE.Vector3(); // current translation
   private rot = new THREE.Quaternion(); // current rotation, about `anchor`
-  private previewId = "";
 
   private gizmo: THREE.Group | null = null;
   private arrows: { group: THREE.Group; mat: THREE.MeshBasicMaterial; axis: number }[] = [];
@@ -161,7 +165,6 @@ export class MoveTool {
   /** per-axis resize about `anchor`, 1 meaning untouched */
   private scl = new THREE.Vector3(1, 1, 1);
   private grabScale = 1;
-  private scaleId = "";
   private origin: { mesh: THREE.Mesh; mat: THREE.MeshBasicMaterial } | null = null;
   /** the origin is sitting on real model geometry, not on empty space */
   private pivotSnapped = false;
@@ -205,20 +208,29 @@ export class MoveTool {
   }
 
   start(bodies: string[], onDone: (id: string | null) => void) {
+    this.startTarget(bodyMoveTarget(this.viewport, this.store, bodies), onDone);
+  }
+
+  startTarget(target: MoveTarget, onDone: (id: string | null) => void) {
+    this.copy = false;
+    this.open(target, onDone);
+  }
+
+  private open(target: MoveTarget, onDone: (id: string | null) => void) {
     if (this.active) return;
     this.active = true;
-    this.bodies = bodies;
+    this.target = target;
+    this.frame = target.frame;
     this.onDone = onDone;
     this.t.set(0, 0, 0);
     this.rot.identity();
     this.ringDeg = 0;
     this.last = null;
-    this.previewId = this.store.nextId();
-    this.scaleId = "";
     this.scl.set(1, 1, 1);
-    this.anchor.copy(this.viewport.bodiesCentroid(bodies));
-    this.box = this.viewport.bodiesBox(bodies);
-    this.viewport.beginBodyMoveGhost(bodies); // live transform during drag (no rebuild)
+    this.anchor.copy(target.centroid());
+    this.box = target.box();
+    target.begin();
+    this.suspendedBefore = this.viewport.suspendPicking;
     this.viewport.suspendPicking = true;
     this.gesture.attach();
 
@@ -227,15 +239,26 @@ export class MoveTool {
       [
         { name: "move", label: "Move", kind: "length" },
         { name: "turn", label: "Angle", kind: "angle" },
-        { name: "size", label: "Scale", kind: "count" },
+        ...(target.handles.cubes.length ? [{ name: "size", label: "Scale", kind: "count" as const }] : []),
       ],
       () => this.commit(),
       () => this.cancel(),
+      target.canCopy
+        ? {
+            label: "Copy",
+            title: "Leave the original where it is and move a copy",
+            initial: this.copy,
+            onChange: (on) => {
+              this.copy = on;
+              this.refreshPreview();
+            },
+          }
+        : undefined,
     );
     const s = this.viewport.projectToScreen(this.anchor);
     this.dim.position(s.x + FIELDS_OFFSET_PX, s.y);
     this.dim.updateFromCursor({ move: 0, turn: 0, size: 1 });
-    setPrompt(IDLE_PROMPT);
+    setPrompt(idlePrompt(target.handles.cubes.length > 0));
     this.stepLabel = "";
     this.gesture.frame();
   }
@@ -269,10 +292,10 @@ export class MoveTool {
   }
 
   private comp(i: number): number {
-    return this.t.getComponent(i);
+    return this.t.dot(this.frame[i]!);
   }
   private setComp(i: number, v: number) {
-    this.t.setComponent(i, v);
+    this.t.addScaledVector(this.frame[i]!, v - this.comp(i));
   }
 
   // --- rotation ------------------------------------------------------------
@@ -285,9 +308,8 @@ export class MoveTool {
    *  the ring is a line on screen there, and refusing is better than spinning
    *  the part (see transformGizmo.ringDragDegenerate). */
   private ringAngle(axis: number, clientX: number, clientY: number): number | null {
-    const ax = AXES[axis];
-    if (!ax) return null;
-    const dir = ax.dir;
+    const dir = this.frame[axis];
+    if (!dir) return null;
     const view = this.viewport.camera.getWorldDirection(new THREE.Vector3());
     if (ringDragDegenerate(view.dot(dir))) return null;
     const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(dir, this.anchor);
@@ -301,10 +323,10 @@ export class MoveTool {
    *  an incremental one accumulates the snap's rounding error every frame, and
    *  after a full turn the part is degrees out from what the field says. */
   private applyRing(axis: number, deg: number) {
-    const ax = AXES[axis];
-    if (!ax) return;
+    const dir = this.frame[axis];
+    if (!dir) return;
     this.ringDeg = deg;
-    const step = new THREE.Quaternion().setFromAxisAngle(ax.dir, (deg * Math.PI) / 180);
+    const step = new THREE.Quaternion().setFromAxisAngle(dir, (deg * Math.PI) / 180);
     this.rot.copy(step).multiply(this.grabRot);
     this.dim.updateFromCursor({ turn: deg });
     this.refreshPreview();
@@ -335,9 +357,9 @@ export class MoveTool {
   private onMove(e: PointerEvent) {
     const g = this.grab;
     if (g?.kind === "axis") {
-      const ax = AXES[g.index];
-      if (!ax) return;
-      const proj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.anchor, ax.dir);
+      const dir = this.frame[g.index];
+      if (!dir) return;
+      const proj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.anchor, dir);
       const raw = this.grabVal + (proj - this.grabProj);
       const step = this.moveStep(e.shiftKey);
       this.showStep(fmtLength(step));
@@ -357,14 +379,13 @@ export class MoveTool {
       const [u, v] = planeAxes(g.index);
       let changed = false;
       for (const j of [u, v]) {
-        const aj = AXES[j];
-        if (!aj) continue;
-        const stepped = snap(this.grabT.getComponent(j) + delta.dot(aj.dir), step);
+        const dj = this.frame[j]!;
+        const stepped = snap(this.grabT.dot(dj) + delta.dot(dj), step);
         if (stepped !== this.comp(j)) { this.setComp(j, stepped); changed = true; }
       }
       if (!changed) return;
-      const du = this.comp(u) - this.grabT.getComponent(u);
-      const dv = this.comp(v) - this.grabT.getComponent(v);
+      const du = this.comp(u) - this.grabT.dot(this.frame[u]!);
+      const dv = this.comp(v) - this.grabT.dot(this.frame[v]!);
       this.dim.updateFromCursor({ move: Math.hypot(du, dv) }); // in-plane distance, as feedback
       this.refreshPreview();
       return;
@@ -381,9 +402,9 @@ export class MoveTool {
       return;
     }
     if (g?.kind === "size") {
-      const ax = AXES[g.index];
-      if (!ax) return;
-      const proj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.anchor, ax.dir);
+      const dir = this.frame[g.index];
+      if (!dir) return;
+      const proj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.anchor, dir);
       // Ratio, not difference: the handle sits a fixed number of PIXELS out
       // from the origin, so how far it started from the pivot in millimetres
       // depends on the zoom. A difference would resize by an amount that
@@ -391,7 +412,8 @@ export class MoveTool {
       if (Math.abs(this.grabProj) < 1e-9) return;
       const step = this.moveStep(e.shiftKey);
       this.showStep(fmtLength(step));
-      const extent = this.box ? this.box.max.getComponent(g.index) - this.box.min.getComponent(g.index) : 0;
+      const size = this.box?.getSize(new THREE.Vector3());
+      const extent = size ? Math.abs(size.x * dir.x) + Math.abs(size.y * dir.y) + Math.abs(size.z * dir.z) : 0;
       this.applySize(g.index, snapScaleFactor(this.grabScale * (proj / this.grabProj), extent, step));
       return;
     }
@@ -418,10 +440,10 @@ export class MoveTool {
     if (hit.kind === "origin") {
       // nothing to seed: the origin follows the cursor from the first move
     } else if (hit.kind === "size") {
-      const ax = AXES[hit.index];
-      if (!ax) return;
+      const dir = this.frame[hit.index];
+      if (!dir) return;
       this.grabScale = this.scl.getComponent(hit.index);
-      this.grabProj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.anchor, ax.dir);
+      this.grabProj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.anchor, dir);
       this.dim.updateFromCursor({ size: this.grabScale });
     } else if (hit.kind === "ring") {
       const start = this.ringAngle(hit.index, e.clientX, e.clientY);
@@ -437,10 +459,10 @@ export class MoveTool {
       this.grabT.copy(this.t);
       this.dim.updateFromCursor({ move: 0 });
     } else {
-      const ax = AXES[hit.index];
-      if (!ax) return;
+      const dir = this.frame[hit.index];
+      if (!dir) return;
       this.grabVal = this.comp(hit.index);
-      this.grabProj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.anchor, ax.dir);
+      this.grabProj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.anchor, dir);
     }
     e.preventDefault();
     e.stopImmediatePropagation();
@@ -454,7 +476,7 @@ export class MoveTool {
     if (this.grab) {
       this.grab = null;
       this.stepLabel = "";
-      setPrompt(IDLE_PROMPT);
+      setPrompt(idlePrompt(this.cubes.length > 0));
       this.viewport.domElement.style.cursor = this.hover ? "grab" : "default";
       // Each drag is its own row in the timeline. Writing it here rather than
       // at the end of the session is what makes an undo undo the LAST nudge
@@ -485,20 +507,20 @@ export class MoveTool {
    *  one. Re-opening against that would put the gizmo back where the body used
    *  to be and the next drag would double the move. */
   private settleDrag() {
-    const ids = this.bodies.slice();
+    const target = this.target;
     const done = this.onDone;
     const through = this.onClickThrough;
-    const before = this.store.document.features.length;
-    this.commit();
-    if (!ids.length) return;
+    const res = this.commit();
+    const next = target?.reopen();
+    if (!next) return;
     const reopen = () => {
       if (this.active) return; // something else claimed the tool meanwhile
-      this.start(ids, done ?? (() => {}));
+      this.open(next, done ?? (() => {}));
       this.onClickThrough = through;
     };
     // A drag that ended back where it started writes nothing (commit() falls
     // through to cancel()), so there is no rebuild to wait for.
-    if (this.store.document.features.length === before) return reopen();
+    if (!res?.rebuild) return reopen();
     // Wait for the FALLING edge, not merely for `building === false`: onBuild
     // replays the current state to a new subscriber, and at this instant the
     // round-trip may not have been announced yet. Re-opening on that replay
@@ -520,14 +542,14 @@ export class MoveTool {
    *  Read live rather than frozen at grab time, which is safe: a planar drag only
    *  moves the gizmo WITHIN this plane, so the plane it defines never changes. */
   private planeDragPoint(axis: number, clientX: number, clientY: number): THREE.Vector3 | null {
-    const ax = AXES[axis];
-    if (!ax) return null;
+    const dir = this.frame[axis];
+    if (!dir) return null;
     // Bail if the axis (the plane's normal) is nearly across the screen, the same
     // degeneracy ringDragDegenerate guards for a ring viewed edge-on.
     const view = this.viewport.camera.getWorldDirection(new THREE.Vector3());
-    if (Math.abs(view.dot(ax.dir)) < 0.12) return null;
+    if (Math.abs(view.dot(dir)) < 0.12) return null;
     const at = this.anchor.clone().applyMatrix4(this.transform());
-    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(ax.dir, at);
+    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(dir, at);
     return this.viewport.screenToPlane(clientX, clientY, plane);
   }
 
@@ -541,7 +563,9 @@ export class MoveTool {
   }
 
   private onKey(e: KeyboardEvent) {
-    if (e.key === "Escape") this.cancel();
+    if (e.key !== "Escape") return;
+    if (this.target?.ownsEscape) e.stopImmediatePropagation();
+    this.cancel();
   }
 
   private tick() {
@@ -639,127 +663,103 @@ export class MoveTool {
   private applySize(axis: number, f: number) {
     const v = Math.max(MIN_SCALE, f);
     if (Math.abs(this.scl.getComponent(axis) - v) < 1e-9) return;
-    this.scl.setComponent(axis, v);
+    if (this.target?.uniformScale) this.scl.setScalar(v);
+    else this.scl.setComponent(axis, v);
     this.dim.updateFromCursor({ size: v });
     this.refreshPreview();
   }
 
-  /** Instant ghost: transform the moved bodies' mesh + edges in place (no
-   *  sidecar round-trip, so the drag is snappy). The real `move` is committed
-   *  on release. */
+  /** Instant ghost, no sidecar round-trip; the real write happens on release. */
   private refreshPreview() {
-    this.viewport.setBodyMoveTransform(this.transform());
-  }
-
-  private buildFeature(): Feature {
-    const r = (n: number) => Math.round(n * 1000) / 1000;
-    const v = this.values();
-    return {
-      id: this.previewId,
-      type: "move",
-      dx: r(v.dx),
-      dy: r(v.dy),
-      dz: r(v.dz),
-      rx: r(v.rx),
-      ry: r(v.ry),
-      rz: r(v.rz),
-      ...(this.bodies.length ? { bodies: this.bodies } : {}),
-    };
-  }
-
-  private buildScale(): Feature {
-    const r = (n: number) => Math.round(n * 1e6) / 1e6;
-    if (!this.scaleId) this.scaleId = this.store.nextId();
-    return {
-      id: this.scaleId,
-      type: "scale",
-      factor: 1,
-      sx: r(this.scl.x),
-      sy: r(this.scl.y),
-      sz: r(this.scl.z),
-      // The point the gizmo was sitting on, not the body's own location: a
-      // resize has to hold still the thing the user aimed at.
-      about: [r(this.anchor.x), r(this.anchor.y), r(this.anchor.z)],
-      ...(this.bodies.length ? { bodies: this.bodies } : {}),
-    };
+    this.target?.preview(this.transform(), this.copy);
   }
 
   private buildGizmo() {
     const g = new THREE.Group();
+    const hs = this.target?.handles;
     for (let i = 0; i < AXES.length; i++) {
       const a = AXES[i];
-      if (!a) continue;
-      const mat = new THREE.MeshBasicMaterial({ color: a.color, depthTest: false, depthWrite: false });
-      const shaft = new THREE.Mesh(
-        new THREE.CylinderGeometry(ARROW_SHAFT_R, ARROW_SHAFT_R, ARROW_SHAFT, 12), mat);
-      shaft.position.y = ARROW_SHAFT / 2;
-      const head = new THREE.Mesh(new THREE.ConeGeometry(ARROW_HEAD_R, ARROW_HEAD, 18), mat);
-      head.position.y = ARROW_SHAFT + ARROW_HEAD / 2;
-      // Never drawn, always hit: `material.visible` keeps it out of the render
-      // list while leaving it in the raycast, which `object.visible` would not.
-      const sleeve = new THREE.Mesh(
-        new THREE.CylinderGeometry(ARROW_GRAB_R, ARROW_GRAB_R, ARROW_LENGTH, 8),
-        new THREE.MeshBasicMaterial({ visible: false }),
-      );
-      sleeve.position.y = ARROW_LENGTH / 2;
-      const arrow = new THREE.Group();
-      arrow.add(shaft, head, sleeve);
-      arrow.quaternion.setFromUnitVectors(Y_AXIS, a.dir);
-      arrow.renderOrder = 999;
-      shaft.renderOrder = 999;
-      head.renderOrder = 999;
-      arrow.userData.axis = i;
-      g.add(arrow);
-      this.arrows.push({ group: arrow, mat, axis: i });
+      const dir = this.frame[i];
+      if (!a || !dir || !hs) continue;
+      if (hs.axes.includes(i)) {
+        const mat = new THREE.MeshBasicMaterial({ color: a.color, depthTest: false, depthWrite: false });
+        const shaft = new THREE.Mesh(
+          new THREE.CylinderGeometry(ARROW_SHAFT_R, ARROW_SHAFT_R, ARROW_SHAFT, 12), mat);
+        shaft.position.y = ARROW_SHAFT / 2;
+        const head = new THREE.Mesh(new THREE.ConeGeometry(ARROW_HEAD_R, ARROW_HEAD, 18), mat);
+        head.position.y = ARROW_SHAFT + ARROW_HEAD / 2;
+        // Never drawn, always hit: `material.visible` keeps it out of the render
+        // list while leaving it in the raycast, which `object.visible` would not.
+        const sleeve = new THREE.Mesh(
+          new THREE.CylinderGeometry(ARROW_GRAB_R, ARROW_GRAB_R, ARROW_LENGTH, 8),
+          new THREE.MeshBasicMaterial({ visible: false }),
+        );
+        sleeve.position.y = ARROW_LENGTH / 2;
+        const arrow = new THREE.Group();
+        arrow.add(shaft, head, sleeve);
+        arrow.quaternion.setFromUnitVectors(Y_AXIS, dir);
+        arrow.renderOrder = 999;
+        shaft.renderOrder = 999;
+        head.renderOrder = 999;
+        arrow.userData.axis = i;
+        g.add(arrow);
+        this.arrows.push({ group: arrow, mat, axis: i });
+      }
 
       // One ring per axis, in that axis's own colour: the ring you turn about X
       // is red, like the arrow you slide along X, so the two families read as
       // one gizmo rather than as two stacked ones.
-      const rmat = new THREE.MeshBasicMaterial({
-        color: a.color, depthTest: false, depthWrite: false, side: THREE.DoubleSide,
-      });
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(RING_RADIUS, RING_TUBE, 8, 96), rmat);
-      // A torus is built in the XY plane, so its own axis is +Z.
-      ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), a.dir);
-      ring.renderOrder = 999;
-      // The grab band is invisible and fat. Hit-testing the drawn 2px tube
-      // means aiming at a two-pixel line in perspective, which is not a target.
-      const grab = new THREE.Mesh(
-        new THREE.TorusGeometry(RING_RADIUS, RING_GRAB, 6, 48),
-        new THREE.MeshBasicMaterial({ visible: false }),
-      );
-      grab.quaternion.copy(ring.quaternion);
-      grab.userData.ring = i;
-      g.add(ring, grab);
-      this.rings.push({ mesh: ring, grab, mat: rmat, axis: i });
+      if (hs.rings.includes(i)) {
+        const rmat = new THREE.MeshBasicMaterial({
+          color: a.color, depthTest: false, depthWrite: false, side: THREE.DoubleSide,
+        });
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(RING_RADIUS, RING_TUBE, 8, 96), rmat);
+        // A torus is built in the XY plane, so its own axis is +Z.
+        ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
+        ring.renderOrder = 999;
+        // The grab band is invisible and fat. Hit-testing the drawn 2px tube
+        // means aiming at a two-pixel line in perspective, which is not a target.
+        const grab = new THREE.Mesh(
+          new THREE.TorusGeometry(RING_RADIUS, RING_GRAB, 6, 48),
+          new THREE.MeshBasicMaterial({ visible: false }),
+        );
+        grab.quaternion.copy(ring.quaternion);
+        grab.userData.ring = i;
+        g.add(ring, grab);
+        this.rings.push({ mesh: ring, grab, mat: rmat, axis: i });
+      }
 
-      const cmat = new THREE.MeshBasicMaterial({
-        color: a.color, depthTest: false, depthWrite: false,
-      });
-      const cube = new THREE.Mesh(
-        new THREE.BoxGeometry(SCALE_BOX, SCALE_BOX, SCALE_BOX), cmat,
-      );
-      cube.position.copy(a.dir).multiplyScalar(SCALE_AT);
-      cube.renderOrder = 999;
-      cube.userData.size = i;
-      g.add(cube);
-      this.cubes.push({ mesh: cube, mat: cmat, axis: i });
+      if (hs.cubes.includes(i)) {
+        const cmat = new THREE.MeshBasicMaterial({
+          color: a.color, depthTest: false, depthWrite: false,
+        });
+        const cube = new THREE.Mesh(
+          new THREE.BoxGeometry(SCALE_BOX, SCALE_BOX, SCALE_BOX), cmat,
+        );
+        cube.quaternion.setFromUnitVectors(Y_AXIS, dir);
+        cube.position.copy(dir).multiplyScalar(SCALE_AT);
+        cube.renderOrder = 999;
+        cube.userData.size = i;
+        g.add(cube);
+        this.cubes.push({ mesh: cube, mat: cmat, axis: i });
+      }
 
       // One planar handle per axis, coloured by that axis and lying in the plane
       // it is normal to: a translucent square in the quadrant between the OTHER
       // two arrows, dragged to slide the selection across their plane. Faint so
       // it never hides a ring behind it, DoubleSide so it reads from either face.
+      if (!hs.planes.includes(i)) continue;
       const [u, v] = planeAxes(i);
-      const au = AXES[u], av = AXES[v];
-      if (!au || !av) continue;
-      const centre = au.dir.clone().multiplyScalar(PLANE_AT)
-        .add(av.dir.clone().multiplyScalar(PLANE_AT));
+      const du = this.frame[u], dv = this.frame[v];
+      if (!du || !dv) continue;
+      const centre = du.clone().multiplyScalar(PLANE_AT)
+        .add(dv.clone().multiplyScalar(PLANE_AT));
       const pmat = new THREE.MeshBasicMaterial({
         color: a.color, depthTest: false, depthWrite: false,
         side: THREE.DoubleSide, transparent: true, opacity: 0.5,
       });
       const quad = new THREE.Mesh(new THREE.PlaneGeometry(PLANE_SIZE, PLANE_SIZE), pmat);
-      quad.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), a.dir);
+      quad.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
       quad.position.copy(centre);
       // Over the rings and arrows it sits among (all depthTest:false), so the
       // square always reads as a foreground handle rather than half-behind a ring.
@@ -824,8 +824,8 @@ export class MoveTool {
     return null;
   }
 
-  private commit() {
-    if (!this.active) return;
+  private commit(): MoveCommit | null {
+    if (!this.active || !this.target) return null;
     this.applyTyped();
     const v = this.values();
     // Measured on the composed transform, not on `t`: moving the pivot rewrites
@@ -834,23 +834,29 @@ export class MoveTool {
     const moved = Math.hypot(v.dx, v.dy, v.dz) > 1e-9;
     const turned = Math.abs(v.rx) + Math.abs(v.ry) + Math.abs(v.rz) > 1e-9;
     const sized = this.resized();
-    if (!moved && !turned && !sized) return this.cancel(); // nothing happened
-    const scaleFeature = sized ? this.buildScale() : null;
-    const feature = moved || turned ? this.buildFeature() : null;
-    this.viewport.endBodyMoveGhost(false); // keep the ghost pose; the rebuild replaces it
-    // The resize goes in FIRST, which is the order the preview composed them
-    // in: it holds the origin still, so the move that follows still turns about
-    // the same point.
-    if (scaleFeature) this.store.addFeature(scaleFeature);
-    if (feature) this.store.addFeature(feature);
+    if (!moved && !turned && !sized) {
+      this.cancel(); // nothing happened
+      return null;
+    }
+    const res = this.target.commit({
+      values: v,
+      scale: this.scl.clone(),
+      pivot: this.anchor.clone(),
+      matrix: this.transform(),
+      moved,
+      turned,
+      sized,
+      copy: this.copy,
+    });
+    this.copy = false; // one copy per drag, the next drag moves again
     const done = this.onDone;
-    const id = feature?.id ?? scaleFeature?.id ?? null;
     this.cleanup();
-    done?.(id);
+    done?.(res.id);
+    return res;
   }
 
   cancel() {
-    this.viewport.endBodyMoveGhost(true); // restore the mesh to its un-moved pose
+    this.target?.end(true);
     const done = this.onDone;
     this.cleanup();
     done?.(null);
@@ -858,7 +864,8 @@ export class MoveTool {
 
   private cleanup() {
     const el = this.viewport.domElement;
-    this.viewport.endBodyMoveGhost(false); // no-op if commit/cancel already ended it
+    this.target?.end(false); // no-op if commit/cancel already ended it
+    this.target = null;
     this.gesture.detach();
     el.style.cursor = "default";
     this.dim.hide();
@@ -895,7 +902,7 @@ export class MoveTool {
       this.cubes = [];
       this.planes = [];
     }
-    this.viewport.suspendPicking = false;
+    this.viewport.suspendPicking = this.suspendedBefore;
     this.active = false;
     this.grab = null;
     this.hover = null;

@@ -235,6 +235,25 @@ export class ModifyFlow {
     this.host.afterModify();
   }
 
+  /** The gizmo's commit: each selected entity through `map`, in place or, with
+   *  `copy`, as new entities beside the originals, which end up selected. */
+  applyTransform(map: (e: ResolvedEntity, id: string) => ResolvedEntity[], copy: boolean) {
+    if (!copy) {
+      this.transformSelection((e) => this.reid(map(e, e.id)));
+      return;
+    }
+    const projected = this.warnSelectedProjected();
+    const copies: ResolvedEntity[] = [];
+    for (const e of this.host.entities()) {
+      if (!this.host.selected().has(e.id) || projected.has(e.id)) continue;
+      const out = map(e, newEntityId());
+      copies.push(...(out.length === 1 ? out : out.map((x) => ({ ...x, id: newEntityId() }))));
+    }
+    this.host.setEntities([...this.host.entities(), ...copies]);
+    this.host.setSelected(new Set(copies.map((c) => c.id)));
+    this.host.afterModify();
+  }
+
   /** keep the id for a single-entity result; give an exploded result (a rotated
    *  rectangle → 4 lines) fresh ids so nothing collides. */
   private reid(rot: ResolvedEntity[]): ResolvedEntity[] {

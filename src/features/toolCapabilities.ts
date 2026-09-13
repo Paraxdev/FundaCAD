@@ -128,7 +128,7 @@ export const TOOL_CAPABILITIES: Record<ToolId, ToolCapability> = {
   // its row anyway, leaving it out would make "what applies to this face"
   // wrong, which is the only question this table exists to answer.
   "delete-face": { label: "Delete Face", consumes: ["face"], source: "selection" },
-  move: { label: "Move", consumes: ["body"], source: "selection" },
+  move: { label: "Move", consumes: ["body", "sketch-region"], source: "selection" },
   // The two patterns, on the same rule as Move: they repeat the SELECTED
   // bodies, falling back to the active one when nothing is picked (see
   // featureStarters.startPattern). They were reachable only from the ribbon

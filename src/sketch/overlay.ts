@@ -531,6 +531,21 @@ export class SketchOverlay {
     this.fills.visible = on;
   }
 
+  /** Draw one committed sketch under a transform, for a live move preview. Null
+   *  puts it back. The next update() rebuilds these objects anyway. */
+  setSketchTransform(sketchId: string, m: THREE.Matrix4 | null) {
+    const objs = [
+      ...this.committed.children.filter((o) => o.userData.sketchId === sketchId),
+      ...this.regions.filter((r) => r.sketchId === sketchId && r.fill).map((r) => r.fill!),
+    ];
+    for (const o of objs) {
+      o.matrixAutoUpdate = !m;
+      if (m) o.matrix.copy(m);
+      else o.matrix.identity();
+      o.matrixWorldNeedsUpdate = true;
+    }
+  }
+
   /** geometry is per-object (dispose); materials are module-shared (keep). */
   private clearGroup(g: THREE.Group) {
     for (const c of [...g.children]) {

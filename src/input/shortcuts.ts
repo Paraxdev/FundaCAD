@@ -53,6 +53,7 @@ export const SHORTCUTS: Shortcut[] = [
   { key: "o", action: "offset", context: "sketch", label: "Offset" },
   { key: "f", action: "fillet-sketch", context: "sketch", label: "Sketch Fillet" },
   { key: "p", action: "project", context: "sketch", label: "Project" },
+  { key: "m", action: "move-sketch", context: "sketch", label: "Move/Rotate" },
   // finish-and-go: E/Q inside a sketch commit it and start the 3D tool
   // (handleAction already finishes an active sketch before any 3D command)
   { key: "e", action: "extrude", context: "sketch", label: "Finish & Extrude" },

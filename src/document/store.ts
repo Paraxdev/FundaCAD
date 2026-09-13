@@ -841,6 +841,16 @@ export class DocumentStore {
    *  a profile sketch plus the climbing revolve that sweeps it, and two
    *  addFeature calls would leave Ctrl+Z removing the revolve and stranding a
    *  sketch nobody drew. */
+  /** An edit to existing features plus any new ones, as ONE undo step. */
+  editAndAdd(edit: (doc: CadDocument) => void, features: Feature[] = []) {
+    const at = this.rollbackIndex;
+    if (features.length && this.rollback !== null && at <= this.rollback) this.rollback += features.length;
+    this.mutate((d) => {
+      edit(d);
+      if (features.length) d.features.splice(at, 0, ...features);
+    }, true);
+  }
+
   addFeatures(features: Feature[], bindings?: SketchBinding[]) {
     if (!features.length) return;
     const at = this.rollbackIndex;
