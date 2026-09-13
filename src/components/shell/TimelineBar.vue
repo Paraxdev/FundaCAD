@@ -16,6 +16,7 @@ import { contextMenu } from "../../ui/menu";
 import { buildProgress, CANCEL_DELAY_MS } from "../../ui/buildProgress";
 import { featureNotes } from "../../ui/featureNotes";
 import { gapIndexIn } from "../../ui/trackGaps";
+import { ClickOrDouble, HistoryPeek } from "../../ui/historyPeek";
 import { anchorPanel } from "../../ui/propsAnchor";
 import { layoutPrefs, onLayoutPrefsChange } from "../../ui/layoutPrefs";
 import { getUnit, onUnitChange } from "../../ui/units";
@@ -222,20 +223,51 @@ function chipTitle(f: { id: string; type: string }, i: number) {
     // that failed), so this reads as one line either way rather than as a
     // feature accused of two different things.
     (err ? `\nFailed: ${err}` : note ? `\nNote: ${note}` : "") +
-    "\ndouble-click to roll here · right-click to edit"
+    "\nclick to edit · double-click to see the model as of here, Esc to go back · right-click for more"
   );
 }
 
-// Double-click a chip to ROLL the model to just after that feature, so you see
-// the part exactly as it stood then with every later step dimmed. Double-click
-// the same step again to release back to the tip, so it reads as a quick peek in
-// time, not a mode to escape from. Editing moved to the right-click menu (and
-// the values panel under a selected chip): scrubbing the history is what the
-// double-click is reached for far more often than reopening a feature's form.
-function rollToInspect(i: number) {
-  const here = i + 1; // build features[0..i] INCLUSIVE: the state as of this one
-  store.setRollback(rollback.value === here ? features.value.length : here);
+// One click EDITS a step. A double-click PEEKS: the model rolls to just after
+// that feature, every later step dimmed, and Escape (or the same double-click
+// again) puts it back exactly as it was before the peek, the tip or wherever
+// the marker stood. A peek is a look, not a move, which is why it remembers
+// where it came from; moving the marker any other way ends it (ui/historyPeek.ts).
+//
+// The chip is selected at once on either, so the values panel answers the click
+// immediately; only the editor waits out the double-click window, or the first
+// click of every peek would open a form.
+const peek = new HistoryPeek({
+  get: () => store.rollbackIndex,
+  set: (i) => store.setRollback(i),
+  length: () => store.document.features.length,
+});
+watch(rollback, (i) => peek.observe(i));
+const clicks = new ClickOrDouble<string>(
+  (id) => timeline.edit(id),
+  (id) => {
+    const i = features.value.findIndex((f) => f.id === id);
+    if (i >= 0) peek.peek(i);
+  },
+);
+function onChipClick(id: string, e: MouseEvent) {
+  timeline.select(id);
+  clicks.click(id, e.detail);
 }
+
+/** Escape releases a peek, unless something with a better claim to the key is
+ *  up: a tool mid-gesture, a sketch, or a field being typed in. */
+function onPeekKey(e: KeyboardEvent) {
+  if (e.key !== "Escape" || e.defaultPrevented || !peek.active) return;
+  if (engine.toolBusy() || engine.sketch.active) return;
+  const t = e.target as HTMLElement | null;
+  if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+  if (peek.release()) e.preventDefault();
+}
+onMounted(() => window.addEventListener("keydown", onPeekKey));
+onUnmounted(() => {
+  window.removeEventListener("keydown", onPeekKey);
+  clicks.cancel();
+});
 
 // --- scrolling -----------------------------------------------------------
 // The scroller is a persistent element and Vue patches the chips in place, so
@@ -403,8 +435,8 @@ function openMenu(e: MouseEvent, id: string, i: number) {
                 }"
                 :title="chipTitle(f, i)"
                 draggable="true"
-                @click="timeline.select(f.id)"
-                @dblclick="rollToInspect(i)"
+                @click="onChipClick(f.id, $event)"
+                @dblclick="clicks.dblclick(f.id)"
                 @contextmenu="openMenu($event, f.id, i)"
                 @dragstart="onDragStart(f.id, $event)"
                 @dragover="onDragOver(f.id, $event)"
