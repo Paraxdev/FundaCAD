@@ -1036,7 +1036,7 @@ def test_intact_survives_a_disk_checkpoint_resume():
         store = geomstore.Store(root)
         key = "chain-intact-0"
         persist = {"store": store, "keys": [key], "mod": {}, "acc_ms": 0.0}
-        _save_checkpoint(persist, 0, bodies, [], [], 0)
+        _save_checkpoint(persist, 0, bodies, [], [], [])
 
         got = _restore_from_disk(store, [key])
         assert got is not None, "checkpoint did not land, nothing to prove"

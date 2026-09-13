@@ -545,7 +545,7 @@ export async function importPath(store: DocumentStore, geometry: GeometryBackend
  *  The IO half of document/materials.ts's `materialsForColors`, which is where
  *  the decision (match an existing material, or mint one, and what to call it)
  *  actually lives. What is here is the part that cannot be pure: the bodies do
- *  not exist until the rebuild runs, and their ids are positional, so the import
+ *  not exist until the rebuild runs and hands out their ids, so the import
  *  has to wait for the build and then find its own bodies in the result.
  *
  *  TWO WAYS A BODY IS FOUND, because there are two kinds of import. An assembly

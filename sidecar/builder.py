@@ -42,6 +42,7 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 
 import appenv
+import body_ids
 import font_guard  # noqa: F401  MUST precede build123d, see font_guard.py
 
 from build123d import (
@@ -265,7 +266,7 @@ class _RebuildCtx:
     """Bundle of the per-rebuild closures/containers a feature handler needs.
     Built ONCE per rebuild() call from the exact same locals the old inline
     if/elif chain closed over (new_body/active/require_active/find_body still
-    close over `bodies` and the id `counter`, bundling them here is just a
+    close over `bodies` and the body ids, bundling them here is just a
     named handle onto that existing state, not new state)."""
 
     val: object            # resolve a parameter name to its value (or pass a literal through)
@@ -342,8 +343,8 @@ def _face_anchor_plane(f, ctx, label):
     resolution falls back to. Once `face` is present it is this that decides.
 
     Resolution is GLOBAL across bodies, for the reason recorded on
-    _handle_delete_face: body ids are positional, so an upstream split or boolean
-    renumbers them and a body-scoped match would silently re-aim the anchor at
+    _handle_delete_face: a body id can come to name a different piece (a split's
+    pieces, an older file numbered by position), and a body-scoped match would silently re-aim the anchor at
     some distant face on the wrong piece.
 
     A face that stops resolving is NOT an error. A sketch is a root: raise here
@@ -469,8 +470,8 @@ def _edge_line(sel, ctx, fid=None):
     """The (origin, dir) tuples of the STRAIGHT model edge a datum or revolve is
     aimed at, re-resolved against the bodies as they stand now, or None when it
     resolves to nothing or to a curve. Resolution is GLOBAL across bodies for the
-    reason recorded on _revolve_axis: body ids are positional, so an upstream
-    split or boolean renumbers them and a body-scoped match would silently re-aim
+    reason recorded on _revolve_axis: a body id can come to name a different
+    piece, and a body-scoped match would silently re-aim
     at some distant edge on the wrong piece."""
     for b in getattr(ctx, "bodies", None) or []:
         shape = b.get("shape")
@@ -697,8 +698,8 @@ def _handle_delete_face(f, ctx):
     # Remove the picked face(s) and heal the solid (defeaturing), deletes
     # an imported chamfer/fillet or a protrusion, where there's no feature
     # to remove. Parametric: the face selector re-resolves each rebuild.
-    # Body ids are POSITIONAL, an upstream split/boolean renumbers them,
-    # silently re-aiming a saved deleteFace at the wrong piece (its nearest
+    # A body id can come to name a different piece (a split's pieces, an
+    # older file numbered by position), silently re-aiming a saved deleteFace at the wrong piece (its nearest
     # match is then some distant face; the delete fails or worse). So
     # nearest-point picks resolve GLOBALLY: the face nearest the recorded
     # point wins across ALL bodies, and a win on a different body than the
@@ -962,8 +963,8 @@ def _revolve_axis(f, ctx):
 
     Re-resolving is what makes a picked edge a reference rather than a note about
     where an edge used to be. Resolution is GLOBAL across bodies for the reason
-    recorded on _face_anchor_plane: body ids are positional, so an upstream split
-    or boolean renumbers them and a body-scoped match would silently re-aim the
+    recorded on _face_anchor_plane: a body id can come to name a different piece,
+    and a body-scoped match would silently re-aim the
     revolve at some distant edge on the wrong piece.
 
     An edge that stops resolving is not an error. The axis falls back to the
@@ -1268,8 +1269,8 @@ def _combine(f, ctx, solid, hidden=None, name=None):
     body it makes; a join takes the name of the body it merges into instead,
     which is why it is passed here and not at the call.
     """
-    def new_body(shape, body_name=None):
-        return ctx.new_body(shape, body_name or name)
+    def new_body(shape, body_name=None, inherit=None):
+        return ctx.new_body(shape, body_name or name, inherit=inherit)
 
     _boolean_into_bodies(
         ctx.bodies, solid, f.get("operation", "new"), new_body,
@@ -1944,6 +1945,18 @@ def _references_any(node, ids):
     return None
 
 
+def _switched_off_owner(message, recorded, inactive):
+    """The switched off feature that made a body the message names, if any."""
+    import re
+    for bid in re.findall(r"\bbody\d+\b", message):
+        for key, got in recorded.items():
+            if got == bid:
+                fid = re.sub(r"(:\d+#?|/[^/]*)$", "", key)
+                if fid in inactive:
+                    return fid
+    return None
+
+
 def _make_val(params):
     """A value resolver over one document's parameter table: a parameter name
     resolves to its value; a numeric literal passes through.
@@ -1969,7 +1982,7 @@ def _make_val(params):
 
 def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist=None,
             projections=None, datums_out=None, sketch_planes_out=None,
-            datum_marks_out=None):
+            datum_marks_out=None, body_ids_out=None):
     """Return (part, errors, bodies).
 
     part    : the merged build123d solid/compound of all bodies, or None.
@@ -2012,16 +2025,16 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
                       successfully-built feature, so a caller can cache per-feature
                       state and resume from the longest unchanged prefix next time.
     A snapshot copies the body dicts (sharing OCCT shape refs, no geometry copy) plus
-    the sketches/datums/id-counter, and is restored by mutating those containers IN
+    the sketches/datums/body ids, and is restored by mutating those containers IN
     PLACE so the new_body/active/find_body closures stay bound to them.
     """
     params = document.get("parameters", {})
     # Bodies the user has hidden, excluded from extrude booleans (never edit a
-    # hidden body). Ids are positional (regenerated each rebuild) but deterministic,
-    # so they line up with the frontend's visibility map for this same document.
+    # hidden body). Ids are deterministic, so they line up with the frontend's visibility map for this same document.
     hidden_bodies = frozenset(
         bid for bid, vis in (document.get("bodyVisibility") or {}).items() if not vis
     )
+    ids = body_ids.BodyIds(document.get("bodyIds"))
 
     val = _make_val(params)
 
@@ -2030,14 +2043,14 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
     sketch_planes = {}  # sketch feature id -> the face-followed PlaneSpec it used
     datum_marks = {}  # datum axis/point feature id -> resolved {kind, origin, dir} (followed only)
     bodies = []  # ordered [{id, name, shape}]
-    counter = {"n": 0}
     errors = []
 
-    def new_body(shape, name=None, node_ref=None, face_colors=None, part_color=None):
-        counter["n"] += 1
+    def new_body(shape, name=None, node_ref=None, face_colors=None, part_color=None,
+                 inherit=None):
+        bid = ids.assign(ids.key(node_ref), inherit)
         entry = {
-            "id": f"body{counter['n']}",
-            "name": name or f"Body{counter['n']}",
+            "id": bid,
+            "name": name or f"Body{body_ids.number(bid)}",
             "shape": shape,
         }
         # Which assembly-tree node this body came from, as "<featureId>/<index>".
@@ -2099,7 +2112,7 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
             # otherwise drop it from the header, and the frontend would snap the
             # datum back to its stale baked cache on that rebuild.
             "datum_marks": {k: dict(v) for k, v in datum_marks.items()},
-            "n": counter["n"],
+            "ids_ref": ids.events, "n_ids": ids.mark(),
             # errors travel with the snapshot: an incremental resume PAST a failed
             # feature must still re-report its error (else the banner would clear
             # while the feature is still broken)
@@ -2135,7 +2148,6 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
         # key, and degrades to the baked fallback rather than raising.
         datum_marks.clear()
         datum_marks.update({k: dict(v) for k, v in (snap.get("datum_marks") or {}).items()})
-        counter["n"] = snap["n"]
         err_src = snap["errors_ref"]
         if err_src is not errors:
             errors[:] = [dict(e) for e in err_src[: snap["n_errors"]]]
@@ -2157,6 +2169,8 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
     if resume is not None:
         start, snap = resume
         _restore(snap)
+        if not ids.restore(snap["ids_ref"][: snap["n_ids"]]):
+            raise ValueError("resumed a cached prefix the document numbers differently")
         if snap.get("replay_sketches") and start > 0:
             # disk checkpoints persist bodies/datums/errors but NOT the sketch
             # registry (build123d rehydration is unproven; sketches are cheap:
@@ -2200,6 +2214,7 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
         # 12.7% of a cold rebuild). The merged view is a lazy ChainMap over the
         # per-body dicts; reversed so duplicate fingerprints resolve like the
         # old last-body-wins dict.update() merge.
+        ids.start_feature(f.get("id"))
         prov = (f.get("type") not in ("sketch", "datumPlane", "datumPoint", "datumAxis")
                 and f.get("id") not in inactive)
         if prov:
@@ -2282,7 +2297,7 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
             snapshots_out.append((i, _snapshot()))
         if persist is not None:
             _persist_tick(
-                persist, i, time.monotonic() - t_feat, bodies, datums, errors, counter,
+                persist, i, time.monotonic() - t_feat, bodies, datums, errors, ids.events,
                 diagnostics, sketch_planes,
             )
         progress.feature_tick(i)  # this feature is done; the watchdog may relax
@@ -2298,9 +2313,14 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
             if off:
                 e["message"] += f" ({off} is switched off by its activeWhen)"
                 continue
-            # Bodies are named by position, so a switched off feature upstream
+            # Without `bodyIds` bodies are named by position, so a switched off feature upstream
             # shifts every body id after it. The reference that broke is a body
             # id, not a feature id, and nothing else would point at the cause.
+            if ids.recorded is not None:
+                owner = _switched_off_owner(e["message"], ids.resulting_map(), inactive)
+                if owner:
+                    e["message"] += f" ({owner} is switched off by its activeWhen)"
+                continue
             upstream = [cf.get("id") for cf in features[:index_of.get(fid, 0)]
                         if cf.get("id") in inactive]
             if upstream and "body" in e["message"].lower():
@@ -2343,6 +2363,8 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
     else:
         part = Compound(shapes)
 
+    if body_ids_out is not None:
+        body_ids_out.update(ids.resulting_map())
     if datums_out is not None:
         datums_out.update(datums)
     if sketch_planes_out is not None:
@@ -2377,8 +2399,12 @@ def reset_cache():
     _CACHE = {"snaps": [], "keys": []}
 
 
+def _ids_resumable(document, snap):
+    return body_ids.BodyIds(document.get("bodyIds")).restore(snap["ids_ref"][: snap["n_ids"]])
+
+
 def rebuild_cached(document, diagnostics=None, projections=None, datums_out=None,
-                   sketch_planes_out=None, datum_marks_out=None):
+                   sketch_planes_out=None, datum_marks_out=None, body_ids_out=None):
     """Incremental rebuild: reuse cached per-feature state for the unchanged document
     PREFIX and re-run only from the first changed feature. Resume sources, deepest
     wins: (1) in-RAM per-feature snapshots from the previous build in this worker,
@@ -2465,7 +2491,8 @@ def rebuild_cached(document, diagnostics=None, projections=None, datums_out=None
             k = min(k, proj_cap)
         # snaps below the RAM retention window are None, fall through to disk
         if k > 0 and k - 1 < len(_CACHE["snaps"]) and _CACHE["snaps"][k - 1] is not None:
-            resume = (k, _CACHE["snaps"][k - 1])  # restore state after feature k-1
+            if _ids_resumable(document, _CACHE["snaps"][k - 1]):
+                resume = (k, _CACHE["snaps"][k - 1])  # restore state after feature k-1
     if resume is None and store is not None:
         # Checkpoint restore reads every prefix body from disk, on a large
         # document that is a long phase, and these two calls only bracket it.
@@ -2474,7 +2501,7 @@ def rebuild_cached(document, diagnostics=None, projections=None, datums_out=None
         progress_tick()
         hit = _restore_from_disk(store, keys if proj_cap is None else keys[:proj_cap])
         progress_tick()
-        if hit is not None:
+        if hit is not None and _ids_resumable(document, hit[1]):
             start_i, snap, disk_mod = hit
             resume = (start_i, snap)
             from_disk = True
@@ -2509,7 +2536,7 @@ def rebuild_cached(document, diagnostics=None, projections=None, datums_out=None
         document, diagnostics=diagnostics, resume=resume,
         snapshots_out=snaps_out, persist=persist, projections=projections,
         datums_out=datums_out, sketch_planes_out=sketch_planes_out,
-        datum_marks_out=datum_marks_out,
+        datum_marks_out=datum_marks_out, body_ids_out=body_ids_out,
     )
     elapsed = time.monotonic() - t_build
 
@@ -2542,7 +2569,7 @@ def rebuild_cached(document, diagnostics=None, projections=None, datums_out=None
         tip = merged[-1]
         _save_checkpoint(
             persist, len(features) - 1, tip["bodies"], tip["datums"],
-            tip["errors_ref"][: tip["n_errors"]], tip["n"],
+            tip["errors_ref"][: tip["n_errors"]], tip["ids_ref"][: tip["n_ids"]],
             (tip.get("diags_ref") or [])[: tip["n_diags"]],
             tip.get("sketch_planes") or {},
         )

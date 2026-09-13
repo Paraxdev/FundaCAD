@@ -118,7 +118,10 @@ type MetaListener = () => void;
 // forbids it), so the `"hiddenBodies" in f` gates see identical shapes.
 const clone = (d: CadDocument): CadDocument => structuredClone(d);
 
-export const EMPTY_DOCUMENT: CadDocument = { parameters: {}, features: [] };
+const isIdMap = (v: unknown): v is Record<string, string> =>
+  !!v && typeof v === "object" && !Array.isArray(v) && Object.values(v).every((x) => typeof x === "string");
+
+export const EMPTY_DOCUMENT: CadDocument = { parameters: {}, features: [], bodyIds: {} };
 
 /** The features a sketch at a given timeline position may reference: everything
  *  up to the rollback marker, minus suppressed features, and, when EDITING an
@@ -1826,6 +1829,7 @@ export class DocumentStore {
       ...(parsed.paramExtras ? { paramExtras: parsed.paramExtras } : {}),
       features: parsed.features ?? [],
       ...(parsed.viewOverrides ? { viewOverrides: parsed.viewOverrides } : {}),
+      ...(isIdMap(parsed.bodyIds) ? { bodyIds: parsed.bodyIds } : {}),
     };
     // Migrate boolean features to captured-visibility semantics: an extrude
     // without `hiddenBodies` is gated by the LIVE eye states on every rebuild
@@ -1876,7 +1880,11 @@ export class DocumentStore {
     // Body visibility travels with the rebuild so the sidecar can keep hidden
     // bodies out of extrude booleans (a hidden body is protected from edits).
     const bodyVisibility = this.bodyVis.size ? Object.fromEntries(this.bodyVis.entries()) : undefined;
-    return { parameters: this.doc.parameters, features, ...(bodyVisibility ? { bodyVisibility } : {}) };
+    return {
+      parameters: this.doc.parameters, features,
+      ...(bodyVisibility ? { bodyVisibility } : {}),
+      ...(this.doc.bodyIds ? { bodyIds: this.doc.bodyIds } : {}),
+    };
   }
 
   /** Project 3D sources onto a sketch plane against the PREFIX document for the
@@ -1888,6 +1896,7 @@ export class DocumentStore {
     const doc: CadDocument = {
       parameters: this.doc.parameters,
       features: prefixFeatures(this.doc.features, this.rollbackIndex, this.suppressed, editingId),
+      ...(this.doc.bodyIds ? { bodyIds: this.doc.bodyIds } : {}),
     };
     return this.geometry.projectGeometry(doc, plane, sources);
   }
@@ -1915,6 +1924,12 @@ export class DocumentStore {
    *  came back by some path that never produced a final chunk. */
   private emitBuildAbort() {
     for (const fn of this.abortListeners) fn(this.buildEpoch);
+  }
+
+  /** Remember the ids a build handed out. Not an edit, so no undo step and no
+   *  unsaved star: a document built again without them gets the same ids. */
+  private keepBodyIds(sent: CadDocument, reply: RebuildReply) {
+    if (reply.ok && reply.result.bodyIds && this.doc === sent) this.doc.bodyIds = reply.result.bodyIds;
   }
 
   private settledBuild(reply: RebuildReply): RebuildState {
@@ -1982,7 +1997,10 @@ export class DocumentStore {
           do {
             this.rebuildQueued = false;
             this.emitBuildStarted();
+            const sent = this.doc;
+            const previewing = !!(this.preview || this.editPreview);
             const reply = await this.geometry.rebuild(this.effectiveDoc());
+            if (!previewing) this.keepBodyIds(sent, reply);
             // A stream that was in flight but never completed has left a PARTIAL
             // model on screen. Tell the viewport to drop it before this result,
             // which on a failure is the PREVIOUS document, renders over the top.
@@ -2029,7 +2047,10 @@ export class DocumentStore {
     this.rebuilding = true;
     try {
       this.emitBuildStarted();
+      const sent = this.doc;
+      const previewing = !!(this.preview || this.editPreview);
       const reply = await ca(this.effectiveDoc());
+      if (!previewing) this.keepBodyIds(sent, reply);
       if (this.build.streamed !== null && !reply.ok) this.emitBuildAbort();
       this.build = this.settledBuild(reply);
       this.emitBuild();

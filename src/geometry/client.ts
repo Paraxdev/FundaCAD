@@ -321,7 +321,8 @@ interface RebuildDeltaPayload {
     length: number;
     set: [number, Feature][];
     parameters?: CadDocument["parameters"];
-    bodyVisibility?: CadDocument["bodyVisibility"];
+    bodyVisibility?: CadDocument["bodyVisibility"] | null;
+    bodyIds?: CadDocument["bodyIds"] | null;
   };
 }
 interface RebuildFullPayload {
@@ -399,7 +400,7 @@ export class Geometry implements GeometryBackend {
   // inequality against the last sent feature list, effectiveDoc() reuses
   // feature objects, so an untouched feature is the same object). Any doubt
   // (worker respawn, missed reply, too many changes) falls back to a full send.
-  private lastSent: { features: Feature[]; parameters: string; bodyVisibility: string } | null = null;
+  private lastSent: { features: Feature[]; parameters: string; bodyVisibility: string; bodyIds: string } | null = null;
   private revision = 0;
 
   constructor(url = "ws://127.0.0.1:8765") {
@@ -819,6 +820,7 @@ export class Geometry implements GeometryBackend {
 
     const pJson = JSON.stringify(doc.parameters ?? null);
     const vJson = JSON.stringify(doc.bodyVisibility ?? null);
+    const iJson = JSON.stringify(doc.bodyIds ?? null);
     let payload: RebuildPayload | null = null;
     if (this.lastSent) {
       const set: [number, Feature][] = [];
@@ -831,7 +833,9 @@ export class Geometry implements GeometryBackend {
       if (set.length <= Math.max(8, doc.features.length / 2)) {
         const ops: RebuildDeltaPayload["ops"] = { length: doc.features.length, set };
         if (pJson !== this.lastSent.parameters) ops.parameters = doc.parameters;
-        if (vJson !== this.lastSent.bodyVisibility) ops.bodyVisibility = doc.bodyVisibility;
+        // null, not undefined: an absent key would leave the engine's copy as it was
+        if (vJson !== this.lastSent.bodyVisibility) ops.bodyVisibility = doc.bodyVisibility ?? null;
+        if (iJson !== this.lastSent.bodyIds) ops.bodyIds = doc.bodyIds ?? null;
         payload = { baseRevision: this.revision, revision: this.revision + 1, ops };
       }
     }
@@ -849,7 +853,7 @@ export class Geometry implements GeometryBackend {
     }
     if (msg.ok && !msg.result?.resync) {
       this.revision = payload.revision;
-      this.lastSent = { features: doc.features.slice(), parameters: pJson, bodyVisibility: vJson };
+      this.lastSent = { features: doc.features.slice(), parameters: pJson, bodyVisibility: vJson, bodyIds: iJson };
     }
     if (msg.ok && msg.result?.protocol === 2) {
       let assembled = this.assemble(msg.result);
@@ -958,6 +962,7 @@ export class Geometry implements GeometryBackend {
     if (r.datumPlanes) out.datumPlanes = r.datumPlanes;
     if (r.sketchPlanes) out.sketchPlanes = r.sketchPlanes;
     if (r.datumMarks) out.datumMarks = r.datumMarks;
+    if (r.bodyIds) out.bodyIds = r.bodyIds;
     return out;
   }
 

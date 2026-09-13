@@ -709,7 +709,7 @@ export type CoreFeature =
   | { id: string; type: "cleanUp"; body?: string; tolerance?: Num }
   // Remove bodies by id (mainstream MCAD "Remove"). Runs at its point in the timeline and
   // drops the listed bodies from the model, the way to delete a body from the
-  // browser. Body ids are positional, so this is appended at the end.
+  // browser. Appended at the end, after every feature that made the bodies.
   | { id: string; type: "removeBody"; bodies: string[] }
   // A feature this build of the application does not know: one whose tool,
   // schema and geometry all belong to a PLUGIN.
@@ -933,8 +933,11 @@ export interface CadDocument {
   bodyVisibility?: Record<string, boolean>;
   /** explicit per-construction-plane show/hide overrides (datum feature id → visible). */
   planeVisibility?: Record<string, boolean>;
-  /** explicit per-body display-name overrides (body id → name). Body ids are
-   *  positional, so a rename re-attaches if an upstream feature is reordered. */
+  /** Where each body id came from ("<featureId>:<n>" → "bodyN"), so ids survive
+   *  features around them changing. Absent on files from before it existed,
+   *  which the build numbers by position once and then remembers. */
+  bodyIds?: Record<string, string>;
+  /** explicit per-body display-name overrides (body id → name). */
   bodyNames?: Record<string, string>;
   /** The user's own folders over the bodies, nestable, for making a large
    *  import navigable. Display-only: nothing here reaches the sidecar and a
@@ -943,9 +946,7 @@ export interface CadDocument {
    *  before this existed. */
   elements?: { id: string; name: string; parent?: string }[];
   /** body id → element id. A body with no entry is an ORPHAN: it shows where it
-   *  always did, at the top level or under its import's own assembly node.
-   *  Positional body ids, exactly like `bodyNames` above, so an assignment
-   *  re-attaches if an upstream feature is reordered. */
+   *  always did, at the top level or under its import's own assembly node. */
   bodyElement?: Record<string, string>;
   /** The document's material library: what a body is made of, as far as the
    *  picture is concerned. Display-only, like everything above it. Absent means
@@ -957,7 +958,7 @@ export interface CadDocument {
     id: string; name: string; color: string;
     metalness?: number; roughness?: number; opacity?: number; emissive?: number;
   }[];
-  /** body id → material id. Positional body ids, like `bodyNames` above. */
+  /** body id → material id. */
   bodyMaterial?: Record<string, string>;
   /** `bodyId#localFaceIndex` → material id: a material on ONE FACE, for the
    *  chrome ring on a printed knob. Display-only like everything above it, and
@@ -1056,6 +1057,8 @@ export interface RebuildResult {
   // falls back to that for every id absent here. Display state like datumPlanes
   // above, and not written back into the document for the same reason.
   datumMarks?: Record<string, DatumMark>;
+  /** The document's body id map after this build, sent only when it changed. */
+  bodyIds?: Record<string, string>;
 }
 
 /** The resolved placement of a datum that follows geometry, as it stands this

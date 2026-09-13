@@ -170,7 +170,7 @@ def test_checkpoint_write_ticks_per_body():
         key = "chain-key-0"
         persist = {"store": store, "keys": [key], "mod": {}, "acc_ms": 0.0}
         with _Ticks() as t:
-            _save_checkpoint(persist, 0, live, [], [], 0)
+            _save_checkpoint(persist, 0, live, [], [], [])
         assert t.n >= len(live), \
             f"checkpoint write ticked {t.n}x for {len(live)} bodies"
 

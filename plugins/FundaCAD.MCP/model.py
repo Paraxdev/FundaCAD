@@ -29,7 +29,7 @@ FORMAT_VERSION = 9
 
 
 def new_document():
-    return {"version": FORMAT_VERSION, "parameters": {}, "paramDefs": {}, "features": []}
+    return {"version": FORMAT_VERSION, "parameters": {}, "paramDefs": {}, "features": [], "bodyIds": {}}
 
 
 def feature_ids(doc):

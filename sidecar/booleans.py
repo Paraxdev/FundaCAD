@@ -434,8 +434,7 @@ def _boolean_into_bodies(bodies, solid, op, new_body, hidden=frozenset(),
         if missing:
             raise ValueError(
                 f"no body called {', '.join(sorted(missing))} exists at this point "
-                "in the timeline. Body ids are handed out in creation order when "
-                "the model is built, so check them against the last build."
+                "in the timeline, check the ids against the last build."
             )
         candidates = [b for b in bodies if b.get("id") in want]
     hits = []
@@ -530,7 +529,7 @@ def _boolean_into_bodies(bodies, solid, op, new_body, hidden=frozenset(),
         # walls, coincident skins, visible seams at every contact); unify right
         # here so a join yields ONE true solid. Fast no-op on clean results
         # (single right-side-out solid), hard-gated otherwise.
-        new_body(_unify_body(merged), name)
+        new_body(_unify_body(merged), name, inherit=hits[0]["id"])
     elif op == "cut":
         # compute every cut first, measure how much came off, and only commit when
         # the extrude actually removed material from some body.
@@ -679,8 +678,8 @@ def _do_split(f, bodies, find_body, active, new_body, datums):
                 # solids that are actually connected. So a connected half stays ONE
                 # body (a honeycomb half is dozens of solids → one piece), while
                 # genuinely disconnected lumps (separate tabs) each get their own.
-                # OPT-IN (new splits only), body ids are positional, so changing the
-                # count would renumber downstream bodies and break older files.
+                # OPT-IN (new splits only): in a file from before `bodyIds`, changing
+                # the count would renumber downstream bodies.
                 n, o = plane.z_dir, plane.origin
                 top = [p for p in pieces if (p.center() - o).dot(n) >= 0]
                 bottom = [p for p in pieces if (p.center() - o).dot(n) < 0]
@@ -695,8 +694,8 @@ def _do_split(f, bodies, find_body, active, new_body, datums):
                     target["shape"] = res
             else:
                 # legacy: one body per disconnected solid. Kept as the default so files
-                # saved before `groupSides` keep their exact positional body ids (any
-                # change to the body count cascades into every downstream body ref).
+                # saved before `groupSides` keep their exact body ids (in a file from
+                # before `bodyIds` the body count cascades into every downstream body ref).
                 target["shape"] = pieces[0]
                 for p in pieces[1:]:
                     new_body(p, "Split")
@@ -715,8 +714,8 @@ def _retarget_delete_faces(named, bodies, sels, diag, fid):
     Nearest-point selectors resolve across ALL bodies: the face closest to the
     recorded pick point wins, wherever it lives. This keeps the app's core
     invariant (geometry by geometric selector, never index) honest for the BODY
-    reference too, body ids are positional, so an upstream split/boolean
-    renumbers them and the named body can quietly become a different piece of
+    reference too: a split's pieces, or an older file renumbered by position,
+    let the named body quietly become a different piece of
     the part; the delete's nearest match on that wrong piece is then some
     distant face and the heal fails (measured: one inserted split turned all 9
     saved deletes red). Legitimate geometry shifts (an edited upstream dimension
@@ -814,8 +813,7 @@ def _do_boolean(f, bodies, find_body, diag=None):
     keepOriginals is set.
 
     Dangling references are NON-FATAL: if the target, or every tool, has already
-    been consumed by an earlier boolean (or renumbered away by an upstream edit;
-    body ids are positional), the feature becomes a no-op recorded in `diag` rather
+    been consumed by an earlier boolean (or removed by an upstream edit), the feature becomes a no-op recorded in `diag` rather
     than halting the whole rebuild. Re-uniting a body an earlier union already
     merged is geometrically idempotent, so skipping a stale duplicate yields the
     intended result; for subtract/intersect, doing nothing is the safe fallback over

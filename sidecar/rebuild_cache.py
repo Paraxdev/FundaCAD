@@ -326,7 +326,7 @@ def _blob_key(chain_key, body_id):
     ).hexdigest()
 
 
-def _persist_tick(persist, i, dt_s, bodies, datums, errors, counter, diagnostics=None,
+def _persist_tick(persist, i, dt_s, bodies, datums, errors, id_events, diagnostics=None,
                   sketch_planes=None):
     """Per-feature bookkeeping for the durable cache: track each body's
     last-modifying chain key (shape-identity comparison, O(bodies)), and drop a
@@ -343,11 +343,11 @@ def _persist_tick(persist, i, dt_s, bodies, datums, errors, counter, diagnostics
     persist["acc_ms"] += dt_s * 1000.0
     if persist["acc_ms"] < persist.get("budget_ms", 1000.0):
         return
-    _save_checkpoint(persist, i, bodies, datums, errors, counter["n"], diagnostics,
+    _save_checkpoint(persist, i, bodies, datums, errors, id_events, diagnostics,
                      sketch_planes)
 
 
-def _save_checkpoint(persist, i, bodies, datums, errors, counter_n, diagnostics=None,
+def _save_checkpoint(persist, i, bodies, datums, errors, id_events, diagnostics=None,
                      sketch_planes=None):
     """Best-effort: a cache write failure must never break a rebuild."""
     try:
@@ -422,7 +422,7 @@ def _save_checkpoint(persist, i, bodies, datums, errors, counter_n, diagnostics=
             # into the `except` below and SILENTLY disables the disk cache, hence
             # test_checkpoint's serializability guard.
             "diagnostics": diagnostics or [],
-            "n": counter_n,
+            "ids": [list(e) for e in id_events],
             "owners": owners,
             "textures": textures,
             "fps": fps,
@@ -515,7 +515,7 @@ def _restore_from_disk(store, chain_keys):
             "datums": state["datums"],
             # .get for the same reason "diagnostics" has one below.
             "sketch_planes": state.get("sketch_planes", {}),
-            "n": state["n"],
+            "ids_ref": [tuple(e) for e in state["ids"]], "n_ids": len(state["ids"]),
             "errors_ref": state["errors"], "n_errors": len(state["errors"]),
             # .get: checkpoints written before diagnostics were persisted have no
             # such key. In practice _env_sig hashes builder.py into every chain

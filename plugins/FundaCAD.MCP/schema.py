@@ -68,10 +68,10 @@ COMMON = {
         "shape passes straight through them. Ignored when `operation` is "
         '"new". A join that names targets and reaches none of them is an error '
         "rather than a quietly-created extra body.\n"
-        "Body ids are assigned in creation order AT BUILD TIME, so read them "
-        "back from `build` or `inspect` rather than assuming them, and re-read "
-        "them after a join: a join merges its targets into one body, which "
-        "takes a fresh id."
+        "Body ids are handed out AT BUILD TIME, so read them back from `build` "
+        "or `inspect` rather than assuming them. Once built, a body keeps its id "
+        "when other features are added, removed or switched off, and a join "
+        "keeps the id of the body it merges into."
     ),
     "activeWhen": (
         "Optional on EVERY feature type: a Num. While it resolves to 0 the build "
@@ -387,7 +387,7 @@ FEATURES = {
                     "to": {"body": "body1",
                            "face": {"kind": "face", "by": "nearest",
                                     "point": [0, 0, 10], "body": "body1"}}},
-        "notes": "Body ids are body1, body2, ... in creation order at build time, so "
+        "notes": "Body ids are body1, body2, ... handed out at build time, so "
                  "read them from `build` or `inspect`. A mate reference that no "
                  "longer resolves (a removed datum, a face a change deleted) leaves "
                  "the moving body exactly where it is and records a diagnostic, "
@@ -412,7 +412,7 @@ FEATURES = {
                    "keepOriginals": "optional bool"},
         "example": {"id": "bo1", "type": "boolean", "operation": "subtract",
                     "target": "body1", "tools": ["body2"]},
-        "notes": "Body ids are body1, body2, ... in creation order, NOT feature "
+        "notes": "Body ids are body1, body2, ..., NOT feature "
                  "ids. Call `build` and read the body list before writing one.",
     },
     "split": {
@@ -580,8 +580,8 @@ and gets the actual part.
 Things that are true here and not in every CAD:
  - Z is up. A sketch on XY is a floor plan; a sketch on XZ is a side elevation.
  - box, cylinder and sphere are CENTRED ON THE ORIGIN. Use `move` to place them.
- - Body ids (body1, body2, ...) are assigned in creation order at build time and
-   are NOT feature ids. Read them from `build` or `inspect`.
+ - Body ids (body1, body2, ...) are handed out at build time and are NOT feature
+   ids. Read them from `build` or `inspect`. A body keeps its id afterwards.
  - A feature can only reference features ABOVE it in the timeline.
 """
 

@@ -1137,6 +1137,8 @@ screen. Every edit you make appears in their window as it happens.
             where = (reply.get("error") or {}).get("feature_id")
             return failure(f"Build failed{f' at {where}' if where else ''}: {err}")
         result = reply.get("result") or {}
+        if "bodyIds" in result:
+            self.doc["bodyIds"] = result["bodyIds"]
         self.mesh = result.get("bodies") or []
         self.built_for = _signature(self.doc)
         # Sizes come from a second call, not from the mesh bbox in this reply.

@@ -1122,6 +1122,8 @@ def _apply_doc_ops(payload):
         doc["parameters"] = ops["parameters"]
     if "bodyVisibility" in ops:
         doc["bodyVisibility"] = ops["bodyVisibility"]
+    if "bodyIds" in ops:
+        doc["bodyIds"] = ops["bodyIds"]
     if "length" in ops:
         feats = doc.get("features", [])
         del feats[ops["length"]:]
@@ -1167,12 +1169,15 @@ def _rebuild_job(document, tolerance, known=None):
     datums = {}
     sketch_planes = {}
     datum_marks = {}
+    body_ids = {}
     known = known or {}
     t0 = time.monotonic()
     part, errors, bodies = rebuild_cached(
         document, diagnostics=diag, projections=proj, datums_out=datums,
         sketch_planes_out=sketch_planes, datum_marks_out=datum_marks,
+        body_ids_out=body_ids,
     )
+    new_ids = {"bodyIds": body_ids} if body_ids != document.get("bodyIds") else {}
     t_rebuild = time.monotonic() - t0
     if errors and part is None and not bodies:
         # nothing built at all, the document is unusable, surface as fatal
@@ -1181,7 +1186,7 @@ def _rebuild_job(document, tolerance, known=None):
         # no solid yet (e.g. only sketches exist), not an error; the frontend
         # still renders sketch overlays. Projection refresh entries still ride
         # along (a sketchCurve source needs no body at all).
-        result = {"protocol": 2, "bodies": [], "bbox": None}
+        result = {"protocol": 2, "bodies": [], "bbox": None, **new_ids}
         if proj:
             result["projectionUpdates"] = proj
         # Datums resolve without any solid (a document can be nothing but planes),
@@ -1266,7 +1271,7 @@ def _rebuild_job(document, tolerance, known=None):
           f"bodies={len(out)} rebuild={t_rebuild:.1f}s payloads={t_payload:.1f}s "
           f"bbox={t_bbox:.1f}s",
           flush=True)
-    result = {"protocol": 2, "bodies": out, "bbox": doc_bbox}
+    result = {"protocol": 2, "bodies": out, "bbox": doc_bbox, **new_ids}
     # Where each datum plane actually ended up. The frontend caches a datum's
     # plane on the feature and draws its quad from that cache, which is the plane
     # the face had when it was picked; once a datum follows a face, that cache and

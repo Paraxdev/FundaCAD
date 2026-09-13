@@ -270,9 +270,10 @@ one-shot calls is not a session, use `--script`, which is either a JSON array of
 - **Z is up.** A sketch on XY is a floor plan; a sketch on XZ is a side elevation.
 - **`box`, `cylinder` and `sphere` are centred on the origin.** Use a `move`
   feature to place them.
-- **Body ids are not feature ids.** `body1`, `body2`, … are assigned in creation
-  order at build time; read them back from `build` or `inspect`. A Join
-  *renumbers* the body it merges into, so re-read them after one.
+- **Body ids are not feature ids.** `body1`, `body2`, … are handed out at build
+  time; read them back from `build` or `inspect`. The document remembers them
+  (`bodyIds`), so a body keeps its id when features around it are added,
+  removed or switched off, and a Join keeps the id of the body it merges into.
 - **A field takes a number or a parameter NAME, never an expression.** The app
   evaluates expressions in the parameter table and writes plain numbers into
   fields, so `"radius": "hub_d/2"` does not resolve, define a parameter for the
