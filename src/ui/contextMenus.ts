@@ -286,7 +286,7 @@ export function createContextMenus(deps: ContextMenusDeps) {
     // a construction plane wins where its quad is exposed (same order as click-select)
     const datumId = viewport.pickDatumAt(x, y);
     if (datumId) return openDatumMenu(x, y, datumId);
-    if (viewport.selecting === "bodies") {
+    if (viewport.selecting === "bodies" || viewport.bodyClickAt(x, y)) {
       // plain mesh raycast (no edge priority), must agree with left-click select,
       // else right-clicking on/near any edge of a body misses the body menu
       const bodyId = viewport.bodyIdAt(x, y);

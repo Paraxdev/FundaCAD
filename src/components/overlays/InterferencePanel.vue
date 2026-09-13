@@ -13,8 +13,10 @@ const panels = usePanelsStore();
 const ui = useUiStore();
 
 function highlight(c: ClashRow) {
-  engine.viewport.setSelectionMode("bodies");
-  ui.selMode = "bodies"; // keep the Faces/Bodies pill in step
+  if (engine.viewport.policy === "faces") {
+    engine.viewport.setSelectPolicy("bodies");
+    ui.selMode = "bodies";
+  }
   engine.viewport.setSelectedBodies([c.a, c.b]);
 }
 </script>

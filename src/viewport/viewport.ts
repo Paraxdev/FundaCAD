@@ -111,6 +111,7 @@ import { Highlighter, EDGE_HOVER_COLOR } from "./highlight";
 import { ProgressiveModel } from "./progressive";
 import { nearestEdgeByMid, midMatchTol, edgeSelectorFrom, polylineMid } from "./edgeMatch";
 import { mergeScope, pickScope, type ScopeDecision, type ScopeView } from "./pickScope";
+import { clickTakes, type SelectPolicy } from "./clickIntent";
 import { edgesOnFace, faceEdgeTol, faceSurface, type Tri } from "./faceEdges";
 import { remapSelection, remapStreamedSelection, shouldAnnounce } from "./selectionMemo";
 import { cylinderFromFace, radialAt, solidInsideCylinder } from "../features/planeMath";
@@ -323,8 +324,11 @@ export class Viewport {
   onAmbiguousEdge:
     | ((cands: EdgeCandidate[], at: { x: number; y: number }, mods: PickMods) => boolean)
     | null = null;
-  // "faces" = pick faces/edges (default); "bodies" = pick whole bodies (to move).
+  // "faces" = the selection holds faces/edges; "bodies" = whole bodies (to move).
   private selectionMode: "faces" | "bodies" = "faces";
+  /** What a click picks: always faces, always bodies, or "auto", a body first
+   *  and then the faces of a body already chosen. */
+  private selectPolicy: SelectPolicy = "auto";
   suspendPicking = false;
 
   /** Picking is off while a chunked reply is being drawn OR while a tool has
@@ -729,6 +733,17 @@ export class Viewport {
       return;
     }
     if (this.pickSuppressed) return;
+    if (this.selectPolicy === "auto" && this.model && this.highlighter) {
+      const hit = this.picker.pick(e.clientX, e.clientY, this.canvas.getBoundingClientRect(), this.rig.active, this.model);
+      const bodyId = this.bodyOfHit(hit);
+      if (bodyId && this.takesBody(bodyId, false) && !this.regionHoverAt?.(e.clientX, e.clientY)) {
+        this.highlighter.clearHover();
+        this.highlighter.hoverBody(bodyId);
+        this.requestRender();
+        return;
+      }
+      this.highlighter.hoverBody(null);
+    }
     if (this.selectionMode === "bodies") return; // no face hover while picking bodies
     // NO MODEL IS NOT NO TARGETS, and this is where hover used to stop. A
     // document holding one sketch and no extrude has no solid at all, so
@@ -761,17 +776,88 @@ export class Viewport {
 
   private handleClick(e: PointerEvent) {
     if (this.pickSuppressed) return;
+    this.clickAt(e.clientX, e.clientY, e.ctrlKey || e.metaKey, e.shiftKey);
+  }
+
+  /** A plain click that stood a tool down, replayed as the click it would have
+   *  been with no tool up. */
+  clickThrough(clientX: number, clientY: number, ctrl: boolean) {
+    if (this.selectPolicy === "auto") this.clickAt(clientX, clientY, ctrl, false);
+    else this.selectBodyAt(clientX, clientY, ctrl);
+  }
+
+  setSelectPolicy(p: SelectPolicy) {
+    this.selectPolicy = p;
+    this.highlighter?.hoverBody(null);
+    if (p !== "auto") this.setSelectionMode(p);
+  }
+
+  get policy(): SelectPolicy {
+    return this.selectPolicy;
+  }
+
+  private bodyOfHit(hit: Hit | null): string | null {
+    if (!hit) return null;
+    return hit.kind === "edge" ? (hit.edge.body ?? null) : this.faceIdToBodyId(hit.faceId);
+  }
+
+  /** Bodies that own a selected face or edge. */
+  private drilledBodies(): Set<string> {
+    const out = new Set<string>();
+    if (!this.highlighter || this.selectionMode !== "faces") return out;
+    for (const f of this.highlighter.getSelectedFaces()) {
+      const id = this.faceIdToBodyId(f);
+      if (id) out.add(id);
+    }
+    for (const edge of this.highlighter.getSelectedEdges()) if (edge.body) out.add(edge.body);
+    return out;
+  }
+
+  private takesBody(bodyId: string, additive: boolean): boolean {
+    return clickTakes({
+      bodyId,
+      additive,
+      selectedBodies: this.selectionMode === "bodies" ? this.getSelectedBodies() : [],
+      drilledBodies: this.drilledBodies(),
+    }) === "body";
+  }
+
+  /** The body a plain click here would select whole, under the auto policy. */
+  bodyClickAt(clientX: number, clientY: number): string | null {
+    if (this.selectPolicy !== "auto" || !this.model) return null;
+    const hit = this.picker.pick(clientX, clientY, this.canvas.getBoundingClientRect(), this.rig.active, this.model);
+    const bodyId = this.bodyOfHit(hit);
+    return bodyId && this.takesBody(bodyId, false) ? bodyId : null;
+  }
+
+  private clickAt(clientX: number, clientY: number, ctrl: boolean, shift: boolean) {
     const rect = this.canvas.getBoundingClientRect();
 
     // --- Bodies mode: a click selects the WHOLE body under the cursor ---
-    if (this.selectionMode === "bodies" && this.model && this.highlighter) {
-      this.selectBodyAt(e.clientX, e.clientY, e.ctrlKey || e.metaKey);
+    if (this.selectPolicy !== "auto" && this.selectionMode === "bodies" && this.model && this.highlighter) {
+      this.selectBodyAt(clientX, clientY, ctrl);
       return;
     }
 
     const hit = this.model
-      ? this.picker.pick(e.clientX, e.clientY, rect, this.rig.active, this.model)
+      ? this.picker.pick(clientX, clientY, rect, this.rig.active, this.model)
       : null;
+
+    if (this.selectPolicy === "auto" && this.model && this.highlighter) {
+      const bodyId = this.bodyOfHit(hit);
+      if (bodyId && this.takesBody(bodyId, ctrl || shift)) {
+        if (this.regionPickAt?.(clientX, clientY, ctrl || shift)) return;
+        this.setSelectionMode("bodies");
+        if (ctrl || shift) this.highlighter.toggleSelectBody(bodyId);
+        else this.highlighter.selectOnlyBody(bodyId);
+        this.highlighter.hoverBody(null);
+        this.onBodySelectionChange?.();
+        this.requestRender();
+        return;
+      }
+      this.setSelectionMode("faces");
+    }
+    const e = { clientX, clientY, ctrlKey: ctrl, metaKey: false, shiftKey: shift };
     // Sketch has PRIORITY over the body: a visible sketch's profile area under the
     // cursor is selected instead of the solid FACE behind/under it (the user asked for
     // sketch-first). An EDGE hit is more specific and still wins; face selection resumes
@@ -2143,6 +2229,7 @@ export class Viewport {
   /** set the body selection from outside (e.g. the browser tree). */
   setSelectedBodies(ids: string[]) {
     if (!this.highlighter) return;
+    if (this.selectPolicy === "auto" && ids.length) this.setSelectionMode("bodies");
     this.highlighter.clearBodySelection();
     for (const id of ids) this.highlighter.toggleSelectBody(id);
     this.onBodySelectionChange?.();

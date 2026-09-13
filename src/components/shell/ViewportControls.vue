@@ -22,6 +22,7 @@ import Popover from "../ui/Popover.vue";
 import Toggle from "../ui/Toggle.vue";
 import ChoiceList from "../ui/ChoiceList.vue";
 import Tabs from "../ui/Tabs.vue";
+import type { SelectPolicy } from "../../viewport/clickIntent";
 
 const engine = useEngine();
 const ui = useUiStore();
@@ -106,11 +107,12 @@ function pickProjection(m: ProjectionMode) {
 }
 
 const SELECT_MODES = [
+  { value: "auto" as const, label: "Body, then face", hint: "click a body to take it, click it again for a face or edge" },
   { value: "faces" as const, label: "Faces" },
   { value: "bodies" as const, label: "Bodies" },
 ];
-function pickSelectMode(m: "faces" | "bodies") {
-  engine.handleAction(m === "bodies" ? "selmode-bodies" : "selmode-faces");
+function pickSelectMode(m: SelectPolicy) {
+  engine.handleAction(`selmode-${m}`);
 }
 
 const analysis = computed(() => {

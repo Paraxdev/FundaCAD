@@ -305,15 +305,17 @@ export function createActions(e: Engine): (action: string) => void {
         break;
       }
       case "selmode": {
-        const next = e.viewport.selecting === "faces" ? "bodies" : "faces";
-        e.viewport.setSelectionMode(next);
+        const order = ["auto", "faces", "bodies"] as const;
+        const next = order[(order.indexOf(e.viewport.policy) + 1) % order.length]!;
+        e.viewport.setSelectPolicy(next);
         ui.selMode = next;
         break;
       }
+      case "selmode-auto":
       case "selmode-faces":
       case "selmode-bodies": {
-        const mode = action === "selmode-bodies" ? "bodies" : "faces";
-        e.viewport.setSelectionMode(mode);
+        const mode = action === "selmode-bodies" ? "bodies" : action === "selmode-faces" ? "faces" : "auto";
+        e.viewport.setSelectPolicy(mode);
         ui.selMode = mode;
         break;
       }

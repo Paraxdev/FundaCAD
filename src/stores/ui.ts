@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
+import type { SelectPolicy } from "../viewport/clickIntent";
 
 /** Chrome state that used to live as imperative writes to element ids in
  *  index.html, `statusEl.textContent`, `docnameEl.classList.toggle("dirty")`,
@@ -40,7 +41,7 @@ export const useUiStore = defineStore("ui", () => {
   // --- view-control pill labels ---
   // Projection cycles Auto -> Persp -> Ortho; the label is the CURRENT mode.
   const projLabel = ref("Auto");
-  const selMode = ref<"faces" | "bodies">("faces");
+  const selMode = ref<SelectPolicy>("auto");
   /** See-through is on: the model is translucent and an area box reaches what
    *  is behind it. A mode with no control on screen is a mode people turn on by
    *  accident and cannot find again, so the view bar carries a lit button. */

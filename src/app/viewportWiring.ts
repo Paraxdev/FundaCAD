@@ -229,7 +229,7 @@ export function installViewportWiring(e: Engine): void {
     const ids = e.viewport.getSelectedBodies();
     if (!ids.length) { setPrompt(null); return; }
     e.tools.move.onClickThrough = (x, y, additive) => {
-      e.viewport.selectBodyAt(x, y, additive);
+      e.viewport.clickThrough(x, y, additive);
     };
     e.starters.startMove();
   };

@@ -41,6 +41,7 @@ export const SHORTCUTS: Shortcut[] = [
   { key: "h", action: "hide-selected", context: "model", label: "Hide selected bodies" },
   { key: "h", shift: true, action: "show-all-bodies", context: "model", label: "Show all bodies" },
   { key: "1", action: "selmode-faces", context: "model", label: "Select faces" },
+  { key: "3", action: "selmode-auto", context: "model", label: "Select a body, then its faces" },
   { key: "2", action: "selmode-bodies", context: "model", label: "Select bodies" },
   { key: "x", action: "toggle-xray", context: "model", label: "See through (select what is behind)" },
   { key: "x", shift: true, action: "toggle-wireframe", context: "model", label: "Wireframe (edges only)" },
