@@ -15,7 +15,7 @@
 
 import { asFeature } from "../types";
 import type { CadDocument, ParamDef, ParamTarget } from "../types";
-import { FEATURE_NUM_FIELDS, RIGID_ENTITY_NUM_FIELDS, kindUnit } from "./numFields";
+import { FEATURE_NUM_FIELDS, RIGID_ENTITY_NUM_FIELDS, kindUnit, presentCommonFields } from "./numFields";
 import { isDimConstraint, newConstraintId, noteConstraintId } from "../sketch/id";
 import { nextDName } from "../params/engine";
 
@@ -172,7 +172,8 @@ export function migrateDocument(parsed: CadDocument): string[] {
     defs[nextDName(defs)] = { expr: raw, value, unit, target };
   };
   for (const f of features) {
-    for (const [field, , kind] of FEATURE_NUM_FIELDS[f.type] ?? []) {
+    const rows = [...(FEATURE_NUM_FIELDS[f.type] ?? []), ...presentCommonFields(f as unknown as Record<string, unknown>)];
+    for (const [field, , kind] of rows) {
       bind(f, field, kindUnit(kind), { kind: "feature", feature: f.id, field });
     }
     const sketch = asFeature(f, "sketch");

@@ -50,6 +50,27 @@ describe("migrateDocument", () => {
     expect(doc.paramDefs!["d2"]!.target).toEqual({ kind: "feature", feature: "f4", field: "distance" });
   });
 
+  it("binds a bare-name activeWhen on any feature type, and leaves a feature without one alone", () => {
+    const doc = v1({
+      parameters: { coreOn: 1 },
+      features: [
+        { id: "sk", type: "sketch", plane: "XY", entities: [], activeWhen: "coreOn" },
+        { id: "bo", type: "boolean", operation: "union", target: "body1", tools: ["body2"], activeWhen: "coreOn" },
+        { id: "ex", type: "extrude", sketch: "sk", distance: 4, operation: "new" },
+      ] as unknown as CadDocument["features"],
+    });
+    migrateDocument(doc);
+    const [sk, bo, ex] = doc.features as unknown as Record<string, unknown>[];
+    expect(sk!["activeWhen"]).toBe(1);
+    expect(bo!["activeWhen"]).toBe(1);
+    expect(ex!["activeWhen"]).toBeUndefined();
+    const targets = Object.values(doc.paramDefs!).flatMap((d) => (d.target ? [d.target] : []));
+    expect(targets).toEqual([
+      { kind: "feature", feature: "sk", field: "activeWhen" },
+      { kind: "feature", feature: "bo", field: "activeWhen" },
+    ]);
+  });
+
   it("binds rigid-entity fields but leaves solved geometry on the legacy path", () => {
     const doc = v1({
       parameters: { r: 8, width: 40 },

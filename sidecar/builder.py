@@ -1907,6 +1907,43 @@ _FEATURE_HANDLERS = {
 }
 
 
+class _Inactive(Exception):
+    """Leaves the handler unrun without touching the error arms below it."""
+
+
+def _is_inactive(f, val):
+    """True when the feature's `activeWhen` resolves to 0, so the build leaves it
+    out exactly as if it were suppressed. Absent means always built.
+
+    NaN is refused rather than read as off: a broken expression must never
+    quietly remove geometry, it has to turn the row red."""
+    cond = f.get("activeWhen")
+    if cond is None:
+        return False
+    v = val(cond)
+    if not isinstance(v, (int, float)) or v != v:
+        raise ValueError(f"activeWhen must resolve to a number (got {v!r})")
+    return v == 0
+
+
+def _references_any(node, ids):
+    """The first of `ids` that appears as a string value anywhere inside a
+    feature, which is how a sketch, datum or body reference is spelled."""
+    if isinstance(node, str):
+        return node if node in ids else None
+    if isinstance(node, dict):
+        items = (v for k, v in node.items() if k != "id")
+    elif isinstance(node, list):
+        items = iter(node)
+    else:
+        return None
+    for v in items:
+        hit = _references_any(v, ids)
+        if hit:
+            return hit
+    return None
+
+
 def _make_val(params):
     """A value resolver over one document's parameter table: a parameter name
     resolves to its value; a numeric literal passes through.
@@ -2145,6 +2182,14 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
         sketch_planes=sketch_planes, datum_marks=datum_marks,
     )
 
+    inactive = set()
+    for cf in features:
+        try:
+            if _is_inactive(cf, val):
+                inactive.add(cf.get("id"))
+        except ValueError:
+            pass  # reported against the feature when the loop reaches it
+
     for i in range(start, len(features)):
         f = features[i]
         t_feat = time.monotonic()
@@ -2155,13 +2200,16 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
         # 12.7% of a cold rebuild). The merged view is a lazy ChainMap over the
         # per-body dicts; reversed so duplicate fingerprints resolve like the
         # old last-body-wins dict.update() merge.
-        prov = f.get("type") not in ("sketch", "datumPlane", "datumPoint", "datumAxis")
+        prov = (f.get("type") not in ("sketch", "datumPlane", "datumPoint", "datumAxis")
+                and f.get("id") not in inactive)
         if prov:
             pre_shape = {id(b): b.get("shape") for b in bodies}
             pre_owners_by_id = {id(b): (b.get("_owners") or {}) for b in bodies}
             pre_owners_all = ChainMap(*reversed(list(pre_owners_by_id.values())))
         try:
             t = f["type"]
+            if _is_inactive(f, val):
+                raise _Inactive
             # The application's own verbs first, then the ones a plugin
             # registered. The order settles nothing in practice, a plugin may
             # not claim a type this table already has, but reading the built-in
@@ -2175,6 +2223,8 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
                 raise ValueError(plugin_geometry.unregistered(t))
             handler(f, ctx)
 
+        except _Inactive:
+            pass
         except ValueError as ex:  # name the feature so the timeline can flag it red
             # MCAD-style: a failed feature is a recorded NO-OP and the build
             # CONTINUES, the body state stays as it was and every feature after
@@ -2236,6 +2286,26 @@ def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist
                 diagnostics, sketch_planes,
             )
         progress.feature_tick(i)  # this feature is done; the watchdog may relax
+
+    if inactive and errors:
+        by_id = {cf.get("id"): cf for cf in features}
+        index_of = {cf.get("id"): k for k, cf in enumerate(features)}
+        for e in errors:
+            if "switched off" in e["message"]:
+                continue
+            fid = e.get("feature_id")
+            off = _references_any(by_id.get(fid), inactive)
+            if off:
+                e["message"] += f" ({off} is switched off by its activeWhen)"
+                continue
+            # Bodies are named by position, so a switched off feature upstream
+            # shifts every body id after it. The reference that broke is a body
+            # id, not a feature id, and nothing else would point at the cause.
+            upstream = [cf.get("id") for cf in features[:index_of.get(fid, 0)]
+                        if cf.get("id") in inactive]
+            if upstream and "body" in e["message"].lower():
+                e["message"] += (f" ({upstream[-1]} is switched off by its activeWhen and "
+                                 "makes no bodies, so the body ids after it shift)")
 
     # A disjoint join (e.g. two bodies that don't touch) yields a ShapeList, which
     # has no single `.wrapped` TopoDS shape. Normalize each body to one Compound so

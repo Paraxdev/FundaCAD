@@ -73,6 +73,16 @@ COMMON = {
         "them after a join: a join merges its targets into one body, which "
         "takes a fresh id."
     ),
+    "activeWhen": (
+        "Optional on EVERY feature type: a Num. While it resolves to 0 the build "
+        "leaves the feature out, exactly as if it were suppressed; any other "
+        "value, or no field at all, builds it. Point it at a parameter whose "
+        'expression is the condition: param_set coreOn = "solidCore == 1", then '
+        '"activeWhen": "coreOn". A NaN condition is an error, never read as off.\n'
+        "A feature that consumes a switched-off one fails and says so, so switch "
+        "its consumers off with the same parameter. Skipping a body-creating "
+        "feature renumbers every body after it, like suppress does."
+    ),
     "MateConnector": (
         "One side of a joint: a coordinate frame, an origin, a z axis that is the "
         "mating direction, and an optional x axis for rotational reference, named "

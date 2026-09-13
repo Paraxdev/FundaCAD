@@ -896,6 +896,19 @@ export class DocumentStore {
     });
   }
 
+  /** Take a field off a feature entirely. A model parameter bound to it stops
+   *  resolving and the recompute in mutate() collects it. */
+  removeFeatureField(id: string, field: string) {
+    const f = this.doc.features.find((x) => x.id === id) as Record<string, unknown> | undefined;
+    if (!f || f[field] === undefined) return;
+    this.mutate((d) => {
+      const i = d.features.findIndex((x) => x.id === id);
+      if (i < 0) return;
+      const { [field]: _gone, ...rest } = d.features[i] as unknown as Record<string, unknown>;
+      d.features[i] = rest as unknown as Feature;
+    });
+  }
+
   /** Give a history step a name of its own. Blank goes back to the default. */
   renameFeature(id: string, name: string) {
     const current = this.doc.features.find((f) => f.id === id) as (Feature & { name?: string }) | undefined;

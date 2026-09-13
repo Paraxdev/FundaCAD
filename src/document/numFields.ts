@@ -82,11 +82,30 @@ export function featureNumFields(
   type: string,
   values?: Record<string, unknown>,
 ): readonly [string, string, FieldKind][] {
+  const base = typeNumFields(type, values);
+  const common = values ? presentCommonFields(values) : [];
+  return common.length ? [...base, ...common] : base;
+}
+
+function typeNumFields(type: string, values?: Record<string, unknown>): readonly [string, string, FieldKind][] {
   const own = FEATURE_NUM_FIELDS[type as Feature["type"]];
   if (own) return own;
   const contributed = contributedFeature(type)?.numFields;
   if (contributed) return contributed;
   return values ? rawNumFields(values) : [];
+}
+
+/** Rows any feature may carry whatever its type. The build leaves a feature out
+ *  while its `activeWhen` is 0 (sidecar/builder._is_inactive).
+ *
+ *  Listed only on a feature that HAS the field. The parameter engine deletes a
+ *  model parameter whose target stops resolving and writes into every target
+ *  that does, so a row that always resolved would outlive "Remove condition"
+ *  and its parameter would put the field straight back. */
+export const COMMON_NUM_FIELDS: [string, string, FieldKind][] = [["activeWhen", "Active when", "count"]];
+
+export function presentCommonFields(values: Record<string, unknown>): [string, string, FieldKind][] {
+  return COMMON_NUM_FIELDS.filter(([field]) => values[field] !== undefined);
 }
 
 /** Every numeric-looking field on a feature nobody describes, in key order,
@@ -97,7 +116,7 @@ export function rawNumFields(
 ): [string, string, FieldKind][] {
   const out: [string, string, FieldKind][] = [];
   for (const [k, v] of Object.entries(values)) {
-    if (k === "id" || k === "type") continue;
+    if (k === "id" || k === "type" || COMMON_NUM_FIELDS.some(([field]) => field === k)) continue;
     if (typeof v === "number") out.push([k, k, "count"]);
   }
   return out;

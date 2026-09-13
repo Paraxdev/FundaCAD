@@ -18,6 +18,7 @@ import { gapIndexIn } from "../../ui/trackGaps";
 import { ClickOrDouble, HistoryPeek } from "../../ui/historyPeek";
 import { getUnit, onUnitChange } from "../../ui/units";
 import FeatureProperties from "./FeatureProperties.vue";
+import type { Feature } from "../../types";
 
 const engine = useEngine();
 const store = engine.store;
@@ -31,7 +32,16 @@ const track = useTemplateRef<HTMLElement>("track");
 // Cast because `name` is optional and only on SOME feature variants, the same
 // way every other reader of it in the app reaches for it.
 const features = useDocValue((doc) =>
-  doc.features.map((f) => ({ id: f.id, type: f.type, name: (f as { name?: string }).name ?? "" })),
+  doc.features.map((f) => {
+    const activeWhen = (f as { activeWhen?: unknown }).activeWhen;
+    return {
+      id: f.id,
+      type: f.type,
+      name: (f as { name?: string }).name ?? "",
+      hasCondition: activeWhen !== undefined,
+      inactive: activeWhen === 0,
+    };
+  }),
 );
 
 const unit = ref(getUnit());
@@ -125,11 +135,12 @@ function metaFor(f: { type: string; operation?: unknown }) {
   return featureMeta(f);
 }
 
-function chipTitle(f: { id: string; type: string }, i: number) {
+function chipTitle(f: { id: string; type: string; inactive?: boolean }, i: number) {
   const err = errors.value.get(f.id);
   const note = notes.value.get(f.id);
   return (
     `${i + 1} · ${metaFor(f).label}` +
+    (f.inactive ? "\nSwitched off: its Active when condition is 0" : "") +
     // A plain-text word, not a warning sign: this is a `title` attribute, and
     // the browser draws it in the OS tooltip font where a symbol lands as
     // whatever fallback glyph, or tofu, that font happens to carry.
@@ -335,6 +346,19 @@ function openMenu(e: MouseEvent, id: string, i: number) {
       label: suppressed.value.has(id) ? "Unsuppress" : "Suppress",
       onClick: () => store.toggleSuppress(id),
     },
+    // A sketch's values are edited in the sketch, not in the rows under its
+    // chip, so it is offered only the removal of a condition the MCP wrote.
+    ...(features.value[i]?.hasCondition
+      ? [{ label: "Remove condition", onClick: () => store.removeFeatureField(id, "activeWhen") }]
+      : features.value[i]?.type === "sketch"
+        ? []
+        : [{
+            label: "Add condition",
+            onClick: () => {
+              store.updateFeature(id, { activeWhen: 1 } as unknown as Partial<Feature>);
+              timeline.select(id);
+            },
+          }]),
     { label: "Roll to here", onClick: () => store.setRollback(i) },
     { label: "Roll past here", onClick: () => store.setRollback(i + 1) },
     { separator: true, label: "" },
@@ -387,7 +411,7 @@ function openMenu(e: MouseEvent, id: string, i: number) {
                   // every failing feature; the `&&` is the second lock.
                   warn: !errors.has(f.id) && notes.has(f.id),
                   rolled: i >= rollback,
-                  suppressed: suppressed.has(f.id),
+                  suppressed: suppressed.has(f.id) || f.inactive,
                   'drop-target': dropTarget === f.id,
                 }"
                 :title="chipTitle(f, i)"
