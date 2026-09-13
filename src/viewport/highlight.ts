@@ -9,7 +9,7 @@
 import * as THREE from "three";
 import { bodyOfFace, edgeObjects, type BodyMesh, type ModelView } from "./render";
 import type { EdgeRef } from "./edgeLines";
-import { makeSelectionGlow, type GlowKind } from "./selectionGlow";
+import { makeSelectionGlow, removeSelectionGlows, type GlowKind } from "./selectionGlow";
 
 const EDGE_BASE = new THREE.Color(0x1b1f24);
 const HOVER = new THREE.Color(0xffd089); // pale hot amber (under cursor)
@@ -45,7 +45,9 @@ export class Highlighter {
   // tint while the fillet/chamfer edge tool is active so you can SEE every edge.
   private edgeBase = EDGE_BASE.clone();
 
-  constructor(private view: ModelView) {}
+  constructor(private view: ModelView) {
+    for (const b of view.bodies) removeSelectionGlows(b.mesh);
+  }
 
   /** body id -> BodyMesh, built once on first use.
    *

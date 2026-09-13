@@ -87,11 +87,23 @@ function glowMaterial(kind: GlowKind): THREE.ShaderMaterial {
   return mat;
 }
 
+const GLOW_NAME = "selection-glow";
+
+/** Take every glow off a body mesh. A rebuild reuses an unchanged body's mesh
+ *  but makes a new Highlighter, which has no record of the glows the old one
+ *  parented there, so without this they stay lit for good. */
+export function removeSelectionGlows(mesh: THREE.Object3D) {
+  for (let i = mesh.children.length - 1; i >= 0; i--) {
+    const c = mesh.children[i]!;
+    if (c.name === GLOW_NAME) c.removeFromParent();
+  }
+}
+
 /** Build the overlay mesh for a body: a second draw of its geometry, non-pickable
  *  and shadow-free, in the current theme accent. Not yet added to a parent. */
 export function makeSelectionGlow(geometry: THREE.BufferGeometry, kind: GlowKind): THREE.Mesh {
   const mesh = new THREE.Mesh(geometry, glowMaterial(kind));
-  mesh.name = "selection-glow";
+  mesh.name = GLOW_NAME;
   mesh.raycast = () => {}; // never a pick target
   mesh.castShadow = false;
   mesh.receiveShadow = false;

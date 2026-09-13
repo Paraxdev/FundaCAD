@@ -9,6 +9,7 @@ import { disposeObject } from "./dispose";
 import { scheduleRaycastIndex } from "./raycastIndex";
 import { BodyEdges, EDGE_IDLE_COLOR, EDGE_IDLE_WIDTH, type EdgeRef } from "./edgeLines";
 import { FINISH } from "../document/materials";
+import { removeSelectionGlows } from "./selectionGlow";
 
 export { BodyEdges, EDGE_IDLE_COLOR, EDGE_IDLE_WIDTH };
 export type { EdgeRef };
@@ -532,6 +533,7 @@ export function resetBodyAppearance(body: BodyMesh) {
   body.mesh.quaternion.identity();
   body.mesh.scale.set(1, 1, 1);
   body.mesh.updateMatrixWorld();
+  removeSelectionGlows(body.mesh);
   for (const mat of bodyMaterials(body)) {
     mat.clippingPlanes = null;
     mat.transparent = false;
