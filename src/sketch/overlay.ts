@@ -560,7 +560,8 @@ export class SketchOverlay {
   private clearGroup(g: THREE.Group) {
     for (const c of [...g.children]) {
       g.remove(c);
-      (c as any).geometry?.dispose?.();
+      // a text is a group of glyph lines, so the geometry can sit a level down
+      c.traverse((o) => (o as Partial<THREE.Mesh>).geometry?.dispose());
     }
   }
 }
