@@ -7,7 +7,7 @@ import * as THREE from "three";
 import { applyClearcoat, applyGlassLook, isRenderLowPower, type BodyMesh, type ModelView } from "./render";
 import type { SceneBundle } from "./scene";
 import { type BodyFinish, FINISH, isShiny } from "../document/materials";
-import { applySurface, applySurfaceGraph, graphKey, surfaceKey } from "./proceduralSurface";
+import { applySurface, applySurfaceGraph, cloneWithoutSurface, graphKey, surfaceKey } from "./proceduralSurface";
 import { MAX_EMISSIVE_INTENSITY } from "../ui/renderPrefs";
 import { type AreaEmitter, areaEmitters, emitterLuminance, emitterShadowNear, emitterStandoff } from "./emitters";
 import { installAreaLights } from "./areaLightShadows";
@@ -334,7 +334,7 @@ export class BodyFinishLayer {
       if (slot === undefined) {
         slot = mats.length;
         slotOf.set(k, slot);
-        mats.push(base.clone());
+        mats.push(cloneWithoutSurface(base));
         finishes.push(this.faceFinish[fid]!);
         colors.push(this.facePaint[fid]);
       }

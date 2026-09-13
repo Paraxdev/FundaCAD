@@ -120,6 +120,15 @@ type Physical = THREE.MeshStandardMaterial & {
   userData: { surfKey?: string; surfUniforms?: Record<string, THREE.IUniform> };
 };
 
+/** Material.clone JSON-copies userData (the Color uniform turns into a plain
+ *  object) but not onBeforeCompile, so a clone has to shed the surface state. */
+export function cloneWithoutSurface<T extends THREE.Material>(mat: T): T {
+  const c = mat.clone() as T;
+  delete c.userData.surfKey;
+  delete c.userData.surfUniforms;
+  return c;
+}
+
 // --- the picker path: one generator, live uniforms --------------------------
 export function applySurface(mat: THREE.Material, spec: SurfaceSpec | undefined): void {
   const m = mat as Physical;

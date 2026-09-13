@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { compileGraph, graphKey } from "../../src/viewport/proceduralSurface";
+import * as THREE from "three";
+import { applySurface, cloneWithoutSurface, compileGraph, graphKey } from "../../src/viewport/proceduralSurface";
 import type { SurfaceGraph } from "../../src/document/materials";
 
 // The compiler turns a node graph into the GLSL `sGraph` function. These check
@@ -120,5 +121,17 @@ describe("compileGraph", () => {
     const glsl = compileGraph(g);
     // a is wired to n1, b falls back to its baked constant 3
     expect(glsl).toContain("float g_m1 = clamp(pow(max(g_n1, 0.0), 3.00000), 0.0, 1.0);");
+  });
+});
+
+describe("cloneWithoutSurface", () => {
+  it("gives a face material cloned from a textured body its own live surface", () => {
+    const spec = { kind: "noise" as const, scale: 4, amount: 0.5, color: "#ff0000", colorAmount: 0.3 };
+    const base = new THREE.MeshStandardMaterial();
+    applySurface(base, spec);
+    const face = cloneWithoutSurface(base);
+    expect(() => applySurface(face, spec)).not.toThrow();
+    expect(face.userData.surfUniforms!.uSurfColor.value).toBeInstanceOf(THREE.Color);
+    expect(face.userData.surfUniforms).not.toBe(base.userData.surfUniforms);
   });
 });
