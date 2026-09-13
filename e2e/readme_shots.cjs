@@ -266,9 +266,9 @@ const ZOOM = Number(process.env.ZOOM || 1);
   await page.goto(URL, { waitUntil: "networkidle" });
   await page.evaluate(() => {
     localStorage.setItem("fundacad.welcomeOnStartup", "false");
-    // The History card would cover the right third of the parts.
+    // Both cards open: the framing below centres the parts between them.
     localStorage.setItem("fundacad.shell.items", "1");
-    localStorage.setItem("fundacad.shell.history", "0");
+    localStorage.setItem("fundacad.shell.history", "1");
   });
   await page.reload({ waitUntil: "networkidle" });
   await page.waitForFunction(() => !!window.store && !!window.viewport && !!window.geometry, null, { timeout: 60000 });
