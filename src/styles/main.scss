@@ -19,10 +19,6 @@
 //     file-splitting and nothing else.
 
 @use "tokens";
-// Straight after tokens and before anything that consumes them: a theme block
-// is the same custom properties at a higher specificity, so it only has to win
-// against :root, and every rule below reads whichever set is active.
-@use "themes";
 @use "base";
 @use "titlebar";
 @use "palette";

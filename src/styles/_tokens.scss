@@ -1,127 +1,62 @@
-/* ============================================================================
-   FundaCAD, the one theme, ported from NeoNoir
-   ============================================================================
-
-   The look is NeoNoir (github.com/Paraxdev/NeoNoirMainsailTheme) brought over
-   to FundaCAD's token system: a neo-brutalist cyberpunk skin, near-black canvas
-   with a distinct PURPLE cast rather than flat grey, dark violet-charcoal panels
-   raised off it, warm cream text, and one loud mint-green neon accent. Depth is
-   physical, hard black offset shadows and visible edges, not glow and not
-   gradients. The earlier flat-graphite pass read as murky and dead; the purple
-   in the surfaces and the green on top are what make this one feel lit.
-
-   Palette mapping from NeoNoir's tokens:
-     --nn-ink   #050409  -> --bg          (deepest, behind everything)
-     --nn-void  #1b1826  -> --panel        (docked panels)
-     --nn-card  #272233  -> --panel-2      (nested surfaces, inputs, popups)
-     --nn-text  #f6f0e4  -> --text         (cream)
-     --nn-green #4bf9bc  -> --accent        (the neon that every screenshot leads with)
-     --nn-amber #ffab2e  -> --warn
-     --nn-red   #ff5c5c  -> --error
-   NeoNoir's default identity accent is actually the purple (#7b5cff); its own
-   screenshots run mint-green because Mainsail's primary was set that way, and
-   that green-on-violet is the feel being matched here. Swapping --accent (and
-   its tints/on-accent) to the purple is a one-block edit if the identity colour
-   is wanted over the screenshot look.
-
-   The one built-in theme lives on :root, so it is on screen before a line of
-   script runs; a user's OWN palette is still uploaded at runtime and layered
-   over this as inline custom properties (ui/theme.ts). The SHAPE below (radii,
-   spacing, shadows, motion, type) is shared with an uploaded palette, which can
-   only move COLOUR: a theme is a repaint, never a relayout.
-   ============================================================================ */
+/* The built-in theme, NeoNoir: violet-black surfaces, cream text and a mint
+   neon accent. It lives on :root so it is on screen before any script runs; an
+   uploaded palette overrides only the colour tokens (ui/theme.ts), never the
+   shape tokens below. */
 
 :root {
-  /* Native controls (a <select> popup, scrollbars, the form focus ring) are
-     drawn by the engine and default to a LIGHT scheme however dark the page is.
-     Declaring it dark is what makes them match. */
+  /* Native controls (select popups, scrollbars) default to a light scheme otherwise. */
   color-scheme: dark;
 
-  /* --- surfaces (dark → light, back → front) ---
-     A violet-black ramp, NOT neutral grey: the purple cast is the point, it is
-     what stops the dark from reading as dead, and it is the half of NeoNoir the
-     green accent needs behind it to pop. The steps are carried apart by the
-     borders and the hard shadows below, not by luminance alone. */
-  --bg: #050409;          /* app background, deepest (nn-ink) */
-  --panel: #1b1826;       /* docked panels (browser/inspector/ribbon/timeline) (nn-void) */
-  --panel-2: #272233;     /* nested surfaces, inputs, popups (nn-card) */
-  --raised: #322c42;      /* hover / raised interactive surface */
-  --raised-2: #3d3651;    /* pressed / stronger hover */
-  /* The 3D view's own ground. Read by the Three side (viewport/themeColors ->
-     scene.applyRenderPrefs), not by any CSS rule. A hair off --bg and carrying
-     the same violet so the viewport belongs to the same room as the chrome. */
+  /* --- surfaces, back to front --- */
+  --bg: #050409;
+  --panel: #1b1826;
+  --panel-2: #272233;
+  --raised: #322c42;
+  --raised-2: #3d3651;
+  /* Read by the Three side (viewport/themeColors), not by any CSS rule. */
   --viewport-bg: #0b0912;
 
   /* --- borders ---
-     A violet hairline for the seams, and a clearly stronger one for the edges
-     that ring a control or a popup, which is where NeoNoir's brutalist stroke
-     lives. Kept off pure black on purpose: --line-strong also draws the
-     scrollbar thumb (_base.scss), and a black thumb on a dark page is an
-     invisible one. */
-  --line: #322c42;        /* divider, visible, not a hairline */
-  --line-strong: #5c5470; /* stronger border (focusable controls, popups) (nn-hairline) */
+     Kept off pure black: --line-strong also draws the scrollbar thumb. */
+  --line: #322c42;
+  --line-strong: #5c5470;
 
-  /* --- text ---
-     Cream, not white: the warm off-white is a load-bearing part of the noir
-     feel and reads softer on the violet-black than a pure #fff would. */
-  --text: #f6f0e4;        /* primary (nn-text) */
-  --text-dim: #aaa1b5;    /* secondary / labels (nn-muted) */
-  --text-mute: #7d7590;   /* tertiary / hints */
+  /* --- text --- */
+  --text: #f6f0e4;
+  --text-dim: #aaa1b5;
+  --text-mute: #7d7590;
 
-  /* --- accent: the mint-green neon ---
-     #4bf9bc, the colour every NeoNoir screenshot leads with: the active nav
-     item, the line on top of a card, a slider fill. It is also what a selected
-     edge, a dimension and a manipulator handle are drawn in over shaded
-     geometry, and this green holds up against a lit grey face as brightly as it
-     does against a violet panel. */
+  /* --- accent ---
+     Also what selected edges, dimensions and manipulator handles are drawn in. */
   --accent: #4bf9bc;
   --accent-hot: #7dffd4;
   --accent-tint: rgba(75, 249, 188, 0.14);
   --accent-tint-2: rgba(75, 249, 188, 0.24);
   --accent-glow: rgba(75, 249, 188, 0.35);
-  --on-accent: #00140d;   /* near-black text on a filled accent surface */
+  --on-accent: #00140d;
 
   /* --- semantic ---
-     NeoNoir's own success/warning/error. The success green is pulled a step
-     deeper than the accent so an "ok" badge and a selection are not the exact
-     same green sitting next to each other. */
+     --ok is a step deeper than the accent so an ok badge and a selection differ. */
   --ok: #17c99a;
   --warn: #ffab2e;
   --error: #ff5c5c;
   --error-tint: rgba(255, 92, 92, 0.14);
 
-  /* legacy alias (kept so any stray reference still resolves) */
+  /* legacy alias */
   --accent-blue: var(--accent);
 
-  /* --- type ---
-     NeoNoir's pairing, self-hosted (see main.ts): Space Grotesk for UI and
-     headings, JetBrains Mono for numbers, coordinates and code. Both fall back
-     to Inter / the platform stack if a weight fails to load, so text is never
-     unstyled. --mono was already referenced by _modals.scss with a fallback and
-     now has a real value. */
+  /* --- type (self-hosted, see main.ts) --- */
   --ui: "Space Grotesk", "Inter", system-ui, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
-  /* --- radii ---
-     Small, not zero. Zero was the graphite pass's mistake, razor corners on
-     every control read as unfinished rather than as brutalist. NeoNoir is
-     brutalist WITH a 3-4px round and full pills on bars and thumbs, which is
-     what keeps a chunky black-shadowed control from looking like a raw div.
-       xs   badges, swatches and grips
-       sm   controls: inputs, buttons, chips, menu rows (nn-r-sm)
-       md   containers: popups, cards, the ribbon button (nn-r)
-       lg   dialogs and the docked palette
-       pill fully-rounded capsules, sliders and thin bars */
+  /* --- radii --- */
   --r-xs: 2px;
   --r-sm: 3px;
   --r-md: 4px;
   --r-lg: 5px;
   --r-pill: 999px;
 
-  /* --- spacing scale ---
-     Proportion, not colour, and unchanged: every gap, padding and margin comes
-     from this ramp so the whole thing tightens or loosens from one place.
-       s-0 2px  s-1 4px  s-2 8px  s-3 12px  s-4 16px  s-5 20px  s-6 28px  s-7 36px */
+  /* --- spacing --- */
   --s-0: 2px;
   --s-1: 4px;
   --s-2: 8px;
@@ -131,12 +66,7 @@
   --s-6: 28px;
   --s-7: 36px;
 
-  /* --- elevation ---
-     Hard black offsets, zero blur, the defining NeoNoir move: a control is a
-     solid object with a black shadow thrown down and to the right, not a card
-     hazily floating. Near-opaque black so it still reads where it falls on the
-     violet panels rather than on the near-black page. --shadow-1 stays gone;
-     things that sit in the layout are separated by their borders. */
+  /* --- elevation: hard offsets, zero blur --- */
   --shadow-1: none;
   --shadow-2: 4px 4px 0 rgba(0, 0, 0, 0.85);
   --shadow-3: 6px 6px 0 rgba(0, 0, 0, 0.9);
@@ -148,9 +78,7 @@
   --t-med: 160ms;
 
   /* --- floating shell ---
-     The cards, rail tiles and popovers that sit over the viewport. Softer and
-     rounder than the docked chrome on purpose: they float over a lit model, and
-     a hard offset shadow there reads as a hole cut in the scene. */
+     Soft shadows here: a hard offset over a lit model reads as a hole in the scene. */
   --float-bg: color-mix(in srgb, var(--panel) 72%, transparent);
   --float-bg-solid: color-mix(in srgb, var(--panel) 92%, transparent);
   --float-line: rgba(255, 255, 255, 0.09);
@@ -162,8 +90,6 @@
   --float-gap: 12px;
   --rail-tile: 40px;
 
-  /* Glass without refraction: a tinted fill over a heavy blur, a sheen across
-     the top, a lit top edge, and a rim that catches the accent at the far corner. */
   --glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0) 46%);
   --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 -1px 0 rgba(0, 0, 0, 0.22);
   --glass-rim: linear-gradient(

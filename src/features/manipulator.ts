@@ -192,7 +192,7 @@ export function fluentRelease(opts: {
 }
 
 // --- the grab handle ------------------------------------------------------
-// Painted from the app's own accent tokens (styles/_themes.scss), not a private
+// Painted from the app's own accent tokens (styles/_tokens.scss), not a private
 // palette: this is the most-looked-at thing on screen.
 
 // The literals are FALLBACKS, not the palette: each is read from its theme token
