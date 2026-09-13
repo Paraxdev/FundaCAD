@@ -102,6 +102,45 @@ def test_arity_is_checked():
         raise AssertionError(f"{src} was accepted")
 
 
+def test_comparisons_and_logic_match_the_app():
+    """Same cases as tests/params/expr.test.ts. The tolerance on == is the one
+    that would drift silently: bit equality says 0.1 + 0.2 != 0.3, and a feature
+    gated on it would build in one program and not the other."""
+    cases = [
+        ("3 > 2", 1), ("3 < 2", 0), ("2 <= 2", 1), ("2 >= 3", 0),
+        ("1 + 1 == 2", 1), ("0.1 + 0.2 == 0.3", 1), ("0.1 + 0.2 != 0.3", 0),
+        ("1 == 1.001", 0), ("0 || 0 && 1", 0), ("1 || 0 && 0", 1),
+        ("!0 + !5", 1), ("(2 > 1) * 10", 10),
+    ]
+    for src, want in cases:
+        close(evaluate(src), want)
+    close(evaluate("a > 1 && b < 5", {"a": 2, "b": 4}), 1)
+    close(evaluate("a > 1 && b < 5", {"a": 0, "b": 4}), 0)
+    close(evaluate("a > 1 || b < 5", {"a": 0, "b": 4}), 1)
+    for src in ("1 < 2 < 3", "1 & 2"):
+        try:
+            evaluate(src)
+        except ExprError:
+            continue
+        raise AssertionError(f"{src} was accepted")
+
+
+def test_if_picks_a_branch_and_NaN_never_picks_one():
+    close(evaluate("if(solid == 1; 0; 2.4)", {"solid": 1}), 0)
+    close(evaluate("if(solid == 1; 0; 2.4)", {"solid": 0}), 2.4)
+    close(evaluate("if(-3; 1; 2)"), 1)
+    close(evaluate("if(n > 0; n; 1) * 2", {"n": 0}), 2)
+    assert math.isnan(evaluate("if(sqrt(-1); 1; 2)"))
+    assert math.isnan(evaluate("sqrt(-1) > 0"))
+    assert math.isnan(evaluate("!sqrt(-1)"))
+    assert refs_of(parse_expr("if(a > b; c; !d)")) == {"a", "b", "c", "d"}
+    try:
+        evaluate("if(1; 2)")
+    except ExprError:
+        return
+    raise AssertionError("if with two arguments was accepted")
+
+
 def test_reserved_names():
     assert is_reserved_name("sin") and is_reserved_name("mm") and is_reserved_name("PI")
     assert is_reserved_name("log"), "reserved-but-unimplemented names are still reserved"

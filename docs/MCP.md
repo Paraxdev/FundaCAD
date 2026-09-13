@@ -303,7 +303,8 @@ one-shot calls is not a session, use `--script`, which is either a JSON array of
 
 `expr.py` and `schema.py` are both ports of things whose authority lives
 elsewhere, so both are pinned by tests: `plugins/FundaCAD.MCP/tests/test_expr.py` holds the
-grammar (degrees trig, right-associative `^`, semicolon arguments) and
+grammar (degrees trig, right-associative `^`, semicolon arguments, comparisons
+with a 1e-9 tolerance on `==`, and `if()`) and
 `plugins/FundaCAD.MCP/tests/test_schema.py` holds every documented type against the sidecar's own
 `_FEATURE_HANDLERS` table, in both directions.
 

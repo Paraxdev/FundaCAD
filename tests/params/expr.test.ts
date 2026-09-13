@@ -52,13 +52,46 @@ describe("expression evaluator", () => {
     expect(() => ev("2 3")).toThrow(/unexpected/);
     expect(() => ev("(2 + 3")).toThrow(/missing "\)"/);
     expect(() => ev("blorp(3)")).toThrow(/unknown function/);
-    expect(() => ev("if(1; 2; 3)")).toThrow(/not supported yet/);
+    expect(() => ev("log(3)")).toThrow(/not supported yet/);
     expect(() => ev("sin(1; 2)")).toThrow(/1 argument/);
     expect(() => ev("min(1)")).toThrow(/at least 2/);
     expect(() => ev("a.b", { a: 1 })).toThrow(/qualified names/);
     expect(() => ev("2 $ 3")).toThrow(/unexpected character/);
     expect(ev("1 / 0")).toBe(Infinity); // caller gates on isFinite
     expect(Number.isNaN(ev("sqrt(-1)"))).toBe(true);
+  });
+
+  it("comparisons and logic yield 1 or 0, and bind looser than arithmetic", () => {
+    expect(ev("3 > 2")).toBe(1);
+    expect(ev("3 < 2")).toBe(0);
+    expect(ev("2 <= 2")).toBe(1);
+    expect(ev("2 >= 3")).toBe(0);
+    expect(ev("1 + 1 == 2")).toBe(1);
+    expect(ev("0.1 + 0.2 == 0.3")).toBe(1); // tolerance, not bit equality
+    expect(ev("0.1 + 0.2 != 0.3")).toBe(0);
+    expect(ev("1 == 1.001")).toBe(0);
+    expect(ev("a > 1 && b < 5", { a: 2, b: 4 })).toBe(1);
+    expect(ev("a > 1 && b < 5", { a: 0, b: 4 })).toBe(0);
+    expect(ev("a > 1 || b < 5", { a: 0, b: 4 })).toBe(1);
+    expect(ev("0 || 0 && 1")).toBe(0); // && binds tighter than ||
+    expect(ev("1 || 0 && 0")).toBe(1);
+    expect(ev("!0 + !5")).toBe(1);
+    expect(ev("(2 > 1) * 10")).toBe(10);
+    expect(() => ev("1 < 2 < 3")).toThrow(/do not chain/);
+    expect(() => ev("1 & 2")).toThrow(/unexpected character/);
+  });
+
+  it("if() picks a branch on a non-zero condition, and NaN never picks one", () => {
+    expect(ev("if(solid == 1; 0; 2.4)", { solid: 1 })).toBe(0);
+    expect(ev("if(solid == 1; 0; 2.4)", { solid: 0 })).toBe(2.4);
+    expect(ev("if(-3; 1; 2)")).toBe(1);
+    expect(ev("if(n > 0; n; 1) * 2", { n: 0 })).toBe(2);
+    expect(Number.isNaN(ev("if(sqrt(-1); 1; 2)"))).toBe(true);
+    expect(Number.isNaN(ev("sqrt(-1) > 0"))).toBe(true);
+    expect(Number.isNaN(ev("!sqrt(-1)"))).toBe(true);
+    expect(() => ev("if(1; 2)")).toThrow(/3 argument/);
+    expect(extractRefs("if(a > b; c; !d)").sort()).toEqual(["a", "b", "c", "d"]);
+    expect(renameRefs("if(a >= 2; a; 0)", "a", "rings")).toBe("if(rings >= 2; rings; 0)");
   });
 
   it("extractRefs skips constants, functions, and unit suffixes", () => {

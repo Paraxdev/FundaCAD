@@ -747,6 +747,9 @@ screen. Every edit you make appears in their window as it happens.
             "Define or redefine a parameter. `expr` may be a number or an "
             "expression over other parameters (\"hub_d/2 - wall\"). Features "
             "reference it by NAME, which is what keeps the model parametric. "
+            "Function arguments are separated by SEMICOLONS and trig is in "
+            "degrees. Comparisons (< <= > >= == !=), && || ! yield 1 or 0, and "
+            "if(cond; a; b) picks a branch: \"if(solid == 1; 0; innerX)\". "
             "Refused, changing nothing, if the expression does not resolve.",
             {"name": {"type": "string"},
              "expr": {"type": ["string", "number"]},

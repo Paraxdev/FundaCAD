@@ -6,7 +6,9 @@
 // wrong arity, those are reject-at-commit errors.
 
 import { CONSTANTS, ExprError, FUNCTIONS, RESERVED_FUNCTIONS, parseExpr } from "./parse";
-import type { ExprNode } from "./parse";
+import type { BinOp, ExprNode } from "./parse";
+
+const TRUTH_OPS = new Set<BinOp>(["<", "<=", ">", ">=", "==", "!=", "&&", "||"]);
 
 export function evalNode(n: ExprNode, values: Record<string, number>): number {
   switch (n.t) {
@@ -33,18 +35,38 @@ export function evalNode(n: ExprNode, values: Record<string, number>): number {
     case "bin": {
       const l = evalNode(n.l, values);
       const r = evalNode(n.r, values);
+      // NaN poisons comparison and logic too, so a broken input never reads as
+      // a clean false and switches a feature off without anyone noticing.
+      if (TRUTH_OPS.has(n.op) && (Number.isNaN(l) || Number.isNaN(r))) return NaN;
       switch (n.op) {
         case "+": return l + r;
         case "-": return l - r;
         case "*": return l * r;
         case "/": return l / r;
         case "^": return Math.pow(l, r);
+        case "<": return l < r ? 1 : 0;
+        case "<=": return l <= r || nearlyEqual(l, r) ? 1 : 0;
+        case ">": return l > r ? 1 : 0;
+        case ">=": return l >= r || nearlyEqual(l, r) ? 1 : 0;
+        case "==": return nearlyEqual(l, r) ? 1 : 0;
+        case "!=": return nearlyEqual(l, r) ? 0 : 1;
+        case "&&": return l !== 0 && r !== 0 ? 1 : 0;
+        case "||": return l !== 0 || r !== 0 ? 1 : 0;
       }
     }
     // eslint-disable-next-line no-fallthrough -- the inner switch returns on every op
     case "neg":
       return -evalNode(n.e, values);
+    case "not": {
+      const v = evalNode(n.e, values);
+      return Number.isNaN(v) ? NaN : v === 0 ? 1 : 0;
+    }
   }
+}
+
+export function nearlyEqual(a: number, b: number): boolean {
+  if (a === b) return true;
+  return Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(a), Math.abs(b));
 }
 
 /** Parse + evaluate `src` against `values`. Throws ExprError on structural

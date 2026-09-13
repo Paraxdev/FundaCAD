@@ -1,12 +1,19 @@
 // Expression tokenizer + parser for the parameters engine. No dependencies.
 //
 // Grammar (Fusion-flavored):
-//   expr    := add
+//   expr    := or
+//   or      := and ('||' and)*
+//   and     := cmp ('&&' cmp)*
+//   cmp     := add (('<'|'<='|'>'|'>='|'=='|'!=') add)?   // non-associative
 //   add     := mul (('+'|'-') mul)*
 //   mul     := unary (('*'|'/') unary)*
-//   unary   := '-' unary | pow
+//   unary   := '-' unary | '!' unary | pow
 //   pow     := primary ('^' unary)?           // right-assoc; -2^2 = -(2^2)
 //   primary := NUMBER unit? | IDENT '(' expr (';' expr)* ')' | IDENT | '(' expr ')'
+//
+// Truth is a number: comparisons and logic yield 1 or 0, and anything non-zero
+// counts as true. `==` and `!=` compare with a relative tolerance of 1e-9, so a
+// value built from arithmetic (0.1 + 0.2) still equals the literal it should.
 //
 // Unit suffixes bind to NUMBER literals only and convert to canonical units at
 // parse time (lengths → mm, angles → degrees); the AST keeps the unit tag so a
@@ -49,12 +56,15 @@ export const FUNCTIONS: Record<string, { arity: [number, number]; apply: (args: 
   sqrt: { arity: [1, 1], apply: ([a]) => Math.sqrt(a!) },
   min: { arity: [2, Infinity], apply: (args) => Math.min(...args) },
   max: { arity: [2, Infinity], apply: (args) => Math.max(...args) },
+  // Both branches are evaluated; there are no side effects, and a NaN condition
+  // stays NaN so a broken input cannot quietly pick a branch.
+  if: { arity: [3, 3], apply: ([c, a, b]) => (Number.isNaN(c!) ? NaN : c !== 0 ? a! : b!) },
 };
 
 /** Reserved-but-unimplemented function names (future grammar additions must not
  *  be shadowed by user parameters). */
 export const RESERVED_FUNCTIONS = new Set([
-  "if", "pow", "ln", "log", "exp", "sign", "random", "sinh", "cosh", "tanh",
+  "pow", "ln", "log", "exp", "sign", "random", "sinh", "cosh", "tanh",
 ]);
 
 export const CONSTANTS: Record<string, number> = { PI: Math.PI };
@@ -73,6 +83,7 @@ export type Token =
 
 const IDENT_START = /[A-Za-z_]/;
 const IDENT_PART = /[A-Za-z0-9_]/;
+const TWO_CHAR_OPS = ["<=", ">=", "==", "!=", "&&", "||"];
 
 export function tokenize(src: string): Token[] {
   const out: Token[] = [];
@@ -107,7 +118,13 @@ export function tokenize(src: string): Token[] {
       out.push({ kind: "ident", name: src.slice(start, i), start, end: i });
       continue;
     }
-    if ("+-*/^();".includes(ch)) {
+    const two = src.slice(i, i + 2);
+    if (TWO_CHAR_OPS.includes(two)) {
+      out.push({ kind: "op", op: two, start: i, end: i + 2 });
+      i += 2;
+      continue;
+    }
+    if ("+-*/^();<>!".includes(ch)) {
       out.push({ kind: "op", op: ch, start: i, end: i + 1 });
       i++;
       continue;
@@ -119,12 +136,17 @@ export function tokenize(src: string): Token[] {
 
 // --- AST ---
 
+export type BinOp = "+" | "-" | "*" | "/" | "^" | "<" | "<=" | ">" | ">=" | "==" | "!=" | "&&" | "||";
+
 export type ExprNode =
   | { t: "num"; v: number; unit?: keyof typeof UNITS } // v is ALREADY canonical
   | { t: "ref"; name: string }
   | { t: "call"; name: string; args: ExprNode[] }
-  | { t: "bin"; op: "+" | "-" | "*" | "/" | "^"; l: ExprNode; r: ExprNode }
-  | { t: "neg"; e: ExprNode };
+  | { t: "bin"; op: BinOp; l: ExprNode; r: ExprNode }
+  | { t: "neg"; e: ExprNode }
+  | { t: "not"; e: ExprNode };
+
+const CMP_OPS: BinOp[] = ["<=", ">=", "==", "!=", "<", ">"];
 
 class Parser {
   private i = 0;
@@ -144,12 +166,36 @@ class Parser {
 
   parse(): ExprNode {
     if (this.toks.length === 0) throw new ExprError("empty expression");
-    const node = this.add();
+    const node = this.expr();
     const left = this.peek();
     if (left) throw new ExprError(`unexpected "${left.kind === "op" ? left.op : left.kind === "ident" ? left.name : left.value}"`, left.start);
     return node;
   }
 
+  private expr(): ExprNode {
+    return this.or();
+  }
+  private or(): ExprNode {
+    let l = this.and();
+    while (this.takeOp("||")) l = { t: "bin", op: "||", l, r: this.and() };
+    return l;
+  }
+  private and(): ExprNode {
+    let l = this.cmp();
+    while (this.takeOp("&&")) l = { t: "bin", op: "&&", l, r: this.cmp() };
+    return l;
+  }
+  private cmp(): ExprNode {
+    const l = this.add();
+    const op = CMP_OPS.find((o) => this.takeOp(o));
+    if (!op) return l;
+    const node: ExprNode = { t: "bin", op, l, r: this.add() };
+    const chained = this.peek();
+    if (chained?.kind === "op" && CMP_OPS.includes(chained.op as BinOp)) {
+      throw new ExprError("comparisons do not chain, join them with &&", chained.start);
+    }
+    return node;
+  }
   private add(): ExprNode {
     let l = this.mul();
     for (;;) {
@@ -168,6 +214,7 @@ class Parser {
   }
   private unary(): ExprNode {
     if (this.takeOp("-")) return { t: "neg", e: this.unary() };
+    if (this.takeOp("!")) return { t: "not", e: this.unary() };
     return this.pow();
   }
   private pow(): ExprNode {
@@ -191,8 +238,8 @@ class Parser {
     if (t.kind === "ident") {
       this.i++;
       if (this.takeOp("(")) {
-        const args: ExprNode[] = [this.add()];
-        while (this.takeOp(";")) args.push(this.add());
+        const args: ExprNode[] = [this.expr()];
+        while (this.takeOp(";")) args.push(this.expr());
         if (!this.takeOp(")")) throw new ExprError(`missing ")" in ${t.name}(…)`, this.peek()?.start ?? t.end);
         return { t: "call", name: t.name, args };
       }
@@ -200,7 +247,7 @@ class Parser {
     }
     if (t.op === "(") {
       this.i++;
-      const inner = this.add();
+      const inner = this.expr();
       if (!this.takeOp(")")) throw new ExprError('missing ")"', this.peek()?.start ?? t.end);
       return inner;
     }
@@ -228,6 +275,7 @@ export function refsOfNode(node: ExprNode): string[] {
         walk(n.r);
         return;
       case "neg":
+      case "not":
         walk(n.e);
         return;
       case "num":

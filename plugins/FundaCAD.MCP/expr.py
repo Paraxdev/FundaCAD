@@ -45,11 +45,22 @@ FUNCTIONS = {
     "sqrt": ((1, 1), lambda a: math.sqrt(a[0])),
     "min": ((2, None), min),
     "max": ((2, None), max),
+    "if": ((3, 3), lambda a: math.nan if math.isnan(a[0]) else (a[1] if a[0] != 0 else a[2])),
 }
 
 RESERVED_FUNCTIONS = {
-    "if", "pow", "ln", "log", "exp", "sign", "random", "sinh", "cosh", "tanh",
+    "pow", "ln", "log", "exp", "sign", "random", "sinh", "cosh", "tanh",
 }
+
+_CMP_OPS = ("<=", ">=", "==", "!=", "<", ">")
+_TRUTH_OPS = set(_CMP_OPS) | {"&&", "||"}
+
+
+def nearly_equal(a, b):
+    """`==` in the expression language: relative tolerance 1e-9, as in eval.ts."""
+    if a == b:
+        return True
+    return abs(a - b) <= 1e-9 * max(1.0, abs(a), abs(b))
 
 CONSTANTS = {"PI": math.pi}
 
@@ -68,7 +79,8 @@ def is_reserved_name(name):
 
 _IDENT_START = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_")
 _IDENT_PART = _IDENT_START | set("0123456789")
-_OPS = set("+-*/^();")
+_OPS = set("+-*/^();<>!")
+_TWO_CHAR_OPS = {"<=", ">=", "==", "!=", "&&", "||"}
 
 
 def tokenize(src):
@@ -96,6 +108,10 @@ def tokenize(src):
             out.append(("ident", src[i:j], i))
             i = j
             continue
+        if src[i:i + 2] in _TWO_CHAR_OPS:
+            out.append(("op", src[i:i + 2], i))
+            i += 2
+            continue
         if ch in _OPS:
             out.append(("op", ch, i))
             i += 1
@@ -120,10 +136,36 @@ class _Parser:
         return False
 
     def parse(self):
-        node = self.add()
+        node = self.expr()
         if self.i != len(self.t):
             tok = self.t[self.i]
             raise ExprError(f"unexpected {tok[1]!r} at {tok[2]}", tok[2])
+        return node
+
+    def expr(self):
+        return self.or_()
+
+    def or_(self):
+        node = self.and_()
+        while self.take_op("||"):
+            node = ("bin", "||", node, self.and_())
+        return node
+
+    def and_(self):
+        node = self.cmp()
+        while self.take_op("&&"):
+            node = ("bin", "&&", node, self.cmp())
+        return node
+
+    def cmp(self):
+        node = self.add()
+        for op in _CMP_OPS:
+            if self.take_op(op):
+                node = ("bin", op, node, self.add())
+                nxt = self.peek()
+                if nxt and nxt[0] == "op" and nxt[1] in _CMP_OPS:
+                    raise ExprError("comparisons do not chain, join them with &&", nxt[2])
+                break
         return node
 
     def add(self):
@@ -149,6 +191,8 @@ class _Parser:
     def unary(self):
         if self.take_op("-"):
             return ("neg", self.unary())
+        if self.take_op("!"):
+            return ("not", self.unary())
         return self.pow()
 
     def pow(self):
@@ -175,16 +219,16 @@ class _Parser:
             if self.take_op("("):
                 args = []
                 if not self.take_op(")"):
-                    args.append(self.add())
+                    args.append(self.expr())
                     while self.take_op(";"):
-                        args.append(self.add())
+                        args.append(self.expr())
                     if not self.take_op(")"):
                         raise ExprError(f"missing ) in {val}(...)", pos)
                 return ("call", val, args, pos)
             return ("ref", val, pos)
         if val == "(":
             self.i += 1
-            node = self.add()
+            node = self.expr()
             if not self.take_op(")"):
                 raise ExprError("missing )", pos)
             return node
@@ -207,7 +251,7 @@ def refs_of(node, out=None):
     if t == "ref":
         if node[1] not in CONSTANTS:
             out.add(node[1])
-    elif t == "neg":
+    elif t in ("neg", "not"):
         refs_of(node[1], out)
     elif t == "bin":
         refs_of(node[2], out)
@@ -231,10 +275,31 @@ def eval_node(node, values):
         raise ExprError(f"unknown parameter {name!r}", node[2])
     if t == "neg":
         return -eval_node(node[1], values)
+    if t == "not":
+        v = eval_node(node[1], values)
+        return math.nan if math.isnan(v) else (1.0 if v == 0 else 0.0)
     if t == "bin":
         op = node[1]
         a = eval_node(node[2], values)
         b = eval_node(node[3], values)
+        if op in _TRUTH_OPS:
+            if math.isnan(a) or math.isnan(b):
+                return math.nan
+            if op == "<":
+                return 1.0 if a < b else 0.0
+            if op == "<=":
+                return 1.0 if a <= b or nearly_equal(a, b) else 0.0
+            if op == ">":
+                return 1.0 if a > b else 0.0
+            if op == ">=":
+                return 1.0 if a >= b or nearly_equal(a, b) else 0.0
+            if op == "==":
+                return 1.0 if nearly_equal(a, b) else 0.0
+            if op == "!=":
+                return 0.0 if nearly_equal(a, b) else 1.0
+            if op == "&&":
+                return 1.0 if a != 0 and b != 0 else 0.0
+            return 1.0 if a != 0 or b != 0 else 0.0
         if op == "+":
             return a + b
         if op == "-":

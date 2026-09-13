@@ -221,7 +221,8 @@ function hasUnitLiteral(n: ExprNode): boolean {
     case "ref": return false;
     case "call": return n.args.some(hasUnitLiteral);
     case "bin": return hasUnitLiteral(n.l) || hasUnitLiteral(n.r);
-    case "neg": return hasUnitLiteral(n.e);
+    case "neg":
+    case "not": return hasUnitLiteral(n.e);
   }
 }
 
