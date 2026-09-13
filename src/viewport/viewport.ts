@@ -12,8 +12,6 @@ import {
 } from "./cameras";
 import {
   buildBodyMesh,
-  applyClearcoat,
-  applyGlassLook,
   isRenderLowPower,
   buildEdgeLines,
   buildSectionGhosts,
@@ -51,9 +49,8 @@ import { EdgeEmphasis } from "./edgeEmphasis";
 import { ViewCube, FACE_VIEWS } from "./viewCube";
 import { setPrompt } from "../ui/prompt";
 import type { DocumentStore } from "../document/store";
-import { type BodyFinish, FINISH, isShiny } from "../document/materials";
-import { applySurface, applySurfaceGraph, graphKey, surfaceKey } from "./proceduralSurface";
-import { MAX_EMISSIVE_INTENSITY } from "../ui/renderPrefs";
+import type { BodyFinish } from "../document/materials";
+import { BodyFinishLayer, sameFinishMap, sameStringMap } from "./bodyFinish";
 import { onRenderPrefsChange, renderPrefs } from "../ui/renderPrefs";
 import { invalidateThemeColors } from "./themeColors";
 import { onThemeChange } from "../ui/theme";
@@ -78,34 +75,6 @@ const EDGE_PICKABLE = new THREE.Color(0xd98a4a); // muted ember "selectable" edg
 const SKETCH_DIM_OPACITY = 0.55;
 const SKETCH_DIM_EDGE_OPACITY = 0.5;
 
-// Emissive bodies and faces that cast light (syncEmitterLights). At most this
-// many rectangle lights, the brightest patches winning: every one is evaluated
-// for every lit pixel, so this is the budget, not a formality. How each patch is
-// shaped and how bright it is lives in emitters.ts.
-const MAX_AREA_LIGHTS = 12;
-const MAX_AREA_LIGHTS_LOW_POWER = 4;
-/** Only the brightest few emitters cast a SHADOW: a point-light shadow is a cube
- *  map (six renders), so this is the real cost of the effect, kept to the lights
- *  that carry the look. Zero on a weak machine (renderer.shadowMap.enabled off). */
-const MAX_SHADOW_EMITTERS = 2;
-/** One glowing patch to light: its fitted rectangle, and the glow and colour of
- *  the faces it covers, area weighted. */
-interface EmitterPatch { key: string; e: AreaEmitter; glow: number; color: THREE.Color }
-/** How far the face being sketched ON is lifted back ABOVE the rest, as added
- *  white. Small: the job is to separate it from its neighbours, not to make it
- *  a light source. */
-const SKETCH_FACE_LIFT = 0.14;
-
-/** How much of the model survives see-through. Lower than the sketch's dimming,
- *  because the point is the far side rather than the near one: at 0.55 the
- *  front face of a block still buries what is behind it. */
-const XRAY_OPACITY = 0.35;
-/** How much of the model is left standing when what is on screen is NOT what
- *  the values say. Fainter than see-through on purpose: see-through is a working
- *  mode you can still pick through, and this is the model saying it is not the
- *  answer. At the same weight the two states would be indistinguishable, and one
- *  of them means the part is wrong. */
-const STALE_OPACITY = 0.16;
 
 import { Highlighter, EDGE_HOVER_COLOR } from "./highlight";
 import { ProgressiveModel } from "./progressive";
@@ -124,8 +93,7 @@ import { faceSketchPlane } from "../sketch/sketchView";
 import { viewSideNormal } from "./viewFlight";
 import { themeColor } from "./themeColors";
 import { AreaBox } from "./areaBox";
-import { type AreaEmitter, areaEmitters, emitterLuminance, emitterShadowNear, emitterStandoff } from "./emitters";
-import { installAreaLights } from "./areaLightShadows";
+import { buildFaceMarker, disposeFaceMarker } from "./sketchFaceMarker";
 import { auditIsClean, auditLine, auditScene } from "../diagnostics/sceneAudit";
 import { pipe, pipeFault } from "../diagnostics/pipelineLog";
 import {
@@ -137,19 +105,14 @@ import {
 } from "./pointSnap";
 import {
   dragBox,
-  faceInBox,
   isAreaDrag,
-  polylineInBox,
-  boxOf,
-  boxVerdict,
-  unionBox,
   areaSelectionMode,
   nextAreaFilter,
   type AreaFilter,
   type AreaMode,
-  type ScreenBox,
   type ScreenRect,
 } from "./areaSelect";
+import { collectInBox, projectForArea, type AreaProjection } from "./areaProjection";
 
 /** One box drag in progress: where it started, whether it is adding, and the
  *  selection as it was when it started.
@@ -166,56 +129,9 @@ export interface AreaDrag {
   bodies: readonly string[];
 }
 
-/** Shallow equality for the flat id→hex paint maps. Cheap enough to run on every
- *  build (microseconds at 3,000 entries) and it saves a full GPU colour upload
- *  whenever the answer is yes, which is the common case. Body ids are strings and
- *  face ids are numbers; both index the same way, so one signature serves both. */
-export function sameStringMap(
-  a: Record<string, string> | Record<number, string>,
-  b: Record<string, string> | Record<number, string>,
-): boolean {
-  const av = a as Record<string, string>;
-  const bv = b as Record<string, string>;
-  const ka = Object.keys(av);
-  if (ka.length !== Object.keys(bv).length) return false;
-  for (const k of ka) if (av[k] !== bv[k]) return false;
-  return true;
-}
-
-/** Shallow equality for the id→finish map, the same bargain sameStringMap
- *  strikes above: run on every build so an unchanged map costs no material
- *  writes and no re-render. */
-function sameFinishMap(
-  a: Record<string, BodyFinish>,
-  b: Record<string, BodyFinish>,
-): boolean {
-  const ka = Object.keys(a);
-  if (ka.length !== Object.keys(b).length) return false;
-  for (const k of ka) {
-    const x = a[k];
-    const y = b[k];
-    if (
-      !y || !x || x.metalness !== y.metalness || x.roughness !== y.roughness
-      || x.opacity !== y.opacity || x.emissive !== y.emissive
-      || x.clearcoat !== y.clearcoat || surfaceKey(x.surface) !== surfaceKey(y.surface)
-      || graphKey(x.surfaceGraph) !== graphKey(y.surfaceGraph)
-    ) {
-      return false;
-    }
-  }
-  return true;
-}
-
 /** (0,0,0), kept once. Read every frame to size the origin arrows, and a fresh
  *  Vector3 per frame for a constant is litter in the hot path. Never written. */
 const WORLD_ORIGIN = new THREE.Vector3(0, 0, 0);
-
-/** Keep a face pickable and depth-free but draw nothing of it. */
-function applyWireframe(mat: THREE.Material, on: boolean) {
-  if (mat.colorWrite === !on) return;
-  mat.colorWrite = !on;
-  if (on) mat.depthWrite = false;
-}
 
 export class Viewport {
   readonly scene: SceneBundle;
@@ -1173,553 +1089,39 @@ export class Viewport {
     this.requestRender();
   }
 
-  /** Write every body's SURFACE FINISH: what its material says it is made of,
-   *  with the two see-through overlays on top of that.
-   *
-   *  ONE writer, deliberately. There are three reasons a body's material gets
-   *  written, an assigned material, x-ray, and the stale-model ghost, and as
-   *  three functions each would undo the others depending on which ran last.
-   *  That was already true of the two overlays before materials existed (hence
-   *  the single applyBodyTransparency this replaces); a glass material assigned
-   *  to a body is simply the third, and the one that has to survive a rebuild.
-   *
-   *  Opacity takes the FAINTEST of whatever applies: an overlay exists to say
-   *  something about the whole model, so it may not be argued out of by a
-   *  material, and stale wins over x-ray because stale is the one carrying a
-   *  warning.
-   *
-   *  Called again after every rebuild, which hands back fresh materials that
-   *  know nothing about any of this. */
-  /** The rectangle light per glowing patch, and the shadow only point light
-   *  paired with it when it is one of the few that cast shadows. */
-  private emitterLights = new Map<string, { area: THREE.RectAreaLight; shadow: THREE.PointLight | null }>();
-  private emitterGroup: THREE.Group | null = null;
-
-  private modelBloomable = false;
-
-  /** A sketch dims the model to a backdrop, so nothing on it is worth a glow. */
-  private syncBloomable() {
-    this.scene.post.bloomable = this.modelBloomable && !this.sketchDimmed;
-  }
+  private finish = new BodyFinishLayer({
+    model: () => this.model,
+    scene: () => this.scene,
+    faceIdToBodyId: (id) => this.faceIdToBodyId(id),
+    addToScene: (o) => this.addToScene(o),
+    requestRender: () => this.requestRender(),
+    savedMats: () => this.savedMats,
+  });
 
   private applyBodyFinish() {
     if (!this.model) return;
-    const ghost = this.xray || this.stale;
-    const ghostOpacity = this.stale ? STALE_OPACITY : XRAY_OPACITY;
-    // Which faces of which body carry a material of their own. Bucketed here,
-    // once per pass, rather than by scanning each body's whole face range: the
-    // map is sparse by contract and a body has six figures of faces on the
-    // reference assembly.
-    const byBody = new Map<string, number[]>();
-    for (const k of Object.keys(this.faceFinish)) {
-      const fid = Number(k);
-      const bid = this.faceIdToBodyId(fid);
-      if (!bid) continue;
-      const list = byBody.get(bid);
-      if (list) list.push(fid);
-      else byBody.set(bid, [fid]);
-    }
-    // Emissive bodies that should also THROW light on their neighbours (the glow
-    // is a lamp, not just a bright skin), collected here and reconciled into real
-    // lights after the pass, see syncEmitterLights.
-    const emitters: EmitterPatch[] = [];
-    let shiny = false;
-    for (const b of this.model.bodies) {
-      // The body's OWN material, which is not b.mesh.material while the zebra
-      // overlay is on: that one is shared by every body, so writing a finish to
-      // it would give the whole model one part's roughness.
-      const own = this.savedMats.get(b.id) ?? b.mesh.material;
-      const mat = (Array.isArray(own) ? own[0] : own);
-      if (!(mat instanceof THREE.MeshStandardMaterial)) continue;
-      this.syncFaceMaterials(b, mat, byBody.get(b.id));
-      const f = this.bodyFinish[b.id];
-      mat.metalness = f ? f.metalness : FINISH.metalness;
-      mat.roughness = f ? f.roughness : FINISH.roughness;
-      if (!ghost && f && isShiny(f)) shiny = true;
-      // What the surface gives off itself. The body's own COLOUR is baked per
-      // vertex and a material has one emissive colour, so the emissive tint is
-      // read back off the paint map rather than off the material: a body wearing
-      // a green indicator glows green, and one with no colour of its own glows
-      // white rather than black (emissive black is emissive off, which would
-      // have made the slider do nothing at all on an unpainted body).
-      //
-      // Zero for a ghost. A see-through body that still glows is drawn as
-      // brightly as an opaque one, so x-ray would light the model up instead of
-      // fading it, and the stale-model ghost would be the most eye-catching
-      // thing on screen.
-      const glow = ghost ? 0 : (f?.emissive ?? FINISH.emissive);
-      mat.emissive.set(glow > 0 ? (this.bodyPaint[b.id] ?? 0xffffff) : 0x000000);
-      mat.emissiveIntensity = glow * MAX_EMISSIVE_INTENSITY;
-      applyClearcoat(mat, ghost ? 0 : (f?.clearcoat ?? FINISH.clearcoat));
-      // A node graph wins over a single generator; both use one shader slot, so
-      // only the active one is applied and switching clears the other.
-      if (!ghost && f?.surfaceGraph) applySurfaceGraph(mat, f.surfaceGraph);
-      else applySurface(mat, ghost ? undefined : f?.surface);
-      // A clear, non-metal finish becomes real glass (refraction); anything else,
-      // and every ghost, keeps the plain fade below.
-      if (!applyGlassLook(mat, f ? f.opacity : 1, f ? f.metalness : FINISH.metalness, ghost)) {
-        const opacity = ghost ? Math.min(f ? f.opacity : 1, ghostOpacity) : f ? f.opacity : 1;
-        mat.transparent = opacity < 1;
-        mat.opacity = opacity;
-        // Off for anything see-through, so what is behind it is actually behind
-        // it. That is the whole point of a translucent body in CAD, and it is
-        // what x-ray already did.
-        mat.depthWrite = opacity >= 1;
-      }
-
-      // The per-face materials, by the SAME rules and in the same pass. That is
-      // the point of doing it here: x-ray, the stale ghost and the emissive
-      // colour are three things that have to be true of every material a body
-      // draws with, and a second writer for the extra ones would be a second
-      // place for them to disagree.
-      const extra = this.faceMatState.get(b.id);
-      let faceGlow = false;
-      if (extra) {
-        for (let i = 1; i < extra.mats.length; i++) {
-          const fm = extra.mats[i]!;
-          const ff = extra.finishes[i]!;
-          fm.metalness = ff.metalness;
-          fm.roughness = ff.roughness;
-          if (!ghost && isShiny(ff)) shiny = true;
-          const fglow = ghost ? 0 : ff.emissive;
-          if (fglow > 0) faceGlow = true;
-          fm.emissive.set(fglow > 0 ? (extra.colors[i] ?? 0xffffff) : 0x000000);
-          fm.emissiveIntensity = fglow * MAX_EMISSIVE_INTENSITY;
-          applyClearcoat(fm, ghost ? 0 : ff.clearcoat);
-          if (!ghost && ff.surfaceGraph) applySurfaceGraph(fm, ff.surfaceGraph);
-          else applySurface(fm, ghost ? undefined : ff.surface);
-          if (!applyGlassLook(fm, ff.opacity, ff.metalness, ghost)) {
-            const fo = ghost ? Math.min(ff.opacity, ghostOpacity) : ff.opacity;
-            fm.transparent = fo < 1;
-            fm.opacity = fo;
-            fm.depthWrite = fo >= 1;
-          }
-          fm.clippingPlanes = mat.clippingPlanes;
-          applyWireframe(fm, this.wireframe);
-        }
-      }
-      applyWireframe(mat, this.wireframe);
-      // A glowing body, or a body with a glowing face, throws light from its own
-      // surface. Only walked when something on it glows, so the common case pays
-      // nothing.
-      if (glow > 0 || faceGlow) this.collectEmitters(b, glow, ghost, emitters);
-    }
-    this.syncEmitterLights(emitters);
+    this.finish.apply({ xray: this.xray, stale: this.stale, wireframe: this.wireframe });
     if (this.wireframe && !this.edgesEmphasized) this.highlighter?.setEdgeBase(EDGE_WIRE);
-    this.modelBloomable = shiny || emitters.length > 0;
     this.syncBloomable();
-    // The model may have moved or grown; re-aim the optional key-light shadow.
     this.scene.frameShadows();
   }
 
-  /** Emissive bodies and faces cast light: a lamp glows AND lights the wall by
-   *  it. Each glowing patch is a real rectangle light the shape of the patch
-   *  (emitters.ts), so a lit strip throws a long soft pool and not a round
-   *  hotspot. The brightest few also cast shadows, through a point light of zero
-   *  intensity paired with each (areaLightShadows.ts explains the pairing, which
-   *  is why the lights are re-added in rank order every pass).
-   *
-   *  CAPPED, because every rectangle light is evaluated per pixel: the brightest
-   *  patches carry the look and the rest are dropped, rather than a document that
-   *  painted forty things emissive grinding the viewport.
-   *
-   *  Reconciled, not rebuilt: a patch's lights are reused across passes and torn
-   *  down only when it stops glowing or leaves, so toggling x-ray or nudging the
-   *  slider does not churn the scene. */
-  private syncEmitterLights(patches: EmitterPatch[]) {
-    const low = isRenderLowPower();
-    const ranked = patches
-      .map((p) => ({ p, power: emitterLuminance(p.glow, p.e) * p.e.width * p.e.height }))
-      .sort((a, b) => b.power - a.power)
-      .slice(0, low ? MAX_AREA_LIGHTS_LOW_POWER : MAX_AREA_LIGHTS)
-      .map((r) => r.p);
-    const keep = new Set(ranked.map((p) => p.key));
-    for (const [key, held] of this.emitterLights) {
-      if (keep.has(key)) continue;
-      held.area.dispose();
-      held.shadow?.dispose();
-      this.emitterLights.delete(key);
-    }
-    if (!ranked.length && !this.emitterGroup) return;
-    if (!this.emitterGroup) {
-      installAreaLights();
-      this.emitterGroup = new THREE.Group();
-      this.emitterGroup.name = "emitters";
-      this.addToScene(this.emitterGroup);
-    }
-    const group = this.emitterGroup;
-    group.clear();
-
-    const shadowCap = low || !this.scene.renderer.shadowMap.enabled ? 0 : MAX_SHADOW_EMITTERS;
-    const shadows: THREE.PointLight[] = [];
-    ranked.forEach(({ key, e, glow, color }, rank) => {
-      let held = this.emitterLights.get(key);
-      if (!held) {
-        held = { area: new THREE.RectAreaLight(), shadow: null };
-        this.emitterLights.set(key, held);
-      }
-      const { area } = held;
-      area.color.copy(color);
-      area.intensity = emitterLuminance(glow, e);
-      area.width = e.width;
-      area.height = e.height;
-      area.position.set(...e.center);
-      // The light shines down its local -Z with its width along X, so build that
-      // frame from the patch's normal and width direction.
-      const x = new THREE.Vector3(...e.xAxis);
-      const z = new THREE.Vector3(...e.normal).negate();
-      const y = new THREE.Vector3().crossVectors(z, x);
-      area.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z));
-      group.add(area);
-
-      if (rank < shadowCap) {
-        if (!held.shadow) {
-          held.shadow = new THREE.PointLight(0xffffff, 0);
-          held.shadow.castShadow = true;
-          held.shadow.shadow.mapSize.set(1024, 1024);
-          held.shadow.shadow.bias = -0.004; // kill the self-shadow acne on flat CAD faces
-          held.shadow.shadow.radius = 4; // soft PCF edges, closer to an area light's soft shadow
-        }
-        const n = e.normal;
-        const lift = emitterStandoff(e.size);
-        held.shadow.position.set(e.center[0] + n[0] * lift, e.center[1] + n[1] * lift, e.center[2] + n[2] * lift);
-        const cam = held.shadow.shadow.camera;
-        cam.near = emitterShadowNear(e.size);
-        cam.far = Math.max(e.size * 40, cam.near * 10);
-        cam.updateProjectionMatrix();
-        shadows.push(held.shadow);
-      } else if (held.shadow) {
-        held.shadow.dispose();
-        held.shadow = null;
-      }
-    });
-    // After every area light, in the same rank order: shadowed area light i and
-    // shadow i are one emitter.
-    for (const light of shadows) group.add(light);
-    this.requestRender();
+  /** A sketch dims the model to a backdrop, so nothing on it is worth a glow. */
+  private syncBloomable() {
+    this.scene.post.bloomable = this.finish.bloomable && !this.sketchDimmed;
   }
 
-  /** The glowing patches of one body. A face with a material of its own glows by
-   *  that material; every other face by the body's. Colour is the face's paint,
-   *  else the body's, else white, averaged by area across a patch that merged
-   *  several faces. */
-  private collectEmitters(b: { id: string; mesh: THREE.Mesh; faceIds: number[] }, bodyGlow: number, ghost: boolean, out: EmitterPatch[]) {
-    const geo = b.mesh.geometry;
-    const pos = geo.getAttribute("position") as THREE.BufferAttribute | undefined;
-    if (!b.faceIds || !pos) return;
-    const glowOf = (fid: number) => {
-      const ff = this.faceFinish[fid];
-      return ff ? (ghost ? 0 : ff.emissive) : bodyGlow;
-    };
-    const tint = new THREE.Color();
-    for (const e of areaEmitters(pos.array, geo.getIndex()?.array ?? null, b.faceIds, (fid) => glowOf(fid) > 0)) {
-      let glow = 0;
-      const color = new THREE.Color(0, 0, 0);
-      for (const [fid, a] of e.faces) {
-        const w = a / e.area;
-        glow += glowOf(fid) * w;
-        tint.set(this.facePaint[fid] ?? this.bodyPaint[b.id] ?? 0xffffff);
-        color.r += tint.r * w;
-        color.g += tint.g * w;
-        color.b += tint.b * w;
-      }
-      out.push({ key: `${b.id}:${e.key}`, e, glow, color });
-    }
-  }
+  /** The model projected once per box drag (the camera cannot move during one),
+   *  dropped by anything that changes what is on screen. */
+  private areaProj: AreaProjection | null = null;
 
-  /** Give one body the extra materials its per-face assignments need, as
-   *  geometry GROUPS over the mesh it already has.
-   *
-   *  Groups rather than a second mesh, and that is the whole design. A body is
-   *  one buffer with one face id per triangle; a group is a range of that
-   *  buffer drawn with a different material, so a chrome ring on a printed knob
-   *  costs one more material and no more geometry. Splitting the body into two
-   *  meshes would double its vertices, break the per-vertex colour buffer the
-   *  hover and the selection are painted into, and leave the picker with two
-   *  objects claiming the same faces.
-   *
-   *  The runs fall out of the triangle order rather than being imposed on it:
-   *  the tessellator emits a face's triangles together, so a handful of dressed
-   *  faces is a handful of groups, and nothing is reordered. Reordering would be
-   *  the alternative, and it would invalidate `faceTriangles`, which is what
-   *  every hover and every selection indexes the colour buffer through.
-   *
-   *  Colour still travels per VERTEX, exactly as it does for a body: what the
-   *  extra material carries is the FINISH. So a face given a plain colour needs
-   *  no material at all and gets none, and only the ones that are shinier,
-   *  rougher, see-through or lit than the body cost anything. */
-  private syncFaceMaterials(
-    b: BodyMesh,
-    base: THREE.MeshStandardMaterial,
-    fids: number[] | undefined,
-  ) {
-    const held = this.faceMatState.get(b.id);
-    if (!fids?.length) {
-      if (!held) return;
-      // Back to one material. The clones are ours and nothing else can be
-      // holding them, so they are disposed rather than left to the GC: they are
-      // GPU programs, not objects.
-      for (let i = 1; i < held.mats.length; i++) held.mats[i]!.dispose();
-      this.faceMatState.delete(b.id);
-      b.mesh.geometry.clearGroups();
-      this.setOwnMaterial(b, base);
-      return;
-    }
-    const sorted = [...fids].sort((x, y) => x - y);
-    // One slot per DISTINCT appearance, so a body with forty faces of the same
-    // brushed steel gets one extra material and forty groups pointing at it.
-    //
-    // Every field that changes how the face is DRAWN belongs here, or a change to
-    // one the key omits leaves `sig` equal, this returns early, and the finish the
-    // material was built from is never refreshed: that is exactly how editing a
-    // face's clearcoat or its procedural surface/graph used to do nothing at all
-    // (the slot was cached against a key that could not see the change). Mirror
-    // sameFinishMap's field set.
-    const slotKey = (fid: number) => {
-      const f = this.faceFinish[fid]!;
-      return [
-        f.metalness, f.roughness, f.opacity, f.emissive, f.clearcoat,
-        surfaceKey(f.surface), graphKey(f.surfaceGraph), this.facePaint[fid] ?? "",
-      ].join("|");
-    };
-    const sig = `${base.uuid};${sorted.map((f) => `${f}:${slotKey(f)}`).join(",")}`;
-    if (held?.sig === sig) return;
-    if (held) for (let i = 1; i < held.mats.length; i++) held.mats[i]!.dispose();
-
-    const mats: THREE.MeshStandardMaterial[] = [base];
-    const finishes: BodyFinish[] = [{ ...FINISH }];
-    const colors: (string | undefined)[] = [undefined];
-    const slotOf = new Map<string, number>();
-    const faceSlot = new Map<number, number>();
-    for (const fid of sorted) {
-      const k = slotKey(fid);
-      let slot = slotOf.get(k);
-      if (slot === undefined) {
-        slot = mats.length;
-        slotOf.set(k, slot);
-        // A clone of the body's own, so every setting that is not the finish
-        // (vertex colours, the polygon offset that keeps the edge lines crisp,
-        // double-sidedness) is inherited rather than restated here and able to
-        // drift from it.
-        const clone = base.clone();
-        mats.push(clone);
-        finishes.push(this.faceFinish[fid]!);
-        colors.push(this.facePaint[fid]);
-      }
-      faceSlot.set(fid, slot);
-    }
-
-    const geo = b.mesh.geometry;
-    geo.clearGroups();
-    const tri = b.faceIds;
-    let runStart = 0;
-    let runSlot = faceSlot.get(tri[0] ?? -1) ?? 0;
-    for (let t = 1; t <= tri.length; t++) {
-      const slot = t < tri.length ? (faceSlot.get(tri[t]!) ?? 0) : -1;
-      if (slot === runSlot) continue;
-      geo.addGroup(runStart * 3, (t - runStart) * 3, runSlot);
-      runStart = t;
-      runSlot = slot;
-    }
-    this.faceMatState.set(b.id, { sig, mats, finishes, colors });
-    this.setOwnMaterial(b, mats);
-  }
-
-  /** Let go of the extra per-face materials of every body `gone` says is gone,
-   *  disposing the GPU side. The state map is the only thing holding them. */
-  private dropFaceMaterials(gone: (bodyId: string) => boolean) {
-    for (const [id, held] of [...this.faceMatState]) {
-      if (!gone(id)) continue;
-      for (let i = 1; i < held.mats.length; i++) held.mats[i]!.dispose();
-      this.faceMatState.delete(id);
-    }
-  }
-
-  /** Write a body's OWN material, wherever it is being kept.
-   *
-   *  While the zebra overlay is on, `mesh.material` is a shader shared by every
-   *  body and the body's own is parked in `savedMats`; writing the mesh then
-   *  would paint one part's finish across the whole model and be undone the
-   *  moment the overlay was switched off. */
-  private setOwnMaterial(b: BodyMesh, m: THREE.Material | THREE.Material[]) {
-    if (this.savedMats.has(b.id)) this.savedMats.set(b.id, m);
-    else b.mesh.material = m;
-  }
-
-  /** The model projected to the screen ONCE, for the whole of one box drag.
-   *
-   *  The box has to be answered while it is still being dragged, so the
-   *  selection can be shown as it is made rather than announced after the fact,
-   *  and that means asking the same question of the same geometry every frame.
-   *  Two things make that affordable, and both live here.
-   *
-   *  The camera cannot move during a box: the left button draws the box and the
-   *  right button orbits, so the projection is a CONSTANT of the gesture. It is
-   *  computed on the first frame of the drag and thrown away on release, which
-   *  turns a matrix multiply per vertex per frame into one per vertex per drag.
-   *
-   *  And every face keeps its screen bounding box, which settles the whole
-   *  question for a window and rules most of the model out for a crossing (see
-   *  areaSelect's boxVerdict). What is left, a crossing box that really does
-   *  overlap, is the only case that walks triangles at all.
-   *
-   *  Dropped rather than updated by anything that changes what is on screen,
-   *  because a stale projection would answer for geometry that is no longer
-   *  there, and answer confidently. */
-  private areaProj: {
-    bodies: {
-      id: string;
-      box: ScreenBox;
-      faces: { faceId: number; tris: number[][]; box: ScreenBox }[];
-    }[];
-    edges: { ref: EdgeRef; flat: number[] | null; box: ScreenBox }[];
-  } | null = null;
-
-  /** Throw away the drag projection. */
   private dropAreaProjection() {
     this.areaProj = null;
   }
 
-  private projectForArea(): NonNullable<Viewport["areaProj"]> {
-    const out: NonNullable<Viewport["areaProj"]> = { bodies: [], edges: [] };
-    if (!this.model) return out;
-    const view = this.canvas.getBoundingClientRect();
-    const cam = this.rig.active;
-    cam.updateMatrixWorld();
-    const vp = new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
-    const ortho = (cam as THREE.OrthographicCamera).isOrthographicCamera === true;
-    const camDir = cam.getWorldDirection(new THREE.Vector3());
-    const camPos = cam.position;
-
-    const tri: number[] = [0, 0, 0, 0, 0, 0];
-    const a = new THREE.Vector3();
-    const b = new THREE.Vector3();
-    const c = new THREE.Vector3();
-    const ab = new THREE.Vector3();
-    const ac = new THREE.Vector3();
-    const nrm = new THREE.Vector3();
-    const look = new THREE.Vector3();
-
-    for (const body of this.model.bodies) {
-      if (!body.mesh.visible) continue;
-      const geom = body.mesh.geometry;
-      const pos = geom.getAttribute("position");
-      const index = geom.getIndex();
-      if (!pos || !index) continue;
-      const count = pos.count;
-      // One projection per VERTEX, not per triangle: a closed solid references
-      // each of its vertices from several triangles, and the matrix multiply is
-      // the expensive half of all this.
-      const sx = new Float64Array(count);
-      const sy = new Float64Array(count);
-      const wx = new Float64Array(count);
-      const wy = new Float64Array(count);
-      const wz = new Float64Array(count);
-      const p = new THREE.Vector4();
-      for (let i = 0; i < count; i++) {
-        p.set(pos.getX(i), pos.getY(i), pos.getZ(i), 1).applyMatrix4(body.mesh.matrixWorld);
-        wx[i] = p.x; wy[i] = p.y; wz[i] = p.z;
-        p.applyMatrix4(vp);
-        // w <= 0 is behind the camera; the divide would fold such a point back
-        // into view. NaN is how areaSelect is told "no opinion", and it answers
-        // no to both verdicts.
-        if (!(p.w > 0)) { sx[i] = NaN; sy[i] = NaN; continue; }
-        sx[i] = view.left + ((p.x / p.w) * 0.5 + 0.5) * view.width;
-        sy[i] = view.top + ((-p.y / p.w) * 0.5 + 0.5) * view.height;
-      }
-
-      const faces: { faceId: number; tris: number[][]; box: ScreenBox }[] = [];
-      let bodyBox: ScreenBox = [Infinity, Infinity, -Infinity, -Infinity];
-      let anyFace = false;
-      for (const [faceId, tris] of body.faceTriangles) {
-        const facing: number[][] = [];
-        for (const t of tris) {
-          const i0 = index.getX(t * 3);
-          const i1 = index.getX(t * 3 + 1);
-          const i2 = index.getX(t * 3 + 2);
-          if (!this.seeThrough) {
-            a.set(wx[i0] as number, wy[i0] as number, wz[i0] as number);
-            b.set(wx[i1] as number, wy[i1] as number, wz[i1] as number);
-            c.set(wx[i2] as number, wy[i2] as number, wz[i2] as number);
-            ab.subVectors(b, a);
-            ac.subVectors(c, a);
-            nrm.crossVectors(ab, ac);
-            look.copy(ortho ? camDir : a.sub(camPos));
-            if (nrm.dot(look) >= 0) continue; // pointing away: the far side
-          }
-          tri[0] = sx[i0] as number; tri[1] = sy[i0] as number;
-          tri[2] = sx[i1] as number; tri[3] = sy[i1] as number;
-          tri[4] = sx[i2] as number; tri[5] = sy[i2] as number;
-          facing.push(tri.slice());
-        }
-        let box: ScreenBox = facing.length ? [Infinity, Infinity, -Infinity, -Infinity] : null;
-        for (const t of facing) box = unionBox(box, boxOf(t));
-        faces.push({ faceId, tris: facing, box });
-        if (facing.length) {
-          anyFace = true;
-          bodyBox = unionBox(bodyBox, box);
-        }
-      }
-      out.bodies.push({ id: body.id, box: anyFace ? bodyBox : null, faces });
-    }
-
-    // Edges are already world coordinates and already polylines, so they are
-    // projected straight rather than through a mesh. They are never culled by
-    // facing: an edge is a boundary, and the one on the silhouette belongs to a
-    // face pointing away as much as to the one pointing at you.
-    const q = new THREE.Vector4();
-    for (const e of this.model.edges) {
-      if (!e.draw.object.visible) continue;
-      const flat: number[] = [];
-      let usable = true;
-      for (const pt of e.points) {
-        q.set(pt[0], pt[1], pt[2], 1).applyMatrix4(vp);
-        if (!(q.w > 0)) { usable = false; break; }
-        flat.push(
-          view.left + ((q.x / q.w) * 0.5 + 0.5) * view.width,
-          view.top + ((-q.y / q.w) * 0.5 + 0.5) * view.height,
-        );
-      }
-      out.edges.push(usable
-        ? { ref: e, flat, box: boxOf(flat) }
-        : { ref: e, flat: null, box: null });
-    }
-    return out;
-  }
-
-  /** Everything the box takes, in the terms the selection is kept in.
-   *
-   *  A body is taken by a WINDOW only when the whole of it is inside, and by a
-   *  CROSSING as soon as one of its faces is touched. That is the same
-   *  distinction the two verdicts draw everywhere else, and it is what makes a
-   *  window thrown over a crowded assembly take the small parts and leave the
-   *  plate they sit on. It used to take a body as soon as one face was inside,
-   *  i.e. crossing semantics under both verdicts, which nothing noticed while
-   *  bodies could only be taken in bodies mode. */
-  private collectInBox(rect: ScreenRect, mode: AreaMode): {
-    faces: number[];
-    edges: EdgeRef[];
-    bodies: string[];
-  } {
-    const out = { faces: [] as number[], edges: [] as EdgeRef[], bodies: [] as string[] };
-    const proj = this.areaProj ?? this.projectForArea();
-    for (const body of proj.bodies) {
-      let touched = false;
-      for (const face of body.faces) {
-        const quick = boxVerdict(face.box, rect, mode);
-        if (!(quick === "look" ? faceInBox(face.tris, rect, mode) : quick)) continue;
-        out.faces.push(face.faceId);
-        touched = true;
-      }
-      const whole = mode === "window" ? boxVerdict(body.box, rect, "window") === true : touched;
-      if (whole) out.bodies.push(body.id);
-    }
-    for (const e of proj.edges) {
-      if (e.flat === null) continue;
-      const quick = boxVerdict(e.box, rect, mode);
-      if (quick === "look" ? polylineInBox(e.flat, rect, mode) : quick) out.edges.push(e.ref);
-    }
-    return out;
+  private projectForArea(): AreaProjection {
+    if (!this.model) return { bodies: [], edges: [] };
+    return projectForArea(this.model, this.rig.active, this.canvas.getBoundingClientRect(), this.seeThrough);
   }
 
   /** Redraw the band at the current pointer position and re-announce what it
@@ -1867,7 +1269,7 @@ export class Viewport {
   selectInBox(rect: ScreenRect, mode: AreaMode, from: AreaDrag, announce: boolean) {
     const h = this.highlighter;
     if (!h || !this.model) return;
-    const got = this.collectInBox(rect, mode);
+    const got = collectInBox(this.areaProj ?? this.projectForArea(), rect, mode);
     // The FILTER decides what kind of selection this is, not the mode the
     // viewport happens to be in; "all" is the one that follows the mode.
     const kind = areaSelectionMode(this.areaFilter, this.selectionMode);
@@ -1949,33 +1351,6 @@ export class Viewport {
   // the support threshold in degrees from horizontal (45° = typical FDM default).
   private draftDir = new THREE.Vector3(0, 0, 1);
   private draftThreshold = 45;
-  // per-body assigned colors (body id → hex) shown as the default base when no
-  // analysis overlay is active; pushed from main.ts on color change + rebuild.
-  private bodyPaint: Record<string, string> = {};
-  /** metalness/roughness/opacity per body, from the document's materials. Only
-   *  bodies that differ from the app's default finish are in it, so an unstyled
-   *  document leaves this empty and applyBodyFinish writes the defaults. */
-  private bodyFinish: Record<string, BodyFinish> = {};
-  // per-FACE colours: a texture inlay's palette slot, or the colour an imported
-  // file put on that one face. One map because they answer the same question
-  // ("what colour is this face, whatever its body is") and a face can only have
-  // one answer; rebuildBridge decides which wins when both speak.
-  private facePaint: Record<number, string> = {};
-  // per-FACE finish: the other half of a material dropped on one face. Sparse,
-  // and almost always empty, which is what keeps the group-building below off
-  // the path of every model that has never had a material dropped on a face.
-  private faceFinish: Record<number, BodyFinish> = {};
-  /** What each body's extra per-face materials currently are, so the geometry
-   *  groups are rebuilt only when the SET of faces or their finishes changed and
-   *  not on every repaint. Keyed by body id; `sig` covers the base material's
-   *  identity too, because a rebuild hands back a fresh one and the clones taken
-   *  from the old one would keep the old one's settings. */
-  private faceMatState = new Map<string, {
-    sig: string;
-    mats: THREE.MeshStandardMaterial[];
-    finishes: BodyFinish[];
-    colors: (string | undefined)[];
-  }>();
   // zebra-stripe + curvature-comb overlays (display-only; re-applied on rebuild)
   private zebra = false;
   private zebraMat: THREE.ShaderMaterial | null = null;
@@ -2036,10 +1411,10 @@ export class Viewport {
       // else the neutral shade. (component/draft overlays above deliberately
       // mask both, analysis modes stay mutually exclusive.)
       this.highlighter.setBase((fid) => {
-        const own = this.facePaint[fid];
+        const own = this.finish.facePaint[fid];
         if (own) return new THREE.Color(own);
         const bid = this.faceIdToBodyId(fid);
-        const hex = bid ? this.bodyPaint[bid] : undefined;
+        const hex = bid ? this.finish.bodyPaint[bid] : undefined;
         return hex ? new THREE.Color(hex) : BASE_COLOR;
       }, only);
     }
@@ -2056,8 +1431,8 @@ export class Viewport {
     // already paints with the maps stored here, so if the map is unchanged its
     // pass was correct and this one is pure waste. A CHANGED map still repaints,
     // which is what keeps setModel's stale-map pass from sticking.
-    if (sameStringMap(this.bodyPaint, map)) return;
-    this.bodyPaint = map;
+    if (sameStringMap(this.finish.bodyPaint, map)) return;
+    this.finish.bodyPaint = map;
     if (this.analysis === "none") this.applyAnalysis();
     // A body that GLOWS glows in its own colour, which applyBodyFinish reads
     // from the map just replaced, so the finish has to be rewritten whenever the
@@ -2083,8 +1458,8 @@ export class Viewport {
    *  one face without disturbing the lighting; a finish is per material, and
    *  there is one material per body. */
   setBodyFinish(map: Record<string, BodyFinish>) {
-    if (sameFinishMap(this.bodyFinish, map)) return;
-    this.bodyFinish = map;
+    if (sameFinishMap(this.finish.bodyFinish, map)) return;
+    this.finish.bodyFinish = map;
     this.applyBodyFinish();
     this.requestRender();
   }
@@ -2097,14 +1472,14 @@ export class Viewport {
    *  written with the same value: the reference assembly has six figures of
    *  faces and this map is rebuilt and compared on every rebuild. */
   setFacePaint(map: Record<number, string>) {
-    if (sameStringMap(this.facePaint, map)) return;
-    this.facePaint = map;
+    if (sameStringMap(this.finish.facePaint, map)) return;
+    this.finish.facePaint = map;
     if (this.analysis === "none") this.applyAnalysis();
     // A face material's colour is its EMISSIVE tint as well as its base colour,
     // and the tint lives on the extra material rather than in the vertex buffer,
     // so a colour change has to reach the finish pass too. Costs nothing when no
     // face carries a material of its own, which is the ordinary case.
-    if (Object.keys(this.faceFinish).length) this.applyBodyFinish();
+    if (Object.keys(this.finish.faceFinish).length) this.applyBodyFinish();
   }
 
   /** Per-face SURFACE FINISH (global face id → metalness/roughness/opacity/glow),
@@ -2115,8 +1490,8 @@ export class Viewport {
    *  nobody has dressed hands this an empty object and it builds no groups and
    *  allocates no materials. */
   setFaceFinish(map: Record<number, BodyFinish>) {
-    if (sameFinishMap(this.faceFinish, map)) return;
-    this.faceFinish = map;
+    if (sameFinishMap(this.finish.faceFinish, map)) return;
+    this.finish.faceFinish = map;
     this.applyBodyFinish();
     this.requestRender();
   }
@@ -2871,72 +2246,17 @@ export class Viewport {
   showSketchFace(faceId: number | null) {
     if (this.sketchFace) {
       this.scene.scene.remove(this.sketchFace);
-      for (const c of this.sketchFace.children) {
-        const o = c as THREE.Mesh | THREE.LineSegments;
-        o.geometry.dispose();
-        (o.material as THREE.Material).dispose();
-      }
+      disposeFaceMarker(this.sketchFace);
       this.sketchFace = null;
     }
     const tris = faceId == null ? [] : this.faceTriangles(faceId);
-    if (!tris.length) {
-      this.requestRender();
-      return;
+    if (tris.length) {
+      this.sketchFace = buildFaceMarker(tris);
+      this.scene.scene.add(this.sketchFace);
     }
-    const pos = new Float32Array(tris.length * 9);
-    let i = 0;
-    for (const t of tris) {
-      for (const v of [t.a, t.b, t.c]) {
-        pos[i++] = v.x;
-        pos[i++] = v.y;
-        pos[i++] = v.z;
-      }
-    }
-    const geom = new THREE.BufferGeometry();
-    geom.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-    const accent = themeColor("--accent", 0xff7a3c);
-    const group = new THREE.Group();
-    group.renderOrder = 2; // over the dimmed model, under the sketch's own glyphs
-    // polygonOffset rather than a geometric lift along the normal: the face is
-    // coplanar with the sketch plane by construction, and any lift big enough to
-    // beat z-fighting is also big enough to be visible as a floating skin at a
-    // grazing angle.
-    //
-    // The fill LIGHTENS rather than tints. An accent wash at 0.16 over a body
-    // held at 0.25 made the face and the part it belongs to one coloured ghost,
-    // and the accent was doing two jobs at once, "this face" and "this is the
-    // sketch", on a surface where the second is never in doubt. Adding white
-    // can only brighten what is behind it, so the face comes out a lighter
-    // shade of the same material and the identity is carried by the outline,
-    // which is still the accent.
-    const fill = new THREE.Mesh(
-      geom,
-      new THREE.MeshBasicMaterial({
-        color: 0xffffff,
-        transparent: true,
-        opacity: SKETCH_FACE_LIFT,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-        polygonOffset: true,
-        polygonOffsetFactor: -4,
-        polygonOffsetUnits: -4,
-      }),
-    );
-    group.add(fill);
-    // The outline is what actually reads. A flat face's triangles are coplanar,
-    // so a threshold angle leaves exactly the boundary and none of the
-    // tessellation running through the middle of it.
-    const outline = new THREE.LineSegments(
-      new THREE.EdgesGeometry(geom, 1),
-      new THREE.LineBasicMaterial({ color: accent, transparent: true, opacity: 0.85, depthTest: false }),
-    );
-    outline.renderOrder = 3;
-    group.add(outline);
-    this.sketchFace = group;
-    this.scene.scene.add(group);
     this.requestRender();
   }
+
 
   /** Start drawing a chunked reply as it arrives. `manifest` names every body,
    *  and `bbox` is already final, which is why the camera can settle here, once,
@@ -3120,7 +2440,7 @@ export class Viewport {
     // programs held in a map keyed by body id, so without this a document edited
     // for an hour leaks one per deleted body and the map answers for bodies that
     // no longer exist.
-    this.dropFaceMaterials((id) => !bodyIds.has(id));
+    this.finish.dropFaceMaterials((id) => !bodyIds.has(id));
     const { byBody, orphans } = groupEdgesByBody(result.edges, bodyIds);
 
     // bodies from the PREVIOUS model, keyed by id, consumed as we go; whatever
@@ -3350,7 +2670,6 @@ export class Viewport {
 
   clearModel() {
     this.dropAreaProjection();
-    this.dropFaceMaterials(() => true);
     this.faceBands = new Map();
     // A STREAM ENDS HERE TOO, and this is the only path that ends it this way:
     // `streaming` is otherwise cleared in setModel, and rebuildBridge routes a
@@ -3381,11 +2700,8 @@ export class Viewport {
     this.targetGridZ = 0; // no model → grid back on the world XY plane
     this.rig.setContentBox(new THREE.Box3());
     this.savedMats.clear(); // materials died with the model
-    // The lights a glowing face threw belong to the model too; left up they light
-    // the next document's first preview and vanish at its first finish pass.
-    this.syncEmitterLights([]);
+    this.finish.clear();
     this.caps.clear();
-    this.modelBloomable = false;
     this.syncBloomable();
     this.ghostMeshes = []; // ...as did the meshes the ghosts hung off
     if (this.combsObj) {
@@ -3714,7 +3030,7 @@ export class Viewport {
       return;
     }
     if (!this.caps.group.parent) this.scene.scene.add(this.caps.group);
-    this.caps.mount(this.model.bodies, this.sectionPlane, (id) => new THREE.Color(this.bodyPaint[id] ?? BASE_COLOR));
+    this.caps.mount(this.model.bodies, this.sectionPlane, (id) => new THREE.Color(this.finish.bodyPaint[id] ?? BASE_COLOR));
   }
 
   /** Rebuild the ghost pass from scratch. Cheap enough to do wholesale, and only

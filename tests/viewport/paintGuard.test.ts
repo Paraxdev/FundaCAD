@@ -3,7 +3,7 @@
 // The guard has to be exact: a false "same" silently leaves the wrong colours on
 // screen, because setModel painted with the PREVIOUS map before these run.
 import { describe, it, expect } from "vitest";
-import { sameStringMap } from "../../src/viewport/viewport";
+import { sameStringMap } from "../../src/viewport/bodyFinish";
 
 describe("sameStringMap", () => {
   it("treats identical content as same", () => {
