@@ -8,7 +8,7 @@
 // The clipboard was already the fallback path for every failed submit, so this
 // is the path that was always the reliable one.
 //
-// The button is components/overlays/BugReportButton.vue and the dialog is
+// The button sits in components/shell/ViewportControls.vue and the dialog is
 // BugReportDialog.vue. What stays here is everything that is NOT markup: what a
 // report contains, how it is assembled, and the clipboard fallback. The
 // component owns the form fields and calls submitBugReport().

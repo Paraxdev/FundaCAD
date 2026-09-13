@@ -725,28 +725,6 @@
 .print-map-opts .choice-check {
   padding: var(--s-1) var(--s-3);
 }
-.bug-report-btn {
-  position: fixed;
-  /* Same inset as everything else that floats over the viewport -- the view
-     pill, the FPS readout and the sketch palette all sit --s-4 from their
-     corner, so the four of them share one invisible margin. */
-  right: var(--s-4);
-  bottom: var(--s-4);
-  z-index: 2200; /* above panels, below modal backdrops (2600 band) */
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border: 1px solid var(--line-strong);
-  background: var(--panel-2);
-  box-shadow: var(--shadow-3);
-  font-size: 17px;
-  line-height: 1;
-  cursor: pointer;
-  opacity: 0.75;
-}
-.bug-report-btn:hover {
-  opacity: 1;
-}
 .bug-report-card {
   width: 440px;
   max-width: calc(100vw - 32px);

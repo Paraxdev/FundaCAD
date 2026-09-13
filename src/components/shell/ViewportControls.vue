@@ -9,6 +9,7 @@ import { useEngine } from "../../app/engineKey";
 import { useBuildValue } from "../../app/useDoc";
 import { useUiStore } from "../../stores/ui";
 import { useShellStore } from "../../stores/shell";
+import { useDialogStore } from "../../stores/dialogs";
 import { useSketchPaletteStore } from "../../stores/sketchPalette";
 import { fmtLength, getUnit, onUnitChange, setUnit, asUnit, type Unit } from "../../ui/units";
 import { saveRenderedImage } from "../../io/files";
@@ -23,6 +24,7 @@ import Tabs from "../ui/Tabs.vue";
 const engine = useEngine();
 const ui = useUiStore();
 const shell = useShellStore();
+const dialogs = useDialogStore();
 const sketchPalette = useSketchPaletteStore();
 
 const root = useTemplateRef<HTMLElement>("root");
@@ -164,6 +166,9 @@ async function screenshot() {
         :badge="errorCount || null"
         @click="shell.toggleHistory()"
       />
+    </div>
+    <div v-if="dialogs.bugDeps" class="float-group">
+      <IconButton icon="bug" title="Report a bug" @click="dialogs.bugReport = true" />
     </div>
 
     <Popover v-if="isOpen('snap')" :anchor="anchorOf('snap')" side="left" kind="vc-pop" @close="shell.closePopover()">

@@ -23,7 +23,6 @@ import OverhangPanel from "./components/overlays/OverhangPanel.vue";
 import ParamsDialog from "./components/overlays/ParamsDialog.vue";
 import WelcomeModal from "./components/overlays/WelcomeModal.vue";
 import PreferencesDialog from "./components/overlays/PreferencesDialog.vue";
-import BugReportButton from "./components/overlays/BugReportButton.vue";
 import BugReportDialog from "./components/overlays/BugReportDialog.vue";
 import SketchDimLayer from "./components/overlays/SketchDimLayer.vue";
 import SketchGlyphLayer from "./components/overlays/SketchGlyphLayer.vue";
@@ -82,9 +81,9 @@ onUnmounted(() => offContrib?.());
           <ToolRail />
         </div>
         <div class="float-right">
+          <ViewportControls />
           <SketchPalette v-if="ui.sketchActive" />
           <TimelineBar v-else-if="shell.historyOpen" />
-          <ViewportControls />
         </div>
       </div>
     </div>
@@ -131,7 +130,6 @@ onUnmounted(() => offContrib?.());
        they genuinely stack, the welcome screen opens sign-in over itself. -->
   <WelcomeModal v-if="dialogs.welcome && dialogs.welcomeCallbacks" />
   <PreferencesDialog v-if="dialogs.preferences" />
-  <BugReportButton />
   <BugReportDialog v-if="dialogs.bugReport && dialogs.bugDeps" />
 
   <!-- Whatever the running plugins add. Last, so a capability's window opens
