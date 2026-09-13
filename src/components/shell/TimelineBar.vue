@@ -279,15 +279,21 @@ watch(
   async (n, prev) => {
     if (prev === undefined || n <= prev) return;
     await nextTick();
-    if (scroller.value) scroller.value.scrollLeft = scroller.value.scrollWidth;
+    const el = scroller.value;
+    if (!el) return;
+    // along the strip's own axis: the end of a column is its bottom
+    if (inFlowProps.value) el.scrollTop = el.scrollHeight;
+    else el.scrollLeft = el.scrollWidth;
   },
 );
 
-// The wheel scrubs the strip horizontally, vertical wheels are useless here.
-// Non-passive: preventDefault is the point.
+// The wheel scrubs the bottom strip horizontally, a vertical wheel is useless on
+// a strip that only scrolls sideways. Non-passive: preventDefault is the point.
+// Not in the side column, which scrolls DOWN: turning the wheel sideways there
+// swallowed every scroll and nudged the rows sideways into their own edge.
 function onWheel(e: WheelEvent) {
   const el = scroller.value;
-  if (!el) return;
+  if (!el || inFlowProps.value) return;
   el.scrollLeft += Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
   e.preventDefault();
 }
@@ -298,7 +304,10 @@ function onDragOverScroller(e: DragEvent) {
   const el = scroller.value;
   if (!el) return;
   const r = el.getBoundingClientRect();
-  if (e.clientX < r.left + 48) el.scrollLeft -= 14;
+  if (inFlowProps.value) {
+    if (e.clientY < r.top + 48) el.scrollTop -= 14;
+    else if (e.clientY > r.bottom - 48) el.scrollTop += 14;
+  } else if (e.clientX < r.left + 48) el.scrollLeft -= 14;
   else if (e.clientX > r.right - 48) el.scrollLeft += 14;
 }
 
@@ -338,7 +347,9 @@ function jumpToNextError() {
   errCycle.value++;
   track.value
     ?.querySelector<HTMLElement>(`.timeline-node[data-id="${CSS.escape(id)}"]`)
-    ?.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+    ?.scrollIntoView(inFlowProps.value
+      ? { block: "center", inline: "nearest", behavior: "smooth" }
+      : { inline: "center", block: "nearest", behavior: "smooth" });
   timeline.select(id);
 }
 

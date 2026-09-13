@@ -152,7 +152,10 @@
     /* The horizontal strip is vertically centred chrome; the column is a list
        that starts at the top. */
     justify-content: flex-start;
-    padding: var(--s-4) var(--s-3);
+    /* The bottom is kept clear of the bug report button, which floats over this
+       corner of the app: without it the button sat on the last rows and on the
+       Cancel button a build shows down here. */
+    padding: var(--s-4) var(--s-3) calc(36px + 2 * var(--s-4));
   }
   /* The transport buttons stay a ROW, they are a segmented control, and four
      of them stacked would be a column of unrelated arrows. */
@@ -161,8 +164,8 @@
     justify-content: center;
   }
   .timeline-scroll {
-    /* Scrolls down now. The wheel handler that turns vertical scrolling into
-       horizontal is still bound, and is simply the identity here. */
+    /* Scrolls down now, and only down: TimelineBar's wheel handler, which turns
+       a vertical wheel sideways for the bottom strip, stands aside here. */
     overflow-x: hidden;
     overflow-y: auto;
     height: auto;
@@ -194,8 +197,11 @@
   }
   .timeline-node {
     /* A full-width row rather than a square chip: there is width to spend here
-       and a vertical list of icons with no labels is unreadable. */
+       and a vertical list of icons with no labels is unreadable. No right
+       margin: the strip's gap between chips made every row 4px wider than the
+       column, which was sideways overflow the rows then scrolled into. */
     width: 100%;
+    margin-right: 0;
     justify-content: flex-start;
     gap: var(--s-3);
   }
