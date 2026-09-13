@@ -273,8 +273,18 @@ def _adjacent_pairs(shape, faces):
     seen = set()
     for i in range(1, amap.Extent() + 1):
         owners = []
-        for f in amap.FindFromIndex(i):
-            owners.extend(where.get(f.TShape(), ()))
+        ancestors = amap.FindFromIndex(i)
+        n = ancestors.Extent()
+        # Iterating an OCP list from Python costs ~170 us an item, and nearly
+        # every edge has one or two faces, which First and Last reach directly.
+        if n <= 2:
+            if n:
+                owners.extend(where.get(ancestors.First().TShape(), ()))
+            if n == 2:
+                owners.extend(where.get(ancestors.Last().TShape(), ()))
+        else:
+            for f in ancestors:
+                owners.extend(where.get(f.TShape(), ()))
         for a in range(len(owners)):
             for b in range(a + 1, len(owners)):
                 lo, hi = sorted((owners[a], owners[b]))
@@ -302,38 +312,73 @@ def _bucket(desc):
     return tuple(flat(desc))
 
 
+def _box(topods, optimal):
+    """(xmin, ymin, zmin, xmax, ymax, zmax) from the B-rep geometry, or None.
+
+    Never from a triangulation and never through build123d's `bounding_box()`,
+    which strips the shape's mesh first: this runs right after the body was
+    meshed for display. The plain box is never smaller than the optimal one,
+    which is what lets it stand in for it wherever it only screens."""
+    from OCP.Bnd import Bnd_Box
+    from OCP.BRepBndLib import BRepBndLib
+
+    box = Bnd_Box()
+    if optimal:
+        BRepBndLib.AddOptimal_s(topods, box, False, False)
+    else:
+        BRepBndLib.Add_s(topods, box, False)
+    return None if box.IsVoid() else box.Get()
+
+
+def _diag(b):
+    return _norm((b[3] - b[0], b[4] - b[1], b[5] - b[2])) if b else 0.0
+
+
 def gap_tolerance(shape):
     """How wide a gap may still count as touching, for this body."""
     try:
-        bb = shape.bounding_box()
-        diag = _norm((bb.max.X - bb.min.X, bb.max.Y - bb.min.Y, bb.max.Z - bb.min.Z))
+        diag = _diag(_box(shape.wrapped, optimal=True))
     except Exception:
         diag = 0.0
     return max(GAP_ABS, GAP_REL * diag)
 
 
-def _near_pairs(faces, surf, tol, already):
-    """Same-surface faces that come within `tol` of each other without sharing an
-    edge, the kernel's own clearance standing where an edge would be.
+def _near_pairs(faces, surf, shape, already):
+    """Same-surface faces that come within the body's gap tolerance of each other
+    without sharing an edge, the kernel's own clearance standing where an edge
+    would be.
 
     Bucketed by surface first and screened by bounding box second, so the only
     pairs that reach the real distance call are ones already known to be on one
-    surface and within a hair of each other. On every shape that has no such
-    pair, which is nearly all of them, this costs one bounding box per face."""
+    surface and within a hair of each other.
+
+    The screen uses plain boxes and a tolerance from the plain body box, both of
+    which only ever err large, so it lets through a superset of the pairs the
+    exact figures would. The exact tolerance needs an optimal box of the whole
+    body, measured at 45 s across the SV08 printer's parts when it was taken for
+    every body and every face, and it can only lie between GAP_ABS and that
+    screening figure, so it is taken only for a distance that falls between the
+    two."""
     from OCP.BRepExtrema import BRepExtrema_DistShapeShape
 
     buckets = {}
     for i, d in surf.items():
         if d is not None:
             buckets.setdefault(_bucket(d), []).append(i)
+    groups = [g for g in buckets.values() if len(g) >= 2]
+    if not groups:
+        return set()
+    try:
+        screen_tol = max(GAP_ABS, GAP_REL * _diag(_box(shape.wrapped, optimal=False)))
+    except Exception:
+        screen_tol = GAP_ABS
+    exact_tol = None
     out = set()
-    for group in buckets.values():
-        if len(group) < 2:
-            continue
+    for group in groups:
         boxes = {}
         for i in group:
             try:
-                boxes[i] = faces[i].bounding_box()
+                boxes[i] = _box(faces[i].wrapped, optimal=False)
             except Exception:
                 pass
         for a in range(len(group)):
@@ -345,17 +390,28 @@ def _near_pairs(faces, surf, tol, already):
                 bi, bj = boxes.get(i), boxes.get(j)
                 if bi is None or bj is None:
                     continue
-                if (bi.min.X > bj.max.X + tol or bj.min.X > bi.max.X + tol
-                        or bi.min.Y > bj.max.Y + tol or bj.min.Y > bi.max.Y + tol
-                        or bi.min.Z > bj.max.Z + tol or bj.min.Z > bi.max.Z + tol):
+                t = screen_tol
+                if (bi[0] > bj[3] + t or bj[0] > bi[3] + t
+                        or bi[1] > bj[4] + t or bj[1] > bi[4] + t
+                        or bi[2] > bj[5] + t or bj[2] > bi[5] + t):
                     continue
                 if not same_surface(surf[i], surf[j]):
                     continue
                 try:
+                    # The shape constructor already computes the distance; a
+                    # Perform() after it computed it a second time.
                     d = BRepExtrema_DistShapeShape(faces[i].wrapped, faces[j].wrapped)
-                    d.Perform()
-                    if d.IsDone() and d.Value() <= tol:
-                        out.add((lo, hi))
+                    if not d.IsDone():
+                        continue
+                    gap = d.Value()
+                    if gap > screen_tol:
+                        continue
+                    if gap > GAP_ABS:
+                        if exact_tol is None:
+                            exact_tol = gap_tolerance(shape)
+                        if gap > exact_tol:
+                            continue
+                    out.add((lo, hi))
                 except Exception:
                     pass
     return out
@@ -379,7 +435,7 @@ def face_bands(shape):
         # the sweep's own clearance has no shared edge anywhere along it, so the
         # old shortcut of asking only about edge-joined faces could never see it.
         surf = {i: surface_of(f) for i, f in enumerate(faces)}
-        pairs = pairs | _near_pairs(faces, surf, gap_tolerance(shape), pairs)
+        pairs = pairs | _near_pairs(faces, surf, shape, pairs)
         if not pairs:
             return []
         wanted = {i for pair in pairs for i in pair}
