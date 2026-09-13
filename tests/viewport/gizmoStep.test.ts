@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   MOVE_STEPS_PER_CELL,
-  ROTATE_LADDER_DEG,
   gizmoMoveStep,
   gizmoRotateStep,
   snapScaleFactor,
@@ -44,27 +43,9 @@ describe("gizmoMoveStep", () => {
 });
 
 describe("gizmoRotateStep", () => {
-  it("gets finer as the slide step shrinks against the part", () => {
-    // 40mm reach: 5mm steps turn by 15, 1mm by 5, 0.2mm by 0.5
-    expect(gizmoRotateStep(5, 40)).toBe(15);
-    expect(gizmoRotateStep(1, 40)).toBe(5);
-    expect(gizmoRotateStep(0.2, 40)).toBe(0.5);
-  });
-
-  it("moves the farthest point by at least one slide step", () => {
-    for (const step of [0.01, 0.1, 1, 10]) {
-      for (const r of [5, 40, 300]) {
-        const deg = gizmoRotateStep(step, r);
-        if (deg === ROTATE_LADDER_DEG[0]) continue;
-        expect((r * deg * Math.PI) / 180).toBeGreaterThanOrEqual(step);
-      }
-    }
-  });
-
-  it("drops one rung with Shift, and falls back to 15 with nothing to measure", () => {
-    expect(gizmoRotateStep(1, 40, true)).toBe(1);
-    expect(gizmoRotateStep(0.001, 40, true)).toBe(0.1);
-    expect(gizmoRotateStep(1, 0)).toBe(15);
+  it("turns in 15 degree steps, and 1 with Shift", () => {
+    expect(gizmoRotateStep()).toBe(15);
+    expect(gizmoRotateStep(true)).toBe(1);
   });
 });
 

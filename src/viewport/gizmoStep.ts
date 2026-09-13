@@ -8,8 +8,9 @@ import { FINE_DIVISOR, MIN_STEP } from "./dragStep";
 /** Move steps per minor grid cell: a 5 mm grid slides in 0.5 mm. */
 export const MOVE_STEPS_PER_CELL = 10;
 
-/** Rotation steps, coarsest first. */
-export const ROTATE_LADDER_DEG = [45, 15, 5, 1, 0.5, 0.1] as const;
+/** A ring turns in these steps, and in the fine step with Shift. */
+export const ROTATE_STEP_DEG = 15;
+export const ROTATE_FINE_DEG = 1;
 
 /** Slide step in mm for the grid cell drawn at this zoom. */
 export function gizmoMoveStep(worldPerPixel: number, fine = false): number {
@@ -18,19 +19,10 @@ export function gizmoMoveStep(worldPerPixel: number, fine = false): number {
   return Math.max(MIN_STEP, step);
 }
 
-/** Turn step in degrees: the finest rung that still moves the selection's
- *  farthest point (`radius` mm from the pivot) by at least one slide step. */
-export function gizmoRotateStep(moveStep: number, radius: number, fine = false): number {
-  const ladder = ROTATE_LADDER_DEG;
-  let at = 1; // 15 degrees when there is nothing to measure against
-  if (moveStep > 0 && radius > 0 && Number.isFinite(radius)) {
-    at = 0;
-    for (let i = 0; i < ladder.length; i++) {
-      if ((radius * ladder[i]! * Math.PI) / 180 >= moveStep) at = i;
-    }
-  }
-  if (fine) at = Math.min(ladder.length - 1, at + 1);
-  return ladder[at]!;
+/** Turn step in degrees. Fixed rather than tied to zoom: a step that followed
+ *  the zoom came out at a degree or less and a turn felt unstepped. */
+export function gizmoRotateStep(fine = false): number {
+  return fine ? ROTATE_FINE_DEG : ROTATE_STEP_DEG;
 }
 
 /** Snap a resize factor so the dragged extent (`extent` mm before resizing)

@@ -49,6 +49,7 @@ import {
   MIN_SCALE,
 } from "./transformGizmo";
 import { CanvasGesture } from "./canvasGesture";
+import { RotateDial } from "../viewport/rotateDial";
 
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 const HOT = 0xffe9a8; // hovered / grabbed handle
@@ -180,9 +181,14 @@ export class MoveTool {
   private grabRot = new THREE.Quaternion();
   /** total turn on the grabbed ring, degrees, the value the field shows */
   private ringDeg = 0;
+  /** the unwrapped turn so far, radians, so one drag can go past half a turn */
+  private ringTurn = 0;
+  private lastRingAngle = 0;
+  private ringStep = 0;
+  private dial: RotateDial | null = null;
   private downPos = { x: 0, y: 0 };
-  /** the selection's world box when the session opened, what rotate and resize
-   *  steps are measured against */
+  /** the selection's world box when the session opened, what resize steps are
+   *  measured against */
   private box: THREE.Box3 | null = null;
   private stepLabel = "";
 
@@ -267,22 +273,6 @@ export class MoveTool {
   private moveStep(fine: boolean): number {
     const at = this.gizmo?.position ?? this.anchor;
     return gizmoMoveStep(this.viewport.pixelWorldSize(at), fine);
-  }
-
-  /** How far the farthest corner of the selection sits from the pivot. */
-  private reach(): number {
-    const b = this.box;
-    if (!b) return 0;
-    let far = 0;
-    for (let i = 0; i < 8; i++) {
-      const corner = new THREE.Vector3(
-        i & 1 ? b.max.x : b.min.x,
-        i & 2 ? b.max.y : b.min.y,
-        i & 4 ? b.max.z : b.min.z,
-      );
-      far = Math.max(far, corner.distanceTo(this.anchor));
-    }
-    return far;
   }
 
   private showStep(label: string) {
@@ -420,10 +410,15 @@ export class MoveTool {
     if (g?.kind === "ring") {
       const now = this.ringAngle(g.index, e.clientX, e.clientY);
       if (now === null) return; // the view went edge-on mid-drag; hold the value
-      const turned = (angleDelta(this.grabAngle, now) * 180) / Math.PI;
-      const stepDeg = gizmoRotateStep(this.moveStep(false), this.reach(), e.shiftKey);
+      this.ringTurn += angleDelta(this.lastRingAngle, now);
+      this.lastRingAngle = now;
+      const stepDeg = gizmoRotateStep(e.shiftKey);
       this.showStep(`${stepDeg}°`);
-      const deg = snapDegrees(turned, stepDeg);
+      const deg = snapDegrees((this.ringTurn * 180) / Math.PI, stepDeg);
+      if (Math.abs(deg - this.ringDeg) < 1e-9 && stepDeg === this.ringStep) return;
+      this.ringStep = stepDeg;
+      this.dial?.update(this.grabAngle, deg, stepDeg);
+      this.viewport.requestRender();
       if (Math.abs(deg - this.ringDeg) < 1e-9) return;
       this.applyRing(g.index, deg);
       return;
@@ -449,8 +444,17 @@ export class MoveTool {
       const start = this.ringAngle(hit.index, e.clientX, e.clientY);
       if (start === null) return; // edge-on: leave the press alone
       this.grabAngle = start;
+      this.lastRingAngle = start;
+      this.ringTurn = 0;
       this.grabRot.copy(this.rot);
       this.ringDeg = 0;
+      this.ringStep = gizmoRotateStep(e.shiftKey);
+      const dir = this.frame[hit.index];
+      if (dir && this.gizmo) {
+        this.dial = new RotateDial(dir, AXES[hit.index]?.color ?? HOT);
+        this.dial.update(start, 0, this.ringStep);
+        this.gizmo.add(this.dial.group);
+      }
       this.dim.updateFromCursor({ turn: 0 });
     } else if (hit.kind === "plane") {
       const p = this.planeDragPoint(hit.index, e.clientX, e.clientY);
@@ -475,6 +479,7 @@ export class MoveTool {
     if (e.button !== 0) return;
     if (this.grab) {
       this.grab = null;
+      this.dropDial();
       this.stepLabel = "";
       setPrompt(idlePrompt(this.cubes.length > 0));
       this.viewport.domElement.style.cursor = this.hover ? "grab" : "default";
@@ -609,6 +614,10 @@ export class MoveTool {
     }
     const s = this.viewport.projectToScreen(pos);
     this.dim.position(s.x + FIELDS_OFFSET_PX, s.y);
+    if (this.dial) {
+      this.gizmo.updateMatrixWorld();
+      this.dial.placeLabel((w) => this.viewport.projectToScreen(w));
+    }
     this.applyTyped();
     this.gesture.frame();
   }
@@ -862,8 +871,14 @@ export class MoveTool {
     done?.(null);
   }
 
+  private dropDial() {
+    this.dial?.dispose();
+    this.dial = null;
+  }
+
   private cleanup() {
     const el = this.viewport.domElement;
+    this.dropDial();
     this.target?.end(false); // no-op if commit/cancel already ended it
     this.target = null;
     this.gesture.detach();
