@@ -367,6 +367,16 @@ export class SketchOverlay {
     this.hovered = wr;
     this.recolorFills();
   }
+  /** Glyph outlines of a text entity in the open sketch, in sketch coordinates. */
+  activeTextLoops(id: string): THREE.Vector2[][] {
+    return this.activeRegions.filter((wr) => wr.entityId === id).map((wr) => wr.region.loop);
+  }
+  /** Text entities in the open sketch whose glyphs are selected as profile areas. */
+  selectedActiveTextIds(): string[] {
+    const ids = new Set<string>();
+    for (const wr of this.activeRegions) if (wr.entityId && this.isRegionSelected(wr)) ids.add(wr.entityId);
+    return [...ids];
+  }
   /** active-sketch region whose material contains the 2D sketch point (sketch mode) */
   activeRegionAt(p: THREE.Vector2): WorldRegion | null {
     for (const wr of this.activeRegions) {

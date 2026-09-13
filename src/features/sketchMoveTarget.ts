@@ -110,10 +110,16 @@ function boxOfPoints(points: THREE.Vector3[]): THREE.Box3 | null {
   return new THREE.Box3().setFromPoints(points);
 }
 
-function entityWorldPoints(ents: readonly ResolvedEntity[], plane: SketchPlane): THREE.Vector3[] {
+function entityWorldPoints(
+  ents: readonly ResolvedEntity[],
+  plane: SketchPlane,
+  outline?: (e: ResolvedEntity) => THREE.Vector2[],
+): THREE.Vector3[] {
   const out: THREE.Vector3[] = [];
   for (const e of ents) {
-    if (e.type === "point" || e.type === "text") out.push(plane.to3D(e.x, e.y));
+    const drawn = e.type === "text" ? (outline?.(e) ?? []) : [];
+    if (drawn.length) for (const p of drawn) out.push(plane.to3D(p.x, p.y));
+    else if (e.type === "point" || e.type === "text") out.push(plane.to3D(e.x, e.y));
     else for (const p of entityPolyline(e)) out.push(plane.to3D(p.x, p.y));
   }
   return out;
@@ -127,13 +133,15 @@ export interface SketchGizmoHost {
   showPreview(ents: ResolvedEntity[] | null): void;
   /** replace (or, with copy, add beside) each selected entity; one undo step */
   apply(map: (e: ResolvedEntity, id: string) => ResolvedEntity[], copy: boolean): void;
+  /** a text's glyph outlines, which its anchor point alone does not describe */
+  outline?(e: ResolvedEntity): THREE.Vector2[];
 }
 
 export function sketchEntityTarget(host: SketchGizmoHost): MoveTarget | null {
   if (!host.selection().length) return null;
   const plane = host.plane();
   const frame = [plane.u.clone(), plane.v.clone(), plane.n.clone()] as const;
-  const points = () => entityWorldPoints(host.selection(), plane);
+  const points = () => entityWorldPoints(host.selection(), plane, host.outline?.bind(host));
   return {
     frame,
     handles: IN_PLANE_HANDLES,

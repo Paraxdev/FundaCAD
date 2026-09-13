@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   applySketchMove,
   planeAfter,
+  sketchEntityTarget,
   similarityIn,
   transformEntity,
 } from "../../src/features/sketchMoveTarget";
@@ -106,6 +107,20 @@ describe("applySketchMove", () => {
     const resolved = { sketchPlanes: { s1: { origin: [0, 0, 3], normal: [0, 0, 1], xdir: [1, 0, 0] } as never } };
     applySketchMove(d, ["s1"], resolved, new THREE.Matrix4().makeTranslation(1, 0, 0));
     expect((d.features[0] as any).plane.origin).toEqual([1, 0, 3]);
+  });
+});
+
+describe("sketchEntityTarget", () => {
+  it("centres a text on its letters rather than on its anchor", () => {
+    const text = { type: "text" as const, id: "t", text: "TEXT", x: 0, y: 0, height: 10, angle: 0 };
+    const target = sketchEntityTarget({
+      plane: () => new SketchPlane("XY"),
+      selection: () => [text],
+      showPreview: () => {},
+      apply: () => {},
+      outline: () => [new THREE.Vector2(0, 0), new THREE.Vector2(40, 0), new THREE.Vector2(40, 10), new THREE.Vector2(0, 10)],
+    });
+    expect(target!.centroid().toArray()).toEqual([20, 5, 0]);
   });
 });
 

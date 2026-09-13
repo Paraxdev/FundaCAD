@@ -9,7 +9,7 @@ import type { DocumentStore } from "../document/store";
 import type { Feature, ParamTarget, PlaneSpec, ProjectionUpdate, Selector, SketchConstraint, SketchPattern } from "../types";
 import { applyProjectionUpdate, dimPlaceOf, isBadgeEntity, isPlacedDim } from "../types";
 import { SketchPlane } from "./plane";
-import { SketchOverlay, curveObjects, dimensionLineObjects, CURVE_COLOR, PREVIEW_COLOR, SELECT_COLOR } from "./overlay";
+import { SketchOverlay, type WorldRegion, curveObjects, dimensionLineObjects, CURVE_COLOR, PREVIEW_COLOR, SELECT_COLOR } from "./overlay";
 import { DimInput } from "./dimInput";
 import { TextPanel } from "./textPanel";
 import type { TextValues } from "./textPanel";
@@ -35,7 +35,9 @@ import { applyDrivingDimsDirect } from "./directDims";
 import { expandPattern, translated } from "./pattern";
 import { candidatesFromEntities, showsSnapMarker, snap, type SnapGuide, type SnapKind, type SnapCandidate } from "./snap";
 import type { ResolvedEntity } from "./snap";
-import { detectRegions, rectCorners, rectFromThreePoints } from "./region";
+import { detectRegions, entityPolyline, rectCorners, rectFromThreePoints } from "./region";
+import { AreaBox } from "../viewport/areaBox";
+import { allInsideRect, convexTouchesRect, dragBox, isAreaDrag, pointInRect, type AreaMode, type ScreenRect } from "../viewport/areaSelect";
 import { loopsFromEdgePolys, planeEdgePolys } from "./faceFootprint";
 import { boundaryAnchors, footprintAnchors } from "./anchors";
 import { setPrompt } from "../ui/prompt";
@@ -185,6 +187,9 @@ export class SketchMode {
   private clickPts: THREE.Vector2[] = []; // accumulated clicks for multi-point primitives (polygon/slot/circle variants)
   private polygonSides = 6; // n for the polygon tool
   private selected = new Set<string>(); // selected entity ids (select tool)
+  /** a press on empty space that becomes a selection box once it travels */
+  private boxDown: { x: number; y: number; additive: boolean; shift: boolean; base: Set<string>; region: WorldRegion | null } | null = null;
+  private areaBox = new AreaBox();
   /** The Relations list in the Sketch Palette. */
   private relations = new RelationsPanel();
   /** Entity ids lit by the relations row under the cursor. Display only: it
@@ -631,6 +636,7 @@ export class SketchMode {
     this.dragSnapshot = null;
     this.pendingDrag = null;
     this.moveDrag = null;
+    this.cancelBox();
     this.dim.hide();
     this.dims.hide();
     this.glyphs.hide();
@@ -673,6 +679,7 @@ export class SketchMode {
     if (this.gizmo?.active) this.gizmo.cancel();
     // With something selected, move, rotate and scale are one gizmo on it; the
     // click flows below are what they fall back to with nothing selected.
+    if ((t === "move" || t === "rotate" || t === "scale") && this.active && this.gizmo) this.adoptSelectedText();
     if ((t === "move" || t === "rotate" || t === "scale") && this.active && this.gizmo && this.selected.size) {
       const target = sketchEntityTarget(this.gizmoHost());
       if (target) {
@@ -698,6 +705,7 @@ export class SketchMode {
     this.dragFrom = null;
     this.pendingDrag = null;
     this.moveDrag = null;
+    this.cancelBox();
     this.dimFlow.resetDimPicks();
     this.modifyFlow.reset(); // an in-progress fillet/move/offset dies with its tool
     this.dim.hide();
@@ -728,6 +736,50 @@ export class SketchMode {
     this.onState?.();
   }
 
+  /** Text is picked through its glyph areas, so a text selected that way is the
+   *  text entity as far as a transform is concerned. */
+  private adoptSelectedText() {
+    const ids = this.overlay.selectedActiveTextIds();
+    if (!ids.length) return;
+    for (const id of ids) this.selected.add(id);
+    this.overlay.clearRegionSelection();
+    this.refreshActive();
+  }
+
+  private cancelBox() {
+    this.boxDown = null;
+    this.areaBox.hide();
+  }
+
+  private selectInBox(rect: ScreenRect, mode: AreaMode, base: Set<string>) {
+    const next = new Set(base);
+    const screen = (p: THREE.Vector2) => {
+      const s = this.viewport.projectToScreen(this.plane.to3D(p.x, p.y));
+      return [s.x, s.y];
+    };
+    const touches = (pts: number[]) => {
+      if (pts.length === 2) return pointInRect(pts[0]!, pts[1]!, rect);
+      for (let i = 0; i + 3 < pts.length; i += 2) {
+        if (convexTouchesRect(pts.slice(i, i + 4), rect)) return true;
+      }
+      return false;
+    };
+    for (const e of this.entities) {
+      if (e.id === TEXT_PREVIEW_ID) continue;
+      const loops = e.type === "text" ? this.overlay.activeTextLoops(e.id) : [entityPolyline(e)];
+      const shapes = loops.map((l) => l.flatMap(screen)).filter((pts) => pts.length);
+      if (!shapes.length) continue;
+      const hit = mode === "window"
+        ? shapes.every((pts) => allInsideRect(pts, rect))
+        : shapes.some((pts) => touches(e.type === "text" ? [...pts, pts[0]!, pts[1]!] : pts));
+      if (hit) next.add(e.id);
+    }
+    const same = next.size === this.selected.size && [...next].every((id) => this.selected.has(id));
+    if (same) return;
+    this.selected = next;
+    this.refreshActive();
+  }
+
   private gizmoHost(): SketchGizmoHost {
     return {
       plane: () => this.plane,
@@ -735,6 +787,7 @@ export class SketchMode {
       showPreview: (ents) =>
         this.overlay.setPreview(ents ? curveObjects(ents, this.plane, PREVIEW_COLOR, true) : []),
       apply: (map, copy) => this.modifyFlow.applyTransform(map, copy),
+      outline: (e) => this.overlay.activeTextLoops(e.id).flat(),
     };
   }
 
@@ -1642,19 +1695,18 @@ export class SketchMode {
         try { this.viewport.domElement.setPointerCapture(e.pointerId); } catch { /* capture optional */ }
         return;
       }
-      // otherwise select a profile AREA to extrude, includes patterned cells and
-      // sub-areas carved by a crossing curve
-      const wr = this.overlay.activeRegionAt(raw);
-      if (wr) {
-        this.overlay.toggleRegionSelection(wr, e.shiftKey || e.ctrlKey || e.metaKey);
-        return;
-      }
-      // empty space → clear both entity and area selection
-      if (!e.shiftKey) {
-        this.selected.clear();
-        this.overlay.clearRegionSelection();
-      }
-      this.refreshActive();
+      // Otherwise a profile AREA (patterned cells and sub-areas carved by a
+      // crossing curve included) or empty space. Either can start a selection
+      // box, so what the click means is settled on release.
+      this.boxDown = {
+        x: e.clientX,
+        y: e.clientY,
+        additive: e.shiftKey || e.ctrlKey || e.metaKey,
+        shift: e.shiftKey,
+        base: e.shiftKey || e.ctrlKey || e.metaKey ? new Set(this.selected) : new Set(),
+        region: this.overlay.activeRegionAt(raw),
+      };
+      try { this.viewport.domElement.setPointerCapture(e.pointerId); } catch { /* capture optional */ }
       return;
     }
     if (PATTERN_TOOLS.has(this.tool)) return this.patternClick(p);
@@ -2427,6 +2479,15 @@ export class SketchMode {
         if (ent) this.entities[md.idx] = translated(ent, dx, dy, ent.id);
         for (const s of md.stretch) s(dx, dy);
         this.refreshDragGeometry(); // curves only; dims/regions/candidates rebuilt on endDrag
+        return;
+      }
+      if (this.boxDown && e.buttons & 1) {
+        const b = this.boxDown;
+        if (this.areaBox.visible || isAreaDrag(b.x, b.y, e.clientX, e.clientY)) {
+          const { rect, mode } = dragBox(b.x, b.y, e.clientX, e.clientY);
+          this.areaBox.show(rect.x0, rect.y0, rect.x1, rect.y1, mode);
+          this.selectInBox(rect, mode, b.base);
+        }
         return;
       }
       const hit = this.snapAt(e.clientX, e.clientY);
@@ -3421,6 +3482,29 @@ export class SketchMode {
   }
 
   private endDrag(pointerId?: number) {
+    if (this.boxDown) {
+      const b = this.boxDown;
+      const boxed = this.areaBox.visible;
+      this.cancelBox();
+      if (pointerId != null) {
+        try { this.viewport.domElement.releasePointerCapture(pointerId); } catch { /* not captured */ }
+      }
+      if (boxed) {
+        if (!b.additive) this.overlay.clearRegionSelection();
+        this.onState?.();
+        return;
+      }
+      if (b.region) {
+        this.overlay.toggleRegionSelection(b.region, b.additive);
+        return;
+      }
+      if (!b.shift) {
+        this.selected.clear();
+        this.overlay.clearRegionSelection();
+      }
+      this.refreshActive();
+      return;
+    }
     if (this.textBoxStart) {
       // finish a text placement: a real drag = a box (wrap width); a click = point anchor
       const s = this.textBoxStart, screen = this.textBoxScreen ?? { x: 0, y: 0 }, end = this.textBoxEnd;
