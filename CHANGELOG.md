@@ -25,7 +25,7 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
-- **Click a body, then click it again for a face.** The first click on a body selects the whole body and raises the move gizmo; a click on the body you already have selects the face or edge under the cursor, and further clicks on that body keep picking faces. Clicking another body takes that body whole. This is the new default, called Body, then face, beside Faces and Bodies in the selection menu, and 3 on the keyboard.
+- **Click a body, then click it again for a face.** The first click on a body selects the whole body and raises the move gizmo; a click on the body you already have selects the face or edge under the cursor, and further clicks on that body keep picking faces. Clicking another body takes that body whole. Resting on a body for a moment highlights the face under the pointer instead, and a click takes whatever is highlighted; how long that moment is sits in Preferences, Accessibility, Hover delay. This is the new default, called Body, then face, beside Faces and Bodies in the selection menu, and 3 on the keyboard.
 
 - **Clicking a folder in the item tree selects everything in it**, its subfolders and their bodies included. Ctrl or Shift adds the folder to the selection, or takes it out again when all of it was already in. The caret opens and closes a folder, and so does a double-click.
 

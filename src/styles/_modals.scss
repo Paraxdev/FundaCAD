@@ -871,3 +871,20 @@
 .mats-foot {
   justify-content: flex-start;
 }
+
+.prefs-slider-readout {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.prefs-slider-readout > .sm-slider {
+  flex: 1;
+  min-width: 0;
+}
+.prefs-readout {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  min-width: 3.5em;
+  text-align: right;
+}

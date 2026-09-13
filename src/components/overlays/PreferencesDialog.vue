@@ -33,6 +33,13 @@ import {
 import { asIconPackId, getIconPack, iconPacks, onIconPackChange, setIconPack } from "../../ui/icons";
 import { asUnit, getUnit, onUnitChange, setUnit } from "../../ui/units";
 import {
+  getHoverDwellMs,
+  MAX_DWELL_MS,
+  MIN_DWELL_MS,
+  onHoverDwellChange,
+  setHoverDwellMs,
+} from "../../ui/interactionPrefs";
+import {
   asBackground,
   asBloom,
   asEnvironment,
@@ -63,6 +70,7 @@ const activeIsCustom = computed(() => theme.value !== BUILTIN_THEME.id);
 const pack = ref(getIconPack());
 const unit = ref(getUnit());
 const render = ref(renderPrefs());
+const dwell = ref(getHoverDwellMs());
 
 // The blocks the running plugins add. An "Assistants" block used to be written
 // out below, configuring what an assistant connected over MCP may do to the
@@ -78,6 +86,7 @@ onMounted(() => {
     onIconPackChange(() => { pack.value = getIconPack(); }),
     onUnitChange(() => { unit.value = getUnit(); }),
     onRenderPrefsChange(() => { render.value = renderPrefs(); }),
+    onHoverDwellChange(() => { dwell.value = getHoverDwellMs(); }),
     onContribChange(() => { sections.value = contributedSettings(); }),
   );
 });
@@ -133,6 +142,7 @@ function onUnit(ev: Event) { const v = asUnit(value(ev)); if (v) setUnit(v); }
 function onEnvironment(ev: Event) { const v = asEnvironment(value(ev)); if (v) setRenderPref("environment", v); }
 function onBackground(ev: Event) { const v = asBackground(value(ev)); if (v) setRenderPref("background", v); }
 function onBrightness(ev: Event) { setRenderPref("brightness", Number.parseFloat(value(ev))); }
+function onDwell(ev: Event) { setHoverDwellMs(Number.parseFloat(value(ev))); }
 function onBloom(ev: Event) { const v = asBloom(value(ev)); if (v !== null) setRenderPref("bloom", v); }
 </script>
 
@@ -229,6 +239,21 @@ function onBloom(ev: Event) { const v = asBloom(value(ev)); if (v !== null) setR
         a material with Glow turned up and a hard specular highlight and nothing
         else, so an ordinary part looks the same; turn it up to catch everyday
         highlights too.
+      </div>
+
+      <div class="sm-section">Accessibility</div>
+      <label class="prefs-row">
+        <span class="prefs-label">Hover delay</span>
+        <span class="prefs-slider-readout">
+          <input id="prefs-hover-dwell" class="sm-slider" type="range" :min="MIN_DWELL_MS" :max="MAX_DWELL_MS"
+            step="50" :value="dwell" @input="onDwell" />
+          <span class="prefs-readout">{{ (dwell / 1000).toFixed(2) }} s</span>
+        </span>
+      </label>
+      <div class="sm-hint">
+        How long the pointer rests on a part before its face is highlighted
+        instead of the whole part. A click selects whatever is highlighted, so a
+        longer delay makes it easier to select whole parts.
       </div>
 
       <!-- What the running plugins ask about. Each brings its own heading, so a

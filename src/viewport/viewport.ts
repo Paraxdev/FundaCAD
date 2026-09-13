@@ -77,8 +77,6 @@ const EDGE_PICKABLE = new THREE.Color(0xd98a4a); // muted ember "selectable" edg
  *  much of its edges. Both were far lower; see setModelDimmed. */
 const SKETCH_DIM_OPACITY = 0.55;
 const SKETCH_DIM_EDGE_OPACITY = 0.5;
-/** How long the cursor stays on a body before its faces, not the body, are lit. */
-const INTENT_DWELL_MS = 450;
 
 // Emissive bodies and faces that cast light (syncEmitterLights). At most this
 // many rectangle lights, the brightest patches winning: every one is evaluated
@@ -114,6 +112,7 @@ import { ProgressiveModel } from "./progressive";
 import { nearestEdgeByMid, midMatchTol, edgeSelectorFrom, polylineMid } from "./edgeMatch";
 import { mergeScope, pickScope, type ScopeDecision, type ScopeView } from "./pickScope";
 import { clickTakes, type SelectPolicy } from "./clickIntent";
+import { getHoverDwellMs } from "../ui/interactionPrefs";
 import { edgesOnFace, faceEdgeTol, faceSurface, type Tri } from "./faceEdges";
 import { remapSelection, remapStreamedSelection, shouldAnnounce } from "./selectionMemo";
 import { cylinderFromFace, radialAt, solidInsideCylinder } from "../features/planeMath";
@@ -701,7 +700,7 @@ export class Viewport {
   private hoverRaf = 0;
   /** The body the cursor arrived on and when. Under the auto policy a body lights
    *  whole on arrival and its face or edge takes over once the cursor has stayed
-   *  on it for INTENT_DWELL_MS, and a click takes whichever is lit. */
+   *  on it for the hover delay preference, and a click takes whichever is lit. */
   private intent: { bodyId: string; since: number } | null = null;
   private intentTimer = 0;
   private lastHover: { clientX: number; clientY: number; force: boolean } | null = null;
@@ -772,11 +771,11 @@ export class Viewport {
     this.intentTimer = window.setTimeout(() => {
       const at = this.lastHover;
       if (at && this.intent?.bodyId === bodyId) this.scheduleHover(at.clientX, at.clientY, at.force);
-    }, INTENT_DWELL_MS + 20);
+    }, getHoverDwellMs() + 20);
   }
 
   private dwelt(bodyId: string): boolean {
-    return this.intent?.bodyId === bodyId && performance.now() - this.intent.since >= INTENT_DWELL_MS;
+    return this.intent?.bodyId === bodyId && performance.now() - this.intent.since >= getHoverDwellMs();
   }
 
   /** Under the auto policy, whether a hit takes its body whole: a face hit on a

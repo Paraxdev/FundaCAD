@@ -185,7 +185,7 @@ const check = (name, ok, detail) => {
     await page.waitForTimeout(150);
     const arrived = await page.evaluate(() => ({ body: window.viewport.highlighter.hoveredBody, faces: window.viewport.highlighter.hoveredFaces.length }));
     check("arriving on a body lights the body", arrived.body === spot.id && arrived.faces === 0, JSON.stringify(arrived));
-    await page.waitForTimeout(700);
+    await page.waitForTimeout(1100);
     const dwelt = await page.evaluate(() => ({ body: window.viewport.highlighter.hoveredBody, faces: window.viewport.highlighter.hoveredFaces.length }));
     check("staying on it lights the face instead", dwelt.body === null && dwelt.faces > 0, JSON.stringify(dwelt));
     await page.screenshot({ path: path.join(OUT, "5-dwell.png") });
