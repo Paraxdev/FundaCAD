@@ -1,6 +1,6 @@
 // The file-manager click rules the Browser's lists share (src/ui/rowSelection.ts).
 import { describe, expect, it } from "vitest";
-import { actOn, EMPTY_SELECTION, modsOf, selectRow, type RowSelection } from "../../src/ui/rowSelection";
+import { actOn, EMPTY_SELECTION, modsOf, selectGroup, selectRow, type RowSelection } from "../../src/ui/rowSelection";
 
 const ORDER = ["a", "b", "c", "d", "e"];
 const plain = { toggle: false, range: false };
@@ -61,5 +61,20 @@ describe("modsOf", () => {
   it("reads Cmd as Ctrl", () => {
     expect(modsOf({ ctrlKey: false, metaKey: true, shiftKey: false })).toEqual({ toggle: true, range: false });
     expect(modsOf({ ctrlKey: false, metaKey: false, shiftKey: true })).toEqual({ toggle: false, range: true });
+  });
+});
+
+describe("selectGroup", () => {
+  it("a plain click takes exactly the folder's bodies", () => {
+    expect(selectGroup(["x"], ["a", "b"], plain)).toEqual(["a", "b"]);
+  });
+
+  it("Ctrl or Shift adds the folder to the selection", () => {
+    expect(selectGroup(["x", "a"], ["a", "b"], ctrl)).toEqual(["x", "a", "b"]);
+    expect(selectGroup(["x"], ["a"], shift)).toEqual(["x", "a"]);
+  });
+
+  it("Ctrl on a folder that is already all selected takes it out", () => {
+    expect(selectGroup(["x", "a", "b"], ["a", "b"], ctrl)).toEqual(["x"]);
   });
 });

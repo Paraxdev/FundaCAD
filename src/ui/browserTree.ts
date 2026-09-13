@@ -30,14 +30,22 @@ export function bodyExtraMenu(bodyId: string): CtxItem[] {
   return contributedBodyMenu(bodyId);
 }
 
-/** Indentation for a row/head nested `depth` levels inside its folder. Capped:
- *  the panel is a fixed 232px with no resizer, and the reference assembly is 12
- *  levels deep, so an uncapped step would spend the whole width on whitespace.
+/** One nesting level is a caret plus the head's gap (12px + 8px), so a child's
+ *  caret sits under its parent's icon. A leaf has no caret and takes one more
+ *  step, which puts its icon under its sibling folders' icons. Capped because
+ *  the panel has no horizontal scroll and imported assemblies nest 12 deep.
  *
- *  Bound as a :style in TreeFolder/TreeRow, e2e/assembly_tree_e2e.cjs reads the
- *  computed paddingLeft back to assert that nesting is visibly indented. */
-export function indent(depth: number, base: number): number {
-  return base + Math.min(depth, 6) * 8;
+ *  Section heads are depth 0 and their contents start at 1. e2e/assembly_tree_e2e.cjs
+ *  reads the computed paddingLeft back to assert that nesting is visibly indented. */
+const INDENT_STEP = 20;
+const INDENT_BASE = 4;
+
+export function folderIndent(depth: number): number {
+  return INDENT_BASE + Math.min(depth, 6) * INDENT_STEP;
+}
+
+export function rowIndent(depth: number): number {
+  return folderIndent(depth) + INDENT_STEP;
 }
 
 /** One node of an imported assembly tree, as the browser renders it. */

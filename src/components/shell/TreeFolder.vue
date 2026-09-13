@@ -17,7 +17,7 @@
 import { computed, nextTick, ref, useTemplateRef, watch } from "vue";
 import Icon from "./Icon.vue";
 import InlineLabel from "./InlineLabel.vue";
-import { indent } from "../../ui/browserTree";
+import { folderIndent } from "../../ui/browserTree";
 import { contextMenu, type CtxItem } from "../../ui/menu";
 import { useBrowserStore } from "../../stores/browser";
 
@@ -52,9 +52,13 @@ const props = defineProps<{
   acceptDrop?: (() => boolean) | undefined;
   /** Take the drop. */
   dropHere?: (() => void) | undefined;
+  /** Given, a click on the head selects what the folder holds and only the caret
+   *  (or a double-click) opens and closes it. */
+  activate?: ((e: MouseEvent) => void) | undefined;
+  selected?: boolean | undefined;
 }>();
 
-defineEmits<{ toggle: [] }>();
+const emit = defineEmits<{ toggle: [] }>();
 
 const browser = useBrowserStore();
 const labelEl = useTemplateRef<InstanceType<typeof InlineLabel>>("labelEl");
@@ -62,8 +66,23 @@ const labelEl = useTemplateRef<InstanceType<typeof InlineLabel>>("labelEl");
 // Only nested heads carry an inline padding, so a top-level folder keeps
 // whatever the stylesheet gives it.
 const style = computed(() =>
-  props.depth > 0 ? { paddingLeft: `${indent(props.depth, 8)}px` } : undefined,
+  props.depth > 0 ? { paddingLeft: `${folderIndent(props.depth)}px` } : undefined,
 );
+
+function onClick(e: MouseEvent) {
+  if (props.activate && !(e.target as HTMLElement | null)?.closest?.(".tree-caret")) props.activate(e);
+  else emit("toggle");
+}
+
+function onDblClick(e: MouseEvent) {
+  if (!props.activate || (e.target as HTMLElement | null)?.closest?.(".tree-caret, [contenteditable='true']")) return;
+  emit("toggle");
+}
+
+/** Same reason as TreeRow: Shift-click takes a run, not a text selection. */
+function onMouseDown(e: MouseEvent) {
+  if (e.shiftKey && !(e.target as HTMLElement | null)?.closest?.("[contenteditable='true']")) e.preventDefault();
+}
 
 function startRename() {
   void nextTick(() => labelEl.value?.start());
@@ -150,11 +169,13 @@ function onDrop(e: DragEvent) {
        icon, so its element carries no text to read it off. -->
   <div
     class="tree-folder"
-    :class="{ 'drop-into': inside > 0 }"
+    :class="{ 'drop-into': inside > 0, selected: selected }"
     :style="style"
     :aria-expanded="!collapsed"
     :draggable="!!dragStart"
-    @click="$emit('toggle')"
+    @mousedown="onMouseDown"
+    @click="onClick"
+    @dblclick="onDblClick"
     @contextmenu="openMenu"
     @dragstart="onDragStart"
     @dragend="browser.endDrag()"

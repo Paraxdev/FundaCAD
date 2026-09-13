@@ -96,15 +96,16 @@
 .tree-count:empty {
   display: none;
 }
-/* Not a spacing choice, a computed alignment, which is why it is spelled out
-   rather than picked off the scale. A folder's LABEL starts at
-   (.tree-folder's inline padding + .tree-caret's width + .tree-folder's gap);
-   the children then step one further rung in from there, so a child row sits
-   visibly under its parent's text instead of under its caret. Written as the
-   sum so that changing the row padding or the gap moves the indent with it,
-   as a bare 26px it silently went out of true the moment either changed. */
+/* A computed alignment, kept in step with folderIndent/rowIndent in
+   ui/browserTree.ts: a section's leaf row is one level in (caret + gap) plus
+   the caret space it does not have, so its icon sits under a nested folder's. */
 .tree-child {
-  padding-left: calc(var(--s-1) + 12px + var(--s-2) + var(--s-1));
+  padding-left: calc(var(--s-1) + 2 * (12px + var(--s-2)));
+}
+.tree-folder.selected {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 22%, transparent), color-mix(in srgb, var(--accent) 6%, transparent));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent);
+  color: var(--accent-hot);
 }
 .tree-label {
   overflow: hidden;

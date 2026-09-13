@@ -472,7 +472,7 @@ describe("BrowserPane", () => {
     expect(caretName(robot!)).toBe("caretRight");
     expect(panel(w).some((r) => r.text === "MCU")).toBe(false);
 
-    await robot!.trigger("click");
+    await robot!.find(".tree-caret").trigger("click");
 
     expect(panel(w).some((r) => r.kind === "row" && r.text === "MCU")).toBe(true);
     expect(caretName(folderNamed(w, "Robot")!)).toBe("caretDown");
@@ -488,15 +488,36 @@ describe("BrowserPane", () => {
     );
     const w = render(fake);
     for (const want of ["Robot", "Electronics"]) {
-      await folderNamed(w, want)!.trigger("click");
+      await folderNamed(w, want)!.find(".tree-caret").trigger("click");
     }
 
-    const electronics = folderNamed(w, "Electronics");
-    // depth 1 head: 8 + 1*8
-    expect(electronics!.attributes("style")).toContain("padding-left: 16px");
+    // Bodies head 0, Robot 1, Electronics 2: 4 + 2 * 20, its caret under Robot's icon
+    expect(folderNamed(w, "Robot")!.attributes("style")).toContain("padding-left: 24px");
+    expect(folderNamed(w, "Electronics")!.attributes("style")).toContain("padding-left: 44px");
     const mcu = w.findAll(".feature-row").find((el) => el.find(".tree-label").text() === "MCU");
-    // depth 2 row: 26 + 2*8
-    expect(mcu!.attributes("style")).toContain("padding-left: 42px");
+    // a depth 3 leaf takes the caret space it lacks: 4 + 3 * 20 + 20
+    expect(mcu!.attributes("style")).toContain("padding-left: 84px");
+  });
+
+  it("clicking an assembly folder selects every body under it, subfolders included", async () => {
+    const fake = makeEngine(
+      { parameters: {}, features: [IMPORT([
+        { name: "Robot", parent: null }, { name: "Electronics", parent: 0 },
+        { name: "MCU", parent: 1 }, { name: "Header", parent: 1 }, { name: "Frame", parent: 0 },
+      ])] },
+      [
+        { id: "b1", name: "MCU", nodeRef: "imp1/2" }, { id: "b2", name: "Header", nodeRef: "imp1/3" },
+        { id: "b3", name: "Frame", nodeRef: "imp1/4" },
+      ],
+    );
+    const w = render(fake);
+    const robot = folderNamed(w, "Robot")!;
+    await robot.trigger("click");
+    expect(caretName(folderNamed(w, "Robot")!)).toBe("caretRight");
+    expect(new Set(fake.engine.viewport.getSelectedBodies())).toEqual(new Set(["b1", "b2", "b3"]));
+
+    await folderNamed(w, "Robot")!.trigger("dblclick");
+    expect(caretName(folderNamed(w, "Robot")!)).toBe("caretDown");
   });
 
   it("renders a product name containing markup as literal text, escaped exactly once", () => {

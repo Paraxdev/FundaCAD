@@ -100,7 +100,7 @@ const check = (name, ok, detail) => {
       const clicked = await page.evaluate((want) => {
         for (const el of document.querySelectorAll("#browser .tree-folder")) {
           if (el.querySelector(".tree-label")?.textContent === want &&
-              el.getAttribute("aria-expanded") === "false") { el.click(); return true; }
+              el.getAttribute("aria-expanded") === "false") { (el.querySelector(".tree-caret") ?? el).click(); return true; }
         }
         return false;
       }, label);

@@ -10,7 +10,7 @@
 import { computed, nextTick, ref, useTemplateRef, watch } from "vue";
 import Icon from "./Icon.vue";
 import InlineLabel from "./InlineLabel.vue";
-import { indent } from "../../ui/browserTree";
+import { rowIndent } from "../../ui/browserTree";
 import { contextMenu, type CtxItem } from "../../ui/menu";
 import { useBrowserStore } from "../../stores/browser";
 
@@ -61,7 +61,7 @@ const browser = useBrowserStore();
 const labelEl = useTemplateRef<InstanceType<typeof InlineLabel>>("labelEl");
 
 const style = computed(() => ({
-  ...(props.depth > 0 ? { paddingLeft: `${indent(props.depth, 26)}px` } : {}),
+  ...(props.depth > 1 ? { paddingLeft: `${rowIndent(props.depth)}px` } : {}),
   ...(props.dim ? { opacity: "0.7" } : {}),
 }));
 

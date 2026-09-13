@@ -46,7 +46,7 @@ import {
   onBrowserFilterChange, sectionVisible, setBrowserFilter, type BrowserSection,
 } from "../../ui/browserFilter";
 import type { CtxItem } from "../../ui/menu";
-import { actOn as actOnSelection, EMPTY_SELECTION, modsOf, selectRow } from "../../ui/rowSelection";
+import { actOn as actOnSelection, EMPTY_SELECTION, modsOf, selectGroup, selectRow } from "../../ui/rowSelection";
 import { VisibilityPaint } from "../../ui/visibilityPaint";
 import { contributedBrowserSections, contributedPalette, onContribChange } from "../../plugins/contrib";
 import type { Component } from "vue";
@@ -123,6 +123,8 @@ interface FolderNode {
   dragStart?: (() => void) | undefined;
   acceptDrop?: (() => boolean) | undefined;
   dropHere?: (() => void) | undefined;
+  activate?: ((e: MouseEvent) => void) | undefined;
+  selected?: boolean | undefined;
 }
 interface RowNode {
   kind: "row";
@@ -293,6 +295,13 @@ function selectBody(id: string, e: MouseEvent) {
   );
   browser.bodyAnchor = next.anchor;
   engine.viewport.setSelectedBodies([...next.keys]); // fires back into browser.selectedBodyIds
+}
+
+/** Click a folder: its bodies and everything nested under it, see selectGroup. */
+function selectFolder(ids: readonly string[], e: MouseEvent) {
+  const next = selectGroup(engine.viewport.getSelectedBodies(), ids, modsOf(e));
+  browser.bodyAnchor = null;
+  engine.viewport.setSelectedBodies(next);
 }
 
 /** Click, Ctrl-click or Shift-click a sketch row. The one feature the timeline
@@ -521,7 +530,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
   if (show("origin")) folder("Origin", "origin", (["XY", "XZ", "YZ"] as Plane3[]).map((p) => ({
     kind: "row" as const,
     k: `o:${p}`,
-    depth: 0,
+    depth: 1,
     label: `${p} plane`,
     icon: "plane",
     dim: true,
@@ -534,7 +543,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
     folder("Planes", "plane", datums.map((f, i) => ({
       kind: "row" as const,
       k: `p:${f.id}`,
-      depth: 0,
+      depth: 1,
       label: f.name || `Plane${i + 1}`,
       icon: "plane",
       selected: selection.featureId === f.id,
@@ -563,7 +572,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
     folder("Datums", "datumPoint", refGeom.map((f, i) => ({
       kind: "row" as const,
       k: `d:${f.id}`,
-      depth: 0,
+      depth: 1,
       label: f.name || (f.type === "datumAxis" ? `Axis${i + 1}` : `Point${i + 1}`),
       icon: f.type === "datumAxis" ? "datumAxis" : "datumPoint",
       selected: selection.featureId === f.id,
@@ -652,6 +661,8 @@ const nodes = useDocValue((doc): TreeNode[] => {
       kind: "folder", k: g.key, key: g.key, label: g.label,
       icon: g.kind === "element" ? "element" : "assembly",
       count: g.total, depth, collapsed,
+      activate: (e: MouseEvent) => selectFolder(ids, e),
+      selected: ids.length > 0 && ids.every((id) => selectedIds.has(id)),
       // The head's eye stands for every body under it, see setVisibility.
       ...eye({ category: "bodies", key: `g:${g.key}`, ids }, anyVisible),
       // Everything below is an element's, and absent on an assembly node, which
@@ -696,8 +707,8 @@ const nodes = useDocValue((doc): TreeNode[] => {
       if (!tree.groups.length && !tree.loose.length) {
         out.push({ kind: "empty", k: "f:Bodies:empty", text: "No bodies yet" });
       }
-      for (const n of tree.groups) groupNode(n, 0);
-      for (const b of tree.loose) out.push(bodyRow(b, 0));
+      for (const n of tree.groups) groupNode(n, 1);
+      for (const b of tree.loose) out.push(bodyRow(b, 1));
     }
   }
 
@@ -713,7 +724,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
     folder("Joints", "assembly", joints.map((f, i) => ({
       kind: "row" as const,
       k: `j:${f.id}`,
-      depth: 0,
+      depth: 1,
       label: f.name || `${nameOf(f.moving)} → ${nameOf(f.to?.body)}`,
       icon: "assembly",
       selected: selection.featureId === f.id,
@@ -731,7 +742,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
   if (show("sketches")) folder("Sketches", "sketch", sketches.map((f, i) => ({
     kind: "row" as const,
     k: `s:${f.id}`,
-    depth: 0,
+    depth: 1,
     label: f.name || `Sketch${i + 1}`,
     icon: "sketch",
     selected: pickedSketches.includes(f.id) || selection.featureId === f.id,
@@ -837,6 +848,8 @@ onUnmounted(() => root.value?.removeEventListener("wheel", onWheel));
         :drag-start="n.dragStart"
         :accept-drop="n.acceptDrop"
         :drop-here="n.dropHere"
+        :activate="n.activate"
+        :selected="n.selected"
         @toggle="browser.toggle(n.key)"
       />
       <TreeRow

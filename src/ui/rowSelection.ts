@@ -66,6 +66,21 @@ export function selectRow<K>(
   return { keys: [key], anchor: key };
 }
 
+/** The selection after clicking a folder that holds `members`. A plain click
+ *  takes exactly them; Ctrl or Shift adds them, or takes them out again when all
+ *  of them were already in. */
+export function selectGroup<K>(selected: readonly K[], members: readonly K[], mods: SelectMods): K[] {
+  if (!mods.toggle && !mods.range) return [...members];
+  const have = new Set(selected);
+  if (members.length && members.every((k) => have.has(k))) {
+    const drop = new Set(members);
+    return selected.filter((k) => !drop.has(k));
+  }
+  const out = [...selected];
+  for (const k of members) if (!have.has(k)) out.push(k);
+  return out;
+}
+
 /** The rows one gesture on `key` acts on: the whole selection when the row that
  *  was grabbed is part of it, otherwise just that row. A menu that silently acted
  *  on one row of a selection of two hundred would be worse than no menu. */
