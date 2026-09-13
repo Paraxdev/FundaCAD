@@ -59,6 +59,9 @@ export interface CameraRig {
   fov(): number;
   setFov(deg: number): void;
   fit(box: THREE.Box3, enableTransition?: boolean): void;
+  /** Back to the view a fresh window opens on: no roll, Z up, looking in from
+   *  the front right corner, framed on `box`, or on the origin when there is none. */
+  resetView(box: THREE.Box3 | null): void;
   setStandardView(view: StandardView): void;
   /** orient to an arbitrary view direction (eye = target + dir·d), with a chosen
    *  world up. Used by the ViewCube for corners/edges and for redefined sides. */
@@ -121,13 +124,16 @@ export type StandardView =
 
 export type ProjectionMode = "persp" | "ortho" | "auto";
 
+/** Where a fresh window's camera sits, relative to what it looks at. */
+const HOME_EYE = new THREE.Vector3(80, -120, 90);
+
 export function createCameraRig(
   dom: HTMLElement,
   aspect: number,
 ): CameraRig {
   const persp = new THREE.PerspectiveCamera(FOV, aspect, NEAR_AT_REST, 10000);
   persp.up.set(0, 0, 1); // Z-up
-  persp.position.set(80, -120, 90);
+  persp.position.copy(HOME_EYE);
 
   const frustum = 100;
   const ortho = new THREE.OrthographicCamera(
@@ -564,6 +570,20 @@ export function createCameraRig(
         center.z + dir.z * dist,
         enableTransition,
       );
+    },
+    resetView(box: THREE.Box3 | null) {
+      rollAngle = 0;
+      persp.up.set(0, 0, 1);
+      ortho.up.set(0, 0, 1);
+      controls.updateCameraUp();
+      const home = HOME_EYE.clone();
+      if (!box || box.isEmpty()) {
+        controls.setLookAt(home.x, home.y, home.z, 0, 0, 0, true);
+        return;
+      }
+      const c = box.getCenter(new THREE.Vector3());
+      controls.setLookAt(c.x + home.x, c.y + home.y, c.z + home.z, c.x, c.y, c.z, false);
+      rig.fit(box, true);
     },
     setStandardView(view: StandardView) {
       rollAngle = 0;

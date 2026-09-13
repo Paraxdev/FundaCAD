@@ -25,6 +25,8 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **Reset camera**, a button beside Views and Shift+Home, puts the view back where a fresh window opens: level, looking in from the front right corner and framed on the model. New does the same, looking at the origin.
+
 - **Click a body, then click it again for a face.** The first click on a body selects the whole body and raises the move gizmo; a click on the body you already have selects the face or edge under the cursor, and further clicks on that body keep picking faces. Clicking another body takes that body whole. Resting on a body for a moment highlights the face under the pointer instead, and a click takes whatever is highlighted; how long that moment is sits in Preferences, Accessibility, Hover delay. This is the new default, called Body, then face, beside Faces and Bodies in the selection menu, and 3 on the keyboard.
 
 - **Clicking a folder in the item tree selects everything in it**, its subfolders and their bodies included. Ctrl or Shift adds the folder to the selection, or takes it out again when all of it was already in. The caret opens and closes a folder, and so does a double-click.
@@ -73,6 +75,8 @@ This file starts on 2026-08-03. For anything before that, see the
 - Each drag of the move gizmo is its own row in the timeline, so an undo takes back the last nudge instead of the whole sitting, and the next drag starts from the pose the last one produced.
 
 ### Fixed
+
+- **A plane a tool asks for is no longer hidden inside the part.** While Sketch, a datum plane or Split asks for a plane, the origin and datum planes draw over the model and a click on one takes it even with a body behind or in front of it, so an imported assembly that swallows the origin no longer hides the planes it is built around.
 
 - **A zoomed out assembly no longer z-fights.** The near clipping plane stayed at 0.1 mm however far the camera went, which left a printer seen from two metres with depth steps of 2.4 mm. It now moves out with the camera's distance from the model, never past the model's nearest point.
 

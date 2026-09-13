@@ -68,6 +68,7 @@ export const SHORTCUTS: Shortcut[] = [
   { key: "p", action: "project", context: "model", label: "Sketch: Project" },
   // --- global ---
   { key: "home", action: "fit", context: "global", label: "Fit view" },
+  { key: "home", shift: true, action: "reset-camera", context: "global", label: "Reset camera" },
   { key: "f6", action: "fit", context: "global", label: "Fit view" },
   { key: "?", action: "shortcut-help", context: "global", label: "Shortcut help" },
 ];

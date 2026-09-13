@@ -17,6 +17,7 @@ export function createDocumentActions(
       }
       if (e.sketch.active) e.sketch.cancel();
       e.store.newDocument();
+      e.viewport.resetCamera(false);
     },
 
     // Open must exit an active sketch first, else the in-progress sketch's curves

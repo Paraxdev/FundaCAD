@@ -293,6 +293,9 @@ export function createActions(e: Engine): (action: string) => void {
       case "fit":
         e.viewport.fitView();
         break;
+      case "reset-camera":
+        e.viewport.resetCamera();
+        break;
       case "iso":
       case "top":
       case "front":
