@@ -517,6 +517,7 @@ export function resetBodyAppearance(body: BodyMesh) {
     mat.transparent = false;
     mat.opacity = 1;
     mat.depthWrite = true;
+    mat.colorWrite = true;
   }
   body.edges.resetAppearance();
 }

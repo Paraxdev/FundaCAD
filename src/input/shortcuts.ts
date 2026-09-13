@@ -43,6 +43,7 @@ export const SHORTCUTS: Shortcut[] = [
   { key: "1", action: "selmode-faces", context: "model", label: "Select faces" },
   { key: "2", action: "selmode-bodies", context: "model", label: "Select bodies" },
   { key: "x", action: "toggle-xray", context: "model", label: "See through (select what is behind)" },
+  { key: "x", shift: true, action: "toggle-wireframe", context: "model", label: "Wireframe (edges only)" },
   // --- sketch context ---
   { key: "l", action: "line", context: "sketch", label: "Line" },
   { key: "c", action: "circle", context: "sketch", label: "Circle" },

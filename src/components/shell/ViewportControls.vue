@@ -16,6 +16,7 @@ import { saveRenderedImage } from "../../io/files";
 import { toast } from "../../ui/toast";
 import type { ProjectionMode } from "../../viewport/cameras";
 import IconButton from "../ui/IconButton.vue";
+import Icon from "./Icon.vue";
 import VersionsPanel from "./VersionsPanel.vue";
 import Popover from "../ui/Popover.vue";
 import Toggle from "../ui/Toggle.vue";
@@ -158,7 +159,7 @@ async function screenshot() {
       <IconButton icon="views" title="Views" :active="isOpen('views')" @click="open('views', $event)" />
     </div>
     <div class="float-group">
-      <IconButton icon="shaded" title="Display" :active="isOpen('display') || ui.xray" @click="open('display', $event)" />
+      <IconButton icon="shaded" title="Display" :active="isOpen('display') || ui.xray || ui.wireframe" @click="open('display', $event)" />
       <IconButton icon="camera" title="Screenshot" :active="saving" @click="screenshot()" />
       <IconButton icon="versions" title="Versions" :active="isOpen('versions')" @click="open('versions', $event)" />
       <IconButton
@@ -217,16 +218,16 @@ async function screenshot() {
         :tabs="[{ value: 'views', label: 'Views' }, { value: 'appearance', label: 'Appearance' }]"
       />
       <template v-if="viewTab === 'views'">
-        <button type="button" class="pop-wide" @click="engine.handleAction('iso')">Default View</button>
-        <button type="button" class="pop-wide ghost" @click="engine.handleAction('fit')">Fit to Model</button>
+        <button type="button" class="pop-wide" @click="engine.handleAction('iso')"><Icon name="view-iso" :size="16" />Default View</button>
+        <button type="button" class="pop-wide ghost" @click="engine.handleAction('fit')"><Icon name="view-fit" :size="16" />Fit to Model</button>
         <div class="pop-rule"></div>
         <button
           v-for="v in VIEWS"
           :key="v.view"
           type="button"
-          class="opt-row"
+          class="opt-row opt-row-icon"
           @click="engine.viewport.setStandardView(v.view)"
-        ><span class="opt-label">{{ v.label }}</span></button>
+        ><Icon :name="`view-${v.view}`" :size="18" /><span class="opt-label">{{ v.label }}</span></button>
       </template>
       <template v-else>
         <div class="pop-section">Projection</div>
@@ -240,6 +241,7 @@ async function screenshot() {
     <Popover v-if="isOpen('display')" :anchor="anchorOf('display')" side="left" kind="vc-pop" @close="shell.closePopover()">
       <div class="pop-section">Shading</div>
       <Toggle :model-value="ui.xray" label="X-Ray" @update:model-value="engine.handleAction('toggle-xray')" />
+      <Toggle :model-value="ui.wireframe" label="Wireframe" @update:model-value="engine.handleAction('toggle-wireframe')" />
       <div class="pop-rule"></div>
       <div class="pop-section">Surface analysis</div>
       <Toggle :model-value="analysis.zebra" label="Zebra" @update:model-value="runAndRefresh('zebra')" />

@@ -321,6 +321,10 @@ export function createActions(e: Engine): (action: string) => void {
         e.viewport.toggleXray();
         break;
       }
+      case "toggle-wireframe": {
+        e.viewport.setWireframe(!e.viewport.isWireframe);
+        break;
+      }
       case "hide-selected": {
         const ids = e.viewport.getSelectedBodies();
         if (!ids.length) {

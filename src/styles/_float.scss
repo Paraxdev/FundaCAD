@@ -472,7 +472,9 @@
 }
 .pop-wide {
   display: flex;
+  align-items: center;
   justify-content: center;
+  gap: var(--s-2);
   width: 100%;
   margin-top: var(--s-2);
   border-radius: var(--float-tile-radius);
@@ -577,11 +579,26 @@
   border-radius: var(--r-pill);
   background: var(--accent);
 }
+.opt-row.opt-row-icon {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+.opt-row-icon .icon {
+  color: var(--text-dim);
+}
+.opt-row-icon:hover .icon {
+  color: var(--accent-hot);
+}
 .opt-hint {
   font-size: 11px;
   color: var(--text-mute);
 }
 
+.float-tab:focus-visible {
+  border-radius: var(--float-chip-radius);
+  box-shadow: inset 0 0 0 2px var(--accent-glow);
+}
 .float-tabs {
   display: flex;
   gap: var(--s-4);
@@ -589,7 +606,8 @@
 }
 .float-tab {
   position: relative;
-  padding: var(--s-1) 0 6px;
+  padding: var(--s-1) var(--s-2) 6px;
+  margin: 0 calc(-1 * var(--s-2));
   background: none;
   border: 0;
   border-radius: 0;

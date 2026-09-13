@@ -208,6 +208,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   // another reason (a sketch dims it too), so the view bar's button is what
   // says which mode you are in.
   e.viewport.onXrayChange = (on) => { useUiStore().xray = on; };
+  e.viewport.onWireframeChange = (on) => { useUiStore().wireframe = on; };
 
   e.geometry = import.meta.env.VITE_GEOM === "rust" ? new TauriGeometry() : new Geometry();
   void e.geometry.init(); // fetch the per-launch sidecar auth token + open the socket

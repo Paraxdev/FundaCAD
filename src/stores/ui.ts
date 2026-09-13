@@ -45,6 +45,7 @@ export const useUiStore = defineStore("ui", () => {
    *  is behind it. A mode with no control on screen is a mode people turn on by
    *  accident and cannot find again, so the view bar carries a lit button. */
   const xray = ref(false);
+  const wireframe = ref(false);
 
   // --- the `?` keyboard cheat sheet ---
   const shortcutHudOpen = ref(false);
@@ -55,7 +56,7 @@ export const useUiStore = defineStore("ui", () => {
     canUndo, canRedo,
     sketchActive,
     gridStepMm,
-    projLabel, selMode, xray,
+    projLabel, selMode, xray, wireframe,
     shortcutHudOpen,
   };
 });

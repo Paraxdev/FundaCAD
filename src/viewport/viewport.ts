@@ -69,6 +69,7 @@ interface SelectionMemo {
 }
 
 const EDGE_IDLE = new THREE.Color(0x1b1f24); // normal dark edge
+const EDGE_WIRE = new THREE.Color(0xc4ced9); // with no faces behind them the dark idle edges vanish into the ground
 const EDGE_PICKABLE = new THREE.Color(0xd98a4a); // muted ember "selectable" edge (fillet/chamfer mode)
 
 /** How much of the model is left standing while a sketch is open on it, and how
@@ -205,6 +206,13 @@ function sameFinishMap(
 /** (0,0,0), kept once. Read every frame to size the origin arrows, and a fresh
  *  Vector3 per frame for a constant is litter in the hot path. Never written. */
 const WORLD_ORIGIN = new THREE.Vector3(0, 0, 0);
+
+/** Keep a face pickable and depth-free but draw nothing of it. */
+function applyWireframe(mat: THREE.Material, on: boolean) {
+  if (mat.colorWrite === !on) return;
+  mat.colorWrite = !on;
+  if (on) mat.depthWrite = false;
+}
 
 export class Viewport {
   readonly scene: SceneBundle;
@@ -919,13 +927,33 @@ export class Viewport {
    *  switch first. `all` still means "whatever I am already picking". */
   private areaFilter: AreaFilter = "all";
   private xray = false;
+  /** Faces drawn as nothing, so only the edges show, hidden ones included. */
+  private wireframe = false;
+  private edgesEmphasized = false;
   /** Fires when see-through is switched, so the chrome can say it is on. */
   onXrayChange: ((on: boolean) => void) | null = null;
+  onWireframeChange: ((on: boolean) => void) | null = null;
   /** The mesh on screen is the last one that BUILT, not what the values say. */
   private stale = false;
 
   get seeThrough(): boolean {
-    return this.xray;
+    return this.xray || this.wireframe;
+  }
+
+  get isWireframe(): boolean {
+    return this.wireframe;
+  }
+
+  /** Edges only. The faces still take picks, so a face can be chosen through the
+   *  lines, and a box reaches the far side as it does in x-ray. */
+  setWireframe(on: boolean) {
+    if (this.wireframe === on) return;
+    this.wireframe = on;
+    this.dropAreaProjection();
+    this.applyBodyFinish();
+    if (!on && !this.edgesEmphasized) this.highlighter?.setEdgeBase(EDGE_IDLE);
+    this.onWireframeChange?.(on);
+    this.requestRender();
   }
 
   get areaTakes(): AreaFilter {
@@ -1117,14 +1145,17 @@ export class Viewport {
             fm.depthWrite = fo >= 1;
           }
           fm.clippingPlanes = mat.clippingPlanes;
+          applyWireframe(fm, this.wireframe);
         }
       }
+      applyWireframe(mat, this.wireframe);
       // A glowing body, or a body with a glowing face, throws light from its own
       // surface. Only walked when something on it glows, so the common case pays
       // nothing.
       if (glow > 0 || faceGlow) this.collectEmitters(b, glow, ghost, emitters);
     }
     this.syncEmitterLights(emitters);
+    if (this.wireframe && !this.edgesEmphasized) this.highlighter?.setEdgeBase(EDGE_WIRE);
     this.modelBloomable = shiny || emitters.length > 0;
     this.syncBloomable();
     // The model may have moved or grown; re-aim the optional key-light shadow.
@@ -1456,7 +1487,7 @@ export class Viewport {
           const i0 = index.getX(t * 3);
           const i1 = index.getX(t * 3 + 1);
           const i2 = index.getX(t * 3 + 2);
-          if (!this.xray) {
+          if (!this.seeThrough) {
             a.set(wx[i0] as number, wy[i0] as number, wz[i0] as number);
             b.set(wx[i1] as number, wy[i1] as number, wz[i1] as number);
             c.set(wx[i2] as number, wy[i2] as number, wz[i2] as number);
@@ -3628,7 +3659,8 @@ export class Viewport {
    *  tool is active, so they're easy to see and target (MCAD-style): bright
    *  color + thicker lines. */
   emphasizeEdges(on: boolean) {
-    this.highlighter?.setEdgeBase(on ? EDGE_PICKABLE : EDGE_IDLE);
+    this.edgesEmphasized = on;
+    this.highlighter?.setEdgeBase(on ? EDGE_PICKABLE : this.wireframe ? EDGE_WIRE : EDGE_IDLE);
     if (this.model) {
       for (const d of edgeObjects(this.model)) d.material.linewidth = on ? 2.8 : 1.6;
     }
