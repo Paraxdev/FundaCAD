@@ -11,7 +11,7 @@ import type { CadDocument, ExportFormat, Feature, ImportFormat } from "../types"
 import { clearRecovery } from "./recovery";
 import { referencedGeometry } from "../document/versions";
 import { noteRecent } from "./recentFiles";
-import { DOC_EXT, LEGACY_DOC_EXTS, isDocumentExt } from "./documentExt";
+import { BINARY_DOC_EXT, DOC_EXT, LEGACY_DOC_EXTS, isDocumentExt } from "./documentExt";
 import { announceImportedBody } from "../plugins/contrib";
 import {
   asHex, materialsForColors, nodeColors, parseLibrary, serializeLibrary,
@@ -36,8 +36,9 @@ function referencedHashes(store: DocumentStore): string[] {
   return [...out];
 }
 
-/** Write the document as a container at `path`. Returns an error message, or
- *  null on success.
+/** Write the document at `path`, as JSON or, for a `.fundab` path, the binary
+ *  format; Rust decides from the extension. Returns an error message, or null on
+ *  success.
  *
  *  Goes through Rust, NOT the sidecar: `sidecar.rs` does not auto-respawn, so a
  *  save that needed the geometry engine would be impossible for the whole rest
@@ -79,7 +80,10 @@ export async function saveDocumentAs(store: DocumentStore) {
   if (isTauri()) {
     const { save } = await import("@tauri-apps/plugin-dialog");
     const path = await save({
-      filters: [{ name: "FundaCAD Document", extensions: [DOC_EXT, ...LEGACY_DOC_EXTS] }],
+      filters: [
+        { name: "FundaCAD Document (JSON)", extensions: [DOC_EXT, ...LEGACY_DOC_EXTS] },
+        { name: "FundaCAD Binary Document (smaller)", extensions: [BINARY_DOC_EXT] },
+      ],
       defaultPath: store.filePath ?? `${store.fileName}.${DOC_EXT}`,
     });
     if (path) {
@@ -108,8 +112,8 @@ export async function openDocument(store: DocumentStore, geometry: GeometryBacke
       // MCAD-style: Open takes our document AND mesh/CAD files (imported as a
       // body), routed by extension below, so users can just "open" an STL.
       filters: [
-        { name: "All supported", extensions: [DOC_EXT, ...LEGACY_DOC_EXTS, "json", "stl", "3mf", "step", "stp", "obj", "glb"] },
-        { name: "FundaCAD Document", extensions: [DOC_EXT, ...LEGACY_DOC_EXTS, "json"] },
+        { name: "All supported", extensions: [DOC_EXT, BINARY_DOC_EXT, ...LEGACY_DOC_EXTS, "json", "stl", "3mf", "step", "stp", "obj", "glb"] },
+        { name: "FundaCAD Document", extensions: [DOC_EXT, BINARY_DOC_EXT, ...LEGACY_DOC_EXTS, "json"] },
         { name: "Mesh / CAD", extensions: ["stl", "3mf", "step", "stp", "obj", "glb"] },
       ],
     });
@@ -236,16 +240,14 @@ export async function openDocumentAtPath(
   let repaired = false;
   try {
     wasContainer = await invoke<boolean>("container_is_container", { path });
-    if (wasContainer) {
-      const opened = await invoke<{ document: string; repairedShards: number; usedBackupIndex: boolean }>(
-        "container_open_checked",
-        { path },
-      );
-      text = opened.document;
-      repaired = opened.repairedShards > 0 || opened.usedBackupIndex;
-    } else {
-      text = await (await import("@tauri-apps/plugin-fs")).readTextFile(path);
-    }
+    // JSON goes through Rust too: it carries embedded geometry that has to reach
+    // the blob store before the first rebuild asks for it.
+    const opened = await invoke<{ document: string; repairedShards: number; usedBackupIndex: boolean }>(
+      "container_open_checked",
+      { path },
+    );
+    text = opened.document;
+    repaired = opened.repairedShards > 0 || opened.usedBackupIndex;
   } catch (e) {
     // Rust's container errors are already user-facing sentences (a newer
     // container format, a damaged archive, geometry that does not match its

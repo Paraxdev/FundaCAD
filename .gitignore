@@ -31,6 +31,7 @@ green-select.png
 # actually tracked (gitignore says nothing about `git add -f`, or a path already
 # tracked before the rule existed).
 *.funda
+*.fundab
 *.neocad
 *.sindri
 *.step

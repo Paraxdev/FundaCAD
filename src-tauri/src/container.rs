@@ -371,6 +371,34 @@ pub fn write_zip_container(
     Ok(manifest)
 }
 
+/// Write a document in the format its extension names.
+pub fn write_document(
+    dest: &Path,
+    document_json: &str,
+    blob_paths: &BTreeMap<String, PathBuf>,
+    mesh_paths: &BTreeMap<String, PathBuf>,
+    app: &str,
+) -> Result<(), String> {
+    if crate::json_doc::is_binary_doc_path(dest) {
+        write_container(dest, document_json, blob_paths, mesh_paths, app).map(|_| ())
+    } else {
+        crate::json_doc::write_json_document(dest, document_json, blob_paths)
+    }
+}
+
+/// Open any document, whatever its extension says: the format is read from the
+/// bytes, so a binary file renamed to `.funda` still opens.
+pub fn open_document_checked(
+    path: &Path,
+    blob_dir: &Path,
+    mesh_dir: Option<&Path>,
+) -> Result<(String, crate::fnda::RepairReport), String> {
+    if looks_like_container(path) {
+        return read_container_checked(path, blob_dir, mesh_dir).map(|(doc, _, report)| (doc, report));
+    }
+    crate::json_doc::read_json_document(path, blob_dir).map(|doc| (doc, crate::fnda::RepairReport::default()))
+}
+
 fn copy_into<W: Write + Seek>(z: &mut zip::ZipWriter<W>, src: &Path) -> Result<(), String> {
     let mut f = File::open(src).map_err(|e| format!("{}: {e}", src.display()))?;
     std::io::copy(&mut f, z).map_err(|e| e.to_string())?;
@@ -604,24 +632,23 @@ pub async fn container_save(
     }
 
     let app_version = app.package_info().version.to_string();
-    write_container(
+    write_document(
         std::path::Path::new(&path),
         &document_json,
         &blobs,
         &meshes,
         &app_version,
     )
-    .map(|_| ())
 }
 
-/// Read a container at `path`: extract its geometry into the blob store and
-/// return the document JSON. The blobs land before this returns, so the rebuild
-/// the frontend kicks off on load can resolve them immediately.
+/// Read a document at `path`, binary or JSON: extract its geometry into the blob
+/// store and return the document JSON. The blobs land before this returns, so the
+/// rebuild the frontend kicks off on load can resolve them immediately.
 #[tauri::command]
 pub async fn container_open(app: tauri::AppHandle, path: String) -> Result<String, String> {
     let blobs = blob_dir(&app)?;
     let meshes = mesh_dir(&app)?;
-    read_container(std::path::Path::new(&path), &blobs, Some(&meshes)).map(|(doc, _)| doc)
+    open_document_checked(std::path::Path::new(&path), &blobs, Some(&meshes)).map(|(doc, _)| doc)
 }
 
 #[derive(serde::Serialize)]
@@ -638,7 +665,7 @@ pub struct OpenedDocument {
 pub async fn container_open_checked(app: tauri::AppHandle, path: String) -> Result<OpenedDocument, String> {
     let blobs = blob_dir(&app)?;
     let meshes = mesh_dir(&app)?;
-    let (document, _, report) = read_container_checked(std::path::Path::new(&path), &blobs, Some(&meshes))?;
+    let (document, report) = open_document_checked(std::path::Path::new(&path), &blobs, Some(&meshes))?;
     Ok(OpenedDocument { document, repaired_shards: report.repaired_shards, used_backup_index: report.used_backup_index })
 }
 
@@ -892,6 +919,32 @@ mod tests {
         }
         let err = read_manifest(&p).unwrap_err();
         assert!(err.contains("Update FundaCAD"), "unexpected message: {err}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn pretty_doc(hash: &str) -> String {
+        format!("{{\n  \"version\": 9,\n  \"features\": [\n    {{\n      \"id\": \"im\",\n      \"type\": \"import\",\n      \"geom\": \"{hash}\"\n    }}\n  ]\n}}")
+    }
+
+    #[test]
+    fn extension_picks_the_format() {
+        let dir = tmpdir("ext");
+        let data: Vec<u8> = (0..70_000u32).map(|i| (i.wrapping_mul(2654435761) >> 20) as u8).collect();
+        let h = hash_bytes(&data);
+        let blobs = BTreeMap::from([(h.clone(), blob(&dir, "g.bin", &data))]);
+        let doc = pretty_doc(&h);
+
+        let json = dir.join("part.funda");
+        let bin = dir.join("part.FundaB");
+        write_document(&json, &doc, &blobs, &BTreeMap::new(), "t").unwrap();
+        write_document(&bin, &doc, &blobs, &BTreeMap::new(), "t").unwrap();
+
+        assert!(!looks_like_container(&json));
+        assert!(crate::fnda::looks_like_fnda(&bin));
+        let text = std::fs::read_to_string(&json).unwrap();
+        assert!(text.starts_with(&doc[..doc.len() - 2]), "the frontend's text is kept as written");
+        assert!(text.find("\"features\"").unwrap() < text.find("\"geometry\"").unwrap());
+        assert!(std::fs::metadata(&bin).unwrap().len() < std::fs::metadata(&json).unwrap().len());
         let _ = std::fs::remove_dir_all(&dir);
     }
 

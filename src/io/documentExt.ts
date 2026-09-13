@@ -22,15 +22,20 @@
 // same names, and a mismatch there means an association that opens a blank
 // window rather than an error.
 
-/** The extension new documents are saved as. */
+/** The extension new documents are saved as: readable JSON. */
 export const DOC_EXT = "funda";
+
+/** The compact binary document, like `.bgcode` beside `.gcode`. Rust picks the
+ *  format from this extension when saving (src-tauri/src/json_doc.rs); opening
+ *  reads the format from the bytes, so a misnamed file still opens. */
+export const BINARY_DOC_EXT = "fundab";
 
 /** The extensions documents were saved as before, newest first. Read forever. */
 export const LEGACY_DOC_EXTS: readonly string[] = ["neocad", "sindri"];
 
 /** Every extension that names one of our documents, `json` included: a pre-v5
  *  document is plain JSON and some are still called that. */
-export const DOC_EXTS: readonly string[] = [DOC_EXT, ...LEGACY_DOC_EXTS, "json"];
+export const DOC_EXTS: readonly string[] = [DOC_EXT, BINARY_DOC_EXT, ...LEGACY_DOC_EXTS, "json"];
 
 /** Is this extension one of ours? Case-insensitive, and tolerant of the
  *  `undefined` that `split(".").pop()` yields for a name with no dot. */
@@ -45,6 +50,6 @@ export function isDocumentExt(ext: string | undefined | null): boolean {
  *  `bracket.stl`, not `bracket.neocad.stl`.
  */
 export function stripDocumentExt(name: string): string {
-  const alts = [DOC_EXT, ...LEGACY_DOC_EXTS].join("|");
+  const alts = [BINARY_DOC_EXT, DOC_EXT, ...LEGACY_DOC_EXTS].join("|");
   return name.replace(new RegExp(`\.(${alts})$`, "i"), "");
 }

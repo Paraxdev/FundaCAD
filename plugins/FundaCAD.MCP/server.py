@@ -60,6 +60,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import app_session  # noqa: E402
 import describe as D  # noqa: E402
+import docfile  # noqa: E402
 import model as M  # noqa: E402
 import render as R  # noqa: E402
 import schema as S  # noqa: E402
@@ -852,10 +853,10 @@ screen. Every edit you make appears in their window as it happens.
         # one the caller has in mind, so echoing back what was typed says
         # nothing about where the file actually is. Say where it is.
         path = os.path.abspath(args["path"])
-        with open(path, "r", encoding="utf-8") as fh:
-            doc = json.load(fh)
-        if not isinstance(doc, dict) or "features" not in doc:
-            return failure(f"{path} is not a FundaCAD document (no `features`).")
+        try:
+            doc, _blobs = docfile.read(path)
+        except docfile.DocumentFileError as ex:
+            return failure(str(ex))
         self.doc = doc
         self.doc.setdefault("parameters", {})
         self.doc.setdefault("paramDefs", {})
@@ -1049,10 +1050,13 @@ screen. Every edit you make appears in their window as it happens.
         parent = os.path.dirname(path)
         if parent and not os.path.isdir(parent):
             return failure(f"No such directory: {parent}")
-        with open(path, "w", encoding="utf-8") as fh:
-            json.dump(self.doc, fh, indent=1)
+        try:
+            embedded = docfile.write(path, self.doc)
+        except docfile.DocumentFileError as ex:
+            return failure(str(ex))
         self.path = path
-        return text(f"Saved {len(self.doc['features'])} features to {path}.")
+        geometry = f", with {embedded} imported bodies' geometry" if embedded else ""
+        return text(f"Saved {len(self.doc['features'])} features to {path}{geometry}.")
 
     async def t_doc_get(self, args):
         out = {"features": self.doc.get("features", [])}

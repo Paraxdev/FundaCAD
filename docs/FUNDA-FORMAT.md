@@ -1,9 +1,48 @@
-# The .funda file format, version 2
+# The FundaCAD document files: .funda and .fundab
 
-A `.funda` file holds one FundaCAD document and the geometry it references. From
-version 2 it is a binary file that finds and repairs damage to itself: every part
-of it carries a checksum, every section carries Reed-Solomon parity, and the index
-that locates the sections is stored twice.
+A document is saved in one of two formats, chosen by the extension, the way a
+slicer writes `.gcode` or `.bgcode`:
+
+| Extension | Format | For |
+|---|---|---|
+| `.funda` | JSON, pretty-printed | reading, diffing, version control, scripts |
+| `.fundab` | binary, format 2 below | smaller files, error correction, large imports |
+
+Saving picks the format from the extension. Opening ignores the extension and
+reads the format from the first bytes, so a file with the wrong name still opens.
+`.neocad`, `.sindri` and `.json` are older names and are saved as JSON.
+
+## JSON (.funda)
+
+The document object exactly as the app holds it, indented by two spaces. When the
+document has imported bodies, one more top-level key comes last:
+
+```json
+{
+  "version": 9,
+  "features": [ { "id": "f1", "type": "import", "geom": "5648909c8c0ccf6096c0e672255e68a0" } ],
+  "geometry": {
+    "5648909c8c0ccf6096c0e672255e68a0": "<base64 of the binary BREP>"
+  }
+}
+```
+
+- Each key of `geometry` is the lowercase hex BLAKE2b-128 of the decoded bytes,
+  and a reader refuses the file when they differ.
+- The bytes are OCCT BinTools, the same blobs the binary format stores.
+- A reader removes `geometry` from the document after publishing the blobs; the
+  rest of the app never sees it.
+- A document without imports has no `geometry` key and is plain JSON.
+
+The reference writer and reader is `src-tauri/src/json_doc.rs`.
+
+## Binary (.fundab), format 2
+
+A `.fundab` file holds one FundaCAD document and the geometry it references. It is
+a binary file that finds and repairs damage to itself: every part of it carries a
+checksum, every section carries Reed-Solomon parity, and the index that locates
+the sections is stored twice. Between the FundaCAD release that introduced format
+2 and the one that split the extensions, these files were also named `.funda`.
 
 The reference writer and reader is `src-tauri/src/fnda.rs`. This document is the
 contract; where the two disagree, the code has a bug.
@@ -180,9 +219,11 @@ FundaCAD still reads every format it has written:
 
 - **Format 1**: a ZIP archive (first bytes `PK`) holding `manifest.json`,
   `document.json` and `geom/<hash>.bbrep`, verified by hash but with no repair.
-- **Plain JSON**: a document saved before containers existed.
+- **Plain JSON with inline `brep`**: a document saved before containers existed,
+  its import features carrying text BREP as base64. Migrated to the blob store on
+  open.
 
-Only format 2 is written.
+Only JSON and format 2 are written.
 
 ## What the error correction does not cover
 

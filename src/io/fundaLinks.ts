@@ -5,7 +5,7 @@
 import type { DocumentStore } from "../document/store";
 import type { GeometryBackend } from "../geometry/client";
 import { asFeature, type Feature } from "../types";
-import { DOC_EXT, LEGACY_DOC_EXTS } from "./documentExt";
+import { BINARY_DOC_EXT, DOC_EXT, LEGACY_DOC_EXTS } from "./documentExt";
 import {
   baseName,
   insertFundaDocument,
@@ -16,14 +16,13 @@ import {
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;
 
-/** A document's JSON, from a container or a plain JSON file, or null when the
- *  file cannot be read. */
+/** A document's JSON, binary or JSON on disk, or null when the file cannot be
+ *  read. Always through Rust, which also publishes the geometry either format
+ *  carries into the blob store. */
 export async function readDocumentText(path: string): Promise<string | null> {
   try {
     const { invoke } = await import("@tauri-apps/api/core");
-    const packed = await invoke<boolean>("container_is_container", { path });
-    if (packed) return await invoke<string>("container_open", { path });
-    return await (await import("@tauri-apps/plugin-fs")).readTextFile(path);
+    return await invoke<string>("container_open", { path });
   } catch {
     return null;
   }
@@ -48,7 +47,7 @@ export async function insertDocumentFromDialog(store: DocumentStore, geometry: G
   const { open } = await import("@tauri-apps/plugin-dialog");
   const path = await open({
     multiple: false,
-    filters: [{ name: "FundaCAD Document", extensions: [DOC_EXT, ...LEGACY_DOC_EXTS, "json"] }],
+    filters: [{ name: "FundaCAD Document", extensions: [DOC_EXT, BINARY_DOC_EXT, ...LEGACY_DOC_EXTS, "json"] }],
   });
   if (typeof path !== "string") return;
   if (store.filePath && samePath(path, store.filePath)) {

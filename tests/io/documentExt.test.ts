@@ -8,6 +8,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  BINARY_DOC_EXT,
   DOC_EXT,
   DOC_EXTS,
   LEGACY_DOC_EXTS,
@@ -33,6 +34,16 @@ describe("documentExt", () => {
     expect(isDocumentExt("funda")).toBe(true);
     expect(isDocumentExt("json")).toBe(true); // pre-v5 documents are plain JSON
     expect(DOC_EXTS).toContain(DOC_EXT);
+  });
+
+  it("names the binary document separately, the way bgcode sits beside gcode", () => {
+    // Literal, not the constant: Rust picks the format from this exact string
+    // (src-tauri/src/json_doc.rs BINARY_DOC_EXT), so the two must not drift.
+    expect(BINARY_DOC_EXT).toBe("fundab");
+    expect(isDocumentExt("fundab")).toBe(true);
+    expect(isDocumentExt("FundaB")).toBe(true);
+    expect(stripDocumentExt("bracket.fundab")).toBe("bracket");
+    expect(stripDocumentExt("bracket.funda")).toBe("bracket");
   });
 
   it("is case-insensitive, and survives a name with no dot", () => {

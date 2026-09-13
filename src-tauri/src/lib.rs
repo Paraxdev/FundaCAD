@@ -10,6 +10,7 @@ mod geom;
 // crate consumes it in the app itself.
 pub mod container;
 pub mod fnda;
+pub mod json_doc;
 mod printer;
 pub mod plugins;
 pub mod session_file;

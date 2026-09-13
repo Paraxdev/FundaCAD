@@ -41,7 +41,7 @@ REBUILD_TOLERANCE = 0.1          # the app's own viewport tessellation tolerance
 #: who renamed their documents to match would otherwise find every baseline
 #: reporting "rebuild raised: FileNotFoundError" and no way to tell that from a
 #: real regression. So the extension is the one thing allowed to move.
-DOC_EXTS = (".funda", ".neocad", ".sindri")
+DOC_EXTS = (".funda", ".fundab", ".neocad", ".sindri")
 
 
 def resolve_doc(path):
