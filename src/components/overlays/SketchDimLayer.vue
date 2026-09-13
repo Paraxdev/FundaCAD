@@ -13,8 +13,8 @@
 //   through the sketch plane and the live camera to screen px, on every frame
 //   the camera moves. The loop at the bottom writes style.transform straight
 //   onto elements it collected into a PLAIN array, no ref, no reactive(), no
-//   scheduler. TimelineBar.vue's rollback drag and RibbonBar.vue's width
-//   measurement draw the same line for the same reason.
+//   scheduler. TimelineBar.vue's rollback drag draws the same line for the
+//   same reason.
 //
 // The label drag, the pointer-capture bookkeeping and the value editor's
 // focus/select are imperative here too: they are pointer- and cursor-rate code

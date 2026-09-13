@@ -362,7 +362,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
  *  subscribe, so who subscribes first is observable. */
 export function mountUi(e: Engine): void {
   e.ui = {} as EngineUi;
-  // The ribbon is components/shell/RibbonBar.vue; it renders itself from the
+  // The tool rail is components/shell/ToolRail.vue; it renders itself from the
   // store, so all that is left here is handing it the dispatcher.
   useRibbonStore().bind((a) => e.handleAction(a));
 

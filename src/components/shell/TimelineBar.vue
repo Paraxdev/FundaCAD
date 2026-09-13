@@ -1,15 +1,14 @@
 <script setup lang="ts">
-// Bottom timeline (MCAD-style): a compact strip of icon chips in build order,
-// plus a draggable rollback marker, transport buttons (roll to start / step /
-// roll to end) and an error badge that jumps to failing features. Number, name
-// and error text live in the tooltip, chips stay ~28px so a 100+-feature
-// document spans screens, not screen-miles.
+// The history: a floating list of every feature in build order, with a draggable
+// rollback marker, transport buttons and an error badge that jumps to failing
+// features. A selected row opens its values in place under it.
 
 import { computed, nextTick, onMounted, onUnmounted, ref, useTemplateRef, watch } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useDocValue, useBuildValue } from "../../app/useDoc";
 import { useSelectionStore } from "../../stores/selection";
 import { useTimelineStore } from "../../stores/timeline";
+import { useShellStore } from "../../stores/shell";
 import { featureMeta } from "../../ui/featureMeta";
 import Icon from "./Icon.vue";
 import { contextMenu } from "../../ui/menu";
@@ -17,8 +16,6 @@ import { buildProgress, CANCEL_DELAY_MS } from "../../ui/buildProgress";
 import { featureNotes } from "../../ui/featureNotes";
 import { gapIndexIn } from "../../ui/trackGaps";
 import { ClickOrDouble, HistoryPeek } from "../../ui/historyPeek";
-import { anchorPanel } from "../../ui/propsAnchor";
-import { layoutPrefs, onLayoutPrefsChange } from "../../ui/layoutPrefs";
 import { getUnit, onUnitChange } from "../../ui/units";
 import FeatureProperties from "./FeatureProperties.vue";
 
@@ -26,103 +23,21 @@ const engine = useEngine();
 const store = engine.store;
 const selection = useSelectionStore();
 const timeline = useTimelineStore();
+const shellStore = useShellStore();
 
 const scroller = useTemplateRef<HTMLElement>("scroller");
 const track = useTemplateRef<HTMLElement>("track");
-// The strip itself, which is what the floating values panel rests on.
-const shell = useTemplateRef<HTMLElement>("shell");
 
-// `name` rides along for the side arrangement, where each chip is a full-width
-// row and a column of unlabelled icons would be unreadable.
 // Cast because `name` is optional and only on SOME feature variants, the same
 // way every other reader of it in the app reaches for it.
 const features = useDocValue((doc) =>
   doc.features.map((f) => ({ id: f.id, type: f.type, name: (f as { name?: string }).name ?? "" })),
 );
 
-// A feature's values are edited here, under the entry that names the operation
-// they belong to, there is no docked panel for them any more. That has to hold
-// in BOTH arrangements, which means two presentations of the same rows: in the
-// flow, indented under the chip, when the history is a column with width to
-// spare; floating above the strip when it is 52px of chrome along the bottom.
-const inFlowProps = ref(layoutPrefs().history === "right");
 const unit = ref(getUnit());
-const stops = [
-  onLayoutPrefsChange(() => {
-    inFlowProps.value = layoutPrefs().history === "right";
-    void measureProps();
-  }),
-  onUnitChange(() => { unit.value = getUnit(); }),
-];
-onUnmounted(() => { for (const stop of stops) stop(); });
+const offUnit = onUnitChange(() => { unit.value = getUnit(); });
+onUnmounted(offUnit);
 
-// --- the floating half -----------------------------------------------------
-// Teleported to the body and positioned in window coordinates, because
-// #timeline is `overflow: hidden` with a scroller inside it and anything
-// positioned within the strip is clipped at its top edge. The arithmetic is
-// ui/propsAnchor.ts; measuring the strip is the part that has to be here.
-//
-// ONE berth, whichever feature is selected: see propsAnchor.ts for why the
-// panel stopped following its chip along the strip.
-
-/** Wide enough for a label and its value side by side, and no wider: this
- *  hangs over the model. */
-const PROPS_WIDTH = 248;
-
-const floatAt = ref<{ left: number; bottom: number } | null>(null);
-
-async function measureProps() {
-  await nextTick();
-  const id = selection.featureId;
-  const strip = shell.value?.getBoundingClientRect();
-  // No selection, no strip to rest on, or the feature is gone (deleted, or
-  // rolled out of the built set), there is nothing to show and a panel left at
-  // the last coordinates would be showing the last feature's values.
-  if (inFlowProps.value || !id || !strip || !features.value.some((f) => f.id === id)) {
-    floatAt.value = null;
-    return;
-  }
-  floatAt.value = anchorPanel(
-    strip,
-    { width: window.innerWidth, height: window.innerHeight },
-    PROPS_WIDTH,
-    8,
-    8,
-    // Measured rather than assumed: the pill's width is its six buttons' labels
-    // and changes with the theme's font, and it is absent entirely while a
-    // sketch is open.
-    document.querySelector("#viewcontrols")?.getBoundingClientRect() ?? null,
-  );
-}
-
-const floatingFeature = computed(() =>
-  floatAt.value && selection.featureId ? selection.featureId : null,
-);
-
-/** The floating panel says which operation it belongs to; the in-flow one is
- *  already indented under the chip that says so. */
-const propsTitle = computed(() => {
-  const id = floatingFeature.value;
-  const f = id ? features.value.find((x) => x.id === id) : null;
-  return f ? f.name || metaFor(f).label : "";
-});
-
-watch(() => [selection.featureId, features.value.length] as const, () => void measureProps(), {
-  immediate: true,
-});
-
-// The strip scrolls under the panel and the window resizes out from under both,
-// so the anchor is re-measured rather than captured once. Cheap: one
-// getBoundingClientRect, and only while a feature is selected.
-const remeasure = () => { if (selection.featureId && !inFlowProps.value) void measureProps(); };
-onMounted(() => {
-  window.addEventListener("resize", remeasure);
-  scroller.value?.addEventListener("scroll", remeasure, { passive: true });
-});
-onUnmounted(() => {
-  window.removeEventListener("resize", remeasure);
-  scroller.value?.removeEventListener("scroll", remeasure);
-});
 const rollback = useDocValue(() => store.rollbackIndex);
 const suppressed = useDocValue(() => new Set(features.value.filter((f) => store.isSuppressed(f.id)).map((f) => f.id)));
 
@@ -281,22 +196,9 @@ watch(
     await nextTick();
     const el = scroller.value;
     if (!el) return;
-    // along the strip's own axis: the end of a column is its bottom
-    if (inFlowProps.value) el.scrollTop = el.scrollHeight;
-    else el.scrollLeft = el.scrollWidth;
+    el.scrollTop = el.scrollHeight;
   },
 );
-
-// The wheel scrubs the bottom strip horizontally, a vertical wheel is useless on
-// a strip that only scrolls sideways. Non-passive: preventDefault is the point.
-// Not in the side column, which scrolls DOWN: turning the wheel sideways there
-// swallowed every scroll and nudged the rows sideways into their own edge.
-function onWheel(e: WheelEvent) {
-  const el = scroller.value;
-  if (!el || inFlowProps.value) return;
-  el.scrollLeft += Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
-  e.preventDefault();
-}
 
 // Dragging a chip near either edge auto-scrolls; a reorder across a long
 // document is impossible otherwise.
@@ -304,11 +206,8 @@ function onDragOverScroller(e: DragEvent) {
   const el = scroller.value;
   if (!el) return;
   const r = el.getBoundingClientRect();
-  if (inFlowProps.value) {
-    if (e.clientY < r.top + 48) el.scrollTop -= 14;
-    else if (e.clientY > r.bottom - 48) el.scrollTop += 14;
-  } else if (e.clientX < r.left + 48) el.scrollLeft -= 14;
-  else if (e.clientX > r.right - 48) el.scrollLeft += 14;
+  if (e.clientY < r.top + 48) el.scrollTop -= 14;
+  else if (e.clientY > r.bottom - 48) el.scrollTop += 14;
 }
 
 // --- reorder via native drag-and-drop ------------------------------------
@@ -347,9 +246,7 @@ function jumpToNextError() {
   errCycle.value++;
   track.value
     ?.querySelector<HTMLElement>(`.timeline-node[data-id="${CSS.escape(id)}"]`)
-    ?.scrollIntoView(inFlowProps.value
-      ? { block: "center", inline: "nearest", behavior: "smooth" }
-      : { inline: "center", block: "nearest", behavior: "smooth" });
+    ?.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
   timeline.select(id);
 }
 
@@ -404,7 +301,17 @@ function openMenu(e: MouseEvent, id: string, i: number) {
 </script>
 
 <template>
-  <footer id="timeline" ref="shell" class="timeline-shell">
+  <section id="timeline" class="timeline-shell float-card" aria-label="History">
+    <div class="float-card-head">
+      <span class="float-card-title">History</span>
+      <button
+        class="timeline-errbadge"
+        :class="{ hidden: errors.size === 0 }"
+        title="Failing features, click to jump to the next one"
+        @click="jumpToNextError()"
+      ><Icon name="warning" :size="14" /> {{ errors.size }}</button>
+      <button class="float-card-close" title="Hide the history (Ctrl Alt H)" @click="shellStore.setHistory(false)"><Icon name="close" :size="14" /></button>
+    </div>
     <div class="timeline-transport">
       <button class="tl-btn" title="Roll back to the start" :disabled="rollback <= 0" @click="store.setRollback(0)"><Icon name="skipStart" /></button>
       <button class="tl-btn" title="Step one feature back" :disabled="rollback <= 0" @click="store.setRollback(Math.max(0, rollback, 1))"><Icon name="stepBack" /></button>
@@ -412,7 +319,7 @@ function openMenu(e: MouseEvent, id: string, i: number) {
       <button class="tl-btn" title="Roll forward to the end" :disabled="rollback >= features.length" @click="store.setRollback(features.length)"><Icon name="skipEnd" /></button>
     </div>
 
-    <div ref="scroller" class="timeline-scroll" @wheel="onWheel" @dragover="onDragOverScroller">
+    <div ref="scroller" class="timeline-scroll" @dragover="onDragOverScroller">
       <div ref="track" class="timeline-track">
         <div v-if="showEmpty" class="timeline-empty">
           Your modeling history will appear here. Start with a Sketch.
@@ -425,10 +332,6 @@ function openMenu(e: MouseEvent, id: string, i: number) {
               title="Drag to roll the model back / forward"
               @pointerdown="onMarkerDown"
             ><span class="marker-grip"></span></div>
-            <!-- The chip and its values are one unit, so they are one box: in
-                 the side arrangement the values sit under the chip in the flow,
-                 and the wrapper is what keeps them from being separated by the
-                 next chip. -->
             <div class="timeline-item">
               <div
                 class="timeline-node"
@@ -455,15 +358,14 @@ function openMenu(e: MouseEvent, id: string, i: number) {
                 @drop="onDrop(f.id, i, $event)"
               >
                 <span class="glyph"><Icon :name="metaFor(f).icon" :size="18" /></span>
-                <!-- Shown only in the side arrangement, where there is width for
-                     it: a vertical column of unlabelled icons is unreadable. -->
                 <span class="t-name">{{ f.name || metaFor(f).label }}</span>
+                <Icon class="t-caret" :name="selection.featureId === f.id ? 'caretDown' : 'caretRight'" :size="12" />
               </div>
               <!-- The feature's own values, under the chip you clicked. The
                    point of putting them HERE rather than in a docked panel is
                    that the history already says which operation you are
                    changing, so the form does not have to. -->
-              <div v-if="inFlowProps && selection.featureId === f.id" class="timeline-props">
+              <div v-if="selection.featureId === f.id" class="timeline-props">
                 <FeatureProperties :feature-id="f.id" :unit="unit" />
               </div>
             </div>
@@ -497,30 +399,5 @@ function openMenu(e: MouseEvent, id: string, i: number) {
       @click="cancelBusy()"
     >Cancel</button>
 
-    <button
-      class="timeline-errbadge"
-      :class="{ hidden: errors.size === 0 }"
-      title="Failing features, click to jump to the next one"
-      @click="jumpToNextError()"
-    ><Icon name="warning" :size="14" /> {{ errors.size }}</button>
-  </footer>
-
-  <!-- The same rows, floating, for the arrangement where the history is a
-       52px strip with no room to open them in place. Teleported because
-       #timeline clips its own overflow. -->
-  <Teleport to="body">
-    <div
-      v-if="floatAt && floatingFeature"
-      class="timeline-props floating"
-      :style="{ left: `${floatAt.left}px`, bottom: `${floatAt.bottom}px` }"
-    >
-      <div class="tp-head">
-        <span class="tp-title">{{ propsTitle }}</span>
-        <button class="tp-close" title="Close" @click="selection.featureId = null">
-          <Icon name="close" :size="12" />
-        </button>
-      </div>
-      <FeatureProperties :feature-id="floatingFeature" :unit="unit" />
-    </div>
-  </Teleport>
+  </section>
 </template>

@@ -10,6 +10,8 @@ export const useRibbonStore = defineStore("ribbon", () => {
   const context = ref<RibbonContext>("model");
   /** The armed sketch tool, highlighted on its button. Empty when none. */
   const activeSketchTool = ref("");
+  /** The sketch feature being edited, null for a sketch not yet committed. */
+  const sketchId = ref<string | null>(null);
 
   let run: ((action: string) => void) | null = null;
   function bind(fn: (action: string) => void) {
@@ -19,5 +21,5 @@ export const useRibbonStore = defineStore("ribbon", () => {
     run?.(action);
   }
 
-  return { context, activeSketchTool, bind, act };
+  return { context, activeSketchTool, sketchId, bind, act };
 });

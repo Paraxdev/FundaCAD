@@ -32,6 +32,9 @@ import { useSelectionStore } from "../../stores/selection";
 import { useBrowserStore } from "../../stores/browser";
 import TreeFolder from "./TreeFolder.vue";
 import TreeRow from "./TreeRow.vue";
+import Icon from "./Icon.vue";
+import { useShellStore } from "../../stores/shell";
+import { contextMenu } from "../../ui/menu";
 import {
   bodyExtraMenu, buildBodyTree, collectGroupBodyIds, elementMoveMenu, elementPath,
   materialMenu, type BodyRef, type TreeGroup,
@@ -50,13 +53,27 @@ import { featuresOf } from "../../types";
 import type { CadDocument, Feature, Plane3 } from "../../types";
 
 const engine = useEngine();
+
+/** The card's own menu: whole-document visibility verbs. */
+function openMore(ev: MouseEvent) {
+  const r = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+  const store = engine.store;
+  const bodies = store.buildState.result?.bodies ?? [];
+  const anyHidden = bodies.some((b) => !store.isBodyVisible(b.id));
+  contextMenu(r.left, r.top - 8, [
+    { label: "Hide Selected Bodies", disabled: !engine.viewport.getSelectedBodies().length, onClick: () => engine.handleAction("hide-selected") },
+    { label: "Show Hidden Bodies", disabled: !anyHidden, onClick: () => engine.handleAction("show-all-bodies") },
+    { label: "Invert Body Visibility", disabled: !bodies.length, onClick: () => store.setBodiesVisibility(new Map(bodies.map((b) => [b.id, !store.isBodyVisible(b.id)]))) },
+  ]);
+}
 const store = engine.store;
 const selection = useSelectionStore();
 const browser = useBrowserStore();
 const root = useTemplateRef<HTMLElement>("root");
+const shell = useShellStore();
 
 // The chosen filter is module state in a plain .ts, not a store, so nothing
-// tracks it, the same arrangement ui/theme.ts, icons.ts and layoutPrefs.ts use,
+// tracks it, the same arrangement ui/theme.ts, icons.ts and units.ts use,
 // and for the same reason: ui/browserFilter.ts has to stay Vue-free for the
 // headless suite.
 const filter = ref(getBrowserFilter());
@@ -768,12 +785,12 @@ onUnmounted(() => root.value?.removeEventListener("wheel", onWheel));
 </script>
 
 <template>
-  <aside id="browser" ref="root">
-    <div class="panel-title browser-title">
-      <span>Browser</span>
-      <!-- In the title row rather than above it: the panel is 232px and a
-           filter on its own line would cost a whole row of tree for a control
-           that is usually left on "All items". -->
+  <aside id="browser" class="float-card">
+    <div class="float-card-head">
+      <span class="float-card-title">Items</span>
+      <button class="float-card-close" title="Hide the items (Ctrl Alt S)" @click="shell.setItems(false)"><Icon name="close" :size="14" /></button>
+    </div>
+    <div class="browser-title">
       <select
         id="browser-filter"
         class="browser-filter"
@@ -784,6 +801,7 @@ onUnmounted(() => root.value?.removeEventListener("wheel", onWheel));
         <option v-for="f in BROWSER_FILTERS" :key="f.id" :value="f.id">{{ f.label }}</option>
       </select>
     </div>
+    <div ref="root" class="float-card-body">
     <template v-for="n in nodes" :key="n.k">
       <TreeFolder
         v-if="n.kind === 'folder'"
@@ -835,5 +853,10 @@ onUnmounted(() => root.value?.removeEventListener("wheel", onWheel));
            visibility and is unmounted when its capability stops. -->
       <component :is="n.component" v-else />
     </template>
+    </div>
+    <div class="float-card-foot">
+      <span class="float-card-spacer"></span>
+      <button class="float-card-more" title="More" aria-label="More" @click="openMore($event)"><Icon name="more" :size="18" /></button>
+    </div>
   </aside>
 </template>

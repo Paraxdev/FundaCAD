@@ -25,7 +25,6 @@
 @use "themes";
 @use "base";
 @use "titlebar";
-@use "ribbon";
 @use "palette";
 // The "MAIN, browser | viewport" section. Named _layout rather than _main so
 // it can't be confused with this entry file, which Sass would otherwise refuse
@@ -39,16 +38,13 @@
 // the .param-row / .panel-title vocabulary the feature values are still drawn
 // with, wherever they are shown.
 @use "inspector";
-// After _ribbon and _timeline, and before _utilities: these rules restate the
-// axis-specific parts of both bars for a side-mounted arrangement, so they must
-// win against them, and .hidden must still win against everything.
-@use "shellsides";
 @use "utilities";
 @use "browser";
 @use "modals";
 @use "welcome";
-// Last on purpose, see the header of _icons.scss.
-@use "seltools";
+// After the panels it restyles as floating cards (_layout, _timeline, _browser).
+@use "float";
 @use "targetedit";
 @use "console";
+// Last on purpose, see the header of _icons.scss.
 @use "icons";

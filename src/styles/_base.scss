@@ -24,31 +24,16 @@ body {
      the window, the ribbon un-collapsed, the browser and inspector slid out of
      bounds. The 0 minimum lets every row be narrower than its content instead. */
   grid-template-columns: minmax(0, 1fr);
-  /* The ribbon row is AUTO, not a fixed height. It was 76px, and a group's
-     content (padding + a 24px icon + its label + the CREATE/MODIFY/... caption)
-     comes to roughly 85px once the platform's font metrics are counted. Since
-     .ribbon-context stretches every group to the row height and #ribbon hides
-     vertical overflow, the caption was simply cut in half, reported twice on
-     the same day, from macOS ("category names are only showing the top 1/2")
-     and from Linux/Hyprland (issue #10, "tool labels are cut off"), and not
-     visible on the box it was built on, because how much gets cut depends
-     entirely on the font. Sizing the row to its content cannot be wrong on a
-     font nobody here has. */
-  grid-template-rows: 36px auto minmax(0, 1fr) 52px;
-  /* Named areas rather than source-order auto-placement, because the ribbon and
-     the history strip can each be moved to a side (ui/layoutPrefs.ts, and the
-     four arrangements in _shellsides.scss). The names let those variants restate
-     the GRID and leave the components, and their ids, which the stylesheet and
-     the e2e suite both select on, exactly where they are in the DOM. */
-  grid-template-areas: "title" "ribbon" "main" "history";
+  /* The title bar, then the stage. Everything else floats over the viewport
+     (_float.scss). */
+  grid-template-rows: 36px minmax(0, 1fr);
+  grid-template-areas: "title" "main";
   height: 100vh;
   width: 100%;
   overflow: hidden;
 }
 #titlebar { grid-area: title; }
-#ribbon { grid-area: ribbon; }
 #main { grid-area: main; }
-#timeline { grid-area: history; }
 
 /* --- shared focus ring (accent) --- */
 :focus-visible {

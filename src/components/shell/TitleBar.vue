@@ -3,8 +3,6 @@ import { toggleConsole } from "../../ui/logStore";
 import { markRaw, ref, onMounted, onUnmounted } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useUiStore } from "../../stores/ui";
-import { getUnit, setUnit, asUnit, onUnitChange, type Unit } from "../../ui/units";
-import { iconPacks, getIconPack, setIconPack, asIconPackId, onIconPackChange } from "../../ui/icons";
 import { buildMenubar } from "../../app/menubarDef";
 import { onContribChange } from "../../plugins/contrib";
 import Icon from "./Icon.vue";
@@ -38,38 +36,6 @@ onMounted(() => {
 });
 onUnmounted(() => offPlugins?.());
 
-// units.ts is a module-level observable with its own listener set and a
-// localStorage backing. Rather than move that state into Pinia (it is read
-// synchronously at draw time by the viewport, eight feature tools and the
-// sketch dimension labels, none of which are Vue), mirror it into a ref.
-const unit = ref<Unit>(getUnit());
-let offUnit: (() => void) | null = null;
-onMounted(() => { offUnit = onUnitChange(() => { unit.value = getUnit(); }); });
-onUnmounted(() => offUnit?.());
-
-function onUnitInput(ev: Event) {
-  // asUnit is a mandatory narrowing gate, not a formality, see units.ts:15-22.
-  const u = asUnit((ev.target as HTMLSelectElement).value);
-  if (u) setUnit(u);
-}
-
-// The icon pack is the same shape of setting as units, a module-level
-// observable with a listener set and localStorage behind it, so it is mirrored
-// the same way rather than through Pinia. The theme used to sit up here beside
-// it, one <select> per palette; it is gone from the title bar now that the app
-// ships a single theme, and the one control that theme still needs, uploading
-// your own, belongs on the Preferences surface with the rest of appearance.
-const pack = ref(getIconPack());
-let offPack: (() => void) | null = null;
-onMounted(() => {
-  offPack = onIconPackChange(() => { pack.value = getIconPack(); });
-});
-onUnmounted(() => { offPack?.(); });
-
-function onPackInput(ev: Event) {
-  const id = asIconPackId((ev.target as HTMLSelectElement).value);
-  if (id) setIconPack(id);
-}
 </script>
 
 <template>
@@ -105,24 +71,7 @@ function onPackInput(ev: Event) {
          assistant is actually attached. -->
     <LiveSessionPill />
     <div class="spacer"></div>
-    <!-- Which arrangement of the window this is. Left of the three appearance
-         selects because it is the only control up here that changes what the
-         window is FOR, the rest change how it looks. -->
     <WorkspaceToggle />
-    <label class="units" title="Display units (geometry is stored in mm)">
-      Units
-      <select id="unit" :value="unit" @change="onUnitInput">
-        <option value="mm">mm</option>
-        <option value="cm">cm</option>
-        <option value="in">in</option>
-      </select>
-    </label>
-    <label class="units" title="Icon set">
-      Icons
-      <select id="iconpack" :value="pack" @change="onPackInput">
-        <option v-for="p in iconPacks()" :key="p.id" :value="p.id">{{ p.label }}</option>
-      </select>
-    </label>
     <!-- A button, not a span, because this is where a failure is first seen and
          it is the one place in the app guaranteed to be showing a CLIPPED
          version of it, the pill is narrow and the sentence is long, so the

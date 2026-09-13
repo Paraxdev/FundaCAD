@@ -17,7 +17,7 @@ import type { StandardView } from "../viewport/cameras";
 export function createActions(e: Engine): (action: string) => void {
   // The "persp" and "selmode" cases used to write projBtn.textContent and
   // selBtn.textContent/classList directly. Those two buttons are
-  // components/shell/ViewControls.vue now and render from this store, so the
+  // components/shell/ViewportControls.vue now and render from this store, so the
   // label can no longer drift out of sync with viewport.selecting.
   const ui = useUiStore();
   const palette = useSketchPaletteStore();

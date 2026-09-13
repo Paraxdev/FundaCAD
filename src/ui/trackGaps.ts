@@ -1,10 +1,8 @@
 // Where a pointer falls in a track of chips, the arithmetic behind dragging the
 // history strip's rollback marker.
 //
-// Split from TimelineBar.vue because the strip can now run either way (the
-// history panel can be moved to the right-hand side, ui/layoutPrefs.ts) and
-// "which gap is the cursor in" is exactly the kind of thing that is silently
-// wrong on the axis nobody tested: comparing x against a stacked column puts
+// Split from TimelineBar.vue because "which gap is the cursor in" is exactly the
+// kind of thing that is silently wrong on the axis nobody tested: comparing x against a stacked column puts
 // every chip's midpoint at the same coordinate, so the marker always lands in
 // gap 0 and the model rolls back to nothing.
 //

@@ -77,9 +77,9 @@ async function view(page) {
       // the mark, and the name in the history
       hasIcon: icons.iconPaths("texture").length > 0,
       featureLabel: meta.featureMeta({ type: "texture" }).label,
-      // the ribbon button, by what is on screen
-      ribbonButton: [...document.querySelectorAll("[class*=ribbon] button")]
-        .some((b) => text(b) === "Texture"),
+      // the rail button, in the category flyouts the rail draws
+      ribbonButton: (await import("/src/ui/railDefs.ts")).modelRail()
+        .some((e) => (e.kind === "family" ? e.items : [e]).some((t) => t.label === "Texture")),
       // the panel, by what is on screen
       panelOpen: !!document.querySelector("[data-panel=texture]"),
     };
@@ -111,7 +111,7 @@ async function view(page) {
   check("a face selection is offered it", on.offeredToAFace);
   check("it brought a mark the application does not have", on.hasIcon);
   check("a texture feature has a name in the history", on.featureLabel === "Texture");
-  check("the ribbon carries its button", on.ribbonButton);
+  check("the rail carries its button", on.ribbonButton);
 
   // --- 2. switched off, every one of those goes ----------------------------
   await setEnabled(page, false);
@@ -122,7 +122,7 @@ async function view(page) {
   // The honest fallback: the document still opens, the history still has a row,
   // and it reads as something this build does not understand.
   check("off: a texture feature falls back to its raw type", off.featureLabel === "texture");
-  check("off: the ribbon button is gone", !off.ribbonButton);
+  check("off: the rail button is gone", !off.ribbonButton);
   // The control on the same reading: the application's own tools are untouched.
   const stillCore = await page.evaluate(async () => {
     const caps = await import("/src/features/toolCapabilities.ts");

@@ -8,12 +8,15 @@ import ShortcutHud from "./components/overlays/ShortcutHud.vue";
 import ContextMenuHost from "./components/overlays/ContextMenuHost.vue";
 import TargetEditPanel from "./components/overlays/TargetEditPanel.vue";
 import ConsolePanel from "./components/overlays/ConsolePanel.vue";
-import SelectionToolbar from "./components/overlays/SelectionToolbar.vue";
 import AreaFilterChip from "./components/overlays/AreaFilterChip.vue";
 import CommandPalette from "./components/overlays/CommandPalette.vue";
-import RibbonBar from "./components/shell/RibbonBar.vue";
+import ToolRail from "./components/shell/ToolRail.vue";
 import TimelineBar from "./components/shell/TimelineBar.vue";
 import BrowserPane from "./components/shell/BrowserPane.vue";
+import ViewportControls from "./components/shell/ViewportControls.vue";
+import SketchPalette from "./components/shell/SketchPalette.vue";
+import { useShellStore } from "./stores/shell";
+import { useUiStore } from "./stores/ui";
 import PropertiesPanel from "./components/overlays/PropertiesPanel.vue";
 import InterferencePanel from "./components/overlays/InterferencePanel.vue";
 import OverhangPanel from "./components/overlays/OverhangPanel.vue";
@@ -34,6 +37,8 @@ import { contributedOverlays, onContribChange } from "./plugins/contrib";
 
 const dialogs = useDialogStore();
 const toolPanels = useToolPanelStore();
+const shell = useShellStore();
+const ui = useUiStore();
 
 // The overlays the running plugins add, mounted at the end of the stack.
 //
@@ -65,27 +70,28 @@ onUnmounted(() => offContrib?.());
        rule in src/styles/_layout.scss is id-scoped to these, and the e2e suite
        selects on them. -->
   <TitleBar />
-  <RibbonBar />
-  <!-- Two columns: what is in the document, and the document. The tool rail
-       that used to stand left of the browser is gone, it was a second copy of
-       the ribbon's tools one column away from the ribbon itself, so whichever
-       of the two you reached for, the other was redundant chrome eating picking
-       width. The ribbon carries every tool, on the top edge or the left one.
-
-       The Parameters inspector that used to close the row on the right is gone
-       too: a feature's values now live under its own entry in the history,
-       where the thing being changed is already named. Document parameters are
-       Modify > Parameters, which is where they could always be added and
-       renamed. -->
   <div id="main">
-    <BrowserPane />
-    <ViewportPane />
-    <!-- Present only in the Render workspace, and it mounts nothing at all in
-         the other one, so the grid track collapses and the viewport is the full
-         width it has always been. -->
+    <!-- The viewport fills the stage and everything else floats over it. The
+         float layer takes no pointer events itself, only its cards do, so the
+         model can be picked through every gap between them. -->
+    <div id="stage">
+      <ViewportPane />
+      <div id="float-layer">
+        <div class="float-left">
+          <BrowserPane v-if="shell.itemsOpen" />
+          <ToolRail />
+        </div>
+        <div class="float-right">
+          <SketchPalette v-if="ui.sketchActive" />
+          <TimelineBar v-else-if="shell.historyOpen" />
+          <ViewportControls />
+        </div>
+      </div>
+    </div>
+    <!-- Present only in the Render workspace; it mounts nothing in the other
+         one, so the grid track collapses. -->
     <RenderDock />
   </div>
-  <TimelineBar />
 
   <!-- Global overlays. Each Teleports to body, which is where the imperative
        versions appended themselves, they must not inherit a stacking context
@@ -96,7 +102,6 @@ onUnmounted(() => offContrib?.());
   <ContextMenuHost />
   <ConsolePanel />
   <TargetEditPanel />
-  <SelectionToolbar />
   <AreaFilterChip />
   <CommandPalette />
 

@@ -5,7 +5,7 @@
 //
 // A surface over the existing setting modules, NOT a store of its own. Every
 // value here already persists itself and already notifies its own subscribers,
-// ui/theme.ts, ui/icons.ts, ui/units.ts, ui/layoutPrefs.ts, so this component
+// ui/theme.ts, ui/icons.ts, ui/units.ts, ui/renderPrefs.ts, so this component
 // holds only the mirror it renders from, and every change is applied live.
 // Copying them into local state and writing back on "OK" would put a second
 // copy of each setting in the app, and the title bar's selects read the first.
@@ -32,13 +32,6 @@ import {
 } from "../../ui/theme";
 import { asIconPackId, getIconPack, iconPacks, onIconPackChange, setIconPack } from "../../ui/icons";
 import { asUnit, getUnit, onUnitChange, setUnit } from "../../ui/units";
-import {
-  asHistorySide,
-  asRibbonSide,
-  layoutPrefs,
-  onLayoutPrefsChange,
-  setLayoutPref,
-} from "../../ui/layoutPrefs";
 import {
   asBackground,
   asBloom,
@@ -69,7 +62,6 @@ const fileInput = ref<HTMLInputElement | null>(null);
 const activeIsCustom = computed(() => theme.value !== BUILTIN_THEME.id);
 const pack = ref(getIconPack());
 const unit = ref(getUnit());
-const layout = ref(layoutPrefs());
 const render = ref(renderPrefs());
 
 // The blocks the running plugins add. An "Assistants" block used to be written
@@ -85,7 +77,6 @@ onMounted(() => {
     onThemeChange(() => { theme.value = getTheme(); themeList.value = themes(); }),
     onIconPackChange(() => { pack.value = getIconPack(); }),
     onUnitChange(() => { unit.value = getUnit(); }),
-    onLayoutPrefsChange(() => { layout.value = layoutPrefs(); }),
     onRenderPrefsChange(() => { render.value = renderPrefs(); }),
     onContribChange(() => { sections.value = contributedSettings(); }),
   );
@@ -139,8 +130,6 @@ function onRemoveTheme() {
 }
 function onPack(ev: Event) { const v = asIconPackId(value(ev)); if (v) setIconPack(v); }
 function onUnit(ev: Event) { const v = asUnit(value(ev)); if (v) setUnit(v); }
-function onRibbon(ev: Event) { const v = asRibbonSide(value(ev)); if (v) setLayoutPref("ribbon", v); }
-function onHistory(ev: Event) { const v = asHistorySide(value(ev)); if (v) setLayoutPref("history", v); }
 function onEnvironment(ev: Event) { const v = asEnvironment(value(ev)); if (v) setRenderPref("environment", v); }
 function onBackground(ev: Event) { const v = asBackground(value(ev)); if (v) setRenderPref("background", v); }
 function onBrightness(ev: Event) { setRenderPref("brightness", Number.parseFloat(value(ev))); }
@@ -195,23 +184,6 @@ function onBloom(ev: Event) { const v = asBloom(value(ev)); if (v !== null) setR
         </select>
       </label>
       <div class="sm-hint">Geometry is always stored in millimetres, this is display only.</div>
-
-      <div class="sm-section">Layout</div>
-      <label class="prefs-row">
-        <span class="prefs-label">Ribbon</span>
-        <select id="prefs-ribbon" class="sm-select" :value="layout.ribbon" @change="onRibbon">
-          <option value="top">Along the top</option>
-          <option value="left">Down the side</option>
-        </select>
-      </label>
-      <label class="prefs-row">
-        <span class="prefs-label">History</span>
-        <select id="prefs-history" class="sm-select" :value="layout.history" @change="onHistory">
-          <option value="bottom">Along the bottom</option>
-          <option value="right">Down the right</option>
-        </select>
-      </label>
-      <div class="sm-hint">Applied straight away, and remembered.</div>
 
       <div class="sm-section">Viewport</div>
       <label class="prefs-row">

@@ -112,6 +112,8 @@ export interface ViewCubeHooks {
 }
 
 export class ViewCube {
+  /** CSS px kept clear on the right, for the floating controls column. */
+  rightInset = 0;
   private scene = new THREE.Scene();
   private camera: THREE.OrthographicCamera;
   private group = new THREE.Group(); // the cube; its quaternion = inverse main-camera orientation
@@ -285,7 +287,7 @@ export class ViewCube {
     // (Doing so applied pixelRatio twice, leaving a dpr²-sized viewport set for
     // the next main render → the whole model rendered offset/oversized on any
     // HiDPI / fractional-scaled display. Invisible at dpr=1.)
-    const x = rect.width - SIZE - MARGIN;
+    const x = rect.width - SIZE - MARGIN - this.rightInset;
     const y = rect.height - SIZE - MARGIN; // WebGL viewport origin is bottom-left
 
     const prevAutoClear = this.renderer.autoClear;
@@ -308,7 +310,7 @@ export class ViewCube {
    *  decide whether a click belongs to the cube or the model. */
   hitsRegion(clientX: number, clientY: number): boolean {
     const rect = this.canvas.getBoundingClientRect();
-    const left = rect.right - SIZE - MARGIN;
+    const left = rect.right - SIZE - MARGIN - this.rightInset;
     const top = rect.top + MARGIN;
     return (
       clientX >= left && clientX <= left + SIZE && clientY >= top && clientY <= top + SIZE
@@ -350,7 +352,7 @@ export class ViewCube {
 
   private pick(clientX: number, clientY: number): Part | null {
     const rect = this.canvas.getBoundingClientRect();
-    const left = rect.right - SIZE - MARGIN;
+    const left = rect.right - SIZE - MARGIN - this.rightInset;
     const top = rect.top + MARGIN;
     // NDC within the corner box
     this.ndc.set(

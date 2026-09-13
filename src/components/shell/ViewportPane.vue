@@ -1,11 +1,8 @@
 <script setup lang="ts">
 import { onMounted, ref, useTemplateRef } from "vue";
 import { useEngine } from "../../app/engineKey";
-import ViewControls from "./ViewControls.vue";
 import PromptBanner from "./PromptBanner.vue";
 import FpsReadout from "./FpsReadout.vue";
-import GridReadout from "./GridReadout.vue";
-import SketchPalette from "./SketchPalette.vue";
 import {
   draggingMaterial, dropScopeFor, endMaterialDrag, MATERIAL_MIME, type DropScope,
 } from "../../ui/materialDrag";
@@ -114,10 +111,7 @@ function onDrop(e: DragEvent) {
     @dragleave="onDragLeave"
     @drop="onDrop"
   >
-    <SketchPalette />
     <PromptBanner />
-    <ViewControls />
-    <GridReadout />
     <FpsReadout />
   </div>
 

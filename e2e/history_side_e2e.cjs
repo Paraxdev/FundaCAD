@@ -1,13 +1,11 @@
-// The history stood on end (Preferences, History: right), in a real browser.
+// The floating history column, in a real browser.
 //
 // What only layout can answer, and happy-dom has none:
 //   1. Every row fits the column: nothing is wider than the list, so there is no
 //      sideways overflow to scroll into and no row cut off at the edge.
-//   2. The mouse wheel scrolls the column DOWN. The wheel handler that turns a
-//      vertical wheel into sideways scrolling belongs to the bottom strip only.
+//   2. The mouse wheel scrolls the column DOWN, never sideways.
 //   3. The last row can be scrolled fully into view, clear of anything floating
 //      over the panel's corner.
-//   4. The bottom strip still scrolls sideways (the control for 2).
 //
 // Usage (from the repo root, with vite on 5173 + sidecar on 8765):
 //   SC_TOKEN=<sidecar token> SC_CHROME=<chromium or brave> node e2e/history_side_e2e.cjs [doc.funda]
@@ -62,7 +60,6 @@ const check = (name, ok, detail) => {
   await page.waitForFunction(() => !!window.store, null, { timeout: 60000 });
   const count = await page.evaluate(async (text) => {
     window.store.load(text);
-    (await import("/src/ui/layoutPrefs.ts")).setLayoutPref("history", "right");
     return window.store.document.features.length;
   }, doc);
   await page.waitForTimeout(1500);
@@ -116,21 +113,6 @@ const check = (name, ok, detail) => {
   check("the last row is fully inside the column", last.inside);
   check("nothing floats over the last row", last.covered === 0, `${last.covered} of 3 points covered`);
   await page.screenshot({ path: "/tmp/history_side.png" }).catch(() => {});
-
-  // control: the strip along the bottom still turns the wheel sideways
-  await page.evaluate(async () => (await import("/src/ui/layoutPrefs.ts")).setLayoutPref("history", "bottom"));
-  await page.waitForTimeout(800);
-  const strip = await page.evaluate(() => {
-    const sc = document.querySelector("#timeline .timeline-scroll");
-    sc.scrollLeft = 0;
-    const r = sc.getBoundingClientRect();
-    return { x: r.left + r.width / 2, y: r.top + r.height / 2, over: sc.scrollWidth > sc.clientWidth };
-  });
-  await page.mouse.move(strip.x, strip.y);
-  for (let i = 0; i < 3; i++) { await page.mouse.wheel(0, 200); await page.waitForTimeout(80); }
-  await page.waitForTimeout(300);
-  const left = await page.evaluate(() => document.querySelector("#timeline .timeline-scroll").scrollLeft);
-  check("the bottom strip still scrolls sideways under a vertical wheel", !strip.over || left > 0, `scrollLeft ${left}`);
 
   console.log(failures ? `FAILED (${failures})` : "all history column checks passed");
   await browser.close();

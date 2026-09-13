@@ -4,6 +4,8 @@ import { saveDocument, saveDocumentAs, exportModel } from "../io/files";
 import { SKETCH_TOOLS } from "./actionTables";
 import { logError, toggleConsole } from "../ui/logStore";
 import { useDialogStore } from "../stores/dialogs";
+import { useShellStore } from "../stores/shell";
+import { useCommandPaletteStore } from "../stores/commandPalette";
 import type { Engine } from "./engine";
 
 /** Global keyboard: the MCAD keymap plus the two window-level handlers that
@@ -84,7 +86,14 @@ export function installKeyboard(e: Engine): void {
   window.addEventListener("keydown", (ev) => {
     if (!(ev.ctrlKey || ev.metaKey)) return;
     const k = ev.key.toLowerCase();
-    if (k === "n") { ev.preventDefault(); void e.newDocument(); }
+    if (ev.altKey) {
+      // Note: Ctrl+Alt must be resolved first, or Ctrl+Alt+S would also save.
+      if (k === "s") { ev.preventDefault(); useShellStore().toggleItems(); }
+      else if (k === "h") { ev.preventDefault(); useShellStore().toggleHistory(); }
+      return;
+    }
+    if (k === "f" && !ev.shiftKey) { ev.preventDefault(); useCommandPaletteStore().toggle(e.sketch.active ? "sketch" : "model"); }
+    else if (k === "n") { ev.preventDefault(); void e.newDocument(); }
     else if (k === "o") { ev.preventDefault(); void e.openDoc(); }
     else if (k === "s" && ev.shiftKey) { ev.preventDefault(); void saveDocumentAs(e.store); }
     else if (k === "s") { ev.preventDefault(); void saveDocument(e.store); }

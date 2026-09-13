@@ -1,7 +1,7 @@
 // Whether this window shares its open document with an assistant.
 //
 // The house shape for a user setting (ui/theme.ts, ui/units.ts,
-// layoutPrefs.ts): module state, a gate over the untrusted stored value, one
+// renderPrefs.ts): module state, a gate over the untrusted stored value, one
 // `fundacad.*` key read at load, and a listener set so live surfaces re-render.
 // No Vue import, that is what keeps the headless suite able to reach it.
 //

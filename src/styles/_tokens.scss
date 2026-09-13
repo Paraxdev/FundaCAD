@@ -146,4 +146,25 @@
   --ease: cubic-bezier(0.2, 0, 0.15, 1);
   --t-fast: 110ms;
   --t-med: 160ms;
+
+  /* --- floating shell ---
+     The cards, rail tiles and popovers that sit over the viewport. Softer and
+     rounder than the docked chrome on purpose: they float over a lit model, and
+     a hard offset shadow there reads as a hole cut in the scene. */
+  --float-bg: rgba(27, 24, 38, 0.9);
+  --float-bg-solid: #1f1b2b;
+  --float-line: rgba(92, 84, 112, 0.55);
+  --float-radius: 10px;
+  --float-tile-radius: 8px;
+  --float-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --float-blur: blur(14px) saturate(1.2);
+  --float-gap: 12px;
+  --rail-tile: 40px;
+
+  /* --- stacking, back to front --- */
+  --z-float: 20;
+  --z-popover: 200;
+  --z-menu: 3000;
+  --z-modal: 4000;
+  --z-toast: 5000;
 }

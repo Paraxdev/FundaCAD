@@ -11,14 +11,12 @@ import "@fontsource/jetbrains-mono/latin-400.css";
 import "@fontsource/jetbrains-mono/latin-500.css";
 import "./styles/main.scss";
 import { initTheme } from "./ui/theme";
-import { initLayoutPrefs } from "./ui/layoutPrefs";
 
 // Before anything renders. The stylesheet already carries the default palette on
 // :root, so a cold load is themed with no script at all; this is what puts a
 // STORED non-default choice on the document, and doing it here rather than in a
 // component keeps the app from painting one palette and then swapping.
 initTheme();
-initLayoutPrefs(); // same reasoning: a stored side-ribbon must not paint on top first
 import "./diagnostics/breadcrumbs"; // installs window error listeners (bug-report trail)
 import { createApp, markRaw } from "vue";
 import { createPinia, setActivePinia } from "pinia";

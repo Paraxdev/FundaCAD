@@ -3728,6 +3728,22 @@ export class Viewport {
     return next;
   }
 
+  /** Keep the view cube clear of chrome floating over the right edge. */
+  setViewCubeInset(px: number) {
+    if (this.cube.rightInset === px) return;
+    this.cube.rightInset = px;
+    this.requestRender();
+  }
+
+  get projection(): ProjectionMode {
+    return this.rig.projectionMode();
+  }
+
+  setProjection(mode: ProjectionMode) {
+    this.rig.setProjectionMode(mode);
+    this.requestRender();
+  }
+
   setStandardView(v: StandardView) {
     // toolbar buttons + SpaceMouse route here; honor a redefined side so "Top"
     // means whatever the user mapped, not the world default.

@@ -8,7 +8,7 @@ import type { Engine } from "./engine";
  *  What used to be here, the click handlers for undo/redo, the view-control
  *  pill cluster and the unit <select>, plus the direct textContent/classList
  *  writes for #docname and the button disabled flags, now lives in
- *  components/shell/TitleBar.vue and ViewControls.vue. This module is the half
+ *  components/shell/TitleBar.vue and ViewportControls.vue. This module is the half
  *  that has to stay outside a component: it subscribes to the store. */
 export function installTitlebar(e: Engine): void {
   const ui = useUiStore();

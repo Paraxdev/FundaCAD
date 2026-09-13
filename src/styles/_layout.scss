@@ -1,13 +1,9 @@
 /* ============================================================================
-   MAIN, browser | viewport
+   MAIN, the stage | the render dock
    ============================================================================ */
 #main {
   display: grid;
-  /* Three tracks, and the last one is `auto` so it VANISHES when nothing is in
-     it: the Render dock is the only thing that ever occupies it, and in the
-     Model workspace it is not mounted at all, which leaves the viewport exactly
-     the width it had before any of this existed. */
-  grid-template-columns: 232px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   /* The single row must be capped at #main's own height. Left implicit it is
      auto-sized, so the tallest panel's CONTENT set the row height (measured:
      #main 723px, row 811px) and the browser, viewport and canvas all stretched
@@ -16,26 +12,6 @@
      track inside it. Same reason the columns are minmax(0, 1fr). */
   grid-template-rows: minmax(0, 1fr);
   min-height: 0;
-}
-
-#browser {
-  background: var(--panel);
-  border-right: 1px solid var(--line);
-  overflow-y: auto;
-  overflow-x: hidden;
-  /* grid items default to min-height:auto, without an explicit 0 the panel
-     can grow with its content instead of scrolling (WebKitGTK is strict here:
-     a long body list then simply runs off the bottom of the window) */
-  min-height: 0;
-  overscroll-behavior: contain;
-  /* Stepped up from --s-3 to --s-4 (8px -> 12px): at 8px the tree rows' hover
-     pills sat almost against the panel border and the whole column read as a
-     list crammed into a gutter. 12px costs 8px of a 232px fixed column, which
-     the labels can afford (they already ellipsis), and it is the same 12px the
-     viewport's floating furniture insets itself by, so the eye reads one margin
-     all the way across the app. The deeper bottom is deliberate: it is scroll
-     runway, so the last row is never flush with the timeline. */
-  padding: var(--s-4) var(--s-4) var(--s-6);
 }
 
 #viewport {
@@ -51,30 +27,6 @@
   height: 100%;
 }
 
-/* ---- floating view-control pill cluster (bottom-left of the viewport) ---- */
-#viewcontrols {
-  position: absolute;
-  left: var(--s-4);
-  bottom: var(--s-4);
-  display: flex;
-  align-items: center;
-  /* Hairline gap, not a real one: these buttons are a single segmented control
-     that happens to be made of separate elements, and anything wider starts
-     reading as a row of unrelated pills inside one border. */
-  gap: var(--s-0);
-  padding: var(--s-1);
-  background: rgba(22, 24, 29, 0.78);
-  -webkit-backdrop-filter: blur(12px) saturate(1.2);
-          backdrop-filter: blur(12px) saturate(1.2);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r-pill);
-  box-shadow: var(--shadow-pill);
-  z-index: 15;
-}
-/* What one grid square is worth, stacked directly above the frame-rate readout
-   and wearing its clothes: the two are the same kind of thing, a fact about the
-   view rather than a control on it, and one corner is where you learn to look
-   for them. The offset is the fps readout's own height plus a rung. */
 /* The area-selection rubber band. Fixed, not absolute: it is placed from
    client coordinates (the viewport works in those throughout) and it is
    appended to <body>, so an absolutely-positioned one would be offset by
@@ -128,22 +80,6 @@
   border-radius: 3px;
 }
 
-.gridscale {
-  position: absolute;
-  right: var(--s-4);
-  bottom: calc(var(--s-4) + 24px);
-  padding: var(--s-0) var(--s-3);
-  font: 11px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-variant-numeric: tabular-nums; /* digits stop twitching as the zoom changes */
-  color: var(--text-mute);
-  background: rgba(22, 24, 29, 0.55);
-  border: 1px solid var(--line);
-  border-radius: var(--r-sm);
-  cursor: default;
-  user-select: none;
-  z-index: 15;
-}
-
 /* Frame-rate readout, viewport bottom-right. Deliberately quiet: it is a
    diagnostic you glance at, not a control. It DOES take pointer events, because
    a `title` tooltip never fires on a pointer-events:none element, that is the
@@ -163,45 +99,6 @@
   cursor: default;
   user-select: none;
   z-index: 15;
-}
-
-#viewcontrols button {
-  border: 1px solid transparent;
-  color: var(--text-dim);
-  border-radius: var(--r-pill);
-  /* Denser than the default button on purpose: this is a strip of six of them
-     floating over the model, so the horizontal rung matches (--s-4) but the
-     vertical stays one rung down. */
-  padding: var(--s-2) var(--s-4);
-  font-size: 11.5px;
-  font-weight: 600;
-  letter-spacing: 0.3px;
-  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
-}
-#viewcontrols button:hover {
-  background: var(--raised);
-  border-color: transparent;
-  color: var(--text);
-}
-#viewcontrols button.active {
-  background: var(--accent-tint);
-  color: var(--accent-hot);
-}
-/* subtle separator before Fit / Persp */
-#viewcontrols #fit {
-  position: relative;
-  margin-left: var(--s-2);
-}
-/* The rule is drawn INSIDE the margin above, which is why the two values are
-   tied: half a rung of clearance either side of a 1px line. */
-#viewcontrols #fit::before {
-  content: "";
-  position: absolute;
-  left: calc(-1 * var(--s-1));
-  top: var(--s-1);
-  bottom: var(--s-1);
-  width: 1px;
-  background: var(--line-strong);
 }
 
 /* default buttons (used in panels, inspector, etc.) */

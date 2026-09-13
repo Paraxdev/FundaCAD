@@ -35,7 +35,7 @@ const CASES = [
   {
     id: "FundaCAD.Printing",
     owns: "the print rows and the PRINT group",
-    present: (m) => m.menus.includes("Send to Printer…") && m.ribbon.includes("PRINT"),
+    present: (m) => m.menus.includes("Send to Printer…") && m.ribbon.includes("Print"),
   },
 ];
 
@@ -48,8 +48,7 @@ async function surfaces(page) {
       // "Send to Printer…" renders with no shortcut; rows that have one carry it
       // in the same node, so compare on the label half.
       .map((t) => t.replace(/Ctrl\+.*$|Del$|\?$/, ""));
-    const ribbon = [...document.querySelectorAll("[class*=ribbon] [class*=group], .ribbon-group")]
-      .map((el) => text(el.querySelector("[class*=label], .ribbon-group-label") || el));
+    const ribbon = [...document.querySelectorAll("#toolrail [data-family] .rail-label")].map(text);
     return { menus, ribbon: [...new Set(ribbon)] };
   });
 }

@@ -245,6 +245,9 @@ export class SketchMode {
   // and reused for the clickable labels (constraintDimExtras)
   private cdims: ConstraintDim[] = [];
   private editingId: string | null = null;
+  get editingSketchId(): string | null {
+    return this.editingId;
+  }
   /** The datumPlane feature this sketch is placed ON, when it was created from
    *  one. Round-tripped through finish() so re-editing a sketch never silently
    *  downgrades it from a live datum link to a baked placement. */

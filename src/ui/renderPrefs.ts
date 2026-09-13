@@ -1,14 +1,14 @@
 // How the viewport is lit and what it is drawn against.
 //
-// The house shape for a user setting (ui/theme.ts, icons.ts, units.ts,
-// layoutPrefs.ts): module state, a validating gate over the untrusted stored
+// The house shape for a user setting (ui/theme.ts, icons.ts, units.ts):
+// module state, a validating gate over the untrusted stored
 // value, one `fundacad.*` key read at load, and a listener set so the surfaces
 // re-render. No Vue import, which is what keeps the headless suite able to reach
 // it, and no Three import either, so this stays a statement of what the user
 // asked for rather than a piece of the renderer.
 //
-// A MAP, per-field sanitised, for layoutPrefs' reason: a stored object with a
-// garbage `background` must not cost the user their lighting.
+// A MAP, sanitised per field: a stored object with a garbage `background` must
+// not cost the user their lighting.
 //
 // WHY THE ENVIRONMENT IS A SETTING AT ALL. A physically-based metal is almost
 // entirely REFLECTION: with nothing around it to reflect, it renders near black,

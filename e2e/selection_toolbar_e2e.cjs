@@ -1,9 +1,8 @@
-// The floating selection toolbar, for a picked BODY, in a real browser.
+// The tool rail's selection mode, for a picked BODY, in a real browser.
 //
 // tests/ui/selectionTools.test.ts proves the OFFER is right. It cannot prove
-// the bar draws it, and the two have been out of step before: the bar is a
-// Teleport onto <body>, it is mounted only while something is selected, and it
-// takes itself off screen whenever a tool is busy. So the questions here are
+// the rail draws it: it swaps to the selection's tools only while something is
+// selected and no tool owns the screen. So the questions here are
 // the ones a pure test structurally cannot ask.
 //
 //   1. Does a picked body actually GET the new buttons, in the DOM?
@@ -85,9 +84,8 @@ const check = (name, ok, detail) => {
   };
 
   const barButtons = () => page.evaluate(() => ({
-    tools: [...document.querySelectorAll(".seltools [data-tool]")].map((b) => b.getAttribute("data-tool")),
-    looks: [...document.querySelectorAll(".seltools [data-look]")].map((b) => b.getAttribute("data-look")),
-    seps: document.querySelectorAll(".seltools .seltool-sep").length,
+    tools: [...document.querySelectorAll("#toolrail [data-action^='offer:']")].map((b) => b.getAttribute("data-action").slice(6)),
+    looks: [...document.querySelectorAll("#toolrail [data-action^='look:']")].map((b) => b.getAttribute("data-action").slice(5)),
   }));
 
   const menuRows = () => page.evaluate(() =>
@@ -106,12 +104,11 @@ const check = (name, ok, detail) => {
   check("the appearance half is drawn beside them",
     JSON.stringify(bar.looks) === JSON.stringify(["material", "hide", "isolate"]),
     JSON.stringify(bar.looks));
-  check("with one rule between the two halves", bar.seps === 1, String(bar.seps));
 
   await page.screenshot({ path: `${OUT}/bar-one-body.png` });
 
   // --- 2. Material opens the library, and a row applies it ------------------
-  await page.click(".seltools [data-look='material']");
+  await page.click("#toolrail [data-action='look:material']");
   await page.waitForTimeout(400);
   const rows = await menuRows();
   console.log("\n  menu rows:", JSON.stringify(rows), "\n");
@@ -149,7 +146,7 @@ const check = (name, ok, detail) => {
 
   // --- 3. Isolate, then Hide ------------------------------------------------
   await select([ids[0]]);
-  await page.click(".seltools [data-look='isolate']");
+  await page.click("#toolrail [data-action='look:isolate']");
   await page.waitForTimeout(500);
   let vis = await page.evaluate((all) => all.map((id) => window.store.isBodyVisible(id)), ids);
   console.log("  after Isolate:", JSON.stringify(vis));
@@ -167,14 +164,14 @@ const check = (name, ok, detail) => {
   check("two bodies bring the booleans in beside the patterns",
     bar.tools.includes("boolean-union") && bar.tools.includes("pattern-linear"),
     JSON.stringify(bar.tools));
-  const label = await page.getAttribute(".seltools [data-look='hide']", "title");
+  const label = await page.getAttribute("#toolrail [data-action='look:hide']", "title");
   check("the verb says how many it is about", label === "Hide 2 bodies", String(label));
 
-  await page.click(".seltools [data-look='hide']");
+  await page.click("#toolrail [data-action='look:hide']");
   await page.waitForTimeout(500);
   vis = await page.evaluate((all) => all.map((id) => window.store.isBodyVisible(id)), ids);
   const stillSelected = await page.evaluate(() => window.viewport.getSelectedBodies().length);
-  const barsLeft = await page.evaluate(() => document.querySelectorAll(".seltools").length);
+  const barsLeft = await page.evaluate(() => document.querySelectorAll("#toolrail[data-mode='selection']").length);
   console.log("  after Hide:", JSON.stringify(vis), "selected:", stillSelected, "bars:", barsLeft, "\n");
   check("Hide takes both bodies", vis[1] === false && vis[2] === false, JSON.stringify(vis));
   check("and lets go of them, so the bar does not float over nothing",
@@ -202,7 +199,6 @@ const check = (name, ok, detail) => {
   check("a picked face is offered no appearance verbs", bar.looks.length === 0, JSON.stringify(bar.looks));
   check("CONTROL: it is still offered its own modelling tools",
     bar.tools.includes("fillet"), JSON.stringify(bar.tools));
-  check("and no rule is drawn when only one half is there", bar.seps === 0, String(bar.seps));
   await page.screenshot({ path: `${OUT}/bar-one-face.png` });
 
   // --- 5. the same gizmo used to make the body's RIGHT-CLICK menu dead too ---
