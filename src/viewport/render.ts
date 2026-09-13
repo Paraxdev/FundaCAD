@@ -218,36 +218,50 @@ export function buildBodyMesh(
   // this runs per changed body on every live-preview drag tick, and Map<number,
   // number> pays hashing/boxing on 3 lookups per triangle.
   const remap = shared ? partition!.remap : new Int32Array(positions.length / 3).fill(-1);
-  const localPositions: number[] = [];
-  const localNormals: number[] = [];
-  let anyNormal = false; // an all-zero slice = "sidecar sent none for this body"
-  const localIndices: number[] = [];
-  const localFaceIds: number[] = [];
-  const local = (gi: number): number => {
-    let li = remap[gi];
-    if (li === undefined) li = -1; // gi is always in range; -1 = "not yet assigned"
-    if (li !== -1) return li;
-    const base = gi * 3;
-    const x = positions[base], y = positions[base + 1], z = positions[base + 2];
-    if (x === undefined || y === undefined || z === undefined) return -1; // in range; unreachable
-    li = localPositions.length / 3;
-    localPositions.push(x, y, z);
-    if (meshNormals) {
-      const nx = meshNormals[base] ?? 0, ny = meshNormals[base + 1] ?? 0, nz = meshNormals[base + 2] ?? 0;
-      localNormals.push(nx, ny, nz);
-      if (nx !== 0 || ny !== 0 || nz !== 0) anyNormal = true;
-    }
-    remap[gi] = li;
-    return li;
-  };
+  // Preallocated rather than pushed: growing plain arrays one number at a time
+  // cost ~11 s of main thread across a 7M-triangle assembly. The first pass
+  // numbers the vertices, the second copies each one once.
+  const indexed = new Uint32Array(owned.length * 3);
+  const firstUse: number[] = [];
+  const localFaceIds: number[] = new Array(owned.length);
+  let nTri = 0;
   for (let k = 0; k < owned.length; k++) {
     const t = owned[k]!;
     const fid = faceIds[t];
     if (fid === undefined) continue;
     const i0 = indices[t * 3], i1 = indices[t * 3 + 1], i2 = indices[t * 3 + 2];
     if (i0 === undefined || i1 === undefined || i2 === undefined) continue;
-    localIndices.push(local(i0), local(i1), local(i2));
-    localFaceIds.push(fid);
+    const at = nTri * 3;
+    for (let c = 0; c < 3; c++) {
+      const gi = c === 0 ? i0 : c === 1 ? i1 : i2;
+      let li = remap[gi] ?? -1;
+      if (li === -1) {
+        li = firstUse.length;
+        firstUse.push(gi);
+        remap[gi] = li;
+      }
+      indexed[at + c] = li;
+    }
+    localFaceIds[nTri++] = fid;
+  }
+  localFaceIds.length = nTri;
+  const localIndices = nTri * 3 === indexed.length ? indexed : indexed.slice(0, nTri * 3);
+  const nLocal = firstUse.length;
+  const localPositions = new Float32Array(nLocal * 3);
+  const localNormals = new Float32Array(meshNormals ? nLocal * 3 : 0);
+  let anyNormal = false; // an all-zero slice = "sidecar sent none for this body"
+  for (let li = 0; li < nLocal; li++) {
+    const base = firstUse[li]! * 3;
+    localPositions[li * 3] = positions[base] ?? 0;
+    localPositions[li * 3 + 1] = positions[base + 1] ?? 0;
+    localPositions[li * 3 + 2] = positions[base + 2] ?? 0;
+    if (meshNormals) {
+      const nx = meshNormals[base] ?? 0, ny = meshNormals[base + 1] ?? 0, nz = meshNormals[base + 2] ?? 0;
+      localNormals[li * 3] = nx;
+      localNormals[li * 3 + 1] = ny;
+      localNormals[li * 3 + 2] = nz;
+      if (nx !== 0 || ny !== 0 || nz !== 0) anyNormal = true;
+    }
   }
 
   // Hand the SHARED remap back clean for the next body by clearing only the
@@ -277,8 +291,8 @@ export function buildBodyMesh(
   // arrives at ~1 vertex per triangle or fewer: running this string-keyed pass over
   // it would find nothing to merge and cost a Map insert per index on every
   // live-preview tick.
-  let posOut = localPositions;
-  let nrmOut = localNormals;
+  let posOut: ArrayLike<number> = localPositions;
+  let nrmOut: ArrayLike<number> = localNormals;
   if (anyNormal && localIndices.length && localPositions.length > localIndices.length * 1.5) {
     const q = 1e4; // 0.1µm position buckets, 1e-3 on the unit normal
     const seen = new Map<string, number>();
@@ -305,13 +319,19 @@ export function buildBodyMesh(
   }
 
   const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.Float32BufferAttribute(posOut, 3));
-  geo.setIndex(localIndices);
+  const f32 = (a: ArrayLike<number>) => (a instanceof Float32Array ? a : Float32Array.from(a));
+  geo.setAttribute("position", new THREE.BufferAttribute(f32(posOut), 3));
+  // The same index width three picks for a plain array: 16 bits while every
+  // vertex number fits.
+  const vertsOut = posOut.length / 3;
+  geo.setIndex(new THREE.BufferAttribute(
+    vertsOut > 65535 ? localIndices : Uint16Array.from(localIndices), 1,
+  ));
   // The sidecar ships true surface normals at shipping quality (a displaced face
   // its plugin's), so shading does not depend on how fine the mesh is. A body
   // without them, a large document's coarsened tier, keeps the client-side
   // accumulation.
-  if (anyNormal) geo.setAttribute("normal", new THREE.Float32BufferAttribute(nrmOut, 3));
+  if (anyNormal) geo.setAttribute("normal", new THREE.BufferAttribute(f32(nrmOut), 3));
   else geo.computeVertexNormals();
 
   // per-vertex color baked to the base albedo; highlight recolors a face's
