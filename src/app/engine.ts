@@ -67,6 +67,7 @@ import { createActions } from "./actions";
 import { installKeyboard } from "./keyboard";
 import { installTitlebar } from "./titlebar";
 import { installUnsavedGuard } from "./unsavedGuard";
+import { installContextMenuGuard } from "../ui/contextMenuGuard";
 import { useUiStore } from "../stores/ui";
 import { createDocBridge, type DocBridge } from "./docBridge";
 import { LiveSessionHost } from "../live/liveSession";
@@ -455,6 +456,7 @@ export function mountUi(e: Engine): void {
 
   installTitlebar(e);
   installUnsavedGuard(e);
+  installContextMenuGuard();
   installViewportWiring(e);
   installRebuildBridge(e);
   installSketchStateBridge(e);
