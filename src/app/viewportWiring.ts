@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import { setPrompt } from "../ui/prompt";
+import { escapeClaimed } from "../ui/escapeClaim";
+import { isEditableTarget } from "../ui/focus";
 import { contextMenu, dismissContextMenu } from "../ui/menu";
 import { featureMeta } from "../ui/featureMeta";
 import { bodyRowLabel, distinguish, dominantOwner, edgeChoiceLabel } from "../ui/edgeChoice";
@@ -231,12 +233,17 @@ export function installViewportWiring(e: Engine): void {
     };
     e.starters.startMove();
   };
-  // Esc clears the body selection while in Bodies mode
+  // Esc clears the body selection while in Bodies mode. toolOwnsScreen, not
+  // toolBusy: the Move gizmo the selection raised cancels on the same key, and
+  // gating on it left the body lit with no gizmo on it. Captured because the
+  // gizmo's value box stops the key from bubbling.
   window.addEventListener("keydown", (ev) => {
-    if (ev.key === "Escape" && e.viewport.selecting === "bodies" && !e.toolBusy() && e.viewport.getSelectedBodies().length) {
+    if (ev.key !== "Escape" || escapeClaimed()) return;
+    if (isEditableTarget(ev.target) && !e.tools.move.active) return;
+    if (e.viewport.selecting === "bodies" && !e.toolOwnsScreen() && e.viewport.getSelectedBodies().length) {
       e.viewport.setSelectedBodies([]);
     }
-  });
+  }, true);
 
   // --- sketch overlays follow the document (when not actively sketching) ---
   e.store.onDocChange(() => {

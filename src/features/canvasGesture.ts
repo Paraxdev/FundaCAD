@@ -20,6 +20,8 @@
 // folding it in behind a flag would put the difference somewhere nobody reading
 // extrudeTool.ts would see it.
 
+import { escapeClaimed } from "../ui/escapeClaim";
+
 /** What the tool wants to be told. `frame` is optional: a tool with no live
  *  gizmo never asks for one. */
 export interface GestureHandlers {
@@ -46,7 +48,7 @@ export class CanvasGesture {
     this.move = (e) => handlers.move(e);
     this.down = (e) => handlers.down(e);
     this.up = (e) => handlers.up?.(e);
-    this.key = (e) => handlers.key(e);
+    this.key = (e) => { if (e.key !== "Escape" || !escapeClaimed()) handlers.key(e); };
     // raf is cleared BEFORE the pass runs, so a re-arm from inside it takes
     this.tick = () => { this.raf = 0; handlers.frame?.(); };
   }

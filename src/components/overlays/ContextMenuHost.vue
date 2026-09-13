@@ -2,6 +2,7 @@
 import { computed, nextTick, onUnmounted, ref, watch, useTemplateRef } from "vue";
 import Icon from "../shell/Icon.vue";
 import { useContextMenuStore, type CtxItem } from "../../stores/contextMenu";
+import { claimEscape } from "../../ui/escapeClaim";
 
 const s = useContextMenuStore();
 
@@ -102,11 +103,15 @@ function onKey(e: KeyboardEvent) {
     s.close();
   }
 }
+let releaseEscape: (() => void) | null = null;
 function bind() {
+  releaseEscape ??= claimEscape();
   document.addEventListener("pointerdown", onDown, true);
   window.addEventListener("keydown", onKey, true);
 }
 function unbind() {
+  releaseEscape?.();
+  releaseEscape = null;
   document.removeEventListener("pointerdown", onDown, true);
   window.removeEventListener("keydown", onKey, true);
 }
