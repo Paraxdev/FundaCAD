@@ -42,6 +42,8 @@ const MARKERS = [
   // marker that cannot quietly stop matching and turn this row into a pass.
   ["FundaCAD.Texture", "Perlin noise"],
   ["FundaCAD.Texture", "Flat land on the crests"],
+  ["FundaCAD.ExtraParameters", "Parameter Setup"],
+  ["FundaCAD.ExtraParameters", "save the current values as"],
 ];
 
 if (!existsSync(dir)) {

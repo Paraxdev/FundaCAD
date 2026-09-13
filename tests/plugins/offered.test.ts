@@ -43,6 +43,7 @@ describe("the plugins this build offers", () => {
     // exists.
     const offered = officialPlugins().map((p) => p.manifest.id).sort();
     expect(offered).toEqual([
+      "FundaCAD.ExtraParameters",
       "FundaCAD.MCP",
       "FundaCAD.MultiColor",
       "FundaCAD.Printing",

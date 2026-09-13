@@ -83,6 +83,7 @@ describe("the plugins in this repository", () => {
     // context, which was always a fact about what a plugin can do rather than
     // about where it came from.
     expect(shippedPlugins().map((p) => p.manifest.id)).toEqual([
+      "FundaCAD.ExtraParameters",
       "FundaCAD.MCP",
       "FundaCAD.MultiColor",
       "FundaCAD.Printing",

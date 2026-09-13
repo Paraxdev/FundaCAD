@@ -1,0 +1,12 @@
+{
+  "id": "FundaCAD.ExtraParameters",
+  "name": "Extra Parameters",
+  "version": "1.0.0",
+  "kind": "builtin",
+  "summary": "Sliders, toggles and choices for parameters, groups to file them in, named configurations of a design, and checks that warn when values stop making sense.",
+  "enabledByDefault": true,
+  "grants": [
+    "document.read",
+    "document.write"
+  ]
+}

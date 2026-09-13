@@ -88,10 +88,11 @@ table, so the reassuring half cannot go stale while the alarming half stays
 current. Hand-written reassurance goes stale silently and in the direction that
 hurts.
 
-## The five plugins this project publishes
+## The six plugins this project publishes
 
 | id | what it is | asks for | kind |
 | --- | --- | --- | --- |
+| `FundaCAD.ExtraParameters` | sliders, toggles and choices for parameters, groups, named configurations and checks | `document.read`, `document.write` | `builtin` |
 | `FundaCAD.MCP` | lets an assistant build, measure and edit the open model | `document.*`, `geometry.build`, `files.*` | `process` |
 | `FundaCAD.Printing` | printers on your network, and opening a model in a slicer | `document.read`, `files.write`, `printer.control`, `process.spawn` | `builtin` |
 | `FundaCAD.SpaceMouse` | navigating and moving with a 3D mouse | `device.input`, `document.read`, `document.write` | `builtin` |
@@ -414,6 +415,8 @@ packaged into something that cannot be installed.
 
 ```
 plugins/
+  FundaCAD.ExtraParameters/ manifest.json, README.md, main.ts, view.ts, state.ts,
+                           ParametersSection.vue, SetupPanel.vue
   FundaCAD.MCP/            manifest.json, README.md, server.py and the rest
   FundaCAD.MultiColor/     manifest.json, README.md, main.ts, palette.ts,
                            PaletteSection.vue
