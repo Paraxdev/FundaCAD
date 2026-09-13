@@ -21,7 +21,8 @@ import { setPrompt } from "../ui/prompt";
 import { isEditableTarget } from "../ui/focus";
 import { snap } from "../ui/units";
 import { axisDragDistance, createDragHandle, HANDLE_UP, type DragHandle } from "./manipulator";
-import { pickFacePlaneAt } from "./facePlanePick";
+import { pickPlaneTarget } from "./facePlanePick";
+import { SketchPlane } from "../sketch/plane";
 import {
   GHOST_DEFAULT,
   clipPlaneAt,
@@ -153,6 +154,7 @@ export class SectionTool {
   private beginPick() {
     this.picking = true;
     this.viewport.suspendPicking = true;
+    this.viewport.showAllPlanes(true);
     this.pickGesture.attach();
     setPrompt("Click a face or plane to cut along · Esc");
   }
@@ -161,13 +163,24 @@ export class SectionTool {
     if (!this.picking) return;
     this.picking = false;
     this.viewport.suspendPicking = false;
+    this.viewport.showAllPlanes(false);
     this.pickGesture.detach();
     this.viewport.clearHover();
+    this.viewport.hoverDatum(null);
     setPrompt(null);
   }
 
   private onPickMove(e: PointerEvent) {
-    this.viewport.hoverFaceAt(e.clientX, e.clientY); // show what the click would take
+    const target = pickPlaneTarget(this.viewport, e.clientX, e.clientY);
+    if (target?.kind === "face") {
+      this.viewport.hoverFaceAt(e.clientX, e.clientY);
+      this.viewport.hoverPlane(null);
+      this.viewport.hoverDatum(null);
+    } else {
+      this.viewport.clearHover();
+      this.viewport.hoverPlane(target?.kind === "base" ? target.spec : null);
+      this.viewport.hoverDatum(target?.kind === "datum" ? target.id : null);
+    }
   }
 
   private onPickDown(e: PointerEvent) {
@@ -196,7 +209,13 @@ export class SectionTool {
       const def = this.deps.datumDef?.(datum);
       if (def) return def;
     }
-    return pickFacePlaneAt(this.viewport, x, y)?.def ?? null;
+    const target = pickPlaneTarget(this.viewport, x, y);
+    if (!target || target.kind === "unusable") return null;
+    if (target.kind === "base") {
+      const p = new SketchPlane(target.spec);
+      return { origin: p.origin.toArray(), normal: p.n.toArray(), xdir: p.u.toArray() };
+    }
+    return target.spec;
   }
 
   // --- the cut ---------------------------------------------------------------
@@ -292,9 +311,11 @@ export class SectionTool {
     if (!escInOwnDim && isEditableTarget(e.target)) return;
     if (e.key === "Escape") this.stop();
     else if (e.key === "f" || e.key === "F") {
+      e.stopImmediatePropagation(); // F is also Fillet
       this.side = this.side === 1 ? -1 : 1;
       this.pushPlane();
     } else if (e.key === "g" || e.key === "G") {
+      e.stopImmediatePropagation();
       this.ghost = nextGhostLevel(this.ghost);
       this.pushPlane();
       this.prompt();

@@ -33,6 +33,7 @@ import {
   type ModelView,
   type EdgeRef,
 } from "./render";
+import { SectionCaps } from "./sectionCaps";
 // Upward reach, deliberate and narrow: facePlanePick is the ONE derivation of
 // "which plane is that face", and a second copy here is exactly what this import
 // replaces. It is a pure function of a raycast plus planeMath, no tool state,
@@ -3411,6 +3412,7 @@ export class Viewport {
   private ghostPlane = new THREE.Plane();
   private ghostMat: THREE.MeshLambertMaterial | null = null;
   private ghostMeshes: THREE.Mesh[] = [];
+  private caps = new SectionCaps();
 
   /** Enter/update cross-section mode: clip the model (faces + edges) by `plane`,
    *  drawing what it cuts away at `ghost` alpha (0 = not drawn at all, the old
@@ -3429,7 +3431,10 @@ export class Viewport {
     this.ghostPlane.copy(view.plane).negate();
     this.section = { ghost: view.ghost };
     if (remount) this.applySection();
-    else this.requestRender();
+    else {
+      this.caps.place(this.sectionPlane);
+      this.requestRender();
+    }
   }
 
   /** True while cross-section mode is on, for anything that has to draw or
@@ -3453,7 +3458,17 @@ export class Viewport {
       for (const d of edgeObjects(this.model)) d.material.clippingPlanes = planes;
     }
     this.mountGhost();
+    this.mountCaps(on);
     this.requestRender();
+  }
+
+  private mountCaps(on: boolean) {
+    if (!on || !this.model) {
+      this.caps.clear();
+      return;
+    }
+    if (!this.caps.group.parent) this.scene.scene.add(this.caps.group);
+    this.caps.mount(this.model.bodies, this.sectionPlane, (id) => new THREE.Color(this.bodyPaint[id] ?? BASE_COLOR));
   }
 
   /** Rebuild the ghost pass from scratch. Cheap enough to do wholesale, and only

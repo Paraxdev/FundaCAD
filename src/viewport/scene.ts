@@ -246,7 +246,7 @@ function detectLowPower(renderer: THREE.WebGLRenderer): boolean {
 }
 
 export function createScene(canvas: HTMLCanvasElement): SceneBundle {
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, stencil: true });
   const autoLowPower = detectLowPower(renderer);
   // The effective tier is the auto detection OR the manual "performance mode"
   // pref, re-applied on every pref change (the bundle's applyRenderPrefs below):
@@ -506,6 +506,7 @@ export class PostChain {
     const buffer = new THREE.WebGLRenderTarget(this.size.x, this.size.y, {
       type: THREE.HalfFloatType,
       samples: 4,
+      stencilBuffer: true,
     });
     const composer = new EffectComposer(this.renderer, buffer);
     composer.setSize(this.size.x, this.size.y);
