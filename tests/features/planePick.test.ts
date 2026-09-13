@@ -30,8 +30,10 @@ const DATUM: PlaneDef = { origin: [0, -9, -3], normal: [0, -0.95, -0.31], xdir: 
 function stub(over: {
   face?: unknown;
   construction?: ReturnType<Viewport["pickConstructionAt"]>;
+  onTop?: boolean;
 }): Viewport {
   return {
+    constructionOnTop: over.onTop ?? false,
     pickFaceForPressPull: () => over.face ?? null,
     pickConstructionAt: () => over.construction ?? null,
     // facePlaneFromHit's input. No triangles is the "this face implies no
@@ -85,5 +87,10 @@ describe("what a plane pick takes", () => {
       0, 0,
     );
     expect(t).toEqual({ kind: "unusable" });
+  });
+  it("takes the plane drawn over a face while a tool asks for one", () => {
+    const over = { face: { faceId: 1 }, construction: { kind: "base", plane: "XY" } as const };
+    expect(pickPlaneTarget(stub({ ...over, onTop: true }), 0, 0)).toEqual({ kind: "base", spec: "XY" });
+    expect(pickPlaneTarget(stub(over), 0, 0)?.kind).toBe("unusable");
   });
 });

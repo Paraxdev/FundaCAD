@@ -279,6 +279,9 @@ export class Viewport {
   // persistent construction/datum planes (translucent quads, click to select)
   private datumGroup = new THREE.Group();
   private datumQuads: THREE.Mesh[] = [];
+  /** A tool is asking for a plane: the construction quads draw over the model
+   *  and take the click before it. */
+  private planesOnTop = false;
   // datum POINTS (small spheres) and AXES (thin long cylinders). Kept apart from
   // datumQuads because those are sketchable PLANES a plane-picking tool consumes,
   // and a point or an axis is neither: it selects, but "sketch on this" or "cut
@@ -2431,6 +2434,7 @@ export class Viewport {
       // means the hit and the plane it implies cannot come apart, which is the
       // same promise pickFaceForPressPull makes about a body face.
       m.userData.datumDef = { origin: p.origin, normal: p.normal, xdir: p.xdir };
+      if (this.planesOnTop) this.drawPlaneOnTop(m, true);
       this.datumGroup.add(m);
       this.datumQuads.push(m);
     }
@@ -3397,13 +3401,41 @@ export class Viewport {
     if (this.model) this.rig.fit(this.model.box, true);
   }
 
+  /** The camera a fresh window starts with. `onModel` frames what is built;
+   *  without it the view goes home to the origin, which is what New wants while
+   *  the old model is still on screen for the frame before the rebuild clears it. */
+  resetCamera(onModel = true) {
+    this.userMovedCamera = false;
+    this.rig.resetView(onModel ? (this.model?.box ?? null) : null);
+    this.requestRender();
+  }
+
   showAllPlanes(on: boolean) {
+    this.planesOnTop = on;
     for (const k of ["XY", "XZ", "YZ"] as Plane3[]) {
       const m = this.scene.planes[k];
       m.visible = on;
       (m.material as THREE.MeshBasicMaterial).opacity = on ? 0.18 : 0.08;
+      this.drawPlaneOnTop(m, on);
     }
+    for (const q of this.datumQuads) this.drawPlaneOnTop(q, on);
     this.requestRender();
+  }
+
+  private drawPlaneOnTop(quad: THREE.Object3D, on: boolean) {
+    quad.traverse((o) => {
+      o.renderOrder = on ? 950 : -1;
+      const mat = (o as THREE.Mesh).material as THREE.Material | undefined;
+      if (mat && !Array.isArray(mat)) {
+        mat.depthTest = !on && !(o instanceof THREE.Sprite);
+        mat.needsUpdate = true;
+      }
+    });
+  }
+
+  /** True while the construction quads are drawn over the model. */
+  get constructionOnTop(): boolean {
+    return this.planesOnTop;
   }
 
   /** Brighten the plane under the cursor during plane-pick (null = none). */

@@ -106,9 +106,10 @@ export type PlanePickTarget =
   | { kind: "unusable" }
   | null;
 
-/** Resolve the plane under the cursor. A body face wins over the construction
- *  quads behind it, the quads are scenery for this step, the part is the thing
- *  the user is looking at.
+/** Resolve the plane under the cursor. While a tool asks for a plane the
+ *  construction quads are drawn over the model, so a quad under the cursor wins
+ *  over the face behind it: what is drawn in front is what the click takes. With
+ *  the quads drawn normally a body face wins, as the part is what is in front.
  *
  *  A DATUM PLANE IS ONE OF THOSE QUADS. It used not to be, and the omission was
  *  the whole of a bug: a plane through three points appeared in the browser,
@@ -119,6 +120,10 @@ export type PlanePickTarget =
  *  make, three points, midplane, offset from a face, was unreachable the one
  *  way people reach for a plane, and the browser row was the only way in. */
 export function pickPlaneTarget(viewport: Viewport, clientX: number, clientY: number): PlanePickTarget {
+  if (viewport.constructionOnTop) {
+    const c = viewport.pickConstructionAt(clientX, clientY);
+    if (c) return c.kind === "datum" ? { kind: "datum", spec: c.def, id: c.id } : { kind: "base", spec: c.plane };
+  }
   const hit = viewport.pickFaceForPressPull(clientX, clientY);
   if (hit) {
     const face = facePlaneFromHit(viewport, hit);
