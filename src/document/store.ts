@@ -1,7 +1,5 @@
-// Central document state: the CadDocument (parameters + features), undo/redo,
-// JSON load/save, and a debounced rebuild pipeline. The store owns the geometry
-// client so any mutation re-runs the tree; results + errors are pushed to
-// listeners (viewport, timeline, tree).
+// Document state: the CadDocument, undo and redo, load and save, and the rebuild
+// pipeline that re-runs the tree after every mutation.
 
 import {
   commit as commitVersion,
@@ -60,23 +58,13 @@ export interface RebuildState {
    *  without these the chip has nothing to show a fraction from. */
   meshed: number | null;
   meshTotal: number | null;
-  /** During a CHUNKED reply: bodies handed to the viewport so far, and the
-   *  reply's total. Both null outside a stream.
-   *
-   *  `result` is still the PREVIOUS committed model while these are non-null.
-   *  That is the whole safety property of progressive display: the partial
-   *  geometry reaches the viewport on onBuildChunk and NOWHERE else, so no
-   *  exporter, feature tree, or persisted document can ever observe a partial
-   *  body list. */
+  /** Progress through a chunked reply, null outside one. `result` stays the previous
+   *  model meanwhile, so nothing but the viewport ever sees a partial body list. */
   streamed: number | null;
   streamTotal: number | null;
 }
 
-/** One installment of a chunked reply on its way to the VIEWPORT.
- *
- *  The only legitimate subscriber is the viewport bridge in main.ts. Anything
- *  that reads document truth, export, the browser tree, a feature that bakes
- *  body ids into the document, must use onBuild, which never sees a partial. */
+/** One installment of a chunked reply, for the viewport only. Everything else uses onBuild. */
 export interface BuildChunk {
   epoch: number;
   phase: "begin" | "bodies";
@@ -91,11 +79,8 @@ export interface BuildChunk {
   total: number;
 }
 
-/** A long non-rebuild operation the user can watch and stop (today: import).
- *  Deliberately NOT folded into RebuildState, an import is not a rebuild, and
- *  everything keyed on `building` (the timeline chip, the rebuild scheduler)
- *  would misread it. `id` is the sidecar request id, so a cancel targets THIS
- *  op rather than whatever ran most recently. */
+/** A long cancellable operation, kept apart from RebuildState so nothing keyed on
+ *  `building` misreads it. `id` is the sidecar request id a cancel targets. */
 export interface BusyState {
   active: boolean;
   label: string;
@@ -111,11 +96,7 @@ type BuildListener = (state: RebuildState) => void;
 type BusyListener = (state: BusyState) => void;
 type MetaListener = () => void;
 
-// structuredClone beats the old JSON.parse(JSON.stringify()) round-trip on the
-// multi-MB imported-BREP docs this runs on (undo snapshot + cascade draft are
-// the two hot callers). Safe swap: docs are pure JSON data, and no mutator
-// writes an explicit `undefined` onto a doc object (exactOptionalPropertyTypes
-// forbids it), so the `"hiddenBodies" in f` gates see identical shapes.
+// Safe for `"hiddenBodies" in f` checks: no mutator writes an explicit undefined.
 const clone = (d: CadDocument): CadDocument => structuredClone(d);
 
 const isIdMap = (v: unknown): v is Record<string, string> =>
@@ -123,11 +104,8 @@ const isIdMap = (v: unknown): v is Record<string, string> =>
 
 export const EMPTY_DOCUMENT: CadDocument = { parameters: {}, features: [], bodyIds: {} };
 
-/** The features a sketch at a given timeline position may reference: everything
- *  up to the rollback marker, minus suppressed features, and, when EDITING an
- *  existing sketch, strictly before that sketch (a source created after it
- *  cannot exist yet when the sketch rebuilds). Pure so the Project tool's
- *  prefix-document rule is unit-testable; effectiveDoc() shares the base case. */
+/** What a sketch may reference: features up to the rollback marker, unsuppressed, and
+ *  strictly before the sketch being edited. */
 export function prefixFeatures(
   features: Feature[],
   rollbackIndex: number,
@@ -151,12 +129,7 @@ const DEFAULT_PALETTE: { name: string; color: string }[] = [
   { name: "Blue", color: "#3050c8" },
 ];
 
-/** A persisted display-only override map (id -> value): sketch/body/plane
- *  visibility, body names, and body colors all hand-rolled the same shape,
- *  a private Map plus a toJSON/load round-trip keyed by one CadDocument field.
- *  This only extracts that storage + serialization boilerplate; each overlay's
- *  markDirty/emit rules differ (some emit a build, some emit nothing at all,
- *  see the store methods below), so those setters stay bespoke on top. */
+/** A persisted display-only id to value map, stored under one CadDocument field. */
 class Overlay<T> {
   private map = new Map<string, T>();
   constructor(private readonly jsonKey: string) {}
@@ -224,15 +197,9 @@ export class DocumentStore {
   /** import feature id → "faces" for an import whose parts wear their face
    *  colours over their body colours (document/faceColors.ts). Absent is "bodies". */
   private importColors = new Overlay<ImportColorSource>("importColorSource");
-  /** The document's material library. Starts as the shared starter set and is
-   *  omitted from the saved file while it is still exactly that and nothing is
-   *  assigned, the same bargain the filament palette strikes: a document nobody
-   *  has restyled saves no bigger than it did before materials existed. */
+  /** Left out of the saved file while it is the untouched starter set. */
   private materials: MaterialDef[] = STARTER_LIBRARY.map((m) => ({ ...m }));
-  /** The user's own folders over the bodies. A LIST rather than an overlay
-   *  because an element is not a property of anything: it exists before it holds
-   *  a body, it has a name and a parent of its own, and its order is what the
-   *  panel draws. See document/elements.ts for every operation on it. */
+  /** The user's folders over the bodies (document/elements.ts). */
   private elements: ElementDef[] = [];
   /** Saved versions of this document. Null until the first one. */
   private repo: VersionRepo | null = null;
@@ -249,13 +216,7 @@ export class DocumentStore {
     { overlay: this.faceMaterial },
     { overlay: this.importColors },
   ];
-  /** Un-committed features shown live (a fillet drag, a thread being sized).
-   *  Never recorded in undo.
-   *
-   *  A LIST, because not every effect is one feature. A thread is honestly two,
-   *  the meridian profile as a sketch and the climbing revolve that sweeps it,
-   *  and a slot that held one could only preview half of it, which for a thread
-   *  is the half with no geometry in it. */
+  /** Un-committed features shown live, never in undo. A list: a thread is a sketch plus a revolve. */
   private preview: Feature[] | null = null;
   private rebuildTimer: number | null = null;
   private rebuilding = false; // a rebuild round-trip is in flight
@@ -342,11 +303,8 @@ export class DocumentStore {
     return () => this.busyListeners.delete(fn);
   }
 
-  /** Run a long cancellable backend op with busy state around it. `fn` receives
-   *  an `onStarted` callback to hand back the request id, without it a cancel
-   *  cannot name the right op, because the document stays editable during the
-   *  op and any rebuild the user triggers meanwhile would claim to be "most
-   *  recent". Busy state is always cleared, including on throw. */
+  /** Run a cancellable backend op with busy state. `onStarted` hands back the request
+   *  id, since a rebuild started meanwhile would otherwise be "most recent". */
   async runBusy<T>(label: string, fn: (onStarted: (id: string) => void) => Promise<T>): Promise<T> {
     this.busy = { active: true, label, id: null, pct: null };
     this.emitBusy();
@@ -365,11 +323,7 @@ export class DocumentStore {
    *  covers both "nothing running" and "the sidecar had already finished". */
   async cancelBusy(): Promise<boolean> {
     if (!this.busy.active) return false;
-    // A rebuild never learns its request id, rebuild() takes no onStarted, so
-    // runBusy's callback is never fired for it. Passing undefined lets the
-    // client fall back to lastHeavyId, which is precisely the fallback it
-    // documents for callers that never learned an id. Imports/exports still
-    // pass their own id and are unaffected.
+    // A rebuild never learns its id; undefined falls back to the client's lastHeavyId.
     return (await this.geometry.cancel?.(this.busy.id ?? undefined)) ?? false;
   }
 
@@ -378,12 +332,7 @@ export class DocumentStore {
     fn(this.build);
     return () => this.buildListeners.delete(fn);
   }
-  /** Installments of a chunked reply, for the VIEWPORT ONLY, see BuildChunk.
-   *  Deliberately a separate channel from onBuild: every tool's onBuild handler
-   *  is a one-shot on the `!building` edge (ghost seeding, selection reseeding,
-   *  the new-failure toast diff), and firing those per chunk would seed against
-   *  a model that is not there yet. Unlike onBuild this does NOT replay the
-   *  current state to a new subscriber: there is nothing meaningful to replay. */
+  /** Chunked reply installments, for the viewport only. Unlike onBuild, nothing is replayed. */
   onBuildChunk(fn: (c: BuildChunk) => void): () => void {
     this.chunkListeners.add(fn);
     return () => this.chunkListeners.delete(fn);
@@ -419,18 +368,8 @@ export class DocumentStore {
     this.isDirty = false;
     this.emitMeta();
   }
-  /** Reset to a blank document (New / Open): discard the model on screen along with
-   *  the document it belonged to, and stop whatever is still building.
-   *
-   *  `rebuildNow` keeps the last good result when a rebuild fails, which is correct
-   *  within one document and wrong across a replacement, the shape left on screen
-   *  is no longer in the document, so the Browser has nothing to hide and the user
-   *  cannot tell what they are looking at. And a rebuild in flight holds the queue,
-   *  so the replacement's own rebuild cannot start until it finishes.
-   *
-   *  Reported 2026-08-08: File -> New during a 3,000-body rebuild left the old model
-   *  on screen over an empty document. Both halves are needed, clearing alone leaves
-   *  New waiting minutes, cancelling alone leaves the stale model up. */
+  /** On New or Open, drop the old model and cancel its build: a failed rebuild keeps
+   *  the last result, and a build in flight would hold up the new document's. */
   private discardModelForReplacement() {
     this.build = {
       ...this.build,
@@ -523,10 +462,7 @@ export class DocumentStore {
   /** Injected: the sketch feature id currently OPEN in the sketch editor (it
    *  re-solves itself live and must not be overwritten headlessly). */
   openSketchId?: () => string | null;
-  /** Fired after a value-changing parameter commit landed. Deliberately
-   *  carries NO sketch set: the open sketch's pending (uncommitted) dim
-   *  bindings can't appear in the draft's affected-set, so the consumer must
-   *  rescan unconditionally, filtering here would be a bug. */
+  /** No sketch set on purpose: an open sketch's pending bindings are not in the draft. */
   onParamsApplied?: () => void;
   /** A closed sketch could not satisfy its dims after a param edit (conflict);
    *  its coordinates were left unchanged. */
@@ -536,10 +472,8 @@ export class DocumentStore {
    *  open sketch is never written headlessly. */
   onProjectionsApplied?: (updates: ProjectionUpdate[]) => void;
 
-  /** Value-changing parameter commits are serialized: each one recomputes on a
-   *  DRAFT, headlessly re-solves the affected closed sketches, then lands
-   *  everything (param edit + dim values + solved coordinates) in ONE mutate =
-   *  one undo step = one rebuild. */
+  /** Parameter commits run in series: recompute a draft, re-solve affected sketches,
+   *  land it all as one undo step and one rebuild. */
   private paramChain: Promise<void> = Promise.resolve();
   private queueParamCommit(fn: (d: CadDocument) => void) {
     this.paramChain = this.paramChain
@@ -572,13 +506,9 @@ export class DocumentStore {
     this.onParamsApplied?.();
   }
 
-  // --- associative projection refresh (plan step 4) ---
-  // A rebuild whose result carries projectionUpdates means an upstream feature
-  // moved geometry that projected entities are linked to. The updates land in
-  // the document via a DERIVED commit (no undo entry, undo should revert the
-  // user edit that caused the refresh, never the refresh itself), which
-  // triggers one more rebuild; the sidecar only emits beyond-tolerance diffs,
-  // so the steady state after an upstream edit is exactly 2 rebuilds.
+  // --- associative projection refresh ---
+  // projectionUpdates land as a derived commit with no undo entry, so an upstream
+  // edit settles in exactly two rebuilds.
 
   /** consecutive doc-changing refreshes we applied (incremented in
    *  commitProjectionRefresh, open-sketch-only deliveries don't count, their
@@ -586,24 +516,14 @@ export class DocumentStore {
   private projStreak = 0;
   private projValveOpen = true;
 
-  /** Re-arm the oscillation valve. Every explicit user gesture that changes the
-   *  model state (mutate/undo/redo/load/new/Compute All) earns a fresh refresh
-   *  budget, this is the "edit the model or Compute All to retry" the valve
-   *  toast promises; without it a tripped valve could never recover (withheld
-   *  updates keep the cached curves != fresh, so a quiet rebuild is unreachable). */
+  /** Every user gesture earns a fresh refresh budget; a tripped valve cannot recover otherwise. */
   private rearmProjectionValve() {
     this.projStreak = 0;
     this.projValveOpen = true;
   }
 
-  /** Refresh-loop entry (rebuildNow's ok-branch). Preview/edit-preview rebuilds
-   *  see transient timelines, never commit from those, and never touch the
-   *  streak either way (checked FIRST: an edit-preview truncated before the
-   *  projected sketch yields a quiet rebuild that must not re-arm a tripped
-   *  valve). The valve stops a float oscillation (a source flapping just past
-   *  the 1e-4 tolerance) from rebuilding forever: after 5 consecutive applied
-   *  refreshes, stop applying + warn once; a quiet rebuild or any user gesture
-   *  (rearmProjectionValve) re-arms it. */
+  /** Never from a preview build, which also must not touch the streak. The valve stops
+   *  a source flapping past the 1e-4 tolerance after 5 refreshes in a row. */
   private maybeQueueProjectionRefresh(updates: ProjectionUpdate[] | undefined) {
     if (this.hasPreview) return;
     if (!updates?.length) {
@@ -684,11 +604,7 @@ export class DocumentStore {
       if (solved) nf = { ...nf, entities: solved };
       replacements.set(sid, nf);
     }
-    // Drop sketches whose LIVE feature object changed while we awaited the
-    // solves (plain mutate() is not serialized on paramChain, e.g. an entity
-    // delete or SketchMode.finish() can land mid-solve): applying nf would
-    // resurrect the pre-edit entities. Nothing is lost, that edit's rebuild
-    // re-emits the diff against the new state.
+    // A sketch edited during the solves would be resurrected; its own rebuild re-emits the diff.
     for (const sid of [...replacements.keys()]) {
       if (this.doc.features.find((x) => x.id === sid) !== sketchOf.get(sid)) replacements.delete(sid);
     }
@@ -704,12 +620,8 @@ export class DocumentStore {
     });
   }
 
-  /** Headless re-solve of one CONSTRAINED closed sketch, the param cascade and
-   *  the projection refresh share these exact semantics (keep them in lockstep):
-   *  returns the solved entities, or null when there was nothing to solve (a
-   *  sketch with no constraints has nothing to satisfy, the value/curve
-   *  write-back alone was the whole job) or the solve failed (surfaced via
-   *  onParamSolveIssue; the caller keeps the coordinates unchanged). */
+  /** Headless re-solve shared by the param cascade and projection refresh. Null when
+   *  there is nothing to solve or the solve failed (onParamSolveIssue). */
   private async solveConstrainedSketch(
     f: Extract<Feature, { type: "sketch" }>,
     parameters: CadDocument["parameters"],
@@ -723,14 +635,8 @@ export class DocumentStore {
     return solved.entities;
   }
 
-  /** The shared commit tail: apply `fn`, keep the parameter invariant (bound
-   *  field number == cached param value) across EVERY document edit, this also
-   *  GCs model params whose dim or feature was just deleted and refreshes the
-   *  derived `parameters` cache, then dirty/emit/rebuild. mutate() prepends
-   *  the undo entry + redo clear + valve re-arm; a DERIVED commit (projection
-   *  refresh) calls this directly because machine-derived state must never
-   *  occupy an undo step, and its immediate rebuild is what closes the refresh
-   *  loop (steady state: a quiet rebuild). */
+  /** The commit tail: apply `fn`, recompute parameters, then dirty, emit and rebuild.
+   *  Derived commits call this directly to stay out of undo. */
   private applyDerived(fn: (doc: CadDocument) => void, immediate = true) {
     fn(this.doc);
     if (this.doc.paramDefs) this.applyRecompute(params.recompute(this.doc));
@@ -840,11 +746,8 @@ export class DocumentStore {
     });
   }
 
-  /** Commit raw user input into a parameter-drivable field as an EXPRESSION
-   *  (canonical units, mm/deg; the edit surface converts plain display-unit
-   *  numbers itself and uses setTargetValue). Supports Fusion's on-the-fly
-   *  `name=expr` form, which names the field's model parameter. Returns an
-   *  error or null. */
+  /** Commit an expression (canonical units, `name=expr` names the parameter) into a
+   *  field. Plain numbers go through setTargetValue. Returns an error or null. */
   setTargetExpr(target: ParamTarget, raw: string, kind: FieldKind): string | null {
     const bound = params.boundParam(this.doc, target);
     const c = params.classifyExprInput(this.doc, raw, kind, bound);
@@ -881,10 +784,7 @@ export class DocumentStore {
     return params.isBound(this.doc, target);
   }
 
-  /** Bindings recorded while a sketch was open (expression typed on a dim);
-   *  applied in the SAME mutate as the feature commit so undo stays atomic.
-   *  A binding that stopped validating (its param was deleted mid-edit) is
-   *  dropped LOUDLY, the dim keeps its last value. */
+  /** Applied in the same mutate as the sketch commit; an invalid binding is dropped with a warning. */
   private applyBindings(d: CadDocument, bindings?: SketchBinding[]) {
     for (const b of bindings ?? []) {
       // re-validate against the final doc, the dim/entity now exists in it
@@ -910,13 +810,6 @@ export class DocumentStore {
     }, true);
   }
 
-  /** Several features as ONE edit: they land together, in order, at the rollback
-   *  marker, and one undo takes all of them back out.
-   *
-   *  A tool whose result is genuinely more than one feature needs this. Thread is
-   *  a profile sketch plus the climbing revolve that sweeps it, and two
-   *  addFeature calls would leave Ctrl+Z removing the revolve and stranding a
-   *  sketch nobody drew. */
   /** An edit to existing features plus any new ones, as ONE undo step. */
   editAndAdd(edit: (doc: CadDocument) => void, features: Feature[] = []) {
     const at = this.rollbackIndex;
@@ -927,6 +820,7 @@ export class DocumentStore {
     }, true);
   }
 
+  /** Several features as one undo step at the rollback marker (a thread is two). */
   addFeatures(features: Feature[], bindings?: SketchBinding[]) {
     if (!features.length) return;
     const at = this.rollbackIndex;
@@ -937,10 +831,7 @@ export class DocumentStore {
     }, true);
   }
 
-  /** NOTE: a numeric field bound to a parameter is re-asserted by the recompute
-   *  in mutate(), a patch that writes such a field simply won't stick. Route
-   *  numeric edits through setTargetValue/setTargetExpr (drag-tool isBound
-   *  guards land in the polish step of Tier 3.1). */
+  /** A bound numeric field is re-asserted by the recompute; use setTargetValue/setTargetExpr. */
   updateFeature(id: string, patch: Partial<Feature>) {
     this.mutate((d) => {
       const i = d.features.findIndex((f) => f.id === id);
@@ -1024,11 +915,8 @@ export class DocumentStore {
     this.scheduleRebuild(true);
   }
 
-  // --- live preview (un-committed feature, e.g. a fillet being dragged) ---
-  /** Show `feature` appended to the built tree without recording undo or marking
-   *  dirty. Pass null to clear it (reverts to the committed model). Rebuilds
-   *  immediately and coalesces in-flight requests so a drag stays live (no
-   *  debounce wait) without flooding OCCT. */
+  // --- live preview ---
+  /** Append un-committed features to the build, no undo, not dirty. Null clears. */
   setPreview(feature: Feature | Feature[] | null) {
     this.preview = feature === null ? null : Array.isArray(feature) ? feature : [feature];
     this.scheduleRebuild(true);
@@ -1039,19 +927,12 @@ export class DocumentStore {
     return this.preview !== null || this.editPreview !== null;
   }
 
-  // --- roll-to-position edit preview (re-opening a committed feature) ---
-  /** While editing feature `id`, rebuilds see the timeline truncated to just
-   *  BEFORE that feature plus the live edited version, the committed mesh has
-   *  already consumed e.g. a fillet's member edges, so only the rolled-back
-   *  model exposes them for highlighting/toggling. Later features are
-   *  temporarily hidden for the duration of the edit (the tool's prompt says
-   *  so). Never recorded in undo; commit goes through replaceFeature. */
+  // --- edit preview ---
+  /** While editing a feature, builds stop just before it plus the live edit: the
+   *  committed mesh has already consumed e.g. a fillet's edges. */
   private editPreview: { id: string; feature: Feature | null } | null = null;
-  /** `feature` is what to build IN THE EDITED FEATURE'S PLACE from the first
-   *  frame. Omit it for a tool that wants the model as it stood before the
-   *  feature (extrude picks its profiles against that); pass the feature itself
-   *  for one that only wants to vary its numbers, which then opens on the model
-   *  the user is already looking at rather than flashing it away and back. */
+  /** Omit `feature` to see the model before it (extrude picks profiles there); pass it
+   *  to open on the model as it looks, without a flash. */
   beginEditPreview(id: string, feature: Feature | null = null) {
     this.editPreview = { id, feature };
     this.scheduleRebuild(true);
@@ -1070,17 +951,7 @@ export class DocumentStore {
     return this.editPreview?.id ?? null;
   }
 
-  /** The kernel's refusal of the feature being previewed, or null.
-   *
-   *  Read from the same build state the timeline reads, but attributed: a build
-   *  can fail for a feature the user is nowhere near, and telling them their
-   *  pitch is impossible because an unrelated shell failed would be worse than
-   *  saying nothing. So this answers only when the failing feature IS the one
-   *  under the cursor.
-   *
-   *  Null while a build is in flight. A refusal that has not come back yet is
-   *  not a refusal, and flashing the last one back up between frames of a drag
-   *  makes the box strobe on every value the user passes through. */
+  /** The kernel's refusal of the previewed feature only, and null mid-build so a drag does not strobe. */
   get previewError(): string | null {
     if (this.build.building) return null;
     const failed = this.build.errorFeatureId;
@@ -1178,10 +1049,7 @@ export class DocumentStore {
     this.setBodiesVisibility(new Map([[id, visible]]));
   }
 
-  /** Show/hide several bodies in one step (Isolate / Show all): apply every
-   *  change, then re-emit ONCE, per-body emits would re-render the whole model
-   *  N times (each emit runs setModel + the flush-seam pass). No-op entries are
-   *  skipped; a call that changes nothing doesn't emit or dirty the document. */
+  /** Show or hide several bodies with one emit. */
   setBodiesVisibility(vis: Map<string, boolean>) {
     let changed = false;
     for (const [id, visible] of vis) {
@@ -1192,10 +1060,7 @@ export class DocumentStore {
     if (!changed) return;
     this.markDirty();
     this.emitBuild();
-    // With captured-visibility semantics (every extrude carries hiddenBodies),
-    // an eye toggle is PURE DISPLAY, no rebuild. Only a legacy feature still
-    // gated by the live map (loaded before stamping existed, in-memory) makes
-    // visibility a geometry input worth a rebuild.
+    // Display only, unless a legacy extrude without hiddenBodies still reads the live map.
     const legacy = this.doc.features.some(
       (f) => f.type === "extrude" && !("hiddenBodies" in f),
     );
@@ -1208,9 +1073,7 @@ export class DocumentStore {
     return [...this.bodyVis.entries()].filter(([, v]) => v === false).map(([k]) => k);
   }
 
-  // --- construction-plane visibility overrides (display-only; datum planes are
-  // synced to the viewport client-side, so a toggle just re-syncs the quads, no
-  // rebuild and no emitBuild, the caller re-syncs the planes + refreshes the tree) ---
+  // --- construction-plane visibility (the caller re-syncs the quads) ---
   /** true unless the user has hidden this construction plane (planes default to visible). */
   isPlaneVisible(id: string): boolean {
     return this.planeVis.get(id) ?? true;
@@ -1236,18 +1099,7 @@ export class DocumentStore {
     this.emitBuild();
   }
   // --- elements: the user's own folders over the bodies ---------------------
-  //
-  // Display-only, like body names and body colours beside them, and for the same
-  // reason: organising an import must not be able to change it. Every setter
-  // here marks the document dirty and re-emits the BUILD (which is what repaints
-  // the Browser) and none of them schedules a rebuild, because the sidecar is
-  // never told any of this. See document/elements.ts for the pure operations.
-  //
-  // NOT ON THE UNDO STACK. Undo here is the feature timeline; these overlays
-  // have never been on it (rename a body, hide a body, assign a colour, none of
-  // them push), and putting one of them on it would make Ctrl+Z after an
-  // organising session step back through six hundred folder moves before it
-  // reached the modelling operation the user meant.
+  // Display only and off the undo stack, like every overlay: undo is the timeline.
 
   /** the document's elements, in list order. */
   get bodyElements(): readonly ElementDef[] {
@@ -1259,10 +1111,6 @@ export class DocumentStore {
     return this.bodyElement.get(id);
   }
 
-  /** body id → element id, the whole map at once, for the Browser's tree
-   *  shaping. A Map rather than a plain object because the caller does nothing
-   *  with it but look bodies up, and on an assembly it is looking up thousands
-   *  of them on every repaint. */
   bodyElementMap(): ReadonlyMap<string, string> {
     return new Map(this.bodyElement.entries());
   }
@@ -1341,13 +1189,7 @@ export class DocumentStore {
     return descendantsOf(this.elements, id);
   }
 
-  /** Move bodies into an element (null = out, back to the top level).
-   *
-   *  Batched and emitting ONCE, which is the point: organising an import means
-   *  moving hundreds of bodies at a time, and a per-body emit would repaint the
-   *  panel and re-run the render bridge once per body. A call that changes
-   *  nothing neither dirties the document nor emits, so a drop onto the folder a
-   *  body is already in costs nothing. */
+  /** Move bodies into an element (null = top level) with one emit. */
   setBodiesElement(bodyIds: Iterable<string>, element: string | null) {
     const target =
       element !== null && this.elements.some((e) => e.id === element) ? element : null;
@@ -1363,11 +1205,7 @@ export class DocumentStore {
     this.emitBuild();
   }
 
-  // --- materials: what a body is made of, on screen -------------------------
-  //
-  // Display-only and off the undo stack, on the same terms as elements above.
-  // See document/materials.ts for what a material is and why it is not the
-  // filament palette.
+  // --- materials (document/materials.ts), display only, off the undo stack ----
 
   /** the document's material library, in list order. */
   get materialLibrary(): readonly MaterialDef[] {
@@ -1387,12 +1225,7 @@ export class DocumentStore {
     return this.bodyMaterial.get(id);
   }
 
-  /** Body colours from materials: the layer UNDER whatever a capability paints.
-   *
-   *  Merged with `contributedPaint()` in the render bridge, and losing to it,
-   *  because the one thing that contributes paint today is the filament palette,
-   *  and a palette slot is a deliberate choice about a real print while a
-   *  material is usually whatever an imported file said. */
+  /** Under contributed paint: a filament slot is a deliberate print choice. */
   materialPaint(): Record<string, string> {
     const out: Record<string, string> = {};
     for (const [body, id] of this.bodyMaterial.entries()) {
@@ -1402,15 +1235,7 @@ export class DocumentStore {
     return out;
   }
 
-  /** Body finishes from materials: metalness, roughness and opacity per body,
-   *  every default already filled in.
-   *
-   *  Separate from the colour above because they travel differently in the
-   *  renderer: colour is baked per VERTEX (so a hover can recolour one face
-   *  without touching the lighting) and the finish is per MATERIAL, one
-   *  MeshStandardMaterial per body. Only bodies that differ from the app's
-   *  default finish appear, so an unstyled document hands the viewport an empty
-   *  map and it changes nothing. */
+  /** Only bodies whose finish differs from the default. */
   materialFinishes(): Record<string, BodyFinish> {
     const out: Record<string, BodyFinish> = {};
     for (const [body, id] of this.bodyMaterial.entries()) {
@@ -1428,10 +1253,7 @@ export class DocumentStore {
     return out;
   }
 
-  // --- materials on ONE FACE -------------------------------------------------
-  //
-  // Same terms as the body assignment above, display-only and off the undo
-  // stack, and addressed by document/faceMaterials.ts's key.
+  // --- materials on one face (document/faceMaterials.ts) ----------------------
 
   /** The raw per-face assignment, for a menu that has to show what is there. */
   faceMaterialId(bodyId: string, localFace: number): string | undefined {
@@ -1554,13 +1376,7 @@ export class DocumentStore {
     return changed;
   }
 
-  /** Merge a library in, by ID.
-   *
-   *  Merge and not replace: importing a library is adding to what is here, and a
-   *  replace would silently unassign every body wearing a material the incoming
-   *  file happens not to have. A colliding id UPDATES that material, which is
-   *  what makes re-importing an edited export do what it looks like it does.
-   *  Returns how many were added and how many were updated. */
+  /** Merge a library by id; replacing would unassign bodies wearing missing materials. */
   importMaterials(incoming: readonly MaterialDef[]): { added: number; updated: number } {
     let added = 0;
     let updated = 0;
@@ -1626,10 +1442,7 @@ export class DocumentStore {
     this.addFeature(feat, this.doc.features.length);
   }
 
-  /** copy a body by appending a duplicate feature at the END of the timeline (so
-   *  it copies the final body), offset a little in X so the copy is not hidden
-   *  inside the original. Move it afterwards, or edit the offset in Properties.
-   *  Undoable like any feature. */
+  /** Append a duplicate feature, offset in X so the copy is not hidden inside the original. */
   duplicateBody(bodyId: string) {
     const feat: Feature = {
       id: this.nextId(), type: "duplicate",
@@ -1701,10 +1514,7 @@ export class DocumentStore {
   }
 
   // --- serialization ---
-  /** The full persistable session as a plain object, everything toJSON()
-   *  writes (geometry doc + suppress set, rollback, overlays, palette).
-   *  Autosave embeds this directly in its envelope so the multi-MB document
-   *  is stringified ONCE, not pretty-printed/re-parsed/re-stringified. */
+  /** Everything toJSON() writes, as an object, so autosave stringifies once. */
   toObject(withVersions = true): CadDocument {
     // Persist the geometry doc PLUS the non-geometry project state that lives in
     // the store (suppress set, rollback marker, sketch visibility) so reopening
@@ -1804,12 +1614,7 @@ export class DocumentStore {
     this.rollback = parsed.rollback ?? null;
     for (const { overlay, mapValue } of this.overlays) overlay.loadFrom(parsed as unknown as Record<string, unknown>, mapValue);
     this.palette = parsed.palette?.length ? parsed.palette.map((s) => ({ ...s })) : DEFAULT_PALETTE.map((s) => ({ ...s }));
-    // Anything without a usable id is dropped here rather than defended against
-    // at every reader: an element is addressed by id everywhere (the body map,
-    // the parent link, the collapse key), so one without a string id is not a
-    // folder that renders oddly, it is a folder nothing can name.
-    // A material with no usable colour is dropped, see normalizeMaterial: it
-    // is a row that can be assigned to a body and then change nothing.
+    // Elements without an id and materials without a colour are dropped here, not at every reader.
     this.repo = normalizeRepo(parsed.versions);
     this.materials = parsed.materials?.length
       ? parsed.materials
@@ -1831,11 +1636,8 @@ export class DocumentStore {
       ...(parsed.viewOverrides ? { viewOverrides: parsed.viewOverrides } : {}),
       ...(isIdMap(parsed.bodyIds) ? { bodyIds: parsed.bodyIds } : {}),
     };
-    // Migrate boolean features to captured-visibility semantics: an extrude
-    // without `hiddenBodies` is gated by the LIVE eye states on every rebuild
-    // (display retroactively rewriting geometry, the recurring red-features
-    // trap). Stamping "nothing hidden" locks in the all-visible behavior every
-    // saved document was verified against, and makes the file eye-proof.
+    // An extrude without hiddenBodies reads the live eye states, so hiding a body
+    // rewrote geometry. Stamp "nothing hidden", which every saved file was built with.
     for (const f of this.doc.features) {
       if (f.type === "extrude" && !("hiddenBodies" in f)) {
         (f as { hiddenBodies?: string[] }).hiddenBodies = [];
@@ -1887,11 +1689,7 @@ export class DocumentStore {
     };
   }
 
-  /** Project 3D sources onto a sketch plane against the PREFIX document for the
-   *  sketch being drawn: `editingId` = the open sketch's feature id when editing
-   *  an existing sketch (sources must live strictly before it), null for a new
-   *  sketch (which lands at the rollback marker, so everything up to it counts).
-   *  Transport failure resolves to []. */
+  /** Project sources against the prefix document (prefixFeatures). [] on transport failure. */
   projectGeometry(plane: PlaneSpec, sources: ProjectedSource[], editingId: string | null): Promise<ProjectionResult[]> {
     const doc: CadDocument = {
       parameters: this.doc.parameters,
@@ -1914,14 +1712,7 @@ export class DocumentStore {
     this.emitBuild();
   }
 
-  /** The state a FINISHED rebuild round-trip publishes. A partial build carries
-   *  its failing feature inside the result, so the surviving geometry renders
-   *  AND the error surfaces; an outright failure keeps the last good mesh on
-   *  screen instead of blanking the viewport. Shared by rebuildNow and
-   *  computeAllNow, which settle identically. */
-  /** Tell the viewport to drop a partial model. Called when a build settles
-   *  without the stream having completed, the reply failed, was cancelled, or
-   *  came back by some path that never produced a final chunk. */
+  /** Drop a partial model when a build settles without its stream completing. */
   private emitBuildAbort() {
     for (const fn of this.abortListeners) fn(this.buildEpoch);
   }
@@ -1932,6 +1723,7 @@ export class DocumentStore {
     if (reply.ok && reply.result.bodyIds && this.doc === sent) this.doc.bodyIds = reply.result.bodyIds;
   }
 
+  /** A partial build carries its failure inside the result; an outright failure keeps the last mesh. */
   private settledBuild(reply: RebuildReply): RebuildState {
     const done = {
       building: false, progress: null, meshed: null, meshTotal: null,
@@ -1958,26 +1750,8 @@ export class DocumentStore {
    *  await the same finish rather than a promise of its own. Null when idle. */
   private rebuildDrain: Promise<void> | null = null;
 
-  /** Rebuild and RESOLVE WHEN THE RESULT IS PUBLISHED.
-   *
-   *  That second half is the whole contract, and it used to be broken in the one
-   *  case that matters. Rebuilds are serialized: when one is already in flight a
-   *  second caller only marks that another pass is wanted, and the running drain
-   *  picks it up. But that path RETURNED IMMEDIATELY, so `await rebuildNow()`
-   *  resolved with `buildState.result` still pointing at the previous document.
-   *
-   *  Every caller of it is doing the same thing, which is why this is worth
-   *  fixing here rather than at each of them: something has just been added to
-   *  the timeline, and the next step needs the BODIES it produced, whose ids do
-   *  not exist until the build lands. Both callers today are import paths, and
-   *  both reach here immediately after addFeature, i.e. with that feature's own
-   *  rebuild already in flight, which is exactly the case that returned early.
-   *  So the colours an imported file carried were matched, and then written onto
-   *  an empty body list.
-   *
-   *  Awaiting the running drain is correct rather than merely closer: the drain
-   *  loops until `rebuildQueued` is clear, so when it resolves the published
-   *  result is the LATEST document, which is what "rebuild now" is asking for. */
+  /** Rebuild, resolving once the latest document's result is published, including
+   *  when another rebuild was already running (callers need the new body ids). */
   async rebuildNow(): Promise<void> {
     if (this.rebuilding) {
       this.rebuildQueued = true;
@@ -1986,12 +1760,7 @@ export class DocumentStore {
     }
     this.rebuilding = true;
     const drain = (async () => {
-      // Wrap the whole drain in runBusy so a LONG rebuild gets the Cancel button
-      // and busy label. Without this, busy.active stayed false for every rebuild
-      // and timeline.ts, which gates both on it, offered no way to stop a build
-      // that runs for minutes on a large assembly (measured 138.7 s on the
-      // reference file). Short rebuilds are unaffected: the button only appears
-      // after CANCEL_DELAY_MS (700 ms).
+      // runBusy gives a long rebuild its Cancel button.
       await this.runBusy("Rebuilding", async () => {
         try {
           do {
@@ -2007,19 +1776,12 @@ export class DocumentStore {
             if (this.build.streamed !== null && !reply.ok) this.emitBuildAbort();
             this.build = this.settledBuild(reply);
             this.emitBuild();
-            // associative projection refresh: decide AFTER the result is published
-            // (a queued commit lands via paramChain and triggers its own rebuild).
-            // A FAILED rebuild says nothing about projections, it must neither
-            // apply nor reset the streak, so only ok results reach the valve.
+            // After publishing; a failed rebuild says nothing about projections.
             if (reply.ok) this.maybeQueueProjectionRefresh(reply.result.projectionUpdates);
           } while (this.rebuildQueued);
         } finally {
-          // Release the serialization flag HERE, not in the outer finally.
-          // runBusy's teardown adds await points after this callback returns,
-          // and a projection refresh chained on paramChain can run in that
-          // window: it would see rebuilding === true, set rebuildQueued on a
-          // loop that has already exited, and be dropped. That silently broke
-          // the derived-commit refresh loop (2 rebuilds became 1).
+          // Here, not in the outer finally: runBusy's teardown awaits, and a refresh
+          // queued in that window would be dropped.
           this.rebuilding = false;
         }
       });
@@ -2033,10 +1795,7 @@ export class DocumentStore {
     }
   }
 
-  /** MCAD-style "Compute All": bypass and rebuild EVERY cache layer (worker
-   *  RAM prefix, mesh cache, this document's disk checkpoints), the escape
-   *  hatch when a cached result is suspected stale. Falls back to a plain
-   *  immediate rebuild on backends without the op. */
+  /** Rebuild past every cache layer, for a suspected stale result. */
   async computeAllNow() {
     const ca = this.geometry.computeAll?.bind(this.geometry);
     if (!ca) return this.scheduleRebuild(true);
