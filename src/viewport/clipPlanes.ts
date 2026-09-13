@@ -70,10 +70,26 @@ export function maxViewHalfHeight(contentRadius: number): number {
   return Math.max(ZOOM_OUT_FLOOR, r * ZOOM_OUT_FACTOR);
 }
 
-/** Where to put the near plane with the camera this far from its pivot. */
-export function perspNear(distance: number): number {
+// Zoomed out, a 0.1mm near plane is what z-fights. A 24-bit depth buffer
+// resolves about z^2 / (near * 2^24) at depth z, so the SV08 seen from 2m has
+// 2.4mm steps and its parts' surfaces a millimetre apart flicker through each
+// other. Nothing of the model can be nearer than the gap from the eye to its
+// bounding box, so near may move out to half that gap, capped at a hundredth
+// of the pivot distance so the ground running under the camera is not cut short.
+
+/** Near may sit this fraction of the eye's gap to the model's bounds. */
+export const NEAR_GAP_FRACTION = 0.5;
+
+/** ...and no further out than this fraction of the pivot distance. */
+export const NEAR_DISTANCE_CAP = 0.01;
+
+/** Where to put the near plane with the camera this far from its pivot, and
+ *  `gap` from the model's bounding box (0 inside it or with no model). */
+export function perspNear(distance: number, gap = 0): number {
   if (!(distance > 0) || !Number.isFinite(distance)) return NEAR_AT_REST;
-  return Math.min(NEAR_AT_REST, Math.max(NEAR_FLOOR, distance * NEAR_FRACTION));
+  const base = Math.min(NEAR_AT_REST, Math.max(NEAR_FLOOR, distance * NEAR_FRACTION));
+  if (!(gap > 0) || !Number.isFinite(gap)) return base;
+  return Math.max(base, Math.min(gap * NEAR_GAP_FRACTION, distance * NEAR_DISTANCE_CAP));
 }
 
 // The FAR plane has to follow the camera OUT for the same reason near follows it

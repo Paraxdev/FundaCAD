@@ -69,3 +69,21 @@ describe("perspNear", () => {
     }
   });
 });
+
+describe("perspNear outside the model", () => {
+  it("moves out with the gap to the model so a far view does not z-fight", () => {
+    expect(perspNear(2000, 1500)).toBe(20);
+    expect(perspNear(2000, 10)).toBe(5);
+  });
+
+  it("never passes the nearest point of the model", () => {
+    for (const [d, gap] of [[2000, 3], [50, 40], [9000, 8000], [3, 1]] as const) {
+      expect(perspNear(d, gap)).toBeLessThanOrEqual(Math.max(gap, NEAR_AT_REST));
+    }
+  });
+
+  it("keeps the old rule inside the model's bounds", () => {
+    expect(perspNear(2000, 0)).toBe(NEAR_AT_REST);
+    expect(perspNear(0.5, 0)).toBe(perspNear(0.5));
+  });
+});

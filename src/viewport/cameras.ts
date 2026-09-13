@@ -162,6 +162,8 @@ export function createCameraRig(
   // lets same-frame wheel bursts chain correctly (see zoomBy).
   let pendingOrthoZoom: number | null = null;
   let maxHalfH = maxViewHalfHeight(0);
+  const contentBox = new THREE.Box3();
+  const eyeScratch = new THREE.Vector3();
 
   const controls = new CameraControls(persp, dom);
   // camera-controls assumes Y-up by default; tell it we orbit around +Z so the
@@ -396,7 +398,10 @@ export function createCameraRig(
       // a zoom-out cannot push the ground grid (whose reach tracks the same
       // zoom) behind it. See viewport/clipPlanes.ts; at every ordinary distance
       // the near write-back is the number that was already there.
-      const near = perspNear(controls.distance);
+      const near = perspNear(
+        controls.distance,
+        contentBox.isEmpty() ? 0 : contentBox.distanceToPoint(controls.getPosition(eyeScratch)),
+      );
       const far = perspFar(controls.distance);
       if (persp.near !== near || persp.far !== far) {
         persp.near = near;
@@ -512,6 +517,7 @@ export function createCameraRig(
       }
     },
     setContentBox(box: THREE.Box3) {
+      contentBox.copy(box);
       const r = box.isEmpty() ? 0 : box.getBoundingSphere(new THREE.Sphere()).radius;
       maxHalfH = maxViewHalfHeight(r);
     },
