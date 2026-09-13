@@ -78,6 +78,7 @@ function makeSketch(doc: CadDocument) {
     setViewLocked() {},
     requestSolve() {},
     viewLocked: false,
+    session: { dispose() {} },
   });
   return { s, store: { document: doc, nextId: () => "s99" } as never };
 }
