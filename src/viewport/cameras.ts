@@ -12,7 +12,9 @@ import CameraControls from "camera-controls";
 import { frameRotation, pivotShift, viewQuaternion } from "./orbitPivot";
 import { anchorDolly, orthoZoomStep } from "./zoomAnchor";
 import { ease, flightSeconds, worthFlying } from "./viewFlight";
-import { MIN_PERSP_DIST, NEAR_AT_REST, orthoDepth, perspFar, perspNear } from "./clipPlanes";
+import {
+  MIN_PERSP_DIST, NEAR_AT_REST, maxViewHalfHeight, orthoDepth, perspFar, perspNear,
+} from "./clipPlanes";
 
 CameraControls.install({ THREE });
 
@@ -44,6 +46,8 @@ export interface CameraRig {
    *  (a world point, usually under the cursor) is given, zooms TOWARD it
    *  (MCAD-style dolly-to-cursor) instead of toward the orbit target. */
   zoomBy(factor: number, pivot?: THREE.Vector3): void;
+  /** The model's bounds, which set how far zoomBy may zoom out. */
+  setContentBox(box: THREE.Box3): void;
   /** Half the visible view height at the orbit target, in world units, the
    *  natural scale for making input steps (SpaceMouse pan) zoom-proportional
    *  in BOTH projections, like wheel zoom already is. */
@@ -157,6 +161,7 @@ export function createCameraRig(
   // ortho zoom queued this frame but not yet applied by controls.update(),
   // lets same-frame wheel bursts chain correctly (see zoomBy).
   let pendingOrthoZoom: number | null = null;
+  let maxHalfH = maxViewHalfHeight(0);
 
   const controls = new CameraControls(persp, dom);
   // camera-controls assumes Y-up by default; tell it we orbit around +Z so the
@@ -439,17 +444,21 @@ export function createCameraRig(
       // on the next frame, a visible stutter for no effect. Input is off for a
       // few hundred milliseconds; the wheel is part of the input.
       if (flight) return;
-      const f = Math.max(0.1, Math.min(10, factor));
+      let f = Math.max(0.1, Math.min(10, factor));
       if (usingOrtho) {
         // ortho.zoom only commits at the next controls.update(); fast wheels
         // deliver several events per frame, so chain off the PENDING zoom or
         // each same-frame step recomputes k against a stale value (over-trucks
         // the cursor tracking and drops all but one step of zoom).
         const curZoom = pendingOrthoZoom ?? ortho.zoom;
+        // Capped at the current zoom so a view already past the ceiling (the
+        // model shrank under it) holds still instead of jumping inward.
+        const ceilingZoom = (ortho.top - ortho.bottom) / 2 / maxHalfH;
+        const minZoom = Math.max(controls.minZoom, Math.min(ceilingZoom, curZoom));
         // The zoom and the truck come from ONE call, against the controls' own
         // limits, see orthoZoomStep for what happened when they came from two.
         const { zoom: newZoom, truck: k } = orthoZoomStep(
-          curZoom, f, controls.minZoom, controls.maxZoom,
+          curZoom, f, minZoom, controls.maxZoom,
         );
         pendingOrthoZoom = newZoom;
         if (pivot) {
@@ -474,7 +483,14 @@ export function createCameraRig(
           );
         }
         controls.zoomTo(newZoom, false);
-      } else if (pivot) {
+        return;
+      }
+      if (f > 1) {
+        const maxDist = maxHalfH / Math.tan((persp.fov * Math.PI) / 360);
+        f = Math.min(f, maxDist / controls.distance);
+        if (!(f > 1)) return;
+      }
+      if (pivot) {
         // Dolly TOWARD THE CURSOR, by scaling camera and target about the cursor
         // point together. See zoomAnchor.ts for why that pins the point under the
         // cursor, and why projecting it onto the view axis first, which is what
@@ -494,6 +510,10 @@ export function createCameraRig(
         // no pivot (programmatic): plain dolly toward the orbit target
         controls.dollyTo(Math.max(MIN_PERSP_DIST, controls.distance * f), false);
       }
+    },
+    setContentBox(box: THREE.Box3) {
+      const r = box.isEmpty() ? 0 : box.getBoundingSphere(new THREE.Sphere()).radius;
+      maxHalfH = maxViewHalfHeight(r);
     },
     fit(box: THREE.Box3, enableTransition = true) {
       // Manual fit that PRESERVES the current view direction. (camera-controls'

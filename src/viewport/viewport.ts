@@ -2827,6 +2827,7 @@ export class Viewport {
     );
     this.adoptProgressiveView(view);
     this.targetGridZ = box.min.z;
+    this.rig.setContentBox(box);
     if (fit) this.rig.fit(box, true);
     this.requestRender();
   }
@@ -3051,6 +3052,7 @@ export class Viewport {
     // knowing about it.
     if (memo) this.restoreSelection(memo);
     this.targetGridZ = this.model.box.min.z; // drop the grid to the model's floor
+    this.rig.setContentBox(this.model.box);
     this.applyAnalysis(); // paints the analysis overlay, or assigned body colors when "none"
     if (this.zebra) this.applyZebra();
     if (this.combs) this.applyCombs();
@@ -3211,6 +3213,7 @@ export class Viewport {
       this.highlighter = null;
     }
     this.targetGridZ = 0; // no model → grid back on the world XY plane
+    this.rig.setContentBox(new THREE.Box3());
     this.savedMats.clear(); // materials died with the model
     // The lights a glowing face threw belong to the model too; left up they light
     // the next document's first preview and vanish at its first finish pass.

@@ -56,6 +56,20 @@ export const NEAR_FLOOR = 1e-4;
  *  user would be looking at the storage format rather than at their part. */
 export const MIN_PERSP_DIST = 0.02;
 
+/** Farthest zoom-out, as half the visible view height in multiples of the
+ *  model's bounding radius. At 100 the whole model still spans several pixels,
+ *  past it the part shrinks below one and the user is left with an empty grid
+ *  and no way to tell which way it went. */
+export const ZOOM_OUT_FACTOR = 100;
+
+/** Zoom-out ceiling that applies however small the model is, or with none. */
+export const ZOOM_OUT_FLOOR = 5000;
+
+export function maxViewHalfHeight(contentRadius: number): number {
+  const r = Number.isFinite(contentRadius) && contentRadius > 0 ? contentRadius : 0;
+  return Math.max(ZOOM_OUT_FLOOR, r * ZOOM_OUT_FACTOR);
+}
+
 /** Where to put the near plane with the camera this far from its pivot. */
 export function perspNear(distance: number): number {
   if (!(distance > 0) || !Number.isFinite(distance)) return NEAR_AT_REST;
