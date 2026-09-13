@@ -62,19 +62,11 @@ PORT = int(appenv.get("SIDECAR_PORT", "8765"))
 # port instead of the useless "exit code 1". Do not reuse this code for anything else.
 EXIT_PORT_IN_USE = 3
 
-# WebSocket auth: every connection must carry the per-launch shared secret.
-# Rust sets FUNDACAD_SIDECAR_TOKEN when it spawns us; a manual `python server.py`
-# (no env) mints one and prints `TOKEN <t>` on stdout so a prober can read it
-# and append ?token=. There is NO open mode, the token is always required,
-# which is what keeps a foreign local process or a DNS-rebinding web page from
-# driving export / import / rebuild against us.
+# Every connection needs the per-launch token (FUNDACAD_SIDECAR_TOKEN, or minted and
+# printed as `TOKEN <t>`). There is no open mode.
 _TOKEN: str | None = None
 
-# Origins the Tauri webview legitimately connects from (prod custom-protocol
-# origin on Linux/Windows + the vite devUrl). A browser-originated WS always
-# sends Origin; a foreign origin is rejected even with a valid token. An absent
-# Origin (a non-browser client like a Python prober) is allowed, the token
-# alone gates it.
+# A foreign Origin is refused even with the token; no Origin (a non-browser client) is allowed.
 ALLOWED_ORIGINS = {
     "tauri://localhost",       # Linux (WebKitGTK) + macOS (WKWebView)
     "http://tauri.localhost",  # Windows WebView2 (useHttpsScheme off, the default)
@@ -98,20 +90,9 @@ _ip_conns: dict[str, int] = {}
 # offset that collapses a hole); the timeout + worker recycling turns that into a
 # clean, recoverable error instead of a frozen app.
 JOB_TIMEOUT = 25.0
-# DOC_TIMEOUT (120 s) used to live here for the ops that replay the whole feature
-# history (export, exportProject, interference, projectGeometry). Gone, those four
-# are supervised by PROGRESS now (STALL_TIMEOUT below). A wall clock could not tell
-# a long build from a wedged one, and its failure was self-perpetuating: the timeout
-# recycled the worker, clearing the incremental cache, so every retry started cold
-# and hit the same wall.
-#
-# Safe only because the silent phases are short. On a 3,000-body assembly the
-# ticking rebuild is 10.2 s while the silent write is 2.8 s for a 48 MB STEP, 0.7 s
-# for STL, 0.1 s for a project 3MF. A future format with a longer silent write needs
-# ticks or its own stall=, not a return to wall clock.
-#
-# `import` keeps a size-derived wall-clock budget on purpose: OCP holds the GIL for
-# the whole of ReadFile+Transfer, so nothing can tick inside it.
+# Whole-history ops are supervised by progress (STALL_TIMEOUT), not a wall clock. That
+# holds while their silent phases stay short (a 48 MB STEP write is 2.8 s). `import`
+# keeps a wall-clock budget: OCP holds the GIL for the whole read.
 
 # Import phase labels and their share of the wall clock, measured on the 356 MiB
 # reference STEP: read+convert 90.6 s, canonicalize 93.9 s, encode 7.3 s.
@@ -122,13 +103,8 @@ _IMPORT_PHASES = (
     ("Packaging", 0.04),
 )
 
-# Split out of this file when it passed 2,600 lines. Re-exported so the tests
-# and the tools that read these by name are unaffected; they are READ here, and
-# a name below must never be reassigned through `server.`, that would bind a
-# fresh attribute nothing in wire.py reads. Patch it on wire itself.
-#
-# `_CANCEL` is the exception that proves it: a ContextVar is an OBJECT, so
-# setting it here and reading it there is the same token either way.
+# Re-exported for tests and tools. Patch these on their own module; rebinding
+# `server.x` changes nothing the code reads.
 import wire
 from wire import (  # noqa: F401
     _CANCEL,
@@ -173,11 +149,7 @@ from viewport_mesh import (  # noqa: F401
     _viewport_profile,
 )
 
-# Rebuilds are supervised by PROGRESS, not wall clock: the worker bumps a shared
-# heartbeat once per feature (and per tessellated body), and the supervisor kills
-# only when no progress is made for STALL_TIMEOUT, a legitimately long resumed
-# build is never executed for merely being long, while one wedged OCCT call still
-# gets reaped. Disk checkpoints make the kill a ratchet, not a restart.
+# A job is reaped only after STALL_TIMEOUT without a heartbeat (per feature and per body).
 STALL_TIMEOUT = 60.0
 
 # the worker-process pool; set in main(). Heavy ops are dispatched here.
@@ -185,23 +157,13 @@ _pool: ProcessPoolExecutor | None = None
 _mp_ctx = None  # the 'spawn' context, kept so we can rebuild the pool after a crash
 _HB = None  # shared heartbeat counter (multiprocessing.Value), set in main()
 _HB_IDX = None  # feature index the worker last started (Value 'q'; -1 = meshing/none)
-# Meshing progress, deliberately a SEPARATE channel from _HB_IDX rather than more
-# overloading of its -1 sentinel. The payload phase ticks per body, which kept the
-# stall watchdog happy but published feature=-1 every time, so the timeline showed
-# "meshing…" pinned at 0% for the whole phase, measured 136 s of it on the
-# reference assembly, the largest single feel defect on the open path. The counts
-# were always known here; only the wire to carry them was missing.
-# Both are -1 when no meshing is in flight.
+# Meshing progress, apart from _HB_IDX so the timeline can show a fraction. -1 when idle.
 _HB_MESH = None       # bodies meshed so far (Value 'q')
 _HB_MESH_TOTAL = None  # bodies to mesh in this pass (Value 'q')
 
 # --- pool bring-up health --------------------------------------------------
-# A worker that dies DURING startup is a different failure from one that
-# segfaults on a user's shape: the first is deterministic (a broken install),
-# the second is specific to one operation. Both raise BrokenProcessPool with the
-# same private `_broken` string, so they are told apart by the warm-up future,
-# see _worker_came_up. Without this split we recycled a pool that could never
-# start, forever, while telling the user their model crashed the kernel.
+# A worker dying at startup (a broken install) and one crashing on a shape raise the
+# same BrokenProcessPool; the warm-up future tells them apart (_worker_came_up).
 MAX_INIT_ATTEMPTS = 2  # the original bring-up plus one retry for a real transient
 
 _INIT_ERR = None  # shared buffer; the worker writes its startup traceback here
@@ -310,25 +272,14 @@ def _worker_init(hb=None, hb_idx=None, err_buf=None, mesh=None, mesh_total=None)
         _WORKER_ERR_BUF, _HB, _HB_IDX = err_buf, hb, hb_idx
         _HB_MESH, _HB_MESH_TOTAL = mesh, mesh_total
         occt_smp.configure()
-        # MUST precede `import builder`, which pulls in build123d. build123d
-        # scans the system font folders at import time and one unreadable file
-        # there takes the whole import down with it, four Windows field reports
-        # across 0.1.82/0.1.85/0.1.100, all "the geometry engine could not
-        # start". Guarding HERE rather than inside builder.py is deliberate:
-        # _env_sig hashes builder.py's bytes into the mesh-cache key, so editing
-        # it would cost every user a cold rebuild of every document. This is the
-        # pool initializer, so no geometry job can run without passing through.
+        # Before build123d: it scans system fonts at import and one unreadable file kills it.
         import font_guard
 
         font_guard.ensure()
         import builder  # noqa: F401  (warm the import)
         import tessellate  # noqa: F401
 
-        # Plugin geometry, in the process that will actually run it. This is a
-        # SPAWNED worker, so nothing the parent imported is inherited: without
-        # this call the registry in here is empty and every plugin feature in
-        # every document reports its plugin missing. Never raises; a plugin that
-        # will not import is recorded and named on the features that needed it.
+        # A spawned worker inherits no imports, so plugins register here.
         plugin_geometry.discover()
         loaded, broken = plugin_geometry.loaded_plugins(), plugin_geometry.broken_plugins()
         if loaded or broken:
@@ -342,14 +293,7 @@ def _worker_init(hb=None, hb_idx=None, err_buf=None, mesh=None, mesh_total=None)
         except Exception:
             pass
 
-        # Bound the disk cache, once per worker start and off the request path.
-        # Nothing pruned it before: evict() reclaims by refcounting blob keys over
-        # checkpoint manifests, and no manifest ever references a mesh key, so
-        # meshes/ grew without bound, measured at 3.2 GB. The budget is sized
-        # from FREE DISK (see Store.cache_budget), because $XDG_CACHE_HOME is the
-        # user's home partition on most laptops; FUNDACAD_CACHE_MAX_GB overrides.
-        # Meshes are evicted first and checkpoints only as a last resort, so a
-        # normal-sized document never loses a checkpoint to this.
+        # Bound the disk cache from free disk (Store.cache_budget), meshes first.
         try:
             import geomstore
             geomstore.default_store().evict_to_budget()
@@ -423,11 +367,7 @@ EXPORT_TRIANGLE_HARD_CAP = 10_000_000
 EXPORT_TRIANGLE_WARN = 500_000
 
 
-# Export-grade tessellation (the 0.1 viewport default is visibly faceted on a
-# printed part). Export meshes get their own cache, keyed exactly like the
-# viewport one in _body_payload: RAM shape-identity + texture spec, then a disk
-# artifact under meshKey + export tolerance, so re-exporting an unchanged
-# document skips re-tessellating every body at 0.02mm.
+# Export tessellation is absolute and finer than the viewport's, with its own cache.
 _EXPORT_TOL = 0.02
 _EXPORT_ANG_TOL = 0.3
 _EXPORT_MESH_CACHE = {}  # body id -> {"shape", "pass_key", "positions", "indices"}
@@ -454,19 +394,11 @@ def _export_mesh(b, tol=None):
     # version displaced. None when the body has no pass on it at all.
     pass_key = plugin_geometry.cache_key(b)
     ent = _EXPORT_MESH_CACHE.get(bid)
-    # TOLERANCE IS PART OF THE KEY. Without it a coarser retry (a tolerance
-    # backoff after a triangle-budget refusal) would be handed the mesh from the
-    # finer attempt still sitting in this cache, the backoff would appear to
-    # succeed while changing nothing, and the export would blow the same budget
-    # a second time with no way to tell why.
+    # Tolerance is part of the key, or a coarser backoff retry gets the finer mesh back.
     if (ent is not None and ent["shape"] is sh
             and ent["pass_key"] == pass_key and ent["tol"] == tol):
         return ent["positions"], ent["indices"]
-    # This body was last meshed at a DIFFERENT tolerance. OCCT keeps the
-    # triangulation on the shape and considers an existing finer mesh adequate
-    # for a coarser request, so without dropping it first the new tolerance is
-    # silently ignored, which is what would make a backoff a no-op even with
-    # the cache keyed correctly.
+    # OCCT keeps a finer triangulation for a coarser request unless it is dropped first.
     retolerance = ent is not None and ent["shape"] is sh and ent.get("tol") != tol
 
     mesh_key = None
@@ -498,14 +430,7 @@ def _export_mesh(b, tol=None):
                 geomstore.default_store().put_mesh(mesh_key, pickle.dumps(mesh, 5))
             except Exception:
                 pass
-    # Cached as NUMPY, not as the boxed Python lists tessellate returns.
-    # Routing untextured stl/3mf through here means every export now populates
-    # this cache, and it is only pruned of DELETED bodies, live ones are held
-    # for the worker's lifetime. Measured for a 2M-triangle document: 96 MB of
-    # positions + 217 MB of indices as lists, against 24 + 24 MB as float64/int32.
-    # Lossless (float64 is the width tessellate produced; int32 covers 2.1e9
-    # vertices), 6.5x smaller, and it removes the conversion each consumer was
-    # doing anyway, on the very worker the rest of this branch defends from OOM.
+    # Numpy, not lists: 48 MB against 313 MB for 2M triangles, held for the worker's life.
     positions = np.asarray(mesh[0], dtype=np.float64)
     indices = np.asarray(mesh[1], dtype=np.int32)
     _EXPORT_MESH_CACHE[bid] = {
@@ -597,13 +522,8 @@ def _set_mesh_progress(done, total):
         pass
 
 
-# Worker-held document for the O(changed) wire protocol (design §5 Phase 4):
-# the client sends {baseRevision, revision, ops} instead of the whole document;
-# we apply ops to this held copy. Any mismatch (worker respawn, missed message)
-# returns {"resync": true} and the client falls back to one full send. Holding
-# the doc worker-side ALSO makes the per-edit pickle across the pool boundary
-# O(changed), at 10k features the full-doc stringify/parse/pickle tax is
-# ~1 s/edit on the webview main thread AND the event loop.
+# The worker holds the document and applies {baseRevision, revision, ops}; any mismatch
+# answers {"resync": true} and the client sends it whole once.
 _DOC_STATE = {"rev": None, "doc": None}
 
 
@@ -727,17 +647,8 @@ def _rebuild_job(document, tolerance, known=None):
         n_meshed += 1
         _set_mesh_progress(n_meshed, n_to_mesh)
         body_boxes.append(ent.get("bbox"))
-        # The assembly-tree node lives in the ENVELOPE, next to id/name/etag, and
-        # is sent on BOTH branches. It must not go inside the mesh payload: that
-        # is etag-cached, so the tree would freeze at whatever it was when the
-        # geometry last changed. The stub branch matters most, on an assembly
-        # rebuild almost every body is unchanged.
+        # In the envelope, not the etag-cached payload, or it freezes with the geometry.
         node_ref = {"nodeRef": b["node_ref"]} if b.get("node_ref") else {}
-        # The imported file's per-face colours ride in the envelope for the same
-        # reason the tree node does, and it matters more here: a colour is
-        # display state that can change (a re-import, a document migration)
-        # while the geometry etag does not, and on an assembly rebuild almost
-        # every body arrives as a stub.
         face_colors = {"faceColors": b["face_colors"]} if b.get("face_colors") else {}
         if b.get("part_color"):
             face_colors["partColor"] = b["part_color"]
@@ -756,12 +667,7 @@ def _rebuild_job(document, tolerance, known=None):
     for bid in list(_MESH_CACHE):
         if bid not in live_ids:
             del _MESH_CACHE[bid]  # body deleted/consumed, drop its cache
-    # The document bbox is the UNION of the per-body boxes accumulated above,
-    # see _union_bbox for why this is no longer one walk over the merged part.
-    # No bbox(part) fallback: it can only be reached when EVERY body's box
-    # failed, where walking the merged compound of those same shapes would fail
-    # too, after spending the untickable 95 s this change exists to remove.
-    # `bbox: null` is already a legal reply (the no-bodies branch sends it).
+    # The union of per-body boxes; walking the merged part took an untickable 95 s.
     t0 = time.monotonic()
     doc_bbox = _union_bbox(body_boxes)
     t_bbox = time.monotonic() - t0
@@ -772,13 +678,7 @@ def _rebuild_job(document, tolerance, known=None):
           f"bbox={t_bbox:.1f}s",
           flush=True)
     result = {"protocol": 2, "bodies": out, "bbox": doc_bbox, **new_ids}
-    # Where each datum plane actually ended up. The frontend caches a datum's
-    # plane on the feature and draws its quad from that cache, which is the plane
-    # the face had when it was picked; once a datum follows a face, that cache and
-    # the plane sketches are placed on part company the first time anything
-    # upstream moves. Sent every rebuild rather than only on a change: it is a few
-    # dozen bytes, and "absent means unchanged" would need the frontend to hold a
-    # copy across builds and get its invalidation right.
+    # Sent every rebuild: a few bytes, and no invalidation for the frontend to get wrong.
     if datums:
         result["datumPlanes"] = datums
     if sketch_planes:
@@ -795,13 +695,7 @@ def _rebuild_job(document, tolerance, known=None):
     if proj:  # only attach when the projection refresh found real changes
         result["projectionUpdates"] = proj
     if errors:
-        # Failing features must NOT blank the whole document: rebuild() records
-        # them as no-ops and continues, so return the geometry that DID build
-        # with the errors attached, the frontend shows the banner AND the model.
-        # The banner gets the LAST (most downstream) error: with a permanently-
-        # failing feature upstream, the user's newest action is what they need
-        # to see, not the same old error masking it. All errors ride along in
-        # "featureErrors" for richer UI later.
+        # The banner gets the most downstream error, the one nearest the user's latest edit.
         result["featureError"] = _err_wire(errors[-1])
         result["featureErrors"] = [_err_wire(e) for e in errors]
     return result
@@ -897,12 +791,7 @@ def _export_job(document, fmt, path, body=None, separate=False,
         ntri = 0
         for b in target_bodies:
             pos, idx = _export_mesh(b)
-            # Checked HERE, per body, rather than on the concatenated total.
-            # The cap exists to stop a pathological document allocating
-            # unbounded memory, and a check that runs only after every body has
-            # been meshed and concatenated has already allowed exactly that,
-            # it could report the OOM it was meant to prevent. Bounded now to
-            # the cap plus one body.
+            # Per body, so the cap stops the allocation instead of reporting it afterwards.
             ntri += len(idx) // 3
             refusal = _budget_refusal(ntri)
             if refusal:
@@ -986,14 +875,8 @@ def _export_job(document, fmt, path, body=None, separate=False,
         # are named the way the user named the bodies.
         names = document.get("bodyNames") or {}
         base, ext = os.path.splitext(path)
-        # Into a DIRECTORY of our own, created with exist_ok=False.
-        #
-        # The save dialog asks the user to confirm overwriting `parts.step`, and
-        # then that file is never written, N sibling files are. So the one file
-        # they were asked about was the only one that could not be clobbered,
-        # while `parts-Body1.step` and its siblings were silently overwritten
-        # with no prompt at all. A fresh directory makes the collision
-        # impossible AND keeps the N files together.
+        # A fresh directory: the save dialog only confirmed overwriting `parts.step`,
+        # not the sibling files actually written.
         outdir = base
         try:
             os.makedirs(outdir, exist_ok=False)
@@ -1028,24 +911,10 @@ def _export_job(document, fmt, path, body=None, separate=False,
     # export() would drop texture displacement (see _glb_export).
     if fmt == "glb":
         return _done({"path": _glb_export(live, path)})
-    # UNTEXTURED stl/3mf goes the same way as textured. It used to fall through to
-    # exporters.export, which calls build123d's export_stl / Mesher directly and
-    # so bypassed every cap, every cache and the export tolerance, the one path
-    # where a pathological document could allocate without limit.
-    #
-    # Measured before switching, because it changes which tessellation runs: at
-    # export grade a sphere, a cylinder and a filleted box all produce the
-    # IDENTICAL triangle count to build123d's default, and a torus produces
-    # 1.84x fewer. The deviation that buys is 0.02 mm, far below any printer's
-    # resolution, and it is the same tolerance textured exports have always used.
+    # All stl/3mf go through the capped, cached path; build123d's exporters bypass the caps.
     if fmt in ("stl", "3mf"):
         return _done({"path": _mesh_export(live, path)})
-    # STEP carries structure: hand build123d a LABELLED tree instead of the fused
-    # part, so product names, and an imported assembly's hierarchy, per-part
-    # colours and per-occurrence placement, survive the export. build123d's
-    # export_step already writes XCAF via STEPCAFControl_Writer, so this only has
-    # to supply the tree. Whole-document exports only: `body=` and `separate=True`
-    # each write a single body, which has no tree.
+    # A labelled tree, so names, hierarchy, colours and placements survive. Whole documents only.
     if fmt == "step" and body is None and not separate:
         import export_tree
 
@@ -1143,15 +1012,7 @@ def _interference_job(document):
     if errors and not live:
         e = errors[0]
         return {"error": _err_wire(e)}
-    # ONE bbox per body, not one per pair. The sweep is quadratic in pairs but
-    # linear in distinct shapes, so computing the box inside the pair test did
-    # 9,360,540 OCCT bounding-box walks at 3,060 bodies to learn 3,060 things.
-    # Ticked per body: this precompute runs BEFORE the first row tick below, and
-    # `bbox_of` is OCCT's exact AddOptimal_s, measured 95.5 s over the 3,072
-    # bodies of the reference assembly, against a 60 s STALL_TIMEOUT. Unticked it
-    # was reaped mid-precompute and the whole operation died with nothing logged.
-    # It is still slow; the tick is what makes it finish and report progress. A
-    # cheaper poles-based box was measured and REJECTED, see `bbox_of`.
+    # One box per body, ticked: the exact boxes take 95 s on a 3,072-body assembly.
     boxes = []
     for b in live:
         progress_tick()
@@ -1407,12 +1268,7 @@ def _watch_warmup(fut, gen):
         try:
             await asyncio.wrap_future(fut)
         except Exception:
-            # A pool WE killed (job timeout / stall reap) also resolves its
-            # pending warm-up with BrokenProcessPool, which is indistinguishable
-            # from a failed bring-up. Counting those would let a slow cold start
-            # on a healthy machine latch "your install is broken", and would
-            # stop the disk-checkpoint ratchet converging. _note_init_failure
-            # skips reaped generations.
+            # _note_init_failure skips pools we reaped, which also break their warm-up.
             _note_init_failure(gen)
         else:
             _ever_came_up = True
@@ -1677,11 +1533,7 @@ async def _run_stall(loop, fn, *args, stall=STALL_TIMEOUT, on_progress=None):
         except BrokenProcessPool:
             if cancelled():
                 return _cancelled_result()  # the pool was killed BY the cancel
-            # Read the heartbeat BEFORE recycling: it holds the index of the
-            # feature the worker was building when it died, which is the only
-            # clue that survives a segfault (the worker leaves no traceback).
-            # Without it the app showed a bare ": the geometry kernel crashed",
-            # naming nothing, see _crash_feature().
+            # Before recycling: the heartbeat names the feature a segfault died in.
             idx = int(_HB_IDX.value) if _HB_IDX is not None else -1
             res = _on_broken(gen)
             # feature_index only means anything for a real op crash; on an
@@ -1824,31 +1676,14 @@ async def _dispatch(ws, loop, req, req_id, op):
         await ws.send(_reply_for(req_id, res))
 
     elif op == "import":
-        # A one-time import (file read + B-rep build) runs far longer than a
-        # rebuild. Two things matter here:
-        #
-        # 1. The budget is SIZE-DERIVED, never a constant. A 356 MiB STEP
-        #    measured 193 s end to end (90.6 s read, 93.9 s canonicalize), so a
-        #    flat 90 s reaps a legitimate import. max() keeps it from ever being
-        #    SHORTER than the old deadline for the files that already worked.
-        # 2. It goes through _run_stall for on_progress, but with an EXPLICIT
-        #    stall=. The default STALL_TIMEOUT is 60 s and OCP holds the GIL for
-        #    the whole read, so nothing can bump the heartbeat, left at the
-        #    default this would reap a working import 30 s EARLIER than the old
-        #    flat 90 s. The stall reaper cannot observe liveness through an
-        #    atomic OCCT call, so here `stall` is simply the wall clock.
+        # A size-derived budget (a 356 MiB STEP took 193 s), passed as stall= because OCP
+        # holds the GIL for the whole read and nothing can tick.
         try:
             _sz = os.path.getsize(req["path"]) / (1024 * 1024)
         except OSError:
             _sz = 0.0
         budget = max(90.0, 60.0 + 1.5 * _sz)
-        # The REAPER budget above is deliberately generous, so it is the wrong
-        # denominator for a progress bar, using it made a 15.7 s import crawl to
-        # 6% and then jump to done. `eta` is a separate, deliberately tighter
-        # ESTIMATE: ~0.5 s/MiB, measured at 0.41 s/MiB on a 38 MiB file and
-        # 0.54 s/MiB on the 356 MiB reference. Under-estimating is the safe
-        # direction, the bar reaches its phase cap and waits, which reads as
-        # "nearly there" rather than "stuck at 6%".
+        # A tighter estimate than the reaper budget for the progress bar (measured 0.41-0.54 s/MiB).
         eta = max(3.0, 0.5 * _sz)
 
         async def _importing(code, *_mesh, _rid=req_id, _t0=loop.time(), _b=eta):
@@ -2027,30 +1862,14 @@ async def handle(ws):
             await ws.close(code=1008, reason="too many connections")
             return
         _ip_conns[peer] = _ip_conns.get(peer, 0) + 1
-    # Bound BEFORE the try, because the finally reads it and one path through the
-    # try returns before the old binding was reached: an unauthorized connection
-    # closed, returned, and then raised UnboundLocalError out of its own cleanup,
-    # which skipped the rest of that cleanup, so the per-IP counter above was
-    # incremented and never decremented. MAX_CONNS_PER_IP failed handshakes later
-    # the sidecar answered "too many connections" to every client from that
-    # address, for the rest of its life, and the only symptom on the other end
-    # was a viewport that never built anything.
+    # Before the try: the finally reads it, and an early return used to leak the per-IP count.
     tasks: set = set()
     try:
         if not _authorized(ws.request):
             await ws.close(code=1008, reason="unauthorized")
             return
         loop = asyncio.get_running_loop()
-        # Heavy ops stay STRICTLY serialized (the shared heartbeat counter and
-        # the rebuild cache both assume one job at a time), the lock preserves
-        # that, while dispatching as tasks keeps the read loop free.
-        #
-        # PROCESS-WIDE, not per connection. It was per connection while the app
-        # was the only client that ever ran a heavy op, and that held right up
-        # until a second one did: two connections meant two locks, and the
-        # invariant the comment above states, one job at a time, was enforced
-        # against nobody. There has always been a second client available (the
-        # attach-by-token escape hatch), and the live session makes one ordinary.
+        # Process-wide, not per connection: the heartbeat and rebuild cache assume one job at a time.
         lock = _JOB_LOCK
         running: dict = {"id": None, "token": None}
         async for raw in ws:
@@ -2114,16 +1933,8 @@ async def main():
     _INIT_ERR = _mp_ctx.Array("c", 16384, lock=False)
     _pool = _new_pool()
     try:
-        # Raise the per-message cap well above the 1 MiB default: a rebuild ships
-        # the WHOLE document, and a document with an imported mesh embeds that
-        # body as a (potentially multi-MB) BREP string, at the default limit the
-        # server would slam the connection shut on the first real import, which
-        # the frontend sees as a permanent "connecting to sidecar". 128 MiB is
-        # plenty for a multi-body doc of imported meshes (each capped at 64 MiB
-        # decoded by builder.py) while bounding a single message's memory cost.
-        # compression=None: the socket is 127.0.0.1-only, so permessage-deflate
-        # (the websockets default) buys no bandwidth and costs real CPU both
-        # sides, measured 84ms to deflate one 5MB mesh reply.
+        # A document embeds imported B-reps, far past the 1 MiB default message cap. No
+        # compression on a loopback socket: it cost 84 ms per 5 MB reply.
         bound = False
         try:
             async with websockets.serve(handle, HOST, PORT, max_size=wire._MAX_FRAME,
@@ -2135,16 +1946,7 @@ async def main():
         except OSError as e:
             if bound:
                 raise  # already serving; this is not a bind failure, do not mislabel it
-            # Almost always "address already in use": a second copy of the app, a
-            # sidecar orphaned by a previous run, or an unrelated program sitting on
-            # the port. Whatever the cause, the user needs the PORT named, the Rust
-            # shell used to report only "exit code 1", which told a field reporter
-            # nothing (bug 2c0cd78a). errno is deliberately not matched: EADDRINUSE
-            # is 98 on Linux and 10048 on Windows, and every bind failure means the
-            # same thing here.
-            # The FATAL line is repeated verbatim by the Rust shell into a toast, so
-            # it stays short and readable; the raw OSError (which restates the address
-            # twice) goes on the following line, for sidecar.log only.
+            # The Rust shell shows the FATAL line in a toast, so it names the port and stays short.
             print(f"FATAL: cannot open port {PORT} on {HOST}", file=sys.stderr, flush=True)
             print(f"  bind failed: {e}", file=sys.stderr, flush=True)
             sys.exit(EXIT_PORT_IN_USE)
