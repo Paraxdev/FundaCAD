@@ -241,16 +241,19 @@ const ZOOM = Number(process.env.ZOOM || 1);
     // cursor off the model: a hover highlight left under it reads as a
     // selection nobody made.
     await page.evaluate(() => window.__fundacad.selectFeature(null));
-    await page.mouse.move(1540, 880);
+    // Over the Items card rather than the canvas, where a sketch would draw a
+    // snap marker under it.
+    await page.mouse.move(140, 960);
+    await page.evaluate(() => window.viewport.clearHover());
     await page.waitForTimeout(300);
     await page.screenshot({ path: path.join(OUT, `${name}.png`) });
     console.log("  " + name + ".png");
   };
   const at = (p) => page.evaluate((q) => window.viewport.projectToScreen(q), { x: p[0], y: p[1], z: p[2] });
-  // Empty sky, well clear of every part: the way to drop a selection without
-  // pressing Escape, which the timeline also listens to.
+  // Empty sky above the parts and clear of every floating card: the way to drop
+  // a selection without pressing Escape.
   const clearSelection = async () => {
-    await page.mouse.click(1450, 250);
+    await page.mouse.click(760, 110);
     // A body picked in the BROWSER is not dropped by a click in the sky, and it
     // stays lit right through the next tool.
     await page.evaluate(() => {
@@ -261,7 +264,12 @@ const ZOOM = Number(process.env.ZOOM || 1);
   };
 
   await page.goto(URL, { waitUntil: "networkidle" });
-  await page.evaluate(() => localStorage.setItem("fundacad.welcomeOnStartup", "false"));
+  await page.evaluate(() => {
+    localStorage.setItem("fundacad.welcomeOnStartup", "false");
+    // The History card would cover the right third of the parts.
+    localStorage.setItem("fundacad.shell.items", "1");
+    localStorage.setItem("fundacad.shell.history", "0");
+  });
   await page.reload({ waitUntil: "networkidle" });
   await page.waitForFunction(() => !!window.store && !!window.viewport && !!window.geometry, null, { timeout: 60000 });
   await page.waitForTimeout(1200);
@@ -292,6 +300,23 @@ const ZOOM = Number(process.env.ZOOM || 1);
   console.log("built:", JSON.stringify(res));
   if (res.error) { console.error("BUILD FAILED:", res.error); process.exit(1); }
 
+  // The canvas runs under the floating cards, so its middle is not the middle
+  // of what can be seen. Slide the view until the parts sit between the tool
+  // rail and whatever stands on the right.
+  const centreBetweenCards = async () => {
+    await page.evaluate(() => {
+      const vp = window.viewport;
+      const rail = document.querySelector("#toolrail").getBoundingClientRect();
+      const right = document.querySelector(".float-right").getBoundingClientRect();
+      const canvas = document.querySelector("#canvas").getBoundingClientRect();
+      const shift = (rail.right + right.left) / 2 - (canvas.left + canvas.width / 2);
+      const target = vp.rig.controls.getTarget(new vp.scene.scene.position.constructor());
+      vp.rig.controls.truck(-shift * vp.pixelWorldSize(target), 0, false);
+      vp.requestRender();
+    });
+    await page.waitForTimeout(600);
+  };
+
   const frame = async () => {
     await page.evaluate(() => window.viewport.setStandardView("iso"));
     await page.waitForTimeout(700);
@@ -303,6 +328,7 @@ const ZOOM = Number(process.env.ZOOM || 1);
     await page.mouse.move(canvas.x + canvas.width / 2, canvas.y + canvas.height / 2);
     for (let i = 0; i < ZOOM; i++) { await page.mouse.wheel(0, -240); await page.waitForTimeout(150); }
     await page.waitForTimeout(900);
+    await centreBetweenCards();
   };
   await frame();
 
@@ -312,8 +338,11 @@ const ZOOM = Number(process.env.ZOOM || 1);
   // Off-centre on purpose: the origin triad is drawn at (0,0,0), which is
   // exactly where this floor's middle is, and it takes the click.
   let gotFace = false;
-  for (const p of [[-16, -9, 2.4], [-20, 6, 2.4], [8, -12, 2.4], [16, 8, 2.4]]) {
+  for (const p of [[-16, -9, 2.4], [-20, 6, 2.4], [8, -12, 2.4], [16, 8, 2.4], [-10, 0, 2.4], [10, 4, 2.4], [-24, -2, 2.4], [20, -6, 2.4], [0, -10, 2.4], [-6, 10, 2.4]]) {
     const floor = await at(p);
+    // Picking answers from the hover pass, which runs on the next frame.
+    await page.mouse.move(floor.x, floor.y);
+    await page.waitForTimeout(400);
     await page.mouse.click(floor.x, floor.y);
     await page.waitForTimeout(400);
     gotFace = await page.evaluate(() => !!window.viewport.selectedFaceSketchPlane());
@@ -328,6 +357,7 @@ const ZOOM = Number(process.env.ZOOM || 1);
   // around it, in three dimensions, which a straight-on view cannot show.
   await page.evaluate(() => window.viewport.setStandardView("iso"));
   await page.waitForTimeout(1400);
+  await centreBetweenCards();
   await shot("sketch-on-face");
   await page.evaluate(() => window.__fundacad.handleAction("finish"));
   await page.waitForTimeout(1500);
@@ -339,14 +369,11 @@ const ZOOM = Number(process.env.ZOOM || 1);
   // viewport under the default Faces filter gives it a face, which it cannot
   // use, it falls back to the last body built and the gizmo appears somewhere
   // nobody pointed at.
-  // The Housing rather than the Knob: the gizmo's handles are a FIXED number of
-  // pixels across, so it only reads at a distance where the part fills a
-  // sensible part of the frame, and its value fields open to the right, which
-  // runs off the edge on anything near it.
-  await page.getByText("Housing", { exact: true }).click();
-  await page.waitForTimeout(400);
-  await page.keyboard.press("m");
-  await page.waitForTimeout(1000);
+  // The Bracket: the gizmo's value fields open to its right, and on the Housing
+  // they land over the Knob. Picking a body opens the gizmo by itself, and its
+  // value field takes focus, so a key pressed now would be typed into it.
+  await page.getByText("Bracket", { exact: true }).click();
+  await page.waitForTimeout(1400);
   await shot("transform-gizmo");
   await page.keyboard.press("Escape");
   await page.waitForTimeout(600);
