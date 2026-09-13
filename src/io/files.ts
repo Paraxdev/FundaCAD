@@ -153,7 +153,7 @@ export type OpenOutcome = "ok" | "unreadable" | "newerFormat";
  *  the empty and spanned-archive headers, and anything starting "PK" is not a
  *  JSON document regardless. */
 export function looksLikeContainer(text: string): boolean {
-  return text.startsWith("PK");
+  return text.startsWith("PK") || text.startsWith("FUNDACAD");
 }
 
 /** Rewrite a pre-v5 document's inline base64 BREP into blob-store references.
@@ -233,11 +233,19 @@ export async function openDocumentAtPath(
   const { invoke } = await import("@tauri-apps/api/core");
   let text: string;
   let wasContainer = false;
+  let repaired = false;
   try {
     wasContainer = await invoke<boolean>("container_is_container", { path });
-    text = wasContainer
-      ? await invoke<string>("container_open", { path })
-      : await (await import("@tauri-apps/plugin-fs")).readTextFile(path);
+    if (wasContainer) {
+      const opened = await invoke<{ document: string; repairedShards: number; usedBackupIndex: boolean }>(
+        "container_open_checked",
+        { path },
+      );
+      text = opened.document;
+      repaired = opened.repairedShards > 0 || opened.usedBackupIndex;
+    } else {
+      text = await (await import("@tauri-apps/plugin-fs")).readTextFile(path);
+    }
   } catch (e) {
     // Rust's container errors are already user-facing sentences (a newer
     // container format, a damaged archive, geometry that does not match its
@@ -275,6 +283,13 @@ export async function openDocumentAtPath(
   await warnAboutMissingPlugins(store);
   noteRecent(path);
   if (geometry) void import("./fundaLinks").then((m) => m.checkLinks(store, geometry));
+  if (repaired) {
+    const { toast } = await import("../ui/toast");
+    toast(`${base} was damaged on disk and its error correction repaired it. Save to write a clean copy.`, {
+      kind: "warning",
+      timeout: 12000,
+    });
+  }
   return "ok";
 }
 

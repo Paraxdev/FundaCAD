@@ -75,6 +75,11 @@ describe("looksLikeContainer", () => {
     expect(looksLikeContainer(new TextDecoder().decode(zipBytes))).toBe(true);
   });
 
+  it("recognises a format 2 file by its magic", () => {
+    const bytes = new Uint8Array([...new TextEncoder().encode("FUNDACAD"), 0x02, 0x00, 0xff, 0xfe]);
+    expect(looksLikeContainer(new TextDecoder().decode(bytes))).toBe(true);
+  });
+
   it("does not fire on a real document, or on ordinary corruption", () => {
     expect(looksLikeContainer('{ "version": 4, "features": [] }')).toBe(false);
     expect(looksLikeContainer("")).toBe(false);

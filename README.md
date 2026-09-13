@@ -123,6 +123,7 @@ outlives its shell, so kill it by hand or it keeps port 8765.
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), how the three processes fit together
 - [`docs/PROTOCOL.md`](docs/PROTOCOL.md), the WebSocket the frontend and sidecar speak
+- [`docs/FUNDA-FORMAT.md`](docs/FUNDA-FORMAT.md), the self-repairing binary `.funda` file
 - [`docs/PACKAGING.md`](docs/PACKAGING.md), how the bundled Python runtime is built
 - [`docs/MCP.md`](docs/MCP.md), the MCP server another model builds, measures and looks at parts through
 - [`docs/PLUGINS.md`](docs/PLUGINS.md), optional parts of the app, what they may reach, and how that is asked

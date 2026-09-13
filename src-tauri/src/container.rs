@@ -144,9 +144,13 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-/// True if `path` is a ZIP. Cheap: reads two bytes. Used to tell a v5 container
-/// from a legacy plain-JSON document without parsing either.
+/// True if `path` is a packaged document, format 2 or the older ZIP, rather than
+/// a legacy plain-JSON one. Cheap: reads the first bytes.
 pub fn looks_like_container(path: &Path) -> bool {
+    crate::fnda::looks_like_fnda(path) || looks_like_zip(path)
+}
+
+fn looks_like_zip(path: &Path) -> bool {
     let mut buf = [0u8; 2];
     File::open(path)
         .and_then(|mut f| f.read_exact(&mut buf))
@@ -192,7 +196,76 @@ fn uuid_hex() -> String {
     hex(&b)
 }
 
-/// Publish a container at `dest`, atomically.
+/// Publish a document at `dest` in the current format (format 2, src/fnda.rs),
+/// atomically: built at a sibling temp path, fsynced, then renamed over the target.
+pub fn write_container(
+    dest: &Path,
+    document_json: &str,
+    blob_paths: &BTreeMap<String, PathBuf>,
+    mesh_paths: &BTreeMap<String, PathBuf>,
+    app: &str,
+) -> Result<Manifest, String> {
+    let info = crate::fnda::json_to_cbor(&serde_json::json!({ "app": app, "hashAlg": HASH_ALG }).to_string())?;
+    let document = crate::fnda::json_to_cbor(document_json)?;
+    let meshes: BTreeMap<String, PathBuf> = mesh_paths
+        .iter()
+        .filter(|(k, p)| is_safe_key(k) && p.exists())
+        .map(|(k, p)| (k.clone(), p.clone()))
+        .collect();
+    for src in blob_paths.values() {
+        std::fs::metadata(src).map_err(|e| format!("could not read geometry {}: {e}", src.display()))?;
+    }
+    if let Some(parent) = dest.parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+    }
+    let tmp = temp_sibling(dest);
+    let build = || -> Result<Vec<crate::fnda::Entry>, String> {
+        let mut file = std::io::BufWriter::new(File::create(&tmp).map_err(|e| e.to_string())?);
+        let entries = crate::fnda::write(&mut file, &crate::fnda::document_sections(&info, &document, blob_paths, &meshes))?;
+        let file = file.into_inner().map_err(|e| e.to_string())?;
+        file.sync_all().map_err(|e| e.to_string())?;
+        Ok(entries)
+    };
+    let entries = match build() {
+        Ok(e) => e,
+        Err(e) => {
+            let _ = std::fs::remove_file(&tmp);
+            return Err(e);
+        }
+    };
+    if let Err(e) = std::fs::rename(&tmp, dest) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e.to_string());
+    }
+    if let Some(parent) = dest.parent() {
+        fsync_dir(parent);
+    }
+    Ok(manifest_of(&entries, app))
+}
+
+/// The manifest a format 2 file implies, for callers written against the ZIP one.
+fn manifest_of(entries: &[crate::fnda::Entry], app: &str) -> Manifest {
+    Manifest {
+        container: CONTAINER_VERSION,
+        hash_alg: HASH_ALG.to_string(),
+        app: app.to_string(),
+        blobs: entries
+            .iter()
+            .filter(|e| e.kind == crate::fnda::KIND_GEOMETRY)
+            .map(|e| BlobRow { entry: format!("geom/{}.bbrep", e.name), hash: e.name.clone(), bytes: e.raw_len })
+            .collect(),
+        meshes: entries
+            .iter()
+            .filter(|e| e.kind == crate::fnda::KIND_MESH)
+            .map(|e| MeshRow { entry: format!("mesh/{}.bin", e.name), key: e.name.clone(), bytes: e.raw_len })
+            .collect(),
+    }
+}
+
+/// Publish a ZIP container (format 1) at `dest`, atomically. No longer written by
+/// the app; kept so the reader of old files stays tested against real ones.
 ///
 /// `blob_paths` maps content hash -> a readable path holding EXACTLY the bytes
 /// that hash was computed over. `mesh_paths` maps a mesh key -> path and is
@@ -202,7 +275,7 @@ fn uuid_hex() -> String {
 /// The archive is built at a sibling temp path, fsynced, then renamed over the
 /// target. A crash leaves either the old file or the new one, never a torn one,
 /// which matters because this file IS the user's geometry.
-pub fn write_container(
+pub fn write_zip_container(
     dest: &Path,
     document_json: &str,
     blob_paths: &BTreeMap<String, PathBuf>,
@@ -363,6 +436,28 @@ pub fn read_manifest(path: &Path) -> Result<Manifest, String> {
 /// A hash mismatch is a HARD error: it means truncation or tampering, and
 /// silently accepting the bytes would put wrong geometry in front of the user.
 pub fn read_container(
+    path: &Path,
+    blob_dir: &Path,
+    mesh_dir: Option<&Path>,
+) -> Result<(String, Manifest), String> {
+    read_container_checked(path, blob_dir, mesh_dir).map(|(doc, manifest, _)| (doc, manifest))
+}
+
+/// As `read_container`, also saying what had to be repaired on the way in.
+pub fn read_container_checked(
+    path: &Path,
+    blob_dir: &Path,
+    mesh_dir: Option<&Path>,
+) -> Result<(String, Manifest, crate::fnda::RepairReport), String> {
+    if crate::fnda::looks_like_fnda(path) {
+        let opened = crate::fnda::read_file(path, blob_dir, mesh_dir)?;
+        let manifest = manifest_of(&opened.entries, "");
+        return Ok((opened.document_json, manifest, opened.report));
+    }
+    read_zip_container(path, blob_dir, mesh_dir).map(|(doc, manifest)| (doc, manifest, crate::fnda::RepairReport::default()))
+}
+
+fn read_zip_container(
     path: &Path,
     blob_dir: &Path,
     mesh_dir: Option<&Path>,
@@ -529,6 +624,30 @@ pub async fn container_open(app: tauri::AppHandle, path: String) -> Result<Strin
     read_container(std::path::Path::new(&path), &blobs, Some(&meshes)).map(|(doc, _)| doc)
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenedDocument {
+    pub document: String,
+    pub repaired_shards: u64,
+    pub used_backup_index: bool,
+}
+
+/// `container_open`, plus what the error correction had to repair. A file that
+/// needed repair opens normally; saving it writes a clean copy.
+#[tauri::command]
+pub async fn container_open_checked(app: tauri::AppHandle, path: String) -> Result<OpenedDocument, String> {
+    let blobs = blob_dir(&app)?;
+    let meshes = mesh_dir(&app)?;
+    let (document, _, report) = read_container_checked(std::path::Path::new(&path), &blobs, Some(&meshes))?;
+    Ok(OpenedDocument { document, repaired_shards: report.repaired_shards, used_backup_index: report.used_backup_index })
+}
+
+/// Check a format 2 file end to end without opening it.
+#[tauri::command]
+pub async fn container_verify(path: String) -> Result<crate::fnda::RepairReport, String> {
+    crate::fnda::verify(std::path::Path::new(&path))
+}
+
 /// True if `path` is a container rather than a legacy plain-JSON document.
 #[tauri::command]
 pub fn container_is_container(path: String) -> bool {
@@ -585,7 +704,7 @@ mod tests {
 
         let doc = format!(r#"{{"version":5,"features":[{{"type":"import","geom":"{ha}"}}]}}"#);
         let dest = dir.join("part.funda");
-        write_container(&dest, &doc, &blobs, &meshes, "test").unwrap();
+        write_zip_container(&dest, &doc, &blobs, &meshes, "test").unwrap();
 
         assert!(looks_like_container(&dest), "written file is a zip");
 
@@ -642,7 +761,7 @@ mod tests {
         let mut blobs = BTreeMap::new();
         blobs.insert(h.clone(), blob(&dir, "d.bin", &data));
         let good = dir.join("ok.funda");
-        write_container(&good, r#"{"version":5}"#, &blobs, &BTreeMap::new(), "t").unwrap();
+        write_zip_container(&good, r#"{"version":5}"#, &blobs, &BTreeMap::new(), "t").unwrap();
 
         let tampered = dir.join("bad.funda");
         {
@@ -680,7 +799,7 @@ mod tests {
         let mut blobs = BTreeMap::new();
         blobs.insert(hash_bytes(&data), blob(&dir, "d.bin", &data));
         let good = dir.join("ok.funda");
-        write_container(&good, r#"{"version":5}"#, &blobs, &BTreeMap::new(), "t").unwrap();
+        write_zip_container(&good, r#"{"version":5}"#, &blobs, &BTreeMap::new(), "t").unwrap();
 
         let whole = std::fs::read(&good).unwrap();
         let trunc = dir.join("trunc.funda");
@@ -744,7 +863,7 @@ mod tests {
 
         let mut blobs = BTreeMap::new();
         blobs.insert("deadbeef".to_string(), PathBuf::from("/nonexistent/x"));
-        assert!(write_container(&dest, r#"{"version":5}"#, &blobs, &BTreeMap::new(), "t").is_err());
+        assert!(write_zip_container(&dest, r#"{"version":5}"#, &blobs, &BTreeMap::new(), "t").is_err());
 
         assert_eq!(std::fs::read(&dest).unwrap(), b"PREVIOUS GOOD FILE");
         let litter: Vec<_> = std::fs::read_dir(&dir)

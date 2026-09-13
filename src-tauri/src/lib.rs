@@ -9,6 +9,7 @@ mod geom;
 // container the way `container_save` / `container_open` do. Nothing outside the
 // crate consumes it in the app itself.
 pub mod container;
+pub mod fnda;
 mod printer;
 pub mod plugins;
 pub mod session_file;
@@ -291,6 +292,8 @@ pub fn run() {
         recovery_clear,
         container::container_save,
         container::container_open,
+        container::container_open_checked,
+        container::container_verify,
         container::container_is_container,
         printer::printers_list,
         printer::printers_upsert,
@@ -338,6 +341,8 @@ pub fn run() {
         recovery_clear,
         container::container_save,
         container::container_open,
+        container::container_open_checked,
+        container::container_verify,
         container::container_is_container,
         printer::printers_list,
         printer::printers_upsert,
