@@ -53,20 +53,13 @@ from build123d import (
     Torus,
     Pos,
     Rot,
-    Plane,
-    Location,
-    Axis,
     Vector,
-    Edge,
-    Wire,
-    Solid,
     Compound,
     GeomType,
     extrude,
     fillet,
     chamfer,
     mirror,
-    revolve,
     loft,
     sweep,
     Transition,
@@ -76,17 +69,15 @@ from build123d import (
 
 import face_plane
 import geom_select
-from errors import GeomError, BAD_REQUEST, REFERENCE_NOT_FOUND
+from errors import BAD_REQUEST, REFERENCE_NOT_FOUND
 from geom_select import (
     resolve_edges,
     resolve_faces,
     _face_surface,
     _face_normal,
-    edge_fingerprint,
     _edge_mid,
     _edge_dir,
     _edge_curve,
-    _edge_dedup_key,
 )
 import plugin_geometry
 from conic_blend import ConicNotApplicable, PROFILE_EPS, clamp_profile
@@ -258,6 +249,40 @@ from projection import (  # noqa: F401
     _project_silhouette,
     _pt_dist,
     _r6,
+)
+from handler_util import (  # noqa: F401
+    _combine,
+    _make_val,
+    _require_positive,
+    _require_sketch,
+)
+from revolve_feature import (  # noqa: F401
+    _axial_scale,
+    _handle_revolve,
+    _revolve_axis,
+    _screw_revolve,
+    _turn_clearance,
+)
+from import_feature import (  # noqa: F401
+    _BINTOOLS_MAGIC,
+    _assembly_root_index,
+    _bind_assembly,
+    _blob_to_shape,
+    _blob_top_children,
+    _handle_import,
+    _import_shape,
+)
+from joints import (  # noqa: F401
+    _handle_joint,
+    _joint_body_shape,
+    _joint_frame,
+)
+from projection_refresh import (  # noqa: F401
+    _fresh_projection,
+    _project_source,
+    _recompute_projections,
+    _require_body,
+    _resolve_sketch_curve,
 )
 
 
@@ -749,259 +774,6 @@ def _handle_mirror(f, ctx):
     act["shape"] = act["shape"] + mirror(act["shape"], about=_plane_of(f["plane"], ctx.datums))
 
 
-def _handle_revolve(f, ctx):
-    entry = _require_sketch(ctx, f.get("sketch"), "revolve")
-    # The selected areas, the same way extrude reads them (_region_cells says how
-    # they are cut). Absent means the whole sketch, which is what every revolve
-    # saved before the tool started recording its selection means, and what it
-    # did with a selection, which is the bug.
-    sk = _region_target(f.get("regions"), entry, ctx)
-    if sk is None:
-        sk = entry["sketch"]
-    if sk is None:
-        raise ValueError("sketch has no closed profile to revolve")
-    angle = ctx.val(f.get("angle", 360))
-    # A zero-degree revolve swept nothing yet still produced a body, so the
-    # timeline showed a healthy feature that had done nothing at all.
-    if angle == 0:
-        raise ValueError("Revolve: angle must not be 0, nothing would be swept")
-    pitch = ctx.val(f.get("pitch", 0) or 0)
-    axis = _revolve_axis(f, ctx)
-    if pitch:
-        _combine(f, ctx, _screw_revolve(sk, axis, angle, pitch))
-        return
-    # Past a full turn a flat revolve only re-sweeps ground it has already
-    # covered. OCCT wraps such an arc back onto the same solid by itself
-    # (measured: 360, 720 and 1080 all give the identical shape), so clamping
-    # here changes no result, it states the intent where the value is read,
-    # instead of leaving a document that says 1080 and a body that means 360.
-    # Winding on is only meaningful once there is a pitch to separate one turn
-    # from the next, and the branch above owns that case.
-    if angle > 360:
-        angle = 360
-    elif angle < -360:
-        angle = -360
-    try:
-        solid = revolve(sk, axis=axis, revolution_arc=angle)
-    except Exception as ex:
-        # OCCT reports a profile that straddles the axis as a bare
-        # `StdFail_NotDone` ("BRep_API: command not done"), which tells the user
-        # nothing. Name the overwhelmingly likely cause instead; a profile may
-        # TOUCH the axis, but it may not cross it.
-        raise ValueError(
-            "Revolve failed, the profile probably crosses the axis of "
-            f"revolution ({f.get('axis', 'Z')}). Move it fully to one side "
-            f"(it may touch the axis, but not cross it). [{type(ex).__name__}]"
-        )
-    _combine(f, ctx, solid)
-
-
-def _turn_clearance(tall):
-    """How much room one turn of a screw revolve must leave the next.
-
-    Absolute at small sizes so a 0.2 mm thread is not scaled away, proportional
-    above 10 mm so a coarse thread gets a clearance in the same ratio."""
-    return max(1e-3, 1e-4 * tall)
-
-
-def _axial_scale(shape, factor, direction, hold):
-    """Scale `shape` by `factor` along `direction` only, holding the plane whose
-    axial coordinate (measured along `direction` from the world origin) is
-    `hold`. Every dimension across the axis is left exactly as drawn.
-
-    A true non-uniform scale, so a profile keeps its vertex count: no offset, no
-    slivers, nothing for the sweep to choke on."""
-    from OCP.BRepBuilderAPI import BRepBuilderAPI_GTransform
-    from OCP.gp import gp_GTrsf, gp_Mat, gp_XYZ
-
-    d = Vector(*direction).normalized()
-    k = factor - 1.0
-    # I + k * d d^T, the identity across the axis, `factor` along it.
-    m = gp_Mat(*[1.0 * (i == j) + k * d.to_tuple()[i] * d.to_tuple()[j]
-                 for i in range(3) for j in range(3)])
-    g = gp_GTrsf()
-    g.SetVectorialPart(m)
-    g.SetTranslationPart(gp_XYZ(*tuple(d * (-k * hold))))
-    return _wrap_topods(BRepBuilderAPI_GTransform(shape.wrapped, g, True).Shape())
-
-
-def _screw_revolve(profile, axis, angle, pitch):
-    """A revolve that climbs the axis while it turns: one turn rises `pitch`.
-
-    This is the whole of thread cutting. Draw the thread's cross section in a
-    plane through the axis, give it the thread's pitch, wind the angle past 360
-    for as many turns as the thread is long, and Join it to the shank or Cut it
-    out of the bore. Nothing else about the feature changes, which is the point:
-    a thread is a revolve that does not close on itself.
-
-    Built as a pipe sweep along a helix, with the binormal PINNED to the axis
-    direction. That pin is what makes it a revolve rather than a pipe: with a
-    fixed binormal, OCCT builds each section's frame from the tangent and that
-    direction, so the section's plane always contains the axis. It stays a
-    meridian section all the way round, exactly as a revolve's does, instead of
-    tipping to stay square to the helix (which is what Frenet framing does, and
-    which would thin the profile by the cosine of the helix angle).
-
-    The motion from the profile's own position to any point of the sweep is then
-    a pure screw: rotate about the axis, rise along it. So the spine's RADIUS is
-    free and cancels out (verified: a spine at r=0.3 and one at the profile's own
-    radius give the same volume and the same bounding box to 1e-6). Its start
-    DIRECTION does not cancel: the profile is carried from wherever the spine
-    starts, so a spine that starts a quarter turn away lifts the whole result by
-    a quarter of the pitch. The spine is therefore built on the meridian the
-    profile is already on, which leaves the first section exactly where it was
-    drawn.
-
-    The volume is a Pappus identity and is what the tests measure: the axial
-    travel shears the section within its own plane, which adds nothing, so a
-    section of area A whose centroid sits at radius r sweeps A * r * angle
-    (radians) no matter what the pitch is.
-    """
-    from OCP.BRepOffsetAPI import BRepOffsetAPI_MakePipeShell
-    from OCP.gp import gp_Dir
-
-    D = Vector(*axis.direction).normalized()
-    O = Vector(*axis.position)
-
-    faces = list(profile.faces()) if hasattr(profile, "faces") else [profile]
-    if not faces:
-        raise ValueError("Revolve: no closed profile to sweep")
-
-    # Consecutive turns run into each other when the section is taller along the
-    # axis than one turn's climb. OCCT builds that happily and hands back a
-    # self-intersecting solid that measures as if nothing were wrong, so the
-    # first sign of it would be a boolean failing much later, somewhere else.
-    # One turn has no neighbour to hit, hence the angle test.
-    if abs(angle) > 360:
-        local = Plane(origin=tuple(O), z_dir=tuple(D)).to_local_coords(
-            Compound(faces) if len(faces) > 1 else faces[0])
-        bb = local.bounding_box()
-        tall = bb.max.Z - bb.min.Z
-        clear = _turn_clearance(tall)
-        if tall > abs(pitch) + clear:
-            raise ValueError(
-                f"Revolve: the profile is {tall:.4g} mm tall along the axis but "
-                f"climbs only {abs(pitch):.4g} mm each turn, so every turn would "
-                "run into the one before. Raise the pitch, or draw a shorter "
-                "profile, or stay within one turn."
-            )
-        # A profile as tall as the climb is the thread everyone actually draws:
-        # crest lands on root, no flat between the turns. It is also the one
-        # shape a B-rep kernel cannot use. A V section meeting the next V section
-        # touches along a LINE, so the solid is non-manifold, BRepCheck calls it
-        # valid and every boolean against it then quietly does nothing (measured:
-        # cutting a block that should lose 610.4 mm3 lost 0.410).
-        #
-        # Welding the turns is the intuitive repair and it does not work: the
-        # overlap between two crests is a lens whose width vanishes with its
-        # height, so no amount of it gives OCCT a real intersection to find
-        # (per-turn sweeps fused at 1e-3..5e-2 of overlap all came back with
-        # NEGATIVE volume). Clearance does work, and by a lot: stop the crest a
-        # hair short of the next root and the sweep stays one clean five-faced
-        # solid that cuts to within 0.06% of the hand-computed answer.
-        #
-        # 1e-3 mm is ten times the measured floor (below 1e-4 mm the booleans go
-        # back to doing nothing) and a thousandth of a printed layer, so the
-        # thread it makes is the thread that was drawn.
-        if tall > abs(pitch) - clear:
-            faces = [_axial_scale(f, (abs(pitch) - clear) / tall,
-                                  D, O.dot(D) + (bb.min.Z + bb.max.Z) / 2)
-                     for f in faces]
-
-    turns = angle / 360.0
-    rise = turns * pitch
-
-    out = None
-    for face in faces:
-        progress_tick()
-        rel = face.center() - O
-        axial = rel.dot(D)
-        radial = rel - D * axial
-        r = radial.length
-        if r < 1e-6:
-            raise ValueError(
-                "Revolve: a climbing revolve needs a profile that sits off to "
-                "one side of the axis. This one is centred on it, so there is "
-                "no direction for it to start from."
-            )
-        # `lefthand` and the flipped normal between them cover all four sign
-        # pairs: the sweep turns the way the angle says, and rises the way the
-        # pitch says, independently. Both are checked in the orientation tests.
-        helix = Edge.make_helix(
-            pitch=abs(pitch), height=abs(rise), radius=r,
-            center=(0, 0, 0), normal=(0, 0, 1), lefthand=(pitch < 0))
-        frame = Plane(origin=tuple(O + D * axial), x_dir=tuple(radial.normalized()),
-                      z_dir=tuple(D if rise >= 0 else -D))
-        path = frame * helix
-        spine = path if isinstance(path, Wire) else Wire(path.edges())
-
-        def swept(wire, _spine=spine):
-            mps = BRepOffsetAPI_MakePipeShell(_spine.wrapped)
-            mps.SetMode(gp_Dir(*tuple(D)))
-            mps.Add(wire.wrapped, False, False)
-            mps.Build()
-            if not mps.IsDone():
-                raise ValueError(
-                    "Revolve: the climbing sweep failed. A profile that is very "
-                    "close to the axis, or a pitch far larger than the profile, "
-                    "can make a surface that crosses itself."
-                )
-            mps.MakeSolid()
-            return Solid(mps.Shape())
-
-        solid = swept(face.outer_wire())
-        for hole in face.inner_wires():
-            solid = solid - swept(hole)
-        out = solid if out is None else out + solid
-    return _as_compound(out)
-
-
-def _revolve_axis(f, ctx):
-    """The axis to spin about: one of the three world axes, an arbitrary line, or
-    the line of the EDGE the revolve was aimed at, re-resolved against the bodies
-    as they stand now.
-
-    Re-resolving is what makes a picked edge a reference rather than a note about
-    where an edge used to be. Resolution is GLOBAL across bodies for the reason
-    recorded on _face_anchor_plane: a body id can come to name a different piece,
-    and a body-scoped match would silently re-aim the
-    revolve at some distant edge on the wrong piece.
-
-    An edge that stops resolving is not an error. The axis falls back to the
-    cached line, where the user last saw it, because the alternative is a
-    failed feature and a body that disappears with it. So is an edge that is no
-    longer straight: an axis is a line, and a curve cannot be one.
-    """
-    axis = f.get("axis", "Z")
-    sel = f.get("axisEdge")
-    if sel:
-        found = None
-        for b in getattr(ctx, "bodies", None) or []:
-            shape = b.get("shape")
-            if shape is None:
-                continue
-            try:
-                edges = resolve_edges(shape, sel, getattr(ctx, "diagnostics", None), f.get("id"))
-            except Exception:
-                continue
-            for e in edges or []:
-                if e is not None and _edge_curve(e) == "line":
-                    found = e
-                    break
-            if found is not None:
-                break
-        if found is not None:
-            a, d = _edge_mid(found), _edge_dir(found)
-            return Axis((a.X, a.Y, a.Z), (d.X, d.Y, d.Z))
-    if isinstance(axis, dict):
-        o, d = axis.get("origin") or [0, 0, 0], axis.get("dir") or [0, 0, 1]
-        try:
-            return Axis(tuple(float(v) for v in o), tuple(float(v) for v in d))
-        except Exception:
-            return AXES["Z"]
-    return AXES.get(axis, AXES["Z"])
-
-
 def _handle_loft(f, ctx):
     # Fusion flow: loft through the SELECTED profile regions (each on its own
     # sketch, in the order given). Resolving the region anchor to a Face, the
@@ -1056,266 +828,6 @@ def _handle_sweep(f, ctx):
     # inline `act["shape"] + solid` / `- solid` against only the active body,
     # unguarded, and a Cut with no active body silently created a new body.)
     _combine(f, ctx, solid)
-
-
-def _blob_top_children(shape):
-    """The blob's top-level children, in stored order. Deliberately NOT
-    `.solids()`: the manifest binds row i to child i, and a leaf product with no
-    solid (the ones dropped silently today) has to keep its slot."""
-    from OCP.TopoDS import TopoDS_Iterator
-
-    out = []
-    it = TopoDS_Iterator(shape.wrapped)
-    while it.More():
-        out.append(it.Value())
-        it.Next()
-    return out
-
-
-def _bind_assembly(f, ctx, shape, nodes, parts):
-    """Name the blob's children from the assembly manifest. Returns False, having
-    recorded WHY, if the manifest and the geometry disagree, the caller then
-    falls back to the historical unnamed explode. A wrong tree is worse than no
-    tree: every body would still build, just labelled as the wrong part."""
-    children = _blob_top_children(shape)
-    if len(children) != len(parts):
-        _skip_feature(
-            ctx.diagnostics, f, "import",
-            f"assembly manifest lists {len(parts)} parts but the stored geometry "
-            f"has {len(children)} top-level shapes, falling back to unnamed bodies",
-        )
-        return False
-
-    wrapped = []
-    for i, (child, part) in enumerate(zip(children, parts)):
-        # One tick per leaf. A single import feature rebuilding a large assembly
-        # was the longest SILENT phase left in the product: measured 90 s
-        # emitting one tick, against a 60 s stall budget. Wave 1.1 ticked export,
-        # the interference sweep and checkpoint writes and missed this one.
-        progress_tick()
-        w = _wrap_topods(child)
-        node_index = part.get("node") if isinstance(part, dict) else None
-        if w is None or not isinstance(node_index, int) or not 0 <= node_index < len(nodes):
-            _skip_feature(
-                ctx.diagnostics, f, "import",
-                f"assembly manifest entry {i} does not refer to a known part "
-                f", falling back to unnamed bodies",
-            )
-            return False
-        # Face count is the checksum that turns an ordinal reference into a
-        # CHECKED one. Without it a reordered or re-generated blob would bind
-        # silently, and the only symptom would be parts wearing each other's names.
-        expected_faces = part.get("faces")
-        if expected_faces is not None and len(w.faces()) != expected_faces:
-            _skip_feature(
-                ctx.diagnostics, f, "import",
-                f"assembly part {i} expected {expected_faces} faces but the stored "
-                f"geometry has {len(w.faces())}, falling back to unnamed bodies",
-            )
-            return False
-        wrapped.append((w, node_index, part.get("faceColors"), part.get("color")))
-
-    # A product owning several solids numbers them; one owning a single solid
-    # keeps its bare name. Same convention the anonymous path already used.
-    owned = {}
-    for _w, node_index, _colors, _color in wrapped:
-        owned[node_index] = owned.get(node_index, 0) + 1
-
-    base = f.get("name") or "Imported"
-    feature_id = f.get("id")
-    seen = {}
-    for w, node_index, colors, color in wrapped:
-        label = (nodes[node_index] or {}).get("name") or base
-        if owned[node_index] > 1:
-            seen[node_index] = seen.get(node_index, 0) + 1
-            label = f"{label} {seen[node_index]}"
-        ctx.new_body(w, label, node_ref=f"{feature_id}/{node_index}",
-                     face_colors=colors, part_color=color)
-    return True
-
-
-_BINTOOLS_MAGIC = b"Open CASCADE Topology V"
-
-
-def _blob_to_shape(data):
-    """A stored binary BREP blob back to a build123d Shape.
-
-    The magic check is NOT redundant with the blob store's hash verification.
-    That hash proves the bytes are the ones the container declared, it does not
-    prove they are benign, because whoever crafted a hostile `.funda` chose both
-    the bytes and the declared hash. So the same reasoning as
-    `_brep_b64_to_shape` applies: refuse to aim a parser fuzz at OCCT.
-
-    There is deliberately NO size cap here, unlike the 64 MiB `MAX_BREP_BYTES` on
-    the legacy embedded path. That cap is exactly what makes a large assembly
-    unopenable, and it is the thing this whole change exists to remove. The bound
-    that replaces it is upstream: the container reader refuses an archive that
-    declares more than 8 GiB before inflating a byte."""
-    import geomstore
-
-    if not data[: len(_BINTOOLS_MAGIC) + 2].lstrip(b"\n\r ").startswith(_BINTOOLS_MAGIC):
-        raise ValueError("stored geometry is not a valid binary BREP (bad header)")
-    # _wrap_topods, not Shape.cast: BinTools hands back a raw TopoDS, and for an
-    # assembly that is a COMPOUND, which Shape.cast() turns into None (see its
-    # docstring). Same trap the XCAF reader hit.
-    shape = _wrap_topods(geomstore.deserialize_shape(data))
-    if shape is None:
-        raise ValueError("stored geometry decoded to an empty shape")
-    return shape
-
-
-def _import_shape(f):
-    """The geometry for an import feature.
-
-    Prefers the content hash (`geom`) and falls back to the legacy embedded
-    base64 (`brep`). Both fields are present during the transition, so a blob
-    that has gone missing, a wiped app-data directory, a document copied
-    without its container, still rebuilds from the embedded copy rather than
-    failing. Once `brep` is gone that fallback disappears and the missing-blob
-    error below becomes the live path."""
-    import blobstore
-
-    digest = f.get("geom")
-    b64 = f.get("brep")
-    if digest:
-        data = blobstore.default_store().get_bytes(digest)
-        if data is not None:
-            return _blob_to_shape(data)
-        if not b64:
-            raise ValueError(
-                "the geometry for this imported body is missing from local storage. "
-                "Open the .funda file it was saved in, or re-import the original file."
-            )
-        # Fall through to the embedded copy, loudly: a miss here means either a
-        # wiped store or a document that travelled without its container, and
-        # both are worth seeing in the log rather than silently absorbing.
-        print(f"[blobstore] blob {digest} missing; falling back to the embedded BREP",
-              file=sys.stderr, flush=True)
-    if not b64:
-        raise ValueError("this imported body has no geometry attached")
-    return _brep_b64_to_shape(b64)
-
-
-def _assembly_root_index(nodes):
-    """Index of the assembly's root product (the node with no parent), or None.
-    First one wins: a well-formed tree has exactly one."""
-    if not nodes:
-        return None
-    for i, n in enumerate(nodes):
-        if isinstance(n, dict) and n.get("parent") is None:
-            return i
-    return None
-
-
-def _handle_import(f, ctx):
-    base = f.get("name") or "Imported"
-    shape = _import_shape(f)
-    nodes, parts = f.get("nodes"), f.get("parts")
-    # explode:false keeps a multi-solid payload as ONE body. For imported
-    # assemblies with hundreds of import features this divides body count
-    # (browser tree entries, per-body payloads, draw calls) by the average
-    # solids-per-import. Default (absent/true) keeps the historical
-    # one-body-per-solid behavior. It is checked FIRST because it is an explicit
-    # instruction to collapse, which a manifest cannot override.
-    if f.get("explode") is False:
-        # ...but collapsing the GEOMETRY must not throw away the TREE. This used
-        # to return here with a body named "Imported" and no node_ref at all, so
-        # the whole assembly hierarchy, product names, structure, colours,
-        # was discarded by the one flag a user would reach for on exactly the
-        # documents where that hierarchy matters most.
-        #
-        # One body can only honestly claim one node, so it claims the ROOT: the
-        # body carries the assembly's own name and sits under it in the Browser,
-        # instead of appearing as an anonymous loose body.
-        root = _assembly_root_index(nodes)
-        if root is not None:
-            label = (nodes[root] or {}).get("name") or base
-            body = ctx.new_body(shape, label, node_ref=f"{f.get('id')}/{root}")
-        else:
-            body = ctx.new_body(shape, base)
-        # Exempt from _drop_debris. That pass deletes any solid under 0.1% of
-        # the biggest one that does not touch it, on the theory that it is
-        # residue from the booleans that carved the body. An explicitly
-        # collapsed import is the opposite case: every solid in it is a part
-        # the user's file declared, and small ones that float clear of the
-        # largest are the NORM in an assembly, not debris.
-        #
-        # Measured on asm_nested: main body 3200 mm3, and four legitimate parts
-        # at 3.0 mm3 each, 0.094%, just under the threshold, were silently
-        # deleted, taking 4 of 7 parts and 24 of 42 faces with them. It never
-        # showed up before because the exploded path gives each body ONE solid,
-        # and the pass returns early below two.
-        body["_intact"] = True
-        return
-    # Assembly manifest, when the import recorded one. Absent for every import
-    # made before this existed and for every non-assembly file, which is what
-    # keeps those documents rebuilding exactly as they did.
-    if nodes and parts and _bind_assembly(f, ctx, shape, nodes, parts):
-        return
-    parts = _explode_solids(shape)
-    if len(parts) == 1:
-        ctx.new_body(parts[0], base)
-    else:
-        for part_no, p in enumerate(parts, 1):
-            ctx.new_body(p, f"{base} {part_no}")
-
-
-def _combine(f, ctx, solid, hidden=None, name=None):
-    """Merge a solid a feature just made into the model, the way `f` asks.
-
-    The one place `operation` and `targets` are read, so the two of them mean
-    the same thing on every feature that creates material rather than on five
-    out of six of them. `name` is the label a primitive wants to keep on the
-    body it makes; a join takes the name of the body it merges into instead,
-    which is why it is passed here and not at the call.
-    """
-    def new_body(shape, body_name=None, inherit=None):
-        return ctx.new_body(shape, body_name or name, inherit=inherit)
-
-    _boolean_into_bodies(
-        ctx.bodies, solid, f.get("operation", "new"), new_body,
-        ctx.hidden_bodies if hidden is None else hidden,
-        targets=f.get("targets"),
-        diag=ctx.diagnostics, feature_id=f.get("id"),
-    )
-
-
-def _require_positive(op, **dims):
-    """Reject a non-positive dimension BY NAME, before OCCT ever sees it.
-
-    OCCT answers a zero-height box with `Standard_DomainError` and a zero-factor
-    scale with `Standard_ConstructionError`. Those class names reach the user as
-    the WHOLE explanation and say nothing about what to change, measured across
-    seven operations in docs/EDGE-CASES.md. Every one of them is a predictable
-    degenerate input, so name the field and the value the user actually typed.
-    """
-    for name, v in dims.items():
-        if v is None:
-            continue
-        if not (v > 0):
-            raise ValueError(f"{op}: {name} must be greater than 0 (got {v:g})")
-
-
-def _require_sketch(ctx, sid, op):
-    """Fetch a sketch entry, or explain WHICH upstream sketch failed.
-
-    A missing sketch is almost always an UPSTREAM failure, not a broken
-    reference: the sketch feature raised (bad profile, zero-radius circle,
-    non-planar wires) and so never registered. Indexing `ctx.sketches` raw turned
-    that into `KeyError: 'f1'`, which the generic handler surfaced as
-    "<op> failed (KeyError)", burying the real cause behind an internal error
-    and pointing the user at the wrong feature.
-
-    Extracted after finding the same fault in FOUR handlers (extrude, revolve,
-    loft, sweep); each had its own raw lookup. Route every sketch fetch here.
-    """
-    entry = ctx.sketches.get(sid)
-    if entry is None:
-        raise ValueError(
-            f"the sketch this {op} depends on ({sid}) did not build, "
-            "fix that sketch first"
-        )
-    return entry
 
 
 # A primitive creates material like an extrude does, so it goes through
@@ -1651,129 +1163,6 @@ def _handle_duplicate(f, ctx):
         ctx.new_body(sh, f"{tgt['name']} copy")
 
 
-def _joint_body_shape(ctx, bid):
-    """The single OCCT shape of a body a joint connector names, or None. A
-    disjoint body is a ShapeList with no single `.wrapped`, so normalize to a
-    Compound first, the way _handle_move does before it transforms one."""
-    b = ctx.find_body(bid)
-    if b is None:
-        return None
-    sh = b.get("shape")
-    if sh is None:
-        return None
-    return sh if _wrapped_or_none(sh) is not None else Compound(list(sh))
-
-
-def _joint_frame(spec, ctx, fid):
-    """Resolve a mate connector to a Plane: an origin plus a z axis (the mating
-    direction) and an x axis (the rotational reference). A connector is one of:
-      - explicit  {"origin":[x,y,z], "zdir":[...], "xdir":[...]}   world frame
-      - a datum   {"datum": <datumId>}                            follows the datum
-      - a face    {"body": <id>, "face": <selector>}   centre + outward normal
-      - an edge   {"body": <id>, "edge": <selector>}   midpoint + direction
-    A connector on geometry is a REFERENCE, re-resolved every rebuild, so the
-    joint follows the parts as they change (the whole point of a mate over a
-    baked Move). Returns None when a geometry reference no longer resolves, the
-    caller then leaves the moving body where it is rather than failing the build.
-    """
-    def plane(o, z, x=None):
-        z = Vector(*z)
-        if z.length < 1e-9:
-            raise GeomError("joint: a connector's axis is zero length", BAD_REQUEST)
-        if x is not None:
-            xv = Vector(*x)
-            if xv.length > 1e-9:
-                return Plane(origin=tuple(o), x_dir=tuple(xv.normalized()),
-                             z_dir=tuple(z.normalized()))
-        return Plane(origin=tuple(o), z_dir=tuple(z.normalized()))
-
-    if "origin" in spec:
-        return plane(spec["origin"], spec.get("zdir", [0, 0, 1]), spec.get("xdir"))
-
-    if spec.get("datum") is not None:
-        d = ctx.datums.get(spec["datum"])
-        if not d:
-            return None  # the datum was removed or has not built; leave the body put
-        return plane(d["origin"], d.get("normal") or d.get("dir") or [0, 0, 1], d.get("xdir"))
-
-    shape = _joint_body_shape(ctx, spec.get("body"))
-    if shape is None:
-        return None
-    if spec.get("face") is not None:
-        faces = resolve_faces(shape, spec["face"], ctx.diagnostics, fid)
-        if not faces:
-            return None
-        fc = faces[0]
-        c, n = fc.center(), _face_normal(fc)
-        return plane((c.X, c.Y, c.Z), (n.X, n.Y, n.Z))
-    if spec.get("edge") is not None:
-        edges = resolve_edges(shape, spec["edge"], ctx.diagnostics, fid)
-        if not edges:
-            return None
-        e = edges[0]
-        m, dr = _edge_mid(e), _edge_dir(e)
-        return plane((m.X, m.Y, m.Z), (dr.X, dr.Y, dr.Z))
-
-    raise GeomError(
-        "joint: a connector needs one of origin, datum, face or edge", BAD_REQUEST)
-
-
-def _handle_joint(f, ctx):
-    """Position one body relative to another by aligning a mate connector on each.
-
-    The MOVING body is rigidly re-placed so its connector meets the fixed
-    connector; nothing else about it changes and no other body is touched. The
-    two connectors are brought together facing each other (their z axes opposed,
-    so two outward face normals meet flush), unless `flush` asks for the axes to
-    point the same way. `offset` then slides the moving body along the mate axis
-    and `angle` spins it about that axis, which is what a slider and a revolute
-    joint drive respectively; `mode` records which of those the joint is so the
-    UI knows which handle to offer, the placement math is the same for all three.
-    """
-    mv = ctx.find_body(f.get("moving"))
-    if mv is None or mv.get("shape") is None:
-        _skip_feature(ctx.diagnostics, f, "joint",
-                      "the body to position is missing or was consumed")
-        return
-
-    f_move = _joint_frame(f["mate"], ctx, f.get("id"))
-    f_fix = _joint_frame(f["to"], ctx, f.get("id"))
-    if f_move is None or f_fix is None:
-        _skip_feature(ctx.diagnostics, f, "joint",
-                      "a mate reference no longer resolves, the body was left in place")
-        return
-
-    # Publish the mate axis (the fixed connector's origin + z) so the frontend can
-    # stand its offset/angle handles on the real line the joint slides and turns
-    # about, wherever the parts have moved it. Rides the existing datum-mark
-    # channel keyed by feature id, so no new wire plumbing: an axis mark on a
-    # joint id, which the datum-plane sync ignores (it only reads datum features).
-    if ctx.datum_marks is not None:
-        o, z = f_fix.origin, f_fix.z_dir
-        ctx.datum_marks[f["id"]] = {
-            "kind": "axis",
-            "origin": [o.X, o.Y, o.Z],
-            "dir": [z.X, z.Y, z.Z],
-        }
-
-    offset = ctx.val(f.get("offset", 0))
-    angle = ctx.val(f.get("angle", 0))
-    # The adjustment lives in the FIXED connector's local frame: translate along
-    # its z by offset, spin about its z by angle, and (unless flush) turn the
-    # moving connector to face it by a half turn about x. Composed onto the fixed
-    # frame and stripped of the moving frame, this is the world placement to
-    # apply to the moving body.
-    adj = Location((0, 0, offset), (0, 0, angle))
-    if not f.get("flush"):
-        adj = adj * Location((0, 0, 0), (180, 0, 0))
-    move_loc = (f_fix.location * adj) * f_move.location.inverse()
-
-    sh = mv["shape"]
-    if _wrapped_or_none(sh) is None:
-        sh = Compound(list(sh))
-    mv["shape"] = move_loc * sh
-
-
 def _sketch_face_selector(f, ctx):
     """The face selector of the sketch a Divide feature consumes, or None. A Divide
     inherits its target face from the sketch it is drawn on, so the sketch's own
@@ -1955,29 +1344,6 @@ def _switched_off_owner(message, recorded, inactive):
                 if fid in inactive:
                     return fid
     return None
-
-
-def _make_val(params):
-    """A value resolver over one document's parameter table: a parameter name
-    resolves to its value; a numeric literal passes through.
-
-    Any other string is a hard error: the frontend evaluates expressions and
-    ships plain numbers, so an unresolved string here would otherwise leak
-    into OCCT as garbage (crash or silent junk geometry). In rebuild() the
-    raise is caught by the per-feature error handler -> red chip, build
-    continues; project_geometry surfaces it as a per-source error entry."""
-
-    def val(x):
-        if isinstance(x, str):
-            if x in params:
-                return params[x]
-            raise ValueError(
-                f'unresolved parameter or expression "{x}", expected a number '
-                f"(expressions are evaluated by the app before building)"
-            )
-        return x
-
-    return val
 
 
 def rebuild(document, diagnostics=None, resume=None, snapshots_out=None, persist=None,
@@ -2622,146 +1988,6 @@ def _update_owners(f, val, bodies, pre_shape, pre_owners_by_id, pre_owners_all):
         b["_owners"] = owners
 
 
-def _recompute_projections(f, ctx):
-    """Associative refresh of one sketch's projected entities, run by
-    _handle_sketch right after the sketch is built: re-resolve every source
-    against the TIMELINE-PREFIX state (ctx.bodies = the bodies built before
-    this sketch; the features list before it for cross-sketch sources) and
-    append change entries to ctx.projections.
-
-    Convergence contract (what terminates the frontend's refresh loop): steady
-    state emits NOTHING. A fresh curve is emitted only when it differs from the
-    cached one beyond _curve_close's 1e-4 tolerance, or the entity was stale
-    and resolves again (stale:false clears the flag). {stale: true} is emitted
-    only on the not-stale -> stale TRANSITION. Resolution here is LENIENT
-    (keep-last-shape + stale flag); the strict refuse-at-pick path is
-    project_geometry's.
-
-    Multi-edge sketchCurve correspondence: a source entity yielding several
-    edges (rectangle/polygon/slot) was projected as N sibling entities sharing
-    source.group. The pick site persists each sibling's edge index within
-    _entity_edges' deterministic order as source.index, the authoritative
-    correspondence, stable across sibling deletions AND source moves. A
-    multi-edge sibling WITHOUT an index is unresolvable -> stale, like an
-    unknown source kind. An index beyond the fresh edge count means that
-    edge is gone -> stale.
-
-    Silhouette correspondence: a silhouette source has NO per-curve selectors,
-    the source is the whole body, and the fresh HLR curve LIST can change count
-    and order across rebuilds. Each group's siblings (shortlex id order) are
-    matched against the fresh list in three passes, each fresh curve consumed
-    at most once: (1) cached-curve match within _curve_close tolerance (steady
-    state); (2) NEAREST same-kind curve by _curve_dist, endpoint + midpoint
-    distance, pairs consumed in globally ascending order, so a resized
-    cylinder's silhouette lines track their own side; (3) the remaining
-    siblings positionally against the remaining fresh curves. Assigned curves
-    are orientation-normalized to the cached endpoint order (_curve_oriented).
-    Siblings beyond the fresh set go stale; fresh curves with no sibling are
-    DROPPED (re-run the Project pick to pick up new outline curves, auto-add
-    from a refresh is deferred)."""
-    ents = [e for e in f.get("entities") or []
-            if isinstance(e, dict) and e.get("type") == "projected" and e.get("id")]
-    if not ents:
-        return
-    plane = _plane_of(_sketch_plane_ref(f), ctx.datums)
-    # features strictly BEFORE this sketch: the prefix a source may live in
-    prefix = []
-    for ft in ctx.features or []:
-        if ft is f or ft.get("id") == f.get("id"):
-            break
-        prefix.append(ft)
-    # per-(sketch, entity) fresh sketchCurve projection memo, filled lazily by
-    # _fresh_projection, siblings of one multi-edge source share the projected
-    # list instead of re-projecting the whole source per sibling
-    curve_fresh = {}
-
-    # silhouette groups: one fresh HLR curve list per BODY (computed once), each
-    # (body, group) sibling set assigned from its own copy of that list
-    sil_groups = {}
-    for e in ents:
-        s = e.get("source") or {}
-        if s.get("kind") == "silhouette":
-            sil_groups.setdefault((s.get("body"), s.get("group")), []).append(e)
-    sil_assign = {}
-    sil_fresh = {}
-    for (body_id, _g), group in sil_groups.items():
-        group.sort(key=lambda x: (len(x["id"]), x["id"]))
-        if body_id not in sil_fresh:
-            body = ctx.find_body(body_id)
-            try:
-                sil_fresh[body_id] = (
-                    _project_silhouette(body["shape"], plane)
-                    if body is not None and body.get("shape") is not None
-                    else None
-                )
-            except Exception:
-                sil_fresh[body_id] = None  # HLR failure = lost source (lenient)
-        sil_assign.update(_assign_silhouette(group, sil_fresh[body_id]))
-
-    for e in ents:
-        if (e.get("source") or {}).get("kind") == "silhouette":
-            fresh = sil_assign.get(e["id"])
-        else:
-            try:
-                fresh = _fresh_projection(e, plane, prefix, curve_fresh, ctx)
-            except Exception:
-                fresh = None  # any resolution/projection failure = lost source
-        if fresh is None:
-            if not e.get("stale"):
-                ctx.projections.append(
-                    {"sketch": f["id"], "entity": e["id"], "stale": True}
-                )
-        elif e.get("stale") or not _curve_close(fresh, e.get("curve") or {}):
-            ctx.projections.append(
-                {"sketch": f["id"], "entity": e["id"], "curve": fresh, "stale": False}
-            )
-
-
-def _fresh_projection(e, plane, prefix, curve_fresh, ctx):
-    """The freshly-projected curve for one projected entity, or None when its
-    source no longer resolves against the prefix state (missing body / sketch /
-    entity, ambiguous match). `curve_fresh` memoizes the projected edge list
-    per sketchCurve source across one sketch's entities. Silhouette entities
-    never reach here, their group-level correspondence runs in
-    _recompute_projections."""
-    src = e.get("source") or {}
-    kind = src.get("kind")
-    if kind in ("edge", "faceBoundary"):
-        # faceBoundary persists PER-EDGE by:"match" sels too (see the pick site
-        # in sketchMode.ts), both kinds resolve via resolve_edges. LENIENT on
-        # purpose: an upstream resize makes the fingerprint a "marginal match"
-        # (length changed), which is exactly the association we must follow,
-        # only a body/edge that no longer resolves AT ALL goes stale.
-        body = ctx.find_body(src.get("body"))
-        if body is None or body.get("shape") is None:
-            return None
-        edges = resolve_edges(body["shape"], src.get("sel"))
-        if not edges:
-            return None  # the source edge is gone, keep last shape
-        return _project_edge_to_plane(edges[0], plane)
-    if kind == "sketchCurve":
-        key = (src.get("sketch"), src.get("entity"))
-        if key not in curve_fresh:
-            try:
-                src_plane, eds = _resolve_sketch_curve(prefix, src, ctx.datums, ctx.val)
-                curve_fresh[key] = [
-                    _project_edge_to_plane(src_plane * ed, plane) for ed in eds
-                ]
-            except Exception:
-                curve_fresh[key] = None  # lost source (lenient), memoized
-        fresh = curve_fresh[key]
-        if not fresh:
-            return None
-        if len(fresh) == 1:
-            return fresh[0]
-        idx = src.get("index")
-        if isinstance(idx, int):
-            # authoritative pick-time edge index (see the docstring above)
-            return fresh[idx] if 0 <= idx < len(fresh) else None
-        return None  # multi-edge sibling without an index: unresolvable
-    return None  # unknown kind: unresolvable
-
-
 def _collect_datums(document):
     """The datumPlane registry for a document WITHOUT running a rebuild, datum
     planes are pure plane algebra over specs stored in the doc (no body
@@ -2806,90 +2032,3 @@ def project_geometry(document, plane_spec, sources):
     return {"results": results}
 
 
-def _require_body(bodies, bid):
-    """The prefix body `bid` with live shape, or the strict pick-time refusal."""
-    body = next((b for b in bodies if b["id"] == bid), None)
-    if body is None or body.get("shape") is None:
-        raise ValueError(
-            f'source body "{bid}" is not available here, '
-            "it may have been created after this sketch"
-        )
-    return body
-
-
-def _resolve_sketch_curve(features, src, datums, val):
-    """Resolve a sketchCurve source against `features` to (source plane, local
-    boundary edges). Raises with the strict pick-time messages on a missing
-    sketch / entity or an entity with no curve; the lenient refresh path
-    (_fresh_projection) catches any raise and treats it as a lost source."""
-    sf = next(
-        (f for f in features
-         if f.get("type") == "sketch" and f.get("id") == src.get("sketch")),
-        None,
-    )
-    if sf is None:
-        raise ValueError(
-            f'source sketch "{src.get("sketch")}" is not available here, '
-            "it may have been created after this sketch"
-        )
-    ent = next(
-        (e for e in sf.get("entities") or [] if e.get("id") == src.get("entity")),
-        None,
-    )
-    if ent is None:
-        raise ValueError("the source curve no longer exists in its sketch")
-    eds = _entity_edges(ent, val)
-    if not eds:
-        raise ValueError(f'a "{ent.get("type")}" entity has no curve to project')
-    return _plane_of(sf["plane"], datums), eds
-
-
-def _project_source(src, plane, document, bodies, datums):
-    """Resolve ONE projection source to its [{fp?, curve}] list, or raise with a
-    user-facing message. Source kinds: edge / faceBoundary / sketchCurve /
-    silhouette (whole-body HLR outline)."""
-    kind = src.get("kind")
-    if kind in ("edge", "faceBoundary"):
-        body = _require_body(bodies, src.get("body"))
-        shape = body["shape"]
-        diag = []
-        if kind == "edge":
-            edges = resolve_edges(shape, src["sel"], diag=diag)
-        else:
-            seen = {}
-            for fc in resolve_faces(shape, src["sel"], diag=diag):
-                for e in fc.edges():
-                    seen.setdefault(_edge_dedup_key(e), e)
-            edges = list(seen.values())
-        if not edges:
-            raise ValueError("the source geometry no longer exists on the body")
-        # LOSSY is the flag that means "this resolution took a best-effort or
-        # marginal path", every diagnostic assertion in the suite keys on it.
-        # Refusing on a merely non-empty `diag` was equivalent once, but it also
-        # swept up advisory entries and turned a perfectly good pick into a hard
-        # failure (see the note in geom_select._nearest_one).
-        lossy = next((d for d in diag if d.get("lossy")), None)
-        if lossy is not None:
-            raise ValueError(
-                "the source selection is ambiguous on this body, "
-                + (lossy.get("reason") or "low-confidence match")
-            )
-        return [
-            {"fp": edge_fingerprint(e, shape), "curve": _project_edge_to_plane(e, plane)}
-            for e in edges
-        ]
-    if kind == "sketchCurve":
-        val = _make_val(document.get("parameters", {}))
-        src_plane, eds = _resolve_sketch_curve(
-            document.get("features", []), src, datums, val
-        )
-        return [{"curve": _project_edge_to_plane(src_plane * ed, plane)} for ed in eds]
-    if kind == "silhouette":
-        body = _require_body(bodies, src.get("body"))
-        curves = _project_silhouette(body["shape"], plane)
-        if not curves:
-            raise ValueError("the body has no visible silhouette on this plane")
-        # whole-body source: no per-curve fingerprints (refresh re-runs HLR and
-        # re-matches by curve, see _recompute_projections)
-        return [{"curve": c} for c in curves]
-    raise ValueError(f"unknown projection source kind: {kind}")

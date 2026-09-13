@@ -18,6 +18,7 @@ import numpy as np
 from build123d import Axis, Box, Cylinder, Location, fillet
 
 import server
+import viewport_mesh
 
 TOL = server._DEFAULT_TOLERANCE
 PROFILE = server._viewport_profile(1)
@@ -88,8 +89,8 @@ def test_helper_payloads_match_the_serial_ones():
 
     def run(min_faces):
         server._MESH_CACHE.clear()
-        old = server._PARALLEL_MIN_FACES
-        server._PARALLEL_MIN_FACES = min_faces
+        old = viewport_mesh._PARALLEL_MIN_FACES
+        viewport_mesh._PARALLEL_MIN_FACES = min_faces
         try:
             server._INSTANCE_PAYLOADS.clear()
             server._parallel_payloads(body_list, TOL, PROFILE)
@@ -98,7 +99,7 @@ def test_helper_payloads_match_the_serial_ones():
             server._PRECOMPUTED.clear()
             return got, out
         finally:
-            server._PARALLEL_MIN_FACES = old
+            viewport_mesh._PARALLEL_MIN_FACES = old
 
     helped, parallel = run(0)
     assert helped >= 2, f"the helpers built {helped} payloads, the test did not exercise them"

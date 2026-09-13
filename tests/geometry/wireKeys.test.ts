@@ -31,10 +31,8 @@ const raw = (pattern: Record<string, string>, endsWith: string): string => {
   return hit ? hit[1] : "";
 };
 
-const server = raw(
-  import.meta.glob("../../sidecar/*.py", { query: "?raw", import: "default", eager: true }) as Record<string, string>,
-  "/sidecar/server.py",
-);
+const sidecarFiles = import.meta.glob("../../sidecar/*.py", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
+const server = raw(sidecarFiles, "/sidecar/server.py") + raw(sidecarFiles, "/sidecar/viewport_mesh.py");
 const assembly = raw(
   import.meta.glob("../../src/geometry/*.ts", { query: "?raw", import: "default", eager: true }) as Record<string, string>,
   "/geometry/assembly.ts",
