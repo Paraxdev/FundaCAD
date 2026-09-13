@@ -727,20 +727,42 @@ def _assembly_payload(asm):
     import face_colors as _face_colors
 
     leaves, parts = [], []
+    # Per unplaced product solid: (canonical solid, realigned face colours).
+    # Canonicalizing each INSTANCE rewrote the same part once per placement and
+    # gave every copy its own faces, which also broke the shape sharing the
+    # payload loop reuses a mesh across (server._INSTANCE_PAYLOADS).
+    canonical = {}
     for leaf_index, (node_index, topods) in enumerate(asm.leaves):
         raw = _wrap_topods(topods)
         if raw is None:
             continue
-        if raw.solids():
+        colors = asm.face_colors.get(leaf_index)
+        source = asm.leaf_sources.get(leaf_index)
+        if source is not None:
+            product, k, location = source
+            if (product, k) not in canonical:
+                local = _wrap_topods(asm.product_solids[product][k])
+                result = _canonicalize(local)
+                if colors and result is not local:
+                    realigned = _realign_face_colors(local, result, colors)
+                else:
+                    realigned = colors
+                canonical[(product, k)] = (result, local, realigned)
+            result, local, realigned = canonical[(product, k)]
+            if result is local:
+                leaf = raw
+            else:
+                leaf = _wrap_topods(result.wrapped.Moved(location))
+                colors = realigned
+        elif raw.solids():
             leaf = _canonicalize(raw)
+            if colors and leaf is not raw:
+                colors = _realign_face_colors(raw, leaf, colors)
         else:
             # A solid-less product (a bare face or shell) fails gate 1,
             # `len(solids) == max(1, len(shape.solids()))` compares 0 against 1,
             # so canonicalizing it can only waste time and never succeed.
             leaf = raw
-        colors = asm.face_colors.get(leaf_index)
-        if colors and leaf is not raw:
-            colors = _realign_face_colors(raw, leaf, colors)
         leaves.append(leaf)
         part = {"node": node_index, "faces": len(leaf.faces())}
         # Packed, not raw: this list is one entry per face and it is going into

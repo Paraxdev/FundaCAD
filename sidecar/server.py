@@ -731,6 +731,57 @@ def _set_mesh_progress(done, total):
         pass
 
 
+# The payload of the first body in a reply that uses each shared B-rep shape,
+# keyed by that shape plus everything else the payload depends on. An imported
+# assembly is mostly instances, a screw placed forty times is one TShape at forty
+# Locations, and every one of them used to be read back node by node, given
+# normals, banded and edge-sampled from scratch. Cleared per reply, so it never
+# holds a shape the document no longer has.
+_INSTANCE_PAYLOADS = {}
+
+
+def _instance_key(sh, tolerance, profile):
+    """(key, placement) for a body whose payload can be moved from another
+    instance, or (None, None). Mirrored or scaled placements are left out: a
+    mirror flips triangle winding and a scale stretches normals."""
+    try:
+        w = sh.wrapped
+        trsf = w.Location().Transformation()
+        if trsf.IsNegative() or abs(trsf.ScaleFactor() - 1.0) > 1e-12:
+            return None, None
+        return (w.TShape(), w.Orientation(), tolerance, profile), trsf
+    except Exception:
+        return None, None
+
+
+def _moved_payload(src, src_trsf, trsf, body_id, face_owners):
+    """`src`, a payload computed for the instance placed at `src_trsf`, carried
+    to the instance placed at `trsf`. Topology-indexed fields are shared as-is."""
+    from tessellate import mesh_bbox
+
+    rel = trsf.Multiplied(src_trsf.Inverted())
+    M = np.array([[rel.Value(r, c) for c in range(1, 5)] for r in range(1, 4)])
+    R, t = M[:, :3], M[:, 3]
+    out = dict(src)
+    pos = np.asarray(src["positions"], dtype=np.float64).reshape(-1, 3) @ R.T + t
+    out["positions"] = pos.ravel().tolist()
+    if src.get("normals") is not None:
+        out["normals"] = (np.asarray(src["normals"], dtype=np.float64).reshape(-1, 3) @ R.T).ravel().tolist()
+    edges = src.get("edges") or []
+    if edges:
+        counts = [len(e["points"]) for e in edges]
+        pts = np.asarray([p for e in edges for p in e["points"]], dtype=np.float64) @ R.T + t
+        pts = pts.tolist()
+        moved, at = [], 0
+        for e, n in zip(edges, counts):
+            moved.append({**e, "points": pts[at:at + n], **({"body": body_id} if "body" in e else {})})
+            at += n
+        out["edges"] = moved
+    out["faceOwners"] = face_owners
+    out["bbox"] = mesh_bbox(None, out["positions"])
+    return out
+
+
 def _body_payload(b, tolerance, profile):
     """Compute (or fetch) the full render payload for one body: positions/indices/
     faceIds (LOCAL ids, offset client-side), faceOwners, per-body edges. Three
@@ -804,6 +855,14 @@ def _body_payload(b, tolerance, profile):
                 payload = pickle.loads(rawp)  # trusted local cache, worker-only
         except Exception:
             payload = None
+    inst_key = inst_trsf = None
+    if payload is None and sh is not None and not pass_key:
+        inst_key, inst_trsf = _instance_key(sh, tolerance, profile)
+        hit = _INSTANCE_PAYLOADS.get(inst_key) if inst_key is not None else None
+        if hit is not None:
+            owners_map = b.get("owners") or {}
+            payload = _moved_payload(hit[0], hit[1], inst_trsf, bid,
+                                     [owners_map.get(_face_fp(face)) for face in sh.faces()])
     if payload is None:
         t0 = time.monotonic()
         passes = plugin_geometry.resolve(b)
@@ -875,6 +934,8 @@ def _body_payload(b, tolerance, profile):
             for vbase, chunk in norm_chunks:
                 norms[vbase * 3:vbase * 3 + len(chunk)] = chunk
             payload["normals"] = norms
+        if inst_key is not None:
+            _INSTANCE_PAYLOADS[inst_key] = (payload, inst_trsf)
         build_ms = (time.monotonic() - t0) * 1000.0
         # Persist when the build was expensive OR the document is large. The
         # flat 50 ms rule was written for an interactive drag of a small model,
@@ -1018,6 +1079,7 @@ def _rebuild_job(document, tolerance, known=None):
     n_to_mesh = sum(1 for b in bodies if b.get("shape") is not None)
     n_meshed = 0
     _set_mesh_progress(0, n_to_mesh)
+    _INSTANCE_PAYLOADS.clear()
     for b in bodies:
         if b.get("shape") is None:
             continue
@@ -1049,6 +1111,7 @@ def _rebuild_job(document, tolerance, known=None):
             item.update(ent["payload"])
             out.append(item)
     t_payload = time.monotonic() - t0
+    _INSTANCE_PAYLOADS.clear()
     _set_mesh_progress(-1, -1)  # meshing done, stop claiming a denominator
     for bid in list(_MESH_CACHE):
         if bid not in live_ids:

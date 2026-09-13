@@ -81,6 +81,12 @@ class Assembly:
     #: SolidWorks export puts the part's appearance here and leaves stale feature
     #: colours (Boss-Extrude yellow, Cut-Extrude red) on the faces.
     solid_colors: dict[int, str] = field(default_factory=dict)
+    #: Where a solid leaf came from: leaf index -> (product key, solid index,
+    #: placement), with the product's own unplaced solids in `product_solids`.
+    #: `leaf` is `product_solids[key][k].Moved(placement)`, which is what lets
+    #: work on a part be done once and placed at every one of its instances.
+    leaf_sources: dict[int, tuple] = field(default_factory=dict)
+    product_solids: dict[str, list] = field(default_factory=dict)
 
     @property
     def product_count(self) -> int:
@@ -344,12 +350,17 @@ def read_assembly(path: str) -> Assembly:
         # unmoved product be handed to the placed leaf by position.
         by_solid = product_face_colors(referred)
         solid_colors = product_solid_colors(referred) if solids else []
+        product = entry_of(referred)
+        if solids and product not in asm.product_solids:
+            asm.product_solids[product] = _solids_of(shape_tool.GetShape_s(referred))
         for k, leaf in enumerate(solids or [shape]):
             row = by_solid[k] if by_solid and k < len(by_solid) else None
             if row and any(row):
                 asm.face_colors[len(asm.leaves)] = row
             if k < len(solid_colors) and solid_colors[k]:
                 asm.solid_colors[len(asm.leaves)] = solid_colors[k]
+            if solids:
+                asm.leaf_sources[len(asm.leaves)] = (product, k, location)
             asm.leaves.append((index, leaf))
 
     roots = TDF_LabelSequence()
