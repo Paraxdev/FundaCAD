@@ -40,6 +40,14 @@ const MIN_RADIUS = 1e-6;
 
 const clampTurn = (v: number) => Math.max(-FULL, Math.min(FULL, v));
 
+/** The snap a pattern drag uses for a bare direction, shared so a row and a
+ *  sweep land on the same angles. Alt passes the cursor's own reading through. */
+export function snapAngleDeg(deg: number, free?: boolean): number {
+  if (free) return deg;
+  const v = Math.round(deg / STEP) * STEP;
+  return v === 0 ? 0 : v; // a snapped -0 would be written into the document as one
+}
+
 /** The new total sweep in degrees, or null when there is no angle to read
  *  (source or cursor sitting on the centre), which leaves the caller on its
  *  current value rather than jumping it somewhere arbitrary. */

@@ -9,7 +9,7 @@ import * as THREE from "three";
 import type { SketchPattern } from "../types";
 import type { DimInput } from "./dimInput";
 import { newPatternId } from "./id";
-import { patternSweepDeg } from "./patternDrag";
+import { patternSweepDeg, snapAngleDeg } from "./patternDrag";
 import { setPrompt } from "../ui/prompt";
 import type { SketchTool } from "./sketchMode";
 
@@ -173,11 +173,22 @@ export class PatternFlow {
       pat.rings = Math.max(0, dimN("rings", pat.rings as number));
       pat.diameter = dim.getValue("diameter") ?? (pat.diameter as number);
     } else if (pat.type === "patternRect") {
-      // cursor offset from the start point = the spacing vector (the second instance)
-      if (Math.abs(dx) > 1) pat.spacingX = Math.round(dx * 10) / 10;
-      if (Math.abs(dy) > 1) pat.spacingY = Math.round(dy * 10) / 10;
       pat.countX = Math.max(1, dimN("countX", pat.countX as number));
       pat.countY = Math.max(1, dimN("countY", pat.countY as number));
+      if (pat.countY === 1) {
+        // a single row is a LINE, so the drag says which way it runs as well as
+        // how far apart, and the whole row follows the cursor instead of only
+        // its X component. A grid keeps the axis-aligned steps it always had,
+        // because there the two directions are separate answers.
+        if (r > 1) {
+          pat.spacingX = Math.round(r * 10) / 10;
+          pat.angle = snapAngleDeg((Math.atan2(dy, dx) * 180) / Math.PI, e.altKey);
+        }
+      } else {
+        // cursor offset from the start point = the spacing vector (the second instance)
+        if (Math.abs(dx) > 1) pat.spacingX = Math.round(dx * 10) / 10;
+        if (Math.abs(dy) > 1) pat.spacingY = Math.round(dy * 10) / 10;
+      }
     } else if (pat.type === "patternCircular") {
       pat.count = Math.max(1, dimN("count", pat.count as number));
       const src = dim.isUserDriven("angle") ? null : this.firstSourcePoint(pat.sources);

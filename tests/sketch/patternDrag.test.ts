@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { patternSweepDeg, type PatternSweepInput } from "../../src/sketch/patternDrag";
+import { patternSweepDeg, snapAngleDeg, type PatternSweepInput } from "../../src/sketch/patternDrag";
 
 /** centre at the origin, the source out along +X, so a cursor bearing in degrees
  *  IS the sweep the drag should read. */
@@ -68,5 +68,19 @@ describe("patternSweepDeg", () => {
     // would jerk the pattern somewhere the user did not point
     expect(patternSweepDeg({ ...at(90), px: 0, py: 0 })).toBeNull();
     expect(patternSweepDeg({ ...at(90), sx: 0, sy: 0 })).toBeNull();
+  });
+});
+
+describe("snapAngleDeg", () => {
+  it("lands a dragged direction on the same grid the sweep uses", () => {
+    expect(snapAngleDeg(43)).toBe(45);
+    expect(snapAngleDeg(-7)).toBe(0);
+    expect(snapAngleDeg(-98)).toBe(-105);
+  });
+
+  it("passes the raw bearing through on a free drag", () => {
+    // a row at 43 degrees is a row at 43 degrees, Alt is the escape hatch for
+    // the angles the grid cannot express
+    expect(snapAngleDeg(43, true)).toBe(43);
   });
 });
