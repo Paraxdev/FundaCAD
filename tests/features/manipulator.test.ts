@@ -286,6 +286,18 @@ describe("arrow handle paint", () => {
     h.dispose();
   });
 
+  it("stays red while the value under a grabbing hand is refused", () => {
+    // The fillet drag holds the handle the whole time it is past the limit, so
+    // hover cannot be allowed to paint over the refusal.
+    const h = createDragHandle();
+    const m = bodyOf(h.group).material as THREE.MeshLambertMaterial;
+    h.paint({ hot: true, refused: true });
+    expect(m.color.getHex()).toBe(HANDLE_CUT);
+    h.paint({ refused: false });
+    expect(m.color.getHex()).toBe(HANDLE_HOT);
+    h.dispose();
+  });
+
   it("keeps the emissive floor in step with the colour", () => {
     // Unlit-from-behind is the common case for a handle standing off a face; if
     // emissive lagged the colour the blob would read as the wrong tone there.

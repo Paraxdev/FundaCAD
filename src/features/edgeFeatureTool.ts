@@ -24,7 +24,7 @@ import type { EdgeRef } from "../viewport/edgeLines";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import type { Viewport } from "../viewport/viewport";
-import type { DocumentStore } from "../document/store";
+import type { DocumentStore, RebuildState } from "../document/store";
 import type { Feature, Selector } from "../types";
 import { midMatchTol, polylineMid, edgeSelectorFrom } from "../viewport/edgeMatch";
 import { pickScope, type PickScope } from "../viewport/pickScope";
@@ -50,8 +50,10 @@ import {
   isPlainProfile,
 } from "./profileArcMath";
 import {
-  blendCeiling,
+  blendRefusalReason,
+  blendVerdict,
   clampValue,
+  commitDecision,
   EMPTY_BLEND_RANGE,
   noteBlendOutcome,
   type BlendRange,
@@ -125,8 +127,6 @@ export class EdgeFeatureTool {
   private editId: string | null = null; // committed feature id being edited
   private awaitingRollback = false; // waiting for the rolled-back model build
   private unsubBuild: (() => void) | null = null;
-  /** the last completed rebuild refused this value on at least one member edge */
-  private previewFailed = false;
 
   private gizmo: THREE.Group | null = null;
   private handle: DragHandle | null = null;
@@ -230,30 +230,72 @@ export class EdgeFeatureTool {
   }
 
   /** The largest size the sidecar has built during this gesture, and the
-   *  smallest it has refused. The drag's real wall, see blendCeiling.
+   *  smallest it has refused, see blendVerdict.
    *
-   *  Reset whenever the question changes: a different treatment or a different
-   *  set of member edges is a different question, and carrying an answer across
-   *  would pin the new one to the old one's limit. */
+   *  Reset whenever the question changes: a different treatment, profile or set
+   *  of member edges is a different question, and carrying an answer across
+   *  would refuse the new one at the old one's limit. */
   private range: BlendRange = EMPTY_BLEND_RANGE;
-  /** a preview has been pushed, so the next completed build is about it. Without
-   *  this a rebuild already in flight when the tool armed would be read as the
-   *  seed value building, and the seed would become the wall. */
-  private previewPushed = false;
+  /** What the kernel said the last time it refused this question. */
+  private refusal: { code: string | null; message: string } | null = null;
+  /** The size the model on screen was built at for this question, null when it
+   *  shows no blend of ours. A refused size keeps the previous one on screen
+   *  (store.setPreview's hold), so this is what a refused release commits. */
+  private shown: number | null = null;
+  /** the refusal currently painted on the handle, box and prompt */
+  private refusalShown: string | null = null;
+  /** confirmed while the kernel was still answering for the value on the handle */
+  private pendingCommit = false;
 
   private forgetBuildRange() {
     this.range = EMPTY_BLEND_RANGE;
+    this.refusal = null;
+    this.shown = null;
   }
 
   /** How far the drag may travel either side of the origin. */
   private limit(): number {
-    return Math.min(dragLimit(this.modelDiagonal()), blendCeiling(this.range, this.dragStep()));
+    return dragLimit(this.modelDiagonal());
   }
 
-  /** The snap granularity the drag is currently moving in, the ceiling steps
-   *  back by one of these, so it has to be the same number scrubSigned uses. */
-  private dragStep(): number {
-    return this.viewport.snapStep(this.anchor, false);
+  /** The value as the feature stores it, which is what replies are matched on. */
+  private size(): number {
+    return Math.round(this.value * 1000) / 1000;
+  }
+
+  /** Everything about the previewed feature except its size and id. */
+  private questionOf(f: Feature): string {
+    const rest: Record<string, unknown> = { ...f };
+    delete rest.id;
+    delete rest.radius;
+    delete rest.distance;
+    return JSON.stringify(rest);
+  }
+
+  private sizeOf(f: Feature): number | null {
+    const v = f.type === "fillet" ? f.radius : f.type === "chamfer" ? f.distance : null;
+    return typeof v === "number" ? v : null;
+  }
+
+  private get refusedNow(): boolean {
+    return !this.neutral
+      && this.currentSelectors().length > 0
+      && blendVerdict(this.range, this.size()) === "refused";
+  }
+
+  /** Paint the refusal, or take it down, on the handle, the value box and the
+   *  prompt. Cheap enough to run on every change of value. */
+  private refreshRefusal() {
+    const reason = this.refusedNow && this.refusal
+      ? blendRefusalReason(this.kind, this.currentSelectors().length, this.refusal)
+      : null;
+    if (reason === this.refusalShown) return;
+    this.refusalShown = reason;
+    if (reason === null) this.recolorGhostsFromDiagnostics(undefined);
+    this.dim.showOwnProblem(reason);
+    this.handle?.paint({ refused: reason !== null });
+    this.viewport.requestRender();
+    this.promptForPhase();
   }
 
   private bounds(): ValueBounds {
@@ -396,10 +438,7 @@ export class EdgeFeatureTool {
    *
    *  Edit mode also uses the FIRST one to snapshot the rolled-back sharp edges
    *  (pass its saved selectors); create mode passes null and only wants the
-   *  failure feedback. Create mode used to subscribe to nothing at all, so a
-   *  radius the kernel refused mid-drag registered as "the preview stopped
-   *  changing", no red edges, no message, nothing to tell you the drag had
-   *  gone past what the geometry allows. */
+   *  kernel's verdicts. */
   private watchBuilds(rollbackSels: Selector[] | null) {
     this.unsubBuild = this.store.onBuild((s) => {
       if (s.building || !s.result) return;
@@ -410,25 +449,27 @@ export class EdgeFeatureTool {
         this.pushPreview();
         return;
       }
-      this.noteBuildOutcome(s.result);
-      this.recolorGhostsFromDiagnostics(s.result.diagnostics);
+      if (this.phase !== "drag") return;
+      this.noteBuildOutcome(s);
+      this.refreshRefusal();
+      if (this.pendingCommit) this.commit();
     });
   }
 
-  /** Record what the kernel just said about the size on screen, so the drag can
-   *  stop where the geometry does instead of where a guess did.
-   *
-   *  Attributed to the CURRENT value rather than to the one that was pushed:
-   *  nothing correlates a reply with the request that caused it, and the tool
-   *  only pushes on a change of step, so during a drag the two are the same
-   *  value. A fast fling can outrun that and record a wall lower than the truth;
-   *  blendCeiling raises it again from the first larger size that does build,
-   *  and a typed value ignores the wall entirely. */
-  private noteBuildOutcome(result: import("../types").RebuildResult) {
-    if (this.phase !== "drag" || this.neutral || !this.previewPushed) return;
-    const failed = (result.featureErrors ?? []).some((e) => e.feature_id === this.previewId)
-      || result.featureError?.feature_id === this.previewId;
-    this.range = noteBlendOutcome(this.range, this.value, !failed);
+  /** Record what the kernel said about the size it was SENT, which during a fast
+   *  drag is often not the size on the handle any more. A reply for an earlier
+   *  question (other treatment, edges or profile) says nothing about this one. */
+  private noteBuildOutcome(s: RebuildState) {
+    const sent = s.previewBuilt?.find((f) => f.id === this.previewId) ?? null;
+    const held = s.heldRefusal?.featureId === this.previewId ? s.heldRefusal : null;
+    const current = sent !== null && this.questionOf(sent) === this.questionOf(this.buildFeature());
+    const size = sent ? this.sizeOf(sent) : null;
+    if (!held) this.shown = current ? size : null;
+    if (current && size !== null) {
+      this.range = noteBlendOutcome(this.range, size, !held);
+      if (held) this.refusal = { code: held.code, message: held.message };
+    }
+    if (current) this.recolorGhostsFromDiagnostics(held?.diagnostics);
   }
 
   /** Match each saved selector to a rendered sharp edge and build its ghost.
@@ -610,6 +651,7 @@ export class EdgeFeatureTool {
    *  than letting the drag track over it. */
   private mountInput(keepTyped = false) {
     this.dim.show([{ ...this.field, kind: "length" }], () => this.commit(), () => this.cancel());
+    this.dim.showOwnProblem(this.refusalShown);
     if (keepTyped) this.dim.seed(this.field.name, this.value);
     else this.dim.updateFromCursor({ [this.field.name]: this.value });
     const s = this.viewport.projectToScreen(this.anchor);
@@ -701,9 +743,13 @@ export class EdgeFeatureTool {
       setPrompt(`Drag out for a ${this.positiveKind}, back for a ${otherTreatment(this.positiveKind)} · release to cancel`);
       return;
     }
-    if (this.previewFailed) {
-      // The red ghosts say WHICH edge; this says what to do about it.
-      setPrompt(`${fmtLength(this.value)} won't build here · drag smaller · Tab · Esc`);
+    if (this.refusalShown) {
+      const then = this.dim.isUserDriven(this.field.name)
+        ? `type a smaller ${this.field.name}`
+        : this.shown !== null
+          ? `keeping ${fmtLength(this.shown)}`
+          : "drag smaller";
+      setPrompt(`${this.refusalShown} · ${then} · Esc`);
       return;
     }
     // The profile only earns a mention on a fillet, and only says its number
@@ -731,35 +777,26 @@ export class EdgeFeatureTool {
     if (this.neutral || !this.currentSelectors().length) {
       if (this.editId) this.store.setEditPreview(null);
       else this.store.setPreview(null);
-      this.previewFailed = false; // nothing previewing, nothing to have failed
-      this.previewPushed = false;
+      this.shown = null;
+      this.refreshRefusal();
       return;
     }
-    const feature = this.buildFeature();
-    this.previewPushed = true;
-    if (this.editId) this.store.setEditPreview(feature);
-    else this.store.setPreview(feature);
+    // A size already refused is not asked again: the kernel would only say no
+    // once more, and the model keeps the last size that built meanwhile.
+    if (blendVerdict(this.range, this.size()) !== "refused") {
+      const feature = this.buildFeature();
+      if (this.editId) this.store.setEditPreview(feature, { hold: true });
+      else this.store.setPreview(feature, { hold: true });
+    }
+    this.refreshRefusal();
   }
 
   /** Paint ghosts red when the sidecar's failure probe names their edge (the
-   *  edgeOpFailed diagnostic carries the failed edges' midpoints), and say so
-   *  in the prompt.
-   *
-   *  Deliberately advisory: the commit is NOT blocked by it. Rebuilds coalesce
-   *  during a drag, so the newest diagnostic can lag the value by one
-   *  round-trip, refusing a commit off it would sometimes reject a value that
-   *  builds fine. A feature that fails is already a recoverable, visible,
-   *  editable state everywhere else in this app; a commit that silently didn't
-   *  happen is not. */
+   *  edgeOpFailed diagnostic carries the failed edges' midpoints). */
   private recolorGhostsFromDiagnostics(diags: import("../types").ResolveDiag[] | undefined) {
     const entry = diags?.find(
       (d) => d.kind === "edgeOpFailed" && d.feature_id === this.previewId && d.failed?.length,
     );
-    const failedNow = !!entry;
-    if (failedNow !== this.previewFailed) {
-      this.previewFailed = failedNow;
-      this.promptForPhase();
-    }
     const bb = this.store.buildState.result?.bbox;
     const diag = bb
       ? Math.hypot(bb.max[0] - bb.min[0], bb.max[1] - bb.min[1], bb.max[2] - bb.min[2])
@@ -775,6 +812,7 @@ export class EdgeFeatureTool {
   }
 
   private onMove(e: PointerEvent) {
+    if (this.pendingCommit) return;
     if (this.phase === "pick") {
       const hit = this.viewport.pickEdgeAt(e.clientX, e.clientY);
       this.viewport.hoverEdge(hit?.edge ?? null);
@@ -786,6 +824,7 @@ export class EdgeFeatureTool {
       if (p !== this.profile) {
         this.profile = p;
         this.arc.setProfile(p);
+        this.forgetBuildRange(); // a conic section has its own limit
         this.pushPreview();
         this.promptForPhase();
       }
@@ -853,7 +892,7 @@ export class EdgeFeatureTool {
   }
 
   private onDown(e: PointerEvent) {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || this.pendingCommit) return;
     if (this.phase === "pick") {
       const hit = this.viewport.pickEdgeAt(e.clientX, e.clientY);
       if (!hit) return; // missed an edge, let the click orbit
@@ -910,7 +949,7 @@ export class EdgeFeatureTool {
   }
 
   private onUp(e: PointerEvent) {
-    if (e.button !== 0 || this.phase !== "drag") return;
+    if (e.button !== 0 || this.phase !== "drag" || this.pendingCommit) return;
     if (this.draggingArc) {
       // Never a commit, even from a fluent gesture: the profile is an adjustment
       // to a blend you are already making, so letting go of it has to leave the
@@ -970,7 +1009,7 @@ export class EdgeFeatureTool {
     // field) never sees it. Nothing is lost there: fillet and chamfer each
     // show exactly ONE field, so tabbing between fields was already a no-op
     // that only had the side effect of locking the field against the drag.
-    if (e.key === "Tab" && this.phase === "drag") {
+    if (e.key === "Tab" && this.phase === "drag" && !this.pendingCommit) {
       e.preventDefault();
       e.stopImmediatePropagation();
       this.flipKind();
@@ -1084,10 +1123,10 @@ export class EdgeFeatureTool {
       // Same product as the passive handle (selectionNudge), or the glyph would
       // resize at the instant the gesture takes over from it.
       this.gizmo.scale.setScalar(k * handleScale(this.viewport.modelDiagonal(), k));
-      this.handle?.paint({ hot: this.hovering || this.grabbing });
+      this.handle?.paint({ hot: this.hovering || this.grabbing, refused: this.refusalShown !== null });
       const s = this.viewport.projectToScreen(this.anchor);
       this.dim.position(s.x, s.y);
-      if (!this.grabbing && this.dim.isUserDriven(this.field.name)) {
+      if (!this.grabbing && !this.pendingCommit && this.dim.isUserDriven(this.field.name)) {
         const v = this.dim.getValue(this.field.name);
         if (v != null && Math.abs(v - this.value) > 1e-6) {
           const wasNeutral = this.neutral;
@@ -1151,7 +1190,7 @@ export class EdgeFeatureTool {
   }
 
   private buildFeature(): Feature {
-    const v = Math.round(this.value * 1000) / 1000;
+    const v = this.size();
     const sels = this.currentSelectors();
     const edges = sels.length === 1 && sels[0] ? sels[0] : sels;
     if (this.kind !== "fillet") return { id: this.previewId, type: "chamfer", edges, distance: v };
@@ -1172,14 +1211,35 @@ export class EdgeFeatureTool {
   private commit() {
     if (this.phase !== "drag") return this.cancel();
     const v = this.dim.getValue(this.field.name);
-    if (v != null) this.setValue(v);
+    if (v != null && Math.abs(v - this.value) > 1e-6) {
+      // Typed and confirmed inside one frame, before tick() previewed it.
+      this.setValue(v);
+      if (!this.neutral) this.pushPreview();
+    }
     // Zero is a real answer here, not a mistake: the drag can be parked on the
     // origin on purpose, and that means "don't do this after all".
     if (this.neutral) return this.cancel();
     if (this.currentSelectors().length === 0) {
+      this.pendingCommit = false;
       setPrompt("Click an edge · Esc");
       return; // deleting is an explicit timeline action, not an implicit empty commit
     }
+    const decision = commitDecision({
+      value: this.size(),
+      verdict: blendVerdict(this.range, this.size()),
+      settled: this.shown !== null && Math.abs(this.shown - this.size()) < 1e-9,
+      shown: this.shown,
+      typed: this.dim.isUserDriven(this.field.name),
+    });
+    if (decision.action === "wait") {
+      this.pendingCommit = true;
+      setPrompt(`Checking ${fmtLength(this.size())} with the kernel… · Esc`);
+      return;
+    }
+    this.pendingCommit = false;
+    if (decision.action === "stay") return this.promptForPhase();
+    if (decision.action === "cancel") return this.cancel();
+    this.setValue(decision.value);
     const feature = this.buildFeature();
     if (this.editId) {
       const id = this.editId;
@@ -1221,8 +1281,8 @@ export class EdgeFeatureTool {
     this.phase = "pick";
     this.grabbing = false;
     this.fluentGrab = false;
-    this.previewFailed = false;
-    this.previewPushed = false;
+    this.pendingCommit = false;
+    this.refusalShown = null;
     this.forgetBuildRange();
     this.hovering = false;
     this.signed = 0;

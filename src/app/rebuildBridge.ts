@@ -234,9 +234,10 @@ export function installRebuildBridge(e: Engine): void {
     // The other half of the same statement: the box says what is wrong, and the
     // model stops presenting a shape nobody asked for as though it were the
     // answer. Kept together so the two can never disagree about whether the
-    // value on screen builds.
-    e.viewport.setStaleModel(refused !== null);
-    if (s.errorMessage) {
+    // value on screen builds. A held refusal is the exception: the model on
+    // screen is the last value that did build, which is what the tool keeps.
+    e.viewport.setStaleModel(refused !== null && !s.heldRefusal);
+    if (s.errorMessage && !s.heldRefusal) {
       e.setStatus(`${s.errorFeatureId ?? ""}: ${s.errorMessage}`, "error");
     } else if (!s.building) {
       e.setStatus("ready", "connected");

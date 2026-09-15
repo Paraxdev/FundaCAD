@@ -144,6 +144,7 @@ from blends import (  # noqa: F401
     SIZE_PROBE_FRACTION,
     SMOOTH_EDGE_DEG,
     _blend_edges,
+    _blend_failure,
     _blend_failure_message,
     _canonical_blend_key,
     _conic_fillet,

@@ -4,7 +4,7 @@
 // a stub backend that records every document it is asked to rebuild.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { DocumentStore, prefixFeatures } from "../../src/document/store";
-import type { CadDocument, Feature, RebuildReply } from "../../src/types";
+import type { CadDocument, Feature, RebuildReply, RebuildResult } from "../../src/types";
 import type { GeometryBackend } from "../../src/geometry/client";
 
 function stubBackend(
@@ -256,6 +256,40 @@ describe("rebuildNow resolves when the RESULT is published", () => {
     await waited;
     expect(store.buildState.result?.bodies?.[0]?.id).toBe("body1");
     expect(calls).toBeGreaterThan(0);
+  });
+
+  // A fast drag pushes a preview per pointermove. Only the one in flight and
+  // the newest may reach the kernel, and each settled build has to say which
+  // preview it answered, since the drag has moved on by the time it lands.
+  it("sends a burst of previews as the one in flight plus the newest, labelled", async () => {
+    vi.useRealTimers();
+    const gates: (() => void)[] = [];
+    const sentRadii: number[] = [];
+    const backend = {
+      async rebuild(d: CadDocument): Promise<RebuildReply> {
+        sentRadii.push((d.features.at(-1) as { radius: number }).radius);
+        await new Promise<void>((r) => gates.push(r));
+        return { ok: true, result: { bodies: [], featureErrors: [] } } as unknown as RebuildReply;
+      },
+      async init() {},
+      onStatus() { return () => {}; },
+      connected: true,
+    } as unknown as GeometryBackend;
+    const store = new DocumentStore(backend, doc());
+    const settledFor: number[] = [];
+    store.onBuild((s) => {
+      const r = (s.previewBuilt?.[0] as { radius?: number } | undefined)?.radius;
+      if (!s.building && r !== undefined) settledFor.push(r);
+    });
+    const fil = (radius: number) =>
+      ({ id: "f9", type: "fillet", edges: { kind: "edge", by: "nearest", point: [0, 0, 0] }, radius }) as Feature;
+    for (let r = 1; r <= 30; r++) store.setPreview(fil(r), { hold: true });
+    await Promise.resolve();
+    gates.shift()!();
+    await vi.waitFor(() => expect(gates.length).toBe(1));
+    gates.shift()!();
+    await vi.waitFor(() => expect(settledFor).toEqual([1, 30]));
+    expect(sentRadii).toEqual([1, 30]);
   });
 });
 
@@ -558,6 +592,37 @@ describe("previewError", () => {
     store.setEditPreview(doc().features[2]!);
     await settle();
     expect(store.previewError).toBeNull();
+  });
+
+  it("keeps the last model that built when a HELD preview is refused", async () => {
+    const good = { bodies: [{ id: "b1" }], featureErrors: [] } as unknown as RebuildResult;
+    const fil = (radius: number) =>
+      ({ id: "f9", type: "fillet", edges: { kind: "edge", by: "nearest", point: [0, 0, 0] }, radius }) as Feature;
+    reply = { ok: true, result: good };
+    store.setPreview(fil(30), { hold: true });
+    await settle();
+    expect(store.buildState.result).toBe(good);
+    expect(store.buildState.previewBuilt?.[0]).toMatchObject({ radius: 30 });
+
+    const refusedResult = {
+      bodies: [{ id: "b1" }],
+      featureErrors: [{ feature_id: "f9", message: "try a smaller value", code: "blendTooLarge" }],
+      diagnostics: [{ feature_id: "f9", kind: "edgeOpFailed", failed: [{ mid: [0, 0, 0] }] }],
+    } as unknown as RebuildResult;
+    reply = { ok: true, result: refusedResult };
+    store.setPreview(fil(45), { hold: true });
+    await settle();
+    expect(store.buildState.result).toBe(good);
+    expect(store.buildState.previewBuilt?.[0]).toMatchObject({ radius: 45 });
+    expect(store.buildState.heldRefusal).toMatchObject({ featureId: "f9", code: "blendTooLarge" });
+    expect(store.buildState.heldRefusal?.diagnostics).toHaveLength(1);
+    expect(store.previewError).toBe("try a smaller value");
+
+    // CONTROL: the same refusal without hold shows the model it came back with.
+    store.setPreview(fil(46));
+    await settle();
+    expect(store.buildState.result).toBe(refusedResult);
+    expect(store.buildState.heldRefusal).toBeNull();
   });
 
   it("clears when the preview is closed, even though the build still failed", async () => {

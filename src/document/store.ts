@@ -15,7 +15,7 @@ import {
   type VersionDiff,
   type VersionRepo,
 } from "./versions";
-import type { CadDocument, Feature, ImportColorSource, ParamControl, ParamExtras, ParamTarget, PlaneSpec, ProjectedSource, ProjectionUpdate, RebuildReply, RebuildResult, ViewCubeSide, ViewOverride } from "../types";
+import type { CadDocument, Feature, ImportColorSource, ParamControl, ParamExtras, ParamTarget, PlaneSpec, ProjectedSource, ProjectionUpdate, RebuildReply, RebuildResult, ResolveDiag, ViewCubeSide, ViewOverride } from "../types";
 import { asFeature } from "../types";
 import { applyProjectionUpdate } from "../types";
 import type { GeometryBackend, ProjectionResult } from "../geometry/client";
@@ -62,6 +62,19 @@ export interface RebuildState {
    *  model meanwhile, so nothing but the viewport ever sees a partial body list. */
   streamed: number | null;
   streamTotal: number | null;
+  /** The preview features this settled build was sent with, null when it had none.
+   *  A reply can land after the tool has moved on, so this is what it answered. */
+  previewBuilt?: Feature[] | null;
+  /** Set when a held preview (setPreview's `hold`) was refused: `result` is then
+   *  still the last model that built, and this carries what the refusal said. */
+  heldRefusal?: PreviewRefusal | null;
+}
+
+export interface PreviewRefusal {
+  featureId: string;
+  message: string;
+  code: string | null;
+  diagnostics: ResolveDiag[];
 }
 
 /** One installment of a chunked reply, for the viewport only. Everything else uses onBuild. */
@@ -382,6 +395,8 @@ export class DocumentStore {
       progress: null,
       meshed: null,
       meshTotal: null,
+      previewBuilt: null,
+      heldRefusal: null,
     };
     this.emitBuild();
     // No-op when nothing is running. Cancel kills the pool worker, which is the
@@ -916,11 +931,15 @@ export class DocumentStore {
   }
 
   // --- live preview ---
-  /** Append un-committed features to the build, no undo, not dirty. Null clears. */
-  setPreview(feature: Feature | Feature[] | null) {
+  /** Append un-committed features to the build, no undo, not dirty. Null clears.
+   *  `hold`: if the kernel refuses a previewed feature, keep the last model that
+   *  built on screen instead of the model without it (see heldRefusal). */
+  setPreview(feature: Feature | Feature[] | null, opts?: { hold?: boolean }) {
     this.preview = feature === null ? null : Array.isArray(feature) ? feature : [feature];
+    this.previewHold = feature !== null && !!opts?.hold;
     this.scheduleRebuild(true);
   }
+  private previewHold = false;
   /** true while an un-committed live-preview feature is appended to rebuilds
    *  (its transient failures must not toast). */
   get hasPreview(): boolean {
@@ -935,16 +954,19 @@ export class DocumentStore {
    *  to open on the model as it looks, without a flash. */
   beginEditPreview(id: string, feature: Feature | null = null) {
     this.editPreview = { id, feature };
+    this.previewHold = false;
     this.scheduleRebuild(true);
   }
-  setEditPreview(feature: Feature | null) {
+  setEditPreview(feature: Feature | null, opts?: { hold?: boolean }) {
     if (!this.editPreview) return;
     this.editPreview = { id: this.editPreview.id, feature };
+    this.previewHold = feature !== null && !!opts?.hold;
     this.scheduleRebuild(true);
   }
   endEditPreview(rebuild = true) {
     if (!this.editPreview) return;
     this.editPreview = null;
+    this.previewHold = false;
     if (rebuild) this.scheduleRebuild(true);
   }
   get editPreviewId(): string | null {
@@ -1723,18 +1745,56 @@ export class DocumentStore {
     if (reply.ok && reply.result.bodyIds && this.doc === sent) this.doc.bodyIds = reply.result.bodyIds;
   }
 
+  /** What was about to be sent as preview, and whether a refusal of it is held. */
+  private previewSnapshot(): { features: Feature[] | null; hold: boolean } {
+    if (!this.preview && !this.editPreview) return { features: null, hold: false };
+    const features = [
+      ...(this.editPreview?.feature ? [this.editPreview.feature] : []),
+      ...(this.preview ?? []),
+    ];
+    return { features, hold: this.previewHold };
+  }
+
+  /** The refusal of one of `sent`'s features in this reply, when the preview asked to be held. */
+  private heldRefusalOf(reply: RebuildReply, sent: { features: Feature[] | null; hold: boolean }): PreviewRefusal | null {
+    if (!sent.hold || !sent.features?.length) return null;
+    const ids = new Set(sent.features.map((f) => f.id));
+    const errs = reply.ok
+      ? (reply.result.featureErrors ?? (reply.result.featureError ? [reply.result.featureError] : []))
+      : [reply.error];
+    const err = errs.find((e) => e.feature_id && ids.has(e.feature_id));
+    if (!err?.feature_id) return null;
+    return {
+      featureId: err.feature_id,
+      message: err.message,
+      code: ("code" in err && typeof err.code === "string") ? err.code : null,
+      diagnostics: reply.ok ? (reply.result.diagnostics ?? []).filter((d) => d.feature_id === err.feature_id) : [],
+    };
+  }
+
   /** A partial build carries its failure inside the result; an outright failure keeps the last mesh. */
-  private settledBuild(reply: RebuildReply): RebuildState {
+  private settledBuild(reply: RebuildReply, sent: { features: Feature[] | null; hold: boolean }): RebuildState {
     const done = {
       building: false, progress: null, meshed: null, meshTotal: null,
-      streamed: null, streamTotal: null,
+      streamed: null, streamTotal: null, previewBuilt: sent.features,
     };
+    const held = this.heldRefusalOf(reply, sent);
+    if (held) {
+      return {
+        ...done,
+        result: this.build.result,
+        errorFeatureId: held.featureId,
+        errorMessage: held.message,
+        heldRefusal: held,
+      };
+    }
     if (!reply.ok) {
       return {
         ...done,
         result: this.build.result,
         errorFeatureId: reply.error.feature_id ?? null,
         errorMessage: reply.error.message,
+        heldRefusal: null,
       };
     }
     const fe = reply.result.featureError;
@@ -1743,6 +1803,7 @@ export class DocumentStore {
       result: reply.result,
       errorFeatureId: fe?.feature_id ?? null,
       errorMessage: fe?.message ?? null,
+      heldRefusal: null,
     };
   }
 
@@ -1768,13 +1829,15 @@ export class DocumentStore {
             this.emitBuildStarted();
             const sent = this.doc;
             const previewing = !!(this.preview || this.editPreview);
+            const sentPreview = this.previewSnapshot();
             const reply = await this.geometry.rebuild(this.effectiveDoc());
             if (!previewing) this.keepBodyIds(sent, reply);
+            const settled = this.settledBuild(reply, sentPreview);
             // A stream that was in flight but never completed has left a PARTIAL
             // model on screen. Tell the viewport to drop it before this result,
             // which on a failure is the PREVIOUS document, renders over the top.
-            if (this.build.streamed !== null && !reply.ok) this.emitBuildAbort();
-            this.build = this.settledBuild(reply);
+            if (this.build.streamed !== null && (!reply.ok || settled.heldRefusal)) this.emitBuildAbort();
+            this.build = settled;
             this.emitBuild();
             // After publishing; a failed rebuild says nothing about projections.
             if (reply.ok) this.maybeQueueProjectionRefresh(reply.result.projectionUpdates);
@@ -1808,10 +1871,12 @@ export class DocumentStore {
       this.emitBuildStarted();
       const sent = this.doc;
       const previewing = !!(this.preview || this.editPreview);
+      const sentPreview = this.previewSnapshot();
       const reply = await ca(this.effectiveDoc());
       if (!previewing) this.keepBodyIds(sent, reply);
-      if (this.build.streamed !== null && !reply.ok) this.emitBuildAbort();
-      this.build = this.settledBuild(reply);
+      const settled = this.settledBuild(reply, sentPreview);
+      if (this.build.streamed !== null && (!reply.ok || settled.heldRefusal)) this.emitBuildAbort();
+      this.build = settled;
       this.emitBuild();
       // Compute All is the explicit retry gesture the valve toast promises:
       // re-arm the valve and route the (freshly recomputed) projection updates

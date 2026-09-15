@@ -20,6 +20,14 @@ from build123d import Vector
 
 from blend_overlap import folds_over_itself
 from conic_blend import ConicNotApplicable, conic_blend
+from errors import (
+    BLEND_FOLDS_OVER,
+    BLEND_HAS_NO_END,
+    BLEND_TOO_LARGE,
+    EDGE_ALREADY_SMOOTH,
+    EDGE_IS_SEAM,
+    GeomError,
+)
 from geom_select import (
     POS_DRIFT,
     REL_DRIFT,
@@ -294,10 +302,11 @@ def _refuse_smooth_edges(shape, edges, label):
         which = f"all {len(edges)} selected edges are already smooth"
     else:
         which = f"{len(smooth)} of the {len(edges)} selected edges are already smooth"
-    raise ValueError(
+    raise GeomError(
         f"can't {label.lower()} here, {which}. The faces meet tangentially, so "
         "there is no corner to cut and no smaller value will help. To get the "
-        "sharp edge back, delete the rounded face."
+        "sharp edge back, delete the rounded face.",
+        EDGE_ALREADY_SMOOTH,
     )
 
 
@@ -328,11 +337,12 @@ def _refuse_seam_edges(shape, edges, label):
             return  # at least one real edge in the selection: nothing to say
     which = ("that edge is a seam" if len(edges) == 1
              else f"all {len(edges)} selected edges are seams")
-    raise ValueError(
+    raise GeomError(
         f"can't {label.lower()} here, {which}. A seam is the line where a face "
         "that wraps all the way round meets itself, so both sides of it are the "
         "same face and there is no corner to cut. Pick the edges where that face "
-        "meets its NEIGHBOURS instead."
+        "meets its NEIGHBOURS instead.",
+        EDGE_IS_SEAM,
     )
 
 
@@ -405,22 +415,32 @@ def _kernel_sentence(err):
     return re.sub(r"[,;]?\s*or use max_fillet\(\)[^.]*", "", str(err)).strip()
 
 
-def _blend_failure_message(label, body, unresolved, one_edge_at, blend_size, err):
-    """What to actually tell the user about a blend the kernel would not build."""
+def _blend_failure(label, body, unresolved, one_edge_at, blend_size, err):
+    """What to actually tell the user about a blend the kernel would not build,
+    as a GeomError whose code says whether size is what decides.
+
+    No code when there were too many edges to probe: nothing was measured, so
+    nothing may claim that a smaller size would build."""
     helps = _size_would_help(body["shape"], unresolved, one_edge_at, blend_size)
     probed = _size_probe(body["shape"], blend_size)
     if helps is not False:
         # Either a smaller size did build, or there were too many edges to probe.
         # OCCT's own sentence is the honest one here.
-        return f"{label} failed on {body['name']}: {_kernel_sentence(err)}"
+        return GeomError(f"{label} failed on {body['name']}: {_kernel_sentence(err)}",
+                         BLEND_TOO_LARGE if helps else None)
     which = ("that edge" if len(unresolved) == 1
              else f"{len(unresolved)} of the selected edges")
-    return (
+    return GeomError(
         f"can't {label.lower()} {which} on {body['name']} at ANY size, it fails "
         f"the same at {probed:g}mm as at {blend_size:g}mm. "
         "The blend has nowhere to end: add the neighbouring edges to it, or blend "
-        "those first."
+        "those first.",
+        BLEND_HAS_NO_END,
     )
+
+
+def _blend_failure_message(label, body, unresolved, one_edge_at, blend_size, err):
+    return str(_blend_failure(label, body, unresolved, one_edge_at, blend_size, err))
 
 
 def _refuse_folded_blend(body, new_shape):
@@ -441,10 +461,11 @@ def _refuse_folded_blend(body, new_shape):
     # No operation name in here. Every path that shows this already puts one in
     # front, so naming it again gives "Fillet failed: Fillet folded over
     # itself", which spends the one line a toast has on saying it twice.
-    raise ValueError(
+    raise GeomError(
         f"made surface that folds back over itself on {body['name']}, at this "
         "size the blend runs past its own face and covers the model twice. Try a "
-        "different size, or blend this edge before the one next to it."
+        "different size, or blend this edge before the one next to it.",
+        BLEND_FOLDS_OVER,
     )
 
 
@@ -499,9 +520,9 @@ def _blend_edges(f, ctx, label, combined, one_edge_at, blend_size):
                 # Paint exactly the offenders red, then re-raise the original error.
                 _report_edge_failures(f, ctx, unresolved,
                                       lambda e: one_edge(body["shape"], e))
-                raise ValueError(_blend_failure_message(
+                raise _blend_failure(
                     label, body, unresolved, one_edge_at, blend_size, combined_err
-                )) from combined_err
+                ) from combined_err
         _refuse_folded_blend(body, new_shape)
         staged.append((body, new_shape))
     for body, shape in staged:

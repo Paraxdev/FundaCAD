@@ -173,8 +173,72 @@ def test_a_large_selection_is_not_probed():
     print("oversized selections skip the probe and keep the kernel wording OK")
 
 
+def _pocket_doc(radius):
+    """A 5 degree tapered R50 x 60 cylinder with an R40 pocket cut 40 deep from
+    the top, filleted along the pocket's floor edge. The point sits opposite the
+    wall's seam, where the app's own edge pick puts it."""
+    return {"parameters": {}, "features": [
+        {"id": "s1", "type": "sketch", "plane": "XY",
+         "entities": [{"type": "circle", "radius": 50, "x": 0, "y": 0}]},
+        {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 60,
+         "operation": "new", "taper": 5},
+        {"id": "s2", "type": "sketch",
+         "plane": {"origin": [0, 0, 60], "normal": [0, 0, 1], "xdir": [1, 0, 0]},
+         "entities": [{"type": "circle", "radius": 40, "x": 0, "y": 0}]},
+        {"id": "e2", "type": "extrude", "sketch": "s2", "distance": -40, "operation": "cut"},
+        {"id": "f1", "type": "fillet", "radius": radius,
+         "edges": {"kind": "edge", "by": "nearest", "point": [-40, 0, 20]}},
+    ]}
+
+
+def test_a_blend_past_its_faces_is_coded_as_too_large():
+    """The interactive drag stops at the largest radius that builds, and only a
+    refusal coded blendTooLarge may say "too large" to the person dragging.
+
+    The pocket's floor is 40 across from the edge to the centre and its wall 40
+    high, so 39.9 is the last radius that fits. CONTROL: 39.9 builds with no
+    error at all, so the code on 40 is about the radius and nothing else."""
+    from builder import rebuild
+    from errors import BLEND_TOO_LARGE
+
+    _part, errors, _bodies = rebuild(_pocket_doc(39.9))
+    assert errors == [], errors
+    for radius in (40.0, 41.0):
+        _part, errors, _bodies = rebuild(_pocket_doc(radius))
+        assert errors and errors[0]["feature_id"] == "f1", errors
+        assert errors[0]["code"] == BLEND_TOO_LARGE, errors[0]
+    print("pocket floor edge: 39.9 builds, 40 and 41 refused as blendTooLarge OK")
+
+
+def test_refusals_that_no_size_fixes_carry_their_own_codes():
+    """A drag must never be told to go smaller for these."""
+    from builder import rebuild
+    from errors import BLEND_HAS_NO_END, EDGE_IS_SEAM
+
+    doc = _pocket_doc(5)
+    doc["features"][-1]["edges"]["point"] = [40, 0, 40]   # the pocket wall's seam
+    _part, errors, _bodies = rebuild(doc)
+    assert errors and errors[0]["code"] == EDGE_IS_SEAM, errors
+
+    shape = _boss_on_a_plate()
+
+    def never(_shape, _edge, _size):
+        raise RuntimeError("Failed creating a fillet with radius of 0.15")
+
+    from builder import _blend_failure
+    err = _blend_failure("Fillet", {"name": "Body1", "shape": shape},
+                         _cap_rim(shape)[:1], never, 0.15, "nope")
+    assert err.code == BLEND_HAS_NO_END, err.code
+    many = list(shape.edges())[:12]
+    assert _blend_failure("Fillet", {"name": "Body1", "shape": shape},
+                          many, _one_edge_at, 1.0, "nope").code is None
+    print("seam and no-end refusals carry their codes, an unprobed one none OK")
+
+
 if __name__ == "__main__":
     try:
+        test_a_blend_past_its_faces_is_coded_as_too_large()
+        test_refusals_that_no_size_fixes_carry_their_own_codes()
         test_the_partial_rim_is_a_real_size_limit()
         test_size_probe_says_yes_when_the_radius_is_the_problem()
         test_a_huge_request_does_not_make_the_probe_lie()

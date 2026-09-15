@@ -25,6 +25,15 @@ PLANE_TILTED = "planeTilted"                # a face is no longer parallel to it
 BAD_REQUEST = "badRequest"                  # a feature is missing or misusing a field
 EMPTY_RESULT = "emptyResult"                # the operation ran but produced no solid
 
+# --- fillet / chamfer refusals ------------------------------------------------
+# An interactive drag reads these to tell "too big, go smaller" apart from "no
+# size will do", and only the first may stop a drag at the largest size that built.
+BLEND_TOO_LARGE = "blendTooLarge"           # a much smaller blend builds on the same edges
+BLEND_HAS_NO_END = "blendHasNoEnd"          # it fails the same at a tiny size
+EDGE_ALREADY_SMOOTH = "edgeAlreadySmooth"   # the faces meet tangentially, no corner
+EDGE_IS_SEAM = "edgeIsSeam"                 # every picked edge is a closed face's seam
+BLEND_FOLDS_OVER = "blendFoldsOver"         # it built, but covers the model twice
+
 
 class GeomError(ValueError):
     """A user-facing geometry refusal that also carries a machine `code`.

@@ -443,6 +443,16 @@ export class DimInput {
     this.problem.textContent = message;
   }
 
+  /** For a tool that judges its own values: stop following the shared preview
+   *  channel for this showing and show `message` instead. The channel only hears
+   *  about values that were sent to the kernel, and such a tool refuses some
+   *  without sending them. */
+  showOwnProblem(message: string | null) {
+    this.unsubscribeError?.();
+    this.unsubscribeError = null;
+    this.setProblem(message);
+  }
+
   isUserDriven(name: string): boolean {
     const f = this.fields.find((x) => x.def.name === name);
     return !!f && f.userDriven;

@@ -227,7 +227,9 @@ export interface DragHandle {
   /** Add this to the scene; scale it by pixelWorldSize(anchor) each frame. */
   group: THREE.Group;
   /** Repaint. Omitted fields keep their current value. */
-  paint(opts: { hot?: boolean; tone?: HandleTone; opacity?: number }): void;
+  /** `refused` paints the error colour over hover and grab, so a hand holding
+   *  the handle still sees that the value under it will not build. */
+  paint(opts: { hot?: boolean; tone?: HandleTone; opacity?: number; refused?: boolean }): void;
   /** Free GPU resources. Removing the group from the scene stays the caller's
    *  job, only it knows which scene that is. */
   dispose(): void;
@@ -399,13 +401,14 @@ export function createDragHandle(tone: HandleTone = "idle"): DragHandle {
   group.add(outline, blob, grabHead, grabStem);
 
   let hot = false;
+  let refused = false;
   let currentTone: HandleTone = tone;
   // Resolved on every repaint, not captured once: a theme change has to reach a
   // handle that is already on screen, and repaint is the only moment its colour
   // is allowed to move.
   const apply = () => {
     const base = currentTone === "cut" ? cutColor() : idleColor();
-    const c = hot ? hotColor() : base;
+    const c = refused ? cutColor() : hot ? hotColor() : base;
     body.color.set(c);
     body.emissive.set(c);
     outlineMat.color.set(themeColor("--bg", HANDLE_OUTLINE));
@@ -417,7 +420,8 @@ export function createDragHandle(tone: HandleTone = "idle"): DragHandle {
     paint(opts) {
       if (opts.hot !== undefined) hot = opts.hot;
       if (opts.tone !== undefined) currentTone = opts.tone;
-      if (opts.hot !== undefined || opts.tone !== undefined) apply();
+      if (opts.refused !== undefined) refused = opts.refused;
+      if (opts.hot !== undefined || opts.tone !== undefined || opts.refused !== undefined) apply();
       if (opts.opacity !== undefined) {
         body.opacity = opts.opacity;
         // The outline fades faster than the body: at the passive handle's 55%
@@ -501,10 +505,11 @@ export function createRotationArc(tone: HandleTone = "idle"): DragHandle {
   group.add(arc, head1, head2, grab);
 
   let hot = false;
+  let refused = false;
   let currentTone: HandleTone = tone;
   const apply = () => {
     const base = currentTone === "cut" ? cutColor() : idleColor();
-    const c = hot ? hotColor() : base;
+    const c = refused ? cutColor() : hot ? hotColor() : base;
     body.color.set(c);
     body.emissive.set(c);
   };
@@ -515,7 +520,8 @@ export function createRotationArc(tone: HandleTone = "idle"): DragHandle {
     paint(opts) {
       if (opts.hot !== undefined) hot = opts.hot;
       if (opts.tone !== undefined) currentTone = opts.tone;
-      if (opts.hot !== undefined || opts.tone !== undefined) apply();
+      if (opts.refused !== undefined) refused = opts.refused;
+      if (opts.hot !== undefined || opts.tone !== undefined || opts.refused !== undefined) apply();
       if (opts.opacity !== undefined) body.opacity = opts.opacity;
     },
     dispose() {

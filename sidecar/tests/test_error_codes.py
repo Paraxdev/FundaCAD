@@ -10,8 +10,8 @@ projects it onto featureErrors[].code. This pins the whole chain: the source
 attaches the code, and it survives to the wire shape.
 
 CONTROLS, so this cannot pass by always reporting a code: an impossible-but-
-well-formed operation (a fillet radius larger than the face) still comes back
-with NO code, and a clean build reports no error at all.
+well-formed operation nothing has categorised (a shell thicker than the body)
+still comes back with NO code, and a clean build reports no error at all.
 
 Run: uv run python tests/test_error_codes.py
 """
@@ -19,7 +19,7 @@ Run: uv run python tests/test_error_codes.py
 import _bootstrap  # noqa: F401  (puts sidecar/ on sys.path)
 
 from geom_select import _nearest_one
-from errors import GeomError, AMBIGUOUS_REFERENCE, REFERENCE_NOT_FOUND
+from errors import GeomError, AMBIGUOUS_REFERENCE, BLEND_TOO_LARGE, REFERENCE_NOT_FOUND
 
 # Reuse the proven two-body document and its selector helpers, so the failures
 # here travel the exact builder path that feeds featureErrors, not a stub.
@@ -49,18 +49,28 @@ def test_an_ambiguous_reference_reaches_the_wire_with_its_code():
     print(PASS, "an ambiguous reference reaches featureErrors with its code")
 
 
-def test_an_ordinary_refusal_carries_no_code():
+def test_a_too_large_fillet_is_not_a_reference_problem():
     """CONTROL: a fillet radius larger than body2's 6mm faces is impossible, but
-    it is not a reference the user can re-pick, so it must reach the wire with NO
-    code. A code on this would send the frontend offering a re-pick that fixes
-    nothing."""
+    it is not a reference the user can re-pick, so it must reach the wire with a
+    size code and never a reference one. A reference code on this would send
+    the frontend offering a re-pick that fixes nothing."""
     _vols, errors = build({"id": "f1", "type": "fillet", "radius": 7.0,
                            "edges": [edge_sel(B1_CORNER, "body1"),
                                      edge_sel(B2_CORNER, "body2")]})
     assert errors, "precondition: the impossible fillet must fail"
+    assert errors[0].get("code") == BLEND_TOO_LARGE, errors[0]
+    assert _wire(errors[0]).get("code") not in (AMBIGUOUS_REFERENCE, REFERENCE_NOT_FOUND)
+    print(PASS, "a too-large fillet reaches the wire as blendTooLarge, not a reference code")
+
+
+def test_an_ordinary_refusal_carries_no_code():
+    """CONTROL: a refusal nothing has categorised, a shell wall thicker than the
+    body, reaches the wire with NO code."""
+    _vols, errors = build({"id": "x2", "type": "shell", "thickness": 50, "faces": []})
+    assert errors, "precondition: the impossible shell must fail"
     assert errors[0].get("code") is None, errors[0]
     assert "code" not in _wire(errors[0]), _wire(errors[0])
-    print(PASS, "an ordinary impossible operation carries no code")
+    print(PASS, "an uncategorised refusal carries no code")
 
 
 def test_a_clean_build_reports_no_error_at_all():
@@ -89,6 +99,7 @@ def test_the_code_is_attached_at_the_source_not_the_loop():
 
 def main():
     test_an_ambiguous_reference_reaches_the_wire_with_its_code()
+    test_a_too_large_fillet_is_not_a_reference_problem()
     test_an_ordinary_refusal_carries_no_code()
     test_a_clean_build_reports_no_error_at_all()
     test_the_code_is_attached_at_the_source_not_the_loop()

@@ -6,7 +6,9 @@ import {
   dragLimit,
   otherTreatment,
   scrubSigned,
-  blendCeiling,
+  blendRefusalReason,
+  blendVerdict,
+  commitDecision,
   EMPTY_BLEND_RANGE,
   noteBlendOutcome,
   seedValue,
@@ -71,20 +73,13 @@ describe("noteBlendOutcome", () => {
     steps.reduce((r, [v, ok]) => noteBlendOutcome(r, v, ok), EMPTY_BLEND_RANGE);
 
   it("records the largest size that built and the smallest that did not", () => {
-    expect(fold([[1, true], [2, true], [4, false], [5, false]])).toEqual({
-      built: 2, refused: 4, anyBuilt: true,
-    });
+    expect(fold([[1, true], [2, true], [4, false], [5, false]])).toEqual({ built: 2, refused: 4 });
   });
 
   it("lets a refusal drop a success recorded at the same size", () => {
-    // The measured case: a rebuild begun at the previous size lands while the
-    // drag already shows the next one, so 2.2 was recorded as BOTH built and
-    // refused and the wall came to rest exactly on a size that shows no blend.
     const r = fold([[2.2, true], [2.2, false]]);
     expect(r.refused).toBe(2.2);
     expect(r.built).toBeNull();
-    expect(r.anyBuilt).toBe(true); // it still knows size is what decides here
-    expect(blendCeiling(r, 0.1)).toBeCloseTo(2.1);
   });
 
   it("does not let a late success climb back over a refusal", () => {
@@ -97,42 +92,85 @@ describe("noteBlendOutcome", () => {
   });
 });
 
-describe("blendCeiling", () => {
-  const range = (built: number | null, refused: number | null, anyBuilt = built != null) => ({
-    built, refused, anyBuilt,
+describe("blendVerdict", () => {
+  // The pocket from the reference flow: a 40mm deep, 40mm radius pocket whose
+  // floor edge builds at 39.9 and is refused from 40 up.
+  const pocket = { built: 39.9, refused: 40 };
+
+  it("knows nothing before the kernel has answered", () => {
+    expect(blendVerdict(EMPTY_BLEND_RANGE, 10)).toBe("unknown");
   });
 
-  it("does not exist until the kernel has refused something", () => {
-    expect(blendCeiling(EMPTY_BLEND_RANGE, 0.5)).toBe(Infinity);
-    expect(blendCeiling(range(3, null), 0.5)).toBe(Infinity);
+  it("refuses the refused size and everything past it without asking again", () => {
+    expect(blendVerdict(pocket, 40)).toBe("refused");
+    expect(blendVerdict(pocket, 55)).toBe("refused");
   });
 
-  it("stops one step BELOW the size that was refused", () => {
-    // Stopping ON it parks the drag where the model shows no blend at all,
-    // the "jumps back and says failed" state this replaces.
-    expect(blendCeiling(range(2.5, 3), 0.5)).toBeCloseTo(2.5);
-    expect(blendCeiling(range(1, 3), 0.5)).toBeCloseTo(2.5);
+  it("comes back the moment the drag is under the refusal", () => {
+    expect(blendVerdict(pocket, 39.9)).toBe("builds");
+    expect(blendVerdict(pocket, 12)).toBe("builds");
+    expect(blendVerdict({ built: 30, refused: 40 }, 35)).toBe("unknown");
   });
 
-  it("keeps a larger size that DID build", () => {
-    // Rebuilds coalesce during a fast drag, so a refusal can describe a size the
-    // drag has already left behind. A measured success outranks it.
-    expect(blendCeiling(range(6, 3), 0.5)).toBeCloseTo(6);
+  it("is not fooled by float fuzz at the refused size", () => {
+    expect(blendVerdict(pocket, 39.999999999999986)).toBe("refused");
   });
 
-  it("invents no wall from a refusal that has no size in it", () => {
-    // Measured on the reported document: the boundary of an existing round is a
-    // tangent edge, refused at 0.5mm exactly as at 8mm. Nothing built at any
-    // size, so nothing says size is the problem, walling the drag at the seed
-    // value would be the arbitrary limit this whole change is about.
-    expect(blendCeiling(range(null, 2, false), 0.1)).toBe(Infinity);
+  it("has no opinion on a value that is not a size", () => {
+    expect(blendVerdict(pocket, 0)).toBe("unknown");
+    expect(blendVerdict(pocket, Number.NaN)).toBe("unknown");
+  });
+});
+
+describe("commitDecision", () => {
+  const base = { value: 41, verdict: "refused" as const, settled: false, shown: 39.8, typed: false };
+
+  it("commits the size on screen when the dragged size is refused", () => {
+    expect(commitDecision(base)).toEqual({ action: "commit", value: 39.8 });
   });
 
-  it("never falls below the smallest blend worth committing", () => {
-    // A step far larger than the refusal would put the wall below zero.
-    expect(blendCeiling(range(0.0005, 0.2), 5)).toBe(MIN_EDGE_VALUE);
-    expect(blendCeiling(range(null, 3, true), Number.NaN)).toBeCloseTo(3 - MIN_EDGE_VALUE);
-    expect(blendCeiling(range(null, 3, true), 0)).toBeCloseTo(3 - MIN_EDGE_VALUE);
+  it("cancels rather than adding a broken feature when nothing ever built", () => {
+    expect(commitDecision({ ...base, shown: null })).toEqual({ action: "cancel" });
+  });
+
+  it("keeps the tool open on a refused TYPED value", () => {
+    expect(commitDecision({ ...base, typed: true })).toEqual({ action: "stay" });
+  });
+
+  it("commits a value whose own preview built", () => {
+    expect(commitDecision({ ...base, value: 30, verdict: "builds", settled: true, shown: 30 }))
+      .toEqual({ action: "commit", value: 30 });
+  });
+
+  it("waits for the kernel on a value it has not answered for yet", () => {
+    // Released mid round-trip: committing now would be a guess.
+    expect(commitDecision({ ...base, verdict: "unknown", shown: 30 })).toEqual({ action: "wait" });
+    expect(commitDecision({ ...base, value: 20, verdict: "builds", shown: 30 })).toEqual({ action: "wait" });
+  });
+});
+
+describe("blendRefusalReason", () => {
+  const tooBig = { code: "blendTooLarge", message: "Fillet failed on Body1: Failed creating a fillet with radius of 40.0, try a smaller value" };
+
+  it("says what a too-large blend means, per treatment and edge count", () => {
+    expect(blendRefusalReason("fillet", 1, tooBig)).toBe("Radius too large for the faces around this edge");
+    expect(blendRefusalReason("chamfer", 3, tooBig)).toBe("Distance too large for the faces around these edges");
+  });
+
+  it("reads the older uncoded wording the same way", () => {
+    expect(blendRefusalReason("fillet", 1, { ...tooBig, code: null })).toBe(
+      "Radius too large for the faces around this edge",
+    );
+  });
+
+  it("never tells someone to go smaller when size is not the problem", () => {
+    const r = blendRefusalReason("fillet", 1, { code: "edgeAlreadySmooth", message: "can't fillet here" });
+    expect(r).not.toMatch(/smaller|too large/i);
+  });
+
+  it("passes an unrecognised refusal through without the body prefix", () => {
+    expect(blendRefusalReason("fillet", 1, { code: null, message: "Fillet failed on Body1: something odd" }))
+      .toBe("something odd");
   });
 });
 

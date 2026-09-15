@@ -39,7 +39,7 @@ export const MIN_EDGE_VALUE = 0.001;
  *
  *  A runaway guard, not a judgement. It exists to stop a flick of the mouse from
  *  running the number to 10⁴ mm and firing a string of doomed rebuilds; the
- *  KERNEL decides what actually builds, and blendCeiling below carries that
+ *  KERNEL decides what actually builds, and blendVerdict below carries that
  *  answer back into the drag. Half the diagonal is past a full round on a cube
  *  (s/2 ≈ 0.29 of s·√3), so nothing a blend can legitimately reach is behind it.
  *
@@ -83,30 +83,19 @@ export function valueBounds(modelDiagonal: number | null): ValueBounds {
   return { min: MIN_EDGE_VALUE, max: dragLimit(modelDiagonal) };
 }
 
-/** What the kernel has said about size so far, during ONE gesture on ONE set of
- *  edges. Reset whenever either of those changes. */
+/** What the kernel has said about size so far, during ONE gesture on ONE
+ *  question (treatment, edges, profile). Reset whenever the question changes. */
 export interface BlendRange {
   /** the largest size seen to build that is below every refusal, or null */
   built: number | null;
   /** the smallest size the kernel refused, or null */
   refused: number | null;
-  /** some size built at all, the evidence that SIZE is what decides here */
-  anyBuilt: boolean;
 }
 
-export const EMPTY_BLEND_RANGE: BlendRange = { built: null, refused: null, anyBuilt: false };
+export const EMPTY_BLEND_RANGE: BlendRange = { built: null, refused: null };
 
-/** Fold one kernel answer into the range.
- *
- *  A refusal is the later word about `value` than any success at the same size,
- *  so it drops a `built` that has caught up with it. That case is real, not
- *  defensive: rebuilds coalesce, so a build begun at the previous size lands
- *  while the drag is already showing the next one, and both get recorded against
- *  it. Left in, the wall would sit exactly ON the refused size, the drag parked
- *  on a value that shows no blend, which is the behaviour all of this replaces.
- *
- *  `anyBuilt` never comes back off, because it answers a different question: not
- *  "how big" but "is size what decides here at all". */
+/** Fold one kernel answer into the range. A refusal drops a `built` at or above
+ *  it, so the range never claims a size both builds and does not. */
 export function noteBlendOutcome(range: BlendRange, value: number, built: boolean): BlendRange {
   if (!Number.isFinite(value) || value <= 0) return range;
   if (!built) {
@@ -114,36 +103,92 @@ export function noteBlendOutcome(range: BlendRange, value: number, built: boolea
     return {
       built: range.built != null && range.built >= refused ? null : range.built,
       refused,
-      anyBuilt: range.anyBuilt,
     };
   }
   const below = range.refused == null || value < range.refused;
   return {
     built: below ? Math.max(range.built ?? 0, value) : range.built,
     refused: range.refused,
-    anyBuilt: true,
   };
 }
 
-/** The wall the kernel itself has put in front of the drag. Infinity while
- *  nothing has been refused: until then there is no measured wall and the
- *  runaway guard is the only bound.
+export type BlendVerdict = "builds" | "refused" | "unknown";
+
+const SAME_SIZE = 1e-9;
+
+/** What the kernel's answers so far say about `value`, before asking again.
  *
- *  The wall sits one `step` BELOW the refusal, not on it, one step down is the
- *  largest size the drag can hold that is actually there. A `built` above that
- *  raises it back: a refusal can describe a size the drag has already left. */
-export function blendCeiling(range: BlendRange, step: number): number {
-  const { built, refused, anyBuilt } = range;
-  if (refused == null || !Number.isFinite(refused) || refused <= 0) return Infinity;
-  // Nothing has built at any size, so nothing says SIZE is what is wrong. Plenty
-  // of blends fail identically however small they get, a tangent edge has no
-  // corner to cut, a chain with nowhere to end fails the same at a twentieth of
-  // the value, and walling the drag off a refusal like that would invent a
-  // limit out of a failure that has none in it.
-  if (!anyBuilt) return Infinity;
-  const back = Number.isFinite(step) && step > 0 ? step : MIN_EDGE_VALUE;
-  const wall = Math.max(MIN_EDGE_VALUE, refused - back);
-  return built != null && Number.isFinite(built) && built > wall ? built : wall;
+ *  Assumes a blend refused at one size is refused at every larger size on the
+ *  same edges, and builds at every smaller size than one that built. That is
+ *  what lets a drag run on past the limit without sending the kernel a doomed
+ *  request per pointermove, and turn back the instant it comes under it. */
+export function blendVerdict(range: BlendRange, value: number): BlendVerdict {
+  if (!Number.isFinite(value) || value <= 0) return "unknown";
+  if (range.refused != null && value >= range.refused - SAME_SIZE) return "refused";
+  if (range.built != null && value <= range.built + SAME_SIZE) return "builds";
+  return "unknown";
+}
+
+export type CommitDecision =
+  | { action: "commit"; value: number }
+  | { action: "cancel" }
+  | { action: "wait" }
+  | { action: "stay" };
+
+/** What confirming the gesture does with the value on the handle.
+ *
+ *  `shown` is the size the model on screen was built at (null for the bare
+ *  model), `settled` says the reply for `value` itself has landed, and `typed`
+ *  says the value came from the keyboard rather than the drag.
+ *
+ *  A refused drag commits what the user is looking at, or nothing. A refused
+ *  TYPED value stays open instead: swapping someone's typed number for another
+ *  one on Enter is not a thing to do silently. A value still on its way to the
+ *  kernel waits for the answer rather than committing a guess. */
+export function commitDecision(o: {
+  value: number;
+  verdict: BlendVerdict;
+  settled: boolean;
+  shown: number | null;
+  typed: boolean;
+}): CommitDecision {
+  if (o.verdict === "refused") {
+    if (o.typed) return { action: "stay" };
+    return o.shown != null && o.shown >= MIN_EDGE_VALUE
+      ? { action: "commit", value: o.shown }
+      : { action: "cancel" };
+  }
+  if (o.settled) return { action: "commit", value: o.value };
+  return { action: "wait" };
+}
+
+/** A kernel refusal, said the way a person would say it. `code` is the sidecar's
+ *  machine category (sidecar/errors.py); the message is only read for the older
+ *  wording that carried no code. */
+export function blendRefusalReason(
+  kind: EdgeTreatment,
+  edgeCount: number,
+  refusal: { code: string | null; message: string },
+): string {
+  const these = edgeCount === 1 ? "this edge" : "these edges";
+  const These = edgeCount === 1 ? "This edge is" : "These edges are";
+  const size = kind === "fillet" ? "Radius" : "Distance";
+  switch (refusal.code) {
+    case "blendTooLarge":
+      return `${size} too large for the faces around ${these}`;
+    case "blendHasNoEnd":
+      return `No ${kind} size works on ${these}, the blend has nowhere to end`;
+    case "edgeAlreadySmooth":
+      return `${These} already smooth, there is no corner to ${kind === "fillet" ? "round" : "cut"}`;
+    case "edgeIsSeam":
+      return `${These} a seam, not a corner, pick where the face meets its neighbours`;
+    case "blendFoldsOver":
+      return `At this size the ${kind} folds back over the model`;
+  }
+  if (/smaller (length )?value/i.test(refusal.message)) {
+    return `${size} too large for the faces around ${these}`;
+  }
+  return refusal.message.replace(/^(Fillet|Chamfer) failed on [^:]+:\s*/, "");
 }
 
 export function clampValue(v: number, bounds: ValueBounds): number {
