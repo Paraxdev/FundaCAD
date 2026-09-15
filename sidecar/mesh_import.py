@@ -259,6 +259,57 @@ def _canonical_ok(result, shape, deep=True):
         return False
 
 
+def _conversion_meshes(face):
+    """Can the mesher still tessellate this rebuilt face, and does what it produces
+    still lie on the surface?
+
+    ShapeFix_Face re-projects the original wire onto the analytic surface, and on a
+    closed face whose seam lands badly the pcurves come out malformed: the face
+    passes BRepCheck, its area is right to four decimals, and OCCT then meshes a
+    region that is not the face. Measured on a spike tip snapped to a cone, 137 of
+    155 triangles faced the wrong way, half of them lying flat in the plane of the
+    neighbouring cap, which is what put z-fighting on screen. Nothing cheaper than
+    asking the mesher separated it: the checks the gate already runs all passed.
+
+    Coarse on purpose (the mesh here is thrown away), and a sample of triangles is
+    enough to tell a face that meshed from one that did not: 0.7 ms a face."""
+    import numpy as np
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepGProp import BRepGProp_Face
+    from OCP.BRepMesh import BRepMesh_IncrementalMesh
+    from OCP.TopAbs import TopAbs_REVERSED
+    from OCP.TopLoc import TopLoc_Location
+    from OCP.gp import gp_Pnt, gp_Vec
+
+    try:
+        if face is None or face.IsNull():
+            return False  # BRepMesh crashes outright on a null shape, it does not raise
+        BRepMesh_IncrementalMesh(face, 0.05, True, 0.5, True)
+        loc = TopLoc_Location()
+        tri = BRep_Tool.Triangulation_s(face, loc)
+        if tri is None or not tri.HasUVNodes() or tri.NbTriangles() == 0:
+            return False
+        P = np.array([tri.Node(k).Coord() for k in range(1, tri.NbNodes() + 1)])
+        UV = np.array([tri.UVNode(k).Coord() for k in range(1, tri.NbNodes() + 1)])
+        T = np.array([tri.Triangle(k).Get() for k in range(1, tri.NbTriangles() + 1)]).reshape(-1, 3) - 1
+        if face.Orientation() == TopAbs_REVERSED:
+            T = T[:, (0, 2, 1)]
+        T = T[::max(1, len(T) // 64)]
+        fn = np.cross(P[T[:, 1]] - P[T[:, 0]], P[T[:, 2]] - P[T[:, 0]])
+        surf = BRepGProp_Face(face)
+        wrong = 0
+        for t in range(len(T)):
+            u, v = UV[T[t]].mean(axis=0)
+            p, n = gp_Pnt(), gp_Vec()
+            surf.Normal(u, v, p, n)
+            scale = float(np.linalg.norm(fn[t])) * n.Magnitude()
+            if scale <= 0 or (fn[t][0] * n.X() + fn[t][1] * n.Y() + fn[t][2] * n.Z()) / scale < 0.5:
+                wrong += 1
+        return wrong * 4 <= len(T)
+    except Exception:  # noqa: BLE001, a face that cannot be measured is not accepted
+        return False
+
+
 def _canonicalize(shape, tol=1e-3):
     """Canonical-recognition pre-pass for B-rep imports (STEP): snap near-analytic
     B-spline/Bezier faces to true planes/cylinders/cones/spheres, and swept
@@ -327,8 +378,11 @@ def _canonicalize(shape, tol=1e-3):
                     if mf.IsDone():
                         fix = ShapeFix_Face(mf.Face())
                         fix.Perform()
-                        nf = fix.Face()
-                        converted += 1
+                        # Keep the spline when the snapped face cannot be meshed:
+                        # a face nothing can draw is worse than an inexact surface.
+                        if _conversion_meshes(fix.Face()):
+                            nf = fix.Face()
+                            converted += 1
             new_faces.append(nf)
         if converted == 0:
             # `work` is SweptToElementary's output, and until now it was returned
