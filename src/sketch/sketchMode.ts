@@ -136,7 +136,10 @@ function parseConflictIdx(ids: string[]): Set<number> {
 }
 
 // Tools that operate on the current multi-selection, so setTool must keep it.
-const KEEPS_SELECTION = new Set<SketchTool>(["mirror", "move", "copy", "rotate", "scale"]);
+// The entity patterns belong here for the same reason mirror does: they
+// replicate what is selected, and clearing it on the way in left them refusing
+// with "Select entities first" that no amount of selecting first could answer.
+const KEEPS_SELECTION = new Set<SketchTool>(["mirror", "move", "copy", "rotate", "scale", ...ENTITY_PATTERNS]);
 
 // Sentinel id for the in-progress text tool's live-preview entity: it lives on the
 // active entity list (so it repaints through the normal render path) but is never
