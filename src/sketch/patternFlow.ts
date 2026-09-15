@@ -9,6 +9,7 @@ import * as THREE from "three";
 import type { SketchPattern } from "../types";
 import type { DimInput } from "./dimInput";
 import { newPatternId } from "./id";
+import { patternSweepDeg } from "./patternDrag";
 import { setPrompt } from "../ui/prompt";
 import type { SketchTool } from "./sketchMode";
 
@@ -35,6 +36,8 @@ export interface PatternHost {
   patterns(): SketchPattern[];
   /** the shared on-canvas dimension input */
   dim(): DimInput;
+  /** where a source entity sits, its centre or anchor, null if the id is gone */
+  sourcePoint(id: string): { x: number; y: number } | null;
   refreshActive(): void;
   onState(): void;
 }
@@ -43,6 +46,7 @@ export class PatternFlow {
   private pendingPattern: SketchPattern | null = null; // one being placed (live)
   private patternCenter: THREE.Vector2 | null = null; // its center (first click)
   private editOriginal: SketchPattern | null = null; // when editing, the pre-edit copy (Esc restores)
+  private sweep: number | null = null; // circular pattern: the last angle the drag reported (null = drag not started)
 
   constructor(private host: PatternHost) {}
 
@@ -60,6 +64,7 @@ export class PatternFlow {
   resetForEnter() {
     this.pendingPattern = null;
     this.patternCenter = null;
+    this.sweep = null;
   }
 
   /** push any in-progress pattern into the committed list, nulling only the
@@ -78,6 +83,7 @@ export class PatternFlow {
     this.pendingPattern = null;
     this.editOriginal = null;
     this.patternCenter = null;
+    this.sweep = null;
   }
 
   /** Delete/Backspace while a pattern is pending: remove it outright. */
@@ -85,6 +91,7 @@ export class PatternFlow {
     this.pendingPattern = null;
     this.editOriginal = null;
     this.patternCenter = null;
+    this.sweep = null;
     this.host.dim().hide();
     setPrompt(null);
     this.host.refreshActive();
@@ -100,6 +107,7 @@ export class PatternFlow {
     this.pendingPattern = null;
     this.editOriginal = null;
     this.patternCenter = null;
+    this.sweep = null;
     this.host.dim().hide();
     setPrompt(null);
     this.host.refreshActive();
@@ -113,6 +121,7 @@ export class PatternFlow {
         return;
       }
       this.patternCenter = p.clone();
+      this.sweep = null;
       this.pendingPattern = this.defaultPattern(this.host.tool(), p);
       this.host.dim().show(this.patternDimDefs(this.pendingPattern.type), () => this.commit());
       this.host.refreshActive();
@@ -141,7 +150,8 @@ export class PatternFlow {
   }
 
   /** Live sizing: cursor offset/distance from the start point drives the spatial
-   *  param (bolt dia / spacing / grid-step); typed fields drive counts/angle. */
+   *  param (bolt dia / spacing / grid-step / circular sweep); typed fields drive
+   *  counts, and a typed value always outranks the cursor. */
   move(p: THREE.Vector2, e: PointerEvent) {
     if (!this.patternCenter || !this.pendingPattern) return;
     const pat = this.pendingPattern;
@@ -170,10 +180,33 @@ export class PatternFlow {
       pat.countY = Math.max(1, dimN("countY", pat.countY as number));
     } else if (pat.type === "patternCircular") {
       pat.count = Math.max(1, dimN("count", pat.count as number));
-      pat.angle = dim.getValue("angle") ?? (pat.angle as number);
+      const src = dim.isUserDriven("angle") ? null : this.firstSourcePoint(pat.sources);
+      const swept = src
+        ? patternSweepDeg({
+            cx: this.patternCenter.x, cy: this.patternCenter.y,
+            sx: src.x, sy: src.y, px: p.x, py: p.y,
+            prev: this.sweep, free: e.altKey,
+          })
+        : null;
+      if (swept != null) {
+        this.sweep = swept;
+        pat.angle = swept;
+        dim.updateFromCursor({ angle: swept }); // skips the field once it is typed in
+      } else {
+        pat.angle = dim.getValue("angle") ?? (pat.angle as number);
+      }
     }
     dim.position(e.clientX, e.clientY);
     this.host.refreshActive();
+  }
+
+  /** the first source that still resolves, what the sweep is measured from */
+  private firstSourcePoint(sources: readonly string[]): { x: number; y: number } | null {
+    for (const id of sources) {
+      const p = this.host.sourcePoint(id);
+      if (p) return p;
+    }
+    return null;
   }
 
   commit() {
@@ -182,6 +215,7 @@ export class PatternFlow {
     this.pendingPattern = null;
     this.editOriginal = null;
     this.patternCenter = null;
+    this.sweep = null;
     this.host.dim().hide();
     setPrompt(null);
     const selected = this.host.selected();
@@ -200,6 +234,7 @@ export class PatternFlow {
     patterns.splice(i, 1); // pull it out; commit/cancel puts it back
     this.editOriginal = { ...pat };
     this.pendingPattern = pat;
+    this.sweep = null; // the first drag sample re-seeds the accumulator from the cursor
     this.patternCenter = new THREE.Vector2(
       "cx" in pat ? (pat.cx as number) : 0,
       "cy" in pat ? (pat.cy as number) : 0,

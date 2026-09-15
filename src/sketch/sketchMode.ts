@@ -41,7 +41,7 @@ import { Disposer } from "../lib/disposer";
 import { allInsideRect, convexTouchesRect, dragBox, isAreaDrag, pointInRect, type AreaMode, type ScreenRect } from "../viewport/areaSelect";
 import { loopsFromEdgePolys, planeEdges, type PlaneEdge } from "./faceFootprint";
 import { isExactPlaneEdge, meshBodyIds } from "./planeEdgePick";
-import { boundaryAnchors, footprintAnchors } from "./anchors";
+import { boundaryAnchors, footprintAnchors, loopCentroid } from "./anchors";
 import { setPrompt } from "../ui/prompt";
 import { tooEdgeOn } from "./planeGraze";
 import { toast } from "../ui/toast";
@@ -368,6 +368,10 @@ export class SketchMode {
       selected: () => this.selected,
       patterns: () => this.patterns,
       dim: () => this.dim,
+      sourcePoint: (id) => {
+        const ent = this.entities.find((x) => x.id === id);
+        return ent ? loopCentroid(entityPolyline(ent)) : null;
+      },
       refreshActive: () => this.refreshActive(),
       onState: () => this.onState?.(),
     };
