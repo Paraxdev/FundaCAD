@@ -139,7 +139,7 @@ export function kindUnit(kind: FieldKind): ParamUnit {
 
 /** Numeric fields on sketch patterns. */
 export const PATTERN_NUM_FIELDS: Record<SketchPattern["type"], [string, FieldKind][]> = {
-  patternRect: [["countX", "count"], ["countY", "count"], ["spacingX", "length"], ["spacingY", "length"]],
+  patternRect: [["countX", "count"], ["countY", "count"], ["spacingX", "length"], ["spacingY", "length"], ["angle", "angle"]],
   patternCircular: [["cx", "length"], ["cy", "length"], ["count", "count"], ["angle", "angle"]],
   hexHoles: [["cx", "length"], ["cy", "length"], ["diameter", "length"], ["spacing", "length"], ["rings", "count"]],
   honeycomb: [["cx", "length"], ["cy", "length"], ["diameter", "length"], ["spacing", "length"], ["rings", "count"]],
