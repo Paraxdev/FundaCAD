@@ -640,7 +640,45 @@ function textObjects(
   return g;
 }
 
-/** a small "+" glyph (two short crossed segments) marking a sketch point.
+/** Screen size of the dot on a sketch point or centre, in CSS pixels. */
+export const POINT_DOT_PX = 9;
+
+let dotTexture: THREE.DataTexture | null = null;
+/** A white disc with a dark rim, so the dot reads over a pale profile fill and a dark ground alike. */
+function pointDotTexture(): THREE.DataTexture {
+  if (dotTexture) return dotTexture;
+  const n = 32;
+  const data = new Uint8Array(n * n * 4);
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < n; i++) {
+      const r = Math.hypot(i + 0.5 - n / 2, j + 0.5 - n / 2) / (n / 2);
+      const edge = (a: number) => Math.min(1, Math.max(0, (a - r) * n * 0.5));
+      const inner = edge(0.62);
+      const k = (j * n + i) * 4;
+      data[k] = data[k + 1] = data[k + 2] = Math.round(255 * inner);
+      data[k + 3] = Math.round(255 * Math.max(inner, 0.85 * edge(1)));
+    }
+  }
+  dotTexture = new THREE.DataTexture(data, n, n);
+  dotTexture.magFilter = dotTexture.minFilter = THREE.LinearFilter;
+  dotTexture.needsUpdate = true;
+  return dotTexture;
+}
+
+const dotMats = new Map<number, THREE.PointsMaterial>();
+function dotMat(color: number): THREE.PointsMaterial {
+  let m = dotMats.get(color);
+  if (!m) {
+    m = new THREE.PointsMaterial({
+      color, size: POINT_DOT_PX, sizeAttenuation: false, map: pointDotTexture(),
+      transparent: true, depthTest: true, depthWrite: false,
+    });
+    dotMats.set(color, m);
+  }
+  return m;
+}
+
+/** A sketch point: a "+" (what committedCurveAt picks) under a dot that keeps its size at any zoom.
  *  Built in PLANE coordinates, world-axis offsets would push strokes out of
  *  the plane on XZ/YZ sketches (edge-on, half the cross vanished). */
 function pointMarker(plane: SketchPlane, x: number, y: number, color: number): THREE.Object3D {
@@ -652,6 +690,9 @@ function pointMarker(plane: SketchPlane, x: number, y: number, color: number): T
   const g = new THREE.BufferGeometry().setFromPoints(pts);
   const seg = new THREE.LineSegments(g, lineMat(color));
   seg.renderOrder = 13;
+  const dot = new THREE.Points(new THREE.BufferGeometry().setFromPoints([plane.to3D(x, y)]), dotMat(color));
+  dot.renderOrder = 14;
+  seg.add(dot);
   return seg;
 }
 
