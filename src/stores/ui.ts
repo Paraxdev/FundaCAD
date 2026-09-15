@@ -48,6 +48,10 @@ export const useUiStore = defineStore("ui", () => {
   const xray = ref(false);
   const wireframe = ref(false);
 
+  // --- the viewport stutters under the full render (viewport/stutterWatch.ts) ---
+  const lowPerformance = ref(false);
+  const lowPerformanceDismissed = ref(false);
+
   // --- the `?` keyboard cheat sheet ---
   const shortcutHudOpen = ref(false);
 
@@ -58,6 +62,7 @@ export const useUiStore = defineStore("ui", () => {
     sketchActive,
     gridStepMm,
     projLabel, selMode, xray, wireframe,
+    lowPerformance, lowPerformanceDismissed,
     shortcutHudOpen,
   };
 });

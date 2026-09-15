@@ -13,6 +13,7 @@ import { useDialogStore } from "../../stores/dialogs";
 import { useSketchPaletteStore } from "../../stores/sketchPalette";
 import { fmtLength, getUnit, onUnitChange, setUnit, asUnit, type Unit } from "../../ui/units";
 import { saveRenderedImage } from "../../io/files";
+import { setRenderPref } from "../../ui/renderPrefs";
 import { toast } from "../../ui/toast";
 import type { ProjectionMode } from "../../viewport/cameras";
 import IconButton from "../ui/IconButton.vue";
@@ -131,6 +132,16 @@ const errorCount = useBuildValue((b) => {
   return ids.size;
 });
 
+function enablePerformanceMode() {
+  shell.closePopover();
+  setRenderPref("performanceMode", true);
+  toast("Performance mode is on, you can turn it off in Preferences");
+}
+function dismissPerformanceWarning() {
+  shell.closePopover();
+  ui.lowPerformanceDismissed = true;
+}
+
 const saving = ref(false);
 async function screenshot() {
   if (saving.value) return;
@@ -149,6 +160,15 @@ async function screenshot() {
 
 <template>
   <div id="viewcontrols" ref="root" class="float-column">
+    <div v-if="ui.lowPerformance && !ui.lowPerformanceDismissed" class="float-group perf-warn-group">
+      <IconButton
+        icon="warning"
+        title="Low performance"
+        class="perf-warn"
+        :active="isOpen('perf')"
+        @click="open('perf', $event)"
+      />
+    </div>
     <div class="float-group">
       <IconButton icon="magnet" title="Snapping" :active="isOpen('snap')" @click="open('snap', $event)" />
       <button
@@ -176,6 +196,16 @@ async function screenshot() {
     <div v-if="dialogs.bugDeps" class="float-group">
       <IconButton icon="bug" title="Report a bug" @click="dialogs.bugReport = true" />
     </div>
+
+    <Popover v-if="isOpen('perf')" :anchor="anchorOf('perf')" side="left" kind="vc-pop perf-pop" @close="shell.closePopover()">
+      <div class="perf-pop-title">Low performance</div>
+      <p class="perf-pop-text">Detected stutters, your machine may have problems with displaying the models.</p>
+      <p class="perf-pop-text">
+        Consider enabling
+        <button type="button" class="perf-pop-link" @click="enablePerformanceMode()">performance mode</button>
+      </p>
+      <button type="button" class="pop-wide ghost" @click="dismissPerformanceWarning()">Dismiss</button>
+    </Popover>
 
     <Popover v-if="isOpen('versions')" :anchor="anchorOf('versions')" side="left" kind="vc-pop versions-pop" @close="shell.closePopover()">
       <VersionsPanel />

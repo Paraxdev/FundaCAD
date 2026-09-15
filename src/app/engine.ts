@@ -211,6 +211,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   // says which mode you are in.
   e.viewport.onXrayChange = (on) => { useUiStore().xray = on; };
   e.viewport.onWireframeChange = (on) => { useUiStore().wireframe = on; };
+  e.viewport.onStutterChange = (on) => { useUiStore().lowPerformance = on; };
 
   e.geometry = import.meta.env.VITE_GEOM === "rust" ? new TauriGeometry() : new Geometry();
   void e.geometry.init(); // fetch the per-launch sidecar auth token + open the socket

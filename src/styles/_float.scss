@@ -818,6 +818,53 @@
   background: var(--accent-tint);
   color: var(--accent-hot);
 }
+
+.perf-warn-group {
+  border-color: color-mix(in srgb, var(--warn) 55%, transparent);
+}
+.icon-btn.perf-warn,
+.icon-btn.perf-warn:hover,
+.icon-btn.perf-warn.active {
+  color: var(--warn);
+}
+.icon-btn.perf-warn:hover,
+.icon-btn.perf-warn.active {
+  background: color-mix(in srgb, var(--warn) 16%, transparent);
+}
+.float-popover.perf-pop {
+  width: 300px;
+  background: color-mix(in srgb, var(--warn) 9%, var(--float-bg-solid));
+  border-color: color-mix(in srgb, var(--warn) 70%, transparent);
+}
+.perf-pop-title {
+  margin: var(--s-1) var(--s-1) var(--s-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--warn);
+}
+.perf-pop-text {
+  margin: 0 var(--s-1) var(--s-2);
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text);
+}
+.perf-pop-link {
+  padding: 0;
+  font: inherit;
+  color: var(--warn);
+  background: none;
+  border: 0;
+  border-radius: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.perf-pop-link:hover {
+  background: none;
+  color: color-mix(in srgb, var(--warn) 70%, #fff);
+}
 .icon-btn-badge {
   position: absolute;
   top: 3px;

@@ -35,6 +35,7 @@ import { SectionCaps } from "./sectionCaps";
 // The one derivation of "which plane is that face"; pure, so nothing cycles back.
 import { pickFacePlaneAt } from "../features/facePlanePick";
 import { FpsMeter } from "./fpsMeter";
+import { StutterWatch } from "./stutterWatch";
 import { sceneStats } from "../diagnostics/sceneStats";
 import { makeZebraMaterial, buildCurvatureCombs } from "./overlays";
 import { Picker, occludedEdge, type EdgeCandidate, type Hit, type EdgeHit, type PickMods } from "./picking";
@@ -260,7 +261,11 @@ export class Viewport {
       // Only when the tier actually flipped: the finishes decide glass vs alpha
       // and how many emitter lights to draw off it, and re-running them on every
       // brightness nudge would walk every body's materials for nothing.
-      if (isRenderLowPower() !== wasLow) this.applyBodyFinish();
+      if (isRenderLowPower() !== wasLow) {
+        this.applyBodyFinish();
+        this.stutter.reset();
+        this.setStuttering(false);
+      }
       this.requestRender();
     });
     onThemeChange(() => {
@@ -3087,12 +3092,38 @@ export class Viewport {
   // ticks draw nothing, so this is incremented at the draw, not at the tick.
   private fps = new FpsMeter();
 
+  /** Notified when the view starts or stops stuttering under the full render. */
+  onStutterChange: ((stuttering: boolean) => void) | null = null;
+  private stutter = new StutterWatch();
+  private stuttering = false;
+  /** Start of the tick that drew a camera move, 0 when the last tick was not one. */
+  private movedDrawAt = 0;
+
+  private setStuttering(on: boolean) {
+    if (on === this.stuttering) return;
+    this.stuttering = on;
+    this.onStutterChange?.(on);
+  }
+
+  // Only camera moves are timed: that is where a slow frame is felt, and it keeps
+  // a rebuild's main thread work from reading as a slow GPU.
+  private watchStutter(now: number) {
+    if (!this.movedDrawAt) return;
+    const period = now - this.movedDrawAt;
+    this.movedDrawAt = 0;
+    if (isRenderLowPower() || this.store?.buildState.building || this.store?.busyState.active) return;
+    if (document.visibilityState !== "visible") return;
+    if (this.stutter.sample(period)) this.setStuttering(true);
+  }
+
   private scratchTarget = new THREE.Vector3();
   private loop = () => {
     // Never let a single bad frame kill the loop: if any step throws, log and
     // keep scheduling, so a transient camera/geometry glitch can't freeze the
     // whole app (the rAF used to be unreachable after a throw).
     try {
+      const now = performance.now();
+      this.watchStutter(now);
       const dt = this.clock.getDelta();
       // Always advanced so damping and transitions progress; returns whether it moved.
       const moved = this.rig.update(dt);
@@ -3117,6 +3148,7 @@ export class Viewport {
         this.scene.post.render(this.rig.active);
         this.cube.render(this.rig.active); // draw the ViewCube overlay in the corner
         this.fps.frame();
+        if (moved) this.movedDrawAt = now;
         this.needsRender = false;
         if (this.lingerFrames > 0) this.lingerFrames--;
       }
