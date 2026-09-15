@@ -243,8 +243,10 @@ export function isPlacedDim(
 // A sketch pattern stored as a definition. Derived copies get ids "<pattern.id>#<n>" and
 // are never constraint or dimension targets.
 export type SketchPattern =
-  // replicate the `sources` entities on a grid (skips the original instance)
-  | { id: string; type: "patternRect"; sources: string[]; countX: Num; countY: Num; spacingX: Num; spacingY: Num }
+  // replicate the `sources` entities on a grid (skips the original instance).
+  // `angle` (degrees, absent = 0) turns the grid's own axes, so the copies march
+  // along a direction the user chose instead of along X and Y.
+  | { id: string; type: "patternRect"; sources: string[]; countX: Num; countY: Num; spacingX: Num; spacingY: Num; angle?: Num }
   // replicate the `sources` entities around a center (cx,cy) over `angle` degrees
   | { id: string; type: "patternCircular"; sources: string[]; cx: Num; cy: Num; count: Num; angle: Num }
   // prebuilt hole generators, self-contained, emit circles at computed positions

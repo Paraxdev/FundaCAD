@@ -139,11 +139,17 @@ export function expandPattern(
   if (pat.type === "patternRect") {
     const cx = Math.max(1, Math.round(N(pat.countX))), cy = Math.max(1, Math.round(N(pat.countY)));
     const sx = N(pat.spacingX), sy = N(pat.spacingY);
+    const ang = (N(pat.angle ?? 0) * Math.PI) / 180;
+    const co = Math.cos(ang), si = Math.sin(ang);
     const srcs = sources(pat.sources);
     for (let i = 0; i < cx; i++)
       for (let j = 0; j < cy; j++) {
         if (i === 0 && j === 0) continue; // the original stays as the real entity
-        for (const s of srcs) out.push(translated(s, i * sx, j * sy, did()));
+        const dx = i * sx, dy = j * sy;
+        // angle 0 skips the cos/sin, so every document without one keeps the
+        // exact offsets it built before instead of picking up float noise
+        const [ox, oy] = ang ? [dx * co - dy * si, dx * si + dy * co] : [dx, dy];
+        for (const s of srcs) out.push(translated(s, ox, oy, did()));
       }
   } else if (pat.type === "patternCircular") {
     const count = Math.max(1, Math.round(N(pat.count)));

@@ -42,6 +42,48 @@ describe("expandPattern / patternRect", () => {
     expect(out.every((e) => e.construction === true)).toBe(true);
   });
 
+  it("an angle of 0 lands on exactly the same numbers as no angle at all", () => {
+    const plain = expandPattern(pat, byIdMap([src]), params);
+    const zero = expandPattern({ ...pat, angle: 0 }, byIdMap([src]), params);
+    expect(zero).toEqual(plain);
+  });
+
+  it("turns a 3-across row into a 3-up column at 90 degrees", () => {
+    const row: SketchPattern = { ...pat, countY: 1, angle: 90 };
+    const out = expandPattern(row, byIdMap([src]), params) as Extract<ResolvedEntity, { type: "circle" }>[];
+    expect(out).toHaveLength(2);
+    out.forEach((e, k) => {
+      expect(e.x).toBeCloseTo(0, 12);
+      expect(e.y).toBeCloseTo((k + 1) * 10, 12);
+    });
+  });
+
+  it("puts copy 1 at spacing * (cos45, sin45) from the source", () => {
+    const row: SketchPattern = { ...pat, countX: 2, countY: 1, angle: 45 };
+    const [c0] = expandPattern(row, byIdMap([src]), params) as Extract<ResolvedEntity, { type: "circle" }>[];
+    expect(c0?.x).toBeCloseTo(10 * Math.cos(Math.PI / 4), 12);
+    expect(c0?.y).toBeCloseTo(10 * Math.sin(Math.PI / 4), 12);
+  });
+
+  // The seam: sidecar/tests/test_pattern_angle.py asserts these same numbers, a
+  // preview that disagrees with the build is a sketch nobody drew.
+  it("places a 45 degree 3x2 grid on the angled axes", () => {
+    const grid: SketchPattern = { ...pat, angle: 45 };
+    const out = expandPattern(grid, byIdMap([src]), params) as Extract<ResolvedEntity, { type: "circle" }>[];
+    const want: [number, number][] = [
+      [-3.5355339059327373, 3.5355339059327378],
+      [7.0710678118654755, 7.071067811865475],
+      [3.535533905932738, 10.606601717798213],
+      [14.142135623730951, 14.14213562373095],
+      [10.606601717798213, 17.67766952966369],
+    ];
+    expect(out).toHaveLength(want.length);
+    out.forEach((e, k) => {
+      expect(e.x).toBeCloseTo(want[k]?.[0] ?? NaN, 12);
+      expect(e.y).toBeCloseTo(want[k]?.[1] ?? NaN, 12);
+    });
+  });
+
   it("silently drops sources that aren't in byId (missing-source filtering)", () => {
     const patMissing: SketchPattern = { ...pat, sources: ["c1", "does-not-exist"] };
     const out = expandPattern(patMissing, byIdMap([src]), params);

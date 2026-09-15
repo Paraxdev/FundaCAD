@@ -139,13 +139,20 @@ def _expand_pattern(pat, by_id, val):
     if t == "patternRect":
         cx, cy = max(1, round(val(pat["countX"]))), max(1, round(val(pat["countY"])))
         sx, sy = val(pat["spacingX"]), val(pat["spacingY"])
+        ang = math.radians(val(pat.get("angle", 0)))
+        co, si = math.cos(ang), math.sin(ang)
         srcs = srcs_of(pat.get("sources", []))
         for i in range(cx):
             for j in range(cy):
                 if i == 0 and j == 0:
                     continue
+                dx, dy = i * sx, j * sy
+                # angle 0 skips the cos/sin, so every document without one keeps
+                # the exact offsets it built before instead of float noise
+                if ang:
+                    dx, dy = dx * co - dy * si, dx * si + dy * co
                 for s in srcs:
-                    out.append(_translate_entity(s, i * sx, j * sy, did(), val))
+                    out.append(_translate_entity(s, dx, dy, did(), val))
     elif t == "patternCircular":
         count, total = max(1, round(val(pat["count"]))), val(pat["angle"])
         full = total != 0 and abs(abs(total) - 360) < 1e-6
