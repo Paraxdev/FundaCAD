@@ -822,18 +822,30 @@ export class ExtrudeTool {
     const sign = this.distance >= 0 ? 1 : -1;
     let inside = 0;
     for (const wr of this.selected) {
-      // step the area's interior a hair along the extrude direction, off its face
-      const p = wr.interior3D.clone().addScaledVector(wr.plane.n, sign * 0.05);
       // Symmetric sweeps BOTH ways, so it enters material if EITHER side does.
       // Reading one side is what made a profile on a datum plane buried in a
       // body guess Join, which then reported adding no material because the
       // prism was already inside the part.
-      const q = this.symmetric
-        ? wr.interior3D.clone().addScaledVector(wr.plane.n, -sign * 0.05)
-        : null;
-      if (this.viewport.pointInSolid(p) || (q !== null && this.viewport.pointInSolid(q))) inside++;
+      if (this.areaEnters(wr, sign) || (this.symmetric && this.areaEnters(wr, -sign))) inside++;
     }
     return inside * 2 > this.selected.length; // majority of selected areas
+  }
+
+  /** Measured once per area and direction for the whole gesture. A tapered
+   *  preview replaces the model on screen with the kernel's result, so probing
+   *  again finds the pocket the preview just cut, calls the next step a Join,
+   *  and the preview flips between the two on every rebuild. */
+  private entersMemo = new Map<string, boolean>();
+  private areaEnters(wr: WorldRegion, dir: number): boolean {
+    const p = wr.interior3D;
+    const key = `${wr.sketchId}:${p.x.toFixed(3)},${p.y.toFixed(3)},${p.z.toFixed(3)}:${dir}`;
+    let hit = this.entersMemo.get(key);
+    if (hit === undefined) {
+      // step the area's interior a hair along the extrude direction, off its face
+      hit = this.viewport.pointInSolid(p.clone().addScaledVector(wr.plane.n, dir * 0.05));
+      this.entersMemo.set(key, hit);
+    }
+    return hit;
   }
 
   /** The situation the rules in features/extrudeOperation.ts read, measured off
@@ -950,6 +962,7 @@ export class ExtrudeTool {
     this.previewKey = "";
     this.disposeDepthHandle();
     this.disposeTaperHandle();
+    this.entersMemo.clear();
     // A create-mode cancel or commit can leave a live floating taper preview up;
     // drop it so the model returns to what is actually committed. An edit's taper
     // preview is torn down by endEditPreview in cancel()/commit() instead.
