@@ -144,6 +144,7 @@ function onBackground(ev: Event) { const v = asBackground(value(ev)); if (v) set
 function onBrightness(ev: Event) { setRenderPref("brightness", Number.parseFloat(value(ev))); }
 function onDwell(ev: Event) { setHoverDwellMs(Number.parseFloat(value(ev))); }
 function onBloom(ev: Event) { const v = asBloom(value(ev)); if (v !== null) setRenderPref("bloom", v); }
+function onPerformanceMode(ev: Event) { setRenderPref("performanceMode", (ev.target as HTMLInputElement).checked); }
 </script>
 
 <template>
@@ -239,6 +240,23 @@ function onBloom(ev: Event) { const v = asBloom(value(ev)); if (v !== null) setR
         a material with Glow turned up and a hard specular highlight and nothing
         else, so an ordinary part looks the same; turn it up to catch everyday
         highlights too.
+      </div>
+      <label class="prefs-row">
+        <span class="prefs-label">Performance</span>
+        <span class="param-switch prefs-switch">
+          <input
+            id="prefs-performance-mode"
+            type="checkbox"
+            :checked="render.performanceMode"
+            @change="onPerformanceMode"
+          />
+          <span class="track"><span class="knob"></span></span>
+        </span>
+      </label>
+      <div class="sm-hint">
+        Drops glass refraction, the high pixel ratio and the emitter shadows for a
+        lighter render. Weak GPUs get it automatically; turn it on if the viewport
+        stutters or a laptop runs hot.
       </div>
 
       <div class="sm-section">Accessibility</div>
