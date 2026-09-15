@@ -69,7 +69,7 @@ export const SKETCH_PROMPTS: Record<string, string> = {
   trim: "Click a curve to trim to its crossings · Esc",
   fillet: "Click two lines, type a radius · Enter · Esc",
   chamfer: "Click two lines, type a setback · Enter · Esc",
-  offset: "Click a curve, type a distance · Enter · Esc",
+  offset: "Click a curve or a face edge, type a distance · Enter · Esc",
   extend: "Click a line or arc near an end · Esc",
   break: "Click a line or arc to split it · Esc",
   move: "Select entities, then click from and to · Esc",

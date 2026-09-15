@@ -39,7 +39,8 @@ import { detectRegions, entityPolyline, rectCorners, rectFromThreePoints } from 
 import { AreaBox } from "../viewport/areaBox";
 import { Disposer } from "../lib/disposer";
 import { allInsideRect, convexTouchesRect, dragBox, isAreaDrag, pointInRect, type AreaMode, type ScreenRect } from "../viewport/areaSelect";
-import { loopsFromEdgePolys, planeEdgePolys } from "./faceFootprint";
+import { loopsFromEdgePolys, planeEdges, type PlaneEdge } from "./faceFootprint";
+import { isExactPlaneEdge, meshBodyIds } from "./planeEdgePick";
 import { boundaryAnchors, footprintAnchors } from "./anchors";
 import { setPrompt } from "../ui/prompt";
 import { tooEdgeOn } from "./planeGraze";
@@ -50,7 +51,7 @@ import { PatternFlow, PATTERN_TOOLS, ENTITY_PATTERNS, type PatternHost } from ".
 import { DimFlow, type DimHost } from "./dimFlow";
 import { ProjectPanel } from "./projectPanel";
 import { ProjectFlow, type ProjectHost } from "./projectFlow";
-import { ModifyFlow, type ModifyHost } from "./modifyFlow";
+import { ModifyFlow, type ModifyHost, type ModelEdge } from "./modifyFlow";
 import type { MoveTarget } from "../features/moveTarget";
 import { sketchEntityTarget, type SketchGizmoHost } from "../features/sketchMoveTarget";
 import { sketchEscapeAction } from "./escapeLayers";
@@ -175,6 +176,8 @@ export class SketchMode {
   /** The same edges, UN-chained, one polyline each, which is what tells a
    *  corner from a point part way along an arc. See anchors.boundaryAnchors. */
   private footprintEdges: THREE.Vector2[][] = [];
+  /** The exact ones among them, with their source edge, for Offset to take. */
+  private modelPlaneEdges: PlaneEdge<ModelEdge>[] = [];
   private entities: ResolvedEntity[] = [];
   private candidates: SnapCandidate[] = []; // cached; rebuilt when entities change
   private base: THREE.Vector2 | null = null; // pending first point
@@ -418,6 +421,9 @@ export class SketchMode {
       planePoint: (e) => this.planePoint(e),
       afterModify: () => this.afterModify(),
       setDrivingDimension: (c) => this.setDrivingDimension(c),
+      planeEdges: () => this.modelPlaneEdges,
+      projectModelEdges: (edges) => this.projectFlow.projectModelEdges(edges),
+      emphasiseModelEdges: (edges) => this.viewport.emphasiseEdges(edges),
     };
     this.modifyFlow = new ModifyFlow(modifyHost);
     // Filter chip clicks land on the panel, not the canvas, so projectHover
@@ -449,12 +455,16 @@ export class SketchMode {
     this.face = face ?? null;
     this.store = store;
     // Once per session: the body under an open sketch cannot change.
-    this.footprintEdges = planeEdgePolys(
+    const inPlane = planeEdges(
       this.viewport.visibleEdgeLines(),
       this.plane,
       this.viewport.modelDiagonal() ?? 0,
     );
+    this.footprintEdges = inPlane.map((x) => x.poly);
     this.footprint = loopsFromEdgePolys(this.footprintEdges);
+    const meshBodies = inPlane.length ? meshBodyIds(store.buildState.result?.bodies, store.document.features) : new Set<string>();
+    this.modelPlaneEdges = inPlane.flatMap(({ edge, poly }) =>
+      edge.body && isExactPlaneEdge(edge, meshBodies) ? [{ edge: { body: edge.body, points: edge.points }, poly }] : []);
     this.history.reset(); // fresh history per session (armed once entities load)
     if (!this.fonts.length) void fetchFonts().then((f) => { this.fonts = f; });
 
@@ -543,6 +553,7 @@ export class SketchMode {
     if (!this.active) return;
     if (this.gizmo?.active) this.gizmo.cancel();
     const store = this.store!;
+    this.modifyFlow.reset(); // an offset left mid-placement takes its face-edge projection with it
     this.patternFlow.flushOnFinish(); // may add patterns, must precede the snapshot
     const sketch = commit ? this.snapshotFeature() : null;
     if (sketch) {
@@ -597,6 +608,7 @@ export class SketchMode {
     this.projectPanel.hide();
     setPrompt(null);
     this.viewport.hoverEntity(null); // drop any Project-tool 3D hover highlight
+    this.modifyFlow.reset();
     this.overlay.setPreview([]);
     this.overlay.setSnap(null);
     this.snapWorld = null;

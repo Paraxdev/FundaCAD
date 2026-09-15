@@ -30,6 +30,8 @@ import {
 } from "./modify";
 import { newEntityId } from "./id";
 import { translated, rotated, scaled } from "./pattern";
+import type { PlaneEdge } from "./faceFootprint";
+import { pickPlaneEdge, planeEdgeChain } from "./planeEdgePick";
 import { contextMenu } from "../ui/menu";
 import { setPrompt } from "../ui/prompt";
 import { toast } from "../ui/toast";
@@ -55,7 +57,29 @@ export interface ModifyHost {
   afterModify(): void;
   /** promote a measured dimension to a driving one, the offset distance */
   setDrivingDimension(c: SketchConstraint): void;
+  /** exact model edges lying in the sketch plane, the ones offset may take */
+  planeEdges(): readonly PlaneEdge<ModelEdge>[];
+  /** land these model edges as projected entities, see ProjectFlow.projectModelEdges */
+  projectModelEdges(edges: readonly ModelEdge[]): Promise<{ ids: string[][]; added: string[] } | null>;
+  /** draw these model edges emphasised over the model; [] clears */
+  emphasiseModelEdges(edges: readonly ModelEdge[]): void;
 }
+
+export interface ModelEdge {
+  readonly body: string;
+  readonly points: readonly (readonly [number, number, number])[];
+}
+
+/** Projected geometry offsets like the native curve it stands for. The ids are
+ *  kept, so the offset constraint's pairs name the projected source and the copy
+ *  follows the model when the projection refreshes. */
+function offsetable(ents: ResolvedEntity[]): ResolvedEntity[] {
+  const ids = new Set(ents.filter((e) => e.type === "projected").map((e) => e.id));
+  return ids.size ? breakLink(ents, ids) : ents;
+}
+
+/** Model edge ends closer than this (mm) are one vertex. */
+const EDGE_JOIN_TOL = 1e-3;
 
 export class ModifyFlow {
   /** first line picked for a sketch fillet or chamfer */
@@ -78,7 +102,9 @@ export class ModifyFlow {
   reset() {
     this.filletFirst = null;
     this.moveBase = null;
+    this.dropAutoProjected();
     this.offsetPick = null;
+    this.emphasise([]);
   }
 
   /** hover-highlight the entity under the cursor in red */
@@ -86,6 +112,7 @@ export class ModifyFlow {
     // An offset being placed owns the preview: this is the MODIFY_TOOLS hover
     // branch and it runs on every move, so without this it would overwrite the
     // offset's live preview with a plain hover highlight one frame later.
+    this.lastMove = e;
     if (this.offsetPick) { this.offsetMove(e); return; }
     const p = this.host.planePoint(e);
     if (!p) return;
@@ -95,7 +122,28 @@ export class ModifyFlow {
     if (first) preview.push(...curveObjects([first], this.host.plane(), 0x33aaff, true));
     const hit = idx >= 0 ? this.host.entities()[idx] : undefined;
     if (hit) preview.push(...curveObjects([hit], this.host.plane(), 0xff5555, true));
+    if (!this.edgePickPending) this.emphasise(!hit && this.host.tool() === "offset" ? this.modelEdgeChainAt(p) : []);
     this.host.overlay().setPreview(preview);
+  }
+
+  private emphasised = "";
+  /** Light up these in-plane model edges. A sketch overlay line cannot do it: the
+   *  edge lies exactly in the plane and the model's own wider line covers it. */
+  private emphasise(chain: readonly number[]) {
+    const key = chain.join(",");
+    if (key === this.emphasised) return;
+    this.emphasised = key;
+    const all = this.host.planeEdges();
+    this.host.emphasiseModelEdges(chain.map((k) => all[k]!.edge));
+  }
+
+  /** The model edges a click at `p` would offset: the edge under it, with its
+   *  whole loop when Chain Selection is on. */
+  private modelEdgeChainAt(p: THREE.Vector2): number[] {
+    const polys = this.host.planeEdges().map((x) => x.poly);
+    const k = pickPlaneEdge(polys, p, this.host.pickTol());
+    if (k < 0) return [];
+    return this.offsetChainMode ? planeEdgeChain(polys, k, EDGE_JOIN_TOL) : [k];
   }
 
   /** Fusion's in-command marking menu for the Offset tool: the two things the
@@ -313,22 +361,36 @@ export class ModifyFlow {
    *  apply. `side` and `mag` are kept apart on purpose: the box displays the
    *  magnitude, so folding them into one signed number is how typing a value
    *  silently flips an inward offset outward (the abs-display trap). */
-  private offsetPick: { idx: number; side: number; mag: number } | null = null;
+  /** `added` holds the projected entities a face-edge pick brought in, which
+   *  leave again if the offset is cancelled. */
+  private offsetPick: { idx: number; side: number; mag: number; added: string[] } | null = null;
   /** Fusion's in-command "Chain Selection" toggle, default ON: offset the whole
    *  connected chain rather than only the clicked curve. */
   private offsetChainMode = true;
+  /** a face-edge pick waiting on the engine */
+  private edgePickPending = false;
+  private lastMove: PointerEvent | null = null;
 
   offsetClick(p: THREE.Vector2) {
     if (this.offsetPick) { this.commitOffset(); return; } // second click applies
+    if (this.edgePickPending) return;
     const idx = pickEntity(this.host.entities(), p, this.host.pickTol());
-    if (idx < 0) return;
+    if (idx < 0) {
+      const chain = this.modelEdgeChainAt(p);
+      if (chain.length) void this.offsetModelEdges(chain);
+      return;
+    }
     const e = this.host.entities()[idx];
-    if (!e || this.guardProjected(e)) return;
+    if (!e) return;
     // Nothing may end in silence here: the user is mid-gesture, and a tool that
     // does nothing without saying why reads as broken.
     if (e.type === "text") { toast("Offset doesn't apply to sketch text"); return; }
     if (e.type === "point") { toast("Offset needs a curve, not a point"); return; }
-    this.offsetPick = { idx, side: 1, mag: 0 };
+    this.beginOffset(idx, []);
+  }
+
+  private beginOffset(idx: number, added: string[]) {
+    this.offsetPick = { idx, side: 1, mag: 0, added };
     this.host.dim().show(
       [{ name: "offset", label: "Offset", kind: "length" }],
       () => this.commitOffset(),
@@ -337,13 +399,52 @@ export class ModifyFlow {
     setPrompt("Move to pick the side, or type a distance · Enter · Esc");
   }
 
+  /** A face edge clicked straight off the model: project it (and its loop) in,
+   *  then carry on exactly as if a projected curve had been clicked. The
+   *  clicked edge is chain[0]. */
+  private async offsetModelEdges(chain: number[]) {
+    const all = this.host.planeEdges();
+    const edges = chain.map((k) => all[k]!.edge);
+    this.edgePickPending = true;
+    setPrompt("Reading the face edge…");
+    let landed;
+    try {
+      landed = await this.host.projectModelEdges(edges);
+    } finally {
+      this.edgePickPending = false;
+    }
+    const stillHere = this.host.tool() === "offset" && !this.offsetPick;
+    const first = landed?.ids[0]?.[0];
+    const idx = first ? this.host.entities().findIndex((x) => x.id === first) : -1;
+    if (!landed || !stillHere || idx < 0) {
+      if (landed) this.removeEntities(landed.added);
+      this.emphasise([]);
+      if (stillHere) setPrompt("Offset: click a curve or a face edge to offset");
+      return;
+    }
+    this.beginOffset(idx, landed.added);
+    if (this.lastMove) this.offsetMove(this.lastMove);
+  }
+
+  private removeEntities(ids: readonly string[]) {
+    if (!ids.length) return;
+    const gone = new Set(ids);
+    this.host.setEntities(this.host.entities().filter((x) => !gone.has(x.id)));
+  }
+
+  private dropAutoProjected() {
+    if (this.offsetPick) this.removeEntities(this.offsetPick.added);
+  }
+
   /** The offset result for the current pick, honouring Chain Selection. Chain
    *  first (a connected profile offsets as a unit), falling back to the single
    *  curve, which is also what a lone curve or a junction lands on. */
   private offsetResultFor(idx: number, dist: number): OffsetResult | null {
     if (Math.abs(dist) < 1e-6) return null;
-    return (this.offsetChainMode ? offsetChain(this.host.entities(), idx, dist) : null)
-      ?? offsetEntity(this.host.entities(), idx, dist);
+    const ents = this.host.entities();
+    const work = offsetable(ents);
+    const res = (this.offsetChainMode ? offsetChain(work, idx, dist) : null) ?? offsetEntity(work, idx, dist);
+    return res && { ...res, entities: [...ents, ...res.entities.slice(work.length)] };
   }
 
   /** Live side/distance + preview while the offset is being placed. */
@@ -352,7 +453,7 @@ export class ModifyFlow {
     const p = this.host.planePoint(ev);
     const src = pick ? this.host.entities()[pick.idx] : undefined;
     if (!pick || !src || !p) return;
-    const signed = signedOffsetAt(src, p);
+    const signed = signedOffsetAt(offsetable([src])[0]!, p);
     const typed = this.host.dim().isUserDriven("offset") ? this.host.dim().getValue("offset") : null;
     if (typed !== null) {
       // Once a value is typed, the SIGN the user wrote owns the side, that is
@@ -389,13 +490,14 @@ export class ModifyFlow {
     }
     if (pick.mag < 1e-6) { toast("Offset: type a distance, or Esc to cancel"); return; }
     const res = this.offsetResultFor(pick.idx, pick.side * pick.mag);
-    this.offsetPick = null;
-    this.host.dim().hide();
     if (!res) {
       toast("Offset: that distance collapses the geometry");
-      this.host.overlay().setPreview([]);
+      this.cancelOffset();
       return;
     }
+    this.offsetPick = null;
+    this.emphasise([]);
+    this.host.dim().hide();
     this.host.setEntities(res.entities);
     if (res.linked && res.pairs.length) {
       // the associative link + its single editable dimension
@@ -407,10 +509,14 @@ export class ModifyFlow {
   }
 
   cancelOffset() {
+    const hadProjected = !!this.offsetPick?.added.length;
+    this.dropAutoProjected();
     this.offsetPick = null;
+    this.emphasise([]);
     this.host.dim().hide();
-    this.host.overlay().setPreview([]);
-    setPrompt("Offset: click a curve to offset");
+    if (hadProjected) this.host.afterModify();
+    else this.host.overlay().setPreview([]);
+    setPrompt("Offset: click a curve or a face edge to offset");
   }
   extendClick(p: THREE.Vector2) {
     const idx = pickEntity(this.host.entities(), p, this.host.pickTol());

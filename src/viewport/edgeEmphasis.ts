@@ -93,12 +93,21 @@ export class EdgeEmphasis {
   /** Draw this polyline emphasised. A polyline with fewer than two points has
    *  no segments to draw and hides instead of producing a degenerate geometry. */
   show(points: readonly (readonly number[])[]) {
-    if (points.length < 2) {
+    this.showAll([points]);
+  }
+
+  /** Several polylines emphasised at once, a whole loop of edges. */
+  showAll(polylines: readonly (readonly (readonly number[])[])[]) {
+    const parts = polylines.filter((p) => p.length >= 2).map(segmentPositions);
+    if (!parts.length) {
       this.hide();
       return;
     }
+    const flat = new Float32Array(parts.reduce((n, p) => n + p.length, 0));
+    let o = 0;
+    for (const p of parts) { flat.set(p, o); o += p.length; }
     const geo = new LineSegmentsGeometry();
-    geo.setPositions(segmentPositions(points));
+    geo.setPositions(flat);
     this.object.geometry.dispose();
     this.object.geometry = geo;
     this.object.visible = true;

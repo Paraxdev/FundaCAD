@@ -70,8 +70,24 @@ export function planeEdgePolys(
   plane: SketchPlane,
   modelScale: number,
 ): THREE.Vector2[][] {
+  return planeEdges(edges, plane, modelScale).map((x) => x.poly);
+}
+
+/** A model edge lying in the sketch plane, with its 2D polyline. */
+export interface PlaneEdge<E extends FootprintEdge = FootprintEdge> {
+  readonly edge: E;
+  readonly poly: THREE.Vector2[];
+}
+
+/** planeEdgePolys keeping each polyline's source edge, for a caller that has to
+ *  name the edge back to the kernel (the offset tool projecting a face edge). */
+export function planeEdges<E extends FootprintEdge>(
+  edges: readonly E[],
+  plane: SketchPlane,
+  modelScale: number,
+): PlaneEdge<E>[] {
   const tol = planeTolerance(modelScale);
-  const flat: THREE.Vector2[][] = [];
+  const out: PlaneEdge<E>[] = [];
   const p = new THREE.Vector3();
   for (const e of edges) {
     if (!edgeLiesInPlane(e, plane, tol)) continue;
@@ -80,9 +96,9 @@ export function planeEdgePolys(
       p.set(q[0], q[1], q[2]);
       poly.push(plane.to2D(p, new THREE.Vector2()));
     }
-    if (poly.length >= 2) flat.push(poly);
+    if (poly.length >= 2) out.push({ edge: e, poly });
   }
-  return flat;
+  return out;
 }
 
 /** The model's outline on this sketch plane, as closed loops in sketch 2D mm,

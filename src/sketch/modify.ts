@@ -398,10 +398,15 @@ export function offsetEntity(
     // direction and the ends use their own single segment.
     const pts = e.points;
     if (pts.length >= 2) {
+      // a closed spline's seam point is an interior point too, or the two ends
+      // push apart along different normals and the copy opens at the seam
+      const a = pts[0]!, z = pts[pts.length - 1]!;
+      const closed = pts.length > 3 && Math.hypot(a.x - z.x, a.y - z.y) < 1e-9;
       copy = {
         type: "spline", id, ...constr(e),
         points: pts.map((p, i) => {
-          const prev = pts[i - 1] ?? p, next = pts[i + 1] ?? p;
+          const prev = pts[i - 1] ?? (closed ? pts[pts.length - 2]! : p);
+          const next = pts[i + 1] ?? (closed ? pts[1]! : p);
           const dx = next.x - prev.x, dy = next.y - prev.y;
           const len = Math.hypot(dx, dy) || 1;
           return { x: p.x + (-dy / len) * dist, y: p.y + (dx / len) * dist };

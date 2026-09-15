@@ -122,6 +122,37 @@ describe("offsetEntity", () => {
     expect(offsetEntity(ents, 0, 1)!.entities[1]!.construction).toBeUndefined();
   });
 
+  it("keeps a closed spline closed at its seam", () => {
+    const pts = Array.from({ length: 13 }, (_v, i) => {
+      const t = (i / 12) * Math.PI * 2;
+      return { x: 10 * Math.cos(t), y: 10 * Math.sin(t) };
+    });
+    pts[12] = { ...pts[0]! };
+    // counter-clockwise, so the left normal points in
+    const out = offsetEntity([{ type: "spline", id: "s", points: pts }], 0, 2)!;
+    const q = (out.entities[1] as Extract<ResolvedEntity, { type: "spline" }>).points;
+    expect(Math.hypot(q[0]!.x - q[12]!.x, q[0]!.y - q[12]!.y)).toBeLessThan(1e-9);
+    const r = q.map((p) => Math.hypot(p.x, p.y));
+    for (const x of r) expect(x).toBeLessThan(10);
+    expect(r[0]).toBeCloseTo(r[6]!, 9);
+  });
+
+  it("offsets projected face edges once they stand in as native curves, pairing the projected ids", () => {
+    const side = (id: string, x1: number, y1: number, x2: number, y2: number): ResolvedEntity => ({
+      type: "projected", id,
+      source: { kind: "edge", body: "b", sel: { kind: "edge", by: "nearest", point: [0, 0, 0] } },
+      curve: { kind: "line", x1, y1, x2, y2 },
+    });
+    const ents = [side("p0", 20, -15, 20, 15), side("p1", 20, 15, -20, 15), side("p2", -20, 15, -20, -15), side("p3", -20, -15, 20, -15)];
+    const work = breakLink(ents, new Set(ents.map((e) => e.id)));
+    const out = offsetChain(work, 0, 4)!;
+    expect(out.pairs.map((p) => p.src).sort()).toEqual(["p0", "p1", "p2", "p3"]);
+    const lines = out.entities.slice(4) as Extract<ResolvedEntity, { type: "line" }>[];
+    const xs = lines.flatMap((l) => [l.x1, l.x2]), ys = lines.flatMap((l) => [l.y1, l.y2]);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(32, 6);
+    expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo(22, 6);
+  });
+
   it("pairs a rectangle by EDGE, which is what the constraint can reference", () => {
     const ents: ResolvedEntity[] = [{ type: "rectangle", id: "r", width: 10, height: 6, x: 0, y: 0 }];
     const out = offsetEntity(ents, 0, 2)!;

@@ -2549,7 +2549,12 @@ export class Viewport {
 
   /** Emphasise the edge a menu row names, over everything; null clears it. */
   emphasiseEdge(line: EdgeRef | null) {
-    if (!line) {
+    this.emphasiseEdges(line ? [line] : []);
+  }
+
+  /** Emphasise several edges together, a loop about to be acted on; [] clears. */
+  emphasiseEdges(lines: readonly { readonly points: readonly (readonly number[])[] }[]) {
+    if (!lines.length) {
       this.emphasis?.hide();
       this.requestRender();
       return;
@@ -2558,7 +2563,7 @@ export class Viewport {
       this.emphasis = new EdgeEmphasis(this.resolution, EDGE_HOVER_COLOR);
       this.addToScene(this.emphasis.object);
     }
-    this.emphasis.show(line.points);
+    this.emphasis.showAll(lines.map((l) => l.points));
     this.requestRender();
   }
 

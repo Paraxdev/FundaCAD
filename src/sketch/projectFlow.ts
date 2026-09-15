@@ -19,7 +19,7 @@ import * as THREE from "three";
 import { asFeature } from "../types";
 import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore } from "../document/store";
-import type { EdgeFingerprint, Feature, ProjectedSource } from "../types";
+import type { EdgeFingerprint, Feature, ProjectedSource, Selector } from "../types";
 import type { SketchPlane } from "./plane";
 import type { SketchOverlay } from "./overlay";
 import { curveObjects } from "./overlay";
@@ -29,6 +29,7 @@ import type { ResolvedEntity } from "./snap";
 import { pickEntity } from "./modify";
 import { newEntityId } from "./id";
 import { resolveRealEntities } from "./resolve";
+import { edgeProbePoint } from "./planeEdgePick";
 import { toast } from "../ui/toast";
 
 // Tolerant edge-fingerprint compare for the Project tool's duplicate-pick check.
@@ -118,16 +119,75 @@ export class ProjectFlow {
     this.host.viewport().requestRender();
   }
 
-  /** does an already-placed projected entity carry (a match selector for) this
-   *  edge fingerprint? Tolerant compare, fps carry float noise, never compare
-   *  them byte-for-byte. */
-  private hasProjectedFp(fp: EdgeFingerprint): boolean {
-    return this.host.entities().some((x) => {
+  /** the already-placed projected entity carrying (a match selector for) this
+   *  edge fingerprint, if any. Tolerant compare, fps carry float noise, never
+   *  compare them byte-for-byte. */
+  private projectedWithFp(fp: EdgeFingerprint): ResolvedEntity | undefined {
+    return this.host.entities().find((x) => {
       if (x.type !== "projected") return false;
       const s = x.source;
       if (s.kind !== "edge" && s.kind !== "faceBoundary") return false;
       return s.sel.kind === "edge" && s.sel.by === "match" && fpClose(s.sel.fp, fp);
     });
+  }
+  private hasProjectedFp(fp: EdgeFingerprint): boolean {
+    return !!this.projectedWithFp(fp);
+  }
+
+  /** Project these model edges into the open sketch without the Project tool,
+   *  for a tool that treats a face edge as a sketch curve. Returns, per edge,
+   *  the ids of the projected entities standing for it: freshly added ones, or
+   *  the ones already there when the edge was projected before. Null when the
+   *  engine refused or the sketch changed while the op was in flight.
+   *
+   *  Deliberately no solve or state notification: the caller finishes the
+   *  gesture, and its own modify tail banks the projection and the result as
+   *  one undo step. */
+  async projectModelEdges(
+    edges: readonly { body: string; points: readonly (readonly [number, number, number])[] }[],
+  ): Promise<{ ids: string[][]; added: string[] } | null> {
+    const store = this.host.store();
+    if (this.projectBusy || !store || !edges.length) return null;
+    const sources: { body: string; sel: Selector }[] = [];
+    for (const e of edges) {
+      const point = edgeProbePoint(e.points);
+      if (!point) return null;
+      sources.push({ body: e.body, sel: { kind: "edge", by: "nearest", point } });
+    }
+    this.projectBusy = true;
+    const session = this.host.entities();
+    let results;
+    try {
+      results = await store.projectGeometry(
+        this.host.plane().serialize(),
+        sources.map((s): ProjectedSource => ({ kind: "edge", ...s })),
+        this.host.editingId(),
+      );
+    } finally {
+      this.projectBusy = false;
+    }
+    if (!this.host.active() || this.host.entities() !== session) return null;
+    const failed = sources.findIndex((_s, i) => !results[i]?.ok);
+    if (failed >= 0) {
+      toast(results[failed]?.error ?? "geometry engine unavailable");
+      return null;
+    }
+    const ids: string[][] = [];
+    const added: string[] = [];
+    sources.forEach((source, i) => {
+      const own: string[] = [];
+      for (const { fp, curve } of results[i]!.curves) {
+        const existing = fp ? this.projectedWithFp(fp) : undefined;
+        if (existing) { own.push(existing.id); continue; }
+        const id = newEntityId();
+        const sel: Selector = fp ? { kind: "edge", by: "match", fp } : source.sel;
+        this.host.entities().push({ type: "projected", id, source: { kind: "edge", body: source.body, sel }, curve });
+        own.push(id);
+        added.push(id);
+      }
+      ids.push(own);
+    });
+    return { ids, added };
   }
 
   /** One Project pick: resolve what's under the cursor into a ProjectedSource,
@@ -183,17 +243,10 @@ export class ProjectFlow {
         source = { kind: "silhouette", body };
       } else if (hit.kind === "edge") {
         // NOT hit.selector: the picker's nearest point is the line's mid VERTEX,
-        // which for a 2-point straight edge is an ENDPOINT, a corner shared by
-        // three edges that "nearest" (center-distance) then resolves to the
-        // wrong one. The middle segment's midpoint is on (or near) the curve
-        // and never a corner.
-        const pts = hit.edge.points;
-        const k = Math.max(0, Math.ceil(pts.length / 2) - 1);
-        const a = pts[k]!, b = pts[Math.min(pts.length - 1, k + 1)]!;
-        source = {
-          kind: "edge", body,
-          sel: { kind: "edge", by: "nearest", point: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2] },
-        };
+        // an endpoint on a straight edge, see edgeProbePoint.
+        const point = edgeProbePoint(hit.edge.points);
+        if (!point) return;
+        source = { kind: "edge", body, sel: { kind: "edge", by: "nearest", point } };
       } else {
         // the raycast hit point re-finds exactly the clicked face: it lies ON
         // the face's material, so by:"nearest" distance is 0 there and > 0 for
