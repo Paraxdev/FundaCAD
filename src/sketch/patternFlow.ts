@@ -38,6 +38,9 @@ export interface PatternHost {
   dim(): DimInput;
   /** where a source entity sits, its centre or anchor, null if the id is gone */
   sourcePoint(id: string): { x: number; y: number } | null;
+  /** the choke point in-sketch undo banks a step at, so a pattern that appears
+   *  or disappears is a step the user can take back like any drawn entity */
+  requestSolve(): void;
   refreshActive(): void;
   onState(): void;
 }
@@ -92,6 +95,7 @@ export class PatternFlow {
     this.editOriginal = null;
     this.patternCenter = null;
     this.sweep = null;
+    this.host.requestSolve();
     this.host.dim().hide();
     setPrompt(null);
     this.host.refreshActive();
@@ -108,6 +112,7 @@ export class PatternFlow {
     this.editOriginal = null;
     this.patternCenter = null;
     this.sweep = null;
+    this.host.requestSolve();
     this.host.dim().hide();
     setPrompt(null);
     this.host.refreshActive();
@@ -223,6 +228,7 @@ export class PatternFlow {
   commit() {
     if (!this.pendingPattern) return;
     this.host.patterns().push(this.pendingPattern);
+    this.host.requestSolve();
     this.pendingPattern = null;
     this.editOriginal = null;
     this.patternCenter = null;

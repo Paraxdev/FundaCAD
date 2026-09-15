@@ -372,6 +372,7 @@ export class SketchMode {
         const ent = this.entities.find((x) => x.id === id);
         return ent ? loopCentroid(entityPolyline(ent)) : null;
       },
+      requestSolve: () => this.requestSolve(),
       refreshActive: () => this.refreshActive(),
       onState: () => this.onState?.(),
     };
