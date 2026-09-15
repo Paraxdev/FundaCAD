@@ -1,6 +1,42 @@
 import { describe, it, expect } from "vitest";
 import * as THREE from "three";
-import { snap, candidatesFromEntities, showsSnapMarker, type SnapCandidate } from "../../src/sketch/snap";
+import { snap, candidatesFromEntities, dragSnap, originCandidate, showsSnapMarker, type SnapCandidate } from "../../src/sketch/snap";
+import { SketchPlane } from "../../src/sketch/plane";
+
+describe("originCandidate", () => {
+  it("offers the origin on a base plane", () => {
+    const c = originCandidate(new SketchPlane("XZ"));
+    expect(c).toHaveLength(1);
+    expect(c[0]!.p.x).toBe(0);
+    expect(c[0]!.p.y).toBe(0);
+  });
+
+  it("finds the origin in a face plane's own coordinates", () => {
+    const c = originCandidate(new SketchPlane({ origin: [10, 20, 0], normal: [0, 0, 1], xdir: [1, 0, 0] }));
+    expect(c[0]!.p.x).toBeCloseTo(-10, 9);
+    expect(c[0]!.p.y).toBeCloseTo(-20, 9);
+  });
+
+  it("offers nothing on a plane that misses the origin", () => {
+    expect(originCandidate(new SketchPlane({ origin: [0, 0, 5], normal: [0, 0, 1], xdir: [1, 0, 0] }))).toEqual([]);
+  });
+});
+
+describe("dragSnap", () => {
+  const origin: SnapCandidate[] = [{ p: new THREE.Vector2(0, 0), kind: "center", priority: 95 }];
+  const px = (p: THREE.Vector2) => ({ x: p.x, y: p.y });
+
+  it("lands a dragged point exactly on a nearby anchor", () => {
+    const r = dragSnap(new THREE.Vector2(3, -4), origin, px);
+    expect(r?.point.x).toBe(0);
+    expect(r?.point.y).toBe(0);
+  });
+
+  it("follows the cursor away from anchors, even on the grid or level with one", () => {
+    expect(dragSnap(new THREE.Vector2(40, 2), origin, px)).toBeNull();
+    expect(dragSnap(new THREE.Vector2(100, 100), origin, px)).toBeNull();
+  });
+});
 
 const v = (x: number, y: number) => new THREE.Vector2(x, y);
 const screen = (p: THREE.Vector2) => ({ x: p.x, y: p.y }); // 1px = 1 unit for the test

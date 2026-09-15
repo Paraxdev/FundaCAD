@@ -7,6 +7,7 @@ import * as THREE from "three";
 import type { DimPlace, ProjectedCurve, ProjectedSource } from "../types";
 import { asRound } from "./entityDims";
 import { rectCorners } from "./region";
+import type { SketchPlane } from "./plane";
 
 export type SnapKind =
   | "free"
@@ -180,6 +181,26 @@ export function showsSnapMarker(tool: string, kind: SnapKind): boolean {
   if (kind === "free") return false;
   if (tool !== "select") return true;
   return kind === "endpoint" || kind === "midpoint" || kind === "center";
+}
+
+/** The world origin as a snap anchor, when the sketch plane passes through it. */
+export function originCandidate(plane: SketchPlane): SnapCandidate[] {
+  const origin = new THREE.Vector3();
+  if (Math.abs(plane.n.dot(origin.clone().sub(plane.origin))) > 1e-6) return [];
+  return [{ p: plane.to2D(origin), kind: "center", priority: 95 }];
+}
+
+/** Where a dragged point lands: on an anchor it is close to, or null to follow
+ *  the cursor. The grid and alignment guides are left out, a drag that stepped
+ *  along the lattice would stop feeling like a drag. */
+export function dragSnap(
+  raw: THREE.Vector2,
+  candidates: SnapCandidate[],
+  toScreen: (p: THREE.Vector2) => { x: number; y: number },
+  pixelTol = 10,
+): SnapResult | null {
+  const res = snap(raw, candidates, toScreen, 0, pixelTol);
+  return res.kind === "endpoint" || res.kind === "midpoint" || res.kind === "center" ? res : null;
 }
 
 /** snap candidates from resolved sketch entities (numbers, not params) */

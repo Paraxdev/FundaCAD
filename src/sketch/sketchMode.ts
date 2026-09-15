@@ -33,7 +33,7 @@ import { SolverUnavailable } from "./solver";
 import { resolveRealEntities, toSketchEntity } from "./resolve";
 import { applyDrivingDimsDirect } from "./directDims";
 import { expandPattern, translated } from "./pattern";
-import { candidatesFromEntities, showsSnapMarker, snap, type SnapGuide, type SnapKind, type SnapCandidate } from "./snap";
+import { candidatesFromEntities, dragSnap, originCandidate, showsSnapMarker, snap, type SnapGuide, type SnapKind, type SnapCandidate } from "./snap";
 import type { ResolvedEntity } from "./snap";
 import { detectRegions, entityPolyline, rectCorners, rectFromThreePoints } from "./region";
 import { AreaBox } from "../viewport/areaBox";
@@ -203,6 +203,8 @@ export class SketchMode {
   private dragMoved = false;
   private dragShift = false;
   private dragSnapshot: ResolvedEntity[] | null = null; // entities at drag start (Esc reverts)
+  /** What a dragged point can land on, taken at the grab so nothing that moves with it is offered. */
+  private dragAnchors: SnapCandidate[] = [];
 
   // --- in-sketch undo -------------------------------------------------------
   // Per session: the document undo would pop the whole sketch, which is not in
@@ -760,6 +762,7 @@ export class SketchMode {
     this.candidates = [
       ...candidatesFromEntities([...this.entities, ...derived]),
       ...this.faceAnchorCandidates(),
+      ...originCandidate(this.plane),
     ];
     // an in-progress dimension holds entity REFERENCES, and a solve replaces
     // every entity object, re-read the picks off the fresh list
@@ -782,7 +785,7 @@ export class SketchMode {
   }
 
   /** Lightweight per-frame refresh for dragging: only the curve geometry moves,
-   * so skip the snap-candidate array (snapping is off mid-drag) and the
+   * so skip the snap-candidate array (a drag snaps to dragAnchors) and the
    * dimension-label DOM teardown/rebuild. refreshActive() restores both on end. */
   private refreshDragGeometry() {
     this.entityVersion++;
@@ -1433,6 +1436,7 @@ export class SketchMode {
         this.dragShift = e.shiftKey;
         this.dragRefusedToast = false;
         this.dragSnapshot = JSON.parse(JSON.stringify(this.entities)); // for Esc-cancel revert
+        this.dragAnchors = this.anchorsAwayFrom(gp.idx, gp.p);
         try { this.viewport.domElement.setPointerCapture(e.pointerId); } catch { /* capture optional */ }
         return;
       }
@@ -2202,7 +2206,7 @@ export class SketchMode {
           if (dx * dx + dy * dy < 16) return; // <4px: still a click, don't solve yet
           this.dragMoved = true;
         }
-        const w = this.planePoint(e); // raw cursor; snapping off for smooth drag
+        const w = this.dragPointTarget(e);
         if (w) this.queueDrag(w);
         return;
       }
@@ -2345,6 +2349,8 @@ export class SketchMode {
         if (this.dragSnapshot) this.entities = this.dragSnapshot;
         this.dragSnapshot = null;
         this.dragFrom = null;
+        this.dragAnchors = [];
+        this.showSnap(null);
         this.moveDrag = null;
         this.pendingDrag = null;
         this.conflict = false;
@@ -3109,6 +3115,24 @@ export class SketchMode {
     return best ? { p: best, idx: bestIdx } : null;
   }
 
+  /** Snap anchors minus the grabbed entity and anything joined to the grabbed point, which move with it. */
+  private anchorsAwayFrom(idx: number, grabbed: THREE.Vector2): SnapCandidate[] {
+    const at = coincKey(grabbed.x, grabbed.y);
+    const still = this.entities.filter((e, i) =>
+      i !== idx && !this.attachmentPoints(e).some((q) => coincKey(q.x, q.y) === at));
+    return [...candidatesFromEntities(still), ...this.faceAnchorCandidates(), ...originCandidate(this.plane)];
+  }
+
+  /** The cursor on the plane, pulled onto an anchor it is near unless Ctrl is held. */
+  private dragPointTarget(e: PointerEvent): THREE.Vector2 | null {
+    const raw = this.planePoint(e);
+    const res = raw && !e.ctrlKey
+      ? dragSnap(raw, this.dragAnchors, (q) => this.viewport.projectToScreen(this.plane.to3D(q.x, q.y)))
+      : null;
+    this.showSnap(res ? { kind: res.kind, p: res.point, world: this.plane.to3D(res.point.x, res.point.y) } : null);
+    return res?.point ?? raw;
+  }
+
   /** Queue a drag target; pump serializes solves (latest target wins). */
   private queueDrag(to: THREE.Vector2) {
     if (!this.dragFrom) return;
@@ -3199,6 +3223,8 @@ export class SketchMode {
     if (!this.dragFrom) return;
     this.dragFrom = null;
     this.pendingDrag = null;
+    this.dragAnchors = [];
+    this.showSnap(null);
     if (pointerId != null) {
       try { this.viewport.domElement.releasePointerCapture(pointerId); } catch { /* not captured */ }
     }
