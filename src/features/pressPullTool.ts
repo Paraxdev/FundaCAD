@@ -335,6 +335,7 @@ export class PressPullTool {
       this.pickingTarget = true;
       this.dim.hide(); // Enter must not commit a plain distance while picking
       this.viewport.clearPressPullGhost();
+      this.viewport.setPeek(null);
       setPrompt("Click the face to stop at · Esc");
     }
   }
@@ -439,6 +440,7 @@ export class PressPullTool {
    *  kernel round-trip (that's why dragging feels immediate). The real OCCT geometry
    *  is computed once on commit. Near-zero distance clears the ghost. */
   private refreshPreview() {
+    this.syncPeek();
     // A leaning wall is not a prism, and the instant ghost cannot draw one, so a
     // tapered push previews the EXACT solid through the sidecar, the way the
     // extrude tool does. Straight pushes keep the instant ghost.
@@ -464,6 +466,15 @@ export class PressPullTool {
       setPrompt(`Drag or type a diameter · under ${collapseDiameter(this.round.radius).toFixed(2)}mm removes it · Esc`);
     }
     this.viewport.setPressPullGhost(this.faceIds, this.value, this.round);
+  }
+
+  /** A push into the part previews inside the body it cuts, so that body is seen
+   *  through for the drag. */
+  private syncPeek() {
+    const f = this.pickingTarget || !this.faceIds.length ? null : this.buildFeature();
+    const cut = f?.type === "press-pull" && f.operation === "cut";
+    const body = this.bodyId ?? this.viewport.faceIdToBodyId(this.faceIds[0] ?? -1);
+    this.viewport.setPeek(cut && body ? () => [body] : null);
   }
 
   private buildGizmo() {
@@ -611,6 +622,7 @@ export class PressPullTool {
     this.gesture.detach();
     el.style.cursor = "default";
     this.viewport.clearPressPullGhost();
+    this.viewport.setPeek(null);
     if (this.taperPreviewOn) {
       this.store.setPreview(null);
       this.taperPreviewOn = false;

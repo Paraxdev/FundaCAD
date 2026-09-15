@@ -35,6 +35,7 @@ import {
 import { draftAngle, draftDelta } from "./draftMath";
 import { regionAnchor } from "./regionNudge";
 import { OP_WORD, plannedOperation, type ExtrudeOp } from "./extrudeOperation";
+import { sweepProbePoints } from "./sweepProbe";
 
 /** Below this taper the extrude is treated as straight: the frontend prism draws
  *  instantly and no kernel preview is asked for. Above it the walls lean and the
@@ -422,6 +423,7 @@ export class ExtrudeTool {
         this.previewKey = "";
         this.disposeDepthHandle();
         this.disposeTaperHandle();
+        this.clearPeek();
         setPrompt("Click a profile area · Esc");
         return;
       }
@@ -600,6 +602,7 @@ export class ExtrudeTool {
       const tv = this.dim.getValue("taper");
       if (tv != null) this.taper = Math.max(-MAX_TAPER_DEG, Math.min(MAX_TAPER_DEG, tv));
     }
+    this.syncPeek();
     const sign = this.distance >= 0 ? 1 : -1;
     const depth = Math.abs(this.distance);
     // A leaning wall is not a prism, and THREE.ExtrudeGeometry cannot taper one,
@@ -623,6 +626,40 @@ export class ExtrudeTool {
       this.updatePrism(sign, depth);
     }
     this.updateManipulators(sign, depth);
+  }
+
+  private peekKey = "";
+
+  /** See through the bodies the preview passes into, or a pocket is drawn inside
+   *  opaque material and all that shows is the arrow. A cut counts every body
+   *  whose box the sweep reaches: a tapered cut previews the pocket itself, where
+   *  a parity probe finds no material left, and an edit starts on a model that
+   *  may still hold the pocket. Anything else needs the probe to land in material. */
+  private syncPeek() {
+    const op = this.shownOp ?? this.plannedOperation();
+    const key = `${op}:${this.distance.toFixed(1)}:${this.symmetric}:${this.selectionIds()}`;
+    if (key === this.peekKey) return;
+    this.peekKey = key;
+    const points = sweepProbePoints(
+      this.selected.map((wr) => ({
+        interior: wr.interior3D,
+        loop: wr.region.loop.map((p) => wr.plane.to3D(p.x, p.y)),
+        normal: wr.plane.n,
+      })),
+      this.distance,
+      this.symmetric,
+    );
+    const bounds = op === "cut";
+    this.peeking = this.viewport.setPeek(() => this.viewport.bodiesHolding(points, bounds)).size > 0;
+  }
+
+  /** The prism is drawn over a ghosted body, so it has to be the stronger of the two. */
+  private peeking = false;
+
+  private clearPeek() {
+    this.peekKey = "";
+    this.peeking = false;
+    this.viewport.setPeek(null);
   }
 
   /** Send the exact tapered solid to the kernel: as a floating preview for a new
@@ -678,7 +715,10 @@ export class ExtrudeTool {
       }
       this.viewport.addToScene(this.preview);
     }
-    this.previewMat?.color.set(cut ? 0xff5c5c : 0x5b9bff);
+    if (this.previewMat) {
+      this.previewMat.color.set(cut ? 0xff5c5c : 0x5b9bff);
+      this.previewMat.opacity = this.peeking ? 0.75 : 0.5;
+    }
   }
 
   /** The two controls, the depth handle and the taper handle, shown in both
@@ -962,6 +1002,7 @@ export class ExtrudeTool {
     this.previewKey = "";
     this.disposeDepthHandle();
     this.disposeTaperHandle();
+    this.clearPeek();
     this.entersMemo.clear();
     // A create-mode cancel or commit can leave a live floating taper preview up;
     // drop it so the model returns to what is actually committed. An edit's taper

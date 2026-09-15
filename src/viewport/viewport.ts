@@ -870,9 +870,31 @@ export class Viewport {
     savedMats: () => this.savedMats,
   });
 
+  private peek: ReadonlySet<string> = new Set();
+  private peekAt: (() => Iterable<string>) | null = null;
+
+  /** Ghost the bodies `which` names while a tool previews something inside them.
+   *  It rides the finish layer like x-ray, and `which` is asked again whenever
+   *  the finish is re-applied, because a preview rebuild can land mid-gesture
+   *  with bodies that were still streaming when the tool last asked. Null gives
+   *  every body back its own finish. Picking is untouched. */
+  setPeek(which: (() => Iterable<string>) | null): ReadonlySet<string> {
+    this.peekAt = which;
+    const next = this.resolvePeek();
+    if (next.size === this.peek.size && [...next].every((id) => this.peek.has(id))) return this.peek;
+    this.applyBodyFinish();
+    this.requestRender();
+    return this.peek;
+  }
+
+  private resolvePeek(): ReadonlySet<string> {
+    return new Set(this.model && this.peekAt ? this.peekAt() : []);
+  }
+
   private applyBodyFinish() {
     if (!this.model) return;
-    this.finish.apply({ xray: this.xray, stale: this.stale, wireframe: this.wireframe });
+    this.peek = this.resolvePeek();
+    this.finish.apply({ xray: this.xray, stale: this.stale, wireframe: this.wireframe, peek: this.peek });
     if (this.wireframe && !this.edgesEmphasized) this.highlighter?.setEdgeBase(EDGE_WIRE);
     this.syncBloomable();
     this.scene.frameShadows();
@@ -1069,6 +1091,39 @@ export class Viewport {
     this.psRay.near = 0;
     this.psRay.far = Infinity;
     return this.psRay.intersectObjects(visibleBodyMeshes(this.model), false).length % 2 === 1;
+  }
+
+  /** Visible bodies holding any of `points`: the parity count of pointInSolid
+   *  kept per body, or with `bounds`, a point anywhere in the body's box. */
+  bodiesHolding(points: readonly THREE.Vector3[], bounds = false): string[] {
+    if (!this.model || !points.length) return [];
+    const meshes = visibleBodyMeshes(this.model);
+    const found = new Set<string>();
+    if (bounds) {
+      const box = new THREE.Box3();
+      for (const mesh of meshes) {
+        const owner = mesh.userData.owner as BodyMesh | undefined;
+        if (!owner) continue;
+        if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+        if (!mesh.geometry.boundingBox) continue;
+        box.copy(mesh.geometry.boundingBox).applyMatrix4(mesh.matrixWorld);
+        if (points.some((p) => box.containsPoint(p))) found.add(owner.id);
+      }
+      return [...found];
+    }
+    const crossings = new Map<string, number>();
+    for (const p of points) {
+      crossings.clear();
+      this.psRay.set(p, this.psDir);
+      this.psRay.near = 0;
+      this.psRay.far = Infinity;
+      for (const hit of this.psRay.intersectObjects(meshes, false)) {
+        const id = (hit.object.userData.owner as BodyMesh | undefined)?.id;
+        if (id) crossings.set(id, (crossings.get(id) ?? 0) + 1);
+      }
+      for (const [id, n] of crossings) if (n % 2 === 1) found.add(id);
+    }
+    return [...found];
   }
 
   // --- face-colour analysis overlays (Inspect), re-applied after each rebuild ---

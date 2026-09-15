@@ -98,7 +98,8 @@ export class GhostLayer {
     const mat = new THREE.MeshBasicMaterial({
       color: distance >= 0 ? 0xffc83d : 0xff6b5c, // amber = add, red = cut
       transparent: true,
-      opacity: 0.4,
+      // A cut is seen through its ghosted body, so it is drawn the stronger.
+      opacity: distance >= 0 ? 0.4 : 0.6,
       side: THREE.DoubleSide,
       depthWrite: false,
     });

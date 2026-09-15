@@ -20,6 +20,9 @@ const MAX_SHADOW_EMITTERS = 2;
 const XRAY_OPACITY = 0.35;
 /** Fainter than x-ray: x-ray is a working mode, stale says the part is wrong. */
 const STALE_OPACITY = 0.16;
+/** A tool looking into a body: fainter than solid so what it previews inside
+ *  reads, solid enough that the body's own faces still do. */
+const PEEK_OPACITY = 0.4;
 
 interface EmitterPatch { key: string; e: AreaEmitter; glow: number; color: THREE.Color }
 
@@ -74,6 +77,8 @@ export interface FinishOverlays {
   xray: boolean;
   stale: boolean;
   wireframe: boolean;
+  /** Bodies a tool is previewing into, ghosted for the length of its gesture. */
+  peek?: ReadonlySet<string>;
 }
 
 export class BodyFinishLayer {
@@ -107,8 +112,8 @@ export class BodyFinishLayer {
   apply(o: FinishOverlays) {
     const model = this.host.model();
     if (!model) return;
-    const ghost = o.xray || o.stale;
-    const ghostOpacity = o.stale ? STALE_OPACITY : XRAY_OPACITY;
+    const anyGhost = o.xray || o.stale;
+    const baseOpacity = o.stale ? STALE_OPACITY : XRAY_OPACITY;
     const byBody = new Map<string, number[]>();
     for (const k of Object.keys(this.faceFinish)) {
       const fid = Number(k);
@@ -125,6 +130,9 @@ export class BodyFinishLayer {
       const mat = (Array.isArray(own) ? own[0] : own);
       if (!(mat instanceof THREE.MeshStandardMaterial)) continue;
       this.syncFaceMaterials(b, mat, byBody.get(b.id));
+      const peeked = o.peek?.has(b.id) === true;
+      const ghost = anyGhost || peeked;
+      const ghostOpacity = anyGhost ? baseOpacity : PEEK_OPACITY;
       const f = this.bodyFinish[b.id];
       mat.metalness = f ? f.metalness : FINISH.metalness;
       mat.roughness = f ? f.roughness : FINISH.roughness;
