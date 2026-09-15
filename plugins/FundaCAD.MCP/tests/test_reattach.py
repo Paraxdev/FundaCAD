@@ -191,5 +191,70 @@ def test_an_attached_server_stops_asking():
     assert not p.probes, "kept probing after it was already attached"
 
 
+class FakeTool:
+    def __init__(self):
+        self.calls = 0
+
+    async def fn(self, args):
+        self.calls += 1
+        return {"content": [{"type": "text", "text": "ran"}]}
+
+
+def attached_to_a_lost_app(error):
+    srv = fresh()
+    srv.live = FakeLive(FakeLink(port=9931, token="t0k"))
+    srv.link = srv.live.link
+    srv.tools = {"inspect": FakeTool()}
+    FakeLive.raises = error
+    return srv
+
+
+def test_a_closed_app_falls_back_to_a_private_engine():
+    # The window closed under a live session. Every call used to fail with the
+    # same ConnectionRefusedError until the host restarted this server.
+    srv = attached_to_a_lost_app(ConnectionRefusedError(1225, "refused"))
+    lost = srv.link
+    with patched(None):
+        out = asyncio.run(srv.call_tool("inspect", {}))
+    assert not out.get("isError"), out
+    assert srv.tools["inspect"].calls == 1
+    assert srv.live is None, "kept the dead live session"
+    assert srv.link is not lost and lost.stopped, "kept the dead link"
+
+
+def test_an_engine_restarted_with_a_new_token_falls_back_too():
+    # The same app port answering, but refusing this token: the engine was restarted.
+    srv = attached_to_a_lost_app(
+        S.websockets.ConnectionClosedError(None, None))
+    with patched(None):
+        out = asyncio.run(srv.call_tool("inspect", {}))
+    assert not out.get("isError"), out
+    assert srv.live is None
+
+
+def test_the_app_coming_back_is_found_again():
+    srv = attached_to_a_lost_app(ConnectionRefusedError(1225, "refused"))
+    with patched(APP) as p:
+        FakeLive.raises = ConnectionRefusedError(1225, "refused")
+        asyncio.run(srv.call_tool("inspect", {}))
+        assert srv.live is None
+        FakeLive.raises = None
+        srv._probed_at -= S.Server.REPROBE_SECONDS + 1
+        asyncio.run(srv.call_tool("inspect", {}))
+        assert p.probes, "never looked for the app again"
+    assert srv.live is not None, "did not re-attach once the app was back"
+
+
+def test_a_window_not_sharing_is_not_mistaken_for_a_lost_engine():
+    # The control: NoAppOpen is a setting the user can flip, and must keep
+    # saying so rather than silently going private.
+    srv = attached_to_a_lost_app(NoAppOpen("no window is sharing a document"))
+    live = srv.live
+    with patched(None):
+        out = asyncio.run(srv.call_tool("inspect", {}))
+    assert out.get("isError"), out
+    assert srv.live is live
+
+
 if __name__ == "__main__":
     _run.run(globals(), "re-attach")

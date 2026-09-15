@@ -56,6 +56,8 @@ import time
 import traceback
 import zipfile
 
+import websockets
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import app_session  # noqa: E402
@@ -645,6 +647,22 @@ screen. Every edit you make appears in their window as it happens.
         # leave a working private session behind, not neither.
         with contextlib.suppress(Exception):
             await old.stop()
+
+    async def _drop_lost_app(self, ex):
+        """The app's engine went away under a live session: the window closed, or
+        the engine was restarted with a new token. Nothing reconnects a live link,
+        so without this every later call fails the same way until the host
+        restarts this server. Fall back to a private engine, keeping the last
+        document pulled, and let the re-probe find the app again."""
+        log(f"[mcp] lost FundaCAD's engine ({type(ex).__name__}: {ex}), "
+            "working on a private copy until it is back")
+        lost = self.link
+        self.live = None
+        self.link = SidecarLink()
+        self._probed_at = 0.0
+        self._invalidate()
+        with contextlib.suppress(Exception):
+            await lost.stop()
 
     #: Tools that change the document. Anything here is offered to the app when
     #: a live session is on; anything not here only reads, and a reader that
@@ -1361,7 +1379,11 @@ screen. Every edit you make appears in their window as it happens.
             await self._adopt_running_app()
         try:
             if self.live is not None and name not in self.NO_DOCUMENT:
-                return await self._call_live(tool, name, args)
+                try:
+                    return await self._call_live(tool, name, args)
+                except (OSError, TimeoutError, websockets.ConnectionClosed) as ex:
+                    await self._drop_lost_app(ex)
+                    return await self.call_tool(name, args)
             if name in self.MUTATORS:
                 self.private_edits = True
             return await tool.fn(args)
