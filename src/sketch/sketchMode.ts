@@ -18,7 +18,7 @@ import { isEditableTarget } from "../ui/focus";
 import { SketchDimensions, type ExtraDim } from "./sketchDimensions";
 import { SketchGlyphs } from "./sketchGlyphs";
 import { RelationsPanel } from "./relationsPanel";
-import { constraintGlyphs, diagnosisOf } from "./glyphs";
+import { constraintGlyphs, diagnosisOf, patternGlyphs } from "./glyphs";
 import { asRound, entityDims, constraintDims, dimRefPoints, curveKind, setDimPixelScale, staggeredDefaults, type DimField, type ConstraintDim } from "./entityDims";
 import { clampPlace, pickDimTarget } from "./dimensionTool";
 import { pickEntity, PROJECTED_FIXED_MSG } from "./modify";
@@ -341,6 +341,7 @@ export class SketchMode {
     };
     this.glyphs = new SketchGlyphs(viewport);
     this.glyphs.onDelete = (i) => this.deleteConstraint(i);
+    this.glyphs.onEditPattern = (id) => this.editPattern(id);
     this.glyphs.onOverlapPick = (e) => this.labelOverlapSelect(e);
     this.relations.onDelete = (i) => this.deleteConstraint(i);
     this.relations.onHover = (ids) => this.setRelationHover(ids);
@@ -711,6 +712,8 @@ export class SketchMode {
     if (t === "patternCircular" && this.active && this.selected.size) {
       for (const id of this.modifyFlow.warnSelectedProjected()) this.selected.delete(id);
       this.patternFlow.begin();
+    } else if (ENTITY_PATTERNS.has(t) && this.active && !this.selected.size) {
+      setPrompt("Click the curves or profile to pattern");
     }
     // Live in `dimension` too: that tool re-arms after each commit, so users stayed in
     // it and could not edit what they had just dimensioned.
@@ -816,7 +819,7 @@ export class SketchMode {
     if (this.dimFlow.picking) this.dimFlow.refreshDimPlan();
     if (this.dimsVisible) this.dims.show(this.entities, this.plane, this.constraintDimExtras());
     else this.dims.hide();
-    if (this.glyphsVisible) this.glyphs.show(constraintGlyphs(this.entities, this.constraints), this.plane, this.conflictIdx, this.overIdx);
+    if (this.glyphsVisible) this.glyphs.show(this.allGlyphs(), this.plane, this.conflictIdx, this.overIdx);
     else this.glyphs.hide();
     // The list, from the same four inputs the badges take. refreshActive is the
     // choke point every constraint change and every finished solve passes
@@ -831,6 +834,18 @@ export class SketchMode {
     this.viewport.requestRender();
   }
 
+  private allGlyphs() {
+    const pending = this.patternFlow.pending;
+    const patterns = pending ? this.patterns.filter((p) => p.id !== pending.id) : this.patterns;
+    return [
+      ...constraintGlyphs(this.entities, this.constraints),
+      ...patternGlyphs(patterns, (id) => {
+        const ent = this.entities.find((x) => x.id === id);
+        return ent ? loopCentroid(entityPolyline(ent)) : null;
+      }),
+    ];
+  }
+
   /** Lightweight per-frame refresh for dragging: the curves and constraint glyphs
    * move, the snap-candidate array (a drag snaps to dragAnchors) and the
    * dimension labels wait for refreshActive() on end. */
@@ -838,7 +853,7 @@ export class SketchMode {
     this.entityVersion++;
     this.overlay.setActiveSketch(curveObjects(this.entities, this.plane, this.activeColor()));
     // Glyphs are a store push the layer projects anyway, so they ride along with the drag.
-    if (this.glyphsVisible) this.glyphs.show(constraintGlyphs(this.entities, this.constraints), this.plane, this.conflictIdx, this.overIdx);
+    if (this.glyphsVisible) this.glyphs.show(this.allGlyphs(), this.plane, this.conflictIdx, this.overIdx);
   }
 
   // --- per-frame reconcile (grid + view lock) --------------------------------
@@ -1573,6 +1588,7 @@ export class SketchMode {
         try { this.viewport.domElement.setPointerCapture(e.pointerId); } catch { /* capture optional */ }
         return;
       }
+      if (this.pickPatternSources(this.planePoint(e) ?? p)) return;
       return this.patternClick(p);
     }
     if (this.tool === "arc") return this.arcClick(p);
@@ -1987,6 +2003,49 @@ export class SketchMode {
       for (const id of this.modifyFlow.warnSelectedProjected()) this.selected.delete(id);
     }
     this.patternFlow.click(p);
+  }
+
+  /** An entity pattern opened with nothing selected picks its sources in place:
+   *  a click on a curve toggles it, a click inside a closed profile takes the
+   *  curves around it. Anywhere else is the centre or start click. */
+  private pickPatternSources(raw: THREE.Vector2): boolean {
+    if (!ENTITY_PATTERNS.has(this.tool) || this.patternFlow.hasPending()) return false;
+    let ids: string[] = [];
+    const idx = pickEntity(this.entities, raw, this.pickTol());
+    const hit = idx >= 0 ? this.entities[idx] : undefined;
+    if (hit) ids = [hit.id];
+    else if (!this.selected.size) {
+      const wr = this.overlay.activeRegionAt(raw);
+      if (wr) ids = this.entitiesAlongLoop(wr.region.loop);
+    }
+    if (!ids.length) return false;
+    const all = ids.every((id) => this.selected.has(id));
+    for (const id of ids) {
+      if (all) this.selected.delete(id);
+      else this.selected.add(id);
+    }
+    for (const id of this.modifyFlow.warnSelectedProjected()) this.selected.delete(id);
+    const n = this.selected.size;
+    setPrompt(n
+      ? `${n} picked · click more to add · ${this.tool === "patternCircular" ? "click the centre" : "click where the pattern starts"}`
+      : "Click the curves or profile to pattern");
+    this.refreshActive();
+    this.onState?.();
+    return true;
+  }
+
+  private entitiesAlongLoop(loop: readonly THREE.Vector2[]): string[] {
+    const ids = new Set<string>();
+    const tol = this.pickTol();
+    const step = Math.max(1, Math.floor(loop.length / 24));
+    for (let i = 0; i < loop.length; i += step) {
+      const pt = loop[i];
+      if (!pt) continue;
+      const k = pickEntity(this.entities, pt, tol);
+      const ent = k >= 0 ? this.entities[k] : undefined;
+      if (ent) ids.add(ent.id);
+    }
+    return [...ids];
   }
 
   private patternMove(p: THREE.Vector2, e: PointerEvent) {

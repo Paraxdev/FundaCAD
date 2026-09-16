@@ -201,7 +201,7 @@ export class PatternFlow {
   click(p: THREE.Vector2) {
     if (!this.patternCenter) {
       if (ENTITY_PATTERNS.has(this.host.tool()) && this.host.selected().size === 0) {
-        setPrompt("Select entities first, then choose a pattern tool");
+        setPrompt("Click the curves or profile to pattern");
         return;
       }
       this.patternCenter = p.clone();
@@ -331,6 +331,7 @@ export class PatternFlow {
     setPrompt(null);
     const selected = this.host.selected();
     if (selected.size) selected.clear(); // the pattern now owns the copies
+    this.host.refreshActive();
     this.host.setTool("select"); // finish: one pattern per invocation (refreshes + notifies)
   }
 
