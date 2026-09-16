@@ -196,20 +196,24 @@ def test_a_blend_past_its_faces_is_coded_as_too_large():
     refusal coded blendTooLarge may say "too large" to the person dragging.
 
     The pocket's floor is 40 across from the edge to the centre and its wall 40
-    high, so 40 is the last radius that fits: the floor becomes a bowl. CONTROL:
-    39.9 and 40 build with no error at all, so the code on 41 is about the
-    radius and nothing else."""
+    high, so at 40 the floor becomes a bowl, and past it the floor contact stops
+    at the axis and the bowl deepens. What is still too large is a size nothing
+    can build, one that fills the whole pocket and more. CONTROL: 39.9 to 45
+    build with no error at all, so the code on 400 is about the radius."""
     from builder import rebuild
     from errors import BLEND_TOO_LARGE
 
-    for radius in (39.9, 40.0):
+    for radius in (39.9, 40.0, 41.0, 45.0):
         _part, errors, _bodies = rebuild(_pocket_doc(radius))
-        assert errors == [], errors
-    for radius in (41.0, 45.0):
-        _part, errors, _bodies = rebuild(_pocket_doc(radius))
-        assert errors and errors[0]["feature_id"] == "f1", errors
-        assert errors[0]["code"] == BLEND_TOO_LARGE, errors[0]
-    print("pocket floor edge: 39.9 and 40 build, 41 and 45 refused as blendTooLarge OK")
+        assert errors == [], (radius, errors)
+    doc = {"parameters": {}, "features": [
+        {"id": "b", "type": "box", "length": 20, "width": 20, "height": 20},
+        {"id": "f1", "type": "fillet", "radius": 400, "edges": {"by": "nearest", "point": [10, 0, 10]}},
+    ]}
+    _part, errors, _bodies = rebuild(doc)
+    assert errors and errors[0]["feature_id"] == "f1", errors
+    assert errors[0]["code"] == BLEND_TOO_LARGE, errors[0]
+    print("pocket floor edge: 39.9 to 45 build, a fillet that removes the body is blendTooLarge OK")
 
 
 def test_refusals_that_no_size_fixes_carry_their_own_codes():

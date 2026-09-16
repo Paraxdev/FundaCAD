@@ -18,6 +18,8 @@ What it does not do is OCCT's corner patches where several blends meet; each
 edge's solid ends square at its own ends. It is the fallback, not the first try.
 """
 
+import math
+
 import font_guard  # noqa: F401  MUST precede build123d, see font_guard.py
 
 from OCP.BRep import BRep_Tool
@@ -35,10 +37,13 @@ from OCP.GeomAPI import GeomAPI_ProjectPointOnSurf
 from OCP.gp import gp_Lin, gp_Pnt, gp_Pnt2d, gp_Vec
 from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
 from OCP.TColgp import TColgp_Array1OfPnt
+from OCP.TColStd import TColStd_Array1OfReal
 from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE, TopAbs_IN, TopAbs_ON, TopAbs_SOLID, TopAbs_VERTEX
 from OCP.TopExp import TopExp, TopExp_Explorer
 from OCP.TopoDS import TopoDS
 from OCP.TopTools import TopTools_IndexedDataMapOfShapeListOfShape, TopTools_ListOfShape
+
+from conic_blend import weight_scale
 
 
 class SectionBlendError(ValueError):
@@ -220,7 +225,45 @@ def _corner(Q1, Q2, n1, n2, P):
     return _p(m)
 
 
-def _section(P, T, sides, s, kind, size, size2, continuity):
+def _clamp_to_axis(Q, K, P, axis):
+    """Pull contacts that would reach past a rim's axis back along their tangent
+    line onto it, so the face they sit on closes to a point instead of the
+    section crossing the axis. True when any contact moved."""
+    loc, d = gp_Vec(axis.Location().XYZ()), gp_Vec(axis.Direction())
+
+    def radial(p):
+        w = _v(p) - loc
+        return w - d.Multiplied(w.Dot(d))
+
+    out = radial(P)
+    if out.Magnitude() < 1e-9:
+        return False
+    out.Normalize()
+    rk = radial(K).Dot(out)
+    moved = False
+    for k in range(2):
+        rq = radial(Q[k]).Dot(out)
+        if rq >= 0 or rk <= 0:
+            continue
+        t = rk / (rk - rq)
+        Q[k] = _p(_v(K) + (_v(Q[k]) - _v(K)).Multiplied(t))
+        moved = True
+    return moved
+
+
+def _conic(Q0, K, Q1, weight):
+    poles = TColgp_Array1OfPnt(1, 3)
+    poles.SetValue(1, Q0)
+    poles.SetValue(2, K)
+    poles.SetValue(3, Q1)
+    weights = TColStd_Array1OfReal(1, 3)
+    weights.SetValue(1, 1.0)
+    weights.SetValue(2, weight)
+    weights.SetValue(3, 1.0)
+    return Geom_BezierCurve(poles, weights)
+
+
+def _section(P, T, sides, s, kind, size, size2, continuity, profile=0.0, axis=None):
     n1 = sides[0].normal_on_edge_cached
     n2 = sides[1].normal_on_edge_cached
     c = max(-1.0, min(1.0, n1.Dot(n2)))
@@ -235,20 +278,39 @@ def _section(P, T, sides, s, kind, size, size2, continuity):
             got = sides[k].foot(q)
             Q.append(got[0] if got else q)
         normals = [n1, n2]
+        if axis is not None:
+            _clamp_to_axis(Q, P, P, axis)
         curve = GC_MakeSegment(Q[1], Q[0]).Value()
     else:
         r = size * G2_SETBACK if continuity == "G2" else size
         C, feet, normals = _ball(P, T, sides, (n1, n2), s, r)
         Q = [_p(feet[0]), _p(feet[1])]
+        K = _corner(Q[0], Q[1], normals[0], normals[1], P)
+        clamped = axis is not None and _clamp_to_axis(Q, K, P, axis)
+        k = weight_scale(profile)
         if continuity == "G2":
-            K = _corner(Q[0], Q[1], normals[0], normals[1], P)
             poles = TColgp_Array1OfPnt(1, 5)
             poles.SetValue(1, Q[1])
             poles.SetValue(2, _p(_v(Q[1]) + (_v(K) - _v(Q[1])).Multiplied(1 - G2_TENSION)))
             poles.SetValue(3, K)
             poles.SetValue(4, _p(_v(Q[0]) + (_v(K) - _v(Q[0])).Multiplied(1 - G2_TENSION)))
             poles.SetValue(5, Q[0])
-            curve = Geom_BezierCurve(poles)
+            if abs(k - 1.0) < 1e-9:
+                curve = Geom_BezierCurve(poles)
+            else:
+                # Poles 1-3 and 3-5 stay collinear, so the ends keep zero
+                # curvature whatever the middle weight.
+                weights = TColStd_Array1OfReal(1, 5)
+                for j, w in enumerate((1.0, 1.0, k, 1.0, 1.0), start=1):
+                    weights.SetValue(j, w)
+                curve = Geom_BezierCurve(poles, weights)
+        elif clamped or abs(k - 1.0) > 1e-9:
+            # The circle is the conic with middle weight sin(corner / 2); the
+            # profile scales that weight exactly as conic_blend does OCCT's.
+            a, b = _v(Q[0]) - _v(K), _v(Q[1]) - _v(K)
+            if a.Magnitude() < 1e-9 or b.Magnitude() < 1e-9:
+                raise SectionBlendError("the blend centre sits on the edge")
+            curve = _conic(Q[1], K, Q[0], math.sin(a.Angle(b) / 2) * k)
         else:
             toward = _v(P) - C
             if toward.Magnitude() < 1e-12:
@@ -289,7 +351,7 @@ def _convexity(P, T, sides, n1, n2, tol):
     return 1 if sides[0].inward_cached.Dot(n2) < 0 else -1
 
 
-def _edge_tool(shape, edge, kind, size, size2, continuity, tol, draft=False):
+def _edge_tool(shape, edge, kind, size, size2, continuity, tol, draft=False, profile=0.0):
     faces = _faces_of(shape, edge)
     sides = [_Side(f, edge) for f in faces]
     crv = BRepAdaptor_Curve(edge)
@@ -313,11 +375,17 @@ def _edge_tool(shape, edge, kind, size, size2, continuity, tol, draft=False):
     if axis is not None:
         # A rim is its section swept round, and revolving it stays exact up to a
         # radius that reaches the axis, where a loft's sections all collapse
-        # onto one point: a cylinder rounded by its own radius is a dome.
+        # onto one point: a cylinder rounded by its own radius is a dome. Past
+        # that the contacts stop on the axis and the dome keeps growing.
         P, T, n1, n2 = frame(t0)
+        # In the meridian plane a coaxial cone or cylinder is a straight line, so
+        # the section is exact without projecting onto the surface, which past
+        # the axis lands on the surface's far side.
+        for sd in sides:
+            sd.planar = True
         sides[0].normal_on_edge_cached = n1
         sides[1].normal_on_edge_cached = n2
-        wire, _inner = _section(P, T, sides, s, kind, size, size2, continuity)
+        wire, _inner = _section(P, T, sides, s, kind, size, size2, continuity, profile, axis)
         from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
         from OCP.BRepPrimAPI import BRepPrimAPI_MakeRevol
 
@@ -355,7 +423,7 @@ def _edge_tool(shape, edge, kind, size, size2, continuity, tol, draft=False):
                 if d.Magnitude() < 1e-12:
                     raise SectionBlendError("the edge runs along a face normal")
                 side.inward_cached = d.Normalized().Multiplied(side.inward_sign)
-        wire, inner = _section(P, T, sides, s, kind, size, size2, continuity)
+        wire, inner = _section(P, T, sides, s, kind, size, size2, continuity, profile)
         # Past the edge's own curvature on the inside of a bend, the blend's
         # centre line stops and runs backwards; the loft would cross itself and
         # the boolean can grind for a minute before failing.
@@ -780,10 +848,10 @@ def _solid_count(shape):
     return n
 
 
-def section_blend(shape, edges, kind, size, size2=None, continuity="G1", sizes=None, draft=False):
+def section_blend(shape, edges, kind, size, size2=None, continuity="G1", sizes=None, draft=False, profile=0.0):
     """Blend `edges` of the TopoDS solid `shape` by lofted sections, returning a
     new TopoDS shape. `sizes`, when given, is one size per edge in place of
-    `size`. Raises SectionBlendError with a sentence when it cannot."""
+    `size`, and `profile` is conic_blend's fillet profile. Raises SectionBlendError with a sentence when it cannot."""
     sizes = list(sizes) if sizes is not None else [size] * len(edges)
     if any(not (x > 0) for x in sizes) or (size2 is not None and not (size2 > 0)):
         raise SectionBlendError("the size must be greater than 0")
@@ -793,11 +861,12 @@ def section_blend(shape, edges, kind, size, size2=None, continuity="G1", sizes=N
     cut, fuse = [], []
     convex = []
     for e, sz in zip(edges, sizes):
-        s, tools = _edge_tool(shape, e, kind, sz, size2, continuity, tol, draft)
+        s, tools = _edge_tool(shape, e, kind, sz, size2, continuity, tol, draft, profile)
         (cut if s > 0 else fuse).extend(tools)
         if s > 0:
             convex.append((e, sz))
-    corners = _ball_corners(shape, convex) if kind == "fillet" and continuity == "G1" else []
+    round_corners = kind == "fillet" and continuity == "G1" and abs(weight_scale(profile) - 1.0) < 1e-9
+    corners = _ball_corners(shape, convex) if round_corners else []
     if corners:
         # On copies: a boolean that fails can still raise the tolerances of its
         # arguments in place, and the retry without corners would inherit that.
@@ -837,8 +906,6 @@ def _combine(shape, cut, fuse, tol):
 def _sane_volume(shape):
     """An inside-out loft can fuse into a solid BRepCheck passes whose volume is
     1e101 and whose faces draw with their normals flipped."""
-    import math
-
     from OCP.Bnd import Bnd_Box
     from OCP.BRepBndLib import BRepBndLib
     from OCP.BRepGProp import BRepGProp

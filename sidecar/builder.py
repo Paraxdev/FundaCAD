@@ -522,14 +522,15 @@ def _handle_fillet(f, ctx):
     def radii(shape, es, size=r):
         return [chord_radius(shape, e, size) if chord else size for e in es]
 
-    section = section_fn("fillet", r, continuity="G2" if g2 else "G1",
-                         sizes_of=radii if chord else None, draft=bool(f.get("draft")))
+    def section(profile):
+        return section_fn("fillet", r, continuity="G2" if g2 else "G1",
+                          sizes_of=radii if chord else None, draft=bool(f.get("draft")), profile=profile)
 
-    def plain():
+    def plain(profile=p):
         _blend_edges(f, ctx, "Fillet",
                      lambda s, es: native_fillet(s, es, radii(s, es)),
                      lambda s, e, size: native_fillet(s, [e], radii(s, [e], size)), r,
-                     section=section, section_only=g2 or only_picked)
+                     section=section(profile), section_only=g2 or only_picked)
 
     if g2 or only_picked or abs(p) < PROFILE_EPS:
         plain()
@@ -537,12 +538,17 @@ def _handle_fillet(f, ctx):
     try:
         _blend_edges(f, ctx, "Fillet",
                      lambda s, es: _conic_fillet(s, es, r, p),
-                     lambda s, e, size: _conic_fillet(s, [e], size, p), r)
+                     lambda s, e, size: _conic_fillet(s, [e], size, p), r,
+                     section=section(p))
     except ConicNotApplicable:
-        # The reweight gave up (often where three rounds meet), not the rounding: fall back
-        # to circular with a warning. _blend_edges assigns nothing until all succeed.
-        plain()
-        _note_profile_fallback(ctx, f)
+        # The reweight gave up (often where three rounds meet), not the rounding. The
+        # section build carries the profile; only when that refuses too does the
+        # fillet go circular, with a warning. _blend_edges assigns nothing until all succeed.
+        try:
+            _blend_edges(f, ctx, "Fillet", None, None, r, section=section(p), section_only=True)
+        except Exception:  # noqa: BLE001  any refusal of the section build means the plain round
+            plain(0.0)
+            _note_profile_fallback(ctx, f)
 
 
 def _note_profile_fallback(ctx, f):

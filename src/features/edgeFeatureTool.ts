@@ -666,11 +666,13 @@ export class EdgeFeatureTool {
     this.dim.show([{ ...this.field, kind: "length" }], () => this.commit(), () => this.cancel(),
       this.kind === "fillet"
         ? {
-            label: "G2",
-            title: "Ease into the faces with no jump in curvature, instead of a circular round",
+            label: this.continuity,
+            title: "Continuity: G1 is a circular round, G2 eases into the faces with no jump in curvature. Click to switch",
             initial: this.continuity === "G2",
             onChange: (on) => {
               this.continuity = on ? "G2" : "G1";
+              this.dim.setToggleLabel(this.continuity);
+              this.forgetBuildRange(); // G2 sets back further, so its limit is not G1's
               this.pushPreview();
             },
           }

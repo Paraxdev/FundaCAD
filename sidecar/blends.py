@@ -606,7 +606,7 @@ def _section_or_raise(label, body, edges, section):
         raise GeomError(f"{label} failed on {body['name']}: {err}") from err
 
 
-def section_fn(kind, size, size2=None, continuity="G1", sizes_of=None, draft=False):
+def section_fn(kind, size, size2=None, continuity="G1", sizes_of=None, draft=False, profile=0.0):
     """`section` for _blend_edges: blend the whole group by lofted sections.
     `sizes_of(shape, edges)` gives a size per edge where they differ."""
     from section_blend import section_blend
@@ -614,7 +614,7 @@ def section_fn(kind, size, size2=None, continuity="G1", sizes_of=None, draft=Fal
     def run(shape, edges):
         sizes = sizes_of(shape, edges) if sizes_of else None
         out = section_blend(shape.wrapped, [e.wrapped for e in edges], kind, size, size2,
-                            continuity, sizes, draft)
+                            continuity, sizes, draft, profile)
         wrapped = _wrap_topods(out)
         if wrapped is None:
             raise ValueError("the blend produced no usable solid")

@@ -535,8 +535,9 @@ def test_the_slider_stops_where_the_mesh_still_holds():
 
 
 def test_a_refused_profile_falls_back_to_a_plain_fillet():
-    """A profile the geometry cannot carry rounds with the plain section instead
-    of failing the feature, and says so on an amber chip rather than a red one.
+    """A profile the reweight cannot carry is built from its sections with the
+    profile kept. Only where that refuses too does the corner round with the
+    plain section instead of failing the feature, and say so on an amber chip.
 
     The radius is fine and the plain fillet at it builds, conic_blend rounds
     first and only then reweights, so ConicNotApplicable means the profile, not
@@ -560,14 +561,30 @@ def test_a_refused_profile_falls_back_to_a_plain_fillet():
     # under test is the handler's response to the exception, not the surface that
     # raises it. The fallback then runs the REAL plain fillet on the box.
     real = builder._conic_fillet
+    real_section = builder.section_fn
     builder._conic_fillet = lambda *_a, **_k: (_ for _ in ()).throw(
         ConicNotApplicable("this blend is cut across its section, use profile 0 here"))
     try:
         diag = []
         _part, errors, bodies = rebuild(doc, diagnostics=diag)
+        assert not errors, errors
+        assert not [d for d in diag if d.get("feature_id") == "f2" and d.get("reason")], (
+            "the section build carried the profile, there is nothing to warn about")
+        kept = bodies[0]["shape"].volume
+
+        def refusing(*a, profile=0.0, **k):
+            if profile:
+                return lambda *_a: (_ for _ in ()).throw(ValueError("no section at this profile"))
+            return real_section(*a, profile=profile, **k)
+
+        builder.section_fn = refusing
+        diag = []
+        _part, errors, bodies = rebuild(doc, diagnostics=diag)
     finally:
         builder._conic_fillet = real
+        builder.section_fn = real_section
 
+    assert bodies and abs(bodies[0]["shape"].volume - kept) > 1e-3, "profile 0.6 and the plain round came out the same"
     assert not errors, f"a refused profile failed the feature instead of rounding it: {errors}"
     assert bodies, "the fallback produced no body"
     notes = [d for d in diag if d.get("feature_id") == "f2" and d.get("reason")]

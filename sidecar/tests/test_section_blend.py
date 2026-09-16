@@ -79,14 +79,55 @@ def test_a_radius_past_the_faces_carves_through():
     bowl = _blend(ring, [floor], kind="fillet", size=40)
     added = sum(math.pi * (40 ** 2 - max(0.0, 40 ** 2 - (10 + (i + 0.5) * 0.01 - 50) ** 2)) * 0.01 for i in range(2000))
     assert bowl.is_valid and abs(bowl.volume - ring.volume - added) < 0.002 * added, (bowl.volume - ring.volume, added)
+    # Wider still, the floor contact stops just short of the axis instead of
+    # crossing it: a deeper bowl, never more than the pocket holds.
     started = time.time()
-    try:
-        _blend(ring, [floor], kind="fillet", size=45)
-        raise AssertionError("a pocket floor blend wider than the pocket must refuse")
-    except SectionBlendError as err:
-        assert "tighter than the edge" in str(err), err
-    assert time.time() - started < 5, "the refusal has to come before the boolean, which grinds for a minute"
-    print(PASS, "15mm on a 20mm cube builds, 1000mm refuses, a pocket-wide one is a bowl, a wider one refuses fast")
+    deeper = _blend(ring, [floor], kind="fillet", size=45)
+    pocket = math.pi * 40 ** 2 * 20
+    assert deeper.is_valid and len(deeper.solids()) == 1, "a bowl wider than the pocket must still build"
+    assert bowl.volume < deeper.volume < ring.volume + pocket, (bowl.volume, deeper.volume, ring.volume + pocket)
+    assert time.time() - started < 5, "the clamped bowl is one revolve and one boolean"
+    print(PASS, "15mm on a 20mm cube builds, 1000mm refuses, a pocket-wide one is a bowl, a wider one a deeper bowl")
+
+
+def test_a_rim_past_its_axis_domes_instead_of_refusing():
+    from build123d import Cone
+
+    # The user's boss: a 15 degree tapered cylinder, its top rim rounded far past
+    # the top face's radius. G2 sets back 1.55 times further, so it met the axis
+    # at two thirds of G1's size and used to refuse from there on.
+    boss = Cone(25.37, 17.75, 28.4)
+    rim = max((e for e in boss.edges() if e.geom_type == GeomType.CIRCLE), key=lambda e: e.center().Z)
+    last = boss.volume
+    for size in (12, 17, 25, 40):
+        for continuity in ("G1", "G2"):
+            out = _blend(boss, [rim], kind="fillet", size=size, continuity=continuity)
+            assert out.is_valid and len(out.solids()) == 1 and out.volume < boss.volume, (size, continuity)
+        g1 = _blend(boss, [rim], kind="fillet", size=size).volume
+        assert g1 < last, f"a larger dome must remove more ({size}mm: {g1} after {last})"
+        last = g1
+    print(PASS, "a tapered boss rim domes at every size, G1 and G2, growing monotonically")
+
+
+def test_the_section_carries_the_profile():
+    box, top = _box_top_edge()
+    plain = _blend(box, [top], kind="fillet", size=5).volume
+    # CONTROL: profile 0 is the circle exactly, the conic weight is sin(45deg).
+    assert abs(_blend(box, [top], kind="fillet", size=5, profile=0.0).volume - plain) < 1e-6
+    fuller = _blend(box, [top], kind="fillet", size=5, profile=0.6).volume
+    flatter = _blend(box, [top], kind="fillet", size=5, profile=-0.6).volume
+    assert flatter < plain < fuller, (flatter, plain, fuller)
+    from conic_blend import conic_blend
+    # The kernel's reweighted fillet is the same conic. Both measured by their
+    # mesh, the integrator is unreliable on those weights.
+    from test_conic_blend import mesh_volume
+    ours = mesh_volume(section_blend(box.wrapped, [top.wrapped], "fillet", 5, profile=0.6))
+    kernel = mesh_volume(conic_blend(box.wrapped, [top.wrapped], 5, 0.6))
+    assert abs(ours - kernel) < 0.5, (ours, kernel)
+    for g2 in (-0.6, 0.6):
+        out = _blend(box, [top], kind="fillet", size=5, continuity="G2", profile=g2)
+        assert out.is_valid
+    print(PASS, "a section blend at a profile matches the kernel's reweighted fillet")
 
 
 LEG = [
@@ -405,6 +446,8 @@ if __name__ == "__main__":
         test_matches_the_kernel_where_the_kernel_builds()
         test_g2_and_two_distance_sections()
         test_a_radius_past_the_faces_carves_through()
+        test_a_rim_past_its_axis_domes_instead_of_refusing()
+        test_the_section_carries_the_profile()
         test_the_junction_beside_a_seam_now_rounds()
         test_feature_options_reach_the_build()
         test_tangent_edges_off_stops_at_the_picked_edge()
