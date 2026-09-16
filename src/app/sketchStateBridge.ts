@@ -14,6 +14,7 @@ export function installSketchStateBridge(e: Engine): void {
   const ribbon = useRibbonStore();
 
   e.sketch.onCommitted = (id) => e.selectFeature(id);
+  e.sketch.onViewSquare = (square) => { palette.offNormal = !square; };
 
   let sketchWasActive = false;
   e.sketch.onState = () => {

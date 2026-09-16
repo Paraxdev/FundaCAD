@@ -33,6 +33,8 @@ export const PALETTE_TOGGLES: ToggleDef[] = [
  *  emitAll() replays them into SketchMode on every sketch entry. */
 export const useSketchPaletteStore = defineStore("sketchPalette", () => {
   const visible = ref(false);
+  /** The camera has turned away from the sketch plane. */
+  const offNormal = ref(false);
   const state = ref<Record<PaletteToggle, boolean>>(
     Object.fromEntries(PALETTE_TOGGLES.map((t) => [t.key, t.default])) as Record<PaletteToggle, boolean>,
   );
@@ -60,5 +62,5 @@ export const useSketchPaletteStore = defineStore("sketchPalette", () => {
     for (const t of PALETTE_TOGGLES) onToggle?.(t.key, state.value[t.key]);
   }
 
-  return { visible, state, bind, set, lookAt, emitAll };
+  return { visible, offNormal, state, bind, set, lookAt, emitAll };
 });

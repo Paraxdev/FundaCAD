@@ -565,6 +565,11 @@ export class SketchMode {
     };
   }
 
+  /** Whether the camera looks straight at the plane, told on change so the UI can
+   *  offer to square it again only when it is not. */
+  onViewSquare: ((square: boolean) => void) | null = null;
+  private viewSquare = true;
+
   /** A finished session wrote this sketch to the document. */
   onCommitted: ((id: string) => void) | null = null;
 
@@ -638,6 +643,7 @@ export class SketchMode {
     this.viewport.rig.setOrbitLocked(false); // restore free orbit in model mode
     this.viewport.suspendPicking = false;
     this.active = false;
+    if (!this.viewSquare) { this.viewSquare = true; this.onViewSquare?.(true); }
     this.base = null;
     this.chainStart = null;
     this.arcStart = null;
@@ -845,6 +851,12 @@ export class SketchMode {
     this.updateGrid();
     this.updateAnnotationScale();
     this.updateSnapScale();
+    const square = !this.viewport.rig.isFlying()
+      && viewSquareToPlane(this.viewDir(), this.plane.n.toArray() as [number, number, number]);
+    if (square !== this.viewSquare) {
+      this.viewSquare = square;
+      this.onViewSquare?.(square);
+    }
     if (this.lockReleased) return;
     // Locked: zooming out releases. Unlocked: turning away does.
     const drifted = this.viewLocked
