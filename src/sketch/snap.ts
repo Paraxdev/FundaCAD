@@ -23,6 +23,9 @@ export interface SnapCandidate {
   priority: number; // higher wins
   /** What the anchor is, named beside the marker ("Face Center"). */
   label?: string | undefined;
+  /** Names for the lines through this anchor along the sketch's own x and y, for
+   *  a cursor that lines up with it on one of them ("X Axis"). */
+  lineLabels?: { x: string; y: string } | undefined;
 }
 
 /** One alignment guide: the anchor the cursor lined up WITH, and which of that
@@ -146,6 +149,8 @@ export function snap(
     // see. Both mechanisms were already per-axis; this is only letting them
     // compose.
     const g = gridAxis();
+    // Lined up on x means standing on the anchor's vertical line, its y line.
+    const line = alignX && !alignY ? alignX.c.lineLabels?.y : alignY && !alignX ? alignY.c.lineLabels?.x : undefined;
     return {
       point: new THREE.Vector2(
         alignX ? alignX.c.p.x : (g.x ?? raw.x),
@@ -153,6 +158,7 @@ export function snap(
       ),
       kind: "align",
       guides,
+      ...(line ? { label: line } : {}),
     };
   }
 
@@ -191,22 +197,33 @@ export function snapLabel(c: Pick<SnapCandidate, "kind" | "label">): string | un
  *  Here rather than in SketchMode because it is a rule about snapping and
  *  nothing else, and this is the file the rest of those live in and get tested
  *  in. */
-export function showsSnapMarker(tool: string, kind: SnapKind): boolean {
+export function showsSnapMarker(tool: string, kind: SnapKind, label?: string): boolean {
   if (kind === "free") return false;
   if (tool !== "select") return true;
-  return kind === "endpoint" || kind === "midpoint" || kind === "center";
+  return kind === "endpoint" || kind === "midpoint" || kind === "center" || (kind === "align" && !!label);
 }
 
 /** The world origin as a snap anchor, when the sketch plane passes through it. */
 export function originCandidate(plane: SketchPlane): SnapCandidate[] {
   const origin = new THREE.Vector3();
   if (Math.abs(plane.n.dot(origin.clone().sub(plane.origin))) > 1e-6) return [];
-  return [{ p: plane.to2D(origin), kind: "center", priority: 95, label: "Origin" }];
+  return [{
+    p: plane.to2D(origin), kind: "center", priority: 95, label: "Origin",
+    lineLabels: { x: axisName(plane.u), y: axisName(plane.v) },
+  }];
 }
 
-/** Where a dragged point lands: on an anchor it is close to, or null to follow
- *  the cursor. The grid and alignment guides are left out, a drag that stepped
- *  along the lattice would stop feeling like a drag. */
+/** "X Axis" for a direction along a world axis, else a plain name for the line. */
+function axisName(dir: THREE.Vector3): string {
+  const names = ["X", "Y", "Z"] as const;
+  const c = [dir.x, dir.y, dir.z];
+  const i = c.findIndex((v) => Math.abs(Math.abs(v) - 1) < 1e-6);
+  return i >= 0 ? `${names[i]} Axis` : "Axis";
+}
+
+/** Where a dragged point lands: on an anchor it is close to, or on a named axis
+ *  line, or null to follow the cursor. The grid and plain alignment guides are
+ *  left out, a drag that stepped along the lattice would stop feeling like a drag. */
 export function dragSnap(
   raw: THREE.Vector2,
   candidates: SnapCandidate[],
@@ -214,6 +231,8 @@ export function dragSnap(
   pixelTol = 10,
 ): SnapResult | null {
   const res = snap(raw, candidates, toScreen, 0, pixelTol);
+  // A named line (an axis through the origin) is a real place to drop a point.
+  if (res.kind === "align" && res.label) return res;
   return res.kind === "endpoint" || res.kind === "midpoint" || res.kind === "center" ? res : null;
 }
 

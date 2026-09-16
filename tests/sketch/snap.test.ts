@@ -36,6 +36,11 @@ describe("dragSnap", () => {
     expect(dragSnap(new THREE.Vector2(40, 2), origin, px)).toBeNull();
     expect(dragSnap(new THREE.Vector2(100, 100), origin, px)).toBeNull();
   });
+
+  it("drops a dragged point onto a named axis line", () => {
+    const r = dragSnap(new THREE.Vector2(40, 2), originCandidate(new SketchPlane("XY")), px);
+    expect([r?.point.x, r?.point.y, r?.label]).toEqual([40, 0, "X Axis"]);
+  });
 });
 
 const v = (x: number, y: number) => new THREE.Vector2(x, y);
@@ -350,5 +355,21 @@ describe("snap labels", () => {
   it("names nothing on the grid or free", () => {
     expect(snap(new THREE.Vector2(10.2, 10.1), [], toScreen, 10).label).toBeUndefined();
     expect(snap(new THREE.Vector2(13, 17), [], toScreen, 0).label).toBeUndefined();
+  });
+});
+
+describe("axis line labels", () => {
+  const toScreen = (p: THREE.Vector2) => ({ x: p.x, y: p.y });
+  it("names the world axis the cursor lines up on through the origin", () => {
+    const cands = originCandidate(new SketchPlane("XY"));
+    expect(snap(new THREE.Vector2(40, 2), cands, toScreen, 0).label).toBe("X Axis");
+    expect(snap(new THREE.Vector2(1, -35), cands, toScreen, 0).label).toBe("Y Axis");
+  });
+  it("uses the plane's own directions", () => {
+    const cands = originCandidate(new SketchPlane("XZ"));
+    const plane = new SketchPlane("XZ");
+    expect([snap(new THREE.Vector2(40, 2), cands, toScreen, 0).label, snap(new THREE.Vector2(1, -35), cands, toScreen, 0).label])
+      .toEqual([`${["X", "Y", "Z"][[plane.u.x, plane.u.y, plane.u.z].findIndex((v) => Math.abs(v) === 1)]} Axis`,
+        `${["X", "Y", "Z"][[plane.v.x, plane.v.y, plane.v.z].findIndex((v) => Math.abs(v) === 1)]} Axis`]);
   });
 });

@@ -2637,7 +2637,7 @@ export class SketchMode {
       this.plane,
       this.planeMmPerPx(),
     );
-    if (!hit || !showsSnapMarker(this.tool, hit.kind)) {
+    if (!hit || !showsSnapMarker(this.tool, hit.kind, hit.label)) {
       this.overlay.setSnap(null);
       this.snapWorld = null;
       this.snapTag.hide();
@@ -3210,7 +3210,7 @@ export class SketchMode {
     const res = raw && !e.ctrlKey
       ? dragSnap(raw, this.dragAnchors, (q) => this.viewport.projectToScreen(this.plane.to3D(q.x, q.y)))
       : null;
-    this.showSnap(res ? { kind: res.kind, p: res.point, world: this.plane.to3D(res.point.x, res.point.y), label: res.label } : null);
+    this.showSnap(res ? { kind: res.kind, p: res.point, world: this.plane.to3D(res.point.x, res.point.y), label: res.label, guides: res.guides } : null);
     return res?.point ?? raw;
   }
 
