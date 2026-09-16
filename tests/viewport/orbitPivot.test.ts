@@ -16,7 +16,7 @@
 
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { frameRotation, pivotShift, viewQuaternion } from "../../src/viewport/orbitPivot";
+import { frameRotation, pivotProbes, pivotShift, viewQuaternion } from "../../src/viewport/orbitPivot";
 
 const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
@@ -95,5 +95,22 @@ describe("frameRotation", () => {
     // Applying it to the first basis has to give the second.
     const composed = q.clone().multiply(before);
     expect(Math.abs(Math.abs(composed.dot(after)) - 1)).toBeLessThan(1e-9);
+  });
+});
+
+describe("pivotProbes", () => {
+  const rect = { left: 0, top: 0, right: 800, bottom: 600 };
+
+  it("walks outward from the cursor, nearest ring first", () => {
+    const probes = pivotProbes(400, 300, rect, 32);
+    const dist = probes.map((p) => Math.hypot(p.x - 400, p.y - 300));
+    for (let i = 1; i < dist.length; i++) expect(dist[i]).toBeGreaterThanOrEqual((dist[i - 1] ?? 0) - 1e-6);
+    expect(dist[0]).toBeCloseTo(32);
+  });
+
+  it("stays on the canvas and reaches its far corner from an edge", () => {
+    const probes = pivotProbes(10, 10, rect, 32);
+    expect(probes.every((p) => p.x >= 0 && p.x <= 800 && p.y >= 0 && p.y <= 600)).toBe(true);
+    expect(probes.some((p) => p.x > 700 && p.y > 500)).toBe(true);
   });
 });

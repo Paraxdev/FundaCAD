@@ -84,6 +84,7 @@ import type { RoundFace } from "../features/radialDrag";
 import type { Plane3, PlaneDef, RebuildResult, Selector, Vec3 } from "../types";
 import { dragStep } from "./dragStep";
 import { groundAnchor } from "./zoomAnchor";
+import { pivotProbes } from "./orbitPivot";
 import { faceSketchPlane } from "../sketch/sketchView";
 import { viewSideNormal } from "./viewFlight";
 import { themeColor } from "./themeColors";
@@ -455,9 +456,22 @@ export class Viewport {
    *  target, which pans and zooms push well off the model. */
   private orbitPivotAt(clientX: number, clientY: number): THREE.Vector3 | null {
     if (!this.model || this.model.box.isEmpty()) return null;
-    const hit = this.rayFrom(clientX, clientY)
-      .intersectObjects(visibleBodyMeshes(this.model), false)[0];
-    return hit ? hit.point.clone() : this.model.box.getCenter(new THREE.Vector3());
+    flushRaycastIndex();
+    const meshes = visibleBodyMeshes(this.model);
+    const hitAt = (x: number, y: number) => {
+      this.surfaceRaycaster.ray.copy(this.rayFrom(x, y).ray);
+      return this.surfaceRaycaster.intersectObjects(meshes, false)[0];
+    };
+    const hit = hitAt(clientX, clientY);
+    if (hit) return hit.point.clone();
+    // Pressed beside the model: the whole scene's centre can sit hundreds of mm
+    // off when zoomed in on one part, and a small drag then flings the view
+    // around it. The nearest surface on screen keeps the orbit local.
+    for (const p of pivotProbes(clientX, clientY, this.canvas.getBoundingClientRect(), 32)) {
+      const near = hitAt(p.x, p.y);
+      if (near) return near.point.clone();
+    }
+    return this.model.box.getCenter(new THREE.Vector3());
   }
 
   /** Zoom anchor: the model under the cursor, else the ground plane, else a point

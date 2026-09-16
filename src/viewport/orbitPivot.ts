@@ -60,3 +60,26 @@ export function pivotShift(
   const v = pivot.clone().sub(target);
   return v.clone().sub(v.applyQuaternion(q));
 }
+
+/** Screen points to try for an orbit pivot when the press missed the model, in
+ *  rings of `step` px outward from the cursor, clipped to the rect. Nearest ring
+ *  first, so the pivot is the model surface closest to where the drag began. */
+export function pivotProbes(
+  x: number,
+  y: number,
+  rect: { left: number; top: number; right: number; bottom: number },
+  step = 24,
+): { x: number; y: number }[] {
+  const out: { x: number; y: number }[] = [];
+  const reach = Math.hypot(Math.max(x - rect.left, rect.right - x), Math.max(y - rect.top, rect.bottom - y));
+  for (let r = step; r <= reach; r += step) {
+    const n = Math.max(8, Math.round((2 * Math.PI * r) / step));
+    for (let i = 0; i < n; i++) {
+      const a = (2 * Math.PI * i) / n;
+      const px = x + r * Math.cos(a);
+      const py = y + r * Math.sin(a);
+      if (px >= rect.left && px <= rect.right && py >= rect.top && py <= rect.bottom) out.push({ x: px, y: py });
+    }
+  }
+  return out;
+}
