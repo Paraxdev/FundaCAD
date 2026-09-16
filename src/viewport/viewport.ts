@@ -711,7 +711,39 @@ export class Viewport {
         return;
       }
     }
+    this.edgeClick = hit?.kind === "edge" && !mods.additive
+      ? { edge: hit.edge, at: this.nearestOnEdge(hit.edge, e.clientX, e.clientY) }
+      : null;
     this.applyPick(hit, mods);
+  }
+
+  /** The one edge last picked by a plain click, and where on it the click landed. */
+  private edgeClick: { edge: EdgeRef; at: [number, number, number] | null } | null = null;
+
+  /** Where the single selected edge was clicked, null when it was not picked by a click. */
+  selectedEdgeClickPoint(): [number, number, number] | null {
+    const sel = this.selectedEdgeLines();
+    return sel.length === 1 && this.edgeClick && sel[0] === this.edgeClick.edge ? this.edgeClick.at : null;
+  }
+
+  private nearestOnEdge(edge: EdgeRef, clientX: number, clientY: number): [number, number, number] | null {
+    const ray = this.rayFrom(clientX, clientY).ray;
+    const onSeg = new THREE.Vector3();
+    const a = new THREE.Vector3();
+    const b = new THREE.Vector3();
+    let best: [number, number, number] | null = null;
+    let bestD = Infinity;
+    for (let i = 1; i < edge.points.length; i++) {
+      const p = edge.points[i - 1]!, q = edge.points[i]!;
+      a.set(p[0], p[1], p[2]);
+      b.set(q[0], q[1], q[2]);
+      const d = ray.distanceSqToSegment(a, b, undefined, onSeg);
+      if (d < bestD) {
+        bestD = d;
+        best = [onSeg.x, onSeg.y, onSeg.z];
+      }
+    }
+    return best;
   }
 
   /** Bodies mode's pick, callable by the move gizmo so a click elsewhere while it

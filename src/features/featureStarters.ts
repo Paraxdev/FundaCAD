@@ -94,9 +94,9 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
    *  a decision back in front of the gesture, which is the thing this flow
    *  exists to stop doing, and neither answer is a dead end, since the other is
    *  one drag back through zero (or one Tab) away. */
-  const grabEdgeHandle = (x: number, y: number, tangent: THREE.Vector3 | null) => {
+  const grabEdgeHandle = (x: number, y: number, tangent: THREE.Vector3 | null, anchor?: THREE.Vector3) => {
     if (toolBusy()) return;
-    edgeFeature.start("fillet", edgeFeatureDone, { tangent, grabAt: { x, y } });
+    edgeFeature.start("fillet", edgeFeatureDone, { tangent, grabAt: { x, y }, ...(anchor ? { anchor } : {}) });
   };
   // Interactive Press/Pull: pick a solid face, then drag an arrow along its normal
   // to add/cut material (planar) or offset a curved face, with a live preview.

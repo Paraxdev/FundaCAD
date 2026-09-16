@@ -310,7 +310,7 @@ export class EdgeFeatureTool {
   start(
     kind: Kind,
     onDone: (id: string | null) => void,
-    opts?: { tangent?: THREE.Vector3 | null; grabAt?: { x: number; y: number } },
+    opts?: { tangent?: THREE.Vector3 | null; grabAt?: { x: number; y: number }; anchor?: THREE.Vector3 },
   ) {
     if (this.active) return;
     // The direct-manipulation entry needs the selection its handle was drawn
@@ -346,7 +346,9 @@ export class EdgeFeatureTool {
       // the point you pressed is the point you can come back to for "no
       // feature". Arriving from a command instead has nothing to measure yet,
       // so it opens on the default and shows a preview immediately.
-      this.beginDrag(seed, this.anchorFromSelectors(seed), opts?.tangent ?? null, undefined, {
+      // The handle's own anchor when it has one: it may stand where the edge was
+      // clicked, and the tool taking over must not move it.
+      this.beginDrag(seed, opts?.anchor?.clone() ?? this.anchorFromSelectors(seed), opts?.tangent ?? null, undefined, {
         fromZero: !!opts?.grabAt,
         // A face's edges are already the complete, closed set the user asked
         // for: expanding each across its tangent chain could only reach edges

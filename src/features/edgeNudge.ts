@@ -23,18 +23,44 @@ type Vec3 = [number, number, number];
  *  and must come from the same place the tool reads it, for the same reason. */
 export function edgeNudgePlacement(
   edges: EdgeRef[],
-  onGrab: (clientX: number, clientY: number, tangent: THREE.Vector3 | null) => void,
+  onGrab: (clientX: number, clientY: number, tangent: THREE.Vector3 | null, anchor: THREE.Vector3) => void,
   centre?: THREE.Vector3 | null,
+  /** Where the one selected edge was clicked; the handle stands there instead of mid-edge. */
+  clickedAt?: Vec3 | null,
 ): NudgePlacement | null {
-  const place = handlePlacement(edges.map((e) => e.points as Vec3[]));
+  const only = edges.length === 1 ? edges[0] : undefined;
+  const local = only && clickedAt ? pointOnEdge(only.points as Vec3[], clickedAt) : null;
+  const place = local ?? handlePlacement(edges.map((e) => e.points as Vec3[]));
   if (!place) return null;
   const tangent = place.tangent && new THREE.Vector3(...place.tangent);
   const anchor = new THREE.Vector3(...place.anchor);
   return {
     anchor,
     axis: (viewport: Viewport) => edgeHandleAxis(viewport, tangent, anchor, centre ?? null),
-    grab: (x, y) => onGrab(x, y, tangent),
+    grab: (x, y) => onGrab(x, y, tangent, anchor),
   };
+}
+
+/** The point of an edge polyline nearest `at`, with the direction of the segment it
+ *  lies on, so a handle on a curve lies across the curve where it stands rather
+ *  than across its chord. Null for a polyline with no segment. */
+export function pointOnEdge(points: Vec3[], at: Vec3): { anchor: Vec3; tangent: Vec3 | null } | null {
+  let best: { anchor: Vec3; tangent: Vec3 | null; d: number } | null = null;
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1]!, b = points[i]!;
+    const ab: Vec3 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    const len2 = ab[0] * ab[0] + ab[1] * ab[1] + ab[2] * ab[2];
+    if (len2 < 1e-18) continue;
+    const t = Math.max(0, Math.min(1,
+      ((at[0] - a[0]) * ab[0] + (at[1] - a[1]) * ab[1] + (at[2] - a[2]) * ab[2]) / len2));
+    const p: Vec3 = [a[0] + ab[0] * t, a[1] + ab[1] * t, a[2] + ab[2] * t];
+    const d = Math.hypot(p[0] - at[0], p[1] - at[1], p[2] - at[2]);
+    if (!best || d < best.d) {
+      const len = Math.sqrt(len2);
+      best = { anchor: p, tangent: [ab[0] / len, ab[1] / len, ab[2] / len], d };
+    }
+  }
+  return best && { anchor: best.anchor, tangent: best.tangent };
 }
 
 /** Where the handle stands and which way it lies, from the selected edges'

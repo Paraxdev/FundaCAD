@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { handlePlacement } from "../../src/features/edgeNudge";
+import { handlePlacement, pointOnEdge } from "../../src/features/edgeNudge";
 
 type Vec3 = [number, number, number];
 
@@ -94,5 +94,23 @@ describe("handlePlacement", () => {
     // with no visible cause.
     expect(handlePlacement([[]])).toBeNull();
     expect(handlePlacement([[], straight])?.anchor).toEqual([5, 0, 0]);
+  });
+});
+
+describe("pointOnEdge", () => {
+  it("stands on the edge where it was clicked, not mid-edge", () => {
+    const line: [number, number, number][] = [[0, 0, 0], [10, 0, 0]];
+    expect(pointOnEdge(line, [8, 1, 0])).toEqual({ anchor: [8, 0, 0], tangent: [1, 0, 0] });
+  });
+  it("clamps past the ends", () => {
+    const line: [number, number, number][] = [[0, 0, 0], [10, 0, 0]];
+    expect(pointOnEdge(line, [-4, 0, 0])?.anchor).toEqual([0, 0, 0]);
+  });
+  it("takes the local direction on a curve", () => {
+    const bend: [number, number, number][] = [[0, 0, 0], [10, 0, 0], [10, 10, 0]];
+    expect(pointOnEdge(bend, [10.5, 7, 0])).toEqual({ anchor: [10, 7, 0], tangent: [0, 1, 0] });
+  });
+  it("has nothing to stand on without a segment", () => {
+    expect(pointOnEdge([[1, 1, 1]], [0, 0, 0])).toBeNull();
   });
 });

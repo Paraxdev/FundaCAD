@@ -314,8 +314,9 @@ export function installViewportWiring(e: Engine): void {
       e.nudge.show(
         edgeNudgePlacement(
           edges,
-          (x, y, tangent) => e.starters.grabEdgeHandle(x, y, tangent),
+          (x, y, tangent, anchor) => e.starters.grabEdgeHandle(x, y, tangent, anchor),
           centre,
+          e.viewport.selectedEdgeClickPoint(),
         ),
       );
     } else if (regions.length) {
