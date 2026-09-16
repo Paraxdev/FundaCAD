@@ -38,7 +38,8 @@ from OCP.TopLoc import TopLoc_Location
 #        the triangulation enlarged by the shape's tolerance (see mesh_bbox)
 #   6 -> the display tessellation carries true surface normals for every face
 #        and welds a curved face's seam duplicates (see _display_face)
-CODE_VERSION = 6
+#   7 -> a seam that also bounds another face is drawn (edge_polylines_by_body)
+CODE_VERSION = 7
 
 
 def tessellate(shape, tolerance=0.1, angular_tolerance=0.5, mesh_passes=None, density_cap=None,
@@ -650,9 +651,12 @@ def edge_polylines_by_body(bodies, deflection=_EDGE_DEFLECTION, hide_coplanar_se
             # segments. Harmless on screen but pure waste in the payload.
             if BRep_Tool.Degenerated_s(ke):
                 continue
-            # A wrap-around seam is ONE face listed TWICE, so both entries of the
-            # (already materialized, free to re-iterate) tuple get tested.
-            if any(BRep_Tool.IsClosed_s(ke, TopoDS.Face_s(f)) for f in faces):
+            # A wrap-around seam is ONE face listed TWICE. Only that is skipped: a
+            # cylinder whose seam lands exactly on its junction with another face
+            # is closed on the edge too, but the edge also bounds that other face
+            # and is a real crease (a patterned leg on a round wall lost one side).
+            if faces and all(f.IsSame(faces[0]) for f in faces) and any(
+                    BRep_Tool.IsClosed_s(ke, TopoDS.Face_s(f)) for f in faces):
                 continue
             e = Edge(ek)
             pts = _edge_points(e, deflection)
