@@ -19,7 +19,7 @@ import { SketchDimensions, type ExtraDim } from "./sketchDimensions";
 import { SketchGlyphs } from "./sketchGlyphs";
 import { RelationsPanel } from "./relationsPanel";
 import { constraintGlyphs, diagnosisOf } from "./glyphs";
-import { entityDims, constraintDims, dimRefPoints, curveKind, setDimPixelScale, staggeredDefaults, type DimField, type ConstraintDim } from "./entityDims";
+import { asRound, entityDims, constraintDims, dimRefPoints, curveKind, setDimPixelScale, staggeredDefaults, type DimField, type ConstraintDim } from "./entityDims";
 import { clampPlace, pickDimTarget } from "./dimensionTool";
 import { pickEntity, PROJECTED_FIXED_MSG } from "./modify";
 import { newEntityId, newConstraintId, isDimConstraint, notePatternId } from "./id";
@@ -2554,6 +2554,7 @@ export class SketchMode {
         this.showDimFields();
       }
     } else {
+      if (entity.type === "circle") this.inferConcentric(entity);
       this.base = null;
       this.dim.hide();
     }
@@ -2579,6 +2580,21 @@ export class SketchMode {
     } else if (dir === "vertical") {
       e.x2 = e.x1; // exactly vertical
       this.constraints.push({ type: "vertical", line: e.id });
+    }
+  }
+
+  /** A circle whose centre landed on another circle's or arc's centre keeps it there. */
+  private inferConcentric(e: ResolvedEntity) {
+    if (e.type !== "circle") return;
+    for (const other of this.entities) {
+      if (other.id === e.id) continue;
+      const k = curveKind(other);
+      if (k !== "circle" && k !== "arc") continue;
+      const r = asRound(other);
+      if (r && Math.hypot(r.x - e.x, r.y - e.y) < 1e-6) {
+        this.constraints.push({ type: "concentric", c1: other.id, c2: e.id });
+        return;
+      }
     }
   }
 
