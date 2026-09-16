@@ -39,7 +39,7 @@ import { detectRegions, entityPolyline, rectCorners, rectFromThreePoints } from 
 import { AreaBox } from "../viewport/areaBox";
 import { Disposer } from "../lib/disposer";
 import { allInsideRect, convexTouchesRect, dragBox, isAreaDrag, pointInRect, type AreaMode, type ScreenRect } from "../viewport/areaSelect";
-import { loopsFromEdgePolys, planeEdges, type PlaneEdge } from "./faceFootprint";
+import { faceFocus, loopsFromEdgePolys, planeEdges, type PlaneEdge } from "./faceFootprint";
 import { isExactPlaneEdge, meshBodyIds } from "./planeEdgePick";
 import { boundaryAnchors, footprintAnchors, loopCentroid } from "./anchors";
 import { setPrompt } from "../ui/prompt";
@@ -180,6 +180,7 @@ export class SketchMode {
   /** The same edges, UN-chained, one polyline each, which is what tells a
    *  corner from a point part way along an arc. See anchors.boundaryAnchors. */
   private footprintEdges: THREE.Vector2[][] = [];
+  private viewFocus = new THREE.Vector3();
   /** The exact ones among them, with their source edge, for Offset to take. */
   private modelPlaneEdges: PlaneEdge<ModelEdge>[] = [];
   private entities: ResolvedEntity[] = [];
@@ -518,7 +519,8 @@ export class SketchMode {
     }
 
     this.viewport.suspendPicking = true;
-    this.viewport.enterSketchView(this.plane.origin, this.plane.n, this.plane.v);
+    this.viewFocus = this.focusPoint();
+    this.viewport.enterSketchView(this.viewFocus, this.plane.n, this.plane.v);
     this.entryScale = null; // re-baselined on the first tick, once the camera lands
     this.lockReleased = false;
     this.releaseAnnounced = false;
@@ -877,6 +879,14 @@ export class SketchMode {
     return [at.x - eye.x, at.y - eye.y, at.z - eye.z];
   }
 
+  private focusPoint(): THREE.Vector3 {
+    const at = this.face?.at;
+    if (!at) return this.plane.origin.clone();
+    const at2 = this.plane.to2D(new THREE.Vector3(at[0], at[1], at[2]));
+    const c = faceFocus(this.footprint, at2) ?? at2;
+    return this.plane.to3D(c.x, c.y);
+  }
+
   /** Hand the camera back: orbit on, and the projection from before the sketch. */
   private releaseView() {
     const wasLocked = this.viewLocked;
@@ -895,7 +905,7 @@ export class SketchMode {
    *  puts the camera back on the plane, so a released session can be recovered
    *  without leaving and re-entering the sketch. */
   private squareToPlane() {
-    this.viewport.enterSketchView(this.plane.origin, this.plane.n, this.plane.v);
+    this.viewport.enterSketchView(this.viewFocus, this.plane.n, this.plane.v);
     this.lockReleased = false;
     this.entryScale = null; // re-measured on the next tick, from the new framing
   }

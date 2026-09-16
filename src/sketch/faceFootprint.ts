@@ -13,7 +13,7 @@
 // the profile can sit on it, and its edge is also where support stops.
 
 import * as THREE from "three";
-import { chainLoops } from "./region";
+import { chainLoops, pointInLoop } from "./region";
 import type { SketchPlane } from "./plane";
 
 /** The shape of an edge as the viewport stores it (viewport/edgeLines.EdgeRef).
@@ -163,4 +163,20 @@ export function footprintCache(
     }
     return hit;
   };
+}
+
+/** Where the camera should aim when a sketch opens on a face: the centre of the
+ *  smallest footprint loop around the clicked point, so a face far from the
+ *  world origin is not left off screen. Null when no loop holds the point. */
+export function faceFocus(loops: readonly THREE.Vector2[][], at: THREE.Vector2): THREE.Vector2 | null {
+  let best: THREE.Box2 | null = null;
+  let bestArea = Infinity;
+  for (const loop of loops) {
+    if (loop.length < 3 || !pointInLoop(at, loop as THREE.Vector2[])) continue;
+    const box = new THREE.Box2().setFromPoints(loop as THREE.Vector2[]);
+    const size = box.getSize(new THREE.Vector2());
+    const area = size.x * size.y;
+    if (area < bestArea) { bestArea = area; best = box; }
+  }
+  return best ? best.getCenter(new THREE.Vector2()) : null;
 }

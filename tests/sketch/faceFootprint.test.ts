@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
+import * as THREE from "three";
 import { SketchPlane } from "../../src/sketch/plane";
 import {
+  faceFocus,
   edgeLiesInPlane,
   footprintCache,
   planeFootprint,
@@ -197,5 +199,20 @@ describe("footprintCache", () => {
     expect(cache(plane)).toEqual([]);
     expect(cache(plane)).toEqual([]);
     expect(walks()).toBe(1);
+  });
+});
+
+describe("faceFocus", () => {
+  const sq = (cx: number, cy: number, h: number) => [
+    new THREE.Vector2(cx - h, cy - h), new THREE.Vector2(cx + h, cy - h),
+    new THREE.Vector2(cx + h, cy + h), new THREE.Vector2(cx - h, cy + h),
+  ];
+  it("centres on the smallest loop around the click, not the origin", () => {
+    const c = faceFocus([sq(100, 40, 30), sq(100, 40, 10)], new THREE.Vector2(120, 40));
+    expect(c?.x).toBeCloseTo(100);
+    expect(c?.y).toBeCloseTo(40);
+  });
+  it("is null when no loop holds the click", () => {
+    expect(faceFocus([sq(0, 0, 5)], new THREE.Vector2(50, 50))).toBeNull();
   });
 });
