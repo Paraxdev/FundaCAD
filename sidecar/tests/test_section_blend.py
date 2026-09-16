@@ -74,20 +74,23 @@ def test_a_radius_past_the_faces_carves_through():
     ring = Cylinder(50, 30) - Cylinder(40, 30).translate((0, 0, 10))
     floor = min((e for e in ring.edges() if e.geom_type == GeomType.CIRCLE and abs(e.radius - 40) < 1e-6),
                 key=lambda e: e.center().Z)
-    # As wide as the pocket, the floor rounds into a bowl: a ball of 40 centred
-    # 40 above the floor, filling the pocket below it.
-    bowl = _blend(ring, [floor], kind="fillet", size=40)
-    added = sum(math.pi * (40 ** 2 - max(0.0, 40 ** 2 - (10 + (i + 0.5) * 0.01 - 50) ** 2)) * 0.01 for i in range(2000))
-    assert bowl.is_valid and abs(bowl.volume - ring.volume - added) < 0.002 * added, (bowl.volume - ring.volume, added)
-    # Wider still, the floor contact stops just short of the axis instead of
-    # crossing it: a deeper bowl, never more than the pocket holds.
-    started = time.time()
-    deeper = _blend(ring, [floor], kind="fillet", size=45)
+    # As wide as the pocket and twice as tall as its wall, the floor rounds into a
+    # bowl that runs from the rim down to the centre. It used to be a ball of 40
+    # cut flat at the rim, a lid across the pocket; on six short legs the same
+    # flat cut filled the whole underside.
     pocket = math.pi * 40 ** 2 * 20
-    assert deeper.is_valid and len(deeper.solids()) == 1, "a bowl wider than the pocket must still build"
-    assert bowl.volume < deeper.volume < ring.volume + pocket, (bowl.volume, deeper.volume, ring.volume + pocket)
-    assert time.time() - started < 5, "the clamped bowl is one revolve and one boolean"
-    print(PASS, "15mm on a 20mm cube builds, 1000mm refuses, a pocket-wide one is a bowl, a wider one a deeper bowl")
+    top = ring.volume + pocket
+    for size in (40, 45):
+        started = time.time()
+        bowl = _blend(ring, [floor], kind="fillet", size=size)
+        assert bowl.is_valid and len(bowl.solids()) == 1, f"a {size}mm floor round must build"
+        assert ring.volume + 0.2 * pocket < bowl.volume < top - 0.1 * pocket, (size, bowl.volume - ring.volume, pocket)
+        rim = ring.bounding_box().max.Z
+        lids = [f for f in bowl.faces() if f.geom_type == GeomType.PLANE and abs(f.center().Z - rim) < 1e-6]
+        assert lids, "the ring's top face is gone"
+        assert sum(f.area for f in lids) < math.pi * (50 ** 2 - 40 ** 2) + 1.0, "the bowl is cut flat across the pocket"
+        assert time.time() - started < 5, "the bowl is one revolve and one boolean"
+    print(PASS, "15mm on a 20mm cube builds, 1000mm refuses, a floor round past the wall's height is a bowl with no lid")
 
 
 def test_a_rim_past_its_axis_domes_instead_of_refusing():

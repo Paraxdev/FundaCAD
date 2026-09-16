@@ -251,6 +251,67 @@ def _clamp_to_axis(Q, K, P, axis):
     return moved
 
 
+def _contacts(P, T, sides, s, kind, size, size2, continuity):
+    """Where the section meets each face, the corner of its control polygon, and
+    for a fillet the ball centre and the faces' normals at the contacts."""
+    n1 = sides[0].normal_on_edge_cached
+    n2 = sides[1].normal_on_edge_cached
+    if kind == "chamfer":
+        Q = []
+        for k, d in enumerate((size, size2 if size2 else size)):
+            q = _p(_v(P) + sides[k].inward_cached.Multiplied(d))
+            got = sides[k].foot(q)
+            Q.append(got[0] if got else q)
+        return Q, P, None, [n1, n2]
+    r = size * G2_SETBACK if continuity == "G2" else size
+    C, feet, normals = _ball(P, T, sides, (n1, n2), s, r)
+    Q = [_p(feet[0]), _p(feet[1])]
+    return Q, _corner(Q[0], Q[1], normals[0], normals[1], P), C, normals
+
+
+def _face_limits(P, T, sides, s, kind, size, size2, continuity):
+    """How far each contact may sit from the corner before it runs off the end of
+    its face, measured once in the middle of the edge, where the face test is
+    sound (at the edge's ends the corner itself lies on another boundary).
+
+    Only for a blend that adds material: filling on past a leg's end is trimmed
+    flat at the end's plane, and six legs of that made a solid puck instead of
+    six flares. A blend that removes material carves on past its faces."""
+    for side in sides:
+        side.limit = None
+    if s > 0:
+        return
+    Q, K, _C, _n = _contacts(P, T, sides, s, kind, size, size2, continuity)
+    tol = 1e-6
+    for k, side in enumerate(sides):
+        if side.contains(Q[k], tol):
+            continue
+        lo, hi = 0.0, 1.0
+        for _ in range(24):
+            mid = 0.5 * (lo + hi)
+            if side.contains(_p(_v(K) + (_v(Q[k]) - _v(K)).Multiplied(mid)), tol):
+                lo = mid
+            else:
+                hi = mid
+        span = Q[k].Distance(K)
+        if lo * span > 1e-6:
+            side.limit = max(lo * span - min(1e-3 * size, 1e-2), 0.5 * lo * span)
+
+
+def _clamp_to_limits(Q, K, sides):
+    moved = False
+    for k, side in enumerate(sides):
+        limit = getattr(side, "limit", None)
+        span = Q[k].Distance(K)
+        if limit is None or span <= limit:
+            continue
+        q = _p(_v(K) + (_v(Q[k]) - _v(K)).Multiplied(limit / span))
+        got = side.foot(q)
+        Q[k] = got[0] if got else q
+        moved = True
+    return moved
+
+
 def _conic(Q0, K, Q1, weight):
     poles = TColgp_Array1OfPnt(1, 3)
     poles.SetValue(1, Q0)
@@ -270,23 +331,15 @@ def _section(P, T, sides, s, kind, size, size2, continuity, profile=0.0, axis=No
     if 1 + c < 1e-3:
         raise SectionBlendError("the faces fold back on each other here")
     m = (n1 + n2).Multiplied(1.0 / (1 + c))
+    Q, K, C, normals = _contacts(P, T, sides, s, kind, size, size2, continuity)
     if kind == "chamfer":
-        u = [sides[0].inward_cached, sides[1].inward_cached]
-        Q = []
-        for k, d in enumerate((size, size2 if size2 else size)):
-            q = _p(_v(P) + u[k].Multiplied(d))
-            got = sides[k].foot(q)
-            Q.append(got[0] if got else q)
-        normals = [n1, n2]
         if axis is not None:
             _clamp_to_axis(Q, P, P, axis)
+        _clamp_to_limits(Q, P, sides)
         curve = GC_MakeSegment(Q[1], Q[0]).Value()
     else:
-        r = size * G2_SETBACK if continuity == "G2" else size
-        C, feet, normals = _ball(P, T, sides, (n1, n2), s, r)
-        Q = [_p(feet[0]), _p(feet[1])]
-        K = _corner(Q[0], Q[1], normals[0], normals[1], P)
         clamped = axis is not None and _clamp_to_axis(Q, K, P, axis)
+        clamped = _clamp_to_limits(Q, K, sides) or clamped
         k = weight_scale(profile)
         if continuity == "G2":
             poles = TColgp_Array1OfPnt(1, 5)
@@ -370,6 +423,9 @@ def _edge_tool(shape, edge, kind, size, size2, continuity, tol, draft=False, pro
 
     Pm, Tm, n1m, n2m = frame(0.5 * (t0 + t1))
     s = _convexity(Pm, Tm, sides, n1m, n2m, tol)
+    sides[0].normal_on_edge_cached = n1m
+    sides[1].normal_on_edge_cached = n2m
+    _face_limits(Pm, Tm, sides, s, kind, size, size2, continuity)
 
     axis = _common_axis(crv, faces) if closed else None
     if axis is not None:
@@ -528,13 +584,29 @@ def _grown(solid, factor):
     return BRepBuilderAPI_Transform(solid, tr, True).Shape()
 
 
+def _shrunk(solid, by):
+    """`solid` scaled about its centre so its far side moves about `by` mm."""
+    from OCP.Bnd import Bnd_Box
+    from OCP.BRepBndLib import BRepBndLib
+
+    box = Bnd_Box()
+    BRepBndLib.Add_s(solid, box)
+    if box.IsVoid():
+        return solid
+    return _grown(solid, -min(1e-3, by / max(math.sqrt(box.SquareExtent()), 1e-9)))
+
+
 def _within(shape, trim):
+    return _within_by(shape, trim, False) or _within_by(shape, trim, True)
+
+
+def _within_by(shape, trim, verify):
     """No point of `shape` outside `trim`: a Common can come back holding part of
     the tool it should have cut away, a flap past the wall."""
     from OCP.BRepClass3d import BRepClass3d_SolidClassifier
 
     cls = BRepClass3d_SolidClassifier(trim)
-    for p in _points_inside(shape):
+    for p in _points_inside(shape, verify):
         cls.Perform(p, 1e-6)
         if cls.State() == TopAbs_OUT:
             return False
@@ -561,9 +633,13 @@ def _inside_point(tool, trim):
     return False
 
 
-def _points_inside(tool):
+def _points_inside(tool, verify=True):
     """Points just inside `tool`, under a few spots of each of its faces. A thin
-    curved blend has room for almost none of a grid over its box."""
+    curved blend has room for almost none of a grid over its box.
+
+    Unverified, a point under a tightly curved face can land outside; the
+    checks below use them first because that can only make a check fail, and
+    classifying every point against a lofted blend was most of a build."""
     from OCP.Bnd import Bnd_Box
     from OCP.BRepBndLib import BRepBndLib
     from OCP.BRepClass3d import BRepClass3d_SolidClassifier
@@ -574,7 +650,7 @@ def _points_inside(tool):
     if box.IsVoid():
         return
     depth = 1e-3 * math.sqrt(box.SquareExtent())
-    cls = BRepClass3d_SolidClassifier(tool)
+    cls = BRepClass3d_SolidClassifier(tool) if verify else None
     ex = TopExp_Explorer(tool, TopAbs_FACE)
     while ex.More():
         f = TopoDS.Face_s(ex.Current())
@@ -587,6 +663,9 @@ def _points_inside(tool):
             if n.Magnitude() < 1e-12:
                 continue
             p = _p(_v(pt) - n.Normalized().Multiplied(depth))
+            if not verify:
+                yield p
+                continue
             cls.Perform(p, 1e-9)
             if cls.State() == TopAbs_IN:
                 yield p
@@ -952,8 +1031,14 @@ def _boolean(op, base, tools, fuzz):
 
 
 def _boolean_all(op, base, tools, fuzz):
-    """All tools in one boolean, or one at a time when overlapping tools that
-    share faces make the single call give up, or quietly leave some out."""
+    """All tools in one boolean, and when the kernel gives up or quietly leaves
+    some out: the tools merged into one first, then one at a time with any that
+    fail retried after the rest. Large overlapping tools (six legs' blends at
+    77mm) fused one at a time fail on one leg in every order the kernel tries,
+    and go in as a single merged solid."""
+    import time
+
+    started = time.monotonic()
     try:
         out = _boolean(op(), base, tools, fuzz)
         if _sound(out) and _applied(op, base, out, tools):
@@ -961,9 +1046,48 @@ def _boolean_all(op, base, tools, fuzz):
     except SectionBlendError:
         if len(tools) == 1:
             raise
-    for t in tools:
-        base = _boolean_one(op, base, t, fuzz)
-    return base
+    if len(tools) == 1:
+        return _boolean_one(op, base, tools[0], fuzz)
+    # The retries below can grind for over a minute on a size the kernel will
+    # not settle; past this a refusal is the better answer for a live drag.
+    budget = max(20.0, 4 * (time.monotonic() - started))
+
+    def out_of_time():
+        return time.monotonic() - started > budget
+
+    try:
+        merged = tools[0]
+        for t in tools[1:]:
+            if out_of_time():
+                raise SectionBlendError("the blend would not combine with the body")
+            merged = _boolean_one(BRepAlgoAPI_Fuse, merged, t, fuzz)
+        out = _boolean_one(op, base, merged, fuzz)
+        if _applied(op, base, out, tools):
+            return out
+    except SectionBlendError:
+        pass
+    # One at a time, in a few orders: which tool the kernel chokes on depends on
+    # what is already fused, and at 77mm G2 the forward order failed on the
+    # last leg where the reverse built all six.
+    n = len(tools)
+    orders = [list(range(n)), list(reversed(range(n))), list(range(0, n, 2)) + list(range(1, n, 2))]
+    for order in orders:
+        cur, pending = base, [tools[i] for i in order]
+        while pending:
+            failed = []
+            for t in pending:
+                if out_of_time():
+                    raise SectionBlendError("the blend would not combine with the body")
+                try:
+                    cur = _boolean_one(op, cur, t, fuzz)
+                except SectionBlendError:
+                    failed.append(t)
+            if len(failed) == len(pending):
+                break
+            pending = failed
+        if not pending:
+            return cur
+    raise SectionBlendError("the blend would not combine with the body")
 
 
 def _boolean_one(op, base, tool, fuzz):
@@ -971,42 +1095,60 @@ def _boolean_one(op, base, tool, fuzz):
     leaves the tool out: a leg's blend fused onto a body that already had its
     neighbour's added 7mm3 of its 1258, and came out whole at fuzz 0 or with
     the arguments swapped."""
-    first = None
     attempts = [(base, tool, fuzz), (base, tool, 0.0), (base, tool, max(fuzz * 1000, 1e-2))]
     if op is BRepAlgoAPI_Fuse:
         attempts.insert(2, (tool, base, fuzz))
+    # A tool overlaps the body by its closing margin, so a tool a hair smaller
+    # still reaches it; one leg's valid blend fused onto a valid body came back
+    # empty at every fuzz and whole at 1e-4 smaller.
+    attempts += [(base, _shrunk(tool, 2e-3), fuzz), (base, _shrunk(tool, 2e-2), fuzz)]
     for a, b, fz in attempts:
+        # On copies: a failed attempt can raise the tolerances of its arguments
+        # in place, and every retry after it inherits that.
         try:
-            out = _boolean(op(), a, [b], fz)
+            out = _boolean(op(), _copy(a), [_copy(b)], fz)
         except SectionBlendError:
             continue
-        if first is None:
-            first = out
         if _sound(out) and _applied(op, base, out, [tool]):
             return out
-    if first is None:
-        raise SectionBlendError("the blend would not combine with the body")
-    return first
+    raise SectionBlendError("the blend would not combine with the body")
 
 
 def _sound(shape):
     """Valid and holding a solid: a fuse can come back as a valid compound with
     none in it."""
-    return _solid_count(shape) > 0 and BRepCheck_Analyzer(shape).IsValid()
+    return _solid_count(shape) > 0 and BRepCheck_Analyzer(shape).IsValid() and _bounded(shape) and _sane_volume(shape)
+
+
+def _bounded(shape):
+    """The point at infinity is outside it. A fuse has come back as a valid solid
+    of 1e-9mm3 that classifies every point of the old body as inside."""
+    from OCP.BRepClass3d import BRepClass3d_SolidClassifier
+
+    cls = BRepClass3d_SolidClassifier(shape)
+    cls.PerformInfinitePoint(1e-7)
+    return cls.State() == TopAbs_OUT
 
 
 def _applied(op, base, out, tools):
+    return _applied_by(op, base, out, tools, False) or _applied_by(op, base, out, tools, True)
+
+
+def _applied_by(op, base, out, tools, verify):
     """Whether `out` took every tool: points inside a tool that `base` did not
     have are in a fuse's result, and points of it that `base` had are gone from
     a cut's. A dropped tool fails every one of them."""
     from OCP.BRepClass3d import BRepClass3d_SolidClassifier
 
-    changed = TopAbs_OUT if op is BRepAlgoAPI_Fuse else TopAbs_IN
+    fuse = op is BRepAlgoAPI_Fuse
+    if fuse and _solid_count(out) > _solid_count(base):
+        return False
+    changed = TopAbs_OUT if fuse else TopAbs_IN
     bc = BRepClass3d_SolidClassifier(base)
     oc = BRepClass3d_SolidClassifier(out)
     for t in tools:
         found = 0
-        for p in _points_inside(t):
+        for p in _points_inside(t, verify):
             bc.Perform(p, 1e-9)
             if bc.State() != changed:
                 continue
@@ -1019,7 +1161,98 @@ def _applied(op, base, out, tools):
         else:
             if found:
                 return False
-    return True
+    return _kept_base(base, out, tools, verify)
+
+
+def _swallowed(base, tools):
+    """Every point sampled inside `base`, under its faces and through its depth,
+    is inside one of the tools. The faces alone are not enough: a 20mm cube
+    rounded 12mm on every edge has tools over all of its skin and a core left."""
+    from OCP.Bnd import Bnd_Box
+    from OCP.BRepBndLib import BRepBndLib
+    from OCP.BRepClass3d import BRepClass3d_SolidClassifier
+
+    near = _near_tools(tools)
+
+    def covered(p):
+        return near(p, lambda st: st == TopAbs_IN)
+
+    n = 0
+    for p in _points_inside(base):
+        if not covered(p):
+            return False
+        n += 1
+        if n >= 24:
+            break
+    box = Bnd_Box()
+    BRepBndLib.Add_s(base, box)
+    if box.IsVoid():
+        return n > 0
+    x0, y0, z0, x1, y1, z1 = box.Get()
+    bc = BRepClass3d_SolidClassifier(base)
+    k = 6
+    for i in range(1, k):
+        for j in range(1, k):
+            for m in range(1, k):
+                p = gp_Pnt(x0 + (x1 - x0) * i / k, y0 + (y1 - y0) * j / k, z0 + (z1 - z0) * m / k)
+                bc.Perform(p, 1e-9)
+                if bc.State() != TopAbs_IN:
+                    continue
+                if not covered(p):
+                    return False
+                n += 1
+    return n > 0
+
+
+def _near_tools(tools):
+    """`hit(p, test)`: whether a tool whose box holds `p` classifies it so that
+    `test(state)`. Classifying against a lofted blend is slow, and most points
+    lie outside most tools' boxes."""
+    from OCP.Bnd import Bnd_Box
+    from OCP.BRepBndLib import BRepBndLib
+    from OCP.BRepClass3d import BRepClass3d_SolidClassifier
+
+    boxes = []
+    for t in tools:
+        box = Bnd_Box()
+        BRepBndLib.Add_s(t, box)
+        if not box.IsVoid():
+            box.Enlarge(1e-3)
+            boxes.append((box, t, []))
+
+    def hit(p, test):
+        for box, t, cls in boxes:
+            if box.IsOut(p):
+                continue
+            if not cls:
+                cls.append(BRepClass3d_SolidClassifier(t))
+            cls[0].Perform(p, 1e-9)
+            if test(cls[0].State()):
+                return True
+        return False
+
+    return hit
+
+
+def _kept_base(base, out, tools, verify=True, most=24):
+    """Whether `out` still holds the body the tools did not reach: a fuse has
+    come back as a valid 128mm3 of a 135000mm3 body in five pieces."""
+    from OCP.BRepClass3d import BRepClass3d_SolidClassifier
+
+    oc = BRepClass3d_SolidClassifier(out)
+    near = _near_tools(tools)
+    checked = lost = 0
+    for p in _points_inside(base, verify):
+        if near(p, lambda st: st != TopAbs_OUT):
+            continue
+        oc.Perform(p, 1e-9)
+        checked += 1
+        lost += oc.State() != TopAbs_IN
+        if checked >= most:
+            break
+    # A destroyed body loses nearly every point; one near a curved tool's edge
+    # can misclassify.
+    return lost * 2 <= checked
 
 
 def _solid_count(shape):
@@ -1068,6 +1301,8 @@ def _copy(shape):
 
 def _combine(shape, cut, fuse, tol):
     fuzz = max(tol * 10, 1e-5)
+    if cut and _swallowed(shape, cut):
+        raise SectionBlendError("at this size the blend removes the whole body")
     out = shape
     if cut:
         out = _boolean_all(BRepAlgoAPI_Cut, out, cut, fuzz)
@@ -1087,7 +1322,7 @@ def _combine(shape, cut, fuse, tol):
         pass
     if _solid_count(out) == 0:
         raise SectionBlendError("at this size the blend removes the whole body")
-    if not BRepCheck_Analyzer(out).IsValid() or not _sane_volume(out):
+    if not _sound(out) or not (_kept_base(shape, out, cut + fuse, False) or _kept_base(shape, out, cut + fuse)):
         raise SectionBlendError("at this size the blend makes a body that is not a valid solid")
     return out
 
@@ -1104,5 +1339,8 @@ def _sane_volume(shape):
     BRepGProp.VolumeProperties_s(shape, g)
     box = Bnd_Box()
     BRepBndLib.Add_s(shape, box)
+    if box.IsVoid():
+        return False
     x0, y0, z0, x1, y1, z1 = box.Get()
-    return math.isfinite(g.Mass()) and 0 < g.Mass() <= 1.01 * (x1 - x0) * (y1 - y0) * (z1 - z0)
+    box = (x1 - x0) * (y1 - y0) * (z1 - z0)
+    return math.isfinite(g.Mass()) and 1e-6 * box < g.Mass() <= 1.01 * box
