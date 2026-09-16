@@ -40,8 +40,9 @@ export function installViewportWiring(e: Engine): void {
   };
 
   // Double-click a face to open the edit of the feature that made it, the
-  // viewport twin of double-clicking that feature's history entry. Faces only:
-  // a face resolves to exactly one owning feature (the build's faceOwners), and
+  // viewport twin of double-clicking that feature's history entry. A visible
+  // sketch profile reopens its sketch, and is asked first by the same ranking a
+  // single click uses. A face resolves to exactly one owning feature (the build's faceOwners), and
   // a face selection leaves toolBusy() false, so editFeature's own guard lets
   // it through and reopens whatever manipulator that feature carries. A body is
   // many features and already raises the Move gizmo, so it keeps that. Gated on
@@ -49,6 +50,11 @@ export function installViewportWiring(e: Engine): void {
   // something else entirely and must not reach an edit here.
   e.viewport.onDoubleClick = (x, y) => {
     if (e.toolBusy() || e.sketch.active) return;
+    const profile = regionAt(x, y);
+    if (profile) {
+      e.editFeature(profile.sketchId);
+      return;
+    }
     const faceId = e.viewport.faceIdAt(x, y);
     if (faceId == null) return;
     const owner = e.featureForFace(faceId);

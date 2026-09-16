@@ -8,6 +8,8 @@
 //      stays on the far face. Pulling it again edits the SAME extrude rather
 //      than stacking a second one.
 //   3. A click on empty space puts the lingering handle away.
+//   4. Finishing selects the sketch, and double-clicking a visible profile
+//      reopens its sketch.
 //
 // Usage (from the repo root, with vite + sidecar running):
 //   SC_TOKEN=<sidecar token> SC_CHROME=<chrome.exe> [SC_URL=http://localhost:5173/] node e2e/sketch_click_pull_e2e.cjs [outDir]
@@ -80,6 +82,8 @@ const check = (name, ok, detail) => {
     check("a profile click with nothing picked finishes the sketch", s.active === false, JSON.stringify(s));
     check("and leaves that profile selected", s.regions === 1, JSON.stringify(s));
     check("with the extrude handle offered on it", await offered());
+    const picked = await page.evaluate(() => window.__fundacad.selectedFeature());
+    check("and the finished sketch is the selected feature", picked === "s1", JSON.stringify(picked));
     await page.screenshot({ path: path.join(OUT, "01_profile_clicked.png") });
   }
 
@@ -128,6 +132,31 @@ const check = (name, ok, detail) => {
     await page.mouse.click(1000, 760);
     await page.waitForTimeout(500);
     check("a click on empty space puts the handle away", !(await offered()));
+  }
+
+  // --- 4. double-clicking a visible profile reopens its sketch --------------------
+  {
+    await page.evaluate(async () => {
+      window.store.addFeature({ id: "s2", type: "sketch", plane: "XY", entities: [
+        { type: "rectangle", id: "r2", x: 50, y: 0, width: 30, height: 30 },
+      ] });
+      await window.store.rebuildNow();
+    });
+    await idle();
+    await page.evaluate(() => window.__fundacad.handleAction("fit"));
+    await page.waitForTimeout(1200);
+    const p = await page.evaluate(() => {
+      const r = window.overlay.regions.find((w) => w.sketchId === "s2");
+      return r ? window.viewport.projectToScreen(r.interior3D.clone()) : null;
+    });
+    check("the second sketch shows a profile", !!p, JSON.stringify(p));
+    if (p) {
+      await page.mouse.dblclick(p.x, p.y);
+      await page.waitForTimeout(1500);
+      const s = await page.evaluate(() => ({ active: window.sketch.active, id: window.sketch.editingSketchId }));
+      check("double-clicking the profile reopens its sketch", s.active && s.id === "s2", JSON.stringify(s));
+      await page.screenshot({ path: path.join(OUT, "04_dblclick_profile.png") });
+    }
   }
 
   await browser.close();
