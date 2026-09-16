@@ -324,7 +324,7 @@ def _conic(Q0, K, Q1, weight):
     return Geom_BezierCurve(poles, weights)
 
 
-def _section(P, T, sides, s, kind, size, size2, continuity, profile=0.0, axis=None):
+def _section(P, T, sides, s, kind, size, size2, continuity, profile=0.0, axis=None, margin=1.0):
     n1 = sides[0].normal_on_edge_cached
     n2 = sides[1].normal_on_edge_cached
     c = max(-1.0, min(1.0, n1.Dot(n2)))
@@ -375,7 +375,7 @@ def _section(P, T, sides, s, kind, size, size2, continuity, profile=0.0, axis=No
     # need a generous margin to stay clear of a curved face, and that margin
     # poked through thin walls and showed on their far side.
     reach = max(Q[0].Distance(P), Q[1].Distance(P), size)
-    e = max(0.02 * size, 0.01)
+    e = max(0.02 * size, 0.01) * margin
     K = _p(_v(P) + m.Multiplied(s * e))
     run = [Q[0]]
     run += _skin(sides[0], normals[0], Q[0], P, s * e, reach)[:-1]
@@ -404,7 +404,7 @@ def _convexity(P, T, sides, n1, n2, tol):
     return 1 if sides[0].inward_cached.Dot(n2) < 0 else -1
 
 
-def _edge_tool(shape, edge, kind, size, size2, continuity, tol, draft=False, profile=0.0):
+def _edge_tool(shape, edge, kind, size, size2, continuity, tol, draft=False, profile=0.0, margin=1.0):
     faces = _faces_of(shape, edge)
     sides = [_Side(f, edge) for f in faces]
     crv = BRepAdaptor_Curve(edge)
@@ -423,6 +423,8 @@ def _edge_tool(shape, edge, kind, size, size2, continuity, tol, draft=False, pro
 
     Pm, Tm, n1m, n2m = frame(0.5 * (t0 + t1))
     s = _convexity(Pm, Tm, sides, n1m, n2m, tol)
+    if s > 0:
+        margin = 1.0  # a cut's closing run lies outside the body, where tools meeting is harmless
     sides[0].normal_on_edge_cached = n1m
     sides[1].normal_on_edge_cached = n2m
     _face_limits(Pm, Tm, sides, s, kind, size, size2, continuity)
@@ -441,7 +443,7 @@ def _edge_tool(shape, edge, kind, size, size2, continuity, tol, draft=False, pro
             sd.planar = True
         sides[0].normal_on_edge_cached = n1
         sides[1].normal_on_edge_cached = n2
-        wire, _inner = _section(P, T, sides, s, kind, size, size2, continuity, profile, axis)
+        wire, _inner = _section(P, T, sides, s, kind, size, size2, continuity, profile, axis, margin)
         from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
         from OCP.BRepPrimAPI import BRepPrimAPI_MakeRevol
 
@@ -475,7 +477,7 @@ def _edge_tool(shape, edge, kind, size, size2, continuity, tol, draft=False, pro
                 if d.Magnitude() < 1e-12:
                     raise SectionBlendError("the edge runs along a face normal")
                 side.inward_cached = d.Normalized().Multiplied(side.inward_sign)
-        wire, inner = _section(P, T, sides, s, kind, size, size2, continuity, profile)
+        wire, inner = _section(P, T, sides, s, kind, size, size2, continuity, profile, margin=margin)
         # Past the edge's own curvature on the inside of a bend, the blend's
         # centre line stops and runs backwards; the loft would cross itself and
         # the boolean can grind for a minute before failing.
@@ -1137,7 +1139,8 @@ def _applied(op, base, out, tools):
 def _applied_by(op, base, out, tools, verify):
     """Whether `out` took every tool: points inside a tool that `base` did not
     have are in a fuse's result, and points of it that `base` had are gone from
-    a cut's. A dropped tool fails every one of them."""
+    a cut's. A dropped tool fails every one of them. Requiring a share of them
+    to land refused ordinary 20mm fillets on sampling noise, so one is enough."""
     from OCP.BRepClass3d import BRepClass3d_SolidClassifier
 
     fuse = op is BRepAlgoAPI_Fuse
@@ -1147,20 +1150,22 @@ def _applied_by(op, base, out, tools, verify):
     bc = BRepClass3d_SolidClassifier(base)
     oc = BRepClass3d_SolidClassifier(out)
     for t in tools:
-        found = 0
+        landed = missed = 0
         for p in _points_inside(t, verify):
             bc.Perform(p, 1e-9)
             if bc.State() != changed:
                 continue
             oc.Perform(p, 1e-9)
             if oc.State() != changed:
+                landed += 1
+            else:
+                missed += 1
+            if landed + missed >= 12:
                 break
-            found += 1
-            if found == 6:
-                return False
-        else:
-            if found:
-                return False
+        # Partial loss has only been seen in fuses; overlapping cut tools, a
+        # corner cell among its edges' tools, sample too noisily for a share.
+        if missed and not landed:
+            return False
     return _kept_base(base, out, tools, verify)
 
 
@@ -1276,8 +1281,11 @@ def section_blend(shape, edges, kind, size, size2=None, continuity="G1", sizes=N
         tol = max(tol, BRep_Tool.Tolerance_s(e))
     cut, fuse = [], []
     convex = []
-    for e, sz in zip(edges, sizes):
-        s, tools = _edge_tool(shape, e, kind, sz, size2, continuity, tol, draft, profile)
+    # Each edge's section closes a slightly different depth inside the body:
+    # six legs closing at one depth gave their tools coplanar overlapping faces,
+    # and the fuse then refused or dropped a leg depending on thread timing.
+    for k, (e, sz) in enumerate(zip(edges, sizes)):
+        s, tools = _edge_tool(shape, e, kind, sz, size2, continuity, tol, draft, profile, 1.0 + 0.11 * k)
         (cut if s > 0 else fuse).extend(tools)
         if s > 0:
             convex.append((e, sz))
