@@ -2,7 +2,7 @@
 // One request/response per message, matched by `id`. Calls made before the
 // socket opens are queued and flushed on connect; the socket auto-reconnects.
 
-import type { CadDocument, EdgeFingerprint, ExportFormat, F32Wire, Feature, ImportFormat, ImportReply, PlaneSpec, ProjectedCurve, ProjectedSource, RebuildReply, RebuildResult, U32Wire } from "../types";
+import type { CadDocument, EdgeFingerprint, ExportFormat, F32Wire, MeshExportOptions, Feature, ImportFormat, ImportReply, PlaneSpec, ProjectedCurve, ProjectedSource, RebuildReply, RebuildResult, U32Wire } from "../types";
 import { RebuildAssembly, manifestFromBodies } from "./assembly";
 import { pipe, pipeFault } from "../diagnostics/pipelineLog";
 import type {
@@ -87,6 +87,7 @@ export interface GeometryBackend {
       separate?: boolean;
       palette?: { name: string; color: string; material?: string }[];
       bodyColors?: Record<string, number>;
+      mesh?: MeshExportOptions;
     },
     // Same contract as importGeometry's: hands back the request id so a Cancel
     // targets THIS export rather than whatever ran most recently. The document
@@ -975,6 +976,7 @@ export class Geometry implements GeometryBackend {
       separate?: boolean;
       palette?: { name: string; color: string; material?: string }[];
       bodyColors?: Record<string, number>;
+      mesh?: MeshExportOptions;
     } = {},
     onStarted?: (id: string) => void,
   ): Promise<{ ok: boolean; path?: string; paths?: string[]; message?: string; cancelled?: boolean; warnings?: { message: string; feature_id?: string }[] }> {
@@ -984,7 +986,7 @@ export class Geometry implements GeometryBackend {
         document: doc, format, path, body: opts.body, separate: opts.separate,
         // GLB writes one material per body from these; the sidecar defaults both
         // to empty, so other formats are unaffected by sending them.
-        palette: opts.palette, bodyColors: opts.bodyColors,
+        palette: opts.palette, bodyColors: opts.bodyColors, mesh: opts.mesh,
       },
       onStarted,
     );

@@ -9,6 +9,7 @@ import { asFeature } from "../types";
 import type { GeometryBackend } from "../geometry/client";
 import type { CadDocument, ExportFormat, Feature, ImportFormat } from "../types";
 import { clearRecovery } from "./recovery";
+import { FORMATS, isMeshFormat, meshWire, saveExportSettings } from "./exportSettings";
 import { referencedGeometry } from "../document/versions";
 import { noteRecent } from "./recentFiles";
 import { BINARY_DOC_EXT, DOC_EXT, LEGACY_DOC_EXTS, isDocumentExt } from "./documentExt";
@@ -296,47 +297,31 @@ export async function openDocumentAtPath(
 }
 
 export async function exportModel(store: DocumentStore, geometry: GeometryBackend) {
+  const bodies = store.buildState.result?.bodies ?? [];
+  const { useExportDialogStore } = await import("../stores/exportDialog");
+  const choice = await useExportDialogStore().open(
+    bodies.map((b) => ({ id: b.id, name: store.bodyName(b.id) ?? b.name })),
+  );
+  if (!choice) return;
+  const { settings, scope } = choice;
+  saveExportSettings(settings);
   if (!isTauri()) {
     console.warn("export needs the native app (a real filesystem path)");
     return;
   }
-  // With several bodies, ask what to export: all merged, each as its own file, or
-  // one specific body. A single-body doc skips straight to the save dialog.
-  const bodies = store.buildState.result?.bodies ?? [];
   const opts: { body?: string; separate?: boolean } = {};
-  if (bodies.length > 1) {
-    const { choose } = await import("../ui/choice");
-    const scope = await choose<"all" | "separate" | "one">("Export, which bodies?", [
-      { value: "all", label: "All in one file", hint: `${bodies.length} bodies merged` },
-      { value: "separate", label: "Each body separately", hint: `${bodies.length} files` },
-      { value: "one", label: "A specific body", hint: "pick one" },
-    ]);
-    if (!scope) return;
-    if (scope === "separate") {
-      opts.separate = true;
-    } else if (scope === "one") {
-      const picked = await choose<string>(
-        "Which body to export?",
-        bodies.map((b) => ({ value: b.id, label: store.bodyName(b.id) ?? b.name })),
-      );
-      if (!picked) return;
-      opts.body = picked;
-    }
-  }
+  if (scope === "separate") opts.separate = true;
+  else if (scope !== "all") opts.body = scope;
 
+  const kind = FORMATS.find((f) => f.value === settings.format) ?? FORMATS[0]!;
   const { save } = await import("@tauri-apps/plugin-dialog");
   const path = await save({
-    filters: [
-      { name: "STEP", extensions: ["step", "stp"] },
-      { name: "STL", extensions: ["stl"] },
-      { name: "3MF", extensions: ["3mf"] },
-      { name: "GLB (glTF)", extensions: ["glb"] },
-    ],
+    filters: [{ name: kind.label, extensions: kind.value === "step" ? ["step", "stp"] : [kind.ext] }],
     // "separate" derives one file per body as "<base>-<body>.<ext>", so name the base.
-    defaultPath: opts.separate ? "parts.step" : "part.step",
+    defaultPath: `${opts.separate ? "parts" : "part"}.${kind.ext}`,
   });
   if (!path) return;
-  const fmt = extToFormat(path);
+  const fmt = settings.format;
   // GLB carries one material per body, so it needs the palette and each body's
   // slot; the other formats ignore both.
   // Wrapped exactly like importPath's runBusy below, and for the same reason:
@@ -351,6 +336,7 @@ export async function exportModel(store: DocumentStore, geometry: GeometryBacken
       ...opts,
       palette: store.colorPalette,
       bodyColors: store.bodyColorsMap(),
+      ...(isMeshFormat(fmt) ? { mesh: meshWire(settings) } : {}),
     }, onStarted),
   );
   if (!res.ok) {

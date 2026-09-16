@@ -23,6 +23,7 @@ import OverhangPanel from "./components/overlays/OverhangPanel.vue";
 import ParamsDialog from "./components/overlays/ParamsDialog.vue";
 import WelcomeModal from "./components/overlays/WelcomeModal.vue";
 import PreferencesDialog from "./components/overlays/PreferencesDialog.vue";
+import ExportDialog from "./components/overlays/ExportDialog.vue";
 import BugReportDialog from "./components/overlays/BugReportDialog.vue";
 import SketchDimLayer from "./components/overlays/SketchDimLayer.vue";
 import SketchGlyphLayer from "./components/overlays/SketchGlyphLayer.vue";
@@ -31,10 +32,12 @@ import ProjectFilterBar from "./components/overlays/ProjectFilterBar.vue";
 import MeasureReadout from "./components/overlays/MeasureReadout.vue";
 import { onMounted, onUnmounted, shallowRef } from "vue";
 import { useDialogStore } from "./stores/dialogs";
+import { useExportDialogStore } from "./stores/exportDialog";
 import { useToolPanelStore } from "./stores/toolPanels";
 import { contributedOverlays, onContribChange } from "./plugins/contrib";
 
 const dialogs = useDialogStore();
+const exportDialog = useExportDialogStore();
 const toolPanels = useToolPanelStore();
 const shell = useShellStore();
 const ui = useUiStore();
@@ -130,6 +133,7 @@ onUnmounted(() => offContrib?.());
        they genuinely stack, the welcome screen opens sign-in over itself. -->
   <WelcomeModal v-if="dialogs.welcome && dialogs.welcomeCallbacks" />
   <PreferencesDialog v-if="dialogs.preferences" />
+  <ExportDialog v-if="exportDialog.request" />
   <BugReportDialog v-if="dialogs.bugReport && dialogs.bugDeps" />
 
   <!-- Whatever the running plugins add. Last, so a capability's window opens

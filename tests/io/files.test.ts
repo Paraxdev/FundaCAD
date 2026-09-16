@@ -120,11 +120,21 @@ describe("export runs as a cancellable busy op", () => {
       choose: async () => null,
       listModal: async () => {},
     }));
+    // The Export dialog answers STEP, whole document.
+    vi.doMock("../../src/stores/exportDialog", async () => {
+      const { DEFAULT_SETTINGS } = await import("../../src/io/exportSettings");
+      return {
+        useExportDialogStore: () => ({
+          open: async () => ({ settings: { ...DEFAULT_SETTINGS, format: "step" }, scope: "all" }),
+        }),
+      };
+    });
   });
 
   afterEach(() => {
     vi.doUnmock("@tauri-apps/plugin-dialog");
     vi.doUnmock("../../src/ui/choice");
+    vi.doUnmock("../../src/stores/exportDialog");
     vi.resetModules();
     delete (globalThis as unknown as Record<string, unknown>).window;
   });
@@ -173,6 +183,42 @@ describe("export runs as a cancellable busy op", () => {
 
     expect(reported.join(" ")).toContain("disk full");
     expect(store.busyState.active).toBe(false);
+  });
+
+  it("cancelling the Export dialog exports nothing", async () => {
+    vi.doMock("../../src/stores/exportDialog", () => ({
+      useExportDialogStore: () => ({ open: async () => null }),
+    }));
+    let called = false;
+    const { backend, store } = storeWith(async () => { called = true; return { ok: true, path: savePath }; });
+    const { exportModel } = await import("../../src/io/files");
+    await exportModel(store, backend);
+    expect(called).toBe(false);
+  });
+
+  it("sends the faceting and units with a mesh format", async () => {
+    vi.doMock("../../src/stores/exportDialog", async () => {
+      const { DEFAULT_SETTINGS } = await import("../../src/io/exportSettings");
+      return {
+        useExportDialogStore: () => ({
+          open: async () => ({
+            settings: { ...DEFAULT_SETTINGS, format: "stl", unit: "in", faceting: { surfaceDeviation: 0.01, normalDeviation: 8, maxEdgeLength: 3 } },
+            scope: "all",
+          }),
+        }),
+      };
+    });
+    let sent: { format?: string; mesh?: unknown } = {};
+    const { backend, store } = storeWith(async (_d, format, _p, opts) => {
+      sent = { format, mesh: opts?.mesh };
+      return { ok: true, path: savePath };
+    });
+    const { exportModel } = await import("../../src/io/files");
+    await exportModel(store, backend);
+    expect(sent).toEqual({
+      format: "stl",
+      mesh: { unit: "in", binary: true, surfaceDeviation: 0.01, normalDeviation: 8, maxEdgeLength: 3 },
+    });
   });
 
   it("clears busy even when the backend throws", async () => {

@@ -5,7 +5,7 @@
 // reconnect to. This is a spike; the websocket client remains the default.
 
 import { invoke } from "@tauri-apps/api/core";
-import type { CadDocument, ExportFormat, ImportFormat, ImportReply, RebuildReply, RebuildResult } from "../types";
+import type { CadDocument, ExportFormat, ImportFormat, MeshExportOptions, ImportReply, RebuildReply, RebuildResult } from "../types";
 import type { ClashPair, GeometryBackend } from "./client";
 
 type StatusListener = (connected: boolean) => void;
@@ -69,6 +69,7 @@ export class TauriGeometry implements GeometryBackend {
       separate?: boolean;
       palette?: { name: string; color: string; material?: string }[];
       bodyColors?: Record<string, number>;
+      mesh?: MeshExportOptions;
     } = {},
   ): Promise<{ ok: boolean; path?: string; paths?: string[]; message?: string }> {
     // Per-body / separate export isn't wired into the Rust kernel yet, it exports

@@ -672,6 +672,15 @@ export type RebuildReply =
 
 export type ExportFormat = "step" | "stl" | "3mf" | "glb";
 
+/** Faceting and output options for a mesh export (STL, 3MF, GLB). */
+export interface MeshExportOptions {
+  unit: "mm" | "cm" | "m" | "in" | "ft";
+  binary: boolean;
+  surfaceDeviation: number;
+  normalDeviation: number;
+  maxEdgeLength: number;
+}
+
 // Import: the format the user picks, and the sidecar's reply for an `import` op,
 // the content hash of the stored geometry plus a little metadata for the new
 // `import` feature.
