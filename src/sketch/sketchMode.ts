@@ -565,6 +565,9 @@ export class SketchMode {
     };
   }
 
+  /** A finished session wrote this sketch to the document. */
+  onCommitted: ((id: string) => void) | null = null;
+
   finish(commit = true) {
     if (!this.active) return;
     if (this.gizmo?.active) this.gizmo.cancel();
@@ -582,6 +585,7 @@ export class SketchMode {
       }
     }
     this.cleanup();
+    if (sketch) this.onCommitted?.(sketch.id);
   }
 
   /** Append a Divide Face when the sketch sits on a body face and its curves close
