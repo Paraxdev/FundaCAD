@@ -29,6 +29,7 @@ export interface GlyphItem extends ConstraintGlyph {
 export class SketchGlyphs {
   /** delete the constraint at this index (wired by SketchMode) */
   onDelete: ((cIndex: number) => void) | null = null;
+  onEditPattern: ((patternId: string) => void) | null = null;
   /** Geometry-beats-glyph, mirroring SketchDimensions.onOverlapPick. A glyph is
    *  a DOM badge above the canvas, so in the dimension tool it would swallow the
    *  click that names an operand. Return true = "the click belonged to the tool
@@ -41,6 +42,7 @@ export class SketchGlyphs {
   private readonly hooks: GlyphHooks = markRaw({
     overlapPick: (e: PointerEvent) => this.onOverlapPick?.(e) ?? false,
     del: (cIndex: number) => this.onDelete?.(cIndex),
+    editPattern: (patternId: string) => this.onEditPattern?.(patternId),
   });
 
   constructor(private viewport: Viewport) {}
@@ -50,6 +52,7 @@ export class SketchGlyphs {
     store.glyphHooks = this.hooks;
     store.showGlyphs(
       glyphs.map((g) => {
+        if (g.patternId) return markRaw<GlyphItem>({ ...g, cls: "sketch-glyph pattern", title: "Edit pattern" });
         const st = diagnosisOf(g.cIndex, conflicts, over);
         // markRaw: `pos` is a THREE.Vector2 the layer projects every frame.
         return markRaw<GlyphItem>({ ...g, cls: glyphClass(st), title: glyphTitle(st) });

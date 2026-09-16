@@ -84,7 +84,8 @@ function onClick(e: MouseEvent, g: GlyphItem) {
     suppressDelete = false;
     return;
   }
-  s.glyphHooks?.del(g.cIndex);
+  if (g.patternId) s.glyphHooks?.editPattern(g.patternId);
+  else s.glyphHooks?.del(g.cIndex);
 }
 
 /** Same as the dimension layer: a constraint badge that has taken the pointer

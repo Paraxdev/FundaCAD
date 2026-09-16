@@ -5,13 +5,14 @@
 
 import * as THREE from "three";
 import type { ResolvedEntity } from "./snap";
-import type { SketchConstraint } from "../types";
+import type { SketchConstraint, SketchPattern } from "../types";
 import { refPoint } from "./entityDims";
 
 const V = (x: number, y: number) => new THREE.Vector2(x, y);
 
 export interface ConstraintGlyph {
-  cIndex: number; // index into the constraints array (delete target)
+  cIndex: number; // index into the constraints array (delete target), -1 for a pattern badge
+  patternId?: string; // set on a pattern badge: a click reopens that pattern instead
   icon: string; // icon name drawn in the badge
   pos: THREE.Vector2; // 2D sketch-plane position
 }
@@ -117,5 +118,26 @@ export function constraintGlyphs(ents: ResolvedEntity[], constraints: SketchCons
       default: break;
     }
   });
+  return out;
+}
+
+/** One badge per sketch pattern, clicked to reopen it: at the centre of a
+ *  circular or preset pattern, on the first source of a rectangular one. */
+export function patternGlyphs(
+  patterns: readonly SketchPattern[],
+  sourcePoint: (id: string) => { x: number; y: number } | null,
+): ConstraintGlyph[] {
+  const out: ConstraintGlyph[] = [];
+  for (const p of patterns) {
+    let pos: { x: number; y: number } | null = null;
+    if (p.type === "patternRect") {
+      for (const id of p.sources) { pos = sourcePoint(id); if (pos) break; }
+    } else if (typeof p.cx === "number" && typeof p.cy === "number") {
+      pos = { x: p.cx, y: p.cy };
+    }
+    if (!pos) continue;
+    const icon = p.type === "patternCircular" || p.type === "boltCircle" ? "patternCircular" : "patternRect";
+    out.push({ cIndex: -1, patternId: p.id, icon, pos: V(pos.x, pos.y) });
+  }
   return out;
 }

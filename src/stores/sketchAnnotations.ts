@@ -18,6 +18,7 @@ export interface DimHooks {
 export interface GlyphHooks {
   overlapPick(e: PointerEvent): boolean;
   del(cIndex: number): void;
+  editPattern(patternId: string): void;
 }
 
 /** The two projected badge layers over the sketch: editable dimension labels and
