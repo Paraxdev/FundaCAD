@@ -1203,11 +1203,6 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
 
   // Shell: pick a face to open, hollow the body to a 2mm wall (edit thickness in
   // the value rows).
-  function startShell() {
-    pickFaceInteractive("Select a face to open for the shell · Esc to cancel", (faces) => {
-      store.addFeature({ id: store.nextId(), type: "shell", thickness: 2, faces } as Feature);
-    });
-  }
 
   // Joint: pick a face on the body to MOVE, then the face to mate it against. The
   // first body is re-placed so its face sits flush on the second, and it FOLLOWS,
@@ -1356,7 +1351,6 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     startLoft,
     startSweep,
     startPrimitive,
-    startShell,
     startJoint,
     startPattern,
     startExtrude,

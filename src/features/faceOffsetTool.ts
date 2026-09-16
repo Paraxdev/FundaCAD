@@ -5,6 +5,8 @@
 //   offsetFace : the picked faces MOVE along their normals, the body staying
 //                closed (neighbouring faces stretch to follow).
 //   thicken    : the picked faces gain a wall, as a new body or joined in.
+//   shell      : the picked faces are opened and the body hollowed to a wall,
+//                the arrow points into the material and its pull is the wall.
 //
 // Like Fillet/Press-Pull-on-curved-faces, neither result can be faked
 // client-side, a real surface offset needs build123d/OCCT, so the preview is
@@ -19,16 +21,16 @@ import type { Feature, Selector } from "../types";
 import { DimInput } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
 import { snap } from "../ui/units";
-import { axisDragDistance, createDragHandle, type DragHandle } from "./manipulator";
+import { axisDragDistance, createDragHandle, handleScale, type DragHandle } from "./manipulator";
 import { CanvasGesture } from "./canvasGesture";
 
-export type FaceOffsetMode = "offsetFace" | "thicken";
+export type FaceOffsetMode = "offsetFace" | "thicken" | "shell";
 
 type Phase = "pick" | "drag";
 
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 
-const LABEL: Record<FaceOffsetMode, string> = { offsetFace: "Offset Face", thicken: "Thicken" };
+const LABEL: Record<FaceOffsetMode, string> = { offsetFace: "Offset Face", thicken: "Thicken", shell: "Shell" };
 
 export class FaceOffsetTool {
   active = false;
@@ -43,6 +45,8 @@ export class FaceOffsetTool {
   private value = 0;
   private symmetric = false; // thicken only
   private previewId = "";
+  private releasePending = false;
+  private refusalShown: string | null = null;
 
   private gizmo: THREE.Group | null = null;
   private handle: DragHandle | null = null;
@@ -95,7 +99,8 @@ export class FaceOffsetTool {
     if (this.grabbing) {
       const proj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.anchor, this.axis);
       const raw = this.grabValue + (proj - this.grabProj);
-      const stepped = snap(raw, this.viewport.snapStep(this.anchor, e.shiftKey));
+      let stepped = snap(raw, this.viewport.snapStep(this.anchor, e.shiftKey));
+      if (this.mode === "shell") stepped = Math.max(0, stepped);
       if (stepped === this.value) return; // same step, don't re-trigger an OCCT rebuild
       this.value = stepped;
       this.dim.updateFromCursor({ distance: Math.abs(this.value) });
@@ -135,6 +140,8 @@ export class FaceOffsetTool {
     if (this.downOnGizmo) {
       e.preventDefault();
       e.stopImmediatePropagation(); // don't orbit while dragging the handle
+      // Captured so the release still lands here when it happens over the value box.
+      try { this.viewport.domElement.setPointerCapture(e.pointerId); } catch { /* capture optional */ }
       this.grabbing = true;
       this.grabValue = this.value;
       this.grabProj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.anchor, this.axis);
@@ -147,6 +154,9 @@ export class FaceOffsetTool {
     if (this.grabbing) {
       this.grabbing = false;
       this.viewport.domElement.style.cursor = this.hovering ? "grab" : "default";
+      const moved =
+        Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
+      if (moved && Math.abs(this.value) >= 1e-3) this.commitOnceBuilt();
       return;
     }
     const moved =
@@ -180,14 +190,15 @@ export class FaceOffsetTool {
     this.bodyId = bodyId;
     this.anchor.copy(anchor);
     this.axis.copy(normal).normalize();
+    if (this.mode === "shell") this.axis.negate();
     this.phase = "drag";
     this.value = 0;
     this.previewId = this.store.nextId();
     this.viewport.clearHover();
     this.buildGizmo();
-    this.dim.show([{ name: "distance", label: "D", kind: "length" }], () => this.commit(), () => this.cancel());
-    const s = this.viewport.projectToScreen(this.anchor);
-    this.dim.position(s.x, s.y);
+    const label = this.mode === "shell" ? "T" : "D";
+    this.dim.show([{ name: "distance", label, kind: "length" }], () => this.commit(), () => this.cancel());
+    this.positionDim();
     this.dim.updateFromCursor({ distance: 0 });
     this.prompt();
     this.gesture.frame();
@@ -203,15 +214,25 @@ export class FaceOffsetTool {
       const k = this.viewport.pixelWorldSize(this.anchor);
       this.gizmo.position.copy(this.anchor);
       this.gizmo.quaternion.copy(this.quat);
-      this.gizmo.scale.setScalar(k);
+      this.gizmo.scale.setScalar(k * handleScale(this.viewport.modelDiagonal(), k));
       // Tone tracks the DIRECTION of the offset: amber grows the face, red
       // pulls it in.
+      const refusal = this.store.previewError;
       this.handle?.paint({
         hot: this.hovering || this.grabbing,
-        tone: sign < 0 ? "cut" : "idle",
+        tone: sign < 0 && this.mode !== "shell" ? "cut" : "idle",
+        refused: refusal !== null,
       });
-      const s = this.viewport.projectToScreen(this.anchor);
-      this.dim.position(s.x, s.y);
+      if (refusal !== this.refusalShown) {
+        this.refusalShown = refusal;
+        if (refusal) setPrompt(`${LABEL[this.mode]} refused: ${refusal} · drag back or Esc`);
+        else this.prompt();
+      }
+      if (this.releasePending && !this.store.buildState.building) {
+        this.releasePending = false;
+        if (refusal === null) { this.commit(); return; }
+      }
+      this.positionDim();
       // The field is the truth once typed, including its SIGN. While dragging
       // it displays |value|, so an unguarded read-back would strip an inward
       // drag's sign (the abs-display trap press-pull documents).
@@ -226,7 +247,21 @@ export class FaceOffsetTool {
     }
   }
 
+  /** Beside the handle, not on it: a box over the anchor sits where the drag starts. */
+  private positionDim() {
+    const s = this.viewport.projectToScreen(this.anchor);
+    this.dim.position(s.x + 40, s.y + 24);
+  }
+
+  /** A release commits, but only a value the kernel built: the preview's build
+   *  may still be running when the hand lets go, so tick() decides once it lands. */
+  private commitOnceBuilt() {
+    this.releasePending = true;
+    this.gesture.frame();
+  }
+
   private pushPreview() {
+    this.releasePending = false;
     this.store.setPreview(Math.abs(this.value) < 1e-6 ? null : this.buildFeature());
   }
 
@@ -248,6 +283,9 @@ export class FaceOffsetTool {
     const v = Math.round(this.value * 1000) / 1000;
     const faces = this.faces.length === 1 ? (this.faces[0] ?? this.faces) : this.faces;
     const body = this.bodyId != null ? { body: this.bodyId } : {};
+    if (this.mode === "shell") {
+      return { id: this.previewId, type: "shell", faces, thickness: Math.abs(v) };
+    }
     if (this.mode === "thicken") {
       return {
         id: this.previewId, type: "thicken", faces, thickness: v,
@@ -300,6 +338,8 @@ export class FaceOffsetTool {
     this.grabbing = false;
     this.hovering = false;
     this.value = 0;
+    this.releasePending = false;
+    this.refusalShown = null;
     setPrompt(null);
   }
 

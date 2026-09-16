@@ -11,6 +11,7 @@ import { useSketchPaletteStore } from "../stores/sketchPalette";
 import type { Engine } from "./engine";
 import type { SketchTool } from "../sketch/sketchMode";
 import type { StandardView } from "../viewport/cameras";
+import type { FaceOffsetMode } from "../features/faceOffsetTool";
 
 /** The single dispatch point shared by the ribbon, the keymap, the command
  *  palette and every context menu. */
@@ -25,7 +26,7 @@ export function createActions(e: Engine): (action: string) => void {
   // Offset Face / Thicken: one interactive tool for both (pick face → scrub along
   // its normal → commit), with a real sidecar preview since neither can be faked
   // client-side.
-  function startFaceOffset(mode: "offsetFace" | "thicken") {
+  function startFaceOffset(mode: FaceOffsetMode) {
     if (e.toolBusy()) return;
     if (!e.hasBody()) {
       e.setStatus("Create or import a body first", "");
@@ -164,7 +165,7 @@ export function createActions(e: Engine): (action: string) => void {
         void e.starters.startPrimitive();
         break;
       case "shell":
-        e.starters.startShell();
+        startFaceOffset("shell");
         break;
       case "joint":
         e.starters.startJoint();
