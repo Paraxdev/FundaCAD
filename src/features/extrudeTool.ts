@@ -120,6 +120,7 @@ export class ExtrudeTool {
    *  Only built once there is depth to swing about, and never in edit mode (the
    *  Properties row edits a committed taper). */
   private taperHandle: DragHandle | null = null;
+  private taperGuide: THREE.Line | null = null;
   /** In-plane drag axis the taper handle runs along (the sketch's local +X). A
    *  drag of `inset` mm inward means atan(inset / depth). */
   private taperAxis = new THREE.Vector3(1, 0, 0);
@@ -806,6 +807,56 @@ export class ExtrudeTool {
       hot: this.taperHovering || this.taperGrabbing,
       tone: this.taper < 0 ? "cut" : "idle",
     });
+    this.updateTaperGuide(dir, z);
+  }
+
+  /** A dashed arc from the straight wall to the leaning one, standing on the far
+   *  face, so the angle reads on the model and not only in the value box. */
+  private updateTaperGuide(dir: THREE.Vector3, swingNormal: THREE.Vector3) {
+    if (Math.abs(this.taper) < 0.05) {
+      this.disposeTaperGuide();
+      return;
+    }
+    const depth = Math.abs(this.distance);
+    const r = depth * 0.6;
+    // On the wall that leans toward the centre: the profile's far side along the drag axis.
+    const centre = this.taperTop.clone().addScaledVector(dir, -depth);
+    let reach = 0;
+    for (const wr of this.selected) {
+      for (const q of wr.region.loop) reach = Math.max(reach, wr.plane.to3D(q.x, q.y).sub(centre).dot(this.taperAxis));
+    }
+    const base = centre.addScaledVector(this.taperAxis, reach);
+    const rad = (this.taper * Math.PI) / 180;
+    // Positive leans the far face in, toward the centre, so the wall tips away from taperAxis.
+    const lean = (a: number) =>
+      dir.clone().applyAxisAngle(swingNormal, a).multiplyScalar(r).add(base);
+    const steps = 24;
+    const arc: THREE.Vector3[] = [];
+    for (let i = 0; i <= steps; i++) arc.push(lean((rad * i) / steps));
+    const pts = [base.clone(), lean(0), ...arc, lean(rad), base.clone()];
+    if (!this.taperGuide) {
+      const mat = new THREE.LineDashedMaterial({
+        color: 0xffffff, dashSize: 1, gapSize: 1, transparent: true, opacity: 0.8, depthTest: false,
+      });
+      this.taperGuide = new THREE.Line(new THREE.BufferGeometry(), mat);
+      this.taperGuide.renderOrder = 999;
+      this.viewport.addToScene(this.taperGuide);
+    }
+    this.taperGuide.geometry.dispose();
+    this.taperGuide.geometry = new THREE.BufferGeometry().setFromPoints(pts);
+    this.taperGuide.computeLineDistances();
+    const dash = this.viewport.pixelWorldSize(base) * 5;
+    const mat = this.taperGuide.material as THREE.LineDashedMaterial;
+    mat.dashSize = dash;
+    mat.gapSize = dash * 0.7;
+  }
+
+  private disposeTaperGuide() {
+    if (!this.taperGuide) return;
+    this.viewport.removeFromScene(this.taperGuide);
+    this.taperGuide.geometry.dispose();
+    (this.taperGuide.material as THREE.Material).dispose();
+    this.taperGuide = null;
   }
 
   /** Orient, size, and tint one chunky slider at `at`, lying along `axis`. The
@@ -831,6 +882,7 @@ export class ExtrudeTool {
   }
 
   private disposeTaperHandle() {
+    this.disposeTaperGuide();
     if (!this.taperHandle) return;
     this.viewport.removeFromScene(this.taperHandle.group);
     this.taperHandle.dispose();
