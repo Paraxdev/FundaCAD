@@ -487,6 +487,12 @@ export class DimInput {
     this.root.style.top = `${screenY + 16}px`;
   }
 
+  /** Centre the box on a screen point rather than beside the cursor. */
+  positionCentred(screenX: number, screenY: number) {
+    this.root.style.left = `${Math.round(screenX - this.root.offsetWidth / 2)}px`;
+    this.root.style.top = `${Math.round(screenY - this.root.offsetHeight / 2)}px`;
+  }
+
   private commit() {
     const out: Record<string, number> = {};
     for (const f of this.fields) {

@@ -2350,8 +2350,24 @@ export class SketchMode {
     if (this.base) {
       const geom = this.computeGeometry(this.base, hit.p);
       this.dim.updateFromCursor(geom.dims);
-      this.dim.position(e.clientX, e.clientY);
-      this.overlay.setPreview([geom.preview]); // only the rubber-band redraws
+      if (this.tool === "circle" && geom.entity?.type === "circle") {
+        // The diameter is drawn through the centre along the drag, and its field
+        // sits on that line where the eye already is.
+        const c = this.base, r = geom.entity.radius;
+        const u = hit.p.clone().sub(c);
+        if (u.lengthSq() < 1e-12) u.set(1, 0);
+        u.normalize();
+        const diameter = curveObjects([{
+          type: "line", id: "__diameter__", construction: true,
+          x1: c.x - u.x * r, y1: c.y - u.y * r, x2: c.x + u.x * r, y2: c.y + u.y * r,
+        }], this.plane, PREVIEW_COLOR);
+        const at = this.viewport.projectToScreen(this.plane.to3D(c.x + (u.x * r) / 2, c.y + (u.y * r) / 2));
+        this.dim.positionCentred(at.x, at.y);
+        this.overlay.setPreview([geom.preview, ...diameter]);
+      } else {
+        this.dim.position(e.clientX, e.clientY);
+        this.overlay.setPreview([geom.preview]); // only the rubber-band redraws
+      }
     } else {
       this.overlay.setPreview([]);
     }

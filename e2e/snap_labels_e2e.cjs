@@ -3,6 +3,8 @@
 //   1. On a sketch started from a face, hovering the face's centre with the
 //      Circle tool shows "Face Center" beside the marker.
 //   2. Moving off every anchor takes the name away.
+//   3. Pulling a circle out from that centre puts the diameter field halfway
+//      along the radius, on the drawn diameter line.
 //
 // Usage (from the repo root, with vite + sidecar running):
 //   SC_TOKEN=<sidecar token> SC_CHROME=<chrome.exe> [SC_URL=http://localhost:5173/] node e2e/snap_labels_e2e.cjs [outDir]
@@ -65,6 +67,24 @@ const check = (name, ok, detail) => {
   await page.waitForTimeout(300);
   const t2 = await tag();
   check("off every anchor there is no name", t2 === "" || t2 == null, JSON.stringify(t2));
+
+  // Placing the centre and pulling out: the diameter field rides the radius line.
+  await page.mouse.move(centre.x + 2, centre.y + 1, { steps: 4 });
+  await page.mouse.click(centre.x + 2, centre.y + 1);
+  await page.waitForTimeout(300);
+  const rim = { x: centre.x + 160, y: centre.y - 60 };
+  await page.mouse.move(rim.x, rim.y, { steps: 10 });
+  await page.waitForTimeout(300);
+  const box = await page.evaluate(() => {
+    const el = document.querySelector(".dim-input");
+    if (!el || el.style.display === "none") return null;
+    const r = el.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  });
+  const mid = { x: (centre.x + rim.x) / 2, y: (centre.y + rim.y) / 2 };
+  check("the diameter field sits halfway along the radius", !!box && Math.hypot(box.x - mid.x, box.y - mid.y) < 25, JSON.stringify({ box, mid }));
+  await page.screenshot({ path: path.join(OUT, "02_diameter_field.png") });
+  await page.keyboard.press("Escape");
 
   await browser.close();
   console.log(failures ? `\n${failures} FAILED` : "\nall checks passed");
