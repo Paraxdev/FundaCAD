@@ -103,7 +103,7 @@ def test_the_triangle_budget_is_checked_per_body_not_after_everything():
     real = server._export_mesh
     # A cap low enough that body 2 crosses it. If the check runs after the loop,
     # all four get meshed first.
-    server._export_mesh = lambda b, tol=None: (seen.append(b["id"]), real(b, tol))[1]
+    server._export_mesh = lambda b, tol=None, ang=None: (seen.append(b["id"]), real(b, tol, ang))[1]
     old_cap = server.EXPORT_TRIANGLE_HARD_CAP
     server.EXPORT_TRIANGLE_HARD_CAP = 20  # a box is 12 triangles
     try:

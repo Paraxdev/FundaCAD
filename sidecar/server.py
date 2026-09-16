@@ -373,7 +373,7 @@ _EXPORT_ANG_TOL = 0.3
 _EXPORT_MESH_CACHE = {}  # body id -> {"shape", "pass_key", "positions", "indices"}
 
 
-def _export_mesh(b, tol=None):
+def _export_mesh(b, tol=None, ang=None):
     """Export-grade (positions, indices) for one live body, three-tier cached
     (RAM identity -> disk artifact -> compute + persist), mirroring
     _body_payload. Worker-side only."""
@@ -388,6 +388,7 @@ def _export_mesh(b, tol=None):
     # which tier served it. A mixed warm/cold export is the common case.
     progress_tick()
     tol = _EXPORT_TOL if tol is None else tol
+    ang = _EXPORT_ANG_TOL if ang is None else ang
     bid, sh = b["id"], b["shape"]
     # Covers every plugin mesh pass on this body, each pass's own code version
     # included, so an algorithm change cannot be served a mesh its previous
@@ -396,14 +397,18 @@ def _export_mesh(b, tol=None):
     ent = _EXPORT_MESH_CACHE.get(bid)
     # Tolerance is part of the key, or a coarser backoff retry gets the finer mesh back.
     if (ent is not None and ent["shape"] is sh
-            and ent["pass_key"] == pass_key and ent["tol"] == tol):
+            and ent["pass_key"] == pass_key and ent["tol"] == tol
+            and ent.get("ang") == ang):
         return ent["positions"], ent["indices"]
     # OCCT keeps a finer triangulation for a coarser request unless it is dropped first.
-    retolerance = ent is not None and ent["shape"] is sh and ent.get("tol") != tol
+    retolerance = (ent is not None and ent["shape"] is sh
+                   and (ent.get("tol") != tol or ent.get("ang") != ang))
 
     mesh_key = None
     if b.get("meshKey"):
         mesh_key = "%s-export-t%s" % (b["meshKey"], tol)
+        if ang != _EXPORT_ANG_TOL:
+            mesh_key += "-a%s" % ang
         if pass_key:
             mesh_key += "-x%s" % hashlib.sha1(pass_key.encode()).hexdigest()[:16]
     mesh = None
@@ -419,7 +424,7 @@ def _export_mesh(b, tol=None):
         t0 = time.monotonic()
         passes = plugin_geometry.resolve(b)
         pos, idx, _fids = tessellate(
-            sh, tolerance=tol, angular_tolerance=_EXPORT_ANG_TOL,
+            sh, tolerance=tol, angular_tolerance=ang,
             mesh_passes=passes, density_cap=EXPORT_DENSITY_CAP_PER_FACE,
             force_remesh=retolerance,
         )
@@ -434,7 +439,7 @@ def _export_mesh(b, tol=None):
     positions = np.asarray(mesh[0], dtype=np.float64)
     indices = np.asarray(mesh[1], dtype=np.int32)
     _EXPORT_MESH_CACHE[bid] = {
-        "shape": sh, "pass_key": pass_key, "tol": tol,
+        "shape": sh, "pass_key": pass_key, "tol": tol, "ang": ang,
         "positions": positions, "indices": indices,
     }
     return positions, indices
@@ -732,8 +737,44 @@ def _compute_all_job(payload, tolerance):
     return _rebuild_job(document, tolerance)
 
 
+# Length of one output unit in millimetres, and its 3MF unit name.
+_EXPORT_UNITS = {
+    "mm": (1.0, "millimeter"),
+    "cm": (10.0, "centimeter"),
+    "m": (1000.0, "meter"),
+    "in": (25.4, "inch"),
+    "ft": (304.8, "foot"),
+}
+
+
+def _mesh_options(mesh):
+    """Validated faceting and output options for a mesh export, defaults for anything absent.
+
+    surfaceDeviation: largest gap between the body and a facet, mm.
+    normalDeviation: largest angle between neighbouring facets, degrees.
+    maxEdgeLength: longest allowed facet edge, mm, 0 for no cap."""
+    import math
+
+    mesh = mesh if isinstance(mesh, dict) else {}
+
+    def num(key, default, lo, hi):
+        v = mesh.get(key)
+        if not isinstance(v, (int, float)) or isinstance(v, bool) or not math.isfinite(v):
+            return default
+        return min(hi, max(lo, float(v)))
+
+    unit = mesh.get("unit") if mesh.get("unit") in _EXPORT_UNITS else "mm"
+    return {
+        "tol": num("surfaceDeviation", _EXPORT_TOL, 1e-4, 10.0),
+        "ang": math.radians(num("normalDeviation", math.degrees(_EXPORT_ANG_TOL), 0.5, 90.0)),
+        "max_edge": num("maxEdgeLength", 0.0, 0.0, 1e6),
+        "unit": unit,
+        "binary": mesh.get("binary") is not False,
+    }
+
+
 def _export_job(document, fmt, path, body=None, separate=False,
-                palette=None, body_colors=None):
+                palette=None, body_colors=None, mesh=None):
     """Worker: rebuild + export. Default exports the merged part to `path`; `body`
     (a body id) exports just that body; `separate` writes EACH body to its own
     '<base>-<name>.<ext>'. Returns {"path"} (+ {"paths"} for separate) or {"error"}.
@@ -756,6 +797,16 @@ def _export_job(document, fmt, path, body=None, separate=False,
     part, errors, bodies = rebuild_cached(document)
     live = [b for b in bodies if b.get("shape") is not None]
     _prune_export_cache(live)
+    mopts = _mesh_options(mesh)
+
+    def _faceted(b):
+        from mesh_refine import cap_edge_length
+
+        pos, idx = _export_mesh(b, mopts["tol"], mopts["ang"])
+        if mopts["max_edge"] > 0:
+            pos, idx = cap_edge_length(pos, idx, mopts["max_edge"], EXPORT_TRIANGLE_HARD_CAP)
+        return pos, idx
+
     # Export what BUILT, and warn about what didn't, never silently. Refusing
     # to export ANYTHING because one feature errored blocked the whole
     # import-repair→print loop (one stubborn face held nine good bodies
@@ -790,7 +841,7 @@ def _export_job(document, fmt, path, body=None, separate=False,
         pos_parts, idx_parts, vbase = [], [], 0
         ntri = 0
         for b in target_bodies:
-            pos, idx = _export_mesh(b)
+            pos, idx = _faceted(b)
             # Per body, so the cap stops the allocation instead of reporting it afterwards.
             ntri += len(idx) // 3
             refusal = _budget_refusal(ntri)
@@ -809,10 +860,16 @@ def _export_job(document, fmt, path, body=None, separate=False,
         warn = _budget_warning(ntri)
         if warn:
             warnings.append({"message": warn})
+        mm_per_unit, unit_name = _EXPORT_UNITS[mopts["unit"]]
+        if mm_per_unit != 1.0:
+            positions = np.asarray(positions, dtype=np.float64) / mm_per_unit
         if fmt == "stl":
-            mesh_writers.write_stl(positions, mindices, p)
+            if mopts["binary"]:
+                mesh_writers.write_stl(positions, mindices, p)
+            else:
+                mesh_writers.write_stl_ascii(positions, mindices, p)
         elif fmt == "3mf":
-            mesh_writers.write_plain_3mf(positions, mindices, p)
+            mesh_writers.write_plain_3mf(positions, mindices, p, unit=unit_name)
         else:
             raise ValueError(f"texture is not supported for {fmt} export")
         return p
@@ -832,7 +889,7 @@ def _export_job(document, fmt, path, body=None, separate=False,
         slots = body_colors or {}
         entries, ntri = [], 0
         for b in target_bodies:
-            pos, idx = _export_mesh(b)
+            pos, idx = _faceted(b)
             ntri += len(idx) // 3
             # Same reason as _mesh_export: bound the allocation as it happens.
             # GLB keeps bodies SEPARATE, so without this a 3,000-body assembly
@@ -1646,7 +1703,7 @@ async def _dispatch(ws, loop, req, req_id, op):
         await _send_reply(ws, req_id, res, bool(req.get("binary")), bool(req.get("chunked")))
 
     elif op == "export":
-        res = await _run_stall(loop, _export_job, req["document"], req["format"], req["path"], req.get("body"), req.get("separate", False), req.get("palette") or [], req.get("bodyColors") or {}, stall=_export_stall_budget(req["document"]))
+        res = await _run_stall(loop, _export_job, req["document"], req["format"], req["path"], req.get("body"), req.get("separate", False), req.get("palette") or [], req.get("bodyColors") or {}, req.get("mesh"), stall=_export_stall_budget(req["document"]))
         await ws.send(_reply_for(req_id, res))
 
     elif op == "exportProject":

@@ -55,7 +55,29 @@ def write_stl(positions, indices, path):
     return path
 
 
-def write_plain_3mf(positions, indices, path):
+def write_stl_ascii(positions, indices, path, name="FundaCAD"):
+    """ASCII STL, the same facets write_stl writes, as text some older tools want."""
+    pos = np.asarray(positions, dtype=np.float64).reshape(-1, 3)
+    idx = np.asarray(indices, dtype=np.int64).reshape(-1, 3)
+    v0, v1, v2 = pos[idx[:, 0]], pos[idx[:, 1]], pos[idx[:, 2]]
+    normals = np.cross(v1 - v0, v2 - v0)
+    lens = np.linalg.norm(normals, axis=1)
+    normals = normals / np.where(lens < 1e-12, 1.0, lens)[:, None]
+    with open(path, "w", encoding="ascii", newline="\n") as fh:
+        fh.write(f"solid {name}\n")
+        for n, a, b, c in zip(normals, v0, v1, v2):
+            fh.write(
+                f"facet normal {n[0]:.6e} {n[1]:.6e} {n[2]:.6e}\n outer loop\n"
+                f"  vertex {a[0]:.6e} {a[1]:.6e} {a[2]:.6e}\n"
+                f"  vertex {b[0]:.6e} {b[1]:.6e} {b[2]:.6e}\n"
+                f"  vertex {c[0]:.6e} {c[1]:.6e} {c[2]:.6e}\n"
+                " endloop\nendfacet\n"
+            )
+        fh.write(f"endsolid {name}\n")
+    return path
+
+
+def write_plain_3mf(positions, indices, path, unit="millimeter"):
     """A minimal single-object plain 3MF (no Orca project metadata, see
     project3mf.py for that variant). Reuses the SAME vertex/triangle
     serialization as the Orca-project writer instead of forking it.
@@ -68,7 +90,7 @@ def write_plain_3mf(positions, indices, path):
     """
     head = (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
-        '<model unit="millimeter" xml:lang="en-US"'
+        f'<model unit="{unit}" xml:lang="en-US"'
         ' xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">\n'
         ' <metadata name="Application">FundaCAD</metadata>\n'
         ' <resources><object id="1" type="model">'
