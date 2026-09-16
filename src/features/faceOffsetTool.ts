@@ -47,6 +47,11 @@ export class FaceOffsetTool {
   private symmetric = false; // thicken only
   private previewId = "";
   private refusalShown: string | null = null;
+  /** Offset Face only: the field reads the whole thickness to the opposite face,
+   *  not the change. Kept across uses, like the unit a field was last typed in. */
+  private total = false;
+  /** The thickness behind the face before any offset, null when it could not be measured. */
+  private baseThickness: number | null = null;
 
   private gizmo: THREE.Group | null = null;
   private handle: DragHandle | null = null;
@@ -113,7 +118,7 @@ export class FaceOffsetTool {
       if (this.mode === "shell") stepped = Math.max(0, stepped);
       if (stepped === this.value) return; // same step, don't re-trigger an OCCT rebuild
       this.value = stepped;
-      this.dim.updateFromCursor({ distance: Math.abs(this.value) });
+      this.dim.updateFromCursor({ distance: this.shown() });
       this.pushPreview();
       return;
     }
@@ -207,9 +212,21 @@ export class FaceOffsetTool {
     this.viewport.clearHover();
     this.buildGizmo();
     const label = this.mode === "shell" ? "T" : "D";
-    this.dim.show([{ name: "distance", label, kind: "length" }], () => this.commit(), () => this.cancel());
+    this.baseThickness = this.mode === "offsetFace" ? this.viewport.thicknessBehind(this.anchor, normal) : null;
+    const totalToggle = this.baseThickness != null
+      ? {
+          label: "Total",
+          title: "Read and type the whole thickness to the opposite face instead of the change",
+          initial: this.total,
+          onChange: (on: boolean) => {
+            this.total = on;
+            this.dim.updateFromCursor({ distance: this.shown() });
+          },
+        }
+      : undefined;
+    this.dim.show([{ name: "distance", label, kind: "length" }], () => this.commit(), () => this.cancel(), totalToggle);
     this.positionDim();
-    this.dim.updateFromCursor({ distance: 0 });
+    this.dim.updateFromCursor({ distance: this.shown() });
     this.prompt();
     this.gesture.frame();
   }
@@ -243,7 +260,8 @@ export class FaceOffsetTool {
       // it displays |value|, so an unguarded read-back would strip an inward
       // drag's sign (the abs-display trap press-pull documents).
       if (!this.grabbing && this.dim.isUserDriven("distance")) {
-        const v = this.dim.getValue("distance");
+        const raw = this.dim.getValue("distance");
+        const v = raw == null ? null : this.fromField(raw);
         if (v != null && Math.abs(v - this.value) > 1e-6) {
           this.value = v;
           this.pushPreview();
@@ -257,6 +275,20 @@ export class FaceOffsetTool {
   private positionDim() {
     const s = this.viewport.projectToScreen(this.anchor);
     this.dim.position(s.x + 40, s.y + 24);
+  }
+
+  private get totalShown(): boolean {
+    return this.total && this.baseThickness != null;
+  }
+
+  /** What the field shows for the current offset. */
+  private shown(): number {
+    return this.totalShown ? this.baseThickness! + this.value : Math.abs(this.value);
+  }
+
+  /** The offset a value typed into the field asks for. */
+  private fromField(v: number): number {
+    return this.totalShown ? v - this.baseThickness! : v;
   }
 
   private pushPreview() {
@@ -300,7 +332,8 @@ export class FaceOffsetTool {
 
   private commit() {
     if (this.phase !== "drag") return this.cancel();
-    const v = this.dim.getValue("distance");
+    const raw = this.dim.getValue("distance");
+    const v = raw == null ? null : this.fromField(raw);
     if (v == null && this.dim.isUserDriven("distance")) {
       setPrompt("That number can't be read · Esc");
       return;

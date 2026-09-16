@@ -1126,6 +1126,20 @@ export class Viewport {
     return this.psRay.intersectObjects(visibleBodyMeshes(this.model), false).length % 2 === 1;
   }
 
+  /** How far material runs behind a face point, against its outward normal, to the
+   *  next surface: the wall or floor thickness at that point. Null with no model or
+   *  when nothing is hit. */
+  thicknessBehind(point: THREE.Vector3, normal: THREE.Vector3): number | null {
+    if (!this.model) return null;
+    const into = normal.clone().normalize().negate();
+    const eps = 1e-3;
+    this.psRay.set(point.clone().addScaledVector(into, eps), into);
+    this.psRay.near = 0;
+    this.psRay.far = Infinity;
+    const hit = this.psRay.intersectObjects(visibleBodyMeshes(this.model), false)[0];
+    return hit ? hit.distance + eps : null;
+  }
+
   /** Visible bodies holding any of `points`: the parity count of pointInSolid
    *  kept per body, or with `bounds`, a point anywhere in the body's box. */
   bodiesHolding(points: readonly THREE.Vector3[], bounds = false): string[] {
