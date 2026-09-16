@@ -179,7 +179,7 @@ async function screenshot() {
         @click="open('grid', $event)"
       >{{ gridLabel }}</button>
       <IconButton icon="views" title="Views" :active="isOpen('views')" @click="open('views', $event)" />
-      <IconButton icon="view-iso" title="Reset camera (Shift Home)" @click="engine.handleAction('reset-camera')" />
+      <IconButton icon="view-reset" title="Reset camera (Shift Home)" @click="engine.handleAction('reset-camera')" />
     </div>
     <div class="float-group">
       <IconButton icon="shaded" title="Display" :active="isOpen('display') || ui.xray || ui.wireframe" @click="open('display', $event)" />
