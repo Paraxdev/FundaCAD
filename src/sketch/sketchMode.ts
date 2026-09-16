@@ -3199,6 +3199,18 @@ export class SketchMode {
         return;
       }
       if (b.region) {
+        // A plain click on a profile with nothing else picked is the sketch, click,
+        // pull loop: finish and leave the profile selected, so the model view
+        // offers its extrude handle on it. With curves picked the click only
+        // swaps to the profile, so clicking inside a shape to drop a selection
+        // does not throw you out of the sketch.
+        if (!b.additive && this.selected.size === 0) {
+          this.overlay.clearRegionSelection();
+          this.overlay.toggleRegionSelection(b.region, false);
+          this.finish(true);
+          return;
+        }
+        if (!b.additive && this.selected.size) { this.selected.clear(); this.refreshActive(); }
         this.overlay.toggleRegionSelection(b.region, b.additive);
         return;
       }
