@@ -11,6 +11,8 @@ import { useBrowserStore } from "../stores/browser";
 import { edgeNudgePlacement } from "../features/edgeNudge";
 import { faceNudgePlacement } from "../features/faceNudge";
 import { regionNudgePlacement } from "../features/regionNudge";
+import { regionBeatsSurface } from "../sketch/regionOverSurface";
+import { regionArea } from "../sketch/region";
 import type { Engine } from "./engine";
 
 /** How far the ambiguous-edge menu sits off the click, px. */
@@ -185,19 +187,42 @@ export function installViewportWiring(e: Engine): void {
     if (s.result && !s.building) dismissContextMenu();
   });
 
+  // A face's area only changes with a rebuild, and hover asks on every move.
+  const faceAreas = new Map<number, number>();
+  e.store.onBuild(() => faceAreas.clear());
+  const regionAt = (x: number, y: number) => {
+    const ray = e.viewport.rayFrom(x, y).ray;
+    const wr = e.overlay.committedRegionAtRay(ray);
+    if (!wr) return null;
+    const onPlane = ray.intersectPlane(wr.plane.plane, new THREE.Vector3());
+    const surface = e.viewport.surfaceHitAt(x, y);
+    if (!onPlane || !surface) return wr;
+    let faceArea = faceAreas.get(surface.faceId);
+    if (faceArea === undefined) {
+      faceArea = e.viewport.faceArea(surface.faceId);
+      faceAreas.set(surface.faceId, faceArea);
+    }
+    return regionBeatsSurface({
+      regionDist: onPlane.distanceTo(ray.origin),
+      surfaceDist: surface.distance,
+      modelScale: e.viewport.modelDiagonal() ?? 0,
+      regionArea: regionArea(wr.region),
+      faceArea,
+    }) ? wr : null;
+  };
   // SOLID-mode direct selection of a visible sketch's profile AREAS (MCAD-style):
   // click a shown sketch's cell to (pre)select it, then Extrude (E) uses it. Only
   // fires when a sketch is visible (overlay.regions is empty otherwise), so normal
   // face/body picking is untouched the rest of the time.
   e.viewport.regionHoverAt = (x, y) => {
     if (e.sketch.active || e.toolBusy()) { e.overlay.setHoverRegion(null); return false; }
-    const wr = e.overlay.committedRegionAtRay(e.viewport.rayFrom(x, y).ray);
+    const wr = regionAt(x, y);
     e.overlay.setHoverRegion(wr);
     return !!wr;
   };
   e.viewport.regionPickAt = (x, y, additive) => {
     if (e.sketch.active || e.toolBusy()) return false;
-    const wr = e.overlay.committedRegionAtRay(e.viewport.rayFrom(x, y).ray);
+    const wr = regionAt(x, y);
     if (!wr) return false;
     e.overlay.toggleRegionSelection(wr, additive);
     refreshNudge();

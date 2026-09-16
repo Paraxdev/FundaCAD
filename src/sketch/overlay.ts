@@ -83,12 +83,16 @@ const GUIDE_MAT = new THREE.LineDashedMaterial({
 // projection (source no longer resolves, last shape kept) tints amber
 const PROJECTED_COLOR = 0xb07fe8;
 const PROJECTED_STALE_COLOR = 0xd9a24d;
+// Pulled toward the camera so a profile lying on a face shows its fill and
+// highlight instead of losing the depth test to the opaque face.
+const FILL_OFFSET = { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 };
 const FILL_MAT = new THREE.MeshBasicMaterial({
   color: FILL_COLOR,
   transparent: true,
   opacity: 0.18,
   side: THREE.DoubleSide,
   depthWrite: false,
+  ...FILL_OFFSET,
 });
 const FILL_HOVER_MAT = new THREE.MeshBasicMaterial({
   color: FILL_COLOR,
@@ -96,6 +100,7 @@ const FILL_HOVER_MAT = new THREE.MeshBasicMaterial({
   opacity: 0.34,
   side: THREE.DoubleSide,
   depthWrite: false,
+  ...FILL_OFFSET,
 });
 const FILL_SELECTED_MAT = new THREE.MeshBasicMaterial({
   color: SELECT_COLOR,
@@ -103,6 +108,7 @@ const FILL_SELECTED_MAT = new THREE.MeshBasicMaterial({
   opacity: 0.34,
   side: THREE.DoubleSide,
   depthWrite: false,
+  ...FILL_OFFSET,
 });
 
 // filled glyph interior is drawn by the region fill layer (fillMesh) so it can

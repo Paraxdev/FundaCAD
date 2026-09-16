@@ -492,6 +492,11 @@ export function pointInRegion(p: THREE.Vector2, region: Region): boolean {
   return !region.holes.some((h) => pointInLoop(p, h));
 }
 
+/** area of a region's material, its holes taken out */
+export function regionArea(region: Region): number {
+  return region.holes.reduce((a, h) => a - loopAbsArea(h), loopAbsArea(region.loop));
+}
+
 /** absolute area of a closed polygon (shoelace) */
 function loopAbsArea(loop: THREE.Vector2[]): number {
   let a = 0;

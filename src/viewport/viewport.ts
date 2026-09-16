@@ -590,8 +590,8 @@ export class Viewport {
       this.highlighter.hoverBody(null);
     }
     if (hit?.kind === "edge") { this.highlighter?.hoverEdge(hit.edge); this.regionHoverAt?.(-1, -1); return; }
-    // Sketch has PRIORITY over the body: hover a visible sketch's region if one is
-    // under the cursor; only fall back to the solid face when no region is there.
+    // Sketch has PRIORITY over the body, except where the body hides it or the
+    // profile traces the whole face (sketch/regionOverSurface.ts).
     if (this.regionHoverAt?.(e.clientX, e.clientY)) return;
     // The whole run, matching what a click on it will take. Measure and the
     // pick-one-face tools deliberately keep hovering a single face: they act on
@@ -685,7 +685,8 @@ export class Viewport {
       this.setSelectionMode("faces");
     }
     const e = { clientX, clientY, ctrlKey: ctrl, metaKey: false, shiftKey: shift };
-    // A visible sketch's area wins over the face behind it; an edge still wins over both.
+    // A visible sketch's area wins over the face it lies on (with the exceptions in
+    // sketch/regionOverSurface.ts); an edge still wins over both.
     if (hit?.kind !== "edge" && this.regionPickAt?.(e.clientX, e.clientY, e.ctrlKey || e.metaKey || e.shiftKey)) return;
     // a click on a construction plane, datum point or datum axis (where it does
     // not overlap the body) selects it. Markers are raycast alongside the quads,
@@ -2638,6 +2639,16 @@ export class Viewport {
       for (const d of edgeObjects(this.model)) d.material.linewidth = on ? 2.8 : 1.6;
     }
     this.requestRender();
+  }
+
+  private surfaceRaycaster = Object.assign(new THREE.Raycaster(), { firstHitOnly: true });
+  /** The nearest visible body surface under (x, y): its ray distance and face. */
+  surfaceHitAt(clientX: number, clientY: number): { distance: number; faceId: number } | null {
+    if (!this.model) return null;
+    flushRaycastIndex();
+    this.surfaceRaycaster.ray.copy(this.rayFrom(clientX, clientY).ray);
+    const hit = this.surfaceRaycaster.intersectObjects(visibleBodyMeshes(this.model), false)[0];
+    return hit ? { distance: hit.distance, faceId: faceIdOfHit(hit) } : null;
   }
 
   /** The faceId under (x, y), without touching the hover highlight. */
