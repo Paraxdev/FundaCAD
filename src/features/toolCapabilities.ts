@@ -148,11 +148,11 @@ export const TOOL_CAPABILITIES: Record<ToolId, ToolCapability> = {
   "boolean-union": { label: "Union", consumes: ["body"], source: "selection", min: 2 },
   "boolean-subtract": { label: "Subtract", consumes: ["body"], source: "selection", min: 2 },
   "boolean-intersect": { label: "Intersect", consumes: ["body"], source: "selection", min: 2 },
+  shell: { label: "Shell", consumes: ["face"], source: "selection" },
+  draft: { label: "Draft", consumes: ["face"], source: "selection" },
+  "offset-face": { label: "Offset Face", consumes: ["face"], source: "selection" },
   // --- tools that run their own pick; the ambient selection is not consumed ---
   measure: { label: "Measure", consumes: ["face", "edge"], source: "pick" },
-  shell: { label: "Shell", consumes: ["face"], source: "pick" },
-  draft: { label: "Draft", consumes: ["face"], source: "pick" },
-  "offset-face": { label: "Offset Face", consumes: ["face"], source: "pick" },
   thicken: { label: "Thicken", consumes: ["face"], source: "pick" },
   // Thread takes a ROUND face specifically; the table has no kind for "a face
   // that happens to be a cylinder", and inventing one to describe a single

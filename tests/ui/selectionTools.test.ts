@@ -76,12 +76,18 @@ describe("what a selection offers", () => {
   });
 
   it("never offers a tool that runs its own pick", () => {
-    // Shell can act on a face, but a selected face does not make Shell runnable,
+    // Measure can act on a face, but a selected face does not make it runnable,
     // it would ignore the selection and ask for another click, which reads as
     // the button having done nothing.
     for (const sel of [{ face: 4 }, { edge: 2 }, { body: 1 }]) {
-      expect(labels(selectionOffers(sel))).not.toContain("shell");
       expect(labels(selectionOffers(sel))).not.toContain("measure");
+    }
+  });
+
+  it("offers the face tools that start from the selected face", () => {
+    for (const id of ["shell", "draft", "offset-face"]) {
+      expect(labels(selectionOffers({ face: 1 }))).toContain(id);
+      expect(labels(selectionOffers({ edge: 1 }))).not.toContain(id);
     }
   });
 
