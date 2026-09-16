@@ -1,7 +1,7 @@
 // Shell a selected face by dragging its wall, in a real browser.
 //
 //   1. Shell with a face selected opens straight on that face with a thickness
-//      handle, no second pick.
+//      handle, no second pick, and the rail steps back to that one tool.
 //   2. Dragging the wall thicker than the body can take is refused: the handle
 //      turns red, the prompt says why, and letting go adds nothing.
 //   3. Dragging back to a wall that builds and letting go commits one shell of
@@ -57,6 +57,15 @@ const check = (name, ok, detail) => {
   await page.waitForTimeout(500);
   const p0 = await prompt();
   check("Shell opens on the selected face", (await busy()) === true && !/click a face/i.test(p0), JSON.stringify(p0));
+  // A selection made from script wakes nothing, a real click's release does.
+  await page.evaluate(() => window.dispatchEvent(new PointerEvent("pointerup")));
+  await page.waitForTimeout(300);
+  const rail = await page.evaluate(() => ({
+    mode: document.querySelector("#toolrail")?.getAttribute("data-mode"),
+    tile: document.querySelector("#toolrail [data-action=running-tool]")?.textContent ?? "",
+    others: document.querySelectorAll("#toolrail [data-family], #toolrail [data-action^='offer:']").length,
+  }));
+  check("the rail steps back to the running Shell", rail.mode === "running" && /Shell/.test(rail.tile) && rail.others === 0, JSON.stringify(rail));
   await page.screenshot({ path: path.join(OUT, "01_opened.png") });
 
   // Aim at the tool's own handle: its anchor, and a point a little way along its axis.
@@ -107,6 +116,10 @@ const check = (name, ok, detail) => {
   const err = await page.evaluate(() => window.store.buildState.errorMessage ?? null);
   check("and the model builds", err === null, String(err));
   check("the tool is done", (await busy()) === false);
+  await page.mouse.move(600, 600);
+  await page.waitForTimeout(400);
+  const after = await page.evaluate(() => document.querySelector("#toolrail")?.getAttribute("data-mode"));
+  check("and the rail comes back", after !== "running", String(after));
   await page.screenshot({ path: path.join(OUT, "03_committed.png") });
 
   await browser.close();

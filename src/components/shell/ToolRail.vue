@@ -16,6 +16,7 @@ import {
 } from "../../ui/railDefs";
 import { HOLD_MS, IDLE, holdStep, type HoldEvent, type HoldPhase } from "../../ui/holdGesture";
 import { useSelectionOffers } from "../../composables/useSelectionOffers";
+import { runningTool } from "../../ui/runningTool";
 import RailButton from "../ui/RailButton.vue";
 import Popover from "../ui/Popover.vue";
 
@@ -50,14 +51,23 @@ let offPlugins: (() => void) | null = null;
 onMounted(() => { offPlugins = onContribChange(() => pluginTick.value++); });
 onUnmounted(() => offPlugins?.());
 
+// While a modelling tool holds the screen the rail steps back to that one tool,
+// so nothing competes with the model for attention mid drag.
+const running = computed(() => {
+  pulse.value;
+  return sel.toolOwns.value && ribbon.context !== "sketch" ? runningTool(engine.tools) : null;
+});
+
 const mode = computed(() => {
   if (ribbon.context === "sketch") return "sketch";
+  if (running.value) return "running";
   return sel.kind.value && !sel.toolOwns.value ? "selection" : "model";
 });
 
 const entries = computed<RailEntry[]>(() => {
   pluginTick.value;
   if (mode.value === "sketch") return sketchRail();
+  if (mode.value === "running") return [];
   if (mode.value === "selection") {
     const onFace = sel.kind.value === "face" && engine.viewport.selectedFaceSketchPlane() ? sketchTool() : null;
     return [
@@ -290,6 +300,15 @@ function toggleIsolate() {
         :sub="sketchName"
         data-action="finish"
         @click="ribbon.act('finish')"
+      />
+      <RailButton
+        v-else-if="mode === 'running' && running"
+        :icon="running.icon"
+        :label="running.label"
+        keys="Esc"
+        active
+        data-action="running-tool"
+        @click="running.cancel()"
       />
       <RailButton
         v-else-if="mode === 'selection'"

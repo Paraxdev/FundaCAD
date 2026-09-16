@@ -75,6 +75,13 @@ export class FaceOffsetTool {
     });
   }
 
+  get label(): string {
+    return LABEL[this.mode];
+  }
+  get icon(): string {
+    return this.mode === "offsetFace" ? "offsetFace" : this.mode;
+  }
+
   start(mode: FaceOffsetMode, onDone: (id: string | null) => void) {
     if (this.active) return;
     this.active = true;
