@@ -129,7 +129,9 @@ def _import_shape(f):
     if digest:
         data = blobstore.default_store().get_bytes(digest)
         if data is not None:
-            return _blob_to_shape(data)
+            import heal_snapped
+
+            return _wrap_topods(heal_snapped.heal_stored(digest, _blob_to_shape(data).wrapped))
         if not b64:
             raise ValueError(
                 "the geometry for this imported body is missing from local storage. "
