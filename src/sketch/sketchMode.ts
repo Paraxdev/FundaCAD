@@ -58,6 +58,7 @@ import { sketchEscapeAction } from "./escapeLayers";
 import { gridReach, gridStep, SketchPlaneGrid, snapLatticeStep } from "./planeGrid";
 import { INFER_TOL_DEG, inferLineDirection } from "./inferLine";
 import { sketchLockHolds, viewSquareToPlane } from "./sketchView";
+import { SnapTag } from "./snapTag";
 
 export type SketchTool =
   | "select"
@@ -636,6 +637,7 @@ export class SketchMode {
     this.modifyFlow.reset();
     this.overlay.setPreview([]);
     this.overlay.setSnap(null);
+    this.snapTag.hide();
     this.overlay.setHandleDot(null);
     this.snapWorld = null;
     this.removeGrid();
@@ -2582,7 +2584,7 @@ export class SketchMode {
     if (!world) return null;
     const p2d = this.plane.to2D(world);
     // Hold Ctrl to suppress snapping for fine placement (raw cursor position).
-    if (noSnap) return { p: p2d, kind: "free" as SnapKind, world, guides: [] as SnapGuide[] };
+    if (noSnap) return { p: p2d, kind: "free" as SnapKind, world, guides: [] as SnapGuide[], label: undefined };
     const res = snap(
       p2d,
       this.candidates, // cached; rebuilt only when entities change
@@ -2594,6 +2596,7 @@ export class SketchMode {
       kind: res.kind,
       world: this.plane.to3D(res.point.x, res.point.y),
       guides: res.guides,
+      label: res.label,
     };
   }
 
@@ -2604,7 +2607,7 @@ export class SketchMode {
   }
 
   private showSnap(
-    hit: { kind: SnapKind; world: THREE.Vector3; p?: THREE.Vector2; guides?: SnapGuide[] } | null,
+    hit: { kind: SnapKind; world: THREE.Vector3; p?: THREE.Vector2; guides?: SnapGuide[]; label?: string | undefined } | null,
   ) {
     // The guides go up or down with the snap itself: a line left standing after
     // the cursor has moved off the row it named is a claim about where the next
@@ -2619,9 +2622,12 @@ export class SketchMode {
     if (!hit || !showsSnapMarker(this.tool, hit.kind)) {
       this.overlay.setSnap(null);
       this.snapWorld = null;
+      this.snapTag.hide();
       return;
     }
     this.overlay.setSnap(hit.world, hit.kind, this.viewport.camera);
+    if (hit.label) this.snapTag.show(hit.label, this.viewport.projectToScreen(hit.world));
+    else this.snapTag.hide();
     this.snapWorld = hit.world.clone();
     this.snapScaleSeen = 0; // a new point: size it now rather than next frame
     this.updateSnapScale();
@@ -2630,6 +2636,7 @@ export class SketchMode {
   /** The snap ring is a screen size in world geometry, so it follows zoom too. */
   private snapWorld: THREE.Vector3 | null = null;
   private snapScaleSeen = 0;
+  private snapTag = new SnapTag();
   private updateSnapScale() {
     const at = this.snapWorld;
     if (!at) return;
@@ -2701,10 +2708,11 @@ export class SketchMode {
       p,
       kind: "center" as SnapKind,
       priority: 70,
+      label: "Face Center",
     }));
     const { corners, sides } = boundaryAnchors(this.footprintEdges);
-    for (const p of corners) out.push({ p, kind: "endpoint", priority: 76 });
-    for (const p of sides) out.push({ p, kind: "midpoint", priority: 72 });
+    for (const p of corners) out.push({ p, kind: "endpoint", priority: 76, label: "Face Corner" });
+    for (const p of sides) out.push({ p, kind: "midpoint", priority: 72, label: "Edge Midpoint" });
     return out;
   }
 
@@ -3184,7 +3192,7 @@ export class SketchMode {
     const res = raw && !e.ctrlKey
       ? dragSnap(raw, this.dragAnchors, (q) => this.viewport.projectToScreen(this.plane.to3D(q.x, q.y)))
       : null;
-    this.showSnap(res ? { kind: res.kind, p: res.point, world: this.plane.to3D(res.point.x, res.point.y) } : null);
+    this.showSnap(res ? { kind: res.kind, p: res.point, world: this.plane.to3D(res.point.x, res.point.y), label: res.label } : null);
     return res?.point ?? raw;
   }
 

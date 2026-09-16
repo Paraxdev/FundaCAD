@@ -896,3 +896,20 @@
   right: auto;
   transform: translateX(-50%);
 }
+
+/* The name beside a sketch snap marker. */
+.snap-tag {
+  position: fixed;
+  z-index: 40;
+  padding: 1px var(--s-2);
+  font: 600 11px/1.5 var(--ui);
+  color: var(--text);
+  background: rgba(22, 24, 29, 0.85);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  pointer-events: none;
+  white-space: nowrap;
+}
+.snap-tag[hidden] {
+  display: none;
+}

@@ -21,6 +21,8 @@ export interface SnapCandidate {
   p: THREE.Vector2;
   kind: SnapKind;
   priority: number; // higher wins
+  /** What the anchor is, named beside the marker ("Face Center"). */
+  label?: string | undefined;
 }
 
 /** One alignment guide: the anchor the cursor lined up WITH, and which of that
@@ -37,6 +39,7 @@ export interface SnapResult {
   /** The anchors this result lined up with, for drawing the guides. Empty for
    *  every kind but "align". */
   guides: SnapGuide[];
+  label?: string | undefined;
 }
 
 export function snap(
@@ -84,7 +87,7 @@ export function snap(
     if (dy <= pixelTol && (!alignY || dy < alignY.d)) alignY = { c, d: dy };
   }
 
-  if (best) return { point: best.p.clone(), kind: best.kind, guides: [] };
+  if (best) return { point: best.p.clone(), kind: best.kind, guides: [], label: snapLabel(best) };
 
   // THE GRID'S ANSWER, ONE AXIS AT A TIME.
   //
@@ -128,7 +131,7 @@ export function snap(
     // outside the round tolerance the point pass used. Snapping to it is right;
     // reporting it as an alignment with two zero-length guides is not.
     if (alignX && alignY && alignX.c === alignY.c) {
-      return { point: alignX.c.p.clone(), kind: alignX.c.kind, guides: [] };
+      return { point: alignX.c.p.clone(), kind: alignX.c.kind, guides: [], label: snapLabel(alignX.c) };
     }
     const guides: SnapGuide[] = [];
     if (alignX) guides.push({ from: alignX.c.p.clone(), axis: "x" });
@@ -165,6 +168,17 @@ export function snap(
   return { point: raw.clone(), kind: "free", guides: [] };
 }
 
+const KIND_LABEL: Partial<Record<SnapKind, string>> = {
+  endpoint: "Endpoint",
+  midpoint: "Midpoint",
+  center: "Center",
+};
+
+/** The name shown beside a snapped anchor: its own, or its kind's. */
+export function snapLabel(c: Pick<SnapCandidate, "kind" | "label">): string | undefined {
+  return c.label ?? KIND_LABEL[c.kind];
+}
+
 /** Whether the snap marker comes up for this kind of snap, given the armed tool.
  *
  *  With the select tool armed there is nothing to place, so a marker on a bare
@@ -187,7 +201,7 @@ export function showsSnapMarker(tool: string, kind: SnapKind): boolean {
 export function originCandidate(plane: SketchPlane): SnapCandidate[] {
   const origin = new THREE.Vector3();
   if (Math.abs(plane.n.dot(origin.clone().sub(plane.origin))) > 1e-6) return [];
-  return [{ p: plane.to2D(origin), kind: "center", priority: 95 }];
+  return [{ p: plane.to2D(origin), kind: "center", priority: 95, label: "Origin" }];
 }
 
 /** Where a dragged point lands: on an anchor it is close to, or null to follow

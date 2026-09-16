@@ -332,3 +332,23 @@ describe("showsSnapMarker", () => {
     expect(showsSnapMarker("line", "free")).toBe(false);
   });
 });
+
+describe("snap labels", () => {
+  const toScreen = (p: THREE.Vector2) => ({ x: p.x, y: p.y });
+  it("names what it caught, its own name first", () => {
+    const cands: SnapCandidate[] = [
+      { p: new THREE.Vector2(0, 0), kind: "center", priority: 70, label: "Face Center" },
+      { p: new THREE.Vector2(50, 0), kind: "endpoint", priority: 100 },
+    ];
+    expect(snap(new THREE.Vector2(1, 1), cands, toScreen, 0).label).toBe("Face Center");
+    expect(snap(new THREE.Vector2(49, 1), cands, toScreen, 0).label).toBe("Endpoint");
+  });
+  it("calls the origin the origin", () => {
+    const [c] = originCandidate(new SketchPlane("XY"));
+    expect(c?.label).toBe("Origin");
+  });
+  it("names nothing on the grid or free", () => {
+    expect(snap(new THREE.Vector2(10.2, 10.1), [], toScreen, 10).label).toBeUndefined();
+    expect(snap(new THREE.Vector2(13, 17), [], toScreen, 0).label).toBeUndefined();
+  });
+});
