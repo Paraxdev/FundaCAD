@@ -499,6 +499,13 @@ def _blend_edges(f, ctx, label, combined, one_edge_at, blend_size, section=None,
         if section_only:
             staged.append((body, _section_or_raise(label, body, edges, section)))
             continue
+        # A failed kernel blend raises the tolerances of the edges and vertices
+        # it touched, in place, on the shared topology: 0.07mm became 12.7mm on a
+        # leg junction, and every boolean on the body after that came out
+        # invalid, the section fallback included. So the kernel only ever
+        # sees a copy.
+        pristine, pristine_edges = body, edges
+        body, edges = _kernel_copy(body, edges)
         try:
             new_shape = combined(body["shape"], edges)
         except ConicNotApplicable:
@@ -518,9 +525,9 @@ def _blend_edges(f, ctx, label, combined, one_edge_at, blend_size, section=None,
                 body["shape"], edges, one_edge, blend_size, body["shape"]
             )
             if unresolved:
-                built = _try_section(body, edges, section)
+                built = _try_section(pristine, pristine_edges, section)
                 if built is not None:
-                    staged.append((body, built))
+                    staged.append((pristine, built))
                     continue
                 # Hard no-silent-degradation rule: any edge we could not blend means
                 # the feature FAILS, never a partial solid, never a smaller radius.
@@ -533,13 +540,30 @@ def _blend_edges(f, ctx, label, combined, one_edge_at, blend_size, section=None,
         try:
             _refuse_folded_blend(body, new_shape)
         except GeomError:
-            built = _try_section(body, edges, section)
+            built = _try_section(pristine, pristine_edges, section)
             if built is None:
                 raise
             new_shape = built
-        staged.append((body, new_shape))
+        staged.append((pristine, new_shape))
     for body, shape in staged:
         body["shape"] = shape
+
+
+def _kernel_copy(body, edges):
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Copy
+    from build123d import Edge
+
+    mk = BRepBuilderAPI_Copy(body["shape"].wrapped, False)
+    copied = []
+    for e in edges:
+        got = mk.Modified(e.wrapped)
+        if got.Size() == 0:
+            return body, edges
+        copied.append(Edge(got.First().Oriented(e.wrapped.Orientation())))
+    shape = _wrap_topods(mk.Shape())
+    if shape is None:
+        return body, edges
+    return {**body, "shape": shape}, copied
 
 
 def _try_section(body, edges, section):
