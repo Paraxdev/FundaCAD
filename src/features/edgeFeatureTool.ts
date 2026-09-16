@@ -274,6 +274,7 @@ export class EdgeFeatureTool {
     delete rest.id;
     delete rest.radius;
     delete rest.distance;
+    delete rest.draft;
     return JSON.stringify(rest);
   }
 
@@ -807,7 +808,8 @@ export class EdgeFeatureTool {
     // A size already refused is not asked again: the kernel would only say no
     // once more, and the model keeps the last size that built meanwhile.
     if (blendVerdict(this.range, this.size()) !== "refused") {
-      const feature = this.buildFeature();
+      // A draft builds quicker and coarser during the drag; commit builds the real one.
+      const feature = { ...this.buildFeature(), draft: true } as Feature;
       if (this.editId) this.store.setEditPreview(feature, { hold: true });
       else this.store.setPreview(feature, { hold: true });
     }
