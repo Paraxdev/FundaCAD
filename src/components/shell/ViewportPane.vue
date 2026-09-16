@@ -3,6 +3,7 @@ import { onMounted, ref, useTemplateRef } from "vue";
 import { useEngine } from "../../app/engineKey";
 import PromptBanner from "./PromptBanner.vue";
 import FpsReadout from "./FpsReadout.vue";
+import SelectionReadout from "./SelectionReadout.vue";
 import {
   draggingMaterial, dropScopeFor, endMaterialDrag, MATERIAL_MIME, type DropScope,
 } from "../../ui/materialDrag";
@@ -138,6 +139,7 @@ function onDrop(e: DragEvent) {
   >
     <PromptBanner />
     <FpsReadout />
+    <SelectionReadout />
   </div>
 
   <Teleport to="body">

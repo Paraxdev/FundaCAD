@@ -15,6 +15,7 @@ import {
 import { contextMenu } from "../ui/menu";
 import { materialMenu } from "../ui/browserTree";
 import type { SelectionCounts } from "../features/toolCapabilities";
+import { describeSelection, type Pt3 } from "../ui/selectionMeasure";
 
 function readCounts(engine: Engine): { counts: SelectionCounts; signature: string } {
   const edges = engine.viewport.selectedEdgeLines();
@@ -34,25 +35,35 @@ function readCounts(engine: Engine): { counts: SelectionCounts; signature: strin
 export function useSelectionOffers(engine: Engine) {
   const counts = shallowRef<SelectionCounts>({});
   const toolOwns = ref(false);
+  const measured = shallowRef<{ edges: Pt3[][]; roundFaceDiameter: number | null }>({ edges: [], roundFaceDiameter: null });
   let signature = "";
 
   const kind = computed(() => primaryKind(counts.value));
   const offers = computed(() => toolbarOffers(counts.value));
   const looks = computed(() => appearanceOffers(counts.value));
-  const summary = computed(() => {
+  const describe = (withNumbers: boolean) => {
     const k = kind.value;
     if (!k) return "";
-    const n = primaryCount(counts.value);
     const one = KIND_LABEL[k];
-    if (n > 1) return `${n} ${one === "body" ? "bodies" : `${one}s`}`;
-    return one.charAt(0).toUpperCase() + one.slice(1);
-  });
+    return describeSelection({
+      count: primaryCount(counts.value),
+      noun: one,
+      plural: one === "body" ? "bodies" : `${one}s`,
+      ...(withNumbers && k === "edge" ? { edges: measured.value.edges } : {}),
+      ...(withNumbers && k === "face" ? { roundFaceDiameter: measured.value.roundFaceDiameter } : {}),
+    });
+  };
+  const summary = computed(() => describe(false));
+  const readout = computed(() => describe(true));
 
   function refresh(): boolean {
     const next = readCounts(engine);
     if (next.signature !== signature) {
       signature = next.signature;
       counts.value = next.counts;
+      const edges = next.counts.edge ? engine.viewport.selectedEdgeLines().map((e) => e.points) : [];
+      const round = next.counts.face === 1 ? engine.viewport.selectedFacesForPressPull()?.round : null;
+      measured.value = { edges, roundFaceDiameter: round ? round.radius * 2 : null };
     }
     toolOwns.value = engine.toolOwnsScreen();
     return Object.keys(next.counts).length > 0;
@@ -126,5 +137,5 @@ export function useSelectionOffers(engine: Engine) {
     wake();
   }
 
-  return { counts, kind, offers, looks, summary, toolOwns, run, look, clear, wake };
+  return { counts, kind, offers, looks, summary, readout, toolOwns, run, look, clear, wake };
 }
