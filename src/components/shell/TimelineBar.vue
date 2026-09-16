@@ -18,6 +18,8 @@ import { gapIndexIn } from "../../ui/trackGaps";
 import { ClickOrDouble, HistoryPeek } from "../../ui/historyPeek";
 import { getUnit, onUnitChange } from "../../ui/units";
 import FeatureProperties from "./FeatureProperties.vue";
+import { useSelectionOffers } from "../../composables/useSelectionOffers";
+import { relatedFeatureIds } from "../../ui/relatedFeatures";
 import type { Feature } from "../../types";
 
 const engine = useEngine();
@@ -43,6 +45,35 @@ const features = useDocValue((doc) =>
     };
   }),
 );
+
+// --- Related to Selection -------------------------------------------------
+// The selection lives on the viewport and the overlay, which are not reactive;
+// the offers composable already watches both and bumps `counts` on a change.
+const selectionOffers = useSelectionOffers(engine);
+const RELATED_KEY = "fundacad.historyRelated";
+const relatedOn = ref((() => {
+  try { return localStorage.getItem(RELATED_KEY) !== "0"; } catch { return true; }
+})());
+function toggleRelated() {
+  relatedOn.value = !relatedOn.value;
+  try { localStorage.setItem(RELATED_KEY, relatedOn.value ? "1" : "0"); } catch { /* not remembered */ }
+}
+const related = computed<Set<string> | null>(() => {
+  void selectionOffers.counts.value;
+  void features.value;
+  const seeds = new Set<string>();
+  for (const f of engine.viewport.getSelectedFaceIds()) {
+    const owner = engine.featureForFace(f);
+    if (owner) seeds.add(owner);
+  }
+  const bodies = new Set(engine.viewport.getSelectedBodies());
+  for (const b of store.buildState.result?.bodies ?? []) {
+    if (bodies.has(b.id)) for (const o of b.faceOwners ?? []) if (o) seeds.add(o);
+  }
+  for (const r of engine.overlay.selectedRegions()) seeds.add(r.sketchId);
+  return seeds.size ? relatedFeatureIds(store.document.features, seeds) : null;
+});
+const filtering = computed(() => relatedOn.value && related.value !== null);
 
 const unit = ref(getUnit());
 const offUnit = onUnitChange(() => { unit.value = getUnit(); });
@@ -372,6 +403,14 @@ function openMenu(e: MouseEvent, id: string, i: number) {
     <div class="float-card-head">
       <span class="float-card-title">History</span>
       <button
+        v-if="related"
+        class="timeline-related"
+        :class="{ on: relatedOn }"
+        data-testid="history-related"
+        :title="relatedOn ? 'Showing what relates to the selection, click to show everything' : 'Show only what relates to the selection'"
+        @click="toggleRelated()"
+      >Related to Selection · {{ related.size }}</button>
+      <button
         class="timeline-errbadge"
         :class="{ hidden: errors.size === 0 }"
         title="Failing features, click to jump to the next one"
@@ -399,7 +438,7 @@ function openMenu(e: MouseEvent, id: string, i: number) {
               title="Drag to roll the model back / forward"
               @pointerdown="onMarkerDown"
             ><span class="marker-grip"></span></div>
-            <div class="timeline-item">
+            <div v-show="!filtering || related?.has(f.id)" class="timeline-item" :data-feature="f.id">
               <div
                 class="timeline-node"
                 :data-id="f.id"
