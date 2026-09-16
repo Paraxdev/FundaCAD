@@ -829,12 +829,14 @@ export class SketchMode {
     this.viewport.requestRender();
   }
 
-  /** Lightweight per-frame refresh for dragging: only the curve geometry moves,
-   * so skip the snap-candidate array (a drag snaps to dragAnchors) and the
-   * dimension-label DOM teardown/rebuild. refreshActive() restores both on end. */
+  /** Lightweight per-frame refresh for dragging: the curves and constraint glyphs
+   * move, the snap-candidate array (a drag snaps to dragAnchors) and the
+   * dimension labels wait for refreshActive() on end. */
   private refreshDragGeometry() {
     this.entityVersion++;
     this.overlay.setActiveSketch(curveObjects(this.entities, this.plane, this.activeColor()));
+    // Glyphs are a store push the layer projects anyway, so they ride along with the drag.
+    if (this.glyphsVisible) this.glyphs.show(constraintGlyphs(this.entities, this.constraints), this.plane, this.conflictIdx, this.overIdx);
   }
 
   // --- per-frame reconcile (grid + view lock) --------------------------------
