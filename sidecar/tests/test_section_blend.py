@@ -16,6 +16,7 @@ Run: uv run python tests/test_section_blend.py
 
 import _bootstrap  # noqa: F401  (puts sidecar/ on sys.path)
 
+import math
 import sys
 import time
 import traceback
@@ -166,6 +167,38 @@ def test_tangent_edges_off_stops_at_the_picked_edge():
     print(PASS, "with tangent edges off only the picked edge rounds, not the whole rim")
 
 
+def test_a_blend_stops_at_the_face_its_edge_ends_on():
+    """A leg under a disc: the arc where it meets the floor ends at the disc's
+    rim. The fallback blend must stop at that rim like the kernel's does,
+    not hang out past it beside the leg."""
+    r = 4.245828802487684
+    feats = [
+        {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "circle", "id": "a", "x": 0, "y": 0, "radius": 50}]},
+        {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 20, "operation": "new"},
+        {"id": "s2", "type": "sketch", "plane": {"origin": [0, 0, 20], "normal": [0, 0, 1], "xdir": [1, 0, 0]},
+         "entities": [{"type": "circle", "id": "b", "x": 0, "y": 50, "radius": r}]},
+        {"id": "e2", "type": "extrude", "sketch": "s2", "distance": -32, "operation": "join"},
+    ]
+    edge = {"kind": "edge", "by": "nearest", "point": [0, 45.7542, 0]}
+    vols = []
+    for extra in ({}, {"tangentEdges": False}):
+        f = {"id": "f", "type": "fillet", "radius": 11.3, "edges": edge, **extra}
+        _p, errors, bodies = rebuild({"parameters": {}, "features": feats + [f]})
+        assert not errors, errors
+        shape = bodies[0]["shape"]
+        vols.append(shape.volume)
+        for rad in (50.3, 52, 55):
+            for deg in range(70, 111, 4):
+                a = math.radians(deg)
+                for z in (-0.3, -2, -5, -9):
+                    p = Vector(rad * math.cos(a), rad * math.sin(a), z)
+                    if math.hypot(p.X, p.Y - 50) < r + 0.05:
+                        continue
+                    assert not shape.is_inside(p), f"{extra}: blend hangs past the rim at {p}"
+    assert abs(vols[0] - vols[1]) < 1.0, vols
+    print(PASS, "the fallback blend stops at the rim its edge ends on, like the kernel's")
+
+
 if __name__ == "__main__":
     try:
         test_matches_the_kernel_where_the_kernel_builds()
@@ -174,6 +207,7 @@ if __name__ == "__main__":
         test_the_junction_beside_a_seam_now_rounds()
         test_feature_options_reach_the_build()
         test_tangent_edges_off_stops_at_the_picked_edge()
+        test_a_blend_stops_at_the_face_its_edge_ends_on()
         print("\nALL PASS")
     except Exception:
         traceback.print_exc()

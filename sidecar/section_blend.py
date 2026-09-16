@@ -22,7 +22,7 @@ import font_guard  # noqa: F401  MUST precede build123d, see font_guard.py
 
 from OCP.BRep import BRep_Tool
 from OCP.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Curve2d, BRepAdaptor_Surface
-from OCP.BRepAlgoAPI import BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse
+from OCP.BRepAlgoAPI import BRepAlgoAPI_Common, BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse
 from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeWire
 from OCP.BRepCheck import BRepCheck_Analyzer
 from OCP.BRepClass import BRepClass_FaceClassifier
@@ -164,7 +164,7 @@ def _ball(P, T, sides, n0, s, r):
 
 
 def _wire(points, curve):
-    """Closed section: the straight run Q1 -> A1 -> K -> A2 -> Q2, then `curve`
+    """Closed section: the run from Q1 around the corner to Q2, then `curve`
     from Q2 back to Q1."""
     mk = BRepBuilderAPI_MakeWire()
     for a, b in zip(points, points[1:]):
@@ -175,6 +175,25 @@ def _wire(points, curve):
     if not mk.IsDone():
         raise SectionBlendError("the blend section did not close")
     return mk.Wire()
+
+
+SKIN_STEPS = 4
+
+
+def _skin(side, normal, a, b, offset, reach):
+    """Points from `a` to `b` laid on `side`'s surface and pushed `offset` along
+    its normal, SKIN_STEPS + 1 of them so every section has the same edges."""
+    out = []
+    for j in range(SKIN_STEPS + 1):
+        q = _p(_v(a) + (_v(b) - _v(a)).Multiplied(j / SKIN_STEPS))
+        foot, n = q, normal
+        got = side.foot(q)
+        if got is not None and got[0].Distance(q) < reach:
+            foot, n = got
+            if n.Dot(normal) < 0:
+                n.Reverse()
+        out.append(_p(_v(foot) + n.Multiplied(offset)))
+    return out
 
 
 def _corner(Q1, Q2, n1, n2, P):
@@ -236,13 +255,20 @@ def _section(P, T, sides, s, kind, size, size2, continuity):
                 raise SectionBlendError("the blend centre sits on the edge")
             mid = _p(C + toward.Normalized().Multiplied(size))
             curve = GC_MakeArcOfCircle(Q[1], mid, Q[0]).Value()
+    # The section closes a hair beyond the faces, following each face's own
+    # surface from its contact back to the edge. A fixed straight run used to
+    # need a generous margin to stay clear of a curved face, and that margin
+    # poked through thin walls and showed on their far side.
     reach = max(Q[0].Distance(P), Q[1].Distance(P), size)
-    e = 0.3 * reach + 1e-3
-    A1 = _p(_v(Q[0]) + normals[0].Multiplied(s * e))
-    A2 = _p(_v(Q[1]) + normals[1].Multiplied(s * e))
+    e = max(0.02 * size, 0.01)
     K = _p(_v(P) + m.Multiplied(s * e))
+    run = [Q[0]]
+    run += _skin(sides[0], normals[0], Q[0], P, s * e, reach)[:-1]
+    run.append(K)
+    run += _skin(sides[1], normals[1], P, Q[1], s * e, reach)[1:]
+    run.append(Q[1])
     inner = (_v(Q[0]) + _v(Q[1])).Multiplied(0.5) if kind == "chamfer" else C
-    return _wire([Q[0], A1, K, A2, Q[1]], curve), inner
+    return _wire(run, curve), inner
 
 
 def _convexity(P, T, sides, n1, n2, tol):
@@ -317,7 +343,85 @@ def _edge_tool(shape, edge, kind, size, size2, continuity, tol):
     if closed:
         half = len(wires) // 2
         return s, [loft(wires[: half + 1]), loft(wires[half:])]
-    return s, [loft(wires)]
+    tool = loft(wires)
+    reach = size * (G2_SETBACK if continuity == "G2" else 1.0) + (size2 or 0.0)
+    for keep_inside, trim in _end_trims(shape, edge, faces, 50 * reach + 10):
+        op = BRepAlgoAPI_Common() if keep_inside else BRepAlgoAPI_Cut()
+        tool = _boolean(op, tool, [trim], max(tol * 10, 1e-5))
+    return s, [tool]
+
+
+def _end_trims(shape, edge, faces, size):
+    """Solids that cut a blend off where its edge ends against another face.
+
+    The lofted blend ends square to the edge, so where the edge stops at a face
+    running across it (a wall the leg meets the floor beside) the blend would
+    hang out past that face. Each such face's surface is made into a solid
+    (half-space box, cylinder, sphere) and the blend is kept on the body's side
+    of it. Faces tangent to the blend's own two faces carry on from them rather
+    than end them, and surfaces with no simple solid are left alone."""
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeCylinder, BRepPrimAPI_MakeSphere
+    from OCP.gp import gp_Ax2, gp_Dir, gp_Lin
+    from OCP.GeomAbs import GeomAbs_Cylinder, GeomAbs_Sphere
+    from OCP.TopAbs import TopAbs_VERTEX
+
+    vmap = TopTools_IndexedDataMapOfShapeListOfShape()
+    TopExp.MapShapesAndAncestors_s(shape, TopAbs_VERTEX, TopAbs_FACE, vmap)
+    own = [_Side(f, edge) for f in faces]
+    out = []
+    seen = []
+    ex = TopExp_Explorer(edge, TopAbs_VERTEX)
+    while ex.More():
+        vtx = TopoDS.Vertex_s(ex.Current())
+        ex.Next()
+        idx = vmap.FindIndex(vtx)
+        if idx == 0:
+            continue
+        at = BRep_Tool.Pnt_s(vtx)
+        own_normals = []
+        for sd in own:
+            proj = GeomAPI_ProjectPointOnSurf(at, sd.surf)
+            if proj.NbPoints():
+                own_normals.append(sd.normal_uv(*proj.LowerDistanceParameters()))
+        for f in vmap.FindFromIndex(idx):
+            g = TopoDS.Face_s(f)
+            if any(g.IsSame(x) for x in faces) or any(g.IsSame(x) for x in seen):
+                continue
+            seen.append(g)
+            side = _Side.__new__(_Side)
+            side.face, side.props, side.surf = g, BRepGProp_Face(g), BRep_Tool.Surface_s(g)
+            proj = GeomAPI_ProjectPointOnSurf(at, side.surf)
+            if proj.NbPoints() == 0:
+                continue
+            try:
+                n = side.normal_uv(*proj.LowerDistanceParameters())
+            except SectionBlendError:
+                continue
+            if any(abs(n.Dot(m)) > 0.9998 for m in own_normals):
+                continue
+            body_side = _p(_v(at) - n.Multiplied(1e-3 * size))
+            ad = BRepAdaptor_Surface(g)
+            kind = ad.GetType()
+            if kind == GeomAbs_Plane:
+                pln = ad.Plane()
+                z = gp_Dir(-n.X(), -n.Y(), -n.Z())
+                ax = gp_Ax2(pln.Location(), z)
+                origin = ax.Location().Translated(
+                    gp_Vec(ax.XDirection()).Multiplied(-size) + gp_Vec(ax.YDirection()).Multiplied(-size))
+                box = BRepPrimAPI_MakeBox(gp_Ax2(origin, z, ax.XDirection()), 2 * size, 2 * size, size).Shape()
+                out.append((True, box))
+            elif kind == GeomAbs_Cylinder:
+                cyl = ad.Cylinder()
+                axis = cyl.Axis()
+                base = axis.Location().Translated(gp_Vec(axis.Direction()).Multiplied(-size))
+                solid = BRepPrimAPI_MakeCylinder(gp_Ax2(base, axis.Direction()), cyl.Radius(), 2 * size).Shape()
+                inside = gp_Lin(axis).Distance(body_side) < cyl.Radius()
+                out.append((inside, solid))
+            elif kind == GeomAbs_Sphere:
+                sph = ad.Sphere()
+                solid = BRepPrimAPI_MakeSphere(sph.Location(), sph.Radius()).Shape()
+                out.append((sph.Location().Distance(body_side) < sph.Radius(), solid))
+    return out
 
 
 def _boolean(op, base, tools, fuzz):
