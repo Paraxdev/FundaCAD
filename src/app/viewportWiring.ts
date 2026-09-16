@@ -11,6 +11,7 @@ import { useBrowserStore } from "../stores/browser";
 import { edgeNudgePlacement } from "../features/edgeNudge";
 import { faceNudgePlacement } from "../features/faceNudge";
 import { regionNudgePlacement } from "../features/regionNudge";
+import type { NudgePlacement } from "../features/selectionNudge";
 import { regionBeatsSurface } from "../sketch/regionOverSurface";
 import { regionArea } from "../sketch/region";
 import type { Engine } from "./engine";
@@ -314,7 +315,9 @@ export function installViewportWiring(e: Engine): void {
     } else if (regions.length) {
       e.nudge.show(regionNudgePlacement(regions, (x, y) => e.starters.grabRegionHandle(x, y)));
     } else {
-      e.nudge.show(faceNudgePlacement(faces, (x, y) => e.starters.grabFaceHandle(x, y)));
+      e.nudge.show(
+        faceNudgePlacement(faces, (x, y) => e.starters.grabFaceHandle(x, y)) ?? recentExtrudePlacement(),
+      );
     }
 
     if (e.toolBusy()) return;
@@ -344,6 +347,34 @@ export function installViewportWiring(e: Engine): void {
     }
   }
   e.viewport.onSelectionChange = refreshNudge;
+
+  // An extrude that just committed keeps its arrow on the far face until the user
+  // moves on, so the next pull edits it instead of needing a double-click.
+  function recentExtrudePlacement(): NudgePlacement | null {
+    const last = e.tools.extrude.lastCommit;
+    if (!last) return null;
+    const features = e.store.document.features;
+    const stillLast = features[features.length - 1]?.id === last.id
+      && e.store.rollbackIndex === features.length;
+    if (!stillLast || e.store.buildState.errorFeatureId === last.id) return null;
+    return {
+      anchor: last.top,
+      axis: () => last.dir,
+      grab: (x, y) => e.starters.grabExtrudeEdit(last.id, x, y),
+    };
+  }
+  const dropRecentExtrude = () => {
+    if (!e.tools.extrude.lastCommit || e.toolBusy()) return;
+    e.tools.extrude.lastCommit = null;
+    refreshNudge();
+  };
+  // Bubble phase: a press on the handle itself is stopped in capture by the nudge.
+  e.viewport.domElement.addEventListener("pointerdown", (ev) => {
+    if (ev.button === 0) dropRecentExtrude();
+  });
+  window.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape") dropRecentExtrude();
+  });
 
   // Profile selection has no change notification of its own, it lives on the
   // overlay, which tools clear directly (extrude's edit-mode cancel) and which

@@ -64,6 +64,7 @@ export function installDevGlobals(e: Engine): void {
     draft: e.tools.draft,
     thread: e.tools.thread,
     overlay: e.overlay,
+    nudge: e.nudge,
     toolBusy: () => e.toolBusy(),
     // The one formula every datum surface goes through: the drawn quad, "sketch
     // on this plane", and an offset plane's target. Exposed so a harness can ask

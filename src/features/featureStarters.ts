@@ -1320,6 +1320,14 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     extrude.start(extrudeDone, { grabAt: { x, y } });
   };
 
+  /** The handle left standing on an extrude that was just committed was pressed:
+   *  reopen that same feature already holding its arrow, so a second pull edits
+   *  it rather than stacking a new one. */
+  const grabExtrudeEdit = (id: string, x: number, y: number) => {
+    if (toolBusy()) return;
+    extrude.startEdit(id, extrudeDone, { grabAt: { x, y } });
+  };
+
   return {
     cancelPlanePick,
     startFillet,
@@ -1353,6 +1361,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     startPattern,
     startExtrude,
     grabRegionHandle,
+    grabExtrudeEdit,
     repickReference,
   };
 }

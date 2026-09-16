@@ -98,6 +98,11 @@ export class ExtrudeTool {
    *  (consumed sketches hide by default), main.ts's isSketchVisible honors it. */
   forcedSketchId: string | null = null;
 
+  /** Where the last commit's far face stands and which way it grew, so the
+   *  model view can keep a handle on it that reopens this extrude. The wiring
+   *  clears it once the user moves on. */
+  lastCommit: { id: string; top: THREE.Vector3; dir: THREE.Vector3 } | null = null;
+
   /** Fluent grab: the cursor's projection along the normal at the moment the
    *  passive handle was pressed. Null for every other entry, where the depth
    *  free-tracks the cursor's ABSOLUTE projection. Holding the button changes
@@ -212,7 +217,11 @@ export class ExtrudeTool {
    *  or Ctrl-click areas, then commit to REPLACE the feature in place (same id,
    *  one undo step). Returns false when the distance is a parameter expression
    *  (the value rows' job). */
-  startEdit(featureId: string, onDone: (id: string | null) => void): boolean {
+  startEdit(
+    featureId: string,
+    onDone: (id: string | null) => void,
+    opts?: { grabAt?: { x: number; y: number } },
+  ): boolean {
     if (this.active) return false;
     const f = asFeature(this.store.document.features.find((x) => x.id === featureId), "extrude");
     if (!f) return false;
@@ -264,6 +273,15 @@ export class ExtrudeTool {
     }
     if (this.selected.length) {
       this.beginDrag();
+      const first = this.selected[0];
+      if (opts?.grabAt && first) {
+        const { x, y } = opts.grabAt;
+        this.grabbing = true;
+        this.grabValue = this.distance;
+        this.downPos = { x, y };
+        this.grabProj = axisDragDistance(this.viewport, x, y, this.anchor(), first.plane.n);
+        this.viewport.domElement.style.cursor = "grabbing";
+      }
     } else {
       setPrompt("Its areas are gone, click a profile · Esc");
     }
@@ -958,6 +976,12 @@ export class ExtrudeTool {
     // the thing that was on screen. See buildFeature.
     const feature = this.buildFeature();
     const id = feature.id;
+    const dir = first.plane.n.clone().multiplyScalar(this.distance >= 0 ? 1 : -1);
+    this.lastCommit = {
+      id,
+      top: this.anchor().addScaledVector(dir, Math.abs(this.distance)),
+      dir,
+    };
     // Drop any live taper preview before the real write. A new extrude's floating
     // preview carries the same id, so building both at once would duplicate it;
     // an edit's preview is torn down by endEditPreview below instead.
