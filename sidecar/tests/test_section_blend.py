@@ -196,7 +196,14 @@ def test_a_blend_stops_at_the_face_its_edge_ends_on():
                         continue
                     assert not shape.is_inside(p), f"{extra}: blend hangs past the rim at {p}"
     assert abs(vols[0] - vols[1]) < 1.0, vols
-    print(PASS, "the fallback blend stops at the rim its edge ends on, like the kernel's")
+    # The leg reaches 12mm below the floor; a 14.65mm blend must stop at its end.
+    for extra in ({}, {"tangentEdges": False}):
+        f = {"id": "f", "type": "fillet", "radius": 14.65, "edges": edge, **extra}
+        _p, errors, bodies = rebuild({"parameters": {}, "features": feats + [f]})
+        assert not errors, errors
+        low = bodies[0]["shape"].bounding_box().min.Z
+        assert low > -12.001, f"{extra}: blend hangs below the leg, down to z={low}"
+    print(PASS, "the fallback blend stops at the rim its edge ends on and at the end of the leg")
 
 
 if __name__ == "__main__":
