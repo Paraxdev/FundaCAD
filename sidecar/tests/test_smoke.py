@@ -957,7 +957,7 @@ def test_fillet_failure_diagnostics():
     successful fillet emits no such diagnostic."""
     _s, base = _box(1, 20, 20, 2)  # thin plate: corners +-10, z=0..2
     # a top edge (y=+10, z=2, along X): its midpoint is (0, 10, 2)
-    fil = {"id": "fl", "type": "fillet", "radius": 5,  # 5mm into a 2mm wall -> impossible
+    fil = {"id": "fl", "type": "fillet", "radius": 1000,  # carves the whole plate away -> impossible
            "edges": {"kind": "edge", "by": "nearest", "point": [0, 10, 2]}}
     diag = []
     _p, err, bodies = rebuild({"parameters": {}, "features": base + [fil]}, diagnostics=diag)

@@ -141,6 +141,10 @@ from sketch_build import (  # noqa: F401
 )
 from blends import (  # noqa: F401
     SIZE_PROBE_BODY_FRACTION,
+    chord_radius,
+    native_fillet,
+    native_two_distance_chamfer,
+    section_fn,
     SIZE_PROBE_FRACTION,
     SMOOTH_EDGE_DEG,
     _blend_edges,
@@ -509,13 +513,25 @@ def _handle_fillet(f, ctx):
     r = ctx.val(f["radius"])
     # `profile`: -1 chamfer, 0 circular (the plain path), +1 sharp.
     p = clamp_profile(ctx.val(f["profile"])) if f.get("profile") is not None else 0.0
+    g2 = f.get("continuity") == "G2"
+    chord = f.get("sizeType") == "chord"
+    # OCCT rounds on along every tangent-continuous neighbour; only the section
+    # blend can stop at the picked edges.
+    only_picked = f.get("tangentEdges") is False
+
+    def radii(shape, es, size=r):
+        return [chord_radius(shape, e, size) if chord else size for e in es]
+
+    section = section_fn("fillet", r, continuity="G2" if g2 else "G1",
+                         sizes_of=radii if chord else None)
 
     def plain():
         _blend_edges(f, ctx, "Fillet",
-                     lambda s, es: fillet(es, radius=r),
-                     lambda s, e, size: fillet([e], radius=size), r)
+                     lambda s, es: native_fillet(s, es, radii(s, es)),
+                     lambda s, e, size: native_fillet(s, [e], radii(s, [e], size)), r,
+                     section=section, section_only=g2 or only_picked)
 
-    if abs(p) < PROFILE_EPS:
+    if g2 or only_picked or abs(p) < PROFILE_EPS:
         plain()
         return
     try:
@@ -550,9 +566,18 @@ def _note_profile_fallback(ctx, f):
 
 def _handle_chamfer(f, ctx):
     d = ctx.val(f["distance"])
+    d2 = ctx.val(f["distance2"]) if f.get("chamferType") == "twoDistance" and f.get("distance2") is not None else None
+
+    def native(s, es, size=d):
+        if d2 is None:
+            return chamfer(es, length=size)
+        return native_two_distance_chamfer(s, es, size, d2 * size / d)
+
     _blend_edges(f, ctx, "Chamfer",
-                 lambda s, es: chamfer(es, length=d),
-                 lambda s, e, size: chamfer([e], length=size), d)
+                 native,
+                 lambda s, e, size: native(s, [e], size), d,
+                 section=section_fn("chamfer", d, d2),
+                 section_only=f.get("tangentEdges") is False)
 
 
 def _handle_press_pull(f, ctx):

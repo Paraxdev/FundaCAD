@@ -50,11 +50,11 @@ def test_an_ambiguous_reference_reaches_the_wire_with_its_code():
 
 
 def test_a_too_large_fillet_is_not_a_reference_problem():
-    """CONTROL: a fillet radius larger than body2's 6mm faces is impossible, but
+    """CONTROL: a fillet radius that would carve all of body2 away is impossible, but
     it is not a reference the user can re-pick, so it must reach the wire with a
     size code and never a reference one. A reference code on this would send
     the frontend offering a re-pick that fixes nothing."""
-    _vols, errors = build({"id": "f1", "type": "fillet", "radius": 7.0,
+    _vols, errors = build({"id": "f1", "type": "fillet", "radius": 25.0,
                            "edges": [edge_sel(B1_CORNER, "body1"),
                                      edge_sel(B2_CORNER, "body2")]})
     assert errors, "precondition: the impossible fillet must fail"

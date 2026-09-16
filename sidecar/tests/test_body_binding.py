@@ -100,15 +100,15 @@ def test_fillet_spans_two_bodies_in_one_feature():
 
 
 def test_partial_failure_leaves_every_body_untouched():
-    """All-or-nothing: r=7 rounds body1's corner happily but is impossible on
-    body2, whose faces are only 6mm wide. body1 must NOT be left blended, a
+    """All-or-nothing: r=25 rounds body1's corner happily but would carve the
+    whole of body2, a 6mm box, away. body1 must NOT be left blended, a
     half-applied feature is a solid the user never asked for and cannot see."""
-    solo, solo_errors = build({"id": "f1", "type": "fillet", "radius": 7.0,
+    solo, solo_errors = build({"id": "f1", "type": "fillet", "radius": 25.0,
                                "edges": edge_sel(B1_CORNER, "body1")})
     assert solo_errors == [] and solo["body1"] < BASE["body1"], (
-        "precondition: r=7 must succeed on body1 alone", solo_errors
+        "precondition: r=25 must succeed on body1 alone", solo_errors
     )
-    vols, errors = build({"id": "f1", "type": "fillet", "radius": 7.0,
+    vols, errors = build({"id": "f1", "type": "fillet", "radius": 25.0,
                           "edges": [edge_sel(B1_CORNER, "body1"), edge_sel(B2_CORNER, "body2")]})
     assert errors, "an impossible fillet reported no error"
     assert "Body2" in errors[0]["message"], f"the error should name the failing body: {errors}"

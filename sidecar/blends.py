@@ -469,7 +469,7 @@ def _refuse_folded_blend(body, new_shape):
     )
 
 
-def _blend_edges(f, ctx, label, combined, one_edge_at, blend_size):
+def _blend_edges(f, ctx, label, combined, one_edge_at, blend_size, section=None, section_only=False):
     """Shared fillet/chamfer body: blend every selected edge, per owning body.
 
     `combined(shape, edges) -> shape` runs the kernel op on a whole group at
@@ -496,6 +496,9 @@ def _blend_edges(f, ctx, label, combined, one_edge_at, blend_size):
             raise ValueError(f"no edge found to {label.lower()} on {body['name']}")
         _refuse_seam_edges(body["shape"], edges, label)
         _refuse_smooth_edges(body["shape"], edges, label)
+        if section_only:
+            staged.append((body, _section_or_raise(label, body, edges, section)))
+            continue
         try:
             new_shape = combined(body["shape"], edges)
         except ConicNotApplicable:
@@ -515,6 +518,10 @@ def _blend_edges(f, ctx, label, combined, one_edge_at, blend_size):
                 body["shape"], edges, one_edge, blend_size, body["shape"]
             )
             if unresolved:
+                built = _try_section(body, edges, section)
+                if built is not None:
+                    staged.append((body, built))
+                    continue
                 # Hard no-silent-degradation rule: any edge we could not blend means
                 # the feature FAILS, never a partial solid, never a smaller radius.
                 # Paint exactly the offenders red, then re-raise the original error.
@@ -523,10 +530,53 @@ def _blend_edges(f, ctx, label, combined, one_edge_at, blend_size):
                 raise _blend_failure(
                     label, body, unresolved, one_edge_at, blend_size, combined_err
                 ) from combined_err
-        _refuse_folded_blend(body, new_shape)
+        try:
+            _refuse_folded_blend(body, new_shape)
+        except GeomError:
+            built = _try_section(body, edges, section)
+            if built is None:
+                raise
+            new_shape = built
         staged.append((body, new_shape))
     for body, shape in staged:
         body["shape"] = shape
+
+
+def _try_section(body, edges, section):
+    """The lofted-section blend (section_blend.py) for edges the kernel's own
+    blend refused, or None when there is none to try or it could not build."""
+    if section is None:
+        return None
+    try:
+        return section(body["shape"], edges)
+    except Exception:
+        return None
+
+
+def _section_or_raise(label, body, edges, section):
+    from section_blend import SectionBlendError
+
+    try:
+        return section(body["shape"], edges)
+    except SectionBlendError as err:
+        raise GeomError(f"{label} failed on {body['name']}: {err}") from err
+
+
+def section_fn(kind, size, size2=None, continuity="G1", sizes_of=None):
+    """`section` for _blend_edges: blend the whole group by lofted sections.
+    `sizes_of(shape, edges)` gives a size per edge where they differ."""
+    from section_blend import section_blend
+
+    def run(shape, edges):
+        sizes = sizes_of(shape, edges) if sizes_of else None
+        out = section_blend(shape.wrapped, [e.wrapped for e in edges], kind, size, size2,
+                            continuity, sizes)
+        wrapped = _wrap_topods(out)
+        if wrapped is None:
+            raise ValueError("the blend produced no usable solid")
+        return wrapped
+
+    return run
 
 
 def _conic_fillet(shape, edges, radius, profile):
@@ -541,3 +591,46 @@ def _conic_fillet(shape, edges, radius, profile):
     if wrapped is None:
         raise ValueError("Fillet: the conic profile produced no usable solid")
     return wrapped
+
+
+def chord_radius(shape, edge, chord):
+    """The radius whose arc spans `chord` between its two contact points on this
+    edge's corner: the arc turns through the angle between the face normals."""
+    ang = _edge_dihedral_deg(shape, edge)
+    if ang is None or ang < SMOOTH_EDGE_DEG:
+        return chord
+    return chord / (2.0 * math.sin(math.radians(ang) / 2.0))
+
+
+def native_fillet(shape, edges, radii):
+    """OCCT's own fillet with a radius per edge."""
+    from OCP.BRepFilletAPI import BRepFilletAPI_MakeFillet
+
+    mk = BRepFilletAPI_MakeFillet(shape.wrapped)
+    for e, r in zip(edges, radii):
+        mk.Add(float(r), e.wrapped)
+    mk.Build()
+    if not mk.IsDone():
+        raise ValueError("Failed creating a fillet, try a smaller value")
+    out = _wrap_topods(mk.Shape())
+    if out is None:
+        raise ValueError("Failed creating a fillet, try a smaller value")
+    return out
+
+
+def native_two_distance_chamfer(shape, edges, d1, d2):
+    """OCCT's chamfer with `d1` along the first face around each edge and `d2`
+    along the other, the same face order section_blend measures from."""
+    from OCP.BRepFilletAPI import BRepFilletAPI_MakeChamfer
+    from section_blend import _faces_of
+
+    mk = BRepFilletAPI_MakeChamfer(shape.wrapped)
+    for e in edges:
+        mk.Add(float(d1), float(d2), e.wrapped, _faces_of(shape.wrapped, e.wrapped)[0])
+    mk.Build()
+    if not mk.IsDone():
+        raise ValueError("Failed creating a chamfer, try a smaller length value(s)")
+    out = _wrap_topods(mk.Shape())
+    if out is None:
+        raise ValueError("Failed creating a chamfer, try a smaller length value(s)")
+    return out
