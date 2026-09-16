@@ -289,6 +289,11 @@ export class DimInput {
     this.toggleBtn?.classList.toggle("on", on);
   }
 
+  /** For a switch that steps through several states rather than two. */
+  setToggleLabel(label: string) {
+    if (this.toggleBtn) this.toggleBtn.textContent = label;
+  }
+
   /** Focus + select the first field. show() calls it; tools whose flow keeps
    *  clicking the canvas while the box stays open must call it again after each
    *  click (the click blurs the input, and typing would silently go nowhere). */

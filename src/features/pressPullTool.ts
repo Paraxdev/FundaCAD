@@ -12,8 +12,8 @@
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore } from "../document/store";
-import type { Feature, Selector } from "../types";
-import { DimInput } from "../sketch/dimInput";
+import type { Feature, PressPullMode, Selector } from "../types";
+import { DimInput, type DimToggleDef } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
 import { snap } from "../ui/units";
 import {
@@ -54,6 +54,9 @@ type Phase = "pick" | "drag";
 
 const Y_AXIS = HANDLE_UP;
 
+const MODES: PressPullMode[] = ["auto", "join", "cut", "new", "intersect"];
+const MODE_LABEL: Record<PressPullMode, string> = { auto: "Auto", join: "Join", cut: "Cut", new: "New", intersect: "Intersect" };
+
 export class PressPullTool {
   active = false;
   private phase: Phase = "pick";
@@ -70,6 +73,7 @@ export class PressPullTool {
    *  rather than moving it, `value` is the radial delta, and the readout speaks
    *  diameters. Null for every other face, where nothing changes. */
   private round: RoundFace | null = null;
+  private mode: PressPullMode = "auto";
   private previewId = ""; // id shared by the live preview and the committed feature
 
   private gizmo: THREE.Group | null = null;
@@ -324,7 +328,8 @@ export class PressPullTool {
         this.pickingTarget = false;
         // restore the distance field T-mode hid (audit bug #2: leaving it
         // active let Enter commit a plain distance mid-target-pick)
-        this.dim.show([{ name: "distance", label: "D", kind: "length" }], () => this.commit(), () => this.cancel());
+        this.dim.show([{ name: "distance", label: "D", kind: "length" }], () => this.commit(), () => this.cancel(),
+          this.round ? undefined : this.modeToggle());
         this.dim.updateFromCursor({ distance: Math.abs(this.value) });
         setPrompt("Drag or type a value · click a face to stop at it · click to commit · Esc");
         return;
@@ -358,11 +363,13 @@ export class PressPullTool {
     this.buildGizmo();
     // The ∠ taper field rides beside the distance for a PLANAR push, the only one
     // that leans a wall. A round resize has no wall to lean, so it is left off.
+    this.mode = "auto";
     this.dim.show(
       round
         ? [{ name: "distance", label: "D", kind: "length" }]
         : [{ name: "distance", label: "D", kind: "length" }, { name: "taper", label: "Angle", icon: "angle", kind: "angle" }],
       () => this.commit(), () => this.cancel(),
+      round ? undefined : this.modeToggle(),
     );
     if (!round) this.dim.updateFromCursor({ taper: 0 });
     const s = this.viewport.projectToScreen(this.anchor);
@@ -445,8 +452,9 @@ export class PressPullTool {
     this.syncPeek();
     // A leaning wall is not a prism, and the instant ghost cannot draw one, so a
     // tapered push previews the EXACT solid through the sidecar, the way the
-    // extrude tool does. Straight pushes keep the instant ghost.
-    if (this.canTaper() && Math.abs(this.taper) >= 0.05) {
+    // extrude tool does. So does a push with an explicit operation, whose effect on
+    // the bodies it reaches no ghost can show. Plain straight pushes keep the ghost.
+    if ((this.canTaper() && Math.abs(this.taper) >= 0.05) || (this.mode !== "auto" && !this.round)) {
       this.viewport.clearPressPullGhost();
       this.store.setPreview(this.buildFeature());
       this.taperPreviewOn = true;
@@ -536,6 +544,20 @@ export class PressPullTool {
     this.taperArc = null;
   }
 
+  private modeToggle(): DimToggleDef {
+    return {
+      label: MODE_LABEL[this.mode],
+      title: "Auto grows or shrinks the face; Join, Cut, New body and Intersect extrude it and combine with any body it reaches",
+      initial: this.mode !== "auto",
+      onChange: () => {
+        this.mode = MODES[(MODES.indexOf(this.mode) + 1) % MODES.length] ?? "auto";
+        this.dim.setToggle(this.mode !== "auto");
+        this.dim.setToggleLabel(MODE_LABEL[this.mode]);
+        this.refreshPreview();
+      },
+    };
+  }
+
   private buildFeature(): Feature {
     const face = this.faces.length === 1 ? (this.faces[0] ?? this.faces) : this.faces;
     // A round face dragged past the smallest size the kernel will build is a
@@ -559,6 +581,7 @@ export class PressPullTool {
       face,
       distance: v,
       operation: v >= 0 ? "join" : "cut",
+      ...(this.mode !== "auto" && !this.round ? { mode: this.mode } : {}),
       ...(this.bodyId != null ? { body: this.bodyId } : {}),
       ...(this.upTo ? { upTo: this.upTo } : {}),
       // Taper rides a planar by-distance push only; the sidecar ignores it on a

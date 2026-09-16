@@ -26,6 +26,7 @@
 //   * anything derived from another field. press-pull's `operation` is read off
 //     the SIGN of its distance by the builder, so a dropdown offering "join" on
 //     a negative distance would be offering a state the rebuild cannot produce.
+//     Its explicit choice is `mode` instead.
 //   * references to geometry, `faces`, `edges`, `sketch`, `body`. Those are
 //     selections, and picking one is a viewport gesture, not a menu.
 //   * `plane` on a sketch or a datum, which is a PlaneSpec: a string for the
@@ -147,6 +148,11 @@ export const FEATURE_CHOICE_FIELDS: Partial<Record<FeatureType, ChoiceField[]>> 
   draft: [{ field: "axis", label: "Pull axis", options: AXES, fallback: "Z" }],
   patternLinear: [{ field: "axis", label: "Direction", options: AXES, fallback: "X" }],
   patternCircular: [{ field: "axis", label: "Axis", options: AXES, fallback: "Z" }],
+  "press-pull": [{
+    field: "mode", label: "Operation", fallback: "auto",
+    options: [{ value: "auto", label: "Auto" }, ...BOOLEAN_OPS],
+    title: "Auto grows or shrinks the face by the sign of the distance; the others extrude it and combine like an extrude",
+  }],
   fillet: [
     {
       field: "sizeType", label: "Size Type", fallback: "radius",

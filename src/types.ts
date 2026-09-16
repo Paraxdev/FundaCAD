@@ -288,6 +288,8 @@ export interface MateConnector {
   xdir?: Vec3;
 }
 
+export type PressPullMode = "auto" | "join" | "cut" | "new" | "intersect";
+
 export type CoreFeature =
   // `planeId` (a datum) or `face` (a body face, touched at `at`) make the sketch follow;
   // `plane` stays as the resolved cache. An id in `plane` itself would render as XY.
@@ -318,7 +320,9 @@ export type CoreFeature =
   | { id: string; type: "chamfer"; edges: Selector | Selector[]; distance: Num; chamferType?: "equal" | "twoDistance"; distance2?: Num; tangentEdges?: boolean }
   // Signed `distance` along each face's normal, or `upTo` a face. Curved faces offset
   // the surface. `taper` applies to planar pushes by distance only.
-  | { id: string; type: "press-pull"; face: Selector | Selector[]; distance: Num; operation: "join" | "cut"; body?: string; upTo?: Selector; taper?: Num }
+  // `mode` other than auto extrudes the face straight out and combines it like an
+  // extrude; auto leaves `operation` to the sign of `distance`.
+  | { id: string; type: "press-pull"; face: Selector | Selector[]; distance: Num; operation: "join" | "cut"; body?: string; upTo?: Selector; taper?: Num; mode?: PressPullMode }
   | { id: string; type: "deleteFace"; face: Selector | Selector[]; body?: string }
   | { id: string; type: "mirror"; plane: Plane3 }
   // `operation` defaults to "new". `regions` are the areas to spin, as for extrude.
