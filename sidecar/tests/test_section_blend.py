@@ -17,6 +17,7 @@ Run: uv run python tests/test_section_blend.py
 import _bootstrap  # noqa: F401  (puts sidecar/ on sys.path)
 
 import sys
+import time
 import traceback
 
 from build123d import Align, Box, Cylinder, GeomType, Vector
@@ -69,7 +70,17 @@ def test_a_radius_past_the_faces_carves_through():
         raise AssertionError("a blend that removes the whole body must refuse")
     except SectionBlendError as err:
         assert "whole body" in str(err), err
-    print(PASS, "15mm on a 20mm cube builds, 1000mm refuses as removing the body")
+    ring = Cylinder(50, 30) - Cylinder(40, 30).translate((0, 0, 10))
+    floor = min((e for e in ring.edges() if e.geom_type == GeomType.CIRCLE and abs(e.radius - 40) < 1e-6),
+                key=lambda e: e.center().Z)
+    started = time.time()
+    try:
+        _blend(ring, [floor], kind="fillet", size=40)
+        raise AssertionError("a pocket floor blend as wide as the pocket must refuse")
+    except SectionBlendError as err:
+        assert "tighter than the edge" in str(err), err
+    assert time.time() - started < 5, "the refusal has to come before the boolean, which grinds for a minute"
+    print(PASS, "15mm on a 20mm cube builds, 1000mm refuses as removing the body, a pocket-wide one fast")
 
 
 LEG = [
@@ -102,7 +113,15 @@ def test_the_junction_beside_a_seam_now_rounds():
     errors, bodies = _fillet()
     assert not errors, errors
     assert bodies[0]["shape"].volume > shape.volume, "a concave fillet adds material"
-    print(PASS, "the leg junction the kernel refuses at every size rounds")
+    assert bodies[0]["shape"].is_valid, "the kernel's fillet reports success on an invalid solid here"
+    both = LEG + [
+        {"id": "f1", "type": "fillet", "radius": 2.0, "edges": {"kind": "edge", "by": "nearest", "point": SEAM_SIDE}},
+        {"id": "f2", "type": "fillet", "radius": 2.0, "continuity": "G2",
+         "edges": {"kind": "edge", "by": "nearest", "point": [-4.242, -49.82, 10.0]}},
+    ]
+    _p, errors, bodies = rebuild({"parameters": {}, "features": both})
+    assert not errors and bodies[0]["shape"].is_valid, errors
+    print(PASS, "the leg junction the kernel refuses at every size rounds, and the next one after it")
 
 
 def test_feature_options_reach_the_build():

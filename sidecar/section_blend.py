@@ -218,10 +218,8 @@ def _section(P, T, sides, s, kind, size, size2, continuity):
         normals = [n1, n2]
         curve = GC_MakeSegment(Q[1], Q[0]).Value()
     else:
-        r = size
-        if continuity == "G2":
-            r = size * G2_SETBACK
-        _, feet, normals = _ball(P, T, sides, (n1, n2), s, r)
+        r = size * G2_SETBACK if continuity == "G2" else size
+        C, feet, normals = _ball(P, T, sides, (n1, n2), s, r)
         Q = [_p(feet[0]), _p(feet[1])]
         if continuity == "G2":
             K = _corner(Q[0], Q[1], normals[0], normals[1], P)
@@ -233,7 +231,6 @@ def _section(P, T, sides, s, kind, size, size2, continuity):
             poles.SetValue(5, Q[0])
             curve = Geom_BezierCurve(poles)
         else:
-            C, _, _ = _ball(P, T, sides, (n1, n2), s, size)
             toward = _v(P) - C
             if toward.Magnitude() < 1e-12:
                 raise SectionBlendError("the blend centre sits on the edge")
@@ -244,7 +241,8 @@ def _section(P, T, sides, s, kind, size, size2, continuity):
     A1 = _p(_v(Q[0]) + normals[0].Multiplied(s * e))
     A2 = _p(_v(Q[1]) + normals[1].Multiplied(s * e))
     K = _p(_v(P) + m.Multiplied(s * e))
-    return _wire([Q[0], A1, K, A2, Q[1]], curve)
+    inner = (_v(Q[0]) + _v(Q[1])).Multiplied(0.5) if kind == "chamfer" else C
+    return _wire([Q[0], A1, K, A2, Q[1]], curve), inner
 
 
 def _convexity(P, T, sides, n1, n2, tol):
@@ -290,13 +288,21 @@ def _edge_tool(shape, edge, kind, size, size2, continuity, tol):
         ts = [t0 + (t1 - t0) * k / n for k in range(n + 1)]
 
     wires = []
+    prev = None
     for t in ts:
         P, T, n1, n2 = frame(t)
         sides[0].normal_on_edge_cached = n1
         sides[1].normal_on_edge_cached = n2
         if kind == "chamfer":
             _convexity(P, T, sides, n1, n2, tol)
-        wires.append(_section(P, T, sides, s, kind, size, size2, continuity))
+        wire, inner = _section(P, T, sides, s, kind, size, size2, continuity)
+        # Past the edge's own curvature on the inside of a bend, the blend's
+        # centre line stops and runs backwards; the loft would cross itself and
+        # the boolean can grind for a minute before failing.
+        if prev is not None and (inner - prev[0]).Dot(prev[1]) <= 1e-3 * P.Distance(prev[2]):
+            raise SectionBlendError("at this size the blend is tighter than the edge's own curve")
+        prev = (inner, T, P)
+        wires.append(wire)
 
     def loft(ws):
         mk = BRepOffsetAPI_ThruSections(True, len(ws) == 2, 1e-6)

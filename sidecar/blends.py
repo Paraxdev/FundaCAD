@@ -604,13 +604,16 @@ def chord_radius(shape, edge, chord):
 
 def native_fillet(shape, edges, radii):
     """OCCT's own fillet with a radius per edge."""
+    from OCP.BRepCheck import BRepCheck_Analyzer
     from OCP.BRepFilletAPI import BRepFilletAPI_MakeFillet
 
     mk = BRepFilletAPI_MakeFillet(shape.wrapped)
     for e, r in zip(edges, radii):
         mk.Add(float(r), e.wrapped)
     mk.Build()
-    if not mk.IsDone():
+    # IsDone alone is not enough: OCCT reports success on fillets that come back
+    # as invalid solids, which build123d's own fillet() also has to check for.
+    if not mk.IsDone() or not BRepCheck_Analyzer(mk.Shape()).IsValid():
         raise ValueError("Failed creating a fillet, try a smaller value")
     out = _wrap_topods(mk.Shape())
     if out is None:
@@ -621,6 +624,7 @@ def native_fillet(shape, edges, radii):
 def native_two_distance_chamfer(shape, edges, d1, d2):
     """OCCT's chamfer with `d1` along the first face around each edge and `d2`
     along the other, the same face order section_blend measures from."""
+    from OCP.BRepCheck import BRepCheck_Analyzer
     from OCP.BRepFilletAPI import BRepFilletAPI_MakeChamfer
     from section_blend import _faces_of
 
@@ -628,7 +632,7 @@ def native_two_distance_chamfer(shape, edges, d1, d2):
     for e in edges:
         mk.Add(float(d1), float(d2), e.wrapped, _faces_of(shape.wrapped, e.wrapped)[0])
     mk.Build()
-    if not mk.IsDone():
+    if not mk.IsDone() or not BRepCheck_Analyzer(mk.Shape()).IsValid():
         raise ValueError("Failed creating a chamfer, try a smaller length value(s)")
     out = _wrap_topods(mk.Shape())
     if out is None:
