@@ -26,7 +26,7 @@ export const FEATURE_NUM_FIELDS: Partial<Record<Feature["type"], [string, string
   // real-valued unitless fields (see scale.factor, texture.sharpness), not an
   // integer claim; INTEGER_FIELDS below is what marks those.
   fillet: [["radius", "Radius", "length"], ["profile", "Profile", "count"]],
-  chamfer: [["distance", "Length", "length"]],
+  chamfer: [["distance", "Distance", "length"], ["distance2", "Distance 2", "length"]],
   "press-pull": [["distance", "Distance", "length"], ["taper", "Taper", "angle"]],
   // Pitch is how far one full turn climbs, not how far the whole revolve does,
   // so a thread's pitch is typed straight off its spec and stays right however

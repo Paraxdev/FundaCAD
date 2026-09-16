@@ -190,6 +190,9 @@ describe("FeatureProperties", () => {
       // What the fillet is applied to leads: it is the other half of the
       // feature, and the half that used to be invisible once committed.
       ["Edges", "", "nothing selected"],
+      ["Size Type", "", "radius"],
+      ["Continuity", "", "G1"],
+      ["Include Tangent Edges", "", "true"],
       ["Radius", "mm", "2"],
       ["Profile", "", "0.5"],
     ]);

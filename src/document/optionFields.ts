@@ -147,6 +147,22 @@ export const FEATURE_CHOICE_FIELDS: Partial<Record<FeatureType, ChoiceField[]>> 
   draft: [{ field: "axis", label: "Pull axis", options: AXES, fallback: "Z" }],
   patternLinear: [{ field: "axis", label: "Direction", options: AXES, fallback: "X" }],
   patternCircular: [{ field: "axis", label: "Axis", options: AXES, fallback: "Z" }],
+  fillet: [
+    {
+      field: "sizeType", label: "Size Type", fallback: "radius",
+      options: [{ value: "radius", label: "Radius" }, { value: "chord", label: "Chord Length" }],
+      title: "Chord Length sizes the round by the width across it rather than its radius",
+    },
+    {
+      field: "continuity", label: "Continuity", fallback: "G1",
+      options: [{ value: "G1", label: "G1" }, { value: "G2", label: "G2" }],
+      title: "G1 is a circular round; G2 eases into the faces with no jump in curvature",
+    },
+  ],
+  chamfer: [{
+    field: "chamferType", label: "Type", fallback: "equal",
+    options: [{ value: "equal", label: "Equal Distance" }, { value: "twoDistance", label: "Two-Distance" }],
+  }],
 };
 
 export const FEATURE_TOGGLE_FIELDS: Partial<Record<FeatureType, ToggleField[]>> = {
@@ -161,6 +177,8 @@ export const FEATURE_TOGGLE_FIELDS: Partial<Record<FeatureType, ToggleField[]>> 
   // direction that a saved feature could not previously be talked out of.
   extrude: [{ field: "symmetric", label: "Symmetric", fallback: false }],
   thicken: [{ field: "symmetric", label: "Symmetric", fallback: false }],
+  fillet: [{ field: "tangentEdges", label: "Include Tangent Edges", fallback: true }],
+  chamfer: [{ field: "tangentEdges", label: "Include Tangent Edges", fallback: true }],
 };
 
 /** Does this field mean anything, given what the feature's other fields say?
@@ -182,6 +200,8 @@ export function fieldApplies(
   field: string,
   values: Record<string, unknown>,
 ): boolean {
+  if (type === "chamfer" && field === "distance2") return values.chamferType === "twoDistance";
+  if (type === "fillet" && field === "profile") return values.continuity !== "G2";
   return contributedFeature(type)?.fieldApplies?.(field, values) ?? true;
 }
 
@@ -192,6 +212,7 @@ export function fieldLabel(
   field: string,
   values: Record<string, unknown>,
 ): { text: string; title?: string } | null {
+  if (type === "fillet" && field === "radius" && values.sizeType === "chord") return { text: "Chord Length" };
   return contributedFeature(type)?.fieldLabel?.(field, values) ?? null;
 }
 

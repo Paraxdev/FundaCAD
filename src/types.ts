@@ -312,8 +312,10 @@ export type CoreFeature =
       taper?: Num;
     }
   // `profile`: -1 chamfer, 0 circular, +1 sharp corner.
-  | { id: string; type: "fillet"; edges: Selector | Selector[]; radius: Num; profile?: Num }
-  | { id: string; type: "chamfer"; edges: Selector | Selector[]; distance: Num }
+  // `sizeType` "chord" reads `radius` as the width across the round. `tangentEdges`
+  // false stops at the picked edges instead of running on along tangent ones.
+  | { id: string; type: "fillet"; edges: Selector | Selector[]; radius: Num; profile?: Num; sizeType?: "radius" | "chord"; continuity?: "G1" | "G2"; tangentEdges?: boolean }
+  | { id: string; type: "chamfer"; edges: Selector | Selector[]; distance: Num; chamferType?: "equal" | "twoDistance"; distance2?: Num; tangentEdges?: boolean }
   // Signed `distance` along each face's normal, or `upTo` a face. Curved faces offset
   // the surface. `taper` applies to planar pushes by distance only.
   | { id: string; type: "press-pull"; face: Selector | Selector[]; distance: Num; operation: "join" | "cut"; body?: string; upTo?: Selector; taper?: Num }

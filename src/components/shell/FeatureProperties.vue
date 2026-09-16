@@ -217,7 +217,12 @@ const toggleRows = useDocValue((doc) => {
 });
 
 function setOption(field: string, value: string | boolean) {
-  store.updateFeature(props.featureId, { [field]: value } as unknown as Partial<Feature>);
+  const patch: Record<string, unknown> = { [field]: value };
+  const f = store.document.features.find((x) => x.id === props.featureId);
+  if (f?.type === "chamfer" && field === "chamferType" && value === "twoDistance" && f.distance2 == null) {
+    patch.distance2 = f.distance;
+  }
+  store.updateFeature(props.featureId, patch as unknown as Partial<Feature>);
 }
 
 const featureRows = useDocValue((doc) => {
