@@ -83,6 +83,8 @@ const near = (a, b, tol) => Number.isFinite(a) && Math.abs(a - b) <= tol;
     });
     let at = await centre();
     check("choosing the tool starts the pattern centred on the selection", !!at && near(at.cx, 30, 0.001) && near(at.cy, 0, 0.001), JSON.stringify(at));
+    const hud = await page.evaluate(() => [...document.querySelectorAll(".dim-input input")].map((i) => i.value));
+    check("the HUD opens on the defaults, not blank fields", hud.length >= 2 && hud[0] === "6" && hud[1] !== "", JSON.stringify(hud));
     await page.screenshot({ path: path.join(OUT, "00_started_on_selection.png") });
 
     const from = await scr(30, 0);

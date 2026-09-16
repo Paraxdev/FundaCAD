@@ -145,7 +145,7 @@ export class PatternFlow {
     this.sweep = null;
     this.centreDrag = false;
     this.pendingPattern = this.defaultPattern("patternCircular", this.patternCenter);
-    this.host.dim().show(this.patternDimDefs("patternCircular"), () => this.commit());
+    this.showHud(this.pendingPattern);
     this.placeHudAtCentre();
     setPrompt("Drag the centre dot to move it · move to sweep · click to commit · Esc");
     this.syncDot();
@@ -168,6 +168,19 @@ export class PatternFlow {
     if (!this.centreDrag) return false;
     this.centreDrag = false;
     return true;
+  }
+
+  /** The HUD opened on the pattern's current values, so a fresh placement reads
+   *  its defaults instead of blank fields the user has to guess at. */
+  private showHud(pat: SketchPattern) {
+    const cur: Record<string, number> = {};
+    const vals = pat as unknown as Record<string, unknown>;
+    for (const d of this.patternDimDefs(pat.type)) {
+      const v = vals[d.name];
+      if (typeof v === "number") cur[d.name] = v;
+    }
+    this.host.dim().show(this.patternDimDefs(pat.type), () => this.commit());
+    this.host.dim().updateFromCursor(cur);
   }
 
   private syncDot() {
@@ -194,7 +207,7 @@ export class PatternFlow {
       this.patternCenter = p.clone();
       this.sweep = null;
       this.pendingPattern = this.defaultPattern(this.host.tool(), p);
-      this.host.dim().show(this.patternDimDefs(this.pendingPattern.type), () => this.commit());
+      this.showHud(this.pendingPattern);
       this.syncDot();
       this.placeHudAtCentre();
       this.host.refreshActive();
@@ -339,14 +352,7 @@ export class PatternFlow {
     );
     this.centreDrag = false;
     this.host.setActiveTool(pat.type);
-    const cur: Record<string, number> = {};
-    const vals = pat as unknown as Record<string, number>;
-    for (const d of this.patternDimDefs(pat.type)) {
-      const v = vals[d.name];
-      if (v !== undefined) cur[d.name] = v;
-    }
-    this.host.dim().show(this.patternDimDefs(pat.type), () => this.commit());
-    this.host.dim().updateFromCursor(cur);
+    this.showHud(pat);
     setPrompt("Drag or type to change · click to commit · Delete removes · Esc");
     this.syncDot();
     this.placeHudAtCentre();
