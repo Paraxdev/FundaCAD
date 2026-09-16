@@ -136,6 +136,11 @@ export class EdgeFeatureTool {
   /** Section shape in (-1, 1); 0 is the plain circular fillet. Survives a Tab to
    *  chamfer and back, so flipping to compare does not silently discard it. */
   private profile = 0;
+  /** Options the drag does not set, kept from the feature being edited so a
+   *  re-edit does not quietly reset them. */
+  private options: Record<string, unknown> = {};
+  private optionsKind: Kind | null = null;
+  private continuity: "G1" | "G2" = "G1";
   private draggingArc = false;
   private hovering = false;
   private grabbing = false;
@@ -420,6 +425,11 @@ export class EdgeFeatureTool {
     this.signed = value;
     this.profile =
       f.type === "fillet" && typeof f.profile === "number" ? clampProfile(f.profile) : 0;
+    this.continuity = f.type === "fillet" && f.continuity === "G2" ? "G2" : "G1";
+    this.options = f.type === "fillet"
+      ? { sizeType: f.sizeType, tangentEdges: f.tangentEdges }
+      : { chamferType: f.chamferType, distance2: f.distance2, tangentEdges: f.tangentEdges };
+    this.optionsKind = f.type;
     this.unmatchedSels = [];
     this.awaitingRollback = true;
 
@@ -652,7 +662,18 @@ export class EdgeFeatureTool {
    *  place to do it. `keepTyped` locks the value in as the user's own rather
    *  than letting the drag track over it. */
   private mountInput(keepTyped = false) {
-    this.dim.show([{ ...this.field, kind: "length" }], () => this.commit(), () => this.cancel());
+    this.dim.show([{ ...this.field, kind: "length" }], () => this.commit(), () => this.cancel(),
+      this.kind === "fillet"
+        ? {
+            label: "G2",
+            title: "Ease into the faces with no jump in curvature, instead of a circular round",
+            initial: this.continuity === "G2",
+            onChange: (on) => {
+              this.continuity = on ? "G2" : "G1";
+              this.pushPreview();
+            },
+          }
+        : undefined);
     this.dim.showOwnProblem(this.refusalShown);
     if (keepTyped) this.dim.seed(this.field.name, this.value);
     else this.dim.updateFromCursor({ [this.field.name]: this.value });
@@ -1195,18 +1216,24 @@ export class EdgeFeatureTool {
     const v = this.size();
     const sels = this.currentSelectors();
     const edges = sels.length === 1 && sels[0] ? sels[0] : sels;
-    if (this.kind !== "fillet") return { id: this.previewId, type: "chamfer", edges, distance: v };
+    const kept = this.optionsKind === this.kind
+      ? Object.fromEntries(Object.entries(this.options).filter(([, x]) => x !== undefined))
+      : {};
+    if (this.kind !== "fillet") return { id: this.previewId, type: "chamfer", edges, distance: v, ...kept };
+    const g2 = this.continuity === "G2" ? { continuity: "G2" as const } : {};
     // Omit the field entirely at 0 rather than storing it: a plain fillet must
     // stay a plain fillet in the document, so it keeps routing to the kernel's
     // own filleter instead of through the reweighting path.
     return isPlainProfile(this.profile)
-      ? { id: this.previewId, type: "fillet", edges, radius: v }
+      ? { id: this.previewId, type: "fillet", edges, radius: v, ...kept, ...g2 }
       : {
           id: this.previewId,
           type: "fillet",
           edges,
           radius: v,
           profile: Math.round(this.profile * 1000) / 1000,
+          ...kept,
+          ...g2,
         };
   }
 
@@ -1269,6 +1296,9 @@ export class EdgeFeatureTool {
     this.dim.hide();
     this.arc.hide();
     this.profile = 0;
+    this.options = {};
+    this.optionsKind = null;
+    this.continuity = "G1";
     this.draggingArc = false;
     this.disposeGizmo();
     this.disposeGhosts();
