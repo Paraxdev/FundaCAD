@@ -196,18 +196,20 @@ def test_a_blend_past_its_faces_is_coded_as_too_large():
     refusal coded blendTooLarge may say "too large" to the person dragging.
 
     The pocket's floor is 40 across from the edge to the centre and its wall 40
-    high, so 39.9 is the last radius that fits. CONTROL: 39.9 builds with no
-    error at all, so the code on 40 is about the radius and nothing else."""
+    high, so 40 is the last radius that fits: the floor becomes a bowl. CONTROL:
+    39.9 and 40 build with no error at all, so the code on 41 is about the
+    radius and nothing else."""
     from builder import rebuild
     from errors import BLEND_TOO_LARGE
 
-    _part, errors, _bodies = rebuild(_pocket_doc(39.9))
-    assert errors == [], errors
-    for radius in (40.0, 41.0):
+    for radius in (39.9, 40.0):
+        _part, errors, _bodies = rebuild(_pocket_doc(radius))
+        assert errors == [], errors
+    for radius in (41.0, 45.0):
         _part, errors, _bodies = rebuild(_pocket_doc(radius))
         assert errors and errors[0]["feature_id"] == "f1", errors
         assert errors[0]["code"] == BLEND_TOO_LARGE, errors[0]
-    print("pocket floor edge: 39.9 builds, 40 and 41 refused as blendTooLarge OK")
+    print("pocket floor edge: 39.9 and 40 build, 41 and 45 refused as blendTooLarge OK")
 
 
 def test_refusals_that_no_size_fixes_carry_their_own_codes():

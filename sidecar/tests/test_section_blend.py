@@ -74,14 +74,19 @@ def test_a_radius_past_the_faces_carves_through():
     ring = Cylinder(50, 30) - Cylinder(40, 30).translate((0, 0, 10))
     floor = min((e for e in ring.edges() if e.geom_type == GeomType.CIRCLE and abs(e.radius - 40) < 1e-6),
                 key=lambda e: e.center().Z)
+    # As wide as the pocket, the floor rounds into a bowl: a ball of 40 centred
+    # 40 above the floor, filling the pocket below it.
+    bowl = _blend(ring, [floor], kind="fillet", size=40)
+    added = sum(math.pi * (40 ** 2 - max(0.0, 40 ** 2 - (10 + (i + 0.5) * 0.01 - 50) ** 2)) * 0.01 for i in range(2000))
+    assert bowl.is_valid and abs(bowl.volume - ring.volume - added) < 0.002 * added, (bowl.volume - ring.volume, added)
     started = time.time()
     try:
-        _blend(ring, [floor], kind="fillet", size=40)
-        raise AssertionError("a pocket floor blend as wide as the pocket must refuse")
+        _blend(ring, [floor], kind="fillet", size=45)
+        raise AssertionError("a pocket floor blend wider than the pocket must refuse")
     except SectionBlendError as err:
         assert "tighter than the edge" in str(err), err
     assert time.time() - started < 5, "the refusal has to come before the boolean, which grinds for a minute"
-    print(PASS, "15mm on a 20mm cube builds, 1000mm refuses as removing the body, a pocket-wide one fast")
+    print(PASS, "15mm on a 20mm cube builds, 1000mm refuses, a pocket-wide one is a bowl, a wider one refuses fast")
 
 
 LEG = [
@@ -240,6 +245,98 @@ def test_a_chamfer_where_its_edge_ends_on_the_rim():
     print(PASS, "a chamfer on the leg's rim-ending arc grows with its size, up to past the leg's end")
 
 
+def _cube(size=20):
+    return [{"id": "s", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": size, "height": size, "x": 0, "y": 0}]},
+            {"id": "e", "type": "extrude", "sketch": "s", "distance": size, "operation": "new"}]
+
+
+def _edges_at(*points):
+    return [{"kind": "edge", "by": "nearest", "point": list(p)} for p in points]
+
+
+CUBE_EDGES = _edges_at((0, 10, 20), (0, -10, 20), (10, 0, 20), (-10, 0, 20), (0, 10, 0), (0, -10, 0),
+                       (10, 0, 0), (-10, 0, 0), (10, 10, 10), (-10, 10, 10), (10, -10, 10), (-10, -10, 10))
+
+
+def test_every_edge_rounded_meets_in_a_ball():
+    """Past what the kernel builds, each edge's blend used to end square and the
+    three at a corner met in the sharp intersection of their cylinders."""
+    def rounded_cube(a, r):
+        s = a - 2 * r
+        return s ** 3 + 6 * s * s * r + 3 * math.pi * r * r * s + 4 / 3 * math.pi * r ** 3
+
+    for r in (9.9, 10.0):
+        _p, errors, bodies = rebuild({"parameters": {}, "features": _cube() + [
+            {"id": "f", "type": "fillet", "radius": r, "edges": CUBE_EDGES}]})
+        assert not errors, errors
+        shape = bodies[0]["shape"]
+        assert shape.is_valid and abs(shape.volume - rounded_cube(20, r)) < 0.5, (r, shape.volume, rounded_cube(20, r))
+    _p, errors, bodies = rebuild({"parameters": {}, "features": _cube() + [
+        {"id": "f", "type": "fillet", "radius": 12.0, "edges": CUBE_EDGES}]})
+    assert not errors and bodies[0]["shape"].is_valid, errors
+    print(PASS, "a 20mm cube rounded on every edge at 9.9 is a rounded cube, at 10 a sphere, at 12 still builds")
+
+
+def test_a_rim_rounded_by_its_own_radius_is_a_dome():
+    cyl = [{"id": "s", "type": "sketch", "plane": "XY", "entities": [{"type": "circle", "id": "c", "x": 0, "y": 0, "radius": 10}]},
+           {"id": "e", "type": "extrude", "sketch": "s", "distance": 20, "operation": "new"}]
+    rim = _edges_at((0, 0, 20))
+    _p, errors, bodies = rebuild({"parameters": {}, "features": cyl + [{"id": "f", "type": "fillet", "radius": 10.0, "edges": rim}]})
+    assert not errors, errors
+    assert abs(bodies[0]["shape"].volume - (math.pi * 100 * 10 + 2 / 3 * math.pi * 1000)) < 0.5, bodies[0]["shape"].volume
+    _p, errors, bodies = rebuild({"parameters": {}, "features": cyl + [{"id": "f", "type": "chamfer", "distance": 10.0, "edges": rim}]})
+    assert not errors, errors
+    assert abs(bodies[0]["shape"].volume - (math.pi * 100 * 10 + math.pi * 1000 / 3)) < 0.5, bodies[0]["shape"].volume
+    print(PASS, "a radius 10 rim filleted 10 is a dome and chamfered 10 a cone")
+
+
+def test_the_kernels_failed_attempts_leave_the_body_alone():
+    """A failed kernel fillet raised the tolerances of the edges it touched on
+    the body itself, from 0.07mm to 12.7mm on the user's part, and the section
+    fallback after it then made an invalid solid at every size. That part is an
+    imported STEP; a failing attempt that does the same stands in for it here."""
+    from OCP.BRep import BRep_Builder, BRep_Tool
+    from OCP.TopAbs import TopAbs_EDGE
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+    import blends
+    import builder
+
+    def max_tol(shape):
+        m, ex = 0.0, TopExp_Explorer(shape.wrapped, TopAbs_EDGE)
+        while ex.More():
+            m = max(m, BRep_Tool.Tolerance_s(TopoDS.Edge_s(ex.Current())))
+            ex.Next()
+        return m
+
+    def poisoning(shape, edges, radii):
+        for e in edges:
+            BRep_Builder().UpdateEdge(e.wrapped, 12.7)
+        raise ValueError("Failed creating a fillet, try a smaller value")
+
+    seen = []
+    real_try = blends._try_section
+    real_native = builder.native_fillet
+
+    def spy(body, edges, section):
+        seen.append(max_tol(body["shape"]))
+        return real_try(body, edges, section)
+
+    blends._try_section = spy
+    builder.native_fillet = poisoning
+    try:
+        _p, _e, base = rebuild({"parameters": {}, "features": LEG})
+        before = max_tol(base[0]["shape"])
+        errors, bodies = _fillet()
+    finally:
+        blends._try_section = real_try
+        builder.native_fillet = real_native
+    assert not errors and bodies[0]["shape"].is_valid, errors
+    assert seen and max(seen) <= before + 1e-9, (before, seen)
+    print(PASS, "the fallback sees the body with the tolerances it had before the kernel tried")
+
+
 if __name__ == "__main__":
     try:
         test_matches_the_kernel_where_the_kernel_builds()
@@ -250,6 +347,9 @@ if __name__ == "__main__":
         test_tangent_edges_off_stops_at_the_picked_edge()
         test_a_blend_stops_at_the_face_its_edge_ends_on()
         test_a_chamfer_where_its_edge_ends_on_the_rim()
+        test_every_edge_rounded_meets_in_a_ball()
+        test_a_rim_rounded_by_its_own_radius_is_a_dome()
+        test_the_kernels_failed_attempts_leave_the_body_alone()
         print("\nALL PASS")
     except Exception:
         traceback.print_exc()

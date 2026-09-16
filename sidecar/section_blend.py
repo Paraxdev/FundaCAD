@@ -309,6 +309,31 @@ def _edge_tool(shape, edge, kind, size, size2, continuity, tol):
     Pm, Tm, n1m, n2m = frame(0.5 * (t0 + t1))
     s = _convexity(Pm, Tm, sides, n1m, n2m, tol)
 
+    axis = _common_axis(crv, faces) if closed else None
+    if axis is not None:
+        # A rim is its section swept round, and revolving it stays exact up to a
+        # radius that reaches the axis, where a loft's sections all collapse
+        # onto one point: a cylinder rounded by its own radius is a dome.
+        P, T, n1, n2 = frame(t0)
+        sides[0].normal_on_edge_cached = n1
+        sides[1].normal_on_edge_cached = n2
+        wire, _inner = _section(P, T, sides, s, kind, size, size2, continuity)
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
+        from OCP.BRepPrimAPI import BRepPrimAPI_MakeRevol
+
+        face = BRepBuilderAPI_MakeFace(wire, True)
+        if face.IsDone():
+            rev = BRepPrimAPI_MakeRevol(face.Face(), axis)
+            rev.Build()
+            if rev.IsDone():
+                tools = [rev.Shape()]
+                reach = size * (G2_SETBACK if continuity == "G2" else 1.0) + (size2 or 0.0)
+                fuzz = max(tol * 10, 1e-5)
+                for keep_inside, trim in _trims(shape, edge, faces, s, 50 * reach + 10):
+                    tools = [_boolean(BRepAlgoAPI_Common() if keep_inside else BRepAlgoAPI_Cut(), t, [trim], fuzz)
+                             for t in tools]
+                return s, tools
+
     if straight:
         ts = [t0, t1]
     else:
@@ -356,6 +381,29 @@ def _edge_tool(shape, edge, kind, size, size2, continuity, tol):
         tools = [_boolean(BRepAlgoAPI_Common() if keep_inside else BRepAlgoAPI_Cut(), t, [trim], fuzz)
                  for t in tools]
     return s, tools
+
+
+def _common_axis(crv, faces):
+    """The circle's axis when both faces are turned about it (a plane square to
+    it, a coaxial cylinder or cone), else None."""
+    from OCP.GeomAbs import GeomAbs_Circle, GeomAbs_Cone, GeomAbs_Cylinder
+
+    if crv.GetType() != GeomAbs_Circle:
+        return None
+    ax = crv.Circle().Axis()
+    for f in faces:
+        ad = BRepAdaptor_Surface(f)
+        kind = ad.GetType()
+        if kind == GeomAbs_Plane:
+            if not ad.Plane().Axis().IsParallel(ax, 1e-6):
+                return None
+        elif kind in (GeomAbs_Cylinder, GeomAbs_Cone):
+            other = ad.Cylinder().Axis() if kind == GeomAbs_Cylinder else ad.Cone().Axis()
+            if not other.IsCoaxial(ax, 1e-6, 1e-6):
+                return None
+        else:
+            return None
+    return ax
 
 
 def _trims(shape, edge, faces, s, size):
@@ -476,6 +524,86 @@ def _trim_solid(g, at, size):
     return None
 
 
+def _ball_corners(shape, blended):
+    """Where every edge into a corner of three planar faces is being rounded
+    convex at one radius, the corner is the ball rolling into it.
+
+    Each edge's loft ends square at the corner, so on their own the three meet
+    in the sharp intersection of their cylinders, and at a radius of half a cube
+    that is a tricylinder instead of a sphere. The corner's cell is the
+    parallelepiped between the ball centre and the vertex, bounded by the three
+    faces; removing the part of it outside the ball is exactly the difference,
+    since every point of the ball is within the radius of each edge's axis."""
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_GTransform
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeSphere
+    from OCP.gp import gp_GTrsf, gp_Mat, gp_XYZ
+
+    if len(blended) < 3:
+        return []
+    vmap = TopTools_IndexedDataMapOfShapeListOfShape()
+    TopExp.MapShapesAndAncestors_s(shape, TopAbs_VERTEX, TopAbs_EDGE, vmap)
+    fmap = TopTools_IndexedDataMapOfShapeListOfShape()
+    TopExp.MapShapesAndAncestors_s(shape, TopAbs_VERTEX, TopAbs_FACE, fmap)
+    out, done = [], []
+    for e, r in blended:
+        ex = TopExp_Explorer(e, TopAbs_VERTEX)
+        while ex.More():
+            v = TopoDS.Vertex_s(ex.Current())
+            ex.Next()
+            if any(v.IsSame(d) for d in done):
+                continue
+            done.append(v)
+            around = _unique(vmap.FindFromIndex(vmap.FindIndex(v)), degenerate_ok=False)
+            radii = []
+            for a in around:
+                hit = [sz for b, sz in blended if b.IsSame(a)]
+                if not hit:
+                    break
+                radii.append(hit[0])
+            if len(around) != 3 or len(radii) != 3 or max(radii) - min(radii) > 1e-9:
+                continue
+            faces = _unique(fmap.FindFromIndex(fmap.FindIndex(v)))
+            if len(faces) != 3 or any(BRepAdaptor_Surface(TopoDS.Face_s(f)).GetType() != GeomAbs_Plane for f in faces):
+                continue
+            V = BRep_Tool.Pnt_s(v)
+            ns = []
+            for f in faces:
+                ad = BRepAdaptor_Surface(TopoDS.Face_s(f))
+                u = 0.5 * (ad.FirstUParameter() + ad.LastUParameter())
+                w = 0.5 * (ad.FirstVParameter() + ad.LastVParameter())
+                p, n = gp_Pnt(), gp_Vec()
+                BRepGProp_Face(TopoDS.Face_s(f)).Normal(u, w, p, n)
+                ns.append(n.Normalized())
+            C = _solve3([(n.X(), n.Y(), n.Z()) for n in ns], [n.Dot(_v(V)) - r for n in ns])
+            if C is None:
+                continue
+            cols = []
+            for k in range(3):
+                d = ns[(k + 1) % 3].Crossed(ns[(k + 2) % 3])
+                along = d.Dot(ns[k])
+                if abs(along) < 1e-9:
+                    break
+                cols.append(d.Multiplied((r * 1.02 + 1e-3) / along))
+            if len(cols) != 3:
+                continue
+            m = gp_Mat(cols[0].XYZ(), cols[1].XYZ(), cols[2].XYZ())
+            g = gp_GTrsf(m, gp_XYZ(C.X(), C.Y(), C.Z()))
+            cell = BRepBuilderAPI_GTransform(BRepPrimAPI_MakeBox(1.0, 1.0, 1.0).Shape(), g, True).Shape()
+            ball = BRepPrimAPI_MakeSphere(_p(C), r).Shape()
+            out.append(_boolean(BRepAlgoAPI_Cut(), cell, [ball], 1e-6))
+    return out
+
+
+def _unique(shapes, degenerate_ok=True):
+    out = []
+    for s in shapes:
+        if not degenerate_ok and s.ShapeType() == TopAbs_EDGE and BRep_Tool.Degenerated_s(TopoDS.Edge_s(s)):
+            continue
+        if not any(s.IsSame(x) for x in out):
+            out.append(s)
+    return out
+
+
 def _boolean(op, base, tools, fuzz):
     a = TopTools_ListOfShape()
     a.Append(base)
@@ -512,9 +640,22 @@ def section_blend(shape, edges, kind, size, size2=None, continuity="G1", sizes=N
     for e in edges:
         tol = max(tol, BRep_Tool.Tolerance_s(e))
     cut, fuse = [], []
+    convex = []
     for e, sz in zip(edges, sizes):
         s, tools = _edge_tool(shape, e, kind, sz, size2, continuity, tol)
         (cut if s > 0 else fuse).extend(tools)
+        if s > 0:
+            convex.append((e, sz))
+    corners = _ball_corners(shape, convex) if kind == "fillet" and continuity == "G1" else []
+    if corners:
+        try:
+            return _combine(shape, cut + corners, fuse, tol)
+        except SectionBlendError:
+            pass  # past the size a ball fits the corner, the edges meet as they are
+    return _combine(shape, cut, fuse, tol)
+
+
+def _combine(shape, cut, fuse, tol):
     fuzz = max(tol * 10, 1e-5)
     out = shape
     if cut:
@@ -522,8 +663,11 @@ def section_blend(shape, edges, kind, size, size2=None, continuity="G1", sizes=N
     if fuse:
         out = _boolean(BRepAlgoAPI_Fuse(), out, fuse, fuzz)
     up = ShapeUpgrade_UnifySameDomain(out, True, True, False)
-    up.Build()
-    out = up.Shape()
+    try:
+        up.Build()
+        out = up.Shape()
+    except Exception:  # noqa: BLE001  merging faces is tidying, "Courbes non jointives" on some bodies
+        pass
     if _solid_count(out) == 0:
         raise SectionBlendError("at this size the blend removes the whole body")
     if not BRepCheck_Analyzer(out).IsValid() or not _sane_volume(out):
