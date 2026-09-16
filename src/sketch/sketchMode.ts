@@ -376,6 +376,14 @@ export class SketchMode {
         return ent ? loopCentroid(entityPolyline(ent)) : null;
       },
       requestSolve: () => this.requestSolve(),
+      toScreen: (x, y) => {
+        const s = this.viewport.projectToScreen(this.plane.to3D(x, y));
+        return Number.isFinite(s.x) && Number.isFinite(s.y) ? s : null;
+      },
+      showCentreDot: (p) => {
+        this.overlay.setHandleDot(p ? this.plane.to3D(p.x, p.y) : null);
+        this.viewport.requestRender();
+      },
       refreshActive: () => this.refreshActive(),
       onState: () => this.onState?.(),
     };
@@ -619,6 +627,7 @@ export class SketchMode {
     this.modifyFlow.reset();
     this.overlay.setPreview([]);
     this.overlay.setSnap(null);
+    this.overlay.setHandleDot(null);
     this.snapWorld = null;
     this.removeGrid();
     this.viewport.exitSketchView();
@@ -685,6 +694,10 @@ export class SketchMode {
     if (!keepSelection && this.selected.size) { this.selected.clear(); this.refreshActive(); }
     if (preselected.length) this.dimFlow.seedDimPicks(preselected);
     this.patternFlow.flushPending(); // don't lose an in-progress pattern
+    if (t === "patternCircular" && this.active && this.selected.size) {
+      for (const id of this.modifyFlow.warnSelectedProjected()) this.selected.delete(id);
+      this.patternFlow.begin();
+    }
     // Live in `dimension` too: that tool re-arms after each commit, so users stayed in
     // it and could not edit what they had just dimensioned.
     const annotationsLive = t === "select" || t === "dimension";
@@ -1525,7 +1538,13 @@ export class SketchMode {
       try { this.viewport.domElement.setPointerCapture(e.pointerId); } catch { /* capture optional */ }
       return;
     }
-    if (PATTERN_TOOLS.has(this.tool)) return this.patternClick(p);
+    if (PATTERN_TOOLS.has(this.tool)) {
+      if (this.patternFlow.grabCentre(e.clientX, e.clientY)) {
+        try { this.viewport.domElement.setPointerCapture(e.pointerId); } catch { /* capture optional */ }
+        return;
+      }
+      return this.patternClick(p);
+    }
     if (this.tool === "arc") return this.arcClick(p);
     if (this.tool === "spline") return this.splineClick(p);
     if (this.tool === "point") return this.pointClick(p);
@@ -3161,6 +3180,12 @@ export class SketchMode {
   }
 
   private endDrag(pointerId?: number) {
+    if (this.patternFlow.releaseCentre()) {
+      if (pointerId != null) {
+        try { this.viewport.domElement.releasePointerCapture(pointerId); } catch { /* not captured */ }
+      }
+      return;
+    }
     if (this.boxDown) {
       const b = this.boxDown;
       const boxed = this.areaBox.visible;

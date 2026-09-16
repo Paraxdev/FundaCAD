@@ -1,5 +1,7 @@
 // Dragging a sketch pattern, in a real browser.
 //
+//   0. Choosing the circular pattern with a selection starts it at once, centred
+//      on that selection, and its centre dot drags and snaps onto the origin.
 //   1. A circular pattern takes its total angle from the DRAG. Before this it
 //      could only be typed, the cursor did nothing.
 //   2. The sweep keeps climbing past half a turn instead of flipping sign, and
@@ -71,15 +73,35 @@ const near = (a, b, tol) => Number.isFinite(a) && Math.abs(a - b) <= tol;
     check("the source circle is selected", s.join() === "c1", JSON.stringify(s));
   }
 
-  // --- circular: click the centre, then sweep ---
+  // --- circular: starts on the selection, drag its centre dot, then sweep ---
   await page.evaluate(() => window.sketch.setTool("patternCircular"));
   await page.waitForTimeout(300);
   {
+    const centre = () => page.evaluate(() => {
+      const f = window.sketch.patternFlow;
+      return f && f.pending ? { cx: f.pending.cx, cy: f.pending.cy } : null;
+    });
+    let at = await centre();
+    check("choosing the tool starts the pattern centred on the selection", !!at && near(at.cx, 30, 0.001) && near(at.cy, 0, 0.001), JSON.stringify(at));
+    await page.screenshot({ path: path.join(OUT, "00_started_on_selection.png") });
+
+    const from = await scr(30, 0);
     const c = await scr(0, 0);
-    await page.mouse.move(c.x, c.y);
+    await page.mouse.move(from.x + 3, from.y + 2);
     await page.mouse.down();
+    await page.mouse.move(c.x + 20, c.y - 10, { steps: 10 });
+    await page.mouse.move(c.x + 2, c.y + 1, { steps: 3 });
+    await page.waitForTimeout(150);
+    await page.screenshot({ path: path.join(OUT, "00b_dragging_centre.png") });
     await page.mouse.up();
     await page.waitForTimeout(300);
+    at = await centre();
+    check("dragging the centre dot snaps it onto the origin", !!at && near(at.cx, 0, 1e-6) && near(at.cy, 0, 1e-6), JSON.stringify(at));
+    const still = await page.evaluate(() => {
+      const f = window.sketch.patternFlow;
+      return !!(f && f.pending) && window.sketch.patterns.length === 0;
+    });
+    check("the centre drag does not commit the pattern", still);
 
     const sweepTo = async (deg) => {
       const r = 30;

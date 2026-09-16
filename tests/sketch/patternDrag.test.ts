@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { patternSweepDeg, snapAngleDeg, type PatternSweepInput } from "../../src/sketch/patternDrag";
+import { nearCentreDot, patternSweepDeg, selectionCentre, snapAngleDeg, type PatternSweepInput } from "../../src/sketch/patternDrag";
 
 /** centre at the origin, the source out along +X, so a cursor bearing in degrees
  *  IS the sweep the drag should read. */
@@ -82,5 +82,35 @@ describe("snapAngleDeg", () => {
     // a row at 43 degrees is a row at 43 degrees, Alt is the escape hatch for
     // the angles the grid cannot express
     expect(snapAngleDeg(43, true)).toBe(43);
+  });
+});
+
+describe("nearCentreDot", () => {
+  it("grabs within the radius and not beyond it", () => {
+    expect(nearCentreDot({ x: 100, y: 100 }, { x: 108, y: 108 })).toBe(true);
+    expect(nearCentreDot({ x: 100, y: 100 }, { x: 100, y: 112 })).toBe(true);
+    expect(nearCentreDot({ x: 100, y: 100 }, { x: 110, y: 110 })).toBe(false);
+    expect(nearCentreDot({ x: 100, y: 100 }, { x: 130, y: 100 }, 40)).toBe(true);
+  });
+
+  it("never grabs a dot that did not project", () => {
+    expect(nearCentreDot(null, { x: 0, y: 0 })).toBe(false);
+    expect(nearCentreDot({ x: NaN, y: 0 }, { x: 0, y: 0 })).toBe(false);
+  });
+});
+
+describe("selectionCentre", () => {
+  it("is the source's own point for a single source", () => {
+    expect(selectionCentre([{ x: 30, y: 0 }])).toEqual({ x: 30, y: 0 });
+  });
+
+  it("averages several sources", () => {
+    expect(selectionCentre([{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 5, y: 15 }])).toEqual({ x: 5, y: 5 });
+  });
+
+  it("skips sources that no longer resolve", () => {
+    expect(selectionCentre([null, { x: 4, y: 2 }, null])).toEqual({ x: 4, y: 2 });
+    expect(selectionCentre([null])).toBeNull();
+    expect(selectionCentre([])).toBeNull();
   });
 });

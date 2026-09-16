@@ -533,6 +533,33 @@ export class SketchOverlay {
     if (camera) this.snapMarker.quaternion.copy(camera.quaternion); // face camera
   }
 
+  private handleDot: THREE.Group | null = null;
+  /** A draggable handle dot (a circular pattern's centre), null clears it. */
+  setHandleDot(world: THREE.Vector3 | null) {
+    if (!world) {
+      if (this.handleDot) this.handleDot.visible = false;
+      return;
+    }
+    if (!this.handleDot) {
+      const dot = new THREE.Points(
+        new THREE.BufferGeometry().setFromPoints([new THREE.Vector3()]),
+        new THREE.PointsMaterial({
+          color: 0xffffff, size: HANDLE_DOT_PX, sizeAttenuation: false, map: pointDotTexture(),
+          transparent: true, depthTest: false, depthWrite: false,
+        }),
+      );
+      dot.frustumCulled = false;
+      // Note: a Group's renderOrder sorts its whole subtree, and curve groups sit at 12,
+      // so a bare Points here would lose to a circle's own centre dot drawn under it
+      this.handleDot = new THREE.Group();
+      this.handleDot.renderOrder = 29;
+      this.handleDot.add(dot);
+      this.group.add(this.handleDot);
+    }
+    this.handleDot.position.copy(world);
+    this.handleDot.visible = true;
+  }
+
   setSnapScale(s: number) {
     this.snapMarker.scale.setScalar(s);
   }
@@ -642,6 +669,7 @@ function textObjects(
 
 /** Screen size of the dot on a sketch point or centre, in CSS pixels. */
 export const POINT_DOT_PX = 9;
+const HANDLE_DOT_PX = 14;
 
 let dotTexture: THREE.DataTexture | null = null;
 /** A white disc with a dark rim, so the dot reads over a pale profile fill and a dark ground alike. */

@@ -66,3 +66,33 @@ export function patternSweepDeg(i: PatternSweepInput): number | null {
   if (FULL - Math.abs(v) <= FULL_SNAP) return v < 0 ? -FULL : FULL;
   return clampTurn(Math.round(v / STEP) * STEP);
 }
+
+/** How far from the centre dot, in screen pixels, a press still grabs it. */
+export const CENTRE_GRAB_PX = 12;
+
+/** Whether a press at `pointer` grabs the centre dot drawn at `dot`, both in
+ *  client pixels. A dot that did not project (null) cannot be grabbed. */
+export function nearCentreDot(
+  dot: { x: number; y: number } | null,
+  pointer: { x: number; y: number },
+  radiusPx = CENTRE_GRAB_PX,
+): boolean {
+  if (!dot || !Number.isFinite(dot.x) || !Number.isFinite(dot.y)) return false;
+  return Math.hypot(pointer.x - dot.x, pointer.y - dot.y) <= radiusPx;
+}
+
+/** Where a circular pattern starts centred: the mean of the selected sources'
+ *  representative points. Sources that no longer resolve are skipped, and with
+ *  none left there is no centre to offer. */
+export function selectionCentre(
+  points: readonly ({ x: number; y: number } | null)[],
+): { x: number; y: number } | null {
+  let sx = 0, sy = 0, n = 0;
+  for (const p of points) {
+    if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
+    sx += p.x;
+    sy += p.y;
+    n++;
+  }
+  return n ? { x: sx / n, y: sy / n } : null;
+}

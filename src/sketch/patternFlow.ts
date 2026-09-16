@@ -9,7 +9,7 @@ import * as THREE from "three";
 import type { SketchPattern } from "../types";
 import type { DimInput } from "./dimInput";
 import { newPatternId } from "./id";
-import { patternSweepDeg, snapAngleDeg } from "./patternDrag";
+import { nearCentreDot, patternSweepDeg, selectionCentre, snapAngleDeg } from "./patternDrag";
 import { setPrompt } from "../ui/prompt";
 import type { SketchTool } from "./sketchMode";
 
@@ -41,6 +41,10 @@ export interface PatternHost {
   /** the choke point in-sketch undo banks a step at, so a pattern that appears
    *  or disappears is a step the user can take back like any drawn entity */
   requestSolve(): void;
+  /** a sketch point in client pixels, null when it does not project */
+  toScreen(x: number, y: number): { x: number; y: number } | null;
+  /** draw (or with null, clear) the draggable centre dot of a circular pattern */
+  showCentreDot(p: { x: number; y: number } | null): void;
   refreshActive(): void;
   onState(): void;
 }
@@ -50,6 +54,7 @@ export class PatternFlow {
   private patternCenter: THREE.Vector2 | null = null; // its center (first click)
   private editOriginal: SketchPattern | null = null; // when editing, the pre-edit copy (Esc restores)
   private sweep: number | null = null; // circular pattern: the last angle the drag reported (null = drag not started)
+  private centreDrag = false;
 
   constructor(private host: PatternHost) {}
 
@@ -68,6 +73,8 @@ export class PatternFlow {
     this.pendingPattern = null;
     this.patternCenter = null;
     this.sweep = null;
+    this.centreDrag = false;
+    this.syncDot();
   }
 
   /** push any in-progress pattern into the committed list, nulling only the
@@ -77,6 +84,8 @@ export class PatternFlow {
       this.host.patterns().push(this.pendingPattern);
       this.pendingPattern = null;
     }
+    this.centreDrag = false;
+    this.syncDot();
   }
 
   /** don't lose an in-progress pattern when the tool changes: keep it, then
@@ -87,6 +96,8 @@ export class PatternFlow {
     this.editOriginal = null;
     this.patternCenter = null;
     this.sweep = null;
+    this.centreDrag = false;
+    this.syncDot();
   }
 
   /** Delete/Backspace while a pattern is pending: remove it outright. */
@@ -95,6 +106,8 @@ export class PatternFlow {
     this.editOriginal = null;
     this.patternCenter = null;
     this.sweep = null;
+    this.centreDrag = false;
+    this.syncDot();
     this.host.requestSolve();
     this.host.dim().hide();
     setPrompt(null);
@@ -112,11 +125,64 @@ export class PatternFlow {
     this.editOriginal = null;
     this.patternCenter = null;
     this.sweep = null;
+    this.centreDrag = false;
+    this.syncDot();
     this.host.requestSolve();
     this.host.dim().hide();
     setPrompt(null);
     this.host.refreshActive();
     this.host.onState();
+  }
+
+  /** Circular pattern with a selection: start pending at once, centred on the
+   *  selection, so the centre dot is there to drag before any click. Returns
+   *  false when there is nothing to centre on. */
+  begin(): boolean {
+    if (this.pendingPattern || this.host.tool() !== "patternCircular") return false;
+    const c = selectionCentre([...this.host.selected()].map((id) => this.host.sourcePoint(id)));
+    if (!c) return false;
+    this.patternCenter = new THREE.Vector2(c.x, c.y);
+    this.sweep = null;
+    this.centreDrag = false;
+    this.pendingPattern = this.defaultPattern("patternCircular", this.patternCenter);
+    this.host.dim().show(this.patternDimDefs("patternCircular"), () => this.commit());
+    this.placeHudAtCentre();
+    setPrompt("Drag the centre dot to move it · move to sweep · click to commit · Esc");
+    this.syncDot();
+    this.host.refreshActive();
+    return true;
+  }
+
+  /** Pointer down: a press on a circular pattern's centre dot starts dragging
+   *  the centre instead of committing. */
+  grabCentre(clientX: number, clientY: number): boolean {
+    const pat = this.pendingPattern;
+    if (!pat || pat.type !== "patternCircular") return false;
+    if (!nearCentreDot(this.host.toScreen(pat.cx as number, pat.cy as number), { x: clientX, y: clientY })) return false;
+    this.centreDrag = true;
+    return true;
+  }
+
+  /** Pointer up: ends a centre drag, true when one was in flight. */
+  releaseCentre(): boolean {
+    if (!this.centreDrag) return false;
+    this.centreDrag = false;
+    return true;
+  }
+
+  private syncDot() {
+    const pat = this.pendingPattern;
+    this.host.showCentreDot(
+      pat && pat.type === "patternCircular" ? { x: pat.cx as number, y: pat.cy as number } : null,
+    );
+  }
+
+  private placeHudAtCentre() {
+    const pat = this.pendingPattern;
+    if (!pat || pat.type !== "patternCircular") return;
+    const s = this.host.toScreen(pat.cx as number, pat.cy as number);
+    // dim.position adds 16 px both ways, this lands the HUD just under the dot
+    if (s) this.host.dim().position(s.x - 16, s.y);
   }
 
   click(p: THREE.Vector2) {
@@ -129,6 +195,8 @@ export class PatternFlow {
       this.sweep = null;
       this.pendingPattern = this.defaultPattern(this.host.tool(), p);
       this.host.dim().show(this.patternDimDefs(this.pendingPattern.type), () => this.commit());
+      this.syncDot();
+      this.placeHudAtCentre();
       this.host.refreshActive();
       return;
     }
@@ -161,6 +229,16 @@ export class PatternFlow {
     if (!this.patternCenter || !this.pendingPattern) return;
     const pat = this.pendingPattern;
     const dim = this.host.dim();
+    if (this.centreDrag && pat.type === "patternCircular") {
+      pat.cx = p.x;
+      pat.cy = p.y;
+      this.patternCenter.copy(p);
+      this.sweep = null; // the sweep is measured about the centre, so it starts over
+      this.syncDot();
+      this.placeHudAtCentre();
+      this.host.refreshActive();
+      return;
+    }
     const dx = p.x - this.patternCenter.x, dy = p.y - this.patternCenter.y;
     const r = Math.hypot(dx, dy);
     const dimN = (name: string, fallback: number) => Math.round(dim.getValue(name) ?? fallback);
@@ -212,7 +290,8 @@ export class PatternFlow {
         pat.angle = dim.getValue("angle") ?? (pat.angle as number);
       }
     }
-    dim.position(e.clientX, e.clientY);
+    if (pat.type === "patternCircular") this.placeHudAtCentre();
+    else dim.position(e.clientX, e.clientY);
     this.host.refreshActive();
   }
 
@@ -233,6 +312,8 @@ export class PatternFlow {
     this.editOriginal = null;
     this.patternCenter = null;
     this.sweep = null;
+    this.centreDrag = false;
+    this.syncDot();
     this.host.dim().hide();
     setPrompt(null);
     const selected = this.host.selected();
@@ -256,6 +337,7 @@ export class PatternFlow {
       "cx" in pat ? (pat.cx as number) : 0,
       "cy" in pat ? (pat.cy as number) : 0,
     );
+    this.centreDrag = false;
     this.host.setActiveTool(pat.type);
     const cur: Record<string, number> = {};
     const vals = pat as unknown as Record<string, number>;
@@ -266,6 +348,8 @@ export class PatternFlow {
     this.host.dim().show(this.patternDimDefs(pat.type), () => this.commit());
     this.host.dim().updateFromCursor(cur);
     setPrompt("Drag or type to change · click to commit · Delete removes · Esc");
+    this.syncDot();
+    this.placeHudAtCentre();
     this.host.refreshActive();
     this.host.onState();
   }
