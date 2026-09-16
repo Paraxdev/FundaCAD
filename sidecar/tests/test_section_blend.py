@@ -287,7 +287,36 @@ def test_a_rim_rounded_by_its_own_radius_is_a_dome():
     _p, errors, bodies = rebuild({"parameters": {}, "features": cyl + [{"id": "f", "type": "chamfer", "distance": 10.0, "edges": rim}]})
     assert not errors, errors
     assert abs(bodies[0]["shape"].volume - (math.pi * 100 * 10 + math.pi * 1000 / 3)) < 0.5, bodies[0]["shape"].volume
-    print(PASS, "a radius 10 rim filleted 10 is a dome and chamfered 10 a cone")
+    both = _edges_at((0, 0, 20), (0, 0, 0))
+    _p, errors, bodies = rebuild({"parameters": {}, "features": cyl + [{"id": "f", "type": "fillet", "radius": 10.0, "edges": both}]})
+    assert not errors, errors
+    assert abs(bodies[0]["shape"].volume - 4 / 3 * math.pi * 1000) < 0.5, bodies[0]["shape"].volume
+    print(PASS, "a radius 10 rim filleted 10 is a dome, chamfered 10 a cone, and both rims make a sphere")
+
+
+def test_a_corner_on_a_curved_face_and_a_tapered_one_round_like_the_kernel():
+    """Where the kernel builds, the fallback's corners should land where its
+    rolling ball does, on faces that are not square to each other or not flat."""
+    from build123d import Rectangle, extrude
+
+    import section_blend as sb
+
+    d = _wrap_topods((Cylinder(10, 20, align=(Align.CENTER, Align.CENTER, Align.MIN))
+                      & Box(30, 30, 20, align=(Align.MIN, Align.CENTER, Align.MIN)).translate((-4, 0, 0))).wrapped)
+    tapered = _wrap_topods(extrude(Rectangle(30, 30), 20, taper=25).wrapped)
+    for name, shape, r in (("D", d, 2), ("tapered", tapered, 4)):
+        edges = shape.edges()
+        kernel = shape.fillet(r, edges).volume
+        with_corners = _blend(shape, edges, kind="fillet", size=r).volume
+        real = sb._ball_corners
+        sb._ball_corners = lambda *a: []
+        try:
+            square = _blend(shape, edges, kind="fillet", size=r).volume
+        finally:
+            sb._ball_corners = real
+        assert abs(with_corners - kernel) < 0.25 * abs(square - kernel), (name, kernel, with_corners, square)
+    assert _blend(d, d.edges(), kind="fillet", size=3).is_valid, "a corner that will not combine is left square, not a failure"
+    print(PASS, "ball corners on a D shape and a 25 degree taper land within a quarter of the square ends' error")
 
 
 def test_the_kernels_failed_attempts_leave_the_body_alone():
@@ -337,6 +366,40 @@ def test_the_kernels_failed_attempts_leave_the_body_alone():
     print(PASS, "the fallback sees the body with the tolerances it had before the kernel tried")
 
 
+def test_a_draft_preview_is_quicker_and_close_to_the_real_build():
+    """The live drag builds a draft: once a frame has needed the section build
+    it skips the kernel's attempts, and it lofts a third of the sections. What
+    it shows has to be the blend the commit will build, near enough to judge."""
+    import blends
+
+    calls = []
+    real = blends._sequential_blend
+
+    def spy(*a, **k):
+        calls.append(1)
+        return real(*a, **k)
+
+    blends._sequential_blend = spy
+    try:
+        full_errors, full = _fillet(radius=2.0)
+        calls.clear()
+        drafts = []
+        for r in (2.0, 2.0):
+            _p, errors, bodies = rebuild({"parameters": {}, "features": LEG + [
+                {"id": "f", "type": "fillet", "radius": r, "draft": True,
+                 "edges": {"kind": "edge", "by": "nearest", "point": SEAM_SIDE}}]})
+            assert not errors, errors
+            drafts.append(bodies[0]["shape"])
+    finally:
+        blends._sequential_blend = real
+    assert not full_errors and not calls, (full_errors, len(calls))
+    _p, _e, base = rebuild({"parameters": {}, "features": LEG})
+    added = full[0]["shape"].volume - base[0]["shape"].volume
+    for d in drafts:
+        assert d.is_valid and abs(d.volume - full[0]["shape"].volume) < 0.05 * added, (d.volume, full[0]["shape"].volume, added)
+    print(PASS, "a draft skips the kernel's per-edge attempts and adds within 5% of the real blend")
+
+
 if __name__ == "__main__":
     try:
         test_matches_the_kernel_where_the_kernel_builds()
@@ -349,7 +412,9 @@ if __name__ == "__main__":
         test_a_chamfer_where_its_edge_ends_on_the_rim()
         test_every_edge_rounded_meets_in_a_ball()
         test_a_rim_rounded_by_its_own_radius_is_a_dome()
+        test_a_corner_on_a_curved_face_and_a_tapered_one_round_like_the_kernel()
         test_the_kernels_failed_attempts_leave_the_body_alone()
+        test_a_draft_preview_is_quicker_and_close_to_the_real_build()
         print("\nALL PASS")
     except Exception:
         traceback.print_exc()

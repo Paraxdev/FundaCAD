@@ -523,7 +523,7 @@ def _handle_fillet(f, ctx):
         return [chord_radius(shape, e, size) if chord else size for e in es]
 
     section = section_fn("fillet", r, continuity="G2" if g2 else "G1",
-                         sizes_of=radii if chord else None)
+                         sizes_of=radii if chord else None, draft=bool(f.get("draft")))
 
     def plain():
         _blend_edges(f, ctx, "Fillet",
@@ -576,7 +576,7 @@ def _handle_chamfer(f, ctx):
     _blend_edges(f, ctx, "Chamfer",
                  native,
                  lambda s, e, size: native(s, [e], size), d,
-                 section=section_fn("chamfer", d, d2),
+                 section=section_fn("chamfer", d, d2, draft=bool(f.get("draft"))),
                  section_only=f.get("tangentEdges") is False)
 
 

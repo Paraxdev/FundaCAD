@@ -469,6 +469,12 @@ def _refuse_folded_blend(body, new_shape):
     )
 
 
+# Drags whose last frame needed the section build, by feature, body and edges.
+# Per worker and never pruned: a few tuples per edit, and a stale entry only
+# costs a draft frame the kernel's attempts.
+_DRAFT_FELL_BACK = set()
+
+
 def _blend_edges(f, ctx, label, combined, one_edge_at, blend_size, section=None, section_only=False):
     """Shared fillet/chamfer body: blend every selected edge, per owning body.
 
@@ -490,6 +496,7 @@ def _blend_edges(f, ctx, label, combined, one_edge_at, blend_size, section=None,
         raise ValueError(
             f"{label}: size must be greater than 0 (got {blend_size:g})"
         )
+    draft = bool(f.get("draft"))
     for body, sels in _group_sels_by_body(f["edges"], ctx, label):
         edges = resolve_edges(body["shape"], sels, diag=ctx.diagnostics, feature_id=f.get("id"))
         if not edges:
@@ -499,6 +506,14 @@ def _blend_edges(f, ctx, label, combined, one_edge_at, blend_size, section=None,
         if section_only:
             staged.append((body, _section_or_raise(label, body, edges, section)))
             continue
+        fell_back = (f.get("id"), body["id"], label, repr(sels))
+        if draft and fell_back in _DRAFT_FELL_BACK:
+            # The last frame of this drag needed the section build: skip the
+            # kernel's attempts, which cost more than the build on a big body.
+            built = _try_section(body, edges, section)
+            if built is not None:
+                staged.append((body, built))
+                continue
         # A failed kernel blend raises the tolerances of the edges and vertices
         # it touched, in place, on the shared topology: 0.07mm became 12.7mm on a
         # leg junction, and every boolean on the body after that came out
@@ -521,12 +536,17 @@ def _blend_edges(f, ctx, label, combined, one_edge_at, blend_size, section=None,
         except Exception as combined_err:
             # Combined call failed: fall back to per-edge blending on the evolving body.
             one_edge = lambda s, e: one_edge_at(s, e, blend_size)  # noqa: E731
-            new_shape, unresolved = _sequential_blend(
-                body["shape"], edges, one_edge, blend_size, body["shape"]
-            )
+            if draft and section is not None:
+                new_shape, unresolved = body["shape"], edges
+            else:
+                new_shape, unresolved = _sequential_blend(
+                    body["shape"], edges, one_edge, blend_size, body["shape"]
+                )
             if unresolved:
                 built = _try_section(pristine, pristine_edges, section)
                 if built is not None:
+                    if draft:
+                        _DRAFT_FELL_BACK.add(fell_back)
                     staged.append((pristine, built))
                     continue
                 # Hard no-silent-degradation rule: any edge we could not blend means
@@ -586,7 +606,7 @@ def _section_or_raise(label, body, edges, section):
         raise GeomError(f"{label} failed on {body['name']}: {err}") from err
 
 
-def section_fn(kind, size, size2=None, continuity="G1", sizes_of=None):
+def section_fn(kind, size, size2=None, continuity="G1", sizes_of=None, draft=False):
     """`section` for _blend_edges: blend the whole group by lofted sections.
     `sizes_of(shape, edges)` gives a size per edge where they differ."""
     from section_blend import section_blend
@@ -594,7 +614,7 @@ def section_fn(kind, size, size2=None, continuity="G1", sizes_of=None):
     def run(shape, edges):
         sizes = sizes_of(shape, edges) if sizes_of else None
         out = section_blend(shape.wrapped, [e.wrapped for e in edges], kind, size, size2,
-                            continuity, sizes)
+                            continuity, sizes, draft)
         wrapped = _wrap_topods(out)
         if wrapped is None:
             raise ValueError("the blend produced no usable solid")
