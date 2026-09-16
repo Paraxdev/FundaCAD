@@ -404,3 +404,22 @@ button.finish:hover {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+
+/* A tool's name and key above its instruction. */
+.prompt.titled {
+  flex-wrap: wrap;
+  row-gap: var(--s-1);
+}
+.prompt-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-weight: 650;
+}
+.prompt-key {
+  padding: 0 var(--s-1);
+  font: 600 10px/1.5 var(--mono);
+  color: var(--text-dim);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+}

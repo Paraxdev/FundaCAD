@@ -81,6 +81,16 @@ function sketchLeaf(action: string): ToolItem {
   throw new Error(`sketch rail names an unknown tool: ${action}`);
 }
 
+/** A sketch tool's name and key, or null for an action that is not a drawing tool. */
+export function sketchToolName(action: string): { label: string; keys?: string } | null {
+  try {
+    const leaf = sketchLeaf(action);
+    return { label: leaf.label, ...(leaf.key ? { keys: leaf.key } : {}) };
+  } catch {
+    return null;
+  }
+}
+
 type SketchSlot = string | { id: string; label: string; actions: readonly string[] };
 
 const SKETCH_SLOTS: readonly SketchSlot[] = [

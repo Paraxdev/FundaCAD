@@ -81,6 +81,9 @@ export class FaceOffsetTool {
   get icon(): string {
     return this.mode === "offsetFace" ? "offsetFace" : this.mode;
   }
+  get action(): string {
+    return this.mode === "offsetFace" ? "offset-face" : this.mode;
+  }
 
   start(mode: FaceOffsetMode, onDone: (id: string | null) => void) {
     if (this.active) return;
