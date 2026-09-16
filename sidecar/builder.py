@@ -626,15 +626,43 @@ def _handle_press_pull(f, ctx):
     taper = ctx.val(f["taper"]) if f.get("taper") is not None else 0.0
     if taper and not (-89 < taper < 89):
         raise ValueError(f"Press/Pull: taper must be between -89 and 89 degrees (got {taper:g})")
+    # `mode` other than auto extrudes the face straight out, curved or not, and
+    # hands the prism to the same boolean an extrude uses, so it can join or cut
+    # any body it runs into, or stand as a new one.
+    mode = f.get("mode") or "auto"
     for sel in sels:
+        if mode != "auto" and f.get("body"):
+            act = ctx.find_body(f["body"]) or act
         found = resolve_faces(act["shape"], sel, diag=ctx.diagnostics, feature_id=f.get("id"))
         if not found:
             raise ValueError("no face found to press/pull")
         src = found[0]
         d = _distance_to_target(src, tgt_pt, tgt_n) if up else dist
-        # up-to distances are exact by construction, the inward
-        # clamp would silently stop short of the chosen target
-        act["shape"] = _press_pull(act["shape"], src, d, clamp=(not up), taper=(0.0 if up else taper))
+        if mode != "auto":
+            if abs(d) < 1e-9:
+                continue
+            prism = _face_prism(src, d, 0.0 if up else taper)
+            _combine({"id": f.get("id"), "operation": mode, "targets": f.get("targets")}, ctx, prism)
+            continue
+        act["shape"] = _press_pull(act["shape"], src, d, clamp=False, taper=(0.0 if up else taper))
+
+
+def _face_prism(face, d, taper=0.0):
+    """The solid a face sweeps out moving `d` along its normal: a tapered extrude
+    for a flat face, a straight prism along the normal at its centre otherwise."""
+    if face.geom_type == GeomType.PLANE:
+        return extrude(face, d, taper=taper) if taper else extrude(face, d)
+    from OCP.BRepCheck import BRepCheck_Analyzer
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakePrism
+    from OCP.gp import gp_Vec
+
+    n = face.normal_at(face.center())
+    mk = BRepPrimAPI_MakePrism(face.wrapped, gp_Vec(n.X * d, n.Y * d, n.Z * d))
+    mk.Build()
+    out = _wrap_topods(mk.Shape()) if mk.IsDone() else None
+    if out is None or not BRepCheck_Analyzer(mk.Shape()).IsValid():
+        raise ValueError("Press/Pull: this face does not extrude into a valid solid")
+    return out
 
 
 def _handle_delete_face(f, ctx):
