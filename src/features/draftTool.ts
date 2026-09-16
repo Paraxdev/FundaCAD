@@ -19,6 +19,7 @@ import { snap } from "../ui/units";
 import { axisDragDistance, createDragHandle, type DragHandle } from "./manipulator";
 import { MAX_DRAFT_DEG, draftAngle, draftDelta, draftLever, pullAxisFor, type Axis3 } from "./draftMath";
 import { CanvasGesture } from "./canvasGesture";
+import { previewVerdict } from "./previewVerdict";
 
 type Phase = "pick" | "drag";
 
@@ -52,6 +53,7 @@ export class DraftTool {
   private grabProj = 0;
   private downPos = { x: 0, y: 0 };
   private downOnGizmo = false;
+  private refusalShown: string | null = null;
 
   private dim = new DimInput();
   private onDone: ((id: string | null) => void) | null = null;
@@ -134,6 +136,8 @@ export class DraftTool {
     if (this.downOnGizmo) {
       e.preventDefault();
       e.stopImmediatePropagation(); // don't orbit while dragging the handle
+      // Captured so the release still lands here when it happens over the value box.
+      try { this.viewport.domElement.setPointerCapture(e.pointerId); } catch { /* capture optional */ }
       this.grabbing = true;
       this.grabAngle = this.angle;
       this.grabProj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.anchor, this.axis);
@@ -146,6 +150,9 @@ export class DraftTool {
     if (this.grabbing) {
       this.grabbing = false;
       this.viewport.domElement.style.cursor = this.hovering ? "grab" : "default";
+      const moved =
+        Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
+      if (moved && Math.abs(this.angle) >= 1e-3) this.commit();
       return;
     }
     const moved =
@@ -224,10 +231,17 @@ export class DraftTool {
       // Tone tracks which way the wall leans: amber opens the face out, red
       // undercuts it (which a mould cannot draw, and which is worth flagging
       // before the commit rather than after).
+      const refusal = this.store.previewError;
       this.handle?.paint({
         hot: this.hovering || this.grabbing,
         tone: sign < 0 ? "cut" : "idle",
+        refused: refusal !== null,
       });
+      if (refusal !== this.refusalShown) {
+        this.refusalShown = refusal;
+        if (refusal) setPrompt(`Draft refused: ${refusal} · drag back or Esc`);
+        else this.prompt();
+      }
       const s = this.viewport.projectToScreen(this.anchor);
       this.dim.position(s.x, s.y);
       if (!this.grabbing && this.dim.isUserDriven("angle")) {
@@ -273,13 +287,20 @@ export class DraftTool {
       return;
     }
     if (v != null && this.dim.isUserDriven("angle")) {
-      this.angle = Math.max(-MAX_DRAFT_DEG, Math.min(MAX_DRAFT_DEG, v));
+      const typed = Math.max(-MAX_DRAFT_DEG, Math.min(MAX_DRAFT_DEG, v));
+      if (typed !== this.angle) { this.angle = typed; this.pushPreview(); }
     }
     if (Math.abs(this.angle) < 1e-3) {
       // keep the tool alive: silently cancelling reads as "nothing happened"
       setPrompt("Nothing to commit yet");
       return;
     }
+    const verdict = previewVerdict(this.store);
+    if (verdict.kind === "wait") {
+      requestAnimationFrame(() => { if (this.active && this.phase === "drag") this.commit(); });
+      return;
+    }
+    if (verdict.kind === "refused") return; // tick() already says why and paints the handle
     const feature = this.buildFeature();
     this.store.setPreview(null); // addFeature re-adds it as a committed feature
     this.store.addFeature(feature);
@@ -305,6 +326,7 @@ export class DraftTool {
     this.grabbing = false;
     this.hovering = false;
     this.angle = 0;
+    this.refusalShown = null;
     setPrompt(null);
   }
 

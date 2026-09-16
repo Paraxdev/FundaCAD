@@ -23,6 +23,7 @@ import { setPrompt } from "../ui/prompt";
 import { snap } from "../ui/units";
 import { axisDragDistance, createDragHandle, handleScale, type DragHandle } from "./manipulator";
 import { CanvasGesture } from "./canvasGesture";
+import { previewVerdict } from "./previewVerdict";
 
 export type FaceOffsetMode = "offsetFace" | "thicken" | "shell";
 
@@ -45,7 +46,6 @@ export class FaceOffsetTool {
   private value = 0;
   private symmetric = false; // thicken only
   private previewId = "";
-  private releasePending = false;
   private refusalShown: string | null = null;
 
   private gizmo: THREE.Group | null = null;
@@ -156,7 +156,7 @@ export class FaceOffsetTool {
       this.viewport.domElement.style.cursor = this.hovering ? "grab" : "default";
       const moved =
         Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
-      if (moved && Math.abs(this.value) >= 1e-3) this.commitOnceBuilt();
+      if (moved && Math.abs(this.value) >= 1e-3) this.commit();
       return;
     }
     const moved =
@@ -228,10 +228,6 @@ export class FaceOffsetTool {
         if (refusal) setPrompt(`${LABEL[this.mode]} refused: ${refusal} · drag back or Esc`);
         else this.prompt();
       }
-      if (this.releasePending && !this.store.buildState.building) {
-        this.releasePending = false;
-        if (refusal === null) { this.commit(); return; }
-      }
       this.positionDim();
       // The field is the truth once typed, including its SIGN. While dragging
       // it displays |value|, so an unguarded read-back would strip an inward
@@ -253,15 +249,7 @@ export class FaceOffsetTool {
     this.dim.position(s.x + 40, s.y + 24);
   }
 
-  /** A release commits, but only a value the kernel built: the preview's build
-   *  may still be running when the hand lets go, so tick() decides once it lands. */
-  private commitOnceBuilt() {
-    this.releasePending = true;
-    this.gesture.frame();
-  }
-
   private pushPreview() {
-    this.releasePending = false;
     this.store.setPreview(Math.abs(this.value) < 1e-6 ? null : this.buildFeature());
   }
 
@@ -307,12 +295,21 @@ export class FaceOffsetTool {
       setPrompt("That number can't be read · Esc");
       return;
     }
-    if (v != null && this.dim.isUserDriven("distance")) this.value = v;
+    if (v != null && this.dim.isUserDriven("distance") && v !== this.value) {
+      this.value = v;
+      this.pushPreview();
+    }
     if (Math.abs(this.value) < 1e-3) {
       // keep the tool alive: silently cancelling reads as "nothing happened"
       setPrompt("Nothing to commit yet");
       return;
     }
+    const verdict = previewVerdict(this.store);
+    if (verdict.kind === "wait") {
+      requestAnimationFrame(() => { if (this.active && this.phase === "drag") this.commit(); });
+      return;
+    }
+    if (verdict.kind === "refused") return; // tick() already says why and paints the handle
     const feature = this.buildFeature();
     this.store.setPreview(null); // addFeature re-adds it as a committed feature
     this.store.addFeature(feature);
@@ -338,7 +335,6 @@ export class FaceOffsetTool {
     this.grabbing = false;
     this.hovering = false;
     this.value = 0;
-    this.releasePending = false;
     this.refusalShown = null;
     setPrompt(null);
   }

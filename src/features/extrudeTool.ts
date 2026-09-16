@@ -36,6 +36,7 @@ import { draftAngle, draftDelta } from "./draftMath";
 import { regionAnchor } from "./regionNudge";
 import { OP_WORD, plannedOperation, type ExtrudeOp } from "./extrudeOperation";
 import { sweepProbePoints } from "./sweepProbe";
+import { previewVerdict } from "./previewVerdict";
 
 /** Below this taper the extrude is treated as straight: the frontend prism draws
  *  instantly and no kernel preview is asked for. Above it the walls lean and the
@@ -971,6 +972,22 @@ export class ExtrudeTool {
     }
     const first = this.selected[0];
     if (!first) return;
+    // A typed value has not been previewed until the pointer moves, and the
+    // kernel has to have seen the tapered solid before it can be judged.
+    if (Math.abs(this.taper) >= 0.05) this.updatePreview();
+    if (this.taperPreviewOn) {
+      const verdict = previewVerdict(this.store);
+      if (verdict.kind === "wait") {
+        requestAnimationFrame(() => { if (this.active && this.phase === "drag") this.commit(); });
+        return;
+      }
+      if (verdict.kind === "refused") {
+        setPrompt(`Extrude refused: ${verdict.reason} · drag back or Esc`);
+        this.depthHandle?.paint({ refused: true });
+        this.viewport.requestRender();
+        return;
+      }
+    }
     // Feature construction (id, regions, symmetric, taper, captured participants)
     // is shared with the live sidecar preview, so the thing committed is exactly
     // the thing that was on screen. See buildFeature.

@@ -27,6 +27,7 @@ import {
 import { draftAngle, draftDelta } from "./draftMath";
 import { collapseDiameter, deltaForDiameter, radialDrag, type RoundFace } from "./radialDrag";
 import { CanvasGesture } from "./canvasGesture";
+import { previewVerdict } from "./previewVerdict";
 
 /** Steepest taper the tool offers, degrees, just under the sidecar's 89 fold limit. */
 const MAX_PP_TAPER = 88;
@@ -405,6 +406,7 @@ export class PressPullTool {
       this.handle?.paint({
         hot: this.hovering || this.grabbing,
         tone: sign < 0 ? "cut" : "idle",
+        refused: this.taperPreviewOn && this.store.previewError !== null,
       });
       this.placeTaperArc(dir, k);
       const s = this.viewport.projectToScreen(this.anchor);
@@ -590,6 +592,15 @@ export class PressPullTool {
     const tv = this.dim.getValue("taper");
     if (tv != null && this.dim.isUserDriven("taper")) {
       this.taper = Math.max(-MAX_PP_TAPER, Math.min(MAX_PP_TAPER, tv));
+    }
+    const verdict = previewVerdict(this.store);
+    if (verdict.kind === "wait") {
+      requestAnimationFrame(() => { if (this.active && this.phase === "drag") this.commit(); });
+      return;
+    }
+    if (verdict.kind === "refused") {
+      setPrompt(`Press/Pull refused: ${verdict.reason} · drag back or Esc`);
+      return;
     }
     const feature = this.buildFeature();
     // Drop the live tapered preview before the real add: it carries the same id,
