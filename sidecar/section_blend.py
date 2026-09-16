@@ -281,8 +281,10 @@ def _convexity(P, T, sides, n1, n2, tol):
         if d.Magnitude() < 1e-12:
             raise SectionBlendError("the edge runs along a face normal")
         d.Normalize()
+        side.inward_sign = 1
         if not side.contains(_p(_v(P) + d.Multiplied(step)), tol):
             d.Reverse()
+            side.inward_sign = -1
         side.inward_cached = d
     return 1 if sides[0].inward_cached.Dot(n2) < 0 else -1
 
@@ -320,7 +322,13 @@ def _edge_tool(shape, edge, kind, size, size2, continuity, tol):
         sides[0].normal_on_edge_cached = n1
         sides[1].normal_on_edge_cached = n2
         if kind == "chamfer":
-            _convexity(P, T, sides, n1, n2, tol)
+            # Carried from the middle rather than probed here: at an end the
+            # edge meets another boundary and neither direction lies on the face.
+            for side, n in zip(sides, (n1, n2)):
+                d = n.Crossed(T)
+                if d.Magnitude() < 1e-12:
+                    raise SectionBlendError("the edge runs along a face normal")
+                side.inward_cached = d.Normalized().Multiplied(side.inward_sign)
         wire, inner = _section(P, T, sides, s, kind, size, size2, continuity)
         # Past the edge's own curvature on the inside of a bend, the blend's
         # centre line stops and runs backwards; the loft would cross itself and
@@ -446,17 +454,19 @@ def _trim_solid(g, at, size):
     body_side = _p(_v(at) - n.Multiplied(1e-3 * size))
     ad = BRepAdaptor_Surface(g)
     kind = ad.GetType()
+    # Every solid is centred on `at`, not on the surface's own origin, which can
+    # sit further along a plane or an axis than the solid reaches.
     if kind == GeomAbs_Plane:
-        pln = ad.Plane()
         z = gp_Dir(-n.X(), -n.Y(), -n.Z())
-        ax = gp_Ax2(pln.Location(), z)
+        ax = gp_Ax2(p, z)
         origin = ax.Location().Translated(
             gp_Vec(ax.XDirection()).Multiplied(-size) + gp_Vec(ax.YDirection()).Multiplied(-size))
         return True, BRepPrimAPI_MakeBox(gp_Ax2(origin, z, ax.XDirection()), 2 * size, 2 * size, size).Shape()
     if kind == GeomAbs_Cylinder:
         cyl = ad.Cylinder()
         axis = cyl.Axis()
-        base = axis.Location().Translated(gp_Vec(axis.Direction()).Multiplied(-size))
+        along = gp_Vec(axis.Location(), at).Dot(gp_Vec(axis.Direction()))
+        base = axis.Location().Translated(gp_Vec(axis.Direction()).Multiplied(along - size))
         solid = BRepPrimAPI_MakeCylinder(gp_Ax2(base, axis.Direction()), cyl.Radius(), 2 * size).Shape()
         return gp_Lin(axis).Distance(body_side) < cyl.Radius(), solid
     if kind == GeomAbs_Sphere:
@@ -516,6 +526,24 @@ def section_blend(shape, edges, kind, size, size2=None, continuity="G1", sizes=N
     out = up.Shape()
     if _solid_count(out) == 0:
         raise SectionBlendError("at this size the blend removes the whole body")
-    if not BRepCheck_Analyzer(out).IsValid():
+    if not BRepCheck_Analyzer(out).IsValid() or not _sane_volume(out):
         raise SectionBlendError("at this size the blend makes a body that is not a valid solid")
     return out
+
+
+def _sane_volume(shape):
+    """An inside-out loft can fuse into a solid BRepCheck passes whose volume is
+    1e101 and whose faces draw with their normals flipped."""
+    import math
+
+    from OCP.Bnd import Bnd_Box
+    from OCP.BRepBndLib import BRepBndLib
+    from OCP.BRepGProp import BRepGProp
+    from OCP.GProp import GProp_GProps
+
+    g = GProp_GProps()
+    BRepGProp.VolumeProperties_s(shape, g)
+    box = Bnd_Box()
+    BRepBndLib.Add_s(shape, box)
+    x0, y0, z0, x1, y1, z1 = box.Get()
+    return math.isfinite(g.Mass()) and 0 < g.Mass() <= 1.01 * (x1 - x0) * (y1 - y0) * (z1 - z0)

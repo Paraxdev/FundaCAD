@@ -206,6 +206,40 @@ def test_a_blend_stops_at_the_face_its_edge_ends_on():
     print(PASS, "the fallback blend stops at the rim its edge ends on and at the end of the leg")
 
 
+def test_a_chamfer_where_its_edge_ends_on_the_rim():
+    """The same leg, chamfered. At the arc's ends neither side of the edge lies
+    on a face, and re-probing the chamfer's direction there turned it up into
+    the body: small sizes did nothing, 4.24 made a solid of volume 1e101 that
+    drew with broken normals, and larger ones were refused."""
+    r = 4.245828802487684
+    feats = [
+        {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "circle", "id": "a", "x": 0, "y": 0, "radius": 50}]},
+        {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 20, "operation": "new"},
+        {"id": "s2", "type": "sketch", "plane": {"origin": [0, 0, 20], "normal": [0, 0, 1], "xdir": [1, 0, 0]},
+         "entities": [{"type": "circle", "id": "b", "x": 0, "y": 50, "radius": r}]},
+        {"id": "e2", "type": "extrude", "sketch": "s2", "distance": -32, "operation": "join"},
+    ]
+    _p, _e, base = rebuild({"parameters": {}, "features": feats})
+    near = Box(40, 40, 12, align=(Align.CENTER, Align.CENTER, Align.MAX)).translate((0, 50, 0))
+    before = (base[0]["shape"] & near).volume
+    added = []
+    for d in (1.0, 2.76, 4.24, 7.32, 11.0):
+        # Tangent edges off sends it straight to the section build, which the
+        # kernel's own chamfer refused on the user's part.
+        f = {"id": "c", "type": "chamfer", "distance": d, "tangentEdges": False,
+             "edges": {"kind": "edge", "by": "nearest", "point": [0, 45.7542, 0]}}
+        _p, errors, bodies = rebuild({"parameters": {}, "features": feats + [f]})
+        assert not errors, (d, errors)
+        shape = bodies[0]["shape"]
+        assert shape.is_valid and shape.volume < math.pi * 50 ** 2 * 20 + 5000, (d, shape.volume)
+        added.append((shape & near).volume - before)
+        assert shape.bounding_box().min.Z > -12.001, (d, shape.bounding_box().min.Z)
+    assert all(a > 0 for a in added) and added == sorted(added), added
+    half_ring = 0.5 * 1.0 * math.pi * (r + 1 / 3)
+    assert abs(added[0] - half_ring) < 0.35 * half_ring, (added[0], half_ring)
+    print(PASS, "a chamfer on the leg's rim-ending arc grows with its size, up to past the leg's end")
+
+
 if __name__ == "__main__":
     try:
         test_matches_the_kernel_where_the_kernel_builds()
@@ -215,6 +249,7 @@ if __name__ == "__main__":
         test_feature_options_reach_the_build()
         test_tangent_edges_off_stops_at_the_picked_edge()
         test_a_blend_stops_at_the_face_its_edge_ends_on()
+        test_a_chamfer_where_its_edge_ends_on_the_rim()
         print("\nALL PASS")
     except Exception:
         traceback.print_exc()
