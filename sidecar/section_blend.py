@@ -38,7 +38,7 @@ from OCP.gp import gp_Lin, gp_Pnt, gp_Pnt2d, gp_Vec
 from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
 from OCP.TColgp import TColgp_Array1OfPnt
 from OCP.TColStd import TColStd_Array1OfReal
-from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE, TopAbs_IN, TopAbs_ON, TopAbs_SOLID, TopAbs_VERTEX
+from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE, TopAbs_IN, TopAbs_ON, TopAbs_OUT, TopAbs_SOLID, TopAbs_VERTEX
 from OCP.TopExp import TopExp, TopExp_Explorer
 from OCP.TopoDS import TopoDS
 from OCP.TopTools import TopTools_IndexedDataMapOfShapeListOfShape, TopTools_ListOfShape
@@ -397,11 +397,7 @@ def _edge_tool(shape, edge, kind, size, size2, continuity, tol, draft=False, pro
                 tools = [rev.Shape()]
                 reach = size * (G2_SETBACK if continuity == "G2" else 1.0) + (size2 or 0.0)
                 fuzz = max(tol * 10, 1e-5)
-                for keep_inside, trim in _trims(shape, edge, faces, s, 50 * reach + 10):
-                    tools = [t if _trim_misses(t, keep_inside, trim)
-                             else _boolean(BRepAlgoAPI_Common() if keep_inside else BRepAlgoAPI_Cut(), t, [trim], fuzz)
-                             for t in tools]
-                return s, tools
+                return s, _apply_trims(tools, _trims(shape, edge, faces, s, 50 * reach + 10), fuzz)
 
     if straight:
         ts = [t0, t1]
@@ -458,11 +454,142 @@ def _edge_tool(shape, edge, kind, size, size2, continuity, tol, draft=False, pro
     reach = size * (G2_SETBACK if continuity == "G2" else 1.0) + (size2 or 0.0)
     trims = _trims(shape, edge, faces, s, 50 * reach + 10)
     fuzz = max(tol * 10, 1e-5)
+    return s, _apply_trims(tools, trims, fuzz)
+
+
+def _apply_trims(tools, trims, fuzz):
     for keep_inside, trim in trims:
-        tools = [t if _trim_misses(t, keep_inside, trim)
-                 else _boolean(BRepAlgoAPI_Common() if keep_inside else BRepAlgoAPI_Cut(), t, [trim], fuzz)
-                 for t in tools]
-    return s, tools
+        out = []
+        for t in tools:
+            if _trim_misses(t, keep_inside, trim):
+                out.append(t)
+                continue
+            if not keep_inside:
+                cut = _boolean(BRepAlgoAPI_Cut(), t, [trim], fuzz)
+                if _volume(cut) > 1e-9:
+                    out.append(cut)
+                continue
+            # Common can give nothing for a tool whose end lies exactly on the
+            # trim's surface (a leg's blend against the round wall it is set
+            # into), and keeping the tool whole leaves a flap past the wall. The
+            # same trim grown by a micron cuts it cleanly.
+            kept = None
+            attempts = [(t, trim, fuzz), (t, trim, 0.0), (trim, t, fuzz), (t, _grown(trim, 1e-5), fuzz),
+                        (t, _grown(trim, 1e-4), fuzz)]
+            for a, b, fz in attempts:
+                try:
+                    got = _boolean(BRepAlgoAPI_Common(), a, [b], fz)
+                except SectionBlendError:
+                    continue
+                if _volume(got) > 1e-9 and _within(got, trim):
+                    kept = got
+                    break
+            if kept is None and _inside_point(t, trim):
+                kept = _outside_removed(t, trim, fuzz)
+            if kept is not None:
+                out.append(kept)
+        tools = out
+    return tools
+
+
+def _outside_removed(tool, trim, fuzz):
+    """The tool less everything around it that is not `trim`: the same solid as
+    Common, reached through two cuts when Common itself comes back empty."""
+    from OCP.Bnd import Bnd_Box
+    from OCP.BRepBndLib import BRepBndLib
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox
+
+    box = Bnd_Box()
+    BRepBndLib.Add_s(tool, box)
+    box.Enlarge(1.0 + 0.1 * math.sqrt(box.SquareExtent()))
+    x0, y0, z0, x1, y1, z1 = box.Get()
+    around = BRepPrimAPI_MakeBox(gp_Pnt(x0, y0, z0), gp_Pnt(x1, y1, z1)).Shape()
+    for fz in (fuzz, 0.0):
+        try:
+            outside = _boolean(BRepAlgoAPI_Cut(), around, [trim], fz)
+            got = _boolean(BRepAlgoAPI_Cut(), tool, [outside], fz)
+        except SectionBlendError:
+            continue
+        if _volume(got) > 1e-9 and BRepCheck_Analyzer(got).IsValid() and _within(got, trim):
+            return got
+    raise SectionBlendError("the blend could not be trimmed where its face ends")
+
+
+def _grown(solid, factor):
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+    from OCP.BRepGProp import BRepGProp
+    from OCP.GProp import GProp_GProps
+    from OCP.gp import gp_Trsf
+
+    g = GProp_GProps()
+    BRepGProp.VolumeProperties_s(solid, g)
+    tr = gp_Trsf()
+    tr.SetScale(g.CentreOfMass(), 1.0 + factor)
+    return BRepBuilderAPI_Transform(solid, tr, True).Shape()
+
+
+def _within(shape, trim):
+    """No point of `shape` outside `trim`: a Common can come back holding part of
+    the tool it should have cut away, a flap past the wall."""
+    from OCP.BRepClass3d import BRepClass3d_SolidClassifier
+
+    cls = BRepClass3d_SolidClassifier(trim)
+    for p in _points_inside(shape):
+        cls.Perform(p, 1e-6)
+        if cls.State() == TopAbs_OUT:
+            return False
+    return True
+
+
+def _volume(shape):
+    from OCP.BRepGProp import BRepGProp
+    from OCP.GProp import GProp_GProps
+
+    g = GProp_GProps()
+    BRepGProp.VolumeProperties_s(shape, g)
+    return g.Mass()
+
+
+def _inside_point(tool, trim):
+    """True when a point inside `tool` is also inside `trim`."""
+    from OCP.BRepClass3d import BRepClass3d_SolidClassifier
+
+    trim_cls = BRepClass3d_SolidClassifier(trim)
+    for p in _points_inside(tool):
+        trim_cls.Perform(p, 1e-9)
+        return trim_cls.State() == TopAbs_IN
+    return False
+
+
+def _points_inside(tool):
+    """Points just inside `tool`, under a few spots of each of its faces. A thin
+    curved blend has room for almost none of a grid over its box."""
+    from OCP.Bnd import Bnd_Box
+    from OCP.BRepBndLib import BRepBndLib
+    from OCP.BRepClass3d import BRepClass3d_SolidClassifier
+    from OCP.BRepTools import BRepTools
+
+    box = Bnd_Box()
+    BRepBndLib.Add_s(tool, box)
+    if box.IsVoid():
+        return
+    depth = 1e-3 * math.sqrt(box.SquareExtent())
+    cls = BRepClass3d_SolidClassifier(tool)
+    ex = TopExp_Explorer(tool, TopAbs_FACE)
+    while ex.More():
+        f = TopoDS.Face_s(ex.Current())
+        ex.Next()
+        u0, u1, v0, v1 = BRepTools.UVBounds_s(f)
+        props = BRepGProp_Face(f)
+        for a, b in ((0.5, 0.5), (0.3, 0.7), (0.7, 0.3)):
+            pt, n = gp_Pnt(), gp_Vec()
+            props.Normal(u0 + (u1 - u0) * a, v0 + (v1 - v0) * b, pt, n)
+            if n.Magnitude() < 1e-12:
+                continue
+            p = _p(_v(pt) - n.Normalized().Multiplied(depth))
+            cls.Perform(p, 1e-9)
+            if cls.State() == TopAbs_IN:
+                yield p
 
 
 def _common_axis(crv, faces):
@@ -587,6 +714,8 @@ def _trim_misses(tool, keep_inside, trim):
     tb, trim_box = Bnd_Box(), Bnd_Box()
     BRepBndLib.Add_s(tool, tb)
     BRepBndLib.Add_s(trim, trim_box)
+    if tb.IsVoid():
+        return True
     if not keep_inside:
         return tb.IsOut(trim_box)
     x0, y0, z0, x1, y1, z1 = tb.Get()
@@ -824,19 +953,73 @@ def _boolean(op, base, tools, fuzz):
 
 def _boolean_all(op, base, tools, fuzz):
     """All tools in one boolean, or one at a time when overlapping tools that
-    share faces make the single call give up."""
+    share faces make the single call give up, or quietly leave some out."""
     try:
         out = _boolean(op(), base, tools, fuzz)
-        if BRepCheck_Analyzer(out).IsValid():
+        if _sound(out) and _applied(op, base, out, tools):
             return out
     except SectionBlendError:
         if len(tools) == 1:
             raise
-    if len(tools) == 1:
-        return out
     for t in tools:
-        base = _boolean(op(), base, [t], fuzz)
+        base = _boolean_one(op, base, t, fuzz)
     return base
+
+
+def _boolean_one(op, base, tool, fuzz):
+    """One tool, retried when the kernel returns a valid solid that simply
+    leaves the tool out: a leg's blend fused onto a body that already had its
+    neighbour's added 7mm3 of its 1258, and came out whole at fuzz 0 or with
+    the arguments swapped."""
+    first = None
+    attempts = [(base, tool, fuzz), (base, tool, 0.0), (base, tool, max(fuzz * 1000, 1e-2))]
+    if op is BRepAlgoAPI_Fuse:
+        attempts.insert(2, (tool, base, fuzz))
+    for a, b, fz in attempts:
+        try:
+            out = _boolean(op(), a, [b], fz)
+        except SectionBlendError:
+            continue
+        if first is None:
+            first = out
+        if _sound(out) and _applied(op, base, out, [tool]):
+            return out
+    if first is None:
+        raise SectionBlendError("the blend would not combine with the body")
+    return first
+
+
+def _sound(shape):
+    """Valid and holding a solid: a fuse can come back as a valid compound with
+    none in it."""
+    return _solid_count(shape) > 0 and BRepCheck_Analyzer(shape).IsValid()
+
+
+def _applied(op, base, out, tools):
+    """Whether `out` took every tool: points inside a tool that `base` did not
+    have are in a fuse's result, and points of it that `base` had are gone from
+    a cut's. A dropped tool fails every one of them."""
+    from OCP.BRepClass3d import BRepClass3d_SolidClassifier
+
+    changed = TopAbs_OUT if op is BRepAlgoAPI_Fuse else TopAbs_IN
+    bc = BRepClass3d_SolidClassifier(base)
+    oc = BRepClass3d_SolidClassifier(out)
+    for t in tools:
+        found = 0
+        for p in _points_inside(t):
+            bc.Perform(p, 1e-9)
+            if bc.State() != changed:
+                continue
+            oc.Perform(p, 1e-9)
+            if oc.State() != changed:
+                break
+            found += 1
+            if found == 6:
+                return False
+        else:
+            if found:
+                return False
+    return True
 
 
 def _solid_count(shape):
@@ -890,11 +1073,17 @@ def _combine(shape, cut, fuse, tol):
         out = _boolean_all(BRepAlgoAPI_Cut, out, cut, fuzz)
     if fuse:
         out = _boolean_all(BRepAlgoAPI_Fuse, out, fuse, fuzz)
-    up = ShapeUpgrade_UnifySameDomain(out, True, True, False)
+    # Tidying only, on a copy: it edits its input's shared topology in place,
+    # throws "Courbes non jointives" on some bodies, and merging the faces of a
+    # leg's two seam halves turned a valid solid invalid.
+    up = ShapeUpgrade_UnifySameDomain(_copy(out), True, True, False)
     try:
         up.Build()
-        out = up.Shape()
-    except Exception:  # noqa: BLE001  merging faces is tidying, "Courbes non jointives" on some bodies
+        tidy = up.Shape()
+        if _solid_count(tidy) == _solid_count(out) and (
+                BRepCheck_Analyzer(tidy).IsValid() or not BRepCheck_Analyzer(out).IsValid()):
+            out = tidy
+    except Exception:  # noqa: BLE001
         pass
     if _solid_count(out) == 0:
         raise SectionBlendError("at this size the blend removes the whole body")

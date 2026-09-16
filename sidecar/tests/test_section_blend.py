@@ -109,6 +109,52 @@ def test_a_rim_past_its_axis_domes_instead_of_refusing():
     print(PASS, "a tapered boss rim domes at every size, G1 and G2, growing monotonically")
 
 
+def test_legs_set_into_a_round_wall_all_round_where_they_meet_its_underside():
+    """The user's bowl: six legs centred on the wall's radius, rounded where they
+    meet the underside. Three kernel faults met here, each silent: trimming a
+    leg's blend against the wall it grazes came back empty, fusing a blend onto
+    a body that already had its neighbour's kept a valid solid without it, and
+    tidying the faces of a leg's two seam halves corrupted the solid in place."""
+    from build123d import Solid
+    from OCP.BRepClass3d import BRepClass3d_SolidClassifier
+    from OCP.TopAbs import TopAbs_IN
+    from OCP.gp import gp_Pnt
+
+    from geom_select import _edge_mid
+
+    legs = [(50 * math.cos(math.radians(-90 + 54 * k)), 50 * math.sin(math.radians(-90 + 54 * k))) for k in range(6)]
+    feats = [
+        {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "circle", "id": "c", "x": 0, "y": 0, "radius": 50}]},
+        {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 20, "operation": "new"},
+        {"id": "s2", "type": "sketch", "plane": {"origin": [0, 0, 20], "normal": [0, 0, 1], "xdir": [1, 0, 0]},
+         "entities": [{"type": "circle", "id": f"l{k}", "x": x, "y": y, "radius": 4.25} for k, (x, y) in enumerate(legs)]},
+        {"id": "e2", "type": "extrude", "sketch": "s2", "distance": -32, "operation": "join"},
+    ]
+    _p, errors, bodies = rebuild({"parameters": {}, "features": feats})
+    assert not errors, errors
+    base = bodies[0]["shape"]
+    arcs = [{"by": "nearest", "kind": "edge", "point": list(_edge_mid(e).to_tuple())} for e in base.edges()
+            if e.geom_type == GeomType.CIRCLE and abs(e.radius - 4.25) < 1e-6
+            and abs(_edge_mid(e).Z) < 1e-6 and math.hypot(_edge_mid(e).X, _edge_mid(e).Y) < 50]
+    for continuity in ("G1", "G2"):
+        added = []
+        for r in (4.0, 8.0):
+            _p, errors, bodies = rebuild({"parameters": {}, "features": feats + [
+                {"id": "f", "type": "fillet", "radius": r, "continuity": continuity, "tangentEdges": False, "edges": arcs}]})
+            assert not errors, (continuity, r, errors)
+            shape = bodies[0]["shape"]
+            assert shape.is_valid and len(shape.solids()) == 1, (continuity, r)
+            added.append(shape.volume - base.volume)
+            cls = BRepClass3d_SolidClassifier(shape.wrapped)
+            for x, y in legs:
+                d = math.hypot(x, y)
+                inner = 45.75 - 0.2 * r
+                cls.Perform(gp_Pnt(x / d * inner, y / d * inner, -0.2 * r), 1e-7)
+                assert cls.State() == TopAbs_IN, f"the leg at ({x:.1f}, {y:.1f}) lost its {continuity} {r}mm blend"
+        assert 0 < added[0] < added[1], (continuity, added)
+    print(PASS, "six legs set into a round wall round at their underside, every one, G1 and G2")
+
+
 def test_the_section_carries_the_profile():
     box, top = _box_top_edge()
     plain = _blend(box, [top], kind="fillet", size=5).volume
@@ -448,6 +494,7 @@ if __name__ == "__main__":
         test_a_radius_past_the_faces_carves_through()
         test_a_rim_past_its_axis_domes_instead_of_refusing()
         test_the_section_carries_the_profile()
+        test_legs_set_into_a_round_wall_all_round_where_they_meet_its_underside()
         test_the_junction_beside_a_seam_now_rounds()
         test_feature_options_reach_the_build()
         test_tangent_edges_off_stops_at_the_picked_edge()
