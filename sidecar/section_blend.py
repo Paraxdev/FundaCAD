@@ -888,8 +888,8 @@ def _ball_corners(shape, blended, continuity="G1", profile=0.0):
     that is a tricylinder instead of a sphere. The corner's cell is the
     parallelepiped between the ball centre and the planes touching the faces
     where the ball does; removing the part of it outside the ball is exactly
-    the difference on planar faces, since every point of the ball is within the
-    radius of each edge's axis, and close to it on curved ones.
+    the difference, since every point of the ball is within the radius of each
+    edge's axis.
 
     A profiled or G2 blend has no ball. Where the three faces are planes square
     to each other its corner is `_patch_solid` instead, and elsewhere the edges
@@ -928,7 +928,9 @@ def _ball_corners(shape, blended, continuity="G1", profile=0.0):
             if len(faces) != 3:
                 continue
             setback = r * G2_SETBACK if continuity == "G2" else r
-            if not ball and not all(BRepAdaptor_Surface(f).GetType() == GeomAbs_Plane for f in faces):
+            # A ball on a curved face overcut a D shape's corner by 10mm3 where
+            # the square ends were within 1.2 of the kernel.
+            if not all(BRepAdaptor_Surface(f).GetType() == GeomAbs_Plane for f in faces):
                 continue
             got = _corner_ball(faces, BRep_Tool.Pnt_s(v), setback)
             if got is None:
@@ -936,16 +938,13 @@ def _ball_corners(shape, blended, continuity="G1", profile=0.0):
             C, ns = got
             if not ball and any(abs(ns[i].Dot(ns[j])) > 1e-6 for i, j in ((0, 1), (1, 2), (0, 2))):
                 continue
-            curved = any(BRepAdaptor_Surface(f).GetType() != GeomAbs_Plane for f in faces)
             cols = []
             for k in range(3):
                 d = ns[(k + 1) % 3].Crossed(ns[(k + 2) % 3])
                 along = d.Dot(ns[k])
                 if abs(along) < 1e-9:
                     break
-                # Past the touching plane: a concave face curves back into the
-                # body beyond it, and a cell short of that leaves a sliver.
-                cols.append(d.Multiplied((setback * (1.5 if curved else 1.02) + 1e-3) / along))
+                cols.append(d.Multiplied((setback * 1.02 + 1e-3) / along))
             if len(cols) != 3:
                 continue
             m = gp_Mat(cols[0].XYZ(), cols[1].XYZ(), cols[2].XYZ())
@@ -1032,28 +1031,13 @@ def _patch_solid(A, ns, d, continuity, k):
 
 def _corner_ball(faces, V, r):
     """Centre of the ball of radius r touching all three faces near V, and each
-    face's outward normal where it touches, or None where there is none."""
-    from OCP.GeomAbs import GeomAbs_Cylinder, GeomAbs_Sphere
-
+    face's outward normal where it touches, or None where there is none. The
+    faces are planes."""
     feet, ns, surfs = [], [], []
     for f in faces:
-        ad = BRepAdaptor_Surface(f)
-        kind = ad.GetType()
-        if kind not in (GeomAbs_Plane, GeomAbs_Cylinder, GeomAbs_Sphere):
-            return None
         surf = BRep_Tool.Surface_s(f)
         got = _surface_normal(f, surf, V)
         if got is None:
-            return None
-        # Convex only: a hole's wall curves back into the body past the ball,
-        # and the corner cell then cuts what the edge blends keep.
-        if kind == GeomAbs_Cylinder:
-            ax = ad.Cylinder().Axis()
-            radial = gp_Vec(ax.Location(), got[0])
-            radial = radial - gp_Vec(ax.Direction()).Multiplied(radial.Dot(gp_Vec(ax.Direction())))
-            if radial.Dot(got[1]) <= 0:
-                return None
-        elif kind == GeomAbs_Sphere and gp_Vec(ad.Sphere().Location(), got[0]).Dot(got[1]) <= 0:
             return None
         feet.append(V)
         ns.append(got[1])
@@ -1127,7 +1111,7 @@ def _boolean_all(op, base, tools, fuzz, one_shot=False):
     started = time.monotonic()
     try:
         out = _boolean(op(), base, tools, fuzz)
-        if _sound(out) and _applied(op, base, out, tools):
+        if _sound(out, base) and _applied(op, base, out, tools):
             return out
     except SectionBlendError:
         if len(tools) == 1 and not one_shot:
@@ -1197,15 +1181,48 @@ def _boolean_one(op, base, tool, fuzz):
             out = _boolean(op(), _copy(a), [_copy(b)], fz)
         except SectionBlendError:
             continue
-        if _sound(out) and _applied(op, base, out, [tool]):
+        if _sound(out, base) and _applied(op, base, out, [tool]):
             return out
     raise SectionBlendError("the blend would not combine with the body")
 
 
-def _sound(shape):
+def _sound(shape, base=None):
     """Valid and holding a solid: a fuse can come back as a valid compound with
     none in it."""
-    return _solid_count(shape) > 0 and BRepCheck_Analyzer(shape).IsValid() and _bounded(shape) and _sane_volume(shape)
+    return (_solid_count(shape) > 0 and BRepCheck_Analyzer(shape).IsValid() and _bounded(shape)
+            and _sane_volume(shape) and (base is None or not _has_strip(shape, base)))
+
+
+def _has_strip(shape, base):
+    """A face the boolean made on a blend's loft that has no area but long
+    edges: two copies of one curve folded into a strip with solid on both
+    sides. Three G2 edges into a box corner at 26.3mm cut to two of them
+    running 40mm through the body, valid to BRepCheck and drawn as stray
+    triangles. Slivers left of a body's own cylinder are not strips: six 77mm
+    leg fills leave five along the wall and draw fine. Faces the body already
+    had are not measured, an imported part has tens of thousands."""
+    from OCP.GeomAbs import GeomAbs_BSplineSurface
+    from OCP.BRepGProp import BRepGProp
+    from OCP.GProp import GProp_GProps
+    from OCP.TopTools import TopTools_IndexedMapOfShape
+
+    old = TopTools_IndexedMapOfShape()
+    TopExp.MapShapes_s(base, TopAbs_FACE, old)
+    ex = TopExp_Explorer(shape, TopAbs_FACE)
+    while ex.More():
+        f = ex.Current()
+        ex.Next()
+        if old.Contains(f) or BRepAdaptor_Surface(TopoDS.Face_s(f)).GetType() != GeomAbs_BSplineSurface:
+            continue
+        g = GProp_GProps()
+        BRepGProp.SurfaceProperties_s(f, g)
+        if abs(g.Mass()) > 1e-3:
+            continue
+        g = GProp_GProps()
+        BRepGProp.LinearProperties_s(f, g)
+        if g.Mass() > 1.0:
+            return True
+    return False
 
 
 def _bounded(shape):
@@ -1233,7 +1250,7 @@ def _applied_by(op, base, out, tools, verify):
     from OCP.BRepClass3d import BRepClass3d_SolidClassifier
 
     fuse = op is BRepAlgoAPI_Fuse
-    if fuse and _solid_count(out) > _solid_count(base):
+    if _solid_count(out) > _solid_count(base) and (fuse or _left_inside(out, base, tools, verify)):
         return False
     changed = TopAbs_OUT if fuse else TopAbs_IN
     bc = BRepClass3d_SolidClassifier(base)
@@ -1267,6 +1284,30 @@ def _applied_by(op, base, out, tools, verify):
         if any(alone(p) for p in missed) and not any(alone(p) for p in landed):
             return False
     return _kept_base(base, out, tools, verify)
+
+
+def _left_inside(out, base, tools, verify):
+    """Whether a cut came back with a piece its tools should have removed. A cut
+    through a thin part can split it for real, but no piece of a cut can lie
+    inside a tool: three edges into a box corner at 10mm G2 left 118mm3 of the
+    corner loose, every sample of it inside the tools."""
+    near = _near_tools(tools)
+    solids = []
+    ex = TopExp_Explorer(out, TopAbs_SOLID)
+    while ex.More():
+        solids.append(ex.Current())
+        ex.Next()
+    solids.sort(key=_volume, reverse=True)
+    for piece in solids[_solid_count(base):]:
+        inside = checked = 0
+        for p in _points_inside(piece, verify):
+            inside += near(p, lambda st: st == TopAbs_IN)
+            checked += 1
+            if checked >= 12:
+                break
+        if checked and inside * 2 > checked:
+            return True
+    return False
 
 
 def _swallowed(base, tools):
@@ -1443,7 +1484,7 @@ def _combine(shape, cut, fuse, tol, one_shot=False):
         pass
     if _solid_count(out) == 0:
         raise SectionBlendError("at this size the blend removes the whole body")
-    if not _sound(out) or not (_kept_base(shape, out, cut + fuse, False) or _kept_base(shape, out, cut + fuse)):
+    if not _sound(out, shape) or not (_kept_base(shape, out, cut + fuse, False) or _kept_base(shape, out, cut + fuse)):
         raise SectionBlendError("at this size the blend makes a body that is not a valid solid")
     return out
 

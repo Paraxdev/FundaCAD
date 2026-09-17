@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Runs the sidecar's and the plugins' test scripts from sidecar/, JOBS at a time.
 # Files that bind the sidecar's websocket port run one at a time afterwards, or
-# two of them would fight over 8765. Each file's output is printed whole in its
-# own group, in file order, once everything has finished.
+# two of them would fight over 8765, and so does any file with a line starting
+# `# ci: run alone`, saying why. Each file's output is printed whole in its own
+# group, in file order, once everything has finished.
 #
 #   SKIP="a.py b.py" JOBS=4 scripts/run-sidecar-tests.sh [test files...]
 #
@@ -22,7 +23,7 @@ serial=()
 for t in "$@"; do
   [ -e "$t" ] || continue   # a glob that matched nothing stays literal
   case " $SKIP " in *" $(basename "$t") "*) echo "skip $t"; continue;; esac
-  if grep -qE '\bPORT\b|websockets\.serve' "$t"; then serial+=("$t"); else parallel+=("$t"); fi
+  if grep -qE '\bPORT\b|websockets\.serve|^# ci: run alone' "$t"; then serial+=("$t"); else parallel+=("$t"); fi
 done
 
 out=$(mktemp -d)
@@ -33,7 +34,7 @@ run() {
 }
 export -f run
 
-echo "${#parallel[@]} files $JOBS at a time, then ${#serial[@]} that bind the port one at a time"
+echo "${#parallel[@]} files $JOBS at a time, then ${#serial[@]} one at a time"
 if [ ${#parallel[@]} -gt 0 ]; then
   printf '%s\0' "${parallel[@]}" | xargs -0 -P "$JOBS" -I{} bash -c 'run "$1" "$2"' _ {} "$out"
 fi
