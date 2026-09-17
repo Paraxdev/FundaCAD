@@ -163,9 +163,12 @@ impl Jobs for GeomJobs {
         doc: &Value,
         tolerance: f64,
         known: &Map<String, Value>,
-        _fresh: bool,
+        fresh: bool,
         ctx: &JobContext,
     ) -> JobResult {
+        // server.py `_compute_all_job` rebuilds with no known etags, every body full.
+        let none = Map::new();
+        let known = if fresh { &none } else { known };
         rebuild_result(doc, tolerance, known, &EngineWatch(ctx))
     }
 
