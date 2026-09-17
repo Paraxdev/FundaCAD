@@ -1076,6 +1076,8 @@ jobs:
       # loop, its transports and the protocol have tests of their own, and the
       # WebSocket transport is behind a feature, so without it the server the
       # Python protocol suites drive is never compiled here (RUST-PIVOT section
-      # 5, Phase 2).
+      # 5, Phase 2). It also covers fundacad-mcp, whose suites drive the built
+      # binaries rather than the library: the MCP server over its real stdio
+      # protocol, and `fundacad-engine` over a real socket for the live session.
       - name: Rust workspace tests
         run: cargo test --workspace --features fundacad-engine/ws

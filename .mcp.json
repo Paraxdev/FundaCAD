@@ -4,6 +4,11 @@
       "command": "uv",
       "args": ["run", "--project", "sidecar", "python", "plugins/FundaCAD.MCP/server.py"],
       "env": {}
+    },
+    "fundacad-rust": {
+      "command": "cargo",
+      "args": ["run", "--quiet", "--package", "fundacad-mcp"],
+      "env": {}
     }
   }
 }

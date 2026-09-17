@@ -252,7 +252,12 @@ progress is planned wrong.
 6. Plugin host (section 2.3, in) and the in-repo plugins' geometry ported to
    wasm components: PrintToolbox is ported, Screws, Printing and Texture are
    not.
-7. `fundacad-mcp` on rmcp, same tool vocabulary (docs/MCP.md).
+7. `fundacad-mcp` on rmcp, same tool vocabulary (docs/MCP.md). Done: the two
+   servers publish a byte-identical tool list, the eleven Python suites have
+   Rust twins, and `crates/fundacad-mcp/tools/diff_servers.py` runs a scripted
+   session through both and diffs the replies. It does not link the kernel: a
+   private session spawns `fundacad-engine --ws`, which is the same socket a
+   live session uses.
 8. Gates: `eval_fillet_corpus` 0/500, `e2e_coverage.py` 34/34, the golden
    corpus, and the Python protocol suites (`test_ws.py`, `test_cancel.py`,
    `test_conn_limit.py`, `test_fullstack.py`) run against
@@ -306,6 +311,21 @@ LOC are `wc -l` of the current tree. "Oracle" is what proves the port right.
 | rebuild_cache.py, geomstore.py | 1,104 | fundacad-geom::cache | medium | test_checkpoint, test_geomstore |
 | shape_generate.py, plugin_geometry.py | 624 | fundacad-geom::plugins (wasmtime host, done) | design | corpus_plugins.json, tests/plugin_host.rs |
 | server.py | 2,139 | fundacad-engine | medium | test_ws, test_cancel, test_conn_limit, test_fullstack, test_heartbeat |
+
+### 4.1b The Python MCP plugin
+
+| Source (plugins/FundaCAD.MCP/) | LOC | Target | Risk | Oracle |
+|---|---|---|---|---|
+| server.py | 1,498 | fundacad-mcp::{server,upload} | medium | tests/{protocol,import}.rs |
+| schema.py | 758 | fundacad-mcp::schema (+ schema.json) | low | tests/schema.rs, held to `Feature::KNOWN` |
+| render.py | 453 | fundacad-mcp::{render,png} | low | tests/render.rs, the same pixel counts |
+| sidecar_link.py, winjob.py | 499 | fundacad-mcp::link | medium | tests/{engine_discovery,lifetime}.rs |
+| model.py | 369 | fundacad-mcp::model | low | tests/model.rs |
+| expr.py | 339 | deleted, fundacad-core::params | low | tests/expr.rs |
+| docfile.py | 293 | fundacad-mcp::docfile | low | tests/docfile.rs |
+| live_link.py, app_session.py | 330 | fundacad-mcp::{live,app_session} | medium | tests/{live_session,reattach}.rs |
+| describe.py | 130 | fundacad-mcp::describe | low | tests/protocol.rs |
+| client.py | 197 | stays Python, drives either server | low | it is the diff harness |
 | tools/*.py evals | 4,169 | stay Python, drive the engine through the CLI or `--ws` | low | they are the oracle |
 
 OpenCASCADE classes the vendored bridge does not expose yet, in order of first

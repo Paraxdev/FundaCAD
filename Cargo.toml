@@ -16,6 +16,7 @@ members = [
     "crates/fundacad-cli",
     "crates/fundacad-core",
     "crates/fundacad-geom",
+    "crates/fundacad-mcp",
     "crates/fundacad-engine",
     "crates/fundacad-protocol",
 ]

@@ -18,6 +18,53 @@ It runs on the sidecar's own virtual environment because everything it needs is
 already a sidecar dependency: `websockets` for the link, `numpy` for the
 renderer, `pillow` for the PNG.
 
+## The Rust port
+
+`crates/fundacad-mcp` is the same server in Rust, on the official MCP SDK
+(`rmcp`, stdio transport, `#[tool]`), and it is what survives the sidecar's
+deletion (docs/RUST-PIVOT.md, Phase 2 item 7). Same tool vocabulary, same
+argument names, same defaults, same refusals: the tool list the two publish is
+byte-identical, which is asserted rather than hoped for (see the parity script
+below). It is registered beside the Python one while both exist:
+
+```json
+{ "mcpServers": { "fundacad-rust": {
+    "command": "cargo",
+    "args": ["run", "--quiet", "--package", "fundacad-mcp"] } } }
+```
+
+`cargo run` rather than a path, because a path needs an extension on Windows and
+a build that has happened; this works from a checkout either way, and after the
+first build it costs nothing. An installed plugin gets the binary itself.
+
+What differs, and why:
+
+- It does not link the geometry kernel. A PRIVATE session spawns
+  `fundacad-engine --ws` and talks to it over the same loopback socket a LIVE
+  session uses, so the two worlds are one code path and an OpenCASCADE abort
+  takes the engine rather than the conversation. The binary to spawn is found
+  next to this one, or named by `FUNDACAD_ENGINE_CMD`, which is the variable the
+  protocol suites already drive both engines with.
+- Tool calls are answered in the order they arrive. The SDK spawns a task per
+  request, so the server runs on a single-threaded runtime and holds one turn
+  lock, which is what the Python server's single read loop gave for free.
+- The renderer is the same rasteriser with no numpy and the PNG comes from the
+  `png` crate rather than Pillow; the pictures are the same pictures.
+- `expr.py` is gone: expressions are `fundacad-core::params`, the Rust twin of
+  `src/params/{parse,eval}.ts`, so there is one fewer copy of the grammar to
+  keep in step. Its error wording follows the app's rather than the Python
+  port's (`unknown parameter "x"`, not `unknown parameter 'x'`).
+
+Both servers can be driven over one scripted session and their replies compared:
+
+```sh
+python crates/fundacad-mcp/tools/diff_servers.py crates/fundacad-mcp/tools/parity.jsonl
+python crates/fundacad-mcp/tools/diff_servers.py --tools
+```
+
+The Python suite in `plugins/FundaCAD.MCP/tests/` is the oracle, and every file
+in it has a twin under `crates/fundacad-mcp/tests/`.
+
 ## Without a clone: installing it as a plugin
 
 That command line needs this repository on disk. For someone who has an
@@ -301,6 +348,14 @@ one-shot calls is not a session, use `--script`, which is either a JSON array of
 | `client.py` | the client the tests and the command line use |
 | `winjob.py` | the Windows job object that makes the engine die with the server |
 | `manifest.json` | what it declares when installed as a plugin (`docs/PLUGINS.md`) |
+
+`crates/fundacad-mcp/src/` is the same list in Rust, module for module:
+`server.rs` (the tools), `link.rs` (the engine and its lifetime, `winjob.py`
+included), `model.rs`, `render.rs`, `png.rs`, `describe.rs`, `docfile.rs`,
+`upload.rs` (the inline half of `server.py`), `app_session.rs`, `live.rs`, and
+`schema.rs` with `schema.json`, which is `schema.py`'s tables carried over
+verbatim rather than retyped. There is no `expr.rs`: that is
+`fundacad-core::params`.
 
 `expr.py` and `schema.py` are both ports of things whose authority lives
 elsewhere, so both are pinned by tests: `plugins/FundaCAD.MCP/tests/test_expr.py` holds the
