@@ -30,5 +30,8 @@ pub fn bbox(shape: &Shape) -> Option<Bbox> {
         return None;
     }
     let (min, max) = (bb.min(), bb.max());
-    Some(Bbox { min: [min.x, min.y, min.z], max: [max.x, max.y, max.z] })
+    Some(Bbox {
+        min: [min.x, min.y, min.z],
+        max: [max.x, max.y, max.z],
+    })
 }
