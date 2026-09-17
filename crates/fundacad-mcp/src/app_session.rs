@@ -108,7 +108,10 @@ pub fn read_session_file(path: Option<&Path>) -> Option<AppSession> {
 pub async fn probe(info: &AppSession, timeout: Duration) -> bool {
     let call = async {
         let mut ws = crate::link::Socket::connect(info.port, &info.token).await.ok()?;
-        let reply = ws.request("probe", &serde_json::json!({})).await.ok()?;
+        let reply = ws
+            .request("probe", &serde_json::json!({"op": "ping"}))
+            .await
+            .ok()?;
         let _ = ws.close().await;
         Some(reply.get("result")?.get("pong")?.as_bool().unwrap_or(false))
     };
