@@ -4,12 +4,15 @@
 // Adding a tool: describe it in printForm.ts, add it to PRINT_TOOLS, give it an icon below, and
 // register its handler in geometry/register.py with its type in manifest.json's featureTypes.
 
-import { contribute } from "fundacad";
+import { choose, contribute, toast } from "fundacad";
 import type { Engine } from "fundacad";
+import { bedFitMessage, bedSizeOf, loadBedFitSetting, saveBedFitSetting, BED_PRESETS } from "./bedFit";
+import { BodyTool } from "./bodyTool";
 import { FaceTool } from "./faceTool";
-import { FACES_TARGET, PRINT_TOOLS, type PrintTool } from "./printForm";
+import { PRINT_TOOLS, type PrintTool } from "./printForm";
 
 const ID = "FundaCAD.PrintToolbox";
+const BED_FIT_ACTION = "print-bed-fit-check";
 
 // Compile-time constants only: these reach the DOM through the app's Icon component.
 const ICONS: Record<string, string> = {
@@ -21,10 +24,21 @@ const ICONS: Record<string, string> = {
   printSacrificialLayer:
     '<rect x="4" y="4" width="16" height="16" rx="1.5"/><line x1="10" y1="4" x2="10" y2="20"/>' +
     '<line x1="14" y1="4" x2="14" y2="20"/><line x1="10" y1="16.5" x2="14" y2="16.5"/>',
+  printThreadRibs:
+    '<circle cx="12" cy="12" r="7.5"/><line x1="12" y1="4.8" x2="12" y2="9"/>' +
+    '<line x1="18.2" y1="14.5" x2="14.6" y2="12.4"/><line x1="5.8" y1="14.5" x2="9.4" y2="12.4"/>',
+  printZipTieChannel:
+    '<path d="M5 8V12A7 7 0 0 0 19 12V8"/><line x1="5" y1="4.5" x2="5" y2="8"/>' +
+    '<line x1="19" y1="4.5" x2="19" y2="8"/>',
+  printElephantFootChamfer: '<path d="M6 4V15H10.5L18 20V4Z"/>',
+  printVerticalFillet:
+    '<path d="M14 4H8A4 4 0 0 0 4 8V20"/><line x1="14" y1="4" x2="14" y2="20"/>' +
+    '<line x1="4" y1="20" x2="14" y2="20"/>',
 };
 
 export async function activate(e: Engine): Promise<() => void> {
   const faceTool = new FaceTool(e.viewport, e.store);
+  const bodyTool = new BodyTool(e.viewport, e.store);
 
   function start(tool: PrintTool) {
     if (e.toolBusy()) return;
@@ -32,10 +46,29 @@ export async function activate(e: Engine): Promise<() => void> {
       e.setStatus(`${tool.label}: create or import a body first`, "");
       return;
     }
-    faceTool.start(tool, (id) => {
+    const done = (id: string | null) => {
       e.noteCommitted(id);
       if (id) e.selectFeature(id);
-    });
+    };
+    if (tool.pick === "bodies") bodyTool.run(tool, done);
+    else faceTool.start(tool, done);
+  }
+
+  async function checkBedFit() {
+    const bbox = e.store.buildState.result?.bbox;
+    if (!bbox) {
+      e.setStatus("Bed Fit Check: build the model first", "");
+      return;
+    }
+    const size: readonly [number, number, number] = [
+      bbox.max[0] - bbox.min[0], bbox.max[1] - bbox.min[1], bbox.max[2] - bbox.min[2],
+    ];
+    const setting = loadBedFitSetting();
+    const picked = await choose("Bed size", BED_PRESETS.map((p) => ({ value: p.id, label: p.label })));
+    if (!picked) return;
+    const next = { ...setting, presetId: picked };
+    saveBedFitSetting(next);
+    toast(bedFitMessage(size, bedSizeOf(next)));
   }
 
   const off = contribute(ID, {
@@ -43,25 +76,36 @@ export async function activate(e: Engine): Promise<() => void> {
       id: t.id,
       label: t.label,
       iconName: t.icon,
-      consumes: ["face"],
+      consumes: t.pick === "bodies" ? ["body"] : ["face"],
       source: "selection",
-      busy: () => faceTool.active,
+      busy: () => (t.pick === "bodies" ? bodyTool.active : faceTool.active),
     })),
-    actions: Object.fromEntries(PRINT_TOOLS.map((t) => [t.id, () => start(t)])),
-    ribbon: [{ group: "PRINT", items: PRINT_TOOLS.map((t) => ({ action: t.id, label: t.label, iconName: t.icon })) }],
-    icons: ICONS,
+    actions: {
+      ...Object.fromEntries(PRINT_TOOLS.map((t) => [t.id, () => start(t)])),
+      [BED_FIT_ACTION]: () => void checkBedFit(),
+    },
+    ribbon: [{
+      group: "PRINT",
+      items: [
+        ...PRINT_TOOLS.map((t) => ({ action: t.id, label: t.label, iconName: t.icon })),
+        { action: BED_FIT_ACTION, label: "Bed Fit Check", iconName: "printBedFit" },
+      ],
+    }],
+    icons: { ...ICONS, printBedFit: '<rect x="4" y="4" width="16" height="16" rx="1.5"/><path d="M4 15L9 10L13 14L20 7"/>' },
     features: PRINT_TOOLS.map((t) => ({
       type: t.type,
       meta: { icon: t.icon, label: t.label },
       numFields: t.numFields,
       choiceFields: t.choiceFields,
-      targets: FACES_TARGET,
+      ...(t.toggleFields ? { toggleFields: t.toggleFields } : {}),
+      targets: t.targets,
       ...(t.fieldApplies ? { fieldApplies: t.fieldApplies } : {}),
     })),
   });
 
   return () => {
     faceTool.cancel();
+    bodyTool.cancel();
     off();
   };
 }

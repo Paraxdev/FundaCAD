@@ -31,6 +31,26 @@ def picked_faces(f, ctx, label):
     return out
 
 
+def bodies_from_ids(f, ctx, label, field="bodies"):
+    """[body, ...] for a positional body-id target, or the active body when empty.
+
+    Same fallback the application's own body tools use (move, scale, pattern):
+    an empty list means "the active body" rather than "nothing".
+    """
+    ids = f.get(field) or []
+    if isinstance(ids, str):
+        ids = [ids]
+    if not ids:
+        return [ctx.require_active(label)]
+    out = []
+    for bid in ids:
+        body = ctx.find_body(bid)
+        if body is None:
+            raise ValueError(f"{label}: the target body no longer exists")
+        out.append(body)
+    return out
+
+
 def _pt(p):
     return (p.X(), p.Y(), p.Z())
 

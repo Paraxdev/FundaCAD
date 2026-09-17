@@ -16,7 +16,10 @@ import plugin_geometry  # noqa: E402
 
 plugin_geometry.discover()
 
-for _t in ("teardropHole", "roofBridge", "counterboreBridge", "sacrificialLayer"):
+for _t in (
+    "teardropHole", "roofBridge", "counterboreBridge", "sacrificialLayer",
+    "threadRibs", "zipTieChannel", "elephantFootChamfer", "verticalFillet",
+):
     assert plugin_geometry.handler_for(_t) is not None, (
         f"{_t} did not register: check manifest.json's {plugin_geometry.MANIFEST_ENTRY!r} entry "
         f"(broken: {plugin_geometry.broken_plugins()})"

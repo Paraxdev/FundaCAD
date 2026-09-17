@@ -419,6 +419,59 @@ FEATURES = {
                     "faces": {"kind": "face", "by": "nearest", "point": [2.5, 0, 5], "body": "body1"},
                     "layerHeight": 0.2, "layers": 1, "depth": 0},
     },
+    "threadRibs": {
+        "summary": "Turn a plain round hole into a self-tapping screw hole: thin axial "
+                   "ribs protrude inward for the screw to cut its own thread into "
+                   "(3D Printing Toolbox plugin).",
+        "fields": {"faces": "Selector or list, the inside face of each hole",
+                   "ribCount": "optional whole Num, 3 to 8, default 3",
+                   "ribWidth": "optional Num, mm, default 0.6",
+                   "coreDiameter": "optional Num, mm, the tap/core diameter the ribs leave clear; "
+                                  "0 or absent defaults to 80% of the hole diameter",
+                   "startDepth": "optional Num, mm the ribs start below the open end(s), default 0.5"},
+        "example": {"id": "tr1", "type": "threadRibs",
+                    "faces": {"kind": "face", "by": "nearest", "point": [0, 0, 13], "body": "body1"},
+                    "ribCount": 3, "ribWidth": 0.6},
+        "notes": "Only adds material, inside the hole. A hole running along the build direction is fine, "
+                "unlike the roof tools.",
+    },
+    "zipTieChannel": {
+        "summary": "Cut a U-shaped channel under a flat face so a zip tie can loop "
+                   "through the part (3D Printing Toolbox plugin).",
+        "fields": {"faces": "Selector or list, the flat face each channel is cut under",
+                   "channelWidth": "optional Num, mm, default 4",
+                   "channelHeight": "optional Num, mm, default 2",
+                   "insetDepth": "optional Num, mm below the face, default 2",
+                   "span": "optional Num, mm between the two openings, must exceed channelHeight, default 10",
+                   "angle": "optional Num, degrees the channel turns on the face, default 0",
+                   "allowBreakthrough": "optional bool, default false; without it a channel reaching "
+                                        "the part's far side is refused"},
+        "example": {"id": "zt1", "type": "zipTieChannel",
+                    "faces": {"kind": "face", "by": "nearest", "point": [0, 0, 10], "body": "body1"},
+                    "channelWidth": 4, "channelHeight": 2, "insetDepth": 2, "span": 10},
+    },
+    "elephantFootChamfer": {
+        "summary": "Chamfer the bottom edges of a body touching the build plate, to cancel "
+                   "first-layer squish (3D Printing Toolbox plugin).",
+        "fields": {"bodies": "optional list of body ids; absent = the active body",
+                   "size": "optional Num, mm, 0.01 to 20, default 0.4",
+                   "buildDir": 'optional "+Z", "-Z", "+X", "-X", "+Y" or "-Y", default "+Z"'},
+        "example": {"id": "ef1", "type": "elephantFootChamfer", "size": 0.4},
+        "notes": "Finds the lowest planar face opposite the build direction and chamfers its outer "
+                "edges. Edges the kernel refuses are skipped and reported rather than failing the "
+                "feature; it only fails outright if none could be chamfered.",
+    },
+    "verticalFillet": {
+        "summary": "Fillet every edge of a body that runs parallel to the build direction "
+                   "(3D Printing Toolbox plugin).",
+        "fields": {"bodies": "optional list of body ids; absent = the active body",
+                   "radius": "optional Num, mm, 0.01 to 100, default 2",
+                   "onlyConvex": "optional bool, default false; true skips reflex (concave) edges",
+                   "buildDir": 'optional "+Z", "-Z", "+X", "-X", "+Y" or "-Y", default "+Z"'},
+        "example": {"id": "vf1", "type": "verticalFillet", "radius": 2},
+        "notes": "Edges the kernel refuses are skipped and reported rather than failing the feature; "
+                "it only fails outright if none could be filleted. A reflex edge ADDS material.",
+    },
 
     # --- placement and combination ---------------------------------------------
     "move": {

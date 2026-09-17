@@ -78,6 +78,10 @@ const DRAWN_BY_PLUGIN: Record<string, string> = {
   roofBridge: "FundaCAD.PrintToolbox",
   counterboreBridge: "FundaCAD.PrintToolbox",
   sacrificialLayer: "FundaCAD.PrintToolbox",
+  threadRibs: "FundaCAD.PrintToolbox",
+  zipTieChannel: "FundaCAD.PrintToolbox",
+  elephantFootChamfer: "FundaCAD.PrintToolbox",
+  verticalFillet: "FundaCAD.PrintToolbox",
 };
 
 const DRAWN_BY: Record<string, string> = { ...DRAWN_BY_APP, ...DRAWN_BY_PLUGIN };

@@ -1,7 +1,7 @@
 // What each toolbox tool is, as data: its feature type, its rows, its defaults, and the feature a
 // pick turns into. Pure, so the tests run without a DOM or an app.
 
-import type { ChoiceField, Feature, FieldKind, Selector, TargetField } from "fundacad";
+import type { ChoiceField, Feature, FieldKind, Selector, TargetField, ToggleField } from "fundacad";
 
 export type BuildDir = "+X" | "-X" | "+Y" | "-Y" | "+Z" | "-Z";
 
@@ -20,7 +20,13 @@ export interface PrintTool {
   usesBuildDir: boolean;
   numFields: readonly [string, string, FieldKind][];
   choiceFields: readonly ChoiceField[];
+  toggleFields?: readonly ToggleField[];
   fieldApplies?: (field: string, values: Record<string, unknown>) => boolean;
+  /** What a run of this tool consumes: faces already selected (FaceTool), or
+   *  the selected bodies, defaulting to the active one (BodyTool). */
+  pick: "faces" | "bodies";
+  /** The selection row(s) the feature panel shows for this type. */
+  targets: readonly TargetField[];
 }
 
 export const BUILD_DIRS: { value: BuildDir; label: string }[] = [
@@ -70,6 +76,8 @@ export const TEARDROP: PrintTool = {
     },
   ],
   fieldApplies: (field, values) => field !== "flatHeight" || values["roof"] === "flat",
+  pick: "faces",
+  targets: FACES_TARGET,
 };
 
 export const ROOF_BRIDGE: PrintTool = {
@@ -82,6 +90,8 @@ export const ROOF_BRIDGE: PrintTool = {
   usesBuildDir: true,
   numFields: [["height", "Extra height", "length"]],
   choiceFields: [BUILD_DIR_FIELD],
+  pick: "faces",
+  targets: FACES_TARGET,
 };
 
 export const COUNTERBORE_BRIDGE: PrintTool = {
@@ -98,6 +108,8 @@ export const COUNTERBORE_BRIDGE: PrintTool = {
     ["angle", "Slot angle", "angle"],
   ],
   choiceFields: [],
+  pick: "faces",
+  targets: FACES_TARGET,
 };
 
 export const SACRIFICIAL_LAYER: PrintTool = {
@@ -126,9 +138,90 @@ export const SACRIFICIAL_LAYER: PrintTool = {
       title: "Which opening is closed when a hole's inside face was picked, lowest or highest along the build direction.",
     },
   ],
+  pick: "faces",
+  targets: FACES_TARGET,
 };
 
-export const PRINT_TOOLS: readonly PrintTool[] = [TEARDROP, ROOF_BRIDGE, COUNTERBORE_BRIDGE, SACRIFICIAL_LAYER];
+export const THREAD_RIBS: PrintTool = {
+  id: "print-thread-ribs",
+  type: "threadRibs",
+  label: "Thread-Forming Ribs",
+  icon: "printThreadRibs",
+  pickHint: "select the inside face of each screw hole",
+  defaults: { ribCount: 3, ribWidth: 0.6, coreDiameter: 0, startDepth: 0.5 },
+  usesBuildDir: false,
+  numFields: [
+    ["ribCount", "Rib count", "count"],
+    ["ribWidth", "Rib width", "length"],
+    ["coreDiameter", "Core diameter", "length"],
+    ["startDepth", "Start depth", "length"],
+  ],
+  choiceFields: [],
+  pick: "faces",
+  targets: FACES_TARGET,
+};
+
+export const ZIP_TIE_CHANNEL: PrintTool = {
+  id: "print-zip-tie-channel",
+  type: "zipTieChannel",
+  label: "Zip-Tie Channel",
+  icon: "printZipTieChannel",
+  pickHint: "select the face to cut a channel under",
+  defaults: { channelWidth: 4, channelHeight: 2, insetDepth: 2, span: 10, angle: 0 },
+  usesBuildDir: false,
+  numFields: [
+    ["channelWidth", "Channel width", "length"],
+    ["channelHeight", "Channel height", "length"],
+    ["insetDepth", "Inset depth", "length"],
+    ["span", "Span", "length"],
+    ["angle", "Angle", "angle"],
+  ],
+  choiceFields: [],
+  toggleFields: [{
+    field: "allowBreakthrough", label: "Allow breakthrough", fallback: false,
+  }],
+  pick: "faces",
+  targets: FACES_TARGET,
+};
+
+/** Body-target tools: no face pick, act on the selected bodies or the active one. */
+export const BODIES_TARGET: readonly TargetField[] = [
+  { field: "bodies", label: "Bodies", kind: "body", shape: "bodyId", arity: "many", whenEmpty: "the active body" },
+];
+
+export const ELEPHANT_FOOT_CHAMFER: PrintTool = {
+  id: "print-elephant-foot-chamfer",
+  type: "elephantFootChamfer",
+  label: "Elephant-Foot Chamfer",
+  icon: "printElephantFootChamfer",
+  pickHint: "select the body, or its bottom face",
+  defaults: { size: 0.4 },
+  usesBuildDir: true,
+  numFields: [["size", "Chamfer size", "length"]],
+  choiceFields: [BUILD_DIR_FIELD],
+  pick: "bodies",
+  targets: BODIES_TARGET,
+};
+
+export const VERTICAL_FILLET: PrintTool = {
+  id: "print-vertical-fillet",
+  type: "verticalFillet",
+  label: "Vertical Edge Fillet",
+  icon: "printVerticalFillet",
+  pickHint: "select the body to round",
+  defaults: { radius: 2 },
+  usesBuildDir: true,
+  numFields: [["radius", "Radius", "length"]],
+  choiceFields: [BUILD_DIR_FIELD],
+  toggleFields: [{ field: "onlyConvex", label: "Convex edges only", fallback: false }],
+  pick: "bodies",
+  targets: BODIES_TARGET,
+};
+
+export const PRINT_TOOLS: readonly PrintTool[] = [
+  TEARDROP, ROOF_BRIDGE, COUNTERBORE_BRIDGE, SACRIFICIAL_LAYER,
+  THREAD_RIBS, ZIP_TIE_CHANNEL, ELEPHANT_FOOT_CHAMFER, VERTICAL_FILLET,
+];
 
 export interface FacePick {
   point: [number, number, number];
@@ -157,6 +250,24 @@ export function featureFor(
     id,
     type: tool.type,
     faces: sels.length === 1 ? sels[0] : sels,
+    ...tool.defaults,
+    ...(tool.usesBuildDir ? { buildDir } : {}),
+  } as unknown as Feature;
+}
+
+/** The feature a body-target tool makes: `bodies` when any are selected, left
+ *  off entirely so the builder's own "active body" fallback applies (the same
+ *  `whenEmpty` contract BODIES_TARGET declares). */
+export function bodyFeatureFor(
+  tool: PrintTool,
+  id: string,
+  bodyIds: readonly string[],
+  buildDir: BuildDir,
+): Feature {
+  return {
+    id,
+    type: tool.type,
+    ...(bodyIds.length ? { bodies: [...bodyIds] } : {}),
     ...tool.defaults,
     ...(tool.usesBuildDir ? { buildDir } : {}),
   } as unknown as Feature;

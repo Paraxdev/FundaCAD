@@ -10,22 +10,25 @@ import {
 import { applicableTools } from "../../src/features/toolCapabilities";
 import { iconPaths } from "../../src/ui/icons";
 import { featureMeta } from "../../src/ui/featureMeta";
-import { choiceFieldsFor, fieldApplies } from "../../src/document/optionFields";
+import { choiceFieldsFor, fieldApplies, toggleFieldsFor } from "../../src/document/optionFields";
 import { targetsOf } from "../../src/features/selectionTargets";
 import type { Engine } from "../../src/app/engine";
 
 function fakeEngine() {
   const state = {
     faces: [] as { point: [number, number, number]; faceId: number }[],
+    bodies: [] as string[],
     hasBody: true,
     status: "",
     dir: "+Z",
     added: [] as Record<string, unknown>[],
+    bbox: null as { min: [number, number, number]; max: [number, number, number] } | null,
   };
   const viewport = {
     setSelectionMode: vi.fn(),
     clearSelection: () => { state.faces = []; },
     faceIdToBodyId: (id: number) => `body${id}`,
+    getSelectedBodies: () => state.bodies,
     get draftConfig() { return { dir: state.dir, threshold: 45 }; },
     selectedFacesForPressPull: () => state.faces.length
       ? {
@@ -37,6 +40,7 @@ function fakeEngine() {
   const store = {
     nextId: () => `f${state.added.length + 1}`,
     addFeature: (f: Record<string, unknown>) => { state.added.push(f); },
+    get buildState() { return { result: state.bbox ? { bbox: state.bbox } : null }; },
   };
   const e = {
     viewport,
@@ -69,16 +73,24 @@ describe("the 3D Printing Toolbox, switched on and off", () => {
     resetContributions();
   });
 
-  it("adds four tools a face selection is offered, in a PRINT ribbon group, with marks", () => {
+  it("adds eight tools and a bed fit check, in a PRINT ribbon group, with marks", () => {
     expect(contributors()).toEqual(["FundaCAD.PrintToolbox"]);
-    const ids = ["print-teardrop", "print-roof-bridge", "print-counterbore-bridge", "print-sacrificial-layer"];
-    for (const id of ids) {
+    const faceIds = ["print-teardrop", "print-roof-bridge", "print-counterbore-bridge", "print-sacrificial-layer",
+      "print-thread-ribs", "print-zip-tie-channel"];
+    const bodyIds = ["print-elephant-foot-chamfer", "print-vertical-fillet"];
+    for (const id of faceIds) {
       expect(applicableTools({ face: 1 })).toContain(id);
       expect(contributedAction(id)).toBeTypeOf("function");
     }
+    for (const id of bodyIds) {
+      expect(applicableTools({ body: 1 })).toContain(id);
+      expect(applicableTools({ face: 1 })).not.toContain(id);
+      expect(contributedAction(id)).toBeTypeOf("function");
+    }
     const group = contributedRibbon().find((g) => g.group === "PRINT");
-    expect(group?.items.map((i) => i.action)).toEqual(ids);
+    expect(group?.items.map((i) => i.action)).toEqual([...faceIds, ...bodyIds, "print-bed-fit-check"]);
     expect(iconPaths("printTeardrop")).toContain("<path");
+    expect(iconPaths("printBedFit")).toContain("<rect");
   });
 
   it("describes the features it leaves in the history", () => {
@@ -86,6 +98,31 @@ describe("the 3D Printing Toolbox, switched on and off", () => {
     expect(choiceFieldsFor("teardropHole").map((c) => c.field)).toEqual(["buildDir", "roof"]);
     expect(fieldApplies("teardropHole", "flatHeight", { roof: "pointed" })).toBe(false);
     expect(targetsOf("sacrificialLayer").map((t) => t.field)).toEqual(["faces"]);
+    expect(targetsOf("elephantFootChamfer").map((t) => t.field)).toEqual(["bodies"]);
+    expect(toggleFieldsFor("zipTieChannel").map((t) => t.field)).toEqual(["allowBreakthrough"]);
+    expect(toggleFieldsFor("verticalFillet").map((t) => t.field)).toEqual(["onlyConvex"]);
+  });
+
+  it("acts at once on the selected bodies, with no wait, no pick and no clearing", () => {
+    engine.state.bodies = ["b1", "b2"];
+    engine.state.dir = "-Z";
+    contributedAction("print-elephant-foot-chamfer")!();
+    expect(engine.state.added).toEqual([{
+      id: "f1", type: "elephantFootChamfer", bodies: ["b1", "b2"], size: 0.4, buildDir: "-Z",
+    }]);
+    expect(anyToolBusy()).toBe(false);
+    expect(engine.calls.selectFeature).toHaveBeenCalledWith("f1");
+  });
+
+  it("leaves the body list off the feature when nothing is selected, for the active-body fallback", () => {
+    contributedAction("print-vertical-fillet")!();
+    expect(engine.state.added).toEqual([{ id: "f1", type: "verticalFillet", radius: 2, buildDir: "+Z" }]);
+    expect(engine.state.added[0]).not.toHaveProperty("bodies");
+  });
+
+  it("bed fit check asks to build first when there is nothing to measure", async () => {
+    await contributedAction("print-bed-fit-check")!();
+    expect(engine.state.status).toContain("build the model first");
   });
 
   it("acts at once on faces already selected, with the Overhang build direction", () => {

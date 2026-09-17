@@ -94,7 +94,7 @@ hurts.
 | --- | --- | --- | --- |
 | `FundaCAD.ExtraParameters` | sliders, toggles and choices for parameters, groups, named configurations and checks | `document.read`, `document.write` | `builtin` |
 | `FundaCAD.MCP` | lets an assistant build, measure and edit the open model | `document.*`, `geometry.build`, `files.*` | `process` |
-| `FundaCAD.PrintToolbox` | teardrop and bridged holes, counterbore bridges and sacrificial layers, for printing without supports | `document.read`, `document.write` | `builtin` |
+| `FundaCAD.PrintToolbox` | teardrop and bridged holes, counterbore bridges, sacrificial layers, thread-forming ribs, zip-tie channels, an elephant-foot chamfer and a vertical edge fillet, plus a bed fit check, for printing without supports | `document.read`, `document.write` | `builtin` |
 | `FundaCAD.Printing` | printers on your network, and opening a model in a slicer | `document.read`, `files.write`, `printer.control`, `process.spawn` | `builtin` |
 | `FundaCAD.SpaceMouse` | navigating and moving with a 3D mouse | `device.input`, `document.read`, `document.write` | `builtin` |
 | `FundaCAD.MultiColor` | filament slots, per body and per texture colour | `document.read`, `document.write` | `builtin` |

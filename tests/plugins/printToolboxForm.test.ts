@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import manifest from "../../plugins/FundaCAD.PrintToolbox/manifest.json";
 import {
-  PRINT_TOOLS, SACRIFICIAL_LAYER, TEARDROP, COUNTERBORE_BRIDGE, faceSelectors, featureFor, toolById,
+  ELEPHANT_FOOT_CHAMFER, PRINT_TOOLS, SACRIFICIAL_LAYER, TEARDROP, COUNTERBORE_BRIDGE, VERTICAL_FILLET,
+  bodyFeatureFor, faceSelectors, featureFor, toolById,
 } from "../../plugins/FundaCAD.PrintToolbox/printForm";
 
 describe("the toolbox's tools", () => {
@@ -66,5 +67,27 @@ describe("the teardrop's rows", () => {
     expect(TEARDROP.fieldApplies!("flatHeight", { roof: "pointed" })).toBe(false);
     expect(TEARDROP.fieldApplies!("flatHeight", {})).toBe(false);
     expect(TEARDROP.fieldApplies!("angle", { roof: "pointed" })).toBe(true);
+  });
+});
+
+describe("body-target tools", () => {
+  it("consume bodies, not faces, and target the bodies field", () => {
+    expect(ELEPHANT_FOOT_CHAMFER.pick).toBe("bodies");
+    expect(ELEPHANT_FOOT_CHAMFER.targets.map((t) => t.field)).toEqual(["bodies"]);
+    expect(VERTICAL_FILLET.pick).toBe("bodies");
+  });
+});
+
+describe("bodyFeatureFor", () => {
+  it("writes the selected bodies, the defaults and the build direction", () => {
+    expect(bodyFeatureFor(ELEPHANT_FOOT_CHAMFER, "f1", ["b1", "b2"], "-Z")).toEqual({
+      id: "f1", type: "elephantFootChamfer", bodies: ["b1", "b2"], size: 0.4, buildDir: "-Z",
+    });
+  });
+
+  it("leaves the bodies field off entirely when nothing is selected", () => {
+    const f = bodyFeatureFor(VERTICAL_FILLET, "f2", [], "+Z") as unknown as Record<string, unknown>;
+    expect(f).not.toHaveProperty("bodies");
+    expect(f).toMatchObject({ radius: 2, buildDir: "+Z" });
   });
 });

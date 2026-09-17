@@ -13,7 +13,11 @@
     "teardropHole",
     "roofBridge",
     "counterboreBridge",
-    "sacrificialLayer"
+    "sacrificialLayer",
+    "threadRibs",
+    "zipTieChannel",
+    "elephantFootChamfer",
+    "verticalFillet"
   ],
   "geometry": "geometry/register.py"
 }
