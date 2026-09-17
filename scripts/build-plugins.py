@@ -47,6 +47,7 @@ With no ids, every plugin is built.
 """
 
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -62,7 +63,10 @@ PLUGINS = os.path.join(REPO, "plugins")
 MANIFEST = "manifest.json"
 CODE = "main.js"
 
-SKIP_DIRS = {"tests", "__pycache__", "target", "node_modules", ".git"}
+# geometry-rs is the SOURCE of the geometry component, compiled by
+# scripts/build-plugin-wasm.py into the geometry.wasm this packs; the crate
+# itself is no more use in a bundle than a .ts is.
+SKIP_DIRS = {"tests", "__pycache__", "target", "node_modules", ".git", "geometry-rs"}
 
 # .pyc for the obvious reason. .ts and .vue for a less obvious one: a plugin
 # directory may carry an APP-SIDE COMPANION -- the settings block a process
@@ -220,7 +224,30 @@ def check(pid, src):
                 f"plugins/{pid}/{MANIFEST} ships geometry but declares no featureTypes, "
                 "exporters or shapeGenerators, so nothing could name it when it is missing"
             )
+
+    # The same geometry for the Rust engine is a WebAssembly component, built
+    # here from the crate beside the manifest (docs/PLUGINS.md). Named but
+    # unbuildable is the same silent failure as above, one engine later.
+    if manifest.get("geometryWasm") and not os.path.isfile(
+        os.path.join(src, "geometry-rs", "Cargo.toml")
+    ):
+        sys.exit(f"plugins/{pid}/{MANIFEST} names geometryWasm and has no geometry-rs crate")
     return manifest
+
+
+def build_wasm(pid, src):
+    """Compile the plugin's geometry component, and hand back (name, bytes).
+
+    A build artifact like main.js: written by the wasm script into the plugin
+    directory, never committed, and packed from there.
+    """
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "build-plugin-wasm.py")
+    spec = importlib.util.spec_from_file_location("build_plugin_wasm", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    out = mod.build(pid, src)
+    with open(out, "rb") as fh:
+        return os.path.basename(out), fh.read()
 
 
 def build(pid, src, out_dir):
@@ -228,6 +255,13 @@ def build(pid, src, out_dir):
     zip_path = os.path.join(out_dir, f"plugin-{pid}.zip")
     entries = sources(src)
     generated = []
+    wasm = manifest.get("geometryWasm")
+    if wasm:
+        name, data = build_wasm(pid, src)
+        if name != wasm:
+            sys.exit(f"plugins/{pid}/{MANIFEST} names {wasm!r}, the component builds as {name!r}")
+        generated.append((wasm, data))
+        entries = [(rel, full) for rel, full in entries if rel != wasm]
     if os.path.isfile(os.path.join(src, "main.ts")):
         # A bundle may carry app-side code whatever its kind, and two kinds may
         # not: `compute` and `panel` are described to the person as contained

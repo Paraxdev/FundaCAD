@@ -28,6 +28,9 @@ const USAGE: &str = "usage:
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    // server.py's startup `plugin_geometry.discover()`: the engine reads the
+    // installed plugins' manifests, an eval or a library user has none.
+    fundacad_geom::plugins::load();
     match args.first().map(String::as_str) {
         Some("--ws") => fundacad_engine::ws::run(GeomJobs),
         Some("--stdio") => fundacad_engine::stdio::run(GeomJobs),
