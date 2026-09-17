@@ -1,6 +1,7 @@
 //! Feature handlers, one module per family, each naming the Python it replaces.
 
 mod boolean;
+mod cleanup;
 mod datum;
 mod defeature;
 mod extrude;
@@ -52,6 +53,8 @@ pub fn dispatch(ctx: &mut Ctx, f: &Feature) -> FResult {
         Feature::PressPull(p) => press_pull::press_pull(ctx, p),
         Feature::OffsetFace(o) => press_pull::offset_face(ctx, o),
         Feature::DeleteFace(d) => defeature::delete_face(ctx, d),
+        Feature::SimplifyMesh(s) => cleanup::simplify_mesh(ctx, s),
+        Feature::CleanUp(c) => cleanup::clean_up(ctx, c),
         other => Err(not_ported(other.type_name().unwrap_or("feature"))),
     }
 }

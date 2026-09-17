@@ -246,6 +246,7 @@ fn with_python_defaults(raw: &Value) -> Option<Value> {
         "patternCircular" => &[("angle", json!(360)), ("axis", json!("Z"))][..],
         "draft" => &[("axis", json!("Z"))][..],
         "split" => &[("keep", json!("both"))][..],
+        "simplifyMesh" => &[("tolerance", json!(1))][..],
         _ => &[][..],
     };
     let mut out = obj.clone();
