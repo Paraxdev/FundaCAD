@@ -1,0 +1,16 @@
+[package]
+name = "fundacad-core"
+description = "FundaCAD document core: the document schema, parameters and expressions, no kernel"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+# preserve_order keeps parameter tables and side maps in file order, float_roundtrip
+# keeps every float bit-exact through a load and save.
+serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
+indexmap = { version = "2", features = ["serde"] }
+thiserror = "1"

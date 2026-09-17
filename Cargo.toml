@@ -13,6 +13,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/fundacad-core",
     "crates/fundacad-geom",
 ]
 exclude = ["src-tauri", "third_party/opencascade-rs"]
