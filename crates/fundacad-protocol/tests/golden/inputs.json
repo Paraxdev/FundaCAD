@@ -1,0 +1,227 @@
+{
+  "cases": [
+    {
+      "name": "single_body",
+      "kind": "send_reply",
+      "id": "r-single",
+      "binary": true,
+      "chunked": false,
+      "result": {
+        "protocol": 2,
+        "bodies": [
+          {
+            "id": "b1", "name": "Bracket é", "etag": "3f9a", "nodeRef": "n1",
+            "positions": [0.1, 16777217.0, -2.5, 3.4e38, 1e-05, -0.0, 1.0, 2.0, 3.0],
+            "indices": [0, 1, 2, 4294967295, 0, 1],
+            "faceIds": [0, 1],
+            "faceOwners": ["f1", null],
+            "edges": [
+              {"points": [[0.0, 0.0, 0.0], [1.0, 0.5, 0.25]], "body": "b1"},
+              {"points": [[2.0, 2.0, 2.0]], "body": "b1", "smooth": true},
+              {"points": [], "body": "b1"},
+              {"points": [[0.3, 0.7, 0.9], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]], "body": "b1", "smooth": true}
+            ],
+            "faceCount": 2,
+            "bbox": {"min": [-2.5, 1e-05, -0.0], "max": [1e+16, 0.1, 123.456]},
+            "faceBands": [[0, 1]],
+            "normals": [0.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0]
+          },
+          {"id": "b2", "name": "Stub", "etag": "aa", "faceColors": {"0": "#ff0000"}, "unchanged": true},
+          {
+            "id": "b3", "name": "", "etag": null,
+            "positions": [1.0, 2.0, 3.0],
+            "indices": [0, 0, 0],
+            "faceIds": [0],
+            "faceCount": 1
+          }
+        ],
+        "bbox": {"min": [0.0, 0.0, 0.0], "max": [1.5, 2.25, 1e-07]},
+        "diagnostics": [{"code": "referenceNotFound", "reason": "no face \"x\"\n"}],
+        "featureError": {"message": "fillet failed", "feature_id": "f9"}
+      }
+    },
+    {
+      "name": "chunked_multi",
+      "kind": "send_reply",
+      "id": "r-chunk",
+      "binary": true,
+      "chunked": true,
+      "sid": "0123456789abcdef",
+      "limits": {"chunk_target": 300},
+      "result": {
+        "protocol": 2,
+        "bodies": [
+          {"id": "a", "name": "A", "etag": "e1", "partColor": "#00ff00", "positions": [0.5, 0.5, 0.5], "indices": [0, 0, 0], "faceIds": [0], "faceOwners": [null], "edges": [{"points": [[1.0, 2.0, 3.0]], "body": "a", "smooth": true}], "faceCount": 1},
+          {"id": "b", "name": "B", "etag": "e2", "unchanged": true},
+          {"id": "c", "name": "C", "etag": "e3", "positions": [0.25, 0.75, 1.0, 2.0, 3.0, 4.0], "indices": [0, 1, 1], "faceIds": [0], "faceOwners": [], "edges": [], "faceCount": 1, "normals": [0.0, 0.0, 1.0, 0.0, 0.0, 1.0]},
+          {"id": "d", "name": "D", "etag": "e4", "positions": [9.0, 9.0, 9.0], "indices": [0, 0, 0], "faceIds": [0], "faceCount": 1}
+        ],
+        "bbox": null,
+        "datumPlanes": {"dp1": {"origin": [0, 0, 0], "normal": [0, 0, 1], "xdir": [1, 0, 0]}}
+      }
+    },
+    {
+      "name": "chunked_empty",
+      "kind": "send_reply",
+      "id": "r-empty",
+      "binary": true,
+      "chunked": true,
+      "sid": "ffffffffffffffff",
+      "result": {"protocol": 2, "bodies": [], "bbox": null}
+    },
+    {
+      "name": "chunked_cancel",
+      "kind": "send_reply",
+      "id": "r-cancel",
+      "binary": true,
+      "chunked": true,
+      "sid": "00000000deadbeef",
+      "cancel_after": 2,
+      "limits": {"chunk_target": 1},
+      "result": {
+        "protocol": 2,
+        "bodies": [
+          {"id": "a", "name": "A", "etag": "1", "positions": [1.0, 1.0, 1.0], "indices": [0, 0, 0], "faceIds": [0], "edges": [], "faceCount": 1},
+          {"id": "b", "name": "B", "etag": "2", "positions": [2.0, 2.0, 2.0], "indices": [0, 0, 0], "faceIds": [0], "edges": [], "faceCount": 1},
+          {"id": "c", "name": "C", "etag": "3", "positions": [3.0, 3.0, 3.0], "indices": [0, 0, 0], "faceIds": [0], "edges": [], "faceCount": 1}
+        ],
+        "bbox": null
+      }
+    },
+    {
+      "name": "chunked_body_too_large",
+      "kind": "send_reply",
+      "id": "r-big",
+      "binary": true,
+      "chunked": true,
+      "sid": "1111222233334444",
+      "limits": {"max_frame": 700, "chunk_target": 100},
+      "result": {
+        "protocol": 2,
+        "bodies": [
+          {"id": "s", "name": "Small", "etag": "1", "positions": [1.0, 1.0, 1.0], "indices": [0, 0, 0], "faceIds": [0], "edges": [], "faceCount": 1},
+          {"id": "g", "name": "Gear “A” é", "etag": "2", "positions": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], "indices": [0, 0, 0], "faceIds": [0], "edges": [], "faceCount": 1},
+          {"id": "t", "name": "Tail", "etag": "3", "positions": [1.0, 1.0, 1.0], "indices": [0, 0, 0], "faceIds": [0], "edges": [], "faceCount": 1}
+        ],
+        "bbox": null
+      }
+    },
+    {
+      "name": "chunked_head_too_large",
+      "kind": "send_reply",
+      "id": "r-head",
+      "binary": true,
+      "chunked": true,
+      "sid": "5555666677778888",
+      "limits": {"max_frame": 64},
+      "result": {
+        "protocol": 2,
+        "bodies": [
+          {"id": "a", "name": "A", "etag": "1", "positions": [1.0, 1.0, 1.0], "indices": [0, 0, 0], "faceIds": [0], "edges": [], "faceCount": 1}
+        ],
+        "bbox": null
+      }
+    },
+    {
+      "name": "single_too_large",
+      "kind": "send_reply",
+      "id": "r-toolarge",
+      "binary": true,
+      "chunked": false,
+      "limits": {"max_frame": 256},
+      "result": {
+        "protocol": 2,
+        "bodies": [
+          {"id": "a", "name": "A", "etag": "1", "positions": [1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 3.0, 3.0, 3.0], "indices": [0, 1, 2], "faceIds": [0], "edges": [], "faceCount": 1}
+        ],
+        "bbox": null
+      }
+    },
+    {
+      "name": "text_mesh",
+      "kind": "send_reply",
+      "id": "r-text",
+      "binary": false,
+      "chunked": false,
+      "result": {
+        "protocol": 2,
+        "bodies": [
+          {"id": "a", "name": "A", "etag": "1", "positions": [0.5, 1.0, -2.25], "normals": [0.0, 0.0, 1.0], "indices": [0, 0, 0], "faceIds": [0], "faceOwners": ["f1"], "edges": [{"points": [[1.0, 2.0, 3.0], [0.125, 0.0, 0.0]], "body": "a"}, {"points": [[5.0, 5.0, 5.0]], "body": "a", "smooth": true}], "faceCount": 1},
+          {"id": "b", "name": "B", "etag": "2", "unchanged": true}
+        ],
+        "bbox": {"min": [0.0, 0.0, 0.0], "max": [1.0, 1.0, 1.0]}
+      }
+    },
+    {
+      "name": "text_too_large",
+      "kind": "send_reply",
+      "id": "r-texttoolarge",
+      "binary": false,
+      "chunked": true,
+      "limits": {"max_frame": 128},
+      "result": {
+        "protocol": 2,
+        "bodies": [
+          {"id": "a", "name": "A", "etag": "1", "positions": [0.5, 1.0, -2.25], "indices": [0, 0, 0], "faceIds": [0], "edges": [], "faceCount": 1}
+        ],
+        "bbox": null
+      }
+    },
+    {
+      "name": "error_reply",
+      "kind": "send_reply",
+      "id": "r-err",
+      "binary": true,
+      "chunked": true,
+      "result": {"error": {"message": "the geometry kernel crashed on this operation", "feature_id": "f3"}}
+    },
+    {
+      "name": "cancelled_reply",
+      "kind": "send_reply",
+      "id": "r-cancelled",
+      "binary": true,
+      "chunked": true,
+      "result": {"cancelled": true, "error": {"message": "cancelled"}}
+    },
+    {
+      "name": "resync_reply",
+      "kind": "send_reply",
+      "id": 42,
+      "binary": true,
+      "chunked": true,
+      "result": {"resync": true}
+    },
+    {
+      "name": "err_empty_message",
+      "kind": "err",
+      "id": "r-e",
+      "message": "",
+      "feature_id": null
+    },
+    {
+      "name": "err_feature",
+      "kind": "err",
+      "id": null,
+      "message": "unknown op: \"frob\"\ttab",
+      "feature_id": "f1"
+    },
+    {
+      "name": "reply_for_ok",
+      "kind": "reply_for",
+      "id": "r-ping",
+      "result": {"pong": true, "n": -3, "x": 2.5e-06, "s": "日本"}
+    },
+    {
+      "name": "progress_building",
+      "kind": "building",
+      "id": "r-b",
+      "frame": [-1, 812, 3071]
+    },
+    {
+      "name": "progress_importing",
+      "kind": "importing",
+      "id": 7,
+      "frame": [2, "Reading STEP", 45]
+    }
+  ]
+}
