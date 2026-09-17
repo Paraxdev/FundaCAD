@@ -13,6 +13,7 @@ use fundacad_geom::kernel;
 use serde_json::{json, Value};
 
 fn component_built() -> bool {
+    fundacad_geom::plugins::load();
     let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins/FundaCAD.PrintToolbox/geometry.wasm");
     if !p.is_file() {
         eprintln!("skipped: build the component with scripts/build-plugin-wasm.py");

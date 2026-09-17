@@ -47,6 +47,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))       # plugins/FundaCAD.MCP/t
 MCP = os.path.dirname(HERE)                             # plugins/FundaCAD.MCP
 ROOT = os.path.dirname(os.path.dirname(MCP))            # the checkout
 SIDECAR = os.path.join(ROOT, "sidecar")
+sys.path.insert(0, os.path.join(SIDECAR, "tools"))
+from harness_util import engine_command  # noqa: E402
 
 #: A port of its own. The app's 8765 may be in use by a real session on the
 #: machine this runs on, and joining THAT would be a test that edits someone's
@@ -163,7 +165,7 @@ class Engine:
         for legacy in ("SINDRI_SIDECAR_PORT", "SINDRI_SIDECAR_TOKEN"):
             env.pop(legacy, None)
 
-        self.proc = subprocess.Popen([sys.executable, "server.py"], cwd=SIDECAR, env=env,
+        self.proc = subprocess.Popen(engine_command(), cwd=SIDECAR, env=env,
                                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                      text=True)
         deadline = time.time() + START_TIMEOUT

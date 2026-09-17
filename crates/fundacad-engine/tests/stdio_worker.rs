@@ -17,6 +17,7 @@ use std::time::{Duration, Instant};
 
 /// Writes to every stdout a job could reach while it runs, the way OpenCASCADE
 /// and third party C++ do, then answers with `triangles` triangles.
+#[derive(Default)]
 struct Noisy;
 
 impl Jobs for Noisy {

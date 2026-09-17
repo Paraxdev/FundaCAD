@@ -1,0 +1,32 @@
+{
+ "extent": 1,
+ "neighbors": [
+  []
+ ],
+ "walkCounts": [
+  0
+ ],
+ "edgeFaces": [
+  [
+   1
+  ],
+  [
+   1,
+   1
+  ],
+  [
+   1
+  ]
+ ],
+ "components": [
+  [
+   1
+  ]
+ ],
+ "wraps": [
+  true
+ ],
+ "faces": 1,
+ "bands": [],
+ "gapTolerance": 0.0017320508075688776
+}
