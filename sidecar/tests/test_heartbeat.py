@@ -376,8 +376,78 @@ def test_a_wedged_job_is_still_reaped_once_the_worker_is_up():
     print(f"{PASS} a wedged job was still reaped after {elapsed:.1f}s once the worker was up")
 
 
+# --- the same contract, against FUNDACAD_ENGINE_CMD ---------------------------
+# A spawned engine cannot take a stub pool, so it runs its own `testSleep` job
+# under clocks shortened through FUNDACAD_STALL_TIMEOUT and FUNDACAD_JOB_TIMEOUT.
+
+
+def _engine_calls(env, *requests):
+    """Send each request on one connection to a freshly spawned engine, and
+    return [(reply, seconds)] in order."""
+    import asyncio
+    import json
+    import time as _time
+
+    import websockets
+
+    from tools import harness_util as H
+
+    async def _go(url):
+        out = []
+        async with websockets.connect(url) as ws:
+            for req in requests:
+                t0 = _time.monotonic()
+                await ws.send(json.dumps(req))
+                while True:
+                    msg = json.loads(await asyncio.wait_for(ws.recv(), timeout=60))
+                    if msg.get("id") == req["id"] and "ok" in msg:
+                        break
+                out.append((msg, _time.monotonic() - t0))
+        return out
+
+    with H.SpawnedServer(env={"FUNDACAD_ENGINE_TEST_OPS": "1", **env}) as srv:
+        return asyncio.run(_go(srv.url))
+
+
+def test_engine_ticking_work_is_never_reaped():
+    [(res, elapsed)] = _engine_calls(
+        {"FUNDACAD_STALL_TIMEOUT": "1"},
+        {"id": "t", "op": "testSleep", "seconds": 3, "tick": True})
+    assert res.get("ok") is True, f"ticking work was reaped: {res}"
+    assert elapsed >= 3.0, f"returned too early ({elapsed:.2f}s) to prove anything"
+    print(f"{PASS} engine: ticking work ran {elapsed:.1f}s under a 1s stall and completed")
+
+
+def test_engine_silent_work_is_reaped_and_the_next_job_runs():
+    box = {"features": [{"id": "b", "type": "box", "length": 2, "width": 2, "height": 2}]}
+    (res, elapsed), (nxt, _) = _engine_calls(
+        {"FUNDACAD_STALL_TIMEOUT": "1"},
+        {"id": "s", "op": "testSleep", "seconds": 6, "deaf": True},
+        {"id": "r", "op": "rebuild", "tolerance": 0.1, "document": box})
+    msg = (res.get("error") or {}).get("message", "")
+    assert "stalled for over" in msg, f"expected a stalled message, got {res}"
+    assert elapsed < 4.0, f"reaped at {elapsed:.2f}s, should be ~1s, not the job's 6s"
+    assert nxt.get("ok") is True and len(nxt["result"]["bodies"]) == 1, \
+        f"the job after a reap did not run: {nxt}"
+    print(f"{PASS} engine: silent work reaped at {elapsed:.1f}s, the next rebuild ran")
+
+
+def test_engine_bounded_ops_keep_a_wall_clock():
+    [(res, elapsed)] = _engine_calls(
+        {"FUNDACAD_JOB_TIMEOUT": "1"},
+        {"id": "w", "op": "testSleep", "seconds": 6, "tick": True, "wall": True, "deaf": True})
+    msg = (res.get("error") or {}).get("message", "")
+    assert "timed out" in msg, f"expected a timeout, got {res}"
+    assert elapsed < 4.0, f"timed out at {elapsed:.2f}s, should be ~1s"
+    print(f"{PASS} engine: a bounded op timed out at {elapsed:.1f}s though it ticked")
+
+
 if __name__ == "__main__":
     print("heartbeat ticks (stall watchdog)")
+    if os.environ.get("FUNDACAD_ENGINE_CMD"):
+        test_engine_ticking_work_is_never_reaped()
+        test_engine_silent_work_is_reaped_and_the_next_job_runs()
+        test_engine_bounded_ops_keep_a_wall_clock()
     test_export_mesh_ticks_on_every_tier()
     test_interference_sweep_ticks_per_row()
     test_interference_sweep_ticks_around_each_boolean()
