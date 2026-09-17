@@ -1,5 +1,5 @@
 {
-  "about": "Small synthetic documents diff_engines.py rebuilds through the Python and the Rust engine. Feature shapes are taken from sidecar/tests (test_smoke, test_fullstack, test_body_binding, test_profile_orientation). Ordered by the port: primitives, sketch extrudes, booleans, blends, shell, revolve, patterns, holes, loft, sweep. Every one builds cleanly on the Python engine (diff_engines.py --python-only).",
+  "about": "Small synthetic documents diff_engines.py rebuilds through the Python and the Rust engine. Feature shapes are taken from sidecar/tests (test_smoke, test_fullstack, test_body_binding, test_profile_orientation). Ordered by the port: primitives, sketch extrudes, booleans, blends, shell, revolve, patterns, holes, loft, sweep. Every one builds cleanly on the Python engine, or fails the way its expectError says (diff_engines.py --python-only).",
   "documents": [
     {"name": "box", "document": {"parameters": {}, "features": [
       {"id": "b", "type": "box", "length": 20, "width": 20, "height": 20}
@@ -99,6 +99,44 @@
         {"type": "rectangle", "width": 20, "height": 20, "x": 0, "y": 0}]},
       {"id": "e", "type": "extrude", "sketch": "s", "distance": 20, "operation": "new"},
       {"id": "sh", "type": "shell", "thickness": 2, "faces": {"kind": "face", "by": "normal", "dir": [0, 0, 1]}}
+    ]}},
+    {"name": "shell_closed_sealed_void", "document": {"parameters": {}, "features": [
+      {"id": "b", "type": "box", "length": 40, "width": 40, "height": 20},
+      {"id": "sh", "type": "shell", "thickness": 2.5}
+    ]}},
+    {"name": "shell_second_body_opening", "document": {"parameters": {}, "features": [
+      {"id": "a", "type": "box", "length": 10, "width": 10, "height": 10},
+      {"id": "b", "type": "box", "length": 10, "width": 10, "height": 10},
+      {"id": "m", "type": "move", "dx": 30, "bodies": ["body2"]},
+      {"id": "sh", "type": "shell", "thickness": 1, "faces": {"kind": "face", "by": "nearest", "point": [30, 0, 5], "body": "body2"}}
+    ]}},
+    {"name": "shell_too_thick_fails", "expectError": true, "document": {"parameters": {}, "features": [
+      {"id": "b", "type": "box", "length": 10, "width": 10, "height": 10},
+      {"id": "sh", "type": "shell", "thickness": 6}
+    ]}},
+    {"name": "thicken_top_join", "document": {"parameters": {}, "features": [
+      {"id": "b", "type": "box", "length": 20, "width": 20, "height": 20},
+      {"id": "t", "type": "thicken", "faces": {"kind": "face", "by": "normal", "dir": [0, 0, 1]}, "thickness": 3, "operation": "join"}
+    ]}},
+    {"name": "thicken_cylinder_side_new", "document": {"parameters": {}, "features": [
+      {"id": "c", "type": "cylinder", "radius": 10, "height": 20},
+      {"id": "t", "type": "thicken", "faces": {"kind": "face", "by": "nearest", "point": [10, 0, 0]}, "thickness": 2, "symmetric": true}
+    ]}},
+    {"name": "thicken_zero_fails", "expectError": true, "document": {"parameters": {}, "features": [
+      {"id": "b", "type": "box", "length": 20, "width": 20, "height": 20},
+      {"id": "t", "type": "thicken", "faces": {"kind": "face", "by": "normal", "dir": [0, 0, 1]}, "thickness": 0}
+    ]}},
+    {"name": "draft_side_walls", "document": {"parameters": {}, "features": [
+      {"id": "s", "type": "sketch", "plane": "XY", "entities": [
+        {"type": "rectangle", "width": 20, "height": 20, "x": 0, "y": 0}]},
+      {"id": "e", "type": "extrude", "sketch": "s", "distance": 20, "operation": "new"},
+      {"id": "dr", "type": "draft", "angle": 5, "faces": [
+        {"kind": "face", "by": "normal", "dir": [1, 0, 0]}, {"kind": "face", "by": "normal", "dir": [-1, 0, 0]},
+        {"kind": "face", "by": "normal", "dir": [0, 1, 0]}, {"kind": "face", "by": "normal", "dir": [0, -1, 0]}]}
+    ]}},
+    {"name": "draft_top_face_fails", "expectError": true, "document": {"parameters": {}, "features": [
+      {"id": "b", "type": "box", "length": 20, "width": 20, "height": 20},
+      {"id": "dr", "type": "draft", "angle": 10, "faces": {"kind": "face", "by": "normal", "dir": [0, 0, 1]}}
     ]}},
     {"name": "revolve_270", "document": {"parameters": {}, "features": [
       {"id": "s", "type": "sketch", "plane": "XZ", "entities": [

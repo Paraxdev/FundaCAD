@@ -322,6 +322,52 @@ CASES = {
 }
 
 
+def face_at(x, y, z, **extra):
+    s = {"kind": "face", "by": "nearest", "point": [x, y, z]}
+    s.update(extra)
+    return s
+
+
+def face_normal(x, y, z):
+    return {"kind": "face", "by": "normal", "dir": [x, y, z]}
+
+
+BLOCK = [sk("s", [rect(20, 20)]), ext("e", "s", 20)]
+TUBE = [{"id": "c", "type": "cylinder", "radius": 10, "height": 20}]
+BORED = [box("b", 30, 30, 10), {"id": "d", "type": "cylinder", "radius": 4, "height": 30, "operation": "cut"}]
+
+SOLID_OPS_CASES = {
+    # shell
+    "shell_open_top": doc(BLOCK + [{"id": "sh", "type": "shell", "thickness": 2, "faces": face_normal(0, 0, 1)}]),
+    "shell_closed": doc([box("b", 40, 40, 20), {"id": "sh", "type": "shell", "thickness": 2.5}]),
+    "shell_negative_open": doc(BLOCK + [{"id": "sh", "type": "shell", "thickness": -3, "faces": [face_normal(0, 0, 1), face_normal(0, 0, -1)]}]),
+    "shell_zero": doc(BLOCK + [{"id": "sh", "type": "shell", "thickness": 0}]),
+    "shell_too_thick": doc([box("b", 10, 10, 10), {"id": "sh", "type": "shell", "thickness": 6}]),
+    "shell_too_thick_open": doc(BLOCK + [{"id": "sh", "type": "shell", "thickness": 15, "faces": face_normal(0, 0, 1)}]),
+    "shell_second_body": doc([box("a", 10, 10, 10), box("b", 10, 10, 10), {"id": "m", "type": "move", "dx": 30, "bodies": ["body2"]},
+                              {"id": "sh", "type": "shell", "thickness": 1, "faces": face_at(30, 0, 5, body="body2")}]),
+    "shell_stale_body": doc(BLOCK + [{"id": "sh", "type": "shell", "thickness": 1, "faces": face_at(0, 0, 20, body="body9")}]),
+    "shell_cylinder_open": doc(TUBE + [{"id": "sh", "type": "shell", "thickness": 1.5, "faces": face_at(0, 0, 10)}]),
+    # thicken
+    "thicken_top_new": doc(BLOCK + [{"id": "t", "type": "thicken", "faces": face_normal(0, 0, 1), "thickness": 3}]),
+    "thicken_top_join": doc(BLOCK + [{"id": "t", "type": "thicken", "faces": face_normal(0, 0, 1), "thickness": 3, "operation": "join"}]),
+    "thicken_symmetric": doc(BLOCK + [{"id": "t", "type": "thicken", "faces": face_normal(1, 0, 0), "thickness": 2, "symmetric": True}]),
+    "thicken_cylinder_side": doc(TUBE + [{"id": "t", "type": "thicken", "faces": face_at(10, 0, 0), "thickness": 2}]),
+    "thicken_whole_body": doc([box("b", 10, 10, 10), {"id": "t", "type": "thicken", "thickness": 1}]),
+    "thicken_zero": doc(BLOCK + [{"id": "t", "type": "thicken", "faces": face_normal(0, 0, 1), "thickness": 0}]),
+    "thicken_missing_body": doc(BLOCK + [{"id": "t", "type": "thicken", "faces": face_normal(0, 0, 1), "thickness": 1, "body": "body5"}]),
+    # draft
+    "draft_sides": doc(BLOCK + [{"id": "dr", "type": "draft", "angle": 5,
+                                 "faces": [face_normal(1, 0, 0), face_normal(-1, 0, 0), face_normal(0, 1, 0), face_normal(0, -1, 0)]}]),
+    "draft_axis_x": doc([box("b", 20, 10, 10), {"id": "dr", "type": "draft", "angle": -8, "axis": "X", "faces": face_normal(0, 0, 1)}]),
+    "draft_vertical": doc(BLOCK + [{"id": "dr", "type": "draft", "angle": 90, "faces": face_normal(1, 0, 0)}]),
+    "draft_refused": doc(BLOCK + [{"id": "dr", "type": "draft", "angle": 10, "faces": face_normal(0, 0, 1)}]),
+    "draft_two_bodies": doc([box("a", 10, 10, 10), box("b", 10, 10, 10), {"id": "m", "type": "move", "dx": 30, "bodies": ["body2"]},
+                             {"id": "dr", "type": "draft", "angle": 3, "faces": [face_at(5, 0, 0, body="body1"), face_at(35, 0, 0, body="body2")]}]),
+}
+CASES.update(SOLID_OPS_CASES)
+
+
 def volume(shape):
     p = GProp_GProps()
     BRepGProp.VolumeProperties_s(shape.wrapped, p)

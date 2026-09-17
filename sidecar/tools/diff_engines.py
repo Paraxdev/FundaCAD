@@ -157,7 +157,10 @@ def python_only(docs):
         problems = []
         if o["fatal"]:
             problems.append(f"refused: {o['fatal']}")
-        if o["messages"] and not o["fatal"]:
+        if d.get("expectError"):
+            if not o["messages"] and not o["fatal"]:
+                problems.append("expected a feature error, built cleanly")
+        elif o["messages"] and not o["fatal"]:
             problems.append("feature errors: " + "; ".join(o["messages"]))
         if o["bodies"] == 0 and not o["fatal"]:
             problems.append("no bodies")

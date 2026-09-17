@@ -9,6 +9,7 @@ mod pattern;
 mod primitives;
 mod revolve;
 pub mod sketch;
+mod solid_ops;
 mod transform;
 
 pub use boolean::combine;
@@ -43,6 +44,9 @@ pub fn dispatch(ctx: &mut Ctx, f: &Feature) -> FResult {
         Feature::PatternRect(p) => pattern::pattern_rect(ctx, p),
         Feature::PatternLinear(p) => pattern::pattern_linear(ctx, p),
         Feature::PatternCircular(p) => pattern::pattern_circular(ctx, p),
+        Feature::Shell(s) => solid_ops::shell(ctx, s),
+        Feature::Thicken(t) => solid_ops::thicken(ctx, t),
+        Feature::Draft(d) => solid_ops::draft(ctx, d),
         other => Err(not_ported(other.type_name().unwrap_or("feature"))),
     }
 }
