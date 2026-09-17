@@ -4289,6 +4289,784 @@
    "errors": []
   }
  },
+ "pattern_circular_full": {
+  "doc": {
+   "features": [
+    {
+     "height": 4,
+     "id": "a",
+     "length": 4,
+     "type": "box",
+     "width": 4
+    },
+    {
+     "dx": 10,
+     "id": "m",
+     "type": "move"
+    },
+    {
+     "angle": 360,
+     "count": 5,
+     "id": "p",
+     "type": "patternCircular"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.88377443708432,
+      -12.030712184291739,
+      -2.0,
+      12.0,
+      12.030712184291739,
+      2.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p"
+     ],
+     "faces": 30,
+     "id": "body1",
+     "name": "Box",
+     "solids": 5,
+     "volume": 320.0000000000001
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "pattern_circular_negative": {
+  "doc": {
+   "features": [
+    {
+     "height": 4,
+     "id": "a",
+     "length": 4,
+     "type": "box",
+     "width": 4
+    },
+    {
+     "angle": 180,
+     "count": -2,
+     "id": "p",
+     "type": "patternCircular"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -2.0,
+      -2.0,
+      -2.0,
+      2.0,
+      2.0,
+      2.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 63.999999999999986
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "p",
+     "message": "Pattern: count must be greater than 0 (got -2)"
+    }
+   ]
+  }
+ },
+ "pattern_circular_one": {
+  "doc": {
+   "features": [
+    {
+     "height": 4,
+     "id": "a",
+     "length": 4,
+     "type": "box",
+     "width": 4
+    },
+    {
+     "angle": 180,
+     "axis": "Y",
+     "count": 1,
+     "id": "p",
+     "type": "patternCircular"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -2.0,
+      -2.0,
+      -2.0,
+      2.0,
+      2.0,
+      2.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 63.999999999999986
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "pattern_circular_overlap": {
+  "doc": {
+   "features": [
+    {
+     "height": 4,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "dx": 4,
+     "id": "m",
+     "type": "move"
+    },
+    {
+     "angle": 360,
+     "axis": "Z",
+     "count": 6,
+     "id": "p",
+     "type": "patternCircular"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -9.000000000000002,
+      -10.294228634059952,
+      -2.0,
+      9.0,
+      10.294228634059948,
+      2.0
+     ],
+     "faceOwners": [
+      "p",
+      "a",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p"
+     ],
+     "faces": 20,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 1120.7695154586736
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "pattern_circular_partial_x": {
+  "doc": {
+   "features": [
+    {
+     "height": 4,
+     "id": "a",
+     "length": 4,
+     "type": "box",
+     "width": 4
+    },
+    {
+     "dy": 10,
+     "id": "m",
+     "type": "move"
+    },
+    {
+     "angle": 90,
+     "axis": "X",
+     "count": 4,
+     "id": "p",
+     "type": "patternCircular"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -2.0,
+      -2.0,
+      -2.0,
+      2.0,
+      12.0,
+      12.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p"
+     ],
+     "faces": 24,
+     "id": "body1",
+     "name": "Box",
+     "solids": 4,
+     "volume": 256.0
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "pattern_linear_apart": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "axis": "Y",
+     "count": 3,
+     "id": "p",
+     "spacing": 15,
+     "type": "patternLinear"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -5.0,
+      -5.0,
+      5.0,
+      35.0,
+      5.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p"
+     ],
+     "faces": 18,
+     "id": "body1",
+     "name": "Box",
+     "solids": 3,
+     "volume": 2999.999999999998
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "pattern_linear_bodies": {
+  "doc": {
+   "features": [
+    {
+     "height": 2,
+     "id": "a",
+     "length": 2,
+     "type": "box",
+     "width": 2
+    },
+    {
+     "height": 3,
+     "id": "b",
+     "length": 3,
+     "type": "box",
+     "width": 3
+    },
+    {
+     "bodies": [
+      "body2"
+     ],
+     "dx": 20,
+     "id": "m",
+     "type": "move"
+    },
+    {
+     "axis": "Y",
+     "bodies": [
+      "body1",
+      "body9",
+      "body2"
+     ],
+     "count": 2,
+     "id": "p",
+     "spacing": 5,
+     "type": "patternLinear"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -1.0,
+      -1.0,
+      -1.0,
+      1.0,
+      6.0,
+      1.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p"
+     ],
+     "faces": 12,
+     "id": "body1",
+     "name": "Box",
+     "solids": 2,
+     "volume": 15.999999999999996
+    },
+    {
+     "bbox": [
+      18.5,
+      -1.5,
+      -1.5,
+      21.5,
+      6.5,
+      1.5
+     ],
+     "faceOwners": [
+      "b",
+      "b",
+      "b",
+      "b",
+      "b",
+      "b",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p"
+     ],
+     "faces": 12,
+     "id": "body2",
+     "name": "Box",
+     "solids": 2,
+     "volume": 54.0
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1",
+    "b:0": "body2"
+   },
+   "datumPlanes": {},
+   "diagnostics": [
+    {
+     "feature_id": "p",
+     "kind": "patternLinear",
+     "reason": "target body already consumed or missing"
+    }
+   ],
+   "errors": []
+  }
+ },
+ "pattern_linear_default_axis_round": {
+  "doc": {
+   "features": [
+    {
+     "height": 2,
+     "id": "a",
+     "length": 2,
+     "type": "box",
+     "width": 2
+    },
+    {
+     "axis": "Z",
+     "count": 2.5,
+     "id": "p",
+     "spacing": "gap",
+     "type": "patternLinear"
+    }
+   ],
+   "parameters": {
+    "gap": 4
+   }
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -1.0,
+      -1.0,
+      -1.0,
+      1.0,
+      1.0,
+      5.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p"
+     ],
+     "faces": 12,
+     "id": "body1",
+     "name": "Box",
+     "solids": 2,
+     "volume": 15.999999999999996
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "pattern_linear_nothing": {
+  "doc": {
+   "features": [
+    {
+     "count": 3,
+     "id": "p",
+     "spacing": 4,
+     "type": "patternLinear"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [],
+   "bodyIds": {},
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "p",
+     "message": "Pattern needs an existing body"
+    }
+   ]
+  }
+ },
+ "pattern_linear_overlap": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "axis": "X",
+     "count": 3,
+     "id": "p",
+     "spacing": 6,
+     "type": "patternLinear"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -5.0,
+      -5.0,
+      17.0,
+      5.0,
+      5.0
+     ],
+     "faceOwners": [
+      "a",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 2199.9999999999995
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "pattern_linear_touching": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "count": 2,
+     "id": "p",
+     "spacing": 10,
+     "type": "patternLinear"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -5.0,
+      -5.0,
+      15.0,
+      5.0,
+      5.0
+     ],
+     "faceOwners": [
+      "a",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 1999.9999999999995
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "pattern_linear_zero": {
+  "doc": {
+   "features": [
+    {
+     "height": 2,
+     "id": "a",
+     "length": 2,
+     "type": "box",
+     "width": 2
+    },
+    {
+     "count": 0,
+     "id": "p",
+     "spacing": 4,
+     "type": "patternLinear"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -1.0,
+      -1.0,
+      -1.0,
+      1.0,
+      1.0,
+      1.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 7.999999999999998
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "p",
+     "message": "Pattern: count must be greater than 0 (got 0)"
+    }
+   ]
+  }
+ },
  "pattern_rect": {
   "doc": {
    "features": [
@@ -4381,6 +5159,233 @@
    "datumPlanes": {},
    "diagnostics": [],
    "errors": []
+  }
+ },
+ "pattern_rect_grid": {
+  "doc": {
+   "features": [
+    {
+     "height": 4,
+     "id": "a",
+     "length": 4,
+     "type": "box",
+     "width": 4
+    },
+    {
+     "countX": 3,
+     "countY": 2,
+     "id": "p",
+     "spacingX": 10,
+     "spacingY": 7,
+     "type": "patternRect"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -2.0,
+      -2.0,
+      -2.0,
+      22.0,
+      9.0,
+      2.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p"
+     ],
+     "faces": 36,
+     "id": "body1",
+     "name": "Box",
+     "solids": 6,
+     "volume": 383.99999999999994
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "pattern_rect_nothing": {
+  "doc": {
+   "features": [
+    {
+     "countX": 2,
+     "countY": 2,
+     "id": "p",
+     "spacingX": 3,
+     "spacingY": 3,
+     "type": "patternRect"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [],
+   "bodyIds": {},
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "p",
+     "message": "Pattern needs an existing body"
+    }
+   ]
+  }
+ },
+ "pattern_rect_overlap": {
+  "doc": {
+   "features": [
+    {
+     "height": 4,
+     "id": "a",
+     "length": 4,
+     "type": "box",
+     "width": 4
+    },
+    {
+     "countX": 2,
+     "countY": 2,
+     "id": "p",
+     "spacingX": 3,
+     "spacingY": 3,
+     "type": "patternRect"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -2.0,
+      -2.0,
+      -2.0,
+      5.0,
+      5.0,
+      2.0
+     ],
+     "faceOwners": [
+      "p",
+      "p",
+      "p",
+      "p",
+      "p",
+      "p"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 196.00000000000006
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "pattern_rect_zero": {
+  "doc": {
+   "features": [
+    {
+     "height": 4,
+     "id": "a",
+     "length": 4,
+     "type": "box",
+     "width": 4
+    },
+    {
+     "countX": 2,
+     "countY": 0,
+     "id": "p",
+     "spacingX": 3,
+     "spacingY": 3,
+     "type": "patternRect"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -2.0,
+      -2.0,
+      -2.0,
+      2.0,
+      2.0,
+      2.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 63.999999999999986
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "p",
+     "message": "Pattern: countY must be greater than 0 (got 0)"
+    }
+   ]
   }
  },
  "polygon": {

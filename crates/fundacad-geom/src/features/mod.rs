@@ -3,6 +3,7 @@
 mod boolean;
 mod datum;
 mod extrude;
+mod pattern;
 mod primitives;
 mod revolve;
 pub mod sketch;
@@ -34,6 +35,9 @@ pub fn dispatch(ctx: &mut Ctx, f: &Feature) -> FResult {
         Feature::Extrude(e) => extrude::handle(ctx, e),
         Feature::Revolve(r) => revolve::handle(ctx, r),
         Feature::Boolean(b) => boolean::do_boolean(ctx, b),
+        Feature::PatternRect(p) => pattern::pattern_rect(ctx, p),
+        Feature::PatternLinear(p) => pattern::pattern_linear(ctx, p),
+        Feature::PatternCircular(p) => pattern::pattern_circular(ctx, p),
         other => Err(not_ported(other.type_name().unwrap_or("feature"))),
     }
 }
