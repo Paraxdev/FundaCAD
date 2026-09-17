@@ -1,0 +1,822 @@
+{
+ "asm_colors": {
+  "isAssembly": true,
+  "roots": 1,
+  "nodes": [
+   {
+    "name": "Painted",
+    "parent": null,
+    "color": null
+   },
+   {
+    "name": "Red Part",
+    "parent": 0,
+    "color": "#e51919"
+   },
+   {
+    "name": "Green Part",
+    "parent": 0,
+    "color": "#19e519"
+   },
+   {
+    "name": "Yellow Part",
+    "parent": 0,
+    "color": "#e5e519"
+   },
+   {
+    "name": "Uncoloured Part",
+    "parent": 0,
+    "color": null
+   }
+  ],
+  "leaves": [
+   {
+    "node": 1,
+    "faces": 6,
+    "solids": 1,
+    "volume": 124.99999999999997,
+    "bbox": [
+     -2.5,
+     -2.5,
+     -2.5,
+     2.5,
+     2.5,
+     2.5
+    ],
+    "faceColors": null,
+    "solidColor": "#e51919"
+   },
+   {
+    "node": 2,
+    "faces": 6,
+    "solids": 1,
+    "volume": 124.99999999999997,
+    "bbox": [
+     7.5,
+     -2.5,
+     -2.5,
+     12.5,
+     2.5,
+     2.5
+    ],
+    "faceColors": null,
+    "solidColor": "#19e519"
+   },
+   {
+    "node": 3,
+    "faces": 6,
+    "solids": 1,
+    "volume": 124.99999999999997,
+    "bbox": [
+     17.5,
+     -2.5,
+     -2.5,
+     22.5,
+     2.5,
+     2.5
+    ],
+    "faceColors": null,
+    "solidColor": "#e5e519"
+   },
+   {
+    "node": 4,
+    "faces": 6,
+    "solids": 1,
+    "volume": 124.99999999999997,
+    "bbox": [
+     27.5,
+     -2.5,
+     -2.5,
+     32.5,
+     2.5,
+     2.5
+    ],
+    "faceColors": null,
+    "solidColor": null
+   }
+  ],
+  "reply": {
+   "solid": true,
+   "faces": 24,
+   "name": "asm_colors",
+   "nodes": [
+    {
+     "name": "Painted",
+     "parent": null
+    },
+    {
+     "name": "Red Part",
+     "parent": 0,
+     "color": "#e51919"
+    },
+    {
+     "name": "Green Part",
+     "parent": 0,
+     "color": "#19e519"
+    },
+    {
+     "name": "Yellow Part",
+     "parent": 0,
+     "color": "#e5e519"
+    },
+    {
+     "name": "Uncoloured Part",
+     "parent": 0
+    }
+   ],
+   "parts": [
+    {
+     "node": 1,
+     "faces": 6,
+     "color": "#e51919"
+    },
+    {
+     "node": 2,
+     "faces": 6,
+     "color": "#19e519"
+    },
+    {
+     "node": 3,
+     "faces": 6,
+     "color": "#e5e519"
+    },
+    {
+     "node": 4,
+     "faces": 6
+    }
+   ]
+  }
+ },
+ "asm_empty_product": {
+  "isAssembly": true,
+  "roots": 1,
+  "nodes": [
+   {
+    "name": "WithDecal",
+    "parent": null,
+    "color": null
+   },
+   {
+    "name": "Panel",
+    "parent": 0,
+    "color": null
+   },
+   {
+    "name": "Decal",
+    "parent": 0,
+    "color": null
+   }
+  ],
+  "leaves": [
+   {
+    "node": 1,
+    "faces": 6,
+    "solids": 1,
+    "volume": 799.9999999999998,
+    "bbox": [
+     -10.0,
+     -10.0,
+     -1.0,
+     10.0,
+     10.0,
+     1.0
+    ],
+    "faceColors": null,
+    "solidColor": null
+   },
+   {
+    "node": 2,
+    "faces": 1,
+    "solids": 0,
+    "volume": 0.0,
+    "bbox": [
+     -3.0,
+     -3.0,
+     0.0,
+     -3.0,
+     3.0,
+     6.0
+    ],
+    "faceColors": null,
+    "solidColor": null
+   }
+  ],
+  "reply": {
+   "solid": true,
+   "faces": 7,
+   "name": "asm_empty_product",
+   "nodes": [
+    {
+     "name": "WithDecal",
+     "parent": null
+    },
+    {
+     "name": "Panel",
+     "parent": 0
+    },
+    {
+     "name": "Decal",
+     "parent": 0
+    }
+   ],
+   "parts": [
+    {
+     "node": 1,
+     "faces": 6
+    },
+    {
+     "node": 2,
+     "faces": 1
+    }
+   ]
+  }
+ },
+ "asm_face_colors": {
+  "isAssembly": true,
+  "roots": 1,
+  "nodes": [
+   {
+    "name": "Painted Faces",
+    "parent": null,
+    "color": null
+   },
+   {
+    "name": "Two Tone Box",
+    "parent": 0,
+    "color": "#1919e5"
+   },
+   {
+    "name": "Plain Box",
+    "parent": 0,
+    "color": null
+   }
+  ],
+  "leaves": [
+   {
+    "node": 1,
+    "faces": 6,
+    "solids": 1,
+    "volume": 999.9999999999998,
+    "bbox": [
+     -5.0,
+     -5.0,
+     -5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "faceColors": [
+     "#e51919",
+     "#ffffff",
+     null,
+     null,
+     null,
+     null
+    ],
+    "solidColor": "#1919e5"
+   },
+   {
+    "node": 2,
+    "faces": 6,
+    "solids": 1,
+    "volume": 124.99999999999997,
+    "bbox": [
+     17.5,
+     -2.5,
+     -2.5,
+     22.5,
+     2.5,
+     2.5
+    ],
+    "faceColors": null,
+    "solidColor": null
+   }
+  ],
+  "reply": {
+   "solid": true,
+   "faces": 12,
+   "name": "asm_face_colors",
+   "nodes": [
+    {
+     "name": "Painted Faces",
+     "parent": null
+    },
+    {
+     "name": "Two Tone Box",
+     "parent": 0,
+     "color": "#1919e5"
+    },
+    {
+     "name": "Plain Box",
+     "parent": 0
+    }
+   ],
+   "parts": [
+    {
+     "node": 1,
+     "faces": 6,
+     "faceColors": {
+      "palette": [
+       "#e51919",
+       "#ffffff"
+      ],
+      "runs": [
+       [
+        1,
+        0
+       ],
+       [
+        1,
+        1
+       ],
+       [
+        4,
+        -1
+       ]
+      ]
+     },
+     "color": "#1919e5"
+    },
+    {
+     "node": 2,
+     "faces": 6
+    }
+   ]
+  }
+ },
+ "asm_flat": {
+  "isAssembly": true,
+  "roots": 1,
+  "nodes": [
+   {
+    "name": "Widget",
+    "parent": null,
+    "color": null
+   },
+   {
+    "name": "Plate",
+    "parent": 0,
+    "color": null
+   },
+   {
+    "name": "Bracket",
+    "parent": 0,
+    "color": null
+   },
+   {
+    "name": "Pin",
+    "parent": 0,
+    "color": null
+   }
+  ],
+  "leaves": [
+   {
+    "node": 1,
+    "faces": 6,
+    "solids": 1,
+    "volume": 799.9999999999998,
+    "bbox": [
+     -10.0,
+     -10.0,
+     -1.0,
+     10.0,
+     10.0,
+     1.0
+    ],
+    "faceColors": null,
+    "solidColor": null
+   },
+   {
+    "node": 2,
+    "faces": 6,
+    "solids": 1,
+    "volume": 359.99999999999994,
+    "bbox": [
+     27.0,
+     -3.0,
+     -5.0,
+     33.0,
+     3.0,
+     5.0
+    ],
+    "faceColors": null,
+    "solidColor": null
+   },
+   {
+    "node": 3,
+    "faces": 3,
+    "solids": 1,
+    "volume": 150.79644737231007,
+    "bbox": [
+     -2.0,
+     28.0,
+     -6.0,
+     2.0,
+     32.0,
+     6.0
+    ],
+    "faceColors": null,
+    "solidColor": null
+   }
+  ],
+  "reply": {
+   "solid": true,
+   "faces": 15,
+   "name": "asm_flat",
+   "nodes": [
+    {
+     "name": "Widget",
+     "parent": null
+    },
+    {
+     "name": "Plate",
+     "parent": 0
+    },
+    {
+     "name": "Bracket",
+     "parent": 0
+    },
+    {
+     "name": "Pin",
+     "parent": 0
+    }
+   ],
+   "parts": [
+    {
+     "node": 1,
+     "faces": 6
+    },
+    {
+     "node": 2,
+     "faces": 6
+    },
+    {
+     "node": 3,
+     "faces": 3
+    }
+   ]
+  }
+ },
+ "asm_multisolid": {
+  "isAssembly": true,
+  "roots": 1,
+  "nodes": [
+   {
+    "name": "Fasteners",
+    "parent": null,
+    "color": null
+   },
+   {
+    "name": "M3 Nut (x3)",
+    "parent": 0,
+    "color": null
+   },
+   {
+    "name": "Plate",
+    "parent": 0,
+    "color": null
+   }
+  ],
+  "leaves": [
+   {
+    "node": 1,
+    "faces": 6,
+    "solids": 1,
+    "volume": 18.0,
+    "bbox": [
+     -1.5,
+     18.5,
+     -1.0,
+     1.5,
+     21.5,
+     1.0
+    ],
+    "faceColors": null,
+    "solidColor": null
+   },
+   {
+    "node": 1,
+    "faces": 6,
+    "solids": 1,
+    "volume": 18.0,
+    "bbox": [
+     6.5,
+     18.5,
+     -1.0,
+     9.5,
+     21.5,
+     1.0
+    ],
+    "faceColors": null,
+    "solidColor": null
+   },
+   {
+    "node": 1,
+    "faces": 6,
+    "solids": 1,
+    "volume": 18.0,
+    "bbox": [
+     14.5,
+     18.5,
+     -1.0,
+     17.5,
+     21.5,
+     1.0
+    ],
+    "faceColors": null,
+    "solidColor": null
+   },
+   {
+    "node": 2,
+    "faces": 6,
+    "solids": 1,
+    "volume": 600.0,
+    "bbox": [
+     -15.0,
+     -5.0,
+     -1.0,
+     15.0,
+     5.0,
+     1.0
+    ],
+    "faceColors": null,
+    "solidColor": null
+   }
+  ],
+  "reply": {
+   "solid": true,
+   "faces": 24,
+   "name": "asm_multisolid",
+   "nodes": [
+    {
+     "name": "Fasteners",
+     "parent": null
+    },
+    {
+     "name": "M3 Nut (x3)",
+     "parent": 0
+    },
+    {
+     "name": "Plate",
+     "parent": 0
+    }
+   ],
+   "parts": [
+    {
+     "node": 1,
+     "faces": 6
+    },
+    {
+     "node": 1,
+     "faces": 6
+    },
+    {
+     "node": 1,
+     "faces": 6
+    },
+    {
+     "node": 2,
+     "faces": 6
+    }
+   ]
+  }
+ },
+ "asm_nested": {
+  "isAssembly": true,
+  "roots": 1,
+  "nodes": [
+   {
+    "name": "Robot",
+    "parent": null,
+    "color": null
+   },
+   {
+    "name": "Electronics",
+    "parent": 0,
+    "color": null
+   },
+   {
+    "name": "Board",
+    "parent": 1,
+    "color": null
+   },
+   {
+    "name": "MCU",
+    "parent": 2,
+    "color": null
+   },
+   {
+    "name": "Header (x2)",
+    "parent": 2,
+    "color": null
+   },
+   {
+    "name": "Board",
+    "parent": 1,
+    "color": null
+   },
+   {
+    "name": "MCU",
+    "parent": 5,
+    "color": null
+   },
+   {
+    "name": "Header (x2)",
+    "parent": 5,
+    "color": null
+   },
+   {
+    "name": "Chassis",
+    "parent": 0,
+    "color": null
+   }
+  ],
+  "leaves": [
+   {
+    "node": 3,
+    "faces": 6,
+    "solids": 1,
+    "volume": 15.999999999999996,
+    "bbox": [
+     -1.0,
+     -1.0,
+     4.5,
+     3.0,
+     3.0,
+     5.5
+    ],
+    "faceColors": null,
+    "solidColor": null
+   },
+   {
+    "node": 4,
+    "faces": 6,
+    "solids": 1,
+    "volume": 3.0,
+    "bbox": [
+     5.5,
+     0.5,
+     3.5,
+     6.5,
+     1.5,
+     6.5
+    ],
+    "faceColors": null,
+    "solidColor": null
+   },
+   {
+    "node": 4,
+    "faces": 6,
+    "solids": 1,
+    "volume": 3.0,
+    "bbox": [
+     7.5,
+     0.5,
+     3.5,
+     8.5,
+     1.5,
+     6.5
+    ],
+    "faceColors": null,
+    "solidColor": null
+   },
+   {
+    "node": 6,
+    "faces": 6,
+    "solids": 1,
+    "volume": 15.999999999999996,
+    "bbox": [
+     49.0,
+     -1.0,
+     4.5,
+     53.0,
+     3.0,
+     5.5
+    ],
+    "faceColors": null,
+    "solidColor": null
+   },
+   {
+    "node": 7,
+    "faces": 6,
+    "solids": 1,
+    "volume": 3.0,
+    "bbox": [
+     55.5,
+     0.5,
+     3.5,
+     56.5,
+     1.5,
+     6.5
+    ],
+    "faceColors": null,
+    "solidColor": null
+   },
+   {
+    "node": 7,
+    "faces": 6,
+    "solids": 1,
+    "volume": 3.0,
+    "bbox": [
+     57.5,
+     0.5,
+     3.5,
+     58.5,
+     1.5,
+     6.5
+    ],
+    "faceColors": null,
+    "solidColor": null
+   },
+   {
+    "node": 8,
+    "faces": 6,
+    "solids": 1,
+    "volume": 3199.999999999999,
+    "bbox": [
+     -40.0,
+     -10.0,
+     -1.0,
+     40.0,
+     10.0,
+     1.0
+    ],
+    "faceColors": null,
+    "solidColor": null
+   }
+  ],
+  "reply": {
+   "solid": true,
+   "faces": 42,
+   "name": "asm_nested",
+   "nodes": [
+    {
+     "name": "Robot",
+     "parent": null
+    },
+    {
+     "name": "Electronics",
+     "parent": 0
+    },
+    {
+     "name": "Board",
+     "parent": 1
+    },
+    {
+     "name": "MCU",
+     "parent": 2
+    },
+    {
+     "name": "Header (x2)",
+     "parent": 2
+    },
+    {
+     "name": "Board",
+     "parent": 1
+    },
+    {
+     "name": "MCU",
+     "parent": 5
+    },
+    {
+     "name": "Header (x2)",
+     "parent": 5
+    },
+    {
+     "name": "Chassis",
+     "parent": 0
+    }
+   ],
+   "parts": [
+    {
+     "node": 3,
+     "faces": 6
+    },
+    {
+     "node": 4,
+     "faces": 6
+    },
+    {
+     "node": 4,
+     "faces": 6
+    },
+    {
+     "node": 6,
+     "faces": 6
+    },
+    {
+     "node": 7,
+     "faces": 6
+    },
+    {
+     "node": 7,
+     "faces": 6
+    },
+    {
+     "node": 8,
+     "faces": 6
+    }
+   ]
+  }
+ }
+}

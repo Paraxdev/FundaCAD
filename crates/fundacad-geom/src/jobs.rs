@@ -168,4 +168,12 @@ impl Jobs for GeomJobs {
     ) -> JobResult {
         rebuild_result(doc, tolerance, known, &EngineWatch(ctx))
     }
+
+    fn run(&mut self, op: &str, req: &Map<String, Value>, ctx: &JobContext) -> JobResult {
+        match op {
+            "export" => crate::export::export_result(req, &EngineWatch(ctx)),
+            "import" => crate::import::import_result(req),
+            other => error_result(&format!("unknown op: {other}")),
+        }
+    }
 }

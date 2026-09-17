@@ -1,0 +1,218 @@
+{
+ "box.stl": {
+  "reply": {
+   "solid": true,
+   "faces": 6,
+   "name": "box"
+  },
+  "volume": 4000.0000000000005,
+  "solids": 1,
+  "bbox": [
+   -10.0,
+   -10.0,
+   -5.0,
+   10.0,
+   10.0,
+   5.0
+  ]
+ },
+ "box.ascii.stl": {
+  "error": "Lib3MFException 5: Reading from a stream was not possible"
+ },
+ "box.3mf": {
+  "reply": {
+   "solid": true,
+   "faces": 6,
+   "name": "box"
+  },
+  "volume": 4000.0000000000005,
+  "solids": 1,
+  "bbox": [
+   -10.0,
+   -10.0,
+   -5.0,
+   10.0,
+   10.0,
+   5.0
+  ]
+ },
+ "box.obj": {
+  "reply": {
+   "solid": true,
+   "faces": 6,
+   "name": "box"
+  },
+  "volume": 4000.0000000000005,
+  "solids": 1,
+  "bbox": [
+   -10.0,
+   -10.0,
+   -5.0,
+   10.0,
+   10.0,
+   5.0
+  ]
+ },
+ "box.glb": {
+  "reply": {
+   "solid": true,
+   "faces": 6,
+   "name": "box",
+   "color": "#3366CC"
+  },
+  "volume": 4000.0000000000005,
+  "solids": 1,
+  "bbox": [
+   -10.0,
+   -10.0,
+   -5.0,
+   10.0,
+   10.0,
+   5.0
+  ]
+ },
+ "box_minus_cylinder.stl": {
+  "reply": {
+   "solid": true,
+   "faces": 26,
+   "name": "box_minus_cylinder"
+  },
+  "volume": 3716.3335171360113,
+  "solids": 1,
+  "bbox": [
+   -10.0,
+   -10.000000000000002,
+   -5.000000000000001,
+   10.000000000000002,
+   10.000000000000002,
+   5.0
+  ]
+ },
+ "box_minus_cylinder.ascii.stl": {
+  "error": "Lib3MFException 5: Reading from a stream was not possible"
+ },
+ "box_minus_cylinder.3mf": {
+  "reply": {
+   "solid": true,
+   "faces": 24,
+   "name": "box_minus_cylinder"
+  },
+  "volume": 3715.5620103632705,
+  "solids": 1,
+  "bbox": [
+   -10.0,
+   -10.000000000000002,
+   -5.0,
+   10.000000000000002,
+   10.000000000000002,
+   5.000000000000001
+  ]
+ },
+ "box_minus_cylinder.obj": {
+  "reply": {
+   "solid": true,
+   "faces": 26,
+   "name": "box_minus_cylinder"
+  },
+  "volume": 3716.3335171360113,
+  "solids": 1,
+  "bbox": [
+   -10.0,
+   -10.000000000000002,
+   -5.000000000000001,
+   10.000000000000002,
+   10.000000000000002,
+   5.0
+  ]
+ },
+ "box_minus_cylinder.glb": {
+  "reply": {
+   "solid": true,
+   "faces": 26,
+   "name": "box_minus_cylinder",
+   "color": "#3366CC"
+  },
+  "volume": 3716.333513582997,
+  "solids": 1,
+  "bbox": [
+   -10.0,
+   -10.000000000000002,
+   -5.000000000000001,
+   10.000000000000002,
+   10.000000000000002,
+   5.0
+  ]
+ },
+ "two_solids.stl": {
+  "reply": {
+   "solid": true,
+   "faces": 282,
+   "name": "two_solids"
+  },
+  "volume": 1517.348577582484,
+  "solids": 2,
+  "bbox": [
+   -5.0,
+   -5.022786927476752,
+   -5.01352859323269,
+   35.07431362421117,
+   5.0227869274767505,
+   5.0
+  ]
+ },
+ "two_solids.ascii.stl": {
+  "error": "Lib3MFException 5: Reading from a stream was not possible"
+ },
+ "two_solids.3mf": {
+  "reply": {
+   "solid": true,
+   "faces": 873,
+   "name": "two_solids"
+  },
+  "volume": 1514.8265352594935,
+  "solids": 1,
+  "bbox": [
+   -5.0,
+   -5.0,
+   -5.0,
+   34.986000061035156,
+   5.0,
+   5.0
+  ]
+ },
+ "two_solids.obj": {
+  "reply": {
+   "solid": true,
+   "faces": 282,
+   "name": "two_solids"
+  },
+  "volume": 1517.348577582484,
+  "solids": 2,
+  "bbox": [
+   -5.0,
+   -5.022786927476752,
+   -5.01352859323269,
+   35.07431362421117,
+   5.0227869274767505,
+   5.0
+  ]
+ },
+ "two_solids.glb": {
+  "reply": {
+   "solid": true,
+   "faces": 283,
+   "name": "two_solids",
+   "color": "#3366CC"
+  },
+  "volume": 1517.2568266923918,
+  "solids": 2,
+  "bbox": [
+   -5.0,
+   -5.022786927476752,
+   -5.000000000000001,
+   35.0743088417304,
+   5.022786927476751,
+   5.0
+  ]
+ }
+}
