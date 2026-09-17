@@ -80,7 +80,7 @@ mod tests {
         let JobResult::Mesh(m) = run(json!({"features": [
             {"id": "a", "type": "box", "length": 10, "width": 10, "height": 10},
             {"id": "p", "type": "datumPlane", "plane": "XY", "offset": 3},
-            {"id": "x", "type": "shell", "thickness": 1},
+            {"id": "x", "type": "shell", "thickness": 0},
         ]})) else {
             panic!("expected a mesh result");
         };
@@ -100,7 +100,7 @@ mod tests {
         assert_eq!(m.fields["bodyIds"], json!({"a:0": "body1"}));
         assert_eq!(
             m.fields["featureError"],
-            json!({"message": "shell is not ported to the Rust engine yet", "feature_id": "x"})
+            json!({"message": "Shell: thickness must not be 0", "feature_id": "x"})
         );
         assert_eq!(m.bodies.len(), 1);
         let bbox = &m.fields["bbox"];
@@ -167,5 +167,13 @@ impl Jobs for GeomJobs {
         ctx: &JobContext,
     ) -> JobResult {
         rebuild_result(doc, tolerance, known, &EngineWatch(ctx))
+    }
+
+    fn run(&mut self, op: &str, req: &Map<String, Value>, ctx: &JobContext) -> JobResult {
+        match op {
+            "export" => crate::export::export_result(req, &EngineWatch(ctx)),
+            "import" => crate::import::import_result(req),
+            other => error_result(&format!("unknown op: {other}")),
+        }
     }
 }

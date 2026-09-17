@@ -111,6 +111,10 @@ pub struct SketchEntry {
     pub points: Vec<[f64; 3]>,
     pub wire: Option<Shape>,
     pub plane: kernel::Frame,
+    /// Every sketch curve, located, for Divide to imprint.
+    pub edges: Vec<Shape>,
+    /// The face selector the sketch follows, which names the body a Divide splits.
+    pub face: Option<fundacad_core::schema::Selector>,
 }
 
 /// What a handler reads and edits, sidecar/builder.py `_RebuildCtx`.
@@ -246,6 +250,7 @@ fn with_python_defaults(raw: &Value) -> Option<Value> {
         "patternCircular" => &[("angle", json!(360)), ("axis", json!("Z"))][..],
         "draft" => &[("axis", json!("Z"))][..],
         "split" => &[("keep", json!("both"))][..],
+        "simplifyMesh" => &[("tolerance", json!(1))][..],
         _ => &[][..],
     };
     let mut out = obj.clone();

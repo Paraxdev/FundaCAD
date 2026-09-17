@@ -2,7 +2,9 @@
 
 pub mod blend;
 mod boolean;
+mod cleanup;
 mod datum;
+mod defeature;
 mod extrude;
 mod hole;
 mod loft_sweep;
@@ -10,6 +12,9 @@ mod pattern;
 mod primitives;
 mod revolve;
 pub mod sketch;
+mod press_pull;
+mod solid_ops;
+mod split;
 mod transform;
 
 pub use boolean::combine;
@@ -46,6 +51,16 @@ pub fn dispatch(ctx: &mut Ctx, f: &Feature) -> FResult {
         Feature::PatternRect(p) => pattern::pattern_rect(ctx, p),
         Feature::PatternLinear(p) => pattern::pattern_linear(ctx, p),
         Feature::PatternCircular(p) => pattern::pattern_circular(ctx, p),
+        Feature::Shell(s) => solid_ops::shell(ctx, s),
+        Feature::Thicken(t) => solid_ops::thicken(ctx, t),
+        Feature::Draft(d) => solid_ops::draft(ctx, d),
+        Feature::PressPull(p) => press_pull::press_pull(ctx, p),
+        Feature::OffsetFace(o) => press_pull::offset_face(ctx, o),
+        Feature::DeleteFace(d) => defeature::delete_face(ctx, d),
+        Feature::SimplifyMesh(s) => cleanup::simplify_mesh(ctx, s),
+        Feature::CleanUp(c) => cleanup::clean_up(ctx, c),
+        Feature::Split(s) => split::split(ctx, s),
+        Feature::Imprint(i) => split::imprint(ctx, i),
         other => Err(not_ported(other.type_name().unwrap_or("feature"))),
     }
 }
