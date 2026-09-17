@@ -29,6 +29,12 @@ const OCCT_LIBS: &[&str] = &[
     "TKCAF",
     "TKLCAF",
     "TKXCAF",
+    // XCAFDoc and XCAFApp pull the OCAF application and presentation layers.
+    "TKCDF",
+    "TKVCAF",
+    "TKV3d",
+    "TKService",
+    "TKHLR",
 ];
 
 fn main() {
