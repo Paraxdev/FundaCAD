@@ -842,3 +842,12 @@ jobs:
 
       - name: Rust geometry engine tests
         run: cargo test -p fundacad-geom
+
+      # The MCP suites drive built binaries: the server over its real stdio
+      # protocol, and `fundacad-engine` over a real socket for the live session.
+      # `cargo test -p fundacad-mcp` builds its own bin and examples but not
+      # another package's, so the engine is built first.
+      - name: Rust MCP server tests
+        run: |
+          cargo build -p fundacad-cli --bin fundacad-engine
+          cargo test -p fundacad-mcp
