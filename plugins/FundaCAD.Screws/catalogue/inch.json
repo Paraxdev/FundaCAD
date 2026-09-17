@@ -1,0 +1,136 @@
+[
+  {
+    "id": "asmeSocketCap",
+    "name": "Socket head cap screw, inch",
+    "standard": "ASME B18.3",
+    "aka": [],
+    "category": "Socket screws",
+    "threads": "inch",
+    "fixed": { "kind": "screw", "head.type": "socketCap", "drive.type": "hex", "point.type": "chamfer" },
+    "columns": { "a": "head.diameter", "h": "head.height", "j": "drive.size", "t": "drive.depth" },
+    "threadLength": { "steps": [[null, 2, 0.5]], "fullWithin": 5 },
+    "lengths": "inch",
+    "sizes": [
+      { "size": "#2", "a": 0.14, "h": 0.086, "j": 0.078, "t": 0.051, "L": [0.125, 0.75] },
+      { "size": "#4", "a": 0.183, "h": 0.112, "j": 0.094, "t": 0.067, "L": [0.1875, 1] },
+      { "size": "#6", "a": 0.226, "h": 0.138, "j": 0.109, "t": 0.083, "L": [0.25, 1.5] },
+      { "size": "#8", "a": 0.27, "h": 0.164, "j": 0.141, "t": 0.098, "L": [0.25, 2] },
+      { "size": "#10", "a": 0.312, "h": 0.19, "j": 0.156, "t": 0.114, "L": [0.25, 3] },
+      { "size": "1/4", "a": 0.375, "h": 0.25, "j": 0.188, "t": 0.15, "L": [0.375, 4] },
+      { "size": "5/16", "a": 0.469, "h": 0.312, "j": 0.25, "t": 0.188, "L": [0.5, 5] },
+      { "size": "3/8", "a": 0.5625, "h": 0.375, "j": 0.3125, "t": 0.225, "L": [0.5, 6] },
+      { "size": "7/16", "a": 0.656, "h": 0.4375, "j": 0.375, "t": 0.262, "L": [0.75, 6] },
+      { "size": "1/2", "a": 0.75, "h": 0.5, "j": 0.375, "t": 0.3, "L": [0.75, 6] }
+    ]
+  },
+  {
+    "id": "asmeButton",
+    "name": "Button head socket screw, inch",
+    "standard": "ASME B18.3",
+    "aka": [],
+    "category": "Socket screws",
+    "threads": "inch",
+    "fixed": { "kind": "screw", "head.type": "button", "drive.type": "hex", "point.type": "chamfer" },
+    "columns": { "a": "head.diameter", "h": "head.height", "j": "drive.size", "t": "drive.depth" },
+    "threadLength": { "full": true },
+    "lengths": "inch",
+    "sizes": [
+      { "size": "#2", "a": 0.164, "h": 0.046, "j": 0.05, "t": 0.028, "L": [0.125, 0.5] },
+      { "size": "#4", "a": 0.213, "h": 0.059, "j": 0.0625, "t": 0.035, "L": [0.1875, 0.75] },
+      { "size": "#6", "a": 0.262, "h": 0.073, "j": 0.078, "t": 0.044, "L": [0.25, 1] },
+      { "size": "#8", "a": 0.312, "h": 0.087, "j": 0.094, "t": 0.052, "L": [0.25, 1] },
+      { "size": "#10", "a": 0.361, "h": 0.101, "j": 0.125, "t": 0.07, "L": [0.25, 1.5] },
+      { "size": "1/4", "a": 0.437, "h": 0.132, "j": 0.156, "t": 0.087, "L": [0.375, 2] },
+      { "size": "5/16", "a": 0.547, "h": 0.166, "j": 0.188, "t": 0.105, "L": [0.5, 2] },
+      { "size": "3/8", "a": 0.656, "h": 0.199, "j": 0.219, "t": 0.122, "L": [0.5, 2.5] },
+      { "size": "1/2", "a": 0.875, "h": 0.265, "j": 0.312, "t": 0.175, "L": [0.75, 3] }
+    ]
+  },
+  {
+    "id": "asmeFlatSocket",
+    "name": "Flat head countersunk socket screw, inch",
+    "standard": "ASME B18.3",
+    "aka": ["82 degree"],
+    "category": "Socket screws",
+    "threads": "inch",
+    "fixed": { "kind": "screw", "head.type": "countersunk", "head.angle": 82, "drive.type": "hex", "point.type": "chamfer" },
+    "columns": { "a": "head.diameter", "h": "head.height", "j": "drive.size", "t": "drive.depth" },
+    "threadLength": { "steps": [[null, 2, 0.5]], "fullWithin": 5 },
+    "lengths": "inch",
+    "sizes": [
+      { "size": "#2", "a": 0.197, "h": 0.064, "j": 0.05, "t": 0.025, "L": [0.1875, 0.75] },
+      { "size": "#4", "a": 0.255, "h": 0.083, "j": 0.0625, "t": 0.035, "L": [0.25, 1] },
+      { "size": "#6", "a": 0.307, "h": 0.1, "j": 0.078, "t": 0.05, "L": [0.3125, 1.5] },
+      { "size": "#8", "a": 0.359, "h": 0.117, "j": 0.094, "t": 0.058, "L": [0.375, 2] },
+      { "size": "#10", "a": 0.411, "h": 0.134, "j": 0.125, "t": 0.07, "L": [0.375, 2.5] },
+      { "size": "1/4", "a": 0.531, "h": 0.183, "j": 0.156, "t": 0.098, "L": [0.5, 3] },
+      { "size": "5/16", "a": 0.656, "h": 0.226, "j": 0.188, "t": 0.117, "L": [0.625, 3.5] },
+      { "size": "3/8", "a": 0.781, "h": 0.27, "j": 0.219, "t": 0.136, "L": [0.75, 4] },
+      { "size": "7/16", "a": 0.844, "h": 0.26, "j": 0.25, "t": 0.139, "L": [1, 4] },
+      { "size": "1/2", "a": 0.938, "h": 0.298, "j": 0.312, "t": 0.156, "L": [1, 5] }
+    ]
+  },
+  {
+    "id": "asmeHexCap",
+    "name": "Hex cap screw, inch",
+    "standard": "ASME B18.2.1",
+    "aka": ["hex bolt"],
+    "category": "Bolts",
+    "threads": "inch",
+    "fixed": { "kind": "screw", "head.type": "hex", "drive.type": "none", "point.type": "chamfer" },
+    "columns": { "f": "head.acrossFlats", "h": "head.height" },
+    "threadLength": { "steps": [[6, 2, 0.25], [null, 2, 0.5]] },
+    "lengths": "inch",
+    "sizes": [
+      { "size": "1/4", "f": 0.4375, "h": 0.156, "L": [0.5, 6] },
+      { "size": "5/16", "f": 0.5, "h": 0.203, "L": [0.625, 6] },
+      { "size": "3/8", "f": 0.5625, "h": 0.234, "L": [0.75, 6] },
+      { "size": "7/16", "f": 0.625, "h": 0.281, "L": [1, 6] },
+      { "size": "1/2", "f": 0.75, "h": 0.312, "L": [1, 6] }
+    ]
+  },
+  {
+    "id": "asmeHexNut",
+    "name": "Hex nut, inch",
+    "standard": "ASME B18.2.2",
+    "aka": ["machine screw nut"],
+    "category": "Nuts",
+    "threads": "inch",
+    "fixed": { "kind": "nut", "nut.type": "hex" },
+    "columns": { "f": "nut.acrossFlats", "h": "nut.height" },
+    "sizes": [
+      { "size": "#2", "f": 0.1875, "h": 0.0625 },
+      { "size": "#4", "f": 0.25, "h": 0.094 },
+      { "size": "#6", "f": 0.3125, "h": 0.109 },
+      { "size": "#8", "f": 0.344, "h": 0.125 },
+      { "size": "#10", "f": 0.375, "h": 0.125 },
+      { "size": "1/4", "f": 0.4375, "h": 0.219 },
+      { "size": "5/16", "f": 0.5, "h": 0.266 },
+      { "size": "3/8", "f": 0.5625, "h": 0.328 },
+      { "size": "7/16", "f": 0.6875, "h": 0.375 },
+      { "size": "1/2", "f": 0.75, "h": 0.4375 }
+    ]
+  },
+  {
+    "id": "saeWasher",
+    "name": "SAE flat washer",
+    "standard": "ASME B18.21.1 (SAE)",
+    "aka": ["SAE"],
+    "category": "Washers",
+    "threads": "inch",
+    "fixed": { "kind": "washer", "washer.type": "plain" },
+    "columns": { "id": "washer.inner", "od": "washer.outer", "t": "washer.thickness" },
+    "sizes": [
+      { "size": "#2", "id": 0.094, "od": 0.25, "t": 0.022 },
+      { "size": "#4", "id": 0.125, "od": 0.312, "t": 0.032 },
+      { "size": "#6", "id": 0.156, "od": 0.375, "t": 0.049 },
+      { "size": "#8", "id": 0.188, "od": 0.438, "t": 0.049 },
+      { "size": "#10", "id": 0.219, "od": 0.5, "t": 0.049 },
+      { "size": "1/4", "id": 0.281, "od": 0.625, "t": 0.065 },
+      { "size": "5/16", "id": 0.344, "od": 0.688, "t": 0.065 },
+      { "size": "3/8", "id": 0.406, "od": 0.812, "t": 0.065 },
+      { "size": "7/16", "id": 0.469, "od": 0.922, "t": 0.065 },
+      { "size": "1/2", "id": 0.531, "od": 1.062, "t": 0.095 }
+    ]
+  }
+]

@@ -89,6 +89,7 @@ const CAPABILITIES: Record<string, (path: string) => boolean> = {
   "a surface texture": (p) => p.includes("/plugins/FundaCAD.Texture/"),
   "the extra parameter panels": (p) => p.includes("/plugins/FundaCAD.ExtraParameters/"),
   "the 3D printing toolbox": (p) => p.includes("/plugins/FundaCAD.PrintToolbox/"),
+  "the fastener library": (p) => p.includes("/plugins/FundaCAD.Screws/"),
 };
 
 /** Static import specifiers in a file, skipping `import type` (erased) and

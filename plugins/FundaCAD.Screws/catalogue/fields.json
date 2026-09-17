@@ -1,0 +1,79 @@
+{
+  "kinds": {
+    "screw": {
+      "label": "Screw or bolt",
+      "parts": ["head", "drive", "thread", "point"],
+      "fields": [["length", "Length (under the head, overall for countersunk)"], ["thread.length", "Thread length"]]
+    },
+    "shoulderScrew": {
+      "label": "Shoulder screw",
+      "parts": ["head", "drive", "shoulder", "thread", "point"],
+      "fields": [["length", "Shoulder length"], ["thread.length", "Thread length"]]
+    },
+    "nut": { "label": "Nut", "parts": ["nut", "thread"], "fields": [] },
+    "washer": { "label": "Washer", "parts": ["washer"], "fields": [] },
+    "insert": { "label": "Threaded insert", "parts": ["insert", "thread"], "fields": [] }
+  },
+  "parts": {
+    "head": {
+      "socketCap": { "label": "Socket cap", "fields": [["diameter", "Head diameter"], ["height", "Head height"]] },
+      "button": { "label": "Button", "fields": [["diameter", "Head diameter"], ["height", "Head height"]] },
+      "lowHead": { "label": "Low cap", "fields": [["diameter", "Head diameter"], ["height", "Head height"]] },
+      "cheese": { "label": "Cheese", "fields": [["diameter", "Head diameter"], ["height", "Head height"]] },
+      "pan": { "label": "Pan", "fields": [["diameter", "Head diameter"], ["height", "Head height"]] },
+      "countersunk": {
+        "label": "Countersunk",
+        "fields": [["diameter", "Head diameter"], ["height", "Head height"]]
+      },
+      "hex": { "label": "Hex", "fields": [["acrossFlats", "Across flats"], ["height", "Head height"]] },
+      "hexFlange": {
+        "label": "Hex flange",
+        "fields": [["acrossFlats", "Across flats"], ["height", "Overall head height"], ["flangeDiameter", "Flange diameter"], ["flangeThickness", "Flange thickness"]]
+      },
+      "knurled": {
+        "label": "Knurled thumb",
+        "fields": [["diameter", "Knurl diameter"], ["height", "Overall head height"], ["collarDiameter", "Collar diameter"], ["collarHeight", "Collar height"]]
+      },
+      "none": { "label": "Headless", "fields": [] }
+    },
+    "drive": {
+      "hex": { "label": "Hex socket", "fields": [["size", "Across flats"], ["depth", "Depth"]] },
+      "torx": { "label": "Hexalobular (Torx)", "fields": [["size", "Point to point (A)"], ["depth", "Depth"]] },
+      "phillips": { "label": "Phillips", "fields": [["size", "Recess diameter (m)"], ["depth", "Depth"]] },
+      "pozidriv": { "label": "Pozidriv", "fields": [["size", "Recess diameter (m)"], ["depth", "Depth"]] },
+      "slot": { "label": "Slot", "fields": [["size", "Slot width"], ["depth", "Slot depth"]] },
+      "square": { "label": "Square", "fields": [["size", "Square size"], ["depth", "Depth"]] },
+      "none": { "label": "None", "fields": [] }
+    },
+    "point": {
+      "chamfer": { "label": "Chamfered", "fields": [] },
+      "flat": { "label": "Flat", "fields": [["diameter", "Point diameter"]] },
+      "cone": { "label": "Cone", "fields": [] },
+      "cup": { "label": "Cup", "fields": [["diameter", "Cup diameter"]] },
+      "tapping": { "label": "Tapping cone", "fields": [] }
+    },
+    "shoulder": {
+      "plain": { "label": "Ground shoulder", "fields": [["diameter", "Shoulder diameter"]] }
+    },
+    "thread": {
+      "metric": { "label": "Metric", "fields": [["diameter", "Nominal diameter"], ["pitch", "Pitch"]] },
+      "unified": { "label": "Unified inch", "fields": [["diameter", "Nominal diameter"], ["pitch", "Pitch"]] },
+      "tapping": { "label": "Tapping", "fields": [["diameter", "Nominal diameter"], ["pitch", "Pitch"]] }
+    },
+    "nut": {
+      "hex": { "label": "Hex", "fields": [["acrossFlats", "Across flats"], ["height", "Height"]] },
+      "square": { "label": "Square", "fields": [["acrossFlats", "Width across flats"], ["height", "Height"]] },
+      "nyloc": { "label": "Nylon insert lock", "fields": [["acrossFlats", "Across flats"], ["height", "Overall height"], ["hexHeight", "Hex height"]] },
+      "flange": { "label": "Hex flange", "fields": [["acrossFlats", "Across flats"], ["height", "Overall height"], ["flangeDiameter", "Flange diameter"], ["flangeThickness", "Flange thickness"]] }
+    },
+    "washer": {
+      "plain": { "label": "Plain", "fields": [["inner", "Inner diameter"], ["outer", "Outer diameter"], ["thickness", "Thickness"]] },
+      "spring": { "label": "Split spring lock", "fields": [["inner", "Inner diameter"], ["outer", "Outer diameter"], ["thickness", "Section thickness"]] }
+    },
+    "insert": {
+      "knurled": { "label": "Knurled heat-set", "fields": [["outer", "Outer diameter"], ["length", "Length"]] }
+    }
+  },
+  "hands": ["right", "left"],
+  "units": ["mm", "in"]
+}

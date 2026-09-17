@@ -88,13 +88,14 @@ table, so the reassuring half cannot go stale while the alarming half stays
 current. Hand-written reassurance goes stale silently and in the direction that
 hurts.
 
-## The seven plugins this project publishes
+## The eight plugins this project publishes
 
 | id | what it is | asks for | kind |
 | --- | --- | --- | --- |
 | `FundaCAD.ExtraParameters` | sliders, toggles and choices for parameters, groups, named configurations and checks | `document.read`, `document.write` | `builtin` |
 | `FundaCAD.MCP` | lets an assistant build, measure and edit the open model | `document.*`, `geometry.build`, `files.*` | `process` |
 | `FundaCAD.PrintToolbox` | teardrop and bridged holes, counterbore bridges, sacrificial layers, thread-forming ribs, zip-tie channels, an elephant-foot chamfer and a vertical edge fillet, plus a bed fit check, for printing without supports | `document.read`, `document.write` | `builtin` |
+| `FundaCAD.Screws` | a library of standard and your own screws, nuts, washers and inserts, inserted as solid bodies | `document.read`, `document.write`, `geometry.build`, `files.read`, `files.write` | `builtin` |
 | `FundaCAD.Printing` | printers on your network, and opening a model in a slicer | `document.read`, `files.read`, `files.write`, `network.local`, `process.spawn` | `builtin` |
 | `FundaCAD.SpaceMouse` | navigating and moving with a 3D mouse | `device.input`, `document.read`, `document.write` | `builtin` |
 | `FundaCAD.MultiColor` | filament slots, per body and per texture colour | `document.read`, `document.write` | `builtin` |
@@ -393,6 +394,35 @@ code, which is the bargain Blender, Rhino and Fusion all make.
 `sandboxNote("builtin")` is where a person is told, in the words they read
 before they install.
 
+### Geometry that becomes an import, not a feature
+
+Some geometry is worth generating once and then keeping, not rebuilding: a standard screw is the
+same solid every time, and a document full of them should not stop building the day the library is
+uninstalled. So a plugin's geometry module may also register a SHAPE GENERATOR:
+
+```python
+def register(engine, plugin_id):
+    engine.register_shape_generator("fastener", plugin_id, build)  # build(params) -> Shape
+```
+
+The window reaches it through `GeometryBackend.generateShape(name, params, opts)`, which runs the
+`generateShape` op (`sidecar/shape_generate.py`, `docs/PROTOCOL.md`). `output: "mesh"` answers a mesh
+for a preview the plugin draws itself. `output: "store"` writes the solid to the blob store and
+answers `geom`, the same content hash an imported STEP file gets, and `placement` carries the
+shape's origin to a point with its +Z along a direction first.
+
+The plugin then adds an ordinary `import` feature with that `geom`. It is saved in the container,
+rebuilt from the blob, and needs neither the generator nor the plugin again. `generatedBy` on the
+feature (`{ plugin, spec }`) records what it was made from, for the plugin to read back; the build
+ignores it. A ValueError raised by `build` reaches the person as its message.
+
+The generator declares no feature type, so the manifest lists `shapeGenerators` beside `geometry`
+instead of `featureTypes` (the packager refuses geometry that declares neither), and there is nothing
+for the missing-plugin warning to say about a document that uses it.
+
+`saveTextFile` and `openTextFile` in `fundacad` are the file half such a library needs: a text file
+the person picks, through the native dialog in the app and a download or an upload in a browser.
+
 ### Two plugins that need each other
 
 The filament palette is the case that made this concrete. A palette is a list of
@@ -430,6 +460,9 @@ plugins/
                            state.ts, PrintStatusPill.vue, CameraPanel.vue,
                            FilamentMappingDialog.vue, FilamentMappingHost.vue,
                            geometry/
+  FundaCAD.Screws/         manifest.json, README.md, main.ts, catalogue.ts, spec.ts,
+                           search.ts, library.ts, state.ts, insert.ts, LibraryPanel.vue,
+                           FastenerPreview.vue, CustomForm.vue, catalogue/, geometry/
   FundaCAD.SpaceMouse/     manifest.json, README.md, main.ts, spacemouse.ts,
                            state.ts, SettingsHost.vue, SpaceMouseModal.vue
 ```

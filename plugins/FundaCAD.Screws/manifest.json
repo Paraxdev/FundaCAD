@@ -1,0 +1,19 @@
+{
+  "id": "FundaCAD.Screws",
+  "name": "Fasteners",
+  "version": "1.0.0",
+  "kind": "builtin",
+  "summary": "A library of standard screws, bolts, nuts, washers and heat-set inserts, metric and inch, with your own alongside. Preview one, read its specs, and drop it into the model as a solid body.",
+  "enabledByDefault": true,
+  "grants": [
+    "document.read",
+    "document.write",
+    "geometry.build",
+    "files.read",
+    "files.write"
+  ],
+  "shapeGenerators": [
+    "fastener"
+  ],
+  "geometry": "geometry/register.py"
+}
