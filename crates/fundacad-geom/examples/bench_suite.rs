@@ -382,8 +382,8 @@ fn stage_faces(args: &[String]) {
 /// The whole reply frame of a document, as a digest. Run it once with
 /// `FUNDACAD_THREADS=1` and once without: the two digests must match, which is
 /// the promise the parallel passes make.
-fn stage_hash(args: &[String]) {
-    let path = args.first().expect("bench_suite hash <document|corpus.json|file.step>");
+fn stage_digest(args: &[String]) {
+    let path = args.first().expect("bench_suite digest <document|corpus.json|file.step>");
     let lower = path.to_lowercase();
     let raw = if lower.ends_with(".step") || lower.ends_with(".stp") {
         imported_document(path, "step").0
@@ -414,7 +414,7 @@ fn stage_hash(args: &[String]) {
     println!(
         "{}",
         json!({
-            "stage": "hash",
+            "stage": "digest",
             "threads": fundacad_geom::par::threads(),
             "documents": digests.len(),
             "digests": digests,
@@ -474,9 +474,9 @@ fn main() {
         Some("export") => stage_export(rest),
         Some("faces") => stage_faces(rest),
         Some("smooth") => stage_smooth(rest),
-        Some("hash") => stage_hash(rest),
+        Some("digest") => stage_digest(rest),
         _ => {
-            eprintln!("usage: bench_suite <corpus|doc|import|export|faces|smooth|hash> <path> [--runs N]");
+            eprintln!("usage: bench_suite <corpus|doc|import|export|faces|smooth|digest> <path> [--runs N]");
             std::process::exit(2);
         }
     }
