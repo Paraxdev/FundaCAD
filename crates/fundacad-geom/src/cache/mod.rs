@@ -59,6 +59,7 @@ pub struct RebuildCache {
     /// A payload at least this slow to build is written to disk.
     pub mesh_persist_after: Duration,
     brep_sigs: HashMap<String, String>,
+    proj_quiet: bool,
     mesh_keys: HashMap<String, String>,
     payloads: meshes::Payloads,
     pub stats: CacheStats,
@@ -95,6 +96,7 @@ impl RebuildCache {
             tip_after: Duration::from_millis(500),
             mesh_persist_after: meshes::PERSIST_MIN,
             brep_sigs: HashMap::new(),
+            proj_quiet: false,
             mesh_keys: HashMap::new(),
             payloads: meshes::Payloads::default(),
             stats: CacheStats::default(),
@@ -151,7 +153,17 @@ impl RebuildCache {
         let mut source = Source::Full;
         let mut modified = Modified::new();
 
-        let common = keys.iter().zip(&self.ring_keys).take_while(|(a, b)| a == b).count();
+        // Never resume PAST the first sketch that projects: an unapplied
+        // projection update is not derivable from the document, so that sketch
+        // runs again. The RAM tier may pass the cap when the previous build of
+        // this prefix emitted no updates at all, a quiet proof.
+        let cap = projection_cap(raw);
+        let mut common = keys.iter().zip(&self.ring_keys).take_while(|(a, b)| a == b).count();
+        if let Some(cap) = cap {
+            if !(self.proj_quiet && common > cap) {
+                common = common.min(cap);
+            }
+        }
         if common > 0 {
             if let Some(Some(snap)) = self.ring.get(common - 1) {
                 if builder::ids_resumable(doc, snap) {
@@ -162,7 +174,7 @@ impl RebuildCache {
         }
         if resume.is_none() {
             if let Some(store) = &self.store {
-                if let Some((start, snap, m)) = checkpoint::restore(store, &keys) {
+                if let Some((start, snap, m)) = checkpoint::restore(store, &keys[..cap.unwrap_or(n)]) {
                     if builder::ids_resumable(doc, &snap) {
                         resume = Some((start, snap));
                         modified = m;
@@ -240,6 +252,7 @@ impl RebuildCache {
             self.mesh_keys.clear();
         }
         let replayed = tap.replayed;
+        self.proj_quiet = r.projection_updates.is_empty();
         self.ring = ring;
         self.ring_keys = keys;
         self.stats = CacheStats {
@@ -286,6 +299,20 @@ impl RebuildCache {
         self.stats.meshed = self.payloads.meshed;
         result
     }
+}
+
+/// The index of the first sketch holding a projected entity, builder.py's
+/// `proj_cap`.
+fn projection_cap(raw: &Value) -> Option<usize> {
+    raw.get("features")
+        .and_then(Value::as_array)?
+        .iter()
+        .position(|f| {
+            f.get("type").and_then(Value::as_str) == Some("sketch")
+                && f.get("entities")
+                    .and_then(Value::as_array)
+                    .is_some_and(|es| es.iter().any(|e| e.get("type").and_then(Value::as_str) == Some("projected")))
+        })
 }
 
 /// The engine process's cache, created on first use.
