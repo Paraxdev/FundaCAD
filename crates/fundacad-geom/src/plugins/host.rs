@@ -78,8 +78,7 @@ fn engine() -> &'static Engine {
     ENGINE.get_or_init(|| {
         let mut cfg = Config::new();
         cfg.wasm_component_model(true)
-            .epoch_interruption(true)
-            .max_wasm_stack(8 << 20);
+            .epoch_interruption(true);
         Engine::new(&cfg).expect("the wasmtime configuration is valid")
     })
 }
