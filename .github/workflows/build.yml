@@ -334,6 +334,35 @@ jobs:
             echo "::warning::no signing key, AppImage left unsigned (not shippable)"
           fi
 
+      # Tauri's CLI always writes `Depends: libwebkit2gtk-4.1-0, libgtk-3-0`, and
+      # no config replaces it. Since the 64-bit time_t transition (Ubuntu 24.04
+      # and everything built on it) the package is libgtk-3-0t64, and libgtk-3-0
+      # only exists as a name it Provides. apt resolves that; Kubuntu's QApt
+      # installer does not, and refuses the .deb with "Cannot satisfy
+      # dependencies". Only the control member is swapped, the ~900MB data member
+      # is left as it is, and nothing signs the .deb, so there is nothing to redo.
+      - name: Depend on the renamed GTK package (deb)
+        if: matrix.platform == 'ubuntu-22.04'
+        shell: bash
+        run: |
+          set -euo pipefail
+          deb=$(find "$PWD/src-tauri/target/release/bundle/deb" -maxdepth 1 -name '*.deb' | head -1)
+          [ -n "$deb" ] || { echo "::error::no .deb was produced"; exit 1; }
+          work=$(mktemp -d)
+          cd "$work"
+          ar x "$deb" control.tar.gz
+          mkdir control
+          tar -xzf control.tar.gz -C control
+          sed -i 's/^Depends: .*/Depends: libwebkit2gtk-4.1-0, libgtk-3-0t64 | libgtk-3-0/' control/control
+          grep -qxF 'Depends: libwebkit2gtk-4.1-0, libgtk-3-0t64 | libgtk-3-0' control/control \
+            || { echo "::error::Depends line not rewritten"; cat control/control; exit 1; }
+          tar -czf control.tar.gz --owner=0 --group=0 -C control .
+          ar r "$deb" control.tar.gz
+          dpkg-deb -f "$deb" Depends
+          # The member order dpkg requires, and a data member that still reads.
+          [ "$(ar t "$deb" | head -2 | tr '\n' ' ')" = "debian-binary control.tar.gz " ]
+          dpkg-deb -c "$deb" | grep -q 'usr/bin/fundacad'
+
       # A PORTABLE Windows build: unzip anywhere, run fundacad.exe, no installer
       # and no admin rights. An installer is a poor fit for a machine you do not
       # administer, or for keeping several builds side by side to compare them.
