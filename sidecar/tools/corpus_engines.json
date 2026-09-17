@@ -1,5 +1,5 @@
 {
-  "about": "Small synthetic documents diff_engines.py rebuilds through the Python and the Rust engine. Feature shapes are taken from sidecar/tests (test_smoke, test_fullstack, test_body_binding, test_profile_orientation). Ordered by the port: primitives, sketch extrudes, booleans, blends, shell, revolve, patterns, holes, loft, sweep. Every one builds cleanly on the Python engine, or fails the way its expectError says (diff_engines.py --python-only).",
+  "about": "Small synthetic documents diff_engines.py rebuilds through the Python and the Rust engine. Feature shapes are taken from sidecar/tests (test_smoke, test_fullstack, test_body_binding, test_profile_orientation). Ordered by the port: primitives, sketch extrudes, booleans, blends, shell, revolve, patterns, holes, loft, sweep. The *_join_* documents of each family are the ones whose fuse comes back as glued lumps instead of merged material, the case the sliced retry exists for. Every one builds cleanly on the Python engine, or fails the way its expectError says (diff_engines.py --python-only).",
   "documents": [
     {
       "name": "box",
@@ -2401,6 +2401,83 @@
       }
     },
     {
+      "name": "revolve_join_tangent_ring",
+      "document": {
+        "parameters": {},
+        "features": [
+          {
+            "id": "c",
+            "type": "cylinder",
+            "radius": 20,
+            "height": 100
+          },
+          {
+            "id": "s",
+            "type": "sketch",
+            "plane": "XZ",
+            "entities": [
+              {
+                "type": "circle",
+                "radius": 8,
+                "x": 26,
+                "y": 0
+              }
+            ]
+          },
+          {
+            "id": "rv",
+            "type": "revolve",
+            "sketch": "s",
+            "axis": "Z",
+            "angle": 360,
+            "operation": "join",
+            "targets": [
+              "body1"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "revolve_join_end_to_end",
+      "document": {
+        "parameters": {},
+        "features": [
+          {
+            "id": "c",
+            "type": "cylinder",
+            "radius": 10,
+            "height": 60
+          },
+          {
+            "id": "s",
+            "type": "sketch",
+            "plane": "XZ",
+            "entities": [
+              {
+                "type": "rectangle",
+                "width": 10,
+                "height": 40,
+                "x": 5,
+                "y": 45
+              }
+            ]
+          },
+          {
+            "id": "rv",
+            "type": "revolve",
+            "sketch": "s",
+            "axis": "Z",
+            "angle": 360,
+            "operation": "join",
+            "targets": [
+              "body1"
+            ]
+          }
+        ]
+      }
+    },
+    {
       "name": "pattern_linear",
       "document": {
         "parameters": {},
@@ -3055,6 +3132,244 @@
       }
     },
     {
+      "name": "loft_join_tangent_tube",
+      "document": {
+        "parameters": {
+          "tube_r": 26.0
+        },
+        "features": [
+          {
+            "id": "sk_path_top",
+            "type": "sketch",
+            "plane": "XZ",
+            "entities": [
+              {
+                "id": "p1",
+                "type": "spline",
+                "points": [
+                  {
+                    "x": -510,
+                    "y": 340
+                  },
+                  {
+                    "x": -430,
+                    "y": 470
+                  },
+                  {
+                    "x": -300,
+                    "y": 570
+                  },
+                  {
+                    "x": -120,
+                    "y": 612
+                  },
+                  {
+                    "x": 100,
+                    "y": 600
+                  },
+                  {
+                    "x": 280,
+                    "y": 565
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "sk_prof_top",
+            "type": "sketch",
+            "plane": {
+              "origin": [
+                -510,
+                0,
+                340
+              ],
+              "normal": [
+                0.52,
+                0,
+                0.85
+              ],
+              "xdir": [
+                0,
+                1,
+                0
+              ]
+            },
+            "entities": [
+              {
+                "id": "c1",
+                "type": "circle",
+                "radius": "tube_r"
+              }
+            ]
+          },
+          {
+            "id": "sw_top",
+            "type": "sweep",
+            "profile": "sk_prof_top",
+            "path": "sk_path_top",
+            "operation": "new"
+          },
+          {
+            "id": "la",
+            "type": "sketch",
+            "plane": {
+              "origin": [
+                280,
+                0,
+                565
+              ],
+              "normal": [
+                -0.62,
+                0,
+                -0.78
+              ],
+              "xdir": [
+                0,
+                1,
+                0
+              ]
+            },
+            "entities": [
+              {
+                "id": "lc1",
+                "type": "circle",
+                "radius": 26,
+                "x": 0,
+                "y": 0
+              }
+            ]
+          },
+          {
+            "id": "lb",
+            "type": "sketch",
+            "plane": {
+              "origin": [
+                8,
+                0,
+                272
+              ],
+              "normal": [
+                -0.62,
+                0,
+                -0.78
+              ],
+              "xdir": [
+                0,
+                1,
+                0
+              ]
+            },
+            "entities": [
+              {
+                "id": "lc2",
+                "type": "circle",
+                "radius": 20,
+                "x": 0,
+                "y": 0
+              }
+            ]
+          },
+          {
+            "id": "lf",
+            "type": "loft",
+            "sketches": [
+              "la",
+              "lb"
+            ],
+            "operation": "join",
+            "targets": [
+              "body1"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "loft_join_tube_end_to_end",
+      "document": {
+        "parameters": {},
+        "features": [
+          {
+            "id": "c",
+            "type": "cylinder",
+            "radius": 12,
+            "height": 60
+          },
+          {
+            "id": "a",
+            "type": "sketch",
+            "plane": {
+              "origin": [
+                0,
+                0,
+                25
+              ],
+              "normal": [
+                0,
+                0,
+                1
+              ],
+              "xdir": [
+                1,
+                0,
+                0
+              ]
+            },
+            "entities": [
+              {
+                "type": "circle",
+                "radius": 12,
+                "x": 0,
+                "y": 0
+              }
+            ]
+          },
+          {
+            "id": "b",
+            "type": "sketch",
+            "plane": {
+              "origin": [
+                0,
+                0,
+                85
+              ],
+              "normal": [
+                0,
+                0,
+                1
+              ],
+              "xdir": [
+                1,
+                0,
+                0
+              ]
+            },
+            "entities": [
+              {
+                "type": "circle",
+                "radius": 9,
+                "x": 0,
+                "y": 0
+              }
+            ]
+          },
+          {
+            "id": "l",
+            "type": "loft",
+            "sketches": [
+              "a",
+              "b"
+            ],
+            "operation": "join",
+            "targets": [
+              "body1"
+            ]
+          }
+        ]
+      }
+    },
+    {
       "name": "sweep_l_path",
       "document": {
         "parameters": {},
@@ -3215,6 +3530,266 @@
             "profile": "p",
             "path": "q",
             "operation": "cut"
+          }
+        ]
+      }
+    },
+    {
+      "name": "sweep_join_tangent_tubes",
+      "document": {
+        "parameters": {
+          "tube_r": 26.0
+        },
+        "features": [
+          {
+            "id": "sk_path_top",
+            "type": "sketch",
+            "plane": "XZ",
+            "entities": [
+              {
+                "id": "p1",
+                "type": "spline",
+                "points": [
+                  {
+                    "x": -510,
+                    "y": 340
+                  },
+                  {
+                    "x": -430,
+                    "y": 470
+                  },
+                  {
+                    "x": -300,
+                    "y": 570
+                  },
+                  {
+                    "x": -120,
+                    "y": 612
+                  },
+                  {
+                    "x": 100,
+                    "y": 600
+                  },
+                  {
+                    "x": 280,
+                    "y": 565
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "sk_prof_top",
+            "type": "sketch",
+            "plane": {
+              "origin": [
+                -510,
+                0,
+                340
+              ],
+              "normal": [
+                0.52,
+                0,
+                0.85
+              ],
+              "xdir": [
+                0,
+                1,
+                0
+              ]
+            },
+            "entities": [
+              {
+                "id": "c1",
+                "type": "circle",
+                "radius": "tube_r"
+              }
+            ]
+          },
+          {
+            "id": "sw_top",
+            "type": "sweep",
+            "profile": "sk_prof_top",
+            "path": "sk_path_top",
+            "operation": "new"
+          },
+          {
+            "id": "sk_path_down",
+            "type": "sketch",
+            "plane": "XZ",
+            "entities": [
+              {
+                "id": "p2",
+                "type": "spline",
+                "points": [
+                  {
+                    "x": 280,
+                    "y": 565
+                  },
+                  {
+                    "x": 205,
+                    "y": 470
+                  },
+                  {
+                    "x": 110,
+                    "y": 355
+                  },
+                  {
+                    "x": 8,
+                    "y": 272
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "sk_prof_down",
+            "type": "sketch",
+            "plane": {
+              "origin": [
+                280,
+                0,
+                565
+              ],
+              "normal": [
+                -0.62,
+                0,
+                -0.78
+              ],
+              "xdir": [
+                0,
+                1,
+                0
+              ]
+            },
+            "entities": [
+              {
+                "id": "c2",
+                "type": "circle",
+                "radius": "tube_r"
+              }
+            ]
+          },
+          {
+            "id": "sw_down",
+            "type": "sweep",
+            "profile": "sk_prof_down",
+            "path": "sk_path_down",
+            "operation": "join",
+            "targets": [
+              "body1"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "sweep_join_end_to_end_tubes",
+      "document": {
+        "parameters": {},
+        "features": [
+          {
+            "id": "pa",
+            "type": "sketch",
+            "plane": {
+              "origin": [
+                0,
+                0,
+                0
+              ],
+              "normal": [
+                1,
+                0,
+                0
+              ],
+              "xdir": [
+                0,
+                1,
+                0
+              ]
+            },
+            "entities": [
+              {
+                "type": "circle",
+                "radius": 10,
+                "x": 0,
+                "y": 0
+              }
+            ]
+          },
+          {
+            "id": "qa",
+            "type": "sketch",
+            "plane": "XZ",
+            "entities": [
+              {
+                "type": "line",
+                "x1": 0,
+                "y1": 0,
+                "x2": 120,
+                "y2": 0
+              }
+            ]
+          },
+          {
+            "id": "wa",
+            "type": "sweep",
+            "profile": "pa",
+            "path": "qa",
+            "operation": "new"
+          },
+          {
+            "id": "pb",
+            "type": "sketch",
+            "plane": {
+              "origin": [
+                110,
+                0,
+                0
+              ],
+              "normal": [
+                0.9888,
+                0,
+                0.1483
+              ],
+              "xdir": [
+                0,
+                1,
+                0
+              ]
+            },
+            "entities": [
+              {
+                "type": "circle",
+                "radius": 10,
+                "x": 0,
+                "y": 0
+              }
+            ]
+          },
+          {
+            "id": "qb",
+            "type": "sketch",
+            "plane": "XZ",
+            "entities": [
+              {
+                "type": "line",
+                "x1": 110,
+                "y1": 0,
+                "x2": 230,
+                "y2": 18
+              }
+            ]
+          },
+          {
+            "id": "wb",
+            "type": "sweep",
+            "profile": "pb",
+            "path": "qb",
+            "operation": "join",
+            "targets": [
+              "body1"
+            ]
           }
         ]
       }

@@ -479,6 +479,30 @@ inline BoShape bo_drop_debris(const TopoDS_Shape &shape) {
   }
 }
 
+// Does `outer` reach everywhere `inner` does? Control-point boxes on both
+// sides, with a 1% slack on the span, so a recut face whose poles moved does
+// not vote; a constituent the fuse dropped is out by its whole length.
+inline bool bo_box_covers(const TopoDS_Shape &outer, const TopoDS_Shape &inner) {
+  Bnd_Box a, b;
+  try {
+    BRepBndLib::Add(outer, a);
+    BRepBndLib::Add(inner, b);
+  } catch (...) {
+    return true;  // unmeasurable, so it does not get a vote
+  }
+  if (a.IsVoid() || b.IsVoid()) return true;
+  double ax0, ay0, az0, ax1, ay1, az1, bx0, by0, bz0, bx1, by1, bz1;
+  a.Get(ax0, ay0, az0, ax1, ay1, az1);
+  b.Get(bx0, by0, bz0, bx1, by1, bz1);
+  double span = std::max({bx1 - bx0, by1 - by0, bz1 - bz0});
+  double slack = std::max(1e-6, 0.01 * span);
+  const double lo_a[3] = {ax0, ay0, az0}, hi_a[3] = {ax1, ay1, az1};
+  const double lo_b[3] = {bx0, by0, bz0}, hi_b[3] = {bx1, by1, bz1};
+  for (int i = 0; i < 3; ++i)
+    if (lo_a[i] > lo_b[i] + slack || hi_a[i] < hi_b[i] - slack) return false;
+  return true;
+}
+
 // shape_util.py `_unify_body`: right inside-out solids, fuse the glued pieces
 // into one, keep the result only when it is valid and its volume plausible.
 inline BoShape bo_unify_body(const TopoDS_Shape &shape) {
@@ -529,7 +553,14 @@ inline BoShape bo_unify_body(const TopoDS_Shape &shape) {
     double after = bo_volume(*cleaned);
     int nAfter = bo_count(*cleaned, 0);
     bool valid = BRepCheck_Analyzer(*cleaned).IsValid();
-    bool ok = valid && nAfter >= 1 && nAfter <= (int)solids.size() && lo - tol <= after &&
+    // The volume bracket alone cannot see a fuse that DROPPED a constituent:
+    // the result is then exactly the largest one, and `lo` is the largest one.
+    // Measured on two tangent swept tubes, OCCT 7.8.1 returned the bigger tube
+    // alone from the inner fuse and the bracket passed it, so the body lost the
+    // smaller tube with nothing said. A union reaches everywhere its
+    // constituents do, so their box is the check the bracket is missing.
+    bool covers = bo_box_covers(*cleaned, shape);
+    bool ok = valid && covers && nAfter >= 1 && nAfter <= (int)solids.size() && lo - tol <= after &&
               after <= hi + tol && after > 0;
     return ok ? std::move(cleaned) : bo_own(shape);
   } catch (...) {

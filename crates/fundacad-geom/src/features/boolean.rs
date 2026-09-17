@@ -5,11 +5,12 @@
 use std::collections::HashSet;
 
 use fundacad_core::schema::{BooleanFeature, Operation};
+use glam::DVec3;
 use opencascade::primitives::Shape;
 use serde_json::json;
 
 use crate::builder::{Ctx, FResult, Fail};
-use crate::kernel::{self, BoolKind};
+use crate::kernel::{self, BoolKind, Kind};
 
 /// A change smaller than this counts as nothing happening.
 fn noop_eps(reference: f64) -> f64 {
@@ -34,6 +35,104 @@ fn overlap(a: Option<[f64; 6]>, b: Option<[f64; 6]>) -> bool {
         && a[4] >= b[1] - tol
         && a[2] <= b[5] + tol
         && a[5] >= b[2] - tol
+}
+
+/// `_in_slices`: `solid` chopped into `n` slabs across the axis it reaches
+/// furthest along.
+///
+/// The slabs are the same material as the whole, so a boolean applied to each
+/// in turn lands on the same answer. What changes is the intersection: each
+/// slab hands the kernel a short curve where the whole handed it one long one,
+/// and that is the entire repair. Fewer than `n` pieces come back when a plane
+/// misses, which is not a failure, the caller only needs more than one.
+fn in_slices(solid: &Shape, n: usize) -> Vec<Shape> {
+    let Some(bb) = kernel::bbox(solid) else {
+        return Vec::new();
+    };
+    let span = [bb[3] - bb[0], bb[4] - bb[1], bb[5] - bb[2]];
+    let axis = (0..3)
+        .max_by(|&a, &b| span[a].total_cmp(&span[b]))
+        .unwrap_or(0);
+    let mut normal = DVec3::ZERO;
+    normal[axis] = 1.0;
+    let xdir = if axis == 0 { DVec3::Y } else { DVec3::X };
+    let mut pieces = vec![solid.clone()];
+    for k in 1..n {
+        let at = bb[axis] + span[axis] * k as f64 / n as f64;
+        let mut cut = Vec::new();
+        for piece in &pieces {
+            let split = super::split::split_by_plane(piece, normal * at, normal, xdir);
+            let mut solids = Vec::new();
+            if let Ok((tops, bottoms)) = split {
+                for p in tops.iter().chain(bottoms.iter()) {
+                    solids.extend(kernel::subshapes(p, Kind::Solid));
+                }
+            }
+            if solids.is_empty() {
+                cut.push(piece.clone());
+            } else {
+                cut.append(&mut solids);
+            }
+        }
+        pieces = cut;
+    }
+    pieces
+}
+
+/// `_retried_in_slices`: the same boolean again with the tool cut into slabs,
+/// for the one case where OCCT did nothing at all.
+///
+/// A long swept tool that runs nearly parallel to the face it meets defeats the
+/// kernel outright: the boolean reports IsDone, raises nothing, and hands the
+/// argument straight back. A fuse fails the same way and worse, the two come
+/// out as a disjoint lump with the whole tool volume "added" and nothing
+/// merged. Nothing about the geometry is wrong, the kernel simply cannot carry
+/// that one intersection curve end to end, and the same tool in two or four
+/// pieces can. It runs only where the alternative was to raise.
+///
+/// `accept` judges a sliced result; without one, any real change in volume
+/// counts. A fuse needs its own test, because a fuse that merged nothing still
+/// reports the whole tool volume as added. `None` is the honest answer that the
+/// tool really does not reach.
+fn retried_in_slices(
+    shape: &Shape,
+    tool: &Shape,
+    kind: BoolKind,
+    accept: Option<&dyn Fn(&Shape) -> bool>,
+) -> Option<Shape> {
+    for n in [2usize, 4] {
+        let pieces = in_slices(tool, n);
+        if pieces.len() < 2 {
+            return None;
+        }
+        let mut out = shape.clone();
+        let mut failed = false;
+        for piece in &pieces {
+            match kernel::serial_bool(&out, &[piece], kind) {
+                Ok(next) => out = next,
+                Err(_) => {
+                    failed = true;
+                    break;
+                }
+            }
+        }
+        if failed {
+            continue;
+        }
+        match accept {
+            Some(judge) => {
+                if judge(&out) {
+                    return Some(out);
+                }
+            }
+            None => {
+                if (vol(&out) - vol(shape)).abs() > noop_eps(vol(shape)) {
+                    return Some(out);
+                }
+            }
+        }
+    }
+    None
 }
 
 /// `_combine`: merge a solid a feature made the way its `operation` and
@@ -101,16 +200,48 @@ pub fn combine(
             }
             let merged_vol = vol(&merged);
             let hit_vol: f64 = hits.iter().map(|&i| vol(ctx.bodies[i].shape())).sum();
-            // The sliced retry of booleans.py `_retried_in_slices` is not ported,
-            // so a fuse the kernel got wrong keeps the refusal it falls back to.
+            // What a fuse that really merged looks like: more material than the
+            // bodies held on their own, and less than those bodies plus the
+            // whole tool, because the overlap gets counted once instead of
+            // twice. Both ways of falling outside that window are the kernel
+            // giving up rather than the caller being wrong, so both get the
+            // sliced retry.
+            let merged_properly = |s: &Shape| {
+                let v = vol(s);
+                hit_vol + noop_eps(prism_vol) < v && v < hit_vol + prism_vol - noop_eps(prism_vol)
+            };
+            let repair = |ctx: &Ctx| -> Option<Shape> {
+                let mut base = ctx.bodies[hits[0]].shape().clone();
+                for &i in &hits[1..] {
+                    base = kernel::serial_bool(&base, &[ctx.bodies[i].shape()], BoolKind::Fuse)
+                        .ok()?;
+                }
+                retried_in_slices(&base, &solid, BoolKind::Fuse, Some(&merged_properly))
+            };
             if merged_vol < hit_vol - noop_eps(hit_vol) {
-                return Err(Fail::msg(
-                    "Join failed: the result came out smaller than the body it started from. That usually means the two shapes touch along a surface instead of overlapping. Move the profile so it reaches a little way into the body.",
-                ));
+                // LESS than was there before. Nothing a union can legitimately
+                // do removes material, so the fuse itself came back wrong, and
+                // the usual reason is that the two shapes meet along a surface
+                // rather than crossing one another.
+                match repair(ctx) {
+                    Some(fixed) => merged = fixed,
+                    None => return Err(Fail::msg(
+                        "Join failed: the result came out smaller than the body it started from. That usually means the two shapes touch along a surface instead of overlapping. Move the profile so it reaches a little way into the body.",
+                    )),
+                }
             } else if merged_vol <= hit_vol + noop_eps(prism_vol) {
                 return Err(Fail::msg(
                     "Join added no material, the profile is already inside the body. Did you mean Cut?",
                 ));
+            } else if merged_vol >= hit_vol + prism_vol - noop_eps(prism_vol) {
+                // The whole tool volume arrived and none of it merged, so the
+                // two came out of the fuse as separate lumps wearing one body's
+                // name. A tool that genuinely misses looks identical from here,
+                // which is why this only offers the repair and keeps the
+                // original result when the slices agree they do not meet.
+                if let Some(fixed) = repair(ctx) {
+                    merged = fixed;
+                }
             }
             let first_name = ctx.bodies[hits[0]].name.clone();
             let first_id = ctx.bodies[hits[0]].id.clone();
@@ -151,9 +282,24 @@ pub fn combine(
                 results.push((i, newshape));
             }
             if hits.is_empty() || removed < noop_eps(prism_vol) {
-                return Err(Fail::msg(
-                    "Cut removed nothing, the extrude doesn't reach any body. Drag the other way, or use Join.",
-                ));
+                // A cut that removed NOTHING is not always a cut that missed:
+                // OCCT hands a long swept tool's argument straight back
+                // sometimes, and the repair is to slice the tool. Try that
+                // before blaming the caller.
+                let mut healed = false;
+                for (i, shape) in &mut results {
+                    if let Some(fixed) =
+                        retried_in_slices(ctx.bodies[*i].shape(), &solid, BoolKind::Cut, None)
+                    {
+                        *shape = fixed;
+                        healed = true;
+                    }
+                }
+                if !healed {
+                    return Err(Fail::msg(
+                        "Cut removed nothing, the extrude doesn't reach any body. Drag the other way, or use Join.",
+                    ));
+                }
             }
             for (i, shape) in results {
                 ctx.set_shape(i, shape);
