@@ -11,8 +11,10 @@ pub mod owners;
 pub mod plane;
 
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Duration, Instant};
 
-use fundacad_core::body_ids::{number, BodyIds};
+use fundacad_core::body_ids::{number, BodyIds, Event};
 use fundacad_core::schema::{CadDocument, Feature, Num, UnresolvedNum};
 use indexmap::IndexMap;
 use opencascade::primitives::Shape;
@@ -88,6 +90,7 @@ impl FeatureError {
     }
 }
 
+#[derive(Clone)]
 pub struct Body {
     uid: u64,
     generation: u64,
@@ -95,16 +98,38 @@ pub struct Body {
     pub name: String,
     shape: Shape,
     pub owners: Owners,
+    /// The assembly tree node an import bound this body to, `<featureId>/<index>`.
+    pub node_ref: Option<String>,
+    /// Packed per-face colours (fundacad_core::face_colors) from the imported file.
+    pub face_colors: Option<Value>,
+    pub part_color: Option<String>,
+    /// An explicitly collapsed import, exempt from debris dropping.
+    pub intact: bool,
 }
 
 impl Body {
     pub fn shape(&self) -> &Shape {
         &self.shape
     }
+
+    /// Process-unique while the shape is unchanged, a key for derived caches.
+    pub fn identity(&self) -> (u64, u64) {
+        (self.uid, self.generation)
+    }
+}
+
+/// What the file an import came from says about a body.
+#[derive(Default)]
+pub struct ImportedMeta {
+    pub node_ref: Option<String>,
+    pub face_colors: Option<Value>,
+    pub part_color: Option<String>,
+    pub intact: bool,
 }
 
 /// A located sketch: the whole profile, its region cells, the hole positions
 /// and sweep path it offers, and its plane.
+#[derive(Clone)]
 pub struct SketchEntry {
     pub sketch: Option<Shape>,
     pub faces: Vec<Shape>,
@@ -128,8 +153,9 @@ pub struct Ctx {
     pub sketch_planes: IndexMap<String, Value>,
     pub datum_marks: IndexMap<String, Value>,
     ids: BodyIds,
-    next_uid: u64,
 }
+
+static NEXT_UID: AtomicU64 = AtomicU64::new(0);
 
 impl Ctx {
     pub fn val(&self, n: &Num) -> FResult<f64> {
@@ -141,13 +167,23 @@ impl Ctx {
     }
 
     fn bump(&mut self) -> u64 {
-        self.next_uid += 1;
-        self.next_uid
+        NEXT_UID.fetch_add(1, Ordering::Relaxed) + 1
     }
 
     /// `new_body`: the next id for this feature, `Body<n>` unless named.
     pub fn new_body(&mut self, shape: Shape, name: Option<String>, inherit: Option<&str>) -> usize {
-        let key = self.ids.key(None);
+        self.new_body_with(shape, name, inherit, ImportedMeta::default())
+    }
+
+    /// `new_body` with the import metadata, whose node ref also keys the body id.
+    pub fn new_body_with(
+        &mut self,
+        shape: Shape,
+        name: Option<String>,
+        inherit: Option<&str>,
+        meta: ImportedMeta,
+    ) -> usize {
+        let key = self.ids.key(meta.node_ref.as_deref());
         let id = self.ids.assign(&key, inherit);
         let name = name.unwrap_or_else(|| format!("Body{}", number(&id)));
         let uid = self.bump();
@@ -159,6 +195,10 @@ impl Ctx {
             name,
             shape,
             owners: Owners::default(),
+            node_ref: meta.node_ref.filter(|r| !r.is_empty()),
+            face_colors: meta.face_colors,
+            part_color: meta.part_color.filter(|c| !c.is_empty()),
+            intact: meta.intact,
         });
         self.bodies.len() - 1
     }
@@ -209,6 +249,11 @@ pub struct BuiltBody {
     pub name: String,
     pub shape: Shape,
     pub owners: Owners,
+    pub node_ref: Option<String>,
+    pub face_colors: Option<Value>,
+    pub part_color: Option<String>,
+    /// `Body::identity` of the body this was made from.
+    pub identity: (u64, u64),
 }
 
 pub struct Rebuild {
@@ -234,6 +279,60 @@ pub trait Watch {
 
 pub struct NoWatch;
 impl Watch for NoWatch {}
+
+/// The build state after a feature, what a later rebuild resumes from.
+/// Shapes are handle copies, so taking one duplicates no geometry.
+#[derive(Clone)]
+pub struct Snapshot {
+    pub bodies: Vec<Body>,
+    pub sketches: HashMap<String, SketchEntry>,
+    /// The sketches were not kept (a disk checkpoint), rebuild them on resume.
+    pub replay_sketches: bool,
+    pub datums: IndexMap<String, PlaneRecord>,
+    pub sketch_planes: IndexMap<String, Value>,
+    pub datum_marks: IndexMap<String, Value>,
+    pub diagnostics: Vec<Value>,
+    pub errors: Vec<FeatureError>,
+    pub id_events: Vec<Event>,
+}
+
+/// The live state a `Tap` sees after each feature.
+pub struct State<'a> {
+    pub ctx: &'a Ctx,
+    pub errors: &'a [FeatureError],
+}
+
+impl State<'_> {
+    pub fn snapshot(&self) -> Snapshot {
+        Snapshot {
+            bodies: self.ctx.bodies.clone(),
+            sketches: self.ctx.sketches.clone(),
+            replay_sketches: false,
+            datums: self.ctx.datums.clone(),
+            sketch_planes: self.ctx.sketch_planes.clone(),
+            datum_marks: self.ctx.datum_marks.clone(),
+            diagnostics: self.ctx.diagnostics.clone(),
+            errors: self.errors.to_vec(),
+            id_events: self.ctx.ids.events().to_vec(),
+        }
+    }
+}
+
+/// Called after every replayed feature, with its wall time.
+pub trait Tap {
+    fn after_feature(&mut self, index: usize, state: &State<'_>, elapsed: Duration);
+}
+
+pub struct NoTap;
+impl Tap for NoTap {
+    fn after_feature(&mut self, _: usize, _: &State<'_>, _: Duration) {}
+}
+
+/// `_ids_resumable`: the document's `bodyIds` numbers the snapshot's prefix
+/// the way the snapshot did.
+pub fn ids_resumable(doc: &CadDocument, snap: &Snapshot) -> bool {
+    BodyIds::new(doc.body_ids.clone()).restore(&snap.id_events)
+}
 
 /// Keys Python reads with a default the schema requires, filled before a
 /// feature is typed so a document the Python engine builds types here too.
@@ -416,6 +515,19 @@ fn strip_key_suffix(key: &str) -> &str {
 /// Replays `doc`. `raw` is the same document as JSON, which is what a
 /// feature's label and references are read from.
 pub fn rebuild(doc: &CadDocument, raw: &Value, watch: &dyn Watch) -> Result<Rebuild, Cancelled> {
+    rebuild_from(doc, raw, watch, None, &mut NoTap)
+}
+
+/// `rebuild` resuming at `resume.0` from the state after the feature before
+/// it, reporting every replayed feature to `tap`. A snapshot the document
+/// numbers differently is ignored and the whole timeline replays.
+pub fn rebuild_from(
+    doc: &CadDocument,
+    raw: &Value,
+    watch: &dyn Watch,
+    resume: Option<(usize, Snapshot)>,
+    tap: &mut dyn Tap,
+) -> Result<Rebuild, Cancelled> {
     let params: HashMap<String, f64> = doc
         .parameters
         .iter()
@@ -440,7 +552,6 @@ pub fn rebuild(doc: &CadDocument, raw: &Value, watch: &dyn Watch) -> Result<Rebu
         sketch_planes: IndexMap::new(),
         datum_marks: IndexMap::new(),
         ids: BodyIds::new(recorded.clone()),
-        next_uid: 0,
     };
     let raw_features: Vec<Value> = raw
         .get("features")
@@ -450,6 +561,31 @@ pub fn rebuild(doc: &CadDocument, raw: &Value, watch: &dyn Watch) -> Result<Rebu
     let features: Vec<Feature> = raw_features.iter().map(typed).collect();
     let mut errors: Vec<FeatureError> = Vec::new();
 
+    let mut start = 0;
+    if let Some((at, snap)) = resume {
+        if at <= features.len() && ctx.ids.restore(&snap.id_events) {
+            start = at;
+            ctx.bodies = snap.bodies;
+            ctx.sketches = snap.sketches;
+            ctx.datums = snap.datums;
+            ctx.sketch_planes = snap.sketch_planes;
+            ctx.datum_marks = snap.datum_marks;
+            ctx.diagnostics = snap.diagnostics;
+            errors = snap.errors;
+            if snap.replay_sketches {
+                let kept = ctx.diagnostics.len();
+                for f in &features[..start] {
+                    if let Feature::Sketch(s) = f {
+                        let _ = features::sketch::handle(&mut ctx, s);
+                    }
+                }
+                ctx.diagnostics.truncate(kept);
+            }
+        } else {
+            ctx.ids = BodyIds::new(recorded.clone());
+        }
+    }
+
     let mut inactive: Vec<String> = Vec::new();
     for f in &features {
         if let Ok(true) = is_inactive(&ctx, f.active_when()) {
@@ -457,10 +593,11 @@ pub fn rebuild(doc: &CadDocument, raw: &Value, watch: &dyn Watch) -> Result<Rebu
         }
     }
 
-    for (i, (f, rawf)) in features.iter().zip(&raw_features).enumerate() {
+    for (i, (f, rawf)) in features.iter().zip(&raw_features).enumerate().skip(start) {
         if watch.cancelled() {
             return Err(Cancelled);
         }
+        let began = Instant::now();
         let fid = rawf.get("id").and_then(Value::as_str);
         ctx.ids.start_feature(fid.unwrap_or("None"));
         let type_name = rawf.get("type").and_then(Value::as_str);
@@ -508,6 +645,14 @@ pub fn rebuild(doc: &CadDocument, raw: &Value, watch: &dyn Watch) -> Result<Rebu
                 });
             }
         }
+        tap.after_feature(
+            i,
+            &State {
+                ctx: &ctx,
+                errors: &errors,
+            },
+            began.elapsed(),
+        );
         watch.feature(i);
     }
 
@@ -552,10 +697,18 @@ pub fn rebuild(doc: &CadDocument, raw: &Value, watch: &dyn Watch) -> Result<Rebu
     let bodies = std::mem::take(&mut ctx.bodies)
         .into_iter()
         .map(|b| BuiltBody {
+            identity: (b.uid, b.generation),
+            shape: if b.intact {
+                b.shape
+            } else {
+                kernel::drop_debris(&b.shape)
+            },
             id: b.id,
             name: b.name,
-            shape: kernel::drop_debris(&b.shape),
             owners: b.owners,
+            node_ref: b.node_ref,
+            face_colors: b.face_colors,
+            part_color: b.part_color,
         })
         .collect();
     Ok(Rebuild {
