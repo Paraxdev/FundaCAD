@@ -205,6 +205,7 @@ struct Outline {
     open: Option<Contour>,
     scale: f64,
     shear: f64,
+    squeeze: f64,
     dx: f64,
     dy: f64,
 }
@@ -212,7 +213,8 @@ struct Outline {
 impl Outline {
     fn p(&self, x: f32, y: f32) -> P {
         let (x, y) = (f64::from(x), f64::from(y));
-        [(x + self.shear * y) * self.scale + self.dx, y * self.scale + self.dy]
+        let (s, c) = (self.shear, self.squeeze);
+        [(x * c + y * s) * self.scale + self.dx, y * c * self.scale + self.dy]
     }
 
     fn push(&mut self, seg: Seg) {
@@ -259,8 +261,10 @@ impl OutlineBuilder for Outline {
     }
 }
 
-/// FreeType's `FT_GlyphSlot_Oblique` shear, what OCCT makes italic with.
-const SYNTHETIC_SHEAR: f64 = 13_930.0 / 65_536.0;
+/// The slant OCCT makes an italic with when the font has no italic face:
+/// ten degrees, applied as a rotation-like matrix, so the glyph loses that
+/// cosine of its height as well as leaning.
+const SYNTHETIC_SLANT: f64 = 10.0;
 
 fn kerning(face: &Face<'_>, left: GlyphId, right: GlyphId) -> f64 {
     let Some(kern) = face.tables().kern else {
@@ -282,7 +286,12 @@ fn lay_out(face: &Face<'_>, text: &str, size: f64, synthetic_italic: bool) -> Ve
     let hhea = face.tables().hhea;
     let spacing =
         (f64::from(hhea.ascender) - f64::from(hhea.descender) + f64::from(hhea.line_gap)) * scale;
-    let shear = if synthetic_italic { SYNTHETIC_SHEAR } else { 0.0 };
+    let (shear, squeeze) = if synthetic_italic {
+        let (s, c) = SYNTHETIC_SLANT.to_radians().sin_cos();
+        (s, c)
+    } else {
+        (0.0, 1.0)
+    };
     let mut out = Vec::new();
     for (row, line) in text.split('\n').enumerate() {
         let chars: Vec<char> = line.chars().filter(|c| *c != '\r').collect();
@@ -296,7 +305,9 @@ fn lay_out(face: &Face<'_>, text: &str, size: f64, synthetic_italic: bool) -> Ve
             if let Some(Some(next)) = ids.get(i + 1) {
                 adv += kerning(face, id, *next);
             }
-            pen += adv * scale;
+            // The slant matrix moves the pen too, as FreeType transforms the
+            // advance along with the outline.
+            pen += adv * scale * squeeze;
         }
         let shift = -pen / 2.0;
         #[allow(clippy::cast_precision_loss)]
@@ -308,6 +319,7 @@ fn lay_out(face: &Face<'_>, text: &str, size: f64, synthetic_italic: bool) -> Ve
                 open: None,
                 scale,
                 shear,
+                squeeze,
                 dx: x + shift,
                 dy: base,
             };
