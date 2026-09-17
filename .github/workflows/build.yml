@@ -361,7 +361,10 @@ jobs:
           dpkg-deb -f "$deb" Depends
           # The member order dpkg requires, and a data member that still reads.
           [ "$(ar t "$deb" | head -2 | tr '\n' ' ')" = "debian-binary control.tar.gz " ]
-          dpkg-deb -c "$deb" | grep -q 'usr/bin/fundacad'
+          # To a file: grep -q stops reading at its match, and under pipefail the
+          # listing's broken pipe fails the step.
+          dpkg-deb -c "$deb" > listing.txt
+          grep -q 'usr/bin/fundacad' listing.txt
 
       # A PORTABLE Windows build: unzip anywhere, run fundacad.exe, no installer
       # and no admin rights. An installer is a poor fit for a machine you do not
