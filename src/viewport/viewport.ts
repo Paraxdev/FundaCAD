@@ -267,6 +267,7 @@ export class Viewport {
         this.stutter.reset();
         this.setStuttering(false);
       }
+      if (renderPrefs().tangentEdges !== this.tangentEdges) this.applyTangentEdges();
       this.requestRender();
     });
     onThemeChange(() => {
@@ -838,6 +839,24 @@ export class Viewport {
   /** Faces drawn as nothing, so only the edges show, hidden ones included. */
   private wireframe = false;
   private edgesEmphasized = false;
+  /** the tangent edges setting the current model's edges were drawn with */
+  private tangentEdges = renderPrefs().tangentEdges;
+
+  private edgeBaseColor(): THREE.Color {
+    return this.edgesEmphasized ? EDGE_PICKABLE : this.wireframe ? EDGE_WIRE : EDGE_IDLE;
+  }
+
+  /** Redraw the tangent edges after the setting changed. */
+  private applyTangentEdges() {
+    this.tangentEdges = renderPrefs().tangentEdges;
+    if (!this.model) return;
+    for (const d of edgeObjects(this.model)) {
+      d.setTangentEdges(this.tangentEdges);
+      d.flush();
+    }
+    this.picker.invalidate();
+    this.highlighter?.setEdgeBase(this.edgeBaseColor());
+  }
   /** Fires when see-through is switched, so the chrome can say it is on. */
   onXrayChange: ((on: boolean) => void) | null = null;
   onWireframeChange: ((on: boolean) => void) | null = null;
@@ -2149,6 +2168,8 @@ export class Viewport {
     this.model = { bodies, edges, orphanEdges, box };
 
     this.hideFlushSeams();
+    this.tangentEdges = renderPrefs().tangentEdges;
+    for (const d of edgeObjects(this.model)) d.setTangentEdges(this.tangentEdges);
     // hideFlushSeams early-returns on an edgeless model, missing a reused body's reset.
     for (const d of edgeObjects(this.model)) d.flush();
     this.picker.invalidate(); // edge geometry just changed, drop cached targets
@@ -2156,6 +2177,9 @@ export class Viewport {
     this.dropKey = "";
     // Before applyAnalysis: setBase() reads the selected set.
     if (memo) this.restoreSelection(memo);
+    // Bodies are built and reset in the plain idle colour; this makes the faint
+    // tangent edges faint, and leaves a restored selection's colour alone.
+    this.highlighter.setEdgeBase(this.edgeBaseColor());
     this.targetGridZ = this.model.box.min.z; // drop the grid to the model's floor
     this.rig.setContentBox(this.model.box);
     this.applyAnalysis(); // paints the analysis overlay, or assigned body colors when "none"
@@ -2694,7 +2718,7 @@ export class Viewport {
    *  color + thicker lines. */
   emphasizeEdges(on: boolean) {
     this.edgesEmphasized = on;
-    this.highlighter?.setEdgeBase(on ? EDGE_PICKABLE : this.wireframe ? EDGE_WIRE : EDGE_IDLE);
+    this.highlighter?.setEdgeBase(this.edgeBaseColor());
     if (this.model) {
       for (const d of edgeObjects(this.model)) d.material.linewidth = on ? 2.8 : 1.6;
     }

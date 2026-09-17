@@ -39,7 +39,8 @@ from OCP.TopLoc import TopLoc_Location
 #   6 -> the display tessellation carries true surface normals for every face
 #        and welds a curved face's seam duplicates (see _display_face)
 #   7 -> a seam that also bounds another face is drawn (edge_polylines_by_body)
-CODE_VERSION = 7
+#   8 -> an edge whose two faces meet tangentially is tagged smooth (_meets_smoothly)
+CODE_VERSION = 8
 
 
 def tessellate(shape, tolerance=0.1, angular_tolerance=0.5, mesh_passes=None, density_cap=None,
@@ -662,9 +663,55 @@ def edge_polylines_by_body(bodies, deflection=_EDGE_DEFLECTION, hide_coplanar_se
             pts = _edge_points(e, deflection)
             if pts is None:
                 continue  # degenerate point-edge (pole), nothing to draw
-            out.append({"id": f"e{k}", "points": pts, "body": b["id"]})
+            line = {"id": f"e{k}", "points": pts, "body": b["id"]}
+            if (len(faces) == 2 and not faces[0].IsSame(faces[1])
+                    and not (fmap.FindIndex(faces[0]) in fnorm and fmap.FindIndex(faces[1]) in fnorm)
+                    and _meets_smoothly(ke, TopoDS.Face_s(faces[0]), TopoDS.Face_s(faces[1]))):
+                line["smooth"] = True
+            out.append(line)
             k += 1
     return out
+
+
+#: Below this angle between the faces' normals an edge is where two faces meet
+#: tangentially, the boundary of a fillet rather than a corner. The same degree
+#: blends.SMOOTH_EDGE_DEG refuses to blend across.
+SMOOTH_EDGE_DEG = 1.0
+
+
+def _meets_smoothly(edge, f0, f1):
+    """Whether the faces on either side of `edge` share a tangent plane along it,
+    so the viewport can draw it faint or not at all. Sampled from each face's
+    pcurve, at the middle first: a crease almost always fails there, so a sharp
+    edge costs one sample. Plane pairs never get here, two planes meeting are
+    either a seam (dropped) or a corner."""
+    import math
+
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepAdaptor import BRepAdaptor_Curve2d, BRepAdaptor_Surface
+    from OCP.gp import gp_Pnt, gp_Vec
+
+    cos_tol = math.cos(math.radians(SMOOTH_EDGE_DEG))
+    try:
+        sides = [(BRepAdaptor_Curve2d(edge, f), BRepAdaptor_Surface(f)) for f in (f0, f1)]
+        t0, t1 = BRep_Tool.Range_s(edge)
+        for frac in (0.5, 0.15, 0.85):
+            t = t0 + (t1 - t0) * frac
+            normals = []
+            for pc, surf in sides:
+                uv = pc.Value(t)
+                p, du, dv = gp_Pnt(), gp_Vec(), gp_Vec()
+                surf.D1(uv.X(), uv.Y(), p, du, dv)
+                n = du.Crossed(dv)
+                if n.Magnitude() < 1e-12:
+                    return False
+                normals.append(n.Normalized())
+            # Unsigned: tangent faces can carry opposite surface orientations.
+            if abs(normals[0].Dot(normals[1])) < cos_tol:
+                return False
+        return True
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def bbox(shape):

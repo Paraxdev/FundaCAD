@@ -642,7 +642,8 @@ export type U32Wire = number[] | Uint32Array;
 
 export interface RebuildResult {
   mesh: { positions: F32Wire; indices: U32Wire; faceIds: U32Wire; normals?: F32Wire };
-  edges: { id: string; points: [number, number, number][]; body?: string }[];
+  // `smooth`: the two faces meet tangentially here (a fillet's boundary), drawn per the tangent edges setting.
+  edges: { id: string; points: [number, number, number][]; body?: string; smooth?: boolean }[];
   bbox: { min: Vec3; max: Vec3 };
   // Each body's faceId range. No `etag` means always rebuild the body's mesh.
   bodies?: { id: string; name: string; faceStart: number; faceCount: number; faceOwners?: (string | null)[]; faceBands?: number[][]; faceColorSlots?: (number | null)[]; etag?: string; nodeRef?: string; faceColors?: FaceColorRuns; partColor?: string }[];

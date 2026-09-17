@@ -30,6 +30,11 @@ function paint(e: EdgeRef, color: THREE.Color) {
   e.draw.setColor(e.slot, color);
 }
 
+/** Back to idle, which for a faint tangent edge is lighter than `base`. */
+function paintIdle(e: EdgeRef, base: THREE.Color) {
+  e.draw.setIdleColor(e.slot, base);
+}
+
 export class Highlighter {
   private hoveredEdge: EdgeRef | null = null;
   /** Every face the cursor is over. More than one when the face under the
@@ -90,8 +95,9 @@ export class Highlighter {
     for (const e of this.errorEdges) {
       if (next.has(e)) continue;
       // no longer failing, restore whatever tier it belongs to now
-      const c = this.selectedEdges.has(e) ? SELECT : e === this.hoveredEdge ? HOVER : this.edgeBase;
-      paint(e, c);
+      if (this.selectedEdges.has(e)) paint(e, SELECT);
+      else if (e === this.hoveredEdge) paint(e, HOVER);
+      else paintIdle(e, this.edgeBase);
     }
     this.errorEdges = next;
     for (const e of this.errorEdges) paint(e, ERROR);
@@ -104,7 +110,7 @@ export class Highlighter {
       !this.selectedEdges.has(this.hoveredEdge) &&
       !this.errorEdges.has(this.hoveredEdge)
     ) {
-      paint(this.hoveredEdge, this.edgeBase);
+      paintIdle(this.hoveredEdge, this.edgeBase);
     }
     this.hoveredEdge = line;
     if (line && !this.selectedEdges.has(line) && !this.errorEdges.has(line)) {
@@ -144,7 +150,7 @@ export class Highlighter {
     // isn't in the error set (error paint has top precedence).
     if (this.selectedEdges.has(line)) {
       this.selectedEdges.delete(line);
-      if (!this.errorEdges.has(line)) paint(line, this.edgeBase);
+      if (!this.errorEdges.has(line)) paintIdle(line, this.edgeBase);
     } else {
       this.selectedEdges.add(line);
       if (!this.errorEdges.has(line)) paint(line, SELECT);
@@ -189,7 +195,7 @@ export class Highlighter {
 
   clearSelection() {
     for (const e of this.selectedEdges) {
-      if (!this.errorEdges.has(e)) paint(e, this.edgeBase);
+      if (!this.errorEdges.has(e)) paintIdle(e, this.edgeBase);
     }
     for (const f of this.selectedFaces) this.restoreFace(f);
     this.selectedEdges.clear();

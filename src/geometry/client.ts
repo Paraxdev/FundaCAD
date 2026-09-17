@@ -178,6 +178,8 @@ interface WireEdgesPacked {
   $pts: F32Wire;
   $counts: U32Wire;
   body?: string;
+  /** indices of the edges whose faces meet tangentially */
+  smooth?: number[];
 }
 
 /** Re-split a packed edge buffer into the per-edge point triples every consumer
@@ -191,6 +193,7 @@ export function expandPackedEdges(
   pts: Float32Array,
   counts: Uint32Array,
   body: string | undefined,
+  smooth?: readonly number[],
 ): WireEdgeList {
   const list: WireEdgeList = [];
   let o = 0;
@@ -199,6 +202,10 @@ export function expandPackedEdges(
     const points: [number, number, number][] = new Array(n) as [number, number, number][];
     for (let k = 0; k < n; k++, o += 3) points[k] = [pts[o]!, pts[o + 1]!, pts[o + 2]!];
     list.push(body !== undefined ? { points, body } : { points });
+  }
+  for (const i of smooth ?? []) {
+    const e = list[i];
+    if (e) e.smooth = true;
   }
   return list;
 }
@@ -304,6 +311,7 @@ export function decodeBinaryFrame(buf: ArrayBuffer): BinaryHeader {
         resolveBuf(rawEdges.$pts) as Float32Array,
         resolveBuf(rawEdges.$counts) as Uint32Array,
         rawEdges.body,
+        rawEdges.smooth,
       );
     }
   }

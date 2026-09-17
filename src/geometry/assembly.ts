@@ -69,7 +69,7 @@ export type WireBody = WireBodyFull | WireBodyStub;
 /** Edge polylines, the form every consumer sees. The binary reply carries them
  *  packed instead; decodeBinaryFrame expands them before the body reaches
  *  anything else, so this stays the single downstream contract. */
-export type WireEdgeList = { points: [number, number, number][]; body?: string }[];
+export type WireEdgeList = { points: [number, number, number][]; body?: string; smooth?: boolean }[];
 
 // The sidecar's raw rebuild/computeAll result before local reassembly: a
 // resync request, a protocol-v2 per-body result, or (defensively) the legacy
@@ -382,6 +382,7 @@ export class RebuildAssembly {
       edges[q.edgeBase + k] = {
         id: `e${q.edgeBase + k}`, points: e.points,
         ...(e.body !== undefined ? { body: e.body } : {}),
+        ...(e.smooth ? { smooth: true } : {}),
       };
     }
     // geometry-side metadata only reachable from the payload

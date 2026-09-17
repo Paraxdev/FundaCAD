@@ -19,6 +19,7 @@ import {
   asBrightness,
   asEnvironment,
   asRenderPrefs,
+  asTangentEdges,
 } from "../../src/ui/renderPrefs";
 
 describe("the field gates", () => {
@@ -27,6 +28,8 @@ describe("the field gates", () => {
     expect(asEnvironment("hdri")).toBeNull();
     expect(asBackground("grey")).toBe("grey");
     expect(asBackground("chartreuse")).toBeNull();
+    expect(asTangentEdges("hide")).toBe("hide");
+    expect(asTangentEdges(true)).toBeNull();
   });
 
   it("clamp a brightness instead of throwing it away", () => {
@@ -56,6 +59,7 @@ describe("asRenderPrefs", () => {
       focusBlur: DEFAULT_RENDER.focusBlur,
       performanceMode: true,
       shadows: DEFAULT_RENDER.shadows,
+      tangentEdges: DEFAULT_RENDER.tangentEdges,
     });
   });
 

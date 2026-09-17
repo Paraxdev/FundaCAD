@@ -59,10 +59,33 @@ def test_a_seam_on_a_junction_is_drawn():
     print(PASS, "a seam lying on the junction is drawn, and fillets")
 
 
+def test_a_fillets_borders_are_tagged_smooth_and_its_corners_are_not():
+    feats = [
+        {"id": "s", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "id": "a", "x": 0, "y": 0, "width": 40, "height": 30}]},
+        {"id": "e", "type": "extrude", "sketch": "s", "distance": 20, "operation": "new"},
+    ]
+    _p, errors, plain = rebuild({"parameters": {}, "features": feats})
+    assert not errors, errors
+    assert not any(pl.get("smooth") for pl in edge_polylines_by_body(plain)), "a box has no tangent edges"
+    f = {"id": "f", "type": "fillet", "radius": 5, "edges": {"kind": "edge", "by": "nearest", "point": [20, 0, 20]}}
+    _p, errors, bodies = rebuild({"parameters": {}, "features": feats + [f]})
+    assert not errors, errors
+    lines = edge_polylines_by_body(bodies)
+    smooth = [pl for pl in lines if pl.get("smooth")]
+    # The round meets the top and the side along two lines; its two ends are
+    # creases against the front and back faces.
+    assert len(smooth) == 2, [pl["points"][0] for pl in smooth]
+    for pl in smooth:
+        assert all(abs(q[1]) <= 15 + 1e-6 for q in pl["points"])
+        assert {round(pl["points"][0][1]), round(pl["points"][-1][1])} == {-15, 15}
+    print(PASS, "a fillet's two borders are tagged smooth, its ends and the box's corners are not")
+
+
 if __name__ == "__main__":
     try:
         test_a_plain_cylinder_seam_stays_hidden()
         test_a_seam_on_a_junction_is_drawn()
+        test_a_fillets_borders_are_tagged_smooth_and_its_corners_are_not()
         print("\nALL PASS")
     except Exception:
         traceback.print_exc()

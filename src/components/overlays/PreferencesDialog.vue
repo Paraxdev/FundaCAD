@@ -43,6 +43,7 @@ import {
   asBackground,
   asBloom,
   asEnvironment,
+  asTangentEdges,
   MAX_BRIGHTNESS,
   MIN_BRIGHTNESS,
   onRenderPrefsChange,
@@ -144,6 +145,7 @@ function onBackground(ev: Event) { const v = asBackground(value(ev)); if (v) set
 function onBrightness(ev: Event) { setRenderPref("brightness", Number.parseFloat(value(ev))); }
 function onDwell(ev: Event) { setHoverDwellMs(Number.parseFloat(value(ev))); }
 function onBloom(ev: Event) { const v = asBloom(value(ev)); if (v !== null) setRenderPref("bloom", v); }
+function onTangentEdges(ev: Event) { const v = asTangentEdges(value(ev)); if (v) setRenderPref("tangentEdges", v); }
 function onPerformanceMode(ev: Event) { setRenderPref("performanceMode", (ev.target as HTMLInputElement).checked); }
 </script>
 
@@ -230,6 +232,18 @@ function onPerformanceMode(ev: Event) { setRenderPref("performanceMode", (ev.tar
         />
       </label>
       <div class="sm-hint">Lights and reflections together, so the two stay in step.</div>
+      <label class="prefs-row">
+        <span class="prefs-label">Tangent edges</span>
+        <select id="prefs-tangent-edges" class="sm-select" :value="render.tangentEdges" @change="onTangentEdges">
+          <option value="show">Show</option>
+          <option value="faint">Faint</option>
+          <option value="hide">Hide</option>
+        </select>
+      </label>
+      <div class="sm-hint">
+        Where two faces meet smoothly, like the borders of a fillet, there is no
+        corner to see, only a line across one continuous surface.
+      </div>
       <label class="prefs-row">
         <span class="prefs-label">Bloom</span>
         <input id="prefs-bloom" class="sm-slider" type="range" min="0" max="1" step="0.05"

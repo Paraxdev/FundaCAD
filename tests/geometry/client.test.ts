@@ -28,6 +28,12 @@ describe("expandPackedEdges", () => {
     expect("body" in out[0]!).toBe(false);
   });
 
+  it("marks the edges the frame lists as smooth, and only those", () => {
+    const out = expandPackedEdges(new Float32Array(9), new Uint32Array([1, 1, 1]), "b", [2]);
+    expect(out.map((e) => e.smooth === true)).toEqual([false, false, true]);
+    expect("smooth" in out[0]!).toBe(false);
+  });
+
   it("handles an empty edge list and a zero-point edge", () => {
     expect(expandPackedEdges(new Float32Array(0), new Uint32Array(0), "b1")).toEqual([]);
     expect(expandPackedEdges(new Float32Array(0), new Uint32Array([0]), "b1")).toEqual([

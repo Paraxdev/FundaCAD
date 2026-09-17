@@ -147,4 +147,36 @@ describe("BodyEdges", () => {
     expect(segCount(be)).toBe(1);
     expect(be.object.geometry.boundingSphere?.radius).toBe(0);
   });
+
+  it("draws a tangent edge faint or not at all, and leaves the others alone", () => {
+    const edges = threeEdges();
+    edges[1] = { ...edges[1]!, smooth: true };
+    const be = new BodyEdges(edges, RES);
+    const base = new THREE.Color(EDGE_IDLE_COLOR);
+    expect(be.refs.map((r) => r.smooth)).toEqual([false, true, false]);
+
+    be.setTangentEdges("faint");
+    be.flush();
+    be.setColorAll(base);
+    expect(segColor(be, 0)).toEqual(rgbOf(base));
+    const faint = segColor(be, 1);
+    expect(faint).not.toEqual(rgbOf(base));
+    expect(faint[0]).toBeGreaterThan(rgbOf(base)[0]);
+    // back to idle after a hover repaints it faint again, not full strength
+    be.setColor(1, new THREE.Color(0xff0000));
+    be.setIdleColor(1, base);
+    expect(segColor(be, 1)).toEqual(faint);
+
+    be.setTangentEdges("hide");
+    be.flush();
+    expect(be.isHidden(1)).toBe(true);
+    expect(segCount(be)).toBe(1 + 3);
+
+    be.setTangentEdges("show");
+    be.flush();
+    be.setColorAll(base);
+    expect(be.isHidden(1)).toBe(false);
+    expect(segCount(be)).toBe(6);
+    expect(segColor(be, 1)).toEqual(rgbOf(base));
+  });
 });

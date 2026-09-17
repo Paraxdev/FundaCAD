@@ -116,6 +116,11 @@ export function bloomSettings(amount: number): { strength: number; radius: numbe
  *  lit from within. */
 export const MAX_EMISSIVE_INTENSITY = 4;
 
+/** How an edge where two faces meet tangentially is drawn: a fillet's
+ *  boundaries, and a corner patch's, which run across what looks like one
+ *  continuous surface. */
+export type TangentEdges = "show" | "faint" | "hide";
+
 export interface RenderPrefs {
   environment: Environment;
   background: Background;
@@ -151,6 +156,10 @@ export interface RenderPrefs {
    *  part is a look, and the app has always drawn a clean, shadowless product
    *  view, so this is opt-in. Ignored on the lightweight tier (no shadow map). */
   shadows: boolean;
+  /** Drawn like every other edge, lighter, or not at all. FAINT by default: a
+   *  near-sharp profiled corner's patch borders ran across its flat top and
+   *  read as a curve that was not there. */
+  tangentEdges: TangentEdges;
 }
 
 /** What the f-stop numbers mean to the blur pass, and the range the control
@@ -184,6 +193,7 @@ export const DEFAULT_RENDER: RenderPrefs = {
   performanceMode: false,
   // OFF: opt-in grounded shadows, see the field comment.
   shadows: false,
+  tangentEdges: "faint",
 };
 
 export const MIN_BRIGHTNESS = 0.4;
@@ -191,6 +201,7 @@ export const MAX_BRIGHTNESS = 2;
 
 const ENVIRONMENTS: Environment[] = ENVIRONMENTS_LIST.map((e) => e.id);
 const BACKGROUNDS: Background[] = ["theme", "dark", "grey", "light"];
+const TANGENT_EDGES: TangentEdges[] = ["show", "faint", "hide"];
 
 /** The fixed grounds, as 0xRRGGBB. "theme" is absent on purpose: it is answered
  *  by the stylesheet, not by a number here. */
@@ -208,6 +219,10 @@ export function asEnvironment(v: unknown): Environment | null {
 
 export function asBackground(v: unknown): Background | null {
   return BACKGROUNDS.includes(v as Background) ? (v as Background) : null;
+}
+
+export function asTangentEdges(v: unknown): TangentEdges | null {
+  return TANGENT_EDGES.includes(v as TangentEdges) ? (v as TangentEdges) : null;
 }
 
 export function asBloom(v: unknown): Bloom | null {
@@ -260,6 +275,7 @@ export function asRenderPrefs(v: unknown): RenderPrefs {
     focusBlur: asFocusBlur(o["focusBlur"]) ?? DEFAULT_RENDER.focusBlur,
     performanceMode: typeof o["performanceMode"] === "boolean" ? o["performanceMode"] : DEFAULT_RENDER.performanceMode,
     shadows: typeof o["shadows"] === "boolean" ? o["shadows"] : DEFAULT_RENDER.shadows,
+    tangentEdges: asTangentEdges(o["tangentEdges"]) ?? DEFAULT_RENDER.tangentEdges,
   };
 }
 
@@ -293,7 +309,8 @@ export function setRenderPref<K extends keyof RenderPrefs>(key: K, value: Render
               : key === "focusBlur" ? asFocusBlur(value)
                 : key === "performanceMode" ? (typeof value === "boolean" ? value : null)
                   : key === "shadows" ? (typeof value === "boolean" ? value : null)
-                    : asBrightness(value);
+                    : key === "tangentEdges" ? asTangentEdges(value)
+                      : asBrightness(value);
   if (ok === null || current[key] === ok) return;
   // A fresh object rather than a mutation, so a subscriber may hold the result
   // of renderPrefs() and compare identity to decide it must redraw.

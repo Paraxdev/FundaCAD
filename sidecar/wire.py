@@ -106,17 +106,23 @@ def _pack_edges(edges, take, body):
     `body` is the owning body id, taken from the envelope rather than re-derived
     from the polylines: every list reaching here comes from a SINGLE-body
     edge_polylines_by_body([b]) call, which stamps that same id on each edge."""
-    counts, flat = [], []
-    for e in edges or ():
+    counts, flat, smooth = [], [], []
+    for i, e in enumerate(edges or ()):
         pts = e.get("points") or ()
         counts.append(len(pts))
         for p in pts:
             flat.extend(p)
-    return {
+        if e.get("smooth"):
+            smooth.append(i)
+    out = {
         "$pts": take(flat, _WIRE_F32, "f32"),
         "$counts": take(counts, _WIRE_U32, "u32"),
         "body": body,
     }
+    # Inline indices rather than a buffer: tangent edges are a handful per body.
+    if smooth:
+        out["smooth"] = smooth
+    return out
 
 
 class _ReplyTooLarge(Exception):

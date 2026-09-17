@@ -20,6 +20,7 @@ import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import type { RebuildResult } from "../types";
+import type { TangentEdges } from "../ui/renderPrefs";
 
 export type EdgePt = [number, number, number];
 
@@ -30,6 +31,8 @@ export interface EdgeRef {
   /** owning body id, undefined only for orphan edges (see ModelView). */
   readonly body: string | undefined;
   readonly points: EdgePt[];
+  /** the faces either side meet tangentially (a fillet's boundary) */
+  readonly smooth: boolean;
   /** the merged object that draws this edge, and this edge's slot in it */
   readonly draw: BodyEdges;
   readonly slot: number;
@@ -37,6 +40,10 @@ export interface EdgeRef {
 
 export const EDGE_IDLE_COLOR = 0x1b1f24;
 export const EDGE_IDLE_WIDTH = 1.6;
+/** A faint tangent edge is its idle colour this far toward a mid grey: lighter
+ *  than that and it draws brighter than a shaded surface, which is no fainter. */
+const FAINT_TOWARD = new THREE.Color(0x76808a);
+const FAINT_MIX = 0.6;
 
 /** Every edge of ONE body, merged into a single LineSegments2. */
 export class BodyEdges {
@@ -48,6 +55,8 @@ export class BodyEdges {
    *  rather than flagging an object, because there is no object to flag, and
    *  because a hidden-but-present segment would still cost traversal. */
   private hidden: Uint8Array;
+  /** per edge: drawn faint, a tangent edge under the "faint" setting */
+  private faint: Uint8Array;
   /** per edge: the colour it should currently be (survives a geometry rebuild) */
   private rgb: Float32Array;
   /** per edge: first segment in the LIVE geometry, or -1 when hidden */
@@ -68,13 +77,14 @@ export class BodyEdges {
   constructor(edges: RebuildResult["edges"], resolution: THREE.Vector2) {
     const n = edges.length;
     this.hidden = new Uint8Array(n);
+    this.faint = new Uint8Array(n);
     this.rgb = new Float32Array(n * 3);
     this.segStart = new Int32Array(n);
     this.segCount = new Int32Array(n);
     const base = new THREE.Color(EDGE_IDLE_COLOR);
     for (let i = 0; i < n; i++) {
       const e = edges[i]!;
-      this.refs.push({ id: e.id, body: e.body, points: e.points, draw: this, slot: i });
+      this.refs.push({ id: e.id, body: e.body, points: e.points, smooth: e.smooth === true, draw: this, slot: i });
       this.segCount[i] = Math.max(0, e.points.length - 1);
       this.rgb[i * 3] = base.r;
       this.rgb[i * 3 + 1] = base.g;
@@ -171,10 +181,29 @@ export class BodyEdges {
     }
   }
 
-  /** Repaint EVERY edge (used when the idle base colour changes). One upload. */
-  setColorAll(color: THREE.Color, skip?: (ref: EdgeRef) => boolean) {
+  /** Repaint one edge in its IDLE colour: `base`, or lighter for a faint
+   *  tangent edge. Hover, selection and error paint through setColor instead. */
+  setIdleColor(slot: number, base: THREE.Color) {
+    this.setColor(slot, this.faint[slot] ? faded(base) : base);
+  }
+
+  /** How tangent edges are drawn. Takes effect on the next flush() for hiding,
+   *  and on the next idle repaint for faintness. */
+  setTangentEdges(mode: TangentEdges) {
+    for (const ref of this.refs) {
+      if (!ref.smooth) continue;
+      this.setHidden(ref.slot, mode === "hide");
+      this.faint[ref.slot] = mode === "faint" ? 1 : 0;
+    }
+  }
+
+  /** Repaint EVERY edge in its idle colour (used when the idle base colour
+   *  changes). One upload. */
+  setColorAll(base: THREE.Color, skip?: (ref: EdgeRef) => boolean) {
+    const light = faded(base);
     for (let i = 0; i < this.refs.length; i++) {
       if (skip?.(this.refs[i]!)) continue;
+      const color = this.faint[i] ? light : base;
       this.rgb[i * 3] = color.r;
       this.rgb[i * 3 + 1] = color.g;
       this.rgb[i * 3 + 2] = color.b;
@@ -264,4 +293,8 @@ export class BodyEdges {
     this.object.geometry.dispose();
     this.material.dispose();
   }
+}
+
+function faded(base: THREE.Color): THREE.Color {
+  return base.clone().lerp(FAINT_TOWARD, FAINT_MIX);
 }
