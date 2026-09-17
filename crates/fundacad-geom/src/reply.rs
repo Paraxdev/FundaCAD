@@ -24,7 +24,9 @@ pub fn mesh_result(bodies: &[BuiltBody], tolerance: f64, known: &Map<String, Val
                         .map_or(Value::Null, |o| json!(o))
                 })
                 .collect(),
-            ..Default::default()
+            node_ref: b.node_ref.clone().map(Value::String),
+            face_colors: b.face_colors.clone(),
+            part_color: b.part_color.clone().map(Value::String),
         })
         .collect();
     JobResult::Mesh(mesh::mesh_result(&bodies, tolerance, known))

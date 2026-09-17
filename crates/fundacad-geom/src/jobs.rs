@@ -173,6 +173,7 @@ impl Jobs for GeomJobs {
         match op {
             "export" => crate::export::export_result(req, &EngineWatch(ctx)),
             "import" => crate::import::import_result(req),
+            "migrateGeometry" => crate::import::migrate_result(req),
             other => error_result(&format!("unknown op: {other}")),
         }
     }

@@ -388,7 +388,7 @@ pub fn export_built(
     };
     let bodies: Vec<ExportBody<'_>> = built
         .iter()
-        .map(|b| ExportBody { id: &b.id, name: &b.name, shape: &b.shape, node_ref: None })
+        .map(|b| ExportBody { id: &b.id, name: &b.name, shape: &b.shape, node_ref: b.node_ref.as_deref() })
         .collect();
     let body = req.get("body").and_then(Value::as_str).filter(|s| !s.is_empty());
     let separate = fundacad_protocol::pyjson::truthy(req.get("separate"));
