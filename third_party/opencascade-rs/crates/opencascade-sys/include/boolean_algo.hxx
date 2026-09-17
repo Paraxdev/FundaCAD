@@ -11,6 +11,7 @@
 #include <Message_Report.hxx>
 #include <TopTools_ListOfShape.hxx>
 #include <bindings_common.hxx>
+#include <fc_report.hxx>
 #include <stdexcept>
 #include <vector>
 
@@ -79,22 +80,7 @@ inline bool FcBooleanRun_has_errors(const FcBooleanRun &run) { return run.algo->
 inline bool FcBooleanRun_has_warnings(const FcBooleanRun &run) { return run.algo->HasWarnings(); }
 
 inline rust::String FcBooleanRun_alerts(const FcBooleanRun &run) {
-  std::string out;
-  const Handle(Message_Report) &report = run.algo->GetReport();
-  if (report.IsNull()) {
-    return rust::String(out);
-  }
-  const Message_Gravity gravities[] = {Message_Warning, Message_Alarm, Message_Fail};
-  const char tags[] = {'W', 'A', 'F'};
-  for (int i = 0; i < 3; ++i) {
-    for (Message_ListOfAlert::Iterator it(report->GetAlerts(gravities[i])); it.More(); it.Next()) {
-      out += tags[i];
-      out += ' ';
-      out += it.Value()->GetMessageKey();
-      out += '\n';
-    }
-  }
-  return rust::String(out);
+  return rust::String(fc_report_alerts(run.algo->GetReport()));
 }
 
 inline std::unique_ptr<TopoDS_Shape> FcBooleanRun_shape(const FcBooleanRun &run) {
