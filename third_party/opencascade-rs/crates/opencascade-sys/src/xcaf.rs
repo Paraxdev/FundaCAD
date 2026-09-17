@@ -40,5 +40,12 @@ mod inner {
         pub fn step_assembly_root_count(a: &StepAssembly) -> i32;
         pub fn step_assembly_root_shape(a: &StepAssembly, i: i32) -> Result<UniquePtr<TopoDS_Shape>>;
         pub fn step_assembly_is_assembly(a: &StepAssembly) -> bool;
+        pub fn step_assembly_leaf_product(a: &StepAssembly, i: i32) -> Result<String>;
+        pub fn step_assembly_leaf_local(a: &StepAssembly, i: i32) -> Result<UniquePtr<TopoDS_Shape>>;
+        pub fn step_assembly_leaf_place(
+            a: &StepAssembly,
+            i: i32,
+            shape: &TopoDS_Shape,
+        ) -> Result<UniquePtr<TopoDS_Shape>>;
     }
 }

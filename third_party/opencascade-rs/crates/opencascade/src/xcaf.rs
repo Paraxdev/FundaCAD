@@ -82,6 +82,9 @@ pub struct StepLeaf {
     /// One entry per face, present when any face is coloured.
     pub face_colors: Option<Vec<Option<[u8; 3]>>>,
     pub solid_color: Option<[u8; 3]>,
+    /// The product solid this leaf places, keyed per product and solid, in
+    /// the product's own frame. None for a leaf that is no solid.
+    pub product: Option<(String, Shape)>,
 }
 
 pub struct StepAssembly {
@@ -89,13 +92,23 @@ pub struct StepAssembly {
     pub leaves: Vec<StepLeaf>,
     pub roots: Vec<Shape>,
     pub is_assembly: bool,
+    raw: UniquePtr<ffi::StepAssembly>,
+}
+
+impl StepAssembly {
+    /// `shape` moved by leaf `leaf`'s placement.
+    pub fn place(&self, leaf: usize, shape: &Shape) -> Result<Shape, Error> {
+        let a = self.raw.as_ref().ok_or(Error::StepReadFailed)?;
+        Ok(Shape { inner: ffi::step_assembly_leaf_place(a, leaf as i32, &shape.inner)? })
+    }
 }
 
 pub fn read_step_assembly(path: &Path) -> Result<StepAssembly, Error> {
     let lock = step_lock();
     let a = ffi::step_assembly_read(path_str(path)?)?;
     drop(lock);
-    let a = a.as_ref().ok_or(Error::StepReadFailed)?;
+    let raw = a;
+    let a = raw.as_ref().ok_or(Error::StepReadFailed)?;
     let mut nodes = Vec::new();
     for i in 0..ffi::step_assembly_node_count(a) {
         let raw = ffi::step_assembly_node_names(a, i)?;
@@ -117,13 +130,22 @@ pub fn read_step_assembly(path: &Path) -> Result<StepAssembly, Error> {
             shape: Shape { inner: ffi::step_assembly_leaf_shape(a, i)? },
             face_colors: (!colors.is_empty()).then(|| colors.iter().map(|&c| rgb(c)).collect()),
             solid_color: rgb(ffi::step_assembly_leaf_solid_color(a, i)?),
+            product: {
+                let key = ffi::step_assembly_leaf_product(a, i)?.to_string();
+                if key.is_empty() {
+                    None
+                } else {
+                    Some((key, Shape { inner: ffi::step_assembly_leaf_local(a, i)? }))
+                }
+            },
         });
     }
     let mut roots = Vec::new();
     for i in 0..ffi::step_assembly_root_count(a) {
         roots.push(Shape { inner: ffi::step_assembly_root_shape(a, i)? });
     }
-    Ok(StepAssembly { nodes, leaves, roots, is_assembly: ffi::step_assembly_is_assembly(a) })
+    let is_assembly = ffi::step_assembly_is_assembly(a);
+    Ok(StepAssembly { nodes, leaves, roots, is_assembly, raw })
 }
 
 /// Binary BREP, BinTools format V3 with triangles.
