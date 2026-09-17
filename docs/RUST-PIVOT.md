@@ -222,7 +222,7 @@ progress is planned wrong.
    a developer setting (`engine: "python" | "rust"`), Python the default. The
    `VITE_GEOM=rust` spike and `src-tauri/src/geom.rs` are deleted; its tests
    move into `fundacad-geom`.
-7. The `prealpha-rust-ver` rolling release (section 6).
+7. The `prealpha-rust` rolling release (section 6). Done.
 
 ### Phase 2, parity
 
@@ -235,7 +235,13 @@ progress is planned wrong.
 3. Tessellation details: faceOwners, faceBands, true normals and seam weld,
    etags, tolerance tiers, density cap, smooth edge tags.
 4. Caches: content-addressed blob store (blake2b-128, `.bbrep`), prefix
-   checkpoint cache, mesh artifact cache.
+   checkpoint cache, mesh artifact cache. `fundacad-geom::cache` keeps the
+   sidecar's chain keys and its two tiers, and drops the SQLite index: every
+   lookup geomstore makes is by chain key, so a `checkpoints/<key>.json`
+   answers it in one stat, the rename that publishes a blob publishes a record
+   the same way, and a record's mtime is its last access. Eviction and Compute
+   All read the records once, which they did over the index anyway. The engine
+   binary's size and mtime stand in for the sidecar's source hash in `env_sig`.
 5. Import (BREP, STEP with XCAF colours and assemblies, STL, 3MF, OBJ, GLB) and
    export (STEP, STL, 3MF with colours, GLB), `inspect`, `interference`,
    `projectGeometry`, `tessellateText`, `listFonts`, `migrateGeometry`.
@@ -346,28 +352,100 @@ The TypeScript stays; these get a Rust twin and shared vectors.
   `diff_engines.py` drives both engines over the same documents and compares
   body count, per-body volume (rel 0.005), bbox (abs 1e-4) and the error list.
 - **Protocol conformance.** The Python protocol suites take the server command
-  from `FUNDACAD_ENGINE_CMD`; CI runs them against both engines.
+  from `FUNDACAD_ENGINE_CMD`; CI runs them against both engines. A suite that
+  needs an op the engine under test has not got yet fails, unless
+  `FUNDACAD_SKIP_UNPORTED_OPS=1` is set, which prints every case it skips. The
+  engine answers a `testSleep` job under `FUNDACAD_ENGINE_TEST_OPS=1` and takes
+  its clocks from `FUNDACAD_STALL_TIMEOUT` and `FUNDACAD_JOB_TIMEOUT`, so
+  `test_cancel.py` has something long to cancel and `test_heartbeat.py` can
+  watch a reap without waiting a minute for one.
 - **Kernel tests in Rust.** `cargo test -p fundacad-geom` runs real
   OpenCASCADE tests from the first brick on.
-- **CI.** The `rust-geom` job caches `target/OCCT` and runs the workspace
-  tests; it gates once Phase 1 step 4 lands.
+- **CI.** The `rust-geom` job caches `target/OCCT` and runs
+  `cargo test --workspace --features fundacad-engine/ws`, so the transport the
+  Python suites drive is compiled and tested; it gates once Phase 1 step 4 lands.
 - **Hygiene.** `scripts/check-repo-hygiene.sh` applies to Rust too.
 
-## 6. The `prealpha-rust-ver` rolling release
+## 6. The `prealpha-rust` rolling release (landed)
 
-A second rolling release beside `beta`, built by a job cloned from `release`
-with its own `concurrency.group`, its own tag moved in place and the same asset
-sweep. Differences:
+A second rolling release beside `beta`, on the tag `prealpha-rust`. Two jobs in
+`.github/workflows/build.yml`, `build-prealpha` and `release-prealpha`, with
+their own `concurrency.group` (`release-prealpha-rust`), their own rolling tag
+moved in place rather than deleted, their own `latest.json` and the same
+old-asset sweep. What makes the bundle:
 
-- The Rust engine is the default engine and the `sidecar-runtime` resource is
-  not bundled.
+- `--features rust-engine`, so the engine is a worker process of the same
+  executable and `engine_kind` answers `"rust"`, which is what selects the IPC
+  transport in `src/geometry/transport.ts`.
+- `src-tauri/tauri.prealpha.conf.json` instead of `tauri.bundle.conf.json`, so
+  no `sidecar-runtime` resource is bundled and no Python is needed at runtime.
+  The job also refuses to build if `src-tauri/sidecar-runtime` exists, and
+  checks the finished binary for the `engine_attach` command, so "this is the
+  Rust build" is a fact about the bytes rather than about the arguments.
 - Title: `FundaCAD pre-alpha, Rust engine (rolling, WORK IN PROGRESS)`.
-- Release notes open with a warning that is not optional: the Rust engine is
-  incomplete, features listed as unported fail in a rebuild with the
-  skipped-feature banner, files saved by it open in the beta, plugin geometry
-  does not run, and it is not for real work.
-- No `latest.json`, so the updater never moves a beta install onto it.
-- Version `0.3.<run number>-rust`.
+- Release notes open with the warning, which is not optional: the Rust engine
+  is incomplete, unported features fail in a rebuild with the skipped-feature
+  banner, plugin geometry does not run at all, files it saves open in the beta,
+  and it is not for real work.
+
+### 6.1 The updater endpoint
+
+**Decided: its own feed, at its own endpoint, baked into its own build.** The
+draft above said "no `latest.json`, so the updater never moves a beta install
+onto it". That answers the danger and loses the feature, and a rolling build
+that cannot roll is one people install once and never update again.
+
+The endpoint is compiled into the binary, so which feed a copy reads is settled
+when it is built and can never change afterwards:
+
+- a beta build reads `releases/download/beta/latest.json`, which only the
+  `release` job writes;
+- a pre-alpha build reads `releases/download/prealpha-rust/latest.json`, which
+  only `release-prealpha` writes.
+
+Neither job touches the other's release, and the two builds download their
+artifacts by pattern (`fundacad-beta-*`, `fundacad-prealpha-*`) so one run's
+installers cannot be published to the other's page. `tests/security/updater.
+test.ts` holds the pair apart.
+
+The separation has to be the endpoint and cannot be the version: the pre-alpha
+is `0.3.x` and the beta is `0.2.x`, so a beta install that ever read the
+pre-alpha manifest would happily take it.
+
+### 6.2 The version
+
+`0.3.<run number>`, not the `0.3.<run number>-rust` the draft asked for. Tauri's
+msi target refuses a version whose pre-release identifier is not numeric
+("optional pre-release identifier in app version must be numeric-only and
+cannot be greater than 65535 for msi target"), so `-rust` fails the Windows leg
+outright, and the NSIS target silently rewrites a non-numeric field to `0` in
+`VIProductVersion`. The minor carries the distinction instead, and the tag, the
+title, the notes and the feed carry the rest. **When the beta reaches `0.3` the
+pre-alpha has to move up with it**, or the two version ranges meet.
+
+### 6.3 The CSP
+
+The pre-alpha config also tightens `connect-src`. The beta grants
+`ws://127.0.0.1:8765 http://127.0.0.1:8765` because the frontend talks to the
+Python sidecar over a loopback WebSocket; the Rust engine is a stdio worker
+reached over Tauri IPC, so that build's webview never opens a socket and the
+grant comes out. `ipc:` and `http://ipc.localhost` are all it keeps.
+`tests/security/csp.test.ts` pins the pre-alpha policy as the shipped one minus
+exactly those two sources, so the two cannot drift, and when the sidecar is
+deleted in phase 3 the base policy loses them too and the pair becomes one.
+
+### 6.4 Before the first pre-alpha release is cut
+
+- The `build-prealpha` job has never run. It compiles OpenCASCADE from source
+  on all three runners, about twenty minutes cold, cached at
+  `src-tauri/target/OCCT`; the Linux leg installs `cmake`, which
+  `.github/actions/linux-deps` deliberately leaves out.
+- The updater is still off everywhere. `tauri.conf.json` carries upstream's
+  minisign pubkey, so both release jobs withhold `latest.json` and say so in
+  the notes. Generating a keypair turns both feeds on at once.
+- Plugin bundles are not published to this release, because the app asks the
+  beta release for them whatever build it is (`RELEASE_TAG` in
+  `src/plugins/index.ts`), and plugin geometry does not run on this engine yet.
 
 ## 7. Working agreements for the branch
 

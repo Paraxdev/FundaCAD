@@ -112,3 +112,35 @@ fn the_payload_carries_face_bands_only_when_there_is_a_run() {
     let p = mesh::body_payload(&plain, "b", "B", 0.1, mesh::viewport_profile(1));
     assert!(!p.fields.contains_key("faceBands"));
 }
+
+#[test]
+fn a_cached_payload_still_carries_its_bands() {
+    let (split, _) = load("split_wall");
+    let body = mesh::MeshBody {
+        id: "b".into(),
+        name: "B".into(),
+        shape: Some(&split),
+        identity: Some((1, 1)),
+        ..Default::default()
+    };
+    let mut payloads = fundacad_geom::cache::meshes::Payloads::default();
+    let bands = |r: &fundacad_protocol::MeshResult| r.bodies[0].fields()["faceBands"].clone();
+    let want = json!([[0, 1]]);
+    {
+        let mut cache = fundacad_geom::cache::meshes::Tiered {
+            payloads: &mut payloads,
+            store: None,
+            persist_after: std::time::Duration::ZERO,
+        };
+        let first = mesh::mesh_result_cached(std::slice::from_ref(&body), 0.1, &Default::default(), &mut cache);
+        assert_eq!(bands(&first), want);
+        let again = mesh::mesh_result_cached(std::slice::from_ref(&body), 0.1, &Default::default(), &mut cache);
+        assert_eq!(bands(&again), want, "a cached payload lost its face bands");
+    }
+    assert_eq!(payloads.ram_hits, 1);
+    // ...and the disk tier, which carries the payload as bytes.
+    let full = mesh::body_payload(&split, "b", "B", 0.1, mesh::viewport_profile(1));
+    let bytes = fundacad_geom::cache::meshes::encode(&mesh::strip_envelope(&full));
+    let back = fundacad_geom::cache::meshes::decode(&bytes).expect("a payload decodes");
+    assert_eq!(back.fields["faceBands"], want);
+}
