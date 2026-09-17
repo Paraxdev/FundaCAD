@@ -57,6 +57,21 @@ def engine_command(cmd=None):
     return shlex.split(cmd)
 
 
+def external_engine():
+    """True when FUNDACAD_ENGINE_CMD names the engine, so a suite that normally
+    serves server.py in process drives a spawned engine instead."""
+    return bool(os.environ.get("FUNDACAD_ENGINE_CMD"))
+
+
+def skip_unported(what):
+    """Whether to skip a check that needs an op the engine under test does not
+    have yet. Off unless FUNDACAD_SKIP_UNPORTED_OPS=1, and loud when on."""
+    if os.environ.get("FUNDACAD_SKIP_UNPORTED_OPS") != "1":
+        return False
+    print(f"  SKIPPED {what}: FUNDACAD_SKIP_UNPORTED_OPS=1")
+    return True
+
+
 def _free_port():
     """Pick an ephemeral loopback port. Tiny bind/close race before the server
     grabs it, acceptable for a local test harness, and never port 8765 because
@@ -74,9 +89,10 @@ class SpawnedServer:
     kills the child on __exit__ (including on exception). Disk cache is forced OFF and the
     token env is cleared so the server MINTS and prints a fresh token."""
 
-    def __init__(self, ready_timeout=90.0, cmd=None):
+    def __init__(self, ready_timeout=90.0, cmd=None, env=None):
         self.ready_timeout = ready_timeout
         self.cmd = cmd
+        self.extra_env = env or {}
         self.proc = None
         self.port = None
         self.token = None
@@ -89,6 +105,7 @@ class SpawnedServer:
         env["FUNDACAD_SIDECAR_PORT"] = str(self.port)
         env["FUNDACAD_DISK_CACHE"] = "0"  # deterministic: no persisted geometry
         env.pop("FUNDACAD_SIDECAR_TOKEN", None)  # force mint+print of a fresh token
+        env.update(self.extra_env)
         self.proc = subprocess.Popen(
             engine_command(self.cmd),
             cwd=SIDECAR_DIR,

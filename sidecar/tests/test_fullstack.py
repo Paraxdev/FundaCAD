@@ -7,6 +7,7 @@ import _bootstrap  # noqa: F401  (puts sidecar/ on sys.path)
 import asyncio, json, os, subprocess, sys, tempfile, time
 import websockets
 
+from tools import harness_util as H
 from tools.harness_util import engine_command
 
 HOST = "127.0.0.1"
@@ -15,7 +16,7 @@ HOST = "127.0.0.1"
 # port the app's sidecar and the MCP server also take: with either of them up, the
 # server this test starts failed to bind, the test connected to THEIR sidecar
 # instead, and the run died on an unauthorized handshake naming neither problem.
-PORT = int(os.environ.get("FUNDACAD_SIDECAR_PORT") or 8765)
+PORT = int(os.environ.get("FUNDACAD_SIDECAR_PORT") or 0) or H._free_port()
 D = tempfile.mkdtemp()
 _id = [0]
 def nid():
@@ -112,7 +113,7 @@ async def main(token):
         r = await call(ws, "import", path=stl, format="stl")
         ok_imp = r["ok"] and r["result"]["solid"] and r["result"]["faces"] == 6
         check("import stl (merged to 6 faces)", ok_imp, f"faces={r['result'].get('faces') if r.get('ok') else r}")
-        if ok_imp:
+        if ok_imp and not H.skip_unported("the import feature rebuilds and migrateGeometry"):
             geom = r["result"]["geom"]
             r = await rebuild(ws, [{"id": "im", "type": "import", "format": "stl", "name": "box", "geom": geom}])
             check("rebuild imported body", r["ok"] and nbodies(r) == 1)
