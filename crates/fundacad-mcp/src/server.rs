@@ -735,7 +735,11 @@ The format comes from the extension unless given. A large STEP can take minutes:
     )]
     pub async fn t_doc_save(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         let mut st = self.state.lock().await;
-        let given = args.get("path").and_then(Value::as_str).map(str::to_string);
+        let given = args
+            .get("path")
+            .and_then(Value::as_str)
+            .filter(|p| !p.is_empty())
+            .map(str::to_string);
         let Some(path) = given.map(|p| abspath(&p)).or_else(|| st.path.clone()) else {
             return Ok(failure(
                 "No path given and this document has never been saved.",
@@ -1338,11 +1342,13 @@ impl FundaCad {
         let w = args
             .get("width")
             .and_then(Value::as_i64)
+            .filter(|n| *n != 0)
             .unwrap_or(640)
             .clamp(64, MAX_IMAGE_PX) as u32;
         let h = args
             .get("height")
             .and_then(Value::as_i64)
+            .filter(|n| *n != 0)
             .unwrap_or(480)
             .clamp(64, MAX_IMAGE_PX) as u32;
         let highlight = match index_set(args.get("highlight_faces")) {
@@ -1362,12 +1368,22 @@ impl FundaCad {
             }
             _ => None,
         };
-        let bodies = args.get("bodies").and_then(Value::as_array).map(|a| {
-            a.iter()
-                .filter_map(|v| v.as_str().map(str::to_string))
-                .collect::<Vec<_>>()
-        });
-        let section = args.get("section").cloned().unwrap_or(Value::Null);
+        // Empty is absent, as it was: `bodies: []` draws everything and
+        // `section: {}` cuts nothing, and both have to READ that way too.
+        let bodies = args
+            .get("bodies")
+            .and_then(Value::as_array)
+            .filter(|a| !a.is_empty())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+                    .collect::<Vec<_>>()
+            });
+        let section = args
+            .get("section")
+            .filter(|s| truthy(Some(s)))
+            .cloned()
+            .unwrap_or(Value::Null);
         let request = ViewRequest {
             width: w,
             height: h,

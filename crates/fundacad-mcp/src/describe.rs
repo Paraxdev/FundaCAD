@@ -48,7 +48,9 @@ fn round_half_even(x: f64, places: i32) -> f64 {
 /// `%g` with six significant digits, the way Python prints it.
 pub fn g_format(v: f64) -> String {
     if v == 0.0 {
-        return "0".into();
+        // Negative zero keeps its sign, as `%g` prints it. It is what a normal
+        // of (-1, -0, 0) reads as, and the two servers have to agree on it.
+        return if v.is_sign_negative() { "-0" } else { "0" }.into();
     }
     if !v.is_finite() {
         return if v.is_nan() {
