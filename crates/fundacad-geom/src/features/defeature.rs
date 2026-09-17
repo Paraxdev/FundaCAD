@@ -173,9 +173,13 @@ fn expand_blend_chain(shape: &Shape, seeds: &[Shape]) -> Vec<Shape> {
             })
             .clone()
     };
-    let widths: HashMap<usize, f64> = (1..=adj.faces.len())
-        .map(|i| (i, width(&adj.face(i))))
-        .collect();
+    let width_cache = std::cell::RefCell::new(HashMap::<usize, f64>::new());
+    let width_of = |i: usize| -> f64 {
+        *width_cache
+            .borrow_mut()
+            .entry(i)
+            .or_insert_with(|| width(&adj.face(i)))
+    };
     let dihedral = |i: usize, j: usize, p: DVec3| -> f64 {
         match (normal_at(&adj.face(i), p), normal_at(&adj.face(j), p)) {
             (Some(a), Some(b)) => a.dot(b).clamp(-1.0, 1.0).abs().acos().to_degrees(),
@@ -186,14 +190,14 @@ fn expand_blend_chain(shape: &Shape, seeds: &[Shape]) -> Vec<Shape> {
     let cap = WIDTH_FACTOR
         * seed_idx
             .iter()
-            .map(|i| widths[i])
+            .map(|&i| width_of(i))
             .fold(f64::NEG_INFINITY, f64::max);
     let patch_area_max = (cap / 2.0).powi(2);
     let mut chain: BTreeSet<usize> = seed_idx.iter().copied().collect();
     let mut queue = seed_idx.clone();
     while let Some(i) = queue.pop() {
         for (j, _) in neighbours_of(i) {
-            if chain.contains(&j) || widths[&j] > cap {
+            if chain.contains(&j) || width_of(j) > cap {
                 continue;
             }
             let near = neighbours_of(j);
@@ -206,7 +210,7 @@ fn expand_blend_chain(shape: &Shape, seeds: &[Shape]) -> Vec<Shape> {
                         .iter()
                         .map(kernel::length)
                         .fold(0.0, f64::max);
-                    let b = if longest <= 0.0 || widths[&j] / longest > BAND_ASPECT_MAX {
+                    let b = if longest <= 0.0 || width_of(j) / longest > BAND_ASPECT_MAX {
                         false
                     } else {
                         match surface_type(&face) {
