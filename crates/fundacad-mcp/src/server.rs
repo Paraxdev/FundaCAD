@@ -362,6 +362,11 @@ impl FundaCad {
         Ok(server)
     }
 
+    /// Every tool this server offers, as the host sees them.
+    pub fn tools(&self) -> Vec<rmcp::model::Tool> {
+        self.router.list_all()
+    }
+
     pub async fn instructions(&self) -> String {
         // Live mode adds a paragraph rather than replacing the working order,
         // which is just as true either way.
