@@ -13,6 +13,7 @@ rust-version.workspace = true
 # builds them statically with cmake: no system OpenCASCADE on any platform.
 opencascade = { path = "../../third_party/opencascade-rs/crates/opencascade" }
 opencascade-sys = { path = "../../third_party/opencascade-rs/crates/opencascade-sys" }
+blake2 = "0.10"
 cxx = "1"
 fundacad-engine = { path = "../fundacad-engine" }
 fundacad-protocol = { path = "../fundacad-protocol" }
