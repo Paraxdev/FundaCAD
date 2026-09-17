@@ -35,3 +35,7 @@ inline const TopoDS_Solid &topods_cast_to_solid(const TopoDS_Shape &shape) {
 inline const TopoDS_Compound &topods_cast_to_compound(const TopoDS_Shape &shape) {
   return TopoDS::Compound(shape);
 }
+
+inline std::unique_ptr<TopoDS_Shape> TopoDS_Shape_reversed(const TopoDS_Shape &shape) {
+  return std::unique_ptr<TopoDS_Shape>(new TopoDS_Shape(shape.Reversed()));
+}

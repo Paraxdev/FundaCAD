@@ -1,7 +1,33 @@
 #pragma once
 #include "rust/cxx.h"
 #include <NCollection_List.hxx>
+#include <Standard_Failure.hxx>
+#include <exception>
 #include <memory>
+#include <string>
+
+// cxx maps a throw to Err only for std::exception, and OCCT throws
+// Standard_Failure, which would otherwise unwind through an extern "C" frame
+// and abort. cxx picks this overload up for every function declared -> Result.
+namespace rust {
+namespace behavior {
+template <typename Try, typename Fail> static void trycatch(Try &&func, Fail &&fail) noexcept try {
+  func();
+} catch (const Standard_Failure &e) {
+  std::string message = e.DynamicType()->Name();
+  const char *detail = e.GetMessageString();
+  if (detail != nullptr && *detail != '\0') {
+    message += ": ";
+    message += detail;
+  }
+  fail(message.c_str());
+} catch (const std::exception &e) {
+  fail(e.what());
+} catch (...) {
+  fail("unknown C++ exception");
+}
+} // namespace behavior
+} // namespace rust
 
 // Generic template constructor
 template <typename T, typename... Args> std::unique_ptr<T> construct_unique(Args... args) {
