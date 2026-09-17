@@ -625,14 +625,17 @@ jobs:
           key: prealpha
 
       # occt-sys installs the kernel into <target>/OCCT, which rust-cache does
-      # not keep. Without this every run pays the OCCT build again on every
-      # platform. Keyed on the lock and the build script, the two things that
-      # decide what gets built.
+      # not keep. Without this every run pays the twenty minute OCCT build again
+      # on every platform.
+      #
+      # Keyed on the three files that decide what gets built, NOT on Cargo.lock:
+      # the kernel does not change when some unrelated crate is bumped, and a
+      # key that moved with the lock would throw the build away most weeks.
       - name: Cache the static OpenCASCADE build
         uses: actions/cache@v4
         with:
           path: src-tauri/target/OCCT
-          key: occt-static-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.lock', 'third_party/opencascade-rs/crates/opencascade-sys/build.rs') }}
+          key: occt-static-${{ runner.os }}-${{ hashFiles('third_party/opencascade-rs/crates/occt-sys/src/lib.rs', 'third_party/opencascade-rs/crates/opencascade-sys/build.rs', 'third_party/opencascade-rs/crates/opencascade-sys/Cargo.toml') }}
 
       - name: Install Node
         uses: actions/setup-node@v4
