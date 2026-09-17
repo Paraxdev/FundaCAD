@@ -9,6 +9,7 @@ pub mod mesh_access;
 pub mod primitives;
 pub mod raw;
 pub mod section;
+pub mod select_access;
 pub mod workplane;
 
 mod law_function;

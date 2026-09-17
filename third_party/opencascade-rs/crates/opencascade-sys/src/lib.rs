@@ -33,6 +33,7 @@ pub mod law;
 pub mod mesh_access;
 pub mod message;
 pub mod poly;
+pub mod select_access;
 pub mod shape_analysis;
 pub mod shape_fix;
 pub mod shape_upgrade;
