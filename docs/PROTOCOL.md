@@ -160,7 +160,12 @@ Reply `result` is one of:
 - **Fatal**, nothing built at all: `{ "error": { "message": "...", "feature_id": "..." } }`.
 - **Stalled worker**, one operation ran past the stall timeout (60 s of no build
   progress): the sidecar kills and respawns the geometry worker and returns
-  `{ "error": { "message": "one operation stalled for over N s - the geometry kernel was restarted; progress up to the last checkpoint is kept" } }`.
+  `{ "error": { "message": "one operation stalled for over N s, the geometry kernel was restarted; progress up to the last checkpoint is kept" } }`.
+  The Rust engine has no pool to kill, so it answers the same way and abandons
+  the job thread, which keeps its wedged call and never takes another job, while
+  a fresh thread takes the queue. Ops with a bounded cost keep a wall clock
+  instead (25 s, 180 s for `generateShape`) and answer
+  `{ "error": { "message": "operation timed out, geometry too complex or degenerate" } }`.
 - **Crashed worker**: `{ "error": { "message": "the geometry kernel crashed on this operation" } }`.
 
 #### Per-body payload (protocol v2)
@@ -609,7 +614,8 @@ if nothing was running, or `target` named a request that had already finished (a
 between the click and the job completing must not cancel a different, unrelated job
 that started meanwhile). Omitting `target` cancels whatever is currently running.
 Neither engine can interrupt a running kernel call any other way, so a cancel not
-honoured within a grace period kills and respawns the worker process; the operation it
+honoured within a grace period kills and respawns the worker process (the Rust engine
+on `--ws`, which nothing supervises, abandons its job thread instead); the operation it
 was running then answers `{ "ok": false, "cancelled": true, ... }` rather than the
 generic "the geometry kernel crashed on this operation" reply, so the caller can tell a
 deliberate cancel apart from a real crash.
