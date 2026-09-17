@@ -320,7 +320,9 @@ inline int32_t mesh_access_edge_smooth(const MeshAccess &m, int32_t edge, double
     }
     const TopoDS_Edge &e = mesh_access_edge(m, edge);
     BRepAdaptor_Curve2d pcurve[2] = {BRepAdaptor_Curve2d(e, anc[0]), BRepAdaptor_Curve2d(e, anc[1])};
-    BRepAdaptor_Surface surf[2] = {BRepAdaptor_Surface(anc[0]), BRepAdaptor_Surface(anc[1])};
+    // Unrestricted: the restricted form computes the face's UV bounds, which
+    // walks every edge of the face, and D1 never looks at them.
+    BRepAdaptor_Surface surf[2] = {BRepAdaptor_Surface(anc[0], false), BRepAdaptor_Surface(anc[1], false)};
     double t0 = 0.0, t1 = 0.0;
     BRep_Tool::Range(e, t0, t1);
     const double fracs[3] = {0.5, 0.15, 0.85};
