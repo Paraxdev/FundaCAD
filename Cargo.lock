@@ -165,6 +165,8 @@ name = "fundacad-geom"
 version = "0.2.0"
 dependencies = [
  "cxx",
+ "fundacad-engine",
+ "fundacad-protocol",
  "glam",
  "opencascade",
  "opencascade-sys",
