@@ -343,8 +343,28 @@ fn the_live_session_answers_while_a_job_runs_and_follows_the_connection() {
         json!({"ok": false, "reason": "not the host"})
     );
 
+    // A guest that leaves takes its uncollected edit with it.
+    let (other_tx, other_rx) = channel();
+    let other = engine.client(Arc::new(Collect(Mutex::new(other_tx))));
+    let offer = json!({"op": "session_propose", "document": doc, "baseRevision": 12});
+    let mut mine = offer.as_object().unwrap().clone();
+    mine.insert("id".into(), json!(7));
+    call(&agent, &agent_rx, Value::Object(mine));
+    let mut theirs = offer.as_object().unwrap().clone();
+    theirs.insert("id".into(), json!(8));
+    call(&other, &other_rx, Value::Object(theirs));
+    call(&agent, &agent_rx, json!({"id": 9, "op": "session_leave"}));
+    let got = call(
+        &app,
+        &app_rx,
+        json!({"id": 10, "op": "session_host", "document": doc, "revision": 12}),
+    );
+    let pending = got["result"]["proposals"].as_array().unwrap();
+    assert_eq!(pending.len(), 1, "the wrong guest's edit was withdrawn");
+    assert_eq!(pending[0]["guest"], "c3");
+
     drop(app);
-    let st = call(&agent, &agent_rx, json!({"id": 7, "op": "session_state"}));
+    let st = call(&agent, &agent_rx, json!({"id": 11, "op": "session_state"}));
     assert_eq!(st["result"]["attached"], false, "a closed host still hosts");
     assert!(st["result"]["document"].is_null());
     gate_tx.send(()).unwrap();
