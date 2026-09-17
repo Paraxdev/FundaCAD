@@ -1,0 +1,39 @@
+{"tool": "schema", "args": {}}
+{"tool": "schema", "args": {"type": "revolve"}}
+{"tool": "schema", "args": {"type": "extrood"}}
+{"tool": "doc_get", "args": {}}
+{"tool": "param_set", "args": {"name": "d", "expr": 20}}
+{"tool": "param_set", "args": {"name": "r", "expr": "d/2"}}
+{"tool": "param_set", "args": {"name": "bad", "expr": "a + nope"}}
+{"tool": "param_set", "args": {"name": "sin", "expr": 1}}
+{"tool": "param_remove", "args": {"name": "d"}}
+{"tool": "feature_add", "args": {"feature": {"type": "cylinder", "radius": "r", "height": 30}}}
+{"tool": "feature_add", "args": {"feature": {"nope": 1}}}
+{"tool": "feature_add", "args": {"feature": {"id": "cy1", "type": "box", "length": 1, "width": 1, "height": 1}}}
+{"tool": "feature_add", "args": {"feature": {"id": "ex1", "type": "extrude", "sketch": "nothing", "distance": 1, "operation": "new"}}}
+{"tool": "feature_remove", "args": {"id": "ex1"}}
+{"tool": "feature_add", "args": {"feature": {"id": "bx1", "type": "box", "length": 40, "width": 30, "height": "r"}}}
+{"tool": "feature_update", "args": {"id": "bx1", "patch": {"height": 12}}}
+{"tool": "feature_move", "args": {"id": "bx1", "to": 0}}
+{"tool": "feature_remove", "args": {"id": "nope"}}
+{"tool": "doc_get", "args": {"features_only": true}}
+{"tool": "doc_import", "args": {}}
+{"tool": "doc_import", "args": {"path": "/no/such/part.step"}}
+{"tool": "doc_import", "args": {"content": "not base64 at all;", "name": "a.step"}}
+{"tool": "doc_import", "args": {"content": "c29saWQgcwplbmRzb2xpZCBzCg==", "part": 1, "parts": 4, "name": "p.stl"}}
+{"tool": "doc_save", "args": {}}
+{"tool": "export", "args": {"path": "/no/such/dir/out.step", "format": "step"}}
+{"tool": "no_such_tool", "args": {}}
+{"tool": "build", "args": {}}
+{"tool": "inspect", "args": {}}
+{"tool": "doc_new", "args": {}}
+{"tool": "doc_get", "args": {}}
+{"tool": "feature_add", "args": {"feature": {"id": "bx9", "type": "box", "length": 20, "width": 20, "height": 20}}}
+{"tool": "build", "args": {}}
+{"tool": "view", "args": {"bodies": [], "section": {}, "width": 0, "height": 0}}
+{"tool": "view", "args": {"view": "top", "section": {"axis": "Z", "keep": "max"}, "width": 96, "height": 96}}
+{"tool": "view", "args": {"azimuth": 30, "elevation": 20, "width": 96, "height": 96, "highlight_faces": [1]}}
+{"tool": "view", "args": {"section": {"axis": "Y", "keep": "middle"}}}
+{"tool": "inspect", "args": {"detail": true, "faces": [0, 1]}}
+{"tool": "inspect", "args": {"body": "body1"}}
+{"tool": "doc_save", "args": {"path": ""}}
