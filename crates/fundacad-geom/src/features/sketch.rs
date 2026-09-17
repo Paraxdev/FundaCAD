@@ -68,7 +68,7 @@ enum Ent {
         w: f64,
     },
     Projected(ProjectedCurve),
-    Text,
+    Text(Box<fundacad_core::schema::Text>),
     Other,
 }
 
@@ -158,7 +158,7 @@ fn resolve(ctx: &Ctx, e: &SketchEntity) -> FResult<Item> {
             },
         ),
         SketchEntity::Projected(p) => (p.construction, Ent::Projected(p.curve.clone())),
-        SketchEntity::Text(t) => (t.construction, Ent::Text),
+        SketchEntity::Text(t) => (t.construction, Ent::Text(Box::new(t.clone()))),
         SketchEntity::Unknown(_) => (None, Ent::Other),
         SketchEntity::Invalid(inv) => {
             let raw_construction = inv
@@ -592,8 +592,85 @@ fn entity_edges(e: &Ent) -> FResult<Vec<Shape>> {
             }
             _ => Vec::new(),
         },
-        Ent::Point { .. } | Ent::Text | Ent::Other => Vec::new(),
+        Ent::Point { .. } | Ent::Text(_) | Ent::Other => Vec::new(),
     })
+}
+
+/// `_entity_edge`: the one edge of a line, arc, circle or spline a text follows.
+fn path_edge(e: &Ent) -> Option<Shape> {
+    match e {
+        Ent::Line { .. } | Ent::Arc { .. } | Ent::Circle { .. } | Ent::Spline(_) => {
+            entity_edges(e).ok()?.into_iter().next()
+        }
+        _ => None,
+    }
+}
+
+/// `_entity_edge` over an entity the frontend already resolved to numbers.
+pub fn path_edge_json(e: &serde_json::Value) -> Option<Shape> {
+    let n = |k: &str| e.get(k).map(|v| crate::text::num_or_zero(Some(v)));
+    let o = |k: &str| crate::text::num_or_zero(e.get(k));
+    let ent = match e.get("type").and_then(serde_json::Value::as_str)? {
+        "line" => Ent::Line {
+            a: [n("x1")?, n("y1")?],
+            b: [n("x2")?, n("y2")?],
+        },
+        "arc" => Ent::Arc {
+            a: [n("x1")?, n("y1")?],
+            b: [n("x2")?, n("y2")?],
+            m: [n("mx")?, n("my")?],
+        },
+        "circle" => Ent::Circle {
+            r: n("radius")?,
+            x: o("x"),
+            y: o("y"),
+        },
+        "spline" => Ent::Spline(
+            e.get("points")
+                .and_then(serde_json::Value::as_array)
+                .map(|pts| {
+                    pts.iter()
+                        .map(|p| Some([p.get("x").map(|v| crate::text::num_or_zero(Some(v)))?, p.get("y").map(|v| crate::text::num_or_zero(Some(v)))?]))
+                        .collect::<Option<Vec<_>>>()
+                })
+                .unwrap_or(Some(Vec::new()))?,
+        ),
+        _ => return None,
+    };
+    path_edge(&ent)
+}
+
+/// `_text_faces`: best effort, a text that cannot be drawn gives no faces.
+fn text_faces(ctx: &Ctx, t: &fundacad_core::schema::Text, path: Option<&Shape>) -> Vec<Shape> {
+    let spec = || -> FResult<crate::text::TextSpec> {
+        let o = |n: &Option<Num>| ctx.val_or(n.as_ref(), 0.0);
+        Ok(crate::text::TextSpec {
+            text: t.text.clone(),
+            size: ctx.val(&t.height)?,
+            font: t.font.clone().filter(|f| !f.is_empty()),
+            aspect: crate::text::fonts::Aspect::from_style(
+                t.style.as_ref().map_or("regular", |s| s.as_str()),
+            ),
+            align: match t.align.as_ref().map(|a| a.as_str()) {
+                Some("center") => crate::text::HAlign::Center,
+                Some("right") => crate::text::HAlign::Right,
+                _ => crate::text::HAlign::Left,
+            },
+            rotation: o(&t.angle)?,
+            x: o(&t.x)?,
+            y: o(&t.y)?,
+            position_on_path: o(&t.position_on_path)?,
+            box_width: t.box_width.as_ref().map(|b| ctx.val(b)).transpose()?,
+        })
+    };
+    if t.text.trim().is_empty() {
+        return Vec::new();
+    }
+    let Ok(spec) = spec() else {
+        return Vec::new();
+    };
+    let placed = crate::text::glyphs(&spec, path.map(|edge| crate::text::TextPath { edge }).as_ref());
+    crate::text::build_faces(&placed)
 }
 
 /// A face bounded by one closed edge, build123d `Face(Wire.make_circle(r))`.
@@ -664,6 +741,7 @@ pub fn build(ctx: &Ctx, f: &SketchFeature, followed: Option<Placement>) -> FResu
     let mut faces: Vec<Shape> = Vec::new();
     let mut edges: Vec<Shape> = Vec::new();
     let mut all_edges: Vec<Shape> = Vec::new();
+    let mut text_local: Vec<Shape> = Vec::new();
     for it in &items {
         if it.construction {
             continue;
@@ -722,7 +800,14 @@ pub fn build(ctx: &Ctx, f: &SketchFeature, followed: Option<Placement>) -> FResu
                     all_edges.push(e);
                 }
             }
-            Ent::Text => return Err(not_ported("text")),
+            Ent::Text(t) => {
+                let path = t
+                    .path_ref
+                    .as_ref()
+                    .and_then(|r| items.iter().rev().find(|i| i.id.as_ref() == Some(r)))
+                    .and_then(|i| path_edge(&i.ent));
+                text_local.extend(text_faces(ctx, t, path.as_ref()));
+            }
             Ent::Point { .. } | Ent::Other => {}
         }
     }
@@ -730,6 +815,7 @@ pub fn build(ctx: &Ctx, f: &SketchFeature, followed: Option<Placement>) -> FResu
     if !edges.is_empty() {
         faces.extend(faces_from_edges(&edges));
     }
+    faces.extend(text_local.iter().cloned());
 
     let mut located: Vec<Shape> = Vec::new();
     if !all_edges.is_empty() {
@@ -737,6 +823,9 @@ pub fn build(ctx: &Ctx, f: &SketchFeature, followed: Option<Placement>) -> FResu
             let placed = plane.locate(&cell)?;
             located.extend(kernel::subshapes(&placed, Kind::Face));
         }
+    }
+    for tf in &text_local {
+        located.extend(kernel::subshapes(&plane.locate(tf)?, Kind::Face));
     }
 
     let sketch = if !faces.is_empty() {
