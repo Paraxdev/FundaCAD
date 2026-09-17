@@ -4,6 +4,7 @@ pub mod angle;
 pub mod bounding_box;
 pub mod kicad;
 pub mod mesh;
+pub mod mesh_access;
 pub mod primitives;
 pub mod section;
 pub mod workplane;

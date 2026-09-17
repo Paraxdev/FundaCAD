@@ -82,6 +82,7 @@ fn main() {
         "src/if_select.rs",
         "src/iges_control.rs",
         "src/law.rs",
+        "src/mesh_access.rs",
         "src/message.rs",
         "src/poly.rs",
         "src/shape_analysis.rs",

@@ -63,7 +63,7 @@ mod tests {
     #[test]
     fn tessellation_matches_the_wire_format() {
         let b = box_20_20_10();
-        let m = mesh::tessellate(&b, 0.1).expect("box tessellates");
+        let m = mesh::body_payload(&b, "b1", "Body1", 0.1, mesh::viewport_profile(1));
         assert_eq!(m.positions.len() % 3, 0);
         assert_eq!(m.indices.len() % 3, 0);
         assert_eq!(
@@ -71,21 +71,118 @@ mod tests {
             m.indices.len() / 3,
             "one face id per triangle"
         );
-        assert_eq!(m.face_count, 6);
+        assert_eq!(m.fields["faceCount"], 6);
         let mut seen: Vec<u32> = m.face_ids.clone();
         seen.sort_unstable();
         seen.dedup();
         assert_eq!(seen, vec![0, 1, 2, 3, 4, 5]);
-        // Twelve edges, every polyline has at least two points.
+        // A straight edge is its two endpoints.
         assert_eq!(m.edges.len(), 12);
-        assert!(m.edges.iter().all(|e| e.points.len() >= 2));
-        let bb = m.bbox.expect("bbox");
-        assert!(bb.min[0] <= 0.0 + 1e-6 && bb.max[0] >= 20.0 - 1e-6);
-        // Every index addresses a vertex that exists.
+        assert!(m.edges.iter().all(|e| e.points.len() == 2 && !e.smooth));
+        let bb = &m.fields["bbox"];
+        assert_eq!(bb["min"][0], 0.0);
+        assert_eq!(bb["max"][0], 20.0);
         let n = (m.positions.len() / 3) as u32;
         assert!(m.indices.iter().all(|&i| i < n));
-        // Serialises with the camelCase names the frontend reads.
-        let json = serde_json::to_value(&m).unwrap();
-        assert!(json.get("faceIds").is_some() && json.get("faceCount").is_some());
+        let normals = m.normals.as_ref().expect("full quality carries normals");
+        assert_eq!(normals.len(), m.positions.len());
+        let keys: Vec<&str> = m.fields.keys().map(String::as_str).collect();
+        assert_eq!(
+            keys,
+            [
+                "id",
+                "name",
+                "etag",
+                "positions",
+                "indices",
+                "faceIds",
+                "faceOwners",
+                "edges",
+                "faceCount",
+                "bbox",
+                "normals"
+            ]
+        );
+        assert_eq!(
+            m.fields["faceOwners"],
+            serde_json::json!([null, null, null, null, null, null])
+        );
+        let json = m.to_json();
+        assert!(json.get("faceIds").is_some() && json.get("normals").is_some());
+    }
+
+    #[test]
+    fn coarse_profile_leaves_normals_out() {
+        let b = box_20_20_10();
+        let m = mesh::body_payload(&b, "b1", "Body1", 0.1, mesh::viewport_profile(1200));
+        assert!(m.normals.is_none());
+        assert!(!m.fields.contains_key("normals"));
+    }
+
+    #[test]
+    fn etag_is_stable_and_stubs_a_known_body() {
+        let a = box_20_20_10();
+        let c = Shape::sphere(5.0).build();
+        let bodies = [
+            mesh::MeshBody {
+                id: "a".into(),
+                name: "A".into(),
+                shape: Some(&a),
+                node_ref: Some(serde_json::json!("n1")),
+                ..Default::default()
+            },
+            mesh::MeshBody {
+                id: "c".into(),
+                name: "C".into(),
+                shape: Some(&c),
+                ..Default::default()
+            },
+            mesh::MeshBody {
+                id: "empty".into(),
+                name: "Empty".into(),
+                ..Default::default()
+            },
+        ];
+        let first = mesh::mesh_result(&bodies, 0.1, &serde_json::Map::new());
+        assert_eq!(first.bodies.len(), 2);
+        let tag = first.bodies[0].fields()["etag"].clone();
+        assert_eq!(tag.as_str().map(str::len), Some(32));
+        assert_eq!(
+            first.fields.keys().collect::<Vec<_>>(),
+            ["protocol", "bodies", "bbox"]
+        );
+        let min_x = first.fields["bbox"]["min"][0].as_f64().unwrap();
+        assert!((min_x + 5.0).abs() < 1e-2, "{min_x}");
+        assert_eq!(first.fields["bbox"]["max"][0], 20.0);
+
+        let mut known = serde_json::Map::new();
+        known.insert("a".into(), tag.clone());
+        let second = mesh::mesh_result(&bodies, 0.1, &known);
+        match &second.bodies[0] {
+            fundacad_protocol::WireBody::Stub(m) => {
+                assert_eq!(m["etag"], tag);
+                assert_eq!(
+                    m.keys().collect::<Vec<_>>(),
+                    ["id", "name", "etag", "nodeRef", "unchanged"]
+                );
+            }
+            other => panic!("expected a stub, got {other:?}"),
+        }
+        assert!(matches!(
+            second.bodies[1],
+            fundacad_protocol::WireBody::Full(_)
+        ));
+        // A content etag: the sphere meshed finer is a new payload, while a box
+        // at any tolerance is the same twelve triangles and stays a stub.
+        known.insert("c".into(), first.bodies[1].fields()["etag"].clone());
+        let finer = mesh::mesh_result(&bodies, 0.05, &known);
+        assert!(matches!(
+            finer.bodies[0],
+            fundacad_protocol::WireBody::Stub(_)
+        ));
+        assert!(matches!(
+            finer.bodies[1],
+            fundacad_protocol::WireBody::Full(_)
+        ));
     }
 }
