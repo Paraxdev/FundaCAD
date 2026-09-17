@@ -27,3 +27,10 @@ thiserror = "1"
 zip = { version = "4", default-features = false, features = ["deflate-flate2"] }
 flate2 = "1"
 quick-xml = "0.37"
+# The plugin host (src/plugins, docs/RUST-PIVOT.md 2.3). wasmtime and its WASI
+# are a large tree, so only the engine binaries turn the feature on.
+wasmtime = { version = "48", optional = true, default-features = false, features = ["runtime", "cranelift", "component-model", "std", "parallel-compilation", "anyhow"] }
+wasmtime-wasi = { version = "48", optional = true, default-features = false, features = ["p2"] }
+
+[features]
+plugins = ["dep:wasmtime", "dep:wasmtime-wasi"]

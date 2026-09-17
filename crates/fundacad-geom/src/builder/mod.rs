@@ -95,6 +95,8 @@ pub struct Body {
     pub name: String,
     shape: Shape,
     pub owners: Owners,
+    /// Mesh pass specs a plugin stashed, `plugin_geometry.BODY_KEY`.
+    pub mesh_passes: Vec<Value>,
 }
 
 impl Body {
@@ -140,6 +142,22 @@ impl Ctx {
         n.map_or(Ok(default), |n| self.val(n))
     }
 
+    /// A context outside any document, for geometry a plugin generates.
+    pub fn detached() -> Ctx {
+        Ctx {
+            params: HashMap::new(),
+            datums: IndexMap::new(),
+            sketches: HashMap::new(),
+            bodies: Vec::new(),
+            diagnostics: Vec::new(),
+            hidden_bodies: HashSet::new(),
+            sketch_planes: IndexMap::new(),
+            datum_marks: IndexMap::new(),
+            ids: BodyIds::new(None),
+            next_uid: 0,
+        }
+    }
+
     fn bump(&mut self) -> u64 {
         self.next_uid += 1;
         self.next_uid
@@ -159,6 +177,7 @@ impl Ctx {
             name,
             shape,
             owners: Owners::default(),
+            mesh_passes: Vec::new(),
         });
         self.bodies.len() - 1
     }
@@ -209,6 +228,7 @@ pub struct BuiltBody {
     pub name: String,
     pub shape: Shape,
     pub owners: Owners,
+    pub mesh_passes: Vec<Value>,
 }
 
 pub struct Rebuild {
@@ -229,6 +249,10 @@ pub trait Watch {
     fn feature(&self, _index: usize) {}
     fn cancelled(&self) -> bool {
         false
+    }
+    /// The flag behind `cancelled`, for work that polls it off this thread.
+    fn cancel_token(&self) -> Option<fundacad_protocol::CancelToken> {
+        None
     }
 }
 
@@ -480,7 +504,7 @@ pub fn rebuild(doc: &CadDocument, raw: &Value, watch: &dyn Watch) -> Result<Rebu
             Vec::new()
         };
 
-        let outcome = run_feature(&mut ctx, f, type_name);
+        let outcome = run_feature(&mut ctx, f, type_name, watch);
         let label = label_of(rawf);
         match outcome {
             Ok(Ran::Inactive) => {}
@@ -556,6 +580,7 @@ pub fn rebuild(doc: &CadDocument, raw: &Value, watch: &dyn Watch) -> Result<Rebu
             name: b.name,
             shape: kernel::drop_debris(&b.shape),
             owners: b.owners,
+            mesh_passes: b.mesh_passes,
         })
         .collect();
     Ok(Rebuild {
@@ -574,7 +599,12 @@ enum Ran {
     Inactive,
 }
 
-fn run_feature(ctx: &mut Ctx, f: &Feature, type_name: Option<&str>) -> FResult<Ran> {
+fn run_feature(
+    ctx: &mut Ctx,
+    f: &Feature,
+    type_name: Option<&str>,
+    watch: &dyn Watch,
+) -> FResult<Ran> {
     let Some(t) = type_name else {
         return Err(Fail::Missing("type".into()));
     };
@@ -583,7 +613,16 @@ fn run_feature(ctx: &mut Ctx, f: &Feature, type_name: Option<&str>) -> FResult<R
     }
     match f {
         Feature::Invalid(inv) => Err(invalid_to_fail(&inv.error)),
-        Feature::Unknown(_) => Err(Fail::msg(format!("unknown feature type: {t}"))),
+        #[cfg(feature = "plugins")]
+        Feature::Unknown(raw) => match crate::plugins::run_feature(ctx, t, raw, watch.cancel_token()) {
+            Some(r) => r.map(|()| Ran::Built),
+            None => Err(Fail::msg(format!("unknown feature type: {t}"))),
+        },
+        #[cfg(not(feature = "plugins"))]
+        Feature::Unknown(_) => {
+            let _ = watch;
+            Err(Fail::msg(format!("unknown feature type: {t}")))
+        }
         known => features::dispatch(ctx, known).map(|()| Ran::Built),
     }
 }
