@@ -18,6 +18,7 @@ pub mod b_rep_prim_api;
 pub mod b_rep_tools;
 pub mod b_rep_tools_history;
 pub mod bin_tools;
+pub mod blend_ops;
 pub mod builder_ops;
 pub mod draft_angle;
 pub mod feature_ops;
