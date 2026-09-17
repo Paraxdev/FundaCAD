@@ -173,6 +173,16 @@ impl MeshAccess {
         ffi::mesh_access_edge_brep_range(m, e, &mut a, &mut b).then_some((a, b))
     }
 
+    /// Whether the edge's two ancestor faces share a tangent plane along it,
+    /// within `cos_tol`. One call so the pcurve and surface adaptors are built
+    /// once for all three samples, which dominates the cost on an import.
+    pub fn edge_smooth(&self, edge: usize, cos_tol: f64) -> bool {
+        let Some((m, e)) = self.edge_ok(edge) else {
+            return false;
+        };
+        ffi::mesh_access_edge_smooth(m, e, cos_tol) == 1
+    }
+
     /// The unnormalised `du x dv` of the `ancestor`-th face at edge parameter `t`.
     pub fn edge_face_normal(&self, edge: usize, ancestor: usize, t: f64) -> Option<[f64; 3]> {
         let (m, e) = self.edge_ok(edge)?;

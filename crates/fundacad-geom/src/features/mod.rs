@@ -28,6 +28,10 @@ use crate::builder::{Ctx, FResult, Fail};
 
 /// `_FEATURE_HANDLERS`, for the types this engine builds so far.
 pub fn dispatch(ctx: &mut Ctx, f: &Feature) -> FResult {
+    crate::bench::phase_named(f.type_name().unwrap_or("feature"), || handle(ctx, f))
+}
+
+fn handle(ctx: &mut Ctx, f: &Feature) -> FResult {
     match f {
         Feature::Box(b) => primitives::make_box(ctx, b),
         Feature::Cylinder(c) => primitives::cylinder(ctx, c),

@@ -27,6 +27,9 @@ thiserror = "1"
 zip = { version = "4", default-features = false, features = ["deflate-flate2"] }
 flate2 = "1"
 quick-xml = "0.37"
+# Deterministic data parallelism: every parallel pass collects by index and is
+# assembled in the serial order, so a reply is byte identical either way.
+rayon = "1"
 fontdb = "0.24.0"
 ttf-parser = "0.25.1"
 # The plugin host (src/plugins, docs/RUST-PIVOT.md 2.3). wasmtime and its WASI

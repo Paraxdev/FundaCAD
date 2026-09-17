@@ -701,7 +701,7 @@ impl Shape {
 
     pub fn write_brep_bin(&self, path: impl AsRef<Path>) -> Result<(), Error> {
         let success =
-            ffi::bin_tools::write(&self.inner, path.as_ref().to_string_lossy().to_string());
+            ffi::bin_tools::write_bin(&self.inner, path.as_ref().to_string_lossy().to_string());
 
         if success {
             Ok(())
@@ -711,7 +711,7 @@ impl Shape {
     }
 
     pub fn read_brep_bin(path: impl AsRef<Path>) -> Result<Self, Error> {
-        let inner = ffi::bin_tools::read(path.as_ref().to_string_lossy().to_string());
+        let inner = ffi::bin_tools::read_bin(path.as_ref().to_string_lossy().to_string());
 
         if inner.is_null() {
             Err(Error::BrepReadFailed)

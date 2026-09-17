@@ -12,6 +12,7 @@
 //! moving a sidecar `*.py` file across; the conversion targets are listed in
 //! the plan.
 
+pub mod bench;
 pub mod builder;
 pub mod cache;
 pub mod export;
@@ -23,6 +24,7 @@ pub mod jobs;
 pub mod kernel;
 pub mod measure;
 pub mod mesh;
+pub mod par;
 #[cfg(feature = "plugins")]
 pub mod plugins;
 pub mod projection;

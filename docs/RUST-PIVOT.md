@@ -486,3 +486,114 @@ deleted in phase 3 the base policy loses them too and the pair becomes one.
 - Building on Windows: use the rustup MSVC toolchain (a MinGW `cargo` earlier
   on PATH picks the MinGW Makefiles generator) and set
   `CMAKE_POLICY_VERSION_MINIMUM=3.5`, CMake 4 refuses OCCT 7.8.1's minimum.
+
+## 8. Performance
+
+The Python engine was one job per process (`ProcessPoolExecutor(max_workers=1)`)
+with OCCT's own thread pool inside BRepMesh and BOPAlgo, and helper processes
+for the payload loop of a large import. The Rust engine keeps the kernel where
+it is and fans the passes above it across cores instead.
+
+**The rule is identical replies.** A reply's bytes depend on body order, face
+order, ids, etags, the error list and the diagnostics, so every parallel pass
+here collects its results by index and is assembled in the serial order. No
+pass sums, hashes or inserts in completion order. Where that could not be
+arranged, the pass stayed serial.
+
+That is checked, not asserted: `bench_suite digest` encodes each document's
+whole binary reply frame and prints a digest of it, and the differential corpus
+plus a 144 body imported assembly give the same digests at
+`FUNDACAD_THREADS=1` as on 32 threads.
+
+### 8.1 The benchmark set
+
+`crates/fundacad-geom/examples/bench_suite.rs`, one stage per run, one JSON
+line out (`cargo run --release -p fundacad-geom --example bench_suite -- ...`):
+
+| Stage | What it measures |
+|---|---|
+| `corpus <corpus_engines.json>` | rebuild and mesh every differential document |
+| `doc <file.funda>` | one document cold, its mesh, and an unchanged warm rebuild |
+| `import <file.step>` | import, rebuild, the payload loop, the binary frame and an STL and 3MF export, the shape of `sidecar/tools/bench_import.py` |
+| `export <file.funda> [formats]` | the writers on their own |
+| `faces <document>` | face bands and the body payload per shape |
+| `smooth <document\|file.step>` | the batched smooth edge test against the per sample walk it replaced, edge by edge |
+| `digest <document\|corpus.json\|file.step>` | the whole reply frame as a digest, to compare a serial run with a parallel one |
+
+`FUNDACAD_BENCH_PHASES=1` adds a phase table (`crate::bench`), the Rust side of
+`bench_import.py`'s `_timed`. `FUNDACAD_THREADS` caps both the engine's rayon
+pool and OCCT's, the sidecar's `VERXA_THREADS`.
+
+The gates double as benchmarks: `fundacad-engine fillet-eval` over the 500 case
+corpus and `select-eval` over the 220 case one.
+
+### 8.2 What runs in parallel
+
+- **The payload loop, per body** (`mesh::built_payloads`). Cache hits are read
+  on the calling thread in body order, the misses are meshed elsewhere, the
+  cache is written back in body order. Every body still ticks progress once,
+  whichever tier answered it, which is what the stall watchdog is promised.
+- **Edge polylines, per edge** and **face bands** (adjacency, the surface read
+  and the near pair search) within one body.
+- **Export tessellation, per body**, a batch at a time so the triangle budget
+  still refuses at the body that passes it, with the same count in the message.
+
+An assembly places one product many times and a placed copy keeps the product's
+`TShape`, so two threads meshing two placements would write one triangulation.
+`par::share_groups` unions the bodies that share a face and runs each group on
+one thread, in body order; the groups run beside each other.
+
+### 8.3 What stayed serial, and why
+
+- **The timeline.** A feature reads the bodies the one before it left.
+- **`fuse_cells` in a pattern.** The cells are fused one at a time onto the
+  growing body, which is what the Python engine does; a balanced tree would
+  give a different face order, so different etags and selectors.
+- **The section blend** (`blend_section.hxx`), the corpus's hot spot at about
+  14 s of a 25 s corpus rebuild. It is a chain of dependent kernel steps
+  (sections, sweep, boolean, then solid classification to verify), and its cost
+  is OCCT's.
+- **The STEP reader.** `STEPCAFControl_Reader` is one parse of one file and is
+  not thread safe. It is the largest single number left in an import.
+
+One copy is still left on the reply path, and is left on purpose. The
+supervisor reads a frame into a `Vec` (`stdio::read_message_limited`) and
+`engine.rs`'s `deliver` then copies the whole frame again into a second `Vec`
+only to put the one byte of message kind in front of it. On the 38 MiB frame a
+144 body assembly produces that is a few milliseconds, the same order as
+encoding the frame at all. Removing it means the reader allocating the kind
+byte's slot up front and `Message` carrying that layout, which changes the type
+the Python protocol suites drive; not worth it for the size of the win.
+
+### 8.4 GPU offload: evaluated, not taken
+
+Stage by stage:
+
+- **Tessellation.** BRepMesh walks B-rep topology and refines a 2D Delaunay per
+  face against a tolerance. Irregular control flow over a C++ object graph, and
+  the only way to move it is to write a new mesher, whose triangles would not be
+  OCCT's. Parity ends there.
+- **Mesh post processing** (true normals, the seam weld, `display_face`).
+  Measured at 0.15 s of a 39 s import. The upload and readback would cost more
+  than the work.
+- **Face bands.** The O(n squared) screen is a bounding box broad phase a GPU
+  would like, but the exact test is `BRepExtrema_DistShapeShape` on the CPU, and
+  after the fan out the whole pass is under two seconds.
+- **Booleans and blends.** Exact B-rep intersection, sequential by nature.
+- **Displacement mesh passes** (the Texture plugin, not ported yet) are the one
+  genuinely GPU shaped stage: a procedural field evaluated over millions of
+  vertices with no topology. But a displaced mesh feeds the export and the
+  etag, and GPU float results are not reproducible across vendors, drivers or
+  shader compilers (contraction, fast math, different transcendental rounding).
+  A model would export differently on two machines.
+
+Cost: wgpu and naga are around sixty crates, and a GPU path needs a CPU
+fallback anyway for headless CI, virtual machines and driver loss. Two paths
+that must agree bit for bit is the opposite of the rule this section opens
+with.
+
+**Recommendation: no GPU in the engine.** The time that is left is OCCT's (the
+STEP read, BRepMesh, the section blend), none of it GPU shaped, and everything
+above OCCT is now either parallel or under a second. The GPU the product
+already uses is three.js in the viewport, which is where anything purely visual
+belongs.
