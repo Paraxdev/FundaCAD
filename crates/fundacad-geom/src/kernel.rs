@@ -4,6 +4,7 @@
 use cxx::UniquePtr;
 use opencascade::primitives::Shape;
 use opencascade_sys::builder_ops as ffi;
+use opencascade_sys::feature_ops as fo;
 use opencascade_sys::topo_ds::TopoDS_Shape;
 
 /// An OpenCASCADE exception, by class name (`StdFail_NotDone`, ...).
@@ -449,4 +450,30 @@ pub fn revolve(s: &Shape, origin: [f64; 3], dir: [f64; 3], angle_deg: f64) -> KR
         dir[2],
         angle_deg,
     ))
+}
+
+/// build123d `Face(Wire.make_polygon(pts, close=True))`.
+pub fn polygon_face(points: &[[f64; 3]]) -> KResult<Shape> {
+    let flat: Vec<f64> = points.iter().flatten().copied().collect();
+    wrap(fo::fo_polygon_face(&flat))
+}
+
+pub fn distance_to_point(s: &Shape, p: [f64; 3]) -> Option<f64> {
+    let d = fo::fo_distance_to_point(s.raw(), p[0], p[1], p[2]);
+    (d >= 0.0).then_some(d)
+}
+
+pub fn length(s: &Shape) -> f64 {
+    fo::fo_length(s.raw())
+}
+
+/// build123d `loft(sections)`, smooth.
+pub fn loft(sections: &[Shape]) -> KResult<Shape> {
+    let c = compound(sections);
+    wrap(fo::fo_loft(c.raw(), false))
+}
+
+/// build123d `sweep` with `Transition.RIGHT` and no Frenet frame.
+pub fn sweep(profile: &Shape, path: &Shape) -> KResult<Shape> {
+    wrap(fo::fo_sweep(profile.raw(), path.raw()))
 }
