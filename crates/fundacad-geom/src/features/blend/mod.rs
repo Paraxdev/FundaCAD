@@ -7,7 +7,7 @@
 //! sentence that says whether a smaller size would have built.
 
 pub mod eval;
-mod ops;
+pub(crate) mod ops;
 pub mod overlap;
 
 use fundacad_core::schema::{Chamfer, Fillet, OneOrMany, Selector};

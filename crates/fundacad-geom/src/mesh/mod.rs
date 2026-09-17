@@ -334,6 +334,71 @@ pub fn mesh_result_cached(
     mesh_result_full(bodies, tolerance, known, cache, &mut |_, _| {})
 }
 
+/// Every body's payload, in body order, `None` where the body has no shape.
+///
+/// The cache is read and written on this thread, in body order, so a cached
+/// run and a fresh one agree; only the bodies that miss are meshed, and those
+/// go to other threads when they own their faces outright (crate::par). The
+/// progress ticks stay 0, 1, ... n-1, what a serial loop reported, so the
+/// watchdog sees the same frames in the same order.
+fn built_payloads(
+    bodies: &[MeshBody<'_>],
+    tolerance: f64,
+    profile: ViewportProfile,
+    cache: &mut dyn PayloadCache,
+    on_body: &mut dyn FnMut(usize, usize),
+) -> Vec<Option<FullBody>> {
+    let total = bodies.len();
+    let mut out: Vec<Option<FullBody>> = Vec::with_capacity(total);
+    let mut misses: Vec<usize> = Vec::new();
+    for (i, body) in bodies.iter().enumerate() {
+        let cached = body
+            .shape
+            .and_then(|_| cache.get(body, tolerance, profile))
+            .map(|payload| with_envelope(body, payload));
+        if cached.is_none() && body.shape.is_some() {
+            misses.push(i);
+        }
+        out.push(cached);
+    }
+
+    let ticked = std::sync::atomic::AtomicUsize::new(0);
+    let tick = std::sync::Mutex::new(on_body);
+    let mesh_one = |k: usize| {
+        let i = misses[k];
+        let body = &bodies[i];
+        let shape = body.shape.expect("a miss has a shape");
+        let began = std::time::Instant::now();
+        let full = crate::bench::phase("body_payload", || {
+            body_payload_for(body, shape, tolerance, profile)
+        });
+        let done = ticked.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if let Ok(mut t) = tick.lock() {
+            t(done, total);
+        }
+        (k, full, began.elapsed())
+    };
+    let mut made: Vec<(usize, FullBody, std::time::Duration)> = if crate::par::worth_it(misses.len())
+    {
+        let shapes: Vec<&Shape> = misses.iter().filter_map(|&i| bodies[i].shape).collect();
+        let groups = crate::bench::phase("share_groups", || crate::par::share_groups(&shapes));
+        let work = crate::par::Shared((&mesh_one, &groups));
+        crate::par::flat_map_indexed(groups.len(), move |g| {
+            let (one, groups) = work.get();
+            groups[g].iter().map(|&k| one(k)).collect()
+        })
+    } else {
+        (0..misses.len()).map(mesh_one).collect()
+    };
+    made.sort_by_key(|(k, _, _)| *k);
+    for (k, full, took) in made {
+        let i = misses[k];
+        cache.put(&bodies[i], tolerance, profile, &strip_envelope(&full), took);
+        out[i] = Some(full);
+    }
+    out
+}
+
 /// The payload loop, over `cache` and reporting each body to `on_body`.
 pub fn mesh_result_full(
     bodies: &[MeshBody<'_>],
@@ -345,21 +410,10 @@ pub fn mesh_result_full(
     let profile = viewport_profile(bodies.len());
     let mut out = Vec::new();
     let mut boxes = Vec::new();
+    let mut built = built_payloads(bodies, tolerance, profile, cache, on_body);
     for (i, body) in bodies.iter().enumerate() {
-        on_body(i, bodies.len());
-        let Some(shape) = body.shape else {
+        let Some(full) = built[i].take() else {
             continue;
-        };
-        let full = match cache.get(body, tolerance, profile) {
-            Some(payload) => with_envelope(body, payload),
-            None => {
-                let began = std::time::Instant::now();
-                let full = crate::bench::phase("body_payload", || {
-                    body_payload_for(body, shape, tolerance, profile)
-                });
-                cache.put(body, tolerance, profile, &strip_envelope(&full), began.elapsed());
-                full
-            }
         };
         boxes.push(full.fields.get("bbox").cloned().unwrap_or(Value::Null));
         let tag = full.fields.get("etag").cloned().unwrap_or(Value::Null);

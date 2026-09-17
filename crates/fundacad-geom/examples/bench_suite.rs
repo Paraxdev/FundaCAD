@@ -211,7 +211,13 @@ fn stage_import(args: &[String]) {
         });
     let root = std::env::temp_dir().join(format!("fundacad-bench-import-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
-    let store = fundacad_geom::import::blobstore::BlobStore::open(&root).expect("a blob store");
+    // The import FEATURE reads the blob back from the default root, so the
+    // bench store has to be that root, not a store opened beside it.
+    std::env::set_var("FUNDACAD_BLOB_DIR", &root);
+    let store = fundacad_geom::import::blobstore::BlobStore::open(
+        fundacad_geom::import::blobstore::default_root(),
+    )
+    .expect("a blob store");
 
     let t = Instant::now();
     let result = fundacad_geom::import::import_geometry(path, &fmt, &store).expect("the import runs");

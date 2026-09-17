@@ -30,6 +30,7 @@
 #include <gp_Pnt.hxx>
 #include <gp_Pnt2d.hxx>
 #include <gp_Vec.hxx>
+#include <cmath>
 #include <memory>
 #include <sstream>
 #include <vector>
@@ -303,6 +304,51 @@ inline bool mesh_access_edge_deflection(const MeshAccess &m, int32_t edge, doubl
     return true;
   } catch (...) {
     return false;
+  }
+}
+
+// _meets_smoothly of sidecar/tessellate.py, whole: whether the two ancestor
+// faces share a tangent plane along the edge, sampled at the middle first so a
+// crease costs one sample. The adaptors are built once for all three samples,
+// which is where this earns its place over the per-sample normal call below.
+// 1 smooth, 0 not, -1 the query raised.
+inline int32_t mesh_access_edge_smooth(const MeshAccess &m, int32_t edge, double cos_tol) {
+  try {
+    const std::vector<TopoDS_Face> &anc = m.edgeAncestors.at(edge);
+    if (anc.size() < 2) {
+      return 0;
+    }
+    const TopoDS_Edge &e = mesh_access_edge(m, edge);
+    BRepAdaptor_Curve2d pcurve[2] = {BRepAdaptor_Curve2d(e, anc[0]), BRepAdaptor_Curve2d(e, anc[1])};
+    BRepAdaptor_Surface surf[2] = {BRepAdaptor_Surface(anc[0]), BRepAdaptor_Surface(anc[1])};
+    double t0 = 0.0, t1 = 0.0;
+    BRep_Tool::Range(e, t0, t1);
+    const double fracs[3] = {0.5, 0.15, 0.85};
+    for (double frac : fracs) {
+      const double t = t0 + (t1 - t0) * frac;
+      double n[2][3];
+      for (int k = 0; k < 2; ++k) {
+        gp_Pnt2d uv = pcurve[k].Value(t);
+        gp_Pnt p;
+        gp_Vec du, dv;
+        surf[k].D1(uv.X(), uv.Y(), p, du, dv);
+        gp_Vec cr = du.Crossed(dv);
+        const double mag = std::sqrt(cr.X() * cr.X() + cr.Y() * cr.Y() + cr.Z() * cr.Z());
+        if (mag < 1e-12) {
+          return 0;
+        }
+        n[k][0] = cr.X() / mag;
+        n[k][1] = cr.Y() / mag;
+        n[k][2] = cr.Z() / mag;
+      }
+      const double d = n[0][0] * n[1][0] + n[0][1] * n[1][1] + n[0][2] * n[1][2];
+      if (std::abs(d) < cos_tol) {
+        return 0;
+      }
+    }
+    return 1;
+  } catch (...) {
+    return -1;
   }
 }
 
