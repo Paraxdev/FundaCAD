@@ -306,12 +306,14 @@ dependencies = [
  "fundacad-protocol",
  "glam",
  "indexmap",
+ "libc",
  "opencascade",
  "opencascade-sys",
  "quick-xml",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
+ "windows-sys 0.59.0",
  "zip",
 ]
 

@@ -116,6 +116,22 @@ impl Body {
     pub fn identity(&self) -> (u64, u64) {
         (self.uid, self.generation)
     }
+
+    /// A body read back from a checkpoint, under a new identity.
+    pub fn restored(id: String, name: String, shape: Shape, owners: Owners, meta: ImportedMeta) -> Body {
+        Body {
+            uid: NEXT_UID.fetch_add(1, Ordering::Relaxed) + 1,
+            generation: NEXT_UID.fetch_add(1, Ordering::Relaxed) + 1,
+            id,
+            name,
+            shape,
+            owners,
+            node_ref: meta.node_ref,
+            face_colors: meta.face_colors,
+            part_color: meta.part_color,
+            intact: meta.intact,
+        }
+    }
 }
 
 /// What the file an import came from says about a body.
