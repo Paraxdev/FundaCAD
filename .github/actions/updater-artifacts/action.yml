@@ -1,0 +1,56 @@
+name: Disable updater artifacts when they could not be trusted
+description: >
+  Turn createUpdaterArtifacts off in a bundle config when there is no signing
+  key, or when the key's public half is not the one the app verifies against.
+  Shared by the beta build and the pre-alpha Rust build, which each have their
+  own bundle config.
+
+inputs:
+  config:
+    description: The bundle config to patch.
+    required: true
+  signing-key:
+    description: The minisign private key, empty on a run that gets no secrets.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    # Dependabot-triggered runs get NO repository secrets, by GitHub's design, so
+    # TAURI_SIGNING_PRIVATE_KEY arrives empty and `tauri build` aborts with "failed
+    # to decode secret key: Missing comment in secret key". That failed the build leg
+    # on all three OSes for every dependency PR while the `test` gate passed, which
+    # reads as "the bump broke the build" when nothing was wrong with the bump.
+    #
+    # Bundle WITHOUT updater artifacts in that case. The point of building a
+    # dependency PR is to prove the bundle still assembles on all three OSes, not to
+    # ship it. Deliberately NOT solved by giving Dependabot the signing key: that key
+    # authorises pushing an update to every tester's machine, and a Dependabot run
+    # executes the install scripts of the very package it just bumped.
+    #
+    # On a normal push the key is present, this is a no-op, and updater artifacts stay
+    # signed, the in-app updater and the release jobs' latest.json depend on that.
+    - name: Disable updater artifacts when they could not be trusted
+      shell: bash
+      env:
+        TAURI_SIGNING_PRIVATE_KEY: ${{ inputs.signing-key }}
+        CONFIG: ${{ inputs.config }}
+      run: |
+        # Upstream's minisign public key, as inherited at the fork point. See
+        # tests/security/updater.test.ts.
+        UPSTREAM_PUBKEY='dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDUwMkY3MDMzN0E1RUREMUYKUldRZjNWNTZNM0F2VU81ZU9YLzBPdDV6UVdkVklPOWg1S01zdU1lWitDMGR6aFg1cmJoZnYrMWIK'
+        pubkey=$(node -p "require('./src-tauri/tauri.conf.json').plugins.updater.pubkey")
+        why=""
+        [ -n "$TAURI_SIGNING_PRIVATE_KEY" ] || why="there is no signing key (expected on Dependabot PRs)"
+        # A signature made with a key whose public half is NOT the one baked
+        # into the app is worse than no signature at all: the build looks
+        # shippable, and every installed copy rejects the update with nothing
+        # said here. Same treatment as a missing key.
+        [ "$pubkey" != "$UPSTREAM_PUBKEY" ] || why="the updater pubkey is still upstream's, so nothing we sign would verify"
+        if [ -z "$why" ]; then
+          echo "signing key present and the pubkey is ours, updater artifacts stay enabled"
+          exit 0
+        fi
+        echo "::warning::No updater artifacts: $why. The installers still build and are still shippable; they just do not update themselves."
+        node -e "const fs=require('fs');const f=process.env.CONFIG;const j=JSON.parse(fs.readFileSync(f));j.bundle.createUpdaterArtifacts=false;fs.writeFileSync(f,JSON.stringify(j,null,2)+'\n')"
