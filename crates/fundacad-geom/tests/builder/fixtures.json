@@ -3107,6 +3107,862 @@
    "errors": []
   }
  },
+ "datum_cylinder_tangent": {
+  "doc": {
+   "features": [
+    {
+     "height": 20,
+     "id": "c",
+     "radius": 12,
+     "type": "cylinder"
+    },
+    {
+     "at": [
+      10,
+      0,
+      0
+     ],
+     "face": {
+      "by": "nearest",
+      "kind": "face",
+      "point": [
+       10,
+       0,
+       0
+      ]
+     },
+     "id": "d1",
+     "plane": {
+      "normal": [
+       1,
+       0,
+       0
+      ],
+      "origin": [
+       10,
+       0,
+       0
+      ],
+      "xdir": [
+       0,
+       0,
+       1
+      ]
+     },
+     "type": "datumPlane"
+    },
+    {
+     "entities": [
+      {
+       "height": 4,
+       "type": "rectangle",
+       "width": 4,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": {
+      "normal": [
+       1,
+       0,
+       0
+      ],
+      "origin": [
+       10,
+       0,
+       0
+      ],
+      "xdir": [
+       0,
+       0,
+       1
+      ]
+     },
+     "planeId": "d1",
+     "type": "sketch"
+    },
+    {
+     "distance": 3,
+     "id": "e",
+     "operation": "new",
+     "sketch": "s",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -12.0,
+      -12.0,
+      -10.0,
+      12.0,
+      12.0,
+      10.0
+     ],
+     "faceOwners": [
+      "c",
+      "c",
+      "c"
+     ],
+     "faces": 3,
+     "id": "body1",
+     "name": "Cylinder",
+     "solids": 1,
+     "volume": 9047.786842338604
+    },
+    {
+     "bbox": [
+      10.0,
+      -2.0,
+      -2.0,
+      13.0,
+      2.0,
+      2.0
+     ],
+     "faceOwners": [
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 6,
+     "id": "body2",
+     "name": "Body2",
+     "solids": 1,
+     "volume": 47.99999999999999
+    }
+   ],
+   "bodyIds": {
+    "c:0": "body1",
+    "e:0": "body2"
+   },
+   "datumPlanes": {
+    "d1": {
+     "normal": [
+      1.0,
+      0.0,
+      0.0
+     ],
+     "origin": [
+      10.0,
+      0.0,
+      0.0
+     ],
+     "xdir": [
+      0.0,
+      0.0,
+      1.0
+     ]
+    }
+   },
+   "diagnostics": [
+    {
+     "feature_id": "d1",
+     "kind": "face",
+     "reason": "Plane: the face this plane sits on has tilted, so the plane stayed at its saved position. Put it on the face again to follow the new angle."
+    }
+   ],
+   "errors": []
+  }
+ },
+ "datum_face_follows": {
+  "doc": {
+   "features": [
+    {
+     "height": 25,
+     "id": "b",
+     "length": 40,
+     "type": "box",
+     "width": 30
+    },
+    {
+     "face": {
+      "by": "nearest",
+      "kind": "face",
+      "point": [
+       0,
+       0,
+       5
+      ]
+     },
+     "id": "d1",
+     "offset": 0,
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       5
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "datumPlane"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -15.0,
+      -12.5,
+      20.0,
+      15.0,
+      12.5
+     ],
+     "faceOwners": [
+      "b",
+      "b",
+      "b",
+      "b",
+      "b",
+      "b"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 30000.0
+    }
+   ],
+   "bodyIds": {
+    "b:0": "body1"
+   },
+   "datumPlanes": {
+    "d1": {
+     "normal": [
+      0.0,
+      0.0,
+      1.0
+     ],
+     "origin": [
+      0.0,
+      0.0,
+      12.5
+     ],
+     "xdir": [
+      1.0,
+      0.0,
+      -0.0
+     ]
+    }
+   },
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "datum_face_named_plane": {
+  "doc": {
+   "features": [
+    {
+     "height": 20,
+     "id": "b",
+     "length": 40,
+     "type": "box",
+     "width": 30
+    },
+    {
+     "face": {
+      "by": "nearest",
+      "kind": "face",
+      "point": [
+       0,
+       0,
+       5
+      ]
+     },
+     "id": "d1",
+     "plane": "XY",
+     "type": "datumPlane"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -15.0,
+      -10.0,
+      20.0,
+      15.0,
+      10.0
+     ],
+     "faceOwners": [
+      "b",
+      "b",
+      "b",
+      "b",
+      "b",
+      "b"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 24000.0
+    }
+   ],
+   "bodyIds": {
+    "b:0": "body1"
+   },
+   "datumPlanes": {
+    "d1": {
+     "normal": [
+      0.0,
+      0.0,
+      1.0
+     ],
+     "origin": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "xdir": [
+      1.0,
+      0.0,
+      -0.0
+     ]
+    }
+   },
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "datum_face_offset": {
+  "doc": {
+   "features": [
+    {
+     "height": 25,
+     "id": "b",
+     "length": 40,
+     "type": "box",
+     "width": 30
+    },
+    {
+     "face": {
+      "by": "nearest",
+      "kind": "face",
+      "point": [
+       0,
+       0,
+       5
+      ]
+     },
+     "id": "d1",
+     "offset": 5,
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       5
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "datumPlane"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -15.0,
+      -12.5,
+      20.0,
+      15.0,
+      12.5
+     ],
+     "faceOwners": [
+      "b",
+      "b",
+      "b",
+      "b",
+      "b",
+      "b"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 30000.0
+    }
+   ],
+   "bodyIds": {
+    "b:0": "body1"
+   },
+   "datumPlanes": {
+    "d1": {
+     "normal": [
+      0.0,
+      0.0,
+      1.0
+     ],
+     "origin": [
+      0.0,
+      0.0,
+      17.5
+     ],
+     "xdir": [
+      1.0,
+      0.0,
+      -0.0
+     ]
+    }
+   },
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "datum_face_sketch_follows": {
+  "doc": {
+   "features": [
+    {
+     "height": 25,
+     "id": "b",
+     "length": 40,
+     "type": "box",
+     "width": 30
+    },
+    {
+     "face": {
+      "by": "nearest",
+      "kind": "face",
+      "point": [
+       0,
+       0,
+       5
+      ]
+     },
+     "id": "d1",
+     "offset": 0,
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       5
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "datumPlane"
+    },
+    {
+     "entities": [
+      {
+       "height": 10,
+       "type": "rectangle",
+       "width": 10,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": "d1",
+     "type": "sketch"
+    },
+    {
+     "distance": 5,
+     "id": "e",
+     "operation": "join",
+     "sketch": "s",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -15.0,
+      -12.5,
+      20.0,
+      15.0,
+      17.5
+     ],
+     "faceOwners": [
+      "b",
+      "b",
+      "e",
+      "b",
+      "b",
+      "b",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 11,
+     "id": "body2",
+     "name": "Box",
+     "solids": 1,
+     "volume": 30499.999999999993
+    }
+   ],
+   "bodyIds": {
+    "b:0": "body1",
+    "e:0": "body2"
+   },
+   "datumPlanes": {
+    "d1": {
+     "normal": [
+      0.0,
+      0.0,
+      1.0
+     ],
+     "origin": [
+      0.0,
+      0.0,
+      12.5
+     ],
+     "xdir": [
+      1.0,
+      0.0,
+      -0.0
+     ]
+    }
+   },
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "datum_face_tilted": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "b",
+     "length": 40,
+     "type": "box",
+     "width": 30
+    },
+    {
+     "face": {
+      "by": "nearest",
+      "kind": "face",
+      "point": [
+       0,
+       0,
+       5
+      ]
+     },
+     "id": "d1",
+     "offset": 0,
+     "plane": {
+      "normal": [
+       0.6,
+       0,
+       0.8
+      ],
+      "origin": [
+       0,
+       0,
+       5
+      ],
+      "xdir": [
+       0.8,
+       0,
+       -0.6
+      ]
+     },
+     "type": "datumPlane"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -15.0,
+      -5.0,
+      20.0,
+      15.0,
+      5.0
+     ],
+     "faceOwners": [
+      "b",
+      "b",
+      "b",
+      "b",
+      "b",
+      "b"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 12000.0
+    }
+   ],
+   "bodyIds": {
+    "b:0": "body1"
+   },
+   "datumPlanes": {
+    "d1": {
+     "normal": [
+      0.6,
+      0.0,
+      0.8
+     ],
+     "origin": [
+      0.0,
+      0.0,
+      5.0
+     ],
+     "xdir": [
+      0.8,
+      0.0,
+      -0.6
+     ]
+    }
+   },
+   "diagnostics": [
+    {
+     "feature_id": "d1",
+     "kind": "face",
+     "reason": "Plane: the face this plane sits on has tilted, so the plane stayed at its saved position. Put it on the face again to follow the new angle."
+    }
+   ],
+   "errors": []
+  }
+ },
+ "datum_face_unchanged": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "b",
+     "length": 40,
+     "type": "box",
+     "width": 30
+    },
+    {
+     "face": {
+      "by": "nearest",
+      "kind": "face",
+      "point": [
+       0,
+       0,
+       5
+      ]
+     },
+     "id": "d1",
+     "offset": 0,
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       5
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "datumPlane"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -15.0,
+      -5.0,
+      20.0,
+      15.0,
+      5.0
+     ],
+     "faceOwners": [
+      "b",
+      "b",
+      "b",
+      "b",
+      "b",
+      "b"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 12000.0
+    }
+   ],
+   "bodyIds": {
+    "b:0": "body1"
+   },
+   "datumPlanes": {
+    "d1": {
+     "normal": [
+      0.0,
+      0.0,
+      1.0
+     ],
+     "origin": [
+      0.0,
+      0.0,
+      5.0
+     ],
+     "xdir": [
+      1.0,
+      0.0,
+      -0.0
+     ]
+    }
+   },
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "datum_face_unresolvable": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "b",
+     "length": 40,
+     "type": "box",
+     "width": 30
+    },
+    {
+     "face": {
+      "by": "match",
+      "fp": {
+       "nope": 1
+      },
+      "kind": "face"
+     },
+     "id": "d1",
+     "offset": 0,
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       5
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "datumPlane"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -15.0,
+      -5.0,
+      20.0,
+      15.0,
+      5.0
+     ],
+     "faceOwners": [
+      "b",
+      "b",
+      "b",
+      "b",
+      "b",
+      "b"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 12000.0
+    }
+   ],
+   "bodyIds": {
+    "b:0": "body1"
+   },
+   "datumPlanes": {
+    "d1": {
+     "normal": [
+      0.0,
+      0.0,
+      1.0
+     ],
+     "origin": [
+      0.0,
+      0.0,
+      5.0
+     ],
+     "xdir": [
+      1.0,
+      0.0,
+      -0.0
+     ]
+    }
+   },
+   "diagnostics": [
+    {
+     "feature_id": "d1",
+     "kind": "face",
+     "reason": "Plane: the face this plane sits on is gone, so the plane stayed at its saved position. Re-pick the face."
+    }
+   ],
+   "errors": []
+  }
+ },
  "datum_named_xz": {
   "doc": {
    "features": [
@@ -19148,6 +20004,585 @@
    ],
    "bodyIds": {
     "e:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "sketch_face_gone": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "b",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "entities": [
+      {
+       "height": 4,
+       "type": "rectangle",
+       "width": 4,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "face": {
+      "by": "match",
+      "fp": {
+       "nope": 1
+      },
+      "kind": "face"
+     },
+     "id": "s",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       50
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "distance": 2,
+     "id": "e",
+     "operation": "new",
+     "sketch": "s",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -5.0,
+      -5.0,
+      5.0,
+      5.0,
+      5.0
+     ],
+     "faceOwners": [
+      "b",
+      "b",
+      "b",
+      "b",
+      "b",
+      "b"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 999.9999999999998
+    },
+    {
+     "bbox": [
+      -2.0,
+      -2.0,
+      50.0,
+      2.0,
+      2.0,
+      52.0
+     ],
+     "faceOwners": [
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 6,
+     "id": "body2",
+     "name": "Body2",
+     "solids": 1,
+     "volume": 31.999999999999993
+    }
+   ],
+   "bodyIds": {
+    "b:0": "body1",
+    "e:0": "body2"
+   },
+   "datumPlanes": {},
+   "diagnostics": [
+    {
+     "feature_id": "s",
+     "kind": "face",
+     "reason": "Sketch: the face this sketch sits on is gone, so the sketch stayed at its saved position. Re-pick the face."
+    }
+   ],
+   "errors": []
+  }
+ },
+ "sketch_face_lowered": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 5,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "at": [
+      3,
+      2,
+      10
+     ],
+     "entities": [
+      {
+       "radius": 8,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "face": {
+      "by": "nearest",
+      "kind": "face",
+      "point": [
+       3,
+       2,
+       10
+      ]
+     },
+     "id": "s2",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       10
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "distance": -5,
+     "id": "e2",
+     "operation": "cut",
+     "regions": [
+      [
+       0,
+       0,
+       0
+      ]
+     ],
+     "sketch": "s2",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      5.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "e2",
+      "e2",
+      "e1",
+      "e2"
+     ],
+     "faces": 7,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 6994.690350851264
+    }
+   ],
+   "bodyIds": {
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "sketch_face_raised": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "at": [
+      3,
+      2,
+      10
+     ],
+     "entities": [
+      {
+       "radius": 8,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "face": {
+      "by": "nearest",
+      "kind": "face",
+      "point": [
+       3,
+       2,
+       10
+      ]
+     },
+     "id": "s2",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       10
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "distance": -5,
+     "id": "e2",
+     "operation": "cut",
+     "regions": [
+      [
+       0,
+       0,
+       0
+      ]
+     ],
+     "sketch": "s2",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e2",
+      "e1",
+      "e2",
+      "e2"
+     ],
+     "faces": 8,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 30994.690350851262
+    }
+   ],
+   "bodyIds": {
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "sketch_face_rotated_xdir": {
+  "doc": {
+   "features": [
+    {
+     "height": 20,
+     "id": "b",
+     "length": 40,
+     "type": "box",
+     "width": 40
+    },
+    {
+     "entities": [
+      {
+       "height": 2,
+       "type": "rectangle",
+       "width": 10,
+       "x": 5,
+       "y": 0
+      }
+     ],
+     "face": {
+      "by": "nearest",
+      "kind": "face",
+      "point": [
+       0,
+       0,
+       5
+      ]
+     },
+     "id": "s",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       5
+      ],
+      "xdir": [
+       0,
+       1,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "distance": 4,
+     "id": "e",
+     "operation": "join",
+     "sketch": "s",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      -10.0,
+      20.0,
+      20.0,
+      14.0
+     ],
+     "faceOwners": [
+      "b",
+      "b",
+      "e",
+      "b",
+      "b",
+      "b",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 11,
+     "id": "body2",
+     "name": "Box",
+     "solids": 1,
+     "volume": 32079.999999999993
+    }
+   ],
+   "bodyIds": {
+    "b:0": "body1",
+    "e:0": "body2"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "sketch_face_unmoved": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 10,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "at": [
+      3,
+      2,
+      10
+     ],
+     "entities": [
+      {
+       "radius": 8,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "face": {
+      "by": "nearest",
+      "kind": "face",
+      "point": [
+       3,
+       2,
+       10
+      ]
+     },
+     "id": "s2",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       10
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "distance": -5,
+     "id": "e2",
+     "operation": "cut",
+     "regions": [
+      [
+       0,
+       0,
+       0
+      ]
+     ],
+     "sketch": "s2",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      10.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e2",
+      "e1",
+      "e2",
+      "e2"
+     ],
+     "faces": 8,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 14994.690350851264
+    }
+   ],
+   "bodyIds": {
+    "e1:0": "body1"
    },
    "datumPlanes": {},
    "diagnostics": [],

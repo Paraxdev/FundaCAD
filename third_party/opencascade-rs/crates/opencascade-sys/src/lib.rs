@@ -51,6 +51,8 @@ pub mod shape_analysis;
 pub mod shape_fix;
 pub mod shape_io;
 pub mod shape_upgrade;
+pub mod sketch_ops;
+pub mod joint_ops;
 pub mod solid_ops;
 pub mod standard;
 pub mod step_control;

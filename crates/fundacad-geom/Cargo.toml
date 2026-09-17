@@ -27,3 +27,5 @@ thiserror = "1"
 zip = { version = "4", default-features = false, features = ["deflate-flate2"] }
 flate2 = "1"
 quick-xml = "0.37"
+fontdb = "0.24.0"
+ttf-parser = "0.25.1"

@@ -13,6 +13,7 @@ use std::f64::consts::PI;
 use fundacad_core::schema::{Num, ProjectedCurve, SketchEntity, SketchFeature, SketchPattern};
 use opencascade::primitives::Shape;
 
+use super::face_anchor::{face_anchor_plane, Placement};
 use super::not_ported;
 use crate::builder::plane::{plane_of, PlaneRef};
 use crate::builder::{py_g, Ctx, FResult, Fail, SketchEntry};
@@ -635,9 +636,10 @@ fn fuse_all(faces: &[Shape]) -> FResult<Shape> {
 }
 
 /// `_build_sketch`.
-pub fn build(ctx: &Ctx, f: &SketchFeature) -> FResult<SketchEntry> {
-    let plane_ref = match &f.plane_id {
-        Some(id) if !id.is_empty() => PlaneRef::Name(id),
+pub fn build(ctx: &Ctx, f: &SketchFeature, followed: Option<Placement>) -> FResult<SketchEntry> {
+    let plane_ref = match (&f.plane_id, followed) {
+        (_, Some(p)) => PlaneRef::Record(p.record()),
+        (Some(id), None) if !id.is_empty() => PlaneRef::Name(id),
         _ => PlaneRef::from(&f.plane),
     };
     let plane = plane_of(plane_ref, &ctx.datums)?;
@@ -815,7 +817,11 @@ fn path_wire(edges: &[Shape], plane: &Frame) -> Option<Shape> {
 }
 
 pub fn handle(ctx: &mut Ctx, f: &SketchFeature) -> FResult {
-    let entry = build(ctx, f)?;
+    let followed = face_anchor_plane(ctx, &f.id, f.face.as_ref(), f.at.as_ref(), &f.plane, "Sketch");
+    if let Some(p) = followed {
+        ctx.sketch_planes.insert(f.id.clone(), p.wire());
+    }
+    let entry = build(ctx, f, followed)?;
     ctx.sketches.insert(f.id.clone(), entry);
     Ok(())
 }
