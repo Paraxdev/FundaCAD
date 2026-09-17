@@ -7,6 +7,7 @@
 //! [`Jobs`], so this crate builds and tests without OpenCASCADE.
 
 mod doc_state;
+pub mod live;
 pub mod stdio;
 #[cfg(feature = "ws")]
 pub mod ws;
@@ -109,6 +110,12 @@ pub struct Engine {
     out: Arc<dyn Outbox>,
     next_client: AtomicU64,
     never_closed: Arc<AtomicBool>,
+    live: Mutex<live::LiveSession>,
+}
+
+/// server.py `_conn_id`: the connection is the live session identity.
+fn conn_id(client: u64) -> String {
+    format!("c{client:x}")
 }
 
 const PROGRESS_EVERY: Duration = Duration::from_secs(1);
@@ -136,6 +143,7 @@ impl Engine {
             out,
             next_client: AtomicU64::new(1),
             never_closed: Arc::new(AtomicBool::new(false)),
+            live: Mutex::new(live::LiveSession::monotonic()),
         }
     }
 
@@ -188,6 +196,13 @@ impl Engine {
                 reply(envelope::cancel_ack(&id, hit));
             }
             Some("ping") => reply(envelope::ok(&id, &json!({ "pong": true }))),
+            Some(op) if live::is_session_op(op) => {
+                let mut session = self.live.lock().unwrap_or_else(|p| p.into_inner());
+                match live::session_reply(&mut session, &conn_id(client), op, &req) {
+                    Ok(res) => reply(envelope::ok(&id, &res)),
+                    Err(message) => reply(envelope::err(&id, &message, None)),
+                }
+            }
             _ => {
                 let queued = Queued {
                     req,
@@ -234,6 +249,10 @@ impl Drop for Client {
     fn drop(&mut self) {
         self.closed.store(true, Ordering::SeqCst);
         self.engine.cancel(self.id, None);
+        let who = conn_id(self.id);
+        let mut session = self.engine.live.lock().unwrap_or_else(|p| p.into_inner());
+        session.release(&who);
+        session.leave(&who);
     }
 }
 
