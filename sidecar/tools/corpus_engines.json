@@ -440,6 +440,24 @@
       {"id": "q", "type": "sketch", "plane": "XZ", "entities": [
         {"type": "line", "x1": -30, "y1": 5, "x2": 30, "y2": 5}]},
       {"id": "w", "type": "sweep", "profile": "p", "path": "q", "operation": "cut"}
+    ]}},
+    {"name": "import_assembly_nested", "importFixture": {"feature": "im", "path": "fixtures/asm_nested.step"}, "document": {"parameters": {}, "features": [
+      {"id": "im", "type": "import", "format": "step"}
+    ]}},
+    {"name": "import_multisolid_names", "importFixture": {"feature": "im", "path": "fixtures/asm_multisolid.step"}, "document": {"parameters": {}, "features": [
+      {"id": "im", "type": "import", "format": "step"}
+    ]}},
+    {"name": "import_empty_product", "importFixture": {"feature": "im", "path": "fixtures/asm_empty_product.step"}, "document": {"parameters": {}, "features": [
+      {"id": "im", "type": "import", "format": "step"}
+    ]}},
+    {"name": "import_face_colors", "importFixture": {"feature": "im", "path": "fixtures/asm_face_colors.step"}, "document": {"parameters": {}, "features": [
+      {"id": "im", "type": "import", "format": "step"}
+    ]}},
+    {"name": "import_flat", "importFixture": {"feature": "im", "path": "fixtures/asm_flat.step"}, "document": {"parameters": {}, "features": [
+      {"id": "im", "type": "import", "format": "step"}
+    ]}},
+    {"name": "import_nested_collapsed", "importFixture": {"feature": "im", "path": "fixtures/asm_nested.step"}, "document": {"parameters": {}, "features": [
+      {"id": "im", "type": "import", "format": "step", "explode": false}
     ]}}
   ]
 }

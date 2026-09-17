@@ -66,19 +66,37 @@ struct Registry {
 
 fn registry() -> MutexGuard<'static, Registry> {
     static REG: OnceLock<Mutex<Registry>> = OnceLock::new();
-    let m = REG.get_or_init(Mutex::default);
-    let mut g = m.lock().unwrap_or_else(|e| e.into_inner());
-    if !g.discovered {
-        g.discovered = true;
-        g.entries = discover()
-            .into_iter()
-            .map(|declared| Entry {
-                declared,
-                loaded: Loaded::NotYet,
-            })
-            .collect();
+    REG.get_or_init(Mutex::default)
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+}
+
+/// Read every installed plugin's manifest, `plugin_geometry.discover`.
+///
+/// Explicit, and only the server startup path calls it, exactly as the Python
+/// engine does: a bare `builder::rebuild` has no plugins at all and a feature
+/// type nothing built in owns is "unknown feature type", the same sentence the
+/// Python builder gives on its own. Idempotent.
+pub fn load() {
+    let mut reg = registry();
+    if reg.discovered {
+        return;
     }
-    g
+    reg.discovered = true;
+    reg.entries = discover()
+        .into_iter()
+        .map(|declared| Entry {
+            declared,
+            loaded: Loaded::NotYet,
+        })
+        .collect();
+}
+
+/// Drop everything loaded. Tests only.
+pub fn reset_for_tests() {
+    let mut reg = registry();
+    reg.entries.clear();
+    reg.discovered = false;
 }
 
 /// `plugin_roots`: FUNDACAD_PLUGIN_DIR, then a checkout's own plugins/.
@@ -173,7 +191,7 @@ fn component_for(reg: &mut Registry, claim: Claim, name: &str) -> Result<usize, 
     };
     let entry = &mut reg.entries[i];
     if matches!(entry.loaded, Loaded::NotYet) {
-        entry.loaded = load(&entry.declared);
+        entry.loaded = compile(&entry.declared);
     }
     match &entry.loaded {
         Loaded::Ready(c) => {
@@ -199,7 +217,7 @@ enum Missing {
     NotRegistered(String),
 }
 
-fn load(d: &Declared) -> Loaded {
+fn compile(d: &Declared) -> Loaded {
     let Some(rel) = &d.wasm else {
         return Loaded::Broken(format!(
             "its manifest names no {MANIFEST_WASM}, so the Rust engine has no geometry to run"
@@ -388,7 +406,7 @@ pub fn pass_cache_key(specs: &[Value]) -> Option<String> {
 fn pass_owner(reg: &mut Registry, pass: &str) -> Option<usize> {
     for i in 0..reg.entries.len() {
         if matches!(reg.entries[i].loaded, Loaded::NotYet) && reg.entries[i].declared.wasm.is_some() {
-            let loaded = load(&reg.entries[i].declared);
+            let loaded = compile(&reg.entries[i].declared);
             reg.entries[i].loaded = loaded;
         }
         if let Loaded::Ready(c) = &reg.entries[i].loaded {

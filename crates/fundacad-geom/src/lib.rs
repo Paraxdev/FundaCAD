@@ -13,17 +13,22 @@
 //! the plan.
 
 pub mod builder;
+pub mod cache;
 pub mod export;
+pub mod faces;
 pub mod features;
 pub mod import;
+pub mod inspect;
 pub mod jobs;
 pub mod kernel;
 pub mod measure;
 pub mod mesh;
 #[cfg(feature = "plugins")]
 pub mod plugins;
+pub mod projection;
 pub mod reply;
 pub mod select;
+pub mod topo;
 
 pub use opencascade;
 

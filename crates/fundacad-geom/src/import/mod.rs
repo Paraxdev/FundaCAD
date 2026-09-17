@@ -183,6 +183,7 @@ pub fn import_geometry(path: &str, fmt: &str, store: &BlobStore) -> Result<Map<S
             cap / (1024 * 1024)
         ));
     }
+    fundacad_engine::sysmem::refuse_if_memory_is_short(size, None)?;
     let imported = match fmt.as_str() {
         "step" | "stp" => read_step(p)?,
         "brep" => Imported {
@@ -254,5 +255,19 @@ pub fn import_result(req: &Map<String, Value>) -> JobResult {
     match result {
         Ok(m) => JobResult::Json(m),
         Err(message) => error_result(&message),
+    }
+}
+
+/// The `migrateGeometry` op.
+pub fn migrate_result(req: &Map<String, Value>) -> JobResult {
+    let items = req.get("items").and_then(Value::as_array).cloned().unwrap_or_default();
+    match BlobStore::open(blobstore::default_root()) {
+        Ok(store) => match crate::features::import::migrate_geometry(&items, &store) {
+            Value::Object(m) => JobResult::Json(m),
+            _ => error_result("migrateGeometry produced no result"),
+        },
+        Err(e) => error_result(&format!(
+            "could not store the imported geometry ({e}). Check free disk space and permissions on the FundaCAD data directory."
+        )),
     }
 }
