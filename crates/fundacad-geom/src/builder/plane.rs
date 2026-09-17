@@ -2,13 +2,13 @@
 
 use fundacad_core::schema::{PlaneDef, PlaneSpec, Real};
 use indexmap::IndexMap;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use super::{FResult, Fail};
 use crate::kernel::Frame;
 
 /// A registered datum plane, the `{origin, xdir, normal}` the result reports.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct PlaneRecord {
     pub origin: [f64; 3],
     pub xdir: [f64; 3],

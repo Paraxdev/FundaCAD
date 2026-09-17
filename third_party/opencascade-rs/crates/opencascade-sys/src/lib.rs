@@ -27,6 +27,7 @@ pub mod bnd;
 pub mod boolean_algo;
 pub mod bop_algo;
 pub mod g_prop;
+pub mod geom_cache;
 pub mod gc;
 pub mod gc_pnts;
 pub mod geom;

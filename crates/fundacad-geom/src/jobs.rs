@@ -6,6 +6,7 @@ use fundacad_protocol::JobResult;
 use serde_json::{Map, Value};
 
 use crate::builder::{self, Watch};
+use crate::cache::{self, RebuildCache};
 use crate::reply::mesh_result;
 
 #[derive(Default)]
@@ -20,28 +21,48 @@ impl Watch for EngineWatch<'_> {
             .feature(i64::try_from(index).unwrap_or(i64::MAX));
     }
 
-    fn meshing(&self, done: usize, total: usize) {
-        let n = |v: usize| i64::try_from(v).unwrap_or(i64::MAX);
-        self.0.progress.meshing(n(done), n(total));
-    }
-
     fn cancelled(&self) -> bool {
         self.0.cancel.is_cancelled()
     }
 }
 
-/// server.py `_rebuild_job`.
+/// server.py `_rebuild_job`, without the caches.
 pub fn rebuild_result(
     doc: &Value,
     tolerance: f64,
     known: &Map<String, Value>,
     watch: &dyn Watch,
 ) -> JobResult {
+    rebuild_with(doc, tolerance, known, watch, None)
+}
+
+/// server.py `_rebuild_job` over `rebuild_cached`.
+pub fn rebuild_result_cached(
+    doc: &Value,
+    tolerance: f64,
+    known: &Map<String, Value>,
+    watch: &dyn Watch,
+    cache: &mut RebuildCache,
+) -> JobResult {
+    rebuild_with(doc, tolerance, known, watch, Some(cache))
+}
+
+fn rebuild_with(
+    doc: &Value,
+    tolerance: f64,
+    known: &Map<String, Value>,
+    watch: &dyn Watch,
+    mut cache: Option<&mut RebuildCache>,
+) -> JobResult {
     let typed: CadDocument = match serde_json::from_value(doc.clone()) {
         Ok(d) => d,
         Err(e) => return error_result(&format!("the document does not parse: {e}")),
     };
-    let Ok(r) = builder::rebuild(&typed, doc, watch) else {
+    let built = match cache.as_deref_mut() {
+        Some(c) => c.rebuild(&typed, doc, watch),
+        None => builder::rebuild(&typed, doc, watch),
+    };
+    let Ok(r) = built else {
         return error_result("cancelled");
     };
     if r.bodies.is_empty() {
@@ -53,7 +74,13 @@ pub fn rebuild_result(
         return JobResult::Json(builder::result_fields(&typed, &r));
     }
     let fields = builder::result_fields(&typed, &r);
-    match mesh_result(&r.bodies, tolerance, known, watch) {
+    let meshed = match cache {
+        Some(c) => JobResult::Mesh(c.mesh(&r, tolerance, known, &mut |done, total| {
+            watch.meshing(done, total)
+        })),
+        None => mesh_result(&r.bodies, tolerance, known, watch),
+    };
+    match meshed {
         JobResult::Mesh(mut mesh) => {
             let bbox = mesh.fields.get("bbox").cloned().unwrap_or(Value::Null);
             let mut merged = fields;
@@ -171,16 +198,21 @@ impl Jobs for GeomJobs {
         fresh: bool,
         ctx: &JobContext,
     ) -> JobResult {
+        let mut cache = cache::global().lock().unwrap_or_else(|p| p.into_inner());
+        if fresh {
+            cache.purge(doc);
+        }
         // server.py `_compute_all_job` rebuilds with no known etags, every body full.
         let none = Map::new();
         let known = if fresh { &none } else { known };
-        rebuild_result(doc, tolerance, known, &EngineWatch(ctx))
+        rebuild_result_cached(doc, tolerance, known, &EngineWatch(ctx), &mut cache)
     }
 
     fn run(&mut self, op: &str, req: &Map<String, Value>, ctx: &JobContext) -> JobResult {
         match op {
             "export" => crate::export::export_result(req, &EngineWatch(ctx)),
             "import" => crate::import::import_result(req),
+            "migrateGeometry" => crate::import::migrate_result(req),
             "inspect" => crate::inspect::inspect_result(req, &EngineWatch(ctx)),
             "interference" => crate::inspect::interference_result(req, &EngineWatch(ctx)),
             "projectGeometry" => crate::projection::project_geometry_result(req, &EngineWatch(ctx)),

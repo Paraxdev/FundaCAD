@@ -13,6 +13,7 @@
 //! the plan.
 
 pub mod builder;
+pub mod cache;
 pub mod export;
 pub mod faces;
 pub mod features;
