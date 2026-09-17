@@ -1275,6 +1275,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fundacad-core"
+version = "0.2.0"
+dependencies = [
+ "indexmap 2.14.0",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "fundacad-engine"
 version = "0.2.0"
 dependencies = [
@@ -1288,10 +1298,13 @@ dependencies = [
 name = "fundacad-geom"
 version = "0.2.0"
 dependencies = [
+ "blake2",
  "cxx",
+ "fundacad-core",
  "fundacad-engine",
  "fundacad-protocol",
  "glam",
+ "indexmap 2.14.0",
  "opencascade",
  "opencascade-sys",
  "serde",
