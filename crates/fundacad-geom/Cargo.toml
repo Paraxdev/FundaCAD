@@ -26,3 +26,4 @@ thiserror = "1"
 # deflate-flate2 selects no backend, flate2 is named for its default rust_backend
 zip = { version = "4", default-features = false, features = ["deflate-flate2"] }
 flate2 = "1"
+quick-xml = "0.37"
