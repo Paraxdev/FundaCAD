@@ -14,6 +14,7 @@ import asyncio
 import json
 import os
 import re
+import shlex
 import socket
 import subprocess
 import sys
@@ -40,6 +41,22 @@ DELTA_UNITS = frozenset(
 )
 
 
+def engine_command(cmd=None):
+    """The argv that starts an engine: `cmd`, else FUNDACAD_ENGINE_CMD, else
+    `python server.py`, which an empty `cmd` also forces. Run it with SIDECAR_DIR as cwd either way, so a relative
+    path in the variable means the same thing for every harness.
+
+    Split POSIX style everywhere but Windows, where that would eat the
+    backslashes of a path, so there the tokens only lose their quotes."""
+    cmd = cmd if cmd is not None else os.environ.get("FUNDACAD_ENGINE_CMD")
+    if not cmd:
+        return [sys.executable, "server.py"]
+    if os.name == "nt":
+        return [t[1:-1] if len(t) > 1 and t[0] == t[-1] and t[0] in "\"'" else t
+                for t in shlex.split(cmd, posix=False)]
+    return shlex.split(cmd)
+
+
 def _free_port():
     """Pick an ephemeral loopback port. Tiny bind/close race before the server
     grabs it, acceptable for a local test harness, and never port 8765 because
@@ -52,13 +69,14 @@ def _free_port():
 
 
 class SpawnedServer:
-    """Context manager: launch `python server.py` as a child, wait until it
-    prints `LISTENING <port>`, and expose its port/token/pid. Always kills the
-    child on __exit__ (including on exception). Disk cache is forced OFF and the
+    """Context manager: launch an engine (see engine_command) as a child, wait
+    until it prints `LISTENING <port>`, and expose its port/token/pid. Always
+    kills the child on __exit__ (including on exception). Disk cache is forced OFF and the
     token env is cleared so the server MINTS and prints a fresh token."""
 
-    def __init__(self, ready_timeout=90.0):
+    def __init__(self, ready_timeout=90.0, cmd=None):
         self.ready_timeout = ready_timeout
+        self.cmd = cmd
         self.proc = None
         self.port = None
         self.token = None
@@ -72,7 +90,7 @@ class SpawnedServer:
         env["FUNDACAD_DISK_CACHE"] = "0"  # deterministic: no persisted geometry
         env.pop("FUNDACAD_SIDECAR_TOKEN", None)  # force mint+print of a fresh token
         self.proc = subprocess.Popen(
-            [sys.executable, "server.py"],
+            engine_command(self.cmd),
             cwd=SIDECAR_DIR,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
