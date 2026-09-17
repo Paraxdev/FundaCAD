@@ -33,6 +33,7 @@ pub mod if_select;
 pub mod iges_control;
 pub mod law;
 pub mod mesh_access;
+pub mod mesh_import;
 pub mod message;
 pub mod poly;
 pub mod shape_analysis;

@@ -2,11 +2,12 @@
 //! `_import_size_cap` of `sidecar/mesh_import.py`, with the product tree walk
 //! of `step_assembly.py` in the vendored bindings (`opencascade::xcaf`).
 //!
-//! Not here yet: `_canonicalize` (spline faces snapped to analytic surfaces),
-//! the free memory guard, and the mesh formats (STL, 3MF, OBJ, GLB), which
-//! need the sew and unify recovery of `shape_util.py`.
+//! Not here yet: `_canonicalize` (spline faces snapped to analytic surfaces)
+//! and the free memory guard.
 
 pub mod blobstore;
+pub mod gltf;
+pub mod mesh;
 
 use std::path::Path;
 
@@ -154,8 +155,24 @@ pub fn import_geometry(path: &str, fmt: &str, store: &BlobStore) -> Result<Map<S
             shape: Shape::read_brep_text(p).map_err(|e| e.to_string())?,
             fields: Map::new(),
         },
-        "stl" | "3mf" | "obj" | "glb" => {
-            return Err(format!("{fmt} import is not ported to the Rust engine yet"))
+        "stl" | "3mf" | "obj" => {
+            if let Some(ntri) = mesh::peek_triangle_count(p, &fmt).filter(|&n| n > mesh::MAX_IMPORT_TRIANGLES) {
+                return Err(mesh::too_dense_error(ntri));
+            }
+            let shape = match fmt.as_str() {
+                "stl" => mesh::read_stl(p)?,
+                "3mf" => mesh::read_3mf(p)?,
+                _ => mesh::read_obj(p)?,
+            };
+            Imported { shape, fields: Map::new() }
+        }
+        "glb" => {
+            let shape = mesh::read_glb(p)?;
+            let mut fields = Map::new();
+            if let Some(c) = std::fs::read(p).ok().and_then(|d| mesh::glb_dominant_color(&d)) {
+                fields.insert("color".into(), json!(c));
+            }
+            Imported { shape, fields }
         }
         other => return Err(format!("unsupported import format: {other}")),
     };
