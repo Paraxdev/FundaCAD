@@ -160,8 +160,8 @@ describe("through the app's generic commands", () => {
 describe("where the slicer is", () => {
   const dirs = (os: string): SystemDirs => ({
     os,
-    home: os === "windows" ? "C:\\Users\\tester" : "/home/tester",
-    config: os === "windows" ? "C:\\Users\\tester\\AppData\\Roaming" : os === "macos" ? "/Users/tester/Library/Application Support" : "/home/tester/.config",
+    home: os === "windows" ? "C:\\Users\\tester" : "/home/alice",
+    config: os === "windows" ? "C:\\Users\\tester\\AppData\\Roaming" : os === "macos" ? "/Users/alice/Library/Application Support" : "/home/alice/.config",
     localData: os === "windows" ? "C:\\Users\\tester\\AppData\\Local" : null,
     programs: os === "windows" ? ["C:\\Program Files", "C:\\Program Files (x86)"] : [],
   });
@@ -184,8 +184,8 @@ describe("where the slicer is", () => {
 
   it("finds the presets in the per-user settings directory", () => {
     expect(orcaDatadir(dirs("windows"))).toBe("C:\\Users\\tester\\AppData\\Roaming\\OrcaSlicer");
-    expect(orcaDatadir(dirs("macos"))).toBe("/Users/tester/Library/Application Support/OrcaSlicer");
-    expect(orcaDatadir(dirs("linux"))).toBe("/home/tester/.config/OrcaSlicer");
+    expect(orcaDatadir(dirs("macos"))).toBe("/Users/alice/Library/Application Support/OrcaSlicer");
+    expect(orcaDatadir(dirs("linux"))).toBe("/home/alice/.config/OrcaSlicer");
   });
 
   it("stages under a name that cannot leave its directory", () => {
