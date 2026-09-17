@@ -8,6 +8,7 @@ mod defeature;
 mod extrude;
 mod face_anchor;
 mod hole;
+pub mod import;
 mod loft_sweep;
 mod pattern;
 mod primitives;
@@ -62,6 +63,7 @@ pub fn dispatch(ctx: &mut Ctx, f: &Feature) -> FResult {
         Feature::CleanUp(c) => cleanup::clean_up(ctx, c),
         Feature::Split(s) => split::split(ctx, s),
         Feature::Imprint(i) => split::imprint(ctx, i),
+        Feature::Import(i) => import::handle(ctx, i),
         other => Err(not_ported(other.type_name().unwrap_or("feature"))),
     }
 }

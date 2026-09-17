@@ -457,6 +457,24 @@
       {"id": "b", "type": "box", "length": 10, "width": 10, "height": 10},
       {"id": "s", "type": "sketch", "plane": {"origin": [0, 0, 20], "normal": [0, 0, 1], "xdir": [0, 1, 0]}, "face": {"kind": "face", "by": "match", "fp": {"nope": 1}}, "entities": [{"type": "rectangle", "width": 6, "height": 2, "x": 1, "y": 0}]},
       {"id": "e", "type": "extrude", "sketch": "s", "distance": 2, "operation": "new"}
+    ]}},
+    {"name": "import_assembly_nested", "importFixture": {"feature": "im", "path": "fixtures/asm_nested.step"}, "document": {"parameters": {}, "features": [
+      {"id": "im", "type": "import", "format": "step"}
+    ]}},
+    {"name": "import_multisolid_names", "importFixture": {"feature": "im", "path": "fixtures/asm_multisolid.step"}, "document": {"parameters": {}, "features": [
+      {"id": "im", "type": "import", "format": "step"}
+    ]}},
+    {"name": "import_empty_product", "importFixture": {"feature": "im", "path": "fixtures/asm_empty_product.step"}, "document": {"parameters": {}, "features": [
+      {"id": "im", "type": "import", "format": "step"}
+    ]}},
+    {"name": "import_face_colors", "importFixture": {"feature": "im", "path": "fixtures/asm_face_colors.step"}, "document": {"parameters": {}, "features": [
+      {"id": "im", "type": "import", "format": "step"}
+    ]}},
+    {"name": "import_flat", "importFixture": {"feature": "im", "path": "fixtures/asm_flat.step"}, "document": {"parameters": {}, "features": [
+      {"id": "im", "type": "import", "format": "step"}
+    ]}},
+    {"name": "import_nested_collapsed", "importFixture": {"feature": "im", "path": "fixtures/asm_nested.step"}, "document": {"parameters": {}, "features": [
+      {"id": "im", "type": "import", "format": "step", "explode": false}
     ]}}
   ]
 }
