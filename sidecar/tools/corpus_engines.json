@@ -167,6 +167,43 @@
       {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 20, "operation": "new"},
       {"id": "h", "type": "hole", "face": {"kind": "face", "by": "nearest", "point": [0, 0, 20]}, "points": [[0, 0, 20], [10, -10, 20]],
        "diameter": 4, "depth": 8}
+    ]}},
+    {"name": "loft_rect_to_circle", "document": {"parameters": {}, "features": [
+      {"id": "a", "type": "sketch", "plane": "XY", "entities": [
+        {"type": "rectangle", "width": 20, "height": 20, "x": 0, "y": 0}]},
+      {"id": "b", "type": "sketch", "plane": {"origin": [0, 0, 25], "normal": [0, 0, 1], "xdir": [1, 0, 0]}, "entities": [
+        {"type": "circle", "radius": 6, "x": 3, "y": 0}]},
+      {"id": "l", "type": "loft", "sketches": ["a", "b"], "operation": "new"}
+    ]}},
+    {"name": "loft_ring_regions_join", "document": {"parameters": {}, "features": [
+      {"id": "x", "type": "box", "length": 30, "width": 30, "height": 4},
+      {"id": "a", "type": "sketch", "plane": {"origin": [0, 0, 1], "normal": [0, 0, 1], "xdir": [1, 0, 0]}, "entities": [
+        {"type": "circle", "radius": 10, "x": 0, "y": 0}, {"type": "circle", "radius": 5, "x": 0, "y": 0}]},
+      {"id": "b", "type": "sketch", "plane": {"origin": [0, 0, 16], "normal": [0, 0, 1], "xdir": [1, 0, 0]}, "entities": [
+        {"type": "circle", "radius": 6, "x": 0, "y": 0}, {"type": "circle", "radius": 3, "x": 0, "y": 0}]},
+      {"id": "l", "type": "loft", "profiles": [{"sketch": "a", "region": [7, 0, 1]}, {"sketch": "b", "region": [4.5, 0, 16]}], "operation": "join"}
+    ]}},
+    {"name": "sweep_l_path", "document": {"parameters": {}, "features": [
+      {"id": "p", "type": "sketch", "plane": "XY", "entities": [
+        {"type": "rectangle", "width": 4, "height": 4, "x": 0, "y": 0}]},
+      {"id": "q", "type": "sketch", "plane": "XZ", "entities": [
+        {"type": "line", "x1": 0, "y1": 0, "x2": 0, "y2": 20}, {"type": "line", "x1": 0, "y1": 20, "x2": 15, "y2": 20}]},
+      {"id": "w", "type": "sweep", "profile": "p", "path": "q", "operation": "new"}
+    ]}},
+    {"name": "sweep_ring_along_arc", "document": {"parameters": {}, "features": [
+      {"id": "p", "type": "sketch", "plane": "XY", "entities": [
+        {"type": "circle", "radius": 3, "x": 0, "y": 0}, {"type": "circle", "radius": 1.5, "x": 0, "y": 0}]},
+      {"id": "q", "type": "sketch", "plane": "XZ", "entities": [
+        {"type": "arc", "x1": 0, "y1": 0, "x2": 20, "y2": 20, "mx": 5.857864, "my": 14.142136}]},
+      {"id": "w", "type": "sweep", "profile": "p", "path": "q", "operation": "new"}
+    ]}},
+    {"name": "sweep_cut_groove", "document": {"parameters": {}, "features": [
+      {"id": "x", "type": "box", "length": 40, "width": 40, "height": 10},
+      {"id": "p", "type": "sketch", "plane": {"origin": [-30, 0, 5], "normal": [1, 0, 0], "xdir": [0, 1, 0]}, "entities": [
+        {"type": "circle", "radius": 2, "x": 0, "y": 0}]},
+      {"id": "q", "type": "sketch", "plane": "XZ", "entities": [
+        {"type": "line", "x1": -30, "y1": 5, "x2": 30, "y2": 5}]},
+      {"id": "w", "type": "sweep", "profile": "p", "path": "q", "operation": "cut"}
     ]}}
   ]
 }

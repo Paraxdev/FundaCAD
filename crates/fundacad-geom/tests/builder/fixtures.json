@@ -7789,6 +7789,886 @@
    ]
   }
  },
+ "loft_coincident": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 20,
+       "type": "rectangle",
+       "width": 20,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "a",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "entities": [
+      {
+       "height": 20,
+       "type": "rectangle",
+       "width": 20,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "b",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "id": "l",
+     "sketches": [
+      "a",
+      "b"
+     ],
+     "type": "loft"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [],
+   "bodyIds": {},
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "l",
+     "message": "Loft failed to blend these profiles, they may be coincident, identical, or too dissimilar to connect. [StdFail_NotDone]"
+    }
+   ]
+  }
+ },
+ "loft_hole_mismatch": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "radius": 10,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      },
+      {
+       "radius": 5,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "a",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "entities": [
+      {
+       "radius": 6,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "b",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       12
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "id": "l",
+     "profiles": [
+      {
+       "region": [
+        7,
+        0,
+        0
+       ],
+       "sketch": "a"
+      },
+      {
+       "region": [
+        0,
+        0,
+        12
+       ],
+       "sketch": "b"
+      }
+     ],
+     "type": "loft"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [],
+   "bodyIds": {},
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "l",
+     "message": "Loft failed to blend these profiles, they may be coincident, identical, or too dissimilar to connect. [ValueError]"
+    }
+   ]
+  }
+ },
+ "loft_join": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "x",
+     "length": 30,
+     "type": "box",
+     "width": 30
+    },
+    {
+     "entities": [
+      {
+       "height": 10,
+       "type": "rectangle",
+       "width": 10,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "a",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       4
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "entities": [
+      {
+       "radius": 3,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "b",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       20
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "id": "l",
+     "operation": "join",
+     "sketches": [
+      "a",
+      "b"
+     ],
+     "type": "loft"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -15.0000001,
+      -15.0000001,
+      -5.0,
+      15.0000001,
+      15.0000001,
+      20.000000100000012
+     ],
+     "faceOwners": [
+      "l",
+      "l",
+      "l",
+      "l",
+      "l",
+      "x",
+      "x",
+      "x",
+      "x",
+      "l",
+      "l",
+      "x"
+     ],
+     "faces": 12,
+     "id": "body2",
+     "name": "Box",
+     "solids": 1,
+     "volume": 9875.078466119634
+    }
+   ],
+   "bodyIds": {
+    "l:0": "body2",
+    "x:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "loft_missing_sketch": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 20,
+       "type": "rectangle",
+       "width": 20,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "a",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "id": "l",
+     "sketches": [
+      "a",
+      "zz"
+     ],
+     "type": "loft"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [],
+   "bodyIds": {},
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "l",
+     "message": "the sketch this loft depends on (zz) did not build, fix that sketch first"
+    }
+   ]
+  }
+ },
+ "loft_none": {
+  "doc": {
+   "features": [
+    {
+     "id": "l",
+     "type": "loft"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [],
+   "bodyIds": {},
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "l",
+     "message": "loft needs at least two profiles"
+    }
+   ]
+  }
+ },
+ "loft_one": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 20,
+       "type": "rectangle",
+       "width": 20,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "a",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "id": "l",
+     "sketches": [
+      "a"
+     ],
+     "type": "loft"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [],
+   "bodyIds": {},
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "l",
+     "message": "loft needs at least two profiles"
+    }
+   ]
+  }
+ },
+ "loft_open_profile": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 20,
+       "type": "rectangle",
+       "width": 20,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "a",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "entities": [
+      {
+       "type": "line",
+       "x1": 0,
+       "x2": 5,
+       "y1": 0,
+       "y2": 5
+      }
+     ],
+     "id": "b",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "id": "l",
+     "profiles": [
+      {
+       "region": [
+        0,
+        0,
+        0
+       ],
+       "sketch": "a"
+      },
+      {
+       "region": [
+        0,
+        0,
+        0
+       ],
+       "sketch": "b"
+      }
+     ],
+     "type": "loft"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [],
+   "bodyIds": {},
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "l",
+     "message": "a loft profile's sketch has no closed area"
+    }
+   ]
+  }
+ },
+ "loft_profiles_disk": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "radius": 10,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      },
+      {
+       "radius": 5,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "a",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "entities": [
+      {
+       "height": 6,
+       "type": "rectangle",
+       "width": 6,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "b",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       12
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "id": "l",
+     "profiles": [
+      {
+       "region": [
+        0,
+        0,
+        0
+       ],
+       "sketch": "a"
+      },
+      {
+       "region": [
+        0,
+        0,
+        12
+       ],
+       "sketch": "b"
+      }
+     ],
+     "type": "loft"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0000001,
+      -5.0000001,
+      -1e-07,
+      5.0000001,
+      5.0000001,
+      12.0000001
+     ],
+     "faceOwners": [
+      "l",
+      "l",
+      "l",
+      "l",
+      "l",
+      "l",
+      "l"
+     ],
+     "faces": 7,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 674.2351812455281
+    }
+   ],
+   "bodyIds": {
+    "l:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "loft_profiles_rings": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "radius": 10,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      },
+      {
+       "radius": 5,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "a",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "entities": [
+      {
+       "radius": 6,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      },
+      {
+       "radius": 3,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "b",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       12
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "id": "l",
+     "profiles": [
+      {
+       "region": [
+        7,
+        0,
+        0
+       ],
+       "sketch": "a"
+      },
+      {
+       "region": [
+        4.5,
+        0,
+        12
+       ],
+       "sketch": "b"
+      }
+     ],
+     "type": "loft"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.0000001,
+      -10.0000001,
+      -1e-07,
+      10.0000001,
+      10.0000001,
+      12.0000001
+     ],
+     "faceOwners": [
+      "l",
+      "l",
+      "l",
+      "l"
+     ],
+     "faces": 4,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 1847.2564803107985
+    }
+   ],
+   "bodyIds": {
+    "l:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "loft_rect_to_circle_three": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 20,
+       "type": "rectangle",
+       "width": 20,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "a",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "entities": [
+      {
+       "radius": 8,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "b",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       15
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "entities": [
+      {
+       "radius": 4,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "c",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       30
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "id": "l",
+     "operation": "new",
+     "sketches": [
+      "a",
+      "b",
+      "c"
+     ],
+     "type": "loft"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.0000001,
+      -10.000000100000001,
+      -1.0000000355271367e-07,
+      10.000000100000001,
+      10.0000001,
+      30.00000010000004
+     ],
+     "faceOwners": [
+      "l",
+      "l",
+      "l",
+      "l",
+      "l",
+      "l",
+      "l"
+     ],
+     "faces": 7,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 6284.192640805638
+    }
+   ],
+   "bodyIds": {
+    "l:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "loft_rects": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 20,
+       "type": "rectangle",
+       "width": 20,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "a",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "entities": [
+      {
+       "height": 10,
+       "type": "rectangle",
+       "width": 10,
+       "x": 2,
+       "y": 0
+      }
+     ],
+     "id": "b",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       20
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "id": "l",
+     "sketches": [
+      "a",
+      "b"
+     ],
+     "type": "loft"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.0000001,
+      -10.0000001,
+      -1e-07,
+      10.0000001,
+      10.0000001,
+      20.0000001
+     ],
+     "faceOwners": [
+      "l",
+      "l",
+      "l",
+      "l",
+      "l",
+      "l"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 4666.666666666667
+    }
+   ],
+   "bodyIds": {
+    "l:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
  "mirror_datum": {
   "doc": {
    "features": [
@@ -10895,6 +11775,563 @@
    "datumPlanes": {},
    "diagnostics": [],
    "errors": []
+  }
+ },
+ "sweep_arc_ring": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "radius": 3,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      },
+      {
+       "radius": 1.5,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "p",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "entities": [
+      {
+       "mx": 5.857864,
+       "my": 14.142136,
+       "type": "arc",
+       "x1": 0,
+       "x2": 20,
+       "y1": 0,
+       "y2": 20
+      }
+     ],
+     "id": "q",
+     "plane": "XZ",
+     "type": "sketch"
+    },
+    {
+     "id": "w",
+     "operation": "new",
+     "path": "q",
+     "profile": "p",
+     "type": "sweep"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -3.0000001000000425,
+      -3.0000001,
+      -2.9269943253167466e-07,
+      20.00000029269946,
+      3.0000001,
+      23.000000100000044
+     ],
+     "faceOwners": [
+      "w",
+      "w",
+      "w"
+     ],
+     "faces": 3,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 888.2644116880027
+    }
+   ],
+   "bodyIds": {
+    "w:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "sweep_corner": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 4,
+       "type": "rectangle",
+       "width": 4,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "p",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "entities": [
+      {
+       "type": "line",
+       "x1": 0,
+       "x2": 0,
+       "y1": 0,
+       "y2": 20
+      },
+      {
+       "type": "line",
+       "x1": 0,
+       "x2": 15,
+       "y1": 20,
+       "y2": 20
+      }
+     ],
+     "id": "q",
+     "plane": "XZ",
+     "type": "sketch"
+    },
+    {
+     "id": "w",
+     "path": "q",
+     "profile": "p",
+     "type": "sweep"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -2.0,
+      -2.0000000000000004,
+      0.0,
+      15.0,
+      2.0000000000000004,
+      22.0
+     ],
+     "faceOwners": [
+      "w",
+      "w",
+      "w",
+      "w",
+      "w",
+      "w",
+      "w",
+      "w"
+     ],
+     "faces": 8,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 560.0
+    }
+   ],
+   "bodyIds": {
+    "w:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "sweep_cut": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "x",
+     "length": 40,
+     "type": "box",
+     "width": 40
+    },
+    {
+     "entities": [
+      {
+       "radius": 2,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "p",
+     "plane": {
+      "normal": [
+       1,
+       0,
+       0
+      ],
+      "origin": [
+       -30,
+       0,
+       5
+      ],
+      "xdir": [
+       0,
+       1,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "entities": [
+      {
+       "type": "line",
+       "x1": -30,
+       "x2": 30,
+       "y1": 5,
+       "y2": 5
+      }
+     ],
+     "id": "q",
+     "plane": "XZ",
+     "type": "sketch"
+    },
+    {
+     "id": "w",
+     "operation": "cut",
+     "path": "q",
+     "profile": "p",
+     "type": "sweep"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      -5.0,
+      20.0,
+      20.0,
+      5.0
+     ],
+     "faceOwners": [
+      "w",
+      "w",
+      "w",
+      "w",
+      "x",
+      "x",
+      "x",
+      "w"
+     ],
+     "faces": 8,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 15748.672587712816
+    }
+   ],
+   "bodyIds": {
+    "x:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "sweep_gap_stitched": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "radius": 1,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "p",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "entities": [
+      {
+       "type": "line",
+       "x1": 0,
+       "x2": 0,
+       "y1": 0,
+       "y2": 10
+      },
+      {
+       "type": "line",
+       "x1": 0.0001,
+       "x2": 10,
+       "y1": 10,
+       "y2": 10
+      }
+     ],
+     "id": "q",
+     "plane": "XZ",
+     "type": "sketch"
+    },
+    {
+     "id": "w",
+     "operation": "new",
+     "path": "q",
+     "profile": "p",
+     "type": "sweep"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -1.0,
+      -1.0,
+      0.0,
+      10.0,
+      1.0,
+      11.0
+     ],
+     "faceOwners": [
+      "w",
+      "w",
+      "w",
+      "w"
+     ],
+     "faces": 4,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 62.831853068737516
+    }
+   ],
+   "bodyIds": {
+    "w:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "sweep_line": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "radius": 2,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "p",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "entities": [
+      {
+       "type": "line",
+       "x1": 0,
+       "x2": 0,
+       "y1": 0,
+       "y2": 30
+      }
+     ],
+     "id": "q",
+     "plane": "XZ",
+     "type": "sketch"
+    },
+    {
+     "id": "w",
+     "operation": "new",
+     "path": "q",
+     "profile": "p",
+     "type": "sweep"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -2.0,
+      -2.0,
+      0.0,
+      2.0,
+      2.0,
+      30.0
+     ],
+     "faceOwners": [
+      "w",
+      "w",
+      "w"
+     ],
+     "faces": 3,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 376.99111843077515
+    }
+   ],
+   "bodyIds": {
+    "w:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "sweep_missing_profile": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "type": "line",
+       "x1": 0,
+       "x2": 0,
+       "y1": 0,
+       "y2": 30
+      }
+     ],
+     "id": "q",
+     "plane": "XZ",
+     "type": "sketch"
+    },
+    {
+     "id": "w",
+     "operation": "new",
+     "path": "q",
+     "profile": "p",
+     "type": "sweep"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [],
+   "bodyIds": {},
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "w",
+     "message": "the sketch this sweep depends on (p) did not build, fix that sketch first"
+    }
+   ]
+  }
+ },
+ "sweep_no_path_curve": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "radius": 2,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "p",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "entities": [
+      {
+       "radius": 9,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "q",
+     "plane": "XZ",
+     "type": "sketch"
+    },
+    {
+     "id": "w",
+     "operation": "new",
+     "path": "q",
+     "profile": "p",
+     "type": "sweep"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [],
+   "bodyIds": {},
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "w",
+     "message": "sweep path sketch has no curve to follow"
+    }
+   ]
+  }
+ },
+ "sweep_open_profile": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "type": "line",
+       "x1": 0,
+       "x2": 3,
+       "y1": 0,
+       "y2": 3
+      }
+     ],
+     "id": "p",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "entities": [
+      {
+       "type": "line",
+       "x1": 0,
+       "x2": 0,
+       "y1": 0,
+       "y2": 30
+      }
+     ],
+     "id": "q",
+     "plane": "XZ",
+     "type": "sketch"
+    },
+    {
+     "id": "w",
+     "operation": "new",
+     "path": "q",
+     "profile": "p",
+     "type": "sweep"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [],
+   "bodyIds": {},
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "w",
+     "message": "sweep profile has no closed section"
+    }
+   ]
   }
  },
  "torus": {
