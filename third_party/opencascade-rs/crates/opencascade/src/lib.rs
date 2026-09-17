@@ -17,6 +17,7 @@ pub mod section;
 pub mod sewing;
 pub mod shape_io;
 pub mod topology;
+pub mod select_access;
 pub mod workplane;
 
 mod law_function;
