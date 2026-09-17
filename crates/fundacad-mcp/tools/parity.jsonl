@@ -28,3 +28,12 @@
 {"tool": "inspect", "args": {}}
 {"tool": "doc_new", "args": {}}
 {"tool": "doc_get", "args": {}}
+{"tool": "feature_add", "args": {"feature": {"id": "bx9", "type": "box", "length": 20, "width": 20, "height": 20}}}
+{"tool": "build", "args": {}}
+{"tool": "view", "args": {"bodies": [], "section": {}, "width": 0, "height": 0}}
+{"tool": "view", "args": {"view": "top", "section": {"axis": "Z", "keep": "max"}, "width": 96, "height": 96}}
+{"tool": "view", "args": {"azimuth": 30, "elevation": 20, "width": 96, "height": 96, "highlight_faces": [1]}}
+{"tool": "view", "args": {"section": {"axis": "Y", "keep": "middle"}}}
+{"tool": "inspect", "args": {"detail": true, "faces": [0, 1]}}
+{"tool": "inspect", "args": {"body": "body1"}}
+{"tool": "doc_save", "args": {"path": ""}}
