@@ -29,7 +29,9 @@ fn main() {
         .map(|d| d["document"].clone())
         .expect("a document of that name");
     let doc: CadDocument = serde_json::from_value(raw.clone()).expect("the document types");
-    let r = builder::rebuild(&doc, &raw, &NoWatch).ok().expect("not cancelled");
+    let r = builder::rebuild(&doc, &raw, &NoWatch)
+        .ok()
+        .expect("not cancelled");
     for b in &r.bodies {
         println!(
             "{} {} vol {:.4} faces {} solids {}",
