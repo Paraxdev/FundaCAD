@@ -2323,6 +2323,655 @@
    "errors": []
   }
  },
+ "del_bore": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "b",
+     "length": 30,
+     "type": "box",
+     "width": 30
+    },
+    {
+     "height": 30,
+     "id": "d",
+     "operation": "cut",
+     "radius": 4,
+     "type": "cylinder"
+    },
+    {
+     "face": {
+      "by": "nearest",
+      "kind": "face",
+      "point": [
+       4,
+       0,
+       0
+      ]
+     },
+     "id": "x",
+     "type": "deleteFace"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -15.0,
+      -15.0,
+      -5.0,
+      15.0,
+      15.0,
+      5.0
+     ],
+     "faceOwners": [
+      "b",
+      "b",
+      "x",
+      "b",
+      "x",
+      "b"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 9000.0
+    }
+   ],
+   "bodyIds": {
+    "b:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "del_box_face_fails": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "face": {
+      "by": "nearest",
+      "kind": "face",
+      "point": [
+       0,
+       0,
+       5
+      ]
+     },
+     "id": "x",
+     "type": "deleteFace"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -5.0,
+      -5.0,
+      5.0,
+      5.0,
+      5.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 999.9999999999998
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "x",
+     "message": "can't heal after removing that face, wedge-filling didn't apply either, use Press/Pull to cut it instead (OCCT: BOPAlgo_AlertUnableToRemoveTheFeature)"
+    }
+   ]
+  }
+ },
+ "del_chain_one_strip": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 20,
+       "type": "rectangle",
+       "width": 20,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 10,
+     "id": "e",
+     "operation": "new",
+     "sketch": "s",
+     "type": "extrude"
+    },
+    {
+     "entities": [
+      {
+       "height": 20,
+       "type": "rectangle",
+       "width": 20,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "t",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       10
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "distance": 1,
+     "id": "b",
+     "operation": "join",
+     "sketch": "t",
+     "taper": 45,
+     "type": "extrude"
+    },
+    {
+     "face": {
+      "by": "nearest",
+      "kind": "face",
+      "point": [
+       0,
+       9.5,
+       10.5
+      ]
+     },
+     "id": "x",
+     "type": "deleteFace"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.0,
+      -10.0,
+      0.0,
+      10.0,
+      10.0,
+      11.0
+     ],
+     "faceOwners": [
+      "e",
+      "x",
+      "b",
+      "x",
+      "e",
+      "x",
+      "e",
+      "x",
+      "e"
+     ],
+     "faces": 9,
+     "id": "body2",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 4370.666666666667
+    }
+   ],
+   "bodyIds": {
+    "b:0": "body2",
+    "e:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "del_corner_chamfer": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "type": "line",
+       "x1": -10,
+       "x2": 10,
+       "y1": -10,
+       "y2": -10
+      },
+      {
+       "type": "line",
+       "x1": 10,
+       "x2": 10,
+       "y1": -10,
+       "y2": 8
+      },
+      {
+       "type": "line",
+       "x1": 10,
+       "x2": 8,
+       "y1": 8,
+       "y2": 10
+      },
+      {
+       "type": "line",
+       "x1": 8,
+       "x2": -10,
+       "y1": 10,
+       "y2": 10
+      },
+      {
+       "type": "line",
+       "x1": -10,
+       "x2": -10,
+       "y1": 10,
+       "y2": -10
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 10,
+     "id": "e",
+     "operation": "new",
+     "sketch": "s",
+     "type": "extrude"
+    },
+    {
+     "face": {
+      "by": "nearest",
+      "kind": "face",
+      "point": [
+       9,
+       9,
+       5
+      ]
+     },
+     "id": "x",
+     "type": "deleteFace"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.0,
+      -10.0,
+      0.0,
+      10.0,
+      10.0,
+      10.0
+     ],
+     "faceOwners": [
+      "e",
+      "x",
+      "x",
+      "x",
+      "x",
+      "e"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 3999.999999999999
+    }
+   ],
+   "bodyIds": {
+    "e:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "del_missing_body": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "body": "body4",
+     "face": {
+      "by": "normal",
+      "dir": [
+       0,
+       0,
+       1
+      ],
+      "kind": "face"
+     },
+     "id": "x",
+     "type": "deleteFace"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -5.0,
+      -5.0,
+      5.0,
+      5.0,
+      5.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 999.9999999999998
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "x",
+     "message": "Delete Face: the target body no longer exists"
+    }
+   ]
+  }
+ },
+ "del_no_face": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "face": {
+      "by": "normal",
+      "dir": [
+       1,
+       1,
+       1
+      ],
+      "kind": "face"
+     },
+     "id": "x",
+     "type": "deleteFace"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -5.0,
+      -5.0,
+      5.0,
+      5.0,
+      5.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 999.9999999999998
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "x",
+     "message": "no face found to delete"
+    }
+   ]
+  }
+ },
+ "del_retarget": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "entities": [
+      {
+       "angle": 0,
+       "radius": 4,
+       "sides": 6,
+       "type": "polygon",
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       30,
+       0,
+       5
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "distance": 3,
+     "id": "e",
+     "operation": "new",
+     "sketch": "s",
+     "type": "extrude"
+    },
+    {
+     "entities": [
+      {
+       "radius": 1,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "t",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       30,
+       0,
+       8
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "distance": -2,
+     "id": "c",
+     "operation": "cut",
+     "sketch": "t",
+     "type": "extrude"
+    },
+    {
+     "body": "body1",
+     "face": {
+      "by": "nearest",
+      "kind": "face",
+      "point": [
+       31,
+       0,
+       7
+      ]
+     },
+     "id": "x",
+     "type": "deleteFace"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -5.0,
+      -5.0,
+      5.0,
+      5.0,
+      5.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 999.9999999999998
+    },
+    {
+     "bbox": [
+      26.0,
+      -3.4641016151377544,
+      5.0,
+      34.0,
+      3.464101615137755,
+      8.0
+     ],
+     "faceOwners": [
+      "x",
+      "c",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 9,
+     "id": "body2",
+     "name": "Body2",
+     "solids": 1,
+     "volume": 124.70765814495917
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1",
+    "e:0": "body2"
+   },
+   "datumPlanes": {},
+   "diagnostics": [
+    {
+     "feature_id": "x",
+     "kind": "deleteFace",
+     "reason": "picked face found on body2 (body ids shifted upstream); re-targeted from body1"
+    }
+   ],
+   "errors": []
+  }
+ },
  "disk_region": {
   "doc": {
    "features": [

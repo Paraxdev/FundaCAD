@@ -186,6 +186,42 @@
       {"id": "r", "type": "revolve", "sketch": "s", "axis": "Z", "angle": 360},
       {"id": "o", "type": "offsetFace", "faces": {"kind": "face", "by": "nearest", "point": [30, 0, 2.5]}, "distance": -1}
     ]}},
+    {"name": "delete_face_corner_chamfer", "document": {"parameters": {}, "features": [
+      {"id": "s", "type": "sketch", "plane": "XY", "entities": [
+        {"type": "line", "x1": -10, "y1": -10, "x2": 10, "y2": -10}, {"type": "line", "x1": 10, "y1": -10, "x2": 10, "y2": 8},
+        {"type": "line", "x1": 10, "y1": 8, "x2": 8, "y2": 10}, {"type": "line", "x1": 8, "y1": 10, "x2": -10, "y2": 10},
+        {"type": "line", "x1": -10, "y1": 10, "x2": -10, "y2": -10}]},
+      {"id": "e", "type": "extrude", "sketch": "s", "distance": 10, "operation": "new"},
+      {"id": "x", "type": "deleteFace", "face": {"kind": "face", "by": "nearest", "point": [9, 9, 5]}}
+    ]}},
+    {"name": "delete_face_bore", "document": {"parameters": {}, "features": [
+      {"id": "b", "type": "box", "length": 30, "width": 30, "height": 10},
+      {"id": "d", "type": "cylinder", "radius": 4, "height": 30, "operation": "cut"},
+      {"id": "x", "type": "deleteFace", "face": {"kind": "face", "by": "nearest", "point": [4, 0, 0]}}
+    ]}},
+    {"name": "delete_face_bevel_strip_chain", "document": {"parameters": {}, "features": [
+      {"id": "s", "type": "sketch", "plane": "XY", "entities": [
+        {"type": "rectangle", "width": 20, "height": 20, "x": 0, "y": 0}]},
+      {"id": "e", "type": "extrude", "sketch": "s", "distance": 10, "operation": "new"},
+      {"id": "t", "type": "sketch", "plane": {"origin": [0, 0, 10], "normal": [0, 0, 1], "xdir": [1, 0, 0]}, "entities": [
+        {"type": "rectangle", "width": 20, "height": 20, "x": 0, "y": 0}]},
+      {"id": "b", "type": "extrude", "sketch": "t", "distance": 1, "operation": "join", "taper": 45},
+      {"id": "x", "type": "deleteFace", "face": {"kind": "face", "by": "nearest", "point": [0, 9.5, 10.5]}}
+    ]}},
+    {"name": "delete_face_retargets_by_pick", "document": {"parameters": {}, "features": [
+      {"id": "a", "type": "box", "length": 10, "width": 10, "height": 10},
+      {"id": "s", "type": "sketch", "plane": {"origin": [30, 0, 5], "normal": [0, 0, 1], "xdir": [1, 0, 0]}, "entities": [
+        {"type": "polygon", "x": 0, "y": 0, "radius": 4, "sides": 6, "angle": 0}]},
+      {"id": "e", "type": "extrude", "sketch": "s", "distance": 3, "operation": "new"},
+      {"id": "t", "type": "sketch", "plane": {"origin": [30, 0, 8], "normal": [0, 0, 1], "xdir": [1, 0, 0]}, "entities": [
+        {"type": "circle", "radius": 1, "x": 0, "y": 0}]},
+      {"id": "c", "type": "extrude", "sketch": "t", "distance": -2, "operation": "cut"},
+      {"id": "x", "type": "deleteFace", "body": "body1", "face": {"kind": "face", "by": "nearest", "point": [31, 0, 7]}}
+    ]}},
+    {"name": "delete_face_box_side_fails", "expectError": true, "document": {"parameters": {}, "features": [
+      {"id": "a", "type": "box", "length": 10, "width": 10, "height": 10},
+      {"id": "x", "type": "deleteFace", "face": {"kind": "face", "by": "nearest", "point": [0, 0, 5]}}
+    ]}},
     {"name": "offset_face_freeform_fails", "expectError": true, "document": {"parameters": {}, "features": [
       {"id": "a", "type": "sketch", "plane": "XY", "entities": [
         {"type": "rectangle", "width": 20, "height": 20, "x": 0, "y": 0}]},
