@@ -7,6 +7,7 @@ pub use inner::*;
 mod inner {
     unsafe extern "C++" {
         include!("opencascade-sys/include/blend_ops.hxx");
+        include!("opencascade-sys/include/blend_conic.hxx");
 
         type TopoDS_Shape = crate::topo_ds::TopoDS_Shape;
 
@@ -37,5 +38,14 @@ mod inner {
         ) -> f64;
         pub fn blend_face_triangles(faces: &TopoDS_Shape, deflection: f64) -> Result<Vec<f64>>;
         pub fn blend_is_valid(shape: &TopoDS_Shape) -> bool;
+        /// Never throws: `status` 0 built, 1 the profile does not apply, 2 refused.
+        pub fn blend_conic(
+            sharp: &TopoDS_Shape,
+            edges: &TopoDS_Shape,
+            radius: f64,
+            profile: f64,
+            status: &mut i32,
+            message: &mut String,
+        ) -> UniquePtr<TopoDS_Shape>;
     }
 }
