@@ -175,9 +175,11 @@ name = "fundacad-geom"
 version = "0.2.0"
 dependencies = [
  "cxx",
+ "fundacad-core",
  "fundacad-engine",
  "fundacad-protocol",
  "glam",
+ "indexmap",
  "opencascade",
  "opencascade-sys",
  "serde",
