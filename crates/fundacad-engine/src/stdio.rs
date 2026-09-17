@@ -4,7 +4,7 @@
 //! inside a frame, so the frames get a private duplicate of the stdout handle
 //! and descriptor 1 is pointed at stderr before any kernel code runs.
 
-use crate::{Engine, Jobs, Outbox};
+use crate::{Engine, EngineOptions, Jobs, Outbox};
 use fundacad_protocol::{read_message, write_message, Message};
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
@@ -25,7 +25,7 @@ impl Outbox for FrameOut {
 /// Serves requests from stdin until the app closes it, then exits the process.
 /// Exiting on EOF is also what ends a worker whose app crashed, even while a
 /// kernel call is still running on the job thread.
-pub fn run<J: Jobs>(jobs: J) -> ! {
+pub fn run<J: Jobs + Default>(jobs: J) -> ! {
     let frames = match take_stdout() {
         Ok(f) => f,
         Err(e) => {
@@ -33,7 +33,14 @@ pub fn run<J: Jobs>(jobs: J) -> ! {
             std::process::exit(2);
         }
     };
-    let engine = Engine::start(jobs, Arc::new(FrameOut(Mutex::new(BufWriter::new(frames)))));
+    // No cancel grace: the app's supervisor restarts a worker that ignores a
+    // cancel, which frees what an abandoned job thread would keep.
+    let engine = Engine::start_with(
+        jobs,
+        Some(Arc::new(J::default)),
+        EngineOptions::from_env(),
+        Arc::new(FrameOut(Mutex::new(BufWriter::new(frames)))),
+    );
     let mut stdin = io::stdin().lock();
     loop {
         match read_message(&mut stdin) {

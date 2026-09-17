@@ -8,10 +8,13 @@
 
 mod doc_state;
 pub mod stdio;
+pub mod supervise;
+pub mod sysmem;
 #[cfg(feature = "ws")]
 pub mod ws;
 
 pub use doc_state::DocState;
+pub use supervise::{Budget, Clocks};
 
 use fundacad_protocol::{
     envelope, send_reply, CancelToken, JobResult, Limits, Message, ReplyOptions,
@@ -35,11 +38,13 @@ pub struct Progress {
     feature: AtomicI64,
     meshed: AtomicI64,
     mesh_total: AtomicI64,
+    beats: AtomicU64,
 }
 
 impl Progress {
     pub fn feature(&self, index: i64) {
         self.feature.store(index, Ordering::Relaxed);
+        self.tick();
     }
 
     /// Meshing phase: `meshed` of `total` bodies. (-1, -1) leaves it.
@@ -47,6 +52,13 @@ impl Progress {
         self.feature.store(-1, Ordering::Relaxed);
         self.meshed.store(meshed, Ordering::Relaxed);
         self.mesh_total.store(total, Ordering::Relaxed);
+        self.tick();
+    }
+
+    /// Proof of life for the stall watchdog, from a phase with no feature or
+    /// body counter to report (an export write, a pair sweep).
+    pub fn tick(&self) {
+        self.beats.fetch_add(1, Ordering::Relaxed);
     }
 
     fn reset(&self) {
@@ -91,6 +103,80 @@ struct Running {
     id: Value,
     client: u64,
     cancel: CancelToken,
+    serial: u64,
+}
+
+/// How an engine supervises its jobs.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct EngineOptions {
+    /// How long a cancelled job may keep running before it is answered as
+    /// cancelled and abandoned. None leaves that to a supervising process.
+    pub cancel_grace: Option<Duration>,
+    pub clocks: Clocks,
+    /// Answer `testSleep`, see [`supervise::test_sleep`].
+    pub test_ops: bool,
+}
+
+impl EngineOptions {
+    pub fn from_env() -> EngineOptions {
+        EngineOptions {
+            cancel_grace: None,
+            clocks: Clocks::from_env(),
+            test_ops: supervise::test_ops_enabled(),
+        }
+    }
+}
+
+/// Makes the jobs of a replacement job thread.
+pub type Respawn<J> = Arc<dyn Fn() -> J + Send + Sync>;
+
+/// What every job thread of one engine shares. There is one live job thread;
+/// an abandoned one keeps only its running job and never takes another.
+struct Pool<J> {
+    rx: Mutex<mpsc::Receiver<Queued>>,
+    running: Arc<Mutex<Option<Running>>>,
+    respawn: Option<Respawn<J>>,
+    opts: EngineOptions,
+    serial: AtomicU64,
+}
+
+fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(|p| p.into_inner())
+}
+
+fn spawn_job_thread<J: Jobs>(pool: Arc<Pool<J>>, mut jobs: J) {
+    let spawned = std::thread::Builder::new()
+        .name("engine-jobs".into())
+        .spawn(move || {
+            let mut docs = DocState::default();
+            let abandoned = Arc::new(AtomicBool::new(false));
+            while !abandoned.load(Ordering::SeqCst) {
+                let Ok(q) = lock(&pool.rx).recv() else { return };
+                if q.closed.load(Ordering::SeqCst) {
+                    continue;
+                }
+                run_one(&pool, &mut jobs, &mut docs, q, &abandoned);
+            }
+        });
+    if let Err(e) = spawned {
+        eprintln!("[engine] cannot start a job thread: {e}");
+    }
+}
+
+/// Leaves the job thread running `serial` to finish on its own and hands the
+/// queue to a fresh one, server.py's `_kill_pool` plus `_new_pool`.
+fn abandon<J: Jobs>(pool: &Arc<Pool<J>>, abandoned: &AtomicBool, serial: u64) {
+    let Some(make) = pool.respawn.clone() else { return };
+    abandoned.store(true, Ordering::SeqCst);
+    clear_running(pool, serial);
+    spawn_job_thread(pool.clone(), make());
+}
+
+fn clear_running<J>(pool: &Pool<J>, serial: u64) {
+    let mut running = lock(&pool.running);
+    if running.as_ref().is_some_and(|r| r.serial == serial) {
+        *running = None;
+    }
 }
 
 struct Queued {
@@ -114,22 +200,30 @@ pub struct Engine {
 const PROGRESS_EVERY: Duration = Duration::from_secs(1);
 
 impl Engine {
-    pub fn start<J: Jobs>(mut jobs: J, out: Arc<dyn Outbox>) -> Engine {
+    /// An engine with the default clocks and no respawn: a job that overstays
+    /// is answered, and the jobs behind it wait for its thread.
+    pub fn start<J: Jobs>(jobs: J, out: Arc<dyn Outbox>) -> Engine {
+        Engine::start_with(jobs, None, EngineOptions::default(), out)
+    }
+
+    /// `respawn` makes the jobs of the job thread that replaces one abandoned
+    /// after a stall, a timeout or an ignored cancel.
+    pub fn start_with<J: Jobs>(
+        jobs: J,
+        respawn: Option<Respawn<J>>,
+        opts: EngineOptions,
+        out: Arc<dyn Outbox>,
+    ) -> Engine {
         let (tx, rx) = mpsc::channel::<Queued>();
         let running: Arc<Mutex<Option<Running>>> = Arc::default();
-        let job_running = running.clone();
-        std::thread::Builder::new()
-            .name("engine-jobs".into())
-            .spawn(move || {
-                let mut docs = DocState::default();
-                for q in rx {
-                    if q.closed.load(Ordering::SeqCst) {
-                        continue;
-                    }
-                    run_one(&mut jobs, &mut docs, q, &job_running);
-                }
-            })
-            .expect("spawn the engine job thread");
+        let pool = Arc::new(Pool {
+            rx: Mutex::new(rx),
+            running: running.clone(),
+            respawn,
+            opts,
+            serial: AtomicU64::new(1),
+        });
+        spawn_job_thread(pool, jobs);
         Engine {
             jobs: tx,
             running,
@@ -238,10 +332,11 @@ impl Drop for Client {
 }
 
 fn run_one<J: Jobs>(
+    pool: &Arc<Pool<J>>,
     jobs: &mut J,
     docs: &mut DocState,
     q: Queued,
-    running: &Arc<Mutex<Option<Running>>>,
+    abandoned: &Arc<AtomicBool>,
 ) {
     let Queued {
         req, client, out, ..
@@ -254,10 +349,12 @@ fn run_one<J: Jobs>(
         .unwrap_or("")
         .to_string();
     let cancel = CancelToken::new();
-    *running.lock().unwrap_or_else(|p| p.into_inner()) = Some(Running {
+    let serial = pool.serial.fetch_add(1, Ordering::SeqCst);
+    *lock(&pool.running) = Some(Running {
         id: id.clone(),
         client,
         cancel: cancel.clone(),
+        serial,
     });
 
     let progress = Arc::new(Progress::default());
@@ -266,8 +363,29 @@ fn run_one<J: Jobs>(
         cancel: cancel.clone(),
         progress: progress.clone(),
     };
-    let ticking = Arc::new(AtomicBool::new(op == "rebuild" || op == "computeAll"));
-    let ticker = spawn_ticker(id.clone(), progress, ticking.clone(), out.clone());
+    let claimed = Arc::new(AtomicBool::new(false));
+    let ticking = Arc::new(AtomicBool::new(true));
+    let on_breach = {
+        let pool = pool.clone();
+        let abandoned = abandoned.clone();
+        move || abandon(&pool, &abandoned, serial)
+    };
+    let watchdog = spawn_watchdog(
+        WatchedJob {
+            id: id.clone(),
+            frames: op == "rebuild" || op == "computeAll",
+            progress,
+            ticking: ticking.clone(),
+            claimed: claimed.clone(),
+            cancel: cancel.clone(),
+            out: out.clone(),
+            watchdog: supervise::Watchdog::new(
+                pool.opts.clocks.budget(&op, &req),
+                pool.opts.cancel_grace,
+            ),
+        },
+        on_breach,
+    );
 
     let result = match op.as_str() {
         "rebuild" | "computeAll" => {
@@ -288,11 +406,17 @@ fn run_one<J: Jobs>(
             }
         }
         "" => error_result("a request needs an op"),
+        supervise::TEST_SLEEP_OP if pool.opts.test_ops => supervise::test_sleep(&req, &ctx),
         other => jobs.run(other, &req, &ctx),
     };
 
+    let answered_elsewhere = claimed.swap(true, Ordering::SeqCst);
     ticking.store(false, Ordering::SeqCst);
-    let _ = ticker.join();
+    let _ = watchdog.join();
+    if answered_elsewhere {
+        clear_running(pool, serial);
+        return;
+    }
     let result = if cancel.is_cancelled() {
         let mut m = Map::new();
         if let Value::Object(c) = envelope::cancelled_result() {
@@ -308,39 +432,70 @@ fn run_one<J: Jobs>(
     };
     let mut reply = send_reply(id, result, opts, Some(cancel), Limits::default());
     let _ = out.send(&mut reply);
-    *running.lock().unwrap_or_else(|p| p.into_inner()) = None;
+    clear_running(pool, serial);
 }
 
 fn truthy(v: Option<&Value>) -> bool {
     fundacad_protocol::pyjson::truthy(v)
 }
 
-fn spawn_ticker(
+struct WatchedJob {
     id: Value,
+    /// Whether to stream `building` frames, which only a rebuild does.
+    frames: bool,
     progress: Arc<Progress>,
     ticking: Arc<AtomicBool>,
+    /// Set by whoever answers the request first, the job or its watchdog.
+    claimed: Arc<AtomicBool>,
+    cancel: CancelToken,
     out: Arc<dyn Outbox>,
+    watchdog: supervise::Watchdog,
+}
+
+/// Streams a rebuild's progress and ends a job that stalls, overstays its wall
+/// clock or ignores a cancel past its grace, server.py `_run_stall` and `_run`.
+fn spawn_watchdog(
+    mut job: WatchedJob,
+    on_breach: impl FnOnce() + Send + 'static,
 ) -> std::thread::JoinHandle<()> {
     std::thread::spawn(move || {
         let step = Duration::from_millis(50);
         let mut waited = Duration::ZERO;
-        while ticking.load(Ordering::SeqCst) {
+        while job.ticking.load(Ordering::SeqCst) {
             std::thread::sleep(step);
             waited += step;
-            if waited < PROGRESS_EVERY {
+            let breach = job.watchdog.poll(
+                job.progress.beats.load(Ordering::Relaxed),
+                job.cancel.is_cancelled(),
+                std::time::Instant::now(),
+            );
+            if let Some(breach) = breach {
+                if job.claimed.swap(true, Ordering::SeqCst) {
+                    return;
+                }
+                if !matches!(breach, supervise::Breach::IgnoredCancel) {
+                    eprintln!("[engine] {} {breach:?}, abandoning its job thread", job.id);
+                }
+                job.cancel.cancel();
+                let text = envelope::reply_for(&job.id, &breach.result());
+                let _ = job.out.send(&mut std::iter::once(Message::Text(text)));
+                on_breach();
+                return;
+            }
+            if !job.frames || waited < PROGRESS_EVERY {
                 continue;
             }
             waited = Duration::ZERO;
-            if !ticking.load(Ordering::SeqCst) {
+            if !job.ticking.load(Ordering::SeqCst) {
                 break;
             }
             let frame = envelope::building(
-                &id,
-                progress.feature.load(Ordering::Relaxed),
-                progress.meshed.load(Ordering::Relaxed),
-                progress.mesh_total.load(Ordering::Relaxed),
+                &job.id,
+                job.progress.feature.load(Ordering::Relaxed),
+                job.progress.meshed.load(Ordering::Relaxed),
+                job.progress.mesh_total.load(Ordering::Relaxed),
             );
-            let _ = out.send(&mut std::iter::once(Message::Text(frame)));
+            let _ = job.out.send(&mut std::iter::once(Message::Text(frame)));
         }
     })
 }
