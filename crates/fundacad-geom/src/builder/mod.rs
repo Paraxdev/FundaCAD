@@ -575,6 +575,7 @@ pub fn rebuild_from(
     resume: Option<(usize, Snapshot)>,
     tap: &mut dyn Tap,
 ) -> Result<Rebuild, Cancelled> {
+    crate::par::configure_occt();
     let params: HashMap<String, f64> = doc
         .parameters
         .iter()

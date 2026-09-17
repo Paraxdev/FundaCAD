@@ -376,24 +376,19 @@ fn built_payloads(
         if let Ok(mut t) = tick.lock() {
             t(done, total);
         }
-        (k, full, began.elapsed())
+        (full, began.elapsed())
     };
-    let mut made: Vec<(usize, FullBody, std::time::Duration)> = if crate::par::worth_it(misses.len())
-    {
+    let made: Vec<(usize, (FullBody, std::time::Duration))> = if crate::par::worth_it(misses.len()) {
         let shapes: Vec<&Shape> = misses.iter().filter_map(|&i| bodies[i].shape).collect();
         let groups = crate::bench::phase("share_groups", || crate::par::share_groups(&shapes));
         crate::bench::note("mesh_groups", groups.len());
         crate::bench::note("mesh_largest_group", groups.iter().map(Vec::len).max().unwrap_or(0));
-        let work = crate::par::Shared((&mesh_one, &groups));
-        crate::par::flat_map_indexed(groups.len(), move |g| {
-            let (one, groups) = work.get();
-            groups[g].iter().map(|&k| one(k)).collect()
-        })
+        let work = crate::par::Shared(&mesh_one);
+        crate::par::map_grouped(&groups, move |k| (work.get())(k))
     } else {
-        (0..misses.len()).map(mesh_one).collect()
+        (0..misses.len()).map(|k| (k, mesh_one(k))).collect()
     };
-    made.sort_by_key(|(k, _, _)| *k);
-    for (k, full, took) in made {
+    for (k, (full, took)) in made {
         let i = misses[k];
         cache.put(&bodies[i], tolerance, profile, &strip_envelope(&full), took);
         out[i] = Some(full);
@@ -409,6 +404,7 @@ pub fn mesh_result_full(
     cache: &mut dyn PayloadCache,
     on_body: &mut dyn FnMut(usize, usize),
 ) -> MeshResult {
+    crate::par::configure_occt();
     let profile = viewport_profile(bodies.len());
     let mut out = Vec::new();
     let mut boxes = Vec::new();

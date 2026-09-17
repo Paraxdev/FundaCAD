@@ -9,10 +9,11 @@
 //!
 //! OCCT is only safe to drive from several threads when no two threads touch
 //! the same `TShape`. Moving or duplicating a body shares its TShape (only the
-//! Location changes), so bodies are meshed in parallel only after
-//! `no_shared_faces` says they own their faces outright.
+//! Location changes), so `share_groups` puts the bodies that share one on the
+//! same thread and lets the rest of the document run beside them.
 
 use std::collections::HashMap;
+use std::sync::OnceLock;
 
 use opencascade::primitives::Shape;
 use opencascade_sys::face_query as fq;
@@ -49,7 +50,30 @@ pub fn threads() -> usize {
 
 /// True when a pass over `n` items is worth handing to other threads.
 pub fn worth_it(n: usize) -> bool {
-    n > 1 && threads() > 1
+    n > 1 && pool().current_num_threads() > 1
+}
+
+/// The engine's rayon pool, sized by `threads()` so one variable caps the whole
+/// engine. Its own pool, not the global one, so a host that also uses rayon
+/// does not resize ours.
+fn pool() -> &'static rayon::ThreadPool {
+    static POOL: OnceLock<rayon::ThreadPool> = OnceLock::new();
+    POOL.get_or_init(|| {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(threads())
+            .thread_name(|i| format!("fundacad-geom-{i}"))
+            .build()
+            .unwrap_or_else(|_| rayon::ThreadPoolBuilder::new().build().expect("a rayon pool"))
+    })
+}
+
+/// Point OCCT's own thread pool at the same thread count and turn on the
+/// parallel defaults BRepMesh and BOPAlgo read, sidecar/occt_smp.py. Once per
+/// process, before any job: the pool must not be resized while an algorithm
+/// holds threads from it. Returns the count OCCT took.
+pub fn configure_occt() -> usize {
+    static DONE: OnceLock<usize> = OnceLock::new();
+    *DONE.get_or_init(|| opencascade_sys::osd_smp::osd_smp_configure(threads() as i32).max(1) as usize)
 }
 
 /// `f` over `0..n` in parallel, the results in index order.
@@ -57,7 +81,8 @@ pub fn map_indexed<R: Send>(n: usize, f: impl Fn(usize) -> R + Sync + Send) -> V
     if !worth_it(n) {
         return (0..n).map(f).collect();
     }
-    (0..n).into_par_iter().map(f).collect()
+    // install() so a nested pass joins this pool instead of rayon's global one.
+    pool().install(|| (0..n).into_par_iter().map(f).collect())
 }
 
 /// `f` over `0..n` in parallel, the results flattened in index order.
@@ -66,6 +91,22 @@ pub fn flat_map_indexed<R: Send>(
     f: impl Fn(usize) -> Vec<R> + Sync + Send,
 ) -> Vec<R> {
     map_indexed(n, f).into_iter().flatten().collect()
+}
+
+/// `f` over every index the groups hold: groups run beside each other, a
+/// group's own members run in order on one thread, and the results come back
+/// sorted by index, which is the order a serial walk would have produced.
+pub fn map_grouped<R: Send>(
+    groups: &[Vec<usize>],
+    f: impl Fn(usize) -> R + Sync + Send,
+) -> Vec<(usize, R)> {
+    let work = Shared((&f, groups));
+    let mut out: Vec<(usize, R)> = flat_map_indexed(groups.len(), move |g| {
+        let (f, groups) = *work.get();
+        groups[g].iter().map(|&i| (i, f(i))).collect()
+    });
+    out.sort_by_key(|(i, _)| *i);
+    out
 }
 
 /// Each shape's face `TShape` addresses.
