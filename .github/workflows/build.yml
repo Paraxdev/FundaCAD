@@ -840,5 +840,10 @@ jobs:
           path: target/OCCT
           key: occt-static-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'third_party/opencascade-rs/crates/opencascade-sys/build.rs') }}
 
-      - name: Rust geometry engine tests
-        run: cargo test -p fundacad-geom
+      # The whole workspace, not the kernel crate alone: the engine's request
+      # loop, its transports and the protocol have tests of their own, and the
+      # WebSocket transport is behind a feature, so without it the server the
+      # Python protocol suites drive is never compiled here (RUST-PIVOT section
+      # 5, Phase 2).
+      - name: Rust workspace tests
+        run: cargo test --workspace --features fundacad-engine/ws
