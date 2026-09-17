@@ -546,6 +546,20 @@ def test_a_profiled_corner_rounds_instead_of_meeting_in_a_point():
     print(PASS, "a profiled corner rounds like the kernel's instead of meeting in a point, G2 gets one, nothing is left loose")
 
 
+def test_a_fill_along_a_slanted_notch_edge_stays_under_the_top():
+    """A corner patch pressed into a notch leaves walls that meet the top face at
+    a single point. The fill along their slanted edge ended square to the edge,
+    stood 0.13mm proud of the top and left three faces of no area there."""
+    features = [{"id": "f1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "id": "e0", "width": 70, "height": 50, "x": 0, "y": 0}]}, {"id": "f2", "type": "extrude", "sketch": "f1", "distance": 19.835, "operation": "new", "regions": [[0, 0, 0]], "hiddenBodies": []}, {"id": "f3", "type": "fillet", "edges": [{"kind": "edge", "by": "nearest", "point": [0, -25, 19.834999084472656], "body": "body1"}, {"kind": "edge", "by": "nearest", "point": [35, 0, 19.834999084472656], "body": "body1"}, {"kind": "edge", "by": "nearest", "point": [35, -25, 9.917499542236328], "body": "body1"}], "radius": 10.1, "profile": 0.928, "continuity": "G2"}, {"id": "f4", "type": "sketch", "plane": {"origin": [0, 0, 19.834999084472656], "normal": [0, 0, 1], "xdir": [1, 0, 0]}, "face": {"kind": "face", "by": "nearest", "point": [-16.885000228881836, 13.551666577657063, 19.834999084472656], "body": "body1"}, "at": [-16.885000228881836, 13.551666577657063, 19.834999084472656], "entities": [{"type": "slot", "id": "e0", "x1": -27.0648565962796, "y1": 6.078649298034972, "x2": -16.16817228516419, "y2": 14.5538482066803, "width": 6.6936309478733005}, {"type": "slot", "id": "e1", "x1": 12.082490743653565, "y1": 10, "x2": -17.91702285361481, "y2": -3.3382383782376124, "width": 9.123646105036928}]}, {"id": "f5", "type": "extrude", "sketch": "f4", "distance": -53.084, "operation": "cut", "regions": [[-21.719350689514858, 10.107781610847816, 19.835000000000004], [-2.518889364377562, 3.65928995152734, 19.835000000000004]], "hiddenBodies": []}, {"id": "f6", "type": "press-pull", "face": {"kind": "face", "by": "nearest", "point": [29.07919692993164, -19.555274963378906, 19.79270362854004]}, "distance": -138, "operation": "cut", "body": "body1"}, {"id": "f7", "type": "fillet", "edges": {"kind": "edge", "by": "nearest", "point": [14.22156810760498, -4.221568405628204, 9.917499542236326], "body": "body1"}, "radius": 8}]
+    _, errors, bodies = rebuild({"parameters": {}, "features": features, "bodyIds": {"f2:0": "body1"}})
+    assert not errors, errors
+    shape = bodies[0]["shape"]
+    assert shape.is_valid and len(shape.solids()) == 1
+    assert max(v.Z for v in shape.vertices()) < 19.835 + 1e-3, "nothing above the top face"
+    assert not [f for f in shape.faces() if f.area < 0.5], "no faces of next to no area"
+    print(PASS, "a fill along a slanted notch edge stops at the top face it runs out through")
+
+
 if __name__ == "__main__":
     try:
         test_matches_the_kernel_where_the_kernel_builds()
@@ -563,6 +577,7 @@ if __name__ == "__main__":
         test_a_rim_rounded_by_its_own_radius_is_a_dome()
         test_a_corner_on_a_curved_face_and_a_tapered_one_round_like_the_kernel()
         test_a_profiled_corner_rounds_instead_of_meeting_in_a_point()
+        test_a_fill_along_a_slanted_notch_edge_stays_under_the_top()
         test_the_kernels_failed_attempts_leave_the_body_alone()
         test_a_draft_preview_is_quicker_and_close_to_the_real_build()
         print("\nALL PASS")

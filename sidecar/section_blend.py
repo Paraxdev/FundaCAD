@@ -756,6 +756,44 @@ def _trims(shape, edge, faces, s, size):
                     continue
                 keys.append(key)
                 out.append(trim)
+    if s < 0:
+        # A fill also stops at a flat face its edge runs out through, which need
+        # not share an edge with the faces it sits on: a notch pressed out of a
+        # corner patch has walls that meet the top face at one point, and the
+        # fill along their slanted edge stood 0.13mm proud of the top.
+        vmap = TopTools_IndexedDataMapOfShapeListOfShape()
+        TopExp.MapShapesAndAncestors_s(shape, TopAbs_VERTEX, TopAbs_FACE, vmap)
+        crv = BRepAdaptor_Curve(edge)
+        mid = 0.5 * (crv.FirstParameter() + crv.LastParameter())
+        for v in ends:
+            idx = vmap.FindIndex(v)
+            if not idx:
+                continue
+            t = BRep_Tool.Parameter_s(v, edge)
+            P, V = gp_Pnt(), gp_Vec()
+            crv.D1(t, P, V)
+            if V.Magnitude() < 1e-12:
+                continue
+            leaving = V.Normalized() if t > mid else V.Normalized().Reversed()
+            for f in vmap.FindFromIndex(idx):
+                g = TopoDS.Face_s(f)
+                if any(g.IsSame(x) for x in seen) or BRepAdaptor_Surface(g).GetType() != GeomAbs_Plane:
+                    continue
+                props = BRepGProp_Face(g)
+                u0, u1, v0, v1 = props.Bounds()
+                q, n = gp_Pnt(), gp_Vec()
+                props.Normal(0.5 * (u0 + u1), 0.5 * (v0 + v1), q, n)
+                if n.Magnitude() < 1e-12 or leaving.Dot(n.Normalized()) < 1e-3:
+                    continue
+                trim = _trim_solid(g, P, size)
+                if trim is None:
+                    continue
+                seen.append(g)
+                key = _surface_key(g, trim[0])
+                if key is not None and key in keys:
+                    continue
+                keys.append(key)
+                out.append(trim)
     return out
 
 
