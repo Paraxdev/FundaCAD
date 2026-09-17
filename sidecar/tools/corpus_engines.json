@@ -1,0 +1,125 @@
+{
+  "about": "Small synthetic documents diff_engines.py rebuilds through the Python and the Rust engine. Feature shapes are taken from sidecar/tests (test_smoke, test_fullstack, test_body_binding, test_profile_orientation). Ordered by the port: primitives, sketch extrudes, booleans, blends, shell, revolve, patterns. Every one builds cleanly on the Python engine (diff_engines.py --python-only).",
+  "documents": [
+    {"name": "box", "document": {"parameters": {}, "features": [
+      {"id": "b", "type": "box", "length": 20, "width": 20, "height": 20}
+    ]}},
+    {"name": "cylinder", "document": {"parameters": {}, "features": [
+      {"id": "c", "type": "cylinder", "radius": 5, "height": 30}
+    ]}},
+    {"name": "sphere", "document": {"parameters": {}, "features": [
+      {"id": "s", "type": "sphere", "radius": 10}
+    ]}},
+    {"name": "cone", "document": {"parameters": {}, "features": [
+      {"id": "k", "type": "cone", "bottomRadius": 12, "topRadius": 5, "height": 20}
+    ]}},
+    {"name": "torus_move", "document": {"parameters": {}, "features": [
+      {"id": "t", "type": "torus", "majorRadius": 20, "minorRadius": 5},
+      {"id": "tm", "type": "move", "dx": 30, "dy": -10, "dz": 5, "rx": 90}
+    ]}},
+    {"name": "boxes_move_two_bodies", "document": {"parameters": {}, "features": [
+      {"id": "a", "type": "box", "length": 10, "width": 10, "height": 10},
+      {"id": "am", "type": "move", "dx": -15},
+      {"id": "b", "type": "box", "length": 10, "width": 10, "height": 10},
+      {"id": "bm", "type": "move", "dx": 15}
+    ]}},
+    {"name": "sketch_rectangle_extrude_new", "document": {"parameters": {"width": 40, "height": 20, "thickness": 5}, "features": [
+      {"id": "f1", "type": "sketch", "plane": "XY", "entities": [
+        {"type": "rectangle", "width": "width", "height": "height", "x": 0, "y": 0}]},
+      {"id": "f2", "type": "extrude", "sketch": "f1", "distance": "thickness", "operation": "new"}
+    ]}},
+    {"name": "sketch_circle_extrude_join", "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [
+        {"type": "rectangle", "width": 40, "height": 20, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 5, "operation": "new"},
+      {"id": "s2", "type": "sketch", "plane": "XY", "entities": [
+        {"type": "circle", "radius": 6, "x": 10, "y": 0}]},
+      {"id": "e2", "type": "extrude", "sketch": "s2", "distance": 15, "operation": "join"}
+    ]}},
+    {"name": "sketch_circle_extrude_cut", "document": {"parameters": {"width": 40, "height": 20, "thickness": 5}, "features": [
+      {"id": "f1", "type": "sketch", "plane": "XY", "entities": [
+        {"type": "rectangle", "width": "width", "height": "height", "x": 0, "y": 0}]},
+      {"id": "f2", "type": "extrude", "sketch": "f1", "distance": "thickness", "operation": "new"},
+      {"id": "f3", "type": "sketch", "plane": "XY", "entities": [
+        {"type": "circle", "radius": 3, "x": -12, "y": 0}]},
+      {"id": "f4", "type": "extrude", "sketch": "f3", "distance": "thickness", "operation": "cut"}
+    ]}},
+    {"name": "sketch_polygon_extrude_cut", "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [
+        {"type": "rectangle", "width": 40, "height": 40, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 10, "operation": "new"},
+      {"id": "s2", "type": "sketch", "plane": "XY", "entities": [
+        {"type": "polygon", "x": 0, "y": 0, "radius": 6, "sides": 6, "angle": 0}]},
+      {"id": "e2", "type": "extrude", "sketch": "s2", "distance": 10, "operation": "cut"}
+    ]}},
+    {"name": "sketch_slot_extrude_new", "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [
+        {"type": "slot", "x1": 0, "y1": -8, "x2": 0, "y2": 8, "width": 6}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 4, "operation": "new"}
+    ]}},
+    {"name": "sketch_slot_extrude_cut", "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [
+        {"type": "rectangle", "width": 40, "height": 40, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 10, "operation": "new"},
+      {"id": "s2", "type": "sketch", "plane": "XY", "entities": [
+        {"type": "slot", "x1": 0, "y1": -8, "x2": 0, "y2": 8, "width": 6}]},
+      {"id": "e2", "type": "extrude", "sketch": "s2", "distance": 10, "operation": "cut"}
+    ]}},
+    {"name": "boolean_subtract", "document": {"parameters": {}, "features": [
+      {"id": "bx", "type": "box", "length": 20, "width": 20, "height": 20},
+      {"id": "cy", "type": "cylinder", "radius": 5, "height": 30},
+      {"id": "cb", "type": "boolean", "operation": "subtract", "target": "body1", "tools": ["body2"]}
+    ]}},
+    {"name": "boolean_union", "document": {"parameters": {}, "features": [
+      {"id": "a", "type": "box", "length": 20, "width": 20, "height": 20},
+      {"id": "b", "type": "box", "length": 20, "width": 20, "height": 20},
+      {"id": "mv", "type": "move", "dx": 10},
+      {"id": "cb", "type": "boolean", "operation": "union", "target": "body1", "tools": ["body2"]}
+    ]}},
+    {"name": "boolean_intersect", "document": {"parameters": {}, "features": [
+      {"id": "bx", "type": "box", "length": 20, "width": 20, "height": 20},
+      {"id": "s", "type": "sphere", "radius": 13},
+      {"id": "cb", "type": "boolean", "operation": "intersect", "target": "body1", "tools": ["body2"]}
+    ]}},
+    {"name": "fillet_plain", "document": {"parameters": {}, "features": [
+      {"id": "s", "type": "sketch", "plane": "XY", "entities": [
+        {"type": "rectangle", "width": 20, "height": 20, "x": 0, "y": 0}]},
+      {"id": "e", "type": "extrude", "sketch": "s", "distance": 10, "operation": "new"},
+      {"id": "f", "type": "fillet", "edges": {"kind": "edge", "by": "axis", "axis": "Z"}, "radius": 2}
+    ]}},
+    {"name": "chamfer_plain", "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [
+        {"type": "rectangle", "width": 40, "height": 40, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 10, "operation": "new"},
+      {"id": "c1", "type": "chamfer", "distance": 1.0,
+       "edges": {"kind": "edge", "by": "nearest", "point": [20.0, 20.0, 5.0], "body": "body1"}}
+    ]}},
+    {"name": "shell_open_top", "document": {"parameters": {}, "features": [
+      {"id": "s", "type": "sketch", "plane": "XY", "entities": [
+        {"type": "rectangle", "width": 20, "height": 20, "x": 0, "y": 0}]},
+      {"id": "e", "type": "extrude", "sketch": "s", "distance": 20, "operation": "new"},
+      {"id": "sh", "type": "shell", "thickness": 2, "faces": {"kind": "face", "by": "normal", "dir": [0, 0, 1]}}
+    ]}},
+    {"name": "revolve_270", "document": {"parameters": {}, "features": [
+      {"id": "s", "type": "sketch", "plane": "XZ", "entities": [
+        {"type": "rectangle", "width": 4, "height": 10, "x": 12, "y": 0}]},
+      {"id": "rv", "type": "revolve", "sketch": "s", "axis": "Z", "angle": 270}
+    ]}},
+    {"name": "pattern_linear", "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [
+        {"type": "rectangle", "width": 20, "height": 20, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 20, "operation": "new"},
+      {"id": "pl", "type": "patternLinear", "count": 4, "spacing": 30, "axis": "X"}
+    ]}},
+    {"name": "pattern_circular", "document": {"parameters": {}, "features": [
+      {"id": "s2", "type": "sketch", "plane": "XY", "entities": [
+        {"type": "rectangle", "width": 10, "height": 10, "x": 40, "y": 0}]},
+      {"id": "e2", "type": "extrude", "sketch": "s2", "distance": 10, "operation": "new"},
+      {"id": "pc", "type": "patternCircular", "count": 6, "angle": 360, "axis": "Z"}
+    ]}},
+    {"name": "pattern_rect", "document": {"parameters": {}, "features": [
+      {"id": "bx", "type": "box", "length": 4, "width": 4, "height": 4},
+      {"id": "pr", "type": "patternRect", "countX": 3, "countY": 2, "spacingX": 10, "spacingY": 10}
+    ]}}
+  ]
+}

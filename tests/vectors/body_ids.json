@@ -1,0 +1,587 @@
+{
+ "about": "Body id allocation vectors from sidecar/body_ids.py, replayed by sidecar/tests/test_vectors_shared.py and crates/fundacad-core/tests/shared_vectors.rs. Steps: start a feature, key (and assign) a body, keyNode with a node ref, keyInherit with the join target id.",
+ "number": [
+  [
+   "body1",
+   1
+  ],
+  [
+   "body42",
+   42
+  ],
+  [
+   "body",
+   0
+  ],
+  [
+   "Body3",
+   0
+  ],
+  [
+   "body3a",
+   0
+  ],
+  [
+   "",
+   0
+  ],
+  [
+   "xbody2",
+   0
+  ],
+  [
+   "body007",
+   7
+  ]
+ ],
+ "sessions": [
+  {
+   "name": "no map numbers by position",
+   "recorded": null,
+   "steps": [
+    [
+     "start",
+     "a"
+    ],
+    [
+     "key"
+    ],
+    [
+     "start",
+     "c"
+    ],
+    [
+     "key"
+    ]
+   ],
+   "results": [
+    null,
+    [
+     "a:0",
+     "body1"
+    ],
+    null,
+    [
+     "c:0",
+     "body2"
+    ]
+   ],
+   "events": [
+    [
+     "a:0",
+     null,
+     "body1"
+    ],
+    [
+     "c:0",
+     null,
+     "body2"
+    ]
+   ],
+   "resultingMap": {
+    "a:0": "body1",
+    "c:0": "body2"
+   }
+  },
+  {
+   "name": "the map keeps ids across a switched off feature",
+   "recorded": {
+    "a:0": "body1",
+    "b:0": "body2",
+    "c:0": "body3"
+   },
+   "steps": [
+    [
+     "start",
+     "a"
+    ],
+    [
+     "key"
+    ],
+    [
+     "start",
+     "c"
+    ],
+    [
+     "key"
+    ]
+   ],
+   "results": [
+    null,
+    [
+     "a:0",
+     "body1"
+    ],
+    null,
+    [
+     "c:0",
+     "body3"
+    ]
+   ],
+   "events": [
+    [
+     "a:0",
+     null,
+     "body1"
+    ],
+    [
+     "c:0",
+     null,
+     "body3"
+    ]
+   ],
+   "resultingMap": {
+    "a:0": "body1",
+    "b:0": "body2",
+    "c:0": "body3"
+   }
+  },
+  {
+   "name": "an inserted feature gets a fresh id above the map",
+   "recorded": {
+    "a:0": "body1",
+    "c:0": "body2"
+   },
+   "steps": [
+    [
+     "start",
+     "z"
+    ],
+    [
+     "key"
+    ],
+    [
+     "start",
+     "a"
+    ],
+    [
+     "key"
+    ],
+    [
+     "start",
+     "c"
+    ],
+    [
+     "key"
+    ]
+   ],
+   "results": [
+    null,
+    [
+     "z:0",
+     "body3"
+    ],
+    null,
+    [
+     "a:0",
+     "body1"
+    ],
+    null,
+    [
+     "c:0",
+     "body2"
+    ]
+   ],
+   "events": [
+    [
+     "z:0",
+     null,
+     "body3"
+    ],
+    [
+     "a:0",
+     null,
+     "body1"
+    ],
+    [
+     "c:0",
+     null,
+     "body2"
+    ]
+   ],
+   "resultingMap": {
+    "a:0": "body1",
+    "c:0": "body2",
+    "z:0": "body3"
+   }
+  },
+  {
+   "name": "a join keeps its target id",
+   "recorded": {},
+   "steps": [
+    [
+     "start",
+     "a"
+    ],
+    [
+     "key"
+    ],
+    [
+     "start",
+     "b"
+    ],
+    [
+     "key"
+    ],
+    [
+     "start",
+     "j"
+    ],
+    [
+     "keyInherit",
+     "body1"
+    ]
+   ],
+   "results": [
+    null,
+    [
+     "a:0",
+     "body1"
+    ],
+    null,
+    [
+     "b:0",
+     "body2"
+    ],
+    null,
+    [
+     "j:0",
+     "body1"
+    ]
+   ],
+   "events": [
+    [
+     "a:0",
+     null,
+     "body1"
+    ],
+    [
+     "b:0",
+     null,
+     "body2"
+    ],
+    [
+     "j:0",
+     "body1",
+     "body1"
+    ]
+   ],
+   "resultingMap": {
+    "a:0": "body1",
+    "b:0": "body2",
+    "j:0": "body1"
+   }
+  },
+  {
+   "name": "a recorded fresh id beats inheriting",
+   "recorded": {
+    "a:0": "body1",
+    "j:0": "body7"
+   },
+   "steps": [
+    [
+     "start",
+     "a"
+    ],
+    [
+     "key"
+    ],
+    [
+     "start",
+     "j"
+    ],
+    [
+     "keyInherit",
+     "body1"
+    ]
+   ],
+   "results": [
+    null,
+    [
+     "a:0",
+     "body1"
+    ],
+    null,
+    [
+     "j:0",
+     "body7"
+    ]
+   ],
+   "events": [
+    [
+     "a:0",
+     null,
+     "body1"
+    ],
+    [
+     "j:0",
+     "body1",
+     "body7"
+    ]
+   ],
+   "resultingMap": {
+    "a:0": "body1",
+    "j:0": "body7"
+   }
+  },
+  {
+   "name": "a node ref keys the body, a repeated key is suffixed",
+   "recorded": {},
+   "steps": [
+    [
+     "start",
+     "imp"
+    ],
+    [
+     "keyNode",
+     "asm/part1"
+    ],
+    [
+     "keyNode",
+     "asm/part1"
+    ],
+    [
+     "key"
+    ]
+   ],
+   "results": [
+    null,
+    [
+     "asm/part1",
+     "body1"
+    ],
+    [
+     "imp:1#",
+     "body2"
+    ],
+    [
+     "imp:2",
+     "body3"
+    ]
+   ],
+   "events": [
+    [
+     "asm/part1",
+     null,
+     "body1"
+    ],
+    [
+     "imp:1#",
+     null,
+     "body2"
+    ],
+    [
+     "imp:2",
+     null,
+     "body3"
+    ]
+   ],
+   "resultingMap": {
+    "asm/part1": "body1",
+    "imp:1#": "body2",
+    "imp:2": "body3"
+   }
+  },
+  {
+   "name": "a recorded id already taken is not reused",
+   "recorded": {
+    "a:0": "body1",
+    "b:0": "body1"
+   },
+   "steps": [
+    [
+     "start",
+     "a"
+    ],
+    [
+     "key"
+    ],
+    [
+     "start",
+     "b"
+    ],
+    [
+     "key"
+    ]
+   ],
+   "results": [
+    null,
+    [
+     "a:0",
+     "body1"
+    ],
+    null,
+    [
+     "b:0",
+     "body2"
+    ]
+   ],
+   "events": [
+    [
+     "a:0",
+     null,
+     "body1"
+    ],
+    [
+     "b:0",
+     null,
+     "body2"
+    ]
+   ],
+   "resultingMap": {
+    "a:0": "body1",
+    "b:0": "body2"
+   }
+  },
+  {
+   "name": "not a map is no map",
+   "recorded": [
+    "body1"
+   ],
+   "steps": [
+    [
+     "start",
+     "a"
+    ],
+    [
+     "key"
+    ],
+    [
+     "key"
+    ]
+   ],
+   "results": [
+    null,
+    [
+     "a:0",
+     "body1"
+    ],
+    [
+     "a:1",
+     "body2"
+    ]
+   ],
+   "events": [
+    [
+     "a:0",
+     null,
+     "body1"
+    ],
+    [
+     "a:1",
+     null,
+     "body2"
+    ]
+   ],
+   "resultingMap": {
+    "a:0": "body1",
+    "a:1": "body2"
+   }
+  },
+  {
+   "name": "odd ids count as 0",
+   "recorded": {
+    "x:0": "part9",
+    "y:0": "body03"
+   },
+   "steps": [
+    [
+     "start",
+     "y"
+    ],
+    [
+     "key"
+    ],
+    [
+     "start",
+     "q"
+    ],
+    [
+     "key"
+    ]
+   ],
+   "results": [
+    null,
+    [
+     "y:0",
+     "body03"
+    ],
+    null,
+    [
+     "q:0",
+     "body4"
+    ]
+   ],
+   "events": [
+    [
+     "y:0",
+     null,
+     "body03"
+    ],
+    [
+     "q:0",
+     null,
+     "body4"
+    ]
+   ],
+   "resultingMap": {
+    "x:0": "part9",
+    "y:0": "body03",
+    "q:0": "body4"
+   }
+  }
+ ],
+ "restore": [
+  {
+   "name": "same map replays",
+   "recorded": {
+    "a:0": "body1",
+    "c:0": "body3"
+   },
+   "events": [
+    [
+     "a:0",
+     null,
+     "body1"
+    ],
+    [
+     "c:0",
+     null,
+     "body3"
+    ]
+   ],
+   "expect": true
+  },
+  {
+   "name": "a changed map refuses the prefix",
+   "recorded": {
+    "a:0": "body5"
+   },
+   "events": [
+    [
+     "a:0",
+     null,
+     "body1"
+    ]
+   ],
+   "expect": false
+  },
+  {
+   "name": "no map replays positional",
+   "recorded": null,
+   "events": [
+    [
+     "a:0",
+     null,
+     "body1"
+    ],
+    [
+     "b:0",
+     "body1",
+     "body2"
+    ]
+   ],
+   "expect": true
+  }
+ ]
+}
