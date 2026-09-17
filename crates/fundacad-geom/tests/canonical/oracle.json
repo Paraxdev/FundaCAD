@@ -1,0 +1,88 @@
+{
+ "box_minus_cylinder": {
+  "input": {
+   "faces": 7,
+   "solids": 1,
+   "volume": 3715.720568637095,
+   "valid": true,
+   "surfaces": {
+    "GeomAbs_BSplineSurface": 7
+   }
+  },
+  "changed": true,
+  "output": {
+   "faces": 7,
+   "solids": 1,
+   "volume": 3718.0046447889126,
+   "valid": true,
+   "surfaces": {
+    "GeomAbs_Cylinder": 1,
+    "GeomAbs_Plane": 6
+   }
+  }
+ },
+ "cone": {
+  "input": {
+   "faces": 3,
+   "solids": 1,
+   "volume": 1228.6368322458484,
+   "valid": true,
+   "surfaces": {
+    "GeomAbs_BSplineSurface": 3
+   }
+  },
+  "changed": false,
+  "output": {
+   "faces": 3,
+   "solids": 1,
+   "volume": 1228.6368322458484,
+   "valid": true,
+   "surfaces": {
+    "GeomAbs_BSplineSurface": 3
+   }
+  }
+ },
+ "sphere": {
+  "input": {
+   "faces": 1,
+   "solids": 1,
+   "volume": 4186.958251793265,
+   "valid": true,
+   "surfaces": {
+    "GeomAbs_BSplineSurface": 1
+   }
+  },
+  "changed": true,
+  "output": {
+   "faces": 1,
+   "solids": 1,
+   "volume": 4186.958251793265,
+   "valid": true,
+   "surfaces": {
+    "GeomAbs_BSplineSurface": 1
+   }
+  }
+ },
+ "filleted_box": {
+  "input": {
+   "faces": 26,
+   "solids": 1,
+   "volume": 3839.0324046331384,
+   "valid": true,
+   "surfaces": {
+    "GeomAbs_BSplineSurface": 26
+   }
+  },
+  "changed": true,
+  "output": {
+   "faces": 26,
+   "solids": 1,
+   "volume": 3839.032404633139,
+   "valid": true,
+   "surfaces": {
+    "GeomAbs_BSplineSurface": 20,
+    "GeomAbs_Plane": 6
+   }
+  }
+ }
+}
