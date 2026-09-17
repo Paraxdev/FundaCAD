@@ -47,7 +47,10 @@ pub fn run<J: Jobs>(jobs: J) -> ! {
     }
 }
 
-fn take_stdout() -> io::Result<File> {
+/// A private handle on the real stdout, with descriptor 1 and the OS standard
+/// handle pointed at stderr, so kernel diagnostics cannot corrupt what the
+/// caller writes. Call it before any other thread exists.
+pub fn take_stdout() -> io::Result<File> {
     io::stdout().flush()?;
     // SAFETY: plain descriptor calls on the process's own standard streams,
     // before any other thread exists.

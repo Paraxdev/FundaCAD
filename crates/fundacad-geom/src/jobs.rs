@@ -16,6 +16,6 @@ impl Jobs for GeomJobs {
         _fresh: bool,
         _ctx: &JobContext,
     ) -> JobResult {
-        error_result("the Rust engine cannot rebuild documents yet")
+        error_result("rebuild is not ported to the Rust engine yet")
     }
 }
