@@ -61,6 +61,22 @@ Three things make it different from the beta bundle:
   `CMAKE_POLICY_VERSION_MINIMUM=3.5`, because CMake 4 refuses OCCT 7.8.1's
   declared minimum.
 
+Measured on Windows, 2026-09-17, from that exact command:
+
+| | beta (0.2.125) | pre-alpha, Rust engine |
+|---|---|---|
+| `.msi` | 162.7 MB | **23.3 MB** |
+| `-setup.exe` (NSIS) | 157.3 MB | **23.1 MB** |
+| `fundacad.exe` | small, plus an 800 MB `sidecar-runtime/` beside it | 62.4 MB, and nothing beside it |
+
+Seven times smaller, and it is the Python runtime that accounts for all of it:
+the engine, OpenCASCADE included, is 62 MB of executable. The same run also
+confirmed the three things that make the bundle, read back out of the compiled
+binary rather than assumed: `engine_attach` is registered and `sidecar_token`
+is not, the policy in it is the tightened one with no `ws://127.0.0.1:8765`
+anywhere, and the updater endpoint baked in is the pre-alpha one with the beta
+one absent.
+
 Nothing about the beta path changes, and the two never meet: separate jobs,
 separate tags, separate update feeds, separate artifact names.
 
