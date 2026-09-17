@@ -7,6 +7,15 @@ use crate::Error;
 use cxx::UniquePtr;
 use opencascade_sys::{blob_bytes, xcaf as ffi};
 use std::path::Path;
+use std::sync::{Mutex, MutexGuard};
+
+// The XCAF application, the STEP controllers and Interface_Static are process
+// globals, and two writers at once raise from inside the transfer.
+static STEP_LOCK: Mutex<()> = Mutex::new(());
+
+fn step_lock() -> MutexGuard<'static, ()> {
+    STEP_LOCK.lock().unwrap_or_else(|p| p.into_inner())
+}
 
 fn path_str(path: &Path) -> Result<&str, Error> {
     path.to_str().ok_or(Error::InvalidInput("the path is not valid UTF-8"))
@@ -14,11 +23,13 @@ fn path_str(path: &Path) -> Result<&str, Error> {
 
 pub struct StepWriter {
     inner: UniquePtr<ffi::XcafStepWriter>,
+    _lock: MutexGuard<'static, ()>,
 }
 
 impl StepWriter {
     pub fn new() -> Result<Self, Error> {
-        Ok(Self { inner: ffi::xcaf_step_writer_new()? })
+        let lock = step_lock();
+        Ok(Self { inner: ffi::xcaf_step_writer_new()?, _lock: lock })
     }
 
     /// Adds a root, or a component under the node `parent` returned earlier.
@@ -81,7 +92,9 @@ pub struct StepAssembly {
 }
 
 pub fn read_step_assembly(path: &Path) -> Result<StepAssembly, Error> {
+    let lock = step_lock();
     let a = ffi::step_assembly_read(path_str(path)?)?;
+    drop(lock);
     let a = a.as_ref().ok_or(Error::StepReadFailed)?;
     let mut nodes = Vec::new();
     for i in 0..ffi::step_assembly_node_count(a) {
