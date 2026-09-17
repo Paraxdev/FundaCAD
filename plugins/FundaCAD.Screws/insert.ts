@@ -20,14 +20,17 @@ export function placementFromSelection(e: Engine): ShapePlacement | null {
   return placementFrom(picked.anchor, plane.normal);
 }
 
-/** Where a drop at a screen point lands: on the flat face under it, at the point aimed at. */
+/** Where a drop at a screen point lands: on the flat face under it, where the pointer struck it,
+ *  or on the corner, edge middle or face centre it snaps to when that lies on the same face. */
 export function placementAt(e: Engine, clientX: number, clientY: number): ShapePlacement | null {
-  const faceId = e.viewport.hoverFaceAt(clientX, clientY);
-  if (faceId == null) return null;
-  const plane = e.viewport.planarFace(faceId);
+  const hit = e.viewport.pickFaceForPressPull(clientX, clientY);
+  if (!hit) return null;
+  const plane = e.viewport.planarFace(hit.faceId);
   if (!plane) return null;
-  const aimed = e.viewport.pointAt(clientX, clientY);
-  return placementFrom(aimed?.p ?? plane.origin, plane.normal);
+  // pointAt snaps to edges of every body, hidden ones included, so a snap off this face is ignored.
+  const snapped = e.viewport.pointAt(clientX, clientY)?.p;
+  const onFace = snapped && Math.abs(plane.normal.dot(snapped) - plane.normal.dot(plane.origin)) < 1e-4;
+  return placementFrom(onFace ? snapped : hit.anchor, plane.normal);
 }
 
 /** The feature id the fastener became, or null when it could not be made (and the person was told). */

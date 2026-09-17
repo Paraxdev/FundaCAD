@@ -19,6 +19,7 @@ function fakeEngine() {
     added: [] as Record<string, unknown>[],
     faces: [] as number[],
     planar: true,
+    snapY: 2,
     calls: [] as unknown[][],
     reply: { ok: true, shape: { solid: true, valid: true, faces: 20, volume: 132, bbox: { min: [0, 0, 0], max: [1, 1, 1] }, geom: "a".repeat(32) } } as unknown,
   };
@@ -28,8 +29,8 @@ function fakeEngine() {
       ? { faceIds: state.faces, anchor: new THREE.Vector3(1, 2, 3), normal: new THREE.Vector3(0, 1, 0), selectors: [], bodyId: "b1", round: null }
       : null,
     planarFace: () => (state.planar ? { normal: new THREE.Vector3(0, 1, 0), origin: new THREE.Vector3(1, 2, 3) } : null),
-    hoverFaceAt: () => 7,
-    pointAt: () => ({ p: new THREE.Vector3(4, 5, 6), kind: "surface" }),
+    pickFaceForPressPull: () => ({ faceId: 7, anchor: new THREE.Vector3(9, 2, 9), normal: new THREE.Vector3(0, 1, 0), bodyId: "b1" }),
+    pointAt: () => ({ p: new THREE.Vector3(4, state.snapY, 6), kind: "vertex" }),
   };
   const store = {
     nextId: () => `f${state.added.length + 1}`,
@@ -116,8 +117,18 @@ describe("the fastener library, switched on and off", () => {
     Object.assign(drop, { clientX: 10, clientY: 20 });
     engine.canvas.dispatchEvent(drop);
     await vi.waitFor(() => expect(engine.state.added).toHaveLength(1));
-    expect(engine.state.calls[0]).toEqual(["fastener", spec, { output: "store", placement: { origin: [4, 5, 6], zAxis: [0, 1, 0] } }]);
+    expect(engine.state.calls[0]).toEqual(["fastener", spec, { output: "store", placement: { origin: [4, 2, 6], zAxis: [0, 1, 0] } }]);
     expect(drop.defaultPrevented).toBe(true);
+  });
+
+  it("ignores a snap that is not on the face the drop struck", async () => {
+    engine.state.snapY = 0;
+    dragging.value = expand({ familyId: "iso4032", size: "M5" });
+    const drop = new Event("drop", { cancelable: true }) as DragEvent;
+    Object.defineProperty(drop, "dataTransfer", { value: { types: ["application/x-fundacad-fastener"] } });
+    engine.canvas.dispatchEvent(drop);
+    await vi.waitFor(() => expect(engine.state.added).toHaveLength(1));
+    expect((engine.state.calls[0]![2] as { placement: unknown }).placement).toEqual({ origin: [9, 2, 9], zAxis: [0, 1, 0] });
   });
 
   it("takes everything away when switched off", () => {
