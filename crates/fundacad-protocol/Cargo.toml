@@ -1,0 +1,15 @@
+[package]
+name = "fundacad-protocol"
+description = "FundaCAD engine wire protocol: reply envelopes, binary mesh frames, chunked streams and stdio framing"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+# preserve_order: replies must keep the key order the Python sidecar emits, the
+# golden tests compare bytes. float_roundtrip: a float read back from JSON must
+# be the exact double, or its re-encoded repr drifts in the last digit.
+serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }

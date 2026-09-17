@@ -12,6 +12,7 @@
 //! moving a sidecar `*.py` file across; the conversion targets are listed in
 //! the plan.
 
+pub mod jobs;
 pub mod measure;
 pub mod mesh;
 

@@ -47,6 +47,7 @@ fn main() {
 
     if is_windows {
         println!("cargo:rustc-link-lib=dylib=user32");
+        println!("cargo:rustc-link-lib=dylib=advapi32");
     }
 
     // TODO(bschwind) - Iterate over the src/ directory to populate this.
@@ -105,6 +106,22 @@ fn main() {
     if let "windows" = std::env::consts::OS {
         let current = std::env::current_dir().unwrap();
         build.include(current.parent().unwrap());
+    }
+
+    // MSVC makes every Handle_X a class deriving from opencascade::handle<X>,
+    // other compilers a typedef. The bridges bind OCCT methods that take
+    // Handle(X) as taking Handle_X, which only type-checks with the typedef,
+    // so the shims compile against a copy of Standard_Handle.hxx using it.
+    // Handle_X adds no data, OCCT's own signatures use Handle(X).
+    if target.contains("msvc") {
+        let src = occt_config.include_dir.join("Standard_Handle.hxx");
+        let header = std::fs::read_to_string(&src).expect("Standard_Handle.hxx not found");
+        let patched = header.replace("#if (defined(_MSC_VER) && _MSC_VER >= 1800)", "#if 0");
+        assert!(patched != header, "Standard_Handle.hxx no longer has the MSVC handle class switch");
+        let dir = std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("occt-override");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("Standard_Handle.hxx"), patched).unwrap();
+        build.include(dir);
     }
 
     build
