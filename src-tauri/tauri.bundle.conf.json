@@ -4,6 +4,19 @@
     "createUpdaterArtifacts": true,
     "resources": {
       "sidecar-runtime": "sidecar-runtime"
+    },
+    "linux": {
+      "rpm": {
+        "compression": {
+          "type": "zstd",
+          "level": 3
+        }
+      }
+    },
+    "windows": {
+      "nsis": {
+        "compression": "zlib"
+      }
     }
   }
 }

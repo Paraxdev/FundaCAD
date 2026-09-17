@@ -89,31 +89,18 @@ jobs:
 
       # The sidecar tests are `__main__` scripts, not pytest-discoverable. This
       # used to be a hand-listed set and it kept rotting: eleven files across two
-      # incidents sat here passing locally and never running in CI. Globbing means
-      # a new test is covered the moment it exists; SKIP is the only way out and
-      # every entry needs a reason.
+      # incidents sat here passing locally and never running in CI. The script
+      # globs sidecar/tests and every plugin's tests, so a new test is covered the
+      # moment it exists; SKIP is the only way out and every entry needs a reason.
+      #
+      # Four at a time on the runner's four cores. One after another this step
+      # took 13.5 of the gate's 17 minutes, and every installer waits on the gate.
+      # Files that bind the sidecar's port still run alone, after the rest.
       - name: Sidecar and plugin tests
-        working-directory: sidecar
-        run: |
-          SKIP="test_conic_fuzz.py"  # minutes-long blend sweep; runs in the eval job
-          fail=0
-          # The plugins' tests too, on this same venv: the MCP server's (websockets,
-          # numpy and pillow are all sidecar dependencies) and the geometry tests
-          # of any plugin that SHIPS geometry, which since the texture move is
-          # where a good deal of the engine's own behaviour is checked from.
-          # Globbing rather than listing is what stops these directories from
-          # repeating the history the comment above records; the plugin glob is
-          # a wildcard for the same reason, so a new plugin's geometry tests run
-          # the day they exist.
-          for t in tests/test_*.py ../plugins/*/tests/test_*.py \
-                   ../plugins/*/geometry/tests/test_*.py; do
-            [ -e "$t" ] || continue   # a glob that matched nothing stays literal
-            case " $SKIP " in *" $(basename "$t") "*) echo "skip $t"; continue;; esac
-            echo "::group::$t"
-            uv run python "$t" || fail=1
-            echo "::endgroup::"
-          done
-          exit $fail
+        env:
+          SKIP: test_conic_fuzz.py  # minutes-long blend sweep; runs in the eval job
+          JOBS: 4
+        run: bash scripts/run-sidecar-tests.sh
 
       # Geometry eval harnesses (fillet corpus, selector survival, real-server op
       # coverage). They are measurement oracles that always exit 0, so the script
