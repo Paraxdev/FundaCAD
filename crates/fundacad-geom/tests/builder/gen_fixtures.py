@@ -69,6 +69,17 @@ def doc(features, parameters=None, **extra):
     return d
 
 
+HOLE_BASE = [sk("s1", [rect(40, 40)]), ext("e1", "s1", 20)]
+HOLE_SK = sk("s2", [{"type": "point", "x": -8, "y": 0}, {"type": "point", "x": 8, "y": 0}],
+             plane={"origin": [0, 0, 20], "normal": [0, 0, 1], "xdir": [1, 0, 0]})
+
+
+def hole(**kw):
+    f = {"id": "h", "type": "hole", "sketch": "s2"}
+    f.update(kw)
+    return f
+
+
 CASES = {
     # primitives
     "box": doc([box("b", 20, 10, 5)]),
@@ -213,6 +224,47 @@ CASES = {
     "pattern_rect_overlap": doc([box("a", 4, 4, 4), {"id": "p", "type": "patternRect", "countX": 2, "countY": 2, "spacingX": 3, "spacingY": 3}]),
     "pattern_rect_zero": doc([box("a", 4, 4, 4), {"id": "p", "type": "patternRect", "countX": 2, "countY": 0, "spacingX": 3, "spacingY": 3}]),
     "pattern_rect_nothing": doc([{"id": "p", "type": "patternRect", "countX": 2, "countY": 2, "spacingX": 3, "spacingY": 3}]),
+    # hole, positioned by a sketch (the face selector form waits on selectors)
+    "hole_sketch_points": doc(HOLE_BASE + [HOLE_SK, hole(diameter=3, depth=4)]),
+    "hole_sketch_circles": doc(HOLE_BASE + [dict(HOLE_SK, entities=[circle(1, 0, 12), circle(2, -10, -10, construction=True)]), hole(diameter=3, depth=4)]),
+    "hole_through_drill_point_ignored": doc(HOLE_BASE + [HOLE_SK, hole(diameter=4, extent="through", drillPoint=True)]),
+    "hole_drill_point": doc(HOLE_BASE + [HOLE_SK, hole(diameter=4, depth=8, drillPoint=True)]),
+    "hole_default_depth_param": doc(HOLE_BASE + [HOLE_SK, hole(diameter="D")], {"D": 2.5}),
+    "hole_counterbore_standard": doc(HOLE_BASE + [HOLE_SK, hole(holeType="counterbore", size="M3", extent="through")]),
+    "hole_counterbore_custom": doc(HOLE_BASE + [HOLE_SK, hole(holeType="counterbore", diameter=3.4, depth=12, cbDiameter=6.5, cbDepth=3.4)]),
+    "hole_countersink_standard": doc(HOLE_BASE + [HOLE_SK, hole(holeType="countersink", size="M4", fit="close", extent="through")]),
+    "hole_countersink_angle": doc(HOLE_BASE + [HOLE_SK, hole(holeType="countersink", diameter=3, depth=10, csDiameter=6, csAngle=120)]),
+    "hole_insert_standard": doc(HOLE_BASE + [HOLE_SK, hole(holeType="insert", size="M3", extent="through")]),
+    "hole_insert_no_lead": doc(HOLE_BASE + [HOLE_SK, hole(holeType="insert", diameter=4, depth=5, leadIn=0)]),
+    "hole_tap": doc(HOLE_BASE + [HOLE_SK, hole(standard="tap", size="M5", depth=6)]),
+    "hole_points_and_sketch": doc(HOLE_BASE + [HOLE_SK, hole(diameter=2, depth=3, points=[[5, 5, 99]])]),
+    "hole_flip": doc(HOLE_BASE + [dict(HOLE_SK, plane={"origin": [0, 0, 0], "normal": [0, 0, -1], "xdir": [1, 0, 0]}), hole(diameter=3, depth=4, flip=True)]),
+    "hole_side_plane": doc(HOLE_BASE + [sk("s2", [{"type": "point", "x": 10, "y": 5}], plane={"origin": [20, 0, 0], "normal": [1, 0, 0], "xdir": [0, 1, 0]}),
+                                        hole(diameter=4, depth=10)]),
+    "hole_nearest_body": doc(HOLE_BASE + [box("b2", 10, 10, 10), {"id": "m", "type": "move", "dx": 60, "dz": 15, "bodies": ["body2"]}, HOLE_SK, hole(diameter=3, depth=4)]),
+    "hole_named_body": doc(HOLE_BASE + [box("b2", 10, 10, 10), HOLE_SK, hole(diameter=3, depth=4, body="body1")]),
+    "hole_misses": doc(HOLE_BASE + [sk("s2", [{"type": "point", "x": 100, "y": 0}], plane={"origin": [0, 0, 20], "normal": [0, 0, 1], "xdir": [1, 0, 0]}), hole(diameter=3, depth=4)]),
+    "hole_removes_body": doc([box("a", 2, 2, 2), sk("s2", [{"type": "point", "x": 0, "y": 0}], plane={"origin": [0, 0, 1], "normal": [0, 0, 1], "xdir": [1, 0, 0]}), hole(diameter=10, extent="through")]),
+    "hole_unknown_type": doc(HOLE_BASE + [HOLE_SK, hole(holeType="tapered", diameter=3)]),
+    "hole_unknown_size": doc(HOLE_BASE + [HOLE_SK, hole(diameter=4, size="M7")]),
+    "hole_no_diameter": doc(HOLE_BASE + [HOLE_SK, hole()]),
+    "hole_insert_no_preset": doc(HOLE_BASE + [HOLE_SK, hole(holeType="insert", size="M8")]),
+    "hole_zero_diameter": doc(HOLE_BASE + [HOLE_SK, hole(diameter=0)]),
+    "hole_negative_depth": doc(HOLE_BASE + [HOLE_SK, hole(diameter=3, depth=-1.5)]),
+    "hole_counterbore_missing": doc(HOLE_BASE + [HOLE_SK, hole(holeType="counterbore", diameter=4, cbDiameter=8)]),
+    "hole_counterbore_small": doc(HOLE_BASE + [HOLE_SK, hole(holeType="counterbore", diameter=4, cbDiameter=3, cbDepth=2)]),
+    "hole_counterbore_deep": doc(HOLE_BASE + [HOLE_SK, hole(holeType="counterbore", diameter=4, depth=5, cbDiameter=8, cbDepth=5)]),
+    "hole_countersink_missing": doc(HOLE_BASE + [HOLE_SK, hole(holeType="countersink", diameter=4)]),
+    "hole_countersink_small": doc(HOLE_BASE + [HOLE_SK, hole(holeType="countersink", diameter=4, csDiameter=4)]),
+    "hole_countersink_angle_bad": doc(HOLE_BASE + [HOLE_SK, hole(holeType="countersink", diameter=4, csDiameter=8, csAngle=180)]),
+    "hole_countersink_deep": doc(HOLE_BASE + [HOLE_SK, hole(holeType="countersink", diameter=2, depth=1, csDiameter=8)]),
+    "hole_lead_negative": doc(HOLE_BASE + [HOLE_SK, hole(holeType="insert", diameter=4, leadIn=-0.5)]),
+    "hole_lead_deep": doc(HOLE_BASE + [HOLE_SK, hole(holeType="insert", diameter=4, depth=1, leadIn=2)]),
+    "hole_missing_sketch": doc(HOLE_BASE + [hole(diameter=3, sketch="s9")]),
+    "hole_no_positions": doc(HOLE_BASE + [sk("s2", [rect(4, 4)]), hole(diameter=3)]),
+    "hole_no_plane": doc(HOLE_BASE + [{"id": "h", "type": "hole", "points": [[0, 0, 20]], "diameter": 3}]),
+    "hole_no_body": doc([HOLE_SK, hole(diameter=3)]),
+    "hole_body_gone": doc(HOLE_BASE + [HOLE_SK, hole(diameter=3, body="body4")]),
     # the loop
     "active_off": doc([box("a", 10, 10, 10, activeWhen="flag"), box("b", 2, 2, 2, activeWhen=-2.5)], {"flag": 0}),
     "active_dependent": doc([sk("s", [rect(5, 5)], activeWhen="flag"), ext("e", "s", 5)], {"flag": 0}),

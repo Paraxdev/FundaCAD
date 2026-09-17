@@ -4,8 +4,8 @@
 //! the `split_profile_cells` rule of sidecar/face_footprint.py.
 //!
 //! Not ported yet: text entities, sketches following a face (`face`, `at`),
-//! projection refresh, and the sweep path wire, imprint tool edges and hole
-//! points a sketch also registers for features this engine does not build.
+//! projection refresh, and the imprint tool edges a sketch also registers for
+//! a feature this engine does not build.
 
 use std::collections::HashMap;
 use std::f64::consts::PI;
@@ -755,8 +755,57 @@ pub fn build(ctx: &Ctx, f: &SketchFeature) -> FResult<SketchEntry> {
     Ok(SketchEntry {
         sketch,
         faces: located,
+        points: hole_points(&items, &plane),
+        wire: path_wire(&edges, &plane),
         plane,
     })
+}
+
+/// Where a Hole drills: the sketch's points, else its circles' centres.
+fn hole_points(items: &[Item], plane: &Frame) -> Vec<[f64; 3]> {
+    let points: Vec<[f64; 2]> = items
+        .iter()
+        .filter_map(|it| match it.ent {
+            Ent::Point { x, y } => Some([x, y]),
+            _ => None,
+        })
+        .collect();
+    let marks = if points.is_empty() {
+        items
+            .iter()
+            .filter_map(|it| match it.ent {
+                Ent::Circle { x, y, .. } if !it.construction => Some([x, y]),
+                _ => None,
+            })
+            .collect()
+    } else {
+        points
+    };
+    let (o, xd, yd) = (plane.origin, plane.x, plane.y);
+    marks
+        .iter()
+        .map(|[x, y]| std::array::from_fn(|k| o[k] + x * xd[k] + y * yd[k]))
+        .collect()
+}
+
+/// Stitches fragments parted by less than a printed layer so the whole path
+/// is followed, keeping the longest when the paths are genuinely separate.
+const PATH_STITCH_TOL: f64 = 1e-3;
+
+/// `_path_wire`: the free edges as one located wire, for a sweep path.
+fn path_wire(edges: &[Shape], plane: &Frame) -> Option<Shape> {
+    if edges.is_empty() {
+        return None;
+    }
+    let wires = kernel::wires_from_edges(edges, PATH_STITCH_TOL).ok()?;
+    let mut best: Option<(f64, &Shape)> = None;
+    for w in &wires {
+        let len = kernel::length(w);
+        if best.map_or(true, |(b, _)| len > b) {
+            best = Some((len, w));
+        }
+    }
+    plane.locate(best?.1).ok()
 }
 
 pub fn handle(ctx: &mut Ctx, f: &SketchFeature) -> FResult {

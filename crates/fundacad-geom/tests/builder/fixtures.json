@@ -3630,6 +3630,4102 @@
    "errors": []
   }
  },
+ "hole_body_gone": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "entities": [
+      {
+       "type": "point",
+       "x": -8,
+       "y": 0
+      },
+      {
+       "type": "point",
+       "x": 8,
+       "y": 0
+      }
+     ],
+     "id": "s2",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       20
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "body": "body4",
+     "diameter": 3,
+     "id": "h",
+     "sketch": "s2",
+     "type": "hole"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 31999.999999999993
+    }
+   ],
+   "bodyIds": {
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "code": "referenceNotFound",
+     "feature_id": "h",
+     "message": "Hole: the target body no longer exists"
+    }
+   ]
+  }
+ },
+ "hole_counterbore_custom": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "entities": [
+      {
+       "type": "point",
+       "x": -8,
+       "y": 0
+      },
+      {
+       "type": "point",
+       "x": 8,
+       "y": 0
+      }
+     ],
+     "id": "s2",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       20
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "cbDepth": 3.4,
+     "cbDiameter": 6.5,
+     "depth": 12,
+     "diameter": 3.4,
+     "holeType": "counterbore",
+     "id": "h",
+     "sketch": "s2",
+     "type": "hole"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "h",
+      "e1",
+      "h",
+      "h",
+      "h",
+      "h",
+      "h",
+      "h",
+      "h",
+      "h"
+     ],
+     "faces": 14,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 31618.19282003127
+    }
+   ],
+   "bodyIds": {
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "hole_counterbore_deep": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "entities": [
+      {
+       "type": "point",
+       "x": -8,
+       "y": 0
+      },
+      {
+       "type": "point",
+       "x": 8,
+       "y": 0
+      }
+     ],
+     "id": "s2",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       20
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "cbDepth": 5,
+     "cbDiameter": 8,
+     "depth": 5,
+     "diameter": 4,
+     "holeType": "counterbore",
+     "id": "h",
+     "sketch": "s2",
+     "type": "hole"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 31999.999999999993
+    }
+   ],
+   "bodyIds": {
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "code": "badRequest",
+     "feature_id": "h",
+     "message": "Hole: the counterbore depth (5) must be greater than 0 and less than the hole depth"
+    }
+   ]
+  }
+ },
+ "hole_counterbore_missing": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "entities": [
+      {
+       "type": "point",
+       "x": -8,
+       "y": 0
+      },
+      {
+       "type": "point",
+       "x": 8,
+       "y": 0
+      }
+     ],
+     "id": "s2",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       20
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "cbDiameter": 8,
+     "diameter": 4,
+     "holeType": "counterbore",
+     "id": "h",
+     "sketch": "s2",
+     "type": "hole"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 31999.999999999993
+    }
+   ],
+   "bodyIds": {
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "code": "badRequest",
+     "feature_id": "h",
+     "message": "Hole: a counterbore needs a counterbore diameter and depth, or a standard size"
+    }
+   ]
+  }
+ },
+ "hole_counterbore_small": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "entities": [
+      {
+       "type": "point",
+       "x": -8,
+       "y": 0
+      },
+      {
+       "type": "point",
+       "x": 8,
+       "y": 0
+      }
+     ],
+     "id": "s2",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       20
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "cbDepth": 2,
+     "cbDiameter": 3,
+     "diameter": 4,
+     "holeType": "counterbore",
+     "id": "h",
+     "sketch": "s2",
+     "type": "hole"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 31999.999999999993
+    }
+   ],
+   "bodyIds": {
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "code": "badRequest",
+     "feature_id": "h",
+     "message": "Hole: the counterbore diameter (3) must be larger than the hole (4)"
+    }
+   ]
+  }
+ },
+ "hole_counterbore_standard": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "entities": [
+      {
+       "type": "point",
+       "x": -8,
+       "y": 0
+      },
+      {
+       "type": "point",
+       "x": 8,
+       "y": 0
+      }
+     ],
+     "id": "s2",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       20
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "extent": "through",
+     "holeType": "counterbore",
+     "id": "h",
+     "size": "M3",
+     "sketch": "s2",
+     "type": "hole"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "h",
+      "h",
+      "e1",
+      "h",
+      "h",
+      "h",
+      "h",
+      "h",
+      "h"
+     ],
+     "faces": 12,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 31472.92557572927
+    }
+   ],
+   "bodyIds": {
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "hole_countersink_angle": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "entities": [
+      {
+       "type": "point",
+       "x": -8,
+       "y": 0
+      },
+      {
+       "type": "point",
+       "x": 8,
+       "y": 0
+      }
+     ],
+     "id": "s2",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       20
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "csAngle": 120,
+     "csDiameter": 6,
+     "depth": 10,
+     "diameter": 3,
+     "holeType": "countersink",
+     "id": "h",
+     "sketch": "s2",
+     "type": "hole"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "h",
+      "e1",
+      "h",
+      "h",
+      "h",
+      "h",
+      "h",
+      "h"
+     ],
+     "faces": 12,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 31842.304136310344
+    }
+   ],
+   "bodyIds": {
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "hole_countersink_angle_bad": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "entities": [
+      {
+       "type": "point",
+       "x": -8,
+       "y": 0
+      },
+      {
+       "type": "point",
+       "x": 8,
+       "y": 0
+      }
+     ],
+     "id": "s2",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       20
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "csAngle": 180,
+     "csDiameter": 8,
+     "diameter": 4,
+     "holeType": "countersink",
+     "id": "h",
+     "sketch": "s2",
+     "type": "hole"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 31999.999999999993
+    }
+   ],
+   "bodyIds": {
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "code": "badRequest",
+     "feature_id": "h",
+     "message": "Hole: the countersink angle must be between 0 and 180 degrees (got 180)"
+    }
+   ]
+  }
+ },
+ "hole_countersink_deep": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "entities": [
+      {
+       "type": "point",
+       "x": -8,
+       "y": 0
+      },
+      {
+       "type": "point",
+       "x": 8,
+       "y": 0
+      }
+     ],
+     "id": "s2",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       20
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "csDiameter": 8,
+     "depth": 1,
+     "diameter": 2,
+     "holeType": "countersink",
+     "id": "h",
+     "sketch": "s2",
+     "type": "hole"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 31999.999999999993
+    }
+   ],
+   "bodyIds": {
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "code": "badRequest",
+     "feature_id": "h",
+     "message": "Hole: the countersink is deeper than the hole"
+    }
+   ]
+  }
+ },
+ "hole_countersink_missing": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "entities": [
+      {
+       "type": "point",
+       "x": -8,
+       "y": 0
+      },
+      {
+       "type": "point",
+       "x": 8,
+       "y": 0
+      }
+     ],
+     "id": "s2",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       20
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "diameter": 4,
+     "holeType": "countersink",
+     "id": "h",
+     "sketch": "s2",
+     "type": "hole"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 31999.999999999993
+    }
+   ],
+   "bodyIds": {
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "code": "badRequest",
+     "feature_id": "h",
+     "message": "Hole: a countersink needs a countersink diameter, or a standard size"
+    }
+   ]
+  }
+ },
+ "hole_countersink_small": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "entities": [
+      {
+       "type": "point",
+       "x": -8,
+       "y": 0
+      },
+      {
+       "type": "point",
+       "x": 8,
+       "y": 0
+      }
+     ],
+     "id": "s2",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       20
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "csDiameter": 4,
+     "diameter": 4,
+     "holeType": "countersink",
+     "id": "h",
+     "sketch": "s2",
+     "type": "hole"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 31999.999999999993
+    }
+   ],
+   "bodyIds": {
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "code": "badRequest",
+     "feature_id": "h",
+     "message": "Hole: the countersink diameter (4) must be larger than the hole (4)"
+    }
+   ]
+  }
+ },
+ "hole_countersink_standard": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "entities": [
+      {
+       "type": "point",
+       "x": -8,
+       "y": 0
+      },
+      {
+       "type": "point",
+       "x": 8,
+       "y": 0
+      }
+     ],
+     "id": "s2",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       20
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "extent": "through",
+     "fit": "close",
+     "holeType": "countersink",
+     "id": "h",
+     "size": "M4",
+     "sketch": "s2",
+     "type": "hole"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "h",
+      "h",
+      "e1",
+      "h",
+      "h",
+      "h",
+      "h"
+     ],
+     "faces": 10,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 31307.23221959242
+    }
+   ],
+   "bodyIds": {
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "hole_default_depth_param": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "entities": [
+      {
+       "type": "point",
+       "x": -8,
+       "y": 0
+      },
+      {
+       "type": "point",
+       "x": 8,
+       "y": 0
+      }
+     ],
+     "id": "s2",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       20
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "diameter": "D",
+     "id": "h",
+     "sketch": "s2",
+     "type": "hole"
+    }
+   ],
+   "parameters": {
+    "D": 2.5
+   }
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "h",
+      "e1",
+      "h",
+      "h",
+      "h",
+      "h"
+     ],
+     "faces": 10,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 31950.912614787652
+    }
+   ],
+   "bodyIds": {
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "hole_drill_point": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "entities": [
+      {
+       "type": "point",
+       "x": -8,
+       "y": 0
+      },
+      {
+       "type": "point",
+       "x": 8,
+       "y": 0
+      }
+     ],
+     "id": "s2",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       20
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "depth": 8,
+     "diameter": 4,
+     "drillPoint": true,
+     "id": "h",
+     "sketch": "s2",
+     "type": "hole"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "h",
+      "e1",
+      "h",
+      "h",
+      "h",
+      "h"
+     ],
+     "faces": 10,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 31788.87055386856
+    }
+   ],
+   "bodyIds": {
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "hole_flip": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "entities": [
+      {
+       "type": "point",
+       "x": -8,
+       "y": 0
+      },
+      {
+       "type": "point",
+       "x": 8,
+       "y": 0
+      }
+     ],
+     "id": "s2",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       -1
+      ],
+      "origin": [
+       0,
+       0,
+       0
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "depth": 4,
+     "diameter": 3,
+     "flip": true,
+     "id": "h",
+     "sketch": "s2",
+     "type": "hole"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "h",
+      "e1",
+      "e1",
+      "h",
+      "h",
+      "h",
+      "h"
+     ],
+     "faces": 10,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 31999.151769983524
+    }
+   ],
+   "bodyIds": {
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "hole_insert_no_lead": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "entities": [
+      {
+       "type": "point",
+       "x": -8,
+       "y": 0
+      },
+      {
+       "type": "point",
+       "x": 8,
+       "y": 0
+      }
+     ],
+     "id": "s2",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       20
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "depth": 5,
+     "diameter": 4,
+     "holeType": "insert",
+     "id": "h",
+     "leadIn": 0,
+     "sketch": "s2",
+     "type": "hole"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "h",
+      "e1",
+      "h",
+      "h",
+      "h",
+      "h"
+     ],
+     "faces": 10,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 31874.336293856406
+    }
+   ],
+   "bodyIds": {
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "hole_insert_no_preset": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "entities": [
+      {
+       "type": "point",
+       "x": -8,
+       "y": 0
+      },
+      {
+       "type": "point",
+       "x": 8,
+       "y": 0
+      }
+     ],
+     "id": "s2",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       20
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "holeType": "insert",
+     "id": "h",
+     "size": "M8",
+     "sketch": "s2",
+     "type": "hole"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 31999.999999999993
+    }
+   ],
+   "bodyIds": {
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "code": "badRequest",
+     "feature_id": "h",
+     "message": "Hole: give a diameter or a heat-set insert preset"
+    }
+   ]
+  }
+ },
+ "hole_insert_standard": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "entities": [
+      {
+       "type": "point",
+       "x": -8,
+       "y": 0
+      },
+      {
+       "type": "point",
+       "x": 8,
+       "y": 0
+      }
+     ],
+     "id": "s2",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       20
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "extent": "through",
+     "holeType": "insert",
+     "id": "h",
+     "size": "M3",
+     "sketch": "s2",
+     "type": "hole"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "h",
+      "e1",
+      "h",
+      "h",
+      "h",
+      "h",
+      "h",
+      "h"
+     ],
+     "faces": 12,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 31845.800160586303
+    }
+   ],
+   "bodyIds": {
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "hole_lead_deep": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "entities": [
+      {
+       "type": "point",
+       "x": -8,
+       "y": 0
+      },
+      {
+       "type": "point",
+       "x": 8,
+       "y": 0
+      }
+     ],
+     "id": "s2",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       20
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "depth": 1,
+     "diameter": 4,
+     "holeType": "insert",
+     "id": "h",
+     "leadIn": 2,
+     "sketch": "s2",
+     "type": "hole"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 31999.999999999993
+    }
+   ],
+   "bodyIds": {
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "code": "badRequest",
+     "feature_id": "h",
+     "message": "Hole: the lead-in is deeper than the hole"
+    }
+   ]
+  }
+ },
+ "hole_lead_negative": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "entities": [
+      {
+       "type": "point",
+       "x": -8,
+       "y": 0
+      },
+      {
+       "type": "point",
+       "x": 8,
+       "y": 0
+      }
+     ],
+     "id": "s2",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       20
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "diameter": 4,
+     "holeType": "insert",
+     "id": "h",
+     "leadIn": -0.5,
+     "sketch": "s2",
+     "type": "hole"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 31999.999999999993
+    }
+   ],
+   "bodyIds": {
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "code": "badRequest",
+     "feature_id": "h",
+     "message": "Hole: the lead-in must not be negative (got -0.5)"
+    }
+   ]
+  }
+ },
+ "hole_misses": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "entities": [
+      {
+       "type": "point",
+       "x": 100,
+       "y": 0
+      }
+     ],
+     "id": "s2",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       20
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "depth": 4,
+     "diameter": 3,
+     "id": "h",
+     "sketch": "s2",
+     "type": "hole"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 31999.999999999993
+    }
+   ],
+   "bodyIds": {
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [
+    {
+     "feature_id": "h",
+     "kind": "hole",
+     "reason": "the holes miss the body, nothing was cut"
+    }
+   ],
+   "errors": []
+  }
+ },
+ "hole_missing_sketch": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "diameter": 3,
+     "id": "h",
+     "sketch": "s9",
+     "type": "hole"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 31999.999999999993
+    }
+   ],
+   "bodyIds": {
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "code": "referenceNotFound",
+     "feature_id": "h",
+     "message": "Hole: the sketch it takes positions from (s9) did not build, fix that sketch first"
+    }
+   ]
+  }
+ },
+ "hole_named_body": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "height": 10,
+     "id": "b2",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "entities": [
+      {
+       "type": "point",
+       "x": -8,
+       "y": 0
+      },
+      {
+       "type": "point",
+       "x": 8,
+       "y": 0
+      }
+     ],
+     "id": "s2",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       20
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "body": "body1",
+     "depth": 4,
+     "diameter": 3,
+     "id": "h",
+     "sketch": "s2",
+     "type": "hole"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "h",
+      "e1",
+      "h",
+      "h",
+      "h",
+      "h"
+     ],
+     "faces": 10,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 31943.451332235385
+    },
+    {
+     "bbox": [
+      -5.0,
+      -5.0,
+      -5.0,
+      5.0,
+      5.0,
+      5.0
+     ],
+     "faceOwners": [
+      "b2",
+      "b2",
+      "b2",
+      "b2",
+      "b2",
+      "b2"
+     ],
+     "faces": 6,
+     "id": "body2",
+     "name": "Box",
+     "solids": 1,
+     "volume": 999.9999999999998
+    }
+   ],
+   "bodyIds": {
+    "b2:0": "body2",
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "hole_nearest_body": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "height": 10,
+     "id": "b2",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "bodies": [
+      "body2"
+     ],
+     "dx": 60,
+     "dz": 15,
+     "id": "m",
+     "type": "move"
+    },
+    {
+     "entities": [
+      {
+       "type": "point",
+       "x": -8,
+       "y": 0
+      },
+      {
+       "type": "point",
+       "x": 8,
+       "y": 0
+      }
+     ],
+     "id": "s2",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       20
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "depth": 4,
+     "diameter": 3,
+     "id": "h",
+     "sketch": "s2",
+     "type": "hole"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "h",
+      "e1",
+      "h",
+      "h",
+      "h",
+      "h"
+     ],
+     "faces": 10,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 31943.451332235385
+    },
+    {
+     "bbox": [
+      55.0,
+      -5.0,
+      10.0,
+      65.0,
+      5.0,
+      20.0
+     ],
+     "faceOwners": [
+      "b2",
+      "b2",
+      "b2",
+      "b2",
+      "b2",
+      "b2"
+     ],
+     "faces": 6,
+     "id": "body2",
+     "name": "Box",
+     "solids": 1,
+     "volume": 999.9999999999998
+    }
+   ],
+   "bodyIds": {
+    "b2:0": "body2",
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "hole_negative_depth": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "entities": [
+      {
+       "type": "point",
+       "x": -8,
+       "y": 0
+      },
+      {
+       "type": "point",
+       "x": 8,
+       "y": 0
+      }
+     ],
+     "id": "s2",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       20
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "depth": -1.5,
+     "diameter": 3,
+     "id": "h",
+     "sketch": "s2",
+     "type": "hole"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 31999.999999999993
+    }
+   ],
+   "bodyIds": {
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "code": "badRequest",
+     "feature_id": "h",
+     "message": "Hole: depth must be greater than 0 (got -1.5)"
+    }
+   ]
+  }
+ },
+ "hole_no_body": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "type": "point",
+       "x": -8,
+       "y": 0
+      },
+      {
+       "type": "point",
+       "x": 8,
+       "y": 0
+      }
+     ],
+     "id": "s2",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       20
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "diameter": 3,
+     "id": "h",
+     "sketch": "s2",
+     "type": "hole"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [],
+   "bodyIds": {},
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "code": "badRequest",
+     "feature_id": "h",
+     "message": "Hole needs an existing body"
+    }
+   ]
+  }
+ },
+ "hole_no_diameter": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "entities": [
+      {
+       "type": "point",
+       "x": -8,
+       "y": 0
+      },
+      {
+       "type": "point",
+       "x": 8,
+       "y": 0
+      }
+     ],
+     "id": "s2",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       20
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "id": "h",
+     "sketch": "s2",
+     "type": "hole"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 31999.999999999993
+    }
+   ],
+   "bodyIds": {
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "code": "badRequest",
+     "feature_id": "h",
+     "message": "Hole: give a diameter or a standard size"
+    }
+   ]
+  }
+ },
+ "hole_no_plane": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "diameter": 3,
+     "id": "h",
+     "points": [
+      [
+       0,
+       0,
+       20
+      ]
+     ],
+     "type": "hole"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 31999.999999999993
+    }
+   ],
+   "bodyIds": {
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "code": "badRequest",
+     "feature_id": "h",
+     "message": "Hole: pick a flat face to drill into"
+    }
+   ]
+  }
+ },
+ "hole_no_positions": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "entities": [
+      {
+       "height": 4,
+       "type": "rectangle",
+       "width": 4,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s2",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "diameter": 3,
+     "id": "h",
+     "sketch": "s2",
+     "type": "hole"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 31999.999999999993
+    }
+   ],
+   "bodyIds": {
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "code": "badRequest",
+     "feature_id": "h",
+     "message": "Hole: no positions, click the face or name a sketch with points"
+    }
+   ]
+  }
+ },
+ "hole_points_and_sketch": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "entities": [
+      {
+       "type": "point",
+       "x": -8,
+       "y": 0
+      },
+      {
+       "type": "point",
+       "x": 8,
+       "y": 0
+      }
+     ],
+     "id": "s2",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       20
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "depth": 3,
+     "diameter": 2,
+     "id": "h",
+     "points": [
+      [
+       5,
+       5,
+       99
+      ]
+     ],
+     "sketch": "s2",
+     "type": "hole"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "h",
+      "e1",
+      "h",
+      "h",
+      "h",
+      "h",
+      "h",
+      "h"
+     ],
+     "faces": 12,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 31971.72566611769
+    }
+   ],
+   "bodyIds": {
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "hole_removes_body": {
+  "doc": {
+   "features": [
+    {
+     "height": 2,
+     "id": "a",
+     "length": 2,
+     "type": "box",
+     "width": 2
+    },
+    {
+     "entities": [
+      {
+       "type": "point",
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s2",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       1
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "diameter": 10,
+     "extent": "through",
+     "id": "h",
+     "sketch": "s2",
+     "type": "hole"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -1.0,
+      -1.0,
+      -1.0,
+      1.0,
+      1.0,
+      1.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 7.999999999999998
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "code": "badRequest",
+     "feature_id": "h",
+     "message": "Hole: the holes removed the whole body"
+    }
+   ]
+  }
+ },
+ "hole_side_plane": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "entities": [
+      {
+       "type": "point",
+       "x": 10,
+       "y": 5
+      }
+     ],
+     "id": "s2",
+     "plane": {
+      "normal": [
+       1,
+       0,
+       0
+      ],
+      "origin": [
+       20,
+       0,
+       0
+      ],
+      "xdir": [
+       0,
+       1,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "depth": 10,
+     "diameter": 4,
+     "id": "h",
+     "sketch": "s2",
+     "type": "hole"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "h",
+      "h",
+      "h"
+     ],
+     "faces": 8,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 31874.33629385641
+    }
+   ],
+   "bodyIds": {
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "hole_sketch_circles": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "entities": [
+      {
+       "radius": 1,
+       "type": "circle",
+       "x": 0,
+       "y": 12
+      },
+      {
+       "construction": true,
+       "radius": 2,
+       "type": "circle",
+       "x": -10,
+       "y": -10
+      }
+     ],
+     "id": "s2",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       20
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "depth": 4,
+     "diameter": 3,
+     "id": "h",
+     "sketch": "s2",
+     "type": "hole"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "h",
+      "e1",
+      "h",
+      "h"
+     ],
+     "faces": 8,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 31971.72566611769
+    }
+   ],
+   "bodyIds": {
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "hole_sketch_points": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "entities": [
+      {
+       "type": "point",
+       "x": -8,
+       "y": 0
+      },
+      {
+       "type": "point",
+       "x": 8,
+       "y": 0
+      }
+     ],
+     "id": "s2",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       20
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "depth": 4,
+     "diameter": 3,
+     "id": "h",
+     "sketch": "s2",
+     "type": "hole"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "h",
+      "e1",
+      "h",
+      "h",
+      "h",
+      "h"
+     ],
+     "faces": 10,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 31943.451332235385
+    }
+   ],
+   "bodyIds": {
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "hole_tap": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "entities": [
+      {
+       "type": "point",
+       "x": -8,
+       "y": 0
+      },
+      {
+       "type": "point",
+       "x": 8,
+       "y": 0
+      }
+     ],
+     "id": "s2",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       20
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "depth": 6,
+     "id": "h",
+     "size": "M5",
+     "sketch": "s2",
+     "standard": "tap",
+     "type": "hole"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "h",
+      "e1",
+      "h",
+      "h",
+      "h",
+      "h"
+     ],
+     "faces": 10,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 31833.746916772026
+    }
+   ],
+   "bodyIds": {
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "hole_through_drill_point_ignored": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "entities": [
+      {
+       "type": "point",
+       "x": -8,
+       "y": 0
+      },
+      {
+       "type": "point",
+       "x": 8,
+       "y": 0
+      }
+     ],
+     "id": "s2",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       20
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "diameter": 4,
+     "drillPoint": true,
+     "extent": "through",
+     "id": "h",
+     "sketch": "s2",
+     "type": "hole"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "h",
+      "h",
+      "e1",
+      "h",
+      "h"
+     ],
+     "faces": 8,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 31497.345175425635
+    }
+   ],
+   "bodyIds": {
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "hole_unknown_size": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "entities": [
+      {
+       "type": "point",
+       "x": -8,
+       "y": 0
+      },
+      {
+       "type": "point",
+       "x": 8,
+       "y": 0
+      }
+     ],
+     "id": "s2",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       20
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "diameter": 4,
+     "id": "h",
+     "size": "M7",
+     "sketch": "s2",
+     "type": "hole"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 31999.999999999993
+    }
+   ],
+   "bodyIds": {
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "code": "badRequest",
+     "feature_id": "h",
+     "message": "Hole: unknown size 'M7', expected one of M2, M2.5, M3, M4, M5, M6, M8, M10"
+    }
+   ]
+  }
+ },
+ "hole_unknown_type": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "entities": [
+      {
+       "type": "point",
+       "x": -8,
+       "y": 0
+      },
+      {
+       "type": "point",
+       "x": 8,
+       "y": 0
+      }
+     ],
+     "id": "s2",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       20
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "diameter": 3,
+     "holeType": "tapered",
+     "id": "h",
+     "sketch": "s2",
+     "type": "hole"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 31999.999999999993
+    }
+   ],
+   "bodyIds": {
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "code": "badRequest",
+     "feature_id": "h",
+     "message": "Hole: unknown hole type 'tapered'"
+    }
+   ]
+  }
+ },
+ "hole_zero_diameter": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s1",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e1",
+     "operation": "new",
+     "sketch": "s1",
+     "type": "extrude"
+    },
+    {
+     "entities": [
+      {
+       "type": "point",
+       "x": -8,
+       "y": 0
+      },
+      {
+       "type": "point",
+       "x": 8,
+       "y": 0
+      }
+     ],
+     "id": "s2",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       20
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "diameter": 0,
+     "id": "h",
+     "sketch": "s2",
+     "type": "hole"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1",
+      "e1"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 31999.999999999993
+    }
+   ],
+   "bodyIds": {
+    "e1:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "code": "badRequest",
+     "feature_id": "h",
+     "message": "Hole: diameter must be greater than 0 (got 0)"
+    }
+   ]
+  }
+ },
  "join_targets_missing": {
   "doc": {
    "features": [

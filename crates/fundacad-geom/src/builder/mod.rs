@@ -103,10 +103,13 @@ impl Body {
     }
 }
 
-/// A located sketch: the whole profile, its region cells and its plane.
+/// A located sketch: the whole profile, its region cells, the hole positions
+/// and sweep path it offers, and its plane.
 pub struct SketchEntry {
     pub sketch: Option<Shape>,
     pub faces: Vec<Shape>,
+    pub points: Vec<[f64; 3]>,
+    pub wire: Option<Shape>,
     pub plane: kernel::Frame,
 }
 
