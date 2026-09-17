@@ -222,6 +222,11 @@ public:
     TopoDS_Shape shape;
     std::vector<int32_t> face_colors;
     int32_t solid_color;
+    // "<product label entry>#<solid index>", with the product's own unplaced
+    // solid and the placement that makes `shape` of it; empty for no solid.
+    std::string product;
+    TopoDS_Shape local;
+    TopLoc_Location location;
   };
   std::vector<Node> nodes;
   std::vector<Leaf> leaves;
@@ -320,7 +325,10 @@ struct StepAssemblyWalk {
     if (!solids.empty()) {
       solid_cols = solid_colors(referred);
     }
-    if (solids.empty()) {
+    std::vector<TopoDS_Shape> local;
+    if (!solids.empty()) {
+      local = xcaf_explore(XCAFDoc_ShapeTool::GetShape(referred), TopAbs_SOLID);
+    } else {
       solids.push_back(shape);
     }
     for (size_t k = 0; k < solids.size(); ++k) {
@@ -328,6 +336,11 @@ struct StepAssemblyWalk {
       leaf.node = index;
       leaf.shape = solids[k];
       leaf.solid_color = k < solid_cols.size() ? solid_cols[k] : -1;
+      if (k < local.size()) {
+        leaf.product = entry(referred) + "#" + std::to_string(k);
+        leaf.local = local[k];
+        leaf.location = location;
+      }
       if (k < by_solid.size()) {
         bool any = false;
         for (int32_t c : by_solid[k]) {
@@ -408,3 +421,13 @@ inline std::unique_ptr<TopoDS_Shape> step_assembly_root_shape(const StepAssembly
   return std::unique_ptr<TopoDS_Shape>(new TopoDS_Shape(a.roots.at(i)));
 }
 inline bool step_assembly_is_assembly(const StepAssembly &a) { return a.is_assembly; }
+inline rust::String step_assembly_leaf_product(const StepAssembly &a, int32_t i) {
+  return rust::String(a.leaves.at(i).product);
+}
+inline std::unique_ptr<TopoDS_Shape> step_assembly_leaf_local(const StepAssembly &a, int32_t i) {
+  return std::unique_ptr<TopoDS_Shape>(new TopoDS_Shape(a.leaves.at(i).local));
+}
+inline std::unique_ptr<TopoDS_Shape> step_assembly_leaf_place(const StepAssembly &a, int32_t i,
+                                                              const TopoDS_Shape &shape) {
+  return std::unique_ptr<TopoDS_Shape>(new TopoDS_Shape(shape.Moved(a.leaves.at(i).location)));
+}

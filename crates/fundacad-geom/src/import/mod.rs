@@ -2,13 +2,14 @@
 //! `_import_size_cap` of `sidecar/mesh_import.py`, with the product tree walk
 //! of `step_assembly.py` in the vendored bindings (`opencascade::xcaf`).
 //!
-//! Not here yet: `_canonicalize` (spline faces snapped to analytic surfaces)
-//! and the free memory guard.
+//! Not here yet: the free memory guard.
 
 pub mod blobstore;
+pub mod canonical;
 pub mod gltf;
 pub mod mesh;
 
+use std::collections::HashMap;
 use std::path::Path;
 
 use fundacad_core::face_colors;
@@ -78,26 +79,59 @@ pub fn assembly_payload(asm: &StepAssembly) -> Imported {
             Value::Object(m)
         })
         .collect();
-    let parts: Vec<Value> = asm
-        .leaves
-        .iter()
-        .map(|leaf| {
-            let mut part = Map::new();
-            part.insert("node".into(), json!(leaf.node));
-            part.insert("faces".into(), json!(kernel::count(&leaf.shape, Kind::Face)));
-            if let Some(colors) = &leaf.face_colors {
-                let hexed: Vec<Option<String>> = colors.iter().map(|c| c.map(hex)).collect();
-                if let Some(packed) = face_colors::encode(&hexed) {
-                    part.insert("faceColors".into(), json!(packed));
+    type Colors = Option<Vec<Option<[u8; 3]>>>;
+    // per product solid, so a part placed two hundred times is rewritten once
+    let mut canonical_of: HashMap<String, Option<(Shape, Colors)>> = HashMap::new();
+    let mut leaves: Vec<Option<Shape>> = Vec::with_capacity(asm.leaves.len());
+    let mut parts = Vec::with_capacity(asm.leaves.len());
+    for (i, leaf) in asm.leaves.iter().enumerate() {
+        let mut colors = leaf.face_colors.clone();
+        let mut placed = None;
+        match &leaf.product {
+            Some((key, local)) => {
+                let done = canonical_of.entry(key.clone()).or_insert_with(|| {
+                    canonical::canonicalize(local).map(|result| {
+                        let realigned = match &colors {
+                            Some(c) => canonical::realign_face_colors(local, &result, c),
+                            None => None,
+                        };
+                        (result, realigned)
+                    })
+                });
+                if let Some((result, realigned)) = done {
+                    if let Ok(moved) = asm.place(i, result) {
+                        placed = Some(moved);
+                        colors = realigned.clone();
+                    }
                 }
             }
-            if let Some(c) = leaf.solid_color {
-                part.insert("color".into(), json!(hex(c)));
+            None if kernel::count(&leaf.shape, Kind::Solid) > 0 => {
+                if let Some(result) = canonical::canonicalize(&leaf.shape) {
+                    if let Some(c) = &colors {
+                        colors = canonical::realign_face_colors(&leaf.shape, &result, c);
+                    }
+                    placed = Some(result);
+                }
             }
-            Value::Object(part)
-        })
-        .collect();
-    let shape = kernel::compound(asm.leaves.iter().map(|l| &l.shape));
+            None => {}
+        }
+        let shape = placed.as_ref().unwrap_or(&leaf.shape);
+        let mut part = Map::new();
+        part.insert("node".into(), json!(leaf.node));
+        part.insert("faces".into(), json!(kernel::count(shape, Kind::Face)));
+        if let Some(colors) = &colors {
+            let hexed: Vec<Option<String>> = colors.iter().map(|c| c.map(hex)).collect();
+            if let Some(packed) = face_colors::encode(&hexed) {
+                part.insert("faceColors".into(), json!(packed));
+            }
+        }
+        if let Some(c) = leaf.solid_color {
+            part.insert("color".into(), json!(hex(c)));
+        }
+        parts.push(Value::Object(part));
+        leaves.push(placed);
+    }
+    let shape = kernel::compound(asm.leaves.iter().zip(&leaves).map(|(l, p)| p.as_ref().unwrap_or(&l.shape)));
     let mut fields = Map::new();
     fields.insert("nodes".into(), Value::Array(nodes));
     fields.insert("parts".into(), Value::Array(parts));
@@ -110,12 +144,6 @@ pub fn read_step(path: &Path) -> Result<Imported, String> {
     if asm.is_assembly {
         return Ok(assembly_payload(&asm));
     }
-    let shape = if asm.roots.len() == 1 {
-        let mut roots = asm.roots;
-        roots.remove(0)
-    } else {
-        kernel::compound(asm.roots.iter())
-    };
     let color = asm
         .leaves
         .first()
@@ -125,6 +153,12 @@ pub fn read_step(path: &Path) -> Result<Imported, String> {
     if let Some(c) = color {
         fields.insert("color".into(), json!(hex(c)));
     }
+    let shape = if asm.roots.len() == 1 {
+        let root = asm.roots.into_iter().next().unwrap_or_else(Shape::empty);
+        canonical::canonicalize(&root).unwrap_or(root)
+    } else {
+        canonical::canonicalize_roots(&asm.roots)
+    };
     Ok(Imported { shape, fields })
 }
 
