@@ -354,6 +354,14 @@ CASES = {
     "chamfer_seam_only": doc([{"id": "c", "type": "cylinder", "radius": 8, "height": 10},
                               cham({"kind": "edge", "by": "nearest", "point": [8, 0, 0]}, 1)]),
     "fillet_draft_builds": doc([box("a", 20, 20, 10), fil(eaxis("Z"), 2, draft=True)]),
+    "fillet_conic_chamfer_side": doc([box("a", 20, 20, 10), fil(eaxis("Z"), 3, profile=-0.5)]),
+    "fillet_conic_sharp_side": doc([box("a", 20, 20, 10), fil(eaxis("Z"), 3, profile=0.6)]),
+    "fillet_conic_clamped": doc([box("a", 20, 20, 10), fil(eaxis("Z"), 2, profile=-5)]),
+    "fillet_conic_mitre": doc([box("a", 20, 20, 10), fil([{"kind": "edge", "by": "nearest", "point": p} for p in
+                                                          ([0, 10, 5], [0, -10, 5], [10, 0, 5], [-10, 0, 5])], 4, profile=0.9)]),
+    "fillet_conic_corners": doc([box("a", 20, 20, 10), fil(eall(), 2, profile=-0.4)]),
+    "fillet_conic_cylinder_rim": doc([{"id": "c", "type": "cylinder", "radius": 8, "height": 10},
+                                      fil({"kind": "edge", "by": "nearest", "point": [0, 8, 5]}, 2, profile=-0.9)]),
     "chamfer_zero": doc([box("a", 20, 20, 10), cham(eaxis("Z"), 0)]),
     # the loop
     "active_off": doc([box("a", 10, 10, 10, activeWhen="flag"), box("b", 2, 2, 2, activeWhen=-2.5)], {"flag": 0}),

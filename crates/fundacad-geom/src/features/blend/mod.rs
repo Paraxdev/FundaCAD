@@ -111,7 +111,75 @@ pub fn fillet(ctx: &mut Ctx, f: &Fillet) -> FResult {
             g2 || only_picked,
         );
     }
-    Err(super::not_ported("fillet with a conic profile"))
+    let conic =
+        move |s: &Shape, es: &[Shape], size: f64, _parented: bool| -> Result<Shape, BlendErr> {
+            ops::conic(s, es, size, p)
+        };
+    match blend_edges(
+        ctx,
+        &f.id,
+        &f.edges,
+        "Fillet",
+        &conic,
+        r,
+        draft,
+        Some(&section),
+        false,
+    ) {
+        Err(Fail::Value {
+            message,
+            code: Some(CONIC_NOT_APPLICABLE),
+        }) => {
+            let _ = message;
+            match blend_edges(
+                ctx,
+                &f.id,
+                &f.edges,
+                "Fillet",
+                &op,
+                r,
+                draft,
+                Some(&section),
+                true,
+            ) {
+                Ok(()) => Ok(()),
+                Err(Fail::Value { message, .. }) if message.contains("not ported") => {
+                    Err(super::not_ported("the lofted section blend"))
+                }
+                Err(_) => {
+                    blend_edges(
+                        ctx,
+                        &f.id,
+                        &f.edges,
+                        "Fillet",
+                        &op,
+                        r,
+                        draft,
+                        Some(&section),
+                        false,
+                    )?;
+                    note_profile_fallback(ctx, &f.id);
+                    Ok(())
+                }
+            }
+        }
+        other => other,
+    }
+}
+
+/// Internal marker for `ConicNotApplicable` between `blend_edges` and the fillet handler.
+const CONIC_NOT_APPLICABLE: &str = "conicNotApplicable";
+
+/// `_note_profile_fallback`: an advisory, the fillet built with a plain section.
+fn note_profile_fallback(ctx: &mut Ctx, fid: &str) {
+    ctx.diagnostics.push(json!({
+        "feature_id": fid,
+        "kind": "edge",
+        "resolved": 1,
+        "confidence": 1.0,
+        "lossy": false,
+        "reason": "the variable profile can't wrap this junction, so the fillet used its plain rounded section here",
+    }));
 }
 
 pub fn chamfer(ctx: &mut Ctx, f: &Chamfer) -> FResult {
@@ -528,7 +596,7 @@ fn blend_edges(
             |s: &Shape, e: &Shape, size: f64| op(s, std::slice::from_ref(e), size, false);
         let new_shape = match op(&work, &work_edges, blend_size, false) {
             Ok(out) => out,
-            Err(BlendErr::Conic(msg)) => return Err(Fail::msg(msg)),
+            Err(BlendErr::Conic(msg)) => return Err(value_err(msg, Some(CONIC_NOT_APPLICABLE))),
             Err(combined_err) => {
                 let (out, unresolved) = if draft && section.is_some() {
                     (work.clone(), work_edges.clone())

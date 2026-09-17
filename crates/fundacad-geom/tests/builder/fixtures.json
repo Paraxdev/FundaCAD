@@ -4325,6 +4325,423 @@
    "errors": []
   }
  },
+ "fillet_conic_chamfer_side": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 20,
+     "type": "box",
+     "width": 20
+    },
+    {
+     "edges": {
+      "axis": "Z",
+      "by": "axis",
+      "kind": "edge"
+     },
+     "id": "f",
+     "profile": -0.5,
+     "radius": 3,
+     "type": "fillet"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.0000001,
+      -10.0000001,
+      -5.0000001,
+      10.0000001,
+      10.0000001,
+      5.0000001
+     ],
+     "faceOwners": [
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f"
+     ],
+     "faces": 10,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 3888.3218604050794
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "fillet_conic_clamped": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 20,
+     "type": "box",
+     "width": 20
+    },
+    {
+     "edges": {
+      "axis": "Z",
+      "by": "axis",
+      "kind": "edge"
+     },
+     "id": "f",
+     "profile": -5,
+     "radius": 2,
+     "type": "fillet"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.0000001,
+      -10.0000001,
+      -5.000000100000001,
+      10.0000001,
+      10.0000001,
+      5.000000100000001
+     ],
+     "faceOwners": [
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f"
+     ],
+     "faces": 10,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 3920.8653602641925
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "fillet_conic_corners": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 20,
+     "type": "box",
+     "width": 20
+    },
+    {
+     "edges": {
+      "by": "all",
+      "kind": "edge"
+     },
+     "id": "f",
+     "profile": -0.4,
+     "radius": 2,
+     "type": "fillet"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.000000100000001,
+      -10.0000001,
+      -5.000000100000001,
+      10.000000100000001,
+      10.000000100000003,
+      5.000000100000001
+     ],
+     "faceOwners": [
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f"
+     ],
+     "faces": 26,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 3788.1992646847116
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "fillet_conic_cylinder_rim": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "c",
+     "radius": 8,
+     "type": "cylinder"
+    },
+    {
+     "edges": {
+      "by": "nearest",
+      "kind": "edge",
+      "point": [
+       0,
+       8,
+       5
+      ]
+     },
+     "id": "f",
+     "profile": -0.9,
+     "radius": 2,
+     "type": "fillet"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -8.0000001,
+      -8.000000100000001,
+      -5.0000001,
+      8.000000100000005,
+      8.000000100000001,
+      5.000000100000002
+     ],
+     "faceOwners": [
+      "f",
+      "f",
+      "c",
+      "f"
+     ],
+     "faces": 4,
+     "id": "body1",
+     "name": "Cylinder",
+     "solids": 1,
+     "volume": 1930.7528389065208
+    }
+   ],
+   "bodyIds": {
+    "c:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "fillet_conic_mitre": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 20,
+     "type": "box",
+     "width": 20
+    },
+    {
+     "edges": [
+      {
+       "by": "nearest",
+       "kind": "edge",
+       "point": [
+        0,
+        10,
+        5
+       ]
+      },
+      {
+       "by": "nearest",
+       "kind": "edge",
+       "point": [
+        0,
+        -10,
+        5
+       ]
+      },
+      {
+       "by": "nearest",
+       "kind": "edge",
+       "point": [
+        10,
+        0,
+        5
+       ]
+      },
+      {
+       "by": "nearest",
+       "kind": "edge",
+       "point": [
+        -10,
+        0,
+        5
+       ]
+      }
+     ],
+     "id": "f",
+     "profile": 0.9,
+     "radius": 4,
+     "type": "fillet"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.000000100000001,
+      -10.0000001,
+      -5.0,
+      10.000000100000001,
+      10.000000100000001,
+      5.000000100000004
+     ],
+     "faceOwners": [
+      "f",
+      "f",
+      "f",
+      "a",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f"
+     ],
+     "faces": 10,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 3976.4667570943084
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "fillet_conic_sharp_side": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 20,
+     "type": "box",
+     "width": 20
+    },
+    {
+     "edges": {
+      "axis": "Z",
+      "by": "axis",
+      "kind": "edge"
+     },
+     "id": "f",
+     "profile": 0.6,
+     "radius": 3,
+     "type": "fillet"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.0000001,
+      -10.0000001,
+      -5.0000001,
+      10.0000001,
+      10.0000001,
+      5.0000001
+     ],
+     "faceOwners": [
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f"
+     ],
+     "faces": 10,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 3964.4103754860303
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
  "fillet_cylinder_rims": {
   "doc": {
    "features": [

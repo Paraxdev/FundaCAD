@@ -5,6 +5,7 @@ use opencascade::primitives::Shape;
 use opencascade_sys::blend_ops as ffi;
 use opencascade_sys::topo_ds::TopoDS_Shape;
 
+use super::BlendErr;
 use crate::kernel;
 use crate::select::entity::EdgeEnt;
 
@@ -83,6 +84,35 @@ pub fn dihedral_deg(shape: &Shape, edge: &Shape) -> Option<f64> {
 pub fn face_triangles(faces: &[Shape], deflection: f64) -> Result<Vec<f64>, String> {
     let comp = kernel::compound(faces);
     ffi::blend_face_triangles(comp.raw(), deflection).map_err(|e| exception_text(&e))
+}
+
+/// conic_blend.py `conic_blend`.
+pub fn conic(shape: &Shape, edges: &[Shape], radius: f64, profile: f64) -> Result<Shape, BlendErr> {
+    let es = kernel::compound(edges);
+    let mut status = 0;
+    let mut message = String::new();
+    let out = ffi::blend_conic(
+        shape.raw(),
+        es.raw(),
+        radius,
+        profile,
+        &mut status,
+        &mut message,
+    );
+    match status {
+        0 if !out.is_null() => {
+            let shape = Shape::from_raw(out);
+            if kernel::is_null(&shape) {
+                Err(BlendErr::Kernel(
+                    "Fillet: the conic profile produced no usable solid".into(),
+                ))
+            } else {
+                Ok(shape)
+            }
+        }
+        1 => Err(BlendErr::Conic(message)),
+        _ => Err(BlendErr::Kernel(message)),
+    }
 }
 
 pub fn is_valid(shape: &Shape) -> bool {
