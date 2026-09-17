@@ -109,7 +109,7 @@ fn body_payload_for(
     tolerance: f64,
     profile: ViewportProfile,
 ) -> FullBody {
-    let access = MeshAccess::new(shape);
+    let access = crate::bench::phase("mesh_access", || MeshAccess::new(shape));
     let tess = tessellate(
         shape,
         &access,
@@ -121,7 +121,7 @@ fn body_payload_for(
             force_remesh: false,
         },
     );
-    let lines = edge_polylines(&access);
+    let lines = crate::bench::phase("edges", || edge_polylines(&access));
     let from_map: Vec<Value> = match body.owner_map {
         Some(owners) if body.face_owners.is_empty() => {
             crate::kernel::subshapes(shape, crate::kernel::Kind::Face)
@@ -172,7 +172,7 @@ fn body_payload_for(
     payload.insert("edges".into(), Value::Null);
     payload.insert("faceCount".into(), face_count.into());
     payload.insert("bbox".into(), bbox);
-    let bands = crate::faces::face_bands(shape);
+    let bands = crate::bench::phase("face_bands", || crate::faces::face_bands(shape));
     if !bands.is_empty() {
         payload.insert("faceBands".into(), serde_json::json!(bands));
     }
@@ -354,7 +354,9 @@ pub fn mesh_result_full(
             Some(payload) => with_envelope(body, payload),
             None => {
                 let began = std::time::Instant::now();
-                let full = body_payload_for(body, shape, tolerance, profile);
+                let full = crate::bench::phase("body_payload", || {
+                    body_payload_for(body, shape, tolerance, profile)
+                });
                 cache.put(body, tolerance, profile, &strip_envelope(&full), began.elapsed());
                 full
             }

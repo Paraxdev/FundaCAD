@@ -12,6 +12,7 @@
 //! moving a sidecar `*.py` file across; the conversion targets are listed in
 //! the plan.
 
+pub mod bench;
 pub mod builder;
 pub mod cache;
 pub mod export;

@@ -41,7 +41,7 @@ fn built(
 pub fn fillet(shape: &Shape, edges: &[Shape], radii: &[f64]) -> Result<(Shape, Built), String> {
     let es = kernel::compound(edges);
     let mut status = 0;
-    let r = ffi::blend_fillet(shape.raw(), es.raw(), radii, &mut status);
+    let r = crate::bench::phase("blend_fillet", || ffi::blend_fillet(shape.raw(), es.raw(), radii, &mut status));
     built(r, status)
 }
 
@@ -53,7 +53,7 @@ pub fn chamfer(
 ) -> Result<(Shape, Built), String> {
     let es = kernel::compound(edges);
     let mut status = 0;
-    let r = ffi::blend_chamfer(shape.raw(), es.raw(), d1, d2, &mut status);
+    let r = crate::bench::phase("blend_chamfer", || ffi::blend_chamfer(shape.raw(), es.raw(), d1, d2, &mut status));
     built(r, status)
 }
 
@@ -83,7 +83,8 @@ pub fn dihedral_deg(shape: &Shape, edge: &Shape) -> Option<f64> {
 /// Per triangle `[face index, a, b, c]` flattened, see blend_overlap.py `_triangles`.
 pub fn face_triangles(faces: &[Shape], deflection: f64) -> Result<Vec<f64>, String> {
     let comp = kernel::compound(faces);
-    ffi::blend_face_triangles(comp.raw(), deflection).map_err(|e| exception_text(&e))
+    crate::bench::phase("blend_face_triangles", || ffi::blend_face_triangles(comp.raw(), deflection))
+        .map_err(|e| exception_text(&e))
 }
 
 /// conic_blend.py `conic_blend`.
@@ -91,14 +92,9 @@ pub fn conic(shape: &Shape, edges: &[Shape], radius: f64, profile: f64) -> Resul
     let es = kernel::compound(edges);
     let mut status = 0;
     let mut message = String::new();
-    let out = ffi::blend_conic(
-        shape.raw(),
-        es.raw(),
-        radius,
-        profile,
-        &mut status,
-        &mut message,
-    );
+    let out = crate::bench::phase("blend_conic", || {
+        ffi::blend_conic(shape.raw(), es.raw(), radius, profile, &mut status, &mut message)
+    });
     match status {
         0 if !out.is_null() => {
             let shape = Shape::from_raw(out);
@@ -130,18 +126,20 @@ pub fn section(
     let es = kernel::compound(edges);
     let mut status = 0;
     let mut message = String::new();
-    let out = ffi::blend_section(
-        shape.raw(),
-        es.raw(),
-        chamfer,
-        sizes,
-        size2.unwrap_or(f64::NAN),
-        g2,
-        draft,
-        profile,
-        &mut status,
-        &mut message,
-    );
+    let out = crate::bench::phase("blend_section", || {
+        ffi::blend_section(
+            shape.raw(),
+            es.raw(),
+            chamfer,
+            sizes,
+            size2.unwrap_or(f64::NAN),
+            g2,
+            draft,
+            profile,
+            &mut status,
+            &mut message,
+        )
+    });
     match status {
         0 if !out.is_null() => {
             let shape = Shape::from_raw(out);
@@ -159,5 +157,5 @@ pub fn section(
 }
 
 pub fn is_valid(shape: &Shape) -> bool {
-    ffi::blend_is_valid(shape.raw())
+    crate::bench::phase("blend_is_valid", || ffi::blend_is_valid(shape.raw()))
 }
