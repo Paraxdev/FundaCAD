@@ -145,6 +145,10 @@ OCCT 8.0 is tracked, not a prerequisite.
   engine never solves sketches; it builds what the document stores.
 - **Text:** glyph outlines from `ttf-parser` plus system font discovery with
   `fontdb`, not `Font_FontMgr`; the outline is converted to OCCT edges by us.
+  Landed in `fundacad-geom::text`, measured against the Python engine by
+  `tests/text_oracle.rs`. Single stroke fonts (build123d's bundled "Relief
+  SingleLine CAD" and its `offset_2d` ribbon) are the one piece left out: the
+  font is not ours to ship, so `singleline` resolves like any unknown family.
 
 ## 3. Phases
 
