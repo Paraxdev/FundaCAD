@@ -222,6 +222,26 @@
       {"id": "a", "type": "box", "length": 10, "width": 10, "height": 10},
       {"id": "x", "type": "deleteFace", "face": {"kind": "face", "by": "nearest", "point": [0, 0, 5]}}
     ]}},
+    {"name": "simplify_mesh_merges_facets", "document": {"parameters": {}, "features": [
+      {"id": "s", "type": "sketch", "plane": "XY", "entities": [
+        {"type": "polygon", "x": 0, "y": 0, "radius": 10, "sides": 36, "angle": 0}]},
+      {"id": "e", "type": "extrude", "sketch": "s", "distance": 5, "operation": "new"},
+      {"id": "m", "type": "simplifyMesh", "tolerance": 12}
+    ]}},
+    {"name": "simplify_mesh_unresolved_tolerance_fails", "expectError": true, "document": {"parameters": {}, "features": [
+      {"id": "b", "type": "box", "length": 10, "width": 10, "height": 10},
+      {"id": "m", "type": "simplifyMesh", "tolerance": "angle"}
+    ]}},
+    {"name": "clean_up_every_body", "document": {"parameters": {}, "features": [
+      {"id": "a", "type": "box", "length": 10, "width": 10, "height": 10},
+      {"id": "b", "type": "box", "length": 4, "width": 4, "height": 4},
+      {"id": "mv", "type": "move", "dx": 20, "bodies": ["body2"]},
+      {"id": "c", "type": "cleanUp"}
+    ]}},
+    {"name": "clean_up_unresolved_tolerance_fails", "expectError": true, "document": {"parameters": {}, "features": [
+      {"id": "a", "type": "box", "length": 10, "width": 10, "height": 10},
+      {"id": "c", "type": "cleanUp", "body": "body1", "tolerance": "tol"}
+    ]}},
     {"name": "offset_face_freeform_fails", "expectError": true, "document": {"parameters": {}, "features": [
       {"id": "a", "type": "sketch", "plane": "XY", "entities": [
         {"type": "rectangle", "width": 20, "height": 20, "x": 0, "y": 0}]},

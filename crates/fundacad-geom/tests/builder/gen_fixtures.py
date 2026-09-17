@@ -421,6 +421,16 @@ SOLID_OPS_CASES = {
     "del_box_face_fails": doc([box("a", 10, 10, 10), {"id": "x", "type": "deleteFace", "face": face_at(0, 0, 5)}]),
     "del_missing_body": doc([box("a", 10, 10, 10), {"id": "x", "type": "deleteFace", "body": "body4", "face": face_normal(0, 0, 1)}]),
     "del_no_face": doc([box("a", 10, 10, 10), {"id": "x", "type": "deleteFace", "face": face_normal(1, 1, 1)}]),
+    # simplify mesh, clean up
+    "simplify_polygon": doc([sk("s", [{"type": "polygon", "x": 0, "y": 0, "radius": 10, "sides": 36, "angle": 0}]), ext("e", "s", 5),
+                             {"id": "m", "type": "simplifyMesh", "tolerance": 12}]),
+    "simplify_default": doc([sk("s", [{"type": "polygon", "x": 0, "y": 0, "radius": 10, "sides": 36, "angle": 0}]), ext("e", "s", 5),
+                             {"id": "m", "type": "simplifyMesh"}]),
+    "simplify_no_body": doc([{"id": "m", "type": "simplifyMesh", "tolerance": 5}]),
+    "clean_up_all": doc([box("a", 10, 10, 10), box("b", 4, 4, 4), {"id": "mv", "type": "move", "dx": 20, "bodies": ["body2"]},
+                         {"id": "c", "type": "cleanUp"}]),
+    "clean_up_named": doc(BORED + [{"id": "c", "type": "cleanUp", "body": "body1", "tolerance": 0.2}]),
+    "clean_up_stale": doc([box("a", 10, 10, 10), {"id": "c", "type": "cleanUp", "body": "body5"}]),
 }
 CASES.update(SOLID_OPS_CASES)
 
