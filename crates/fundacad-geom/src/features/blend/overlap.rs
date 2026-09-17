@@ -108,6 +108,10 @@ fn cell_of(c: DVec3) -> (i64, i64, i64) {
 
 /// `doubled_area`, in mm2.
 pub fn doubled_area(faces: &[Shape]) -> Option<f64> {
+    crate::bench::phase("doubled_area", || doubled_area_inner(faces))
+}
+
+fn doubled_area_inner(faces: &[Shape]) -> Option<f64> {
     let tris = triangles(faces)?;
     let mut grid: HashMap<(i64, i64, i64), Vec<usize>> = HashMap::new();
     for (i, t) in tris.iter().enumerate() {

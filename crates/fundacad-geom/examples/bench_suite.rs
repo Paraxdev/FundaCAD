@@ -96,23 +96,29 @@ fn stage_corpus(args: &[String]) {
     let known = Map::new();
     let mut totals = Vec::new();
     let (mut build_ms, mut mesh_ms, mut bodies) = (0.0, 0.0, 0usize);
+    let mut each: Vec<(String, f64)> = Vec::new();
     for r in 0..runs {
         let began = Instant::now();
         let (mut b, mut m, mut n) = (0.0, 0.0, 0usize);
-        for (_, doc) in &docs {
+        each.clear();
+        for (name, doc) in &docs {
             let t = Instant::now();
             let built = builder::rebuild(&typed(doc), doc, &NoWatch).ok().expect("not cancelled");
             b += ms(t.elapsed());
+            let one = ms(t.elapsed());
             let t = Instant::now();
             let _ = reply::mesh_result(&built.bodies, 0.1, &known, &NoWatch);
             m += ms(t.elapsed());
             n += built.bodies.len();
+            each.push((name.clone(), one + ms(t.elapsed())));
         }
         totals.push(began.elapsed());
         if r == runs - 1 {
             (build_ms, mesh_ms, bodies) = (b, m, n);
         }
     }
+    each.sort_by(|a, b| b.1.total_cmp(&a.1));
+    each.truncate(12);
     println!(
         "{}",
         json!({
@@ -123,6 +129,8 @@ fn stage_corpus(args: &[String]) {
             "total_ms": median(totals),
             "rebuild_ms": build_ms,
             "mesh_ms": mesh_ms,
+            "slowest": each.iter().map(|(n, v)| json!([n, (v * 10.0).round() / 10.0])).collect::<Vec<_>>(),
+            "phases": fundacad_geom::bench::report(),
         })
     );
 }
@@ -181,6 +189,7 @@ fn stage_doc(args: &[String]) {
             "cold_rebuild_ms": median(cold_build),
             "cold_mesh_ms": median(cold_mesh),
             "warm_unchanged_ms": median(warm),
+            "phases": fundacad_geom::bench::report(),
         })
     );
 }
@@ -244,6 +253,7 @@ fn stage_import(args: &[String]) {
             "rebuild_ms": rebuild_ms,
             "payloads_ms": payload_ms,
             "total_ms": import_ms + rebuild_ms + payload_ms,
+            "phases": fundacad_geom::bench::report(),
         })
     );
 }
@@ -328,6 +338,7 @@ fn stage_faces(args: &[String]) {
             "runs": runs,
             "face_bands_ms": median(bands),
             "body_payload_ms": median(tess),
+            "phases": fundacad_geom::bench::report(),
         })
     );
 }
