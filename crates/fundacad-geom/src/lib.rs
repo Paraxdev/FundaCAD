@@ -14,6 +14,7 @@
 
 pub mod builder;
 pub mod export;
+pub mod faces;
 pub mod features;
 pub mod import;
 pub mod jobs;
@@ -22,6 +23,7 @@ pub mod measure;
 pub mod mesh;
 pub mod reply;
 pub mod select;
+pub mod topo;
 
 pub use opencascade;
 
