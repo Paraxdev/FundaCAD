@@ -99,6 +99,18 @@ windows = { version = "0.58", features = [
     "Win32_System_Threading",
 ] }
 
+# The shipped engine's own crates compile as one unit, which is what the root
+# workspace's release profile does for the standalone engine. Kept per package
+# rather than profile wide: `lto` and a workspace `codegen-units = 1` would
+# apply to the whole Tauri app and its webview crates, and the release job pays
+# that on every build.
+[profile.release.package.fundacad-geom]
+codegen-units = 1
+[profile.release.package.fundacad-core]
+codegen-units = 1
+[profile.release.package.fundacad-protocol]
+codegen-units = 1
+
 # Its own workspace root until it joins the root workspace, so cargo run from a
 # worktree nested inside another checkout does not adopt the outer workspace.
 [workspace]
