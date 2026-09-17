@@ -13,7 +13,7 @@ import type { DocumentStore } from "../document/store";
 import type { Viewport } from "../viewport/viewport";
 import type { GeometryBackend } from "../geometry/client";
 import { getUnit, toDisplay, displayRound } from "./units";
-import { usePanelsStore, type PanelRow, type ClashRow } from "../stores/panels";
+import { usePanelsStore, type PanelRow, type ClashRow, type ClearanceRow } from "../stores/panels";
 
 export interface PanelsDeps {
   store: DocumentStore;
@@ -27,7 +27,9 @@ export function createPanels(deps: PanelsDeps) {
   const { store, viewport, geometry, hasBody, setStatus } = deps;
   const panels = usePanelsStore();
 
-  // --- Inspect: Properties readout (volume / area / mass / center / bbox) ---
+  // --- Inspect: Properties readout (volume / area / center / bbox). Mass and
+  // the filament estimate are computed live in the panel component itself,
+  // from `raw` below, so changing material/infill needs no new geometry call. ---
   function showProperties() {
     if (!hasBody()) {
       setStatus("Properties: create or import a body first", "");
@@ -38,11 +40,9 @@ export function createPanels(deps: PanelsDeps) {
     if (!p) return;
     const unit = getUnit();
     const f = toDisplay(1);
-    const cm3 = p.volume / 1000; // mm³ → cm³ (mass at 1 g/cm³ baseline)
     const rows: PanelRow[] = [
       { k: "Volume", v: `${displayRound(p.volume * f * f * f)} ${unit}³` },
       { k: "Surface area", v: `${displayRound(p.area * f * f)} ${unit}²` },
-      { k: "Mass (≈1 g/cm³)", v: `${displayRound(cm3)} g` },
       {
         k: "Center of mass",
         v: `${displayRound(toDisplay(p.com.x))}, ${displayRound(toDisplay(p.com.y))}, ${displayRound(toDisplay(p.com.z))}`,
@@ -58,11 +58,22 @@ export function createPanels(deps: PanelsDeps) {
     panels.showProperties({
       title: sel.length === 1 ? (p.names[0] ?? "") : sel.length ? `${sel.length} bodies` : "All bodies",
       rows,
+      raw: { volumeMm3: p.volume, areaMm2: p.area },
     });
+    viewport.setComMarker(p.com);
   }
 
-  // --- Inspect: Interference (clash) check between bodies ---
-  async function showInterference() {
+  /** Close Properties and drop its center-of-mass marker. The panel component
+   *  calls this instead of nulling the store ref directly, so the overlay
+   *  never outlives the panel that asked for it. */
+  function closeProperties() {
+    panels.properties = null;
+    viewport.setComMarker(null);
+  }
+
+  // --- Inspect: Interference (clash) check between bodies, optionally with a
+  // clearance threshold (mm) for the near-miss pass. ---
+  async function showInterference(clearanceMm?: number) {
     if (!hasBody()) {
       setStatus("Interference: create or import a body first", "");
       return;
@@ -72,15 +83,20 @@ export function createPanels(deps: PanelsDeps) {
       return;
     }
     setStatus("Checking interference…", "");
-    const res = await geometry.interference(store.document);
+    const res = await geometry.interference(store.document, clearanceMm);
     if (!res.ok) {
       setStatus(`Interference check failed: ${res.message ?? "error"}`, "error");
       return;
     }
     const pairs = res.pairs ?? [];
+    const clearances = res.clearances ?? [];
+    const foundAny = pairs.length || clearances.length;
     setStatus(
-      pairs.length ? `${pairs.length} interference${pairs.length > 1 ? "s" : ""} found` : "No interferences found",
-      pairs.length ? "error" : "connected",
+      foundAny
+        ? `${pairs.length} interference${pairs.length === 1 ? "" : "s"}` +
+          (clearanceMm ? `, ${clearances.length} close pair${clearances.length === 1 ? "" : "s"}` : "")
+        : "No interferences found",
+      foundAny ? "error" : "connected",
     );
     const unit = getUnit();
     const f = toDisplay(1);
@@ -90,12 +106,30 @@ export function createPanels(deps: PanelsDeps) {
       a: p.a,
       b: p.b,
     }));
+    const clearanceRows: ClearanceRow[] = clearances.map((c) => ({
+      k: `${c.aName} ↔ ${c.bName}`,
+      v: `${displayRound(toDisplay(c.distance))} ${unit}`,
+      a: c.a,
+      b: c.b,
+    }));
     panels.showInterference({
       title: pairs.length
         ? `Interference, ${pairs.length} clash${pairs.length > 1 ? "es" : ""}`
         : "Interference",
       clashes,
+      clearances: clearanceRows,
+      ...(res.truncated ? { truncatedMessage: res.message } : {}),
     });
+    viewport.setInterferenceOverlay(
+      pairs,
+      clearances.map((c) => ({ pointA: c.pointA, pointB: c.pointB })),
+    );
+  }
+
+  /** Close Interference and drop its overlap/clearance overlay. */
+  function closeInterference() {
+    panels.interference = null;
+    viewport.setInterferenceOverlay(null, null);
   }
 
   function showOverhangSettings() {
@@ -105,7 +139,10 @@ export function createPanels(deps: PanelsDeps) {
     panels.overhang = false;
   }
 
-  return { showProperties, showInterference, showOverhangSettings, closeOverhangSettings };
+  return {
+    showProperties, closeProperties, showInterference, closeInterference,
+    showOverhangSettings, closeOverhangSettings,
+  };
 }
 
 export type Panels = ReturnType<typeof createPanels>;

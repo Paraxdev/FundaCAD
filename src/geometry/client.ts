@@ -43,7 +43,10 @@ export interface ProjectionResult {
   error?: string;
 }
 
-// One overlapping body pair from an interference check.
+// One overlapping body pair from an interference check. `positions`/`indices`
+// are a coarse triangulation of the OVERLAP SOLID itself (display only, never
+// written to the document), for drawing it as a highlighted overlay; absent if
+// the sidecar couldn't tessellate that particular intersection.
 export interface ClashPair {
   a: string;
   b: string;
@@ -51,6 +54,20 @@ export interface ClashPair {
   bName: string;
   volume: number;
   bbox: { min: [number, number, number]; max: [number, number, number] };
+  positions?: number[];
+  indices?: number[];
+}
+
+// One near-miss pair from clearance mode: closer than the threshold but not
+// overlapping, with the two nearest points for drawing a short marker line.
+export interface ClearancePair {
+  a: string;
+  b: string;
+  aName: string;
+  bName: string;
+  distance: number;
+  pointA: [number, number, number];
+  pointB: [number, number, number];
 }
 
 // The surface the rest of the app depends on. Both the websocket `Geometry`
@@ -110,8 +127,14 @@ export interface GeometryBackend {
   // `onStarted` receives the request id, so a caller that may later cancel
   // can target THIS op rather than whatever ran most recently.
   importGeometry(path: string, format: ImportFormat, onStarted?: (id: string) => void): Promise<ImportReply>;
-  // Pairwise interference (clash) check among the document's bodies.
-  interference(doc: CadDocument): Promise<{ ok: boolean; pairs?: ClashPair[]; message?: string }>;
+  // Pairwise interference (clash) check among the document's bodies. `clearance`
+  // (mm) turns on the near-miss pass: pairs closer than that but not
+  // overlapping come back in `clearances`. `truncated` marks a candidate-pair
+  // cap hit on a dense assembly, `message` explains it.
+  interference(
+    doc: CadDocument,
+    clearance?: number,
+  ): Promise<{ ok: boolean; pairs?: ClashPair[]; clearances?: ClearancePair[]; truncated?: boolean; message?: string }>;
   /** Colored multi-material 3MF PROJECT export (Orca format: one object per body,
    *  palette slot → extruder). Optional, only the Python sidecar authors it; the
    *  Rust spike backend omits it. Palette/bodyColors/bodyNames live in store
@@ -1081,11 +1104,22 @@ export class Geometry implements GeometryBackend {
     return msg.ok ? msg.result.cancelled : false;
   }
 
-  async interference(doc: CadDocument): Promise<{ ok: boolean; pairs?: ClashPair[]; message?: string }> {
-    const msg = await this.call<{ pairs?: ClashPair[] }>("interference", { document: doc });
+  async interference(
+    doc: CadDocument,
+    clearance?: number,
+  ): Promise<{ ok: boolean; pairs?: ClashPair[]; clearances?: ClearancePair[]; truncated?: boolean; message?: string }> {
+    const msg = await this.call<{ pairs?: ClashPair[]; clearances?: ClearancePair[]; truncated?: boolean; message?: string }>(
+      "interference",
+      { document: doc, ...(clearance ? { clearance } : {}) },
+    );
     if (msg.ok) {
       const r = msg.result;
-      return { ok: true, ...(r.pairs !== undefined ? { pairs: r.pairs } : {}) };
+      return {
+        ok: true,
+        ...(r.pairs !== undefined ? { pairs: r.pairs } : {}),
+        ...(r.clearances !== undefined ? { clearances: r.clearances } : {}),
+        ...(r.truncated ? { truncated: true, message: r.message } : {}),
+      };
     }
     return { ok: false, message: msg.error?.message };
   }

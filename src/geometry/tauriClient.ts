@@ -6,7 +6,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import type { CadDocument, ExportFormat, ImportFormat, MeshExportOptions, ImportReply, RebuildReply, RebuildResult } from "../types";
-import type { ClashPair, GeometryBackend } from "./client";
+import type { ClashPair, ClearancePair, GeometryBackend } from "./client";
 
 type StatusListener = (connected: boolean) => void;
 
@@ -93,7 +93,10 @@ export class TauriGeometry implements GeometryBackend {
   }
 
   // Interference (clash) detection isn't wired into the Rust kernel yet.
-  async interference(_doc: CadDocument): Promise<{ ok: boolean; pairs?: ClashPair[]; message?: string }> {
+  async interference(
+    _doc: CadDocument,
+    _clearance?: number,
+  ): Promise<{ ok: boolean; pairs?: ClashPair[]; clearances?: ClearancePair[]; truncated?: boolean; message?: string }> {
     return { ok: false, message: "interference check isn't supported by the Rust backend yet, run without VITE_GEOM=rust" };
   }
 }

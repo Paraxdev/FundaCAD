@@ -37,7 +37,14 @@ import { pickFacePlaneAt } from "../features/facePlanePick";
 import { FpsMeter } from "./fpsMeter";
 import { StutterWatch } from "./stutterWatch";
 import { sceneStats } from "../diagnostics/sceneStats";
-import { makeZebraMaterial, buildCurvatureCombs } from "./overlays";
+import {
+  makeZebraMaterial,
+  buildCurvatureCombs,
+  buildClashMesh,
+  buildClearanceLine,
+  buildComMarker,
+  clearOverlayObjects,
+} from "./overlays";
 import { Picker, occludedEdge, type EdgeCandidate, type Hit, type EdgeHit, type PickMods } from "./picking";
 import { bandIndex, expandToBand, type BandIndex } from "./faceBands";
 import { flushRaycastIndex } from "./raycastIndex";
@@ -2108,6 +2115,10 @@ export class Viewport {
   }
 
   setModel(result: RebuildResult, fit = false, hiddenBodies: string[] = []) {
+    // Analysis overlays key off the PREVIOUS tessellation's bodies (an overlap
+    // solid, a center-of-mass point); any rebuild invalidates them.
+    this.setInterferenceOverlay(null, null);
+    this.setComMarker(null);
     this.dropAreaProjection();
     const hidden = new Set(hiddenBodies);
     // An eye toggle re-emits the same result object: only flip visibility. The full
@@ -2526,6 +2537,48 @@ export class Viewport {
     this.requestRender();
   }
   private measureLine: THREE.Line | null = null;
+
+  /** Interference overlay: a translucent red mesh per overlap solid, plus a
+   *  short line at each clearance pair's nearest points. Pass null/empty to
+   *  clear either list. Display only, cleared automatically on the next
+   *  `setModel`. */
+  setInterferenceOverlay(
+    clashes: { positions?: number[]; indices?: number[] }[] | null,
+    clearances: { pointA: [number, number, number]; pointB: [number, number, number] }[] | null,
+  ) {
+    clearOverlayObjects(this.clashMeshes);
+    this.clashMeshes = [];
+    clearOverlayObjects(this.clearanceLines);
+    this.clearanceLines = [];
+    for (const c of clashes ?? []) {
+      if (!c.positions?.length || !c.indices?.length) continue;
+      const mesh = buildClashMesh(c.positions, c.indices);
+      this.scene.scene.add(mesh);
+      this.clashMeshes.push(mesh);
+    }
+    for (const c of clearances ?? []) {
+      const line = buildClearanceLine(new THREE.Vector3(...c.pointA), new THREE.Vector3(...c.pointB));
+      this.scene.scene.add(line);
+      this.clearanceLines.push(line);
+    }
+    this.requestRender();
+  }
+  private clashMeshes: THREE.Mesh[] = [];
+  private clearanceLines: THREE.Line[] = [];
+
+  /** Center-of-mass marker for the Properties panel (pass null to clear). */
+  setComMarker(point: THREE.Vector3 | null) {
+    if (this.comMarker) {
+      clearOverlayObjects([this.comMarker]);
+      this.comMarker = null;
+    }
+    if (!point) { this.requestRender(); return; }
+    const diag = this.model?.box.getSize(new THREE.Vector3()).length() || 100;
+    this.comMarker = buildComMarker(point, diag);
+    this.scene.scene.add(this.comMarker);
+    this.requestRender();
+  }
+  private comMarker: THREE.Mesh | null = null;
 
   /** Highlight exactly these faces + edges (used by the Measure tool). */
   measureHighlight(

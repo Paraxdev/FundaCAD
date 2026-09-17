@@ -39,7 +39,7 @@ URL = f"ws://{HOST}:{PORT}?token=cancel-test-token"
 SLEEP_SECONDS = 30
 
 
-def _sleep_job(seconds):
+def _sleep_job(seconds, *_ignored):
     time.sleep(seconds)
     return {"slept": seconds}
 

@@ -1053,11 +1053,24 @@ def _migrate_geometry_job(items):
     return {"items": out, "failed": failed}
 
 
-def _interference_job(document):
+# Real booleans/distance checks attempted are the expensive, crashable part; the
+# AABB reject sweeps every pair cheaply regardless of body count (see bbox_of's
+# docstring). Capping THIS, not the raw pair count, is what keeps a picked set
+# of a few hundred candidates from turning into an unbounded OCCT run.
+_MAX_INTERFERENCE_OPS = 400
+
+
+def _interference_job(document, threshold=None):
     """Worker: rebuild + pairwise interference check among live bodies. Returns
     {"pairs": [...]}, one entry per pair of solids that actually overlap (boolean
-    intersection volume above a tiny epsilon), with the overlap volume + bbox so the
-    frontend can report and zoom to each clash."""
+    intersection volume above a tiny epsilon), with the overlap volume + bbox, and
+    a coarse mesh of the overlap solid so the frontend can draw it as a highlight.
+
+    `threshold` (mm) turns on clearance mode: pairs that do NOT overlap but come
+    within `threshold` of each other are reported in a separate "clearances" list,
+    with the exact distance and the two nearest points. Off (None) by default,
+    the exact-distance search is its own OCCT call per candidate pair, no reason
+    to pay for it when nobody asked."""
     from builder import rebuild_cached, _bbox_pair_overlap, bbox_of
     from progress import progress_tick
 
@@ -1074,35 +1087,104 @@ def _interference_job(document):
     for b in live:
         progress_tick()
         boxes.append(bbox_of(b["shape"]))
+    clear_on = bool(threshold) and threshold > 0
+    # Widen the AABB reject by the clearance threshold too, a pair whose exact
+    # boxes miss by less than the threshold can still be within it.
+    reject_tol = threshold if clear_on else 1e-6
     pairs = []
+    clearances = []
+    ops = 0
+    truncated = False
     for i in range(len(live)):
         # Ticked in two places, both proportional to real work: once per row,
         # and again before each boolean. The bbox rejects are cheap enough to
         # sweep in bulk, but a single row of a dense assembly can spend minutes
         # in the booleans below, which is longer than the stall timeout.
         progress_tick()
+        if truncated:
+            break
         for j in range(i + 1, len(live)):
             a, b = live[i], live[j]
-            if not _bbox_pair_overlap(boxes[i], boxes[j]):
+            if not _bbox_pair_overlap(boxes[i], boxes[j], tol=reject_tol):
                 continue  # cheap AABB reject before the (crashable) boolean
+            if ops >= _MAX_INTERFERENCE_OPS:
+                truncated = True
+                break
+            ops += 1
             progress_tick()
             try:
                 common = a["shape"] & b["shape"]
                 vol = abs(getattr(common, "volume", 0.0) or 0.0)
             except Exception:
-                continue  # tangent/degenerate intersection, treat as no clash
-            if vol <= 1e-6:
-                continue
-            bb = common.bounding_box()
-            pairs.append({
-                "a": a["id"], "b": b["id"], "aName": a["name"], "bName": b["name"],
-                "volume": vol,
-                "bbox": {
-                    "min": [bb.min.X, bb.min.Y, bb.min.Z],
-                    "max": [bb.max.X, bb.max.Y, bb.max.Z],
-                },
-            })
-    return {"pairs": pairs}
+                vol = 0.0
+                common = None
+            if vol > 1e-6 and common is not None:
+                bb = common.bounding_box()
+                entry = {
+                    "a": a["id"], "b": b["id"], "aName": a["name"], "bName": b["name"],
+                    "volume": vol,
+                    "bbox": {
+                        "min": [bb.min.X, bb.min.Y, bb.min.Z],
+                        "max": [bb.max.X, bb.max.Y, bb.max.Z],
+                    },
+                }
+                try:
+                    # Coarse on purpose: this is a display overlay, not export,
+                    # and the overlap solid is usually a small fraction of either body.
+                    from tessellate import tessellate
+                    pos, idx, _fids = tessellate(common, tolerance=0.25, angular_tolerance=0.6)
+                    entry["positions"] = [float(x) for x in pos]
+                    entry["indices"] = [int(x) for x in idx]
+                except Exception:
+                    pass  # no overlay mesh, the row still reports
+                pairs.append(entry)
+            elif clear_on:
+                d = _min_distance(a["shape"], b["shape"])
+                if d is not None and d.distance <= threshold:
+                    clearances.append({
+                        "a": a["id"], "b": b["id"], "aName": a["name"], "bName": b["name"],
+                        "distance": d.distance, "pointA": d.point_a, "pointB": d.point_b,
+                    })
+    res = {"pairs": pairs}
+    if clear_on:
+        res["clearances"] = clearances
+    if truncated:
+        res["truncated"] = True
+        res["message"] = (
+            f"Stopped after checking {_MAX_INTERFERENCE_OPS} candidate pairs; "
+            "pick a smaller set of bodies for a full sweep."
+        )
+    return res
+
+
+class _MinDistance:
+    __slots__ = ("distance", "point_a", "point_b")
+
+    def __init__(self, distance, point_a, point_b):
+        self.distance = distance
+        self.point_a = point_a
+        self.point_b = point_b
+
+
+def _min_distance(shape_a, shape_b):
+    """Exact minimum distance between two shapes + one nearest point on each,
+    or None if OCCT can't solve it (degenerate input). Used only in clearance
+    mode, on pairs whose boolean intersection is empty."""
+    from OCP.BRepExtrema import BRepExtrema_DistShapeShape
+
+    try:
+        calc = BRepExtrema_DistShapeShape(shape_a.wrapped, shape_b.wrapped)
+        calc.Perform()
+        if not calc.IsDone() or calc.NbSolution() < 1:
+            return None
+        p1, p2 = calc.PointOnShape1(1), calc.PointOnShape2(1)
+        return _MinDistance(
+            float(calc.Value()),
+            [float(p1.X()), float(p1.Y()), float(p1.Z())],
+            [float(p2.X()), float(p2.Y()), float(p2.Z())],
+        )
+    except Exception:
+        return None
 
 
 def _inspect_job(document, detail=True, bodies_filter=None, max_faces=None, max_edges=None):
@@ -1722,7 +1804,7 @@ async def _dispatch(ws, loop, req, req_id, op):
         await ws.send(_reply_for(req_id, res))
 
     elif op == "interference":
-        res = await _run_stall(loop, _interference_job, req["document"])
+        res = await _run_stall(loop, _interference_job, req["document"], req.get("clearance"))
         await ws.send(_reply_for(req_id, res))
 
     elif op == "inspect":

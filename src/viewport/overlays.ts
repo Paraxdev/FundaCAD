@@ -1,7 +1,9 @@
 // Surface-analysis overlay helpers (display-only, no geometry backend):
-//   - a zebra-stripe material for visualizing surface continuity, and
-//   - curvature combs along edges for visualizing how sharply curves bend.
-// Both are toggled from the viewport; neither touches the document or the kernel.
+//   - a zebra-stripe material for visualizing surface continuity,
+//   - curvature combs along edges for visualizing how sharply curves bend,
+//   - the interference overlay (translucent overlap solids + clearance lines), and
+//   - a small center-of-mass marker.
+// All are toggled from the viewport; none touch the document or the kernel.
 
 import * as THREE from "three";
 import type { ModelView } from "./render";
@@ -106,4 +108,59 @@ export function buildCurvatureCombs(view: ModelView, box: THREE.Box3): THREE.Lin
   const seg = new THREE.LineSegments(geo, mat);
   seg.renderOrder = 3;
   return seg;
+}
+
+/** One overlap solid's mesh, red and translucent so it reads as "this volume
+ *  clashes" while the parts around it stay visible. `depthWrite: false` is
+ *  what keeps two overlapping overlays (or the overlay over the model) from
+ *  fighting the z-buffer into a flicker. */
+export function buildClashMesh(positions: number[], indices: number[]): THREE.Mesh {
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  const mat = new THREE.MeshBasicMaterial({
+    color: 0xff2d2d,
+    transparent: true,
+    opacity: 0.55,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.renderOrder = 500;
+  return mesh;
+}
+
+/** The short marker line between a clearance pair's two nearest points. */
+export function buildClearanceLine(pointA: THREE.Vector3, pointB: THREE.Vector3): THREE.Line {
+  const geo = new THREE.BufferGeometry().setFromPoints([pointA, pointB]);
+  const mat = new THREE.LineBasicMaterial({ color: 0xffc24a, depthTest: false, transparent: true, opacity: 0.95 });
+  const line = new THREE.Line(geo, mat);
+  line.renderOrder = 999;
+  return line;
+}
+
+/** A small sphere at a body's center of mass. Sized off the model diagonal so
+ *  it reads at any part scale instead of vanishing on a tiny print or
+ *  swallowing a huge one. */
+export function buildComMarker(point: THREE.Vector3, modelDiag: number): THREE.Mesh {
+  const r = Math.max(modelDiag * 0.012, 0.4);
+  const geo = new THREE.SphereGeometry(r, 16, 12);
+  const mat = new THREE.MeshBasicMaterial({ color: 0x4ac6ff, depthTest: false, transparent: true, opacity: 0.9 });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.copy(point);
+  mesh.renderOrder = 999;
+  return mesh;
+}
+
+/** Dispose + detach a list of overlay Object3Ds built by the helpers above. */
+export function clearOverlayObjects(objs: THREE.Object3D[]) {
+  for (const o of objs) {
+    o.removeFromParent();
+    const mesh = o as THREE.Mesh | THREE.Line;
+    mesh.geometry?.dispose();
+    const mat = mesh.material as THREE.Material | THREE.Material[] | undefined;
+    if (Array.isArray(mat)) mat.forEach((m) => m.dispose());
+    else mat?.dispose();
+  }
 }

@@ -210,21 +210,40 @@ optional `warnings`).
 
 ### `interference`
 
-Pairwise interference (clash) check among the document's live bodies.
+Pairwise interference (clash) check among the document's live bodies. Display
+only: the result never enters the document or undo history.
 
 ```jsonc
-{ "op": "interference", "id": "...", "document": { /* CadDocument */ } }
+{ "op": "interference", "id": "...", "document": { /* CadDocument */ },
+  "clearance": 0.2 }   // optional, mm: turns on the near-miss pass below
 ```
 
 Reply:
 ```jsonc
 { "pairs": [
-  { "a": "<bodyId>", "b": "<bodyId>", "aName": "...", "bName": "...",
-    "volume": 12.34, "bbox": { "min": [x,y,z], "max": [x,y,z] } }
-] }
+    { "a": "<bodyId>", "b": "<bodyId>", "aName": "...", "bName": "...",
+      "volume": 12.34, "bbox": { "min": [x,y,z], "max": [x,y,z] },
+      "positions": [...], "indices": [...] }   // coarse overlap-solid mesh, omitted if untessellatable
+  ],
+  "clearances": [   // only present when "clearance" was given
+    { "a": "<bodyId>", "b": "<bodyId>", "aName": "...", "bName": "...",
+      "distance": 0.1, "pointA": [x,y,z], "pointB": [x,y,z] }
+  ],
+  "truncated": true, "message": "..."   // only present if the candidate-pair cap was hit
+}
 ```
-One entry per pair whose boolean intersection volume exceeds a small epsilon. A cheap
-bounding-box reject skips most pairs before the (crashable) boolean intersection runs.
+`pairs` has one entry per pair whose boolean intersection volume exceeds a small
+epsilon; `positions`/`indices` are a display-tolerance triangulation of the
+overlap solid itself, for drawing it as a highlight, not exported geometry.
+`clearances` has one entry per pair that does NOT overlap but comes within
+`clearance` mm of each other, with the exact distance and one nearest point on
+each body. A cheap bounding-box reject (widened by `clearance` when given)
+skips most pairs before the (crashable) boolean intersection or exact-distance
+call runs; the real per-pair work (a boolean or a distance search) is capped at
+`_MAX_INTERFERENCE_OPS` (400) candidate pairs, past which the sweep stops and
+reports `truncated`/`message` rather than running unbounded on a dense
+assembly. `clearance` omitted or 0 skips the near-miss pass entirely, callers
+that never asked for it pay nothing extra.
 
 ### `inspect`
 

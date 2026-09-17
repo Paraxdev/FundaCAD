@@ -10,6 +10,10 @@ export interface PanelRow {
 export interface PropertiesData {
   title: string;
   rows: PanelRow[];
+  /** Unrounded mm/mm2/mm3 values, for the filament estimate to compute from
+   *  live as the user changes material/infill, without a unit-display round
+   *  trip through the formatted rows above. */
+  raw: { volumeMm3: number; areaMm2: number };
 }
 
 /** One overlapping pair, keeping the body ids so clicking the row can select
@@ -20,9 +24,18 @@ export interface ClashRow extends PanelRow {
   b: string;
 }
 
+/** One near-miss pair from clearance mode, same shape as a ClashRow. */
+export interface ClearanceRow extends PanelRow {
+  a: string;
+  b: string;
+}
+
 export interface InterferenceData {
   title: string;
   clashes: ClashRow[];
+  clearances: ClearanceRow[];
+  /** Set when the sidecar capped the candidate-pair sweep on a dense assembly. */
+  truncatedMessage?: string;
 }
 
 /** The floating "measure-panel" popups. Each is independent, Properties and
