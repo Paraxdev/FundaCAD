@@ -249,6 +249,8 @@ pub struct Cancelled;
 /// Hooks the engine hands a rebuild: progress per feature, cancel between them.
 pub trait Watch {
     fn feature(&self, _index: usize) {}
+    /// Meshing `done` of `total` bodies.
+    fn meshing(&self, _done: usize, _total: usize) {}
     fn cancelled(&self) -> bool {
         false
     }
