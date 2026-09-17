@@ -22,6 +22,7 @@ pub mod measure;
 pub mod mesh;
 pub mod reply;
 pub mod select;
+pub mod text;
 
 pub use opencascade;
 
