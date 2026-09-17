@@ -7,6 +7,7 @@ use opencascade::{
     extrema::SupportKind,
     heal::FixOptions,
     primitives::{Direction, Edge, Shape, ShapeType, SurfaceType, Vertex},
+    query::PointState,
 };
 use opencascade_sys as ffi;
 
@@ -186,4 +187,166 @@ fn gprop_mass_centre_and_inertia_of_solids_faces_and_edges() {
     let w = wall.properties().unwrap();
     assert!(close(w.mass, 100.0 * std::f64::consts::PI, 1e-6));
     assert!(near(w.centre_of_mass, dvec3(0.0, 0.0, 5.0), 1e-7));
+}
+
+fn tube() -> Shape {
+    Shape::cylinder(dvec3(0.0, 0.0, 0.0), 5.0, dvec3(0.0, 0.0, 1.0), 10.0)
+}
+
+#[test]
+fn topexp_maps_index_shapes_and_walk_edge_to_face_adjacency() {
+    let block = Shape::box_with_dimensions(10.0, 20.0, 30.0);
+    let faces = block.shape_map(ShapeType::Face);
+    assert_eq!(faces.len(), 6);
+    assert_eq!(block.shape_map(ShapeType::Edge).len(), 12);
+    assert_eq!(block.shape_map(ShapeType::Vertex).len(), 8);
+    assert!(faces.get(0).is_none() && faces.get(7).is_none());
+
+    let top: Shape = block.faces().farthest(Direction::PosZ).into();
+    let top_index = faces.index_of(&top);
+    assert!((1..=6).contains(&top_index));
+    assert_eq!(faces.index_of(&top.reversed()), top_index);
+    assert!(faces.get(top_index).unwrap().is_same(&top));
+    let other: Shape = Shape::box_with_dimensions(10.0, 20.0, 30.0).faces().next().unwrap().into();
+    assert_eq!(faces.index_of(&other), 0);
+
+    let edge_faces = block.ancestor_map(ShapeType::Edge, ShapeType::Face);
+    assert_eq!(edge_faces.len(), 12);
+    let mut neighbours = std::collections::BTreeSet::new();
+    for i in 1..=edge_faces.len() {
+        let adjacent = edge_faces.ancestors_at(i);
+        assert_eq!(adjacent.len(), 2);
+        assert!(!adjacent[0].is_same(&adjacent[1]));
+        let ids: Vec<usize> = adjacent.iter().map(|f| faces.index_of(f)).collect();
+        if ids.contains(&top_index) {
+            neighbours.extend(ids.into_iter().filter(|&j| j != top_index));
+        }
+    }
+    // The top face touches the four sides and never the bottom.
+    assert_eq!(neighbours.len(), 4);
+    let bottom: Shape = block.faces().farthest(Direction::NegZ).into();
+    assert!(!neighbours.contains(&faces.index_of(&bottom)));
+
+    let top_edge = top.subshapes(ShapeType::Edge).remove(0);
+    assert_eq!(edge_faces.ancestors(&top_edge).len(), 2);
+    assert!(edge_faces.ancestors(&Edge::segment(DVec3::ZERO, DVec3::X).into()).is_empty());
+
+    // A lone face: every edge is a free boundary with one ancestor.
+    let lone = top.ancestor_map(ShapeType::Edge, ShapeType::Face);
+    assert!((1..=lone.len()).all(|i| lone.ancestors_at(i).len() == 1));
+
+    // Non-manifold: three faces on one edge takes the long path through the list.
+    let fan = opencascade::primitives::Compound::from_shapes([&top, &top, &top]);
+    let fan = Shape::from(fan).ancestor_map(ShapeType::Edge, ShapeType::Face);
+    assert_eq!(fan.ancestors_at(1).len(), 3);
+
+    let mut map = block.shape_map(ShapeType::Face);
+    assert_eq!(map.insert(&top), top_index);
+    assert_eq!(map.insert(&other), 7);
+    assert_eq!(map.iter().count(), 7);
+}
+
+#[test]
+fn seam_edges_and_wrapping_faces_on_a_cylinder() {
+    let tube = tube();
+    let wall = tube.faces().find(|f| f.surface_type() == SurfaceType::Cylinder).unwrap();
+    let cap = tube.faces().farthest(Direction::PosZ);
+    assert!(wall.wraps());
+    assert!(!cap.wraps());
+    let c = wall.closure().unwrap();
+    assert!(c.u_closed && c.u_periodic && !c.v_closed && !c.v_periodic, "{c:?}");
+
+    let edge_faces = tube.ancestor_map(ShapeType::Edge, ShapeType::Face);
+    let wall_shape: Shape = (&wall).into();
+    let seams: Vec<Edge> = wall_shape
+        .subshapes(ShapeType::Edge)
+        .iter()
+        .filter_map(Shape::as_edge)
+        .filter(|e| e.is_seam_of(&wall))
+        .collect();
+    assert_eq!(seams.len(), 2, "a seam is walked once per orientation");
+    let seam: Shape = (&seams[0]).into();
+    assert!(seam.is_same(&(&seams[1]).into()));
+    let around = edge_faces.ancestors(&seam);
+    assert_eq!(around.len(), 2);
+    assert!(around.iter().all(|f| f.is_same(&wall_shape)));
+
+    let rim = cap.edges().next().unwrap();
+    assert!(!rim.is_seam_of(&wall) && !rim.is_seam_of(&cap));
+    let range = rim.range().unwrap();
+    assert!(range.closed && range.periodic && !range.degenerated);
+    assert!(close(range.last - range.first, 2.0 * std::f64::consts::PI, 1e-9));
+}
+
+#[test]
+fn face_uv_bounds_projection_normals_and_classification() {
+    let tube = tube();
+    let wall = tube.faces().find(|f| f.surface_type() == SurfaceType::Cylinder).unwrap();
+    let uv = wall.uv_bounds().unwrap();
+    assert!(close(uv.u_max - uv.u_min, 2.0 * std::f64::consts::PI, 1e-9), "{uv:?}");
+    assert!(close(uv.v_min, 0.0, 1e-9) && close(uv.v_max, 10.0, 1e-9), "{uv:?}");
+
+    let hit = wall.project_point(dvec3(0.0, 8.0, 4.0)).unwrap().unwrap();
+    assert!(close(hit.distance, 3.0, 1e-9));
+    assert!(near(hit.point, dvec3(0.0, 5.0, 4.0), 1e-9));
+    assert!(close(hit.u, std::f64::consts::FRAC_PI_2, 1e-9));
+    assert!(close(hit.v, 4.0, 1e-9));
+    // The untrimmed surface: a point past the cap still projects at distance 3.
+    let past = wall.project_point(dvec3(0.0, 8.0, 40.0)).unwrap().unwrap();
+    assert!(close(past.distance, 3.0, 1e-9));
+    assert_eq!(wall.classify_uv(past.u, past.v, 1e-7).unwrap(), PointState::Out);
+    assert_eq!(wall.classify_uv(hit.u, hit.v, 1e-7).unwrap(), PointState::In);
+    // u = 0 is the seam, which the classifier reports as boundary.
+    assert_eq!(wall.classify_uv(0.0, 4.0, 1e-7).unwrap(), PointState::On);
+
+    let (p, n) = wall.point_and_normal(hit.u, hit.v).unwrap();
+    assert!(near(p, dvec3(0.0, 5.0, 4.0), 1e-9));
+    assert!(near(n, dvec3(0.0, 1.0, 0.0), 1e-9), "{n:?}");
+
+    let block = Shape::box_with_dimensions(10.0, 20.0, 30.0);
+    let top = block.faces().farthest(Direction::PosZ);
+    let bottom = block.faces().farthest(Direction::NegZ);
+    let tb = top.uv_bounds().unwrap();
+    let mut spans = [tb.u_max - tb.u_min, tb.v_max - tb.v_min];
+    spans.sort_by(f64::total_cmp);
+    assert!(close(spans[0], 10.0, 1e-9) && close(spans[1], 20.0, 1e-9), "{tb:?}");
+    let (_, up) = top.point_and_normal(tb.u_min, tb.v_min).unwrap();
+    assert!(near(up, DVec3::Z, 1e-12));
+    let bb = bottom.uv_bounds().unwrap();
+    let (_, down) = bottom.point_and_normal(bb.u_min, bb.v_min).unwrap();
+    assert!(near(down, -DVec3::Z, 1e-12), "the reversed face flips its normal");
+
+    assert_eq!(top.classify_point(dvec3(5.0, 5.0, 30.0), 1e-7).unwrap(), PointState::In);
+    assert_eq!(top.classify_point(dvec3(25.0, 5.0, 30.0), 1e-7).unwrap(), PointState::Out);
+    assert_eq!(top.classify_point(dvec3(10.0, 5.0, 30.0), 1e-7).unwrap(), PointState::On);
+    assert!(top.tolerance() > 0.0 && top.tolerance() < 1e-6);
+}
+
+#[test]
+fn edge_parameter_range_and_derivative() {
+    let segment = Edge::segment(dvec3(1.0, 0.0, 0.0), dvec3(1.0, 10.0, 0.0));
+    let r = segment.range().unwrap();
+    assert!(!r.closed && !r.periodic && !r.degenerated);
+    assert!(close(r.last - r.first, 10.0, 1e-9), "{r:?}");
+    let (p, d) = segment.d1(r.first).unwrap();
+    assert!(near(p, dvec3(1.0, 0.0, 0.0), 1e-12));
+    assert!(near(d, dvec3(0.0, 1.0, 0.0), 1e-12));
+
+    let ring = Edge::circle(dvec3(0.0, 0.0, 2.0), DVec3::Z, 4.0);
+    let r = ring.range().unwrap();
+    assert!(r.closed && r.periodic);
+    let (p, d) = ring.d1(std::f64::consts::FRAC_PI_2).unwrap();
+    assert!(close((p - dvec3(0.0, 0.0, 2.0)).length(), 4.0, 1e-12));
+    assert!(close(d.length(), 4.0, 1e-12));
+    assert!(close(d.dot(p - dvec3(0.0, 0.0, 2.0)), 0.0, 1e-9));
+    assert!(ring.tolerance() > 0.0);
+
+    let cone = Shape::cone().bottom_radius(5.0).top_radius(0.0).height(10.0).build();
+    let degenerate = cone
+        .subshapes(ShapeType::Edge)
+        .iter()
+        .filter_map(Shape::as_edge)
+        .filter(|e| e.range().unwrap().degenerated)
+        .count();
+    assert!(degenerate >= 1, "a cone apex is a degenerated edge");
 }
