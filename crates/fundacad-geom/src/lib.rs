@@ -21,6 +21,7 @@ pub mod kernel;
 pub mod measure;
 pub mod mesh;
 pub mod reply;
+pub mod select;
 
 pub use opencascade;
 
