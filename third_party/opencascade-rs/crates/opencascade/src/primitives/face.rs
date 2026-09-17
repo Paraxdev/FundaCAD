@@ -389,20 +389,13 @@ impl Face {
         Some(ffi::b_rep_adaptor::BRepAdaptor_Surface_cylinder_radius(&surface))
     }
 
-    /// Distance from a point to this face's underlying surface (not its center),
-    /// via point-on-surface projection. Mirrors build123d's `face.distance_to(p)`
-    /// — a cylinder's center sits on its axis (far from the clicked wall), so
-    /// center-distance mis-picks curved faces; surface distance fixes that.
+    /// Distance from a point to the trimmed face, as build123d's
+    /// `face.distance_to(p)` (BRepExtrema). The unbounded surface would put a
+    /// point beside a small coplanar face at distance zero.
     pub fn distance_to(&self, point: DVec3) -> f64 {
-        let surface = ffi::b_rep::BRep_Tool_Surface(&self.inner);
-        let projector =
-            ffi::geom_api::GeomAPI_ProjectPointOnSurf_new(&make_point(point), &surface);
-        if projector.NbPoints() > 0 {
-            projector.LowerDistance()
-        } else {
-            // No projection (degenerate): fall back to center distance.
-            (self.center_of_mass() - point).length()
-        }
+        Shape::from(self)
+            .distance_to_point(point)
+            .unwrap_or_else(|_| (self.center_of_mass() - point).length())
     }
 
     /// Is `point` inside (or on the boundary of) this face? The point is projected
