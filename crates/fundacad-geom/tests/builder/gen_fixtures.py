@@ -335,6 +335,11 @@ def face_normal(x, y, z):
 BLOCK = [sk("s", [rect(20, 20)]), ext("e", "s", 20)]
 TUBE = [{"id": "c", "type": "cylinder", "radius": 10, "height": 20}]
 BORED = [box("b", 30, 30, 10), {"id": "d", "type": "cylinder", "radius": 4, "height": 30, "operation": "cut"}]
+CHAMFERED = [sk("s", [line(-10, -10, 10, -10), line(10, -10, 10, 8), line(10, 8, 8, 10), line(8, 10, -10, 10), line(-10, 10, -10, -10)]),
+             ext("e", "s", 10)]
+BEVELLED = [sk("s", [rect(20, 20)]), ext("e", "s", 10),
+            sk("t", [rect(20, 20)], plane={"origin": [0, 0, 10], "normal": [0, 0, 1], "xdir": [1, 0, 0]}),
+            ext("b", "t", 1, "join", taper=45)]
 
 SOLID_OPS_CASES = {
     # shell
@@ -404,6 +409,18 @@ SOLID_OPS_CASES = {
                          {"id": "l", "type": "loft", "sketches": ["a", "b"], "operation": "new"},
                          {"id": "o", "type": "offsetFace", "faces": face_at(9.27, 3.65, 12.5), "distance": 1}]),
     "off_missing_body": doc(BLOCK + [{"id": "o", "type": "offsetFace", "body": "body3", "faces": face_at(0, 0, 20), "distance": 1}]),
+    # delete face
+    "del_corner_chamfer": doc(CHAMFERED + [{"id": "x", "type": "deleteFace", "face": face_at(9, 9, 5)}]),
+    "del_bore": doc(BORED + [{"id": "x", "type": "deleteFace", "face": face_at(4, 0, 0)}]),
+    "del_chain_one_strip": doc(BEVELLED + [{"id": "x", "type": "deleteFace", "face": face_at(0, 9.5, 10.5)}]),
+    "del_retarget": doc([box("a", 10, 10, 10), sk("s", [{"type": "polygon", "x": 0, "y": 0, "radius": 4, "sides": 6, "angle": 0}],
+                                                  plane={"origin": [30, 0, 5], "normal": [0, 0, 1], "xdir": [1, 0, 0]}),
+                         ext("e", "s", 3), sk("t", [circle(1)], plane={"origin": [30, 0, 8], "normal": [0, 0, 1], "xdir": [1, 0, 0]}),
+                         ext("c", "t", -2, "cut"),
+                         {"id": "x", "type": "deleteFace", "body": "body1", "face": face_at(31, 0, 7)}]),
+    "del_box_face_fails": doc([box("a", 10, 10, 10), {"id": "x", "type": "deleteFace", "face": face_at(0, 0, 5)}]),
+    "del_missing_body": doc([box("a", 10, 10, 10), {"id": "x", "type": "deleteFace", "body": "body4", "face": face_normal(0, 0, 1)}]),
+    "del_no_face": doc([box("a", 10, 10, 10), {"id": "x", "type": "deleteFace", "face": face_normal(1, 1, 1)}]),
 }
 CASES.update(SOLID_OPS_CASES)
 

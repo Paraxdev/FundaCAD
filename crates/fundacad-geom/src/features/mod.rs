@@ -2,6 +2,7 @@
 
 mod boolean;
 mod datum;
+mod defeature;
 mod extrude;
 mod hole;
 mod loft_sweep;
@@ -50,6 +51,7 @@ pub fn dispatch(ctx: &mut Ctx, f: &Feature) -> FResult {
         Feature::Draft(d) => solid_ops::draft(ctx, d),
         Feature::PressPull(p) => press_pull::press_pull(ctx, p),
         Feature::OffsetFace(o) => press_pull::offset_face(ctx, o),
+        Feature::DeleteFace(d) => defeature::delete_face(ctx, d),
         other => Err(not_ported(other.type_name().unwrap_or("feature"))),
     }
 }
