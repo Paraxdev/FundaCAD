@@ -700,6 +700,43 @@ export async function importMaterialLibrary(
   return { ...store.importMaterials(materials), problem };
 }
 
+/** Write text to a file the person picks, or download it outside the desktop app. False when
+ *  the dialog was dismissed or the write failed, which has already been reported. */
+export async function saveTextFile(
+  suggested: string,
+  text: string,
+  filter: { name: string; extensions: string[] },
+): Promise<boolean> {
+  if (!isTauri()) {
+    downloadText(suggested, text);
+    return true;
+  }
+  const { save } = await import("@tauri-apps/plugin-dialog");
+  const path = await save({ filters: [filter], defaultPath: suggested });
+  if (!path) return false;
+  try {
+    await (await import("@tauri-apps/plugin-fs")).writeTextFile(path, text);
+    return true;
+  } catch (e) {
+    await reportError(`Couldn't write ${path}: ${errMsg(e)}`);
+    return false;
+  }
+}
+
+/** The text of a file the person picks, or null when dismissed or unreadable. */
+export async function openTextFile(filter: { name: string; extensions: string[] }): Promise<string | null> {
+  if (!isTauri()) return uploadJson(filter.extensions.map((e) => `.${e}`).join(","));
+  const { open } = await import("@tauri-apps/plugin-dialog");
+  const path = await open({ multiple: false, filters: [filter] });
+  if (typeof path !== "string") return null;
+  try {
+    return await (await import("@tauri-apps/plugin-fs")).readTextFile(path);
+  } catch (e) {
+    await reportError(`Couldn't read ${path}: ${errMsg(e)}`);
+    return null;
+  }
+}
+
 // --- browser fallbacks ---
 /** Write a rendered picture to a file the user picks.
  *
@@ -758,11 +795,11 @@ function downloadText(name: string, text: string) {
  *  rather than a parameter on it: that one advertises document extensions, and
  *  a picker that offers .funda when it wants a material library is a picker
  *  that will be handed one. */
-function uploadJson(): Promise<string | null> {
+function uploadJson(accept = ".json,application/json"): Promise<string | null> {
   return new Promise((resolve) => {
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = ".json,application/json";
+    input.accept = accept;
     input.onchange = () => {
       const file = input.files?.[0];
       if (!file) return resolve(null);

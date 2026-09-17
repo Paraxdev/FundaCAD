@@ -310,6 +310,24 @@ Reply: `{ "brep": "...", "name": "...", "solid": true, "faces": [...] }` (the ex
 fields the frontend embeds as an `import` feature), or `{ "error": { "message": "..." } }`.
 Given a longer budget than a normal rebuild (mesh read + B-rep build can run longer).
 
+### `generateShape`
+
+Runs a shape generator a plugin registered (`plugin_geometry.register_shape_generator`) on plain JSON
+parameters, outside any document.
+
+```jsonc
+{ "op": "generateShape", "id": "...", "generator": "fastener", "params": { ... },
+  "output": "mesh",                                           // or "store"
+  "placement": { "origin": [0, 0, 0], "zAxis": [0, 0, 1] } }  // optional
+```
+
+Reply: `{ "solid": true, "solids": 1, "valid": true, "faces": 20, "volume": 132.2,
+"bbox": { "min": [...], "max": [...] } }` plus, for `mesh`, `"mesh": { "positions", "indices",
+"normals" }` (flat arrays, one normal per position) and, for `store`, `"geom"`: the blob store hash
+an `import` feature carries. An unknown generator, a generator's ValueError, a bad placement or a
+result with no solid is `{ "error": { "message": "..." } }`. Budget 180 s, a modelled thread on a
+long bolt is thousands of helical faces.
+
 ### `session_*`, the live session
 
 Five ops that share one document between the app window and an outside client

@@ -70,6 +70,26 @@ export interface ClearancePair {
   pointB: [number, number, number];
 }
 
+/** Where a generated shape goes: its local origin to `origin`, its +Z along `zAxis`. */
+export interface ShapePlacement {
+  origin: [number, number, number];
+  zAxis: [number, number, number];
+}
+
+/** A solid from a shape generator, measured off the B-rep. `mesh` answers output "mesh",
+ *  flat arrays with one normal per position; `geom` answers "store", a blob store hash. */
+export interface GeneratedShape {
+  solid: boolean;
+  valid: boolean;
+  faces: number;
+  volume: number;
+  bbox: { min: [number, number, number]; max: [number, number, number] };
+  geom?: string;
+  mesh?: { positions: number[]; indices: number[]; normals: number[] };
+}
+
+export type GeneratedShapeReply = { ok: true; shape: GeneratedShape } | { ok: false; message: string };
+
 // The surface the rest of the app depends on. Both the websocket `Geometry`
 // and the in-process `TauriGeometry` implement this, so callers stay agnostic
 // to which backend is wired up (see VITE_GEOM in main.ts).
@@ -127,6 +147,16 @@ export interface GeometryBackend {
   // `onStarted` receives the request id, so a caller that may later cancel
   // can target THIS op rather than whatever ran most recently.
   importGeometry(path: string, format: ImportFormat, onStarted?: (id: string) => void): Promise<ImportReply>;
+  /** A solid from a shape generator a plugin registered with the geometry engine
+   *  (sidecar/plugin_geometry.py `register_shape_generator`). "mesh" is for a preview;
+   *  "store" writes the solid to the blob store, and an `import` feature carrying the
+   *  returned `geom` rebuilds with neither the generator nor its plugin present.
+   *  Optional, only the Python sidecar runs plugin geometry. */
+  generateShape?(
+    generator: string,
+    params: object,
+    opts?: { output?: "mesh" | "store"; placement?: ShapePlacement },
+  ): Promise<GeneratedShapeReply>;
   // Pairwise interference (clash) check among the document's bodies. `clearance`
   // (mm) turns on the near-miss pass: pairs closer than that but not
   // overlapping come back in `clearances`. `truncated` marks a candidate-pair
@@ -1101,6 +1131,21 @@ export class Geometry implements GeometryBackend {
     if (!id) return false;
     const msg = await this.call<{ cancelled: boolean }>("cancel", { target: id });
     return msg.ok ? msg.result.cancelled : false;
+  }
+
+  async generateShape(
+    generator: string,
+    params: object,
+    opts: { output?: "mesh" | "store"; placement?: ShapePlacement } = {},
+  ): Promise<GeneratedShapeReply> {
+    const msg = await this.call<GeneratedShape>("generateShape", {
+      generator,
+      params,
+      output: opts.output ?? "mesh",
+      ...(opts.placement ? { placement: opts.placement } : {}),
+    });
+    if (msg.ok) return { ok: true, shape: msg.result };
+    return { ok: false, message: msg.error?.message ?? "the shape could not be generated" };
   }
 
   async interference(

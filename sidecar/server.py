@@ -1265,6 +1265,16 @@ def _tessellate_text_job(entity, path_entity):
         return {"error": {"message": str(ex)}}
 
 
+def _generate_shape_job(name, params, output, placement):
+    """Worker: a plugin's shape generator, meshed for a preview or stored as a blob."""
+    from shape_generate import generate_shape
+
+    try:
+        return generate_shape(name, params, output, placement)
+    except Exception as ex:
+        return {"error": {"message": str(ex)}}
+
+
 def _project_geometry_job(document, plane, sources):
     """Worker: resolve + project geometry sources onto a sketch plane (read-only;
     per-source errors ride inside `results`, only a failed prefix rebuild or a
@@ -1874,6 +1884,15 @@ async def _dispatch(ws, loop, req, req_id, op):
 
     elif op == "tessellateText":
         res = await _run(loop, _tessellate_text_job, req["entity"], req.get("pathEntity"), timeout=JOB_TIMEOUT)
+        await ws.send(_reply_for(req_id, res))
+
+    elif op == "generateShape":
+        # A modelled thread on a long bolt is thousands of helical faces and runs
+        # past the ordinary job budget.
+        res = await _run(
+            loop, _generate_shape_job, req.get("generator"), req.get("params") or {},
+            req.get("output") or "mesh", req.get("placement"), timeout=180.0,
+        )
         await ws.send(_reply_for(req_id, res))
 
     elif op == "projectGeometry":

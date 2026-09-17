@@ -209,14 +209,16 @@ def check(pid, src):
         gpath = os.path.join(src, *str(geometry).split("/"))
         if not os.path.isfile(gpath):
             sys.exit(f"plugins/{pid}/{MANIFEST} names geometry {geometry!r}, which is not there")
-        if not manifest.get("featureTypes") and not manifest.get("exporters"):
+        if not (manifest.get("featureTypes") or manifest.get("exporters") or manifest.get("shapeGenerators")):
             # The types are how the app names this plugin in the warning when it
             # is NOT running, so geometry without them means a document full of
             # features that can only say "unknown feature type". Geometry that
-            # only writes files declares the exporters it registers instead.
+            # only writes files declares the exporters it registers, and geometry
+            # that only generates shapes leaves import features behind, which
+            # build without it, and names its generators.
             sys.exit(
-                f"plugins/{pid}/{MANIFEST} ships geometry but declares neither "
-                "featureTypes nor exporters, so nothing could name it when it is missing"
+                f"plugins/{pid}/{MANIFEST} ships geometry but declares no featureTypes, "
+                "exporters or shapeGenerators, so nothing could name it when it is missing"
             )
     return manifest
 

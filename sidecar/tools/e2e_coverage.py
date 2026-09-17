@@ -622,6 +622,18 @@ async def check_inspect(ws):
     register("inspect", "volume", math.pi * 100 * 20, bodies[0].get("volume"))
 
 
+async def check_generate_shape(ws):
+    # A plain washer from the fastener plugin's generator: pi/4 (D^2 - d^2) t, a closed form, so
+    # the volume the op measures off the B-rep is checked against arithmetic, not a fixture.
+    spec = {"kind": "washer", "units": "mm", "name": "w",
+            "washer": {"type": "plain", "inner": 6.4, "outer": 12, "thickness": 1.6}}
+    reply = await H.ws_call(ws, "generateShape", "c", generator="fastener", params=spec, output="mesh")
+    if not reply.get("ok"):
+        print(f"  REFUSE generateShape, op not ok: {reply.get('error')}")
+        return
+    register("generateShape", "volume", math.pi / 4 * (12 ** 2 - 6.4 ** 2) * 1.6, reply["result"].get("volume"))
+
+
 EXPLICIT_CHECKS = [
     check_box, check_cylinder, check_sphere, check_extrude, check_revolve,
     check_loft, check_shell, check_mirror, check_pattern_rect,
@@ -631,7 +643,7 @@ EXPLICIT_CHECKS = [
     check_datum_split,
     check_sketch, check_boolean, check_press_pull, check_offset_face,
     check_thicken, check_delete_face, check_texture, check_project_geometry,
-    check_migrate_geometry, check_inspect,
+    check_migrate_geometry, check_inspect, check_generate_shape,
 ]
 
 

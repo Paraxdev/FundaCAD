@@ -78,7 +78,7 @@ export type { EntityKind, EntitySource } from "../features/toolCapabilities";
 // app's own calls take; none of them is a way to obtain one.
 export type { Engine } from "../app/engine";
 export type { DocumentStore } from "../document/store";
-export type { GeometryBackend } from "../geometry/client";
+export type { GeneratedShape, GeneratedShapeReply, GeometryBackend, ShapePlacement } from "../geometry/client";
 export type { Viewport } from "../viewport/viewport";
 export type { CtxItem, MenuDef, MenuItem } from "../ui/menu";
 export type { CadDocument, Feature, Num, PlaneSpec, RebuildResult, Selector } from "../types";
@@ -95,6 +95,8 @@ export { setPrompt } from "../ui/prompt";
 export { choose, listModal } from "../ui/choice";
 /** A failed write, as a native dialog in the app and the console outside it. */
 export { reportError } from "../io/files";
+/** A text file the person picks to write or to read, a download or an upload in a browser. */
+export { openTextFile, saveTextFile } from "../io/files";
 /** A breadcrumb that survives twenty later toasts, for a bug report. */
 export { stickyFact } from "../diagnostics/breadcrumbs";
 

@@ -374,6 +374,9 @@ export type CoreFeature =
       // A body read in from another FundaCAD document that is kept in step with
       // it: the file, and a fingerprint of what it held when it was last read.
       link?: { path: string; stamp: string };
+      // Geometry a plugin generated and stored here (GeometryBackend.generateShape), and what it
+      // was generated from. Read by that plugin to say what the body is; the build ignores it.
+      generatedBy?: { plugin: string; spec: Record<string, unknown> };
     }
   // keep=both splits into bodies. `bodies` cuts several; `planeId` names a datum plane.
   | { id: string; type: "split"; plane?: PlaneSpec; planeId?: string; keep: "top" | "bottom" | "both"; body?: string; bodies?: string[]; groupSides?: boolean }

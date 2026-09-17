@@ -39,6 +39,10 @@ The engine does the rebuild, the meshing and the triangle budget, so an
 exporter only decides what the file looks like. `exportWith` in server.py is the
 op that runs one.
 
+A SHAPE GENERATOR is neither: it makes a solid from parameters, outside any
+document, for the window to preview or to keep as an `import` feature's blob.
+See register_shape_generator and shape_generate.py.
+
 WHERE THE SPECS LIVE. On the body dict under `BODY_KEY`, as a flat list, each
 entry carrying `"pass"` to say whose it is. The core plumbing that carries that
 list, the timeline snapshot, the checkpoint cache, the three mesh caches, treats
@@ -100,6 +104,8 @@ class MeshPass:
 
 # feature type -> (handler, plugin id)
 _FEATURES = {}
+# generator name -> (build, plugin id)
+_GENERATORS = {}
 # pass name -> MeshPass
 _PASSES = {}
 # exporter name -> (write, plugin id)
@@ -165,6 +171,22 @@ def exporter_owner(name):
     hit = _EXPORTERS.get(name)
     return hit[1] if hit else _EXPORT_OWNERS.get(name)
 
+def register_shape_generator(name, plugin, build):
+    """Offer a shape the window can ask for by name, outside any document.
+
+    `build(params) -> Shape` makes one solid from plain JSON. The `generateShape`
+    op meshes it for a preview or stores it as a blob for an `import` feature,
+    so a body made this way is ordinary imported geometry: the document keeps
+    building on a machine that does not have the plugin. A ValueError's message
+    is shown to the person as it is.
+    """
+    if name in _GENERATORS and _GENERATORS[name][1] != plugin:
+        raise ValueError(
+            f"shape generator {name!r} is already owned by "
+            f"{_GENERATORS[name][1]}, {plugin} cannot claim it too"
+        )
+    _GENERATORS[name] = (build, plugin)
+
 
 def stash(body, spec):
     """Append one pass spec to a body, REBINDING the list rather than mutating it.
@@ -184,6 +206,17 @@ def handler_for(type_name):
     """The registered handler for a feature type, or None."""
     ent = _FEATURES.get(type_name)
     return ent[0] if ent else None
+
+
+def generator_for(name):
+    """The registered shape generator's build callable, or None."""
+    ent = _GENERATORS.get(name)
+    return ent[0] if ent else None
+
+
+def shape_generators():
+    """Registered shape generator names, sorted."""
+    return sorted(_GENERATORS)
 
 
 def owner_of(type_name):
@@ -471,6 +504,7 @@ def _reset_for_tests():
     """Drop everything registered. Tests only; see sidecar/tests/."""
     global _discovered
     _FEATURES.clear()
+    _GENERATORS.clear()
     _PASSES.clear()
     _EXPORTERS.clear()
     _EXPORT_OWNERS.clear()
