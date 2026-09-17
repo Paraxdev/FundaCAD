@@ -254,10 +254,22 @@ pub fn mesh_result(
     tolerance: f64,
     known: &Map<String, Value>,
 ) -> MeshResult {
+    mesh_result_watched(bodies, tolerance, known, &mut |_, _| {})
+}
+
+/// [`mesh_result`] reporting each body as it starts, which is what keeps the
+/// stall watchdog off a long meshing pass.
+pub fn mesh_result_watched(
+    bodies: &[MeshBody<'_>],
+    tolerance: f64,
+    known: &Map<String, Value>,
+    on_body: &mut dyn FnMut(usize, usize),
+) -> MeshResult {
     let profile = viewport_profile(bodies.len());
     let mut out = Vec::new();
     let mut boxes = Vec::new();
-    for body in bodies {
+    for (i, body) in bodies.iter().enumerate() {
+        on_body(i, bodies.len());
         let Some(shape) = body.shape else {
             continue;
         };
