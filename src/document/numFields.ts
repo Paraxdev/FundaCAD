@@ -42,6 +42,12 @@ export const FEATURE_NUM_FIELDS: Partial<Record<Feature["type"], [string, string
   offsetFace: [["distance", "Distance", "length"]],
   thicken: [["thickness", "Thickness", "length"]],
   draft: [["angle", "Angle", "angle"]],
+  hole: [
+    ["diameter", "Diameter", "length"], ["depth", "Depth", "length"],
+    ["cbDiameter", "Counterbore diameter", "length"], ["cbDepth", "Counterbore depth", "length"],
+    ["csDiameter", "Countersink diameter", "length"], ["csAngle", "Countersink angle", "angle"],
+    ["leadIn", "Lead-in", "length"],
+  ],
   patternRect: [["countX", "Count X", "count"], ["countY", "Count Y", "count"], ["spacingX", "Spacing X", "length"], ["spacingY", "Spacing Y", "length"]],
   patternLinear: [["count", "Count", "count"], ["spacing", "Spacing", "length"]],
   patternCircular: [["count", "Count", "count"], ["angle", "Angle", "angle"]],

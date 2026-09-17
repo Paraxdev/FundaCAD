@@ -56,6 +56,7 @@ import {
   toggleValue,
 } from "../../document/optionFields";
 import { targetsOf } from "../../features/selectionTargets";
+import { holeChoicePatch } from "../../features/holeStandards";
 import { asFeature } from "../../types";
 import type { Feature, Num, ParamTarget } from "../../types";
 
@@ -217,8 +218,13 @@ const toggleRows = useDocValue((doc) => {
 });
 
 function setOption(field: string, value: string | boolean) {
-  const patch: Record<string, unknown> = { [field]: value };
+  let patch: Record<string, unknown> = { [field]: value };
   const f = store.document.features.find((x) => x.id === props.featureId);
+  const hole = asFeature(f, "hole");
+  if (hole) {
+    patch = holeChoicePatch(hole, field, value, (k) =>
+      store.isParamBound({ kind: "feature", feature: hole.id, field: k }));
+  }
   if (f?.type === "chamfer" && field === "chamferType" && value === "twoDistance" && f.distance2 == null) {
     patch.distance2 = f.distance;
   }

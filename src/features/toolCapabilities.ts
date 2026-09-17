@@ -80,7 +80,8 @@ export type ToolId =
   | "draft"
   | "offset-face"
   | "thicken"
-  | "thread";
+  | "thread"
+  | "hole";
 
 export interface ToolCapability {
   /** Human name, for prompts and menus. */
@@ -151,6 +152,8 @@ export const TOOL_CAPABILITIES: Record<ToolId, ToolCapability> = {
   shell: { label: "Shell", consumes: ["face"], source: "selection" },
   draft: { label: "Draft", consumes: ["face"], source: "selection" },
   "offset-face": { label: "Offset Face", consumes: ["face"], source: "selection" },
+  // The selected face is where the first hole goes; further clicks add more.
+  hole: { label: "Hole", consumes: ["face"], source: "selection" },
   // --- tools that run their own pick; the ambient selection is not consumed ---
   measure: { label: "Measure", consumes: ["face", "edge"], source: "pick" },
   thicken: { label: "Thicken", consumes: ["face"], source: "pick" },

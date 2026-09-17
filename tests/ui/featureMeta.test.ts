@@ -31,6 +31,7 @@ const DRAWN_BY_APP: Record<FeatureType, "app"> = {
   fillet: "app",
   chamfer: "app",
   "press-pull": "app",
+  hole: "app",
   deleteFace: "app",
   mirror: "app",
   revolve: "app",

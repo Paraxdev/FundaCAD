@@ -100,6 +100,7 @@ const TOOL_ICON: Record<ToolId, string> = {
   "offset-face": "offsetFace",
   thicken: "thicken",
   thread: "thread",
+  hole: "hole",
 };
 
 /** The tools whose id is NOT an action string.

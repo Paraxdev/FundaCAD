@@ -100,6 +100,7 @@ export const FEATURE_TARGETS: Partial<Record<FeatureType, readonly TargetField[]
     whenEmpty: "the whole body",
   }],
   draft: [{ field: "faces", label: "Faces", kind: "face", shape: "selector", arity: "many" }],
+  hole: [{ field: "face", label: "Face", kind: "face", shape: "selector", arity: "one" }],
   // Two body targets with opposite fates, so they are labelled by fate. Which
   // body is kept is the whole meaning of a Subtract, and it was previously
   // decided by which one you happened to click first and then never shown.

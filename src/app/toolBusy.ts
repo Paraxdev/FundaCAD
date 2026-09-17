@@ -26,7 +26,7 @@ export function createToolBusy(
     const t = e.tools;
     return (
       e.sketch.active || t.extrude.active || t.edgeFeature.active || t.pressPull.active ||
-      t.faceOffset.active || t.draft.active || t.thread.active || t.loft.active || t.planeOffset.active ||
+      t.faceOffset.active || t.draft.active || t.thread.active || t.hole.active || t.loft.active || t.planeOffset.active ||
       (moveCounts && t.move.active) || t.pattern.active ||
       t.measure.active || t.section.picking || t.targetEdit.active ||
       t.revolvePitch.active || t.joint.active ||

@@ -49,6 +49,7 @@
 // which of them a given pattern actually reads.
 
 import { BOOLEAN_COMMANDS } from "../features/booleanOps";
+import { HOLE_SIZES, holeFieldApplies } from "../features/holeStandards";
 import { contributedFeature } from "../plugins/contrib";
 import type { Feature, FeatureType } from "../types";
 
@@ -169,6 +170,36 @@ export const FEATURE_CHOICE_FIELDS: Partial<Record<FeatureType, ChoiceField[]>> 
     field: "chamferType", label: "Type", fallback: "equal",
     options: [{ value: "equal", label: "Equal Distance" }, { value: "twoDistance", label: "Two-Distance" }],
   }],
+  hole: [
+    {
+      field: "holeType", label: "Hole type", fallback: "simple",
+      options: [
+        { value: "simple", label: "Simple" },
+        { value: "counterbore", label: "Counterbore" },
+        { value: "countersink", label: "Countersink" },
+        { value: "insert", label: "Heat-set insert" },
+      ],
+      title: "Heat-set insert sizes the bore for a brass insert of the chosen size",
+    },
+    {
+      field: "standard", label: "Standard", fallback: "clearance",
+      options: [
+        { value: "clearance", label: "Clearance" },
+        { value: "tap", label: "Tap drill" },
+        { value: "custom", label: "Custom" },
+      ],
+      title: "Clearance is ISO 273, Tap drill the coarse pitch drill; Custom keeps the diameter you type",
+    },
+    { field: "size", label: "Size", fallback: "M3", options: HOLE_SIZES.map((s) => ({ value: s, label: s })) },
+    {
+      field: "fit", label: "Fit", fallback: "normal",
+      options: [{ value: "close", label: "Close" }, { value: "normal", label: "Normal" }, { value: "loose", label: "Loose" }],
+    },
+    {
+      field: "extent", label: "Extent", fallback: "blind",
+      options: [{ value: "blind", label: "Blind" }, { value: "through", label: "Through all" }],
+    },
+  ],
 };
 
 export const FEATURE_TOGGLE_FIELDS: Partial<Record<FeatureType, ToggleField[]>> = {
@@ -185,6 +216,11 @@ export const FEATURE_TOGGLE_FIELDS: Partial<Record<FeatureType, ToggleField[]>> 
   thicken: [{ field: "symmetric", label: "Symmetric", fallback: false }],
   fillet: [{ field: "tangentEdges", label: "Include Tangent Edges", fallback: true }],
   chamfer: [{ field: "tangentEdges", label: "Include Tangent Edges", fallback: true }],
+  hole: [
+    { field: "drillPoint", label: "Drill point", fallback: false },
+    { field: "flip", label: "Flip direction", fallback: false },
+    { field: "tapped", label: "Tapped", fallback: false },
+  ],
 };
 
 /** Does this field mean anything, given what the feature's other fields say?
@@ -208,6 +244,7 @@ export function fieldApplies(
 ): boolean {
   if (type === "chamfer" && field === "distance2") return values.chamferType === "twoDistance";
   if (type === "fillet" && field === "profile") return values.continuity !== "G2";
+  if (type === "hole") return holeFieldApplies(field, values);
   return contributedFeature(type)?.fieldApplies?.(field, values) ?? true;
 }
 

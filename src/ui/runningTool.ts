@@ -19,6 +19,7 @@ export function runningTool(t: EngineTools): RunningTool | null {
   if (t.faceOffset.active) return entry(t.faceOffset.label, t.faceOffset.icon, t.faceOffset.action, () => t.faceOffset.cancel());
   if (t.draft.active) return entry("Draft", "draft", "draft", () => t.draft.cancel());
   if (t.thread.active) return entry("Thread", "thread", "thread", () => t.thread.cancel());
+  if (t.hole.active) return entry("Hole", "hole", "hole", () => t.hole.cancel());
   if (t.loft.active) return entry("Loft", "loft", "loft", () => t.loft.cancel());
   if (t.pattern.active) return entry("Pattern", "patternLinear", "pattern-linear", () => t.pattern.cancel());
   return null;

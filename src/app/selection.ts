@@ -110,6 +110,9 @@ export function createSelection(
         // parameter drives, and those fall through to the rows as before.
         if (!e.tools.revolvePitch.startEdit(id, done)) e.setStatus(VALUES_IN_HISTORY, "");
         break;
+      case "hole":
+        if (!e.tools.hole.startEdit(id, done)) e.setStatus(VALUES_IN_HISTORY, "");
+        break;
       case "joint":
         // The arrow slides the joined body along the mate axis (its offset). It
         // stands down when a parameter drives the offset or the sidecar could not

@@ -290,6 +290,10 @@ export interface MateConnector {
 
 export type PressPullMode = "auto" | "join" | "cut" | "new" | "intersect";
 
+export type HoleType = "simple" | "counterbore" | "countersink" | "insert";
+export type HoleStandard = "clearance" | "tap" | "custom";
+export type HoleFit = "close" | "normal" | "loose";
+
 export type CoreFeature =
   // `planeId` (a datum) or `face` (a body face, touched at `at`) make the sketch follow;
   // `plane` stays as the resolved cache. An id in `plane` itself would render as XY.
@@ -395,6 +399,16 @@ export type CoreFeature =
   | { id: string; type: "thicken"; faces?: Selector | Selector[]; thickness: Num; symmetric?: boolean; operation?: "join" | "new"; targets?: string[]; body?: string }
   // Taper the selected faces by an angle about a neutral plane (pull axis).
   | { id: string; type: "draft"; faces: Selector | Selector[]; angle: Num; axis: Axis3 }
+  // Holes into the flat `face` along its inward normal, at `points` (projected onto
+  // the face) and at `sketch`'s points. A dimension left out comes from `size`
+  // (features/holeStandards.ts); the tool writes them all so the rows show them.
+  | {
+      id: string; type: "hole"; face?: Selector; points: Vec3[]; sketch?: string; body?: string;
+      holeType?: HoleType; standard?: HoleStandard; size?: string; fit?: HoleFit;
+      diameter?: Num; extent?: "blind" | "through"; depth?: Num;
+      cbDiameter?: Num; cbDepth?: Num; csDiameter?: Num; csAngle?: Num; leadIn?: Num;
+      drillPoint?: boolean; flip?: boolean; tapped?: boolean;
+    }
   // Patterns union their copies. `bodies` absent means the active body.
   | { id: string; type: "patternRect"; countX: Num; countY: Num; spacingX: Num; spacingY: Num }
   | { id: string; type: "patternLinear"; count: Num; spacing: Num; axis: Axis3; bodies?: string[] }
@@ -440,7 +454,7 @@ export type FeatureType = CoreFeature["type"];
 const CORE_FEATURE_TYPES = {
   boolean: true, box: true, chamfer: true, cleanUp: true, cone: true, cylinder: true,
   datumAxis: true, datumPlane: true, datumPoint: true, deleteFace: true, draft: true,
-  duplicate: true, extrude: true, fillet: true, import: true, imprint: true, joint: true,
+  duplicate: true, extrude: true, fillet: true, hole: true, import: true, imprint: true, joint: true,
   loft: true, mirror: true, move: true, offsetFace: true, patternCircular: true,
   patternLinear: true, patternRect: true, "press-pull": true, removeBody: true, revolve: true, scale: true,
   shell: true, simplifyMesh: true, sketch: true, sphere: true, split: true, sweep: true,

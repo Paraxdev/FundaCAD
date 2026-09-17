@@ -60,6 +60,7 @@ export const MODEL: Group[] = [
       { action: "presspull", label: "Press/Pull", iconName: "presspull", key: "Q" },
       { action: "fillet", label: "Fillet", iconName: "fillet", key: "F" },
       { action: "chamfer", label: "Chamfer", iconName: "chamfer", key: "B" },
+      { action: "hole", label: "Hole", iconName: "hole" },
       {
         label: "Move",
         children: [

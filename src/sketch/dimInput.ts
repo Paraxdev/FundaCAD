@@ -407,6 +407,15 @@ export class DimInput {
     this.sizeToContent(f);
   }
 
+  /** `seed` for a value that is not a number, a size name or a word. */
+  seedText(name: string, text: string) {
+    const f = this.fields.find((x) => x.def.name === name);
+    if (!f) return;
+    f.input.value = text;
+    f.userDriven = true;
+    this.sizeToContent(f);
+  }
+
   /** A DRAG takes a field back from the keyboard.
    *
    *  Typing freezes a field against cursor tracking, and `seed` freezes it from

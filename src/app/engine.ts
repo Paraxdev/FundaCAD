@@ -56,6 +56,7 @@ import { activatePlugins } from "../plugins/activate";
 import { createSelection } from "./selection";
 import { DraftTool } from "../features/draftTool";
 import { ThreadTool } from "../features/threadTool";
+import { HoleTool } from "../features/holeTool";
 import { createToolBusy } from "./toolBusy";
 import { createDocumentActions } from "./documentActions";
 import { createDatumPlanes } from "./datumPlanes";
@@ -83,6 +84,7 @@ export interface EngineTools {
   faceOffset: FaceOffsetTool;
   draft: DraftTool;
   thread: ThreadTool;
+  hole: HoleTool;
   loft: LoftTool;
   move: MoveTool;
   pattern: PatternTool;
@@ -287,6 +289,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
     faceOffset: new FaceOffsetTool(e.viewport, e.store),
     draft: new DraftTool(e.viewport, e.store),
     thread: new ThreadTool(e.viewport, e.store),
+    hole: new HoleTool(e.viewport, e.store),
     loft: new LoftTool(e.viewport, e.overlay, e.store),
     move: new MoveTool(e.viewport, e.store),
     pattern: new PatternTool(e.viewport, e.store),

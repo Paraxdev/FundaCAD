@@ -1948,6 +1948,45 @@ export class Viewport {
     };
   }
 
+  /** The plane of a face, or null when the face is curved. */
+  planarFace(faceId: number): { normal: THREE.Vector3; origin: THREE.Vector3 } | null {
+    if (!this.model) return null;
+    const tris = this.faceTriangles(faceId);
+    if (tris.length === 0) return null;
+    const n = this.faceNormalWorld(faceId);
+    const c = this.faceCentroidWorld(faceId);
+    const tol = 1e-3 * (this.model.box.getSize(new THREE.Vector3()).length() || 1) + 1e-4;
+    const d0 = n.dot(c);
+    for (const t of tris) {
+      for (const v of [t.a, t.b, t.c]) {
+        if (Math.abs(n.dot(v) - d0) > tol) return null;
+      }
+    }
+    return { normal: n, origin: c };
+  }
+
+  /** The flat face nearest `point` whose plane passes through it. Unlike
+   *  faceIdNear this cannot land on the wall of a hole drilled at that point. */
+  planarFaceThrough(point: THREE.Vector3, bodyId: string | null = null): { faceId: number; normal: THREE.Vector3; origin: THREE.Vector3 } | null {
+    if (!this.model) return null;
+    const tol = 1e-3 * (this.model.box.getSize(new THREE.Vector3()).length() || 1) + 1e-4;
+    const closest = new THREE.Vector3();
+    let best: { faceId: number; normal: THREE.Vector3; origin: THREE.Vector3 } | null = null;
+    let bestDist = Infinity;
+    for (const body of this.model.bodies) {
+      if (bodyId && body.id !== bodyId) continue;
+      for (const faceId of body.faceTriangles.keys()) {
+        const plane = this.planarFace(faceId);
+        if (!plane || Math.abs(plane.normal.dot(point) - plane.normal.dot(plane.origin)) > tol) continue;
+        for (const t of this.faceTriangles(faceId)) {
+          const d = t.closestPointToPoint(point, closest).distanceTo(point);
+          if (d < bestDist) { bestDist = d; best = { faceId, ...plane }; }
+        }
+      }
+    }
+    return best;
+  }
+
   // --- the face a sketch is being drawn on -----------------------------------
   // Its own marker, not the selection: starting the sketch consumed the selection.
   private sketchFace: THREE.Group | null = null;
