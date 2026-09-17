@@ -536,6 +536,15 @@ one thread, in body order; the groups run beside each other.
 - **The STEP reader.** `STEPCAFControl_Reader` is one parse of one file and is
   not thread safe. It is the largest single number left in an import.
 
+One copy is still left on the reply path, and is left on purpose. The
+supervisor reads a frame into a `Vec` (`stdio::read_message_limited`) and
+`engine.rs`'s `deliver` then copies the whole frame again into a second `Vec`
+only to put the one byte of message kind in front of it. On the 38 MiB frame a
+144 body assembly produces that is a few milliseconds, the same order as
+encoding the frame at all. Removing it means the reader allocating the kind
+byte's slot up front and `Message` carrying that layout, which changes the type
+the Python protocol suites drive; not worth it for the size of the win.
+
 ### 8.4 GPU offload: evaluated, not taken
 
 Stage by stage:
