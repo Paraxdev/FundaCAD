@@ -29,9 +29,23 @@ import websockets
 
 import server
 from server import handle, HOST, PORT
+from tools import harness_util as H
 
 server._TOKEN = "cancel-test-token"
 URL = f"ws://{HOST}:{PORT}?token=cancel-test-token"
+
+# With FUNDACAD_ENGINE_CMD the suite drives that engine instead of serving
+# server.py here. It cannot patch a job into a spawned engine, so the long op is
+# the engine's own `testSleep`, deaf to its cancel token like time.sleep in a
+# pool worker, so only the engine ending the job from outside can stop it.
+EXTERNAL = H.external_engine()
+_SPAWNED = None
+
+
+def _long(req_id, seconds):
+    if EXTERNAL:
+        return {"id": req_id, "op": "testSleep", "seconds": seconds, "deaf": True}
+    return {"id": req_id, "op": "interference", "document": seconds}
 
 # A job that simply sleeps in the worker: it stands in for a 90-second STEP
 # read without needing a 356 MiB file. Registered as a module-level function so
@@ -61,7 +75,13 @@ class _Keep:
 
 
 async def _serve():
-    global _SERVER
+    global _SERVER, _SPAWNED, URL
+    if EXTERNAL:
+        if _SPAWNED is None:
+            _SPAWNED = H.SpawnedServer(env={"FUNDACAD_ENGINE_TEST_OPS": "1"}).__enter__()
+            URL = _SPAWNED.url
+            print(f"  engine: {H.engine_command()} pid={_SPAWNED.pid}")
+        return _Keep()
     if _SERVER is None:
         _SERVER = await websockets.serve(handle, HOST, PORT)
     return _Keep()
@@ -77,8 +97,7 @@ async def test_cancel_stops_a_running_job():
         async with await _serve():
             async with websockets.connect(URL) as ws:
                 t0 = time.monotonic()
-                await ws.send(json.dumps({"id": "long", "op": "interference",
-                                          "document": SLEEP_SECONDS}))
+                await ws.send(json.dumps(_long("long", SLEEP_SECONDS)))
                 await asyncio.sleep(1.5)  # let it get into the worker
 
                 # THE POINT: this must be read and acted on while `long` runs
@@ -116,7 +135,7 @@ async def test_geometry_still_works_after_a_cancel():
     try:
         async with await _serve():
             async with websockets.connect(URL) as ws:
-                await ws.send(json.dumps({"id": "long", "op": "interference", "document": SLEEP_SECONDS}))
+                await ws.send(json.dumps(_long("long", SLEEP_SECONDS)))
                 await asyncio.sleep(1.0)
                 await ws.send(json.dumps({"id": "c", "op": "cancel"}))
                 for _ in range(2):
@@ -125,6 +144,13 @@ async def test_geometry_still_works_after_a_cancel():
                 await ws.send(json.dumps({"id": "p", "op": "ping"}))
                 pong = json.loads(await asyncio.wait_for(ws.recv(), timeout=10))
                 assert pong["ok"] is True and pong["result"]["pong"] is True, pong
+                if EXTERNAL:
+                    # The engine answers ping on its read path, so only a job
+                    # proves the job thread was replaced.
+                    box = {"features": [{"id": "b", "type": "box", "length": 2,
+                                         "width": 2, "height": 2}]}
+                    reply = await H.ws_call(ws, "rebuild", "r", document=box, tolerance=0.1)
+                    assert reply["ok"] is True and len(reply["result"]["bodies"]) == 1, reply
                 print("  pool recovered after cancel")
     finally:
         server._interference_job = orig
@@ -147,7 +173,7 @@ async def test_cancel_targeting_another_id_leaves_the_job_alone():
     try:
         async with await _serve():
             async with websockets.connect(URL) as ws:
-                await ws.send(json.dumps({"id": "current", "op": "interference", "document": 3}))
+                await ws.send(json.dumps(_long("current", 3)))
                 await asyncio.sleep(1.0)
                 await ws.send(json.dumps({"id": "c", "op": "cancel", "target": "some-older-op"}))
 
@@ -189,6 +215,8 @@ async def main():
     if _SERVER is not None:
         _SERVER.close()
         await _SERVER.wait_closed()
+    if _SPAWNED is not None:
+        _SPAWNED.close()
     print("\nall cancel tests passed")
 
 

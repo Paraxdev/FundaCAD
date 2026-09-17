@@ -14,7 +14,7 @@ use fundacad_core::schema::{Num, ProjectedCurve, SketchEntity, SketchFeature, Sk
 use opencascade::primitives::Shape;
 
 use super::face_anchor::{face_anchor_plane, Placement};
-use super::not_ported;
+
 use crate::builder::plane::{plane_of, PlaneRef};
 use crate::builder::{py_g, Ctx, FResult, Fail, SketchEntry};
 use crate::kernel::{self, BoolKind, Frame, Kind};
@@ -1018,6 +1018,11 @@ pub fn region_target(ctx: &Ctx, pts: &[[f64; 3]], entry: &SketchEntry) -> FResul
         target = kernel::boolean_op(&target, &[s], BoolKind::Fuse)?;
     }
     Ok(Some(target))
+}
+
+/// `_entity_edges` of one entity, local to its sketch's XY, for projection.
+pub fn entity_curve_edges(ctx: &Ctx, e: &SketchEntity) -> FResult<Vec<Shape>> {
+    entity_edges(&resolve(ctx, e)?.ent)
 }
 
 /// A frame whose z is `normal`, for handlers that only need the direction.
