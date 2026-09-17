@@ -23,6 +23,7 @@ use serde_json::{json, Map, Value};
 
 use crate::builder::{Ctx, FResult, Fail};
 
+pub use crate::mesh::passes::FaceMesh;
 pub use host::MeshData;
 
 pub const MANIFEST_WASM: &str = "geometryWasm";
@@ -424,9 +425,9 @@ pub fn displace_body(
     shape: &opencascade::primitives::Shape,
     faces: &[opencascade::primitives::Shape],
     specs: &[Value],
-    triangles_of: &dyn Fn(usize) -> Option<MeshData>,
+    triangles_of: &dyn Fn(usize) -> Option<FaceMesh>,
     density_cap: u32,
-) -> HashMap<usize, MeshData> {
+) -> HashMap<usize, FaceMesh> {
     let mut claimed: Vec<(usize, &Value)> = Vec::new();
     let mut reg = registry();
     for spec in specs {
@@ -458,9 +459,21 @@ pub fn displace_body(
         let Loaded::Ready(c) = &reg.entries[i].loaded else {
             continue;
         };
-        match c.displace(name, &faces[k], tri, spec, density_cap) {
+        let sent = MeshData {
+            positions: tri.positions,
+            indices: tri.indices,
+            normals: tri.normals,
+        };
+        match c.displace(name, &faces[k], sent, spec, density_cap) {
             Ok(m) => {
-                out.insert(k, m);
+                out.insert(
+                    k,
+                    FaceMesh {
+                        positions: m.positions,
+                        indices: m.indices,
+                        normals: m.normals,
+                    },
+                );
             }
             Err(e) => eprintln!("[plugin-geometry] displacing a face for {name:?} failed: {e}"),
         }
