@@ -391,11 +391,14 @@ fn run_one<J: Jobs>(
         "rebuild" | "computeAll" => {
             let tolerance = req.get("tolerance").and_then(Value::as_f64).unwrap_or(0.1);
             let empty = Map::new();
+            let fresh = op == "computeAll";
+            // server.py never hands computeAll the client's etags: it resends
+            // every body.
             let known = req
                 .get("known")
                 .and_then(Value::as_object)
+                .filter(|_| !fresh)
                 .unwrap_or(&empty);
-            let fresh = op == "computeAll";
             match docs.apply(&req, fresh) {
                 Some(doc) => jobs.rebuild(doc, tolerance, known, fresh, &ctx),
                 None => {
