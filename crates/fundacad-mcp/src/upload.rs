@@ -30,12 +30,37 @@ pub const IMPORT_FORMATS: &[&str] = &["step", "stl", "3mf", "obj", "brep", "glb"
 /// and applies it to the file on disk. `path` has no ceiling at all.
 pub const MAX_INLINE_BYTES: usize = 64 * 1024 * 1024;
 
+static INLINE_CAP: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(MAX_INLINE_BYTES);
+
+pub fn max_inline_bytes() -> usize {
+    INLINE_CAP.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 /// How much may be WRITTEN once an archive is opened. Deliberately above the
 /// engine's own 400 MiB STEP cap, so nothing is refused here that the reader
 /// would have accepted, and finite because the ratio between an archive and its
 /// contents has no upper bound: a few hundred bytes of gzip expands to a
 /// gigabyte of zeroes, and a limit only on what arrives is not a limit at all.
 pub const MAX_UNPACKED_BYTES: usize = 512 * 1024 * 1024;
+
+static UNPACKED_CAP: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(MAX_UNPACKED_BYTES);
+
+pub fn max_unpacked_bytes() -> usize {
+    UNPACKED_CAP.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Move the two caps, and give back what they were. The only caller is a test
+/// that has to provoke the refusal: the assertion is about what is said when a
+/// file is too large, not about writing half a gigabyte to find out.
+pub fn set_caps(inline: usize, unpacked: usize) -> (usize, usize) {
+    use std::sync::atomic::Ordering::Relaxed;
+    (
+        INLINE_CAP.swap(inline, Relaxed),
+        UNPACKED_CAP.swap(unpacked, Relaxed),
+    )
+}
 
 /// Past this many pieces, say so. Inline content is written by the model, so
 /// every piece costs a whole message of its output whatever this server's own
@@ -109,7 +134,7 @@ fn too_large(size: usize) -> String {
          compression=\"gzip\", which a STEP file typically shrinks tenfold, or pass path instead, \
          which has no limit at all. {ASK_FOR_A_PATH}",
         size_text(size),
-        MAX_INLINE_BYTES / (1024 * 1024)
+        max_inline_bytes() / (1024 * 1024)
     )
 }
 
@@ -349,7 +374,7 @@ impl Upload {
         // A spool bound, not the real one: the exact limit is on the DECODED
         // bytes and is checked as they are written. This exists only so that a
         // caller ignoring the limit cannot spool without bound before finding out.
-        if self.spooled() + data.len() > MAX_INLINE_BYTES / 3 * 4 + 64 {
+        if self.spooled() + data.len() > max_inline_bytes() / 3 * 4 + 64 {
             return fail(too_large(self.spooled() * 3 / 4));
         }
         let appended = std::fs::OpenOptions::new()
@@ -422,7 +447,7 @@ fn decode_spool(up: &Upload, out_path: &Path) -> Result<usize, UploadError> {
             }
         };
         total += data.len();
-        if total > MAX_INLINE_BYTES {
+        if total > max_inline_bytes() {
             return fail(too_large(total));
         }
         if dst.write_all(&data).is_err() {
@@ -465,11 +490,11 @@ fn copy_capped(
             Err(e) => return fail(format!("{what} could not be read ({e}).")),
         };
         total += n;
-        if total > MAX_UNPACKED_BYTES {
+        if total > max_unpacked_bytes() {
             return fail(format!(
                 "{what} is over {} once unpacked, which is more than will be read from an \
                  archive. Send the file itself, or pass path.",
-                size_text(MAX_UNPACKED_BYTES)
+                size_text(max_unpacked_bytes())
             ));
         }
         if dst.write_all(&block[..n]).is_err() {
@@ -560,11 +585,11 @@ fn unzip_one(
         want[0].clone()
     };
     let (index, name, declared) = chosen;
-    if declared as usize > MAX_UNPACKED_BYTES {
+    if declared as usize > max_unpacked_bytes() {
         return fail(format!(
             "{name} is {} unpacked, more than the {} an archive is read up to. Pass path.",
             size_text(declared as usize),
-            size_text(MAX_UNPACKED_BYTES)
+            size_text(max_unpacked_bytes())
         ));
     }
     let Ok(mut entry) = z.by_index(index) else {

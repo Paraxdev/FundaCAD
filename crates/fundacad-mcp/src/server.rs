@@ -362,6 +362,40 @@ impl FundaCad {
         Ok(server)
     }
 
+    /// The document as it stands, for a test that drives the tools directly.
+    pub async fn document(&self) -> Doc {
+        self.state.lock().await.doc.clone()
+    }
+
+    /// Whether this server is working on a document a running app has open.
+    pub async fn is_live(&self) -> bool {
+        self.state.lock().await.live.is_some()
+    }
+
+    /// The engine this server is talking to, by port.
+    pub async fn engine_port(&self) -> u16 {
+        self.state.lock().await.link.port
+    }
+
+    /// The uploads still arriving, as (id, spool directory).
+    pub async fn uploads(&self) -> Vec<(String, PathBuf)> {
+        self.state
+            .lock()
+            .await
+            .uploads
+            .iter()
+            .map(|(k, u)| (k.clone(), u.dir.clone()))
+            .collect()
+    }
+
+    /// Move every open upload's last-touched time back, so a test can reach the
+    /// sweep without waiting half an hour for it.
+    pub async fn age_uploads(&self, by: Duration) {
+        for up in self.state.lock().await.uploads.values_mut() {
+            up.touched -= by;
+        }
+    }
+
     /// Every tool this server offers, as the host sees them.
     pub fn tools(&self) -> Vec<rmcp::model::Tool> {
         self.router.list_all()
@@ -547,6 +581,18 @@ impl FundaCad {
     }
 }
 
+/// Python's `bool(x)` for a JSON value, which is what `doc_import` branched on.
+fn truthy(v: Option<&Value>) -> bool {
+    match v {
+        None | Some(Value::Null) | Some(Value::Bool(false)) => false,
+        Some(Value::String(s)) => !s.is_empty(),
+        Some(Value::Number(n)) => n.as_f64().is_some_and(|f| f != 0.0),
+        Some(Value::Array(a)) => !a.is_empty(),
+        Some(Value::Object(o)) => !o.is_empty(),
+        Some(Value::Bool(true)) => true,
+    }
+}
+
 fn require<'a>(args: &'a JsonObject, key: &str) -> Result<&'a Value, CallToolResult> {
     args.get(key)
         .filter(|v| !v.is_null())
@@ -575,7 +621,7 @@ impl FundaCad {
         description = "The document schema: every feature type, its fields, an example and the traps. Call it with no argument for the overview and the working order, or with a type name for that type's detail. READ THIS FIRST.",
         input_schema = crate::tools::schema_tool()
     )]
-    async fn t_schema(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
+    pub async fn t_schema(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         Ok(text(schema::schema_text(
             args.get("type").and_then(Value::as_str),
         )))
@@ -586,7 +632,7 @@ impl FundaCad {
         description = "Start an empty document, discarding the current one.",
         input_schema = crate::tools::doc_new()
     )]
-    async fn t_doc_new(&self, _args: JsonObject) -> Result<CallToolResult, McpError> {
+    pub async fn t_doc_new(&self, _args: JsonObject) -> Result<CallToolResult, McpError> {
         let mut st = self.state.lock().await;
         st.doc = model::new_document();
         st.path = None;
@@ -599,7 +645,7 @@ impl FundaCad {
         description = "Load a .funda document from disk.",
         input_schema = crate::tools::doc_open()
     )]
-    async fn t_doc_open(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
+    pub async fn t_doc_open(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         // Absolute from here down. A relative path resolves against the
         // SERVER's working directory, which an MCP host chooses and which is
         // rarely the one the caller has in mind, so echoing back what was typed
@@ -646,7 +692,7 @@ But content is written by YOU, so the limit that binds is your own output and no
 The format comes from the extension unless given. A large STEP can take minutes: it is one read, so do it once and keep the document.",
         input_schema = crate::tools::doc_import()
     )]
-    async fn t_doc_import(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
+    pub async fn t_doc_import(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         Ok(self.doc_import(&args).await)
     }
 
@@ -655,7 +701,7 @@ The format comes from the extension unless given. A large STEP can take minutes:
         description = "Write the document to a .funda file, which the FundaCAD app opens directly. Saves to the path it was opened from if none is given.",
         input_schema = crate::tools::doc_save()
     )]
-    async fn t_doc_save(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
+    pub async fn t_doc_save(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         let mut st = self.state.lock().await;
         let given = args.get("path").and_then(Value::as_str).map(str::to_string);
         let Some(path) = given.map(|p| abspath(&p)).or_else(|| st.path.clone()) else {
@@ -691,7 +737,7 @@ The format comes from the extension unless given. A large STEP can take minutes:
         description = "The whole document as JSON: parameters and the feature timeline in order.",
         input_schema = crate::tools::doc_get()
     )]
-    async fn t_doc_get(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
+    pub async fn t_doc_get(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         let st = self.state.lock().await;
         let mut out = Map::new();
         out.insert(
@@ -720,7 +766,7 @@ The format comes from the extension unless given. A large STEP can take minutes:
         description = "Replace the whole document with the given JSON. For wholesale rewrites; prefer the feature_* tools for edits.",
         input_schema = crate::tools::doc_set()
     )]
-    async fn t_doc_set(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
+    pub async fn t_doc_set(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         let doc = match require(&args, "document") {
             Ok(d) => d,
             Err(e) => return Ok(e),
@@ -747,7 +793,7 @@ The format comes from the extension unless given. A large STEP can take minutes:
         description = "Define or redefine a parameter. `expr` may be a number or an expression over other parameters (\"hub_d/2 - wall\"). Features reference it by NAME, which is what keeps the model parametric. Function arguments are separated by SEMICOLONS and trig is in degrees. Comparisons (< <= > >= == !=), && || ! yield 1 or 0, and if(cond; a; b) picks a branch: \"if(solid == 1; 0; innerX)\". Refused, changing nothing, if the expression does not resolve.",
         input_schema = crate::tools::param_set()
     )]
-    async fn t_param_set(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
+    pub async fn t_param_set(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         let name = match require_str(&args, "name") {
             Ok(n) => n,
             Err(e) => return Ok(e),
@@ -785,7 +831,7 @@ The format comes from the extension unless given. A large STEP can take minutes:
         description = "Delete a parameter. Refused if anything still uses it.",
         input_schema = crate::tools::param_remove()
     )]
-    async fn t_param_remove(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
+    pub async fn t_param_remove(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         let name = match require_str(&args, "name") {
             Ok(n) => n,
             Err(e) => return Ok(e),
@@ -804,7 +850,7 @@ The format comes from the extension unless given. A large STEP can take minutes:
         description = "Append a feature to the timeline (or insert it at `at`). Returns the id it was given. Call `schema` for the shape of one.",
         input_schema = crate::tools::feature_add()
     )]
-    async fn t_feature_add(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
+    pub async fn t_feature_add(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         let feature = match require(&args, "feature") {
             Ok(f) => f.clone(),
             Err(e) => return Ok(e),
@@ -824,7 +870,7 @@ The format comes from the extension unless given. A large STEP can take minutes:
         description = "Merge `patch` into a feature. A null value in the patch REMOVES that field. Pass replace=true to swap the whole body instead.",
         input_schema = crate::tools::feature_update()
     )]
-    async fn t_feature_update(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
+    pub async fn t_feature_update(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         let id = match require_str(&args, "id") {
             Ok(i) => i,
             Err(e) => return Ok(e),
@@ -848,7 +894,7 @@ The format comes from the extension unless given. A large STEP can take minutes:
         description = "Delete a feature from the timeline.",
         input_schema = crate::tools::feature_remove()
     )]
-    async fn t_feature_remove(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
+    pub async fn t_feature_remove(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         let id = match require_str(&args, "id") {
             Ok(i) => i,
             Err(e) => return Ok(e),
@@ -868,7 +914,7 @@ The format comes from the extension unless given. A large STEP can take minutes:
         description = "Move a feature to another position in the timeline.",
         input_schema = crate::tools::feature_move()
     )]
-    async fn t_feature_move(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
+    pub async fn t_feature_move(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         let id = match require_str(&args, "id") {
             Ok(i) => i,
             Err(e) => return Ok(e),
@@ -892,7 +938,7 @@ The format comes from the extension unless given. A large STEP can take minutes:
         description = "Rebuild the document and report what came out: the bodies, their sizes, and any feature that failed. Build often, an error names the feature that caused it.",
         input_schema = crate::tools::build()
     )]
-    async fn t_build(&self, _args: JsonObject) -> Result<CallToolResult, McpError> {
+    pub async fn t_build(&self, _args: JsonObject) -> Result<CallToolResult, McpError> {
         Ok(self.build().await)
     }
 
@@ -901,7 +947,7 @@ The format comes from the extension unless given. A large STEP can take minutes:
         description = "Exact measurements of the built bodies: volume, area, bounding box, and, the part that matters, every face and edge with a ready-made SELECTOR you can paste into the next feature. Also flags seam edges and wrapping faces, which are what fillet and press/pull refuse.",
         input_schema = crate::tools::inspect()
     )]
-    async fn t_inspect(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
+    pub async fn t_inspect(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         Ok(self.inspect(&args).await)
     }
 
@@ -910,7 +956,7 @@ The format comes from the extension unless given. A large STEP can take minutes:
         description = "Render the built model as a PNG. Orthographic, flat-shaded, with edges drawn. Use it to check what the numbers cannot tell you. `section` cuts it open, which is the only way to see a bore, a pocket or a thread; `bodies` draws one part of an assembly; `focus` zooms in on a point, which is the only way to see a small feature on a large part.",
         input_schema = crate::tools::view()
     )]
-    async fn t_view(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
+    pub async fn t_view(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         Ok(self.view(&args).await)
     }
 
@@ -919,7 +965,7 @@ The format comes from the extension unless given. A large STEP can take minutes:
         description = "Write the model to STEP, STL, 3MF or OBJ.",
         input_schema = crate::tools::export()
     )]
-    async fn t_export(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
+    pub async fn t_export(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         let path = match require_str(&args, "path") {
             Ok(p) => abspath(&p),
             Err(e) => return Ok(e),
@@ -1387,14 +1433,12 @@ impl FundaCad {
     /// untouched, which is what keeps a half-arrived file from reaching the app
     /// as an edit.
     async fn doc_import(&self, args: &JsonObject) -> CallToolResult {
-        let has_path = args
-            .get("path")
-            .and_then(Value::as_str)
-            .is_some_and(|p| !p.is_empty());
-        let has_content = args
-            .get("content")
-            .and_then(Value::as_str)
-            .is_some_and(|c| !c.is_empty());
+        // Present and not empty, whatever type it arrived as. A `content` that
+        // is a number is content that was sent wrong, and it has to reach the
+        // spool to be told so by name; treating it as absent would answer with
+        // the message for a call that sent nothing at all.
+        let has_path = truthy(args.get("path"));
+        let has_content = truthy(args.get("content"));
         if has_path && has_content {
             return failure("Give path or content, not both.");
         }
