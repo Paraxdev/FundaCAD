@@ -1,0 +1,4 @@
+[env]
+# CMake 4 refuses OpenCASCADE 7.8.1's cmake_minimum_required; this lets the
+# static kernel build configure on current toolchains.
+CMAKE_POLICY_VERSION_MINIMUM = "3.5"
