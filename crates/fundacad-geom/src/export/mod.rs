@@ -122,6 +122,8 @@ pub struct ExportBody<'a> {
     pub id: &'a str,
     pub name: &'a str,
     pub shape: &'a Shape,
+    /// `"<import feature id>/<manifest node index>"` for an imported part.
+    pub node_ref: Option<&'a str>,
 }
 
 pub struct Exporter<'a> {
@@ -218,7 +220,7 @@ impl Exporter<'_> {
             "glb" => self.glb(std::slice::from_ref(b), path),
             "stl" | "3mf" => self.merged(std::slice::from_ref(b), path),
             "step" => {
-                step::write_flat(&[(b.shape, None, None)], None, path)?;
+                step::write_shape(b.shape, path)?;
                 Ok(())
             }
             other => Err(Failure(format!("unknown export format: {other}"))),
@@ -324,11 +326,12 @@ fn export_inner(
                     .map(|s| s.to_string_lossy().into_owned())
                     .filter(|s| !s.is_empty())
                     .unwrap_or_else(|| "Model".into());
-                let flat: Vec<step::Leaf<'_>> = bodies
-                    .iter()
-                    .map(|b| (b.shape, Some(if b.name.is_empty() { b.id } else { b.name }), None))
-                    .collect();
-                step::write_flat(&flat, Some(&stem), Path::new(path))?;
+                if let Some(tree) = step::build_export_tree(ex.document, bodies, &stem) {
+                    step::write_tree(&tree, Path::new(path))?;
+                } else {
+                    let all = crate::kernel::compound(bodies.iter().map(|b| b.shape));
+                    step::write_shape(&all, Path::new(path))?;
+                }
             }
             other => return Err(Failure(format!("unknown export format: {other}"))),
         }
@@ -385,7 +388,7 @@ pub fn export_built(
     };
     let bodies: Vec<ExportBody<'_>> = built
         .iter()
-        .map(|b| ExportBody { id: &b.id, name: &b.name, shape: &b.shape })
+        .map(|b| ExportBody { id: &b.id, name: &b.name, shape: &b.shape, node_ref: None })
         .collect();
     let body = req.get("body").and_then(Value::as_str).filter(|s| !s.is_empty());
     let separate = fundacad_protocol::pyjson::truthy(req.get("separate"));

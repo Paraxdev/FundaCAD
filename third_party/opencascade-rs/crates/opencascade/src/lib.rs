@@ -10,6 +10,7 @@ pub mod primitives;
 pub mod raw;
 pub mod section;
 pub mod workplane;
+pub mod xcaf;
 
 mod law_function;
 mod make_pipe_shell;
