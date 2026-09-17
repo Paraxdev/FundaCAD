@@ -13,7 +13,7 @@
 use fundacad_protocol::stdio::{read_message, write_message, Message};
 use fundacad_protocol::{envelope, message_id};
 use serde_json::Value;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -38,6 +38,8 @@ struct Inner {
     generation: AtomicU64,
     /// Requests sent and not yet answered by a terminal message, by id.
     in_flight: Mutex<HashSet<String>>,
+    /// Cancel requests awaiting their acknowledgement, to the id they target.
+    cancels: Mutex<HashMap<String, String>>,
     stopping: AtomicBool,
     /// The generation last ended on purpose by a cancel, which is no crash.
     cancel_killed: AtomicU64,
@@ -63,6 +65,7 @@ impl Engine {
             up: AtomicBool::new(false),
             generation: AtomicU64::new(0),
             in_flight: Mutex::new(HashSet::new()),
+            cancels: Mutex::new(HashMap::new()),
             stopping: AtomicBool::new(false),
             cancel_killed: AtomicU64::new(0),
         });
@@ -164,7 +167,7 @@ fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
 }
 
 /// Forwards the worker's messages until it goes away, and says why.
-fn relay(inner: &Inner, stdout: std::process::ChildStdout) -> String {
+fn relay(inner: &Arc<Inner>, stdout: std::process::ChildStdout) -> String {
     let mut reader = BufReader::with_capacity(1 << 20, stdout);
     loop {
         match read_message(&mut reader) {
@@ -178,9 +181,16 @@ fn relay(inner: &Inner, stdout: std::process::ChildStdout) -> String {
     }
 }
 
-/// Drops a request from `in_flight` once its terminal message is seen.
-fn settle(inner: &Inner, msg: &Message) {
+/// Drops a request from `in_flight` once its terminal message is seen, and
+/// starts the grace period of a cancel the worker says reached a running job.
+fn settle(inner: &Arc<Inner>, msg: &Message) {
     let Some(Value::String(id)) = message_id(msg) else { return };
+    if let Some(target) = lock(&inner.cancels).remove(&id) {
+        if cancel_hit(msg) {
+            escalate_cancel(inner.clone(), target);
+        }
+        return;
+    }
     let terminal = match msg {
         Message::Text(t) => !t.contains("\"status\": \"building\"") && !t.contains("\"status\": \"importing\""),
         Message::Binary(b) => binary_is_final(b),
@@ -188,6 +198,16 @@ fn settle(inner: &Inner, msg: &Message) {
     if terminal {
         lock(&inner.in_flight).remove(&id);
     }
+}
+
+/// A job queued behind another is not running, so a cancel misses it, and
+/// ending the worker then would take the running job down with it.
+fn cancel_hit(msg: &Message) -> bool {
+    let Message::Text(t) = msg else { return false };
+    serde_json::from_str::<Value>(t)
+        .ok()
+        .and_then(|v| v.pointer("/result/cancelled").and_then(Value::as_bool))
+        .unwrap_or(false)
 }
 
 fn binary_is_final(frame: &[u8]) -> bool {
@@ -215,6 +235,7 @@ fn set_up(inner: &Inner, up: bool) {
     if inner.up.swap(up, Ordering::SeqCst) != up {
         if !up {
             lock(&inner.in_flight).clear();
+            lock(&inner.cancels).clear();
         }
         let _ = inner.app.emit("engine:state", up);
     }
@@ -265,22 +286,27 @@ pub fn engine_send(state: tauri::State<'_, Engine>, request: Request<'_>) -> Res
     };
     let text = String::from_utf8(bytes.clone()).map_err(|e| e.to_string())?;
     let (id, op, target) = head(&text);
-    let msg = Message::Text(text);
-    send_to_worker(&state.0, &msg)?;
+    // Recorded before sending: a fast reply can be relayed before
+    // send_to_worker returns, and would find nothing to settle.
+    let Some(id) = id else {
+        return send_to_worker(&state.0, &Message::Text(text));
+    };
     match op.as_deref() {
         Some("cancel") => {
-            if let Some(t) = target.or_else(|| lock(&state.0.in_flight).iter().next().cloned()) {
-                escalate_cancel(state.0.clone(), t);
+            let target = target.or_else(|| lock(&state.0.in_flight).iter().next().cloned());
+            if let Some(target) = target {
+                lock(&state.0.cancels).insert(id.clone(), target);
             }
         }
         Some("ping") | None => {}
         Some(_) => {
-            if let Some(id) = id {
-                lock(&state.0.in_flight).insert(id);
-            }
+            lock(&state.0.in_flight).insert(id.clone());
         }
     }
-    Ok(())
+    send_to_worker(&state.0, &Message::Text(text)).inspect_err(|_| {
+        lock(&state.0.in_flight).remove(&id);
+        lock(&state.0.cancels).remove(&id);
+    })
 }
 
 /// `id`, `op` and `target` of a request without parsing a multi-megabyte
@@ -326,6 +352,15 @@ mod tests {
         );
         assert_eq!(head(r#"{"op":"ping"}"#), (None, Some("ping".into()), None));
         assert_eq!(head("not json"), (None, None, None));
+    }
+
+    #[test]
+    fn only_a_cancel_that_reached_a_running_job_is_a_hit() {
+        let ack = |s: &str| Message::Text(s.into());
+        assert!(cancel_hit(&ack(r#"{"id": "c", "ok": true, "result": {"cancelled": true}}"#)));
+        assert!(!cancel_hit(&ack(r#"{"id": "c", "ok": true, "result": {"cancelled": false}}"#)));
+        assert!(!cancel_hit(&ack(r#"{"id": "c", "ok": false, "error": {"message": "x"}}"#)));
+        assert!(!cancel_hit(&Message::Binary(vec![0, 0, 0, 0])));
     }
 
     #[test]
