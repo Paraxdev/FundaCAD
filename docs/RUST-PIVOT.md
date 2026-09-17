@@ -195,7 +195,13 @@ progress is planned wrong.
 3. Tessellation details: faceOwners, faceBands, true normals and seam weld,
    etags, tolerance tiers, density cap, smooth edge tags.
 4. Caches: content-addressed blob store (blake2b-128, `.bbrep`), prefix
-   checkpoint cache, mesh artifact cache.
+   checkpoint cache, mesh artifact cache. `fundacad-geom::cache` keeps the
+   sidecar's chain keys and its two tiers, and drops the SQLite index: every
+   lookup geomstore makes is by chain key, so a `checkpoints/<key>.json`
+   answers it in one stat, the rename that publishes a blob publishes a record
+   the same way, and a record's mtime is its last access. Eviction and Compute
+   All read the records once, which they did over the index anyway. The engine
+   binary's size and mtime stand in for the sidecar's source hash in `env_sig`.
 5. Import (BREP, STEP with XCAF colours and assemblies, STL, 3MF, OBJ, GLB) and
    export (STEP, STL, 3MF with colours, GLB), `inspect`, `interference`,
    `projectGeometry`, `tessellateText`, `listFonts`, `migrateGeometry`.
