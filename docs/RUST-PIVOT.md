@@ -305,11 +305,18 @@ The TypeScript stays; these get a Rust twin and shared vectors.
   `diff_engines.py` drives both engines over the same documents and compares
   body count, per-body volume (rel 0.005), bbox (abs 1e-4) and the error list.
 - **Protocol conformance.** The Python protocol suites take the server command
-  from `FUNDACAD_ENGINE_CMD`; CI runs them against both engines.
+  from `FUNDACAD_ENGINE_CMD`; CI runs them against both engines. A suite that
+  needs an op the engine under test has not got yet fails, unless
+  `FUNDACAD_SKIP_UNPORTED_OPS=1` is set, which prints every case it skips. The
+  engine answers a `testSleep` job under `FUNDACAD_ENGINE_TEST_OPS=1` and takes
+  its clocks from `FUNDACAD_STALL_TIMEOUT` and `FUNDACAD_JOB_TIMEOUT`, so
+  `test_cancel.py` has something long to cancel and `test_heartbeat.py` can
+  watch a reap without waiting a minute for one.
 - **Kernel tests in Rust.** `cargo test -p fundacad-geom` runs real
   OpenCASCADE tests from the first brick on.
-- **CI.** The `rust-geom` job caches `target/OCCT` and runs the workspace
-  tests; it gates once Phase 1 step 4 lands.
+- **CI.** The `rust-geom` job caches `target/OCCT` and runs
+  `cargo test --workspace --features fundacad-engine/ws`, so the transport the
+  Python suites drive is compiled and tested; it gates once Phase 1 step 4 lands.
 - **Hygiene.** `scripts/check-repo-hygiene.sh` applies to Rust too.
 
 ## 6. The `prealpha-rust` rolling release (landed)
