@@ -581,6 +581,44 @@ SKETCH_FACE_CASES = {
 CASES.update(SKETCH_FACE_CASES)
 
 
+def two_cubes():
+    return [box("a", 20, 20, 20), box("b", 6, 6, 6),
+            {"id": "mb", "type": "move", "bodies": ["body2"], "dx": 50}]
+
+
+def face_on(point, body):
+    return {"kind": "face", "by": "nearest", "point": point, "body": body}
+
+
+def joint(mate=None, to=None, **kw):
+    f = {"id": "j", "type": "joint", "moving": "body2",
+         "mate": mate or {"body": "body2", "face": face_on([50.0, 0.0, -3.0], "body2")},
+         "to": to or {"body": "body1", "face": face_on([0.0, 0.0, 10.0], "body1")}}
+    f.update(kw)
+    return f
+
+
+JOINT_CASES = {
+    "joint_face_mate": doc(two_cubes() + [joint()]),
+    "joint_offset": doc(two_cubes() + [joint(offset=5)]),
+    "joint_angle": doc(two_cubes() + [joint(angle=30)]),
+    "joint_flush": doc(two_cubes() + [joint(flush=True)]),
+    "joint_offset_and_angle": doc(two_cubes() + [joint(offset=-2, angle=45, mode="revolute")]),
+    "joint_origin_connector": doc(two_cubes() + [joint(to={"origin": [10, 5, 0], "zdir": [0, 0, 1], "xdir": [0, 1, 0]})]),
+    "joint_datum_connector": doc(two_cubes() + [
+        {"id": "d", "type": "datumPlane", "plane": "XZ", "offset": 12},
+        joint(to={"datum": "d"})]),
+    "joint_edge_connector": doc(two_cubes() + [
+        joint(to={"body": "body1", "edge": {"kind": "edge", "by": "nearest", "point": [10, 0, 10], "body": "body1"}})]),
+    "joint_missing_body": doc(two_cubes() + [joint(moving="body9")]),
+    "joint_unresolved_face": doc(two_cubes() + [
+        joint(to={"body": "body1", "face": {"kind": "face", "by": "match", "fp": {"nope": 1}}})]),
+    "joint_zero_axis": doc(two_cubes() + [joint(to={"origin": [0, 0, 0], "zdir": [0, 0, 0]})]),
+    "joint_no_reference": doc(two_cubes() + [joint(to={})]),
+}
+CASES.update(JOINT_CASES)
+
+
 def volume(shape):
     p = GProp_GProps()
     BRepGProp.VolumeProperties_s(shape.wrapped, p)

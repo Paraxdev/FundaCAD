@@ -13261,6 +13261,1448 @@
    ]
   }
  },
+ "joint_angle": {
+  "doc": {
+   "features": [
+    {
+     "height": 20,
+     "id": "a",
+     "length": 20,
+     "type": "box",
+     "width": 20
+    },
+    {
+     "height": 6,
+     "id": "b",
+     "length": 6,
+     "type": "box",
+     "width": 6
+    },
+    {
+     "bodies": [
+      "body2"
+     ],
+     "dx": 50,
+     "id": "mb",
+     "type": "move"
+    },
+    {
+     "angle": 30,
+     "id": "j",
+     "mate": {
+      "body": "body2",
+      "face": {
+       "body": "body2",
+       "by": "nearest",
+       "kind": "face",
+       "point": [
+        50.0,
+        0.0,
+        -3.0
+       ]
+      }
+     },
+     "moving": "body2",
+     "to": {
+      "body": "body1",
+      "face": {
+       "body": "body1",
+       "by": "nearest",
+       "kind": "face",
+       "point": [
+        0.0,
+        0.0,
+        10.0
+       ]
+      }
+     },
+     "type": "joint"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.0,
+      -10.0,
+      -10.0,
+      10.0,
+      10.0,
+      10.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 7999.999999999998
+    },
+    {
+     "bbox": [
+      -4.098076211353316,
+      -4.098076211353316,
+      10.0,
+      4.098076211353316,
+      4.098076211353317,
+      16.0
+     ],
+     "faceOwners": [
+      "j",
+      "j",
+      "j",
+      "j",
+      "j",
+      "j"
+     ],
+     "faces": 6,
+     "id": "body2",
+     "name": "Box",
+     "solids": 1,
+     "volume": 216.0
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1",
+    "b:0": "body2"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "joint_datum_connector": {
+  "doc": {
+   "features": [
+    {
+     "height": 20,
+     "id": "a",
+     "length": 20,
+     "type": "box",
+     "width": 20
+    },
+    {
+     "height": 6,
+     "id": "b",
+     "length": 6,
+     "type": "box",
+     "width": 6
+    },
+    {
+     "bodies": [
+      "body2"
+     ],
+     "dx": 50,
+     "id": "mb",
+     "type": "move"
+    },
+    {
+     "id": "d",
+     "offset": 12,
+     "plane": "XZ",
+     "type": "datumPlane"
+    },
+    {
+     "id": "j",
+     "mate": {
+      "body": "body2",
+      "face": {
+       "body": "body2",
+       "by": "nearest",
+       "kind": "face",
+       "point": [
+        50.0,
+        0.0,
+        -3.0
+       ]
+      }
+     },
+     "moving": "body2",
+     "to": {
+      "datum": "d"
+     },
+     "type": "joint"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.0,
+      -10.0,
+      -10.0,
+      10.0,
+      10.0,
+      10.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 7999.999999999998
+    },
+    {
+     "bbox": [
+      -3.0,
+      -18.0,
+      -3.0,
+      3.0,
+      -12.0,
+      3.000000000000001
+     ],
+     "faceOwners": [
+      "j",
+      "j",
+      "j",
+      "j",
+      "j",
+      "j"
+     ],
+     "faces": 6,
+     "id": "body2",
+     "name": "Box",
+     "solids": 1,
+     "volume": 216.0
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1",
+    "b:0": "body2"
+   },
+   "datumPlanes": {
+    "d": {
+     "normal": [
+      0.0,
+      -1.0,
+      0.0
+     ],
+     "origin": [
+      0.0,
+      -12.0,
+      0.0
+     ],
+     "xdir": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    }
+   },
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "joint_edge_connector": {
+  "doc": {
+   "features": [
+    {
+     "height": 20,
+     "id": "a",
+     "length": 20,
+     "type": "box",
+     "width": 20
+    },
+    {
+     "height": 6,
+     "id": "b",
+     "length": 6,
+     "type": "box",
+     "width": 6
+    },
+    {
+     "bodies": [
+      "body2"
+     ],
+     "dx": 50,
+     "id": "mb",
+     "type": "move"
+    },
+    {
+     "id": "j",
+     "mate": {
+      "body": "body2",
+      "face": {
+       "body": "body2",
+       "by": "nearest",
+       "kind": "face",
+       "point": [
+        50.0,
+        0.0,
+        -3.0
+       ]
+      }
+     },
+     "moving": "body2",
+     "to": {
+      "body": "body1",
+      "edge": {
+       "body": "body1",
+       "by": "nearest",
+       "kind": "edge",
+       "point": [
+        10,
+        0,
+        10
+       ]
+      }
+     },
+     "type": "joint"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.0,
+      -10.0,
+      -10.0,
+      10.0,
+      10.0,
+      10.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 7999.999999999998
+    },
+    {
+     "bbox": [
+      7.0,
+      -4.440892098500626e-16,
+      7.0,
+      13.0,
+      6.000000000000001,
+      13.0
+     ],
+     "faceOwners": [
+      "j",
+      "j",
+      "j",
+      "j",
+      "j",
+      "j"
+     ],
+     "faces": 6,
+     "id": "body2",
+     "name": "Box",
+     "solids": 1,
+     "volume": 216.0
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1",
+    "b:0": "body2"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "joint_face_mate": {
+  "doc": {
+   "features": [
+    {
+     "height": 20,
+     "id": "a",
+     "length": 20,
+     "type": "box",
+     "width": 20
+    },
+    {
+     "height": 6,
+     "id": "b",
+     "length": 6,
+     "type": "box",
+     "width": 6
+    },
+    {
+     "bodies": [
+      "body2"
+     ],
+     "dx": 50,
+     "id": "mb",
+     "type": "move"
+    },
+    {
+     "id": "j",
+     "mate": {
+      "body": "body2",
+      "face": {
+       "body": "body2",
+       "by": "nearest",
+       "kind": "face",
+       "point": [
+        50.0,
+        0.0,
+        -3.0
+       ]
+      }
+     },
+     "moving": "body2",
+     "to": {
+      "body": "body1",
+      "face": {
+       "body": "body1",
+       "by": "nearest",
+       "kind": "face",
+       "point": [
+        0.0,
+        0.0,
+        10.0
+       ]
+      }
+     },
+     "type": "joint"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.0,
+      -10.0,
+      -10.0,
+      10.0,
+      10.0,
+      10.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 7999.999999999998
+    },
+    {
+     "bbox": [
+      -3.0,
+      -3.0,
+      10.0,
+      3.0,
+      3.000000000000001,
+      16.0
+     ],
+     "faceOwners": [
+      "j",
+      "j",
+      "j",
+      "j",
+      "j",
+      "j"
+     ],
+     "faces": 6,
+     "id": "body2",
+     "name": "Box",
+     "solids": 1,
+     "volume": 216.0
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1",
+    "b:0": "body2"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "joint_flush": {
+  "doc": {
+   "features": [
+    {
+     "height": 20,
+     "id": "a",
+     "length": 20,
+     "type": "box",
+     "width": 20
+    },
+    {
+     "height": 6,
+     "id": "b",
+     "length": 6,
+     "type": "box",
+     "width": 6
+    },
+    {
+     "bodies": [
+      "body2"
+     ],
+     "dx": 50,
+     "id": "mb",
+     "type": "move"
+    },
+    {
+     "flush": true,
+     "id": "j",
+     "mate": {
+      "body": "body2",
+      "face": {
+       "body": "body2",
+       "by": "nearest",
+       "kind": "face",
+       "point": [
+        50.0,
+        0.0,
+        -3.0
+       ]
+      }
+     },
+     "moving": "body2",
+     "to": {
+      "body": "body1",
+      "face": {
+       "body": "body1",
+       "by": "nearest",
+       "kind": "face",
+       "point": [
+        0.0,
+        0.0,
+        10.0
+       ]
+      }
+     },
+     "type": "joint"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.0,
+      -10.0,
+      -10.0,
+      10.0,
+      10.0,
+      10.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 7999.999999999998
+    },
+    {
+     "bbox": [
+      -3.0,
+      -3.0,
+      4.0,
+      3.0,
+      3.0,
+      10.0
+     ],
+     "faceOwners": [
+      "j",
+      "j",
+      "j",
+      "j",
+      "j",
+      "j"
+     ],
+     "faces": 6,
+     "id": "body2",
+     "name": "Box",
+     "solids": 1,
+     "volume": 216.0
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1",
+    "b:0": "body2"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "joint_missing_body": {
+  "doc": {
+   "features": [
+    {
+     "height": 20,
+     "id": "a",
+     "length": 20,
+     "type": "box",
+     "width": 20
+    },
+    {
+     "height": 6,
+     "id": "b",
+     "length": 6,
+     "type": "box",
+     "width": 6
+    },
+    {
+     "bodies": [
+      "body2"
+     ],
+     "dx": 50,
+     "id": "mb",
+     "type": "move"
+    },
+    {
+     "id": "j",
+     "mate": {
+      "body": "body2",
+      "face": {
+       "body": "body2",
+       "by": "nearest",
+       "kind": "face",
+       "point": [
+        50.0,
+        0.0,
+        -3.0
+       ]
+      }
+     },
+     "moving": "body9",
+     "to": {
+      "body": "body1",
+      "face": {
+       "body": "body1",
+       "by": "nearest",
+       "kind": "face",
+       "point": [
+        0.0,
+        0.0,
+        10.0
+       ]
+      }
+     },
+     "type": "joint"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.0,
+      -10.0,
+      -10.0,
+      10.0,
+      10.0,
+      10.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 7999.999999999998
+    },
+    {
+     "bbox": [
+      47.0,
+      -3.0,
+      -3.0,
+      53.0,
+      3.0,
+      3.0
+     ],
+     "faceOwners": [
+      "b",
+      "b",
+      "b",
+      "b",
+      "b",
+      "b"
+     ],
+     "faces": 6,
+     "id": "body2",
+     "name": "Box",
+     "solids": 1,
+     "volume": 216.0
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1",
+    "b:0": "body2"
+   },
+   "datumPlanes": {},
+   "diagnostics": [
+    {
+     "feature_id": "j",
+     "kind": "joint",
+     "reason": "the body to position is missing or was consumed"
+    }
+   ],
+   "errors": []
+  }
+ },
+ "joint_no_reference": {
+  "doc": {
+   "features": [
+    {
+     "height": 20,
+     "id": "a",
+     "length": 20,
+     "type": "box",
+     "width": 20
+    },
+    {
+     "height": 6,
+     "id": "b",
+     "length": 6,
+     "type": "box",
+     "width": 6
+    },
+    {
+     "bodies": [
+      "body2"
+     ],
+     "dx": 50,
+     "id": "mb",
+     "type": "move"
+    },
+    {
+     "id": "j",
+     "mate": {
+      "body": "body2",
+      "face": {
+       "body": "body2",
+       "by": "nearest",
+       "kind": "face",
+       "point": [
+        50.0,
+        0.0,
+        -3.0
+       ]
+      }
+     },
+     "moving": "body2",
+     "to": {
+      "body": "body1",
+      "face": {
+       "body": "body1",
+       "by": "nearest",
+       "kind": "face",
+       "point": [
+        0.0,
+        0.0,
+        10.0
+       ]
+      }
+     },
+     "type": "joint"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.0,
+      -10.0,
+      -10.0,
+      10.0,
+      10.0,
+      10.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 7999.999999999998
+    },
+    {
+     "bbox": [
+      -3.0,
+      -3.0,
+      10.0,
+      3.0,
+      3.000000000000001,
+      16.0
+     ],
+     "faceOwners": [
+      "j",
+      "j",
+      "j",
+      "j",
+      "j",
+      "j"
+     ],
+     "faces": 6,
+     "id": "body2",
+     "name": "Box",
+     "solids": 1,
+     "volume": 216.0
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1",
+    "b:0": "body2"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "joint_offset": {
+  "doc": {
+   "features": [
+    {
+     "height": 20,
+     "id": "a",
+     "length": 20,
+     "type": "box",
+     "width": 20
+    },
+    {
+     "height": 6,
+     "id": "b",
+     "length": 6,
+     "type": "box",
+     "width": 6
+    },
+    {
+     "bodies": [
+      "body2"
+     ],
+     "dx": 50,
+     "id": "mb",
+     "type": "move"
+    },
+    {
+     "id": "j",
+     "mate": {
+      "body": "body2",
+      "face": {
+       "body": "body2",
+       "by": "nearest",
+       "kind": "face",
+       "point": [
+        50.0,
+        0.0,
+        -3.0
+       ]
+      }
+     },
+     "moving": "body2",
+     "offset": 5,
+     "to": {
+      "body": "body1",
+      "face": {
+       "body": "body1",
+       "by": "nearest",
+       "kind": "face",
+       "point": [
+        0.0,
+        0.0,
+        10.0
+       ]
+      }
+     },
+     "type": "joint"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.0,
+      -10.0,
+      -10.0,
+      10.0,
+      10.0,
+      10.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 7999.999999999998
+    },
+    {
+     "bbox": [
+      -3.0,
+      -3.0,
+      15.0,
+      3.0,
+      3.000000000000001,
+      21.0
+     ],
+     "faceOwners": [
+      "j",
+      "j",
+      "j",
+      "j",
+      "j",
+      "j"
+     ],
+     "faces": 6,
+     "id": "body2",
+     "name": "Box",
+     "solids": 1,
+     "volume": 216.0
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1",
+    "b:0": "body2"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "joint_offset_and_angle": {
+  "doc": {
+   "features": [
+    {
+     "height": 20,
+     "id": "a",
+     "length": 20,
+     "type": "box",
+     "width": 20
+    },
+    {
+     "height": 6,
+     "id": "b",
+     "length": 6,
+     "type": "box",
+     "width": 6
+    },
+    {
+     "bodies": [
+      "body2"
+     ],
+     "dx": 50,
+     "id": "mb",
+     "type": "move"
+    },
+    {
+     "angle": 45,
+     "id": "j",
+     "mate": {
+      "body": "body2",
+      "face": {
+       "body": "body2",
+       "by": "nearest",
+       "kind": "face",
+       "point": [
+        50.0,
+        0.0,
+        -3.0
+       ]
+      }
+     },
+     "mode": "revolute",
+     "moving": "body2",
+     "offset": -2,
+     "to": {
+      "body": "body1",
+      "face": {
+       "body": "body1",
+       "by": "nearest",
+       "kind": "face",
+       "point": [
+        0.0,
+        0.0,
+        10.0
+       ]
+      }
+     },
+     "type": "joint"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.0,
+      -10.0,
+      -10.0,
+      10.0,
+      10.0,
+      10.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 7999.999999999998
+    },
+    {
+     "bbox": [
+      -4.242640687119286,
+      -4.242640687119286,
+      8.0,
+      4.242640687119286,
+      4.2426406871192865,
+      14.0
+     ],
+     "faceOwners": [
+      "j",
+      "j",
+      "j",
+      "j",
+      "j",
+      "j"
+     ],
+     "faces": 6,
+     "id": "body2",
+     "name": "Box",
+     "solids": 1,
+     "volume": 216.0
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1",
+    "b:0": "body2"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "joint_origin_connector": {
+  "doc": {
+   "features": [
+    {
+     "height": 20,
+     "id": "a",
+     "length": 20,
+     "type": "box",
+     "width": 20
+    },
+    {
+     "height": 6,
+     "id": "b",
+     "length": 6,
+     "type": "box",
+     "width": 6
+    },
+    {
+     "bodies": [
+      "body2"
+     ],
+     "dx": 50,
+     "id": "mb",
+     "type": "move"
+    },
+    {
+     "id": "j",
+     "mate": {
+      "body": "body2",
+      "face": {
+       "body": "body2",
+       "by": "nearest",
+       "kind": "face",
+       "point": [
+        50.0,
+        0.0,
+        -3.0
+       ]
+      }
+     },
+     "moving": "body2",
+     "to": {
+      "origin": [
+       10,
+       5,
+       0
+      ],
+      "xdir": [
+       0,
+       1,
+       0
+      ],
+      "zdir": [
+       0,
+       0,
+       1
+      ]
+     },
+     "type": "joint"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.0,
+      -10.0,
+      -10.0,
+      10.0,
+      10.0,
+      10.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 7999.999999999998
+    },
+    {
+     "bbox": [
+      6.999999999999999,
+      2.0,
+      -4.440892098500626e-16,
+      13.0,
+      8.0,
+      6.000000000000001
+     ],
+     "faceOwners": [
+      "j",
+      "j",
+      "j",
+      "j",
+      "j",
+      "j"
+     ],
+     "faces": 6,
+     "id": "body2",
+     "name": "Box",
+     "solids": 1,
+     "volume": 216.0
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1",
+    "b:0": "body2"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "joint_unresolved_face": {
+  "doc": {
+   "features": [
+    {
+     "height": 20,
+     "id": "a",
+     "length": 20,
+     "type": "box",
+     "width": 20
+    },
+    {
+     "height": 6,
+     "id": "b",
+     "length": 6,
+     "type": "box",
+     "width": 6
+    },
+    {
+     "bodies": [
+      "body2"
+     ],
+     "dx": 50,
+     "id": "mb",
+     "type": "move"
+    },
+    {
+     "id": "j",
+     "mate": {
+      "body": "body2",
+      "face": {
+       "body": "body2",
+       "by": "nearest",
+       "kind": "face",
+       "point": [
+        50.0,
+        0.0,
+        -3.0
+       ]
+      }
+     },
+     "moving": "body2",
+     "to": {
+      "body": "body1",
+      "face": {
+       "by": "match",
+       "fp": {
+        "nope": 1
+       },
+       "kind": "face"
+      }
+     },
+     "type": "joint"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.0,
+      -10.0,
+      -10.0,
+      10.0,
+      10.0,
+      10.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 7999.999999999998
+    },
+    {
+     "bbox": [
+      47.0,
+      -3.0,
+      -3.0,
+      53.0,
+      3.0,
+      3.0
+     ],
+     "faceOwners": [
+      "b",
+      "b",
+      "b",
+      "b",
+      "b",
+      "b"
+     ],
+     "faces": 6,
+     "id": "body2",
+     "name": "Box",
+     "solids": 1,
+     "volume": 216.0
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1",
+    "b:0": "body2"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "code": "badRequest",
+     "feature_id": "j",
+     "message": "joint is missing the field \"centroid\""
+    }
+   ]
+  }
+ },
+ "joint_zero_axis": {
+  "doc": {
+   "features": [
+    {
+     "height": 20,
+     "id": "a",
+     "length": 20,
+     "type": "box",
+     "width": 20
+    },
+    {
+     "height": 6,
+     "id": "b",
+     "length": 6,
+     "type": "box",
+     "width": 6
+    },
+    {
+     "bodies": [
+      "body2"
+     ],
+     "dx": 50,
+     "id": "mb",
+     "type": "move"
+    },
+    {
+     "id": "j",
+     "mate": {
+      "body": "body2",
+      "face": {
+       "body": "body2",
+       "by": "nearest",
+       "kind": "face",
+       "point": [
+        50.0,
+        0.0,
+        -3.0
+       ]
+      }
+     },
+     "moving": "body2",
+     "to": {
+      "origin": [
+       0,
+       0,
+       0
+      ],
+      "zdir": [
+       0,
+       0,
+       0
+      ]
+     },
+     "type": "joint"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.0,
+      -10.0,
+      -10.0,
+      10.0,
+      10.0,
+      10.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 7999.999999999998
+    },
+    {
+     "bbox": [
+      47.0,
+      -3.0,
+      -3.0,
+      53.0,
+      3.0,
+      3.0
+     ],
+     "faceOwners": [
+      "b",
+      "b",
+      "b",
+      "b",
+      "b",
+      "b"
+     ],
+     "faces": 6,
+     "id": "body2",
+     "name": "Box",
+     "solids": 1,
+     "volume": 216.0
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1",
+    "b:0": "body2"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "code": "badRequest",
+     "feature_id": "j",
+     "message": "joint: a connector's axis is zero length"
+    }
+   ]
+  }
+ },
  "loft_coincident": {
   "doc": {
    "features": [
