@@ -1,0 +1,194 @@
+// The geometry half of a FundaCAD plugin bundle, as a WebAssembly component
+// (docs/RUST-PIVOT.md 2.3, docs/PLUGINS.md "Owning a feature type").
+//
+// Shapes never cross as BREP bytes: the host keeps every solid, face, wire and
+// edge, and a plugin holds `shape` handles. A handle lives as long as the call
+// that produced it; nothing survives between calls, each call gets a fresh
+// instance.
+package fundacad:plugin@0.1.0;
+
+interface types {
+  type vec3 = tuple<f64, f64, f64>;
+
+  enum shape-kind { compound, comp-solid, solid, shell, face, wire, edge, vertex, other }
+
+  // `normal` points out of the material (the face orientation is applied).
+  record plane { origin: vec3, normal: vec3 }
+  record cylinder { origin: vec3, axis: vec3, radius: f64 }
+  variant surface { plane(plane), cylinder(cylinder), other(string) }
+
+  record line { origin: vec3, direction: vec3 }
+  record circle { center: vec3, axis: vec3, radius: f64 }
+  variant curve { line(line), circle(circle), other(string) }
+
+  enum point-state { inside, on, outside }
+  enum boolean-op { fuse, cut, common }
+
+  // A triangle soup: xyz per vertex, three indices per triangle, and either
+  // no normals or one xyz per vertex.
+  record mesh { positions: list<f64>, indices: list<u32>, normals: list<f32> }
+
+  record export-body { id: string, name: string, positions: list<f64>, indices: list<u32> }
+}
+
+// Always available: cancellation, progress and the engine log.
+interface host {
+  // True once the person cancelled. A long loop should poll it and return an
+  // error; the host also stops a plugin that overruns its time budget.
+  cancelled: func() -> bool;
+  progress: func(fraction: f64, message: string);
+  log: func(message: string);
+}
+
+// The generic kernel. Nothing here knows what a fastener, a texture or a
+// printer is.
+interface kernel {
+  use types.{vec3, shape-kind, surface, curve, point-state, boolean-op, mesh};
+
+  resource shape {
+    kind: func() -> shape-kind;
+    // Unique sub-shapes in explorer order, degenerate edges left out.
+    solids: func() -> list<shape>;
+    faces: func() -> list<shape>;
+    wires: func() -> list<shape>;
+    edges: func() -> list<shape>;
+    // A face's outer boundary, and every other wire of it.
+    outer-wire: func() -> option<shape>;
+    inner-wires: func() -> list<shape>;
+    // A face's surface, an edge's curve.
+    surface: func() -> surface;
+    curve: func() -> curve;
+    // Every edge of the shape, explorer order with repeats, sampled at
+    // `segments` + 1 evenly spaced curve parameters.
+    sample-edges: func(segments: u32) -> list<vec3>;
+    // An edge at a fraction of its length.
+    point-at: func(position: f64) -> option<vec3>;
+    tangent-at: func(position: f64) -> option<vec3>;
+    // A planar face's area centroid, a curved face's middle of its UV bounds,
+    // anything else's centre of mass.
+    center: func() -> option<vec3>;
+    // A face's outward normal at the point projected onto it.
+    normal-at: func(point: vec3) -> option<vec3>;
+    // Solids in order: the first that has the point in or on it decides.
+    classify: func(point: vec3, tolerance: f64) -> point-state;
+    volume: func() -> f64;
+    area: func() -> f64;
+    bounding-box: func() -> option<tuple<vec3, vec3>>;
+    is-valid: func() -> bool;
+    is-same: func(other: borrow<shape>) -> bool;
+    // The distinct faces of this shape meeting at `edge`.
+    faces-of-edge: func(edge: borrow<shape>) -> list<shape>;
+    // The angle between the normals of the two faces at an edge, none on a
+    // seam or a free edge.
+    dihedral-deg: func(edge: borrow<shape>) -> option<f64>;
+    // A face's triangulation at a linear deflection.
+    triangulate: func(deflection: f64) -> result<mesh, string>;
+  }
+
+  // A box from its minimum corner.
+  make-box: func(corner: vec3, size: vec3) -> result<shape, string>;
+  // A cylinder whose bottom disc is centred on `base`, rising along `axis`.
+  make-cylinder: func(base: vec3, axis: vec3, radius: f64, height: f64) -> result<shape, string>;
+  make-cone: func(base: vec3, axis: vec3, bottom-radius: f64, top-radius: f64, height: f64) -> result<shape, string>;
+  make-sphere: func(center: vec3, radius: f64) -> result<shape, string>;
+  // A closed planar polygon face.
+  polygon-face: func(points: list<vec3>) -> result<shape, string>;
+  // A planar face bounded by a closed wire.
+  face-from-wire: func(wire: borrow<shape>) -> result<shape, string>;
+  // The profile faces of sketch entities, both JSON exactly as a sketch
+  // feature stores its `plane` and `entities`. Inside `run-feature` a named
+  // datum plane resolves against the document.
+  sketch-faces: func(plane: string, entities: string) -> result<list<shape>, string>;
+  // A face or wire swept along a vector, and revolved about an axis.
+  prism: func(profile: borrow<shape>, direction: vec3) -> result<shape, string>;
+  revolve: func(profile: borrow<shape>, origin: vec3, axis: vec3, degrees: f64) -> result<shape, string>;
+  // One boolean, the base against every tool at once. A result the checker
+  // calls invalid is an error.
+  boolean: func(op: boolean-op, base: borrow<shape>, tools: list<borrow<shape>>) -> result<shape, string>;
+  // Faces split along a shared surface merged, the input back if that fails.
+  unify: func(shape: borrow<shape>) -> shape;
+  translate: func(shape: borrow<shape>, offset: vec3) -> result<shape, string>;
+  // Carry the local origin to `origin` and local +Z to `z-axis`.
+  place: func(shape: borrow<shape>, origin: vec3, z-axis: vec3) -> result<shape, string>;
+  compound: func(parts: list<borrow<shape>>) -> shape;
+
+  record blended { shape: shape, skipped: u32 }
+  // Every edge at once; with `one-by-one`, a refused batch falls back to one
+  // edge at a time on the evolving body and `skipped` counts the refusals.
+  fillet: func(shape: borrow<shape>, edges: list<borrow<shape>>, radius: f64, one-by-one: bool) -> result<blended, string>;
+  chamfer: func(shape: borrow<shape>, edges: list<borrow<shape>>, distance: f64, distance2: f64, one-by-one: bool) -> result<blended, string>;
+
+  // The content-addressed blob store: a shape by its id, and a shape stored.
+  read-blob: func(id: string) -> result<shape, string>;
+  write-blob: func(shape: borrow<shape>) -> result<string, string>;
+}
+
+// The feature being rebuilt. Only valid inside `run-feature`.
+interface feature {
+  use kernel.{shape};
+
+  // The feature object exactly as the document stores it, JSON.
+  definition: func() -> string;
+  // A number or a parameter expression (JSON) resolved against the document.
+  number: func(value: string) -> result<f64, string>;
+
+  record picked { body: u32, items: list<shape> }
+  // The selectors in a field resolved, grouped by the body each names.
+  pick-faces: func(field: string, label: string) -> result<list<picked>, string>;
+  pick-edges: func(field: string, label: string) -> result<list<picked>, string>;
+  // Body ids in a field, the active body when it is empty.
+  target-bodies: func(field: string, label: string) -> result<list<u32>, string>;
+
+  body-shape: func(body: u32) -> result<shape, string>;
+  body-name: func(body: u32) -> result<string, string>;
+  set-body-shape: func(body: u32, shape: borrow<shape>) -> result<_, string>;
+  add-body: func(shape: borrow<shape>, name: option<string>) -> u32;
+  // One entry of the rebuild's diagnostics, JSON; `feature_id` is filled in.
+  diagnostic: func(entry: string);
+  // Attach a mesh pass spec (JSON with a "pass" key) to a body, for
+  // `resolve-pass` and `displace` at tessellation time.
+  stash-pass: func(body: u32, spec: string) -> result<_, string>;
+}
+
+// Where an exporter's bytes go. The host picked the path; a plugin never
+// names a file.
+interface output {
+  write: func(bytes: list<u8>) -> result<_, string>;
+}
+
+world plugin {
+  import host;
+  import kernel;
+  import feature;
+  import output;
+
+  use types.{mesh, export-body};
+  use kernel.{shape};
+
+  record mesh-pass { name: string, code-version: u32 }
+  record registration {
+    features: list<string>,
+    mesh-passes: list<mesh-pass>,
+    exporters: list<string>,
+    shape-generators: list<string>,
+  }
+
+  // What this component claims. Each name must be declared in the manifest.
+  export register: func() -> registration;
+
+  // register_feature: edit the bodies through `feature`. An error is shown to
+  // the person as it is.
+  export run-feature: func(type-name: string) -> result<_, string>;
+
+  // register_mesh_pass: the faces of a finished body one stashed spec lands
+  // on, then one face's triangulation displaced.
+  export resolve-pass: func(pass: string, body: borrow<shape>, spec: string) -> result<list<shape>, string>;
+  export displace: func(pass: string, face: borrow<shape>, triangles: mesh, spec: string, density-cap: u32) -> result<mesh, string>;
+
+  // register_exporter: every live body meshed at export grade, written
+  // through `output`. The result is an info object, JSON, or "".
+  export write-export: func(exporter: string, bodies: list<export-body>, options: string) -> result<string, string>;
+
+  // register_shape_generator: one solid from JSON parameters.
+  export generate-shape: func(generator: string, params: string) -> result<shape, string>;
+}

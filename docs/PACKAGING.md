@@ -13,6 +13,10 @@
 > **The OCCT sections below are LEGACY**, they apply only to building the optional
 > `rust-geom` spike (`cargo build --features rust-geom`), not to shipping.
 
+> **The pre-alpha Rust bundle (2026-09):** there is now a second thing this
+> repository builds, and it has no Python in it. See
+> [the pre-alpha section](#the-pre-alpha-rust-bundle) below.
+
 FundaCAD is a [Tauri 2](https://v2.tauri.app) desktop app:
 
 - **Frontend**, TypeScript + Vite, built with `npm run build` (Node 22) into `dist/`.
@@ -23,6 +27,61 @@ FundaCAD is a [Tauri 2](https://v2.tauri.app) desktop app:
   relocatable `sidecar-runtime/` resource.
 
 CI: [`.github/workflows/build.yml`](../.github/workflows/build.yml).
+
+---
+
+## The pre-alpha Rust bundle
+
+A second bundle, from the same tree, whose geometry engine is compiled in. It
+is what the `build-prealpha` and `release-prealpha` jobs publish to the
+`prealpha-rust` rolling release; docs/RUST-PIVOT.md section 6 is the decision
+record, this is how to build one.
+
+```sh
+npx tauri build --config src-tauri/tauri.prealpha.conf.json --features rust-engine
+```
+
+Three things make it different from the beta bundle:
+
+- **`--features rust-engine`.** `src-tauri` gains `fundacad-engine` and
+  `fundacad-geom`, `main.rs` dispatches `--engine` into the worker loop, and
+  the app registers `engine_attach` / `engine_send` / `engine_kind` instead of
+  `sidecar_token`. `engine_kind` answering `"rust"` is what makes
+  `src/geometry/transport.ts` choose IPC over the WebSocket.
+- **`tauri.prealpha.conf.json` instead of `tauri.bundle.conf.json`.** It
+  declares no `resources`, so no `sidecar-runtime` is bundled and
+  `scripts/build-sidecar-runtime.{sh,ps1}` never has to run. It also points the
+  updater at the pre-alpha feed and drops the loopback grant from the CSP,
+  which that build cannot use.
+- **OpenCASCADE 7.8.1 is compiled from source**, statically, by the `occt-sys`
+  crate the vendored bindings pull in. It needs cmake and a C++ toolchain, it
+  takes about twenty minutes cold, and it lands in `<target>/OCCT`, which is
+  what CI caches. On Windows use the rustup MSVC toolchain, a MinGW `cargo`
+  earlier on PATH picks the wrong cmake generator, and set
+  `CMAKE_POLICY_VERSION_MINIMUM=3.5`, because CMake 4 refuses OCCT 7.8.1's
+  declared minimum.
+
+Measured on Windows, 2026-09-17, from that exact command:
+
+| | beta (0.2.125) | pre-alpha, Rust engine |
+|---|---|---|
+| `.msi` | 162.7 MB | **23.3 MB** |
+| `-setup.exe` (NSIS) | 157.3 MB | **23.1 MB** |
+| `fundacad.exe` | small, plus an 800 MB `sidecar-runtime/` beside it | 62.4 MB, and nothing beside it |
+
+Seven times smaller, and it is the Python runtime that accounts for all of it:
+the engine, OpenCASCADE included, is 62 MB of executable. The same run also
+confirmed the three things that make the bundle, read back out of the compiled
+binary rather than assumed: `engine_attach` is registered and `sidecar_token`
+is not, the policy in it is the tightened one with no `ws://127.0.0.1:8765`
+anywhere, and the updater endpoint baked in is the pre-alpha one with the beta
+one absent.
+
+Nothing about the beta path changes, and the two never meet: separate jobs,
+separate tags, separate update feeds, separate artifact names.
+
+The OCCT sections below are about the OLD `rust-geom` system-linked spike and
+do not apply to this bundle, which links no system OCCT on any platform.
 
 ---
 

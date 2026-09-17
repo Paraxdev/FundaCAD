@@ -18,7 +18,7 @@ pub use feature::*;
 pub use selector::*;
 pub use sketch::{
     DimPlace, PlaceOffset, ProjectedCurve, ProjectedSource, SketchConstraint, SketchEntity,
-    SketchPattern,
+    SketchPattern, Text,
 };
 pub use value::{Extra, Invalid, Num, OneOrMany, Real, UnresolvedNum, Vec3};
 
