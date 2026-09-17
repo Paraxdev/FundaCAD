@@ -1,5 +1,5 @@
 {
-  "about": "Small synthetic documents diff_engines.py rebuilds through the Python and the Rust engine. Feature shapes are taken from sidecar/tests (test_smoke, test_fullstack, test_body_binding, test_profile_orientation). Ordered by the port: primitives, sketch extrudes, booleans, blends, shell, revolve, patterns, holes, loft, sweep. Every one builds cleanly on the Python engine, or fails the way its expectError says (diff_engines.py --python-only).",
+  "about": "Small synthetic documents diff_engines.py rebuilds through the Python and the Rust engine. Feature shapes are taken from sidecar/tests (test_smoke, test_fullstack, test_body_binding, test_profile_orientation). Ordered by the port: primitives, sketch extrudes, booleans, blends, shell, revolve, patterns, holes, loft, sweep, imports, then organic_bike, the one document built the way a person draws a frame. The *_join_* documents of each family are the ones whose fuse comes back as glued lumps instead of merged material, the case the sliced retry exists for. Every one builds cleanly on the Python engine, or fails the way its expectError says (diff_engines.py --python-only).",
   "documents": [
     {"name": "box", "document": {"parameters": {}, "features": [
       {"id": "b", "type": "box", "length": 20, "width": 20, "height": 20}
@@ -341,6 +341,16 @@
         {"type": "rectangle", "width": 4, "height": 10, "x": 12, "y": 0}]},
       {"id": "rv", "type": "revolve", "sketch": "s", "axis": "Z", "angle": 270}
     ]}},
+    {"name": "revolve_join_tangent_ring", "document": {"parameters": {}, "features": [
+      {"id": "c", "type": "cylinder", "radius": 20, "height": 100},
+      {"id": "s", "type": "sketch", "plane": "XZ", "entities": [{"type": "circle", "radius": 8, "x": 26, "y": 0}]},
+      {"id": "rv", "type": "revolve", "sketch": "s", "axis": "Z", "angle": 360, "operation": "join", "targets": ["body1"]}
+    ]}},
+    {"name": "revolve_join_end_to_end", "document": {"parameters": {}, "features": [
+      {"id": "c", "type": "cylinder", "radius": 10, "height": 60},
+      {"id": "s", "type": "sketch", "plane": "XZ", "entities": [{"type": "rectangle", "width": 10, "height": 40, "x": 5, "y": 45}]},
+      {"id": "rv", "type": "revolve", "sketch": "s", "axis": "Z", "angle": 360, "operation": "join", "targets": ["body1"]}
+    ]}},
     {"name": "pattern_linear", "document": {"parameters": {}, "features": [
       {"id": "s1", "type": "sketch", "plane": "XY", "entities": [
         {"type": "rectangle", "width": 20, "height": 20, "x": 0, "y": 0}]},
@@ -419,6 +429,20 @@
         {"type": "circle", "radius": 6, "x": 0, "y": 0}, {"type": "circle", "radius": 3, "x": 0, "y": 0}]},
       {"id": "l", "type": "loft", "profiles": [{"sketch": "a", "region": [7, 0, 1]}, {"sketch": "b", "region": [4.5, 0, 16]}], "operation": "join"}
     ]}},
+    {"name": "loft_join_tangent_tube", "document": {"parameters": {"tube_r": 26.0}, "features": [
+      {"id": "sk_path_top", "type": "sketch", "plane": "XZ", "entities": [{"id": "p1", "type": "spline", "points": [{"x": -510, "y": 340}, {"x": -430, "y": 470}, {"x": -300, "y": 570}, {"x": -120, "y": 612}, {"x": 100, "y": 600}, {"x": 280, "y": 565}]}]},
+      {"id": "sk_prof_top", "type": "sketch", "plane": {"origin": [-510, 0, 340], "normal": [0.52, 0, 0.85], "xdir": [0, 1, 0]}, "entities": [{"id": "c1", "type": "circle", "radius": "tube_r"}]},
+      {"id": "sw_top", "type": "sweep", "profile": "sk_prof_top", "path": "sk_path_top", "operation": "new"},
+      {"id": "la", "type": "sketch", "plane": {"origin": [280, 0, 565], "normal": [-0.62, 0, -0.78], "xdir": [0, 1, 0]}, "entities": [{"id": "lc1", "type": "circle", "radius": 26, "x": 0, "y": 0}]},
+      {"id": "lb", "type": "sketch", "plane": {"origin": [8, 0, 272], "normal": [-0.62, 0, -0.78], "xdir": [0, 1, 0]}, "entities": [{"id": "lc2", "type": "circle", "radius": 20, "x": 0, "y": 0}]},
+      {"id": "lf", "type": "loft", "sketches": ["la", "lb"], "operation": "join", "targets": ["body1"]}
+    ]}},
+    {"name": "loft_join_tube_end_to_end", "document": {"parameters": {}, "features": [
+      {"id": "c", "type": "cylinder", "radius": 12, "height": 60},
+      {"id": "a", "type": "sketch", "plane": {"origin": [0, 0, 25], "normal": [0, 0, 1], "xdir": [1, 0, 0]}, "entities": [{"type": "circle", "radius": 12, "x": 0, "y": 0}]},
+      {"id": "b", "type": "sketch", "plane": {"origin": [0, 0, 85], "normal": [0, 0, 1], "xdir": [1, 0, 0]}, "entities": [{"type": "circle", "radius": 9, "x": 0, "y": 0}]},
+      {"id": "l", "type": "loft", "sketches": ["a", "b"], "operation": "join", "targets": ["body1"]}
+    ]}},
     {"name": "sweep_l_path", "document": {"parameters": {}, "features": [
       {"id": "p", "type": "sketch", "plane": "XY", "entities": [
         {"type": "rectangle", "width": 4, "height": 4, "x": 0, "y": 0}]},
@@ -441,6 +465,22 @@
         {"type": "line", "x1": -30, "y1": 5, "x2": 30, "y2": 5}]},
       {"id": "w", "type": "sweep", "profile": "p", "path": "q", "operation": "cut"}
     ]}},
+    {"name": "sweep_join_tangent_tubes", "document": {"parameters": {"tube_r": 26.0}, "features": [
+      {"id": "sk_path_top", "type": "sketch", "plane": "XZ", "entities": [{"id": "p1", "type": "spline", "points": [{"x": -510, "y": 340}, {"x": -430, "y": 470}, {"x": -300, "y": 570}, {"x": -120, "y": 612}, {"x": 100, "y": 600}, {"x": 280, "y": 565}]}]},
+      {"id": "sk_prof_top", "type": "sketch", "plane": {"origin": [-510, 0, 340], "normal": [0.52, 0, 0.85], "xdir": [0, 1, 0]}, "entities": [{"id": "c1", "type": "circle", "radius": "tube_r"}]},
+      {"id": "sw_top", "type": "sweep", "profile": "sk_prof_top", "path": "sk_path_top", "operation": "new"},
+      {"id": "sk_path_down", "type": "sketch", "plane": "XZ", "entities": [{"id": "p2", "type": "spline", "points": [{"x": 280, "y": 565}, {"x": 205, "y": 470}, {"x": 110, "y": 355}, {"x": 8, "y": 272}]}]},
+      {"id": "sk_prof_down", "type": "sketch", "plane": {"origin": [280, 0, 565], "normal": [-0.62, 0, -0.78], "xdir": [0, 1, 0]}, "entities": [{"id": "c2", "type": "circle", "radius": "tube_r"}]},
+      {"id": "sw_down", "type": "sweep", "profile": "sk_prof_down", "path": "sk_path_down", "operation": "join", "targets": ["body1"]}
+    ]}},
+    {"name": "sweep_join_end_to_end_tubes", "document": {"parameters": {}, "features": [
+      {"id": "pa", "type": "sketch", "plane": {"origin": [0, 0, 0], "normal": [1, 0, 0], "xdir": [0, 1, 0]}, "entities": [{"type": "circle", "radius": 10, "x": 0, "y": 0}]},
+      {"id": "qa", "type": "sketch", "plane": "XZ", "entities": [{"type": "line", "x1": 0, "y1": 0, "x2": 120, "y2": 0}]},
+      {"id": "wa", "type": "sweep", "profile": "pa", "path": "qa", "operation": "new"},
+      {"id": "pb", "type": "sketch", "plane": {"origin": [110, 0, 0], "normal": [0.9888, 0, 0.1483], "xdir": [0, 1, 0]}, "entities": [{"type": "circle", "radius": 10, "x": 0, "y": 0}]},
+      {"id": "qb", "type": "sketch", "plane": "XZ", "entities": [{"type": "line", "x1": 110, "y1": 0, "x2": 230, "y2": 18}]},
+      {"id": "wb", "type": "sweep", "profile": "pb", "path": "qb", "operation": "join", "targets": ["body1"]}
+    ]}},
     {"name": "import_assembly_nested", "importFixture": {"feature": "im", "path": "fixtures/asm_nested.step"}, "document": {"parameters": {}, "features": [
       {"id": "im", "type": "import", "format": "step"}
     ]}},
@@ -458,6 +498,41 @@
     ]}},
     {"name": "import_nested_collapsed", "importFixture": {"feature": "im", "path": "fixtures/asm_nested.step"}, "document": {"parameters": {}, "features": [
       {"id": "im", "type": "import", "format": "step", "explode": false}
+    ]}},
+    {"name": "organic_bike", "document": {"parameters": {"bb_z": 272.0, "fork_r": 19.0, "front_x": 510.0, "rear_x": -510.0, "rim_r": 308.0, "stay_r": 17.0, "tube_r": 26.0, "tyre_r": 22.0, "wheel_r": 330.0, "wheelbase": 1020.0}, "paramDefs": {"wheel_r": {"expr": "330", "value": 330.0, "unit": "mm", "comment": "tyre outer radius, 700c"}, "tyre_r": {"expr": "22", "value": 22.0, "unit": "mm"}, "wheelbase": {"expr": "1020", "value": 1020.0, "unit": "mm"}, "rear_x": {"expr": "0 - wheelbase/2", "value": -510.0, "unit": "mm"}, "front_x": {"expr": "wheelbase/2", "value": 510.0, "unit": "mm"}, "tube_r": {"expr": "26", "value": 26.0, "unit": "mm"}, "bb_z": {"expr": "272", "value": 272.0, "unit": "mm"}, "rim_r": {"expr": "wheel_r - tyre_r", "value": 308.0, "unit": "mm"}, "stay_r": {"expr": "17", "value": 17.0, "unit": "mm"}, "fork_r": {"expr": "19", "value": 19.0, "unit": "mm"}}, "bodyIds": {"tyre_r_body:0": "body1", "tyre_f_body:0": "body2", "sw_top:0": "body3", "sw_down:0": "body3", "sw_chain:0": "body3", "sw_fork:0": "body3", "sw_bar:0": "body4", "saddle_body:0": "body5", "post_body:0": "body6", "hub_r_body:0": "body7", "hub_f_body:0": "body8", "lug_bb:0": "body9", "lug_head:0": "body10"}, "features": [
+      {"id": "tyre_r_body", "type": "torus", "majorRadius": "rim_r", "minorRadius": "tyre_r"},
+      {"id": "tyre_r_place", "type": "move", "rx": 90, "dx": "rear_x", "dz": "wheel_r"},
+      {"id": "tyre_f_body", "type": "torus", "majorRadius": "rim_r", "minorRadius": "tyre_r"},
+      {"id": "tyre_f_place", "type": "move", "rx": 90, "dx": "front_x", "dz": "wheel_r", "targets": ["body2"]},
+      {"id": "sk_path_top", "type": "sketch", "plane": "XZ", "entities": [{"id": "p1", "type": "spline", "points": [{"x": -510, "y": 340}, {"x": -430, "y": 470}, {"x": -300, "y": 570}, {"x": -120, "y": 612}, {"x": 100, "y": 600}, {"x": 280, "y": 565}]}]},
+      {"id": "sk_prof_top", "type": "sketch", "plane": {"origin": [-510, 0, 340], "normal": [0.52, 0, 0.85], "xdir": [0, 1, 0]}, "entities": [{"id": "c1", "type": "circle", "radius": "tube_r"}]},
+      {"id": "sw_top", "type": "sweep", "profile": "sk_prof_top", "path": "sk_path_top", "operation": "new"},
+      {"id": "sk_path_down", "type": "sketch", "plane": "XZ", "entities": [{"id": "p2", "type": "spline", "points": [{"x": 280, "y": 565}, {"x": 205, "y": 470}, {"x": 110, "y": 355}, {"x": 8, "y": 272}]}]},
+      {"id": "sk_prof_down", "type": "sketch", "plane": {"origin": [280, 0, 565], "normal": [-0.62, 0, -0.78], "xdir": [0, 1, 0]}, "entities": [{"id": "c2", "type": "circle", "radius": "tube_r"}]},
+      {"id": "sw_down", "type": "sweep", "profile": "sk_prof_down", "path": "sk_path_down", "operation": "join", "targets": ["body3"]},
+      {"id": "sk_path_chain", "type": "sketch", "plane": "XZ", "entities": [{"id": "p3", "type": "spline", "points": [{"x": 8, "y": 272}, {"x": -150, "y": 286}, {"x": -340, "y": 316}, {"x": -510, "y": 340}]}]},
+      {"id": "sk_prof_chain", "type": "sketch", "plane": {"origin": [8, 0, 272], "normal": [-0.996, 0, 0.088], "xdir": [0, 1, 0]}, "entities": [{"id": "c3", "type": "circle", "radius": "stay_r"}]},
+      {"id": "sw_chain", "type": "sweep", "profile": "sk_prof_chain", "path": "sk_path_chain", "operation": "join", "targets": ["body3"]},
+      {"id": "sk_path_fork", "type": "sketch", "plane": "XZ", "entities": [{"id": "p4", "type": "spline", "points": [{"x": 292, "y": 560}, {"x": 370, "y": 480}, {"x": 460, "y": 395}, {"x": 510, "y": 332}]}]},
+      {"id": "sk_prof_fork", "type": "sketch", "plane": {"origin": [292, 0, 560], "normal": [0.7, 0, -0.71], "xdir": [0, 1, 0]}, "entities": [{"id": "c4", "type": "circle", "radius": "fork_r"}]},
+      {"id": "sw_fork", "type": "sweep", "profile": "sk_prof_fork", "path": "sk_path_fork", "operation": "join", "targets": ["body3"]},
+      {"id": "sk_path_bar", "type": "sketch", "plane": {"origin": [0, 0, 600], "normal": [0, 0, 1], "xdir": [1, 0, 0]}, "entities": [{"id": "p5", "type": "spline", "points": [{"x": 250, "y": -210}, {"x": 285, "y": -110}, {"x": 300, "y": 0}, {"x": 285, "y": 110}, {"x": 250, "y": 210}]}]},
+      {"id": "sk_prof_bar", "type": "sketch", "plane": {"origin": [250, -210, 600], "normal": [0.33, 0.94, 0], "xdir": [0, 0, 1]}, "entities": [{"id": "c5", "type": "circle", "radius": 15}]},
+      {"id": "sw_bar", "type": "sweep", "profile": "sk_prof_bar", "path": "sk_path_bar", "operation": "new"},
+      {"id": "saddle_body", "type": "sphere", "radius": 100},
+      {"id": "saddle_shape", "type": "scale", "sx": 1.35, "sy": 0.62, "sz": 0.22, "targets": ["body5"]},
+      {"id": "saddle_place", "type": "move", "dx": -195, "dz": 665, "ry": -8, "targets": ["body5"]},
+      {"id": "post_body", "type": "cylinder", "radius": 18, "height": 90},
+      {"id": "post_place", "type": "move", "dx": -195, "dz": 625, "targets": ["body6"]},
+      {"id": "hub_r_body", "type": "cylinder", "radius": 24, "height": 100},
+      {"id": "hub_r_place", "type": "move", "rx": 90, "dx": "rear_x", "dz": "wheel_r", "targets": ["body7"]},
+      {"id": "hub_f_body", "type": "cylinder", "radius": 24, "height": 100},
+      {"id": "hub_f_place", "type": "move", "rx": 90, "dx": "front_x", "dz": "wheel_r", "targets": ["body8"]},
+      {"id": "lug_bb", "type": "sphere", "radius": 40},
+      {"id": "lug_bb_place", "type": "move", "dx": 8, "dz": 272, "targets": ["body9"]},
+      {"id": "lug_head", "type": "sphere", "radius": 36},
+      {"id": "lug_head_place", "type": "move", "dx": 286, "dz": 562, "targets": ["body10"]},
+      {"id": "frame_union", "type": "boolean", "operation": "union", "target": "body3", "tools": ["body6", "body7", "body8", "body9", "body10"]}
     ]}}
   ]
 }
