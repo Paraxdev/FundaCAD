@@ -4,12 +4,18 @@
 
 use glam::{dvec3, DVec3};
 use opencascade::{
+    boolean_op::{bop_split, BooleanKind, BooleanOp, BooleanOptions, Glue},
     extrema::SupportKind,
+    progress::{Progress, ProgressRange},
     heal::FixOptions,
     primitives::{Direction, Edge, Shape, ShapeType, SurfaceType, Vertex},
     query::PointState,
 };
 use opencascade_sys as ffi;
+use std::sync::{
+    atomic::{AtomicBool, AtomicUsize, Ordering},
+    Arc,
+};
 
 fn close(a: f64, b: f64, tol: f64) -> bool {
     (a - b).abs() <= tol
@@ -349,4 +355,150 @@ fn edge_parameter_range_and_derivative() {
         .filter(|e| e.range().unwrap().degenerated)
         .count();
     assert!(degenerate >= 1, "a cone apex is a degenerated edge");
+}
+
+fn count(shape: &Shape, kind: ShapeType) -> usize {
+    shape.shape_map(kind).len()
+}
+
+fn plane_face(z: f64, half: f64) -> Shape {
+    let face = opencascade::primitives::Wire::rect(2.0 * half, 2.0 * half).translate(dvec3(0.0, 0.0, z)).to_face();
+    let face: Shape = face.into();
+    assert!(close(face.surface_area(), 4.0 * half * half, 1e-9));
+    face
+}
+
+#[test]
+fn boolean_op_cut_keeps_history_and_section_edges() {
+    let block = Shape::box_with_dimensions(20.0, 20.0, 10.0);
+    let pin = Shape::cylinder(dvec3(10.0, 10.0, -1.0), 3.0, dvec3(0.0, 0.0, 1.0), 12.0);
+    let mut cut =
+        BooleanOp::run(BooleanKind::Cut, [&block], [&pin], BooleanOptions::default(), &ProgressRange::detached())
+            .unwrap();
+    let result = cut.shape().unwrap();
+    let hole = std::f64::consts::PI * 9.0 * 10.0;
+    assert!(close(result.volume(), 4000.0 - hole, 1e-6), "{}", result.volume());
+    assert!(!cut.has_errors());
+
+    let top: Shape = block.faces().farthest(Direction::PosZ).into();
+    let now = cut.modified(&top).unwrap();
+    assert_eq!(now.len(), 1);
+    assert!(close(now[0].surface_area(), 400.0 - std::f64::consts::PI * 9.0, 1e-6));
+    let side: Shape = block.faces().farthest(Direction::NegX).into();
+    assert!(cut.modified(&side).unwrap().is_empty());
+    assert!(!cut.is_deleted(&side).unwrap());
+    let pin_cap: Shape = pin.faces().farthest(Direction::PosZ).into();
+    assert!(cut.is_deleted(&pin_cap).unwrap());
+
+    let circles = cut.section_edges().unwrap();
+    let length: f64 = circles.iter().map(|e| e.as_edge().unwrap().length()).sum();
+    assert!(close(length, 2.0 * 2.0 * std::f64::consts::PI * 3.0, 1e-6), "{length}");
+}
+
+#[test]
+fn boolean_op_fuzzy_value_closes_a_sub_tolerance_gap_and_glue_fuses_touching_boxes() {
+    let a = Shape::box_with_dimensions(10.0, 10.0, 10.0);
+    let near_miss = Shape::box_with_dimensions(10.0, 10.0, 10.0).translated(dvec3(10.0 + 5e-6, 0.0, 0.0));
+    let detached = ProgressRange::detached();
+
+    let exact = BooleanOp::run(BooleanKind::Fuse, [&a], [&near_miss], BooleanOptions::default(), &detached)
+        .unwrap()
+        .shape()
+        .unwrap();
+    assert_eq!(count(&exact, ShapeType::Solid), 2);
+
+    let fuzzy = BooleanOptions { fuzzy: 1e-5, ..Default::default() };
+    let merged = BooleanOp::run(BooleanKind::Fuse, [&a], [&near_miss], fuzzy, &detached).unwrap().shape().unwrap();
+    assert_eq!(count(&merged, ShapeType::Solid), 1);
+    assert!(close(merged.volume(), 2000.0, 1e-3), "{}", merged.volume());
+
+    let touching = Shape::box_with_dimensions(10.0, 10.0, 10.0).translated(dvec3(10.0, 0.0, 0.0));
+    for glue in [Glue::Off, Glue::Full] {
+        let options = BooleanOptions { glue, non_destructive: true, parallel: true, ..Default::default() };
+        let mut fuse = BooleanOp::run(BooleanKind::Fuse, [&a], [&touching], options, &detached).unwrap();
+        let fused = fuse.shape().unwrap();
+        assert_eq!(count(&fused, ShapeType::Solid), 1, "{glue:?}");
+        assert!(close(fused.volume(), 2000.0, 1e-6));
+        assert_eq!(count(&fused, ShapeType::Face), 10, "{glue:?}");
+        fuse.simplify(true, true, 1e-6).unwrap();
+        let simple = fuse.shape().unwrap();
+        assert_eq!(count(&simple, ShapeType::Face), 6);
+        assert!(close(simple.volume(), 2000.0, 1e-6));
+    }
+    assert!(close(a.volume(), 1000.0, 1e-9) && close(touching.volume(), 1000.0, 1e-9));
+}
+
+#[test]
+fn splitters_and_general_fuse_divide_without_removing_anything() {
+    let detached = ProgressRange::detached();
+    let block = Shape::box_with_dimensions(10.0, 10.0, 10.0);
+    let knife = plane_face(4.0, 50.0);
+    let split = BooleanOp::run(BooleanKind::Split, [&block], [&knife], BooleanOptions::default(), &detached)
+        .unwrap()
+        .shape()
+        .unwrap();
+    let mut volumes: Vec<f64> = split.subshapes(ShapeType::Solid).iter().map(Shape::volume).collect();
+    volumes.sort_by(f64::total_cmp);
+    assert_eq!(volumes.len(), 2);
+    assert!(close(volumes[0], 400.0, 1e-6) && close(volumes[1], 600.0, 1e-6), "{volumes:?}");
+
+    let section = BooleanOp::run(BooleanKind::Section, [&block], [&knife], BooleanOptions::default(), &detached)
+        .unwrap()
+        .shape()
+        .unwrap();
+    let length: f64 = section.subshapes(ShapeType::Edge).iter().map(|e| e.as_edge().unwrap().length()).sum();
+    assert!(close(length, 40.0, 1e-9), "{length}");
+
+    let overlap = Shape::box_with_dimensions(10.0, 10.0, 10.0).translated(dvec3(5.0, 0.0, 0.0));
+    let cells = BooleanOp::run(BooleanKind::GeneralFuse, [&block, &overlap], [], BooleanOptions::default(), &detached)
+        .unwrap()
+        .shape()
+        .unwrap();
+    let mut volumes: Vec<f64> = cells.subshapes(ShapeType::Solid).iter().map(Shape::volume).collect();
+    volumes.sort_by(f64::total_cmp);
+    assert_eq!(volumes.len(), 3);
+    assert!(volumes.iter().all(|v| close(*v, 500.0, 1e-6)), "{volumes:?}");
+
+    // Sketch region detection: a square cut by two crossing lines into four cells.
+    let square = plane_face(0.0, 10.0);
+    let across = Shape::from(Edge::segment(dvec3(-20.0, 0.0, 0.0), dvec3(20.0, 0.0, 0.0)));
+    let down = Shape::from(Edge::segment(dvec3(0.0, -20.0, 0.0), dvec3(0.0, 20.0, 0.0)));
+    let regions = bop_split([&square], [&across, &down], BooleanOptions::default(), &detached).unwrap();
+    let areas: Vec<f64> = regions.subshapes(ShapeType::Face).iter().map(Shape::surface_area).collect();
+    assert_eq!(areas.len(), 4);
+    assert!(areas.iter().all(|a| close(*a, 100.0, 1e-9)), "{areas:?}");
+}
+
+#[test]
+fn progress_indicator_reports_and_cancels_a_boolean() {
+    let block = Shape::box_with_dimensions(20.0, 20.0, 10.0);
+    let pins: Vec<Shape> = (0..4)
+        .map(|i| Shape::cylinder(dvec3(3.0 + 4.0 * i as f64, 10.0, -1.0), 1.0, DVec3::Z, 12.0))
+        .collect();
+
+    let progress = Progress::new(|| false);
+    let range = progress.start();
+    let cut = BooleanOp::run(BooleanKind::Cut, [&block], pins.iter(), BooleanOptions::default(), &range).unwrap();
+    drop(range);
+    assert!(close(cut.shape().unwrap().volume(), 4000.0 - 4.0 * std::f64::consts::PI * 10.0, 1e-6));
+    assert!(progress.break_checks() > 0);
+    assert!(close(progress.position(), 1.0, 1e-9), "{}", progress.position());
+    assert!(!progress.is_cancelled());
+
+    let flag = Arc::new(AtomicBool::new(true));
+    let cancelled = Progress::from_flag(flag.clone());
+    let refused = BooleanOp::run(BooleanKind::Cut, [&block], pins.iter(), BooleanOptions::default(), &cancelled.start());
+    assert!(matches!(refused, Err(opencascade::Error::Cancelled)));
+    assert!(cancelled.is_cancelled());
+
+    // Cancelled part way: the flag goes up on the fifth time OCCT asks.
+    let asked = Arc::new(AtomicUsize::new(0));
+    let counter = asked.clone();
+    let midway = Progress::new(move || counter.fetch_add(1, Ordering::Relaxed) >= 4);
+    let refused = BooleanOp::run(BooleanKind::Cut, [&block], pins.iter(), BooleanOptions::default(), &midway.start());
+    assert!(matches!(refused, Err(opencascade::Error::Cancelled)));
+    assert_eq!(midway.break_checks() as usize, asked.load(Ordering::Relaxed));
+    assert!(asked.load(Ordering::Relaxed) >= 5);
+    flag.store(false, Ordering::Relaxed);
+    assert!(!cancelled.is_cancelled());
 }
