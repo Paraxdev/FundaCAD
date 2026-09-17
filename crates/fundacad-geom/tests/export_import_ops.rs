@@ -149,7 +149,7 @@ fn export_one_body_separate_bodies_and_refusals() {
 
     let partly = json!({"features": [
         {"id": "a", "type": "box", "length": 10, "width": 10, "height": 10},
-        {"id": "s", "type": "shell", "thickness": 1},
+        {"id": "s", "type": "shell", "thickness": 0},
     ]});
     let r = c.call(json!({"id": 6, "op": "export", "document": partly, "format": "stl", "path": one}));
     assert_eq!(r["ok"], true, "{r}");
