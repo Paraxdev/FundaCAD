@@ -1,14 +1,21 @@
 # Cross-platform build + bundle for FundaCAD (Tauri 2 + bundled Python sidecar).
 #
-# No system OpenCASCADE anywhere: the Rust/OCCT path is behind the off-by-default
-# `rust-geom` feature (see src-tauri/Cargo.toml), and the shipping geometry runs in the
-# Python sidecar, whose cadquery-ocp-novtk wheels bundle their own OCCT. So this
-# workflow has NO "build OCCT from source / brew / vcpkg" steps (they were removed when
-# Move 1 gated OCCT out).
+# No SYSTEM OpenCASCADE anywhere, on any platform: the beta's geometry runs in the
+# Python sidecar, whose cadquery-ocp-novtk wheels bundle their own OCCT, and the
+# pre-alpha's is the occt-sys crate, which carries the 7.8.1 sources and builds them
+# statically into the binary. So this workflow still has no brew or vcpkg OCCT step,
+# and no apt one either.
 #
 # Per OS it: builds a relocatable Python "sidecar-runtime" (uv + python-build-standalone
 # installed from sidecar/uv.lock), then runs `tauri build` with the bundle-only config
 # that ships that runtime as a resource, and uploads the installers.
+#
+# TWO rolling releases come out of this file, and they are kept apart on purpose.
+# `build` + `release` make the beta, the complete app on the Python engine. The
+# `build-prealpha` + `release-prealpha` pair make the pre-alpha Rust engine build
+# (docs/RUST-PIVOT.md section 6), which compiles OpenCASCADE into the app, ships no
+# Python at all, and has its own tag, its own update feed and its own warning. That
+# pair is the only place in this file where OCCT is built from source.
 #
 # Scope: x86_64 Linux, Apple Silicon macOS, x86_64 Windows. (No Intel-mac / linux-arm64.)
 
