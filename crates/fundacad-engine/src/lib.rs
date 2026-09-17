@@ -8,6 +8,8 @@
 
 mod doc_state;
 pub mod stdio;
+#[cfg(feature = "ws")]
+pub mod ws;
 
 pub use doc_state::DocState;
 
@@ -16,7 +18,7 @@ use fundacad_protocol::{
 };
 use serde_json::{json, Map, Value};
 use std::io;
-use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -87,29 +89,44 @@ pub fn error_result(message: &str) -> JobResult {
 
 struct Running {
     id: Value,
+    client: u64,
     cancel: CancelToken,
 }
 
-/// One engine: a job thread and the read path in front of it.
+struct Queued {
+    req: Map<String, Value>,
+    client: u64,
+    out: Arc<dyn Outbox>,
+    closed: Arc<AtomicBool>,
+}
+
+/// One engine: a job thread and the read path in front of it. Every client of
+/// an engine shares its job thread, held document and caches, so the jobs of
+/// all connections run one at a time, as under server.py's `_JOB_LOCK`.
 pub struct Engine {
-    jobs: mpsc::Sender<Map<String, Value>>,
+    jobs: mpsc::Sender<Queued>,
     running: Arc<Mutex<Option<Running>>>,
     out: Arc<dyn Outbox>,
+    next_client: AtomicU64,
+    never_closed: Arc<AtomicBool>,
 }
 
 const PROGRESS_EVERY: Duration = Duration::from_secs(1);
 
 impl Engine {
     pub fn start<J: Jobs>(mut jobs: J, out: Arc<dyn Outbox>) -> Engine {
-        let (tx, rx) = mpsc::channel::<Map<String, Value>>();
+        let (tx, rx) = mpsc::channel::<Queued>();
         let running: Arc<Mutex<Option<Running>>> = Arc::default();
-        let (job_out, job_running) = (out.clone(), running.clone());
+        let job_running = running.clone();
         std::thread::Builder::new()
             .name("engine-jobs".into())
             .spawn(move || {
                 let mut docs = DocState::default();
-                for req in rx {
-                    run_one(&mut jobs, &mut docs, req, &job_out, &job_running);
+                for q in rx {
+                    if q.closed.load(Ordering::SeqCst) {
+                        continue;
+                    }
+                    run_one(&mut jobs, &mut docs, q, &job_running);
                 }
             })
             .expect("spawn the engine job thread");
@@ -117,65 +134,119 @@ impl Engine {
             jobs: tx,
             running,
             out,
+            next_client: AtomicU64::new(1),
+            never_closed: Arc::new(AtomicBool::new(false)),
         }
     }
 
-    /// One incoming message, on the transport's read path.
+    /// A client whose replies go to `out`. Its cancel reaches only its own
+    /// jobs, and dropping it drops its queued jobs and cancels its running one,
+    /// as closing a connection does in server.py's `handle`.
+    pub fn client(self: &Arc<Self>, out: Arc<dyn Outbox>) -> Client {
+        Client {
+            engine: self.clone(),
+            id: self.next_client.fetch_add(1, Ordering::Relaxed),
+            out,
+            closed: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    /// One incoming message, answered to the outbox the engine started with.
     pub fn handle(&self, msg: Message) {
+        self.handle_for(0, &self.out, &self.never_closed, msg);
+    }
+
+    fn handle_for(
+        &self,
+        client: u64,
+        out: &Arc<dyn Outbox>,
+        closed: &Arc<AtomicBool>,
+        msg: Message,
+    ) {
+        let reply = |text: String| {
+            let _ = out.send(&mut std::iter::once(Message::Text(text)));
+        };
         let Message::Text(text) = msg else {
-            self.reply(envelope::err(&Value::Null, "requests are JSON text", None));
+            reply(envelope::err(&Value::Null, "requests are JSON text", None));
             return;
         };
         let req: Map<String, Value> = match serde_json::from_str(&text) {
             Ok(Value::Object(m)) => m,
             Ok(_) => {
-                self.reply(envelope::bad_json("a request is a JSON object"));
+                reply(envelope::bad_json("a request is a JSON object"));
                 return;
             }
             Err(e) => {
-                self.reply(envelope::bad_json(&e.to_string()));
+                reply(envelope::bad_json(&e.to_string()));
                 return;
             }
         };
         let id = req.get("id").cloned().unwrap_or(Value::Null);
         match req.get("op").and_then(Value::as_str) {
             Some("cancel") => {
-                let hit = self.cancel(req.get("target"));
-                self.reply(envelope::cancel_ack(&id, hit));
+                let hit = self.cancel(client, req.get("target"));
+                reply(envelope::cancel_ack(&id, hit));
             }
-            Some("ping") => self.reply(envelope::ok(&id, &json!({ "pong": true }))),
+            Some("ping") => reply(envelope::ok(&id, &json!({ "pong": true }))),
             _ => {
-                if self.jobs.send(req).is_err() {
-                    self.reply(envelope::err(&id, "the engine job thread is gone", None));
+                let queued = Queued {
+                    req,
+                    client,
+                    out: out.clone(),
+                    closed: closed.clone(),
+                };
+                if self.jobs.send(queued).is_err() {
+                    reply(envelope::err(&id, "the engine job thread is gone", None));
                 }
             }
         }
     }
 
-    /// Cancels the running job, only if it is `target` when one is given.
-    fn cancel(&self, target: Option<&Value>) -> bool {
+    /// Cancels `client`'s running job, only if it is `target` when one is given.
+    fn cancel(&self, client: u64, target: Option<&Value>) -> bool {
         let guard = self.running.lock().unwrap_or_else(|p| p.into_inner());
         match guard.as_ref() {
-            Some(r) if target.map_or(true, |t| t.is_null() || *t == r.id) => {
+            Some(r) if r.client == client && target.map_or(true, |t| t.is_null() || *t == r.id) => {
                 r.cancel.cancel();
                 true
             }
             _ => false,
         }
     }
+}
 
-    fn reply(&self, text: String) {
-        let _ = self.out.send(&mut std::iter::once(Message::Text(text)));
+/// One connection's handle on a shared [`Engine`].
+pub struct Client {
+    engine: Arc<Engine>,
+    id: u64,
+    out: Arc<dyn Outbox>,
+    closed: Arc<AtomicBool>,
+}
+
+impl Client {
+    pub fn handle(&self, msg: Message) {
+        self.engine
+            .handle_for(self.id, &self.out, &self.closed, msg);
+    }
+}
+
+impl Drop for Client {
+    fn drop(&mut self) {
+        self.closed.store(true, Ordering::SeqCst);
+        self.engine.cancel(self.id, None);
     }
 }
 
 fn run_one<J: Jobs>(
     jobs: &mut J,
     docs: &mut DocState,
-    req: Map<String, Value>,
-    out: &Arc<dyn Outbox>,
+    q: Queued,
     running: &Arc<Mutex<Option<Running>>>,
 ) {
+    let Queued {
+        req, client, out, ..
+    } = q;
+    let out = &out;
     let id = req.get("id").cloned().unwrap_or(Value::Null);
     let op = req
         .get("op")
@@ -185,6 +256,7 @@ fn run_one<J: Jobs>(
     let cancel = CancelToken::new();
     *running.lock().unwrap_or_else(|p| p.into_inner()) = Some(Running {
         id: id.clone(),
+        client,
         cancel: cancel.clone(),
     });
 
