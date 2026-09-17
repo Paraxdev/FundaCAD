@@ -50,14 +50,12 @@ fn in_slices(solid: &Shape, n: usize) -> Vec<Shape> {
         return Vec::new();
     };
     let span = [bb[3] - bb[0], bb[4] - bb[1], bb[5] - bb[2]];
-    let axis = (0..3).max_by(|&a, &b| span[a].total_cmp(&span[b])).unwrap_or(0);
+    let axis = (0..3)
+        .max_by(|&a, &b| span[a].total_cmp(&span[b]))
+        .unwrap_or(0);
     let mut normal = DVec3::ZERO;
     normal[axis] = 1.0;
-    let xdir = if axis == 0 {
-        DVec3::Y
-    } else {
-        DVec3::X
-    };
+    let xdir = if axis == 0 { DVec3::Y } else { DVec3::X };
     let mut pieces = vec![solid.clone()];
     for k in 1..n {
         let at = bb[axis] + span[axis] * k as f64 / n as f64;
