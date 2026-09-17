@@ -874,7 +874,7 @@ The format comes from the extension unless given. A large STEP can take minutes:
         }
         st.invalidate();
         let table = st.doc.get("parameters").cloned().unwrap_or_else(|| json!({}));
-        Ok(text(format!("Removed {name}. Now: {table}")))
+        Ok(text(format!("Removed {name}. Now: {}", py_json(&table))))
     }
 
     #[tool(
@@ -918,7 +918,7 @@ The format comes from the extension unless given. A large STEP can take minutes:
             Err(e) => return Ok(doc_error(e)),
         };
         st.invalidate();
-        Ok(text(st.state_line(&format!("Updated {id}: {f}"))))
+        Ok(text(st.state_line(&format!("Updated {id}: {}", py_json(&f)))))
     }
 
     #[tool(
@@ -1044,6 +1044,26 @@ fn error_message(reply: &Value) -> String {
         .and_then(Value::as_str)
         .unwrap_or("?")
         .to_string()
+}
+
+/// `json.dumps(v)`: compact, but with a space after every colon and comma. The
+/// difference is only whitespace, and it is in the line an agent reads after
+/// every edit, so the two servers say it the same way while both exist.
+fn py_json(v: &Value) -> String {
+    match v {
+        Value::Object(o) => format!(
+            "{{{}}}",
+            o.iter()
+                .map(|(k, val)| format!("{}: {}", Value::String(k.clone()), py_json(val)))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        Value::Array(a) => format!(
+            "[{}]",
+            a.iter().map(py_json).collect::<Vec<_>>().join(", ")
+        ),
+        other => other.to_string(),
+    }
 }
 
 /// `json.dumps(v, indent=n)`, which is two things serde_json's pretty printer

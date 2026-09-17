@@ -55,6 +55,11 @@ class McpClient:
         env = dict(os.environ)
         if self.env:
             env.update(self.env)
+        # A `.py` server is run by this interpreter; anything else is a program
+        # and is run as one, which is how the same client drives the Rust
+        # `fundacad-mcp` binary and this one over the same script.
+        argv = ([self.python, self.server] if str(self.server).endswith(".py")
+                else [self.server])
         self.proc = await asyncio.create_subprocess_exec(
             # The CALLER's directory, not this file's. The server resolves a
             # relative `path` against its own working directory, so launching it
@@ -62,7 +67,7 @@ class McpClient:
             # while the person who typed it watched their own directory stay
             # empty. It does not need to be here: server.py puts its own
             # directory on sys.path itself.
-            self.python, self.server, cwd=os.getcwd(), env=env,
+            *argv, cwd=os.getcwd(), env=env,
             stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
             stderr=None,  # inherit: the server's diagnostics belong on OUR stderr
         )
@@ -163,12 +168,16 @@ def _load_script(path):
 
 async def _run(argv):
     script = None
-    if argv and argv[0] == "--script":
-        script = _load_script(argv[1])
+    server = None
+    while argv and argv[0] in ("--script", "--server"):
+        if argv[0] == "--script":
+            script = _load_script(argv[1])
+        else:
+            server = argv[1]
         argv = argv[2:]
     out_dir = os.getcwd()
 
-    async with McpClient() as c:
+    async with McpClient(server=server) as c:
         if script is None:
             if not argv:
                 for t in await c.tools():

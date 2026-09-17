@@ -504,6 +504,11 @@ impl EngineLink {
         Err(io::Error::other("the engine could not be reached"))
     }
 
+    /// The process id of the engine this link spawned, when it spawned one.
+    pub async fn engine_pid(&self) -> Option<u32> {
+        self.state.lock().await.child.as_ref().and_then(Child::id)
+    }
+
     pub async fn stop(&self) {
         let mut state = self.state.lock().await;
         if let Some(mut socket) = state.socket.take() {
