@@ -213,7 +213,11 @@ pub struct Socket {
 
 impl Socket {
     pub async fn connect(port: u16, token: &str) -> io::Result<Socket> {
-        let url = format!("ws://127.0.0.1:{port}?token={token}");
+        // The slash is not decoration. Without a path the request line comes
+        // out as `GET ?token=... HTTP/1.1`, which is not a request-URI: the
+        // engine's header parser refuses it, drops the connection, and the
+        // client reports an unfinished handshake with nothing to point at.
+        let url = format!("ws://127.0.0.1:{port}/?token={token}");
         let (ws, _) = tokio_tungstenite::connect_async(url)
             .await
             .map_err(|e| io::Error::new(io::ErrorKind::ConnectionRefused, e.to_string()))?;
