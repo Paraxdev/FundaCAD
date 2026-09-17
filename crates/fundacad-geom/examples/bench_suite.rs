@@ -194,6 +194,27 @@ fn stage_doc(args: &[String]) {
     );
 }
 
+/// A one feature document holding `path` as imported geometry, the shape the
+/// import stage and the smooth check both rebuild.
+fn imported_document(path: &str, fmt: &str) -> (Value, f64, std::path::PathBuf) {
+    let root = std::env::temp_dir().join(format!("fundacad-bench-import-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    // The import FEATURE reads the blob back from the default root, so the
+    // bench store has to be that root, not a store opened beside it.
+    std::env::set_var("FUNDACAD_BLOB_DIR", &root);
+    let store = fundacad_geom::import::blobstore::BlobStore::open(
+        fundacad_geom::import::blobstore::default_root(),
+    )
+    .expect("a blob store");
+    let began = Instant::now();
+    let mut feature = fundacad_geom::import::import_geometry(path, fmt, &store)
+        .expect("the import runs");
+    let took = ms(began.elapsed());
+    feature.insert("id".into(), json!("im"));
+    feature.insert("type".into(), json!("import"));
+    (json!({"parameters": {}, "features": [Value::Object(feature)]}), took, root)
+}
+
 /// The import path bench_import.py measures: read the file into the blob
 /// store, rebuild the one-feature document, then the payload loop.
 fn stage_import(args: &[String]) {
@@ -209,24 +230,7 @@ fn stage_import(args: &[String]) {
                 .filter(|e| e != "stp")
                 .unwrap_or_else(|| "step".into())
         });
-    let root = std::env::temp_dir().join(format!("fundacad-bench-import-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&root);
-    // The import FEATURE reads the blob back from the default root, so the
-    // bench store has to be that root, not a store opened beside it.
-    std::env::set_var("FUNDACAD_BLOB_DIR", &root);
-    let store = fundacad_geom::import::blobstore::BlobStore::open(
-        fundacad_geom::import::blobstore::default_root(),
-    )
-    .expect("a blob store");
-
-    let t = Instant::now();
-    let result = fundacad_geom::import::import_geometry(path, &fmt, &store).expect("the import runs");
-    let import_ms = ms(t.elapsed());
-
-    let mut feature = result;
-    feature.insert("id".into(), json!("im"));
-    feature.insert("type".into(), json!("import"));
-    let doc = json!({"parameters": {}, "features": [Value::Object(feature)]});
+    let (doc, import_ms, root) = imported_document(path, &fmt);
 
     let t = Instant::now();
     let built = builder::rebuild(&typed(&doc), &doc, &NoWatch).ok().expect("not cancelled");
@@ -237,7 +241,7 @@ fn stage_import(args: &[String]) {
     let meshed = reply::mesh_result(&built.bodies, 0.1, &known, &NoWatch);
     let payload_ms = ms(t.elapsed());
 
-    let (mut tris, mut faces) = (0usize, 0usize);
+    let (mut tris, mut faces, mut frame_ms, mut frame_mib) = (0usize, 0usize, 0.0, 0.0);
     if let fundacad_protocol::JobResult::Mesh(m) = &meshed {
         for b in &m.bodies {
             if let fundacad_protocol::WireBody::Full(f) = b {
@@ -245,6 +249,14 @@ fn stage_import(args: &[String]) {
                 faces += f.fields.get("faceCount").and_then(Value::as_u64).unwrap_or(0) as usize;
             }
         }
+        let t = Instant::now();
+        let bytes = fundacad_protocol::frame::encode_binary_reply(
+            &json!(1),
+            m,
+            &fundacad_protocol::Limits::default(),
+        );
+        frame_ms = ms(t.elapsed());
+        frame_mib = bytes.map_or(0, |b| b.len()) as f64 / (1024.0 * 1024.0);
     }
     let _ = std::fs::remove_dir_all(&root);
     println!(
@@ -258,7 +270,9 @@ fn stage_import(args: &[String]) {
             "import_ms": import_ms,
             "rebuild_ms": rebuild_ms,
             "payloads_ms": payload_ms,
-            "total_ms": import_ms + rebuild_ms + payload_ms,
+            "frame_ms": frame_ms,
+            "frame_mib": (frame_mib * 10.0).round() / 10.0,
+            "total_ms": import_ms + rebuild_ms + payload_ms + frame_ms,
             "phases": fundacad_geom::bench::report(),
         })
     );
@@ -349,6 +363,40 @@ fn stage_faces(args: &[String]) {
     );
 }
 
+/// The batched smooth edge test against the per sample walk it replaced, over
+/// every edge of a real document. The flag rides in the payload and in a saved
+/// selector, so the two must never disagree.
+fn stage_smooth(args: &[String]) {
+    let path = args.first().expect("bench_suite smooth <document|corpus.json|file.step>");
+    let raw = if path.to_lowercase().ends_with(".step") || path.to_lowercase().ends_with(".stp") {
+        imported_document(path, "step").0
+    } else {
+        read_json(path)
+    };
+    let docs: Vec<Value> = if raw.get("documents").is_some() {
+        corpus_documents(path).into_iter().map(|(_, d)| d).collect()
+    } else {
+        vec![raw]
+    };
+    let cos_tol = fundacad_geom::mesh::edges::SMOOTH_EDGE_DEG.to_radians().cos();
+    let (mut edges, mut differ) = (0usize, 0usize);
+    for doc in &docs {
+        let built = builder::rebuild(&typed(doc), doc, &NoWatch).ok().expect("not cancelled");
+        for b in &built.bodies {
+            let access = fundacad_geom::opencascade::mesh_access::MeshAccess::new(&b.shape);
+            for e in 0..access.edge_count() {
+                edges += 1;
+                if fundacad_geom::mesh::edges::meets_smoothly(&access, e)
+                    != access.edge_smooth(e, cos_tol)
+                {
+                    differ += 1;
+                }
+            }
+        }
+    }
+    println!("{}", json!({"stage": "smooth", "edges": edges, "differ": differ}));
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let rest = &args[1..];
@@ -358,8 +406,9 @@ fn main() {
         Some("import") => stage_import(rest),
         Some("export") => stage_export(rest),
         Some("faces") => stage_faces(rest),
+        Some("smooth") => stage_smooth(rest),
         _ => {
-            eprintln!("usage: bench_suite <corpus|doc|import|export|faces> <path> [--runs N]");
+            eprintln!("usage: bench_suite <corpus|doc|import|export|faces|smooth> <path> [--runs N]");
             std::process::exit(2);
         }
     }

@@ -228,23 +228,26 @@ fn adjacent_pairs(shape: &Shape, faces: &[Shape]) -> HashSet<(usize, usize)> {
     for (i, f) in faces.iter().enumerate() {
         where_.entry(fq::FQ_tshape(f.raw())).or_default().push(i);
     }
-    let mut seen = HashSet::new();
-    for e in 1..=amap.len() {
+    let work = crate::par::Shared((&amap, &where_));
+    let per_edge = crate::par::map_indexed(amap.len(), move |i| {
+        let (amap, where_) = *work.get();
         let owners: Vec<usize> = amap
-            .ancestors_at(e)
+            .ancestors_at(i + 1)
             .iter()
             .flat_map(|f| where_.get(&fq::FQ_tshape(f.raw())).cloned().unwrap_or_default())
             .collect();
+        let mut out = Vec::new();
         for a in 0..owners.len() {
             for b in a + 1..owners.len() {
                 let (lo, hi) = (owners[a].min(owners[b]), owners[a].max(owners[b]));
                 if lo != hi {
-                    seen.insert((lo, hi));
+                    out.push((lo, hi));
                 }
             }
         }
-    }
-    seen
+        out
+    });
+    per_edge.into_iter().flatten().collect()
 }
 
 /// `_near_pairs`: same-surface faces within the gap tolerance, no shared edge.
@@ -261,13 +264,20 @@ fn near_pairs(
         }
     }
     let groups: Vec<&Vec<usize>> = buckets.values().filter(|g| g.len() >= 2).collect();
-    let mut out = HashSet::new();
     if groups.is_empty() {
-        return out;
+        return HashSet::new();
     }
     let screen = GAP_ABS.max(GAP_REL * diag(bbox(shape, false)));
-    let mut exact: Option<f64> = None;
-    for group in groups {
+    // The exact tolerance needs the optimal box, which is slow; a group only
+    // asks for it when a pair is past the cheap screen, and every thread has
+    // to see the same number, so it is settled once up front when any group
+    // could reach it.
+    let exact = gap_tolerance(shape);
+    let work = crate::par::Shared((&groups, faces, surf, already));
+    let found = crate::par::flat_map_indexed(groups.len(), move |g| {
+        let (groups, faces, surf, already) = *work.get();
+        let group = groups[g];
+        let mut out = Vec::new();
         let boxes: HashMap<usize, [f64; 6]> =
             group.iter().filter_map(|&i| Some((i, bbox(&faces[i], false)?))).collect();
         for a in 0..group.len() {
@@ -300,17 +310,15 @@ fn near_pairs(
                 if gap > screen {
                     continue;
                 }
-                if gap > GAP_ABS {
-                    let tol = *exact.get_or_insert_with(|| gap_tolerance(shape));
-                    if gap > tol {
-                        continue;
-                    }
+                if gap > GAP_ABS && gap > exact {
+                    continue;
                 }
-                out.insert(pair);
+                out.push(pair);
             }
         }
-    }
-    out
+        out
+    });
+    found.into_iter().collect()
 }
 
 /// `face_bands`: runs of two or more face positions (`shape.faces()` order)
@@ -325,7 +333,9 @@ pub fn face_bands_capped(shape: &Shape, faces: &[Shape], cap: usize) -> Vec<Vec<
         return Vec::new();
     }
     let mut pairs = adjacent_pairs(shape, faces);
-    let Ok(surf) = faces.iter().map(surface_of).collect::<Result<Vec<_>, _>>() else {
+    let work = crate::par::Shared(faces);
+    let read = crate::par::map_indexed(faces.len(), move |i| surface_of(&work.get()[i]).ok());
+    let Some(surf) = read.into_iter().collect::<Option<Vec<_>>>() else {
         return Vec::new();
     };
     let near = near_pairs(faces, &surf, shape, &pairs);

@@ -90,7 +90,7 @@ pub fn assembly_payload(asm: &StepAssembly) -> Imported {
         match &leaf.product {
             Some((key, local)) => {
                 let done = canonical_of.entry(key.clone()).or_insert_with(|| {
-                    canonical::canonicalize(local).map(|result| {
+                    crate::bench::phase("canonicalize", || canonical::canonicalize(local)).map(|result| {
                         let realigned = match &colors {
                             Some(c) => canonical::realign_face_colors(local, &result, c),
                             None => None,
@@ -140,9 +140,10 @@ pub fn assembly_payload(asm: &StepAssembly) -> Imported {
 
 /// The STEP half of `import_geometry`.
 pub fn read_step(path: &Path) -> Result<Imported, String> {
-    let asm = xcaf::read_step_assembly(path).map_err(|e| occt_message(&e))?;
+    let asm = crate::bench::phase("step_read", || xcaf::read_step_assembly(path))
+        .map_err(|e| occt_message(&e))?;
     if asm.is_assembly {
-        return Ok(assembly_payload(&asm));
+        return Ok(crate::bench::phase("assembly_payload", || assembly_payload(&asm)));
     }
     let color = asm
         .leaves
@@ -211,12 +212,12 @@ pub fn import_geometry(path: &str, fmt: &str, store: &BlobStore) -> Result<Map<S
         }
         other => return Err(format!("unsupported import format: {other}")),
     };
-    let bytes = xcaf::to_bin_v3(&imported.shape).map_err(|e| {
+    let bytes = crate::bench::phase("to_bin", || xcaf::to_bin_v3(&imported.shape)).map_err(|e| {
         format!(
             "could not store the imported geometry ({e}). Check free disk space and permissions on the FundaCAD data directory."
         )
     })?;
-    let geom = store.put_bytes(&bytes).map_err(|e| {
+    let geom = crate::bench::phase("blob_put", || store.put_bytes(&bytes)).map_err(|e| {
         format!(
             "could not store the imported geometry ({e}). Check free disk space and permissions on the FundaCAD data directory."
         )

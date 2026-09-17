@@ -65,6 +65,16 @@ pub fn phase_named<T>(name: &str, f: impl FnOnce() -> T) -> T {
     phase(interned, f)
 }
 
+/// A plain number in the report, for a count a phase cannot show.
+pub fn note(name: &'static str, value: usize) {
+    if !on() {
+        return;
+    }
+    if let Ok(mut t) = table().lock() {
+        t.insert(name, (0.0, value as u64));
+    }
+}
+
 /// Every phase recorded so far, as `{"name": [seconds, calls]}`.
 pub fn report() -> serde_json::Value {
     let Ok(t) = table().lock() else {

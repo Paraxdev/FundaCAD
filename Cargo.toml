@@ -28,6 +28,14 @@ license = "AGPL-3.0-only"
 authors = ["Paraxdev"]
 rust-version = "1.77"
 
+# The engine is a long lived worker and its hot loops are thin Rust over a
+# static C++ kernel, so cross crate inlining is worth the slower link. Unwinding
+# stays on: the supervisor classifies a panic, and cxx catches OCCT's own
+# exceptions on the C++ side.
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
 # occt-sys is a BUILD dependency of opencascade-sys, but the static OpenCASCADE
 # libraries it compiles end up in the final binary. Cargo builds build-deps at
 # opt-level 0 even in release, and the `cmake` crate copies that level into the

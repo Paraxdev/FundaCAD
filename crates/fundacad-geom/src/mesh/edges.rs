@@ -29,52 +29,62 @@ pub struct EdgeLine {
 }
 
 /// Every drawn edge of one body, in edge-to-face map order.
+///
+/// The edges go out to other threads: each one builds its own adaptors and
+/// nothing is written back to the shape, and the results are collected by edge
+/// index, so the list is the one a serial walk produces.
 pub fn edge_polylines(access: &MeshAccess) -> Vec<EdgeLine> {
     let cos_tol = 1.0f64.to_radians().cos();
-    let plane: Vec<Option<[f64; 3]>> = crate::bench::phase("e_plane", || {
-        (0..access.face_count()).map(|f| access.face_plane_normal(f)).collect()
+    let plane: Vec<Option<[f64; 3]>> = (0..access.face_count())
+        .map(|f| access.face_plane_normal(f))
+        .collect();
+    let work = crate::par::Shared((access, &plane));
+    let lines = crate::par::map_indexed(access.edge_count(), move |e| {
+        let (access, plane) = *work.get();
+        one_edge(access, plane, cos_tol, e)
     });
+    lines.into_iter().flatten().collect()
+}
+
+fn one_edge(
+    access: &MeshAccess,
+    plane: &[Option<[f64; 3]>],
+    cos_tol: f64,
+    e: usize,
+) -> Option<EdgeLine> {
     let plane_of = |f: usize| plane.get(f).copied().flatten();
-    let mut out = Vec::new();
-    for e in 0..access.edge_count() {
-        let faces = crate::bench::phase("e_faces", || access.edge_faces(e));
-        if faces.len() == 2 {
-            if let (Some(n0), Some(n1)) = (plane_of(faces[0]), plane_of(faces[1])) {
-                if (n0[0] * n1[0] + n0[1] * n1[1] + n0[2] * n1[2]).abs() > cos_tol {
-                    continue;
-                }
+    let faces = access.edge_faces(e);
+    if faces.len() == 2 {
+        if let (Some(n0), Some(n1)) = (plane_of(faces[0]), plane_of(faces[1])) {
+            if (n0[0] * n1[0] + n0[1] * n1[1] + n0[2] * n1[2]).abs() > cos_tol {
+                return None;
             }
         }
-        if crate::bench::phase("e_degen", || access.edge_degenerated(e)) {
-            continue;
-        }
-        if !faces.is_empty()
-            && faces.iter().all(|&f| f == faces[0])
-            && crate::bench::phase("e_closed", || (0..faces.len()).any(|k| access.edge_closed_on(e, k)))
-        {
-            continue;
-        }
-        let Some(points) = crate::bench::phase("e_points", || edge_points(access, e)) else {
-            continue;
-        };
-        let smooth = faces.len() == 2
-            && faces[0] != faces[1]
-            && !(plane_of(faces[0]).is_some() && plane_of(faces[1]).is_some())
-            && crate::bench::phase("e_smooth", || {
-                access.edge_smooth(e, SMOOTH_EDGE_DEG.to_radians().cos())
-            });
-        out.push(EdgeLine { points, smooth });
     }
-    out
+    if access.edge_degenerated(e) {
+        return None;
+    }
+    if !faces.is_empty()
+        && faces.iter().all(|&f| f == faces[0])
+        && (0..faces.len()).any(|k| access.edge_closed_on(e, k))
+    {
+        return None;
+    }
+    let points = edge_points(access, e)?;
+    let smooth = faces.len() == 2
+        && faces[0] != faces[1]
+        && !(plane_of(faces[0]).is_some() && plane_of(faces[1]).is_some())
+        && access.edge_smooth(e, SMOOTH_EDGE_DEG.to_radians().cos());
+    Some(EdgeLine { points, smooth })
 }
 
 /// A line is its two endpoints; any other curve is deviation bounded; an edge
 /// the sampler refuses is walked by its raw parameter.
 fn edge_points(access: &MeshAccess, e: usize) -> Option<Vec<[f64; 3]>> {
-    if let Ok(Some(ends)) = crate::bench::phase("e_line", || access.edge_line(e)) {
+    if let Ok(Some(ends)) = access.edge_line(e) {
         return Some(ends.to_vec());
     }
-    crate::bench::phase("e_deflect", || sample_by_deflection(access, e, EDGE_DEFLECTION, EDGE_MIN_SEG, EDGE_MAX_SEG))
+    sample_by_deflection(access, e, EDGE_DEFLECTION, EDGE_MIN_SEG, EDGE_MAX_SEG)
         .or_else(|| uniform_param_points(access, e, EDGE_FALLBACK_SEG))
 }
 
@@ -134,9 +144,8 @@ fn sample_by_deflection(
 ///
 /// `MeshAccess::edge_smooth` is the same walk with the adaptors built once,
 /// and is what the pass above calls; this stays as the reference the test
-/// below checks it against.
-#[cfg_attr(not(test), allow(dead_code))]
-fn meets_smoothly(access: &MeshAccess, e: usize) -> bool {
+/// below and the bench suite's `smooth` stage check it against.
+pub fn meets_smoothly(access: &MeshAccess, e: usize) -> bool {
     let cos_tol = SMOOTH_EDGE_DEG.to_radians().cos();
     let Some((t0, t1)) = access.edge_brep_range(e) else {
         return false;

@@ -382,6 +382,8 @@ fn built_payloads(
     {
         let shapes: Vec<&Shape> = misses.iter().filter_map(|&i| bodies[i].shape).collect();
         let groups = crate::bench::phase("share_groups", || crate::par::share_groups(&shapes));
+        crate::bench::note("mesh_groups", groups.len());
+        crate::bench::note("mesh_largest_group", groups.iter().map(Vec::len).max().unwrap_or(0));
         let work = crate::par::Shared((&mesh_one, &groups));
         crate::par::flat_map_indexed(groups.len(), move |g| {
             let (one, groups) = work.get();
