@@ -50,6 +50,10 @@ class SectionBlendError(ValueError):
     pass
 
 
+class _DraftGaveUp(SectionBlendError):
+    pass
+
+
 # A G2 section has zero curvature where it meets the faces, so for the same
 # setback it bulges less than an arc. Starting it this much further out makes a
 # G2 blend of radius r look about as big as the G1 one.
@@ -1032,7 +1036,7 @@ def _boolean(op, base, tools, fuzz):
     return op.Shape()
 
 
-def _boolean_all(op, base, tools, fuzz):
+def _boolean_all(op, base, tools, fuzz, one_shot=False):
     """All tools in one boolean, and when the kernel gives up or quietly leaves
     some out: the tools merged into one first, then one at a time with any that
     fail retried after the rest. Large overlapping tools (six legs' blends at
@@ -1046,8 +1050,10 @@ def _boolean_all(op, base, tools, fuzz):
         if _sound(out) and _applied(op, base, out, tools):
             return out
     except SectionBlendError:
-        if len(tools) == 1:
+        if len(tools) == 1 and not one_shot:
             raise
+    if one_shot:
+        raise _DraftGaveUp("the blend would not combine with the body")
     if len(tools) == 1:
         return _boolean_one(op, base, tools[0], fuzz)
     # The retries below can grind for over a minute on a size the kernel will
@@ -1140,7 +1146,10 @@ def _applied_by(op, base, out, tools, verify):
     """Whether `out` took every tool: points inside a tool that `base` did not
     have are in a fuse's result, and points of it that `base` had are gone from
     a cut's. A dropped tool fails every one of them. Requiring a share of them
-    to land refused ordinary 20mm fillets on sampling noise, so one is enough."""
+    to land refused ordinary 20mm fillets on sampling noise, so one is enough.
+    A point landing where another tool also reaches says nothing about this one:
+    two of six 77mm leg fills dropped from a drag's fuse, and their samples in
+    the neighbours' overlap all landed."""
     from OCP.BRepClass3d import BRepClass3d_SolidClassifier
 
     fuse = op is BRepAlgoAPI_Fuse
@@ -1150,21 +1159,32 @@ def _applied_by(op, base, out, tools, verify):
     bc = BRepClass3d_SolidClassifier(base)
     oc = BRepClass3d_SolidClassifier(out)
     for t in tools:
-        landed = missed = 0
+        landed, missed = [], []
         for p in _points_inside(t, verify):
             bc.Perform(p, 1e-9)
             if bc.State() != changed:
                 continue
             oc.Perform(p, 1e-9)
-            if oc.State() != changed:
-                landed += 1
-            else:
-                missed += 1
-            if landed + missed >= 12:
+            (landed if oc.State() != changed else missed).append(p)
+            if len(landed) + len(missed) >= 12:
                 break
+        if not missed:
+            continue
         # Partial loss has only been seen in fuses; overlapping cut tools, a
-        # corner cell among its edges' tools, sample too noisily for a share.
-        if missed and not landed:
+        # corner cell among its edges' tools, sample too noisily for a share or
+        # for telling apart which tool a point belongs to.
+        if not fuse:
+            if not landed:
+                return False
+            continue
+        # Classifying against the other lofts is slow, so only a tool that
+        # missed somewhere pays for it.
+        others = _near_tools([u for u in tools if u is not t])
+
+        def alone(p):
+            return not others(p, lambda st: st == TopAbs_IN)
+
+        if any(alone(p) for p in missed) and not any(alone(p) for p in landed):
             return False
     return _kept_base(base, out, tools, verify)
 
@@ -1276,6 +1296,18 @@ def section_blend(shape, edges, kind, size, size2=None, continuity="G1", sizes=N
     sizes = list(sizes) if sizes is not None else [size] * len(edges)
     if any(not (x > 0) for x in sizes) or (size2 is not None and not (size2 > 0)):
         raise SectionBlendError("the size must be greater than 0")
+    if draft:
+        # A drag's thinned lofts get one boolean. Two of six 77mm leg fills
+        # dropped from theirs, and the retries on thinned lofts took longer
+        # than building the full sections, which also match the commit.
+        try:
+            return _section_blend(shape, edges, kind, size2, continuity, sizes, True, profile)
+        except _DraftGaveUp:
+            pass
+    return _section_blend(shape, edges, kind, size2, continuity, sizes, False, profile)
+
+
+def _section_blend(shape, edges, kind, size2, continuity, sizes, draft, profile):
     tol = 1e-6
     for e in edges:
         tol = max(tol, BRep_Tool.Tolerance_s(e))
@@ -1295,10 +1327,12 @@ def section_blend(shape, edges, kind, size, size2=None, continuity="G1", sizes=N
         # On copies: a boolean that fails can still raise the tolerances of its
         # arguments in place, and the retry without corners would inherit that.
         try:
-            return _combine(_copy(shape), [_copy(t) for t in cut] + corners, [_copy(t) for t in fuse], tol)
+            return _combine(_copy(shape), [_copy(t) for t in cut] + corners, [_copy(t) for t in fuse], tol, draft)
+        except _DraftGaveUp:
+            raise
         except SectionBlendError:
             pass  # past the size a ball fits the corner, the edges meet as they are
-    return _combine(shape, cut, fuse, tol)
+    return _combine(_copy(shape) if draft else shape, cut, fuse, tol, draft)
 
 
 def _copy(shape):
@@ -1307,15 +1341,15 @@ def _copy(shape):
     return BRepBuilderAPI_Copy(shape, False).Shape()
 
 
-def _combine(shape, cut, fuse, tol):
+def _combine(shape, cut, fuse, tol, one_shot=False):
     fuzz = max(tol * 10, 1e-5)
     if cut and _swallowed(shape, cut):
         raise SectionBlendError("at this size the blend removes the whole body")
     out = shape
     if cut:
-        out = _boolean_all(BRepAlgoAPI_Cut, out, cut, fuzz)
+        out = _boolean_all(BRepAlgoAPI_Cut, out, cut, fuzz, one_shot)
     if fuse:
-        out = _boolean_all(BRepAlgoAPI_Fuse, out, fuse, fuzz)
+        out = _boolean_all(BRepAlgoAPI_Fuse, out, fuse, fuzz, one_shot)
     # Tidying only, on a copy: it edits its input's shared topology in place,
     # throws "Courbes non jointives" on some bodies, and merging the faces of a
     # leg's two seam halves turned a valid solid invalid.
