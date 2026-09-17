@@ -25,6 +25,16 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- The Rust pivot begins: a root Cargo workspace and a `fundacad-geom` crate that
+  links OpenCASCADE 7.8.1 statically through the vendored bindings and runs real
+  kernel tests (volume, boolean cut, per-face tessellation in the protocol v2
+  body payload shape). Nothing shipped changes yet: the Python sidecar is still
+  the engine. The plan, the decision record and the per-module conversion list
+  are in `docs/RUST-PIVOT.md`, including the `prealpha-rust-ver` rolling
+  release that will carry the Rust engine with a work-in-progress warning.
+
+### Added
+
 - **A Hole tool.** Click a flat face to drill a hole there, click more spots to add holes and click a hole to take it away. Type a size like M3 or a plain diameter, and a depth or "through". The switch in the box steps through simple, counterbore, countersink and heat-set insert. Sizes follow ISO clearance holes (close, normal or loose fit) or tap drills from M2 to M10, counterbores fit socket head screws and countersinks 90 degree flat heads, and the insert preset sizes a bore with a small lead-in for M2 to M5 brass inserts. Every dimension is a row under the feature afterwards, parameters can drive them, and double-clicking the hole reopens it to move, add or remove positions. An optional 118 degree drill point and a Tapped label are there too.
 
 - **Pick several materials and delete them together.** In the Render workspace's material list Ctrl and Shift click pick several, and a right-click offers Delete and Remove from the model, which takes a material off every body and face wearing it while keeping it in the library. The Delete key works on the picked materials too, and deleting one the model is wearing asks first.

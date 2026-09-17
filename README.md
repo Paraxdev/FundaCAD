@@ -122,6 +122,7 @@ outlives its shell, so kill it by hand or it keeps port 8765.
 ## Docs
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), how the three processes fit together
+- [`docs/RUST-PIVOT.md`](docs/RUST-PIVOT.md), the plan and conversion list for moving the geometry engine, and later the whole app, to Rust (pre-alpha, work in progress)
 - [`docs/PROTOCOL.md`](docs/PROTOCOL.md), the WebSocket the frontend and sidecar speak
 - [`docs/FUNDA-FORMAT.md`](docs/FUNDA-FORMAT.md), the readable `.funda` JSON document and the self-repairing binary `.fundab`
 - [`docs/PACKAGING.md`](docs/PACKAGING.md), how the bundled Python runtime is built
