@@ -69,6 +69,26 @@ def doc(features, parameters=None, **extra):
     return d
 
 
+def eaxis(axis):
+    return {"kind": "edge", "by": "axis", "axis": axis}
+
+
+def eall():
+    return {"kind": "edge", "by": "all"}
+
+
+def fil(edges, radius, **extra):
+    f = {"id": "f", "type": "fillet", "edges": edges, "radius": radius}
+    f.update(extra)
+    return f
+
+
+def cham(edges, distance, **extra):
+    f = {"id": "c", "type": "chamfer", "edges": edges, "distance": distance}
+    f.update(extra)
+    return f
+
+
 HOLE_BASE = [sk("s1", [rect(40, 40)]), ext("e1", "s1", 20)]
 HOLE_SK = sk("s2", [{"type": "point", "x": -8, "y": 0}, {"type": "point", "x": 8, "y": 0}],
              plane={"origin": [0, 0, 20], "normal": [0, 0, 1], "xdir": [1, 0, 0]})
@@ -303,6 +323,38 @@ CASES = {
                                {"id": "w", "type": "sweep", "profile": "p", "path": "q", "operation": "new"}]),
     "sweep_no_path_curve": doc([sk("p", [circle(2)]), sk("q", [circle(9)], plane="XZ"),
                                 {"id": "w", "type": "sweep", "profile": "p", "path": "q", "operation": "new"}]),
+    # fillet and chamfer
+    "fillet_box_z_edges": doc([box("a", 20, 20, 10), fil(eaxis("Z"), 2)]),
+    "fillet_all_box": doc([box("a", 20, 16, 10), fil(eall(), 1.5)]),
+    "fillet_chord": doc([box("a", 20, 16, 10), fil(eaxis("Z"), 2, sizeType="chord")]),
+    "fillet_param_radius": doc([box("a", 20, 16, 10), fil(eaxis("Z"), "R")], {"R": 3}),
+    "fillet_join_L_sequential": doc([box("b1", 19.071, 12.7, 14.56), box("b2", 19.071, 12.7, 14.56),
+                                     {"id": "mv", "type": "move", "dx": 9.101, "dy": 6.616, "bodies": ["body2"]},
+                                     {"id": "cb", "type": "boolean", "operation": "join", "target": "body1", "tools": ["body2"]},
+                                     fil(eaxis("Z"), 4.599)]),
+    "fillet_cylinder_rims": doc([{"id": "c", "type": "cylinder", "radius": 8, "height": 10}, fil(eall(), 1)]),
+    "fillet_zero": doc([box("a", 20, 20, 10), fil(eaxis("Z"), 0)]),
+    "fillet_negative": doc([box("a", 20, 20, 10), fil(eaxis("Z"), -3)]),
+    "fillet_no_edge": doc([{"id": "c", "type": "cylinder", "radius": 8, "height": 10}, fil(eaxis("X"), 1)]),
+    "fillet_body_gone": doc([box("a", 20, 20, 10), fil(dict(eaxis("Z"), body="body5"), 1)]),
+    "fillet_no_body": doc([fil(eaxis("Z"), 1)]),
+    "fillet_seam_only": doc([{"id": "c", "type": "cylinder", "radius": 8, "height": 10},
+                             fil({"kind": "edge", "by": "nearest", "point": [8, 0, 0]}, 1)]),
+    "fillet_smooth_edge": doc([box("a", 20, 20, 10), fil(eaxis("Z"), 3),
+                               {"id": "f2", "type": "fillet", "edges": {"kind": "edge", "by": "nearest", "point": [10, 7, 0]}, "radius": 1}]),
+    "fillet_two_bodies": doc([box("a", 10, 10, 10), box("b", 6, 6, 6), {"id": "m", "type": "move", "dx": 30, "bodies": ["body2"]},
+                              fil([dict(eaxis("Z"), body="body1"), dict(eaxis("Z"), body="body2")], 1)]),
+    "chamfer_equal_all": doc([box("a", 20, 16, 10), cham(eall(), 1)]),
+    "chamfer_equal_z": doc([box("a", 20, 16, 10), cham(eaxis("Z"), 2)]),
+    "chamfer_two_distance": doc([box("a", 20, 16, 10), cham(eaxis("Z"), 1, chamferType="twoDistance", distance2=3)]),
+    "chamfer_two_distance_all": doc([box("a", 20, 16, 10), cham(eall(), 1, chamferType="twoDistance", distance2=2)]),
+    "chamfer_type_without_distance2": doc([box("a", 20, 16, 10), cham(eaxis("Z"), 1.5, chamferType="twoDistance")]),
+    "chamfer_cylinder_rim": doc([{"id": "c", "type": "cylinder", "radius": 8, "height": 10},
+                                 cham({"kind": "edge", "by": "nearest", "point": [0, 8, 5]}, 1)]),
+    "chamfer_seam_only": doc([{"id": "c", "type": "cylinder", "radius": 8, "height": 10},
+                              cham({"kind": "edge", "by": "nearest", "point": [8, 0, 0]}, 1)]),
+    "fillet_draft_builds": doc([box("a", 20, 20, 10), fil(eaxis("Z"), 2, draft=True)]),
+    "chamfer_zero": doc([box("a", 20, 20, 10), cham(eaxis("Z"), 0)]),
     # the loop
     "active_off": doc([box("a", 10, 10, 10, activeWhen="flag"), box("b", 2, 2, 2, activeWhen=-2.5)], {"flag": 0}),
     "active_dependent": doc([sk("s", [rect(5, 5)], activeWhen="flag"), ext("e", "s", 5)], {"flag": 0}),
