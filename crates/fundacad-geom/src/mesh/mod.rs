@@ -3,8 +3,8 @@
 //! (`_compute_payload`, `_body_payload`, `_union_bbox`), plus the body loop of
 //! `server._rebuild_job`.
 //!
-//! Not here yet: mesh passes and `faceColorSlots` (the plugin host),
-//! `faceBands` (`face_bands.py`), and every cache tier (RAM identity cache,
+//! Not here yet: mesh passes and `faceColorSlots` (the plugin host), and
+//! every cache tier (RAM identity cache,
 //! disk mesh artifacts, instance payloads, helper processes).
 
 pub mod edges;
@@ -116,6 +116,10 @@ fn body_payload_for(
     payload.insert("edges".into(), Value::Null);
     payload.insert("faceCount".into(), face_count.into());
     payload.insert("bbox".into(), bbox);
+    let bands = crate::faces::face_bands(shape);
+    if !bands.is_empty() {
+        payload.insert("faceBands".into(), serde_json::json!(bands));
+    }
     if b.normals.is_some() {
         payload.insert("normals".into(), Value::Null);
     }
