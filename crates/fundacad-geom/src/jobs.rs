@@ -20,6 +20,11 @@ impl Watch for EngineWatch<'_> {
             .feature(i64::try_from(index).unwrap_or(i64::MAX));
     }
 
+    fn meshing(&self, done: usize, total: usize) {
+        let n = |v: usize| i64::try_from(v).unwrap_or(i64::MAX);
+        self.0.progress.meshing(n(done), n(total));
+    }
+
     fn cancelled(&self) -> bool {
         self.0.cancel.is_cancelled()
     }
@@ -48,7 +53,7 @@ pub fn rebuild_result(
         return JobResult::Json(builder::result_fields(&typed, &r));
     }
     let fields = builder::result_fields(&typed, &r);
-    match mesh_result(&r.bodies, tolerance, known) {
+    match mesh_result(&r.bodies, tolerance, known, watch) {
         JobResult::Mesh(mut mesh) => {
             let bbox = mesh.fields.get("bbox").cloned().unwrap_or(Value::Null);
             let mut merged = fields;

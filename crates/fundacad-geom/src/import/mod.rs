@@ -183,6 +183,7 @@ pub fn import_geometry(path: &str, fmt: &str, store: &BlobStore) -> Result<Map<S
             cap / (1024 * 1024)
         ));
     }
+    fundacad_engine::sysmem::refuse_if_memory_is_short(size, None)?;
     let imported = match fmt.as_str() {
         "step" | "stp" => read_step(p)?,
         "brep" => Imported {
