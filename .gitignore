@@ -6,6 +6,9 @@ dist/
 # rust / tauri
 src-tauri/target/
 /target/
+# a plugin's geometry component: built by scripts/build-plugin-wasm.py, never committed
+plugins/*/geometry-rs/target/
+plugins/*/geometry.wasm
 src-tauri/gen/
 
 # python sidecar

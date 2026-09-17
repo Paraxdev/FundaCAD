@@ -133,9 +133,49 @@ OCCT 8.0 is tracked, not a prerequisite.
   primitives and sketches, boolean, fillet, displace a face triangulation,
   read and write blobs, write an export file) and knows nothing of fasteners,
   textures or printers. The `featureTypes`, `exporters` and `shapeGenerators`
-  manifest keys stay, so documents do not change. Until the host exists,
-  plugin geometry runs only on the Python engine and the pre-alpha notes say
-  so.
+  manifest keys stay, so documents do not change. The host is in, the second
+  manifest key `geometryWasm` names the component, and a plugin that ships
+  only the Python half runs on the Python engine alone until it is ported.
+
+#### The plugin component, in detail
+
+The world is `crates/fundacad-geom/wit/plugin.wit`, the host is
+`fundacad-geom::plugins` behind the crate feature `plugins`, which
+`fundacad-cli` and `src-tauri`'s `rust-engine` turn on (wasmtime and its WASI
+are a large dependency tree and the default build of the geometry crate has no
+use for them).
+
+- **Exports, the four hooks:** `register` (what the component claims, checked
+  against the manifest's `featureTypes`, `exporters` and `shapeGenerators`),
+  `run-feature`, `resolve-pass` + `displace` with a `code-version` that rides
+  in the mesh etag and the mesh cache key, `write-export`, `generate-shape`.
+- **Imports, the generic kernel:** an opaque `shape` resource (never BREP
+  bytes per call) with its measurements, surfaces, curves, classification and
+  triangulation; primitives, polygon faces, sketch profiles, prism, revolve,
+  booleans, unify, fillet and chamfer with the one-edge-at-a-time fallback;
+  the blob store; a feature context (the feature JSON, parameter values,
+  selector picks grouped by body, body shapes in and out, diagnostics, mesh
+  pass specs); `output.write` for an exporter, to a path the host chose; and
+  `cancelled`, `progress`, `log`.
+- **Sandbox:** WASI with no preopened directories, no environment, no
+  arguments and sockets refused; a `StoreLimits` memory cap of 1 GiB;
+  epoch interruption on a 20 ms tick with the same budgets the Python engine
+  gives a job, 60 s per feature and per mesh pass, 180 s for `generateShape`;
+  cancellation polled in the same callback, so a cancel stops a plugin mid
+  loop. A trap poisons nothing: every call gets a fresh instance, so no state
+  survives a call and a crashed plugin costs one feature.
+- **Discovery** reads the manifests under `FUNDACAD_PLUGIN_DIR` (a checkout's
+  own `plugins/` in a debug build), explicitly, from the engine's startup path
+  only, as `server.py` calls `plugin_geometry.discover()`: a bare
+  `builder::rebuild` has no plugins and an unknown type reads "unknown feature
+  type", exactly as the Python builder alone does. A component is compiled the
+  first time one of its declared names is used, and the three sentences of
+  `unregistered()` (absent, installed but broken, unknown) are kept.
+- **Proof:** PrintToolbox's eight feature types are ported
+  (`plugins/FundaCAD.PrintToolbox/geometry-rs`, 192 KiB of wasm) and
+  `sidecar/tools/corpus_plugins.json` runs 40 documents through both engines,
+  volumes and refusals alike.
+
 - **Shared algorithms:** the TypeScript copies stay (the frontend needs them
   synchronously for previews); the Rust twin is ported from the TypeScript,
   not from Python, and both run the same JSON test vectors under
@@ -209,8 +249,9 @@ progress is planned wrong.
 5. Import (BREP, STEP with XCAF colours and assemblies, STL, 3MF, OBJ, GLB) and
    export (STEP, STL, 3MF with colours, GLB), `inspect`, `interference`,
    `projectGeometry`, `tessellateText`, `listFonts`, `migrateGeometry`.
-6. Plugin host (section 2.3) and the in-repo plugins' geometry ported to wasm
-   components: Screws, PrintToolbox, Printing, Texture.
+6. Plugin host (section 2.3, in) and the in-repo plugins' geometry ported to
+   wasm components: PrintToolbox is ported, Screws, Printing and Texture are
+   not.
 7. `fundacad-mcp` on rmcp, same tool vocabulary (docs/MCP.md).
 8. Gates: `eval_fillet_corpus` 0/500, `e2e_coverage.py` 34/34, the golden
    corpus, and the Python protocol suites (`test_ws.py`, `test_cancel.py`,
@@ -263,7 +304,7 @@ LOC are `wc -l` of the current tree. "Oracle" is what proves the port right.
 | exporters.py, export_tree.py | 202 | fundacad-geom::export::step | medium | STEP re-read round trip |
 | inspect_model.py | 249 | fundacad-geom::inspect | low | MCP tests |
 | rebuild_cache.py, geomstore.py | 1,104 | fundacad-geom::cache | medium | test_checkpoint, test_geomstore |
-| shape_generate.py, plugin_geometry.py | 624 | fundacad-geom::plugins (wasmtime host) | design | test_fasteners |
+| shape_generate.py, plugin_geometry.py | 624 | fundacad-geom::plugins (wasmtime host, done) | design | corpus_plugins.json, tests/plugin_host.rs |
 | server.py | 2,139 | fundacad-engine | medium | test_ws, test_cancel, test_conn_limit, test_fullstack, test_heartbeat |
 | tools/*.py evals | 4,169 | stay Python, drive the engine through the CLI or `--ws` | low | they are the oracle |
 
