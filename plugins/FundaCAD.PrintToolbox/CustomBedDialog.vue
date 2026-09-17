@@ -49,31 +49,31 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
     <template #title>Custom bed size</template>
 
     <div class="modal-body prefs">
-      <label class="prefs-row">
+      <label class="prefs-row" style="grid-template-columns: 70px 1fr">
         <span class="prefs-label">Width</span>
-        <span class="export-num">
+        <span style="display: flex; align-items: center; gap: var(--s-2)">
           <input
-            v-model="width" class="sm-input" type="number" min="0" step="1"
+            v-model="width" class="sm-input" style="flex: 1; min-width: 0" type="number" min="0" step="1"
             data-testid="bed-custom-width" autofocus
           />
-          <span class="export-unit">mm</span>
+          <span style="width: 22px; font-size: 12px; color: var(--text-dim)">mm</span>
         </span>
       </label>
-      <label class="prefs-row">
+      <label class="prefs-row" style="grid-template-columns: 70px 1fr">
         <span class="prefs-label">Depth</span>
-        <span class="export-num">
-          <input v-model="depth" class="sm-input" type="number" min="0" step="1" data-testid="bed-custom-depth" />
-          <span class="export-unit">mm</span>
+        <span style="display: flex; align-items: center; gap: var(--s-2)">
+          <input v-model="depth" class="sm-input" style="flex: 1; min-width: 0" type="number" min="0" step="1" data-testid="bed-custom-depth" />
+          <span style="width: 22px; font-size: 12px; color: var(--text-dim)">mm</span>
         </span>
       </label>
-      <label class="prefs-row">
+      <label class="prefs-row" style="grid-template-columns: 70px 1fr">
         <span class="prefs-label">Height</span>
-        <span class="export-num">
-          <input v-model="height" class="sm-input" type="number" min="0" step="1" data-testid="bed-custom-height" />
-          <span class="export-unit">mm</span>
+        <span style="display: flex; align-items: center; gap: var(--s-2)">
+          <input v-model="height" class="sm-input" style="flex: 1; min-width: 0" type="number" min="0" step="1" data-testid="bed-custom-height" />
+          <span style="width: 22px; font-size: 12px; color: var(--text-dim)">mm</span>
         </span>
       </label>
-      <div v-if="error" class="sm-hint bed-custom-error" data-testid="bed-custom-error">{{ error }}</div>
+      <div v-if="error" class="sm-hint" style="color: var(--error, #f0564a)" data-testid="bed-custom-error">{{ error }}</div>
     </div>
 
     <div class="modal-foot">
@@ -82,26 +82,3 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
     </div>
   </ModalFrame>
 </template>
-
-<style scoped>
-.bed-custom-dialog .prefs-row {
-  grid-template-columns: 70px 1fr;
-}
-.export-num {
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
-}
-.export-num input {
-  flex: 1;
-  min-width: 0;
-}
-.export-unit {
-  width: 22px;
-  font-size: 12px;
-  color: var(--text-dim);
-}
-.bed-custom-error {
-  color: var(--error, #f0564a);
-}
-</style>
