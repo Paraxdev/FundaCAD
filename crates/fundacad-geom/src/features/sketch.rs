@@ -894,6 +894,11 @@ fn region_face_at(cells: &[Cell], p: [f64; 3]) -> Option<Shape> {
         .map(|c| c.face.clone())
 }
 
+/// `_region_face_at` over `_region_cells`, for one picked point.
+pub fn region_face(ctx: &Ctx, entry: &SketchEntry, p: [f64; 3]) -> Option<Shape> {
+    region_face_at(&region_cells(ctx, entry), p)
+}
+
 /// `_region_target`: the selected areas united, or `None` for no selection.
 pub fn region_target(ctx: &Ctx, pts: &[[f64; 3]], entry: &SketchEntry) -> FResult<Option<Shape>> {
     if pts.is_empty() {
