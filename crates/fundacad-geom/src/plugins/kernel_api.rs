@@ -281,8 +281,10 @@ pub fn sketch_faces(ctx: Option<&mut Ctx>, plane: &str, entities: &str) -> Resul
     let typed: fundacad_core::schema::SketchFeature =
         serde_json::from_value(raw).map_err(|e| format!("the sketch does not parse: {e}"))?;
     let entry = match ctx {
-        Some(ctx) => crate::features::sketch::build(ctx, &typed),
-        None => crate::features::sketch::build(&Ctx::detached(), &typed),
+        // Nothing to follow: a plugin authors a sketch on a plane it names,
+        // never on a placement carried down from a feature above it.
+        Some(ctx) => crate::features::sketch::build(ctx, &typed, None),
+        None => crate::features::sketch::build(&Ctx::detached(), &typed, None),
     }
     .map_err(fail_text)?;
     Ok(entry.faces)
