@@ -40,6 +40,9 @@ pub struct FakeEngine {
     pub port: u16,
     pub token: String,
     pub calls: Arc<Mutex<Vec<Call>>>,
+    /// Set to hang up on every connection without answering, which is what a
+    /// window closing or an engine restarting looks like from the client.
+    dead: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl FakeEngine {
@@ -53,9 +56,11 @@ impl FakeEngine {
             port,
             token: "test-token".into(),
             calls: Arc::new(Mutex::new(Vec::new())),
+            dead: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         };
         let answer = Arc::new(answer);
         let calls = engine.calls.clone();
+        let dead = engine.dead.clone();
         tokio::spawn(async move {
             let listener = tokio::net::TcpListener::bind(("127.0.0.1", port))
                 .await
@@ -66,12 +71,19 @@ impl FakeEngine {
                 };
                 let answer = answer.clone();
                 let calls = calls.clone();
+                let dead = dead.clone();
                 tokio::spawn(async move {
+                    if dead.load(std::sync::atomic::Ordering::Relaxed) {
+                        return;
+                    }
                     let Ok(mut ws) = tokio_tungstenite::accept_async(stream).await else {
                         return;
                     };
                     while let Some(Ok(msg)) = ws.next().await {
                         let Message::Text(text) = msg else { continue };
+                        if dead.load(std::sync::atomic::Ordering::Relaxed) {
+                            return;
+                        }
                         let Ok(Value::Object(req)) = serde_json::from_str::<Value>(&text) else {
                             continue;
                         };
@@ -116,6 +128,11 @@ impl FakeEngine {
     /// of the import cases need.
     pub fn always(reply: Value) -> FakeEngine {
         FakeEngine::start(move |_op, _req| reply.clone())
+    }
+
+    /// Stop answering, the way a closed window does.
+    pub fn die(&self) {
+        self.dead.store(true, std::sync::atomic::Ordering::Relaxed);
     }
 
     pub fn calls(&self) -> Vec<Call> {
@@ -206,8 +223,12 @@ pub struct Mcp {
 
 impl Mcp {
     pub fn start(env: &BTreeMap<String, String>, cwd: &Path) -> Mcp {
-        let stderr_path =
-            std::env::temp_dir().join(format!("fundacad-mcp-test-{}.log", std::process::id()));
+        static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let stderr_path = std::env::temp_dir().join(format!(
+            "fundacad-mcp-test-{}-{}.log",
+            std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
         let log = std::fs::File::create(&stderr_path).expect("a log file");
         let mut cmd = Command::new(mcp_binary());
         cmd.current_dir(cwd)

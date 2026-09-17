@@ -377,6 +377,30 @@ impl FundaCad {
         self.state.lock().await.link.port
     }
 
+    /// Whether a tool has changed the PRIVATE document. It is what stops the
+    /// re-probe pulling the rug out from under work already done here, and it
+    /// is settable so a test can reach that branch without building anything.
+    pub async fn private_edits(&self) -> bool {
+        self.state.lock().await.private_edits
+    }
+
+    pub async fn set_private_edits(&self, edited: bool) {
+        self.state.lock().await.private_edits = edited;
+    }
+
+    /// Move the last re-probe back, so a test can reach the next one without
+    /// waiting out the interval.
+    pub async fn age_probe(&self, by: Duration) {
+        let mut st = self.state.lock().await;
+        st.probed_at = st.probed_at.and_then(|at| at.checked_sub(by));
+    }
+
+    /// Ask again whether FundaCAD is open, which is what every tool call does
+    /// before it runs.
+    pub async fn probe_for_the_app(&self) {
+        self.adopt_running_app().await;
+    }
+
     /// The uploads still arriving, as (id, spool directory).
     pub async fn uploads(&self) -> Vec<(String, PathBuf)> {
         self.state
@@ -530,7 +554,15 @@ impl FundaCad {
             let Some(live) = st.live.as_mut() else {
                 return Err(LiveError::NoAppOpen("no live session".into()));
             };
-            let pulled = live.pull(&link).await?;
+            // A window that is not sharing is a SETTING, not a lost engine:
+            // the answer the user can act on is "turn live editing on", and
+            // falling back to a private copy would hide it. Only the transport
+            // going away is worth reconnecting over.
+            let pulled = match live.pull(&link).await {
+                Ok(pulled) => pulled,
+                Err(e) if e.is_lost() => return Err(e),
+                Err(e) => return Ok(Ok(CallToolResponse::Complete(failure(e.message())))),
+            };
             st.doc = pulled.unwrap_or_else(model::new_document);
             model::fill_defaults(&mut st.doc);
             // No invalidate here, deliberately. `view` already asks whether the
@@ -1805,13 +1837,11 @@ impl ServerHandler for FundaCad {
                 let run = self.router.call(tcc);
                 match self.call_live(&name, &args, run).await {
                     Ok(out) => return out,
-                    Err(e) => {
-                        if attempt == 1 {
-                            return Ok(CallToolResponse::Complete(failure(e.message())));
-                        }
+                    Err(e) if attempt == 0 && e.is_lost() => {
                         self.drop_lost_app(e.message()).await;
                         continue;
                     }
+                    Err(e) => return Ok(CallToolResponse::Complete(failure(e.message()))),
                 }
             }
             if MUTATORS.contains(&name.as_str()) {
