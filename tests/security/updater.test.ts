@@ -87,13 +87,13 @@ describe("updater", () => {
   // manifest at all": a pre-alpha that cannot update itself is a pre-alpha
   // nobody re-downloads, and the point of a rolling build is the next one.
   it("keeps the pre-alpha feed away from the beta one", () => {
-    const beta = conf.plugins.updater.endpoints;
-    const rust = prealpha.plugins.updater.endpoints;
-    expect(beta).toHaveLength(1);
-    expect(rust).toHaveLength(1);
-    expect(rust[0]).not.toBe(beta[0]);
-    expect(new URL(beta[0]).pathname).toContain("/download/beta/");
-    expect(new URL(rust[0]).pathname).toContain("/download/prealpha-rust/");
+    const path = (urls: string[]) => urls.map((u) => new URL(u).pathname);
+    expect(path(conf.plugins.updater.endpoints)).toEqual([
+      "/Paraxdev/fundacad/releases/download/beta/latest.json",
+    ]);
+    expect(path(prealpha.plugins.updater.endpoints)).toEqual([
+      "/Paraxdev/fundacad/releases/download/prealpha-rust/latest.json",
+    ]);
   });
 
   it("fetches the pre-alpha feed from this project's own releases too", () => {
