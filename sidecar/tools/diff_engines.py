@@ -23,8 +23,10 @@ import asyncio
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 
 import websockets
 
@@ -130,10 +132,40 @@ async def rebuild_all(url, docs):
     return replies
 
 
-def run_engine(cmd, docs):
+async def import_all(url, docs):
+    async with websockets.connect(url, max_size=H._MAX_WS, compression=None) as ws:
+        for i, d in enumerate(docs):
+            spec = d["importFixture"]
+            reply = await H.ws_call(ws, "import", f"seed{i}",
+                                    path=os.path.join(H.SIDECAR_DIR, spec["path"]),
+                                    format=spec.get("format", "step"))
+            if not reply.get("ok"):
+                raise SystemExit(f"{d['name']}: the import op refused {spec['path']}: {reply.get('error')}")
+            for f in d["document"]["features"]:
+                if f.get("id") == spec["feature"]:
+                    merged = dict(reply["result"])
+                    merged.update(f)
+                    f.clear()
+                    f.update(merged)
+
+
+def seed_imports(docs):
+    """A document naming an `importFixture` gets that file imported through the
+    Python engine's `import` op, into a blob directory both engines then read,
+    so the import FEATURE is compared on identical stored geometry."""
+    wanted = [d for d in docs if d.get("importFixture")]
+    if not wanted:
+        return None
+    blob_dir = tempfile.mkdtemp(prefix="diff-engines-blobs-")
+    os.environ["FUNDACAD_BLOB_DIR"] = blob_dir
+    run_engine("", wanted, import_all)
+    return blob_dir
+
+
+def run_engine(cmd, docs, job=None):
     with H.SpawnedServer(cmd=cmd) as srv:
         try:
-            return H.run(rebuild_all(srv.url, docs))
+            return H.run((job or rebuild_all)(srv.url, docs))
         finally:
             # server.py leaves process pool workers behind a plain terminate on Windows.
             if sys.platform == "win32" and srv.proc.poll() is None:
@@ -210,6 +242,15 @@ def main():
     args = ap.parse_args()
 
     docs = load_corpus(args.corpus, [n for n in (args.only or "").split(",") if n])
+    blob_dir = seed_imports(docs)
+    try:
+        return run(args, docs)
+    finally:
+        if blob_dir:
+            shutil.rmtree(blob_dir, ignore_errors=True)
+
+
+def run(args, docs):
     if args.python_only:
         return python_only(docs)
     rust_cmd = args.rust or os.environ.get("FUNDACAD_ENGINE_CMD") or default_rust_cmd()
