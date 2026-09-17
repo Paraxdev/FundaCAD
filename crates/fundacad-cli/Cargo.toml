@@ -13,6 +13,6 @@ path = "src/main.rs"
 
 [dependencies]
 fundacad-engine = { path = "../fundacad-engine", features = ["ws"] }
-fundacad-geom = { path = "../fundacad-geom" }
+fundacad-geom = { path = "../fundacad-geom", features = ["plugins"] }
 fundacad-protocol = { path = "../fundacad-protocol" }
 serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
