@@ -8,8 +8,11 @@ use opencascade::{
     extrema::SupportKind,
     progress::{Progress, ProgressRange},
     heal::FixOptions,
-    primitives::{Direction, Edge, Shape, ShapeType, SurfaceType, Vertex},
+    modify::{OffsetJoin, OffsetOptions, UnifyOptions},
+    primitives::{Direction, Edge, Face, Shape, ShapeType, SurfaceType, Vertex},
     query::PointState,
+    sewing::{ReShape, Sewing, SewingCounts, SewingOptions},
+    shape_io::BrepWriteOptions,
 };
 use opencascade_sys as ffi;
 use std::sync::{
@@ -501,4 +504,206 @@ fn progress_indicator_reports_and_cancels_a_boolean() {
     assert!(asked.load(Ordering::Relaxed) >= 5);
     flag.store(false, Ordering::Relaxed);
     assert!(!cancelled.is_cancelled());
+}
+
+fn intersection_join() -> OffsetOptions {
+    OffsetOptions { join: OffsetJoin::Intersection, ..Default::default() }
+}
+
+#[test]
+fn thick_solid_shells_a_box_open_at_the_top() {
+    let block = Shape::box_with_dimensions(20.0, 20.0, 10.0);
+    let top = block.faces().farthest(Direction::PosZ);
+    let detached = ProgressRange::detached();
+
+    let cup = block.thick_solid_by_join(&[&top], -1.0, intersection_join(), &detached).unwrap();
+    assert!(close(cup.volume(), 4000.0 - 18.0 * 18.0 * 9.0, 1e-6), "{}", cup.volume());
+    assert_eq!(count(&cup, ShapeType::Face), 11);
+    assert!(cup.is_valid().unwrap());
+
+    let same = block.offset_thick_solid(-1.0, &[&top], intersection_join(), &detached).unwrap();
+    assert!(close(same.volume().abs(), cup.volume(), 1e-6), "{}", same.volume());
+
+    // A plate thickened from one face.
+    let slab = plane_face(0.0, 5.0).thick_solid_by_simple(3.0).unwrap();
+    assert!(close(slab.volume().abs(), 300.0, 1e-6), "{}", slab.volume());
+}
+
+#[test]
+fn offset_shape_grows_whole_solids_and_single_faces() {
+    let block = Shape::box_with_dimensions(20.0, 20.0, 10.0);
+    let detached = ProgressRange::detached();
+
+    let sharp = block.offset_shape(1.0, &[], intersection_join(), &detached).unwrap();
+    assert!(close(sharp.volume(), 22.0 * 22.0 * 12.0, 1e-6), "{}", sharp.volume());
+
+    // Arc join: faces pushed out, quarter cylinders on the 200 mm of edges, sphere octants.
+    let round = block.offset_shape(1.0, &[], OffsetOptions::default(), &detached).unwrap();
+    let pi = std::f64::consts::PI;
+    let expected = 4000.0 + 1600.0 + pi / 4.0 * 200.0 + 4.0 / 3.0 * pi;
+    assert!(close(round.volume(), expected, 1e-3), "{} vs {expected}", round.volume());
+
+    let top = block.faces().farthest(Direction::PosZ);
+    let raised = block.offset_shape(0.0, &[(&top, 2.0)], intersection_join(), &detached).unwrap();
+    assert!(close(raised.volume(), 4800.0, 1e-6), "{}", raised.volume());
+    let bounds = raised.faces().farthest(Direction::PosZ).center_of_mass();
+    assert!(close(bounds.z, 12.0, 1e-9));
+
+    assert!(block.offset_shape(0.0, &[], intersection_join(), &detached).is_err(), "a null offset is refused");
+
+    let cancelled = Progress::new(|| true);
+    let refused = block.offset_shape(1.0, &[], intersection_join(), &cancelled.start());
+    assert!(matches!(refused, Err(opencascade::Error::Cancelled)), "{:?}", refused.err());
+    assert!(cancelled.break_checks() > 0);
+}
+
+#[test]
+fn draft_angle_tapers_the_side_walls() {
+    let block = Shape::box_with_dimensions(20.0, 20.0, 10.0);
+    let sides: Vec<Face> = [Direction::PosX, Direction::NegX, Direction::PosY, Direction::NegY]
+        .into_iter()
+        .map(|d| block.faces().farthest(d))
+        .collect();
+    let sides: Vec<&Face> = sides.iter().collect();
+    let angle = 5f64.to_radians();
+    let drafted = block.draft(&sides, DVec3::Z, angle, DVec3::ZERO, DVec3::Z).unwrap();
+    assert!(drafted.is_valid().unwrap());
+
+    let top = drafted.faces().farthest(Direction::PosZ).surface_area();
+    let bottom = drafted.faces().farthest(Direction::NegZ).surface_area();
+    assert!(close(bottom, 400.0, 1e-6), "the neutral plane keeps the base: {bottom}");
+    let shrink = 20.0 - 2.0 * 10.0 * angle.tan();
+    let grow = 20.0 + 2.0 * 10.0 * angle.tan();
+    let side = if top < 400.0 { shrink } else { grow };
+    assert!(close(top, side * side, 1e-6), "{top} vs {}", side * side);
+    let frustum = 10.0 / 3.0 * (400.0 + side * side + 20.0 * side);
+    assert!(close(drafted.volume(), frustum, 1e-6), "{} vs {frustum}", drafted.volume());
+}
+
+#[test]
+fn remove_features_fills_a_drilled_hole() {
+    let block = Shape::box_with_dimensions(20.0, 20.0, 10.0);
+    let pin = Shape::cylinder(dvec3(10.0, 10.0, -1.0), 3.0, DVec3::Z, 12.0);
+    let drilled: Shape = block.subtract(&pin).into();
+    assert_eq!(count(&drilled, ShapeType::Face), 7);
+    let wall = drilled.faces().find(|f| f.surface_type() == SurfaceType::Cylinder).unwrap();
+
+    let healed = drilled.remove_features(&[&wall], false, &ProgressRange::detached()).unwrap();
+    assert!(close(healed.shape.volume(), 4000.0, 1e-6), "{}", healed.shape.volume());
+    assert_eq!(count(&healed.shape, ShapeType::Face), 6);
+    assert!(healed.history.is_removed(&Shape::from(&wall)).unwrap());
+    let top: Shape = drilled.faces().farthest(Direction::PosZ).into();
+    let top_now = healed.history.modified(&top).unwrap();
+    assert_eq!(top_now.len(), 1);
+    assert!(close(top_now[0].surface_area(), 400.0, 1e-6));
+}
+
+#[test]
+fn unify_same_domain_merges_split_faces_and_keeps_history() {
+    let a = Shape::box_with_dimensions(10.0, 10.0, 10.0);
+    let b = Shape::box_with_dimensions(10.0, 10.0, 10.0).translated(dvec3(10.0, 0.0, 0.0));
+    let fused = BooleanOp::run(BooleanKind::Fuse, [&a], [&b], BooleanOptions::default(), &ProgressRange::detached())
+        .unwrap()
+        .shape()
+        .unwrap();
+    assert_eq!(count(&fused, ShapeType::Face), 10);
+
+    let unified = fused.unify_same_domain(UnifyOptions::default(), &[]).unwrap();
+    assert_eq!(count(&unified.shape, ShapeType::Face), 6);
+    assert!(close(unified.shape.volume(), 2000.0, 1e-6));
+    let half: Shape = fused.faces().farthest(Direction::PosZ).into();
+    let merged = unified.history.modified(&half).unwrap();
+    assert_eq!(merged.len(), 1);
+    assert!(close(merged[0].surface_area(), 200.0, 1e-6));
+
+    // Faces meeting at 179.5 degrees stay apart by default and merge at a 1 degree tolerance.
+    let rise = 10.0 * 0.5f64.to_radians().tan();
+    let bent = opencascade::primitives::Wire::from_ordered_points([
+        dvec3(0.0, 0.0, 0.0),
+        dvec3(10.0, 0.0, 0.0),
+        dvec3(20.0, rise, 0.0),
+        dvec3(20.0, 10.0, 0.0),
+        dvec3(0.0, 10.0, 0.0),
+    ])
+    .unwrap()
+    .to_face()
+    .extrude(dvec3(0.0, 0.0, 5.0));
+    let bent: Shape = bent.into();
+    let faces = count(&bent, ShapeType::Face);
+    assert_eq!(faces, 7);
+    let strict = bent.unify_same_domain(UnifyOptions::default(), &[]).unwrap();
+    assert_eq!(count(&strict.shape, ShapeType::Face), 7);
+    let loose = UnifyOptions { angular_tolerance: 1f64.to_radians(), linear_tolerance: 0.1, ..Default::default() };
+    let merged = bent.unify_same_domain(loose, &[]).unwrap();
+    assert_eq!(count(&merged.shape, ShapeType::Face), 6);
+}
+
+#[test]
+fn sewing_rebuilds_a_shell_from_loose_faces_and_reshape_edits_one() {
+    let block = Shape::box_with_dimensions(10.0, 10.0, 10.0);
+    let loose: Vec<Shape> = block.subshapes(ShapeType::Face).iter().map(|f| f.deep_copy(true, false).unwrap()).collect();
+    assert!(loose.iter().all(|f| block.shape_map(ShapeType::Face).index_of(f) == 0), "copies share nothing");
+    let pile = Shape::from(opencascade::primitives::Compound::from_shapes(&loose));
+    assert_eq!(count(&pile, ShapeType::Edge), 24);
+
+    let sewing = Sewing::run(&loose, SewingOptions::default(), &ProgressRange::detached()).unwrap();
+    let sewn = sewing.shape();
+    assert_eq!(sewn.shape_type(), ShapeType::Shell);
+    assert_eq!(count(&sewn, ShapeType::Edge), 12);
+    assert_eq!(sewing.counts(), SewingCounts { free_edges: 0, multiple_edges: 0, degenerated_shapes: 0, deleted_faces: 0 });
+    assert!(close(sewn.fix_solid(0.0, 0.0).unwrap().volume(), 1000.0, 1e-6));
+    let first = sewing.modified(&loose[0]).unwrap();
+    assert!(sewn.shape_map(ShapeType::Face).index_of(&first) > 0);
+
+    let open = Sewing::run(&loose[1..], SewingOptions::default(), &ProgressRange::detached()).unwrap();
+    assert_eq!(open.counts().free_edges, 4);
+    let rim: f64 = open.free_edges().iter().map(|e| e.as_edge().unwrap().length()).sum();
+    assert!(close(rim, 40.0, 1e-9));
+
+    let mut reshape = ReShape::new();
+    let top: Shape = block.faces().farthest(Direction::PosZ).into();
+    reshape.remove(&top).unwrap();
+    assert!(reshape.is_recorded(&top));
+    let lidless = reshape.apply(&block).unwrap();
+    assert_eq!(count(&lidless, ShapeType::Face), 5);
+    assert!(close(lidless.surface_area(), 500.0, 1e-6));
+
+    let mut swap = ReShape::new();
+    let bottom: Shape = block.faces().farthest(Direction::NegZ).into();
+    let replacement = bottom.deep_copy(true, false).unwrap();
+    swap.replace(&bottom, &replacement).unwrap();
+    assert!(swap.value(&bottom).is_same(&replacement));
+    let swapped = swap.apply(&block).unwrap();
+    assert!(swapped.shape_map(ShapeType::Face).index_of(&replacement) > 0);
+    assert_eq!(swapped.shape_map(ShapeType::Face).index_of(&bottom), 0);
+}
+
+#[test]
+fn brep_bytes_and_text_round_trip_in_memory() {
+    let block = Shape::box_with_dimensions(20.0, 20.0, 10.0);
+    let pin = Shape::cylinder(dvec3(10.0, 10.0, -1.0), 3.0, DVec3::Z, 12.0);
+    let drilled: Shape = block.subtract(&pin).into();
+    let detached = ProgressRange::detached();
+
+    let bytes = drilled.to_brep_bytes(BrepWriteOptions::default(), &detached).unwrap();
+    assert!(bytes.len() > 100);
+    let back = Shape::from_brep_bytes(&bytes, &detached).unwrap();
+    assert!(close(back.volume(), drilled.volume(), 1e-9));
+    assert_eq!(count(&back, ShapeType::Face), 7);
+    assert!(back.is_valid().unwrap());
+    let v3 = drilled.to_brep_bytes(BrepWriteOptions { version: 3, ..Default::default() }, &detached).unwrap();
+    assert!(close(Shape::from_brep_bytes(&v3, &detached).unwrap().volume(), drilled.volume(), 1e-9));
+    assert!(drilled.to_brep_bytes(BrepWriteOptions { version: 9, ..Default::default() }, &detached).is_err());
+    assert!(Shape::from_brep_bytes(b"not a brep", &detached).is_err());
+
+    let text = drilled.to_brep_text(BrepWriteOptions::default(), &detached).unwrap();
+    assert!(text.trim_start().starts_with("CASCADE Topology V3"), "{}", &text[..40]);
+    let back = Shape::from_brep_text(&text, &detached).unwrap();
+    assert!(close(back.volume(), drilled.volume(), 1e-9));
+    assert_eq!(count(&back, ShapeType::Edge), count(&drilled, ShapeType::Edge));
+
+    let copy = drilled.deep_copy(true, false).unwrap();
+    assert!(close(copy.volume(), drilled.volume(), 1e-9));
+    let top: Shape = drilled.faces().farthest(Direction::PosZ).into();
+    assert_eq!(copy.shape_map(ShapeType::Face).index_of(&top), 0, "a deep copy shares no topology");
 }

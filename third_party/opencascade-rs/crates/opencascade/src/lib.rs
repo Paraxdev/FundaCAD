@@ -8,11 +8,14 @@ pub mod heal;
 pub mod kicad;
 pub mod mesh;
 pub mod mesh_access;
+pub mod modify;
 pub mod primitives;
 pub mod progress;
 pub mod query;
 pub mod raw;
 pub mod section;
+pub mod sewing;
+pub mod shape_io;
 pub mod topology;
 pub mod workplane;
 
