@@ -49,7 +49,10 @@ pub(crate) fn faces_of(shape: &Shape) -> Vec<Shape> {
     shape.shape_map(ShapeType::Face).iter().collect()
 }
 
+/// The face's surface kind, `None` where the guarded probe cannot read it,
+/// since the adaptor behind `Face::surface_type` does not catch.
 pub(crate) fn surface_type(face: &Shape) -> Option<SurfaceType> {
+    opencascade::select_access::face_probe(face)?;
     face.as_face().map(|f| f.surface_type())
 }
 
