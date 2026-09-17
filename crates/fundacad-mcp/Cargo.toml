@@ -27,5 +27,11 @@ png = "0.17"
 blake2 = "0.10"
 getrandom = { version = "0.3", features = ["std"] }
 
+[dev-dependencies]
+blake2 = "0.10"
+flate2 = "1"
+tempfile = "3"
+tokio-tungstenite = "0.29"
+
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_Security"] }
