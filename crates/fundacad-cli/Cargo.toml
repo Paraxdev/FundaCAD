@@ -1,0 +1,18 @@
+[package]
+name = "fundacad-cli"
+description = "FundaCAD engine command line: the WebSocket and stdio servers and one-shot rebuilds"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "fundacad-engine"
+path = "src/main.rs"
+
+[dependencies]
+fundacad-engine = { path = "../fundacad-engine", features = ["ws"] }
+fundacad-geom = { path = "../fundacad-geom" }
+fundacad-protocol = { path = "../fundacad-protocol" }
+serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
