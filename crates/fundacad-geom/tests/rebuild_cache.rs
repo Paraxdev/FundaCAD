@@ -184,6 +184,35 @@ fn a_cached_payload_keeps_its_face_bands() {
 }
 
 #[test]
+fn a_projecting_sketch_is_never_resumed_past() {
+    let raw = json!({"parameters": {}, "features": [
+        {"id": "c", "type": "cylinder", "radius": 10, "height": 20},
+        {"id": "s", "type": "sketch", "plane": "XY", "entities": [
+            {"id": "p", "type": "projected", "source": {"kind": "silhouette", "body": "body1", "group": "p"},
+             "curve": {"kind": "circle", "x": 0, "y": 0, "r": 9}}]},
+        {"id": "b", "type": "box", "length": 4, "width": 4, "height": 4},
+    ]});
+    let mut cache = RebuildCache::new(None);
+    let watch = Replayed::default();
+    let first = cache.rebuild(&typed(&raw), &raw, &watch).unwrap();
+    assert_eq!(first.projection_updates.len(), 1, "the fixture projects nothing");
+
+    let watch = Replayed::default();
+    let again = cache.rebuild(&typed(&raw), &raw, &watch).unwrap();
+    assert_eq!(cache.stats.resumed_at, 1, "a resume skipped the projecting sketch");
+    assert_eq!(again.projection_updates, first.projection_updates,
+        "the projection update was cached away, the frontend would never hear it");
+
+    // The update applied, the sketch stops reporting and a resume may pass it.
+    let mut applied = raw.clone();
+    applied["features"][1]["entities"][0]["curve"] = json!({"kind": "circle", "x": 0, "y": 0, "r": 10});
+    let quiet = cache.rebuild(&typed(&applied), &applied, &Replayed::default()).unwrap();
+    assert!(quiet.projection_updates.is_empty(), "{:?}", quiet.projection_updates);
+    let (_, replayed) = warm(&mut cache, &applied);
+    assert!(replayed.is_empty(), "a quiet prefix still replayed {replayed:?}");
+}
+
+#[test]
 fn a_mid_timeline_edit_resumes_at_it() {
     let mut cache = RebuildCache::new(None);
     let base = doc();
