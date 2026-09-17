@@ -13,6 +13,7 @@ use opencascade::topology::{AncestorMap, ShapeMap};
 use serde_json::{json, Value};
 
 use super::solid_ops::surface_type;
+use super::split::split_by_plane;
 use crate::builder::owners::face_key;
 use crate::builder::{Ctx, FResult, Fail};
 use crate::kernel::{self, BoolKind, Kind};
@@ -285,44 +286,11 @@ fn samples(faces: &[Shape]) -> Vec<DVec3> {
     out
 }
 
-fn leaves(shape: &Shape, out: &mut Vec<Shape>) {
-    if shape.shape_type() == ShapeType::Compound {
-        for c in kernel::children(shape) {
-            leaves(&c, out);
-        }
-    } else {
-        out.push(shape.clone());
-    }
-}
-
 /// build123d `split(tool, bisect_by=Plane(origin, z_dir), keep=Keep.TOP)`.
 fn split_keep_top(tool: &Shape, origin: DVec3, z: DVec3) -> Option<Shape> {
-    let bb = kernel::bbox(tool)?;
-    let (lo, hi) = (dvec3(bb[0], bb[1], bb[2]), dvec3(bb[3], bb[4], bb[5]));
-    let mid = (lo + hi) / 2.0;
-    let half = (hi - lo).length() + (mid - origin).length() + 10.0;
-    let c = mid - z * (mid - origin).dot(z);
     let helper = if z.x.abs() < 0.9 { DVec3::X } else { DVec3::Y };
-    let u = z.cross(helper).normalize() * half;
-    let v = z.cross(u).normalize() * half;
-    let corners = [c + u + v, c - u + v, c - u - v, c + u - v].map(|p| p.to_array());
-    let plane = kernel::polygon_face(&corners).ok()?;
-    let op = BooleanOp::run(
-        BooleanKind::Split,
-        [tool],
-        [&plane],
-        BooleanOptions::default(),
-        &ProgressRange::detached(),
-    )
-    .ok()?;
-    let mut parts = Vec::new();
-    leaves(&op.shape().ok()?, &mut parts);
-    let tops: Vec<Shape> = parts
-        .into_iter()
-        .filter(|p| {
-            kernel::center_of_mass(p).is_some_and(|m| (DVec3::from(m) - origin).dot(z) >= 0.0)
-        })
-        .collect();
+    let xdir = z.cross(helper).normalize();
+    let (tops, _) = split_by_plane(tool, origin, z, xdir).ok()?;
     Some(kernel::compound(&tops))
 }
 

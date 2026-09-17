@@ -9023,6 +9023,508 @@
    ]
   }
  },
+ "imprint_cross": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 20,
+       "type": "rectangle",
+       "width": 20,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e",
+     "operation": "new",
+     "sketch": "s",
+     "type": "extrude"
+    },
+    {
+     "entities": [
+      {
+       "type": "line",
+       "x1": -10,
+       "x2": 10,
+       "y1": 0,
+       "y2": 0
+      },
+      {
+       "type": "line",
+       "x1": 0,
+       "x2": 0,
+       "y1": -10,
+       "y2": 10
+      }
+     ],
+     "face": {
+      "by": "nearest",
+      "kind": "face",
+      "point": [
+       0,
+       0,
+       20
+      ]
+     },
+     "id": "d",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       20
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "id": "i",
+     "sketch": "d",
+     "type": "imprint"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.0,
+      -10.0,
+      0.0,
+      10.0,
+      10.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "i",
+      "i",
+      "i",
+      "i"
+     ],
+     "faces": 9,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 7999.999999999999
+    }
+   ],
+   "bodyIds": {
+    "e:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "imprint_missing_sketch": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 20,
+       "type": "rectangle",
+       "width": 20,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e",
+     "operation": "new",
+     "sketch": "s",
+     "type": "extrude"
+    },
+    {
+     "id": "i",
+     "sketch": "nope",
+     "type": "imprint"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.0,
+      -10.0,
+      0.0,
+      10.0,
+      10.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 7999.999999999998
+    }
+   ],
+   "bodyIds": {
+    "e:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "i",
+     "message": "the sketch this divide depends on (nope) did not build, fix that sketch first"
+    }
+   ]
+  }
+ },
+ "imprint_no_curves": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 20,
+       "type": "rectangle",
+       "width": 20,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e",
+     "operation": "new",
+     "sketch": "s",
+     "type": "extrude"
+    },
+    {
+     "entities": [
+      {
+       "type": "point",
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "d",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "id": "i",
+     "sketch": "d",
+     "type": "imprint"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.0,
+      -10.0,
+      0.0,
+      10.0,
+      10.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 7999.999999999998
+    }
+   ],
+   "bodyIds": {
+    "e:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [
+    {
+     "feature_id": "i",
+     "kind": "imprint",
+     "reason": "this sketch has no curves to divide a face with"
+    }
+   ],
+   "errors": []
+  }
+ },
+ "imprint_second_body": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "height": 10,
+     "id": "b",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "bodies": [
+      "body2"
+     ],
+     "dx": 30,
+     "id": "m",
+     "type": "move"
+    },
+    {
+     "entities": [
+      {
+       "radius": 2,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "face": {
+      "by": "nearest",
+      "kind": "face",
+      "point": [
+       0,
+       0,
+       5
+      ]
+     },
+     "id": "d",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       5
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "id": "i",
+     "sketch": "d",
+     "type": "imprint"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -5.0,
+      -5.0,
+      5.0,
+      5.0,
+      5.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "i",
+      "i"
+     ],
+     "faces": 7,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 1000.0
+    },
+    {
+     "bbox": [
+      25.0,
+      -5.0,
+      -5.0,
+      35.0,
+      5.0,
+      5.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body2",
+     "name": "Box",
+     "solids": 1,
+     "volume": 999.9999999999998
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1",
+    "b:0": "body2"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "imprint_short_line": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 20,
+       "type": "rectangle",
+       "width": 20,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e",
+     "operation": "new",
+     "sketch": "s",
+     "type": "extrude"
+    },
+    {
+     "entities": [
+      {
+       "type": "line",
+       "x1": -2,
+       "x2": 2,
+       "y1": 0,
+       "y2": 0
+      }
+     ],
+     "id": "d",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       20
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "id": "i",
+     "sketch": "d",
+     "type": "imprint"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.0,
+      -10.0,
+      0.0,
+      10.0,
+      10.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 7999.999999999998
+    }
+   ],
+   "bodyIds": {
+    "e:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [
+    {
+     "feature_id": "i",
+     "kind": "imprint",
+     "reason": "these curves don't divide the face, extend them across it to its edges"
+    }
+   ],
+   "errors": []
+  }
+ },
  "join_targets_missing": {
   "doc": {
    "features": [
@@ -16112,6 +16614,791 @@
    ],
    "bodyIds": {
     "e:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "split_bad_keep": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "id": "sp",
+     "keep": "middle",
+     "plane": "XY",
+     "type": "split"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -5.0,
+      -5.0,
+      5.0,
+      5.0,
+      5.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 999.9999999999998
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "sp",
+     "message": "unknown split keep mode: middle"
+    }
+   ]
+  }
+ },
+ "split_bodies": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "height": 10,
+     "id": "b",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "bodies": [
+      "body2"
+     ],
+     "dx": 30,
+     "id": "m",
+     "type": "move"
+    },
+    {
+     "bodies": [
+      "body1",
+      "body2",
+      "body7"
+     ],
+     "id": "sp",
+     "plane": "XY",
+     "type": "split"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -5.0,
+      0.0,
+      5.0,
+      5.0,
+      5.0
+     ],
+     "faceOwners": [
+      "sp",
+      "sp",
+      "a",
+      "sp",
+      "sp",
+      "sp"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 499.9999999999999
+    },
+    {
+     "bbox": [
+      25.0,
+      -5.0,
+      0.0,
+      35.0,
+      5.0,
+      5.0
+     ],
+     "faceOwners": [
+      "sp",
+      "sp",
+      "a",
+      "sp",
+      "sp",
+      "sp"
+     ],
+     "faces": 6,
+     "id": "body2",
+     "name": "Box",
+     "solids": 1,
+     "volume": 499.9999999999999
+    },
+    {
+     "bbox": [
+      -5.0,
+      -5.0,
+      -5.0,
+      5.0,
+      5.0,
+      0.0
+     ],
+     "faceOwners": [
+      "sp",
+      "sp",
+      "sp",
+      "sp",
+      "a",
+      "sp"
+     ],
+     "faces": 6,
+     "id": "body3",
+     "name": "Split",
+     "solids": 1,
+     "volume": 499.9999999999999
+    },
+    {
+     "bbox": [
+      25.0,
+      -5.0,
+      -5.0,
+      35.0,
+      5.0,
+      0.0
+     ],
+     "faceOwners": [
+      "sp",
+      "sp",
+      "sp",
+      "sp",
+      "a",
+      "sp"
+     ],
+     "faces": 6,
+     "id": "body4",
+     "name": "Split",
+     "solids": 1,
+     "volume": 499.9999999999999
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1",
+    "b:0": "body2",
+    "sp:0": "body3",
+    "sp:1": "body4"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "split_both": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 20,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "id": "sp",
+     "plane": "YZ",
+     "type": "split"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      0.0,
+      -5.0,
+      -5.0,
+      10.0,
+      5.0,
+      5.0
+     ],
+     "faceOwners": [
+      "sp",
+      "sp",
+      "a",
+      "sp",
+      "sp",
+      "sp"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 999.9999999999998
+    },
+    {
+     "bbox": [
+      -10.0,
+      -5.0,
+      -5.0,
+      0.0,
+      5.0,
+      5.0
+     ],
+     "faceOwners": [
+      "a",
+      "sp",
+      "sp",
+      "sp",
+      "sp",
+      "sp"
+     ],
+     "faces": 6,
+     "id": "body2",
+     "name": "Split",
+     "solids": 1,
+     "volume": 999.9999999999998
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1",
+    "sp:0": "body2"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "split_bottom_datum": {
+  "doc": {
+   "features": [
+    {
+     "id": "p",
+     "offset": 2,
+     "plane": "XY",
+     "type": "datumPlane"
+    },
+    {
+     "height": 10,
+     "id": "a",
+     "length": 20,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "id": "sp",
+     "keep": "bottom",
+     "planeId": "p",
+     "type": "split"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.0,
+      -5.0,
+      -5.0,
+      10.0,
+      5.0,
+      2.0
+     ],
+     "faceOwners": [
+      "sp",
+      "sp",
+      "sp",
+      "sp",
+      "a",
+      "sp"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 1399.9999999999998
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {
+    "p": {
+     "normal": [
+      0.0,
+      0.0,
+      1.0
+     ],
+     "origin": [
+      0.0,
+      0.0,
+      2.0
+     ],
+     "xdir": [
+      1.0,
+      0.0,
+      -0.0
+     ]
+    }
+   },
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "split_group_sides": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 20,
+       "type": "rectangle",
+       "width": 4,
+       "x": -8,
+       "y": 0
+      },
+      {
+       "height": 20,
+       "type": "rectangle",
+       "width": 4,
+       "x": 8,
+       "y": 0
+      },
+      {
+       "height": 4,
+       "type": "rectangle",
+       "width": 20,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 10,
+     "id": "e",
+     "operation": "new",
+     "sketch": "s",
+     "type": "extrude"
+    },
+    {
+     "groupSides": true,
+     "id": "sp",
+     "plane": {
+      "normal": [
+       0,
+       1,
+       0
+      ],
+      "origin": [
+       0,
+       0,
+       5
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "split"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.0,
+      0.0,
+      0.0,
+      10.0,
+      10.0,
+      10.0
+     ],
+     "faceOwners": [
+      "sp",
+      "sp",
+      "sp",
+      "sp",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "sp"
+     ],
+     "faces": 10,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 1039.9999999999998
+    },
+    {
+     "bbox": [
+      -10.0,
+      -10.0,
+      0.0,
+      10.0,
+      0.0,
+      10.0
+     ],
+     "faceOwners": [
+      "e",
+      "sp",
+      "e",
+      "sp",
+      "sp",
+      "sp",
+      "e",
+      "sp",
+      "e",
+      "e"
+     ],
+     "faces": 10,
+     "id": "body2",
+     "name": "Split",
+     "solids": 1,
+     "volume": 1039.9999999999998
+    }
+   ],
+   "bodyIds": {
+    "e:0": "body1",
+    "sp:0": "body2"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "split_misses": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "id": "sp",
+     "keep": "top",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       50
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "split"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -5.0,
+      -5.0,
+      5.0,
+      5.0,
+      5.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 999.9999999999998
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "sp",
+     "message": "the plane does not intersect the body"
+    }
+   ]
+  }
+ },
+ "split_no_body": {
+  "doc": {
+   "features": [
+    {
+     "id": "sp",
+     "plane": "XY",
+     "type": "split"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [],
+   "bodyIds": {},
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "sp",
+     "message": "Split needs an existing body"
+    }
+   ]
+  }
+ },
+ "split_no_plane": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "id": "sp",
+     "type": "split"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -5.0,
+      -5.0,
+      5.0,
+      5.0,
+      5.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 999.9999999999998
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "code": "badRequest",
+     "feature_id": "sp",
+     "message": "split is missing the field \"plane\""
+    }
+   ]
+  }
+ },
+ "split_tilted": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 20,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "id": "sp",
+     "keep": "both",
+     "plane": {
+      "normal": [
+       1,
+       0,
+       1
+      ],
+      "origin": [
+       1,
+       0,
+       0
+      ],
+      "xdir": [
+       0,
+       1,
+       0
+      ]
+     },
+     "type": "split"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -4.0,
+      -5.0,
+      -5.000000000000001,
+      10.0,
+      5.0,
+      5.000000000000001
+     ],
+     "faceOwners": [
+      "sp",
+      "sp",
+      "a",
+      "sp",
+      "sp",
+      "sp"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 899.9999999999999
+    },
+    {
+     "bbox": [
+      -10.0,
+      -5.0,
+      -5.000000000000001,
+      6.000000000000003,
+      5.0,
+      5.000000000000001
+     ],
+     "faceOwners": [
+      "a",
+      "sp",
+      "sp",
+      "sp",
+      "sp",
+      "sp"
+     ],
+     "faces": 6,
+     "id": "body2",
+     "name": "Split",
+     "solids": 1,
+     "volume": 1100.0
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1",
+    "sp:0": "body2"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "split_top": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 20,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "id": "sp",
+     "keep": "top",
+     "plane": "XY",
+     "type": "split"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.0,
+      -5.0,
+      0.0,
+      10.0,
+      5.0,
+      5.0
+     ],
+     "faceOwners": [
+      "sp",
+      "sp",
+      "a",
+      "sp",
+      "sp",
+      "sp"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 999.9999999999998
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
    },
    "datumPlanes": {},
    "diagnostics": [],
