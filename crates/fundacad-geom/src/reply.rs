@@ -5,11 +5,16 @@ use fundacad_protocol::JobResult;
 use serde_json::{json, Map, Value};
 
 use crate::builder::owners::face_key;
-use crate::builder::BuiltBody;
+use crate::builder::{BuiltBody, Watch};
 use crate::kernel::{self, Kind};
 use crate::mesh::{self, MeshBody};
 
-pub fn mesh_result(bodies: &[BuiltBody], tolerance: f64, known: &Map<String, Value>) -> JobResult {
+pub fn mesh_result(
+    bodies: &[BuiltBody],
+    tolerance: f64,
+    known: &Map<String, Value>,
+    watch: &dyn Watch,
+) -> JobResult {
     let bodies: Vec<MeshBody<'_>> = bodies
         .iter()
         .map(|b| MeshBody {
@@ -27,5 +32,7 @@ pub fn mesh_result(bodies: &[BuiltBody], tolerance: f64, known: &Map<String, Val
             ..Default::default()
         })
         .collect();
-    JobResult::Mesh(mesh::mesh_result(&bodies, tolerance, known))
+    JobResult::Mesh(mesh::mesh_result_watched(&bodies, tolerance, known, &mut |done, total| {
+        watch.meshing(done, total)
+    }))
 }

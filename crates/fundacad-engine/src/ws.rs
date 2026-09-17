@@ -14,7 +14,7 @@
 //! with `peek` outside the lock and parses them under it with the socket put
 //! in non-blocking mode, so an idle connection never holds a writer back.
 
-use crate::{Client, Engine, Jobs, Outbox};
+use crate::{Client, Engine, EngineOptions, Jobs, Outbox, Respawn};
 use fundacad_protocol::{Message, MAX_FRAME};
 use std::collections::{BTreeSet, HashMap};
 use std::io::{self, Read, Write};
@@ -45,6 +45,10 @@ pub const ALLOWED_ORIGINS: [&str; 5] = [
     "http://127.0.0.1:5173",
 ];
 
+/// Nothing supervises a `--ws` engine from outside, so a job that ignores a
+/// cancel this long is abandoned by the engine itself, where server.py kills
+/// its worker pool at once.
+const CANCEL_GRACE: Duration = Duration::from_secs(2);
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 const CLOSE_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -185,8 +189,18 @@ impl Outbox for Discard {
 
 impl Server {
     pub fn bind<J: Jobs>(jobs: J, addr: SocketAddr, gate: Gate) -> io::Result<Server> {
+        Server::bind_with(jobs, None, EngineOptions::default(), addr, gate)
+    }
+
+    pub fn bind_with<J: Jobs>(
+        jobs: J,
+        respawn: Option<Respawn<J>>,
+        opts: EngineOptions,
+        addr: SocketAddr,
+        gate: Gate,
+    ) -> io::Result<Server> {
         let listener = TcpListener::bind(addr)?;
-        let engine = Arc::new(Engine::start(jobs, Arc::new(Discard)));
+        let engine = Arc::new(Engine::start_with(jobs, respawn, opts, Arc::new(Discard)));
         Ok(Server {
             listener,
             shared: Arc::new(Shared {
@@ -228,7 +242,7 @@ impl Server {
 
 /// `fundacad-engine --ws`: the environment, the readiness lines and the exit
 /// codes of `python server.py`.
-pub fn run<J: Jobs>(jobs: J) -> ! {
+pub fn run<J: Jobs + Default>(jobs: J) -> ! {
     let token = match appenv("SIDECAR_TOKEN").filter(|t| !t.is_empty()) {
         Some(t) => t,
         None => match mint_token() {
@@ -249,7 +263,11 @@ pub fn run<J: Jobs>(jobs: J) -> ! {
     };
     let gate = Gate::new(token, &appenv("EXTRA_ORIGINS").unwrap_or_default());
     let addr = SocketAddr::new(HOST.parse().expect("loopback literal"), port);
-    let server = match Server::bind(jobs, addr, gate) {
+    let opts = EngineOptions {
+        cancel_grace: Some(CANCEL_GRACE),
+        ..EngineOptions::from_env()
+    };
+    let server = match Server::bind_with(jobs, Some(Arc::new(J::default)), opts, addr, gate) {
         Ok(s) => s,
         Err(e) => {
             eprintln!("FATAL: cannot open port {port} on {HOST}");

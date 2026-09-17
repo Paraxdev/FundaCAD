@@ -349,3 +349,128 @@ fn the_live_session_answers_while_a_job_runs_and_follows_the_connection() {
     assert!(st["result"]["document"].is_null());
     gate_tx.send(()).unwrap();
 }
+
+
+/// Never looks at its cancel token, like a kernel call that cannot be stopped.
+#[derive(Default)]
+struct Deaf;
+
+impl Jobs for Deaf {
+    fn rebuild(
+        &mut self,
+        doc: &Value,
+        _t: f64,
+        _k: &Map<String, Value>,
+        _f: bool,
+        _ctx: &JobContext,
+    ) -> JobResult {
+        let secs = doc["sleep"].as_f64().unwrap_or(0.0);
+        std::thread::sleep(Duration::from_secs_f64(secs));
+        let mut m = Map::new();
+        m.insert("slept".into(), json!(secs));
+        JobResult::Json(m)
+    }
+}
+
+fn respawning(opts: EngineOptions) -> (Engine, Receiver<Message>) {
+    let (tx, rx) = channel();
+    let e = Engine::start_with(
+        Deaf,
+        Some(Arc::new(Deaf::default)),
+        opts,
+        Arc::new(Collect(Mutex::new(tx))),
+    );
+    (e, rx)
+}
+
+fn reply_to(rx: &Receiver<Message>, id: &str) -> Value {
+    loop {
+        let m = text(rx.recv_timeout(Duration::from_secs(10)).expect("a reply"));
+        if m["id"] == id && m.get("ok").is_some() {
+            return m;
+        }
+    }
+}
+
+#[test]
+fn a_silent_job_is_reaped_and_the_queue_behind_it_still_runs() {
+    let clocks = Clocks {
+        stall: Duration::from_millis(400),
+        job: Duration::from_secs(25),
+    };
+    let (e, rx) = respawning(EngineOptions {
+        clocks,
+        ..EngineOptions::default()
+    });
+    let t0 = Instant::now();
+    send(&e, json!({"id": "wedged", "op": "rebuild", "document": {"sleep": 30}}));
+    send(&e, json!({"id": "next", "op": "rebuild", "document": {"sleep": 0}}));
+    let wedged = reply_to(&rx, "wedged");
+    assert_eq!(wedged["ok"], false);
+    let msg = wedged["error"]["message"].as_str().unwrap();
+    assert!(msg.contains("stalled for over"), "{msg}");
+    let next = reply_to(&rx, "next");
+    assert_eq!(next["ok"], true, "{next}");
+    assert!(t0.elapsed() < Duration::from_secs(5), "{:?}", t0.elapsed());
+    assert!(e.running.lock().unwrap().is_none());
+}
+
+#[test]
+fn a_cancel_the_job_ignores_is_answered_after_the_grace() {
+    let (e, rx) = respawning(EngineOptions {
+        cancel_grace: Some(Duration::from_millis(300)),
+        ..EngineOptions::default()
+    });
+    send(&e, json!({"id": "long", "op": "rebuild", "document": {"sleep": 30}}));
+    let t0 = Instant::now();
+    while e.running.lock().unwrap().is_none() {
+        assert!(t0.elapsed() < Duration::from_secs(5));
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    send(&e, json!({"id": "c", "op": "cancel", "target": "long"}));
+    assert_eq!(reply_to(&rx, "c")["result"]["cancelled"], true);
+    let long = reply_to(&rx, "long");
+    assert_eq!(long["cancelled"], true);
+    assert!(t0.elapsed() < Duration::from_secs(5));
+    send(&e, json!({"id": "c2", "op": "cancel"}));
+    assert_eq!(reply_to(&rx, "c2")["result"]["cancelled"], false);
+    send(&e, json!({"id": "after", "op": "rebuild", "document": {"sleep": 0}}));
+    assert_eq!(reply_to(&rx, "after")["ok"], true);
+}
+
+#[test]
+fn a_bounded_op_is_held_to_its_wall_clock_even_while_it_beats() {
+    let clocks = Clocks {
+        stall: Duration::from_secs(60),
+        job: Duration::from_millis(500),
+    };
+    let (e, rx) = respawning(EngineOptions {
+        clocks,
+        test_ops: true,
+        ..EngineOptions::default()
+    });
+    send(&e, json!({"id": "w", "op": "testSleep", "seconds": 20, "tick": true, "wall": true, "deaf": true}));
+    let w = reply_to(&rx, "w");
+    assert_eq!(w["error"]["message"], "operation timed out, geometry too complex or degenerate");
+    send(&e, json!({"id": "s", "op": "testSleep", "seconds": 0.2}));
+    assert_eq!(reply_to(&rx, "s")["result"]["slept"], 0.2);
+}
+
+#[test]
+fn the_test_op_is_unknown_unless_enabled() {
+    let (e, rx) = respawning(EngineOptions::default());
+    send(&e, json!({"id": "t", "op": "testSleep", "seconds": 0}));
+    assert_eq!(reply_to(&rx, "t")["ok"], false);
+}
+
+#[test]
+fn compute_all_resends_bodies_the_client_already_holds() {
+    let (e, rx, _) = engine(None);
+    let doc = json!({"features": [{"id": "f1"}]});
+    let known = json!({"body1": "e"});
+    send(&e, json!({"id": "r", "op": "rebuild", "document": doc, "known": known}));
+    assert_eq!(reply_to(&rx, "r")["result"]["bodies"][0]["unchanged"], true);
+    send(&e, json!({"id": "c", "op": "computeAll", "document": doc, "known": known}));
+    let c = reply_to(&rx, "c");
+    assert!(c["result"]["bodies"][0].get("unchanged").is_none(), "{c}");
+}

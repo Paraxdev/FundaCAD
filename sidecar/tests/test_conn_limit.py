@@ -33,13 +33,68 @@ import websockets
 import server
 from server import handle, HOST, PORT, MAX_CONNS_PER_IP
 
+from tools import harness_util as H
+
 server._TOKEN = "conn-limit-token"
 GOOD = f"ws://{HOST}:{PORT}?token=conn-limit-token"
 BAD = f"ws://{HOST}:{PORT}?token=wrong"
 
+# With FUNDACAD_ENGINE_CMD the suite drives that engine. Its slot table is out of
+# reach, so a leak is looked for from outside: a full house of good connections
+# must still fit, and one more must be the one refused.
+EXTERNAL = H.external_engine()
+
+
+class _Spawned:
+    def __init__(self):
+        global GOOD, BAD
+        self.srv = H.SpawnedServer().__enter__()
+        GOOD = self.srv.url
+        BAD = f"ws://{HOST}:{self.srv.port}?token=wrong"
+        print(f"engine: {H.engine_command()} pid={self.srv.pid}")
+
+    def close(self):
+        self.srv.close()
+
+    async def wait_closed(self):
+        pass
+
 
 async def _serve():
+    if EXTERNAL:
+        return _Spawned()
     return await websockets.serve(handle, HOST, PORT)
+
+
+async def _no_slots_left_behind(what):
+    """A full house of good connections still fits, and the next is refused."""
+    if not EXTERNAL:
+        assert not server._ip_conns, (
+            f"{what} left slots behind: {dict(server._ip_conns)}. "
+            f"Every further client from this address is now refused with "
+            f"'too many connections'."
+        )
+        return
+    held = []
+    try:
+        for i in range(MAX_CONNS_PER_IP):
+            ws = await websockets.connect(GOOD)
+            held.append(ws)
+            await ws.send(json.dumps({"id": i, "op": "ping"}))
+            reply = json.loads(await asyncio.wait_for(ws.recv(), timeout=10))
+            assert reply.get("ok") is True, (
+                f"{what} left slots behind: good connection {i + 1} of "
+                f"{MAX_CONNS_PER_IP} was refused: {reply}")
+        code = await _rejected(GOOD)
+        assert code == 1008, f"connection {MAX_CONNS_PER_IP + 1} closed with {code}, expected 1008"
+    except websockets.exceptions.ConnectionClosed as ex:
+        raise AssertionError(
+            f"{what} left slots behind: good connection {len(held)} of "
+            f"{MAX_CONNS_PER_IP} was closed with {ex.code}") from ex
+    finally:
+        for ws in held:
+            await ws.close()
+    await asyncio.sleep(0.2)
 
 
 async def _rejected(url):
@@ -74,11 +129,7 @@ async def main():
         # give the loop a turn, otherwise the last rejection is still "open"
         # and the count is legitimately 1.
         await asyncio.sleep(0.2)
-        assert not server._ip_conns, (
-            f"rejected connections left slots behind: {dict(server._ip_conns)}. "
-            f"Every further client from this address is now refused with "
-            f"'too many connections'."
-        )
+        await _no_slots_left_behind("rejected connections")
 
         reply = await _echo_ok(GOOD)
         assert reply.get("ok") is not False, f"a valid connection was refused: {reply}"
@@ -90,9 +141,7 @@ async def main():
             async with websockets.connect(GOOD):
                 pass
         await asyncio.sleep(0.2)  # the server's finally runs after our close
-        assert not server._ip_conns, (
-            f"closed connections left slots behind: {dict(server._ip_conns)}"
-        )
+        await _no_slots_left_behind("closed connections")
         print("clean disconnects give their slots back too OK")
     finally:
         srv.close()
