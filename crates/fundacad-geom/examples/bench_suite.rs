@@ -379,6 +379,58 @@ fn stage_faces(args: &[String]) {
 }
 
 /// The batched smooth edge test against the per sample walk it replaced, over
+/// The whole reply frame of a document, as a digest. Run it once with
+/// `FUNDACAD_THREADS=1` and once without: the two digests must match, which is
+/// the promise the parallel passes make.
+fn stage_hash(args: &[String]) {
+    let path = args.first().expect("bench_suite hash <document|corpus.json|file.step>");
+    let lower = path.to_lowercase();
+    let raw = if lower.ends_with(".step") || lower.ends_with(".stp") {
+        imported_document(path, "step").0
+    } else {
+        read_json(path)
+    };
+    let docs: Vec<(String, Value)> = if raw.get("documents").is_some() {
+        corpus_documents(path)
+    } else {
+        vec![(path.clone(), raw)]
+    };
+    let known = Map::new();
+    let mut digests = Map::new();
+    for (name, doc) in &docs {
+        let built = builder::rebuild(&typed(doc), doc, &NoWatch).ok().expect("not cancelled");
+        let meshed = reply::mesh_result(&built.bodies, 0.1, &known, &NoWatch);
+        let bytes = match &meshed {
+            fundacad_protocol::JobResult::Mesh(m) => fundacad_protocol::frame::encode_binary_reply(
+                &json!(1),
+                m,
+                &fundacad_protocol::Limits::default(),
+            )
+            .unwrap_or_default(),
+            other => serde_json::to_vec(&json!(format!("{other:?}"))).unwrap_or_default(),
+        };
+        digests.insert(name.clone(), json!(digest(&bytes)));
+    }
+    println!(
+        "{}",
+        json!({
+            "stage": "hash",
+            "threads": fundacad_geom::par::threads(),
+            "documents": digests.len(),
+            "digests": digests,
+        })
+    );
+}
+
+fn digest(bytes: &[u8]) -> String {
+    use blake2::digest::{Update, VariableOutput};
+    let mut h = blake2::Blake2bVar::new(16).expect("16 is a valid digest size");
+    h.update(bytes);
+    let mut out = [0u8; 16];
+    h.finalize_variable(&mut out).expect("the buffer is 16 bytes");
+    out.iter().map(|b| format!("{b:02x}")).collect()
+}
+
 /// every edge of a real document. The flag rides in the payload and in a saved
 /// selector, so the two must never disagree.
 fn stage_smooth(args: &[String]) {
@@ -422,8 +474,9 @@ fn main() {
         Some("export") => stage_export(rest),
         Some("faces") => stage_faces(rest),
         Some("smooth") => stage_smooth(rest),
+        Some("hash") => stage_hash(rest),
         _ => {
-            eprintln!("usage: bench_suite <corpus|doc|import|export|faces|smooth> <path> [--runs N]");
+            eprintln!("usage: bench_suite <corpus|doc|import|export|faces|smooth|hash> <path> [--runs N]");
             std::process::exit(2);
         }
     }
