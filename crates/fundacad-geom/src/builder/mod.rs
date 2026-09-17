@@ -127,11 +127,31 @@ pub struct Ctx {
     pub hidden_bodies: HashSet<String>,
     pub sketch_planes: IndexMap<String, Value>,
     pub datum_marks: IndexMap<String, Value>,
+    /// Projected sketch entity refresh entries, sidecar/projection_refresh.py.
+    pub projections: Vec<Value>,
     ids: BodyIds,
     next_uid: u64,
 }
 
 impl Ctx {
+    /// A context holding only the document's parameters, for reading sketch
+    /// entities outside a rebuild.
+    pub fn with_params(doc: &CadDocument) -> Ctx {
+        Ctx {
+            params: params_of(doc),
+            datums: IndexMap::new(),
+            sketches: HashMap::new(),
+            bodies: Vec::new(),
+            diagnostics: Vec::new(),
+            hidden_bodies: HashSet::new(),
+            sketch_planes: IndexMap::new(),
+            datum_marks: IndexMap::new(),
+            projections: Vec::new(),
+            ids: BodyIds::new(None),
+            next_uid: 0,
+        }
+    }
+
     pub fn val(&self, n: &Num) -> FResult<f64> {
         Ok(n.resolve(|name| self.params.get(name).copied())?)
     }
@@ -219,6 +239,8 @@ pub struct Rebuild {
     pub sketch_planes: IndexMap<String, Value>,
     pub datum_marks: IndexMap<String, Value>,
     pub body_ids: IndexMap<String, String>,
+    /// `projectionUpdates`, only the entries a refresh found a real change for.
+    pub projection_updates: Vec<Value>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -413,6 +435,14 @@ fn strip_key_suffix(key: &str) -> &str {
     key
 }
 
+fn params_of(doc: &CadDocument) -> HashMap<String, f64> {
+    doc.parameters
+        .iter()
+        .flatten()
+        .map(|(k, v)| (k.clone(), v.get()))
+        .collect()
+}
+
 /// Replays `doc`. `raw` is the same document as JSON, which is what a
 /// feature's label and references are read from.
 pub fn rebuild(doc: &CadDocument, raw: &Value, watch: &dyn Watch) -> Result<Rebuild, Cancelled> {
@@ -439,6 +469,7 @@ pub fn rebuild(doc: &CadDocument, raw: &Value, watch: &dyn Watch) -> Result<Rebu
         hidden_bodies,
         sketch_planes: IndexMap::new(),
         datum_marks: IndexMap::new(),
+        projections: Vec::new(),
         ids: BodyIds::new(recorded.clone()),
         next_uid: 0,
     };
@@ -487,6 +518,9 @@ pub fn rebuild(doc: &CadDocument, raw: &Value, watch: &dyn Watch) -> Result<Rebu
             Ok(Ran::Built) => {
                 if prov {
                     owners::update(&mut ctx, f, fid.unwrap_or(""), &pre, &pre_owners);
+                }
+                if type_name == Some("sketch") {
+                    crate::projection::refresh(&mut ctx, rawf, &raw_features[..i]);
                 }
             }
             Err(Fail::Value { message, code }) => errors.push(FeatureError {
@@ -566,6 +600,7 @@ pub fn rebuild(doc: &CadDocument, raw: &Value, watch: &dyn Watch) -> Result<Rebu
         sketch_planes: ctx.sketch_planes,
         datum_marks: ctx.datum_marks,
         body_ids,
+        projection_updates: ctx.projections,
     })
 }
 
@@ -602,6 +637,9 @@ pub fn result_fields(doc: &CadDocument, r: &Rebuild) -> Map<String, Value> {
     if changed {
         m.insert("bodyIds".into(), json!(r.body_ids));
     }
+    if r.bodies.is_empty() && !r.projection_updates.is_empty() {
+        m.insert("projectionUpdates".into(), Value::Array(r.projection_updates.clone()));
+    }
     if !r.datum_planes.is_empty() {
         m.insert("datumPlanes".into(), json!(r.datum_planes));
     }
@@ -614,6 +652,9 @@ pub fn result_fields(doc: &CadDocument, r: &Rebuild) -> Map<String, Value> {
     if !r.bodies.is_empty() {
         if !r.diagnostics.is_empty() {
             m.insert("diagnostics".into(), Value::Array(r.diagnostics.clone()));
+        }
+        if !r.projection_updates.is_empty() {
+            m.insert("projectionUpdates".into(), Value::Array(r.projection_updates.clone()));
         }
         if let Some(last) = r.errors.last() {
             m.insert("featureError".into(), last.wire());

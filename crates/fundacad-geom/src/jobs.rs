@@ -178,6 +178,7 @@ impl Jobs for GeomJobs {
             "import" => crate::import::import_result(req),
             "inspect" => crate::inspect::inspect_result(req, &EngineWatch(ctx)),
             "interference" => crate::inspect::interference_result(req, &EngineWatch(ctx)),
+            "projectGeometry" => crate::projection::project_geometry_result(req, &EngineWatch(ctx)),
             other => error_result(&format!("unknown op: {other}")),
         }
     }

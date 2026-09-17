@@ -925,6 +925,11 @@ pub fn region_target(ctx: &Ctx, pts: &[[f64; 3]], entry: &SketchEntry) -> FResul
     Ok(Some(target))
 }
 
+/// `_entity_edges` of one entity, local to its sketch's XY, for projection.
+pub fn entity_curve_edges(ctx: &Ctx, e: &SketchEntity) -> FResult<Vec<Shape>> {
+    entity_edges(&resolve(ctx, e)?.ent)
+}
+
 /// A frame whose z is `normal`, for handlers that only need the direction.
 pub fn frame_for_normal(origin: [f64; 3], normal: [f64; 3]) -> Frame {
     let hint = if normal[0].abs() < 0.9 {

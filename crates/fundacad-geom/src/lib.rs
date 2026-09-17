@@ -22,6 +22,7 @@ pub mod jobs;
 pub mod kernel;
 pub mod measure;
 pub mod mesh;
+pub mod projection;
 pub mod reply;
 pub mod select;
 pub mod topo;
