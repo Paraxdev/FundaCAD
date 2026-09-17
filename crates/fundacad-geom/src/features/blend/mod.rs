@@ -7,7 +7,7 @@
 //! sentence that says whether a smaller size would have built.
 
 pub mod eval;
-mod ops;
+pub mod ops;
 pub mod overlap;
 
 use fundacad_core::schema::{Chamfer, Fillet, OneOrMany, Selector};
@@ -403,7 +403,7 @@ fn rematch_edge(
 }
 
 /// `_sequential_blend`: the survivors blended one by one to a fixpoint.
-fn sequential_blend(
+pub(crate) fn sequential_blend(
     shape: &Shape,
     edges: &[Shape],
     apply_one: &dyn Fn(&Shape, &Shape) -> Result<Shape, BlendErr>,
