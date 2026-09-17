@@ -400,6 +400,147 @@ CASES = {
 }
 
 
+def face_at(x, y, z, **extra):
+    s = {"kind": "face", "by": "nearest", "point": [x, y, z]}
+    s.update(extra)
+    return s
+
+
+def face_normal(x, y, z):
+    return {"kind": "face", "by": "normal", "dir": [x, y, z]}
+
+
+BLOCK = [sk("s", [rect(20, 20)]), ext("e", "s", 20)]
+TUBE = [{"id": "c", "type": "cylinder", "radius": 10, "height": 20}]
+BORED = [box("b", 30, 30, 10), {"id": "d", "type": "cylinder", "radius": 4, "height": 30, "operation": "cut"}]
+CHAMFERED = [sk("s", [line(-10, -10, 10, -10), line(10, -10, 10, 8), line(10, 8, 8, 10), line(8, 10, -10, 10), line(-10, 10, -10, -10)]),
+             ext("e", "s", 10)]
+BEVELLED = [sk("s", [rect(20, 20)]), ext("e", "s", 10),
+            sk("t", [rect(20, 20)], plane={"origin": [0, 0, 10], "normal": [0, 0, 1], "xdir": [1, 0, 0]}),
+            ext("b", "t", 1, "join", taper=45)]
+
+SOLID_OPS_CASES = {
+    # shell
+    "shell_open_top": doc(BLOCK + [{"id": "sh", "type": "shell", "thickness": 2, "faces": face_normal(0, 0, 1)}]),
+    "shell_closed": doc([box("b", 40, 40, 20), {"id": "sh", "type": "shell", "thickness": 2.5}]),
+    "shell_negative_open": doc(BLOCK + [{"id": "sh", "type": "shell", "thickness": -3, "faces": [face_normal(0, 0, 1), face_normal(0, 0, -1)]}]),
+    "shell_zero": doc(BLOCK + [{"id": "sh", "type": "shell", "thickness": 0}]),
+    "shell_too_thick": doc([box("b", 10, 10, 10), {"id": "sh", "type": "shell", "thickness": 6}]),
+    "shell_too_thick_open": doc(BLOCK + [{"id": "sh", "type": "shell", "thickness": 15, "faces": face_normal(0, 0, 1)}]),
+    "shell_second_body": doc([box("a", 10, 10, 10), box("b", 10, 10, 10), {"id": "m", "type": "move", "dx": 30, "bodies": ["body2"]},
+                              {"id": "sh", "type": "shell", "thickness": 1, "faces": face_at(30, 0, 5, body="body2")}]),
+    "shell_stale_body": doc(BLOCK + [{"id": "sh", "type": "shell", "thickness": 1, "faces": face_at(0, 0, 20, body="body9")}]),
+    "shell_cylinder_open": doc(TUBE + [{"id": "sh", "type": "shell", "thickness": 1.5, "faces": face_at(0, 0, 10)}]),
+    # thicken
+    "thicken_top_new": doc(BLOCK + [{"id": "t", "type": "thicken", "faces": face_normal(0, 0, 1), "thickness": 3}]),
+    "thicken_top_join": doc(BLOCK + [{"id": "t", "type": "thicken", "faces": face_normal(0, 0, 1), "thickness": 3, "operation": "join"}]),
+    "thicken_symmetric": doc(BLOCK + [{"id": "t", "type": "thicken", "faces": face_normal(1, 0, 0), "thickness": 2, "symmetric": True}]),
+    "thicken_cylinder_side": doc(TUBE + [{"id": "t", "type": "thicken", "faces": face_at(10, 0, 0), "thickness": 2}]),
+    "thicken_whole_body": doc([box("b", 10, 10, 10), {"id": "t", "type": "thicken", "thickness": 1}]),
+    "thicken_zero": doc(BLOCK + [{"id": "t", "type": "thicken", "faces": face_normal(0, 0, 1), "thickness": 0}]),
+    "thicken_missing_body": doc(BLOCK + [{"id": "t", "type": "thicken", "faces": face_normal(0, 0, 1), "thickness": 1, "body": "body5"}]),
+    # draft
+    "draft_sides": doc(BLOCK + [{"id": "dr", "type": "draft", "angle": 5,
+                                 "faces": [face_normal(1, 0, 0), face_normal(-1, 0, 0), face_normal(0, 1, 0), face_normal(0, -1, 0)]}]),
+    "draft_axis_x": doc([box("b", 20, 10, 10), {"id": "dr", "type": "draft", "angle": -8, "axis": "X", "faces": face_normal(0, 0, 1)}]),
+    "draft_vertical": doc(BLOCK + [{"id": "dr", "type": "draft", "angle": 90, "faces": face_normal(1, 0, 0)}]),
+    "draft_refused": doc(BLOCK + [{"id": "dr", "type": "draft", "angle": 10, "faces": face_normal(0, 0, 1)}]),
+    "draft_two_bodies": doc([box("a", 10, 10, 10), box("b", 10, 10, 10), {"id": "m", "type": "move", "dx": 30, "bodies": ["body2"]},
+                             {"id": "dr", "type": "draft", "angle": 3, "faces": [face_at(5, 0, 0, body="body1"), face_at(35, 0, 0, body="body2")]}]),
+    # press/pull
+    "pp_top_out": doc(BLOCK + [{"id": "p", "type": "press-pull", "face": face_at(0, 0, 20), "distance": 5}]),
+    "pp_top_in": doc(BLOCK + [{"id": "p", "type": "press-pull", "face": face_at(0, 0, 20), "distance": -8}]),
+    "pp_top_through": doc(BLOCK + [{"id": "p", "type": "press-pull", "face": face_at(0, 0, 20), "distance": -25}]),
+    "pp_taper": doc(BLOCK + [{"id": "p", "type": "press-pull", "face": face_at(0, 0, 20), "distance": 5, "taper": 10}]),
+    "pp_taper_bad": doc(BLOCK + [{"id": "p", "type": "press-pull", "face": face_at(0, 0, 20), "distance": 5, "taper": 89}]),
+    "pp_two_faces": doc(BLOCK + [{"id": "p", "type": "press-pull", "face": [face_at(0, 0, 20), face_at(10, 0, 10)], "distance": 3}]),
+    "pp_cylinder_out": doc(TUBE + [{"id": "p", "type": "press-pull", "face": face_at(10, 0, 0), "distance": 2}]),
+    "pp_cylinder_in": doc(TUBE + [{"id": "p", "type": "press-pull", "face": face_at(10, 0, 0), "distance": -3}]),
+    "pp_bore": doc(BORED + [{"id": "p", "type": "press-pull", "face": face_at(4, 0, 0), "distance": 1}]),
+    "pp_sphere": doc([{"id": "s", "type": "sphere", "radius": 10},
+                      {"id": "p", "type": "press-pull", "face": face_at(10, 0, 0), "distance": 2}]),
+    "pp_up_to": doc([box("a", 10, 10, 10), box("b", 10, 10, 10), {"id": "m", "type": "move", "dz": 25, "bodies": ["body2"]},
+                     {"id": "p", "type": "press-pull", "body": "body1", "face": face_at(0, 0, 5), "distance": 1,
+                      "upTo": face_at(0, 0, 20)}]),
+    "pp_up_to_parallel": doc([box("a", 10, 10, 10), {"id": "p", "type": "press-pull", "face": face_at(5, 0, 0), "distance": 1,
+                                                     "upTo": face_at(0, 0, 5)}]),
+    "pp_mode_new": doc(BLOCK + [{"id": "p", "type": "press-pull", "face": face_at(0, 0, 20), "distance": 5, "mode": "new"}]),
+    "pp_mode_cut_other": doc([box("a", 10, 10, 10), box("b", 30, 30, 4), {"id": "m", "type": "move", "dz": 8, "bodies": ["body2"]},
+                              {"id": "p", "type": "press-pull", "body": "body1", "face": face_at(0, 0, 5), "distance": 6, "mode": "cut"}]),
+    "pp_mode_cylinder_join": doc(TUBE + [{"id": "p", "type": "press-pull", "face": face_at(10, 0, 0), "distance": 2, "mode": "join"}]),
+    "pp_no_face": doc(BLOCK + [{"id": "p", "type": "press-pull", "face": face_normal(1, 1, 1), "distance": 5}]),
+    "pp_missing_body": doc(BLOCK + [{"id": "p", "type": "press-pull", "body": "body4", "face": face_at(0, 0, 20), "distance": 5}]),
+    "pp_loft_side": doc([sk("a", [rect(20, 20)]), sk("b", [circle(6, 3)], plane={"origin": [0, 0, 25], "normal": [0, 0, 1], "xdir": [1, 0, 0]}),
+                         {"id": "l", "type": "loft", "sketches": ["a", "b"], "operation": "new"},
+                         {"id": "p", "type": "press-pull", "face": face_at(9.27, 3.65, 12.5), "distance": 1}]),
+    # offset face
+    "off_top": doc(BLOCK + [{"id": "o", "type": "offsetFace", "faces": face_at(0, 0, 20), "distance": 3}]),
+    "off_top_clamped": doc(BLOCK + [{"id": "o", "type": "offsetFace", "faces": face_at(0, 0, 20), "distance": -30}]),
+    "off_cylinder_in": doc(TUBE + [{"id": "o", "type": "offsetFace", "faces": face_at(10, 0, 0), "distance": -2}]),
+    "off_bore": doc(BORED + [{"id": "o", "type": "offsetFace", "faces": face_at(4, 0, 0), "distance": 1}]),
+    "off_two_faces": doc(BLOCK + [{"id": "o", "type": "offsetFace", "faces": [face_at(0, 0, 20), face_at(10, 0, 10)], "distance": 2}]),
+    "off_chamfered_rim": doc([sk("s", [line(0, 0, 29.7, 0), line(29.7, 0, 30, 0.3), line(30, 0.3, 30, 5), line(30, 5, 0, 5), line(0, 5, 0, 0)], plane="XZ"),
+                              {"id": "r", "type": "revolve", "sketch": "s", "axis": "Z", "angle": 360},
+                              {"id": "o", "type": "offsetFace", "faces": face_at(29.85, 0, 0.15), "distance": 1}]),
+    "off_zero": doc(BLOCK + [{"id": "o", "type": "offsetFace", "faces": face_at(0, 0, 20), "distance": 0}]),
+    "off_freeform": doc([sk("a", [rect(20, 20)]), sk("b", [circle(6, 3)], plane={"origin": [0, 0, 25], "normal": [0, 0, 1], "xdir": [1, 0, 0]}),
+                         {"id": "l", "type": "loft", "sketches": ["a", "b"], "operation": "new"},
+                         {"id": "o", "type": "offsetFace", "faces": face_at(9.27, 3.65, 12.5), "distance": 1}]),
+    "off_missing_body": doc(BLOCK + [{"id": "o", "type": "offsetFace", "body": "body3", "faces": face_at(0, 0, 20), "distance": 1}]),
+    # delete face
+    "del_corner_chamfer": doc(CHAMFERED + [{"id": "x", "type": "deleteFace", "face": face_at(9, 9, 5)}]),
+    "del_bore": doc(BORED + [{"id": "x", "type": "deleteFace", "face": face_at(4, 0, 0)}]),
+    "del_chain_one_strip": doc(BEVELLED + [{"id": "x", "type": "deleteFace", "face": face_at(0, 9.5, 10.5)}]),
+    "del_retarget": doc([box("a", 10, 10, 10), sk("s", [{"type": "polygon", "x": 0, "y": 0, "radius": 4, "sides": 6, "angle": 0}],
+                                                  plane={"origin": [30, 0, 5], "normal": [0, 0, 1], "xdir": [1, 0, 0]}),
+                         ext("e", "s", 3), sk("t", [circle(1)], plane={"origin": [30, 0, 8], "normal": [0, 0, 1], "xdir": [1, 0, 0]}),
+                         ext("c", "t", -2, "cut"),
+                         {"id": "x", "type": "deleteFace", "body": "body1", "face": face_at(31, 0, 7)}]),
+    "del_box_face_fails": doc([box("a", 10, 10, 10), {"id": "x", "type": "deleteFace", "face": face_at(0, 0, 5)}]),
+    "del_missing_body": doc([box("a", 10, 10, 10), {"id": "x", "type": "deleteFace", "body": "body4", "face": face_normal(0, 0, 1)}]),
+    "del_no_face": doc([box("a", 10, 10, 10), {"id": "x", "type": "deleteFace", "face": face_normal(1, 1, 1)}]),
+    # simplify mesh, clean up
+    "simplify_polygon": doc([sk("s", [{"type": "polygon", "x": 0, "y": 0, "radius": 10, "sides": 36, "angle": 0}]), ext("e", "s", 5),
+                             {"id": "m", "type": "simplifyMesh", "tolerance": 12}]),
+    "simplify_default": doc([sk("s", [{"type": "polygon", "x": 0, "y": 0, "radius": 10, "sides": 36, "angle": 0}]), ext("e", "s", 5),
+                             {"id": "m", "type": "simplifyMesh"}]),
+    "simplify_no_body": doc([{"id": "m", "type": "simplifyMesh", "tolerance": 5}]),
+    "clean_up_all": doc([box("a", 10, 10, 10), box("b", 4, 4, 4), {"id": "mv", "type": "move", "dx": 20, "bodies": ["body2"]},
+                         {"id": "c", "type": "cleanUp"}]),
+    "clean_up_named": doc(BORED + [{"id": "c", "type": "cleanUp", "body": "body1", "tolerance": 0.2}]),
+    "clean_up_stale": doc([box("a", 10, 10, 10), {"id": "c", "type": "cleanUp", "body": "body5"}]),
+    # split
+    "split_both": doc([box("a", 20, 10, 10), {"id": "sp", "type": "split", "plane": "YZ"}]),
+    "split_top": doc([box("a", 20, 10, 10), {"id": "sp", "type": "split", "plane": "XY", "keep": "top"}]),
+    "split_bottom_datum": doc([{"id": "p", "type": "datumPlane", "plane": "XY", "offset": 2}, box("a", 20, 10, 10),
+                               {"id": "sp", "type": "split", "planeId": "p", "keep": "bottom"}]),
+    "split_tilted": doc([box("a", 20, 10, 10), {"id": "sp", "type": "split", "keep": "both",
+                                                "plane": {"origin": [1, 0, 0], "normal": [1, 0, 1], "xdir": [0, 1, 0]}}]),
+    "split_bodies": doc([box("a", 10, 10, 10), box("b", 10, 10, 10), {"id": "m", "type": "move", "dx": 30, "bodies": ["body2"]},
+                         {"id": "sp", "type": "split", "plane": "XY", "bodies": ["body1", "body2", "body7"]}]),
+    "split_group_sides": doc([sk("s", [rect(4, 20, x=-8), rect(4, 20, x=8), rect(20, 4)]), ext("e", "s", 10),
+                              {"id": "sp", "type": "split", "plane": {"origin": [0, 0, 5], "normal": [0, 1, 0], "xdir": [1, 0, 0]},
+                               "groupSides": True}]),
+    "split_misses": doc([box("a", 10, 10, 10), {"id": "sp", "type": "split", "keep": "top",
+                                                "plane": {"origin": [0, 0, 50], "normal": [0, 0, 1], "xdir": [1, 0, 0]}}]),
+    "split_bad_keep": doc([box("a", 10, 10, 10), {"id": "sp", "type": "split", "plane": "XY", "keep": "middle"}]),
+    "split_no_body": doc([{"id": "sp", "type": "split", "plane": "XY"}]),
+    "split_no_plane": doc([box("a", 10, 10, 10), {"id": "sp", "type": "split"}]),
+    # divide
+    "imprint_cross": doc(BLOCK + [sk("d", [line(-10, 0, 10, 0), line(0, -10, 0, 10)],
+                                     plane={"origin": [0, 0, 20], "normal": [0, 0, 1], "xdir": [1, 0, 0]}, face=face_at(0, 0, 20)),
+                                  {"id": "i", "type": "imprint", "sketch": "d"}]),
+    "imprint_short_line": doc(BLOCK + [sk("d", [line(-2, 0, 2, 0)], plane={"origin": [0, 0, 20], "normal": [0, 0, 1], "xdir": [1, 0, 0]}),
+                                       {"id": "i", "type": "imprint", "sketch": "d"}]),
+    "imprint_second_body": doc([box("a", 10, 10, 10), box("b", 10, 10, 10), {"id": "m", "type": "move", "dx": 30, "bodies": ["body2"]},
+                                sk("d", [circle(2)], plane={"origin": [0, 0, 5], "normal": [0, 0, 1], "xdir": [1, 0, 0]}, face=face_at(0, 0, 5)),
+                                {"id": "i", "type": "imprint", "sketch": "d"}]),
+    "imprint_no_curves": doc(BLOCK + [sk("d", [{"type": "point", "x": 0, "y": 0}]), {"id": "i", "type": "imprint", "sketch": "d"}]),
+    "imprint_missing_sketch": doc(BLOCK + [{"id": "i", "type": "imprint", "sketch": "nope"}]),
+}
+CASES.update(SOLID_OPS_CASES)
+
+
 def volume(shape):
     p = GProp_GProps()
     BRepGProp.VolumeProperties_s(shape.wrapped, p)

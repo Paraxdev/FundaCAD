@@ -752,12 +752,18 @@ pub fn build(ctx: &Ctx, f: &SketchFeature) -> FResult<SketchEntry> {
     } else {
         None
     };
+    let tool_edges = all_edges
+        .iter()
+        .map(|e| plane.locate(e))
+        .collect::<Result<Vec<_>, _>>()?;
     Ok(SketchEntry {
         sketch,
         faces: located,
         points: hole_points(&items, &plane),
         wire: path_wire(&edges, &plane),
         plane,
+        edges: tool_edges,
+        face: f.face.clone(),
     })
 }
 

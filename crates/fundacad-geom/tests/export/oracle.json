@@ -1,0 +1,161 @@
+{
+ "writerTolerance": 0.2,
+ "exportTolerance": 0.02,
+ "exportAngular": 0.3,
+ "fixtures": {
+  "box": {
+   "stl": "8b8ab45a775b6814e3963fe2c0106167",
+   "stlAscii": "19994f94860cdfced2b126cef6d115bc",
+   "3mf": {
+    "[Content_Types].xml": "a2b072e5a5d5a2956e61a074a110d145",
+    "_rels/.rels": "2020d28ca006c34ad5d837caf51f3282",
+    "3D/3dmodel.model": "840f40b0050de5a688632b8b7f32ab03"
+   },
+   "3mfInch": {
+    "[Content_Types].xml": "a2b072e5a5d5a2956e61a074a110d145",
+    "_rels/.rels": "2020d28ca006c34ad5d837caf51f3282",
+    "3D/3dmodel.model": "858737a84b73a5b8cdfc346b3e6a970a"
+   },
+   "stlAsciiInch": "8500b25d4bb8a367975c429600f2281d",
+   "capped3": {
+    "vertices": 598,
+    "triangles": 1024,
+    "positions": "a2436750437eca39ace6d475ac4527ac",
+    "indices": "dbc3f31a85fe513e5b80a9b33892dd90"
+   },
+   "cappedBudget": {
+    "vertices": 6534,
+    "triangles": 3072,
+    "positions": "db87e989455acd72f511750ce4e3dca6",
+    "indices": "7812175cc430cd55919faf96cda6d120"
+   },
+   "exportGrade": {
+    "triangles": 12,
+    "volume": 4000.0,
+    "area": 1600.0
+   }
+  },
+  "box_minus_cylinder": {
+   "stl": "09eedd271e62096ad7acb33802a8e76e",
+   "stlAscii": "918177a4ff4e9271d34ce5fa2605fea2",
+   "3mf": {
+    "[Content_Types].xml": "a2b072e5a5d5a2956e61a074a110d145",
+    "_rels/.rels": "2020d28ca006c34ad5d837caf51f3282",
+    "3D/3dmodel.model": "c8eb3e22bb3badbfceef09b6fa5c0032"
+   },
+   "3mfInch": {
+    "[Content_Types].xml": "a2b072e5a5d5a2956e61a074a110d145",
+    "_rels/.rels": "2020d28ca006c34ad5d837caf51f3282",
+    "3D/3dmodel.model": "0e91b244f2ebbaa5179e80eb322d5b3f"
+   },
+   "stlAsciiInch": "f8f4d63297e2d51f22be75b96ed47c63",
+   "capped3": {
+    "vertices": 1579,
+    "triangles": 2812,
+    "positions": "26a0ce7aa8347a9723d7133f548f0f4c",
+    "indices": "c6fa65795f50b967a21c62b8b1d50603"
+   },
+   "cappedBudget": {
+    "vertices": 2973,
+    "triangles": 1768,
+    "positions": "801db04f4693a5bcde5e7d3b14092bb5",
+    "indices": "7dabb0397fcd3e22281a96cb4e346c2c"
+   },
+   "exportGrade": {
+    "triangles": 184,
+    "volume": 3718.310116927031,
+    "area": 1731.981859223195
+   }
+  },
+  "sphere": {
+   "stl": "c5d0c6660d20091e34efd2b3309e3373",
+   "stlAscii": "9af8f50f66f1dd1a7619fe9624263087",
+   "3mf": {
+    "[Content_Types].xml": "a2b072e5a5d5a2956e61a074a110d145",
+    "_rels/.rels": "2020d28ca006c34ad5d837caf51f3282",
+    "3D/3dmodel.model": "e7cc1a894655c161f949b7e9b10204e8"
+   },
+   "3mfInch": {
+    "[Content_Types].xml": "a2b072e5a5d5a2956e61a074a110d145",
+    "_rels/.rels": "2020d28ca006c34ad5d837caf51f3282",
+    "3D/3dmodel.model": "86b48dae7bfab254bd2a302a28a8a285"
+   },
+   "stlAsciiInch": "395535d2b7ae10e2b628359cecdf0e32",
+   "capped3": {
+    "vertices": 474,
+    "triangles": 902,
+    "positions": "e64f5130fea08991acf29ad431c4da7d",
+    "indices": "e919bcea9416e0975a4599097b629c6d"
+   },
+   "cappedBudget": {
+    "vertices": 6322,
+    "triangles": 3356,
+    "positions": "7cbc147b91684615389df47889a87ca1",
+    "indices": "b6541a3a440b36031d3ee032effba2d1"
+   },
+   "exportGrade": {
+    "triangles": 5008,
+    "volume": 4176.746607402564,
+    "area": 1254.6678094012764
+   }
+  },
+  "two_solids": {
+   "stl": "73337d9d09722497f2c67e0e002f12ec",
+   "stlAscii": "b12fc437193432157e869e1973f8d21d",
+   "3mf": {
+    "[Content_Types].xml": "a2b072e5a5d5a2956e61a074a110d145",
+    "_rels/.rels": "2020d28ca006c34ad5d837caf51f3282",
+    "3D/3dmodel.model": "1acd979736b304071a397ba4e13079f5"
+   },
+   "3mfInch": {
+    "[Content_Types].xml": "a2b072e5a5d5a2956e61a074a110d145",
+    "_rels/.rels": "2020d28ca006c34ad5d837caf51f3282",
+    "3D/3dmodel.model": "226c083d7a51f253bc8684906fd71c12"
+   },
+   "stlAsciiInch": "64ac05177d75ee650358b1eb19d203ac",
+   "capped3": {
+    "vertices": 703,
+    "triangles": 1252,
+    "positions": "9209f432a62c270149fd49e31b000f31",
+    "indices": "7667c585daf10bcc33aa022c4d63f49e"
+   },
+   "cappedBudget": {
+    "vertices": 5079,
+    "triangles": 3250,
+    "positions": "5271c68cfbd93b4db8ae107dae3b3a9c",
+    "indices": "7c5cd349e7ea0406a380b7ce27987ae1"
+   },
+   "exportGrade": {
+    "triangles": 2568,
+    "volume": 1520.6288208126455,
+    "area": 913.2212572292515
+   }
+  }
+ },
+ "glb": "ac64f6cc570182c231f7f45cc945e9d1",
+ "glbEmpty": "07bb7555868fc2ebb710301068e74fdf",
+ "normColor": {
+  "#ff8800": "#FF8800",
+  "FF8800": "#FF8800",
+  "#ff880080": "#FF8800",
+  "#ggg000": "#808080",
+  "": "#808080",
+  "None": "#808080",
+  " #aBcDeF ": "#ABCDEF"
+ },
+ "safeNames": {
+  "Body 1": "Body_1",
+  "con": "con_",
+  "CON.step": "CON.step_",
+  "..": "body7",
+  "": "body7",
+  "a/b\\c:d": "a_b_c_d",
+  "été": "été",
+  "_x_": "x",
+  "lpt9.x": "lpt9.x_",
+  "中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中": "中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中",
+  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "Aux bracket (2)": "Aux_bracket_2",
+  "trail._": "trail"
+ }
+}
