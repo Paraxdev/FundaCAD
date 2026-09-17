@@ -3,9 +3,9 @@
 //! (`_compute_payload`, `_body_payload`, `_union_bbox`), plus the body loop of
 //! `server._rebuild_job`.
 //!
-//! Not here yet: mesh passes and `faceColorSlots` (the plugin host), and
-//! every cache tier (RAM identity cache,
-//! disk mesh artifacts, instance payloads, helper processes).
+//! Not here yet: mesh passes and `faceColorSlots` (the plugin host),
+//! instance payloads and helper processes. The
+//! RAM and disk payload caches plug in through `PayloadCache` (crate::cache).
 
 pub mod edges;
 pub mod profile;
@@ -34,9 +34,51 @@ pub struct MeshBody<'a> {
     pub shape: Option<&'a Shape>,
     /// The owning feature id per face, in face order; empty for all null.
     pub face_owners: Vec<Value>,
+    /// Face fingerprint to owning feature, read when `face_owners` is empty.
+    pub owner_map: Option<&'a std::collections::HashMap<String, String>>,
     pub node_ref: Option<Value>,
     pub face_colors: Option<Value>,
     pub part_color: Option<Value>,
+    /// `Body::identity`, what the in-memory payload cache matches on.
+    pub identity: Option<(u64, u64)>,
+    /// The content key of the checkpoint blob this shape was stored under.
+    pub mesh_key: Option<String>,
+}
+
+/// A store of built payloads, consulted before a body is meshed. What it
+/// returns and stores has the envelope keys stripped.
+pub trait PayloadCache {
+    fn get(&mut self, body: &MeshBody<'_>, tolerance: f64, profile: ViewportProfile) -> Option<FullBody>;
+    fn put(&mut self, body: &MeshBody<'_>, tolerance: f64, profile: ViewportProfile, payload: &FullBody, build: std::time::Duration);
+}
+
+pub struct NoPayloadCache;
+
+impl PayloadCache for NoPayloadCache {
+    fn get(&mut self, _: &MeshBody<'_>, _: f64, _: ViewportProfile) -> Option<FullBody> {
+        None
+    }
+    fn put(&mut self, _: &MeshBody<'_>, _: f64, _: ViewportProfile, _: &FullBody, _: std::time::Duration) {}
+}
+
+pub const ENVELOPE_KEYS: [&str; 6] = ["id", "name", "etag", "nodeRef", "faceColors", "partColor"];
+
+/// The payload without its envelope, the part a cache may share between bodies.
+pub fn strip_envelope(full: &FullBody) -> FullBody {
+    let mut out = full.clone();
+    for k in ENVELOPE_KEYS {
+        out.fields.shift_remove(k);
+    }
+    out
+}
+
+fn with_envelope(body: &MeshBody<'_>, payload: FullBody) -> FullBody {
+    let mut out = payload;
+    let tag = etag(&out);
+    let mut fields = envelope(body, &tag);
+    fields.extend(std::mem::take(&mut out.fields));
+    out.fields = fields;
+    out
 }
 
 /// The full payload of one body, meshed at the wire `tolerance` under
@@ -80,8 +122,22 @@ fn body_payload_for(
         },
     );
     let lines = edge_polylines(&access);
+    let from_map: Vec<Value> = match body.owner_map {
+        Some(owners) if body.face_owners.is_empty() => {
+            crate::kernel::subshapes(shape, crate::kernel::Kind::Face)
+                .iter()
+                .map(|f| {
+                    crate::builder::owners::face_key(f)
+                        .and_then(|k| owners.get(&k))
+                        .map_or(Value::Null, |o| Value::String(o.clone()))
+                })
+                .collect()
+        }
+        _ => Vec::new(),
+    };
+    let listed = if from_map.is_empty() { &body.face_owners } else { &from_map };
     let face_owners: Vec<Value> = (0..access.face_count())
-        .map(|i| body.face_owners.get(i).cloned().unwrap_or(Value::Null))
+        .map(|i| listed.get(i).cloned().unwrap_or(Value::Null))
         .collect();
     let face_count = tess.face_ids.iter().max().map_or(0, |m| m + 1);
     let bbox = bbox_value(mesh_bbox(shape, &tess.positions));
@@ -124,11 +180,7 @@ fn body_payload_for(
         payload.insert("normals".into(), Value::Null);
     }
     b.fields = payload;
-    let tag = etag(&b);
-    let mut fields = envelope(body, &tag);
-    fields.extend(std::mem::take(&mut b.fields));
-    b.fields = fields;
-    b
+    with_envelope(body, b)
 }
 
 /// `id`, `name`, `etag` and the envelope keys that change without the geometry.
@@ -258,15 +310,36 @@ pub fn mesh_result(
     tolerance: f64,
     known: &Map<String, Value>,
 ) -> MeshResult {
-    mesh_result_watched(bodies, tolerance, known, &mut |_, _| {})
+    mesh_result_full(bodies, tolerance, known, &mut NoPayloadCache, &mut |_, _| {})
 }
 
-/// [`mesh_result`] reporting each body as it starts, which is what keeps the
+/// `mesh_result` reporting each body as it starts, which is what keeps the
 /// stall watchdog off a long meshing pass.
 pub fn mesh_result_watched(
     bodies: &[MeshBody<'_>],
     tolerance: f64,
     known: &Map<String, Value>,
+    on_body: &mut dyn FnMut(usize, usize),
+) -> MeshResult {
+    mesh_result_full(bodies, tolerance, known, &mut NoPayloadCache, on_body)
+}
+
+/// `mesh_result`, reusing the payloads `cache` holds.
+pub fn mesh_result_cached(
+    bodies: &[MeshBody<'_>],
+    tolerance: f64,
+    known: &Map<String, Value>,
+    cache: &mut dyn PayloadCache,
+) -> MeshResult {
+    mesh_result_full(bodies, tolerance, known, cache, &mut |_, _| {})
+}
+
+/// The payload loop, over `cache` and reporting each body to `on_body`.
+pub fn mesh_result_full(
+    bodies: &[MeshBody<'_>],
+    tolerance: f64,
+    known: &Map<String, Value>,
+    cache: &mut dyn PayloadCache,
     on_body: &mut dyn FnMut(usize, usize),
 ) -> MeshResult {
     let profile = viewport_profile(bodies.len());
@@ -277,7 +350,15 @@ pub fn mesh_result_watched(
         let Some(shape) = body.shape else {
             continue;
         };
-        let full = body_payload_for(body, shape, tolerance, profile);
+        let full = match cache.get(body, tolerance, profile) {
+            Some(payload) => with_envelope(body, payload),
+            None => {
+                let began = std::time::Instant::now();
+                let full = body_payload_for(body, shape, tolerance, profile);
+                cache.put(body, tolerance, profile, &strip_envelope(&full), began.elapsed());
+                full
+            }
+        };
         boxes.push(full.fields.get("bbox").cloned().unwrap_or(Value::Null));
         let tag = full.fields.get("etag").cloned().unwrap_or(Value::Null);
         if known.get(&body.id) == Some(&tag) {
