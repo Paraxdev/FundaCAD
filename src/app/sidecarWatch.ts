@@ -22,7 +22,9 @@ export function installSidecarDiedToast(): void {
     const msg =
       p && p.kind === "port_in_use"
         ? `FundaCAD could not start its geometry engine: ${cause}. Another copy of FundaCAD may still be running. Close it and open FundaCAD again.`
-        : `The geometry engine crashed${cause ? ` (${cause})` : ""}. Save your work, then restart FundaCAD.`;
+        : p && p.kind === "restarted"
+          ? `The geometry engine crashed${cause ? ` (${cause})` : ""} and was restarted. The last operation did not finish.`
+          : `The geometry engine crashed${cause ? ` (${cause})` : ""}. Save your work, then restart FundaCAD.`;
     toast(msg, {
       kind: "error",
       timeout: 60000,
