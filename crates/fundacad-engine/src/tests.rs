@@ -269,3 +269,83 @@ fn unknown_ops_and_bad_json_are_errors_not_hangs() {
     e.handle(Message::Text("{not json".into()));
     assert_eq!(text(next(&rx))["ok"], false);
 }
+
+#[test]
+fn the_live_session_answers_while_a_job_runs_and_follows_the_connection() {
+    let (gate_tx, gate_rx) = channel();
+    let (tx, _rx) = channel();
+    let engine = Arc::new(Engine::start(
+        Fake {
+            gate: Some(gate_rx),
+            rebuilds: Arc::new(AtomicI64::new(0)),
+        },
+        Arc::new(Collect(Mutex::new(tx))),
+    ));
+    let (app_tx, app_rx) = channel();
+    let (agent_tx, agent_rx) = channel();
+    let app = engine.client(Arc::new(Collect(Mutex::new(app_tx))));
+    let agent = engine.client(Arc::new(Collect(Mutex::new(agent_tx))));
+    let call = |c: &Client, rx: &Receiver<Message>, v: Value| -> Value {
+        c.handle(Message::Text(v.to_string()));
+        text(next(rx))
+    };
+    let doc = json!({"features": [{"id": "f0", "type": "box"}]});
+    agent.handle(Message::Text(
+        json!({"id": "busy", "op": "rebuild", "document": doc}).to_string(),
+    ));
+    let t0 = Instant::now();
+    while engine.running.lock().unwrap().is_none() {
+        assert!(t0.elapsed() < Duration::from_secs(5));
+        std::thread::sleep(Duration::from_millis(5));
+    }
+
+    let r = call(
+        &app,
+        &app_rx,
+        json!({"id": 1, "op": "session_host", "document": doc, "revision": 12,
+            "title": "spool.funda", "status": {"canEdit": true}}),
+    );
+    assert_eq!(
+        r,
+        json!({"id": 1, "ok": true, "result": {"ok": true, "guests": [], "proposals": []}})
+    );
+    let st = call(
+        &agent,
+        &agent_rx,
+        json!({"id": 2, "op": "session_state", "name": "an assistant"}),
+    );
+    assert_eq!(st["result"]["attached"], true);
+    assert_eq!(st["result"]["revision"], 12);
+    assert_eq!(st["result"]["guests"], json!(["an assistant"]));
+    let p = call(
+        &agent,
+        &agent_rx,
+        json!({"id": 3, "op": "session_propose", "document": doc, "baseRevision": 12,
+            "note": "feature_add: cylinder", "name": "an assistant"}),
+    );
+    assert_eq!(p["result"], json!({"ok": true, "proposal": "p1", "revision": 12}));
+    let stale = call(
+        &agent,
+        &agent_rx,
+        json!({"id": 4, "op": "session_propose", "document": doc, "baseRevision": 11}),
+    );
+    assert_eq!(stale["result"]["reason"], "stale");
+    let got = call(
+        &app,
+        &app_rx,
+        json!({"id": 5, "op": "session_host", "document": doc, "revision": 12}),
+    );
+    assert_eq!(got["result"]["guests"], json!(["an assistant"]));
+    assert_eq!(got["result"]["proposals"][0]["note"], "feature_add: cylinder");
+    let not_host = call(&agent, &agent_rx, json!({"id": 6, "op": "session_release"}));
+    assert_eq!(
+        not_host["result"],
+        json!({"ok": false, "reason": "not the host"})
+    );
+
+    drop(app);
+    let st = call(&agent, &agent_rx, json!({"id": 7, "op": "session_state"}));
+    assert_eq!(st["result"]["attached"], false, "a closed host still hosts");
+    assert!(st["result"]["document"].is_null());
+    gate_tx.send(()).unwrap();
+}
