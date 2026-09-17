@@ -5,7 +5,9 @@
 use crate::primitives::Shape;
 use crate::Error;
 use cxx::UniquePtr;
-use opencascade_sys::{blob_bytes, xcaf as ffi};
+use crate::progress::ProgressRange;
+use crate::shape_io::BrepWriteOptions;
+use opencascade_sys::xcaf as ffi;
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 
@@ -150,9 +152,12 @@ pub fn read_step_assembly(path: &Path) -> Result<StepAssembly, Error> {
 
 /// Binary BREP, BinTools format V3 with triangles.
 pub fn to_bin_v3(shape: &Shape) -> Result<Vec<u8>, Error> {
-    Ok(blob_bytes::blob_bytes_write_v3(&shape.inner)?)
+    shape.to_brep_bytes(
+        BrepWriteOptions { with_triangles: true, with_normals: false, version: 3 },
+        &ProgressRange::detached(),
+    )
 }
 
 pub fn from_bin(data: &[u8]) -> Result<Shape, Error> {
-    Ok(Shape { inner: blob_bytes::blob_bytes_read(data)? })
+    Shape::from_brep_bytes(data, &ProgressRange::detached())
 }

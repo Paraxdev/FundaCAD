@@ -18,7 +18,6 @@ pub mod b_rep_prim_api;
 pub mod b_rep_tools;
 pub mod b_rep_tools_history;
 pub mod bin_tools;
-pub mod blob_bytes;
 pub mod builder_ops;
 pub mod canonical;
 pub mod draft_angle;
