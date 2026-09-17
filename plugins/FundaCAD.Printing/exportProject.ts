@@ -39,7 +39,7 @@ export async function exportPrintProject(
     return null;
   }
   if (!geometry.exportWith) {
-    await reportError("Colored 3MF export needs the Python sidecar backend (run without VITE_GEOM=rust).");
+    await reportError("Colored 3MF export is not available with this geometry engine yet.");
     return null;
   }
   const bodies = store.buildState.result?.bodies ?? [];

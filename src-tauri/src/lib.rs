@@ -3,8 +3,8 @@
 //! WebSocket directly (not Tauri IPC); Rust only owns the window, native
 //! dialogs, and the sidecar lifecycle.
 
-#[cfg(feature = "rust-geom")]
-mod geom;
+#[cfg(feature = "rust-engine")]
+mod engine;
 // `pub` so the cross-language seam test (tests/container_seam.rs) can drive the
 // container the way `container_save` / `container_open` do. Nothing outside the
 // crate consumes it in the app itself.
@@ -13,6 +13,7 @@ pub mod fnda;
 pub mod json_doc;
 pub mod plugins;
 pub mod session_file;
+#[cfg_attr(feature = "rust-engine", allow(dead_code))]
 mod sidecar;
 mod spacemouse;
 // WebKitGTK only exists on Linux; macOS and Windows use WKWebView and WebView2.
@@ -31,10 +32,17 @@ const LEGACY_DOC_EXTS: [&str; 2] = ["neocad", "sindri"];
 use sidecar::Sidecar;
 use tauri::{Manager, RunEvent};
 
+/// `fundacad --engine`: this process is the geometry worker, not the app.
+#[cfg(feature = "rust-engine")]
+pub fn run_engine_worker() -> ! {
+    engine::run_worker()
+}
+
 /// Hand the per-launch sidecar WebSocket auth token to the webview so the
 /// frontend can append it to its `ws://…?token=` URL. Only the privileged
 /// webview can call this (Tauri IPC), which is what keeps the token out of
 /// reach of other local processes and web pages.
+#[cfg_attr(feature = "rust-engine", allow(dead_code))]
 #[tauri::command]
 fn sidecar_token(state: tauri::State<'_, Sidecar>) -> String {
     state.token.clone()
@@ -56,6 +64,10 @@ fn restart_for_update(app: tauri::AppHandle) {
     // `Sidecar::kill` waits for the child, so the port is free before we return.
     if let Some(sidecar) = app.try_state::<Sidecar>() {
         sidecar.kill();
+    }
+    #[cfg(feature = "rust-engine")]
+    if let Some(engine) = app.try_state::<engine::Engine>() {
+        engine.stop();
     }
     // Then release the single-instance lock. The frontend used to call the process
     // plugin's `relaunch()` directly, which maps to `app.request_restart()` and
@@ -271,17 +283,13 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init());
 
-    // The Rust/OCCT geometry commands (`geom_rebuild`/`geom_export`) only exist when
-    // the `rust-geom` feature is on (VITE_GEOM=rust). generate_handler! won't accept
-    // #[cfg] on individual entries, so we register the command set in two whole-list
-    // arms: with the geom pair when the feature is on, without it (the shipping
-    // Python-sidecar build) when it's off. `sidecar_token` hands the per-launch
-    // WebSocket auth token to the frontend so it can dial the sidecar.
-    #[cfg(feature = "rust-geom")]
+    // generate_handler! takes no #[cfg] on entries, so the command list comes in
+    // two whole arms: the Rust engine's commands, or the sidecar token.
+    #[cfg(feature = "rust-engine")]
     let builder = builder.invoke_handler(tauri::generate_handler![
-        geom::geom_rebuild,
-        geom::geom_export,
-        sidecar_token,
+        engine::engine_kind,
+        engine::engine_attach,
+        engine::engine_send,
         restart_for_update,
         updates_supported,
         frontend_ready,
@@ -318,7 +326,7 @@ pub fn run() {
         spacemouse::spacemouse_start,
         spacemouse::spacemouse_stop
     ]);
-    #[cfg(not(feature = "rust-geom"))]
+    #[cfg(not(feature = "rust-engine"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         sidecar_token,
         restart_for_update,
@@ -365,6 +373,9 @@ pub fn run() {
         // token for a file somebody forgot they had offered it.
         .manage(plugins::files::Handles::default())
         .setup(|app| {
+            #[cfg(feature = "rust-engine")]
+            app.manage(engine::Engine::start(app.handle()));
+            #[cfg(not(feature = "rust-engine"))]
             match Sidecar::spawn(app.handle()) {
                 Ok(s) => {
                     app.manage(s);
@@ -393,6 +404,10 @@ pub fn run() {
         if let RunEvent::ExitRequested { .. } | RunEvent::Exit = event {
             if let Some(s) = app_handle.try_state::<Sidecar>() {
                 s.kill();
+            }
+            #[cfg(feature = "rust-engine")]
+            if let Some(e) = app_handle.try_state::<engine::Engine>() {
+                e.stop();
             }
         }
     });

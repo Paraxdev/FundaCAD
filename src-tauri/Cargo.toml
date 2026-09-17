@@ -44,22 +44,13 @@ sha2 = "0.10"
 # Binary payloads cross Tauri IPC as base64 strings (a JSON Vec<u8> would be
 # pathological at ~1 MB); container.rs and the plugin commands use this.
 base64 = "0.22"
-# --- Rust/OCCT geometry spike (opt-in only) ---------------------------------
-# These four crates are used ONLY by src-tauri/src/geom.rs (the experimental
-# in-Rust OCCT geometry path, VITE_GEOM=rust). They are `optional` and behind the
-# `rust-geom` feature (below) so the DEFAULT build links no system OpenCASCADE and
-# needs no cmake, that is what makes the shell build cleanly on Windows/macOS/Linux.
-# The shipping geometry runs in the Python sidecar. Enable the spike with
-# `cargo build --features rust-geom` (needs OCCT >= 7.9 installed; Arch: `opencascade`).
-opencascade = { path = "../third_party/opencascade-rs/crates/opencascade", default-features = false, optional = true }
-opencascade-sys = { path = "../third_party/opencascade-rs/crates/opencascade-sys", default-features = false, optional = true }
-# glam re-exported by opencascade for DVec3 used in the document->geometry mapping.
-# MUST match the fork's glam (0.24) so DVec3 unifies across the crate boundary.
-glam = { version = "0.24", optional = true }
-# 3MF export for the Rust path: OCCT has no 3MF writer, so geom.rs tessellates the
-# solid and writes the mesh as a 3MF via this crate. The SHIPPING colored-3MF export
-# is done by the Python sidecar, so this is opt-in with the rest of the spike.
-threemf = { version = "0.8", optional = true }
+# --- Rust engine (docs/RUST-PIVOT.md) ----------------------------------------
+# The worker loop and the geometry crate link OpenCASCADE statically, a long
+# C++ build, so they are opt-in until the Rust engine replaces the sidecar.
+# `cargo build --features rust-engine`.
+fundacad-protocol = { path = "../crates/fundacad-protocol", optional = true }
+fundacad-engine = { path = "../crates/fundacad-engine", optional = true }
+fundacad-geom = { path = "../crates/fundacad-geom", optional = true }
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 # The document container (container.rs): a ZIP holding document.json plus the
@@ -93,9 +84,9 @@ crc32fast = "1"
 ciborium = "0.2"
 
 [features]
-# Off by default: the default build has zero OCCT/cmake dependency. Turn on to
-# compile the in-Rust OCCT geometry path (src/geom.rs) for VITE_GEOM=rust.
-rust-geom = ["dep:opencascade", "dep:opencascade-sys", "dep:glam", "dep:threemf"]
+# Off by default: the default build ships the Python sidecar and needs no
+# OpenCASCADE. On, the app runs the Rust engine as its own worker process.
+rust-engine = ["dep:fundacad-protocol", "dep:fundacad-engine", "dep:fundacad-geom"]
 
 # Windows-only: a Job Object with KILL_ON_JOB_CLOSE reaps the sidecar (and its
 # ProcessPoolExecutor workers) when the app exits or crashes. Unix uses a process

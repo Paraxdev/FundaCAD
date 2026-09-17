@@ -14,7 +14,6 @@
 import { Viewport } from "../viewport/viewport";
 import { asFeature } from "../types";
 import { Geometry, type GeometryBackend } from "../geometry/client";
-import { TauriGeometry } from "../geometry/tauriClient";
 import { DocumentStore, EMPTY_DOCUMENT } from "../document/store";
 import { SketchOverlay } from "../sketch/overlay";
 import { footprintCache } from "../sketch/faceFootprint";
@@ -215,8 +214,8 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   e.viewport.onWireframeChange = (on) => { useUiStore().wireframe = on; };
   e.viewport.onStutterChange = (on) => { useUiStore().lowPerformance = on; };
 
-  e.geometry = import.meta.env.VITE_GEOM === "rust" ? new TauriGeometry() : new Geometry();
-  void e.geometry.init(); // fetch the per-launch sidecar auth token + open the socket
+  e.geometry = new Geometry();
+  void e.geometry.init(); // picks the engine transport and opens it
   installSidecarDiedToast();
 
   // Start on a blank canvas. It used to open a built-in example bracket, which

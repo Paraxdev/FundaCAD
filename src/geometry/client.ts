@@ -1,10 +1,11 @@
-// WebSocket client to the Python geometry sidecar.
+// Client of the geometry engine, over a transport (./transport.ts).
 // One request/response per message, matched by `id`. Calls made before the
-// socket opens are queued and flushed on connect; the socket auto-reconnects.
+// transport opens are queued and flushed on open; the transport reconnects.
 
 import type { CadDocument, EdgeFingerprint, ExportFormat, F32Wire, MeshExportOptions, Feature, ImportFormat, ImportReply, PlaneSpec, ProjectedCurve, ProjectedSource, RebuildReply, RebuildResult, U32Wire } from "../types";
 import { RebuildAssembly, manifestFromBodies } from "./assembly";
 import { pipe, pipeFault } from "../diagnostics/pipelineLog";
+import { EngineTransport, type GeometryTransport } from "./transport";
 import type {
   WireBody, WireBodyFull, WireEdgeList, WireManifestEntry, WireRebuildResult,
 } from "./assembly";
@@ -90,9 +91,8 @@ export interface GeneratedShape {
 
 export type GeneratedShapeReply = { ok: true; shape: GeneratedShape } | { ok: false; message: string };
 
-// The surface the rest of the app depends on. Both the websocket `Geometry`
-// and the in-process `TauriGeometry` implement this, so callers stay agnostic
-// to which backend is wired up (see VITE_GEOM in main.ts).
+// The surface the rest of the app depends on. `Geometry` implements it over
+// either engine's transport, and tests stub it by hand.
 export interface GeometryBackend {
   rebuild(doc: CadDocument, tolerance?: number): Promise<RebuildReply>;
   /** Per-glyph 2D outlines for a sketch text entity (the sidecar owns fonts, so
@@ -414,9 +414,7 @@ export function tooLargeToSend(len: number): string | null {
 }
 
 export class Geometry implements GeometryBackend {
-  private ws: WebSocket | null = null;
-  private readonly url: string;
-  private token = ""; // per-launch shared secret fetched from the Rust shell
+  private readonly transport: GeometryTransport;
   private pending = new Map<string, Pending>();
   // The heavy op most recently sent, for cancel() to target. The sidecar
   // serializes heavy ops, so at most one is actually running; targeting by id
@@ -426,8 +424,6 @@ export class Geometry implements GeometryBackend {
   private statusListeners = new Set<StatusListener>();
   private opProgressListeners = new Set<(pct: number, label: string) => void>();
   private progressListeners = new Set<(feature: number, meshed: number, meshTotal: number) => void>();
-  private reconnectTimer: number | null = null;
-  private reconnectDelay = 500; // ms; doubles on each failed attempt, capped, reset on open
   // Protocol-v2 per-body mesh cache: the sidecar answers unchanged bodies with
   // an etag stub instead of re-sending their (multi-MB) mesh; we keep the last
   // full payload per body and reassemble the merged RebuildResult locally, so
@@ -463,29 +459,18 @@ export class Geometry implements GeometryBackend {
   private lastSent: { features: Feature[]; parameters: string; bodyVisibility: string; bodyIds: string } | null = null;
   private revision = 0;
 
-  constructor(url = "ws://127.0.0.1:8765") {
-    this.url = url;
-    // Does NOT connect, call init() once so the per-launch auth token is
-    // fetched from the Rust shell before the first socket open.
+  constructor(transport: GeometryTransport = new EngineTransport()) {
+    this.transport = transport;
+    // Does NOT connect, call init() once so the transport can fetch what it
+    // needs from the Rust shell (the sidecar token) before its first open.
   }
 
   async init(): Promise<void> {
-    try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      this.token = await invoke<string>("sidecar_token");
-    } catch {
-      // Plain browser, no Tauri. DEV builds accept a token on the URL so the app
-      // can be driven against a hand-started sidecar (demo capture, e2e); a
-      // production bundle keeps the old "" and simply has no sidecar.
-      this.token = import.meta.env.DEV
-        ? (new URLSearchParams(location.search).get("token") ?? "")
-        : "";
-    }
-    this.connect();
-  }
-
-  private wsUrl(): string {
-    return `${this.url}/?token=${encodeURIComponent(this.token)}`;
+    await this.transport.start({
+      opened: () => this.onOpened(),
+      message: (data) => this.onMessage(data),
+      closed: (tooBig) => this.onClosed(tooBig),
+    });
   }
 
   onStatus(fn: StatusListener): () => void {
@@ -516,111 +501,87 @@ export class Geometry implements GeometryBackend {
   }
 
   get connected(): boolean {
-    return this.ws?.readyState === WebSocket.OPEN;
+    return this.transport.open;
   }
 
   private emitStatus() {
     for (const fn of this.statusListeners) fn(this.connected);
   }
 
-  private connect() {
-    const ws = new WebSocket(this.wsUrl());
-    ws.binaryType = "arraybuffer"; // binary mesh frames (default "blob" would need async reads)
-    this.ws = ws;
-
-    ws.onopen = () => {
-      this.reconnectDelay = 500; // healthy connection, reset backoff
-      this.emitStatus();
-      for (const raw of this.outbox) ws.send(raw);
-      this.outbox = [];
-    };
-
-    ws.onmessage = (e) => {
-      if (typeof e.data !== "string") {
-        this.handleBinaryReply(e.data as ArrayBuffer);
-        return;
-      }
-      let msg: any;
-      try {
-        msg = JSON.parse(e.data);
-      } catch (err) {
-        console.error("[geometry] bad JSON from sidecar:", err, "payload:", String(e.data).slice(0, 200));
-        return;
-      }
-      if (msg && typeof msg.status === "string") {
-        // ANY interim status frame is informational and must NEVER resolve the
-        // pending call, the real reply follows. Guarding on "building" alone
-        // was a trap for the next frame type: an unrecognised status fell
-        // through to the pending map and resolved the caller's promise with a
-        // frame carrying no `ok`, so the caller reported failure while the
-        // sidecar happily kept working for another minute.
-        if (msg.status === "building") {
-          const f = typeof msg.feature === "number" ? msg.feature : -1;
-          const m = typeof msg.meshed === "number" ? msg.meshed : -1;
-          const mt = typeof msg.meshTotal === "number" ? msg.meshTotal : -1;
-          for (const fn of this.progressListeners) fn(f, m, mt);
-        } else if (msg.status === "importing") {
-          const pct = typeof msg.pct === "number" ? msg.pct : 0;
-          const label = typeof msg.label === "string" ? msg.label : "";
-          for (const fn of this.opProgressListeners) fn(pct, label);
-        }
-        return;
-      }
-      const resolve = this.pending.get(msg.id);
-      if (resolve) {
-        this.pending.delete(msg.id);
-        // A terminal TEXT reply for an id with a stream in flight is how the
-        // sidecar aborts one mid-send (cancel, or a single body over the frame
-        // cap). Drop the partial stream, this reply supersedes it.
-        this.dropStream(msg.id);
-        resolve(msg);
-      }
-    };
-
-    ws.onclose = (ev) => {
-      this.emitStatus();
-      // 1009 = "message too big": the sidecar refused a frame past its max_size.
-      // The pre-flight guard in call() should have caught it, so reaching here
-      // means the two limits have drifted apart, say so rather than blaming the
-      // connection, which is what sent GH #4's reporter looking in the wrong place.
-      const tooBig = ev.code === 1009;
-      const message = tooBig
-        ? "That model is too large for the geometry engine to accept. "
-          + "Remove or simplify the imported body, then try again."
-        : "geometry engine connection lost";
-      // Settle every in-flight call with a synthetic error reply shaped like a
-      // real sidecar error, matching the `msg.ok === false` contract every
-      // caller already checks (rebuild/export/etc). Without this, a call made
-      // before the drop just hangs forever, e.g. DocumentStore.rebuildNow()'s
-      // `await this.geometry.rebuild(...)` never returns, so its finally-block
-      // never clears `rebuilding`, so the reconnect-triggered rebuild in
-      // main.ts's onStatus() silently no-ops (rebuildNow sees rebuilding===true
-      // and just sets rebuildQueued, forever).
-      for (const [id, resolve] of this.pending) {
-        resolve({ id, ok: false, error: { message } });
-      }
-      this.pending.clear();
-      // Every pending call has just been settled, so no stream can still have
-      // its partner entry, clear them (and their watchdogs) to keep the
-      // streams/pending invariant true rather than merely usually true.
-      for (const s of this.streams.values()) clearTimeout(s.timer);
-      this.streams.clear();
-      this.scheduleReconnect();
-    };
-
-    ws.onerror = () => {
-      ws.close();
-    };
+  private onOpened() {
+    this.emitStatus();
+    for (const raw of this.outbox) this.transport.send(raw);
+    this.outbox = [];
   }
 
-  private scheduleReconnect() {
-    if (this.reconnectTimer != null) return;
-    this.reconnectTimer = window.setTimeout(() => {
-      this.reconnectTimer = null;
-      this.connect();
-    }, this.reconnectDelay);
-    // back off for next time; a successful onopen resets this to the floor
-    this.reconnectDelay = Math.min(this.reconnectDelay * 2, 10_000);
+  private onMessage(data: string | ArrayBuffer) {
+    if (typeof data !== "string") {
+      this.handleBinaryReply(data);
+      return;
+    }
+    let msg: any;
+    try {
+      msg = JSON.parse(data);
+    } catch (err) {
+      console.error("[geometry] bad JSON from sidecar:", err, "payload:", data.slice(0, 200));
+      return;
+    }
+    if (msg && typeof msg.status === "string") {
+      // ANY interim status frame is informational and must NEVER resolve the
+      // pending call, the real reply follows. Guarding on "building" alone
+      // was a trap for the next frame type: an unrecognised status fell
+      // through to the pending map and resolved the caller's promise with a
+      // frame carrying no `ok`, so the caller reported failure while the
+      // sidecar happily kept working for another minute.
+      if (msg.status === "building") {
+        const f = typeof msg.feature === "number" ? msg.feature : -1;
+        const m = typeof msg.meshed === "number" ? msg.meshed : -1;
+        const mt = typeof msg.meshTotal === "number" ? msg.meshTotal : -1;
+        for (const fn of this.progressListeners) fn(f, m, mt);
+      } else if (msg.status === "importing") {
+        const pct = typeof msg.pct === "number" ? msg.pct : 0;
+        const label = typeof msg.label === "string" ? msg.label : "";
+        for (const fn of this.opProgressListeners) fn(pct, label);
+      }
+      return;
+    }
+    const resolve = this.pending.get(msg.id);
+    if (resolve) {
+      this.pending.delete(msg.id);
+      // A terminal TEXT reply for an id with a stream in flight is how the
+      // sidecar aborts one mid-send (cancel, or a single body over the frame
+      // cap). Drop the partial stream, this reply supersedes it.
+      this.dropStream(msg.id);
+      resolve(msg);
+    }
+  }
+
+  private onClosed(tooBig: boolean) {
+    this.emitStatus();
+    // A refused size means the pre-flight guard in call() and the engine's
+    // limit have drifted apart, say so rather than blaming the connection,
+    // which is what sent GH #4's reporter looking in the wrong place.
+    const message = tooBig
+      ? "That model is too large for the geometry engine to accept. "
+        + "Remove or simplify the imported body, then try again."
+      : "geometry engine connection lost";
+    // Settle every in-flight call with a synthetic error reply shaped like a
+    // real sidecar error, matching the `msg.ok === false` contract every
+    // caller already checks (rebuild/export/etc). Without this, a call made
+    // before the drop just hangs forever, e.g. DocumentStore.rebuildNow()'s
+    // `await this.geometry.rebuild(...)` never returns, so its finally-block
+    // never clears `rebuilding`, so the reconnect-triggered rebuild in
+    // main.ts's onStatus() silently no-ops (rebuildNow sees rebuilding===true
+    // and just sets rebuildQueued, forever).
+    for (const [id, resolve] of this.pending) {
+      resolve({ id, ok: false, error: { message } });
+    }
+    this.pending.clear();
+    // Every pending call has just been settled, so no stream can still have
+    // its partner entry, clear them (and their watchdogs) to keep the
+    // streams/pending invariant true rather than merely usually true.
+    for (const s of this.streams.values()) clearTimeout(s.timer);
+    this.streams.clear();
   }
 
   /** Decode ONE binary frame (see server.py's _encode_binary_reply / _frame_bytes
@@ -857,7 +818,7 @@ export class Geometry implements GeometryBackend {
       onId?.(id);
       this.pending.set(id, resolve as Pending);
       if (this.connected) {
-        this.ws!.send(raw);
+        this.transport.send(raw);
       } else {
         this.outbox.push(raw);
       }
