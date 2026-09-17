@@ -204,4 +204,30 @@ fn both_ops_answer_over_the_protocol() {
     engine.handle(Message::Text(json!({"id": 2, "op": "interference", "document": doc}).to_string()));
     let reply: Value = serde_json::from_str(&rx.recv().unwrap()).unwrap();
     assert_eq!(reply["result"], json!({"pairs": []}), "{reply}");
+
+    let result = |id: i64| -> Value {
+        loop {
+            let v: Value = serde_json::from_str(&rx.recv().unwrap()).unwrap();
+            if v["id"] == id && v.get("ok").is_some() {
+                return v["result"].clone();
+            }
+        }
+    };
+    engine.handle(Message::Text(json!({"id": 3, "op": "rebuild", "document": doc, "revision": 1}).to_string()));
+    let built = result(3);
+    let etag = built["bodies"][0]["etag"].clone();
+    let known = json!({"body1": etag});
+    engine.handle(Message::Text(
+        json!({"id": 4, "op": "rebuild", "document": doc, "revision": 2, "known": known}).to_string(),
+    ));
+    assert_eq!(result(4)["bodies"][0]["unchanged"], json!(true));
+    // server.py `_compute_all_job` never answers with a stub, whatever the client holds.
+    engine.handle(Message::Text(
+        json!({"id": 5, "op": "computeAll", "document": doc, "revision": 3, "known": known}).to_string(),
+    ));
+    let all = result(5);
+    assert!(all["bodies"][0].get("unchanged").is_none(), "{all}");
+    assert_eq!(all["bodies"][0]["etag"], etag);
+    let keys = |v: &Value| v.as_object().unwrap().keys().cloned().collect::<Vec<_>>();
+    assert_eq!(keys(&all), keys(&built));
 }
