@@ -46,6 +46,7 @@ pub mod mesh_import;
 pub mod message;
 pub mod message_progress;
 pub mod offset_shape;
+pub mod osd_smp;
 pub mod poly;
 pub mod remove_features;
 pub mod sewing;

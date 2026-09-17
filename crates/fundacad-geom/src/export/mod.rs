@@ -109,6 +109,17 @@ pub fn export_mesh(shape: &Shape, opts: &MeshOptions) -> (Vec<f64>, Vec<u32>) {
     }
 }
 
+/// Which group each index belongs to, the inverse of `par::share_groups`.
+fn group_index(groups: &[Vec<usize>], n: usize) -> Vec<usize> {
+    let mut out = vec![0; n];
+    for (g, members) in groups.iter().enumerate() {
+        for &i in members {
+            out[i] = g;
+        }
+    }
+    out
+}
+
 struct Failure(String);
 
 impl<E: std::fmt::Display> From<E> for Failure {
@@ -142,13 +153,32 @@ impl Exporter<'_> {
         mut each: impl FnMut(&ExportBody<'b>, Vec<f64>, Vec<u32>),
     ) -> Result<(), Failure> {
         let mut ntri = 0;
-        for b in bodies {
-            let (pos, idx) = export_mesh(b.shape, &self.opts);
-            ntri += idx.len() / 3;
-            if let Some(refusal) = budget_refusal(ntri) {
-                return Err(Failure(refusal));
+        let shapes: Vec<&Shape> = bodies.iter().map(|b| b.shape).collect();
+        let groups = crate::par::share_groups(&shapes);
+        let of_group: Vec<usize> = group_index(&groups, bodies.len());
+        // A batch at a time, in body order, because the triangle budget refuses
+        // AT the body that passes it: a whole document meshed up front would
+        // hold the very mesh the budget exists to refuse. One batch of extra
+        // work is the price, and the refusal names the same body and count.
+        for batch in (0..bodies.len()).collect::<Vec<_>>().chunks(crate::par::threads().max(1)) {
+            let mut sub: Vec<Vec<usize>> = vec![Vec::new(); groups.len()];
+            for &i in batch {
+                sub[of_group[i]].push(i);
             }
-            each(b, pos, idx);
+            sub.retain(|g| !g.is_empty());
+            let opts = &self.opts;
+            let work = crate::par::Shared((bodies, opts));
+            let meshed = crate::par::map_grouped(&sub, move |i| {
+                let (bodies, opts) = *work.get();
+                export_mesh(bodies[i].shape, opts)
+            });
+            for (i, (pos, idx)) in meshed {
+                ntri += idx.len() / 3;
+                if let Some(refusal) = budget_refusal(ntri) {
+                    return Err(Failure(refusal));
+                }
+                each(&bodies[i], pos, idx);
+            }
         }
         if let Some(w) = budget_warning(ntri) {
             self.warnings.push(json!({ "message": w }));
