@@ -1102,7 +1102,7 @@ def _boolean(op, base, tools, fuzz):
         # The cut itself was right and left the removed material behind as loose
         # pieces: a D shape's eight 2mm edges came back with 77mm3 of them, and
         # redoing the cut one tool at a time took 24s to get the same body.
-        loose = _loose_pieces(out, base, tools, False)
+        loose = _loose_pieces(out, base, tools)
         if loose:
             from OCP.BRep import BRep_Builder
             from OCP.TopoDS import TopoDS_Compound
@@ -1269,7 +1269,7 @@ def _applied_by(op, base, out, tools, verify):
     from OCP.BRepClass3d import BRepClass3d_SolidClassifier
 
     fuse = op is BRepAlgoAPI_Fuse
-    if _solid_count(out) > _solid_count(base) and (fuse or _left_inside(out, base, tools, verify)):
+    if _solid_count(out) > _solid_count(base) and (fuse or _loose_pieces(out, base, tools)):
         return False
     changed = TopAbs_OUT if fuse else TopAbs_IN
     bc = BRepClass3d_SolidClassifier(base)
@@ -1305,15 +1305,13 @@ def _applied_by(op, base, out, tools, verify):
     return _kept_base(base, out, tools, verify)
 
 
-def _left_inside(out, base, tools, verify):
-    return bool(_loose_pieces(out, base, tools, verify))
-
-
-def _loose_pieces(out, base, tools, verify):
+def _loose_pieces(out, base, tools):
     """The solids of a cut that its tools should have removed. A cut through a
     thin part can split it for real, but no piece of a cut can lie inside a
     tool: three edges into a box corner at 10mm G2 left 118mm3 of the corner
-    loose, every sample of it inside the tools."""
+    loose, every sample of it inside the tools. A piece the unverified samples
+    miss is sampled again verified, which only a split body pays for: on Linux
+    a 180mm3 piece along a 16mm blend read as outside its loft unverified."""
     near = _near_tools(tools)
     loose = []
     solids = []
@@ -1323,14 +1321,16 @@ def _loose_pieces(out, base, tools, verify):
         ex.Next()
     solids.sort(key=_volume, reverse=True)
     for piece in solids[_solid_count(base):]:
-        inside = checked = 0
-        for p in _points_inside(piece, verify):
-            inside += near(p, lambda st: st == TopAbs_IN)
-            checked += 1
-            if checked >= 12:
+        for verify in (False, True):
+            inside = checked = 0
+            for p in _points_inside(piece, verify):
+                inside += near(p, lambda st: st == TopAbs_IN)
+                checked += 1
+                if checked >= 12:
+                    break
+            if checked and inside * 2 > checked:
+                loose.append(piece)
                 break
-        if checked and inside * 2 > checked:
-            loose.append(piece)
     return loose
 
 
