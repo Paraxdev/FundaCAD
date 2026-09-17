@@ -48,6 +48,7 @@ pub mod shape_analysis;
 pub mod shape_fix;
 pub mod shape_io;
 pub mod shape_upgrade;
+pub mod solid_ops;
 pub mod standard;
 pub mod step_control;
 pub mod surface_query;

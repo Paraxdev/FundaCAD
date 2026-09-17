@@ -13,6 +13,7 @@ mod revolve;
 pub mod sketch;
 mod press_pull;
 mod solid_ops;
+mod split;
 mod transform;
 
 pub use boolean::combine;
@@ -55,6 +56,8 @@ pub fn dispatch(ctx: &mut Ctx, f: &Feature) -> FResult {
         Feature::DeleteFace(d) => defeature::delete_face(ctx, d),
         Feature::SimplifyMesh(s) => cleanup::simplify_mesh(ctx, s),
         Feature::CleanUp(c) => cleanup::clean_up(ctx, c),
+        Feature::Split(s) => split::split(ctx, s),
+        Feature::Imprint(i) => split::imprint(ctx, i),
         other => Err(not_ported(other.type_name().unwrap_or("feature"))),
     }
 }
