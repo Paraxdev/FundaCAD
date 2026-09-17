@@ -167,7 +167,13 @@ fn expand_blend_chain(shape: &Shape, seeds: &[Shape]) -> Vec<Shape> {
                 adj.walk(i)
                     .into_iter()
                     .map(|(j, e)| {
-                        let mid = e.as_edge().map_or(DVec3::ZERO, |e| e.position_at(0.5));
+                        let mid = e
+                            .as_edge()
+                            .and_then(|e| {
+                                let r = e.range().ok()?;
+                                e.d1(0.5 * (r.first + r.last)).ok().map(|(p, _)| p)
+                            })
+                            .unwrap_or(DVec3::ZERO);
                         (j, mid)
                     })
                     .collect()
