@@ -480,6 +480,11 @@ here collects its results by index and is assembled in the serial order. No
 pass sums, hashes or inserts in completion order. Where that could not be
 arranged, the pass stayed serial.
 
+That is checked, not asserted: `bench_suite digest` encodes each document's
+whole binary reply frame and prints a digest of it, and the differential corpus
+plus a 144 body imported assembly give the same digests at
+`FUNDACAD_THREADS=1` as on 32 threads.
+
 ### 8.1 The benchmark set
 
 `crates/fundacad-geom/examples/bench_suite.rs`, one stage per run, one JSON
@@ -493,6 +498,7 @@ line out (`cargo run --release -p fundacad-geom --example bench_suite -- ...`):
 | `export <file.funda> [formats]` | the writers on their own |
 | `faces <document>` | face bands and the body payload per shape |
 | `smooth <document\|file.step>` | the batched smooth edge test against the per sample walk it replaced, edge by edge |
+| `digest <document\|corpus.json\|file.step>` | the whole reply frame as a digest, to compare a serial run with a parallel one |
 
 `FUNDACAD_BENCH_PHASES=1` adds a phase table (`crate::bench`), the Rust side of
 `bench_import.py`'s `_timed`. `FUNDACAD_THREADS` caps both the engine's rayon
@@ -505,7 +511,8 @@ corpus and `select-eval` over the 220 case one.
 
 - **The payload loop, per body** (`mesh::built_payloads`). Cache hits are read
   on the calling thread in body order, the misses are meshed elsewhere, the
-  cache is written back in body order. Progress still ticks 0, 1, ... n-1.
+  cache is written back in body order. Every body still ticks progress once,
+  whichever tier answered it, which is what the stall watchdog is promised.
 - **Edge polylines, per edge** and **face bands** (adjacency, the surface read
   and the near pair search) within one body.
 - **Export tessellation, per body**, a batch at a time so the triangle budget
