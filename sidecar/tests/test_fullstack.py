@@ -7,6 +7,8 @@ import _bootstrap  # noqa: F401  (puts sidecar/ on sys.path)
 import asyncio, json, os, subprocess, sys, tempfile, time
 import websockets
 
+from tools.harness_util import engine_command
+
 HOST = "127.0.0.1"
 # The port this test's OWN server is told to use, and the one it connects to, so
 # that the two cannot drift apart. It was a bare 8765 on both sides, which is the
@@ -163,7 +165,7 @@ def run():
     token = secrets.token_urlsafe(16)
     env["FUNDACAD_SIDECAR_TOKEN"] = token
     env["FUNDACAD_SIDECAR_PORT"] = str(PORT)
-    proc = subprocess.Popen([sys.executable, "server.py"], cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))) or ".",
+    proc = subprocess.Popen(engine_command(), cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))) or ".",
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
     try:
         # wait for readiness

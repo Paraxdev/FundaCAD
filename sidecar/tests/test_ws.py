@@ -23,6 +23,7 @@ import server
 import wire
 from server import handle, HOST, PORT
 from test_smoke import EXAMPLE
+from tools.harness_util import engine_command
 
 # The server requires the per-launch token (security round). In-process test:
 # set it directly and dial with ?token=… (no Origin header → origin check skipped).
@@ -735,7 +736,7 @@ def test_port_in_use_exits_with_its_own_code():
     taken = holder.getsockname()[1]
     try:
         p = subprocess.run(
-            [sys.executable, "server.py"],
+            engine_command(),
             cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
             env={**os.environ, "FUNDACAD_SIDECAR_PORT": str(taken)},
             capture_output=True, text=True, timeout=180,
