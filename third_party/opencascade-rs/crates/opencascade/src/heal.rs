@@ -14,7 +14,8 @@ pub struct FixOptions {
     pub max_tolerance: f64,
 }
 
-/// A healed shape and whether ShapeFix changed anything.
+/// A healed shape and what `Perform` returned. Not a reliable "changed" flag:
+/// righting an inside-out solid leaves it false.
 pub struct Fixed<T> {
     pub shape: T,
     pub modified: bool,
