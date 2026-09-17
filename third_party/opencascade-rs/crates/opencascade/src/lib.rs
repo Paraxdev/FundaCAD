@@ -2,6 +2,7 @@ use thiserror::Error;
 
 pub mod angle;
 pub mod bounding_box;
+pub mod heal;
 pub mod kicad;
 pub mod mesh;
 pub mod mesh_access;
@@ -43,4 +44,18 @@ pub enum Error {
     NotEnoughPoints,
     #[error("failed to offset face")]
     OffsetFaceFailed,
+    #[error("OpenCASCADE raised {0}")]
+    Occt(String),
+    #[error("{0} did not produce a result")]
+    OperationFailed(&'static str),
+    #[error("{0}")]
+    InvalidInput(&'static str),
+    #[error("the operation was cancelled")]
+    Cancelled,
+}
+
+impl From<cxx::Exception> for Error {
+    fn from(err: cxx::Exception) -> Self {
+        Self::Occt(err.what().to_string())
+    }
 }
