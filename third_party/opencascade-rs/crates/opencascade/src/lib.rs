@@ -1,16 +1,25 @@
 use thiserror::Error;
 
 pub mod angle;
+pub mod boolean_op;
 pub mod bounding_box;
 pub mod canonical;
+pub mod extrema;
 pub mod heal;
 pub mod kicad;
 pub mod mesh;
 pub mod mesh_access;
 pub mod mesh_import;
+pub mod modify;
 pub mod primitives;
+pub mod progress;
+pub mod query;
 pub mod raw;
 pub mod section;
+pub mod sewing;
+pub mod shape_io;
+pub mod topology;
+pub mod select_access;
 pub mod workplane;
 pub mod xcaf;
 
