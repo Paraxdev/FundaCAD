@@ -1,0 +1,20 @@
+[package]
+name = "fundacad-geom"
+description = "FundaCAD geometry engine: the CAD document rebuilt on OpenCASCADE, in Rust"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+# Vendored bindings (third_party/opencascade-rs). The default `builtin` feature
+# pulls occt-sys from crates.io, which carries the OpenCASCADE 7.8.1 sources and
+# builds them statically with cmake: no system OpenCASCADE on any platform.
+opencascade = { path = "../../third_party/opencascade-rs/crates/opencascade" }
+opencascade-sys = { path = "../../third_party/opencascade-rs/crates/opencascade-sys" }
+cxx = "1"
+glam = { version = "0.24", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"

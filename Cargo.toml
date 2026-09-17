@@ -1,0 +1,34 @@
+# FundaCAD Rust workspace (docs/RUST-PIVOT.md).
+#
+# `crates/*` is the Rust pivot: the geometry engine, then the document core,
+# the protocol, the server and the native shell that replace the Python
+# sidecar and, later, the webview.
+#
+# `src-tauri` (the shipping desktop shell) is EXCLUDED for now, on purpose: it
+# keeps its own Cargo.lock and its own `src-tauri/target`, which is where the
+# release workflow, tauri-action and the portable-zip step all look for the
+# bundle. It reaches the pivot crates by path and joins the workspace in Phase
+# 2, together with the CI path changes that move implies.
+# `third_party/opencascade-rs` is its own workspace (vendored bindings).
+[workspace]
+resolver = "2"
+members = [
+    "crates/fundacad-geom",
+]
+exclude = ["src-tauri", "third_party/opencascade-rs"]
+
+[workspace.package]
+version = "0.2.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+authors = ["Paraxdev"]
+rust-version = "1.77"
+
+# occt-sys is a BUILD dependency of opencascade-sys, but the static OpenCASCADE
+# libraries it compiles end up in the final binary. Cargo builds build-deps at
+# opt-level 0 even in release, and the `cmake` crate copies that level into the
+# C++ build, so without this the whole kernel would ship unoptimised.
+[profile.release.package.occt-sys]
+opt-level = 3
+[profile.dev.package.occt-sys]
+opt-level = 3

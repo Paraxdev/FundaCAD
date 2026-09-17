@@ -444,6 +444,37 @@ impl Shape {
         }
     }
 
+    /// Volume of the shape from `BRepGProp::VolumeProperties`, in model units
+    /// cubed. Zero for anything that is not a closed solid.
+    pub fn volume(&self) -> f64 {
+        let mut props = ffi::g_prop::GProps_new();
+        let only_closed = false;
+        let skip_shared = false;
+        let use_triangulation = false;
+        ffi::b_rep_g_prop::BRepGProp::VolumeProperties(
+            &self.inner,
+            props.pin_mut(),
+            only_closed,
+            skip_shared,
+            use_triangulation,
+        );
+        props.Mass()
+    }
+
+    /// Total surface area of every face in the shape.
+    pub fn surface_area(&self) -> f64 {
+        let mut props = ffi::g_prop::GProps_new();
+        let skip_shared = false;
+        let use_triangulation = false;
+        ffi::b_rep_g_prop::BRepGProp::SurfaceProperties(
+            &self.inner,
+            props.pin_mut(),
+            skip_shared,
+            use_triangulation,
+        );
+        props.Mass()
+    }
+
     pub fn shape_type(&self) -> ShapeType {
         self.inner.ShapeType().into()
     }

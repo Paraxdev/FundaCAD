@@ -5,6 +5,7 @@ dist/
 
 # rust / tauri
 src-tauri/target/
+/target/
 src-tauri/gen/
 
 # python sidecar
