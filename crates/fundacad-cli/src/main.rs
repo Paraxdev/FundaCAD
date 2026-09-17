@@ -21,7 +21,10 @@ const USAGE: &str = "usage:
                                           rebuild one document; --json prints the whole reply
   fundacad-engine select-eval <corpus.json> [--config <tuning.json>]
                                           score selector survival on a frozen corpus, as
-                                          sidecar/tools/eval_selector_survival.py does";
+                                          sidecar/tools/eval_selector_survival.py does
+  fundacad-engine fillet-eval <corpus.json> [--show-ids]
+                                          score a fillet and chamfer corpus, as
+                                          sidecar/tools/eval_fillet_corpus.py does";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -30,6 +33,7 @@ fn main() -> ExitCode {
         Some("--stdio") => fundacad_engine::stdio::run(GeomJobs),
         Some("rebuild") => rebuild(&args[1..]),
         Some("select-eval") => select_eval(&args[1..]),
+        Some("fillet-eval") => fillet_eval(&args[1..]),
         Some("-h" | "--help") => {
             println!("{USAGE}");
             ExitCode::SUCCESS
@@ -218,5 +222,41 @@ fn select_eval(args: &[String]) -> ExitCode {
         per.join(", ")
     );
     println!("{}", Value::Object(metrics));
+    ExitCode::SUCCESS
+}
+
+/// sidecar/tools/eval_fillet_corpus.py on this engine, the same report and last line.
+fn fillet_eval(args: &[String]) -> ExitCode {
+    use fundacad_geom::features::blend::eval;
+    let mut corpus_path = None;
+    let mut show_ids = false;
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--corpus" => corpus_path = it.next().cloned(),
+            "--show-ids" => show_ids = true,
+            other if corpus_path.is_none() && !other.starts_with("--") => {
+                corpus_path = Some(other.to_string());
+            }
+            other => return usage(&format!("unexpected argument {other}")),
+        }
+    }
+    let Some(corpus_path) = corpus_path else {
+        return usage("fillet-eval needs a corpus path");
+    };
+    let corpus = match read_json(&corpus_path) {
+        Ok(v) => v,
+        Err(e) => return fail(&format!("setup failure: {e}")),
+    };
+    let verbose = std::env::var_os("FILLET_EVAL_VERBOSE").is_some();
+    let report = match eval::run(&corpus, |id| {
+        if verbose {
+            eprintln!("{id}");
+        }
+    }) {
+        Ok(r) => r,
+        Err(e) => return fail(&format!("setup failure: {e}")),
+    };
+    println!("{}", eval::render(&corpus_path, &corpus, &report, show_ids));
     ExitCode::SUCCESS
 }
