@@ -3693,6 +3693,185 @@
    ]
   }
  },
+ "mirror_datum": {
+  "doc": {
+   "features": [
+    {
+     "id": "p",
+     "offset": 12,
+     "plane": "YZ",
+     "type": "datumPlane"
+    },
+    {
+     "height": 2,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 4
+    },
+    {
+     "id": "mi",
+     "plane": "p",
+     "type": "mirror"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -2.0,
+      -1.0,
+      29.0,
+      2.0,
+      1.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "mi",
+      "mi",
+      "mi",
+      "mi",
+      "mi",
+      "mi"
+     ],
+     "faces": 12,
+     "id": "body1",
+     "name": "Box",
+     "solids": 2,
+     "volume": 160.00000000000003
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {
+    "p": {
+     "normal": [
+      1.0,
+      0.0,
+      0.0
+     ],
+     "origin": [
+      12.0,
+      0.0,
+      0.0
+     ],
+     "xdir": [
+      -0.0,
+      1.0,
+      0.0
+     ]
+    }
+   },
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "mirror_datum_tilted": {
+  "doc": {
+   "features": [
+    {
+     "id": "p",
+     "plane": {
+      "normal": [
+       1,
+       1,
+       0
+      ],
+      "origin": [
+       8,
+       0,
+       0
+      ],
+      "xdir": [
+       0,
+       0,
+       1
+      ]
+     },
+     "type": "datumPlane"
+    },
+    {
+     "height": 4,
+     "id": "a",
+     "length": 4,
+     "type": "box",
+     "width": 4
+    },
+    {
+     "id": "mi",
+     "plane": "p",
+     "type": "mirror"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -2.0,
+      -2.0,
+      -2.0,
+      10.000000000000004,
+      10.000000000000004,
+      2.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "mi",
+      "mi",
+      "mi",
+      "mi",
+      "mi",
+      "mi"
+     ],
+     "faces": 12,
+     "id": "body1",
+     "name": "Box",
+     "solids": 2,
+     "volume": 127.99999999999997
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {
+    "p": {
+     "normal": [
+      0.7071067811865476,
+      0.7071067811865476,
+      0.0
+     ],
+     "origin": [
+      8.0,
+      0.0,
+      0.0
+     ],
+     "xdir": [
+      0.0,
+      -0.0,
+      1.0
+     ]
+    }
+   },
+   "diagnostics": [],
+   "errors": []
+  }
+ },
  "mirror_nothing": {
   "doc": {
    "features": [
@@ -3713,6 +3892,120 @@
     {
      "feature_id": "mi",
      "message": "Mirror needs an existing body"
+    }
+   ]
+  }
+ },
+ "mirror_through_body": {
+  "doc": {
+   "features": [
+    {
+     "height": 2,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 4
+    },
+    {
+     "dx": 3,
+     "id": "m",
+     "type": "move"
+    },
+    {
+     "id": "mi",
+     "plane": "YZ",
+     "type": "mirror"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -8.0,
+      -2.0,
+      -1.0,
+      8.0,
+      2.0,
+      1.0
+     ],
+     "faceOwners": [
+      "mi",
+      "a",
+      "mi",
+      "mi",
+      "mi",
+      "mi"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 127.99999999999997
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "mirror_unknown_plane": {
+  "doc": {
+   "features": [
+    {
+     "height": 2,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 4
+    },
+    {
+     "id": "mi",
+     "plane": "nope",
+     "type": "mirror"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -2.0,
+      -1.0,
+      5.0,
+      2.0,
+      1.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 79.99999999999999
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "mi",
+     "message": "unknown plane reference: nope"
     }
    ]
   }
