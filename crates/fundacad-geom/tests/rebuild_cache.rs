@@ -125,7 +125,8 @@ fn editing_the_last_feature_replays_only_it_and_matches_a_cold_build() {
 }
 
 /// `tests/faces/split_wall.brep`: one body whose side is two faces of the same
-/// surface, which is what puts `faceBands` in its payload.
+/// surface, which is what puts `faceBands` in its payload. faces_parity covers
+/// the memory tier; what this adds is the artifact written to a real store.
 fn split_wall() -> opencascade::primitives::Shape {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/faces/split_wall.brep");
     let text = std::fs::read_to_string(path).unwrap();
