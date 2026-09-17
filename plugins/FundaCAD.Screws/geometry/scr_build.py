@@ -58,8 +58,13 @@ def _screw(spec):
         body = S.revolve_edges(edges)
         z_top = head["height"]
     elif htype == "none":
-        top = _set_screw_top(r, pitch)
-        body = None if (modelled and open_neck) else S.revolve_rz(top + tail) if not modelled else S.revolve_rz([(0.0, 0.0), (r, 0.0), *tail])
+        if not modelled:
+            body = S.revolve_rz(_set_screw_top(r, pitch) + tail)
+        elif open_neck:
+            body = None
+        else:
+            # the top chamfer is cut after the threaded part is fused on
+            body = S.revolve_rz([(0.0, 0.0), (r, 0.0), *tail])
     elif outline is not None:
         body = S.revolve_rz([*outline, *tail])
     else:
