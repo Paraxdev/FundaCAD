@@ -113,3 +113,45 @@ fn an_unknown_type_still_reads_unknown() {
     let r = build(vec![json!({"id": "x", "type": "noSuchFeature"})]);
     assert_eq!(r.errors[0].message, "unknown feature type: noSuchFeature");
 }
+
+/// The three sentences of `plugin_geometry.unregistered`: a plugin that is on
+/// disk but has no component for this engine is named, and says why.
+#[test]
+fn a_plugin_without_a_component_is_named() {
+    if !component_built() {
+        return;
+    }
+    let r = build(vec![json!({"id": "t", "type": "texture", "faces": []})]);
+    let m = &r.errors[0].message;
+    assert!(
+        m.starts_with("this needs the \"FundaCAD.Texture\" plugin, which is installed but would not load:"),
+        "{m}"
+    );
+}
+
+#[test]
+fn an_op_names_the_plugin_it_cannot_find() {
+    use fundacad_protocol::JobResult;
+    let JobResult::Json(m) = fundacad_geom::plugins::generate_shape_result(
+        &serde_json::from_value(json!({"generator": "nope", "params": {}})).unwrap(),
+        None,
+    ) else {
+        panic!("a json reply")
+    };
+    assert_eq!(
+        m["error"]["message"],
+        json!("no plugin that is running offers the shape \"nope\"")
+    );
+
+    let JobResult::Json(m) = fundacad_geom::plugins::export_with_result(
+        &serde_json::from_value(json!({"exporter": "nope", "path": "x.bin", "document": {"features": []}})).unwrap(),
+        &NoWatch,
+        None,
+    ) else {
+        panic!("a json reply")
+    };
+    assert_eq!(
+        m["error"]["message"],
+        json!("no installed plugin provides the \"nope\" export")
+    );
+}
