@@ -5,6 +5,7 @@ pub mod bounding_box;
 pub mod kicad;
 pub mod mesh;
 pub mod primitives;
+pub mod raw;
 pub mod section;
 pub mod workplane;
 
