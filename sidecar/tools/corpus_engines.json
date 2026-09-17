@@ -475,6 +475,23 @@
     ]}},
     {"name": "import_nested_collapsed", "importFixture": {"feature": "im", "path": "fixtures/asm_nested.step"}, "document": {"parameters": {}, "features": [
       {"id": "im", "type": "import", "format": "step", "explode": false}
+    ]}},
+    {"name": "sketch_text_extrude", "document": {"parameters": {}, "features": [
+      {"id": "s", "type": "sketch", "plane": "XY", "entities": [{"type": "text", "id": "t", "text": "Fun", "height": 10, "font": "Arial", "x": 0, "y": 0}]},
+      {"id": "e", "type": "extrude", "sketch": "s", "distance": 2, "operation": "new"}
+    ]}},
+    {"name": "sketch_text_counters_cut", "document": {"parameters": {}, "features": [
+      {"id": "b", "type": "box", "length": 60, "width": 20, "height": 6},
+      {"id": "s", "type": "sketch", "plane": {"origin": [0, 0, 3], "normal": [0, 0, 1], "xdir": [1, 0, 0]}, "entities": [{"type": "text", "id": "t", "text": "B8o", "height": 12, "font": "Arial", "style": "bold", "align": "center"}]},
+      {"id": "e", "type": "extrude", "sketch": "s", "distance": -2, "operation": "cut"}
+    ]}},
+    {"name": "sketch_text_on_path", "document": {"parameters": {}, "features": [
+      {"id": "s", "type": "sketch", "plane": "XY", "entities": [{"type": "arc", "id": "p", "x1": -40, "y1": 0, "mx": 0, "my": 30, "x2": 40, "y2": 0, "construction": true}, {"type": "text", "id": "t", "text": "ARCH", "height": 8, "font": "Times New Roman", "pathRef": "p", "positionOnPath": 0.2}]},
+      {"id": "e", "type": "extrude", "sketch": "s", "distance": 3, "operation": "new"}
+    ]}},
+    {"name": "sketch_text_rotated_with_rectangle", "document": {"parameters": {}, "features": [
+      {"id": "s", "type": "sketch", "plane": "XZ", "entities": [{"type": "rectangle", "id": "r", "width": 60, "height": 20, "x": 0, "y": 0}, {"type": "text", "id": "t", "text": "45 deg", "height": 6, "font": "Consolas", "angle": 45, "x": -5, "y": 2, "align": "right"}]},
+      {"id": "e", "type": "extrude", "sketch": "s", "distance": 4, "operation": "new"}
     ]}}
   ]
 }
