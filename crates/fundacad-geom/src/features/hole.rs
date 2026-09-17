@@ -5,11 +5,13 @@
 use fundacad_core::hole_standards::{self as std_holes, DRILL_POINT_DEG, HOLE_TYPES, SIZES};
 use fundacad_core::schema::{Hole, HoleExtent, Num};
 use opencascade::primitives::Shape;
-use serde_json::json;
+use opencascade::select_access::SurfaceType;
+use serde_json::{json, Value};
 
-use super::not_ported;
 use crate::builder::{py_g, Ctx, FResult, Fail, BAD_REQUEST};
 use crate::kernel::{self, BoolKind, Frame, Kind};
+use crate::select::entity::FaceEnt;
+use crate::select::Resolver;
 
 const REFERENCE_NOT_FOUND: &str = "referenceNotFound";
 
@@ -246,9 +248,11 @@ fn tool_solid(d: &Dims, lift: f64, through_depth: f64) -> FResult<Shape> {
     Ok(kernel::revolve(&face, [0.0; 3], [0.0, 0.0, 1.0], 360.0)?)
 }
 
-/// `_pick_body`: the named body, else the one nearest the anchor, else the last.
-fn pick_body(ctx: &Ctx, f: &Hole, point: Option<[f64; 3]>) -> FResult<usize> {
-    if let Some(bid) = f.body.as_deref().filter(|b| !b.is_empty()) {
+/// `_pick_body`: the named body (the feature's, else the selector's), else the
+/// one nearest the anchor, else the last.
+fn pick_body(ctx: &Ctx, f: &Hole, sel_body: Option<&str>, point: Option<[f64; 3]>) -> FResult<usize> {
+    let named = f.body.as_deref().filter(|b| !b.is_empty());
+    if let Some(bid) = named.or(sel_body.filter(|b| !b.is_empty())) {
         return ctx
             .find_body(bid)
             .ok_or_else(|| missing_ref("Hole: the target body no longer exists"));
@@ -316,15 +320,76 @@ pub fn handle(ctx: &mut Ctx, f: &Hole) -> FResult {
         ));
     }
 
-    let (body, origin, normal) = if f.face.is_some() {
-        return Err(not_ported("hole with a face selector"));
+    let sel = f
+        .face
+        .as_ref()
+        .map(serde_json::to_value)
+        .transpose()
+        .map_err(|_| Fail::Internal("TypeError".into()))?
+        .filter(|v| truthy(v));
+    let (body, origin, normal) = if let Some(sel) = sel {
+        face_anchor(ctx, f, &sel)?
     } else if let Some(plane) = sk_plane {
-        let body = pick_body(ctx, f, Some(points[0]))?;
+        let body = pick_body(ctx, f, None, Some(points[0]))?;
         (body, plane.origin, plane.z)
     } else {
         return Err(bad("Hole: pick a flat face to drill into"));
     };
     drill(ctx, f, &d, body, origin, normal, &points)
+}
+
+fn truthy(v: &Value) -> bool {
+    match v {
+        Value::Null => false,
+        Value::Bool(b) => *b,
+        Value::Object(m) => !m.is_empty(),
+        Value::Array(a) => !a.is_empty(),
+        Value::String(s) => !s.is_empty(),
+        Value::Number(n) => n.as_f64() != Some(0.0),
+    }
+}
+
+/// The body, centre and normal of the one flat face a `face` selector names.
+fn face_anchor(ctx: &mut Ctx, f: &Hole, sel: &Value) -> FResult<(usize, [f64; 3], [f64; 3])> {
+    let Some(m) = sel.as_object() else {
+        return Err(bad("Hole: `face` must be one face selector"));
+    };
+    let anchor = if m.get("by").and_then(Value::as_str) == Some("nearest") {
+        match m.get("point") {
+            Some(Value::Array(p)) => {
+                let mut xyz = [0.0; 3];
+                for (slot, c) in xyz.iter_mut().zip(p) {
+                    *slot = c.as_f64().ok_or_else(|| Fail::Internal("TypeError".into()))?;
+                }
+                Some(xyz)
+            }
+            Some(Value::Null) | None => None,
+            Some(_) => return Err(Fail::Internal("TypeError".into())),
+        }
+    } else {
+        None
+    };
+    let body = pick_body(ctx, f, m.get("body").and_then(Value::as_str), anchor)?;
+    let shape = ctx.bodies[body].shape().clone();
+    let faces = Resolver::new(Some(&mut ctx.diagnostics), Some(&f.id))
+        .faces(&shape, sel)
+        .map_err(|e| match e {
+            Fail::Missing(key) => bad(format!("Hole: the face selector is malformed ('{key}')")),
+            Fail::Internal(name) if name == "TypeError" || name == "AttributeError" => {
+                bad(format!("Hole: the face selector is malformed ({name})"))
+            }
+            other => other,
+        })?;
+    let Some(face) = faces.into_iter().next() else {
+        return Err(missing_ref("Hole: the face to drill is no longer in the model"));
+    };
+    let face = FaceEnt::new(face)?;
+    if face.surface != SurfaceType::Plane {
+        return Err(bad(
+            "Hole: the face must be flat, a hole is drilled along a flat face's normal",
+        ));
+    }
+    Ok((body, face.centroid().to_array(), face.normal().to_array()))
 }
 
 #[allow(clippy::too_many_arguments)]
