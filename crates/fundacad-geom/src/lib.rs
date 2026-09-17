@@ -12,9 +12,13 @@
 //! moving a sidecar `*.py` file across; the conversion targets are listed in
 //! the plan.
 
+pub mod builder;
+pub mod features;
 pub mod jobs;
+pub mod kernel;
 pub mod measure;
 pub mod mesh;
+pub mod reply;
 
 pub use opencascade;
 

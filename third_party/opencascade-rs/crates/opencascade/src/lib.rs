@@ -6,6 +6,7 @@ pub mod kicad;
 pub mod mesh;
 pub mod mesh_access;
 pub mod primitives;
+pub mod raw;
 pub mod section;
 pub mod workplane;
 
