@@ -15,7 +15,9 @@ opencascade = { path = "../../third_party/opencascade-rs/crates/opencascade" }
 opencascade-sys = { path = "../../third_party/opencascade-rs/crates/opencascade-sys" }
 blake2 = "0.10"
 cxx = "1"
+fundacad-core = { path = "../fundacad-core" }
 fundacad-engine = { path = "../fundacad-engine" }
+indexmap = { version = "2", features = ["serde"] }
 fundacad-protocol = { path = "../fundacad-protocol" }
 glam = { version = "0.24", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }

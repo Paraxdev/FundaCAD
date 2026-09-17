@@ -1,0 +1,5949 @@
+{
+ "active_dependent": {
+  "doc": {
+   "features": [
+    {
+     "activeWhen": "flag",
+     "entities": [
+      {
+       "height": 5,
+       "type": "rectangle",
+       "width": 5,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 5,
+     "id": "e",
+     "operation": "new",
+     "sketch": "s",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {
+    "flag": 0
+   }
+  },
+  "expect": {
+   "bodies": [],
+   "bodyIds": {},
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "e",
+     "message": "the sketch this extrude depends on (s) did not build, fix that sketch first (s is switched off by its activeWhen)"
+    }
+   ]
+  }
+ },
+ "active_off": {
+  "doc": {
+   "features": [
+    {
+     "activeWhen": "flag",
+     "height": 10,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "activeWhen": -2.5,
+     "height": 2,
+     "id": "b",
+     "length": 2,
+     "type": "box",
+     "width": 2
+    }
+   ],
+   "parameters": {
+    "flag": 0
+   }
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -1.0,
+      -1.0,
+      -1.0,
+      1.0,
+      1.0,
+      1.0
+     ],
+     "faceOwners": [
+      "b",
+      "b",
+      "b",
+      "b",
+      "b",
+      "b"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 7.999999999999998
+    }
+   ],
+   "bodyIds": {
+    "b:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "active_shifted_body": {
+  "doc": {
+   "features": [
+    {
+     "activeWhen": "flag",
+     "height": 10,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "height": 5,
+     "id": "b",
+     "length": 5,
+     "type": "box",
+     "width": 5
+    },
+    {
+     "bodies": [
+      "body2"
+     ],
+     "dx": 3,
+     "id": "m",
+     "type": "move"
+    },
+    {
+     "bodies": [
+      "body2"
+     ],
+     "id": "r",
+     "type": "removeBody"
+    }
+   ],
+   "parameters": {
+    "flag": 0
+   }
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -2.5,
+      -2.5,
+      -2.5,
+      2.5,
+      2.5,
+      2.5
+     ],
+     "faceOwners": [
+      "b",
+      "b",
+      "b",
+      "b",
+      "b",
+      "b"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 124.99999999999997
+    }
+   ],
+   "bodyIds": {
+    "b:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [
+    {
+     "feature_id": "m",
+     "kind": "move",
+     "reason": "target body already consumed or missing"
+    }
+   ],
+   "errors": [
+    {
+     "feature_id": "r",
+     "message": "Remove: no such body body2, it may have been renumbered or consumed by an earlier feature (a is switched off by its activeWhen and makes no bodies, so the body ids after it shift)"
+    }
+   ]
+  }
+ },
+ "active_unresolved": {
+  "doc": {
+   "features": [
+    {
+     "activeWhen": "missing",
+     "height": 10,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [],
+   "bodyIds": {},
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "a",
+     "message": "unresolved parameter or expression \"missing\", expected a number (expressions are evaluated by the app before building)"
+    }
+   ]
+  }
+ },
+ "arc_d": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "type": "line",
+       "x1": 0,
+       "x2": 0,
+       "y1": -5,
+       "y2": 5
+      },
+      {
+       "mx": 5,
+       "my": 0,
+       "type": "arc",
+       "x1": 0,
+       "x2": 0,
+       "y1": 5,
+       "y2": -5
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 2,
+     "id": "e",
+     "operation": "new",
+     "sketch": "s",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      0.0,
+      -5.0,
+      0.0,
+      5.0,
+      5.0,
+      2.0
+     ],
+     "faceOwners": [
+      "e",
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 4,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 78.53981633974483
+    }
+   ],
+   "bodyIds": {
+    "e:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "body_ids_join_inherit": {
+  "doc": {
+   "bodyIds": {
+    "a:0": "body4"
+   },
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "height": 20,
+     "id": "b",
+     "length": 4,
+     "operation": "join",
+     "type": "box",
+     "width": 4
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -5.0,
+      -10.0,
+      5.0,
+      5.0,
+      10.0
+     ],
+     "faceOwners": [
+      "b",
+      "b",
+      "b",
+      "b",
+      "b",
+      "b",
+      "a",
+      "a",
+      "a",
+      "a",
+      "b",
+      "b",
+      "b",
+      "b",
+      "b",
+      "b"
+     ],
+     "faces": 16,
+     "id": "body4",
+     "name": "Box",
+     "solids": 1,
+     "volume": 1159.9999999999993
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body4",
+    "b:0": "body4"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "body_ids_recorded": {
+  "doc": {
+   "bodyIds": {
+    "a:0": "body3",
+    "b:0": "body7"
+   },
+   "features": [
+    {
+     "height": 1,
+     "id": "a",
+     "length": 1,
+     "type": "box",
+     "width": 1
+    },
+    {
+     "height": 2,
+     "id": "b",
+     "length": 2,
+     "type": "box",
+     "width": 2
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -0.5,
+      -0.5,
+      -0.5,
+      0.5,
+      0.5,
+      0.5
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body3",
+     "name": "Box",
+     "solids": 1,
+     "volume": 0.9999999999999998
+    },
+    {
+     "bbox": [
+      -1.0,
+      -1.0,
+      -1.0,
+      1.0,
+      1.0,
+      1.0
+     ],
+     "faceOwners": [
+      "b",
+      "b",
+      "b",
+      "b",
+      "b",
+      "b"
+     ],
+     "faces": 6,
+     "id": "body7",
+     "name": "Box",
+     "solids": 1,
+     "volume": 7.999999999999998
+    }
+   ],
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "bolt_circle": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "radius": 20,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "patterns": [
+      {
+       "bcd": 24,
+       "count": 6,
+       "cx": 0,
+       "cy": 0,
+       "diameter": 3,
+       "id": "b",
+       "type": "boltCircle"
+      }
+     ],
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 3,
+     "id": "e",
+     "operation": "new",
+     "regions": [
+      [
+       0,
+       0,
+       0
+      ]
+     ],
+     "sketch": "s",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      3.0
+     ],
+     "faceOwners": [
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 9,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 3642.676681837364
+    }
+   ],
+   "bodyIds": {
+    "e:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "boolean_bad_op": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "height": 1,
+     "id": "b",
+     "length": 1,
+     "type": "box",
+     "width": 1
+    },
+    {
+     "id": "u",
+     "operation": "xor",
+     "target": "body1",
+     "type": "boolean"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -5.0,
+      -5.0,
+      5.0,
+      5.0,
+      5.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 999.9999999999998
+    },
+    {
+     "bbox": [
+      -0.5,
+      -0.5,
+      -0.5,
+      0.5,
+      0.5,
+      0.5
+     ],
+     "faceOwners": [
+      "b",
+      "b",
+      "b",
+      "b",
+      "b",
+      "b"
+     ],
+     "faces": 6,
+     "id": "body2",
+     "name": "Box",
+     "solids": 1,
+     "volume": 0.9999999999999998
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1",
+    "b:0": "body2"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "u",
+     "message": "unknown boolean operation: xor"
+    }
+   ]
+  }
+ },
+ "boolean_intersect": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "id": "s",
+     "radius": 6,
+     "type": "sphere"
+    },
+    {
+     "id": "u",
+     "operation": "intersect",
+     "target": "body1",
+     "tools": [
+      "body2"
+     ],
+     "type": "boolean"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -5.0,
+      -5.0,
+      5.0,
+      5.0,
+      5.000000000000002
+     ],
+     "faceOwners": [
+      "u",
+      "u",
+      "u",
+      "u",
+      "u",
+      "u",
+      "u"
+     ],
+     "faces": 7,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 797.9645581019955
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1",
+    "s:0": "body2"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "boolean_stale": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "id": "u",
+     "operation": "union",
+     "target": "body4",
+     "tools": [
+      "body1"
+     ],
+     "type": "boolean"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -5.0,
+      -5.0,
+      5.0,
+      5.0,
+      5.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 999.9999999999998
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [
+    {
+     "feature_id": "u",
+     "kind": "boolean",
+     "reason": "target body already consumed or missing"
+    }
+   ],
+   "errors": []
+  }
+ },
+ "boolean_subtract_keep": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "height": 30,
+     "id": "c",
+     "radius": 3,
+     "type": "cylinder"
+    },
+    {
+     "id": "u",
+     "keepOriginals": true,
+     "operation": "subtract",
+     "target": "body1",
+     "tools": [
+      "body2"
+     ],
+     "type": "boolean"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -5.0,
+      -5.0,
+      5.0,
+      5.0,
+      5.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "u",
+      "a",
+      "u",
+      "a",
+      "u"
+     ],
+     "faces": 7,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 717.2566611769184
+    },
+    {
+     "bbox": [
+      -3.0,
+      -3.0,
+      -15.0,
+      3.0,
+      3.0,
+      15.0
+     ],
+     "faceOwners": [
+      "c",
+      "c",
+      "c"
+     ],
+     "faces": 3,
+     "id": "body2",
+     "name": "Cylinder",
+     "solids": 1,
+     "volume": 848.2300164692441
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1",
+    "c:0": "body2"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "boolean_subtract_nothing": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "height": 2,
+     "id": "b",
+     "length": 2,
+     "type": "box",
+     "width": 2
+    },
+    {
+     "bodies": [
+      "body2"
+     ],
+     "dx": 40,
+     "id": "m",
+     "type": "move"
+    },
+    {
+     "id": "u",
+     "operation": "subtract",
+     "target": "body1",
+     "tools": [
+      "body2"
+     ],
+     "type": "boolean"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -5.0,
+      -5.0,
+      5.0,
+      5.0,
+      5.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 999.9999999999998
+    },
+    {
+     "bbox": [
+      39.0,
+      -1.0,
+      -1.0,
+      41.0,
+      1.0,
+      1.0
+     ],
+     "faceOwners": [
+      "b",
+      "b",
+      "b",
+      "b",
+      "b",
+      "b"
+     ],
+     "faces": 6,
+     "id": "body2",
+     "name": "Box",
+     "solids": 1,
+     "volume": 7.999999999999998
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1",
+    "b:0": "body2"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "u",
+     "message": "Subtract removed nothing, no tool body overlaps the one being kept."
+    }
+   ]
+  }
+ },
+ "boolean_union": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "height": 10,
+     "id": "b",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "bodies": [
+      "body2"
+     ],
+     "dx": 5,
+     "id": "m",
+     "type": "move"
+    },
+    {
+     "id": "u",
+     "operation": "union",
+     "target": "body1",
+     "tools": [
+      "body2"
+     ],
+     "type": "boolean"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -5.0,
+      -5.0,
+      10.0,
+      5.0,
+      5.0
+     ],
+     "faceOwners": [
+      "a",
+      "u",
+      "a",
+      "u",
+      "u",
+      "u"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 1500.0
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1",
+    "b:0": "body2"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "box": {
+  "doc": {
+   "features": [
+    {
+     "height": 5,
+     "id": "b",
+     "length": 20,
+     "type": "box",
+     "width": 10
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.0,
+      -5.0,
+      -2.5,
+      10.0,
+      5.0,
+      2.5
+     ],
+     "faceOwners": [
+      "b",
+      "b",
+      "b",
+      "b",
+      "b",
+      "b"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 999.9999999999998
+    }
+   ],
+   "bodyIds": {
+    "b:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "box_cut": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "height": 20,
+     "id": "c",
+     "operation": "cut",
+     "radius": 2,
+     "type": "cylinder"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -5.0,
+      -5.0,
+      5.0,
+      5.0,
+      5.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "c",
+      "a",
+      "c",
+      "a",
+      "c"
+     ],
+     "faces": 7,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 874.336293856408
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "box_intersect": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "id": "s",
+     "operation": "intersect",
+     "radius": 6.5,
+     "type": "sphere"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -5.0,
+      -5.000000000000001,
+      5.0,
+      5.0,
+      5.0
+     ],
+     "faceOwners": [
+      "s",
+      "s",
+      "s",
+      "s",
+      "s",
+      "s",
+      "s"
+     ],
+     "faces": 7,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 895.8774568800195
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "box_join": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "height": 20,
+     "id": "b",
+     "length": 4,
+     "operation": "join",
+     "type": "box",
+     "width": 4
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -5.0,
+      -10.0,
+      5.0,
+      5.0,
+      10.0
+     ],
+     "faceOwners": [
+      "b",
+      "b",
+      "b",
+      "b",
+      "b",
+      "b",
+      "a",
+      "a",
+      "a",
+      "a",
+      "b",
+      "b",
+      "b",
+      "b",
+      "b",
+      "b"
+     ],
+     "faces": 16,
+     "id": "body2",
+     "name": "Box",
+     "solids": 1,
+     "volume": 1159.9999999999993
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1",
+    "b:0": "body2"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "box_missing_field": {
+  "doc": {
+   "features": [
+    {
+     "id": "b",
+     "length": 5,
+     "type": "box",
+     "width": 5
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [],
+   "bodyIds": {},
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "code": "badRequest",
+     "feature_id": "b",
+     "message": "box is missing the field \"height\""
+    }
+   ]
+  }
+ },
+ "box_negative": {
+  "doc": {
+   "features": [
+    {
+     "height": 5,
+     "id": "b",
+     "length": 10,
+     "type": "box",
+     "width": -2.5
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [],
+   "bodyIds": {},
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "b",
+     "message": "Box: width must be greater than 0 (got -2.5)"
+    }
+   ]
+  }
+ },
+ "box_param": {
+  "doc": {
+   "features": [
+    {
+     "height": "H",
+     "id": "b",
+     "length": "L",
+     "type": "box",
+     "width": 10
+    }
+   ],
+   "parameters": {
+    "H": 2.5,
+    "L": 30
+   }
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -15.0,
+      -5.0,
+      -1.25,
+      15.0,
+      5.0,
+      1.25
+     ],
+     "faceOwners": [
+      "b",
+      "b",
+      "b",
+      "b",
+      "b",
+      "b"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 750.0
+    }
+   ],
+   "bodyIds": {
+    "b:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "box_unresolved": {
+  "doc": {
+   "features": [
+    {
+     "height": 5,
+     "id": "b",
+     "length": "nope",
+     "type": "box",
+     "width": 10
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [],
+   "bodyIds": {},
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "b",
+     "message": "unresolved parameter or expression \"nope\", expected a number (expressions are evaluated by the app before building)"
+    }
+   ]
+  }
+ },
+ "box_zero": {
+  "doc": {
+   "features": [
+    {
+     "height": 5,
+     "id": "b",
+     "length": 0,
+     "type": "box",
+     "width": 10
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [],
+   "bodyIds": {},
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "b",
+     "message": "Box: length must be greater than 0 (got 0)"
+    }
+   ]
+  }
+ },
+ "circle_xz_negative": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "radius": 5,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": "XZ",
+     "type": "sketch"
+    },
+    {
+     "distance": -6,
+     "id": "e",
+     "operation": "new",
+     "sketch": "s",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      0.0,
+      -5.0,
+      5.0,
+      6.0,
+      5.0
+     ],
+     "faceOwners": [
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 3,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 471.2388980384689
+    }
+   ],
+   "bodyIds": {
+    "e:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "circle_yz": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "radius": 5,
+       "type": "circle",
+       "x": 3,
+       "y": 4
+      }
+     ],
+     "id": "s",
+     "plane": "YZ",
+     "type": "sketch"
+    },
+    {
+     "distance": 10,
+     "id": "e",
+     "operation": "new",
+     "sketch": "s",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      0.0,
+      -2.0,
+      -1.0,
+      10.0,
+      8.0,
+      9.0
+     ],
+     "faceOwners": [
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 3,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 785.3981633974482
+    }
+   ],
+   "bodyIds": {
+    "e:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "clockwise_lines": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "type": "line",
+       "x1": 0,
+       "x2": 0,
+       "y1": 0,
+       "y2": 8
+      },
+      {
+       "type": "line",
+       "x1": 0,
+       "x2": 10,
+       "y1": 8,
+       "y2": 8
+      },
+      {
+       "type": "line",
+       "x1": 10,
+       "x2": 10,
+       "y1": 8,
+       "y2": 0
+      },
+      {
+       "type": "line",
+       "x1": 10,
+       "x2": 0,
+       "y1": 0,
+       "y2": 0
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 3,
+     "id": "e",
+     "operation": "new",
+     "sketch": "s",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      0.0,
+      0.0,
+      0.0,
+      10.0,
+      8.0,
+      3.0
+     ],
+     "faceOwners": [
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 240.0
+    }
+   ],
+   "bodyIds": {
+    "e:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "cone_equal": {
+  "doc": {
+   "features": [
+    {
+     "bottomRadius": 3,
+     "height": 4,
+     "id": "c",
+     "topRadius": 3,
+     "type": "cone"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [],
+   "bodyIds": {},
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "c",
+     "message": "Cone: the two radii must differ (equal radii is a cylinder)"
+    }
+   ]
+  }
+ },
+ "cone_frustum": {
+  "doc": {
+   "features": [
+    {
+     "bottomRadius": 5,
+     "height": 10,
+     "id": "c",
+     "topRadius": 2,
+     "type": "cone"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -5.0,
+      -5.0,
+      5.0,
+      5.0,
+      5.0
+     ],
+     "faceOwners": [
+      "c",
+      "c",
+      "c"
+     ],
+     "faces": 3,
+     "id": "body1",
+     "name": "Cone",
+     "solids": 1,
+     "volume": 408.4070449666731
+    }
+   ],
+   "bodyIds": {
+    "c:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "cone_negative": {
+  "doc": {
+   "features": [
+    {
+     "bottomRadius": -1,
+     "height": 4,
+     "id": "c",
+     "topRadius": 3,
+     "type": "cone"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [],
+   "bodyIds": {},
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "c",
+     "message": "Cone: radii must not be negative"
+    }
+   ]
+  }
+ },
+ "cone_point": {
+  "doc": {
+   "features": [
+    {
+     "bottomRadius": 0,
+     "height": 6,
+     "id": "c",
+     "topRadius": 4,
+     "type": "cone"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -3.999999999999999,
+      -3.999999999999999,
+      -3.0,
+      3.999999999999999,
+      3.999999999999999,
+      3.0
+     ],
+     "faceOwners": [
+      "c",
+      "c"
+     ],
+     "faces": 2,
+     "id": "body1",
+     "name": "Cone",
+     "solids": 1,
+     "volume": 100.53096491487335
+    }
+   ],
+   "bodyIds": {
+    "c:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "construction_skipped": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 10,
+       "type": "rectangle",
+       "width": 10,
+       "x": 0,
+       "y": 0
+      },
+      {
+       "construction": true,
+       "radius": 3,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 2,
+     "id": "e",
+     "operation": "new",
+     "sketch": "s",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -5.0,
+      0.0,
+      5.0,
+      5.0,
+      2.0
+     ],
+     "faceOwners": [
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 199.99999999999994
+    }
+   ],
+   "bodyIds": {
+    "e:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "crossing_lines": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 10,
+       "type": "rectangle",
+       "width": 10,
+       "x": 0,
+       "y": 0
+      },
+      {
+       "type": "line",
+       "x1": -8,
+       "x2": 8,
+       "y1": 0,
+       "y2": 0
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 2,
+     "id": "e",
+     "operation": "new",
+     "regions": [
+      [
+       0,
+       3,
+       0
+      ]
+     ],
+     "sketch": "s",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      0.0,
+      0.0,
+      5.0,
+      5.0,
+      2.0
+     ],
+     "faceOwners": [
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 99.99999999999997
+    }
+   ],
+   "bodyIds": {
+    "e:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "cut_everything": {
+  "doc": {
+   "features": [
+    {
+     "height": 4,
+     "id": "a",
+     "length": 4,
+     "type": "box",
+     "width": 4
+    },
+    {
+     "height": 10,
+     "id": "b",
+     "length": 10,
+     "operation": "cut",
+     "type": "box",
+     "width": 10
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -2.0,
+      -2.0,
+      -2.0,
+      2.0,
+      2.0,
+      2.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 63.999999999999986
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "b",
+     "message": "Cut would remove all of Box. Shorten it, or select a smaller area."
+    }
+   ]
+  }
+ },
+ "cut_misses": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "height": 2,
+     "id": "m",
+     "length": 2,
+     "operation": "cut",
+     "type": "box",
+     "width": 2
+    },
+    {
+     "dx": 50,
+     "id": "mv",
+     "type": "move"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      45.0,
+      -5.0,
+      -5.0,
+      55.0,
+      5.0,
+      5.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "m",
+      "m",
+      "m",
+      "m",
+      "m",
+      "m"
+     ],
+     "faces": 12,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 991.9999999999995
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [
+    {
+     "feature_id": "m",
+     "kind": "sealedVoid",
+     "reason": "This cut closed a cavity inside the body instead of opening its surface. Extrude it further, or make it symmetric."
+    }
+   ],
+   "errors": []
+  }
+ },
+ "cylinder": {
+  "doc": {
+   "features": [
+    {
+     "height": 12,
+     "id": "c",
+     "radius": 4,
+     "type": "cylinder"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -4.0,
+      -4.0,
+      -6.0,
+      4.0,
+      4.0,
+      6.0
+     ],
+     "faceOwners": [
+      "c",
+      "c",
+      "c"
+     ],
+     "faces": 3,
+     "id": "body1",
+     "name": "Cylinder",
+     "solids": 1,
+     "volume": 603.1857894892403
+    }
+   ],
+   "bodyIds": {
+    "c:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "datum_bad": {
+  "doc": {
+   "features": [
+    {
+     "id": "p",
+     "plane": "ZZ",
+     "type": "datumPlane"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [],
+   "bodyIds": {},
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "p",
+     "message": "unknown plane reference: ZZ"
+    }
+   ]
+  }
+ },
+ "datum_custom": {
+  "doc": {
+   "features": [
+    {
+     "id": "p",
+     "offset": 1,
+     "plane": {
+      "normal": [
+       0,
+       0.6,
+       0.8
+      ],
+      "origin": [
+       1,
+       2,
+       3
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "datumPlane"
+    },
+    {
+     "entities": [
+      {
+       "radius": 3,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "planeId": "p",
+     "type": "sketch"
+    },
+    {
+     "distance": 4,
+     "id": "e",
+     "operation": "new",
+     "sketch": "s",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -2.0,
+      0.19999999999999973,
+      1.9999999999999996,
+      4.0,
+      7.4,
+      8.8
+     ],
+     "faceOwners": [
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 3,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 113.09733552923254
+    }
+   ],
+   "bodyIds": {
+    "e:0": "body1"
+   },
+   "datumPlanes": {
+    "p": {
+     "normal": [
+      0.0,
+      0.6,
+      0.8
+     ],
+     "origin": [
+      1.0,
+      2.6,
+      3.8
+     ],
+     "xdir": [
+      1.0,
+      0.0,
+      -0.0
+     ]
+    }
+   },
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "datum_named_xz": {
+  "doc": {
+   "features": [
+    {
+     "id": "p",
+     "offset": -4,
+     "plane": "XZ",
+     "type": "datumPlane"
+    },
+    {
+     "id": "q",
+     "offset": 2,
+     "plane": "p",
+     "type": "datumPlane"
+    },
+    {
+     "entities": [
+      {
+       "height": 3,
+       "type": "rectangle",
+       "width": 6,
+       "x": 2,
+       "y": 1
+      }
+     ],
+     "id": "s",
+     "plane": "XZ",
+     "planeId": "q",
+     "type": "sketch"
+    },
+    {
+     "distance": 5,
+     "id": "e",
+     "operation": "new",
+     "sketch": "s",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -1.0,
+      -3.0,
+      -0.5,
+      5.0,
+      2.0,
+      2.5
+     ],
+     "faceOwners": [
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 90.0
+    }
+   ],
+   "bodyIds": {
+    "e:0": "body1"
+   },
+   "datumPlanes": {
+    "p": {
+     "normal": [
+      0.0,
+      -1.0,
+      0.0
+     ],
+     "origin": [
+      0.0,
+      4.0,
+      0.0
+     ],
+     "xdir": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "q": {
+     "normal": [
+      0.0,
+      -1.0,
+      0.0
+     ],
+     "origin": [
+      0.0,
+      2.0,
+      0.0
+     ],
+     "xdir": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    }
+   },
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "datum_offset": {
+  "doc": {
+   "features": [
+    {
+     "id": "p",
+     "offset": 15,
+     "plane": "XY",
+     "type": "datumPlane"
+    },
+    {
+     "entities": [
+      {
+       "height": 10,
+       "type": "rectangle",
+       "width": 10,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "planeId": "p",
+     "type": "sketch"
+    },
+    {
+     "distance": 5,
+     "id": "e",
+     "operation": "new",
+     "sketch": "s",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -5.0,
+      15.0,
+      5.0,
+      5.0,
+      20.0
+     ],
+     "faceOwners": [
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 499.9999999999999
+    }
+   ],
+   "bodyIds": {
+    "e:0": "body1"
+   },
+   "datumPlanes": {
+    "p": {
+     "normal": [
+      0.0,
+      0.0,
+      1.0
+     ],
+     "origin": [
+      0.0,
+      0.0,
+      15.0
+     ],
+     "xdir": [
+      1.0,
+      0.0,
+      -0.0
+     ]
+    }
+   },
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "disk_region": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 20,
+       "type": "rectangle",
+       "width": 20,
+       "x": 0,
+       "y": 0
+      },
+      {
+       "radius": 4,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 5,
+     "id": "e",
+     "operation": "new",
+     "region": [
+      0,
+      0,
+      0
+     ],
+     "sketch": "s",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -4.0,
+      -4.0,
+      0.0,
+      4.0,
+      4.0,
+      5.0
+     ],
+     "faceOwners": [
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 3,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 251.32741228718336
+    }
+   ],
+   "bodyIds": {
+    "e:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "duplicate": {
+  "doc": {
+   "features": [
+    {
+     "height": 2,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 4
+    },
+    {
+     "dx": 30,
+     "id": "d",
+     "rz": 90,
+     "type": "duplicate"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -2.0,
+      -1.0,
+      5.0,
+      2.0,
+      1.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 79.99999999999999
+    },
+    {
+     "bbox": [
+      28.0,
+      -5.0,
+      -1.0,
+      32.0,
+      5.0,
+      1.0
+     ],
+     "faceOwners": [
+      "d",
+      "d",
+      "d",
+      "d",
+      "d",
+      "d"
+     ],
+     "faces": 6,
+     "id": "body2",
+     "name": "Box copy",
+     "solids": 1,
+     "volume": 79.99999999999999
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1",
+    "d:0": "body2"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "duplicate_two": {
+  "doc": {
+   "features": [
+    {
+     "height": 2,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 4
+    },
+    {
+     "height": 1,
+     "id": "b",
+     "length": 1,
+     "type": "box",
+     "width": 1
+    },
+    {
+     "bodies": [
+      "body1",
+      "body2"
+     ],
+     "dz": 10,
+     "id": "d",
+     "type": "duplicate"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -2.0,
+      -1.0,
+      5.0,
+      2.0,
+      1.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 79.99999999999999
+    },
+    {
+     "bbox": [
+      -0.5,
+      -0.5,
+      -0.5,
+      0.5,
+      0.5,
+      0.5
+     ],
+     "faceOwners": [
+      "b",
+      "b",
+      "b",
+      "b",
+      "b",
+      "b"
+     ],
+     "faces": 6,
+     "id": "body2",
+     "name": "Box",
+     "solids": 1,
+     "volume": 0.9999999999999998
+    },
+    {
+     "bbox": [
+      -5.0,
+      -2.0,
+      9.0,
+      5.0,
+      2.0,
+      11.0
+     ],
+     "faceOwners": [
+      "d",
+      "d",
+      "d",
+      "d",
+      "d",
+      "d"
+     ],
+     "faces": 6,
+     "id": "body3",
+     "name": "Box copy",
+     "solids": 1,
+     "volume": 79.99999999999999
+    },
+    {
+     "bbox": [
+      -0.5,
+      -0.5,
+      9.5,
+      0.5,
+      0.5,
+      10.5
+     ],
+     "faceOwners": [
+      "d",
+      "d",
+      "d",
+      "d",
+      "d",
+      "d"
+     ],
+     "faces": 6,
+     "id": "body4",
+     "name": "Box copy",
+     "solids": 1,
+     "volume": 0.9999999999999998
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1",
+    "b:0": "body2",
+    "d:0": "body3",
+    "d:1": "body4"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "ellipse": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "angle": 20,
+       "rx": 3,
+       "ry": 7,
+       "type": "ellipse",
+       "x": 2
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 2,
+     "id": "e",
+     "operation": "new",
+     "sketch": "s",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -1.6985282393974543,
+      -6.6573935487080504,
+      0.0,
+      5.698528239397454,
+      6.6573935487080504,
+      2.0
+     ],
+     "faceOwners": [
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 3,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 131.94689145077132
+    }
+   ],
+   "bodyIds": {
+    "e:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "extrude_cut": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 30,
+     "type": "box",
+     "width": 30
+    },
+    {
+     "entities": [
+      {
+       "radius": 4,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e",
+     "operation": "cut",
+     "sketch": "s",
+     "symmetric": true,
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -15.0,
+      -15.0,
+      -5.0,
+      15.0,
+      15.0,
+      5.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "e",
+      "a",
+      "e",
+      "a",
+      "e"
+     ],
+     "faces": 7,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 8497.345175425633
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "extrude_empty_sketch": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "type": "point",
+       "x": 1,
+       "y": 1
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 5,
+     "id": "e",
+     "operation": "new",
+     "sketch": "s",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [],
+   "bodyIds": {},
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "e",
+     "message": "sketch has no closed profile to extrude"
+    }
+   ]
+  }
+ },
+ "extrude_hidden": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 30,
+     "type": "box",
+     "width": 30
+    },
+    {
+     "entities": [
+      {
+       "radius": 4,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "hiddenBodies": [
+      "body1"
+     ],
+     "id": "e",
+     "operation": "cut",
+     "sketch": "s",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -15.0,
+      -15.0,
+      -5.0,
+      15.0,
+      15.0,
+      5.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 9000.0
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "e",
+     "message": "Cut removed nothing, the extrude doesn't reach any body. Drag the other way, or use Join."
+    }
+   ]
+  }
+ },
+ "extrude_intersect": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 30,
+     "type": "box",
+     "width": 30
+    },
+    {
+     "entities": [
+      {
+       "radius": 6,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 3,
+     "id": "e",
+     "operation": "intersect",
+     "sketch": "s",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -6.0,
+      -6.0,
+      0.0,
+      6.0,
+      6.0,
+      3.0
+     ],
+     "faceOwners": [
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 3,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 339.2920065876977
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "extrude_join": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 30,
+     "type": "box",
+     "width": 30
+    },
+    {
+     "entities": [
+      {
+       "height": 10,
+       "type": "rectangle",
+       "width": 10,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": {
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "origin": [
+       0,
+       0,
+       5
+      ],
+      "xdir": [
+       1,
+       0,
+       0
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "distance": 6,
+     "id": "e",
+     "operation": "join",
+     "sketch": "s",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -15.0,
+      -15.0,
+      -5.0,
+      15.0,
+      15.0,
+      11.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "e",
+      "a",
+      "a",
+      "a",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 11,
+     "id": "body2",
+     "name": "Box",
+     "solids": 1,
+     "volume": 9600.0
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1",
+    "e:0": "body2"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "extrude_join_inside": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 30,
+     "type": "box",
+     "width": 30
+    },
+    {
+     "entities": [
+      {
+       "height": 10,
+       "type": "rectangle",
+       "width": 10,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 2,
+     "id": "e",
+     "operation": "join",
+     "sketch": "s",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -15.0,
+      -15.0,
+      -5.0,
+      15.0,
+      15.0,
+      5.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 9000.0
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "e",
+     "message": "Join added no material, the profile is already inside the body. Did you mean Cut?"
+    }
+   ]
+  }
+ },
+ "extrude_missing_sketch": {
+  "doc": {
+   "features": [
+    {
+     "distance": 5,
+     "id": "e",
+     "operation": "new",
+     "sketch": "s9",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [],
+   "bodyIds": {},
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "e",
+     "message": "the sketch this extrude depends on (s9) did not build, fix that sketch first"
+    }
+   ]
+  }
+ },
+ "extrude_on_datum_cut_two_bodies": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "height": 10,
+     "id": "b",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "bodies": [
+      "body2"
+     ],
+     "dx": 12,
+     "id": "m",
+     "type": "move"
+    },
+    {
+     "entities": [
+      {
+       "height": 2,
+       "type": "rectangle",
+       "width": 30,
+       "x": 6,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e",
+     "operation": "cut",
+     "sketch": "s",
+     "symmetric": true,
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -5.0,
+      -5.0,
+      5.0,
+      5.0,
+      5.0
+     ],
+     "faceOwners": [
+      "e",
+      "e",
+      "e",
+      "e",
+      "a",
+      "e",
+      "e",
+      "e",
+      "a",
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 12,
+     "id": "body1",
+     "name": "Box",
+     "solids": 2,
+     "volume": 799.9999999999997
+    },
+    {
+     "bbox": [
+      7.0,
+      -5.0,
+      -5.0,
+      17.0,
+      5.0,
+      5.0
+     ],
+     "faceOwners": [
+      "e",
+      "e",
+      "e",
+      "e",
+      "a",
+      "e",
+      "e",
+      "e",
+      "a",
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 12,
+     "id": "body2",
+     "name": "Box",
+     "solids": 2,
+     "volume": 799.9999999999997
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1",
+    "b:0": "body2"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "extrude_param": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": "W",
+       "type": "rectangle",
+       "width": 10,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": "D",
+     "id": "e",
+     "operation": "new",
+     "sketch": "s",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {
+    "D": 3.5,
+    "W": 7
+   }
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -3.5,
+      0.0,
+      5.0,
+      3.5,
+      3.5
+     ],
+     "faceOwners": [
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 245.0
+    }
+   ],
+   "bodyIds": {
+    "e:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "extrude_symmetric": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 10,
+       "type": "rectangle",
+       "width": 10,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 4,
+     "id": "e",
+     "operation": "new",
+     "sketch": "s",
+     "symmetric": true,
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -5.0,
+      -4.0,
+      5.0,
+      5.0,
+      4.0
+     ],
+     "faceOwners": [
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 799.9999999999998
+    }
+   ],
+   "bodyIds": {
+    "e:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "extrude_taper": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 20,
+       "type": "rectangle",
+       "width": 20,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 5,
+     "id": "e",
+     "operation": "new",
+     "sketch": "s",
+     "taper": 10,
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.0,
+      -10.0,
+      0.0,
+      10.0,
+      10.0,
+      5.0000000000000036
+     ],
+     "faceOwners": [
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 1828.8548866458293
+    }
+   ],
+   "bodyIds": {
+    "e:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "extrude_taper_bad": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 20,
+       "type": "rectangle",
+       "width": 20,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 5,
+     "id": "e",
+     "operation": "new",
+     "sketch": "s",
+     "taper": 95,
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [],
+   "bodyIds": {},
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "e",
+     "message": "Extrude: taper must be between -89 and 89 degrees (got 95)"
+    }
+   ]
+  }
+ },
+ "extrude_taper_negative": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 20,
+       "type": "rectangle",
+       "width": 20,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 5,
+     "id": "e",
+     "operation": "new",
+     "sketch": "s",
+     "taper": -10,
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.881635003542325,
+      -10.881635003542325,
+      -1e-07,
+      10.881635003542325,
+      10.881635003542325,
+      5.0000001
+     ],
+     "faceOwners": [
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 2181.508848062759
+    }
+   ],
+   "bodyIds": {
+    "e:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "extrude_zero": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 10,
+       "type": "rectangle",
+       "width": 10,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 0,
+     "id": "e",
+     "operation": "new",
+     "sketch": "s",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [],
+   "bodyIds": {},
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "e",
+     "message": "Extrude: distance must not be 0"
+    }
+   ]
+  }
+ },
+ "hidden_body_skipped": {
+  "doc": {
+   "bodyVisibility": {
+    "body1": false
+   },
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "height": 20,
+     "id": "b",
+     "length": 4,
+     "operation": "join",
+     "type": "box",
+     "width": 4
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -5.0,
+      -5.0,
+      5.0,
+      5.0,
+      5.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 999.9999999999998
+    },
+    {
+     "bbox": [
+      -2.0,
+      -2.0,
+      -10.0,
+      2.0,
+      2.0,
+      10.0
+     ],
+     "faceOwners": [
+      "b",
+      "b",
+      "b",
+      "b",
+      "b",
+      "b"
+     ],
+     "faces": 6,
+     "id": "body2",
+     "name": "Box",
+     "solids": 1,
+     "volume": 319.99999999999994
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1",
+    "b:0": "body2"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "join_targets_missing": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "height": 4,
+     "id": "b",
+     "length": 4,
+     "operation": "join",
+     "targets": [
+      "body9"
+     ],
+     "type": "box",
+     "width": 4
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -5.0,
+      -5.0,
+      5.0,
+      5.0,
+      5.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 999.9999999999998
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "b",
+     "message": "no body called body9 exists at this point in the timeline, check the ids against the last build."
+    }
+   ]
+  }
+ },
+ "mirror_nothing": {
+  "doc": {
+   "features": [
+    {
+     "id": "mi",
+     "plane": "XY",
+     "type": "mirror"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [],
+   "bodyIds": {},
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "mi",
+     "message": "Mirror needs an existing body"
+    }
+   ]
+  }
+ },
+ "mirror_xz": {
+  "doc": {
+   "features": [
+    {
+     "height": 2,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 4
+    },
+    {
+     "dy": 1,
+     "id": "m",
+     "type": "move"
+    },
+    {
+     "id": "mi",
+     "plane": "XZ",
+     "type": "mirror"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -3.0,
+      -1.0,
+      5.0,
+      3.0,
+      1.0
+     ],
+     "faceOwners": [
+      "mi",
+      "a",
+      "mi",
+      "mi",
+      "mi",
+      "mi"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 120.0
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "mirror_yz": {
+  "doc": {
+   "features": [
+    {
+     "height": 2,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 4
+    },
+    {
+     "dx": 8,
+     "id": "m",
+     "type": "move"
+    },
+    {
+     "id": "mi",
+     "plane": "YZ",
+     "type": "mirror"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -13.0,
+      -2.0,
+      -1.0,
+      13.0,
+      2.0,
+      1.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "mi",
+      "mi",
+      "mi",
+      "mi",
+      "mi",
+      "mi"
+     ],
+     "faces": 12,
+     "id": "body1",
+     "name": "Box",
+     "solids": 2,
+     "volume": 160.0
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "missing_type": {
+  "doc": {
+   "features": [
+    {
+     "id": "x",
+     "name": "Mystery"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [],
+   "bodyIds": {},
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "code": "badRequest",
+     "feature_id": "x",
+     "message": "Mystery is missing the field \"type\""
+    }
+   ]
+  }
+ },
+ "move": {
+  "doc": {
+   "features": [
+    {
+     "height": 2,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 4
+    },
+    {
+     "dx": 5,
+     "dy": -3,
+     "dz": 7,
+     "id": "m",
+     "rx": 30,
+     "ry": 10,
+     "rz": 45,
+     "type": "move"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -0.048197859907062934,
+      -7.9631926323301245,
+      3.9912698064307435,
+      10.048197859907063,
+      1.9631926323301254,
+      10.008730193569257
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 80.00000000000001
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "move_nothing": {
+  "doc": {
+   "features": [
+    {
+     "dx": 5,
+     "id": "m",
+     "type": "move"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [],
+   "bodyIds": {},
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "m",
+     "message": "Move needs an existing body"
+    }
+   ]
+  }
+ },
+ "move_param": {
+  "doc": {
+   "features": [
+    {
+     "height": 2,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 4
+    },
+    {
+     "dz": "lift",
+     "id": "m",
+     "type": "move"
+    }
+   ],
+   "parameters": {
+    "lift": 12.5
+   }
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -2.0,
+      11.5,
+      5.0,
+      2.0,
+      13.5
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 79.99999999999999
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "move_stale": {
+  "doc": {
+   "features": [
+    {
+     "height": 2,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 4
+    },
+    {
+     "bodies": [
+      "body7"
+     ],
+     "dx": 5,
+     "id": "m",
+     "type": "move"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -2.0,
+      -1.0,
+      5.0,
+      2.0,
+      1.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 79.99999999999999
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [
+    {
+     "feature_id": "m",
+     "kind": "move",
+     "reason": "target body already consumed or missing"
+    }
+   ],
+   "errors": []
+  }
+ },
+ "nested_holes": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "radius": 10,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      },
+      {
+       "radius": 6,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      },
+      {
+       "radius": 3,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 2,
+     "id": "e",
+     "operation": "new",
+     "regions": [
+      [
+       8,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0
+      ]
+     ],
+     "sketch": "s",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.0,
+      -10.0,
+      0.0,
+      10.0,
+      10.0,
+      2.0
+     ],
+     "faceOwners": [
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 7,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 2,
+     "volume": 458.6725274241098
+    }
+   ],
+   "bodyIds": {
+    "e:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "nothing_built": {
+  "doc": {
+   "features": [
+    {
+     "height": 1,
+     "id": "a",
+     "length": 0,
+     "type": "box",
+     "width": 1
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [],
+   "bodyIds": {},
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "a",
+     "message": "Box: length must be greater than 0 (got 0)"
+    }
+   ]
+  }
+ },
+ "only_sketch": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 5,
+       "type": "rectangle",
+       "width": 5,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [],
+   "bodyIds": {},
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "owners_follow_a_move": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "entities": [
+      {
+       "radius": 2,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 20,
+     "id": "e",
+     "operation": "cut",
+     "sketch": "s",
+     "symmetric": true,
+     "type": "extrude"
+    },
+    {
+     "dx": 4,
+     "id": "m",
+     "rz": 30,
+     "type": "move"
+    },
+    {
+     "height": 30,
+     "id": "b",
+     "length": 3,
+     "operation": "join",
+     "type": "box",
+     "width": 3
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -2.830127018922193,
+      -6.830127018922193,
+      -15.0,
+      10.830127018922193,
+      6.830127018922194,
+      15.0
+     ],
+     "faceOwners": [
+      "b",
+      "b",
+      "b",
+      "b",
+      "b",
+      "b",
+      "b",
+      "b",
+      "b",
+      "b",
+      "b",
+      "a",
+      "a",
+      "a",
+      "e",
+      "b"
+     ],
+     "faces": 16,
+     "id": "body2",
+     "name": "Box",
+     "solids": 1,
+     "volume": 1057.3767632459533
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1",
+    "b:0": "body2"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "pattern_rect": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 40,
+       "type": "rectangle",
+       "width": 40,
+       "x": 0,
+       "y": 0
+      },
+      {
+       "id": "h",
+       "radius": 2,
+       "type": "circle",
+       "x": -10,
+       "y": -10
+      }
+     ],
+     "id": "s",
+     "patterns": [
+      {
+       "countX": 3,
+       "countY": 2,
+       "id": "p",
+       "sources": [
+        "h"
+       ],
+       "spacingX": 10,
+       "spacingY": 12,
+       "type": "patternRect"
+      }
+     ],
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 3,
+     "id": "e",
+     "operation": "new",
+     "regions": [
+      [
+       15,
+       15,
+       0
+      ]
+     ],
+     "sketch": "s",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0,
+      -20.0,
+      0.0,
+      20.0,
+      20.0,
+      3.0
+     ],
+     "faceOwners": [
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 12,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 4573.805328941536
+    }
+   ],
+   "bodyIds": {
+    "e:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "polygon": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "angle": 15,
+       "radius": 6,
+       "sides": 6,
+       "type": "polygon",
+       "x": 1,
+       "y": 2
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 2,
+     "id": "e",
+     "operation": "new",
+     "sketch": "s",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -4.79555495773441,
+      -3.7955549577344088,
+      0.0,
+      6.79555495773441,
+      7.795554957734409,
+      2.0
+     ],
+     "faceOwners": [
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 8,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 187.06148721743875
+    }
+   ],
+   "bodyIds": {
+    "e:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "rect_angle": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "angle": 30,
+       "height": 10,
+       "type": "rectangle",
+       "width": 20,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 3,
+     "id": "e",
+     "operation": "new",
+     "sketch": "s",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -11.160254037844387,
+      -9.330127018922193,
+      0.0,
+      11.160254037844387,
+      9.330127018922193,
+      3.0
+     ],
+     "faceOwners": [
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 600.0
+    }
+   ],
+   "bodyIds": {
+    "e:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "rect_extrude": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 10,
+       "type": "rectangle",
+       "width": 20,
+       "x": 5,
+       "y": -2
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 8,
+     "id": "e",
+     "operation": "new",
+     "sketch": "s",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -7.0,
+      0.0,
+      15.0,
+      3.0,
+      8.0
+     ],
+     "faceOwners": [
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 1599.9999999999995
+    }
+   ],
+   "bodyIds": {
+    "e:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "remove_body": {
+  "doc": {
+   "features": [
+    {
+     "height": 2,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 4
+    },
+    {
+     "height": 1,
+     "id": "b",
+     "length": 1,
+     "type": "box",
+     "width": 1
+    },
+    {
+     "bodies": [
+      "body1"
+     ],
+     "id": "r",
+     "type": "removeBody"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -0.5,
+      -0.5,
+      -0.5,
+      0.5,
+      0.5,
+      0.5
+     ],
+     "faceOwners": [
+      "b",
+      "b",
+      "b",
+      "b",
+      "b",
+      "b"
+     ],
+     "faces": 6,
+     "id": "body2",
+     "name": "Box",
+     "solids": 1,
+     "volume": 0.9999999999999998
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1",
+    "b:0": "body2"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "remove_missing": {
+  "doc": {
+   "features": [
+    {
+     "height": 2,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 4
+    },
+    {
+     "bodies": [
+      "body5",
+      "body3"
+     ],
+     "id": "r",
+     "type": "removeBody"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -2.0,
+      -1.0,
+      5.0,
+      2.0,
+      1.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 79.99999999999999
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "r",
+     "message": "Remove: no such body body3, body5, it may have been renumbered or consumed by an earlier feature"
+    }
+   ]
+  }
+ },
+ "revolve_full": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 10,
+       "type": "rectangle",
+       "width": 4,
+       "x": 8,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": "XZ",
+     "type": "sketch"
+    },
+    {
+     "angle": 360,
+     "axis": "Z",
+     "id": "r",
+     "sketch": "s",
+     "type": "revolve"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.0,
+      -10.0,
+      -5.0,
+      10.0,
+      10.0,
+      5.0
+     ],
+     "faceOwners": [
+      "r",
+      "r",
+      "r",
+      "r"
+     ],
+     "faces": 4,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 2010.6192982974676
+    }
+   ],
+   "bodyIds": {
+    "r:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "revolve_quarter": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 10,
+       "type": "rectangle",
+       "width": 4,
+       "x": 8,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": "XZ",
+     "type": "sketch"
+    },
+    {
+     "angle": 90,
+     "axis": "Z",
+     "id": "r",
+     "sketch": "s",
+     "type": "revolve"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      3.6739403974420594e-16,
+      0.0,
+      -5.0,
+      10.0,
+      10.0,
+      5.0
+     ],
+     "faceOwners": [
+      "r",
+      "r",
+      "r",
+      "r",
+      "r",
+      "r"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 502.6548245743669
+    }
+   ],
+   "bodyIds": {
+    "r:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "revolve_zero": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 10,
+       "type": "rectangle",
+       "width": 4,
+       "x": 8,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": "XZ",
+     "type": "sketch"
+    },
+    {
+     "angle": 0,
+     "axis": "Z",
+     "id": "r",
+     "sketch": "s",
+     "type": "revolve"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [],
+   "bodyIds": {},
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "r",
+     "message": "Revolve: angle must not be 0, nothing would be swept"
+    }
+   ]
+  }
+ },
+ "ring_region": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 20,
+       "type": "rectangle",
+       "width": 20,
+       "x": 0,
+       "y": 0
+      },
+      {
+       "radius": 4,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 5,
+     "id": "e",
+     "operation": "new",
+     "regions": [
+      [
+       8,
+       8,
+       0
+      ]
+     ],
+     "sketch": "s",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.0,
+      -10.0,
+      0.0,
+      10.0,
+      10.0,
+      5.0
+     ],
+     "faceOwners": [
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 7,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 1748.672587712816
+    }
+   ],
+   "bodyIds": {
+    "e:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "ring_whole": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 20,
+       "type": "rectangle",
+       "width": 20,
+       "x": 0,
+       "y": 0
+      },
+      {
+       "radius": 4,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 5,
+     "id": "e",
+     "operation": "new",
+     "sketch": "s",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.0,
+      -10.0,
+      0.0,
+      10.0,
+      10.0,
+      5.0
+     ],
+     "faceOwners": [
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 1999.9999999999995
+    }
+   ],
+   "bodyIds": {
+    "e:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "scale_after_move": {
+  "doc": {
+   "features": [
+    {
+     "height": 2,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 4
+    },
+    {
+     "dx": 20,
+     "id": "m",
+     "type": "move"
+    },
+    {
+     "factor": 2,
+     "id": "s",
+     "type": "scale"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      10.0,
+      -4.0,
+      -2.0,
+      30.0,
+      4.0,
+      2.0
+     ],
+     "faceOwners": [
+      "s",
+      "s",
+      "s",
+      "s",
+      "s",
+      "s"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 639.9999999999999
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "scale_axes_about": {
+  "doc": {
+   "features": [
+    {
+     "height": 2,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 4
+    },
+    {
+     "about": [
+      5,
+      0,
+      1
+     ],
+     "factor": 1,
+     "id": "s",
+     "sx": 2,
+     "sz": 3,
+     "type": "scale"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -15.0000001,
+      -2.0000001,
+      -5.0000001,
+      5.0000001,
+      2.0000001,
+      1.0000001
+     ],
+     "faceOwners": [
+      "s",
+      "s",
+      "s",
+      "s",
+      "s",
+      "s"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 480.0
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "scale_uniform": {
+  "doc": {
+   "features": [
+    {
+     "height": 2,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 4
+    },
+    {
+     "factor": 2,
+     "id": "s",
+     "type": "scale"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.0,
+      -4.0,
+      -2.0,
+      10.0,
+      4.0,
+      2.0
+     ],
+     "faceOwners": [
+      "s",
+      "s",
+      "s",
+      "s",
+      "s",
+      "s"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 639.9999999999999
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "scale_zero": {
+  "doc": {
+   "features": [
+    {
+     "height": 2,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 4
+    },
+    {
+     "factor": 1,
+     "id": "s",
+     "sy": 0,
+     "type": "scale"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -2.0,
+      -1.0,
+      5.0,
+      2.0,
+      1.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 79.99999999999999
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "s",
+     "message": "Scale: sy must not be 0, it would collapse the body flat"
+    }
+   ]
+  }
+ },
+ "sketch_on_plane_def": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 6,
+       "type": "rectangle",
+       "width": 4,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": {
+      "normal": [
+       1,
+       1,
+       0
+      ],
+      "origin": [
+       0,
+       0,
+       10
+      ],
+      "xdir": [
+       0,
+       0,
+       1
+      ]
+     },
+     "type": "sketch"
+    },
+    {
+     "distance": 5,
+     "id": "e",
+     "operation": "new",
+     "sketch": "s",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -2.121320343559643,
+      -2.121320343559643,
+      8.0,
+      5.656854249492381,
+      5.656854249492381,
+      12.0
+     ],
+     "faceOwners": [
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 120.00000000000001
+    }
+   ],
+   "bodyIds": {
+    "e:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "slot": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "type": "slot",
+       "width": 4,
+       "x1": -5,
+       "x2": 5,
+       "y1": 0,
+       "y2": 3
+      }
+     ],
+     "id": "s",
+     "plane": "XZ",
+     "type": "sketch"
+    },
+    {
+     "distance": 2,
+     "id": "e",
+     "operation": "new",
+     "sketch": "s",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -7.0,
+      -2.0,
+      -2.0,
+      7.0,
+      0.0,
+      5.0
+     ],
+     "faceOwners": [
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 108.65519330000274
+    }
+   ],
+   "bodyIds": {
+    "e:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "sphere": {
+  "doc": {
+   "features": [
+    {
+     "id": "s",
+     "radius": 7,
+     "type": "sphere"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -7.0,
+      -7.0,
+      -7.0,
+      7.0,
+      7.0,
+      7.0
+     ],
+     "faceOwners": [
+      "s"
+     ],
+     "faces": 1,
+     "id": "body1",
+     "name": "Sphere",
+     "solids": 1,
+     "volume": 1436.755040241732
+    }
+   ],
+   "bodyIds": {
+    "s:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "sphere_small_value": {
+  "doc": {
+   "features": [
+    {
+     "id": "s",
+     "radius": -0.0001,
+     "type": "sphere"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [],
+   "bodyIds": {},
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "s",
+     "message": "Sphere: radius must be greater than 0 (got -0.0001)"
+    }
+   ]
+  }
+ },
+ "spline": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "points": [
+        {
+         "x": 0,
+         "y": 0
+        },
+        {
+         "x": 4,
+         "y": 3
+        },
+        {
+         "x": 8,
+         "y": 1
+        },
+        {
+         "x": 12,
+         "y": 0
+        }
+       ],
+       "type": "spline"
+      },
+      {
+       "type": "line",
+       "x1": 12,
+       "x2": 0,
+       "y1": 0,
+       "y2": 0
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 2,
+     "id": "e",
+     "operation": "new",
+     "sketch": "s",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -1e-07,
+      -0.07450803749024265,
+      -1e-07,
+      12.000000100000006,
+      3.066921409788641,
+      2.0000001
+     ],
+     "faceOwners": [
+      "e",
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 4,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 37.09429667848348
+    }
+   ],
+   "bodyIds": {
+    "e:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "torus": {
+  "doc": {
+   "features": [
+    {
+     "id": "t",
+     "majorRadius": 10,
+     "minorRadius": 2.5,
+     "type": "torus"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -12.5000001,
+      -12.5000001,
+      -2.5000001,
+      12.5000001,
+      12.5000001,
+      2.5000001
+     ],
+     "faceOwners": [
+      "t"
+     ],
+     "faces": 1,
+     "id": "body1",
+     "name": "Torus",
+     "solids": 1,
+     "volume": 1233.7005501361696
+    }
+   ],
+   "bodyIds": {
+    "t:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "torus_fat": {
+  "doc": {
+   "features": [
+    {
+     "id": "t",
+     "majorRadius": 2,
+     "minorRadius": 3,
+     "type": "torus"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [],
+   "bodyIds": {},
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "t",
+     "message": "Torus: the tube radius must be smaller than the ring radius"
+    }
+   ]
+  }
+ },
+ "triangle_lines": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "type": "line",
+       "x1": 0,
+       "x2": 10,
+       "y1": 0,
+       "y2": 0
+      },
+      {
+       "type": "line",
+       "x1": 10,
+       "x2": 0,
+       "y1": 0,
+       "y2": 8
+      },
+      {
+       "type": "line",
+       "x1": 0,
+       "x2": 0,
+       "y1": 8,
+       "y2": 0
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 2,
+     "id": "e",
+     "operation": "new",
+     "sketch": "s",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      0.0,
+      0.0,
+      0.0,
+      10.0,
+      8.0,
+      2.0
+     ],
+     "faceOwners": [
+      "e",
+      "e",
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 5,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 1,
+     "volume": 80.0
+    }
+   ],
+   "bodyIds": {
+    "e:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "two_boxes": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "height": 4,
+     "id": "b",
+     "length": 4,
+     "type": "box",
+     "width": 4
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -5.0,
+      -5.0,
+      5.0,
+      5.0,
+      5.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 999.9999999999998
+    },
+    {
+     "bbox": [
+      -2.0,
+      -2.0,
+      -2.0,
+      2.0,
+      2.0,
+      2.0
+     ],
+     "faceOwners": [
+      "b",
+      "b",
+      "b",
+      "b",
+      "b",
+      "b"
+     ],
+     "faces": 6,
+     "id": "body2",
+     "name": "Box",
+     "solids": 1,
+     "volume": 63.999999999999986
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1",
+    "b:0": "body2"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "two_regions": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 20,
+       "type": "rectangle",
+       "width": 20,
+       "x": 0,
+       "y": 0
+      },
+      {
+       "radius": 4,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      },
+      {
+       "radius": 2,
+       "type": "circle",
+       "x": 6,
+       "y": 6
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 5,
+     "id": "e",
+     "operation": "new",
+     "regions": [
+      [
+       0,
+       0,
+       0
+      ],
+      [
+       6,
+       6,
+       0
+      ]
+     ],
+     "sketch": "s",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -4.0,
+      -4.0,
+      0.0,
+      8.0,
+      8.0,
+      5.0
+     ],
+     "faceOwners": [
+      "e",
+      "e",
+      "e",
+      "e",
+      "e",
+      "e"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Body1",
+     "solids": 2,
+     "volume": 314.15926535897927
+    }
+   ],
+   "bodyIds": {
+    "e:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "unknown_type": {
+  "doc": {
+   "features": [
+    {
+     "height": 1,
+     "id": "a",
+     "length": 1,
+     "type": "box",
+     "width": 1
+    },
+    {
+     "body": "body1",
+     "id": "t",
+     "type": "texture"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -0.5,
+      -0.5,
+      -0.5,
+      0.5,
+      0.5,
+      0.5
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 0.9999999999999998
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "t",
+     "message": "unknown feature type: texture"
+    }
+   ]
+  }
+ },
+ "zero_circle": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 10,
+       "type": "rectangle",
+       "width": 10,
+       "x": 0,
+       "y": 0
+      },
+      {
+       "radius": 0,
+       "type": "circle",
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    },
+    {
+     "distance": 5,
+     "id": "e",
+     "operation": "new",
+     "sketch": "s",
+     "type": "extrude"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [],
+   "bodyIds": {},
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "s",
+     "message": "a circle in this sketch has a radius of 0, give it a radius greater than 0, or delete it"
+    },
+    {
+     "feature_id": "e",
+     "message": "the sketch this extrude depends on (s) did not build, fix that sketch first"
+    }
+   ]
+  }
+ },
+ "zero_rect": {
+  "doc": {
+   "features": [
+    {
+     "entities": [
+      {
+       "height": 10,
+       "type": "rectangle",
+       "width": 0,
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "id": "s",
+     "plane": "XY",
+     "type": "sketch"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [],
+   "bodyIds": {},
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": [
+    {
+     "feature_id": "s",
+     "message": "a rectangle in this sketch has a zero width or height, give it a size, or delete it"
+    }
+   ]
+  }
+ }
+}

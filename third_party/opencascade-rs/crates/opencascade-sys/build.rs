@@ -50,55 +50,20 @@ fn main() {
         println!("cargo:rustc-link-lib=dylib=advapi32");
     }
 
-    // TODO(bschwind) - Iterate over the src/ directory to populate this.
-    let rust_bridges = [
-        "src/b_rep.rs",
-        "src/b_rep_adaptor.rs",
-        "src/b_rep_algo_api.rs",
-        "src/b_rep_bnd_lib.rs",
-        "src/b_rep_builder_api.rs",
-        "src/b_rep_class.rs",
-        "src/b_rep_feat.rs",
-        "src/b_rep_fillet_api.rs",
-        "src/b_rep_g_prop.rs",
-        "src/b_rep_int_curve_surface.rs",
-        "src/b_rep_lib.rs",
-        "src/b_rep_mesh.rs",
-        "src/b_rep_offset.rs",
-        "src/b_rep_offset_api.rs",
-        "src/b_rep_prim_api.rs",
-        "src/b_rep_tools.rs",
-        "src/bin_tools.rs",
-        "src/bnd.rs",
-        "src/bop_algo.rs",
-        "src/geom.rs",
-        "src/geom2d.rs",
-        "src/geom_abs.rs",
-        "src/geom_api.rs",
-        "src/g_prop.rs",
-        "src/gc.rs",
-        "src/gc_pnts.rs",
-        "src/gp.rs",
-        "src/if_select.rs",
-        "src/iges_control.rs",
-        "src/law.rs",
-        "src/mesh_access.rs",
-        "src/message.rs",
-        "src/poly.rs",
-        "src/shape_analysis.rs",
-        "src/shape_upgrade.rs",
-        "src/standard.rs",
-        "src/step_control.rs",
-        "src/stl_api.rs",
-        "src/t_col_gp.rs",
-        "src/top_abs.rs",
-        "src/top_exp.rs",
-        "src/top_loc.rs",
-        "src/top_tools.rs",
-        "src/topo_ds.rs",
-    ];
+    // Every bridge file in src/, so a new bridge needs no edit here. A build
+    // script binary shared between checkouts then builds whichever set of
+    // bridges the checkout it runs in has.
+    let mut rust_bridges: Vec<String> = std::fs::read_dir("src")
+        .expect("opencascade-sys src dir")
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|x| x == "rs"))
+        .filter(|p| std::fs::read_to_string(p).is_ok_and(|t| t.contains("#[cxx::bridge]")))
+        .map(|p| format!("src/{}", p.file_name().unwrap_or_default().to_string_lossy()))
+        .collect();
+    rust_bridges.sort();
 
-    let mut build = cxx_build::bridges(rust_bridges);
+    let mut build = cxx_build::bridges(&rust_bridges);
 
     if is_windows_gnu {
         build.define("OCC_CONVERT_SIGNALS", "TRUE");
@@ -135,9 +100,7 @@ fn main() {
 
     println!("cargo:rustc-link-lib=static=rust-occt");
 
-    for bridge in rust_bridges {
-        println!("cargo:rerun-if-changed={bridge}");
-    }
+    println!("cargo:rerun-if-changed=src");
 
     // The C++ shim headers are #included by the generated cxx bridges but are not
     // tracked by cxx_build, so edits to them would otherwise not trigger a

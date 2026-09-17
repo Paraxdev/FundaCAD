@@ -254,9 +254,11 @@ version = "0.2.0"
 dependencies = [
  "blake2",
  "cxx",
+ "fundacad-core",
  "fundacad-engine",
  "fundacad-protocol",
  "glam",
+ "indexmap",
  "opencascade",
  "opencascade-sys",
  "serde",
