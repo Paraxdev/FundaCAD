@@ -13,6 +13,7 @@
 //! the plan.
 
 pub mod builder;
+pub mod export;
 pub mod features;
 pub mod jobs;
 pub mod kernel;
