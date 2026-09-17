@@ -254,8 +254,7 @@ export class HoleTool {
     if (this.phase !== "place") return;
     const first = this.points[0];
     const anchor = first ? new THREE.Vector3(first[0], first[1], first[2]) : this.origin;
-    const s = this.viewport.projectToScreen(anchor);
-    this.dim.position(s.x + 24, s.y + 24);
+    this.positionDim(anchor);
     let changed = false;
     const sizeText = this.dim.getRaw("size");
     if (sizeText !== this.lastSizeText) {
@@ -289,6 +288,23 @@ export class HoleTool {
     }
     if (changed) this.valueChanged();
     this.gesture.frame();
+  }
+
+  /** Beside the model rather than over it: the face under the box is where the
+   *  next click goes. */
+  private positionDim(anchor: THREE.Vector3) {
+    const s = this.viewport.projectToScreen(anchor);
+    const box = this.viewport.modelBox();
+    if (!box) return this.dim.position(s.x + 24, s.y + 24);
+    let minX = Infinity;
+    let maxX = -Infinity;
+    for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) {
+      const c = this.viewport.projectToScreen(new THREE.Vector3(x, y, z));
+      minX = Math.min(minX, c.x);
+      maxX = Math.max(maxX, c.x);
+    }
+    const right = maxX + 8;
+    this.dim.position(right + 240 < window.innerWidth ? right : Math.max(0, minX - 280), s.y - 16);
   }
 
   private valueChanged() {
