@@ -2,8 +2,11 @@
 // and that switching it off takes all of it away.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { flushPromises } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { activate } from "../../plugins/FundaCAD.PrintToolbox/main";
+import { loadBedFitSetting } from "../../plugins/FundaCAD.PrintToolbox/bedFit";
+import { customBedReq } from "../../plugins/FundaCAD.PrintToolbox/customBedDialog";
 import {
   anyToolBusy, contributedAction, contributedRibbon, contributors, resetContributions,
 } from "../../src/plugins/contrib";
@@ -12,6 +15,7 @@ import { iconPaths } from "../../src/ui/icons";
 import { featureMeta } from "../../src/ui/featureMeta";
 import { choiceFieldsFor, fieldApplies, toggleFieldsFor } from "../../src/document/optionFields";
 import { targetsOf } from "../../src/features/selectionTargets";
+import { useModalStore } from "../../src/stores/modals";
 import type { Engine } from "../../src/app/engine";
 
 function fakeEngine() {
@@ -56,6 +60,14 @@ function fakeEngine() {
 
 function press(key: string) {
   document.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+}
+
+/** Narrows the modal store's current request to the "choose" shape a test can
+ *  resolve with a single string, sidestepping the union's contravariant `resolve`. */
+function pickCurrentChoice(value: string) {
+  const req = useModalStore().current;
+  if (req?.kind !== "choose") throw new Error("expected a choose() modal to be open");
+  req.resolve(value);
 }
 
 describe("the 3D Printing Toolbox, switched on and off", () => {
@@ -123,6 +135,29 @@ describe("the 3D Printing Toolbox, switched on and off", () => {
   it("bed fit check asks to build first when there is nothing to measure", async () => {
     await contributedAction("print-bed-fit-check")!();
     expect(engine.state.status).toContain("build the model first");
+  });
+
+  it("picking Custom opens the dialog and saves the typed size on OK", async () => {
+    engine.state.bbox = { min: [0, 0, 0], max: [50, 50, 50] };
+    contributedAction("print-bed-fit-check")!();
+    expect(useModalStore().current?.kind).toBe("choose");
+    pickCurrentChoice("custom");
+    await flushPromises();
+    expect(customBedReq.value).not.toBeNull();
+    customBedReq.value!.resolve([80, 80, 80]);
+    await flushPromises();
+    expect(loadBedFitSetting()).toEqual({ presetId: "custom", customSize: [80, 80, 80] });
+  });
+
+  it("Cancel on the custom dialog leaves the stored setting untouched", async () => {
+    engine.state.bbox = { min: [0, 0, 0], max: [50, 50, 50] };
+    const before = loadBedFitSetting();
+    contributedAction("print-bed-fit-check")!();
+    pickCurrentChoice("custom");
+    await flushPromises();
+    customBedReq.value!.resolve(null);
+    await flushPromises();
+    expect(loadBedFitSetting()).toEqual(before);
   });
 
   it("acts at once on faces already selected, with the Overhang build direction", () => {

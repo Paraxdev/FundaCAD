@@ -7,6 +7,8 @@
 import { choose, contribute, toast } from "fundacad";
 import type { Engine } from "fundacad";
 import { bedFitMessage, bedSizeOf, loadBedFitSetting, saveBedFitSetting, BED_PRESETS } from "./bedFit";
+import { openCustomBedDialog } from "./customBedDialog";
+import CustomBedHost from "./CustomBedHost.vue";
 import { BodyTool } from "./bodyTool";
 import { FaceTool } from "./faceTool";
 import { PRINT_TOOLS, type PrintTool } from "./printForm";
@@ -66,6 +68,14 @@ export async function activate(e: Engine): Promise<() => void> {
     const setting = loadBedFitSetting();
     const picked = await choose("Bed size", BED_PRESETS.map((p) => ({ value: p.id, label: p.label })));
     if (!picked) return;
+    if (picked === "custom") {
+      const customSize = await openCustomBedDialog(setting.customSize);
+      if (!customSize) return;
+      const next = { presetId: "custom", customSize };
+      saveBedFitSetting(next);
+      toast(bedFitMessage(size, customSize));
+      return;
+    }
     const next = { ...setting, presetId: picked };
     saveBedFitSetting(next);
     toast(bedFitMessage(size, bedSizeOf(next)));
@@ -92,6 +102,7 @@ export async function activate(e: Engine): Promise<() => void> {
       ],
     }],
     icons: { ...ICONS, printBedFit: '<rect x="4" y="4" width="16" height="16" rx="1.5"/><path d="M4 15L9 10L13 14L20 7"/>' },
+    overlays: [CustomBedHost],
     features: PRINT_TOOLS.map((t) => ({
       type: t.type,
       meta: { icon: t.icon, label: t.label },

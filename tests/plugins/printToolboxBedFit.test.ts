@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { bedFit, bedFitMessage, bedSizeOf, BED_PRESETS } from "../../plugins/FundaCAD.PrintToolbox/bedFit";
+import {
+  bedFit, bedFitMessage, bedSizeOf, parseCustomBedSize, BED_PRESETS,
+} from "../../plugins/FundaCAD.PrintToolbox/bedFit";
 
 describe("bedFit", () => {
   it("fits when every axis is within the bed, with scale 1", () => {
@@ -49,5 +51,26 @@ describe("bedSizeOf", () => {
       if (p.id === "custom") expect(p.size).toBeNull();
       else expect(p.size).not.toBeNull();
     }
+  });
+});
+
+describe("parseCustomBedSize", () => {
+  it("accepts three positive finite numbers", () => {
+    expect(parseCustomBedSize(220, 220, 250)).toEqual({ ok: true, size: [220, 220, 250] });
+  });
+
+  it("rejects zero or negative on any axis", () => {
+    expect(parseCustomBedSize(0, 220, 250).ok).toBe(false);
+    expect(parseCustomBedSize(220, -1, 250).ok).toBe(false);
+  });
+
+  it("rejects NaN, from an empty or unparsable field", () => {
+    const result = parseCustomBedSize(NaN, 220, 250);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toContain("positive");
+  });
+
+  it("rejects infinity", () => {
+    expect(parseCustomBedSize(220, 220, Infinity).ok).toBe(false);
   });
 });

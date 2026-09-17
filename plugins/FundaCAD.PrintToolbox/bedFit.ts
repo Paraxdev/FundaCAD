@@ -81,6 +81,20 @@ export function bedSizeOf(setting: BedFitSetting): Vec3 {
   return preset?.size ?? setting.customSize;
 }
 
+export type CustomBedParse =
+  | { ok: true; size: Vec3 }
+  | { ok: false; message: string };
+
+/** Pure: three typed numbers into a custom bed size, or the message to show
+ *  beside the field that is wrong. Positive and finite is the whole rule, a
+ *  bed of 0 or NaN mm is not a bed. */
+export function parseCustomBedSize(width: number, depth: number, height: number): CustomBedParse {
+  if ([width, depth, height].some((v) => !Number.isFinite(v) || v <= 0)) {
+    return { ok: false, message: "Width, depth and height must all be positive numbers." };
+  }
+  return { ok: true, size: [width, depth, height] };
+}
+
 /** The toast line for a bed fit result. Rounded to a tenth of a mm and of a
  *  percent, which is closer than a bed's own accuracy ever is. */
 export function bedFitMessage(size: Vec3, bed: Vec3): string {
