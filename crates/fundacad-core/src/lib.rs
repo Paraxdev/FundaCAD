@@ -4,6 +4,7 @@
 
 pub mod body_ids;
 pub mod face_colors;
+pub mod hole_standards;
 pub mod params;
 pub mod schema;
 
