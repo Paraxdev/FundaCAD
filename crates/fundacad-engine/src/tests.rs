@@ -209,6 +209,57 @@ fn a_long_job_reports_progress_before_its_reply() {
 }
 
 #[test]
+fn a_closed_client_loses_its_queued_jobs_and_its_running_one() {
+    let (gate_tx, gate_rx) = channel();
+    let rebuilds = Arc::new(AtomicI64::new(0));
+    let (tx, _rx) = channel();
+    let engine = Arc::new(Engine::start(
+        Fake {
+            gate: Some(gate_rx),
+            rebuilds: rebuilds.clone(),
+        },
+        Arc::new(Collect(Mutex::new(tx))),
+    ));
+    let (a_tx, a_rx) = channel();
+    let (b_tx, b_rx) = channel();
+    let a = engine.client(Arc::new(Collect(Mutex::new(a_tx))));
+    let b = engine.client(Arc::new(Collect(Mutex::new(b_tx))));
+    let doc = json!({"features": []});
+    a.handle(Message::Text(
+        json!({"id": "a1", "op": "rebuild", "document": doc}).to_string(),
+    ));
+    let t0 = Instant::now();
+    while engine.running.lock().unwrap().is_none() {
+        assert!(t0.elapsed() < Duration::from_secs(5));
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    a.handle(Message::Text(
+        json!({"id": "a2", "op": "rebuild", "document": doc}).to_string(),
+    ));
+    b.handle(Message::Text(
+        json!({"id": "bc", "op": "cancel"}).to_string(),
+    ));
+    assert_eq!(text(next(&b_rx))["result"], json!({"cancelled": false}));
+    drop(a);
+    let a_first = text(next(&a_rx));
+    assert_eq!(a_first["id"], "a1");
+    assert_eq!(a_first["cancelled"], true);
+    b.handle(Message::Text(
+        json!({"id": "b1", "op": "rebuild", "document": doc}).to_string(),
+    ));
+    gate_tx.send(()).unwrap();
+    loop {
+        let m = text(next(&b_rx));
+        if m["id"] == "b1" && m.get("ok").is_some() {
+            assert_eq!(m["ok"], true);
+            break;
+        }
+    }
+    assert_eq!(rebuilds.load(Ordering::SeqCst), 2);
+    assert!(a_rx.try_recv().is_err());
+}
+
+#[test]
 fn unknown_ops_and_bad_json_are_errors_not_hangs() {
     let (e, rx, _) = engine(None);
     send(&e, json!({"id": "u", "op": "frobnicate"}));
