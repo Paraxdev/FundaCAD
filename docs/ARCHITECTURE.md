@@ -5,7 +5,7 @@ TypeScript frontend running in that shell's webview, and a Python geometry sidec
 
 ```
 ┌─ Tauri shell (Rust) ───────────────────────────────────────────┐
-│  • native window, file dialogs, printer/slicer network calls    │
+│  • native window, file dialogs, plugin local-network requests   │
 │  • spawns and supervises the Python geometry sidecar             │
 │  • kills the sidecar on app exit (process-group + PDEATHSIG /     │
 │    Job Object on Windows)                                         │
@@ -37,7 +37,7 @@ anything in the core reaches for one statically. `docs/PLUGINS.md` has the
 permission model, what "off" is guaranteed to mean, and why the download happens
 in Rust rather than the webview.
 
-FundaCAD owns the document, the feature tree, the UI, and the print pipeline.
+FundaCAD owns the document, the feature tree and the UI.
 [build123d](https://github.com/gumyr/build123d) on top of OpenCASCADE owns the geometry
 kernel itself; FundaCAD does not reimplement one.
 
@@ -83,15 +83,14 @@ reason, not a quick patch.
    palette/body colors, MATERIALS, and the ELEMENTS a body is filed into are UI state, not
    model state, they live in `DocumentStore` side-maps, not in the `document` sent
    to the sidecar, and are threaded explicitly through the calls that need them
-   (e.g. `exportProject`). Elements (`src/document/elements.ts`) are the strongest
+   (e.g. `exportWith`). Elements (`src/document/elements.ts`) are the strongest
    case for the rule: they exist so a several-thousand-body import can be sorted
    into something navigable, and organising a model must never be able to change
    its geometry. A document with every element deleted rebuilds byte-identically
    to one that never had any. Materials (`src/document/materials.ts`) are the
    same bargain in the other direction: they are appearance only, a colour and a
    finish, never a physical property, and they are deliberately NOT the filament
-   `palette`, which is up to four physical toolhead slots and means "print this
-   part from filament N". Where a body carries both, the palette slot wins on
+   `palette`, which means "make this part from filament N". Where a body carries both, the palette slot wins on
    screen; the render bridge is the one place that decides.
 6. **Pattern expansion and region detection are mirrored TS <-> Python.** Both sides
    independently expand associative patterns and detect split regions for direct

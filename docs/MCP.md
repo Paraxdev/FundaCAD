@@ -27,7 +27,7 @@ downloads it until the install screen has been answered.
 
 The screen lists what it will be able to do (read and change the document, use
 the geometry engine, read and save files you choose) and what it will not (use
-the internet, control your printer, start other programs). It also says that a
+the internet, reach devices on your local network, start other programs). It also says that a
 process plugin runs as a normal program on the machine, which is true and is
 the reason the list is worth reading rather than dismissing. See
 `docs/PLUGINS.md`.

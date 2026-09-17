@@ -189,24 +189,24 @@ Rebuilds (from the warm in-worker cache, not a cold rebuild) and writes one file
 Export is "export what built": a feature failure never blocks exporting the bodies that
 did build; only zero live bodies is a hard `{ "error": {...} }`.
 
-### `exportProject`
+### `exportWith`
 
-Rebuilds and writes an OrcaSlicer-format project 3MF (one object per body, palette slot
--> extruder mapping), via `sidecar/project3mf.py`.
+Rebuilds, meshes every live body at export grade (with the same triangle budget as
+`export`), and hands the meshes to an exporter a plugin registered with
+`plugin_geometry.register_exporter`. What the file looks like is the plugin's.
 
 ```jsonc
-{ "op": "exportProject", "id": "...", "document": { /* CadDocument */ },
-  "path": "/abs/path/out.3mf",
-  "palette": [ { "name": "...", "color": "#rrggbb", "material": "..." } ],
-  "bodyColors": { "<bodyId>": 0 },
-  "bodyNames": { "<bodyId>": "Bracket" },
-  "settings": { /* written into the 3MF verbatim, capped at 256 KiB JSON */ } }
+{ "op": "exportWith", "id": "...", "document": { /* CadDocument */ },
+  "path": "/abs/path/out.ext",
+  "exporter": "<name the plugin registered>",
+  "options": { /* passed to the exporter verbatim, capped at 256 KiB JSON */ } }
 ```
 
-`palette`/`bodyColors`/`bodyNames`/`settings` are all optional (default to empty).
-`settings` failing the size/type check replies `{ "error": { "message": "exportProject: bad settings" } }`
-before any rebuild runs. Otherwise the reply matches `export`'s shape (`path` +
-optional `warnings`).
+A missing or overlong `exporter`, or `options` failing the size/type check, replies
+`{ "error": { "message": "exportWith: bad exporter" } }` (or `bad options`) before any
+rebuild runs. An exporter no installed plugin provides is an error naming it.
+Otherwise the reply matches `export`'s shape (`path` + optional `warnings`), plus an
+optional `info` object the exporter chose to report.
 
 ### `interference`
 

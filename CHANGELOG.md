@@ -69,6 +69,8 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Changed
 
+- **The printer connection lives entirely in its plugin.** Sending jobs, print status, the camera, the slicer hand-off and the colored 3MF project all run from the Printer connection plugin now, and with it off or uninstalled nothing about printers is left in the app. Your printer list and slicer location move into the plugin the first time they are used, so nothing needs setting up again. Update the plugin together with the app: it now asks to talk to devices on your local network, where it used to ask to control your printer.
+
 - **One finish across the whole app.** Dialogs, the command palette, the menu bar's menus, toasts, the console, the parameters and shortcut sheets, the welcome screen, the render dock and the surface graph editor now wear the same glass as the floating shell: squircle corners, a blurred tinted fill and a lit rim, with buttons, fields and selects to match.
 
 - **Every right-click menu is FundaCAD's.** A right-click the app has no menu for no longer opens the webview's own menu, and text fields get a Cut, Copy, Paste and Select all menu in the same style.

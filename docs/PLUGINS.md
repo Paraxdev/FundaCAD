@@ -73,7 +73,7 @@ that is no.
 | `files.read` | Read files you pick for it |
 | `files.write` | Save files where you tell it to |
 | `network` | Connect to *(the hosts it names)* |
-| `printer.control` | Send jobs to your printer and read its status |
+| `network.local` | Talk to devices on your local network |
 | `device.input` | Read the 3D mouse or other input device you have plugged in |
 | `ui.panel` | Add a panel to the window |
 | `process.spawn` | Start other programs on your computer |
@@ -95,7 +95,7 @@ hurts.
 | `FundaCAD.ExtraParameters` | sliders, toggles and choices for parameters, groups, named configurations and checks | `document.read`, `document.write` | `builtin` |
 | `FundaCAD.MCP` | lets an assistant build, measure and edit the open model | `document.*`, `geometry.build`, `files.*` | `process` |
 | `FundaCAD.PrintToolbox` | teardrop and bridged holes, counterbore bridges, sacrificial layers, thread-forming ribs, zip-tie channels, an elephant-foot chamfer and a vertical edge fillet, plus a bed fit check, for printing without supports | `document.read`, `document.write` | `builtin` |
-| `FundaCAD.Printing` | printers on your network, and opening a model in a slicer | `document.read`, `files.write`, `printer.control`, `process.spawn` | `builtin` |
+| `FundaCAD.Printing` | printers on your network, and opening a model in a slicer | `document.read`, `files.read`, `files.write`, `network.local`, `process.spawn` | `builtin` |
 | `FundaCAD.SpaceMouse` | navigating and moving with a 3D mouse | `device.input`, `document.read`, `document.write` | `builtin` |
 | `FundaCAD.MultiColor` | filament slots, per body and per texture colour | `document.read`, `document.write` | `builtin` |
 | `FundaCAD.Texture` | a printed surface texture on picked faces or a whole body | `document.read`, `document.write`, `files.read` | `builtin` |
@@ -129,9 +129,10 @@ is the half worth keeping:
 - **Printing claims `process.spawn`.** Opening a model in a slicer starts
   another program on the machine, and that is the most consequential thing
   anything in this app does on the user's behalf.
-- **Printing does not claim `network`.** It reaches printers configured in
-  this app, over the local network. "Connect to the internet" would be a worse
-  description rather than a more cautious one.
+- **Printing claims `network.local`, not `network`.** It reaches printers on
+  the local network, and "connect to the internet" would be a worse description
+  rather than a more cautious one. The app side of that grant refuses anything
+  that is not a private or link-local address, so the sentence is also true.
 - **The 3D mouse claims `document.write`.** Its object mode moves the selected
   body, and a move is an edit. Omitting it because the edit arrives through a
   knob rather than a dialog would be describing the input device instead of the
@@ -424,10 +425,11 @@ plugins/
   FundaCAD.PrintToolbox/   manifest.json, README.md, main.ts, printForm.ts,
                            faceTool.ts, geometry/
   FundaCAD.Printing/       manifest.json, README.md, main.ts, printerClient.ts,
-                           printFlow.ts, printDialog.ts, printStatusLine.ts,
-                           printStatus.ts, exportProject.ts, state.ts,
-                           PrintStatusPill.vue, CameraPanel.vue,
-                           FilamentMappingDialog.vue, FilamentMappingHost.vue
+                           native.ts, slicer.ts, printFlow.ts, printDialog.ts,
+                           printStatusLine.ts, printStatus.ts, exportProject.ts,
+                           state.ts, PrintStatusPill.vue, CameraPanel.vue,
+                           FilamentMappingDialog.vue, FilamentMappingHost.vue,
+                           geometry/
   FundaCAD.SpaceMouse/     manifest.json, README.md, main.ts, spacemouse.ts,
                            state.ts, SettingsHost.vue, SpaceMouseModal.vue
 ```
@@ -779,6 +781,27 @@ design decision. The tempting shape is a second channel, a `native` object
 handed to the plugin beside `app`, and a second channel is a second permission
 system to keep in step with the first. There is one door.
 
+### What a builtin plugin reaches natively
+
+A `builtin` plugin's code runs in the window and can call the shell's commands
+directly. The ones meant for it are generic, name no device and no program,
+and are exactly what a third-party plugin of the same kind would get:
+
+| command | what it does | the grant it stands behind |
+| --- | --- | --- |
+| `plugin_local_request` | one HTTP request to a private or link-local address, with a text, JSON or multipart body; a file part names a handle from `plugin_file_pick`, never a path; redirects are not followed, and a name is resolved and pinned before connecting | `network.local` |
+| `plugin_launch` | starts the first of a list of absolute program paths that exists, with arguments and no shell | `process.spawn` |
+| `plugin_system_dirs` | the home, per-user settings, per-user data and program install directories, so a plugin can build candidate paths | `process.spawn` |
+| `plugin_data_read`, `plugin_data_write`, `plugin_data_path` | small files in `app data/plugin-data/<id>/`, which survives reinstalling the plugin | none |
+| `plugin_data_adopt` | moves a JSON file the plugin's code kept directly under app data, from before it had a directory, into its own | none |
+
+And in the geometry engine, `register_exporter` (`sidecar/plugin_geometry.py`):
+the engine rebuilds, meshes every body at export grade and applies the triangle
+budget, then hands the meshes to the plugin's writer. The window reaches it with
+`GeometryBackend.exportWith`. The printer connection's project 3MF is written
+this way, and `tests/plugins/coreIndependence.test.ts` refuses any mention of a
+printer or a slicer anywhere in `src/`, `src-tauri/` or `sidecar/`.
+
 ### A plugin never names a file
 
 It asks. A native dialog opens, with the plugin's id and its own sentence in the
@@ -957,6 +980,9 @@ and the `process` sentence on the install screen says so.
 | `src-tauri/src/plugins/bundle.rs` | the refusals, split out so they can be tested |
 | `src-tauri/src/plugins/files.rs` | the dialogs and the disk |
 | `src-tauri/src/plugins/handed.rs` | which files a plugin holds, split out so it can be tested |
+| `src-tauri/src/plugins/localnet.rs` | a request to a device on the local network |
+| `src-tauri/src/plugins/launch.rs` | starting another program, and where programs live |
+| `src-tauri/src/plugins/data.rs` | a plugin's own small files |
 | `plugins/<id>/manifest.json` | what it is and what it asks for; the only copy |
 | `plugins/<id>/README.md` | why it asks for that |
 | `plugins/<id>/main.ts` | a shipped capability's activation module: everything it contributes |
