@@ -67,5 +67,12 @@ pub fn tessellate(shape: &Shape, tolerance: f64) -> Result<BodyMesh, MeshError> 
         })
         .collect();
 
-    Ok(BodyMesh { positions, indices, face_ids, face_count, edges, bbox: bbox(shape) })
+    Ok(BodyMesh {
+        positions,
+        indices,
+        face_ids,
+        face_count,
+        edges,
+        bbox: bbox(shape),
+    })
 }

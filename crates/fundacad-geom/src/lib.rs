@@ -65,7 +65,11 @@ mod tests {
         let m = mesh::tessellate(&b, 0.1).expect("box tessellates");
         assert_eq!(m.positions.len() % 3, 0);
         assert_eq!(m.indices.len() % 3, 0);
-        assert_eq!(m.face_ids.len(), m.indices.len() / 3, "one face id per triangle");
+        assert_eq!(
+            m.face_ids.len(),
+            m.indices.len() / 3,
+            "one face id per triangle"
+        );
         assert_eq!(m.face_count, 6);
         let mut seen: Vec<u32> = m.face_ids.clone();
         seen.sort_unstable();
