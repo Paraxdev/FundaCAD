@@ -283,10 +283,10 @@ rebuild runs. An exporter no installed plugin provides is an error naming it.
 Otherwise the reply matches `export`'s shape (`path` + optional `warnings`), plus an
 optional `info` object the exporter chose to report.
 
-Plugin geometry is a permanent Python-only concern, not a to-be-ported gap: the plugin
-runs with full worker privileges and no sandbox, and stays that way until the Rust
-engine's wasm plugin host exists (`docs/RUST-PIVOT.md` section 2.3). Until then the
-Rust engine answers this op `unknown op`.
+Plugin geometry runs in the Python worker today, with full worker privileges and no
+sandbox. In the Rust engine it moves into WebAssembly components inside each plugin
+(`docs/RUST-PIVOT.md` section 2.3); until that host exists the Rust engine answers this
+op `unknown op`.
 
 ### `interference`
 
@@ -496,9 +496,9 @@ Reply: `{ "solid": true, "solids": 1, "valid": true, "faces": 20, "volume": 132.
 "normals" }` (flat arrays, one normal per position) and, for `store`, `"geom"`: the blob store hash
 an `import` feature carries. An unknown generator, a generator's ValueError, a bad placement or a
 result with no solid is `{ "error": { "message": "..." } }`. Budget 180 s, a modelled thread on a
-long bolt is thousands of helical faces. Like `exportWith`, this is plugin geometry, a
-permanent Python-only concern until the Rust engine's wasm plugin host exists
-(`docs/RUST-PIVOT.md` section 2.3), not a to-be-ported gap.
+long bolt is thousands of helical faces. Like `exportWith`, this is plugin geometry: the
+Rust engine answers `unknown op` until its wasm plugin host exists (`docs/RUST-PIVOT.md`
+section 2.3).
 
 ### `tessellateText`
 
