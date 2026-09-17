@@ -10,6 +10,20 @@ dispatch in `handle()`) and consumed in `src/geometry/client.ts`. If the two eve
 disagree, the code is the source of truth, update this file to match it, not the other
 way around.
 
+The Rust engine being ported in `crates/fundacad-engine`/`crates/fundacad-geom`
+answers the exact same JSON envelope and binary frames; only the transport
+differs. Its worker process (`fundacad --engine`) talks to the Tauri supervisor
+over stdio, one message per `[u32 LE payload_len][u8 kind][payload]`, kind `1`
+for UTF-8 JSON text and `2` for a binary reply frame, no handshake or token
+(`crates/fundacad-protocol/src/stdio.rs`, and see `docs/RUST-PIVOT.md` section
+2.1). `fundacad-engine --ws` also serves the WebSocket shape above, for
+`npm run dev`, the e2e scripts and the differential harness. As of this branch
+the Rust engine implements `rebuild`, `computeAll`, `export`, `import`, `ping`
+and `cancel`; every other op still answers `{"error": {"message": "unknown op:
+<op>"}}` there while its port lands (`docs/RUST-PIVOT.md`'s phase 2 list).
+Where the two engines' behaviour genuinely differs rather than one simply not
+being ported yet, a note says so inline.
+
 ## Connecting
 
 The URL carries the per-launch shared secret as a query parameter:
@@ -38,7 +52,7 @@ A **terminal** reply always has the same top-level shape:
 // success
 { "id": "<matching id>", "ok": true, "result": { /* op-specific */ } }
 // failure
-{ "id": "<matching id>", "ok": false, "error": { "message": "...", "feature_id": "..." /* optional */ } }
+{ "id": "<matching id>", "ok": false, "error": { "message": "...", "feature_id": "...", "code": "..." /* both optional */ } }
 ```
 
 `rebuild` and `computeAll` additionally stream **non-terminal progress frames** with no
@@ -77,20 +91,39 @@ Reply `result` is one of:
 - **Resync needed**, the worker doesn't hold a document at `baseRevision` (first
   connection, worker respawn, or a missed message): `{ "resync": true }`. The client
   must retry with a full send.
-- **Nothing built yet** (e.g. only sketches, no solid): `{ "protocol": 2, "bodies": [], "bbox": null }`.
+- **Nothing built yet** (e.g. only sketches, no solid): `{ "protocol": 2, "bodies": [], "bbox": null }`,
+  plus whichever of `bodyIds`/`datumPlanes`/`sketchPlanes`/`datumMarks` below apply, since
+  none of those four needs a solid to resolve (a document can be nothing but datum planes).
 - **Built** (protocol v2, per-body payloads, see below):
   ```jsonc
   {
     "protocol": 2,
     "bodies": [ /* one entry per live body, full payload or "unchanged" stub */ ],
     "bbox": { "min": [x,y,z], "max": [x,y,z] },
+    "bodyIds": { "<feature id>:<index>": "<body id>", ... },        // optional, see below
     "diagnostics": [ /* selector resolutions worth reporting; see below */ ],
     "datumPlanes": { "<datumPlane id>": { "origin": [..], "normal": [..], "xdir": [..] } },
     "sketchPlanes": { "<sketch id>":     { "origin": [..], "normal": [..], "xdir": [..] } },
-    "featureError": { "message": "...", "feature_id": "..." },   // optional
-    "featureErrors": [ { "message": "...", "feature_id": "..." }, ... ]  // optional
+    "datumMarks": { "<datum id>": { "origin": [..], /* ... */ } },   // optional, see below
+    "projectionUpdates": [ /* the lenient sibling of projectGeometry; see below */ ],  // optional
+    "featureError": { "message": "...", "feature_id": "...", "code": "..." },   // optional
+    "featureErrors": [ { "message": "...", "feature_id": "...", "code": "..." }, ... ]  // optional
   }
   ```
+
+  `bodyIds` is a body's id remembered against where it came from (the feature that made
+  it, and which of that feature's bodies it was, `sidecar/body_ids.py`), so switching
+  off, failing or reordering a feature leaves every other body's id alone; a document
+  with no map yet is numbered by position, once, the same as before the map existed.
+  It is present only when it changed from the document's own `bodyIds`, and the
+  frontend writes it straight back so the next rebuild sees the same ids again.
+  `datumMarks` is `datumPlanes`'s sibling for datum axes and points that
+  FOLLOW geometry (an axis anchored to an edge), present only for the ones that moved,
+  the same fallback rule as `sketchPlanes`. `projectionUpdates` is the automatic,
+  LENIENT refresh of a sketch's `"projected"` entities against `projectGeometry`'s
+  cached sources; it rides along only when the refresh found a real change, and unlike
+  `projectGeometry` itself it never refuses an ambiguous match outright, it keeps the
+  last good shape and flags the entity stale instead.
 
   `datumPlanes` and `sketchPlanes` say where the build actually PUT each plane, for
   features anchored to a body face. The feature's own `plane` is the cache written at
@@ -141,19 +174,33 @@ or a **full payload**, when the client's `known` etag for that body is stale or 
 {
   "id": "b1", "name": "Body1", "etag": "3f9a...",
   "positions": [ /* flat float array, xyz per vertex */ ],
+  "normals": [ /* flat float array, one per vertex; omitted, not null, when the tessellator kept none */ ],
   "indices": [ /* flat triangle index array */ ],
   "faceIds": [ /* per-triangle face id, local to this body */ ],
   "faceOwners": [ /* per-face owner id or null, for feature highlighting */ ],
-  "edges": [ { "points": [...], "body": "b1" }, ... ],
+  "edges": [ { "points": [...], "body": "b1", "smooth": true } ],  // "smooth" present only when the edge's two faces meet tangentially
   "faceCount": 12
 }
 ```
+`nodeRef` (an imported part's `"<import feature id>/<manifest node index>"`),
+`faceColors` (a packed per-face colour string) and `partColor` (a whole-body hex
+colour) are optional envelope fields that can appear on EITHER shape, stub or full,
+since a body's own mesh not changing does not mean its colouring didn't; they are
+kept out of the etag below for the same reason.
+
 The client (`Geometry.assemble()` in `src/geometry/client.ts`) keeps the last full
 payload per body id and merges stubs + full payloads into one flat mesh (vertex/index/
 faceId offsets rebased per body), reproducing the pre-v2 single-mesh `RebuildReply`
 shape for the rest of the app. If a stub's etag doesn't match anything the client is
 holding (e.g. state lost across a worker respawn), `assemble()` returns `null` and the
 client resyncs with one full request.
+
+`etag` only ever needs to compare equal, its VALUE carries no meaning to the client,
+but the two engines mint it differently. The Python sidecar hands out a random one per
+cache entry (`uuid4().hex`); the Rust engine hashes the payload itself (blake2b-128 of
+`positions`/`normals`/`indices`/`faceIds`/`edges`, 32 hex digits, envelope fields like
+`id`/`name`/colours excluded), so identical geometry gets the same etag even across a
+worker restart that emptied every cache, not just within one running worker's.
 
 ### `computeAll`
 
@@ -173,21 +220,49 @@ resync case since this is always a full send). Streams the same progress frames.
 Rebuilds (from the warm in-worker cache, not a cold rebuild) and writes one file.
 
 ```jsonc
-{ "op": "export", "id": "...", "document": { /* CadDocument */ }, "format": "step" | "stl" | "3mf",
-  "path": "/abs/path/out.step", "body": "<bodyId>", "separate": false }
+{ "op": "export", "id": "...", "document": { /* CadDocument */ },
+  "format": "step" | "stl" | "3mf" | "glb",
+  "path": "/abs/path/out.step", "body": "<bodyId>", "separate": false,
+  "palette": [ { "color": "#rrggbb" }, ... ],    // optional, GLB per-body colour slots
+  "bodyColors": { "<bodyId>": 0 },               // optional, body id -> palette index, GLB only
+  "mesh": { "surfaceDeviation": 0.02, "normalDeviation": 17.2,
+            "maxEdgeLength": 0, "unit": "mm", "binary": true } }   // optional
 ```
 
-`body` (export just one body) and `separate` (write every body to its own
-`<base>-<name>.<ext>`) are optional. Reply:
+`body` (export just one body) and `separate` (write every live body to its own file, in
+a NEW SIBLING FOLDER named after `path`'s own stem, not `<base>-<name>.<ext>`) are
+optional. `palette`/`bodyColors` matter only for `glb`: a body absent from
+`bodyColors`, or given an out-of-range index, falls back to palette slot `0` if one
+exists, else no colour override. `mesh` fields are each independently clamped rather
+than rejected: `surfaceDeviation` mm in `[1e-4, 10]` (default `0.02`, the largest gap
+between the body and a facet), `normalDeviation` degrees in `[0.5, 90]` (default about
+`17.2`, i.e. `0.3` rad, the largest angle between neighbouring facets), `maxEdgeLength`
+mm in `[0, 1e6]` (`0` disables the post-pass), `unit` one of `mm|cm|m|in|ft` (default
+`mm`, divides mesh-format positions only, STEP always writes native millimetres), and
+`binary` (default `true`, STL only, 3MF and GLB have no ASCII form). STL, 3MF and GLB
+are all hand-rolled writers on both engines, not an OCCT/build123d exporter, so a
+plugin-textured body's per-face colour survives on those three formats; STEP goes
+through XCAF (`STEPCAFControl_Writer`), which is why textured bodies lose their surface
+detail there (see the warning below). The Rust engine's STEP writer additionally stamps
+the file's `FILE_NAME` originating-system field as `"FundaCAD"`; the Python path leaves
+OCCT/build123d's own default.
+
+Reply:
 
 ```jsonc
-{ "path": "/abs/path/out.step" }                 // default / single-body
-{ "path": "...", "paths": ["...", "..."] }       // separate
-{ "path": "...", "warnings": [{ "message": "...", "feature_id": "..." }] }  // some features failed but others built
+{ "path": "/abs/path/out.step" }                       // default / single-body
+{ "path": "/abs/path/out", "paths": ["...", "..."] }   // separate: "path" is the new FOLDER
+{ "path": "...", "warnings": [{ "message": "...", "feature_id": "...", "code": "..." }] }
 ```
 
 Export is "export what built": a feature failure never blocks exporting the bodies that
-did build; only zero live bodies is a hard `{ "error": {...} }`.
+did build; only zero live bodies is a hard `{ "error": {...} }`. A `warnings` entry can
+also carry no `feature_id` at all, raised by the export itself rather than by a
+feature: STEP export with a plugin-displaced (textured) body present ("surface
+displacement from a plugin is not represented in STEP exports"), or a mesh export past
+500,000 triangles but under the 10,000,000-triangle hard cap ("export is very dense (N
+triangles)"); past the hard cap it is instead a hard `{ "error": {...} }` naming the
+count. `separate` into a folder that already exists is also a hard error naming it.
 
 ### `exportWith`
 
@@ -207,6 +282,11 @@ A missing or overlong `exporter`, or `options` failing the size/type check, repl
 rebuild runs. An exporter no installed plugin provides is an error naming it.
 Otherwise the reply matches `export`'s shape (`path` + optional `warnings`), plus an
 optional `info` object the exporter chose to report.
+
+Plugin geometry is a permanent Python-only concern, not a to-be-ported gap: the plugin
+runs with full worker privileges and no sandbox, and stays that way until the Rust
+engine's wasm plugin host exists (`docs/RUST-PIVOT.md` section 2.3). Until then the
+Rust engine answers this op `unknown op`.
 
 ### `interference`
 
@@ -271,7 +351,7 @@ Reply:
                  "neighbors": [1,2],
                  "selector": { "kind":"face", "by":"match", "fp": {...}, "body":"body1" } } ],
     "edges": [ { "i": 1, "curve": "line", "length": 20.0, "mid": [...], "dir": [...],
-                 "faces": [0,0], "seam": true,
+                 "faces": [0,0], "seam": true, "openBoundary": true,
                  "selector": { "kind":"edge", "by":"match", "fp": {...}, "body":"body1" } } ],
     "truncated": { "faces": 0, "edges": 0 }   // only when a cap was hit
   } ],
@@ -288,7 +368,9 @@ Three fields are not measurements and matter more than the measurements:
   true point-to-surface distance.
 - **`seam`** on an edge whose two ancestor faces are the SAME face, and `wraps` on
   a face that closes on itself. Those are exactly the edge a blend refuses and the
-  face a linear press/pull has no direction for.
+  face a linear press/pull has no direction for. An edge with fewer than two
+  ancestor faces (a mesh-import border, or a body whose shell doesn't close) carries
+  `openBoundary` instead.
 
 Failing features are REPORTED in `errors`, not raised: a document with one red
 feature still has bodies, and looking at what did build is the point.
@@ -296,19 +378,107 @@ feature still has bodies, and looking at what did build is the point.
 Face indices `i` are positions in the body's `shape.faces()`, the same numbering
 the tessellator and the frontend's face ids use.
 
+### `projectGeometry`
+
+Projects edges, whole face boundaries, sketch curves or a body's silhouette onto a
+plane, for a sketch's `"projected"` entities. Rebuilds through the same warm cache as
+`export`/`interference`/`inspect`. This is the STRICT sibling of `rebuild`'s own
+automatic projection refresh (`projectionUpdates`, above): a source this op cannot
+match exactly is refused outright, per source, rather than resolved with a guess.
+
+```jsonc
+{ "op": "projectGeometry", "id": "...",
+  "document": { /* CadDocument, truncated to the prefix before the sketch that holds the projection */ },
+  "plane": "XY" | "<datumPlane featureId>" | { "origin": [..], "normal": [..], "xdir": [..] },
+  "sources": [
+    { "kind": "edge", "body": "<bodyId>", "sel": { /* Selector */ } },
+    { "kind": "faceBoundary", "body": "<bodyId>", "sel": { /* Selector */ } },
+    { "kind": "sketchCurve", "sketch": "<sketchFeatureId>", "entity": "<entityId>" },
+    { "kind": "silhouette", "body": "<bodyId>" }
+  ] }   // "sources" optional, default []
+```
+
+Reply:
+```jsonc
+{ "results": [
+    { "source_index": 0, "ok": true, "curves": [ { "fp": {...}, "curve": {...} } ] },
+    { "source_index": 1, "ok": false, "curves": [], "error": "the source geometry no longer exists on the body" }
+] }
+```
+`fp` (a `geom_select` fingerprint) is present only for `edge`/`faceBoundary` sources.
+`curve` is one of four shapes, exact where exactness survives projection (a circle
+whose axis stays parallel to the plane normal stays a circle) and sampled to a poly
+otherwise: `{"kind":"line", "x1":..,"y1":..,"x2":..,"y2":..}`,
+`{"kind":"circle", "x":..,"y":..,"r":..}`,
+`{"kind":"arc", "x1":..,"y1":..,"x2":..,"y2":..,"mx":..,"my":..}`,
+`{"kind":"poly", "pts":[[x,y], ...]}`. A whole-request failure (a bad plane spec, a
+prefix rebuild that fails outright) is `{ "error": { "message": "..." } }`; per-source
+failures never raise, they land in that source's own `results[i]` instead.
+
 ### `import`
 
-Reads an external geometry file (STL / 3MF / STEP / BREP) into an embeddable BREP
-payload for an `import` feature. Path-based, the sidecar reads the file directly, the
-frontend never ships file bytes over the socket.
+Reads an external geometry file into a blob-stored shape for an `import` feature.
+Path-based, the sidecar/engine reads the file directly, the frontend never ships file
+bytes over the socket. Formats: `step`/`stp`, `brep`, `stl`, `3mf`, `obj`, `glb`.
 
 ```jsonc
 { "op": "import", "id": "...", "path": "/abs/path/in.step", "format": "step" }
 ```
 
-Reply: `{ "brep": "...", "name": "...", "solid": true, "faces": [...] }` (the exact
-fields the frontend embeds as an `import` feature), or `{ "error": { "message": "..." } }`.
-Given a longer budget than a normal rebuild (mesh read + B-rep build can run longer).
+Reply:
+```jsonc
+{
+  "geom": "<blob store content hash>",
+  "solid": true,
+  "faces": 6,
+  "name": "MyPart",
+  "color": "#rrggbb",          // omitted, not null, when the file carries no colour
+  "nodes": [ { "name": "...", "parent": 0, "color": "#rrggbb" }, ... ],  // STEP assemblies only
+  "parts": [ { "node": 0, "faces": 12, "faceColors": "<packed>", "color": "#rrggbb" }, ... ]  // STEP assemblies only
+}
+```
+or `{ "error": { "message": "..." } }`. `geom` is a content hash into the durable blob
+store, not inline geometry, and `faces` is the shape's total face count, an integer,
+not a list. (An older document's `import` feature may still carry a legacy `brep`
+field, inline base64 BREP from before the blob store existed; a feature's own read
+prefers `geom` but falls back to `brep`, and a fresh `import` reply never writes `brep`
+again, `migrateGeometry` below one-way upgrades an old one.) Given a longer budget than
+a normal rebuild (mesh read + B-rep build can run longer).
+
+Both engines peek the file's own reported triangle count and refuse past 150,000 for
+STL/3MF, and past the same count once parsed for OBJ, before building any B-rep. GLB
+import additionally refuses a file whose glTF keeps geometry in a buffer other than the
+embedded one ("this glTF keeps its geometry in an external buffer, only a
+self-contained .glb imports"): `RWGltf_CafReader`, the Python path's OCCT reader, would
+otherwise happily resolve an external buffer, but the Rust engine's hand-written GLB
+reader only ever looks at the embedded BIN chunk. STL/3MF/OBJ import has no OCCT reader
+binding in either engine's plan (`docs/RUST-PIVOT.md` section 4.1); the Rust engine
+parses these formats itself, the same "OCCT doesn't help here" precedent the export
+side's mesh writers already set.
+
+### `migrateGeometry`
+
+A one-way, opportunistic upgrade the FRONTEND calls on document open, not tied to any
+feature-tree rebuild: turns an `import` feature's legacy inline base64 `brep` field
+into a blob-store `geom` hash. Skipping it is safe and idempotent, `import`'s own read
+already prefers `geom` and falls back to `brep` forever, so a document that never gets
+migrated just keeps paying the inline-base64 size cost.
+
+```jsonc
+{ "op": "migrateGeometry", "id": "...",
+  "items": [ { "id": "<featureId>", "brep": "<base64>" }, ... ] }   // "items" optional, default []
+```
+
+Reply:
+```jsonc
+{ "items": [ { "id": "<featureId>", "geom": "<blob store content hash>" }, ... ],
+  "failed": [ { "id": "<featureId>", "message": "..." } ] }
+```
+Per-item failures are REPORTED in `failed`, never raised: one unreadable legacy body
+must not block migrating the rest, and the document keeps its inline copy for anything
+that fails either way. Runs in the worker process deliberately: this parses geometry
+out of a file the user opened, which may be hostile, in a process whose crash does not
+take anything important with it.
 
 ### `generateShape`
 
@@ -326,7 +496,46 @@ Reply: `{ "solid": true, "solids": 1, "valid": true, "faces": 20, "volume": 132.
 "normals" }` (flat arrays, one normal per position) and, for `store`, `"geom"`: the blob store hash
 an `import` feature carries. An unknown generator, a generator's ValueError, a bad placement or a
 result with no solid is `{ "error": { "message": "..." } }`. Budget 180 s, a modelled thread on a
-long bolt is thousands of helical faces.
+long bolt is thousands of helical faces. Like `exportWith`, this is plugin geometry, a
+permanent Python-only concern until the Rust engine's wasm plugin host exists
+(`docs/RUST-PIVOT.md` section 2.3), not a to-be-ported gap.
+
+### `tessellateText`
+
+A sketch `text` entity's glyph outlines, for the sketch editor's live preview, without
+building a solid.
+
+```jsonc
+{ "op": "tessellateText", "id": "...",
+  "entity": { "type": "text", "text": "Hi", "height": 5, "style": "regular",
+              "align": "left", "angle": 0, "font": "Arial", "x": 0, "y": 0,
+              "boxWidth": 40, "positionOnPath": 0.5 },
+  "pathEntity": { /* optional line/arc/circle/spline entity, a text-on-path anchor */ } }
+```
+
+Reply: `{ "faces": [ { "outer": [[x,y], ...], "holes": [ [[x,y], ...], ... ] }, ... ] }`,
+one entry per glyph FACE (a glyph with one counter, like "o", is one face with one
+hole; a glyph with two, like "B", is one face with two holes). Every coordinate is
+already in FINAL sketch-2D space, anchor, rotation, alignment and path placement all
+applied, so the preview's face count matches the extruded solid's exactly, both call
+the same helper. On any failure: `{ "error": { "message": "..." } }`; a font/glyph
+failure that does not raise instead answers `{ "faces": [] }`, not an error.
+
+### `listFonts`
+
+No request fields beyond the envelope.
+
+```jsonc
+{ "op": "listFonts", "id": "..." }
+```
+
+Reply: `{ "families": [...] }`, a sorted, deduplicated list of font family names, never
+file paths or style variants. Never errors to the caller: an unreadable font, or a
+machine with nothing usable, just answers `{ "families": [] }`. The Python sidecar
+reads this from OCCT's `Font_FontMgr`; the Rust engine's port is planned to read it
+from `fontdb`'s own system font discovery instead, `Font_FontMgr` is deliberately not
+carried forward at all (`docs/RUST-PIVOT.md` section 2.3), keeping the same observable
+contract: sorted, deduplicated, never an error.
 
 ### `session_*`, the live session
 
@@ -383,6 +592,27 @@ acknowledgement a guest waits on. Not "the revision moved", which also moves for
 the user's own edits, and not "the published document equals what I offered",
 which is never true: the window migrates a document on the way in and adds
 `version`, `suppressed` and the visibility overlays on the way back out.
+
+### `cancel`
+
+Answered on the read path, ahead of any op queued behind the heavy-op lock, so it is
+heard WHILE a job runs rather than queued after it, the entire point (a slow import or
+rebuild can hold the worker a long time, and cancelling it has to interrupt that, not
+wait for it).
+
+```jsonc
+{ "op": "cancel", "id": "...", "target": "<request id>" }   // "target" optional
+```
+
+Reply: `{ "cancelled": true }` if something was actually stopped, `{ "cancelled": false }`
+if nothing was running, or `target` named a request that had already finished (a race
+between the click and the job completing must not cancel a different, unrelated job
+that started meanwhile). Omitting `target` cancels whatever is currently running.
+Neither engine can interrupt a running kernel call any other way, so a cancel not
+honoured within a grace period kills and respawns the worker process; the operation it
+was running then answers `{ "ok": false, "cancelled": true, ... }` rather than the
+generic "the geometry kernel crashed on this operation" reply, so the caller can tell a
+deliberate cancel apart from a real crash.
 
 ### `ping`
 
@@ -454,9 +684,10 @@ and each chunk decodes independently. The framing rides in one extra envelope fi
   "result": { /* ... */ } }
 ```
 
-- **`seq: 0` (the head)** carries every non-body field (`protocol`, `bbox`,
-  `diagnostics`, `projectionUpdates`, `featureError(s)`) plus a **`manifest`**: one entry
-  per body of the reply, in final order, as `{id, name, etag, nodeRef?, unchanged?}` plus
+- **`seq: 0` (the head)** carries every non-body field (`protocol`, `bbox`, `bodyIds`,
+  `diagnostics`, `datumMarks`, `projectionUpdates`, `featureError(s)`) plus a
+  **`manifest`**: one entry per body of the reply, in final order, as
+  `{id, name, etag, nodeRef?, faceColors?, partColor?, unchanged?}` plus
   `{faceCount, nVerts3, nIdx, nTris, nEdges, hasNormals?}` **for full bodies only**.
   Sizes are absent on stubs by design, the sidecar does not have them, because those
   arrays live in the client's own per-body cache. The head carries no `bodies`.
