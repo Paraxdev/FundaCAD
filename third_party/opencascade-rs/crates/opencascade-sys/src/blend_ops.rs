@@ -8,6 +8,7 @@ mod inner {
     unsafe extern "C++" {
         include!("opencascade-sys/include/blend_ops.hxx");
         include!("opencascade-sys/include/blend_conic.hxx");
+        include!("opencascade-sys/include/blend_section.hxx");
 
         type TopoDS_Shape = crate::topo_ds::TopoDS_Shape;
 
@@ -43,6 +44,20 @@ mod inner {
             sharp: &TopoDS_Shape,
             edges: &TopoDS_Shape,
             radius: f64,
+            profile: f64,
+            status: &mut i32,
+            message: &mut String,
+        ) -> UniquePtr<TopoDS_Shape>;
+        /// Never throws: `status` 0 built, 1 SectionBlendError, 2 another exception.
+        #[allow(clippy::too_many_arguments)]
+        pub fn blend_section(
+            shape: &TopoDS_Shape,
+            edges: &TopoDS_Shape,
+            chamfer: bool,
+            sizes: &[f64],
+            size2: f64,
+            g2: bool,
+            draft: bool,
             profile: f64,
             status: &mut i32,
             message: &mut String,

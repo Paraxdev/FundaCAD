@@ -5,7 +5,7 @@ use opencascade::primitives::Shape;
 use opencascade_sys::blend_ops as ffi;
 use opencascade_sys::topo_ds::TopoDS_Shape;
 
-use super::BlendErr;
+use super::{BlendErr, SectionErr};
 use crate::kernel;
 use crate::select::entity::EdgeEnt;
 
@@ -112,6 +112,49 @@ pub fn conic(shape: &Shape, edges: &[Shape], radius: f64, profile: f64) -> Resul
         }
         1 => Err(BlendErr::Conic(message)),
         _ => Err(BlendErr::Kernel(message)),
+    }
+}
+
+/// section_blend.py `section_blend` through blends.py `section_fn`.
+#[allow(clippy::too_many_arguments)]
+pub fn section(
+    shape: &Shape,
+    edges: &[Shape],
+    chamfer: bool,
+    sizes: &[f64],
+    size2: Option<f64>,
+    g2: bool,
+    draft: bool,
+    profile: f64,
+) -> Result<Shape, SectionErr> {
+    let es = kernel::compound(edges);
+    let mut status = 0;
+    let mut message = String::new();
+    let out = ffi::blend_section(
+        shape.raw(),
+        es.raw(),
+        chamfer,
+        sizes,
+        size2.unwrap_or(f64::NAN),
+        g2,
+        draft,
+        profile,
+        &mut status,
+        &mut message,
+    );
+    match status {
+        0 if !out.is_null() => {
+            let shape = Shape::from_raw(out);
+            if kernel::is_null(&shape) {
+                Err(SectionErr::Value(
+                    "the blend produced no usable solid".into(),
+                ))
+            } else {
+                Ok(shape)
+            }
+        }
+        1 => Err(SectionErr::Blend(message)),
+        _ => Err(SectionErr::Internal(message)),
     }
 }
 

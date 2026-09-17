@@ -52,7 +52,18 @@ impl BlendErr {
 /// edges taken from `_kernel_copy`, which build123d's own `chamfer()` cannot
 /// find a solid for, so an equal chamfer's combined call always refuses.
 type ParentedOp<'a> = dyn Fn(&Shape, &[Shape], f64, bool) -> Result<Shape, BlendErr> + 'a;
-type SectionOp<'a> = dyn Fn(&Shape, &[Shape]) -> Result<Shape, String> + 'a;
+type SectionOp<'a> = dyn Fn(&Shape, &[Shape]) -> Result<Shape, SectionErr> + 'a;
+
+/// Why the lofted section blend did not build.
+#[derive(Debug, Clone)]
+pub enum SectionErr {
+    /// section_blend.py `SectionBlendError`, a sentence.
+    Blend(String),
+    /// A plain `ValueError` on the way out.
+    Value(String),
+    /// An OpenCASCADE exception, by class.
+    Internal(String),
+}
 
 fn value_err(message: impl Into<String>, code: Option<&'static str>) -> Fail {
     Fail::Value {
@@ -95,8 +106,16 @@ pub fn fillet(ctx: &mut Ctx, f: &Fillet) -> FResult {
                 .collect();
             native_fillet(s, es, &radii)
         };
-    let section =
-        |_: &Shape, _: &[Shape]| -> Result<Shape, String> { Err(SECTION_NOT_PORTED.into()) };
+    let section_at = move |profile: f64| {
+        move |s: &Shape, es: &[Shape]| -> Result<Shape, SectionErr> {
+            let sizes: Vec<f64> = es
+                .iter()
+                .map(|e| if chord { chord_radius(s, e, r) } else { r })
+                .collect();
+            ops::section(s, es, false, &sizes, None, g2, draft, profile)
+        }
+    };
+    let section = section_at(p);
 
     if g2 || only_picked || p.abs() < PROFILE_EPS {
         return blend_edges(
@@ -143,10 +162,8 @@ pub fn fillet(ctx: &mut Ctx, f: &Fillet) -> FResult {
                 true,
             ) {
                 Ok(()) => Ok(()),
-                Err(Fail::Value { message, .. }) if message.contains("not ported") => {
-                    Err(super::not_ported("the lofted section blend"))
-                }
                 Err(_) => {
+                    let section = section_at(0.0);
                     blend_edges(
                         ctx,
                         &f.id,
@@ -196,8 +213,9 @@ pub fn chamfer(ctx: &mut Ctx, f: &Chamfer) -> FResult {
             Some(d2) => native_two_distance_chamfer(s, es, size, d2 * size / d),
         }
     };
-    let section =
-        |_: &Shape, _: &[Shape]| -> Result<Shape, String> { Err(SECTION_NOT_PORTED.into()) };
+    let section = move |s: &Shape, es: &[Shape]| -> Result<Shape, SectionErr> {
+        ops::section(s, es, true, &vec![d; es.len()], d2, false, draft, 0.0)
+    };
     blend_edges(
         ctx,
         &f.id,
@@ -211,7 +229,23 @@ pub fn chamfer(ctx: &mut Ctx, f: &Chamfer) -> FResult {
     )
 }
 
-const SECTION_NOT_PORTED: &str = "the lofted section blend is not ported to the Rust engine yet";
+/// `_DRAFT_FELL_BACK`: drags whose last frame needed the section build.
+static DRAFT_FELL_BACK: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
+fn fell_back_before(key: &str) -> bool {
+    DRAFT_FELL_BACK
+        .lock()
+        .map(|v| v.iter().any(|k| k == key))
+        .unwrap_or(false)
+}
+
+fn remember_fell_back(key: String) {
+    if let Ok(mut v) = DRAFT_FELL_BACK.lock() {
+        if !v.contains(&key) {
+            v.push(key);
+        }
+    }
+}
 
 /// blends.py `native_fillet`.
 fn native_fillet(s: &Shape, es: &[Shape], radii: &[f64]) -> Result<Shape, BlendErr> {
@@ -571,22 +605,28 @@ fn blend_edges(
         }
         refuse_seam_edges(&body_shape, &edges, label)?;
         refuse_smooth_edges(&body_shape, &edges, label)?;
-        let try_section = |shape: &Shape, es: &[Shape]| -> Option<Result<Shape, String>> {
-            section.map(|s| s(shape, es))
+        let try_section = |shape: &Shape, es: &[Shape]| -> Option<Shape> {
+            section.and_then(|s| s(shape, es).ok())
         };
         if section_only {
-            match try_section(&body_shape, &edges) {
+            match section.map(|s| s(&body_shape, &edges)) {
                 Some(Ok(out)) => {
                     staged.push((index, out));
                     continue;
                 }
-                Some(Err(e)) if e == SECTION_NOT_PORTED => {
-                    return Err(super::not_ported("the lofted section blend"))
-                }
-                Some(Err(e)) => {
+                Some(Err(SectionErr::Blend(e))) => {
                     return Err(Fail::msg(format!("{label} failed on {body_name}: {e}")))
                 }
+                Some(Err(SectionErr::Value(e))) => return Err(Fail::msg(e)),
+                Some(Err(SectionErr::Internal(name))) => return Err(Fail::Internal(name)),
                 None => return Err(Fail::Internal("TypeError".into())),
+            }
+        }
+        let fell_back = format!("{fid}|{}|{label}|{sel_value}", ctx.bodies[index].id);
+        if draft && fell_back_before(&fell_back) {
+            if let Some(built) = try_section(&body_shape, &edges) {
+                staged.push((index, built));
+                continue;
             }
         }
 
@@ -608,15 +648,12 @@ fn blend_edges(
                 if unresolved.is_empty() {
                     out
                 } else {
-                    match try_section(&body_shape, &edges) {
-                        Some(Ok(built)) => {
-                            staged.push((index, built));
-                            continue;
+                    if let Some(built) = try_section(&body_shape, &edges) {
+                        if draft {
+                            remember_fell_back(fell_back);
                         }
-                        Some(Err(e)) if e == SECTION_NOT_PORTED => {
-                            return Err(super::not_ported("the lofted section blend"))
-                        }
-                        _ => {}
+                        staged.push((index, built));
+                        continue;
                     }
                     report_edge_failures(&mut ctx.diagnostics, fid, &unresolved, &|e| {
                         one_edge_at(&work, e, blend_size).is_ok()
@@ -638,11 +675,8 @@ fn blend_edges(
         };
         let new_shape = if overlap::folds_over_itself(&work, &new_shape) {
             match try_section(&body_shape, &edges) {
-                Some(Ok(built)) => built,
-                Some(Err(e)) if e == SECTION_NOT_PORTED => {
-                    return Err(super::not_ported("the lofted section blend"))
-                }
-                _ => return Err(fold_error(&body_name)),
+                Some(built) => built,
+                None => return Err(fold_error(&body_name)),
             }
         } else {
             new_shape
