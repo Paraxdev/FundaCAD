@@ -87,6 +87,7 @@ mod inner {
         pub fn IsEqual(self: &TopoDS_Shape, other: &TopoDS_Shape) -> bool;
         pub fn ShapeType(self: &TopoDS_Shape) -> TopAbs_ShapeEnum;
         pub fn Orientation(self: &TopoDS_Shape) -> TopAbs_Orientation;
+        pub fn TopoDS_Shape_reversed(shape: &TopoDS_Shape) -> UniquePtr<TopoDS_Shape>;
 
         type TopoDS_Compound;
         #[cxx_name = "upcast_ref"]
