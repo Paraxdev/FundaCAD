@@ -1,5 +1,6 @@
 //! Feature handlers, one module per family, each naming the Python it replaces.
 
+pub mod blend;
 mod boolean;
 mod cleanup;
 mod datum;
@@ -43,6 +44,8 @@ pub fn dispatch(ctx: &mut Ctx, f: &Feature) -> FResult {
         Feature::Revolve(r) => revolve::handle(ctx, r),
         Feature::Boolean(b) => boolean::do_boolean(ctx, b),
         Feature::Hole(h) => hole::handle(ctx, h),
+        Feature::Fillet(b) => blend::fillet(ctx, b),
+        Feature::Chamfer(b) => blend::chamfer(ctx, b),
         Feature::Loft(l) => loft_sweep::loft(ctx, l),
         Feature::Sweep(s) => loft_sweep::sweep(ctx, s),
         Feature::PatternRect(p) => pattern::pattern_rect(ctx, p),
