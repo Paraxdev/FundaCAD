@@ -1097,7 +1097,26 @@ def _boolean(op, base, tools, fuzz):
     op.Build()
     if not op.IsDone():
         raise SectionBlendError("the blend would not combine with the body")
-    return op.Shape()
+    out = op.Shape()
+    if isinstance(op, BRepAlgoAPI_Cut) and _solid_count(out) > _solid_count(base):
+        # The cut itself was right and left the removed material behind as loose
+        # pieces: a D shape's eight 2mm edges came back with 77mm3 of them, and
+        # redoing the cut one tool at a time took 24s to get the same body.
+        loose = _loose_pieces(out, base, tools, False)
+        if loose:
+            from OCP.BRep import BRep_Builder
+            from OCP.TopoDS import TopoDS_Compound
+
+            kept = TopoDS_Compound()
+            builder = BRep_Builder()
+            builder.MakeCompound(kept)
+            ex = TopExp_Explorer(out, TopAbs_SOLID)
+            while ex.More():
+                if not any(ex.Current().IsSame(piece) for piece in loose):
+                    builder.Add(kept, ex.Current())
+                ex.Next()
+            out = kept
+    return out
 
 
 def _boolean_all(op, base, tools, fuzz, one_shot=False):
@@ -1287,11 +1306,16 @@ def _applied_by(op, base, out, tools, verify):
 
 
 def _left_inside(out, base, tools, verify):
-    """Whether a cut came back with a piece its tools should have removed. A cut
-    through a thin part can split it for real, but no piece of a cut can lie
-    inside a tool: three edges into a box corner at 10mm G2 left 118mm3 of the
-    corner loose, every sample of it inside the tools."""
+    return bool(_loose_pieces(out, base, tools, verify))
+
+
+def _loose_pieces(out, base, tools, verify):
+    """The solids of a cut that its tools should have removed. A cut through a
+    thin part can split it for real, but no piece of a cut can lie inside a
+    tool: three edges into a box corner at 10mm G2 left 118mm3 of the corner
+    loose, every sample of it inside the tools."""
     near = _near_tools(tools)
+    loose = []
     solids = []
     ex = TopExp_Explorer(out, TopAbs_SOLID)
     while ex.More():
@@ -1306,8 +1330,8 @@ def _left_inside(out, base, tools, verify):
             if checked >= 12:
                 break
         if checked and inside * 2 > checked:
-            return True
-    return False
+            loose.append(piece)
+    return loose
 
 
 def _swallowed(base, tools):
