@@ -24,6 +24,10 @@ impl Watch for EngineWatch<'_> {
     fn cancelled(&self) -> bool {
         self.0.cancel.is_cancelled()
     }
+
+    fn cancel_token(&self) -> Option<fundacad_protocol::CancelToken> {
+        Some(self.0.cancel.clone())
+    }
 }
 
 /// server.py `_rebuild_job`, without the caches.
@@ -218,6 +222,16 @@ impl Jobs for GeomJobs {
             "inspect" => crate::inspect::inspect_result(req, &EngineWatch(ctx)),
             "interference" => crate::inspect::interference_result(req, &EngineWatch(ctx)),
             "projectGeometry" => crate::projection::project_geometry_result(req, &EngineWatch(ctx)),
+            #[cfg(feature = "plugins")]
+            "generateShape" => {
+                crate::plugins::generate_shape_result(req, Some(ctx.cancel.clone()))
+            }
+            #[cfg(feature = "plugins")]
+            "exportWith" => crate::plugins::export_with_result(
+                req,
+                &EngineWatch(ctx),
+                Some(ctx.cancel.clone()),
+            ),
             other => error_result(&format!("unknown op: {other}")),
         }
     }

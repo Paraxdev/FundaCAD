@@ -394,6 +394,48 @@ code, which is the bargain Blender, Rhino and Fusion all make.
 `sandboxNote("builtin")` is where a person is told, in the words they read
 before they install.
 
+#### The same geometry for the Rust engine, as a component
+
+The Rust engine (docs/RUST-PIVOT.md) does not import Python. A plugin's
+geometry for it is a **WebAssembly component** built from a Rust crate in the
+plugin folder, and a second manifest key names it:
+
+```json
+{
+  "featureTypes": ["teardropHole"],
+  "geometry": "geometry/register.py",
+  "geometryWasm": "geometry.wasm"
+}
+```
+
+- The crate lives in `plugins/<id>/geometry-rs/`, is its own cargo workspace,
+  builds as a `cdylib` for `wasm32-wasip2`, and generates its bindings from
+  `crates/fundacad-geom/wit/plugin.wit` with `wit-bindgen`.
+  `plugins/FundaCAD.PrintToolbox/geometry-rs` is the worked example.
+- `python scripts/build-plugin-wasm.py <plugin id>` compiles it and writes
+  `plugins/<id>/geometry.wasm`. That file is a build artifact, ignored by git
+  like `main.js`, and `scripts/build-plugins.py` builds it again when it packs
+  the bundle, so the zip carries the component and never the crate.
+  `rustup target add wasm32-wasip2` once per machine.
+- The world exports the same four hooks the Python registry has: `run-feature`,
+  `resolve-pass` and `displace` (a mesh pass, with a `code-version` that keys
+  the mesh caches), `write-export` and `generate-shape`. `register` returns
+  what the component claims, and every name in it must be declared in the
+  manifest, or the plugin does not load.
+- It imports a generic kernel: solids from primitives and sketches, booleans,
+  fillet and chamfer, a face triangulation to displace, blobs, and one
+  `output.write` for an exporter's bytes. Shapes stay in the engine, a plugin
+  holds handles to them; nothing crosses as BREP bytes per call.
+- **This half IS sandboxed**, because it can be: no files, no network, no
+  environment, a memory cap and a time budget, and an export writes only to the
+  path the host chose. That is a property of the format, not a promise the
+  plugin makes, and it does not change what the person is told about the
+  Python half while both exist.
+
+Both halves stay in the bundle until the Python engine is deleted: whichever
+engine is running loads its own, and a plugin that ships only one runs on only
+one.
+
 ### Geometry that becomes an import, not a feature
 
 Some geometry is worth generating once and then keeping, not rebuilding: a standard screw is the
