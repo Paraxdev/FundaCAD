@@ -15,6 +15,7 @@ pub fn mesh_body(b: &BuiltBody) -> MeshBody<'_> {
         name: b.name.clone(),
         shape: Some(&b.shape),
         owner_map: Some(&b.owners),
+        mesh_passes: b.mesh_passes.clone(),
         node_ref: b.node_ref.clone().map(Value::String),
         face_colors: b.face_colors.clone(),
         part_color: b.part_color.clone().map(Value::String),

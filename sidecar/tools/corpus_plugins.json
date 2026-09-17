@@ -1,0 +1,282 @@
+{
+  "about": "Documents whose features belong to a PLUGIN, not to the engine. diff_engines.py rebuilds them through the Python engine (which imports plugins/FundaCAD.PrintToolbox/geometry/*.py) and the Rust engine (which runs plugins/FundaCAD.PrintToolbox/geometry.wasm, built by scripts/build-plugin-wasm.py), so the two halves of the same plugin are compared on the same parts. The shapes are the ones the plugin's own tests measure analytically (plugins/FundaCAD.PrintToolbox/geometry/tests). Run: python tools/diff_engines.py --corpus tools/corpus_plugins.json",
+  "documents": [
+    {"name": "teardrop_45", "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 30, "height": 20, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 20, "operation": "new"},
+      {"id": "sh", "type": "sketch", "plane": "XZ", "entities": [{"type": "circle", "radius": 3, "x": 0, "y": 10}]},
+      {"id": "eh", "type": "extrude", "sketch": "sh", "distance": 100, "symmetric": true, "operation": "cut"},
+      {"id": "td", "type": "teardropHole", "faces": {"kind": "face", "by": "nearest", "point": [0, 0, 13]}}
+    ]}},
+    {"name": "teardrop_30", "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 30, "height": 20, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 20, "operation": "new"},
+      {"id": "sh", "type": "sketch", "plane": "XZ", "entities": [{"type": "circle", "radius": 3, "x": 0, "y": 10}]},
+      {"id": "eh", "type": "extrude", "sketch": "sh", "distance": 100, "symmetric": true, "operation": "cut"},
+      {"id": "td", "type": "teardropHole", "faces": {"kind": "face", "by": "nearest", "point": [0, 0, 13]}, "angle": 30}
+    ]}},
+    {"name": "teardrop_60_flat", "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 30, "height": 20, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 20, "operation": "new"},
+      {"id": "sh", "type": "sketch", "plane": "XZ", "entities": [{"type": "circle", "radius": 3, "x": 0, "y": 10}]},
+      {"id": "eh", "type": "extrude", "sketch": "sh", "distance": 100, "symmetric": true, "operation": "cut"},
+      {"id": "td", "type": "teardropHole", "faces": {"kind": "face", "by": "nearest", "point": [0, 0, 13]}, "angle": 60, "roof": "flat", "flatHeight": 0.5}
+    ]}},
+    {"name": "teardrop_build_dir_x", "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 30, "height": 20, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 20, "operation": "new"},
+      {"id": "sh", "type": "sketch", "plane": "XZ", "entities": [{"type": "circle", "radius": 3, "x": 0, "y": 10}]},
+      {"id": "eh", "type": "extrude", "sketch": "sh", "distance": 100, "symmetric": true, "operation": "cut"},
+      {"id": "td", "type": "teardropHole", "faces": {"kind": "face", "by": "nearest", "point": [0, 0, 13]}, "buildDir": "+X"}
+    ]}},
+    {"name": "teardrop_tilted_body", "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 30, "height": 20, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 20, "operation": "new"},
+      {"id": "sh", "type": "sketch", "plane": "XZ", "entities": [{"type": "circle", "radius": 3, "x": 0, "y": 10}]},
+      {"id": "eh", "type": "extrude", "sketch": "sh", "distance": 100, "symmetric": true, "operation": "cut"},
+      {"id": "mv", "type": "move", "rx": 30},
+      {"id": "td", "type": "teardropHole", "faces": {"kind": "face", "by": "nearest", "point": [0, -6.5, 10.598]}}
+    ]}},
+    {"name": "teardrop_two_holes", "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 40, "height": 20, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 20, "operation": "new"},
+      {"id": "sh", "type": "sketch", "plane": "XZ", "entities": [{"type": "circle", "radius": 3, "x": -8, "y": 10}, {"type": "circle", "radius": 3, "x": 8, "y": 10}]},
+      {"id": "eh", "type": "extrude", "sketch": "sh", "distance": 100, "symmetric": true, "operation": "cut"},
+      {"id": "td", "type": "teardropHole", "faces": [
+        {"kind": "face", "by": "nearest", "point": [-8, 5, 13]},
+        {"kind": "face", "by": "nearest", "point": [8, 5, 13]},
+        {"kind": "face", "by": "nearest", "point": [-8, -5, 7]}
+      ]}
+    ]}},
+    {"name": "teardrop_blind_hole", "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 30, "height": 20, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 20, "operation": "new"},
+      {"id": "sh", "type": "sketch", "plane": "XZ", "entities": [{"type": "circle", "radius": 3, "x": 0, "y": 10}]},
+      {"id": "eh", "type": "extrude", "sketch": "sh", "distance": -8, "operation": "cut"},
+      {"id": "td", "type": "teardropHole", "faces": {"kind": "face", "by": "nearest", "point": [0, -4, 13]}}
+    ]}},
+    {"name": "teardrop_vertical_refused", "expectError": true, "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 30, "height": 30, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 20, "operation": "new"},
+      {"id": "sv", "type": "sketch", "plane": "XY", "entities": [{"type": "circle", "radius": 3, "x": 0, "y": 0}]},
+      {"id": "ev", "type": "extrude", "sketch": "sv", "distance": 20, "operation": "cut"},
+      {"id": "td", "type": "teardropHole", "faces": {"kind": "face", "by": "nearest", "point": [3, 0, 10]}}
+    ]}},
+    {"name": "teardrop_flat_face_refused", "expectError": true, "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 30, "height": 20, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 20, "operation": "new"},
+      {"id": "sh", "type": "sketch", "plane": "XZ", "entities": [{"type": "circle", "radius": 3, "x": 0, "y": 10}]},
+      {"id": "eh", "type": "extrude", "sketch": "sh", "distance": 100, "symmetric": true, "operation": "cut"},
+      {"id": "td", "type": "teardropHole", "faces": {"kind": "face", "by": "nearest", "point": [0, 0, 20]}}
+    ]}},
+    {"name": "teardrop_boss_refused", "expectError": true, "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 30, "height": 30, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 10, "operation": "new"},
+      {"id": "sb", "type": "sketch", "plane": "XZ", "entities": [{"type": "circle", "radius": 3, "x": 0, "y": 20}]},
+      {"id": "eb", "type": "extrude", "sketch": "sb", "distance": 10, "symmetric": true, "operation": "join"},
+      {"id": "td", "type": "teardropHole", "faces": {"kind": "face", "by": "nearest", "point": [0, 0, 23]}}
+    ]}},
+    {"name": "roof_bridge_flush", "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 30, "height": 20, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 20, "operation": "new"},
+      {"id": "sh", "type": "sketch", "plane": "XZ", "entities": [{"type": "circle", "radius": 3, "x": 0, "y": 10}]},
+      {"id": "eh", "type": "extrude", "sketch": "sh", "distance": 100, "symmetric": true, "operation": "cut"},
+      {"id": "rb", "type": "roofBridge", "faces": {"kind": "face", "by": "nearest", "point": [0, 0, 13]}}
+    ]}},
+    {"name": "roof_bridge_raised", "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 30, "height": 20, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 20, "operation": "new"},
+      {"id": "sh", "type": "sketch", "plane": "XZ", "entities": [{"type": "circle", "radius": 3, "x": 0, "y": 10}]},
+      {"id": "eh", "type": "extrude", "sketch": "sh", "distance": 100, "symmetric": true, "operation": "cut"},
+      {"id": "rb", "type": "roofBridge", "faces": {"kind": "face", "by": "nearest", "point": [0, 0, 13]}, "height": 0.6}
+    ]}},
+    {"name": "counterbore_two_layers", "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 30, "height": 30, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 20, "operation": "new"},
+      {"id": "sc", "type": "sketch", "plane": "XY", "entities": [{"type": "circle", "radius": 6, "x": 0, "y": 0}]},
+      {"id": "ec", "type": "extrude", "sketch": "sc", "distance": 5, "operation": "cut"},
+      {"id": "sb", "type": "sketch", "plane": "XY", "entities": [{"type": "circle", "radius": 2.5, "x": 0, "y": 0}]},
+      {"id": "eb", "type": "extrude", "sketch": "sb", "distance": 20, "operation": "cut"},
+      {"id": "cb", "type": "counterboreBridge", "faces": {"kind": "face", "by": "nearest", "point": [4, 0, 5]}, "layers": 2}
+    ]}},
+    {"name": "counterbore_three_layers", "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 30, "height": 30, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 20, "operation": "new"},
+      {"id": "sc", "type": "sketch", "plane": "XY", "entities": [{"type": "circle", "radius": 6, "x": 0, "y": 0}]},
+      {"id": "ec", "type": "extrude", "sketch": "sc", "distance": 5, "operation": "cut"},
+      {"id": "sb", "type": "sketch", "plane": "XY", "entities": [{"type": "circle", "radius": 2.5, "x": 0, "y": 0}]},
+      {"id": "eb", "type": "extrude", "sketch": "sb", "distance": 20, "operation": "cut"},
+      {"id": "cb", "type": "counterboreBridge", "faces": {"kind": "face", "by": "nearest", "point": [4, 0, 5]}, "layers": 3}
+    ]}},
+    {"name": "counterbore_turned", "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 30, "height": 30, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 20, "operation": "new"},
+      {"id": "sc", "type": "sketch", "plane": "XY", "entities": [{"type": "circle", "radius": 6, "x": 0, "y": 0}]},
+      {"id": "ec", "type": "extrude", "sketch": "sc", "distance": 5, "operation": "cut"},
+      {"id": "sb", "type": "sketch", "plane": "XY", "entities": [{"type": "circle", "radius": 2.5, "x": 0, "y": 0}]},
+      {"id": "eb", "type": "extrude", "sketch": "sb", "distance": 20, "operation": "cut"},
+      {"id": "cb", "type": "counterboreBridge", "faces": {"kind": "face", "by": "nearest", "point": [4, 0, 5]}, "angle": 90}
+    ]}},
+    {"name": "counterbore_no_bore_refused", "expectError": true, "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 30, "height": 30, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 20, "operation": "new"},
+      {"id": "sc", "type": "sketch", "plane": "XY", "entities": [{"type": "circle", "radius": 6, "x": 0, "y": 0}]},
+      {"id": "ec", "type": "extrude", "sketch": "sc", "distance": 5, "operation": "cut"},
+      {"id": "cb", "type": "counterboreBridge", "faces": {"kind": "face", "by": "nearest", "point": [4, 0, 5]}}
+    ]}},
+    {"name": "counterbore_curved_face_refused", "expectError": true, "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 30, "height": 30, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 20, "operation": "new"},
+      {"id": "sc", "type": "sketch", "plane": "XY", "entities": [{"type": "circle", "radius": 6, "x": 0, "y": 0}]},
+      {"id": "ec", "type": "extrude", "sketch": "sc", "distance": 5, "operation": "cut"},
+      {"id": "sb", "type": "sketch", "plane": "XY", "entities": [{"type": "circle", "radius": 2.5, "x": 0, "y": 0}]},
+      {"id": "eb", "type": "extrude", "sketch": "sb", "distance": 20, "operation": "cut"},
+      {"id": "cb", "type": "counterboreBridge", "faces": {"kind": "face", "by": "nearest", "point": [0, 2.5, 10]}}
+    ]}},
+    {"name": "sacrificial_bottom", "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 20, "height": 20, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 10, "operation": "new"},
+      {"id": "sb", "type": "sketch", "plane": "XY", "entities": [{"type": "circle", "radius": 2.5, "x": 0, "y": 0}]},
+      {"id": "eb", "type": "extrude", "sketch": "sb", "distance": 10, "operation": "cut"},
+      {"id": "sl", "type": "sacrificialLayer", "faces": {"kind": "face", "by": "nearest", "point": [2.5, 0, 5]}, "side": "bottom"}
+    ]}},
+    {"name": "sacrificial_top", "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 20, "height": 20, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 10, "operation": "new"},
+      {"id": "sb", "type": "sketch", "plane": "XY", "entities": [{"type": "circle", "radius": 2.5, "x": 0, "y": 0}]},
+      {"id": "eb", "type": "extrude", "sketch": "sb", "distance": 10, "operation": "cut"},
+      {"id": "sl", "type": "sacrificialLayer", "faces": {"kind": "face", "by": "nearest", "point": [2.5, 0, 5]}, "side": "top"}
+    ]}},
+    {"name": "sacrificial_at_depth", "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 20, "height": 20, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 10, "operation": "new"},
+      {"id": "sb", "type": "sketch", "plane": "XY", "entities": [{"type": "circle", "radius": 2.5, "x": 0, "y": 0}]},
+      {"id": "eb", "type": "extrude", "sketch": "sb", "distance": 10, "operation": "cut"},
+      {"id": "sl", "type": "sacrificialLayer", "faces": {"kind": "face", "by": "nearest", "point": [8, 8, 10]}, "depth": 3, "layers": 2}
+    ]}},
+    {"name": "sacrificial_counterbore_floor", "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 30, "height": 30, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 20, "operation": "new"},
+      {"id": "sc", "type": "sketch", "plane": "XY", "entities": [{"type": "circle", "radius": 6, "x": 0, "y": 0}]},
+      {"id": "ec", "type": "extrude", "sketch": "sc", "distance": 5, "operation": "cut"},
+      {"id": "sb", "type": "sketch", "plane": "XY", "entities": [{"type": "circle", "radius": 2.5, "x": 0, "y": 0}]},
+      {"id": "eb", "type": "extrude", "sketch": "sb", "distance": 20, "operation": "cut"},
+      {"id": "sl", "type": "sacrificialLayer", "faces": {"kind": "face", "by": "nearest", "point": [0, 2.5, 12]}}
+    ]}},
+    {"name": "sacrificial_too_deep_refused", "expectError": true, "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 20, "height": 20, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 10, "operation": "new"},
+      {"id": "sb", "type": "sketch", "plane": "XY", "entities": [{"type": "circle", "radius": 2.5, "x": 0, "y": 0}]},
+      {"id": "eb", "type": "extrude", "sketch": "sb", "distance": 10, "operation": "cut"},
+      {"id": "sl", "type": "sacrificialLayer", "faces": {"kind": "face", "by": "nearest", "point": [2.5, 0, 5]}, "depth": 9.9}
+    ]}},
+    {"name": "sacrificial_fractional_layers_refused", "expectError": true, "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 20, "height": 20, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 10, "operation": "new"},
+      {"id": "sb", "type": "sketch", "plane": "XY", "entities": [{"type": "circle", "radius": 2.5, "x": 0, "y": 0}]},
+      {"id": "eb", "type": "extrude", "sketch": "sb", "distance": 10, "operation": "cut"},
+      {"id": "sl", "type": "sacrificialLayer", "faces": {"kind": "face", "by": "nearest", "point": [2.5, 0, 5]}, "layers": 2.5}
+    ]}},
+    {"name": "ribs_default", "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 30, "height": 20, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 20, "operation": "new"},
+      {"id": "sh", "type": "sketch", "plane": "XZ", "entities": [{"type": "circle", "radius": 3, "x": 0, "y": 10}]},
+      {"id": "eh", "type": "extrude", "sketch": "sh", "distance": 100, "symmetric": true, "operation": "cut"},
+      {"id": "tr", "type": "threadRibs", "faces": {"kind": "face", "by": "nearest", "point": [0, 0, 13]}}
+    ]}},
+    {"name": "ribs_explicit", "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 30, "height": 20, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 20, "operation": "new"},
+      {"id": "sh", "type": "sketch", "plane": "XZ", "entities": [{"type": "circle", "radius": 3, "x": 0, "y": 10}]},
+      {"id": "eh", "type": "extrude", "sketch": "sh", "distance": 100, "symmetric": true, "operation": "cut"},
+      {"id": "tr", "type": "threadRibs", "faces": {"kind": "face", "by": "nearest", "point": [0, 0, 13]}, "ribCount": 5, "ribWidth": 0.4, "coreDiameter": 4.0, "startDepth": 1.0}
+    ]}},
+    {"name": "ribs_blind_hole", "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 30, "height": 20, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 20, "operation": "new"},
+      {"id": "sh", "type": "sketch", "plane": "XZ", "entities": [{"type": "circle", "radius": 3, "x": 0, "y": 10}]},
+      {"id": "eh", "type": "extrude", "sketch": "sh", "distance": -100, "operation": "cut"},
+      {"id": "tr", "type": "threadRibs", "faces": {"kind": "face", "by": "nearest", "point": [0, 5, 13]}}
+    ]}},
+    {"name": "ribs_overlap_refused", "expectError": true, "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 30, "height": 20, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 20, "operation": "new"},
+      {"id": "sh", "type": "sketch", "plane": "XZ", "entities": [{"type": "circle", "radius": 3, "x": 0, "y": 10}]},
+      {"id": "eh", "type": "extrude", "sketch": "sh", "distance": 100, "symmetric": true, "operation": "cut"},
+      {"id": "tr", "type": "threadRibs", "faces": {"kind": "face", "by": "nearest", "point": [0, 0, 13]}, "ribCount": 8, "ribWidth": 3.0}
+    ]}},
+    {"name": "zip_channel", "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 30, "height": 30, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 10, "operation": "new"},
+      {"id": "zt", "type": "zipTieChannel", "faces": {"kind": "face", "by": "nearest", "point": [0, 0, 10]}, "channelWidth": 4, "channelHeight": 2, "insetDepth": 5, "span": 10}
+    ]}},
+    {"name": "zip_channel_turned", "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 30, "height": 30, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 10, "operation": "new"},
+      {"id": "zt", "type": "zipTieChannel", "faces": {"kind": "face", "by": "nearest", "point": [0, 0, 10]}, "channelWidth": 4, "channelHeight": 2, "insetDepth": 5, "span": 10, "angle": 90}
+    ]}},
+    {"name": "zip_breakthrough_refused", "expectError": true, "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 30, "height": 30, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 5.05, "operation": "new"},
+      {"id": "zt", "type": "zipTieChannel", "faces": {"kind": "face", "by": "nearest", "point": [0, 0, 5.05]}, "channelWidth": 4, "channelHeight": 2, "insetDepth": 5, "span": 10}
+    ]}},
+    {"name": "zip_breakthrough_allowed", "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 30, "height": 30, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 5.05, "operation": "new"},
+      {"id": "zt", "type": "zipTieChannel", "faces": {"kind": "face", "by": "nearest", "point": [0, 0, 5.05]}, "channelWidth": 4, "channelHeight": 2, "insetDepth": 5, "span": 10, "allowBreakthrough": true}
+    ]}},
+    {"name": "zip_span_refused", "expectError": true, "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 30, "height": 30, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 10, "operation": "new"},
+      {"id": "zt", "type": "zipTieChannel", "faces": {"kind": "face", "by": "nearest", "point": [0, 0, 10]}, "channelHeight": 3, "span": 3}
+    ]}},
+    {"name": "zip_curved_face_refused", "expectError": true, "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 30, "height": 20, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 20, "operation": "new"},
+      {"id": "sh", "type": "sketch", "plane": "XZ", "entities": [{"type": "circle", "radius": 3, "x": 0, "y": 10}]},
+      {"id": "eh", "type": "extrude", "sketch": "sh", "distance": 100, "symmetric": true, "operation": "cut"},
+      {"id": "zt", "type": "zipTieChannel", "faces": {"kind": "face", "by": "nearest", "point": [3, 0, 10]}}
+    ]}},
+    {"name": "elephant_foot", "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 20, "height": 15, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 10, "operation": "new"},
+      {"id": "ef", "type": "elephantFootChamfer", "size": 0.4}
+    ]}},
+    {"name": "elephant_foot_with_a_hole", "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 20, "height": 20, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 10, "operation": "new"},
+      {"id": "sh", "type": "sketch", "plane": "XY", "entities": [{"type": "circle", "radius": 2, "x": 0, "y": 0}]},
+      {"id": "eh", "type": "extrude", "sketch": "sh", "distance": 10, "operation": "cut"},
+      {"id": "ef", "type": "elephantFootChamfer", "size": 0.4}
+    ]}},
+    {"name": "elephant_foot_zero_refused", "expectError": true, "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 20, "height": 20, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 10, "operation": "new"},
+      {"id": "ef", "type": "elephantFootChamfer", "size": 0}
+    ]}},
+    {"name": "vertical_fillet", "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 20, "height": 15, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 10, "operation": "new"},
+      {"id": "vf", "type": "verticalFillet", "radius": 2}
+    ]}},
+    {"name": "vertical_fillet_l_shape", "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 20, "height": 20, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 10, "operation": "new"},
+      {"id": "s2", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 10, "height": 10, "x": 5, "y": 5}]},
+      {"id": "e2", "type": "extrude", "sketch": "s2", "distance": 10, "operation": "cut"},
+      {"id": "vf", "type": "verticalFillet", "radius": 1}
+    ]}},
+    {"name": "vertical_fillet_only_convex", "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 20, "height": 20, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 10, "operation": "new"},
+      {"id": "s2", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 10, "height": 10, "x": 5, "y": 5}]},
+      {"id": "e2", "type": "extrude", "sketch": "s2", "distance": 10, "operation": "cut"},
+      {"id": "vf", "type": "verticalFillet", "radius": 1, "onlyConvex": true}
+    ]}},
+    {"name": "vertical_fillet_no_edges_refused", "expectError": true, "document": {"parameters": {}, "features": [
+      {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "circle", "radius": 10, "x": 0, "y": 0}]},
+      {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 10, "operation": "new"},
+      {"id": "vf", "type": "verticalFillet", "radius": 1}
+    ]}}
+  ]
+}

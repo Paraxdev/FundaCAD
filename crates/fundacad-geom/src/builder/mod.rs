@@ -98,6 +98,8 @@ pub struct Body {
     pub name: String,
     shape: Shape,
     pub owners: Owners,
+    /// Mesh pass specs a plugin stashed, `plugin_geometry.BODY_KEY`.
+    pub mesh_passes: Vec<Value>,
     /// The assembly tree node an import bound this body to, `<featureId>/<index>`.
     pub node_ref: Option<String>,
     /// Packed per-face colours (fundacad_core::face_colors) from the imported file.
@@ -126,6 +128,7 @@ impl Body {
             name,
             shape,
             owners,
+            mesh_passes: Vec::new(),
             node_ref: meta.node_ref,
             face_colors: meta.face_colors,
             part_color: meta.part_color,
@@ -201,6 +204,22 @@ impl Ctx {
         n.map_or(Ok(default), |n| self.val(n))
     }
 
+    /// A context outside any document, for geometry a plugin generates.
+    pub fn detached() -> Ctx {
+        Ctx {
+            params: HashMap::new(),
+            datums: IndexMap::new(),
+            sketches: HashMap::new(),
+            bodies: Vec::new(),
+            diagnostics: Vec::new(),
+            hidden_bodies: HashSet::new(),
+            sketch_planes: IndexMap::new(),
+            datum_marks: IndexMap::new(),
+            projections: Vec::new(),
+            ids: BodyIds::new(None),
+        }
+    }
+
     fn bump(&mut self) -> u64 {
         NEXT_UID.fetch_add(1, Ordering::Relaxed) + 1
     }
@@ -230,6 +249,7 @@ impl Ctx {
             name,
             shape,
             owners: Owners::default(),
+            mesh_passes: Vec::new(),
             node_ref: meta.node_ref.filter(|r| !r.is_empty()),
             face_colors: meta.face_colors,
             part_color: meta.part_color.filter(|c| !c.is_empty()),
@@ -284,6 +304,7 @@ pub struct BuiltBody {
     pub name: String,
     pub shape: Shape,
     pub owners: Owners,
+    pub mesh_passes: Vec<Value>,
     pub node_ref: Option<String>,
     pub face_colors: Option<Value>,
     pub part_color: Option<String>,
@@ -313,6 +334,10 @@ pub trait Watch {
     fn meshing(&self, _done: usize, _total: usize) {}
     fn cancelled(&self) -> bool {
         false
+    }
+    /// The flag behind `cancelled`, for work that polls it off this thread.
+    fn cancel_token(&self) -> Option<fundacad_protocol::CancelToken> {
+        None
     }
 }
 
@@ -666,7 +691,7 @@ pub fn rebuild_from(
             Vec::new()
         };
 
-        let outcome = run_feature(&mut ctx, f, type_name);
+        let outcome = run_feature(&mut ctx, f, type_name, watch);
         let label = label_of(rawf);
         match outcome {
             Ok(Ran::Inactive) => {}
@@ -758,6 +783,7 @@ pub fn rebuild_from(
             id: b.id,
             name: b.name,
             owners: b.owners,
+            mesh_passes: b.mesh_passes,
             node_ref: b.node_ref,
             face_colors: b.face_colors,
             part_color: b.part_color,
@@ -780,7 +806,12 @@ enum Ran {
     Inactive,
 }
 
-fn run_feature(ctx: &mut Ctx, f: &Feature, type_name: Option<&str>) -> FResult<Ran> {
+fn run_feature(
+    ctx: &mut Ctx,
+    f: &Feature,
+    type_name: Option<&str>,
+    watch: &dyn Watch,
+) -> FResult<Ran> {
     let Some(t) = type_name else {
         return Err(Fail::Missing("type".into()));
     };
@@ -789,7 +820,16 @@ fn run_feature(ctx: &mut Ctx, f: &Feature, type_name: Option<&str>) -> FResult<R
     }
     match f {
         Feature::Invalid(inv) => Err(invalid_to_fail(&inv.error)),
-        Feature::Unknown(_) => Err(Fail::msg(format!("unknown feature type: {t}"))),
+        #[cfg(feature = "plugins")]
+        Feature::Unknown(raw) => match crate::plugins::run_feature(ctx, t, raw, watch.cancel_token()) {
+            Some(r) => r.map(|()| Ran::Built),
+            None => Err(Fail::msg(format!("unknown feature type: {t}"))),
+        },
+        #[cfg(not(feature = "plugins"))]
+        Feature::Unknown(_) => {
+            let _ = watch;
+            Err(Fail::msg(format!("unknown feature type: {t}")))
+        }
         known => features::dispatch(ctx, known).map(|()| Ran::Built),
     }
 }
