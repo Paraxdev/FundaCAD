@@ -1540,6 +1540,73 @@
    "errors": []
   }
  },
+ "chamfer_fails_everywhere": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "distance": 20,
+     "edges": {
+      "by": "all",
+      "kind": "edge"
+     },
+     "id": "c",
+     "type": "chamfer"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -5.0,
+      -5.0,
+      5.0,
+      5.0,
+      5.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 999.9999999999998
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [
+    {
+     "feature_id": "c",
+     "kind": "edgeOpFailed",
+     "reason": "per-edge"
+    }
+   ],
+   "errors": [
+    {
+     "feature_id": "c",
+     "message": "Chamfer failed on Box: Nothing to chamfer"
+    }
+   ]
+  }
+ },
  "chamfer_seam_only": {
   "doc": {
    "features": [
@@ -1601,6 +1668,194 @@
      "message": "can't chamfer here, that edge is a seam. A seam is the line where a face that wraps all the way round meets itself, so both sides of it are the same face and there is no corner to cut. Pick the edges where that face meets its NEIGHBOURS instead."
     }
    ]
+  }
+ },
+ "chamfer_section_huge_all": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 20,
+     "type": "box",
+     "width": 20
+    },
+    {
+     "distance": 6,
+     "edges": {
+      "by": "all",
+      "kind": "edge"
+     },
+     "id": "c",
+     "type": "chamfer"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -9.0000001,
+      -9.0000001,
+      -5.0000001,
+      9.0000001,
+      9.0000001,
+      5.0000001
+     ],
+     "faceOwners": [
+      "c",
+      "c",
+      "c",
+      "c",
+      "c",
+      "c",
+      "c",
+      "c",
+      "c",
+      "c",
+      "c",
+      "c",
+      "c",
+      "c"
+     ],
+     "faces": 14,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 1730.666666666659
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "chamfer_section_tangent_off": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 20,
+     "type": "box",
+     "width": 20
+    },
+    {
+     "distance": 1.5,
+     "edges": {
+      "by": "nearest",
+      "kind": "edge",
+      "point": [
+       0,
+       10,
+       5
+      ]
+     },
+     "id": "c",
+     "tangentEdges": false,
+     "type": "chamfer"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.0000001,
+      -10.0000001,
+      -5.0000001,
+      10.0000001,
+      10.0000001,
+      5.0000001
+     ],
+     "faceOwners": [
+      "c",
+      "c",
+      "c",
+      "c",
+      "a",
+      "a",
+      "c"
+     ],
+     "faces": 7,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 3977.4999999999995
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "chamfer_section_two_distance": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 20,
+     "type": "box",
+     "width": 20
+    },
+    {
+     "chamferType": "twoDistance",
+     "distance": 3,
+     "distance2": 12,
+     "edges": {
+      "axis": "Z",
+      "by": "axis",
+      "kind": "edge"
+     },
+     "id": "c",
+     "type": "chamfer"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.0000001,
+      -9.5000001,
+      -5.0000001,
+      10.0000001,
+      9.5000001,
+      5.0000001
+     ],
+     "faceOwners": [
+      "c",
+      "c",
+      "c",
+      "c",
+      "c",
+      "c",
+      "c",
+      "c"
+     ],
+     "faces": 8,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 3299.9999999999995
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
   }
  },
  "chamfer_two_distance": {
@@ -4858,6 +5113,73 @@
    "errors": []
   }
  },
+ "fillet_fails_everywhere": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 10,
+     "type": "box",
+     "width": 10
+    },
+    {
+     "edges": {
+      "by": "all",
+      "kind": "edge"
+     },
+     "id": "f",
+     "radius": 30,
+     "type": "fillet"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -5.0,
+      -5.0,
+      5.0,
+      5.0,
+      5.0
+     ],
+     "faceOwners": [
+      "a",
+      "a",
+      "a",
+      "a",
+      "a",
+      "a"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 999.9999999999998
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [
+    {
+     "feature_id": "f",
+     "kind": "edgeOpFailed",
+     "reason": "per-edge"
+    }
+   ],
+   "errors": [
+    {
+     "feature_id": "f",
+     "message": "Fillet failed on Box: Failed creating a fillet, try a smaller value"
+    }
+   ]
+  }
+ },
  "fillet_join_L_sequential": {
   "doc": {
    "features": [
@@ -5162,6 +5484,81 @@
    "errors": []
   }
  },
+ "fillet_profile_falls_to_section": {
+  "doc": {
+   "features": [
+    {
+     "height": 4,
+     "id": "p",
+     "length": 40,
+     "type": "box",
+     "width": 40
+    },
+    {
+     "height": 20,
+     "id": "c",
+     "operation": "join",
+     "radius": 6,
+     "type": "cylinder"
+    },
+    {
+     "edges": {
+      "by": "nearest",
+      "kind": "edge",
+      "point": [
+       0,
+       6,
+       2
+      ]
+     },
+     "id": "f",
+     "profile": 0.5,
+     "radius": 1.5,
+     "type": "fillet"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -20.0000001,
+      -20.0000001,
+      -10.0,
+      20.0000001,
+      20.0000001,
+      10.0000001
+     ],
+     "faceOwners": [
+      "f",
+      "f",
+      "c",
+      "f",
+      "p",
+      "p",
+      "p",
+      "p",
+      "c",
+      "c",
+      "c"
+     ],
+     "faces": 11,
+     "id": "body2",
+     "name": "Box",
+     "solids": 1,
+     "volume": 8223.026740615942
+    }
+   ],
+   "bodyIds": {
+    "c:0": "body2",
+    "p:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
  "fillet_seam_only": {
   "doc": {
    "features": [
@@ -5223,6 +5620,493 @@
      "message": "can't fillet here, that edge is a seam. A seam is the line where a face that wraps all the way round meets itself, so both sides of it are the same face and there is no corner to cut. Pick the edges where that face meets its NEIGHBOURS instead."
     }
    ]
+  }
+ },
+ "fillet_section_concave_fill": {
+  "doc": {
+   "features": [
+    {
+     "height": 4,
+     "id": "b1",
+     "length": 30,
+     "type": "box",
+     "width": 30
+    },
+    {
+     "height": 20,
+     "id": "b2",
+     "length": 6,
+     "operation": "join",
+     "type": "box",
+     "width": 6
+    },
+    {
+     "edges": {
+      "by": "nearest",
+      "kind": "edge",
+      "point": [
+       0,
+       3,
+       2
+      ]
+     },
+     "id": "f",
+     "radius": 3,
+     "tangentEdges": false,
+     "type": "fillet"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -15.0000001,
+      -15.0000001,
+      -10.0,
+      15.0000001,
+      15.0000001,
+      10.0000001
+     ],
+     "faceOwners": [
+      "b2",
+      "b2",
+      "b2",
+      "b2",
+      "b2",
+      "b1",
+      "f",
+      "b2",
+      "b2",
+      "f",
+      "f",
+      "f",
+      "f",
+      "b1",
+      "b1",
+      "b1",
+      "b2"
+     ],
+     "faces": 17,
+     "id": "body2",
+     "name": "Box",
+     "solids": 1,
+     "volume": 4187.588499176538
+    }
+   ],
+   "bodyIds": {
+    "b1:0": "body1",
+    "b2:0": "body2"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "fillet_section_draft": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 20,
+     "type": "box",
+     "width": 20
+    },
+    {
+     "draft": true,
+     "edges": {
+      "axis": "Z",
+      "by": "axis",
+      "kind": "edge"
+     },
+     "id": "f",
+     "radius": 12,
+     "type": "fillet"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -9.832159566199262,
+      -9.83215956619926,
+      -5.0,
+      9.832159566199262,
+      9.83215956619926,
+      5.0
+     ],
+     "faceOwners": [
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 2772.8197195679572
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "fillet_section_g2": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 20,
+     "type": "box",
+     "width": 20
+    },
+    {
+     "continuity": "G2",
+     "edges": {
+      "by": "all",
+      "kind": "edge"
+     },
+     "id": "f",
+     "radius": 2,
+     "type": "fillet"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.000000100000001,
+      -10.0000001,
+      -5.0000001,
+      10.000000100000001,
+      10.0000001,
+      5.0000001
+     ],
+     "faceOwners": [
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f"
+     ],
+     "faces": 26,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 3819.375931428569
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "fillet_section_g2_profile": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 20,
+     "type": "box",
+     "width": 20
+    },
+    {
+     "continuity": "G2",
+     "edges": {
+      "by": "all",
+      "kind": "edge"
+     },
+     "id": "f",
+     "profile": -0.5,
+     "radius": 2,
+     "type": "fillet"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.000000100000006,
+      -10.000000100000006,
+      -5.000000100000001,
+      10.000000100000006,
+      10.000000100000006,
+      5.000000100000001
+     ],
+     "faceOwners": [
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f"
+     ],
+     "faces": 28,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 3755.466075221267
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "fillet_section_huge": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 20,
+     "type": "box",
+     "width": 20
+    },
+    {
+     "edges": {
+      "axis": "Z",
+      "by": "axis",
+      "kind": "edge"
+     },
+     "id": "f",
+     "radius": 12,
+     "type": "fillet"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -9.832159566199262,
+      -9.83215956619926,
+      -5.0,
+      9.832159566199262,
+      9.83215956619926,
+      5.0
+     ],
+     "faceOwners": [
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f"
+     ],
+     "faces": 6,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 2772.8197195679572
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "fillet_section_rim_dome": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "c",
+     "radius": 5,
+     "type": "cylinder"
+    },
+    {
+     "edges": {
+      "by": "nearest",
+      "kind": "edge",
+      "point": [
+       0,
+       5,
+       5
+      ]
+     },
+     "id": "f",
+     "radius": 5,
+     "type": "fillet"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -5.0,
+      -5.0,
+      -5.0,
+      5.0,
+      5.0,
+      5.0
+     ],
+     "faceOwners": [
+      "f",
+      "f",
+      "c"
+     ],
+     "faces": 3,
+     "id": "body1",
+     "name": "Cylinder",
+     "solids": 1,
+     "volume": 654.4984694978735
+    }
+   ],
+   "bodyIds": {
+    "c:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
+  }
+ },
+ "fillet_section_tangent_off": {
+  "doc": {
+   "features": [
+    {
+     "height": 10,
+     "id": "a",
+     "length": 20,
+     "type": "box",
+     "width": 20
+    },
+    {
+     "edges": {
+      "axis": "Z",
+      "by": "axis",
+      "kind": "edge"
+     },
+     "id": "f",
+     "radius": 3,
+     "type": "fillet"
+    },
+    {
+     "edges": {
+      "by": "nearest",
+      "kind": "edge",
+      "point": [
+       0,
+       10,
+       5
+      ]
+     },
+     "id": "f2",
+     "radius": 1,
+     "tangentEdges": false,
+     "type": "fillet"
+    }
+   ],
+   "parameters": {}
+  },
+  "expect": {
+   "bodies": [
+    {
+     "bbox": [
+      -10.0,
+      -10.0,
+      -5.0,
+      10.0,
+      10.0,
+      5.0
+     ],
+     "faceOwners": [
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f",
+      "f"
+     ],
+     "faces": 10,
+     "id": "body1",
+     "name": "Box",
+     "solids": 1,
+     "volume": 3922.7433388230806
+    }
+   ],
+   "bodyIds": {
+    "a:0": "body1"
+   },
+   "datumPlanes": {},
+   "diagnostics": [],
+   "errors": []
   }
  },
  "fillet_smooth_edge": {
