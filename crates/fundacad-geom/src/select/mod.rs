@@ -97,7 +97,8 @@ fn nth_of(sel: &Map<String, Value>) -> (bool, Option<i64>) {
 }
 
 fn pick_nth(nth: Option<i64>, len: usize) -> Option<usize> {
-    nth.and_then(|n| usize::try_from(n).ok()).filter(|&n| n < len)
+    nth.and_then(|n| usize::try_from(n).ok())
+        .filter(|&n| n < len)
 }
 
 /// `_finite3(seq, want=3)`: three finite numbers rounded to 6 places.
@@ -142,13 +143,21 @@ impl<'a> Resolver<'a> {
     }
 
     /// Typed selectors from a feature field, resolved to edges.
-    pub fn edge_selectors(&mut self, part: &Shape, sel: &OneOrMany<Selector>) -> FResult<Vec<Shape>> {
+    pub fn edge_selectors(
+        &mut self,
+        part: &Shape,
+        sel: &OneOrMany<Selector>,
+    ) -> FResult<Vec<Shape>> {
         let v = serde_json::to_value(sel).map_err(|_| Fail::Internal("TypeError".into()))?;
         self.edges(part, &v)
     }
 
     /// Typed selectors from a feature field, resolved to faces.
-    pub fn face_selectors(&mut self, part: &Shape, sel: &OneOrMany<Selector>) -> FResult<Vec<Shape>> {
+    pub fn face_selectors(
+        &mut self,
+        part: &Shape,
+        sel: &OneOrMany<Selector>,
+    ) -> FResult<Vec<Shape>> {
         let v = serde_json::to_value(sel).map_err(|_| Fail::Internal("TypeError".into()))?;
         self.faces(part, &v)
     }
@@ -158,7 +167,11 @@ impl<'a> Resolver<'a> {
         if kernel::is_null(part) {
             return Err(Fail::msg("no part to select edges from"));
         }
-        Ok(self.edge_ents(part, sel)?.into_iter().map(|e| e.shape).collect())
+        Ok(self
+            .edge_ents(part, sel)?
+            .into_iter()
+            .map(|e| e.shape)
+            .collect())
     }
 
     /// `resolve_faces`: a selector or a list of them to faces of `part`.
@@ -166,7 +179,11 @@ impl<'a> Resolver<'a> {
         if kernel::is_null(part) {
             return Err(Fail::msg("no part to select faces from"));
         }
-        Ok(self.face_ents(part, sel)?.into_iter().map(|f| f.shape).collect())
+        Ok(self
+            .face_ents(part, sel)?
+            .into_iter()
+            .map(|f| f.shape)
+            .collect())
     }
 
     fn edge_ents(&mut self, part: &Shape, sel: &Value) -> FResult<Vec<EdgeEnt>> {
@@ -217,7 +234,8 @@ impl<'a> Resolver<'a> {
                 let dists: Vec<f64> = edges.iter().map(|e| (e.mid - p).length()).collect();
                 let keys: Vec<Key> = edges.iter().map(EdgeEnt::canonical_key).collect();
                 let described = |i: usize| Ok(edges[i].describe());
-                let pick = self.nearest_one(Kind::Edge, m, &dists, &keys, described, |_: &[usize]| None)?;
+                let pick =
+                    self.nearest_one(Kind::Edge, m, &dists, &keys, described, |_: &[usize]| None)?;
                 Ok(take(edges, &[pick.index]))
             }
             Some("match") => {
@@ -250,7 +268,8 @@ impl<'a> Resolver<'a> {
             Some("tangentChain") => {
                 let fp = as_object(need(m, "seed")?)?;
                 let edges = edges_of(part)?;
-                let (seed, conf, lossy, reason) = self.match_edge(part, &edges, fp, (false, None))?;
+                let (seed, conf, lossy, reason) =
+                    self.match_edge(part, &edges, fp, (false, None))?;
                 let Some(seed) = seed else {
                     self.push(
                         "edge",
@@ -312,15 +331,19 @@ impl<'a> Resolver<'a> {
                 // face cannot be measured, so the margin compares like with like.
                 let bounded: Option<Vec<f64>> =
                     faces.iter().map(|f| f.distance(p).map(|d| d.0)).collect();
-                let dists = bounded.unwrap_or_else(|| {
-                    faces.iter().map(|f| (f.centroid() - p).length()).collect()
-                });
+                let dists = bounded
+                    .unwrap_or_else(|| faces.iter().map(|f| (f.centroid() - p).length()).collect());
                 let keys: Vec<Key> = faces.iter().map(FaceEnt::canonical_key).collect();
                 let tie_band = self.tuning.nearest_tie_band;
                 let described = |i: usize| faces[i].describe();
-                let pick = self.nearest_one(Kind::Face, m, &dists, &keys, described, |tied: &[usize]| {
-                    slid_out_winner(&faces, tied, p, tie_band)
-                })?;
+                let pick = self.nearest_one(
+                    Kind::Face,
+                    m,
+                    &dists,
+                    &keys,
+                    described,
+                    |tied: &[usize]| slid_out_winner(&faces, tied, p, tie_band),
+                )?;
                 Ok(take(faces, &[pick.index]))
             }
             Some("all") => faces_of(part),
@@ -426,7 +449,16 @@ impl<'a> Resolver<'a> {
             .collect();
         tied.sort_by(|a, b| key_cmp(&keys[*a], &keys[*b]));
         if let Some(n) = pick_nth(nth_of(sel).1, tied.len()) {
-            self.push(name, 1, margin, true, Some("tie broken by nth".into()), None, None, None);
+            self.push(
+                name,
+                1,
+                margin,
+                true,
+                Some("tie broken by nth".into()),
+                None,
+                None,
+                None,
+            );
             return Ok(Nearest { index: tied[n] });
         }
 

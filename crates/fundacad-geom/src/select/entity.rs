@@ -376,7 +376,10 @@ mod tests {
         assert_eq!(py_round(2.675, 2), 2.67);
         assert_eq!(py_round(0.0625, 3), 0.062);
         assert_eq!(py_round(0.375, 2), 0.38);
-        assert_eq!(key_bits(&[py_round(-0.0001, 3), 0.0, 0.0, 0.0]), key_bits(&[0.0; 4]));
+        assert_eq!(
+            key_bits(&[py_round(-0.0001, 3), 0.0, 0.0, 0.0]),
+            key_bits(&[0.0; 4])
+        );
         assert_eq!(format!("{:.2}", 0.125), "0.12");
     }
 }
