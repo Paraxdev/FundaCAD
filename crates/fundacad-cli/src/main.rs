@@ -18,7 +18,10 @@ const USAGE: &str = "usage:
   fundacad-engine --ws                    serve over WebSocket on 127.0.0.1 (FUNDACAD_SIDECAR_PORT, default 8765)
   fundacad-engine --stdio                 serve the worker protocol on stdin and stdout
   fundacad-engine rebuild <doc.json> [--json] [--tolerance <t>]
-                                          rebuild one document; --json prints the whole reply";
+                                          rebuild one document; --json prints the whole reply
+  fundacad-engine select-eval <corpus.json> [--config <tuning.json>]
+                                          score selector survival on a frozen corpus, as
+                                          sidecar/tools/eval_selector_survival.py does";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -26,6 +29,7 @@ fn main() -> ExitCode {
         Some("--ws") => fundacad_engine::ws::run(GeomJobs),
         Some("--stdio") => fundacad_engine::stdio::run(GeomJobs),
         Some("rebuild") => rebuild(&args[1..]),
+        Some("select-eval") => select_eval(&args[1..]),
         Some("-h" | "--help") => {
             println!("{USAGE}");
             ExitCode::SUCCESS
@@ -150,4 +154,66 @@ fn usage(msg: &str) -> ExitCode {
 fn fail(msg: &str) -> ExitCode {
     eprintln!("fundacad-engine: {msg}");
     ExitCode::from(2)
+}
+
+fn read_json(path: &str) -> Result<Value, String> {
+    let text = std::fs::read_to_string(path).map_err(|e| format!("cannot read {path}: {e}"))?;
+    serde_json::from_str(&text).map_err(|e| format!("{path} is not JSON: {e}"))
+}
+
+/// sidecar/tools/eval_selector_survival.py on this engine: one JSON line of
+/// metrics last on stdout, everything else on stderr, exit 2 on a setup failure.
+/// --config overrides the shipped tuning key by key, as `configure` does after
+/// geom_select.py loaded selector_tuning.json at import.
+fn select_eval(args: &[String]) -> ExitCode {
+    use fundacad_geom::select::{eval, Tuning};
+    let mut corpus_path = None;
+    let mut tuning = *Tuning::shipped();
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--corpus" => corpus_path = it.next().cloned(),
+            "--config" => {
+                let Some(path) = it.next() else {
+                    return usage("--config needs a path");
+                };
+                match read_json(path) {
+                    Ok(v) => tuning.configure(&v),
+                    Err(e) => return fail(&format!("setup failure: {e}")),
+                }
+            }
+            other if corpus_path.is_none() && !other.starts_with("--") => {
+                corpus_path = Some(other.to_string());
+            }
+            other => return usage(&format!("unexpected argument {other}")),
+        }
+    }
+    let Some(corpus_path) = corpus_path else {
+        return usage("select-eval needs a corpus path");
+    };
+    let corpus = match read_json(&corpus_path) {
+        Ok(v) => v,
+        Err(e) => return fail(&format!("setup failure: {e}")),
+    };
+    if corpus["cases"].as_array().is_none_or(Vec::is_empty) {
+        return fail("empty corpus");
+    }
+    let (mut metrics, counts) = eval::run(&corpus, &tuning, |line| eprintln!("{line}"));
+    let tests_pass = match eval::selector_v2_checks(&tuning) {
+        Ok(()) => 1.0,
+        Err(e) => {
+            eprintln!("  selector v2 checks FAILED: {e}");
+            0.0
+        }
+    };
+    metrics.insert("tests_pass".into(), json!(tests_pass));
+    let survived: usize = counts.iter().map(|c| c.1).sum();
+    let valid: usize = counts.iter().map(|c| c.2).sum();
+    let per: Vec<String> = counts
+        .iter()
+        .map(|(c, s, v)| format!("{c}: ({s}, {v})"))
+        .collect();
+    eprintln!("survive={survived}/{valid} per-category={{{}}}", per.join(", "));
+    println!("{}", Value::Object(metrics));
+    ExitCode::SUCCESS
 }

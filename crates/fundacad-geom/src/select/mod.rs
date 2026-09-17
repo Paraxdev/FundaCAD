@@ -12,6 +12,7 @@
 //! `normal`, `nearest`, `match`, `all`. A list of selectors is their union.
 
 pub mod entity;
+pub mod eval;
 mod plane;
 pub mod tuning;
 
