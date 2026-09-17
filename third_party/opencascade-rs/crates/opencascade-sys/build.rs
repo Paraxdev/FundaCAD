@@ -118,10 +118,17 @@ impl OcctConfig {
     /// Find OpenCASCADE library using cmake
     fn detect() -> Self {
         println!("cargo:rerun-if-env-changed=DEP_OCCT_ROOT");
+        println!("cargo:rerun-if-env-changed=FUNDACAD_OCCT_ROOT");
 
-        // Add path to builtin OCCT
+        // FUNDACAD_OCCT_ROOT points at an installed builtin kernel (cmake,
+        // include, lib) so several target dirs share one 22 minute OCCT build.
+        let shared_root = std::env::var_os("FUNDACAD_OCCT_ROOT").filter(|v| !v.is_empty());
+        if let Some(root) = &shared_root {
+            std::env::set_var("DEP_OCCT_ROOT", root);
+        }
+
         #[cfg(feature = "builtin")]
-        {
+        if shared_root.is_none() {
             occt_sys::build_occt();
             std::env::set_var("DEP_OCCT_ROOT", occt_sys::occt_path().as_os_str());
         }
