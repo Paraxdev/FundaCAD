@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use fundacad_core::CadDocument;
 use fundacad_geom::builder::{self, NoWatch, Rebuild, Watch};
+use fundacad_geom::cache::meshes::{Payloads, Tiered};
 use fundacad_geom::cache::store::GeomStore;
 use fundacad_geom::cache::{RebuildCache, Source};
 use fundacad_geom::import::{self, blobstore::BlobStore};
@@ -121,6 +122,65 @@ fn editing_the_last_feature_replays_only_it_and_matches_a_cold_build() {
     assert_eq!(again, resumed);
     assert_eq!(cache.stats.mesh_ram_hits, 2, "unchanged bodies were meshed again");
     assert_eq!(cache.stats.meshed, 0);
+}
+
+/// `tests/faces/split_wall.brep`: one body whose side is two faces of the same
+/// surface, which is what puts `faceBands` in its payload.
+fn split_wall() -> opencascade::primitives::Shape {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/faces/split_wall.brep");
+    let text = std::fs::read_to_string(path).unwrap();
+    opencascade::mesh_access::read_brep_str(&text).expect("the fixture BREP reads")
+}
+
+fn banded_payload(payloads: &mut Payloads, store: Option<&GeomStore>, shape: &opencascade::primitives::Shape) -> Value {
+    let body = fundacad_geom::mesh::MeshBody {
+        id: "body1".into(),
+        name: "Wall".into(),
+        shape: Some(shape),
+        identity: Some((7, 9)),
+        mesh_key: Some("ab".repeat(16)),
+        ..Default::default()
+    };
+    payloads.reset_counters();
+    let mut tiered = Tiered {
+        payloads,
+        store,
+        persist_after: Duration::ZERO,
+    };
+    let m = fundacad_geom::mesh::mesh_result_full(
+        std::slice::from_ref(&body),
+        TOL,
+        &Map::new(),
+        &mut tiered,
+        &mut |_, _| {},
+    );
+    match &m.bodies[0] {
+        WireBody::Full(f) => json!([f.fields["faceBands"], f.fields["etag"]]),
+        WireBody::Stub(_) => Value::Null,
+    }
+}
+
+#[test]
+fn a_cached_payload_keeps_its_face_bands() {
+    let shape = split_wall();
+    let root = scratch("bands");
+    let store = GeomStore::open(&root).unwrap();
+    let mut payloads = Payloads::default();
+
+    let fresh = banded_payload(&mut payloads, Some(&store), &shape);
+    assert_eq!(fresh[0], json!([[0, 1]]), "the fixture carries no face bands");
+    assert_eq!((payloads.ram_hits, payloads.disk_hits, payloads.meshed), (0, 0, 1));
+
+    let warm = banded_payload(&mut payloads, Some(&store), &shape);
+    assert_eq!((payloads.ram_hits, payloads.disk_hits, payloads.meshed), (1, 0, 0),
+        "a banded payload was meshed again instead of served from memory");
+    assert_eq!(warm, fresh);
+
+    let mut reopened = Payloads::default();
+    let from_disk = banded_payload(&mut reopened, Some(&store), &shape);
+    assert_eq!((reopened.ram_hits, reopened.disk_hits, reopened.meshed), (0, 1, 0),
+        "the disk artifact of a banded body was not read back");
+    assert_eq!(from_disk, fresh);
 }
 
 #[test]
