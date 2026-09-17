@@ -492,6 +492,36 @@
     {"name": "sketch_text_rotated_with_rectangle", "document": {"parameters": {}, "features": [
       {"id": "s", "type": "sketch", "plane": "XZ", "entities": [{"type": "rectangle", "id": "r", "width": 60, "height": 20, "x": 0, "y": 0}, {"type": "text", "id": "t", "text": "45 deg", "height": 6, "font": "Consolas", "angle": 45, "x": -5, "y": 2, "align": "right"}]},
       {"id": "e", "type": "extrude", "sketch": "s", "distance": 4, "operation": "new"}
+    ]}},
+    {"name": "joint_face_mate", "document": {"parameters": {}, "features": [
+      {"id": "a", "type": "box", "length": 20, "width": 20, "height": 20},
+      {"id": "b", "type": "box", "length": 6, "width": 6, "height": 6},
+      {"id": "mb", "type": "move", "bodies": ["body2"], "dx": 50},
+      {"id": "j", "type": "joint", "moving": "body2", "mate": {"body": "body2", "face": {"kind": "face", "by": "nearest", "point": [50, 0, -3], "body": "body2"}}, "to": {"body": "body1", "face": {"kind": "face", "by": "nearest", "point": [0, 0, 10], "body": "body1"}}}
+    ]}},
+    {"name": "joint_offset_angle_flush", "document": {"parameters": {"lift": 4}, "features": [
+      {"id": "a", "type": "cylinder", "radius": 10, "height": 20},
+      {"id": "b", "type": "box", "length": 8, "width": 4, "height": 4},
+      {"id": "mb", "type": "move", "bodies": ["body2"], "dx": 40, "dz": 12},
+      {"id": "j", "type": "joint", "moving": "body2", "mode": "revolute", "flush": true, "offset": "lift", "angle": 30, "mate": {"body": "body2", "face": {"kind": "face", "by": "nearest", "point": [36, 0, 12], "body": "body2"}}, "to": {"body": "body1", "face": {"kind": "face", "by": "nearest", "point": [0, 0, 10], "body": "body1"}}}
+    ]}},
+    {"name": "joint_datum_and_edge_connectors", "document": {"parameters": {}, "features": [
+      {"id": "a", "type": "box", "length": 20, "width": 20, "height": 20},
+      {"id": "b", "type": "box", "length": 6, "width": 6, "height": 6},
+      {"id": "mb", "type": "move", "bodies": ["body2"], "dx": 50},
+      {"id": "d", "type": "datumPlane", "plane": "XZ", "offset": 12},
+      {"id": "j", "type": "joint", "moving": "body2", "mate": {"body": "body2", "edge": {"kind": "edge", "by": "nearest", "point": [50, -3, -3], "body": "body2"}}, "to": {"datum": "d"}}
+    ]}},
+    {"name": "joint_reference_gone_leaves_the_body", "document": {"parameters": {}, "features": [
+      {"id": "a", "type": "box", "length": 20, "width": 20, "height": 20},
+      {"id": "b", "type": "box", "length": 6, "width": 6, "height": 6},
+      {"id": "mb", "type": "move", "bodies": ["body2"], "dx": 50},
+      {"id": "j", "type": "joint", "moving": "body2", "mate": {"body": "body2", "face": {"kind": "face", "by": "nearest", "point": [50, 0, -3], "body": "body2"}}, "to": {"body": "body7"}}
+    ]}},
+    {"name": "joint_zero_axis_fails", "expectError": true, "document": {"parameters": {}, "features": [
+      {"id": "a", "type": "box", "length": 20, "width": 20, "height": 20},
+      {"id": "b", "type": "box", "length": 6, "width": 6, "height": 6},
+      {"id": "j", "type": "joint", "moving": "body2", "mate": {"origin": [0, 0, 0], "zdir": [0, 0, 1]}, "to": {"origin": [5, 5, 5], "zdir": [0, 0, 0]}}
     ]}}
   ]
 }
