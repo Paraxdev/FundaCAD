@@ -381,3 +381,15 @@ fn the_test_op_is_unknown_unless_enabled() {
     send(&e, json!({"id": "t", "op": "testSleep", "seconds": 0}));
     assert_eq!(reply_to(&rx, "t")["ok"], false);
 }
+
+#[test]
+fn compute_all_resends_bodies_the_client_already_holds() {
+    let (e, rx, _) = engine(None);
+    let doc = json!({"features": [{"id": "f1"}]});
+    let known = json!({"body1": "e"});
+    send(&e, json!({"id": "r", "op": "rebuild", "document": doc, "known": known}));
+    assert_eq!(reply_to(&rx, "r")["result"]["bodies"][0]["unchanged"], true);
+    send(&e, json!({"id": "c", "op": "computeAll", "document": doc, "known": known}));
+    let c = reply_to(&rx, "c");
+    assert!(c["result"]["bodies"][0].get("unchanged").is_none(), "{c}");
+}

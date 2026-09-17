@@ -9,6 +9,7 @@ Run:  uv run python test_ws.py
 import _bootstrap  # noqa: F401  (puts sidecar/ on sys.path)
 
 import asyncio
+import contextlib
 import json
 import os
 import socket
@@ -23,6 +24,7 @@ import server
 import wire
 from server import handle, HOST, PORT
 from test_smoke import EXAMPLE
+from tools import harness_util
 from tools.harness_util import engine_command
 
 # The server requires the per-launch token (security round). In-process test:
@@ -560,6 +562,101 @@ def test_doc_bbox_covers_the_model_without_the_slow_walk():
     print(f"  document bbox covers the model, tight ({len(res['bodies'])} bodies)")
 
 
+def _boxes(n):
+    return [{"id": f"b{i}", "type": "box", "length": 4, "width": 4, "height": 4 + i}
+            for i in range(n)]
+
+
+async def _call(ws, req):
+    await ws.send(json.dumps(req))
+    while True:
+        msg = await _recv_reply(ws)
+        if msg.get("id") == req.get("id"):
+            return msg
+
+
+async def _protocol_conformance(url):
+    """The envelope rules both engines must agree on, over a real socket: error
+    replies, the delta document, known etags, a reconnect keeping the held
+    document, and the frame cap on what a client sends."""
+    big = 128 * 1024 * 1024
+    async with websockets.connect(url, max_size=big) as ws:
+        await ws.send("{not json")
+        bad = json.loads(await ws.recv())
+        assert bad["id"] is None and bad["ok"] is False, bad
+        assert bad["error"]["message"].startswith("bad JSON"), bad
+
+        u = await _call(ws, {"id": "u", "op": "frobnicate"})
+        assert u == {"id": "u", "ok": False, "error": {"message": "unknown op: frobnicate"}}, u
+        print("  WS error envelopes OK")
+
+        full = await _call(ws, {"id": "d1", "op": "rebuild", "tolerance": 0.1, "revision": 1,
+                                "document": {"parameters": {}, "features": _boxes(1)}})
+        assert full["ok"] and len(full["result"]["bodies"]) == 1, full
+        delta = await _call(ws, {"id": "d2", "op": "rebuild", "tolerance": 0.1,
+                                 "baseRevision": 1, "revision": 2,
+                                 "ops": {"length": 2, "set": [[1, _boxes(2)[1]]]}})
+        assert delta["ok"] and len(delta["result"]["bodies"]) == 2, delta
+        stale = await _call(ws, {"id": "d3", "op": "rebuild", "baseRevision": 1,
+                                 "revision": 3, "ops": {}})
+        assert stale == {"id": "d3", "ok": True, "result": {"resync": True}}, stale
+        print("  WS delta rebuild OK: patched, and a stale base asks for a resync")
+
+        known = {b["id"]: b["etag"] for b in delta["result"]["bodies"]}
+        again = await _call(ws, {"id": "k", "op": "rebuild", "tolerance": 0.1, "revision": 4,
+                                 "known": known,
+                                 "document": {"parameters": {}, "features": _boxes(2)}})
+        assert again["ok"] and all(b.get("unchanged") for b in again["result"]["bodies"]), again
+        fresh = await _call(ws, {"id": "ca", "op": "computeAll", "tolerance": 0.1,
+                                 "revision": 5, "known": known,
+                                 "document": {"parameters": {}, "features": _boxes(2)}})
+        assert fresh["ok"] and not any(b.get("unchanged") for b in fresh["result"]["bodies"]), \
+            "computeAll must resend every body"
+        print("  WS known etags OK: stubs on rebuild, full bodies on computeAll")
+
+    async with websockets.connect(url, max_size=big) as ws:
+        after = await _call(ws, {"id": "r", "op": "rebuild", "tolerance": 0.1,
+                                 "baseRevision": 5, "revision": 6,
+                                 "ops": {"length": 1}})
+        assert after["ok"] and len(after["result"]["bodies"]) == 1, after
+        hole = await _call(ws, {"id": "h", "op": "rebuild", "baseRevision": 6,
+                                "revision": 7, "ops": {"length": 3}})
+        assert hole["result"] == {"resync": True}, hole
+        gone = await _call(ws, {"id": "g", "op": "rebuild", "baseRevision": 6,
+                                "revision": 8, "ops": {}})
+        assert gone["result"] == {"resync": True}, "a hole must drop the held document"
+        print("  WS reconnect keeps the held document, a hole drops it OK")
+
+        roomy = await _call(ws, {"id": "m", "op": "rebuild", "tolerance": 0.1,
+                                 "document": {"parameters": {}, "features": _boxes(1),
+                                              "note": "x" * (4 * 1024 * 1024)}})
+        assert roomy["ok"], "a 4 MiB request is under the cap"
+
+    async with websockets.connect(url, max_size=big, max_queue=None) as ws:
+        try:
+            await ws.send(json.dumps({"id": "x", "op": "ping", "pad": "x" * big}))
+            await asyncio.wait_for(ws.recv(), timeout=30)
+            raise AssertionError("a request over the frame cap was answered")
+        except websockets.exceptions.ConnectionClosed as ex:
+            code = ex.rcvd.code if ex.rcvd else None
+            assert code == 1009, f"closed with {code}, expected 1009"
+    print("  WS frame cap OK: 4 MiB accepted, over 128 MiB closed with 1009")
+
+
+@contextlib.asynccontextmanager
+async def _socket_server():
+    """server.py served here, or with FUNDACAD_ENGINE_CMD that engine spawned on
+    a free port, for the socket half of this suite."""
+    if not harness_util.external_engine():
+        async with websockets.serve(handle, HOST, PORT, max_size=wire._MAX_FRAME,
+                                    compression=None):
+            yield URL
+        return
+    with harness_util.SpawnedServer() as srv:
+        print(f"  engine: {engine_command()} pid={srv.pid}")
+        yield srv.url
+
+
 async def main():
     test_encoder_unit()
     test_encoder_packs_edges()
@@ -573,8 +670,8 @@ async def main():
     await test_single_oversized_body_aborts_the_stream_by_name()
     test_unchunked_client_still_gets_one_frame()
     await test_cancel_mid_stream_stops_sending()
-    async with websockets.serve(handle, HOST, PORT):
-        async with websockets.connect(URL) as ws:
+    async with _socket_server() as url:
+        async with websockets.connect(url, max_size=128 * 1024 * 1024) as ws:
             req_id = "req-1"
             await ws.send(json.dumps({
                 "id": req_id, "op": "rebuild", "tolerance": 0.1, "document": EXAMPLE,
@@ -656,56 +753,59 @@ async def main():
             assert pong["ok"] and pong["result"]["pong"]
             print("  WS ping OK")
 
-            # projectGeometry: envelope over the real socket, one good
-            # faceBoundary source, one strict-resolution error entry.
-            box = {"parameters": {}, "features": [
-                {"id": "s1", "type": "sketch", "plane": "XY", "entities": [
-                    {"id": "r1", "type": "rectangle", "width": 20, "height": 20,
-                     "x": 0, "y": 0}]},
-                {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 10,
-                 "operation": "new"},
-            ]}
-            await ws.send(json.dumps({
-                "id": "pg", "op": "projectGeometry", "document": box, "plane": "XY",
-                "sources": [
-                    {"kind": "faceBoundary", "body": "body1",
-                     "sel": {"kind": "face", "by": "nearest", "point": [0, 0, 10]}},
-                    {"kind": "edge", "body": "ghost",
-                     "sel": {"kind": "edge", "by": "nearest", "point": [0, 0, 0]}},
-                ],
-            }))
-            pg = await _recv_reply(ws)
-            assert pg["id"] == "pg" and pg["ok"], f"projectGeometry failed: {pg}"
-            results = pg["result"]["results"]
-            assert [r["source_index"] for r in results] == [0, 1]
-            assert results[0]["ok"] and len(results[0]["curves"]) == 4
-            assert all(c["curve"]["kind"] == "line" and "fp" in c
-                       for c in results[0]["curves"])
-            assert not results[1]["ok"] and "created after this sketch" in results[1]["error"]
-            print("  WS projectGeometry OK: 4 boundary lines + 1 error entry")
-
-            # exportWith: dispatch to a plugin's exporter, the refusal when no
-            # plugin provides the named one, and the options-size guard.
-            import os
-            import tempfile
-            with tempfile.TemporaryDirectory() as td:
-                out = os.path.join(td, "ws.bin")
+            if not harness_util.skip_unported("projectGeometry and exportWith over the socket"):
+                # projectGeometry: envelope over the real socket, one good
+                # faceBoundary source, one strict-resolution error entry.
+                box = {"parameters": {}, "features": [
+                    {"id": "s1", "type": "sketch", "plane": "XY", "entities": [
+                        {"id": "r1", "type": "rectangle", "width": 20, "height": 20,
+                         "x": 0, "y": 0}]},
+                    {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 10,
+                     "operation": "new"},
+                ]}
                 await ws.send(json.dumps({
-                    "id": "xw", "op": "exportWith", "document": EXAMPLE, "path": out,
-                    "exporter": "no-such-exporter", "options": {},
+                    "id": "pg", "op": "projectGeometry", "document": box, "plane": "XY",
+                    "sources": [
+                        {"kind": "faceBoundary", "body": "body1",
+                         "sel": {"kind": "face", "by": "nearest", "point": [0, 0, 10]}},
+                        {"kind": "edge", "body": "ghost",
+                         "sel": {"kind": "edge", "by": "nearest", "point": [0, 0, 0]}},
+                    ],
                 }))
-                xw = json.loads(await ws.recv())
-                assert xw["id"] == "xw" and not xw.get("ok"), f"unknown exporter ran: {xw}"
-                assert "no-such-exporter" in json.dumps(xw), xw
-                print("  WS exportWith OK: an exporter nobody registered is refused by name")
+                pg = await _recv_reply(ws)
+                assert pg["id"] == "pg" and pg["ok"], f"projectGeometry failed: {pg}"
+                results = pg["result"]["results"]
+                assert [r["source_index"] for r in results] == [0, 1]
+                assert results[0]["ok"] and len(results[0]["curves"]) == 4
+                assert all(c["curve"]["kind"] == "line" and "fp" in c
+                           for c in results[0]["curves"])
+                assert not results[1]["ok"] and "created after this sketch" in results[1]["error"]
+                print("  WS projectGeometry OK: 4 boundary lines + 1 error entry")
 
-                await ws.send(json.dumps({
-                    "id": "xw2", "op": "exportWith", "document": EXAMPLE, "path": out,
-                    "exporter": "no-such-exporter", "options": {"junk": "x" * 300000},
-                }))
-                xw2 = json.loads(await ws.recv())
-                assert not xw2.get("ok"), "oversized options must be rejected"
-                print("  WS exportWith options-cap OK")
+                # exportWith: dispatch to a plugin's exporter, the refusal when no
+                # plugin provides the named one, and the options-size guard.
+                import os
+                import tempfile
+                with tempfile.TemporaryDirectory() as td:
+                    out = os.path.join(td, "ws.bin")
+                    await ws.send(json.dumps({
+                        "id": "xw", "op": "exportWith", "document": EXAMPLE, "path": out,
+                        "exporter": "no-such-exporter", "options": {},
+                    }))
+                    xw = json.loads(await ws.recv())
+                    assert xw["id"] == "xw" and not xw.get("ok"), f"unknown exporter ran: {xw}"
+                    assert "no-such-exporter" in json.dumps(xw), xw
+                    print("  WS exportWith OK: an exporter nobody registered is refused by name")
+
+                    await ws.send(json.dumps({
+                        "id": "xw2", "op": "exportWith", "document": EXAMPLE, "path": out,
+                        "exporter": "no-such-exporter", "options": {"junk": "x" * 300000},
+                    }))
+                    xw2 = json.loads(await ws.recv())
+                    assert not xw2.get("ok"), "oversized options must be rejected"
+                    print("  WS exportWith options-cap OK")
+
+        await _protocol_conformance(url)
 
     # LAST, deliberately: this one does real geometry (import + two rebuilds) in
     # THIS process, and the socket tests above are supervised by a 60 s stall
