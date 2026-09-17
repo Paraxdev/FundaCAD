@@ -29,41 +29,53 @@ pub struct EdgeLine {
 }
 
 /// Every drawn edge of one body, in edge-to-face map order.
+///
+/// The edges go out to other threads: each one builds its own adaptors and
+/// nothing is written back to the shape, and the results are collected by edge
+/// index, so the list is the one a serial walk produces.
 pub fn edge_polylines(access: &MeshAccess) -> Vec<EdgeLine> {
     let cos_tol = 1.0f64.to_radians().cos();
     let plane: Vec<Option<[f64; 3]>> = (0..access.face_count())
         .map(|f| access.face_plane_normal(f))
         .collect();
+    let work = crate::par::Shared((access, &plane));
+    let lines = crate::par::map_indexed(access.edge_count(), move |e| {
+        let (access, plane) = *work.get();
+        one_edge(access, plane, cos_tol, e)
+    });
+    lines.into_iter().flatten().collect()
+}
+
+fn one_edge(
+    access: &MeshAccess,
+    plane: &[Option<[f64; 3]>],
+    cos_tol: f64,
+    e: usize,
+) -> Option<EdgeLine> {
     let plane_of = |f: usize| plane.get(f).copied().flatten();
-    let mut out = Vec::new();
-    for e in 0..access.edge_count() {
-        let faces = access.edge_faces(e);
-        if faces.len() == 2 {
-            if let (Some(n0), Some(n1)) = (plane_of(faces[0]), plane_of(faces[1])) {
-                if (n0[0] * n1[0] + n0[1] * n1[1] + n0[2] * n1[2]).abs() > cos_tol {
-                    continue;
-                }
+    let faces = access.edge_faces(e);
+    if faces.len() == 2 {
+        if let (Some(n0), Some(n1)) = (plane_of(faces[0]), plane_of(faces[1])) {
+            if (n0[0] * n1[0] + n0[1] * n1[1] + n0[2] * n1[2]).abs() > cos_tol {
+                return None;
             }
         }
-        if access.edge_degenerated(e) {
-            continue;
-        }
-        if !faces.is_empty()
-            && faces.iter().all(|&f| f == faces[0])
-            && (0..faces.len()).any(|k| access.edge_closed_on(e, k))
-        {
-            continue;
-        }
-        let Some(points) = edge_points(access, e) else {
-            continue;
-        };
-        let smooth = faces.len() == 2
-            && faces[0] != faces[1]
-            && !(plane_of(faces[0]).is_some() && plane_of(faces[1]).is_some())
-            && meets_smoothly(access, e);
-        out.push(EdgeLine { points, smooth });
     }
-    out
+    if access.edge_degenerated(e) {
+        return None;
+    }
+    if !faces.is_empty()
+        && faces.iter().all(|&f| f == faces[0])
+        && (0..faces.len()).any(|k| access.edge_closed_on(e, k))
+    {
+        return None;
+    }
+    let points = edge_points(access, e)?;
+    let smooth = faces.len() == 2
+        && faces[0] != faces[1]
+        && !(plane_of(faces[0]).is_some() && plane_of(faces[1]).is_some())
+        && access.edge_smooth(e, SMOOTH_EDGE_DEG.to_radians().cos());
+    Some(EdgeLine { points, smooth })
 }
 
 /// A line is its two endpoints; any other curve is deviation bounded; an edge
@@ -129,7 +141,11 @@ fn sample_by_deflection(
 /// Whether the two faces on either side share a tangent plane along the edge,
 /// sampled at the middle first so a crease costs one sample. Unsigned, tangent
 /// faces can carry opposite surface orientations.
-fn meets_smoothly(access: &MeshAccess, e: usize) -> bool {
+///
+/// `MeshAccess::edge_smooth` is the same walk with the adaptors built once,
+/// and is what the pass above calls; this stays as the reference the test
+/// below and the bench suite's `smooth` stage check it against.
+pub fn meets_smoothly(access: &MeshAccess, e: usize) -> bool {
     let cos_tol = SMOOTH_EDGE_DEG.to_radians().cos();
     let Some((t0, t1)) = access.edge_brep_range(e) else {
         return false;
@@ -155,4 +171,39 @@ fn meets_smoothly(access: &MeshAccess, e: usize) -> bool {
         }
     }
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::kernel::{self, Kind};
+    use opencascade::primitives::Shape;
+
+    fn agrees(shape: &Shape) {
+        let access = MeshAccess::new(shape);
+        let cos_tol = SMOOTH_EDGE_DEG.to_radians().cos();
+        for e in 0..access.edge_count() {
+            assert_eq!(
+                meets_smoothly(&access, e),
+                access.edge_smooth(e, cos_tol),
+                "edge {e} disagrees"
+            );
+        }
+    }
+
+    /// The batched kernel call must decide exactly what the per sample walk
+    /// decides, or a saved selector and an etag move under the client.
+    #[test]
+    fn the_batched_smooth_test_matches_the_sampled_one() {
+        agrees(&kernel::make_box(20.0, 20.0, 10.0).expect("a box"));
+        agrees(&kernel::make_cylinder(6.0, 12.0).expect("a cylinder"));
+        agrees(&kernel::make_sphere(7.0).expect("a sphere"));
+        agrees(&kernel::make_cone(6.0, 2.0, 9.0).expect("a cone"));
+        agrees(&kernel::make_torus(10.0, 3.0).expect("a torus"));
+        let b = kernel::make_box(20.0, 20.0, 10.0).expect("a box");
+        let edges = kernel::subshapes(&b, Kind::Edge);
+        let (filleted, _) = crate::features::blend::ops::fillet(&b, &edges, &vec![2.0; edges.len()])
+            .expect("a fillet");
+        agrees(&filleted);
+    }
 }

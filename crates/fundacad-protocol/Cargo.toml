@@ -13,3 +13,6 @@ serde = { version = "1", features = ["derive"] }
 # golden tests compare bytes. float_roundtrip: a float read back from JSON must
 # be the exact double, or its re-encoded repr drifts in the last digit.
 serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
+# The mesh buffers are copied into a frame whole on a little endian host, no
+# per element loop; bytemuck is what makes that cast safe.
+bytemuck = "1"

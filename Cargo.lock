@@ -806,6 +806,7 @@ dependencies = [
  "opencascade",
  "opencascade-sys",
  "quick-xml",
+ "rayon",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -842,6 +843,7 @@ dependencies = [
 name = "fundacad-protocol"
 version = "0.2.0"
 dependencies = [
+ "bytemuck",
  "serde",
  "serde_json",
 ]

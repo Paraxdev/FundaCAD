@@ -36,13 +36,15 @@ pub struct MeshParams {
 /// triangulation. A reversed face has its winding flipped so facet normals
 /// point outward.
 pub fn tessellate(shape: &Shape, access: &MeshAccess, params: MeshParams) -> Tessellation {
-    mesh_access::mesh(
-        shape,
-        params.linear,
-        params.relative,
-        params.angular,
-        params.force_remesh,
-    );
+    crate::bench::phase("brep_mesh", || {
+        mesh_access::mesh(
+            shape,
+            params.linear,
+            params.relative,
+            params.angular,
+            params.force_remesh,
+        )
+    });
     let mut out = Tessellation::default();
     let mut normals: Option<Vec<f64>> = None;
     for fid in 0..access.face_count() {
@@ -60,7 +62,9 @@ pub fn tessellate(shape: &Shape, access: &MeshAccess, params: MeshParams) -> Tes
         let ntri = t.len() / 3;
         let (pos, t) = if params.display {
             let is_plane = access.face_plane_normal(fid).is_some();
-            let face = display_face(tri.nodes, t, &tri.normals, flip, is_plane);
+            let face = crate::bench::phase("display_face", || {
+                display_face(tri.nodes, t, &tri.normals, flip, is_plane)
+            });
             normals
                 .get_or_insert_with(Vec::new)
                 .extend_from_slice(&face.normals);

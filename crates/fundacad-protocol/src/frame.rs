@@ -74,15 +74,11 @@ impl BufSrc<'_> {
 
     fn write(&self, out: &mut Vec<u8>) {
         match self {
-            BufSrc::F32(v) => v
-                .iter()
-                .for_each(|x| out.extend_from_slice(&x.to_le_bytes())),
-            BufSrc::U32(v) => v
-                .iter()
-                .for_each(|x| out.extend_from_slice(&x.to_le_bytes())),
+            BufSrc::F32(v) => write_f32(v, out),
+            BufSrc::U32(v) => write_u32(v, out),
             BufSrc::EdgePoints(edges) => {
-                for p in edges.iter().flat_map(|e| e.points.iter()).flatten() {
-                    out.extend_from_slice(&p.to_le_bytes());
+                for e in *edges {
+                    write_f32(bytemuck::cast_slice(&e.points), out);
                 }
             }
             BufSrc::EdgeCounts(edges) => {
@@ -91,6 +87,24 @@ impl BufSrc<'_> {
                 }
             }
         }
+    }
+}
+
+/// The frame is little endian, which on a little endian host is the slice's own
+/// bytes; anywhere else each value is swapped on the way out.
+fn write_f32(v: &[f32], out: &mut Vec<u8>) {
+    if cfg!(target_endian = "little") {
+        out.extend_from_slice(bytemuck::cast_slice(v));
+    } else {
+        v.iter().for_each(|x| out.extend_from_slice(&x.to_le_bytes()));
+    }
+}
+
+fn write_u32(v: &[u32], out: &mut Vec<u8>) {
+    if cfg!(target_endian = "little") {
+        out.extend_from_slice(bytemuck::cast_slice(v));
+    } else {
+        v.iter().for_each(|x| out.extend_from_slice(&x.to_le_bytes()));
     }
 }
 
