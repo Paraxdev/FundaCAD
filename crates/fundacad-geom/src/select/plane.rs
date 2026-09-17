@@ -35,10 +35,25 @@ pub fn plane_fallback_reason(code: &str, label: &str, detail: Option<&str>) -> S
 
 /// `push_plane_fallback`: lossy stays false, no match was taken at all, and a
 /// lossy entry would make a projection refuse an unrelated source.
-fn push_plane_fallback(r: &mut Resolver, code: &'static str, label: &str, sel: &Value, detail: Option<&str>) {
+fn push_plane_fallback(
+    r: &mut Resolver,
+    code: &'static str,
+    label: &str,
+    sel: &Value,
+    detail: Option<&str>,
+) {
     let reason = plane_fallback_reason(code, label, detail);
     let at = sel.as_object().and_then(|m| m.get("point"));
-    r.push("face", 0, 0.0, false, Some(Value::from(reason)), at, None, Some(code));
+    r.push(
+        "face",
+        0,
+        0.0,
+        false,
+        Some(Value::from(reason)),
+        at,
+        None,
+        Some(code),
+    );
 }
 
 pub(super) fn resolve_face_on_plane(

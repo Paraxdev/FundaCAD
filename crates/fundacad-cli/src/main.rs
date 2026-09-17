@@ -213,7 +213,10 @@ fn select_eval(args: &[String]) -> ExitCode {
         .iter()
         .map(|(c, s, v)| format!("{c}: ({s}, {v})"))
         .collect();
-    eprintln!("survive={survived}/{valid} per-category={{{}}}", per.join(", "));
+    eprintln!(
+        "survive={survived}/{valid} per-category={{{}}}",
+        per.join(", ")
+    );
     println!("{}", Value::Object(metrics));
     ExitCode::SUCCESS
 }

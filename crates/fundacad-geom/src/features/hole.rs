@@ -326,7 +326,7 @@ pub fn handle(ctx: &mut Ctx, f: &Hole) -> FResult {
         .map(serde_json::to_value)
         .transpose()
         .map_err(|_| Fail::Internal("TypeError".into()))?
-        .filter(|v| truthy(v));
+        .filter(truthy);
     let (body, origin, normal) = if let Some(sel) = sel {
         face_anchor(ctx, f, &sel)?
     } else if let Some(plane) = sk_plane {

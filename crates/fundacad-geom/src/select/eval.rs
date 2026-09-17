@@ -39,7 +39,9 @@ fn p(params: &Value, key: &str) -> FResult<f64> {
 
 /// `gen_selector_corpus.build_part`.
 pub fn build_part(spec: &Value) -> FResult<Shape> {
-    let params = spec.get("params").ok_or_else(|| Fail::Missing("params".into()))?;
+    let params = spec
+        .get("params")
+        .ok_or_else(|| Fail::Missing("params".into()))?;
     match spec.get("archetype").and_then(Value::as_str) {
         Some("box") => {
             let part = kernel::make_box(p(params, "w")?, p(params, "d")?, p(params, "h")?)?;
@@ -60,7 +62,11 @@ pub fn build_part(spec: &Value) -> FResult<Shape> {
         Some("box_holes") => {
             let h = p(params, "h")?;
             let mut part = kernel::make_box(p(params, "w")?, p(params, "d")?, h)?;
-            let holes = params.get("holes").and_then(Value::as_array).cloned().unwrap_or_default();
+            let holes = params
+                .get("holes")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
             for hole in holes {
                 let n = |i: usize| hole.get(i).and_then(Value::as_f64).unwrap_or(0.0);
                 let cyl = kernel::make_cylinder(n(2), h * 3.0)?;
@@ -69,7 +75,10 @@ pub fn build_part(spec: &Value) -> FResult<Shape> {
             }
             Ok(part)
         }
-        other => Err(Fail::msg(format!("unknown archetype: {}", other.unwrap_or("None")))),
+        other => Err(Fail::msg(format!(
+            "unknown archetype: {}",
+            other.unwrap_or("None")
+        ))),
     }
 }
 
@@ -123,12 +132,19 @@ pub fn score_case(case: &Value, tuning: &Tuning) -> (Outcome, Option<String>) {
 
 fn try_score(case: &Value, tuning: &Tuning) -> FResult<Outcome> {
     let kind = case.get("kind").and_then(Value::as_str).unwrap_or("");
-    let expected = case.get("expected_key").ok_or_else(|| Fail::Missing("expected_key".into()))?;
-    let selector = case.get("selector").ok_or_else(|| Fail::Missing("selector".into()))?;
+    let expected = case
+        .get("expected_key")
+        .ok_or_else(|| Fail::Missing("expected_key".into()))?;
+    let selector = case
+        .get("selector")
+        .ok_or_else(|| Fail::Missing("selector".into()))?;
     let part = build_part(case.get("mutated_spec").unwrap_or(&Value::Null))?;
     let mut r = Resolver::new(None, None).with_tuning(tuning);
     if kind == "edge" {
-        let matching = edges_of(&part)?.iter().filter(|e| py_eq(&edge_key(e), expected)).count();
+        let matching = edges_of(&part)?
+            .iter()
+            .filter(|e| py_eq(&edge_key(e), expected))
+            .count();
         if matching != 1 {
             return Ok(Outcome::Invalid);
         }
@@ -138,7 +154,10 @@ fn try_score(case: &Value, tuning: &Tuning) -> FResult<Outcome> {
             _ => Outcome::Miss,
         })
     } else {
-        let matching = faces_of(&part)?.iter().filter(|f| py_eq(&face_key(f), expected)).count();
+        let matching = faces_of(&part)?
+            .iter()
+            .filter(|f| py_eq(&face_key(f), expected))
+            .count();
         if matching != 1 {
             return Ok(Outcome::Invalid);
         }
@@ -190,8 +209,16 @@ pub fn aggregate(outcomes: &[(&str, Outcome)]) -> Map<String, Value> {
 }
 
 /// Every case of a corpus scored: the metric map, then (category, survived, valid).
-pub fn run(corpus: &Value, tuning: &Tuning, mut log: impl FnMut(&str)) -> (Map<String, Value>, Vec<(String, usize, usize)>) {
-    let cases = corpus.get("cases").and_then(Value::as_array).cloned().unwrap_or_default();
+pub fn run(
+    corpus: &Value,
+    tuning: &Tuning,
+    mut log: impl FnMut(&str),
+) -> (Map<String, Value>, Vec<(String, usize, usize)>) {
+    let cases = corpus
+        .get("cases")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
     let mut outcomes = Vec::new();
     for case in &cases {
         let (o, err) = score_case(case, tuning);
@@ -207,14 +234,20 @@ pub fn run(corpus: &Value, tuning: &Tuning, mut log: impl FnMut(&str)) -> (Map<S
                 case.get("id").and_then(Value::as_str).unwrap_or("?")
             ));
         }
-        outcomes.push((case.get("category").and_then(Value::as_str).unwrap_or(""), o));
+        outcomes.push((
+            case.get("category").and_then(Value::as_str).unwrap_or(""),
+            o,
+        ));
     }
     let metrics = aggregate(&outcomes);
     let counts = CATEGORIES
         .iter()
         .map(|c| {
             let of = |pred: fn(Outcome) -> bool| {
-                outcomes.iter().filter(|(cat, o)| cat == c && pred(*o)).count()
+                outcomes
+                    .iter()
+                    .filter(|(cat, o)| cat == c && pred(*o))
+                    .count()
             };
             (
                 (*c).to_owned(),
@@ -259,7 +292,10 @@ fn top_circles(part: &Shape, z: f64) -> Result<Vec<EdgeEnt>, String> {
 
 fn radius_of(shapes: &[Shape], i: usize) -> Result<f64, String> {
     let s = shapes.get(i).ok_or("nothing resolved")?;
-    EdgeEnt::new(s.clone()).map_err(kerr)?.radius().ok_or_else(|| "not a circle".into())
+    EdgeEnt::new(s.clone())
+        .map_err(kerr)?
+        .radius()
+        .ok_or_else(|| "not a circle".into())
 }
 
 /// sidecar/tests/test_selector_v2.py, the eval's `tests_pass` guardrail, run on
@@ -269,19 +305,29 @@ pub fn selector_v2_checks(tuning: &Tuning) -> Result<(), String> {
     let r = || Resolver::new(None, None).with_tuning(tuning);
     let boxed = kernel::make_box(20.0, 20.0, 10.0).map_err(kerr)?;
 
-    let x_edges = r().edges(&boxed, &json!({"kind": "edge", "by": "axis", "axis": "X"})).map_err(kerr)?;
+    let x_edges = r()
+        .edges(&boxed, &json!({"kind": "edge", "by": "axis", "axis": "X"}))
+        .map_err(kerr)?;
     ensure(x_edges.len() == 4, "axis X grabs all 4 X edges")?;
     let target = ents_edges(&boxed)?
         .into_iter()
         .find(|e| {
-            e.curve_name() == "line" && e.dir().x.abs() > 0.99 && close(e.mid.y, 10.0, 1e-3) && close(e.mid.z, 5.0, 1e-3)
+            e.curve_name() == "line"
+                && e.dir().x.abs() > 0.99
+                && close(e.mid.y, 10.0, 1e-3)
+                && close(e.mid.z, 5.0, 1e-3)
         })
         .ok_or("no top front X edge")?;
     let fp = edge_fingerprint_with(tuning, &target.shape, &boxed).map_err(kerr)?;
-    let got = r().edges(&boxed, &json!({"kind": "edge", "by": "match", "fp": fp})).map_err(kerr)?;
+    let got = r()
+        .edges(&boxed, &json!({"kind": "edge", "by": "match", "fp": fp}))
+        .map_err(kerr)?;
     ensure(got.len() == 1, "match picks exactly one edge")?;
     let m = EdgeEnt::new(got[0].clone()).map_err(kerr)?.mid;
-    ensure(close(m.y, 10.0, 1e-3) && close(m.z, 5.0, 1e-3), "match picks the right X edge")?;
+    ensure(
+        close(m.y, 10.0, 1e-3) && close(m.z, 5.0, 1e-3),
+        "match picks the right X edge",
+    )?;
 
     let faces = faces_of(&boxed).map_err(kerr)?;
     let top = faces
@@ -290,10 +336,18 @@ pub fn selector_v2_checks(tuning: &Tuning) -> Result<(), String> {
         .ok_or("no faces")?;
     let (c, n) = (top.centroid(), top.normal());
     let face_fp = json!({"centroid": [c.x, c.y, c.z], "normal": [n.x, n.y, n.z], "area": top.area});
-    let got = r().edges(&boxed, &json!({"kind": "edge", "by": "ofFace", "face": face_fp})).map_err(kerr)?;
+    let got = r()
+        .edges(
+            &boxed,
+            &json!({"kind": "edge", "by": "ofFace", "face": face_fp}),
+        )
+        .map_err(kerr)?;
     ensure(got.len() == 4, "ofFace(top) is 4 edges")?;
     for e in &got {
-        ensure(close(EdgeEnt::new(e.clone()).map_err(kerr)?.mid.z, 5.0, 1e-3), "ofFace edges lie on the top face")?;
+        ensure(
+            close(EdgeEnt::new(e.clone()).map_err(kerr)?.mid.z, 5.0, 1e-3),
+            "ofFace edges lie on the top face",
+        )?;
     }
 
     let tube = cut(
@@ -305,25 +359,44 @@ pub fn selector_v2_checks(tuning: &Tuning) -> Result<(), String> {
     let by_r = |want_outer: bool| {
         rims.iter()
             .max_by(|a, b| {
-                let o = a.radius().unwrap_or(0.0).total_cmp(&b.radius().unwrap_or(0.0));
-                if want_outer { o } else { o.reverse() }
+                let o = a
+                    .radius()
+                    .unwrap_or(0.0)
+                    .total_cmp(&b.radius().unwrap_or(0.0));
+                if want_outer {
+                    o
+                } else {
+                    o.reverse()
+                }
             })
             .map(|e| e.shape.clone())
     };
     let (outer, inner) = (by_r(true).ok_or("no rim")?, by_r(false).ok_or("no rim")?);
     let fo = edge_fingerprint_with(tuning, &outer, &tube).map_err(kerr)?;
     let fi = edge_fingerprint_with(tuning, &inner, &tube).map_err(kerr)?;
-    let go = r().edges(&tube, &json!({"kind": "edge", "by": "match", "fp": fo})).map_err(kerr)?;
-    let gi = r().edges(&tube, &json!({"kind": "edge", "by": "match", "fp": fi})).map_err(kerr)?;
-    ensure(close(radius_of(&go, 0)?, 10.0, 0.05), "match picks the r=10 circle")?;
-    ensure(close(radius_of(&gi, 0)?, 5.0, 0.05), "match picks the r=5 circle")?;
+    let go = r()
+        .edges(&tube, &json!({"kind": "edge", "by": "match", "fp": fo}))
+        .map_err(kerr)?;
+    let gi = r()
+        .edges(&tube, &json!({"kind": "edge", "by": "match", "fp": fi}))
+        .map_err(kerr)?;
+    ensure(
+        close(radius_of(&go, 0)?, 10.0, 0.05),
+        "match picks the r=10 circle",
+    )?;
+    ensure(
+        close(radius_of(&gi, 0)?, 5.0, 0.05),
+        "match picks the r=5 circle",
+    )?;
     let both = r()
         .edges(
             &tube,
             &json!([{"kind": "edge", "by": "match", "fp": fo}, {"kind": "edge", "by": "match", "fp": fi}]),
         )
         .map_err(kerr)?;
-    let mut radii: Vec<f64> = (0..both.len()).map(|i| radius_of(&both, i)).collect::<Result<_, _>>()?;
+    let mut radii: Vec<f64> = (0..both.len())
+        .map(|i| radius_of(&both, i))
+        .collect::<Result<_, _>>()?;
     radii.sort_by(f64::total_cmp);
     ensure(
         radii.len() == 2 && close(radii[0], 5.0, 0.05) && close(radii[1], 10.0, 0.05),
@@ -337,16 +410,28 @@ pub fn selector_v2_checks(tuning: &Tuning) -> Result<(), String> {
     let rims = top_circles(&pipe, 6.0)?;
     let outer = rims
         .iter()
-        .max_by(|a, b| a.radius().unwrap_or(0.0).total_cmp(&b.radius().unwrap_or(0.0)))
+        .max_by(|a, b| {
+            a.radius()
+                .unwrap_or(0.0)
+                .total_cmp(&b.radius().unwrap_or(0.0))
+        })
         .ok_or("no rim")?;
     let fp = edge_fingerprint_with(tuning, &outer.shape, &pipe).map_err(kerr)?;
-    ensure(fp["radius_group"] == json!(2) && fp["radius_rank"] == json!(1), "outer rim fp is rank 1 of 2")?;
+    ensure(
+        fp["radius_group"] == json!(2) && fp["radius_rank"] == json!(1),
+        "outer rim fp is rank 1 of 2",
+    )?;
     let scaled = cut(
         &kernel::make_cylinder(34.0, 12.0).map_err(kerr)?,
         &kernel::make_cylinder(17.0, 12.0).map_err(kerr)?,
     )?;
-    let got = r().edges(&scaled, &json!({"kind": "edge", "by": "match", "fp": fp})).map_err(kerr)?;
-    ensure(got.len() == 1 && close(radius_of(&got, 0)?, 34.0, 0.1), "scaled match keeps the outer rim")?;
+    let got = r()
+        .edges(&scaled, &json!({"kind": "edge", "by": "match", "fp": fp}))
+        .map_err(kerr)?;
+    ensure(
+        got.len() == 1 && close(radius_of(&got, 0)?, 34.0, 0.1),
+        "scaled match keeps the outer rim",
+    )?;
 
     let holed = cut(
         &kernel::make_box(40.0, 40.0, 10.0).map_err(kerr)?,
@@ -359,14 +444,24 @@ pub fn selector_v2_checks(tuning: &Tuning) -> Result<(), String> {
         .ok_or("no hole rim")?;
     let fp = edge_fingerprint_with(tuning, &rim.shape, &holed).map_err(kerr)?;
     ensure(fp["radius_group"] == json!(1), "a lone hole rim is group 1")?;
-    let got = r().edges(&holed, &json!({"kind": "edge", "by": "match", "fp": fp})).map_err(kerr)?;
-    ensure(got.len() == 1 && close(radius_of(&got, 0)?, 5.0, 0.05), "group 1 rim resolves by radius")?;
+    let got = r()
+        .edges(&holed, &json!({"kind": "edge", "by": "match", "fp": fp}))
+        .map_err(kerr)?;
+    ensure(
+        got.len() == 1 && close(radius_of(&got, 0)?, 5.0, 0.05),
+        "group 1 rim resolves by radius",
+    )?;
 
     let got = r()
         .faces(&boxed, &json!({"kind": "face", "by": "match", "fp": face_fingerprint(&top.shape).map_err(kerr)?}))
         .map_err(kerr)?;
     ensure(
-        got.len() == 1 && close(FaceEnt::new(got[0].clone()).map_err(kerr)?.centroid().z, 5.0, 1e-3),
+        got.len() == 1
+            && close(
+                FaceEnt::new(got[0].clone()).map_err(kerr)?.centroid().z,
+                5.0,
+                1e-3,
+            ),
         "face match picks the top face",
     )?;
 
@@ -375,7 +470,12 @@ pub fn selector_v2_checks(tuning: &Tuning) -> Result<(), String> {
         .find(|e| e.curve_name() == "line")
         .ok_or("no line edge")?;
     let fp = edge_fingerprint_with(tuning, &seed.shape, &boxed).map_err(kerr)?;
-    let got = r().edges(&boxed, &json!({"kind": "edge", "by": "tangentChain", "seed": fp})).map_err(kerr)?;
+    let got = r()
+        .edges(
+            &boxed,
+            &json!({"kind": "edge", "by": "tangentChain", "seed": fp}),
+        )
+        .map_err(kerr)?;
     ensure(got.len() == 1, "a box tangent chain is the seed alone")?;
 
     let mut diag = Vec::new();
@@ -386,7 +486,8 @@ pub fn selector_v2_checks(tuning: &Tuning) -> Result<(), String> {
         .map_err(kerr)?;
     ensure(got.len() == 1, "a poor match still resolves")?;
     ensure(
-        diag.first().is_some_and(|d| d["lossy"] == json!(true) && d["feature_id"] == json!("f9")),
+        diag.first()
+            .is_some_and(|d| d["lossy"] == json!(true) && d["feature_id"] == json!("f9")),
         "a poor match records a lossy diagnostic",
     )
 }
@@ -425,7 +526,10 @@ mod tests {
 
     #[test]
     fn all_invalid_is_zero_not_a_crash() {
-        let out = aggregate(&[("concentric", Outcome::Invalid), ("concentric", Outcome::Invalid)]);
+        let out = aggregate(&[
+            ("concentric", Outcome::Invalid),
+            ("concentric", Outcome::Invalid),
+        ]);
         assert!(approx(&out["v2_rate"], 0.0));
         assert!(approx(&out["concentric"], 0.0));
         assert_eq!(out["invalid_count"], json!(2.0));
@@ -434,10 +538,20 @@ mod tests {
     #[test]
     fn rounding_six_places_and_the_extremes() {
         use Outcome::*;
-        let out = aggregate(&[("concentric", Survive), ("concentric", Miss), ("concentric", Miss)]);
+        let out = aggregate(&[
+            ("concentric", Survive),
+            ("concentric", Miss),
+            ("concentric", Miss),
+        ]);
         assert!(approx(&out["concentric"], 0.333333));
         assert!(approx(&out["v2_rate"], 0.333333));
-        assert!(approx(&aggregate(&[("moved_sketch", Survive)])["v2_rate"], 1.0));
-        assert!(approx(&aggregate(&[("moved_sketch", Miss)])["v2_rate"], 0.0));
+        assert!(approx(
+            &aggregate(&[("moved_sketch", Survive)])["v2_rate"],
+            1.0
+        ));
+        assert!(approx(
+            &aggregate(&[("moved_sketch", Miss)])["v2_rate"],
+            0.0
+        ));
     }
 }
