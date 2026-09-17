@@ -541,6 +541,46 @@ SOLID_OPS_CASES = {
 CASES.update(SOLID_OPS_CASES)
 
 
+TOP10 = {"origin": [0, 0, 5], "normal": [0, 0, 1], "xdir": [1, 0, 0]}
+
+
+def datum_on_top(height, offset=0, sel=None, plane=None):
+    d = {"id": "d1", "type": "datumPlane", "plane": plane or TOP10, "offset": offset,
+         "face": sel or face_at(0, 0, 5)}
+    return [box("b", 40, 30, height), d]
+
+
+def on_face_pocket(height, **extra):
+    s = sk("s2", [circle(8)], plane={"origin": [0, 0, 10], "normal": [0, 0, 1], "xdir": [1, 0, 0]},
+           face=face_at(3, 2, 10), at=[3, 2, 10], **extra)
+    return [sk("s1", [rect(40, 40)]), ext("e1", "s1", height), s,
+            ext("e2", "s2", -5, "cut", regions=[[0, 0, 0]])]
+
+
+CYL_SIDE = {"origin": [10, 0, 0], "normal": [1, 0, 0], "xdir": [0, 0, 1]}
+
+SKETCH_FACE_CASES = {
+    "datum_face_follows": doc(datum_on_top(25)),
+    "datum_face_unchanged": doc(datum_on_top(10)),
+    "datum_face_offset": doc(datum_on_top(25, offset=5)),
+    "datum_face_unresolvable": doc(datum_on_top(10, sel={"kind": "face", "by": "match", "fp": {"nope": 1}})),
+    "datum_face_tilted": doc(datum_on_top(10, plane={"origin": [0, 0, 5], "normal": [0.6, 0, 0.8], "xdir": [0.8, 0, -0.6]})),
+    "datum_face_named_plane": doc([box("b", 40, 30, 20), {"id": "d1", "type": "datumPlane", "plane": "XY", "face": face_at(0, 0, 5)}]),
+    "datum_face_sketch_follows": doc(datum_on_top(25) + [sk("s", [rect(10, 10)], plane="d1"), ext("e", "s", 5, "join")]),
+    "datum_cylinder_tangent": doc([{"id": "c", "type": "cylinder", "radius": 12, "height": 20},
+                                   {"id": "d1", "type": "datumPlane", "plane": CYL_SIDE, "face": face_at(10, 0, 0), "at": [10, 0, 0]},
+                                   sk("s", [rect(4, 4)], planeId="d1", plane=CYL_SIDE), ext("e", "s", 3, "new")]),
+    "sketch_face_raised": doc(on_face_pocket(20)),
+    "sketch_face_unmoved": doc(on_face_pocket(10)),
+    "sketch_face_lowered": doc(on_face_pocket(5)),
+    "sketch_face_gone": doc([box("b", 10, 10, 10), sk("s", [rect(4, 4)], plane={"origin": [0, 0, 50], "normal": [0, 0, 1], "xdir": [1, 0, 0]},
+                                                        face={"kind": "face", "by": "match", "fp": {"nope": 1}}), ext("e", "s", 2, "new")]),
+    "sketch_face_rotated_xdir": doc([box("b", 40, 40, 20), sk("s", [rect(10, 2, x=5)], plane={"origin": [0, 0, 5], "normal": [0, 0, 1], "xdir": [0, 1, 0]},
+                                                               face=face_at(0, 0, 5)), ext("e", "s", 4, "join")]),
+}
+CASES.update(SKETCH_FACE_CASES)
+
+
 def volume(shape):
     p = GProp_GProps()
     BRepGProp.VolumeProperties_s(shape.wrapped, p)

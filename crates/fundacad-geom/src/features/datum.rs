@@ -1,17 +1,23 @@
 //! Datum planes and axes, sidecar/builder.py `_handle_datum_plane` and
 //! `_handle_datum_axis`.
 //!
-//! Not ported yet: following a face (`face`, `at`) or an edge (`axisEdge`)
-//! through `geom_select`. Such a datum keeps its cached placement, which is
+//! A datum plane made on a face follows it (face_anchor.rs). Not ported yet:
+//! an axis following an edge (`axisEdge`) through `geom_select`. Such a datum keeps its cached placement, which is
 //! what the Python engine also does whenever the reference stops resolving.
 
 use fundacad_core::schema::{DatumAxis, DatumPlane, Num};
 
 use crate::builder::plane::{plane_of, PlaneRecord, PlaneRef};
+use super::face_anchor::face_anchor_plane;
 use crate::builder::{Ctx, FResult, Fail};
 
 pub fn datum_plane(ctx: &mut Ctx, f: &DatumPlane) -> FResult {
-    let base = plane_of(PlaneRef::from(&f.plane), &ctx.datums)?;
+    let followed = face_anchor_plane(ctx, &f.id, f.face.as_ref(), f.at.as_ref(), &f.plane, "Plane");
+    let spec = match followed {
+        Some(p) => PlaneRef::Record(p.record()),
+        None => PlaneRef::from(&f.plane),
+    };
+    let base = plane_of(spec, &ctx.datums)?;
     // Python reads `offset` raw, so a parameter name there is a TypeError.
     let off = match &f.offset {
         None => 0.0,

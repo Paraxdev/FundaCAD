@@ -6,6 +6,7 @@ mod cleanup;
 mod datum;
 mod defeature;
 mod extrude;
+mod face_anchor;
 mod hole;
 mod loft_sweep;
 mod pattern;
