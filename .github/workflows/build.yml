@@ -366,6 +366,14 @@ jobs:
           node-version: 22
           cache: npm
 
+      # A plugin that owns geometry for the Rust engine carries a Rust crate
+      # that builds to a WebAssembly component (docs/PLUGINS.md), packed into
+      # the bundle by build-plugins.py.
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip2
+
       - name: Install dependencies
         run: npm ci
 

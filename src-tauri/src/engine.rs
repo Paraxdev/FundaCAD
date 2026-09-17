@@ -53,6 +53,8 @@ struct Worker {
 
 /// The worker entry point, called from `main` before Tauri starts.
 pub fn run_worker() -> ! {
+    // server.py's startup `plugin_geometry.discover()`, over FUNDACAD_PLUGIN_DIR.
+    fundacad_geom::plugins::load();
     fundacad_engine::stdio::run(fundacad_geom::jobs::GeomJobs)
 }
 
@@ -141,6 +143,11 @@ fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    // Where installed plugins are, so the worker can run the geometry any of
+    // them ship, the same variable the Python sidecar is told (sidecar.rs).
+    if let Ok(dir) = crate::plugins::plugins_root(&inner.app) {
+        cmd.env("FUNDACAD_PLUGIN_DIR", dir);
+    }
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;

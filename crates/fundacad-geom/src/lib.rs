@@ -23,6 +23,8 @@ pub mod jobs;
 pub mod kernel;
 pub mod measure;
 pub mod mesh;
+#[cfg(feature = "plugins")]
+pub mod plugins;
 pub mod projection;
 pub mod reply;
 pub mod select;
