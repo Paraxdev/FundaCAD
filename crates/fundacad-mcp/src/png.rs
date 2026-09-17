@@ -12,7 +12,7 @@ pub fn encode(canvas: &Canvas) -> Result<Vec<u8>, String> {
         let mut encoder = png::Encoder::new(&mut out, canvas.w, canvas.h);
         encoder.set_color(png::ColorType::Rgb);
         encoder.set_depth(png::BitDepth::Eight);
-        encoder.set_compression(png::Compression::High);
+        encoder.set_compression(png::Compression::Best);
         let mut writer = encoder
             .write_header()
             .map_err(|e| format!("the render could not be encoded: {e}"))?;
