@@ -372,6 +372,53 @@ FEATURES = {
                           "existing document rather than from scratch"},
         "example": None,
     },
+    "teardropHole": {
+        "summary": "Give sideways round holes a pointed or flat roof so they print "
+                   "without supports (3D Printing Toolbox plugin).",
+        "fields": {"faces": "Selector or list, the inside face of each hole",
+                   "angle": "optional Num, degrees the roof leans from the build direction, 10 to 80, default 45",
+                   "roof": 'optional "pointed" or "flat"',
+                   "flatHeight": "optional Num, mm above the top of the hole where a flat roof sits, default 0",
+                   "buildDir": 'optional "+Z", "-Z", "+X", "-X", "+Y" or "-Y", default "+Z"'},
+        "example": {"id": "td1", "type": "teardropHole",
+                    "faces": {"kind": "face", "by": "nearest", "point": [0, 0, 13], "body": "body1"},
+                    "angle": 45, "roof": "pointed", "buildDir": "+Z"},
+        "notes": "Only removes material. A hole whose axis runs along the build direction is refused.",
+    },
+    "roofBridge": {
+        "summary": "Square off the top half of sideways round holes so the roof is a flat "
+                   "bridge (3D Printing Toolbox plugin).",
+        "fields": {"faces": "Selector or list, the inside face of each hole",
+                   "height": "optional Num, mm the bridge sits above the top of the hole, default 0",
+                   "buildDir": 'optional "+Z", "-Z", "+X", "-X", "+Y" or "-Y", default "+Z"'},
+        "example": {"id": "rb1", "type": "roofBridge",
+                    "faces": {"kind": "face", "by": "nearest", "point": [0, 0, 13], "body": "body1"},
+                    "height": 0},
+    },
+    "counterboreBridge": {
+        "summary": "Cut the first layers above a counterbore floor into a slot then a "
+                   "square, so its ceiling bridges cleanly (3D Printing Toolbox plugin).",
+        "fields": {"faces": "Selector or list, the flat floor of each counterbore",
+                   "layerHeight": "optional Num, mm, default 0.2",
+                   "layers": "optional whole Num, 1 to 3, default 2 (3 adds an octagon layer)",
+                   "angle": "optional Num, degrees the slot turns about the bore, default 0"},
+        "example": {"id": "cb1", "type": "counterboreBridge",
+                    "faces": {"kind": "face", "by": "nearest", "point": [4, 0, 5], "body": "body1"},
+                    "layerHeight": 0.2, "layers": 2},
+    },
+    "sacrificialLayer": {
+        "summary": "Close a round hole with a thin membrane to drill out after printing "
+                   "(3D Printing Toolbox plugin).",
+        "fields": {"faces": "Selector or list, a hole's inside face or the flat face it opens onto",
+                   "layerHeight": "optional Num, mm, default 0.2",
+                   "layers": "optional whole Num, 1 to 5, default 1",
+                   "depth": "optional Num, mm into the hole from its opening, default 0",
+                   "side": 'optional "bottom" or "top", which opening a picked hole face closes',
+                   "buildDir": 'optional "+Z", "-Z", "+X", "-X", "+Y" or "-Y", default "+Z"'},
+        "example": {"id": "sl1", "type": "sacrificialLayer",
+                    "faces": {"kind": "face", "by": "nearest", "point": [2.5, 0, 5], "body": "body1"},
+                    "layerHeight": 0.2, "layers": 1, "depth": 0},
+    },
 
     # --- placement and combination ---------------------------------------------
     "move": {

@@ -44,6 +44,7 @@ const MARKERS = [
   ["FundaCAD.Texture", "Flat land on the crests"],
   ["FundaCAD.ExtraParameters", "Parameter Setup"],
   ["FundaCAD.ExtraParameters", "save the current values as"],
+  ["FundaCAD.PrintToolbox", "select the flat floor of each counterbore"],
 ];
 
 if (!existsSync(dir)) {

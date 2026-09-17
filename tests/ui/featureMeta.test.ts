@@ -74,6 +74,10 @@ const DRAWN_BY_APP: Record<FeatureType, "app"> = {
  *  built from the same manifests the application reads could not say that. */
 const DRAWN_BY_PLUGIN: Record<string, string> = {
   texture: "FundaCAD.Texture",
+  teardropHole: "FundaCAD.PrintToolbox",
+  roofBridge: "FundaCAD.PrintToolbox",
+  counterboreBridge: "FundaCAD.PrintToolbox",
+  sacrificialLayer: "FundaCAD.PrintToolbox",
 };
 
 const DRAWN_BY: Record<string, string> = { ...DRAWN_BY_APP, ...DRAWN_BY_PLUGIN };

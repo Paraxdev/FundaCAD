@@ -1,0 +1,19 @@
+{
+  "id": "FundaCAD.PrintToolbox",
+  "name": "3D Printing Toolbox",
+  "version": "1.0.0",
+  "kind": "builtin",
+  "summary": "Print-friendly holes without supports: teardrop and flat-roof holes, bridged counterbores, and sacrificial layers you drill out after printing.",
+  "enabledByDefault": true,
+  "grants": [
+    "document.read",
+    "document.write"
+  ],
+  "featureTypes": [
+    "teardropHole",
+    "roofBridge",
+    "counterboreBridge",
+    "sacrificialLayer"
+  ],
+  "geometry": "geometry/register.py"
+}

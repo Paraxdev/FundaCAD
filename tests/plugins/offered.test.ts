@@ -46,6 +46,7 @@ describe("the plugins this build offers", () => {
       "FundaCAD.ExtraParameters",
       "FundaCAD.MCP",
       "FundaCAD.MultiColor",
+      "FundaCAD.PrintToolbox",
       "FundaCAD.Printing",
       "FundaCAD.SpaceMouse",
       "FundaCAD.Texture",
