@@ -391,9 +391,11 @@ pub fn mesh_result_cached(
 ///
 /// The cache is read and written on this thread, in body order, so a cached
 /// run and a fresh one agree; only the bodies that miss are meshed, and those
-/// go to other threads when they own their faces outright (crate::par). The
-/// progress ticks stay 0, 1, ... n-1, what a serial loop reported, so the
-/// watchdog sees the same frames in the same order.
+/// go to other threads when they own their faces outright (crate::par).
+///
+/// Every body still ticks progress once, whichever tier answered it and
+/// whether or not it has a shape, and the counts still run 0, 1, ... n-1: the
+/// stall watchdog is promised one beat per body, not a particular order.
 fn built_payloads(
     bodies: &[MeshBody<'_>],
     tolerance: f64,
@@ -404,6 +406,7 @@ fn built_payloads(
     let total = bodies.len();
     let mut out: Vec<Option<FullBody>> = Vec::with_capacity(total);
     let mut misses: Vec<usize> = Vec::new();
+    let ticked = std::sync::atomic::AtomicUsize::new(0);
     for (i, body) in bodies.iter().enumerate() {
         let cached = body
             .shape
@@ -411,11 +414,12 @@ fn built_payloads(
             .map(|payload| with_envelope(body, payload));
         if cached.is_none() && body.shape.is_some() {
             misses.push(i);
+        } else {
+            on_body(ticked.fetch_add(1, std::sync::atomic::Ordering::Relaxed), total);
         }
         out.push(cached);
     }
 
-    let ticked = std::sync::atomic::AtomicUsize::new(0);
     let tick = std::sync::Mutex::new(on_body);
     let mesh_one = |k: usize| {
         let i = misses[k];

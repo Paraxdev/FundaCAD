@@ -268,14 +268,14 @@ fn near_pairs(
         return HashSet::new();
     }
     let screen = GAP_ABS.max(GAP_REL * diag(bbox(shape, false)));
-    // The exact tolerance needs the optimal box, which is slow; a group only
-    // asks for it when a pair is past the cheap screen, and every thread has
-    // to see the same number, so it is settled once up front when any group
-    // could reach it.
-    let exact = gap_tolerance(shape);
-    let work = crate::par::Shared((&groups, faces, surf, already));
+    // The exact tolerance needs the OPTIMAL box, which costs more than the
+    // whole pass on a body no pair ever reaches. Still computed on demand, and
+    // shared: it is a pure function of the shape, so whichever thread gets
+    // there first computes the number they all then read.
+    let exact: std::sync::OnceLock<f64> = std::sync::OnceLock::new();
+    let work = crate::par::Shared((&groups, faces, surf, already, &exact, shape));
     let found = crate::par::flat_map_indexed(groups.len(), move |g| {
-        let (groups, faces, surf, already) = *work.get();
+        let (groups, faces, surf, already, exact, shape) = *work.get();
         let group = groups[g];
         let mut out = Vec::new();
         let boxes: HashMap<usize, [f64; 6]> =
@@ -310,7 +310,7 @@ fn near_pairs(
                 if gap > screen {
                     continue;
                 }
-                if gap > GAP_ABS && gap > exact {
+                if gap > GAP_ABS && gap > *exact.get_or_init(|| gap_tolerance(shape)) {
                     continue;
                 }
                 out.push(pair);
