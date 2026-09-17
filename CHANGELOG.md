@@ -30,8 +30,17 @@ This file starts on 2026-08-03. For anything before that, see the
   kernel tests (volume, boolean cut, per-face tessellation in the protocol v2
   body payload shape). Nothing shipped changes yet: the Python sidecar is still
   the engine. The plan, the decision record and the per-module conversion list
-  are in `docs/RUST-PIVOT.md`, including the `prealpha-rust-ver` rolling
+  are in `docs/RUST-PIVOT.md`, including the `prealpha-rust` rolling
   release that will carry the Rust engine with a work-in-progress warning.
+
+- **A second rolling release, `prealpha-rust`, for the Rust engine.** It is
+  built with the engine compiled into the app, carries no Python runtime at
+  all, and opens its notes with a warning that it is a work in progress and not
+  for real work: unported features fail in a rebuild with the skipped-feature
+  banner, and plugin geometry does not run yet. Files it saves are ordinary
+  `.funda` documents that open in the beta. It updates only from its own feed,
+  so a beta install is never offered one of these builds and the beta stays the
+  complete app. Nothing is published from it until the first green run.
 
 ### Added
 

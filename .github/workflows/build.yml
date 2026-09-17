@@ -1,14 +1,21 @@
 # Cross-platform build + bundle for FundaCAD (Tauri 2 + bundled Python sidecar).
 #
-# No system OpenCASCADE anywhere: the Rust/OCCT path is behind the off-by-default
-# `rust-geom` feature (see src-tauri/Cargo.toml), and the shipping geometry runs in the
-# Python sidecar, whose cadquery-ocp-novtk wheels bundle their own OCCT. So this
-# workflow has NO "build OCCT from source / brew / vcpkg" steps (they were removed when
-# Move 1 gated OCCT out).
+# No SYSTEM OpenCASCADE anywhere, on any platform: the beta's geometry runs in the
+# Python sidecar, whose cadquery-ocp-novtk wheels bundle their own OCCT, and the
+# pre-alpha's is the occt-sys crate, which carries the 7.8.1 sources and builds them
+# statically into the binary. So this workflow still has no brew or vcpkg OCCT step,
+# and no apt one either.
 #
 # Per OS it: builds a relocatable Python "sidecar-runtime" (uv + python-build-standalone
 # installed from sidecar/uv.lock), then runs `tauri build` with the bundle-only config
 # that ships that runtime as a resource, and uploads the installers.
+#
+# TWO rolling releases come out of this file, and they are kept apart on purpose.
+# `build` + `release` make the beta, the complete app on the Python engine. The
+# `build-prealpha` + `release-prealpha` pair make the pre-alpha Rust engine build
+# (docs/RUST-PIVOT.md section 6), which compiles OpenCASCADE into the app, ships no
+# Python at all, and has its own tag, its own update feed and its own warning. That
+# pair is the only place in this file where OCCT is built from source.
 #
 # Scope: x86_64 Linux, Apple Silicon macOS, x86_64 Windows. (No Intel-mac / linux-arm64.)
 
@@ -196,42 +203,13 @@ jobs:
           node -e "const fs=require('fs');const f='src-tauri/tauri.conf.json';const j=JSON.parse(fs.readFileSync(f));j.version='$v';fs.writeFileSync(f,JSON.stringify(j,null,2)+'\n')"
           echo "stamped $v"
 
-      # Dependabot-triggered runs get NO repository secrets, by GitHub's design -- so
-      # TAURI_SIGNING_PRIVATE_KEY arrives empty and `tauri build` aborts with "failed
-      # to decode secret key: Missing comment in secret key". That failed the build leg
-      # on all three OSes for every dependency PR while the `test` gate passed, which
-      # reads as "the bump broke the build" when nothing was wrong with the bump.
-      #
-      # Bundle WITHOUT updater artifacts in that case. The point of building a
-      # dependency PR is to prove the bundle still assembles on all three OSes, not to
-      # ship it. Deliberately NOT solved by giving Dependabot the signing key: that key
-      # authorises pushing an update to every tester's machine, and a Dependabot run
-      # executes the install scripts of the very package it just bumped.
-      #
-      # On a normal push the key is present, this is a no-op, and updater artifacts stay
-      # signed -- the in-app updater and the `release` job's latest.json depend on that.
+      # Why a run without a usable signing key must not produce updater
+      # artifacts is in the action. Shared with the pre-alpha Rust build below.
       - name: Disable updater artifacts when they could not be trusted
-        shell: bash
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-        run: |
-          # Upstream's minisign public key, as inherited at the fork point. See
-          # tests/security/updater.test.ts.
-          UPSTREAM_PUBKEY='dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDUwMkY3MDMzN0E1RUREMUYKUldRZjNWNTZNM0F2VU81ZU9YLzBPdDV6UVdkVklPOWg1S01zdU1lWitDMGR6aFg1cmJoZnYrMWIK'
-          pubkey=$(node -p "require('./src-tauri/tauri.conf.json').plugins.updater.pubkey")
-          why=""
-          [ -n "$TAURI_SIGNING_PRIVATE_KEY" ] || why="there is no signing key (expected on Dependabot PRs)"
-          # A signature made with a key whose public half is NOT the one baked
-          # into the app is worse than no signature at all: the build looks
-          # shippable, and every installed copy rejects the update with nothing
-          # said here. Same treatment as a missing key.
-          [ "$pubkey" != "$UPSTREAM_PUBKEY" ] || why="the updater pubkey is still upstream's, so nothing we sign would verify"
-          if [ -z "$why" ]; then
-            echo "signing key present and the pubkey is ours -- updater artifacts stay enabled"
-            exit 0
-          fi
-          echo "::warning::No updater artifacts: $why. The installers still build and are still shippable; they just do not update themselves."
-          node -e "const fs=require('fs');const f='src-tauri/tauri.bundle.conf.json';const j=JSON.parse(fs.readFileSync(f));j.bundle.createUpdaterArtifacts=false;fs.writeFileSync(f,JSON.stringify(j,null,2)+'\n')"
+        uses: ./.github/actions/updater-artifacts
+        with:
+          config: src-tauri/tauri.bundle.conf.json
+          signing-key: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
 
       # --- build + bundle. The bundle-only config ships sidecar-runtime/ as a resource
       #     and (on macOS) turns on hardened runtime + entitlements. ---
@@ -271,187 +249,26 @@ jobs:
       # Windows Authenticode: set bundle.windows.signCommand in the bundle config +
       # a signing secret to clear SmartScreen (optional; unsigned still runs).
 
-      # The AppImage must NOT carry the GTK/WebKit/GStreamer stack. Tauri's AppImage
-      # bundler copies webkit2gtk in explicitly and linuxdeploy pulls the rest of the GTK
-      # stack in behind it, and that bundled stack aborts its own web process at startup
-      # on any host running a modern WebKit: the window opens, the page never loads, and
-      # before the load watchdog there was nothing in the log at all. Reported on NixOS
-      # with WebKitGTK 2.50.4 (#3), reproduced on Arch with 2.52.5.
-      #
-      # It is not version skew. A 24.04-built bundle fails identically (PR #8), the
-      # bundle is internally consistent (LD_DEBUG shows GTK/GLib/WebKit all resolving to
-      # it), and the environment is not at fault either (the .deb binary runs fine under
-      # the full set of variables the AppImage's GTK hook exports). What fails is that
-      # bundled stack meeting the host's GPU drivers, which are never bundled and cannot
-      # be. Removing the bundled stack outright is what fixes it, and it is the
-      # configuration the .deb has shipped all along.
-      #
-      # Measured: with all 233 bundled system libraries removed, the AppImage starts and
-      # leaves no coredump on a host where the shipped one does neither.
-      #
-      # usr/lib/<product> holds the Python geometry engine and MUST survive: it is the
-      # app, not a system library, and no host provides it.
+      # Why the bundled GTK stack has to come out, and what has to survive the
+      # strip, are in the action. Shared with the pre-alpha Rust build below.
       - name: Un-bundle the system stack from the AppImage
         if: matrix.platform == 'ubuntu-22.04'
-        shell: bash
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: |
-          set -euo pipefail
-          img=$(find src-tauri/target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' | head -1)
-          [ -n "$img" ] || { echo "::error::no AppImage was produced"; exit 1; }
-          echo "before: $(du -m "$img" | cut -f1) MB"
+        uses: ./.github/actions/appimage-unbundle
+        with:
+          engine: sidecar
+          signing-key: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          signing-key-password: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
-          work=$(mktemp -d)
-          cp "$img" "$work/in.AppImage"
-          (cd "$work" && ./in.AppImage --appimage-extract >/dev/null)
-          root="$work/squashfs-root"
-
-          find "$root/usr/lib" -maxdepth 1 -type f -name '*.so*' -delete
-          rm -rf "$root/usr/lib/x86_64-linux-gnu"
-          # The geometry engine must still be there, or we just shipped a dead app.
-          # The directory is named after productName, so it is READ from the config
-          # rather than written out here: hardcoding it meant this check silently
-          # named a directory that no longer existed the moment the app was renamed,
-          # and a `test -d` against the wrong path fails the job for the wrong reason.
-          product=$(node -p "require('./src-tauri/tauri.conf.json').productName")
-          test -d "$root/usr/lib/$product/sidecar-runtime"             || { echo "::error::no sidecar-runtime under usr/lib/$product";                  ls -la "$root/usr/lib"; exit 1; }
-
-          wget -qO "$work/appimagetool" \
-            https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
-          chmod +x "$work/appimagetool"
-          ARCH=x86_64 "$work/appimagetool" --appimage-extract-and-run "$root" "$img"
-          echo "after: $(du -m "$img" | cut -f1) MB"
-
-          # The old .sig covers the old bytes. Leaving it would hand every existing
-          # install an update whose signature does not verify.
-          rm -f "$img.sig"
-          if [ -n "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
-            npx --yes @tauri-apps/cli signer sign "$img"
-            test -f "$img.sig"
-          else
-            echo "::warning::no signing key, AppImage left unsigned (not shippable)"
-          fi
-
-      # Tauri's CLI always writes `Depends: libwebkit2gtk-4.1-0, libgtk-3-0`, and
-      # no config replaces it. Since the 64-bit time_t transition (Ubuntu 24.04
-      # and everything built on it) the package is libgtk-3-0t64, and libgtk-3-0
-      # only exists as a name it Provides. apt resolves that; Kubuntu's QApt
-      # installer does not, and refuses the .deb with "Cannot satisfy
-      # dependencies". Only the control member is swapped, the ~900MB data member
-      # is left as it is, and nothing signs the .deb, so there is nothing to redo.
       - name: Depend on the renamed GTK package (deb)
         if: matrix.platform == 'ubuntu-22.04'
-        shell: bash
-        run: |
-          set -euo pipefail
-          deb=$(find "$PWD/src-tauri/target/release/bundle/deb" -maxdepth 1 -name '*.deb' | head -1)
-          [ -n "$deb" ] || { echo "::error::no .deb was produced"; exit 1; }
-          work=$(mktemp -d)
-          cd "$work"
-          ar x "$deb" control.tar.gz
-          mkdir control
-          tar -xzf control.tar.gz -C control
-          sed -i 's/^Depends: .*/Depends: libwebkit2gtk-4.1-0, libgtk-3-0t64 | libgtk-3-0/' control/control
-          grep -qxF 'Depends: libwebkit2gtk-4.1-0, libgtk-3-0t64 | libgtk-3-0' control/control \
-            || { echo "::error::Depends line not rewritten"; cat control/control; exit 1; }
-          tar -czf control.tar.gz --owner=0 --group=0 -C control .
-          ar r "$deb" control.tar.gz
-          dpkg-deb -f "$deb" Depends
-          # The member order dpkg requires, and a data member that still reads.
-          [ "$(ar t "$deb" | head -2 | tr '\n' ' ')" = "debian-binary control.tar.gz " ]
-          # To a file: grep -q stops reading at its match, and under pipefail the
-          # listing's broken pipe fails the step.
-          dpkg-deb -c "$deb" > listing.txt
-          grep -q 'usr/bin/fundacad' listing.txt
+        uses: ./.github/actions/deb-gtk-depends
 
-      # A PORTABLE Windows build: unzip anywhere, run fundacad.exe, no installer
-      # and no admin rights. An installer is a poor fit for a machine you do not
-      # administer, or for keeping several builds side by side to compare them.
-      #
-      # Its contents are EXTRACTED FROM THE MSI rather than assembled by hand. A
-      # hand-built tree would be a second and silently drifting opinion about
-      # what the app consists of: the exe and whichever resources were current on
-      # the day it was written. `msiexec /a` performs an administrative install,
-      # which unpacks the package's payload without installing it, so the folder
-      # is by construction the same file set a real install lays down.
-      #
-      # Portable means no installer, not no traces: preferences and recent files
-      # still live in the user profile, as they do for an installed copy. The
-      # readme inside the zip says so rather than leaving it to be discovered.
       - name: Portable zip (Windows)
         if: matrix.platform == 'windows-latest'
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          $msi = Get-ChildItem src-tauri/target/release/bundle/msi -Filter *.msi | Select-Object -First 1
-          if (-not $msi) { throw "no .msi was produced, so there is nothing to unpack" }
-
-          $stage = Join-Path $PWD "portable-stage"
-          $log = Join-Path $PWD "msi-extract.log"
-          $proc = Start-Process msiexec -Wait -PassThru -ArgumentList @(
-            "/a", "`"$($msi.FullName)`"", "/qn", "TARGETDIR=`"$stage`"", "/l*v", "`"$log`"")
-          if ($proc.ExitCode -ne 0) {
-            if (Test-Path $log) { Get-Content $log -Tail 60 }
-            throw "msiexec /a failed with $($proc.ExitCode)"
-          }
-
-          # An administrative install drops a copy of the package itself beside
-          # the payload. Nobody wants an installer inside the portable zip.
-          Get-ChildItem $stage -Filter *.msi | Remove-Item -Force
-
-          $exe = Get-ChildItem $stage -Recurse -Filter fundacad.exe | Select-Object -First 1
-          if (-not $exe) { throw "no fundacad.exe in the unpacked payload" }
-          $root = $exe.Directory.FullName
-
-          # The geometry engine IS the app, not an extra. A zip with the exe and
-          # no interpreter starts, opens a window, and can never build anything.
-          if (-not (Test-Path (Join-Path $root "sidecar-runtime/python/python.exe"))) {
-            Get-ChildItem $root | Select-Object -ExpandProperty Name
-            throw "no bundled Python at sidecar-runtime/python/python.exe"
-          }
-
-          $version = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
-          $out = Join-Path $PWD "src-tauri/target/release/bundle/portable"
-          $pack = Join-Path $out "pack"
-          $folder = Join-Path $pack "FundaCAD"
-          New-Item -ItemType Directory -Force -Path $pack | Out-Null
-          Copy-Item $root $folder -Recurse
-
-          # An ARRAY, not a here-string: a here-string's closing marker has to sit
-          # at column 0, and every line of this script is indented by the YAML
-          # block it lives in.
-          Set-Content -Path (Join-Path $folder "README.txt") -Encoding utf8 -Value @(
-            "FundaCAD $version, portable build",
-            "",
-            "Run fundacad.exe. There is nothing to install and no admin rights are",
-            "needed. Move or copy this folder wherever you like, a USB stick",
-            "included, and it goes on working.",
-            "",
-            "The first run shows a SmartScreen warning, Windows protected your PC.",
-            "Choose More info, then Run anyway. The build is not code signed, and",
-            "that is what SmartScreen is reporting.",
-            "",
-            "Needs the Microsoft Edge WebView2 runtime, which Windows 11 and an",
-            "up to date Windows 10 already have. If no window ever appears, get it",
-            "from https://developer.microsoft.com/microsoft-edge/webview2/",
-            "",
-            "Portable means no installer, not no traces: preferences and recent",
-            "files are kept in your user profile, the same as an installed copy.",
-            "",
-            "This build does not update itself. Newer ones are at",
-            "https://github.com/Paraxdev/fundacad/releases/tag/beta"
-          )
-
-          $zip = Join-Path $out "FundaCAD_${version}_x64_portable.zip"
-          # .NET rather than Compress-Archive: the payload is a few thousand files
-          # and several hundred megabytes, which Compress-Archive walks one
-          # pipeline object at a time.
-          [System.IO.Compression.ZipFile]::CreateFromDirectory(
-            $pack, $zip, [System.IO.Compression.CompressionLevel]::Optimal, $false)
-          Remove-Item $pack -Recurse -Force
-          Write-Host "portable zip: $zip ($([math]::Round((Get-Item $zip).Length / 1MB, 1)) MB)"
+        uses: ./.github/actions/windows-portable
+        with:
+          engine: sidecar
+          release-tag: beta
 
       # These exist to hand the installers to the `release` job below, in this
       # same run, and for a person to download from a red build. Nothing reads
@@ -466,7 +283,10 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: fundacad-${{ matrix.platform }}
+          # The variant is in the NAME because both rolling builds upload into
+          # the same run, and each release job downloads by pattern. Without it
+          # the beta release would publish whatever the pre-alpha leg built.
+          name: fundacad-beta-${{ matrix.platform }}
           retention-days: 1
           if-no-files-found: warn
           path: |
@@ -526,8 +346,12 @@ jobs:
       # code.
       - uses: actions/checkout@v4
 
+      # By PATTERN, not everything: the pre-alpha Rust build uploads into this
+      # same run, and a bare download would put its installers in dist/ for the
+      # find below to publish to the beta release.
       - uses: actions/download-artifact@v4
         with:
+          pattern: fundacad-beta-*
           path: dist
 
       # The plugin bundles are built here rather than in the platform matrix:
@@ -751,6 +575,406 @@ jobs:
                   || gh release delete-asset beta "$asset" --repo "$R" --yes || true
               done
 
+  # The pre-alpha Rust engine build (docs/RUST-PIVOT.md section 6).
+  #
+  # The same three platforms as `build`, and deliberately its OWN job rather
+  # than two more rows of that matrix. `needs:` has job granularity and nothing
+  # else, so a matrix row here would mean the beta release waits on an engine
+  # that is still being written, and one unported feature would hold up the
+  # build people actually use. Nothing needs this job except the pre-alpha
+  # release below.
+  #
+  # Two differences make the bundle, and they are the whole point: the app is
+  # built with the `rust-engine` cargo feature, so the engine is a worker
+  # process of the same executable, and the bundle config ships no
+  # sidecar-runtime resource, so there is no Python in it at all.
+  #
+  # main only, unlike `build`. OpenCASCADE 7.8.1 is compiled from source into
+  # the binary on each platform, twenty minutes cold, and a pull request is
+  # already told whether the engine compiles by the `rust-geom` job.
+  build-prealpha:
+    needs: test
+    permissions:
+      contents: write # tauri-action may attach artifacts to a draft release
+    if: >-
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      && github.ref == 'refs/heads/main'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-22.04
+          - platform: macos-14 # Apple Silicon (arm64) runner
+          - platform: windows-latest
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+        # third_party/opencascade-rs is vendored in-repo (no submodules), and
+        # this build DOES compile it, so a plain checkout is still enough.
+
+      - name: Install Linux system dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        uses: ./.github/actions/linux-deps
+
+      # The one thing linux-deps deliberately leaves out, because the beta build
+      # has no C++ to compile and this one has OpenCASCADE.
+      - name: Install cmake (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: sudo apt-get install -y cmake
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          key: prealpha
+
+      # occt-sys installs the kernel into <target>/OCCT, which rust-cache does
+      # not keep. Without this every run pays the twenty minute OCCT build again
+      # on every platform.
+      #
+      # Keyed on the three files that decide what gets built, NOT on Cargo.lock:
+      # the kernel does not change when some unrelated crate is bumped, and a
+      # key that moved with the lock would throw the build away most weeks.
+      - name: Cache the static OpenCASCADE build
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/target/OCCT
+          key: occt-static-${{ runner.os }}-${{ hashFiles('third_party/opencascade-rs/crates/occt-sys/src/lib.rs', 'third_party/opencascade-rs/crates/opencascade-sys/build.rs', 'third_party/opencascade-rs/crates/opencascade-sys/Cargo.toml') }}
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      # No sidecar runtime is built here, and this is what proves it stayed
+      # that way. `tauri.prealpha.conf.json` declares no resources, so a
+      # directory left behind by some other step could not be bundled anyway,
+      # but a build that found one would mean the wrong config was in use.
+      - name: No Python runtime is anywhere near this build
+        shell: bash
+        run: |
+          test ! -d src-tauri/sidecar-runtime \
+            || { echo "::error::src-tauri/sidecar-runtime exists in a Rust engine build"; exit 1; }
+          node -e "
+            const j = require('./src-tauri/tauri.prealpha.conf.json');
+            if (j.bundle.resources) { console.error('the pre-alpha config bundles resources'); process.exit(1); }
+          "
+
+      # Rolling pre-alpha versioning, 0.3.<run_number>.
+      #
+      # docs/RUST-PIVOT.md section 6 asked for `0.3.<run number>-rust`, and the
+      # suffix cannot be had: tauri's msi target refuses a version whose
+      # pre-release identifier is not numeric ("optional pre-release identifier
+      # in app version must be numeric-only"), so `-rust` fails the Windows leg
+      # outright and NSIS silently rewrites it to 0 in VIProductVersion. The
+      # minor carries the distinction instead, 0.3 against the beta's 0.2, and
+      # the tag, the title and the update feed carry the rest. When the beta
+      # reaches 0.3 this has to move up with it.
+      - name: Stamp rolling version
+        shell: bash
+        run: |
+          v="0.3.${{ github.run_number }}"
+          node -e "const fs=require('fs');const f='src-tauri/tauri.conf.json';const j=JSON.parse(fs.readFileSync(f));j.version='$v';fs.writeFileSync(f,JSON.stringify(j,null,2)+'\n')"
+          echo "stamped $v"
+
+      - name: Disable updater artifacts when they could not be trusted
+        uses: ./.github/actions/updater-artifacts
+        with:
+          config: src-tauri/tauri.prealpha.conf.json
+          signing-key: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+
+      # --- build + bundle. `--features rust-engine` is what makes the engine
+      #     the Rust worker, and tauri.prealpha.conf.json is what leaves the
+      #     Python runtime out and points the updater at the pre-alpha feed. ---
+      - name: Build + bundle Tauri app (Rust engine)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+          # CMake 4 refuses OCCT 7.8.1's declared minimum. Harmless on a runner
+          # still shipping CMake 3, and the day one moves this is why it builds.
+          CMAKE_POLICY_VERSION_MINIMUM: "3.5"
+          NO_STRIP: true
+        with:
+          args: --verbose --config src-tauri/tauri.prealpha.conf.json --features rust-engine
+
+      # The claim this whole job exists to make, checked against the bytes
+      # rather than against the arguments that were meant to produce them.
+      # `engine_attach` is the IPC command only the rust-engine build registers
+      # (src-tauri/src/lib.rs), so its absence means the feature flag did not
+      # take and the bundle is a Python build with no Python in it.
+      - name: The shipped binary is the Rust engine
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin=$(find src-tauri/target/release -maxdepth 1 -type f \( -name fundacad -o -name fundacad.exe \) | head -1)
+          [ -n "$bin" ] || { echo "::error::no fundacad binary was produced"; exit 1; }
+          node -e "
+            const fs = require('fs');
+            const hay = fs.readFileSync(process.argv[1]);
+            if (hay.indexOf(Buffer.from('engine_attach')) < 0) {
+              console.error('::error::the binary registers no engine_attach command, so it was not built with --features rust-engine');
+              process.exit(1);
+            }
+            console.log('engine_attach found, this is the Rust engine build');
+          " "$bin"
+
+      - name: Un-bundle the system stack from the AppImage
+        if: matrix.platform == 'ubuntu-22.04'
+        uses: ./.github/actions/appimage-unbundle
+        with:
+          engine: builtin
+          signing-key: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          signing-key-password: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - name: Depend on the renamed GTK package (deb)
+        if: matrix.platform == 'ubuntu-22.04'
+        uses: ./.github/actions/deb-gtk-depends
+
+      - name: Portable zip (Windows)
+        if: matrix.platform == 'windows-latest'
+        uses: ./.github/actions/windows-portable
+        with:
+          engine: builtin
+          release-tag: prealpha-rust
+
+      # A week rather than the beta's one day, and still inside the cap
+      # tests/build/artifactRetention.test.ts holds. These installers are the
+      # only copy of a build nobody has a Python runtime for, and the pre-alpha
+      # release can be republished from them by hand while the job that does it
+      # is still new.
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fundacad-prealpha-${{ matrix.platform }}
+          retention-days: 7
+          if-no-files-found: warn
+          path: |
+            src-tauri/target/release/bundle/**/*.AppImage
+            src-tauri/target/release/bundle/**/*.deb
+            src-tauri/target/release/bundle/**/*.rpm
+            src-tauri/target/release/bundle/**/*.dmg
+            src-tauri/target/release/bundle/**/*.app
+            src-tauri/target/release/bundle/**/*.msi
+            src-tauri/target/release/bundle/**/*.exe
+            src-tauri/target/release/bundle/**/*.app.tar.gz
+            src-tauri/target/release/bundle/**/*_portable.zip
+            src-tauri/target/release/bundle/**/*.sig
+
+  # Rolling "prealpha-rust" pre-release, the beta's twin for the Rust engine.
+  #
+  # Its own concurrency group, so a pre-alpha publish and a beta publish never
+  # serialize behind one another, and its own tag, moved in place exactly the
+  # way the beta's is.
+  #
+  # ITS OWN latest.json, on its own release, and that is the decision section 6
+  # left open. The updater endpoint is baked into the binary at build time
+  # (tauri.prealpha.conf.json points at prealpha-rust/latest.json), so a beta
+  # install reads the beta feed and can never be offered a build of this one.
+  # That separation has to come from the endpoint and not from the version:
+  # 0.3.x is NEWER than the beta's 0.2.x, so a beta install that ever read this
+  # manifest would take it. Section 6's own answer, publish no manifest at all,
+  # was rejected because a rolling build that cannot roll is one people install
+  # once and never update; tests/security/updater.test.ts pins the pair.
+  #
+  # No plugin bundles here. The app asks the BETA release for those
+  # (RELEASE_TAG in src/plugins/index.ts) whichever build it is, and plugin
+  # geometry does not run on this engine yet anyway.
+  release-prealpha:
+    needs: build-prealpha
+    if: >-
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    concurrency:
+      group: release-prealpha-rust
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      # Before download-artifact: actions/checkout cleans the workspace by
+      # default and would delete dist/.
+      - uses: actions/checkout@v4
+
+      # By pattern, so the beta installers built in this same run stay out of
+      # dist/ and off this release.
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: fundacad-prealpha-*
+          path: dist
+
+      - name: Assemble latest.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          v="0.3.${{ github.run_number }}"
+          base="https://github.com/${{ github.repository }}/releases/download/prealpha-rust"
+          d="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          jq -n --arg v "$v" --arg d "$d" '{version:$v, pub_date:$d, platforms:{}}' > latest.json
+          add() { # $1 = updater platform key, $2 = updater bundle path
+            [ -n "$2" ] && [ -f "$2" ] || { echo "NOTE: no bundle for $1"; return 0; }
+            sig="$2.sig"
+            [ -f "$sig" ] || { echo "WARNING: $2 has no .sig, $1 left out of latest.json"; return 0; }
+            jq --arg k "$1" --arg u "$base/$(basename "$2")" --rawfile s "$sig" \
+              '.platforms[$k] = {signature: $s, url: $u}' latest.json > t && mv t latest.json
+          }
+          add linux-x86_64  "$(find dist -name '*.AppImage'   | head -1)"
+          add windows-x86_64 "$(find dist -name '*setup.exe'  | head -1)"
+          add darwin-aarch64 "$(find dist -name '*.app.tar.gz' | head -1)"  # macos-14 runners are arm64
+          cat latest.json
+
+      - name: Publish rolling pre-alpha release
+        shell: bash
+        run: |
+          set -euo pipefail
+          # No spaces in Tauri bundle filenames, so plain word-splitting is safe here.
+          files=$(find dist -type f \( -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' \
+            -o -name '*.dmg' -o -name '*.msi' -o -name '*setup.exe' \
+            -o -name '*_portable.zip' \
+            -o -name '*.app.tar.gz' -o -name '*.sig' \))
+          # Updates in place, never delete and recreate: see the beta job for
+          # the release that stayed gone for two hours when that was tried.
+
+          # Same gate as the beta's, for the same reason: a manifest pointing
+          # installed copies at bundles they will reject is worse than none.
+          UPSTREAM_PUBKEY='dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDUwMkY3MDMzN0E1RUREMUYKUldRZjNWNTZNM0F2VU81ZU9YLzBPdDV6UVdkVklPOWg1S01zdU1lWitDMGR6aFg1cmJoZnYrMWIK'
+          pubkey=$(node -p "require('./src-tauri/tauri.conf.json').plugins.updater.pubkey")
+          platforms=$(jq '.platforms | length' latest.json)
+          if [ "$pubkey" = "$UPSTREAM_PUBKEY" ]; then
+            echo "::warning::The updater pubkey in tauri.conf.json is still upstream's, so no update this project signs could verify. Publishing the installers WITHOUT latest.json."
+            SELF_UPDATES=no
+          elif [ "$platforms" -eq 0 ]; then
+            echo "::warning::latest.json has no platforms in it (nothing was signed). Publishing the installers without it."
+            SELF_UPDATES=no
+          else
+            SELF_UPDATES=yes
+          fi
+
+          R='${{ github.repository }}'
+          SHA='${{ github.sha }}'
+          MAX=25
+
+          # The warning section 6 calls not optional, and it comes first
+          # because a reader who stops after the first screen has to have read
+          # it. Everything below it is the same shape as the beta's notes.
+          cat > notes.md <<'WARN'
+          > ### Read this first
+          >
+          > **This is a work in progress, and it is not for real work.**
+          >
+          > The geometry engine in this build is the new Rust one, and it is
+          > **incomplete**. In practice:
+          >
+          > - Features that are not ported yet fail during a rebuild and the
+          >   skipped feature banner names them. The model comes back without
+          >   them, which is not a corrupt document, it is a missing engine.
+          > - **Plugin geometry does not run at all.** Screws, PrintToolbox,
+          >   Printing and Texture need a plugin host that is still being
+          >   written, so those features do nothing here.
+          > - Documents this build saves are ordinary `.funda` files and open
+          >   in the beta, so nothing drawn here is trapped in it.
+          > - Keep real work in the [beta](https://github.com/Paraxdev/fundacad/releases/tag/beta),
+          >   which runs the complete Python engine.
+          >
+          > This exists so the port can be used and reported on while it is
+          > being written. A missing feature is already known; wrong geometry,
+          > a crash, or a file that will not open is worth reporting.
+
+          WARN
+
+          printf 'Rolling pre-alpha 0.3.%s, Rust engine, rebuilt from `main` at [`%s`](https://github.com/%s/commit/%s).\n' \
+            '${{ github.run_number }}' "${SHA:0:7}" "$R" "$SHA" >> notes.md
+
+          # The commit the rolling tag is on RIGHT NOW: the build this replaces.
+          # Read BEFORE the tag is moved, further down.
+          prev=$(gh api "repos/$R/git/ref/tags/prealpha-rust" --jq .object.sha 2>/dev/null || true)
+          commits=''
+          if [ -n "$prev" ] && [ "$prev" != "$SHA" ]; then
+            commits=$(gh api "repos/$R/compare/$prev...$SHA" \
+              --jq '[.commits[] | select((.parents | length) < 2)] | reverse' 2>/dev/null || true)
+          fi
+          span="since [\`${prev:0:7}\`](https://github.com/$R/compare/$prev...$SHA)"
+          if [ -z "$commits" ] || [ "$(jq 'length' <<<"$commits")" -eq 0 ]; then
+            commits=$(gh api "repos/$R/commits?sha=$SHA&per_page=$MAX" \
+              --jq '[.[] | select((.parents | length) < 2)]')
+            span="the newest on \`main\`"
+          fi
+          total=$(jq 'length' <<<"$commits")
+
+          {
+            printf '\n## Changes, %s\n\n' "$span"
+            jq -r --arg base "https://github.com/$R/commit/" --argjson max "$MAX" '
+              def clip($n): if (length) > $n then (.[0:$n] | sub("\\s+$"; "")) + "…" else . end;
+              .[0:$max][]
+              | .sha as $sha
+              | (.commit.message | split("\n")) as $l
+              | ($l[0] | gsub("[\\[\\]]"; "")) as $subject
+              | ($l[1:] | map(select(test("\\S"))) | join(" ")
+                        | gsub("\\s+"; " ") | gsub("[\\[\\]]"; "")) as $body
+              | (($subject | capture("^(?<t>[a-z]+)(\\([^)]*\\))?!?: (?<r>.+)$"))
+                  // {t: "commit", r: $subject}) as $c
+              | "- " + $c.t + "(`" + $sha[0:7] + "`): ["
+                + ($c.r | clip(90)) + "](" + $base + $sha + ")"
+                + (if ($body | length) == 0 then "" else " " + ($body | clip(160)) end)
+            ' <<<"$commits"
+            if [ "$total" -gt "$MAX" ]; then
+              printf '\nand %d more.\n' "$((total - MAX))"
+            fi
+          } >> notes.md
+
+          printf '\n---\n\nUnsigned: Windows SmartScreen needs "More info", then "Run anyway"; macOS may call the app damaged, which `xattr -dr com.apple.quarantine /Applications/FundaCAD.app` clears. [Install notes](https://github.com/%s#install).\n' \
+            "$R" >> notes.md
+          printf '\nThis build carries no Python runtime, so it is a fraction of the beta download.\n' >> notes.md
+          if [ "$SELF_UPDATES" = yes ]; then
+            printf '\nInstalled pre-alpha copies update themselves from this release, and only from this one. A beta install never sees it.\n' >> notes.md
+          else
+            printf '\nThis build does not update itself, so take a new installer from this page when you want a newer one.\n' >> notes.md
+          fi
+
+          # Move the rolling tag onto this commit (create it if it is missing),
+          # so the release attached to it never stops existing.
+          gh api -X PATCH "repos/$R/git/refs/tags/prealpha-rust" -f sha="$SHA" -F force=true \
+            || gh api -X POST "repos/$R/git/refs" -f ref=refs/tags/prealpha-rust -f sha="$SHA"
+
+          TITLE='FundaCAD pre-alpha, Rust engine (rolling, WORK IN PROGRESS)'
+          if gh release view prealpha-rust --repo "$R" >/dev/null 2>&1; then
+            gh release edit prealpha-rust --repo "$R" --prerelease \
+              --title "$TITLE" --notes-file notes.md
+          else
+            gh release create prealpha-rust --repo "$R" --prerelease \
+              --title "$TITLE" --notes-file notes.md
+          fi
+
+          # Binaries first, latest.json LAST, so the manifest on the release
+          # only ever names files that are already up.
+          gh release upload prealpha-rust --repo "$R" --clobber $files
+          if [ "$SELF_UPDATES" = yes ]; then
+            gh release upload prealpha-rust --repo "$R" --clobber latest.json
+          else
+            echo "latest.json withheld (see the warning above); the installers above are complete"
+          fi
+
+          # Retire assets from older builds. Their filenames carry the version,
+          # so they do not get clobbered by name and would otherwise pile up.
+          keep=$(for f in $files latest.json; do basename "$f"; done | sort -u)
+          gh release view prealpha-rust --repo "$R" --json assets -q '.assets[].name' \
+            | while read -r asset; do
+                printf '%s\n' "$keep" | grep -qxF "$asset" \
+                  || gh release delete-asset prealpha-rust "$asset" --repo "$R" --yes || true
+              done
+
   # Browser end-to-end checks for the imported-assembly Browser tree.
   #
   # Deliberately NON-GATING: nothing `needs:` this job, exactly like
@@ -848,5 +1072,10 @@ jobs:
           path: target/OCCT
           key: occt-static-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'third_party/opencascade-rs/crates/opencascade-sys/build.rs') }}
 
-      - name: Rust geometry engine tests
-        run: cargo test -p fundacad-geom
+      # The whole workspace, not the kernel crate alone: the engine's request
+      # loop, its transports and the protocol have tests of their own, and the
+      # WebSocket transport is behind a feature, so without it the server the
+      # Python protocol suites drive is never compiled here (RUST-PIVOT section
+      # 5, Phase 2).
+      - name: Rust workspace tests
+        run: cargo test --workspace --features fundacad-engine/ws
