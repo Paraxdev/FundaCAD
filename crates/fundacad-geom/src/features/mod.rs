@@ -9,6 +9,7 @@ mod pattern;
 mod primitives;
 mod revolve;
 pub mod sketch;
+mod press_pull;
 mod solid_ops;
 mod transform;
 
@@ -47,6 +48,8 @@ pub fn dispatch(ctx: &mut Ctx, f: &Feature) -> FResult {
         Feature::Shell(s) => solid_ops::shell(ctx, s),
         Feature::Thicken(t) => solid_ops::thicken(ctx, t),
         Feature::Draft(d) => solid_ops::draft(ctx, d),
+        Feature::PressPull(p) => press_pull::press_pull(ctx, p),
+        Feature::OffsetFace(o) => press_pull::offset_face(ctx, o),
         other => Err(not_ported(other.type_name().unwrap_or("feature"))),
     }
 }
