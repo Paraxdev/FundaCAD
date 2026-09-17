@@ -1,0 +1,2231 @@
+[
+ {
+  "name": "axis_X_box",
+  "part": "box",
+  "fn": "edges",
+  "selector": {
+   "kind": "edge",
+   "by": "axis",
+   "axis": "X"
+  },
+  "diag": [],
+  "result": [
+   {
+    "type": "line",
+    "at": [
+     0.0,
+     -10.0,
+     -5.0
+    ],
+    "size": 20.0
+   },
+   {
+    "type": "line",
+    "at": [
+     0.0,
+     -10.0,
+     5.0
+    ],
+    "size": 20.0
+   },
+   {
+    "type": "line",
+    "at": [
+     0.0,
+     10.0,
+     -5.0
+    ],
+    "size": 20.0
+   },
+   {
+    "type": "line",
+    "at": [
+     0.0,
+     10.0,
+     5.0
+    ],
+    "size": 20.0
+   }
+  ]
+ },
+ {
+  "name": "axis_Y_box",
+  "part": "box",
+  "fn": "edges",
+  "selector": {
+   "kind": "edge",
+   "by": "axis",
+   "axis": "Y"
+  },
+  "diag": [],
+  "result": [
+   {
+    "type": "line",
+    "at": [
+     -10.0,
+     0.0,
+     5.0
+    ],
+    "size": 20.0
+   },
+   {
+    "type": "line",
+    "at": [
+     -10.0,
+     0.0,
+     -5.0
+    ],
+    "size": 20.0
+   },
+   {
+    "type": "line",
+    "at": [
+     10.0,
+     0.0,
+     5.0
+    ],
+    "size": 20.0
+   },
+   {
+    "type": "line",
+    "at": [
+     10.0,
+     0.0,
+     -5.0
+    ],
+    "size": 20.0
+   }
+  ]
+ },
+ {
+  "name": "axis_Z_box",
+  "part": "box",
+  "fn": "edges",
+  "selector": {
+   "kind": "edge",
+   "by": "axis",
+   "axis": "Z"
+  },
+  "diag": [],
+  "result": [
+   {
+    "type": "line",
+    "at": [
+     -10.0,
+     -10.0,
+     0.0
+    ],
+    "size": 10.0
+   },
+   {
+    "type": "line",
+    "at": [
+     -10.0,
+     10.0,
+     0.0
+    ],
+    "size": 10.0
+   },
+   {
+    "type": "line",
+    "at": [
+     10.0,
+     -10.0,
+     0.0
+    ],
+    "size": 10.0
+   },
+   {
+    "type": "line",
+    "at": [
+     10.0,
+     10.0,
+     0.0
+    ],
+    "size": 10.0
+   }
+  ]
+ },
+ {
+  "name": "axis_Z_round_corners",
+  "part": "round_corners",
+  "fn": "edges",
+  "selector": {
+   "kind": "edge",
+   "by": "axis",
+   "axis": "Z"
+  },
+  "diag": [],
+  "result": [
+   {
+    "type": "line",
+    "at": [
+     -10.0,
+     -7.0,
+     0.0
+    ],
+    "size": 10.0
+   },
+   {
+    "type": "line",
+    "at": [
+     -10.0,
+     7.0,
+     0.0
+    ],
+    "size": 10.0
+   },
+   {
+    "type": "line",
+    "at": [
+     -7.0,
+     -10.0,
+     0.0
+    ],
+    "size": 10.0
+   },
+   {
+    "type": "line",
+    "at": [
+     -7.0,
+     10.0,
+     0.0
+    ],
+    "size": 10.0
+   },
+   {
+    "type": "line",
+    "at": [
+     7.0,
+     -10.0,
+     0.0
+    ],
+    "size": 10.0
+   },
+   {
+    "type": "line",
+    "at": [
+     7.0,
+     10.0,
+     0.0
+    ],
+    "size": 10.0
+   },
+   {
+    "type": "line",
+    "at": [
+     10.0,
+     -7.0,
+     0.0
+    ],
+    "size": 10.0
+   },
+   {
+    "type": "line",
+    "at": [
+     10.0,
+     7.0,
+     0.0
+    ],
+    "size": 10.0
+   }
+  ]
+ },
+ {
+  "name": "axis_unknown",
+  "part": "box",
+  "fn": "edges",
+  "selector": {
+   "kind": "edge",
+   "by": "axis",
+   "axis": "W"
+  },
+  "diag": [],
+  "error": {
+   "type": "missing",
+   "message": "W",
+   "code": null
+  }
+ },
+ {
+  "name": "axis_missing",
+  "part": "box",
+  "fn": "edges",
+  "selector": {
+   "kind": "edge",
+   "by": "axis"
+  },
+  "diag": [],
+  "error": {
+   "type": "missing",
+   "message": "axis",
+   "code": null
+  }
+ },
+ {
+  "name": "all_edges_pipe",
+  "part": "pipe",
+  "fn": "edges",
+  "selector": {
+   "kind": "edge",
+   "by": "all"
+  },
+  "diag": [],
+  "result": [
+   {
+    "type": "circle",
+    "at": [
+     -10.0,
+     -1.653892159485515e-14,
+     5.0
+    ],
+    "size": 62.8318530717959
+   },
+   {
+    "type": "line",
+    "at": [
+     10.0,
+     -2.4492935982947065e-15,
+     0.0
+    ],
+    "size": 10.0
+   },
+   {
+    "type": "circle",
+    "at": [
+     -10.0,
+     -1.653892159485515e-14,
+     -5.0
+    ],
+    "size": 62.8318530717959
+   },
+   {
+    "type": "circle",
+    "at": [
+     -5.0,
+     -8.269460797427575e-15,
+     5.0
+    ],
+    "size": 31.41592653589795
+   },
+   {
+    "type": "circle",
+    "at": [
+     -5.0,
+     -8.269460797427575e-15,
+     -5.0
+    ],
+    "size": 31.41592653589795
+   },
+   {
+    "type": "line",
+    "at": [
+     5.0,
+     -1.2246467991473533e-15,
+     0.0
+    ],
+    "size": 10.0
+   }
+  ]
+ },
+ {
+  "name": "all_faces_holed",
+  "part": "holed",
+  "fn": "faces",
+  "selector": {
+   "kind": "face",
+   "by": "all"
+  },
+  "diag": [],
+  "result": [
+   {
+    "type": "plane",
+    "at": [
+     -20.0,
+     0.0,
+     0.0
+    ],
+    "size": 399.99999999999994
+   },
+   {
+    "type": "plane",
+    "at": [
+     0.0,
+     -20.0,
+     0.0
+    ],
+    "size": 399.99999999999994
+   },
+   {
+    "type": "plane",
+    "at": [
+     1.9984014443252818e-15,
+     1.5068909450358973e-16,
+     5.0
+    ],
+    "size": 1521.4601836602544
+   },
+   {
+    "type": "plane",
+    "at": [
+     0.0,
+     20.0,
+     0.0
+    ],
+    "size": 399.99999999999994
+   },
+   {
+    "type": "plane",
+    "at": [
+     1.9984014443252818e-15,
+     1.5068909450358973e-16,
+     -5.0
+    ],
+    "size": 1521.4601836602544
+   },
+   {
+    "type": "plane",
+    "at": [
+     20.0,
+     0.0,
+     0.0
+    ],
+    "size": 399.99999999999994
+   },
+   {
+    "type": "cylinder",
+    "at": [
+     -5.0,
+     -8.269460797427575e-15,
+     0.0
+    ],
+    "size": 314.1592653589793
+   }
+  ]
+ },
+ {
+  "name": "nearest_edge_clear",
+  "part": "box",
+  "fn": "edges",
+  "selector": {
+   "kind": "edge",
+   "by": "nearest",
+   "point": [
+    9,
+    9.5,
+    5.2
+   ]
+  },
+  "diag": [],
+  "result": [
+   {
+    "type": "line",
+    "at": [
+     10.0,
+     10.0,
+     0.0
+    ],
+    "size": 10.0
+   }
+  ]
+ },
+ {
+  "name": "nearest_edge_tie_refuses",
+  "part": "touching_prisms",
+  "fn": "edges",
+  "selector": {
+   "kind": "edge",
+   "by": "nearest",
+   "point": [
+    -5.0,
+    5.0,
+    4.5
+   ]
+  },
+  "diag": [
+   {
+    "feature_id": "f1",
+    "kind": "edge",
+    "resolved": 0,
+    "confidence": 0.0,
+    "lossy": true,
+    "reason": "ambiguous nearest pick",
+    "at": [
+     -5.0,
+     5.0,
+     4.5
+    ],
+    "candidates": [
+     "an edge at (-10.00,5.00,0.00) length 10.0",
+     "an edge at (-10.00,5.00,9.00) length 10.0",
+     "an edge at (-5.00,0.00,0.00) length 10.0"
+    ]
+   }
+  ],
+  "error": {
+   "type": "value",
+   "message": "ambiguous edge reference at (-5.00, 5.00, 4.50): an edge at (-10.00,5.00,0.00) length 10.0 and an edge at (-10.00,5.00,9.00) length 10.0 and an edge at (-5.00,0.00,0.00) length 10.0 are equally close (6.727mm vs 6.727mm), re-pick the edge",
+   "code": "ambiguousReference"
+  }
+ },
+ {
+  "name": "nearest_edge_tie_nth",
+  "part": "touching_prisms",
+  "fn": "edges",
+  "selector": {
+   "kind": "edge",
+   "by": "nearest",
+   "point": [
+    -5.0,
+    5.0,
+    4.5
+   ],
+   "nth": 2
+  },
+  "diag": [
+   {
+    "feature_id": "f1",
+    "kind": "edge",
+    "resolved": 1,
+    "confidence": 0.0,
+    "lossy": true,
+    "reason": "tie broken by nth"
+   }
+  ],
+  "result": [
+   {
+    "type": "line",
+    "at": [
+     -5.0,
+     0.0,
+     0.0
+    ],
+    "size": 10.0
+   }
+  ]
+ },
+ {
+  "name": "nearest_edge_seam_dedup",
+  "part": "touching_prisms",
+  "fn": "edges",
+  "selector": {
+   "kind": "edge",
+   "by": "nearest",
+   "point": [
+    0.0,
+    0.0,
+    4.5
+   ]
+  },
+  "diag": [],
+  "result": [
+   {
+    "type": "line",
+    "at": [
+     0.0,
+     0.0,
+     4.5
+    ],
+    "size": 9.0
+   }
+  ]
+ },
+ {
+  "name": "nearest_edge_no_point",
+  "part": "box",
+  "fn": "edges",
+  "selector": {
+   "kind": "edge",
+   "by": "nearest"
+  },
+  "diag": [],
+  "error": {
+   "type": "missing",
+   "message": "point",
+   "code": null
+  }
+ },
+ {
+  "name": "match_edge_box",
+  "part": "box",
+  "fn": "edges",
+  "selector": {
+   "kind": "edge",
+   "by": "match",
+   "fp": {
+    "mid": [
+     0.0,
+     10.0,
+     5.0
+    ],
+    "dir": [
+     1.0,
+     0.0,
+     0.0
+    ],
+    "length": 20.0,
+    "curve": "line"
+   }
+  },
+  "diag": [],
+  "result": [
+   {
+    "type": "line",
+    "at": [
+     0.0,
+     10.0,
+     5.0
+    ],
+    "size": 20.0
+   }
+  ]
+ },
+ {
+  "name": "match_edge_outer_rim",
+  "part": "pipe",
+  "fn": "edges",
+  "selector": {
+   "kind": "edge",
+   "by": "match",
+   "fp": {
+    "mid": [
+     -10.0,
+     -1.653892159485515e-14,
+     5.0
+    ],
+    "dir": [
+     -1.653892159485515e-15,
+     1.0,
+     -0.0
+    ],
+    "length": 62.8318530717959,
+    "curve": "circle",
+    "radius": 10.0,
+    "center": [
+     0.0,
+     0.0,
+     5.0
+    ],
+    "radius_rank": 1,
+    "radius_group": 2
+   }
+  },
+  "diag": [],
+  "result": [
+   {
+    "type": "circle",
+    "at": [
+     -10.0,
+     -1.653892159485515e-14,
+     5.0
+    ],
+    "size": 62.8318530717959
+   }
+  ]
+ },
+ {
+  "name": "match_edge_inner_rim",
+  "part": "pipe",
+  "fn": "edges",
+  "selector": {
+   "kind": "edge",
+   "by": "match",
+   "fp": {
+    "mid": [
+     -5.0,
+     -8.269460797427575e-15,
+     5.0
+    ],
+    "dir": [
+     -1.653892159485515e-15,
+     1.0,
+     -0.0
+    ],
+    "length": 31.41592653589795,
+    "curve": "circle",
+    "radius": 5.0,
+    "center": [
+     0.0,
+     0.0,
+     5.0
+    ],
+    "radius_rank": 0,
+    "radius_group": 2
+   }
+  },
+  "diag": [],
+  "result": [
+   {
+    "type": "circle",
+    "at": [
+     -5.0,
+     -8.269460797427575e-15,
+     5.0
+    ],
+    "size": 31.41592653589795
+   }
+  ]
+ },
+ {
+  "name": "match_edge_rims_list",
+  "part": "pipe",
+  "fn": "edges",
+  "selector": [
+   {
+    "kind": "edge",
+    "by": "match",
+    "fp": {
+     "mid": [
+      -10.0,
+      -1.653892159485515e-14,
+      5.0
+     ],
+     "dir": [
+      -1.653892159485515e-15,
+      1.0,
+      -0.0
+     ],
+     "length": 62.8318530717959,
+     "curve": "circle",
+     "radius": 10.0,
+     "center": [
+      0.0,
+      0.0,
+      5.0
+     ],
+     "radius_rank": 1,
+     "radius_group": 2
+    }
+   },
+   {
+    "kind": "edge",
+    "by": "match",
+    "fp": {
+     "mid": [
+      -5.0,
+      -8.269460797427575e-15,
+      5.0
+     ],
+     "dir": [
+      -1.653892159485515e-15,
+      1.0,
+      -0.0
+     ],
+     "length": 31.41592653589795,
+     "curve": "circle",
+     "radius": 5.0,
+     "center": [
+      0.0,
+      0.0,
+      5.0
+     ],
+     "radius_rank": 0,
+     "radius_group": 2
+    }
+   }
+  ],
+  "diag": [],
+  "result": [
+   {
+    "type": "circle",
+    "at": [
+     -10.0,
+     -1.653892159485515e-14,
+     5.0
+    ],
+    "size": 62.8318530717959
+   },
+   {
+    "type": "circle",
+    "at": [
+     -5.0,
+     -8.269460797427575e-15,
+     5.0
+    ],
+    "size": 31.41592653589795
+   }
+  ]
+ },
+ {
+  "name": "match_edge_twin_rim",
+  "part": "twin_holes",
+  "fn": "edges",
+  "selector": {
+   "kind": "edge",
+   "by": "match",
+   "fp": {
+    "mid": [
+     11.0,
+     -6.6155686379420605e-15,
+     5.0
+    ],
+    "dir": [
+     -1.6538921594855151e-15,
+     1.0,
+     0.0
+    ],
+    "length": 25.13274122871836,
+    "curve": "circle",
+    "radius": 4.0,
+    "center": [
+     15.0,
+     0.0,
+     5.0
+    ],
+    "radius_rank": 0,
+    "radius_group": 1
+   }
+  },
+  "diag": [],
+  "result": [
+   {
+    "type": "circle",
+    "at": [
+     11.0,
+     -6.6155686379420605e-15,
+     5.0
+    ],
+    "size": 25.13274122871836
+   }
+  ]
+ },
+ {
+  "name": "match_edge_twin_rim_on_holed",
+  "part": "holed",
+  "fn": "edges",
+  "selector": {
+   "kind": "edge",
+   "by": "match",
+   "fp": {
+    "mid": [
+     11.0,
+     -6.6155686379420605e-15,
+     5.0
+    ],
+    "dir": [
+     -1.6538921594855151e-15,
+     1.0,
+     0.0
+    ],
+    "length": 25.13274122871836,
+    "curve": "circle",
+    "radius": 4.0,
+    "center": [
+     15.0,
+     0.0,
+     5.0
+    ],
+    "radius_rank": 0,
+    "radius_group": 1
+   }
+  },
+  "diag": [
+   {
+    "feature_id": "f1",
+    "kind": "edge",
+    "resolved": 1,
+    "confidence": 0.139,
+    "lossy": true,
+    "reason": "marginal match"
+   }
+  ],
+  "result": [
+   {
+    "type": "circle",
+    "at": [
+     -5.0,
+     -8.269460797427575e-15,
+     5.0
+    ],
+    "size": 31.41592653589795
+   }
+  ]
+ },
+ {
+  "name": "match_edge_poor",
+  "part": "box",
+  "fn": "edges",
+  "selector": {
+   "kind": "edge",
+   "by": "match",
+   "fp": {
+    "mid": [
+     100,
+     100,
+     100
+    ],
+    "dir": [
+     1,
+     0,
+     0
+    ],
+    "length": 999,
+    "curve": "line"
+   }
+  },
+  "diag": [
+   {
+    "feature_id": "f1",
+    "kind": "edge",
+    "resolved": 1,
+    "confidence": 0.033,
+    "lossy": true,
+    "reason": "tie; canonical-first"
+   }
+  ],
+  "result": [
+   {
+    "type": "line",
+    "at": [
+     0.0,
+     10.0,
+     -5.0
+    ],
+    "size": 20.0
+   }
+  ]
+ },
+ {
+  "name": "match_edge_tie_canonical",
+  "part": "box",
+  "fn": "edges",
+  "selector": {
+   "kind": "edge",
+   "by": "match",
+   "fp": {
+    "mid": [
+     0,
+     0,
+     0
+    ],
+    "dir": [
+     0,
+     0,
+     1
+    ],
+    "length": 10,
+    "curve": "line"
+   }
+  },
+  "diag": [
+   {
+    "feature_id": "f1",
+    "kind": "edge",
+    "resolved": 1,
+    "confidence": 0.0,
+    "lossy": true,
+    "reason": "tie; canonical-first"
+   }
+  ],
+  "result": [
+   {
+    "type": "line",
+    "at": [
+     -10.0,
+     -10.0,
+     0.0
+    ],
+    "size": 10.0
+   }
+  ]
+ },
+ {
+  "name": "match_edge_tie_nth",
+  "part": "box",
+  "fn": "edges",
+  "selector": {
+   "kind": "edge",
+   "by": "match",
+   "fp": {
+    "mid": [
+     0,
+     0,
+     0
+    ],
+    "dir": [
+     0,
+     0,
+     1
+    ],
+    "length": 10,
+    "curve": "line"
+   },
+   "nth": 3
+  },
+  "diag": [
+   {
+    "feature_id": "f1",
+    "kind": "edge",
+    "resolved": 1,
+    "confidence": 0.0,
+    "lossy": false,
+    "reason": "tie broken by nth"
+   }
+  ],
+  "result": [
+   {
+    "type": "line",
+    "at": [
+     10.0,
+     10.0,
+     0.0
+    ],
+    "size": 10.0
+   }
+  ]
+ },
+ {
+  "name": "match_edge_missing_mid",
+  "part": "box",
+  "fn": "edges",
+  "selector": {
+   "kind": "edge",
+   "by": "match",
+   "fp": {
+    "dir": [
+     1,
+     0,
+     0
+    ]
+   }
+  },
+  "diag": [],
+  "error": {
+   "type": "missing",
+   "message": "mid",
+   "code": null
+  }
+ },
+ {
+  "name": "tangent_chain_round_corners",
+  "part": "round_corners",
+  "fn": "edges",
+  "selector": {
+   "kind": "edge",
+   "by": "tangentChain",
+   "seed": {
+    "mid": [
+     -9.121320343559638,
+     -9.121320343559645,
+     5.0
+    ],
+    "dir": [
+     0.7071067811865486,
+     -0.7071067811865466,
+     0.0
+    ],
+    "length": 4.712388980384701,
+    "curve": "circle",
+    "radius": 3.0,
+    "center": [
+     -7.0,
+     -7.0,
+     5.0
+    ],
+    "radius_rank": 0,
+    "radius_group": 1
+   }
+  },
+  "diag": [],
+  "result": [
+   {
+    "type": "circle",
+    "at": [
+     -9.121320343559638,
+     -9.121320343559645,
+     5.0
+    ],
+    "size": 4.712388980384701
+   }
+  ]
+ },
+ {
+  "name": "tangent_chain_box",
+  "part": "box",
+  "fn": "edges",
+  "selector": {
+   "kind": "edge",
+   "by": "tangentChain",
+   "seed": {
+    "mid": [
+     0.0,
+     10.0,
+     5.0
+    ],
+    "dir": [
+     1.0,
+     0.0,
+     0.0
+    ],
+    "length": 20.0,
+    "curve": "line"
+   }
+  },
+  "diag": [],
+  "result": [
+   {
+    "type": "line",
+    "at": [
+     0.0,
+     10.0,
+     5.0
+    ],
+    "size": 20.0
+   }
+  ]
+ },
+ {
+  "name": "of_face_top",
+  "part": "box",
+  "fn": "edges",
+  "selector": {
+   "kind": "edge",
+   "by": "ofFace",
+   "face": {
+    "centroid": [
+     0.0,
+     0.0,
+     5.0
+    ],
+    "normal": [
+     0.0,
+     0.0,
+     1.0
+    ],
+    "area": 399.99999999999994,
+    "surface": "plane"
+   }
+  },
+  "diag": [],
+  "result": [
+   {
+    "type": "line",
+    "at": [
+     -10.0,
+     0.0,
+     5.0
+    ],
+    "size": 20.0
+   },
+   {
+    "type": "line",
+    "at": [
+     0.0,
+     10.0,
+     5.0
+    ],
+    "size": 20.0
+   },
+   {
+    "type": "line",
+    "at": [
+     10.0,
+     0.0,
+     5.0
+    ],
+    "size": 20.0
+   },
+   {
+    "type": "line",
+    "at": [
+     0.0,
+     -10.0,
+     5.0
+    ],
+    "size": 20.0
+   }
+  ]
+ },
+ {
+  "name": "of_face_pipe_top",
+  "part": "pipe",
+  "fn": "edges",
+  "selector": {
+   "kind": "edge",
+   "by": "ofFace",
+   "face": {
+    "centroid": [
+     1.7763568394002505e-15,
+     -9.369494000915709e-16,
+     5.0
+    ],
+    "normal": [
+     0.0,
+     0.0,
+     1.0
+    ],
+    "area": 235.61944901923493,
+    "surface": "plane"
+   }
+  },
+  "diag": [],
+  "result": [
+   {
+    "type": "circle",
+    "at": [
+     -10.0,
+     -1.653892159485515e-14,
+     5.0
+    ],
+    "size": 62.8318530717959
+   },
+   {
+    "type": "circle",
+    "at": [
+     -5.0,
+     -8.269460797427575e-15,
+     5.0
+    ],
+    "size": 31.41592653589795
+   }
+  ]
+ },
+ {
+  "name": "face_selector_in_edge_field",
+  "part": "box",
+  "fn": "edges",
+  "selector": {
+   "kind": "face",
+   "by": "nearest",
+   "point": [
+    1,
+    2,
+    5.1
+   ]
+  },
+  "diag": [],
+  "result": [
+   {
+    "type": "line",
+    "at": [
+     -10.0,
+     0.0,
+     5.0
+    ],
+    "size": 20.0
+   },
+   {
+    "type": "line",
+    "at": [
+     0.0,
+     10.0,
+     5.0
+    ],
+    "size": 20.0
+   },
+   {
+    "type": "line",
+    "at": [
+     10.0,
+     0.0,
+     5.0
+    ],
+    "size": 20.0
+   },
+   {
+    "type": "line",
+    "at": [
+     0.0,
+     -10.0,
+     5.0
+    ],
+    "size": 20.0
+   }
+  ]
+ },
+ {
+  "name": "unknown_edge_selector",
+  "part": "box",
+  "fn": "edges",
+  "selector": {
+   "kind": "edge",
+   "by": "spiral"
+  },
+  "diag": [],
+  "error": {
+   "type": "value",
+   "message": "unknown edge selector: spiral",
+   "code": null
+  }
+ },
+ {
+  "name": "normal_up_pipe",
+  "part": "pipe",
+  "fn": "faces",
+  "selector": {
+   "kind": "face",
+   "by": "normal",
+   "dir": [
+    0,
+    0,
+    2
+   ]
+  },
+  "diag": [],
+  "result": [
+   {
+    "type": "plane",
+    "at": [
+     1.7763568394002505e-15,
+     -9.369494000915709e-16,
+     5.0
+    ],
+    "size": 235.61944901923493
+   }
+  ]
+ },
+ {
+  "name": "normal_tilted_box",
+  "part": "box",
+  "fn": "faces",
+  "selector": {
+   "kind": "face",
+   "by": "normal",
+   "dir": [
+    1,
+    0.1,
+    0
+   ]
+  },
+  "diag": [],
+  "result": [
+   {
+    "type": "plane",
+    "at": [
+     10.0,
+     0.0,
+     0.0
+    ],
+    "size": 199.99999999999997
+   }
+  ]
+ },
+ {
+  "name": "nearest_face_clear",
+  "part": "holed",
+  "fn": "faces",
+  "selector": {
+   "kind": "face",
+   "by": "nearest",
+   "point": [
+    0,
+    5.5,
+    1
+   ]
+  },
+  "diag": [],
+  "result": [
+   {
+    "type": "cylinder",
+    "at": [
+     -5.0,
+     -8.269460797427575e-15,
+     0.0
+    ],
+    "size": 314.1592653589793
+   }
+  ]
+ },
+ {
+  "name": "nearest_face_corner_refuses",
+  "part": "box",
+  "fn": "faces",
+  "selector": {
+   "kind": "face",
+   "by": "nearest",
+   "point": [
+    10,
+    10,
+    5
+   ]
+  },
+  "diag": [
+   {
+    "feature_id": "f1",
+    "kind": "face",
+    "resolved": 0,
+    "confidence": 0.0,
+    "lossy": true,
+    "reason": "ambiguous nearest pick",
+    "at": [
+     10.0,
+     10.0,
+     5.0
+    ],
+    "candidates": [
+     "a face at (0.00,0.00,5.00) area 400.0",
+     "a face at (0.00,10.00,0.00) area 200.0",
+     "a face at (10.00,0.00,0.00) area 200.0"
+    ]
+   }
+  ],
+  "error": {
+   "type": "value",
+   "message": "ambiguous face reference at (10.00, 10.00, 5.00): a face at (0.00,0.00,5.00) area 400.0 and a face at (0.00,10.00,0.00) area 200.0 and a face at (10.00,0.00,0.00) area 200.0 are equally close (0.000mm vs 0.000mm), re-pick the face",
+   "code": "ambiguousReference"
+  }
+ },
+ {
+  "name": "nearest_face_corner_nth",
+  "part": "box",
+  "fn": "faces",
+  "selector": {
+   "kind": "face",
+   "by": "nearest",
+   "point": [
+    10,
+    10,
+    5
+   ],
+   "nth": 1
+  },
+  "diag": [
+   {
+    "feature_id": "f1",
+    "kind": "face",
+    "resolved": 1,
+    "confidence": 0.0,
+    "lossy": true,
+    "reason": "tie broken by nth"
+   }
+  ],
+  "result": [
+   {
+    "type": "plane",
+    "at": [
+     0.0,
+     10.0,
+     0.0
+    ],
+    "size": 199.99999999999997
+   }
+  ]
+ },
+ {
+  "name": "nearest_face_slid_out",
+  "part": "box",
+  "fn": "faces",
+  "selector": {
+   "kind": "face",
+   "by": "nearest",
+   "point": [
+    15,
+    0,
+    5
+   ]
+  },
+  "diag": [
+   {
+    "feature_id": "f1",
+    "kind": "face",
+    "resolved": 1,
+    "confidence": 1.0,
+    "lossy": true,
+    "reason": "this face moved out from under the saved pick point, it was recovered by the surface it still lies in, re-pick it if this is not the right face",
+    "at": [
+     15.0,
+     0.0,
+     5.0
+    ],
+    "code": "ambiguousReference"
+   }
+  ],
+  "result": [
+   {
+    "type": "plane",
+    "at": [
+     0.0,
+     0.0,
+     5.0
+    ],
+    "size": 399.99999999999994
+   }
+  ]
+ },
+ {
+  "name": "match_face_top",
+  "part": "box",
+  "fn": "faces",
+  "selector": {
+   "kind": "face",
+   "by": "match",
+   "fp": {
+    "centroid": [
+     0.0,
+     0.0,
+     5.0
+    ],
+    "normal": [
+     0.0,
+     0.0,
+     1.0
+    ],
+    "area": 399.99999999999994,
+    "surface": "plane"
+   }
+  },
+  "diag": [],
+  "result": [
+   {
+    "type": "plane",
+    "at": [
+     0.0,
+     0.0,
+     5.0
+    ],
+    "size": 399.99999999999994
+   }
+  ]
+ },
+ {
+  "name": "match_face_wall",
+  "part": "holed",
+  "fn": "faces",
+  "selector": {
+   "kind": "face",
+   "by": "match",
+   "fp": {
+    "centroid": [
+     -5.0,
+     -8.269460797427575e-15,
+     0.0
+    ],
+    "normal": [
+     1.0,
+     1.653892159485515e-15,
+     -0.0
+    ],
+    "area": 314.1592653589793,
+    "surface": "cylinder",
+    "radius": 5.0
+   }
+  },
+  "diag": [],
+  "result": [
+   {
+    "type": "cylinder",
+    "at": [
+     -5.0,
+     -8.269460797427575e-15,
+     0.0
+    ],
+    "size": 314.1592653589793
+   }
+  ]
+ },
+ {
+  "name": "match_face_poor",
+  "part": "box",
+  "fn": "faces",
+  "selector": {
+   "kind": "face",
+   "by": "match",
+   "fp": {
+    "centroid": [
+     50,
+     0,
+     0
+    ],
+    "normal": [
+     0,
+     1,
+     0
+    ]
+   }
+  },
+  "diag": [
+   {
+    "feature_id": "f1",
+    "kind": "face",
+    "resolved": 1,
+    "confidence": 0.116,
+    "lossy": true,
+    "reason": "marginal match"
+   }
+  ],
+  "result": [
+   {
+    "type": "plane",
+    "at": [
+     0.0,
+     10.0,
+     0.0
+    ],
+    "size": 199.99999999999997
+   }
+  ]
+ },
+ {
+  "name": "match_face_list",
+  "part": "box",
+  "fn": "faces",
+  "selector": [
+   {
+    "kind": "face",
+    "by": "match",
+    "fp": {
+     "centroid": [
+      0.0,
+      0.0,
+      5.0
+     ],
+     "normal": [
+      0.0,
+      0.0,
+      1.0
+     ],
+     "area": 399.99999999999994,
+     "surface": "plane"
+    }
+   },
+   {
+    "kind": "face",
+    "by": "normal",
+    "dir": [
+     0,
+     0,
+     1
+    ]
+   }
+  ],
+  "diag": [],
+  "result": [
+   {
+    "type": "plane",
+    "at": [
+     0.0,
+     0.0,
+     5.0
+    ],
+    "size": 399.99999999999994
+   }
+  ]
+ },
+ {
+  "name": "unknown_face_selector",
+  "part": "box",
+  "fn": "faces",
+  "selector": {
+   "kind": "face",
+   "by": "axis",
+   "axis": "Z"
+  },
+  "diag": [],
+  "error": {
+   "type": "value",
+   "message": "unknown face selector: axis",
+   "code": null
+  }
+ },
+ {
+  "name": "plane_follows_top",
+  "part": "step",
+  "fn": "plane",
+  "selector": {
+   "point": [
+    0,
+    0,
+    4
+   ]
+  },
+  "normal": [
+   0,
+   0,
+   1
+  ],
+  "label": "Sketch",
+  "diag": [],
+  "result": [
+   {
+    "type": "plane",
+    "at": [
+     0.0,
+     0.0,
+     5.0
+    ],
+    "size": 399.99999999999994
+   }
+  ]
+ },
+ {
+  "name": "plane_coplanar_halves",
+  "part": "slotted",
+  "fn": "plane",
+  "selector": {
+   "point": [
+    0,
+    0,
+    2.5
+   ]
+  },
+  "normal": [
+   0,
+   0,
+   1
+  ],
+  "label": "Sketch",
+  "diag": [],
+  "result": [
+   {
+    "type": "plane",
+    "at": [
+     -11.5,
+     6.269494727295001e-16,
+     2.5
+    ],
+    "size": 340.0
+   }
+  ]
+ },
+ {
+  "name": "plane_ambiguous_step",
+  "part": "step",
+  "fn": "plane",
+  "selector": {
+   "point": [
+    10,
+    0,
+    7.5
+   ]
+  },
+  "normal": [
+   0,
+   0,
+   1
+  ],
+  "label": "Plane",
+  "diag": [
+   {
+    "feature_id": "f1",
+    "kind": "face",
+    "resolved": 0,
+    "confidence": 0.0,
+    "lossy": false,
+    "reason": "Plane: this plane's face reference no longer identifies one face, a face at (0.00,0.00,5.00) area 400.0 and a face at (20.00,0.00,10.00) area 400.0. The plane stayed at its saved position. Re-pick the face.",
+    "at": [
+     10.0,
+     0.0,
+     7.5
+    ],
+    "code": "ambiguousReference"
+   }
+  ],
+  "result": []
+ },
+ {
+  "name": "plane_tilted",
+  "part": "box",
+  "fn": "plane",
+  "selector": {
+   "point": [
+    0,
+    0,
+    5
+   ]
+  },
+  "normal": [
+   1,
+   1,
+   0
+  ],
+  "label": "Sketch",
+  "diag": [
+   {
+    "feature_id": "f1",
+    "kind": "face",
+    "resolved": 0,
+    "confidence": 0.0,
+    "lossy": false,
+    "reason": "Sketch: the face this sketch sits on has tilted, so the sketch stayed at its saved position. Put it on the face again to follow the new angle.",
+    "at": [
+     0.0,
+     0.0,
+     5.0
+    ],
+    "code": "planeTilted"
+   }
+  ],
+  "result": []
+ },
+ {
+  "name": "plane_far_side_by_abs",
+  "part": "ball",
+  "fn": "plane",
+  "selector": {
+   "point": [
+    0,
+    0,
+    6
+   ]
+  },
+  "normal": [
+   0,
+   0,
+   1
+  ],
+  "label": "Sketch",
+  "diag": [
+   {
+    "feature_id": "f1",
+    "kind": "face",
+    "resolved": 0,
+    "confidence": 0.0,
+    "lossy": false,
+    "reason": "Sketch: the face this sketch sits on is gone, so the sketch stayed at its saved position. Re-pick the face.",
+    "at": [
+     0.0,
+     0.0,
+     6.0
+    ],
+    "code": "referenceNotFound"
+   }
+  ],
+  "result": []
+ },
+ {
+  "name": "plane_bad_point",
+  "part": "box",
+  "fn": "plane",
+  "selector": {
+   "point": [
+    0,
+    "x",
+    5
+   ]
+  },
+  "normal": [
+   0,
+   0,
+   1
+  ],
+  "label": "Sketch",
+  "diag": [
+   {
+    "feature_id": "f1",
+    "kind": "face",
+    "resolved": 0,
+    "confidence": 0.0,
+    "lossy": false,
+    "reason": "Sketch: the face this sketch sits on is gone, so the sketch stayed at its saved position. Re-pick the face.",
+    "code": "referenceNotFound"
+   }
+  ],
+  "result": []
+ },
+ {
+  "name": "plane_flat_face_down",
+  "part": "box",
+  "fn": "plane",
+  "selector": {
+   "point": [
+    3,
+    3,
+    -5
+   ]
+  },
+  "normal": [
+   0,
+   0,
+   -1
+  ],
+  "label": "Sketch",
+  "diag": [],
+  "result": [
+   {
+    "type": "plane",
+    "at": [
+     0.0,
+     0.0,
+     -5.0
+    ],
+    "size": 399.99999999999994
+   }
+  ]
+ },
+ {
+  "name": "edge_fp_pipe_0",
+  "part": "pipe",
+  "fn": "edge_fp",
+  "selector": null,
+  "index": 0,
+  "diag": [],
+  "fp": {
+   "mid": [
+    -10.0,
+    -1.653892159485515e-14,
+    5.0
+   ],
+   "dir": [
+    -1.653892159485515e-15,
+    1.0,
+    -0.0
+   ],
+   "length": 62.8318530717959,
+   "curve": "circle",
+   "radius": 10.0,
+   "center": [
+    0.0,
+    0.0,
+    5.0
+   ],
+   "radius_rank": 1,
+   "radius_group": 2
+  }
+ },
+ {
+  "name": "edge_fp_pipe_1",
+  "part": "pipe",
+  "fn": "edge_fp",
+  "selector": null,
+  "index": 1,
+  "diag": [],
+  "fp": {
+   "mid": [
+    10.0,
+    -2.4492935982947065e-15,
+    0.0
+   ],
+   "dir": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 10.0,
+   "curve": "line"
+  }
+ },
+ {
+  "name": "edge_fp_pipe_2",
+  "part": "pipe",
+  "fn": "edge_fp",
+  "selector": null,
+  "index": 2,
+  "diag": [],
+  "fp": {
+   "mid": [
+    -10.0,
+    -1.653892159485515e-14,
+    -5.0
+   ],
+   "dir": [
+    -1.653892159485515e-15,
+    1.0,
+    -0.0
+   ],
+   "length": 62.8318530717959,
+   "curve": "circle",
+   "radius": 10.0,
+   "center": [
+    0.0,
+    0.0,
+    -5.0
+   ],
+   "radius_rank": 1,
+   "radius_group": 2
+  }
+ },
+ {
+  "name": "edge_fp_pipe_3",
+  "part": "pipe",
+  "fn": "edge_fp",
+  "selector": null,
+  "index": 3,
+  "diag": [],
+  "fp": {
+   "mid": [
+    -5.0,
+    -8.269460797427575e-15,
+    5.0
+   ],
+   "dir": [
+    -1.653892159485515e-15,
+    1.0,
+    -0.0
+   ],
+   "length": 31.41592653589795,
+   "curve": "circle",
+   "radius": 5.0,
+   "center": [
+    0.0,
+    0.0,
+    5.0
+   ],
+   "radius_rank": 0,
+   "radius_group": 2
+  }
+ },
+ {
+  "name": "edge_fp_pipe_4",
+  "part": "pipe",
+  "fn": "edge_fp",
+  "selector": null,
+  "index": 4,
+  "diag": [],
+  "fp": {
+   "mid": [
+    -5.0,
+    -8.269460797427575e-15,
+    -5.0
+   ],
+   "dir": [
+    -1.653892159485515e-15,
+    1.0,
+    -0.0
+   ],
+   "length": 31.41592653589795,
+   "curve": "circle",
+   "radius": 5.0,
+   "center": [
+    0.0,
+    0.0,
+    -5.0
+   ],
+   "radius_rank": 0,
+   "radius_group": 2
+  }
+ },
+ {
+  "name": "edge_fp_pipe_5",
+  "part": "pipe",
+  "fn": "edge_fp",
+  "selector": null,
+  "index": 5,
+  "diag": [],
+  "fp": {
+   "mid": [
+    5.0,
+    -1.2246467991473533e-15,
+    0.0
+   ],
+   "dir": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 10.0,
+   "curve": "line"
+  }
+ },
+ {
+  "name": "edge_fp_box_0",
+  "part": "box",
+  "fn": "edge_fp",
+  "selector": null,
+  "index": 0,
+  "diag": [],
+  "fp": {
+   "mid": [
+    -10.0,
+    -10.0,
+    0.0
+   ],
+   "dir": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 10.0,
+   "curve": "line"
+  }
+ },
+ {
+  "name": "edge_fp_box_4",
+  "part": "box",
+  "fn": "edge_fp",
+  "selector": null,
+  "index": 4,
+  "diag": [],
+  "fp": {
+   "mid": [
+    10.0,
+    -10.0,
+    0.0
+   ],
+   "dir": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "length": 10.0,
+   "curve": "line"
+  }
+ },
+ {
+  "name": "face_fp_holed_0",
+  "part": "holed",
+  "fn": "face_fp",
+  "selector": null,
+  "index": 0,
+  "diag": [],
+  "fp": {
+   "centroid": [
+    -20.0,
+    0.0,
+    0.0
+   ],
+   "normal": [
+    -1.0,
+    -0.0,
+    0.0
+   ],
+   "area": 399.99999999999994,
+   "surface": "plane"
+  }
+ },
+ {
+  "name": "face_fp_holed_1",
+  "part": "holed",
+  "fn": "face_fp",
+  "selector": null,
+  "index": 1,
+  "diag": [],
+  "fp": {
+   "centroid": [
+    0.0,
+    -20.0,
+    0.0
+   ],
+   "normal": [
+    -0.0,
+    -1.0,
+    -0.0
+   ],
+   "area": 399.99999999999994,
+   "surface": "plane"
+  }
+ },
+ {
+  "name": "face_fp_holed_2",
+  "part": "holed",
+  "fn": "face_fp",
+  "selector": null,
+  "index": 2,
+  "diag": [],
+  "fp": {
+   "centroid": [
+    1.9984014443252818e-15,
+    1.5068909450358973e-16,
+    5.0
+   ],
+   "normal": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "area": 1521.4601836602544,
+   "surface": "plane"
+  }
+ },
+ {
+  "name": "face_fp_holed_3",
+  "part": "holed",
+  "fn": "face_fp",
+  "selector": null,
+  "index": 3,
+  "diag": [],
+  "fp": {
+   "centroid": [
+    0.0,
+    20.0,
+    0.0
+   ],
+   "normal": [
+    0.0,
+    1.0,
+    0.0
+   ],
+   "area": 399.99999999999994,
+   "surface": "plane"
+  }
+ },
+ {
+  "name": "face_fp_holed_4",
+  "part": "holed",
+  "fn": "face_fp",
+  "selector": null,
+  "index": 4,
+  "diag": [],
+  "fp": {
+   "centroid": [
+    1.9984014443252818e-15,
+    1.5068909450358973e-16,
+    -5.0
+   ],
+   "normal": [
+    -0.0,
+    -0.0,
+    -1.0
+   ],
+   "area": 1521.4601836602544,
+   "surface": "plane"
+  }
+ },
+ {
+  "name": "face_fp_holed_5",
+  "part": "holed",
+  "fn": "face_fp",
+  "selector": null,
+  "index": 5,
+  "diag": [],
+  "fp": {
+   "centroid": [
+    20.0,
+    0.0,
+    0.0
+   ],
+   "normal": [
+    1.0,
+    0.0,
+    -0.0
+   ],
+   "area": 399.99999999999994,
+   "surface": "plane"
+  }
+ },
+ {
+  "name": "face_fp_holed_6",
+  "part": "holed",
+  "fn": "face_fp",
+  "selector": null,
+  "index": 6,
+  "diag": [],
+  "fp": {
+   "centroid": [
+    -5.0,
+    -8.269460797427575e-15,
+    0.0
+   ],
+   "normal": [
+    1.0,
+    1.653892159485515e-15,
+    -0.0
+   ],
+   "area": 314.1592653589793,
+   "surface": "cylinder",
+   "radius": 5.0
+  }
+ },
+ {
+  "name": "face_fp_ball",
+  "part": "ball",
+  "fn": "face_fp",
+  "selector": null,
+  "index": 0,
+  "diag": [],
+  "fp": {
+   "centroid": [
+    -6.0,
+    -9.92335295691309e-15,
+    0.0
+   ],
+   "normal": [
+    -1.0,
+    -1.653892159485515e-15,
+    0.0
+   ],
+   "area": 452.3893421169302,
+   "surface": "sphere",
+   "radius": 6.0
+  }
+ }
+]
