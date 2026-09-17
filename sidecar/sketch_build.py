@@ -550,7 +550,13 @@ def _build_sketch(f, val, datums=None, plane=None):
 
     if edges:
         faces.extend(_faces_from_edges(edges))
-    faces.extend(text_local)  # glyph faces union into the whole-sketch profile (extrude)
+    faces.extend(text_local)
+
+    # Positions a Hole can drill at: the sketch's points, else its circles' centres.
+    marks = [e for e in entities if e["type"] == "point"] or [
+        e for e in entities if e["type"] == "circle" and not e.get("construction")]
+    hole_points = [plane.from_local_coords((val(e.get("x", 0)), val(e.get("y", 0))))
+                   for e in marks]  # glyph faces union into the whole-sketch profile (extrude)
 
     # the located open/closed path wire from the free edges (for sweep paths)
     path_wire = _path_wire(edges, plane)
@@ -603,13 +609,13 @@ def _build_sketch(f, val, datums=None, plane=None):
             sk = Compound(list(sk))
     else:
         return {"sketch": None, "faces": [], "wire": path_wire, "plane": plane,
-                "edges": tool_edges}
+                "edges": tool_edges, "points": hole_points}
 
     # `plane` rides along for _region_cells: a consuming feature has to cut these
     # cells where the model under them ends, and needs to know which plane that
     # model has to lie in.
     return {"sketch": sk, "faces": located_faces, "wire": path_wire, "plane": plane,
-            "edges": tool_edges}
+            "edges": tool_edges, "points": hole_points}
 
 
 # Stitch tolerance for combining a sweep path's free edges. Wire.combine defaults

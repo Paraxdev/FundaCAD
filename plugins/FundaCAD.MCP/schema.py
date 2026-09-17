@@ -308,6 +308,39 @@ FEATURES = {
                     "faces": {"kind": "face", "by": "normal", "dir": [1, 0, 0], "body": "body1"},
                     "angle": 3, "axis": "Z"},
     },
+    "hole": {
+        "summary": "Drill holes into a flat face along its normal: simple, "
+                   "counterbore, countersink, or a heat-set insert bore.",
+        "fields": {
+            "face": "Selector naming the flat face to drill into",
+            "points": "list of [x,y,z] hole centres in world mm, projected onto the face",
+            "sketch": "optional sketch id whose points (else circle centres) add positions; "
+                      "with no `face` the sketch plane gives the direction",
+            "holeType": '"simple" (default), "counterbore", "countersink" or "insert"',
+            "size": '"M2", "M2.5", "M3", "M4", "M5", "M6", "M8" or "M10". Fills in every '
+                    "dimension below that is left out",
+            "standard": '"clearance" (ISO 273, default), "tap" (tap drill) or "custom"',
+            "fit": '"close", "normal" (default) or "loose", for a clearance hole',
+            "diameter": "Num, overrides the size",
+            "extent": '"blind" (default) or "through" (through all)',
+            "depth": "Num, for a blind hole; defaults to twice the diameter without a size",
+            "cbDiameter": "Num, counterbore diameter (ISO 4762 socket head default)",
+            "cbDepth": "Num, counterbore depth",
+            "csDiameter": "Num, countersink diameter at the face (ISO 10642 default)",
+            "csAngle": "Num, countersink included angle, default 90",
+            "leadIn": "Num, insert lead-in chamfer, default 0.5; 0 for none",
+            "drillPoint": "optional bool, a 118 degree cone at the bottom of a blind hole",
+            "flip": "optional bool, drill along the face normal instead of into it",
+            "tapped": "optional bool, a label only, no thread is modelled",
+            "body": "optional body id",
+        },
+        "example": {"id": "ho1", "type": "hole", "holeType": "counterbore", "size": "M3",
+                    "extent": "through",
+                    "face": {"kind": "face", "by": "nearest", "point": [0, 0, 10], "body": "body1"},
+                    "points": [[-15, 0, 10], [15, 0, 10]]},
+        "notes": "Sizes are M2 to M10; a heat-set insert preset exists for M2 to M5 and is "
+                 "always blind. A through hole reaches past the far side of the body.",
+    },
     "thicken": {
         "summary": "Give a surface (or a set of faces) a thickness.",
         "fields": {"thickness": "Num", "faces": "optional Selector(s)",

@@ -73,6 +73,7 @@ from geom_select import (
     _edge_curve,
 )
 import plugin_geometry
+from hole_feature import handle_hole as _handle_hole
 from conic_blend import ConicNotApplicable, PROFILE_EPS, clamp_profile
 
 # Re-exported: tests, server.py and tessellate.py reach these through `builder.`.
@@ -1145,6 +1146,7 @@ _FEATURE_HANDLERS = {
     "offsetFace": _handle_offset_face,
     "thicken": _handle_thicken,
     "draft": _handle_draft,
+    "hole": _handle_hole,
     "patternRect": _handle_pattern_rect,
     "patternLinear": _handle_pattern_linear,
     "patternCircular": _handle_pattern_circular,

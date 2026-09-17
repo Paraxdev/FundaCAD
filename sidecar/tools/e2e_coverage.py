@@ -398,6 +398,16 @@ async def check_draft(ws):
     register("draft", "bodies_eq", 1, _nbodies(r))
 
 
+async def check_hole(ws):
+    # two through holes d=4 down the 20-cube's height: 8000 - 2*pi*2^2*20
+    r = await _rebuild(ws, [_box("b", 20, 20, 20),
+        {"id": "ho", "type": "hole", "diameter": 4, "extent": "through",
+         "face": {"kind": "face", "by": "nearest", "point": [0, 0, 10]},
+         "points": [[-5, 0, 10], [5, 0, 10]]}])
+    register("hole", "volume", 8000.0 - 2 * _PI * 4 * 20, _total_volume(r))
+    register("hole", "bodies_eq", 1, _nbodies(r))
+
+
 async def check_sweep(ws):
     r = await _rebuild(ws, [
         {"id": "pa", "type": "sketch", "plane": "XY",
@@ -617,7 +627,7 @@ EXPLICIT_CHECKS = [
     check_loft, check_shell, check_mirror, check_pattern_rect,
     check_pattern_linear, check_pattern_circular, check_scale, check_move, check_remove_body,
     check_compute_all, check_interference, check_export,
-    check_fillet, check_chamfer, check_draft, check_sweep, check_simplify_mesh,
+    check_fillet, check_chamfer, check_draft, check_hole, check_sweep, check_simplify_mesh,
     check_datum_split,
     check_sketch, check_boolean, check_press_pull, check_offset_face,
     check_thicken, check_delete_face, check_texture, check_project_geometry,

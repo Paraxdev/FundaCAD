@@ -94,6 +94,7 @@ _PREFIXES = {
     "loft": "lo", "sweep": "sw", "datumPlane": "pl", "move": "mv",
     "duplicate": "dup",
     "patternCircular": "pc", "patternLinear": "pln", "split": "spl",
+    "hole": "ho",
 }
 
 
