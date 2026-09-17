@@ -133,9 +133,49 @@ OCCT 8.0 is tracked, not a prerequisite.
   primitives and sketches, boolean, fillet, displace a face triangulation,
   read and write blobs, write an export file) and knows nothing of fasteners,
   textures or printers. The `featureTypes`, `exporters` and `shapeGenerators`
-  manifest keys stay, so documents do not change. Until the host exists,
-  plugin geometry runs only on the Python engine and the pre-alpha notes say
-  so.
+  manifest keys stay, so documents do not change. The host is in, the second
+  manifest key `geometryWasm` names the component, and a plugin that ships
+  only the Python half runs on the Python engine alone until it is ported.
+
+#### The plugin component, in detail
+
+The world is `crates/fundacad-geom/wit/plugin.wit`, the host is
+`fundacad-geom::plugins` behind the crate feature `plugins`, which
+`fundacad-cli` and `src-tauri`'s `rust-engine` turn on (wasmtime and its WASI
+are a large dependency tree and the default build of the geometry crate has no
+use for them).
+
+- **Exports, the four hooks:** `register` (what the component claims, checked
+  against the manifest's `featureTypes`, `exporters` and `shapeGenerators`),
+  `run-feature`, `resolve-pass` + `displace` with a `code-version` that rides
+  in the mesh etag and the mesh cache key, `write-export`, `generate-shape`.
+- **Imports, the generic kernel:** an opaque `shape` resource (never BREP
+  bytes per call) with its measurements, surfaces, curves, classification and
+  triangulation; primitives, polygon faces, sketch profiles, prism, revolve,
+  booleans, unify, fillet and chamfer with the one-edge-at-a-time fallback;
+  the blob store; a feature context (the feature JSON, parameter values,
+  selector picks grouped by body, body shapes in and out, diagnostics, mesh
+  pass specs); `output.write` for an exporter, to a path the host chose; and
+  `cancelled`, `progress`, `log`.
+- **Sandbox:** WASI with no preopened directories, no environment, no
+  arguments and sockets refused; a `StoreLimits` memory cap of 1 GiB;
+  epoch interruption on a 20 ms tick with the same budgets the Python engine
+  gives a job, 60 s per feature and per mesh pass, 180 s for `generateShape`;
+  cancellation polled in the same callback, so a cancel stops a plugin mid
+  loop. A trap poisons nothing: every call gets a fresh instance, so no state
+  survives a call and a crashed plugin costs one feature.
+- **Discovery** reads the manifests under `FUNDACAD_PLUGIN_DIR` (a checkout's
+  own `plugins/` in a debug build), explicitly, from the engine's startup path
+  only, as `server.py` calls `plugin_geometry.discover()`: a bare
+  `builder::rebuild` has no plugins and an unknown type reads "unknown feature
+  type", exactly as the Python builder alone does. A component is compiled the
+  first time one of its declared names is used, and the three sentences of
+  `unregistered()` (absent, installed but broken, unknown) are kept.
+- **Proof:** PrintToolbox's eight feature types are ported
+  (`plugins/FundaCAD.PrintToolbox/geometry-rs`, 192 KiB of wasm) and
+  `sidecar/tools/corpus_plugins.json` runs 40 documents through both engines,
+  volumes and refusals alike.
+
 - **Shared algorithms:** the TypeScript copies stay (the frontend needs them
   synchronously for previews); the Rust twin is ported from the TypeScript,
   not from Python, and both run the same JSON test vectors under
@@ -145,6 +185,10 @@ OCCT 8.0 is tracked, not a prerequisite.
   engine never solves sketches; it builds what the document stores.
 - **Text:** glyph outlines from `ttf-parser` plus system font discovery with
   `fontdb`, not `Font_FontMgr`; the outline is converted to OCCT edges by us.
+  Landed in `fundacad-geom::text`, measured against the Python engine by
+  `tests/text_oracle.rs`. Single stroke fonts (build123d's bundled "Relief
+  SingleLine CAD" and its `offset_2d` ribbon) are the one piece left out: the
+  font is not ours to ship, so `singleline` resolves like any unknown family.
 
 ## 3. Phases
 
@@ -182,7 +226,7 @@ progress is planned wrong.
    a developer setting (`engine: "python" | "rust"`), Python the default. The
    `VITE_GEOM=rust` spike and `src-tauri/src/geom.rs` are deleted; its tests
    move into `fundacad-geom`.
-7. The `prealpha-rust-ver` rolling release (section 6).
+7. The `prealpha-rust` rolling release (section 6). Done.
 
 ### Phase 2, parity
 
@@ -195,12 +239,19 @@ progress is planned wrong.
 3. Tessellation details: faceOwners, faceBands, true normals and seam weld,
    etags, tolerance tiers, density cap, smooth edge tags.
 4. Caches: content-addressed blob store (blake2b-128, `.bbrep`), prefix
-   checkpoint cache, mesh artifact cache.
+   checkpoint cache, mesh artifact cache. `fundacad-geom::cache` keeps the
+   sidecar's chain keys and its two tiers, and drops the SQLite index: every
+   lookup geomstore makes is by chain key, so a `checkpoints/<key>.json`
+   answers it in one stat, the rename that publishes a blob publishes a record
+   the same way, and a record's mtime is its last access. Eviction and Compute
+   All read the records once, which they did over the index anyway. The engine
+   binary's size and mtime stand in for the sidecar's source hash in `env_sig`.
 5. Import (BREP, STEP with XCAF colours and assemblies, STL, 3MF, OBJ, GLB) and
    export (STEP, STL, 3MF with colours, GLB), `inspect`, `interference`,
    `projectGeometry`, `tessellateText`, `listFonts`, `migrateGeometry`.
-6. Plugin host (section 2.3) and the in-repo plugins' geometry ported to wasm
-   components: Screws, PrintToolbox, Printing, Texture.
+6. Plugin host (section 2.3, in) and the in-repo plugins' geometry ported to
+   wasm components: PrintToolbox is ported, Screws, Printing and Texture are
+   not.
 7. `fundacad-mcp` on rmcp, same tool vocabulary (docs/MCP.md). Done: the two
    servers publish a byte-identical tool list, the eleven Python suites have
    Rust twins, and `crates/fundacad-mcp/tools/diff_servers.py` runs a scripted
@@ -258,7 +309,7 @@ LOC are `wc -l` of the current tree. "Oracle" is what proves the port right.
 | exporters.py, export_tree.py | 202 | fundacad-geom::export::step | medium | STEP re-read round trip |
 | inspect_model.py | 249 | fundacad-geom::inspect | low | MCP tests |
 | rebuild_cache.py, geomstore.py | 1,104 | fundacad-geom::cache | medium | test_checkpoint, test_geomstore |
-| shape_generate.py, plugin_geometry.py | 624 | fundacad-geom::plugins (wasmtime host) | design | test_fasteners |
+| shape_generate.py, plugin_geometry.py | 624 | fundacad-geom::plugins (wasmtime host, done) | design | corpus_plugins.json, tests/plugin_host.rs |
 | server.py | 2,139 | fundacad-engine | medium | test_ws, test_cancel, test_conn_limit, test_fullstack, test_heartbeat |
 
 ### 4.1b The Python MCP plugin
@@ -325,28 +376,100 @@ The TypeScript stays; these get a Rust twin and shared vectors.
   `diff_engines.py` drives both engines over the same documents and compares
   body count, per-body volume (rel 0.005), bbox (abs 1e-4) and the error list.
 - **Protocol conformance.** The Python protocol suites take the server command
-  from `FUNDACAD_ENGINE_CMD`; CI runs them against both engines.
+  from `FUNDACAD_ENGINE_CMD`; CI runs them against both engines. A suite that
+  needs an op the engine under test has not got yet fails, unless
+  `FUNDACAD_SKIP_UNPORTED_OPS=1` is set, which prints every case it skips. The
+  engine answers a `testSleep` job under `FUNDACAD_ENGINE_TEST_OPS=1` and takes
+  its clocks from `FUNDACAD_STALL_TIMEOUT` and `FUNDACAD_JOB_TIMEOUT`, so
+  `test_cancel.py` has something long to cancel and `test_heartbeat.py` can
+  watch a reap without waiting a minute for one.
 - **Kernel tests in Rust.** `cargo test -p fundacad-geom` runs real
   OpenCASCADE tests from the first brick on.
-- **CI.** The `rust-geom` job caches `target/OCCT` and runs the workspace
-  tests; it gates once Phase 1 step 4 lands.
+- **CI.** The `rust-geom` job caches `target/OCCT` and runs
+  `cargo test --workspace --features fundacad-engine/ws`, so the transport the
+  Python suites drive is compiled and tested; it gates once Phase 1 step 4 lands.
 - **Hygiene.** `scripts/check-repo-hygiene.sh` applies to Rust too.
 
-## 6. The `prealpha-rust-ver` rolling release
+## 6. The `prealpha-rust` rolling release (landed)
 
-A second rolling release beside `beta`, built by a job cloned from `release`
-with its own `concurrency.group`, its own tag moved in place and the same asset
-sweep. Differences:
+A second rolling release beside `beta`, on the tag `prealpha-rust`. Two jobs in
+`.github/workflows/build.yml`, `build-prealpha` and `release-prealpha`, with
+their own `concurrency.group` (`release-prealpha-rust`), their own rolling tag
+moved in place rather than deleted, their own `latest.json` and the same
+old-asset sweep. What makes the bundle:
 
-- The Rust engine is the default engine and the `sidecar-runtime` resource is
-  not bundled.
+- `--features rust-engine`, so the engine is a worker process of the same
+  executable and `engine_kind` answers `"rust"`, which is what selects the IPC
+  transport in `src/geometry/transport.ts`.
+- `src-tauri/tauri.prealpha.conf.json` instead of `tauri.bundle.conf.json`, so
+  no `sidecar-runtime` resource is bundled and no Python is needed at runtime.
+  The job also refuses to build if `src-tauri/sidecar-runtime` exists, and
+  checks the finished binary for the `engine_attach` command, so "this is the
+  Rust build" is a fact about the bytes rather than about the arguments.
 - Title: `FundaCAD pre-alpha, Rust engine (rolling, WORK IN PROGRESS)`.
-- Release notes open with a warning that is not optional: the Rust engine is
-  incomplete, features listed as unported fail in a rebuild with the
-  skipped-feature banner, files saved by it open in the beta, plugin geometry
-  does not run, and it is not for real work.
-- No `latest.json`, so the updater never moves a beta install onto it.
-- Version `0.3.<run number>-rust`.
+- Release notes open with the warning, which is not optional: the Rust engine
+  is incomplete, unported features fail in a rebuild with the skipped-feature
+  banner, plugin geometry does not run at all, files it saves open in the beta,
+  and it is not for real work.
+
+### 6.1 The updater endpoint
+
+**Decided: its own feed, at its own endpoint, baked into its own build.** The
+draft above said "no `latest.json`, so the updater never moves a beta install
+onto it". That answers the danger and loses the feature, and a rolling build
+that cannot roll is one people install once and never update again.
+
+The endpoint is compiled into the binary, so which feed a copy reads is settled
+when it is built and can never change afterwards:
+
+- a beta build reads `releases/download/beta/latest.json`, which only the
+  `release` job writes;
+- a pre-alpha build reads `releases/download/prealpha-rust/latest.json`, which
+  only `release-prealpha` writes.
+
+Neither job touches the other's release, and the two builds download their
+artifacts by pattern (`fundacad-beta-*`, `fundacad-prealpha-*`) so one run's
+installers cannot be published to the other's page. `tests/security/updater.
+test.ts` holds the pair apart.
+
+The separation has to be the endpoint and cannot be the version: the pre-alpha
+is `0.3.x` and the beta is `0.2.x`, so a beta install that ever read the
+pre-alpha manifest would happily take it.
+
+### 6.2 The version
+
+`0.3.<run number>`, not the `0.3.<run number>-rust` the draft asked for. Tauri's
+msi target refuses a version whose pre-release identifier is not numeric
+("optional pre-release identifier in app version must be numeric-only and
+cannot be greater than 65535 for msi target"), so `-rust` fails the Windows leg
+outright, and the NSIS target silently rewrites a non-numeric field to `0` in
+`VIProductVersion`. The minor carries the distinction instead, and the tag, the
+title, the notes and the feed carry the rest. **When the beta reaches `0.3` the
+pre-alpha has to move up with it**, or the two version ranges meet.
+
+### 6.3 The CSP
+
+The pre-alpha config also tightens `connect-src`. The beta grants
+`ws://127.0.0.1:8765 http://127.0.0.1:8765` because the frontend talks to the
+Python sidecar over a loopback WebSocket; the Rust engine is a stdio worker
+reached over Tauri IPC, so that build's webview never opens a socket and the
+grant comes out. `ipc:` and `http://ipc.localhost` are all it keeps.
+`tests/security/csp.test.ts` pins the pre-alpha policy as the shipped one minus
+exactly those two sources, so the two cannot drift, and when the sidecar is
+deleted in phase 3 the base policy loses them too and the pair becomes one.
+
+### 6.4 Before the first pre-alpha release is cut
+
+- The `build-prealpha` job has never run. It compiles OpenCASCADE from source
+  on all three runners, about twenty minutes cold, cached at
+  `src-tauri/target/OCCT`; the Linux leg installs `cmake`, which
+  `.github/actions/linux-deps` deliberately leaves out.
+- The updater is still off everywhere. `tauri.conf.json` carries upstream's
+  minisign pubkey, so both release jobs withhold `latest.json` and say so in
+  the notes. Generating a keypair turns both feeds on at once.
+- Plugin bundles are not published to this release, because the app asks the
+  beta release for them whatever build it is (`RELEASE_TAG` in
+  `src/plugins/index.ts`), and plugin geometry does not run on this engine yet.
 
 ## 7. Working agreements for the branch
 

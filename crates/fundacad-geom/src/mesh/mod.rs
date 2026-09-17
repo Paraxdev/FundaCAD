@@ -8,6 +8,7 @@
 //! RAM and disk payload caches plug in through `PayloadCache` (crate::cache).
 
 pub mod edges;
+pub mod passes;
 pub mod profile;
 pub mod tessellate;
 
@@ -41,6 +42,9 @@ pub struct MeshBody<'a> {
     pub part_color: Option<Value>,
     /// `Body::identity`, what the in-memory payload cache matches on.
     pub identity: Option<(u64, u64)>,
+    /// The mesh pass specs a plugin stashed on the body, displaced at
+    /// tessellation time (`plugin_geometry.specs`).
+    pub mesh_passes: Vec<Value>,
     /// The content key of the checkpoint blob this shape was stored under.
     pub mesh_key: Option<String>,
 }
@@ -74,7 +78,7 @@ pub fn strip_envelope(full: &FullBody) -> FullBody {
 
 fn with_envelope(body: &MeshBody<'_>, payload: FullBody) -> FullBody {
     let mut out = payload;
-    let tag = etag(&out);
+    let tag = etag_with(&out, pass_key(body).as_deref());
     let mut fields = envelope(body, &tag);
     fields.extend(std::mem::take(&mut out.fields));
     out.fields = fields;
@@ -121,6 +125,7 @@ fn body_payload_for(
             force_remesh: false,
         },
     );
+    let tess = displace(body, shape, tess);
     let lines = edge_polylines(&access);
     let from_map: Vec<Value> = match body.owner_map {
         Some(owners) if body.face_owners.is_empty() => {
@@ -183,6 +188,31 @@ fn body_payload_for(
     with_envelope(body, b)
 }
 
+/// Every mesh pass on the body run over the faces it claims of the final
+/// shape. Without the plugin host, or with no pass, the tessellation as it is.
+fn displace(body: &MeshBody<'_>, shape: &Shape, tess: Tessellation) -> Tessellation {
+    #[cfg(feature = "plugins")]
+    {
+        if body.mesh_passes.is_empty() {
+            return tess;
+        }
+        let faces = crate::kernel::subshapes(shape, crate::kernel::Kind::Face);
+        let displaced = crate::plugins::displace_body(
+            shape,
+            &faces,
+            &body.mesh_passes,
+            &|face| passes::face_mesh(&tess, face as u32),
+            crate::export::EXPORT_DENSITY_CAP_PER_FACE as u32,
+        );
+        return passes::apply(tess, &displaced);
+    }
+    #[cfg(not(feature = "plugins"))]
+    {
+        let _ = (body, shape);
+        tess
+    }
+}
+
 /// `id`, `name`, `etag` and the envelope keys that change without the geometry.
 fn envelope(body: &MeshBody<'_>, etag: &str) -> Map<String, Value> {
     let mut m = Map::new();
@@ -224,6 +254,25 @@ fn bbox_value(bb: Option<([f64; 3], [f64; 3])>) -> Value {
 /// is the same promise without the cache, and survives a worker restart.
 /// Envelope keys (`id`, `name`, `nodeRef`, colours) are not part of it.
 pub fn etag(body: &FullBody) -> String {
+    etag_with(body, None)
+}
+
+/// The mesh pass cache key of a body, the specs and the code version of each
+/// pass that will displace it, so a plugin that changes its algorithm cannot
+/// be served the previous version's mesh out of a cache.
+pub fn pass_key(body: &MeshBody<'_>) -> Option<String> {
+    #[cfg(feature = "plugins")]
+    {
+        crate::plugins::pass_cache_key(&body.mesh_passes)
+    }
+    #[cfg(not(feature = "plugins"))]
+    {
+        (!body.mesh_passes.is_empty()).then(|| Value::Array(body.mesh_passes.clone()).to_string())
+    }
+}
+
+/// `etag`, with the mesh passes mixed in.
+pub fn etag_with(body: &FullBody, passes: Option<&str>) -> String {
     let mut h = match Blake2bVar::new(16) {
         Ok(h) => h,
         Err(_) => return String::new(),
@@ -272,6 +321,10 @@ pub fn etag(body: &FullBody) -> String {
         rest.shift_remove(k);
     }
     h.update(Value::Object(rest).to_string().as_bytes());
+    if let Some(passes) = passes {
+        h.update(b"passes");
+        h.update(passes.as_bytes());
+    }
     let mut out = [0u8; 16];
     if h.finalize_variable(&mut out).is_err() {
         return String::new();

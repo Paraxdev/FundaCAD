@@ -33,9 +33,14 @@
 import { describe, expect, it } from "vitest";
 
 import confRaw from "../../src-tauri/tauri.conf.json?raw";
+import prealphaRaw from "../../src-tauri/tauri.prealpha.conf.json?raw";
 
 const conf = JSON.parse(confRaw) as {
   plugins: { updater: { pubkey: string; endpoints: string[] } };
+};
+
+const prealpha = JSON.parse(prealphaRaw) as {
+  plugins: { updater: { endpoints: string[] } };
 };
 
 /** Upstream's minisign public key, as inherited at the fork point. Recorded so
@@ -66,6 +71,37 @@ describe("updater", () => {
       atob(key),
       "the updater pubkey is not a minisign public key",
     ).toMatch(/minisign public key/);
+  });
+
+  // The two rolling releases are two feeds, and this is what keeps them apart.
+  //
+  // The endpoint is baked into the binary at build time, so which feed a copy
+  // reads is decided by the config it was built with and can never change
+  // afterwards. A shipped beta reads beta/latest.json; a pre-alpha build reads
+  // prealpha-rust/latest.json. Nothing else separates them, and nothing else
+  // could: the pre-alpha version is 0.3.x, which is NEWER than the beta's
+  // 0.2.x, so a beta install offered the pre-alpha manifest would take it and
+  // land on an engine that cannot rebuild most documents.
+  //
+  // docs/RUST-PIVOT.md section 6 has the decision and why it is not "publish no
+  // manifest at all": a pre-alpha that cannot update itself is a pre-alpha
+  // nobody re-downloads, and the point of a rolling build is the next one.
+  it("keeps the pre-alpha feed away from the beta one", () => {
+    const path = (urls: string[]) => urls.map((u) => new URL(u).pathname);
+    expect(path(conf.plugins.updater.endpoints)).toEqual([
+      "/Paraxdev/fundacad/releases/download/beta/latest.json",
+    ]);
+    expect(path(prealpha.plugins.updater.endpoints)).toEqual([
+      "/Paraxdev/fundacad/releases/download/prealpha-rust/latest.json",
+    ]);
+  });
+
+  it("fetches the pre-alpha feed from this project's own releases too", () => {
+    for (const url of prealpha.plugins.updater.endpoints) {
+      expect(new URL(url).origin, `updater endpoint ${url}`).toBe("https://github.com");
+      expect(new URL(url).pathname.startsWith("/Paraxdev/fundacad/"), `updater endpoint ${url}`)
+        .toBe(true);
+    }
   });
 
   it("still carries UPSTREAM's key, which the release job must refuse", () => {
