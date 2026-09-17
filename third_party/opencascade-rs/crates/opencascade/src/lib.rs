@@ -8,8 +8,10 @@ pub mod kicad;
 pub mod mesh;
 pub mod mesh_access;
 pub mod primitives;
+pub mod query;
 pub mod raw;
 pub mod section;
+pub mod topology;
 pub mod workplane;
 
 mod law_function;
