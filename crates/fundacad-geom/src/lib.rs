@@ -17,6 +17,7 @@ pub mod export;
 pub mod faces;
 pub mod features;
 pub mod import;
+pub mod inspect;
 pub mod jobs;
 pub mod kernel;
 pub mod measure;
