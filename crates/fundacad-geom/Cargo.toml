@@ -30,9 +30,18 @@ quick-xml = "0.37"
 # Deterministic data parallelism: every parallel pass collects by index and is
 # assembled in the serial order, so a reply is byte identical either way.
 rayon = "1"
+fontdb = "0.24.0"
+ttf-parser = "0.25.1"
+# The plugin host (src/plugins, docs/RUST-PIVOT.md 2.3). wasmtime and its WASI
+# are a large tree, so only the engine binaries turn the feature on.
+wasmtime = { version = "48", optional = true, default-features = false, features = ["runtime", "cranelift", "component-model", "std", "parallel-compilation", "anyhow"] }
+wasmtime-wasi = { version = "48", optional = true, default-features = false, features = ["p2"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = ["Win32_Storage_FileSystem"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+
+[features]
+plugins = ["dep:wasmtime", "dep:wasmtime-wasi"]

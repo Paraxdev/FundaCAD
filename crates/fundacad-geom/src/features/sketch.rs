@@ -3,9 +3,8 @@
 //! `_expand_pattern`, `_faces_from_edges`, `_subdivide_faces`, `_region_*`) and
 //! the `split_profile_cells` rule of sidecar/face_footprint.py.
 //!
-//! Not ported yet: text entities, sketches following a face (`face`, `at`),
-//! projection refresh, and the imprint tool edges a sketch also registers for
-//! a feature this engine does not build.
+//! A sketch follows the face it was made on through face_anchor.rs, and its
+//! text entities are drawn by the text module.
 
 use std::collections::HashMap;
 use std::f64::consts::PI;
@@ -13,7 +12,7 @@ use std::f64::consts::PI;
 use fundacad_core::schema::{Num, ProjectedCurve, SketchEntity, SketchFeature, SketchPattern};
 use opencascade::primitives::Shape;
 
-use super::not_ported;
+use super::face_anchor::{face_anchor_plane, Placement};
 use crate::builder::plane::{plane_of, PlaneRef};
 use crate::builder::{py_g, Ctx, FResult, Fail, SketchEntry};
 use crate::kernel::{self, BoolKind, Frame, Kind};
@@ -67,7 +66,7 @@ enum Ent {
         w: f64,
     },
     Projected(ProjectedCurve),
-    Text,
+    Text(Box<fundacad_core::schema::Text>),
     Other,
 }
 
@@ -157,7 +156,7 @@ fn resolve(ctx: &Ctx, e: &SketchEntity) -> FResult<Item> {
             },
         ),
         SketchEntity::Projected(p) => (p.construction, Ent::Projected(p.curve.clone())),
-        SketchEntity::Text(t) => (t.construction, Ent::Text),
+        SketchEntity::Text(t) => (t.construction, Ent::Text(Box::new(t.clone()))),
         SketchEntity::Unknown(_) => (None, Ent::Other),
         SketchEntity::Invalid(inv) => {
             let raw_construction = inv
@@ -202,8 +201,20 @@ fn rect_corners(w: f64, h: f64, x: f64, y: f64, angle: f64) -> [[f64; 2]; 4] {
 }
 
 /// `_translate_entity`.
-fn translate(e: &Item, dx: f64, dy: f64, id: String) -> FResult<Item> {
+fn translate(ctx: &Ctx, e: &Item, dx: f64, dy: f64, id: String) -> FResult<Item> {
     let ent = match &e.ent {
+        // Python's fallthrough: a patterned copy of anything else is a point,
+        // and the lettering itself is not repeated.
+        Ent::Text(t) => {
+            let n = |v: &Option<Num>| match v {
+                Some(n) => ctx.val(n),
+                None => Err(Fail::Missing("x".into())),
+            };
+            Ent::Point {
+                x: n(&t.x)? + dx,
+                y: n(&t.y)? + dy,
+            }
+        }
         Ent::Line { a, b } => Ent::Line {
             a: [a[0] + dx, a[1] + dy],
             b: [b[0] + dx, b[1] + dy],
@@ -388,7 +399,7 @@ fn expand_pattern(
                     }
                     for s in &srcs {
                         let id = did(&p.id);
-                        out.push(translate(s, dx, dy, id)?);
+                        out.push(translate(ctx, s, dx, dy, id)?);
                     }
                 }
             }
@@ -591,8 +602,85 @@ fn entity_edges(e: &Ent) -> FResult<Vec<Shape>> {
             }
             _ => Vec::new(),
         },
-        Ent::Point { .. } | Ent::Text | Ent::Other => Vec::new(),
+        Ent::Point { .. } | Ent::Text(_) | Ent::Other => Vec::new(),
     })
+}
+
+/// `_entity_edge`: the one edge of a line, arc, circle or spline a text follows.
+fn path_edge(e: &Ent) -> Option<Shape> {
+    match e {
+        Ent::Line { .. } | Ent::Arc { .. } | Ent::Circle { .. } | Ent::Spline(_) => {
+            entity_edges(e).ok()?.into_iter().next()
+        }
+        _ => None,
+    }
+}
+
+/// `_entity_edge` over an entity the frontend already resolved to numbers.
+pub fn path_edge_json(e: &serde_json::Value) -> Option<Shape> {
+    let n = |k: &str| e.get(k).map(|v| crate::text::num_or_zero(Some(v)));
+    let o = |k: &str| crate::text::num_or_zero(e.get(k));
+    let ent = match e.get("type").and_then(serde_json::Value::as_str)? {
+        "line" => Ent::Line {
+            a: [n("x1")?, n("y1")?],
+            b: [n("x2")?, n("y2")?],
+        },
+        "arc" => Ent::Arc {
+            a: [n("x1")?, n("y1")?],
+            b: [n("x2")?, n("y2")?],
+            m: [n("mx")?, n("my")?],
+        },
+        "circle" => Ent::Circle {
+            r: n("radius")?,
+            x: o("x"),
+            y: o("y"),
+        },
+        "spline" => Ent::Spline(
+            e.get("points")
+                .and_then(serde_json::Value::as_array)
+                .map(|pts| {
+                    pts.iter()
+                        .map(|p| Some([p.get("x").map(|v| crate::text::num_or_zero(Some(v)))?, p.get("y").map(|v| crate::text::num_or_zero(Some(v)))?]))
+                        .collect::<Option<Vec<_>>>()
+                })
+                .unwrap_or(Some(Vec::new()))?,
+        ),
+        _ => return None,
+    };
+    path_edge(&ent)
+}
+
+/// `_text_faces`: best effort, a text that cannot be drawn gives no faces.
+fn text_faces(ctx: &Ctx, t: &fundacad_core::schema::Text, path: Option<&Shape>) -> Vec<Shape> {
+    let spec = || -> FResult<crate::text::TextSpec> {
+        let o = |n: &Option<Num>| ctx.val_or(n.as_ref(), 0.0);
+        Ok(crate::text::TextSpec {
+            text: t.text.clone(),
+            size: ctx.val(&t.height)?,
+            font: t.font.clone().filter(|f| !f.is_empty()),
+            aspect: crate::text::fonts::Aspect::from_style(
+                t.style.as_ref().map_or("regular", |s| s.as_str()),
+            ),
+            align: match t.align.as_ref().map(|a| a.as_str()) {
+                Some("center") => crate::text::HAlign::Center,
+                Some("right") => crate::text::HAlign::Right,
+                _ => crate::text::HAlign::Left,
+            },
+            rotation: o(&t.angle)?,
+            x: o(&t.x)?,
+            y: o(&t.y)?,
+            position_on_path: o(&t.position_on_path)?,
+            box_width: t.box_width.as_ref().map(|b| ctx.val(b)).transpose()?,
+        })
+    };
+    if t.text.trim().is_empty() {
+        return Vec::new();
+    }
+    let Ok(spec) = spec() else {
+        return Vec::new();
+    };
+    let placed = crate::text::glyphs(&spec, path.map(|edge| crate::text::TextPath { edge }).as_ref());
+    crate::text::build_faces(&placed)
 }
 
 /// A face bounded by one closed edge, build123d `Face(Wire.make_circle(r))`.
@@ -635,9 +723,10 @@ fn fuse_all(faces: &[Shape]) -> FResult<Shape> {
 }
 
 /// `_build_sketch`.
-pub fn build(ctx: &Ctx, f: &SketchFeature) -> FResult<SketchEntry> {
-    let plane_ref = match &f.plane_id {
-        Some(id) if !id.is_empty() => PlaneRef::Name(id),
+pub fn build(ctx: &Ctx, f: &SketchFeature, followed: Option<Placement>) -> FResult<SketchEntry> {
+    let plane_ref = match (&f.plane_id, followed) {
+        (_, Some(p)) => PlaneRef::Record(p.record()),
+        (Some(id), None) if !id.is_empty() => PlaneRef::Name(id),
         _ => PlaneRef::from(&f.plane),
     };
     let plane = plane_of(plane_ref, &ctx.datums)?;
@@ -662,6 +751,7 @@ pub fn build(ctx: &Ctx, f: &SketchFeature) -> FResult<SketchEntry> {
     let mut faces: Vec<Shape> = Vec::new();
     let mut edges: Vec<Shape> = Vec::new();
     let mut all_edges: Vec<Shape> = Vec::new();
+    let mut text_local: Vec<Shape> = Vec::new();
     for it in &items {
         if it.construction {
             continue;
@@ -720,7 +810,14 @@ pub fn build(ctx: &Ctx, f: &SketchFeature) -> FResult<SketchEntry> {
                     all_edges.push(e);
                 }
             }
-            Ent::Text => return Err(not_ported("text")),
+            Ent::Text(t) => {
+                let path = t
+                    .path_ref
+                    .as_ref()
+                    .and_then(|r| items.iter().rev().find(|i| i.id.as_ref() == Some(r)))
+                    .and_then(|i| path_edge(&i.ent));
+                text_local.extend(text_faces(ctx, t, path.as_ref()));
+            }
             Ent::Point { .. } | Ent::Other => {}
         }
     }
@@ -728,6 +825,7 @@ pub fn build(ctx: &Ctx, f: &SketchFeature) -> FResult<SketchEntry> {
     if !edges.is_empty() {
         faces.extend(faces_from_edges(&edges));
     }
+    faces.extend(text_local.iter().cloned());
 
     let mut located: Vec<Shape> = Vec::new();
     if !all_edges.is_empty() {
@@ -735,6 +833,9 @@ pub fn build(ctx: &Ctx, f: &SketchFeature) -> FResult<SketchEntry> {
             let placed = plane.locate(&cell)?;
             located.extend(kernel::subshapes(&placed, Kind::Face));
         }
+    }
+    for tf in &text_local {
+        located.extend(kernel::subshapes(&plane.locate(tf)?, Kind::Face));
     }
 
     let sketch = if !faces.is_empty() {
@@ -815,7 +916,11 @@ fn path_wire(edges: &[Shape], plane: &Frame) -> Option<Shape> {
 }
 
 pub fn handle(ctx: &mut Ctx, f: &SketchFeature) -> FResult {
-    let entry = build(ctx, f)?;
+    let followed = face_anchor_plane(ctx, &f.id, f.face.as_ref(), f.at.as_ref(), &f.plane, "Sketch");
+    if let Some(p) = followed {
+        ctx.sketch_planes.insert(f.id.clone(), p.wire());
+    }
+    let entry = build(ctx, f, followed)?;
     ctx.sketches.insert(f.id.clone(), entry);
     Ok(())
 }
