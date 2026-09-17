@@ -3,9 +3,8 @@
 //! `_expand_pattern`, `_faces_from_edges`, `_subdivide_faces`, `_region_*`) and
 //! the `split_profile_cells` rule of sidecar/face_footprint.py.
 //!
-//! Not ported yet: text entities, sketches following a face (`face`, `at`),
-//! projection refresh, and the imprint tool edges a sketch also registers for
-//! a feature this engine does not build.
+//! A sketch follows the face it was made on through face_anchor.rs, and its
+//! text entities are drawn by the text module.
 
 use std::collections::HashMap;
 use std::f64::consts::PI;
@@ -14,7 +13,6 @@ use fundacad_core::schema::{Num, ProjectedCurve, SketchEntity, SketchFeature, Sk
 use opencascade::primitives::Shape;
 
 use super::face_anchor::{face_anchor_plane, Placement};
-
 use crate::builder::plane::{plane_of, PlaneRef};
 use crate::builder::{py_g, Ctx, FResult, Fail, SketchEntry};
 use crate::kernel::{self, BoolKind, Frame, Kind};
@@ -203,8 +201,20 @@ fn rect_corners(w: f64, h: f64, x: f64, y: f64, angle: f64) -> [[f64; 2]; 4] {
 }
 
 /// `_translate_entity`.
-fn translate(e: &Item, dx: f64, dy: f64, id: String) -> FResult<Item> {
+fn translate(ctx: &Ctx, e: &Item, dx: f64, dy: f64, id: String) -> FResult<Item> {
     let ent = match &e.ent {
+        // Python's fallthrough: a patterned copy of anything else is a point,
+        // and the lettering itself is not repeated.
+        Ent::Text(t) => {
+            let n = |v: &Option<Num>| match v {
+                Some(n) => ctx.val(n),
+                None => Err(Fail::Missing("x".into())),
+            };
+            Ent::Point {
+                x: n(&t.x)? + dx,
+                y: n(&t.y)? + dy,
+            }
+        }
         Ent::Line { a, b } => Ent::Line {
             a: [a[0] + dx, a[1] + dy],
             b: [b[0] + dx, b[1] + dy],
@@ -389,7 +399,7 @@ fn expand_pattern(
                     }
                     for s in &srcs {
                         let id = did(&p.id);
-                        out.push(translate(s, dx, dy, id)?);
+                        out.push(translate(ctx, s, dx, dy, id)?);
                     }
                 }
             }

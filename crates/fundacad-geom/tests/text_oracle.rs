@@ -47,8 +47,50 @@ fn sorted(faces: &[Value]) -> Vec<&Value> {
     v
 }
 
-fn check(name: &str, case: &Value) -> Vec<String> {
+/// The preview op over the same glyphs: one entry per face, holes and all.
+fn check_tessellation(name: &str, case: &Value) -> Vec<String> {
+    let path = case["pathEntity"]
+        .as_object()
+        .and_then(|_| fundacad_geom::features::sketch::path_edge_json(&case["pathEntity"]));
+    let spec = TextSpec::from_json(&case["entity"], &text::num_or_zero).expect("a spec");
+    let glyphs = text::glyphs(&spec, path.as_ref().map(|edge| TextPath { edge }).as_ref());
+    let got = text::tessellate(&glyphs);
+    let faces = got["faces"].as_array().cloned().unwrap_or_default();
+    let want = case["expect"]["tessellated"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
     let mut bad = Vec::new();
+    if faces.len() != want.len() {
+        bad.push(format!(
+            "{name}: {} tessellated faces, expected {}",
+            faces.len(),
+            want.len()
+        ));
+        return bad;
+    }
+    let holes = |f: &Value| f["holes"].as_array().map_or(0, Vec::len);
+    let mut got_holes: Vec<usize> = faces.iter().map(holes).collect();
+    let mut want_holes: Vec<usize> = want
+        .iter()
+        .map(|f| usize::try_from(f["holes"].as_u64().unwrap_or(0)).unwrap_or(0))
+        .collect();
+    got_holes.sort_unstable();
+    want_holes.sort_unstable();
+    if got_holes != want_holes {
+        bad.push(format!("{name}: holes {got_holes:?} != {want_holes:?}"));
+    }
+    for f in &faces {
+        if f["outer"].as_array().map_or(0, Vec::len) < 3 {
+            bad.push(format!("{name}: a face came back without an outer contour"));
+            break;
+        }
+    }
+    bad
+}
+
+fn check(name: &str, case: &Value) -> Vec<String> {
+    let mut bad = check_tessellation(name, case);
     let got = measured(name, case);
     let want = case["expect"]["faces"].as_array().cloned().unwrap_or_default();
     if got.len() != want.len() {

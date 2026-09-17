@@ -9,7 +9,6 @@ use opencascade_sys::joint_ops as ffi;
 use serde_json::json;
 
 use crate::builder::{Ctx, FResult, Fail, BAD_REQUEST};
-
 use crate::select::{entity::EdgeEnt, Resolver};
 
 /// A mate connector: an origin, the mating direction and a rotational
