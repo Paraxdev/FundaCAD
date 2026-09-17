@@ -98,3 +98,7 @@ windows = { version = "0.58", features = [
     "Win32_System_JobObjects",
     "Win32_System_Threading",
 ] }
+
+# Its own workspace root until it joins the root workspace, so cargo run from a
+# worktree nested inside another checkout does not adopt the outer workspace.
+[workspace]
