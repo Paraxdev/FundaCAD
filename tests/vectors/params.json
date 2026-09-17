@@ -1,0 +1,216 @@
+{
+  "about": "Parameter expression vectors shared by src/params (tests/params/vectors.test.ts) and fundacad-core::params (crates/fundacad-core/tests/params_vectors.rs). expect is a number or \"NaN\", \"Infinity\", \"-Infinity\"; digits, when present, compares like toBeCloseTo, otherwise the result must be exact. error is a substring of the message.",
+  "eval": [
+    { "expr": "2 + 3 * 4", "expect": 14 },
+    { "expr": "(2 + 3) * 4", "expect": 20 },
+    { "expr": "10 - 4 - 3", "expect": 3 },
+    { "expr": "12 / 4 / 3", "expect": 1 },
+    { "expr": "2 * 3 ^ 2", "expect": 18 },
+    { "expr": "2 ^ 3 ^ 2", "expect": 512 },
+    { "expr": "-2 ^ 2", "expect": -4 },
+    { "expr": "2 ^ -2", "expect": 0.25 },
+    { "expr": "--3", "expect": 3 },
+    { "expr": "1.5e2 + .5", "expect": 150.5 },
+    { "expr": "2E-1 * 10", "expect": 2 },
+    { "expr": "5.", "expect": 5 },
+    { "expr": "\t7 ", "expect": 7 },
+    { "expr": "width / 2 + 5", "values": { "width": 40 }, "expect": 25 },
+    { "expr": "PI * d", "values": { "d": 2 }, "expect": 6.2832, "digits": 3 },
+    { "expr": "PI", "values": { "PI": 999 }, "expect": 999 },
+    { "expr": "1 in + 5 mm", "expect": 30.4, "digits": 2 },
+    { "expr": "2 cm", "expect": 20 },
+    { "expr": "30 deg", "expect": 30 },
+    { "expr": "1 rad", "expect": 57.29578, "digits": 4 },
+    { "expr": "2*3 mm", "expect": 6 },
+    { "expr": "5 in", "expect": 127 },
+    { "expr": "sin(30)", "expect": 0.5, "digits": 9 },
+    { "expr": "cos(60)", "expect": 0.5, "digits": 9 },
+    { "expr": "tan(45)", "expect": 1, "digits": 9 },
+    { "expr": "asin(0.5)", "expect": 30, "digits": 9 },
+    { "expr": "acos(0.5)", "expect": 60, "digits": 9 },
+    { "expr": "atan(1)", "expect": 45, "digits": 9 },
+    { "expr": "floor(2.7) + ceil(2.2) + round(2.5)", "expect": 8 },
+    { "expr": "abs(-3) + sqrt(16)", "expect": 7 },
+    { "expr": "min(3; 7)", "expect": 3 },
+    { "expr": "max(3; 7; 11)", "expect": 11 },
+    { "expr": "min(width; 10) * 2", "values": { "width": 4 }, "expect": 8 },
+    { "expr": "1 / 0", "expect": "Infinity" },
+    { "expr": "-1 / 0", "expect": "-Infinity" },
+    { "expr": "0 / 0", "expect": "NaN" },
+    { "expr": "sqrt(-1)", "expect": "NaN" },
+    { "expr": "asin(2)", "expect": "NaN" },
+    { "expr": "3 > 2", "expect": 1 },
+    { "expr": "3 < 2", "expect": 0 },
+    { "expr": "2 <= 2", "expect": 1 },
+    { "expr": "2 >= 3", "expect": 0 },
+    { "expr": "1 + 1 == 2", "expect": 1 },
+    { "expr": "0.1 + 0.2 == 0.3", "expect": 1 },
+    { "expr": "0.1 + 0.2 != 0.3", "expect": 0 },
+    { "expr": "0.30000000001 >= 0.3", "expect": 1 },
+    { "expr": "0.3 <= 0.29999999999", "expect": 1 },
+    { "expr": "1 == 1.001", "expect": 0 },
+    { "expr": "1 / 0 == 1 / 0", "expect": 1 },
+    { "expr": "a > 1 && b < 5", "values": { "a": 2, "b": 4 }, "expect": 1 },
+    { "expr": "a > 1 && b < 5", "values": { "a": 0, "b": 4 }, "expect": 0 },
+    { "expr": "a > 1 || b < 5", "values": { "a": 0, "b": 4 }, "expect": 1 },
+    { "expr": "0 || 0 && 1", "expect": 0 },
+    { "expr": "1 || 0 && 0", "expect": 1 },
+    { "expr": "!0 + !5", "expect": 1 },
+    { "expr": "(2 > 1) * 10", "expect": 10 },
+    { "expr": "if(solid == 1; 0; 2.4)", "values": { "solid": 1 }, "expect": 0 },
+    { "expr": "if(solid == 1; 0; 2.4)", "values": { "solid": 0 }, "expect": 2.4 },
+    { "expr": "if(-3; 1; 2)", "expect": 1 },
+    { "expr": "if(n > 0; n; 1) * 2", "values": { "n": 0 }, "expect": 2 },
+    { "expr": "if(sqrt(-1); 1; 2)", "expect": "NaN" },
+    { "expr": "sqrt(-1) > 0", "expect": "NaN" },
+    { "expr": "sqrt(-1) && 0", "expect": "NaN" },
+    { "expr": "!sqrt(-1)", "expect": "NaN" },
+    { "expr": "round(-2.5)", "expect": -2 },
+    { "expr": "round(0.49999999999999994)", "expect": 0 },
+    { "expr": "round(-0.6)", "expect": -1 },
+    { "expr": "round(3.5)", "expect": 4 },
+    { "expr": "min(sqrt(-1); 1)", "expect": "NaN" },
+    { "expr": "max(1; sqrt(-1))", "expect": "NaN" },
+    { "expr": "10 ^ 400", "expect": "Infinity" },
+    { "expr": "(0 - 8) ^ (1 / 3)", "expect": "NaN" },
+    { "expr": "1 ^ (1 / 0)", "expect": "NaN" },
+    { "expr": "(0 - 1) ^ (1 / 0)", "expect": "NaN" },
+    { "expr": "(0 / 0) ^ 0", "expect": 1 },
+    { "expr": "floor(1 / 0)", "expect": "Infinity" },
+    { "expr": "abs(-1 / 0)", "expect": "Infinity" }
+  ],
+  "errors": [
+    { "expr": "", "error": "empty expression" },
+    { "expr": "   ", "error": "empty expression" },
+    { "expr": "2 +", "error": "unexpected end" },
+    { "expr": "2 3", "error": "unexpected \"3\"" },
+    { "expr": "(2 + 3", "error": "missing \")\"" },
+    { "expr": "min(2; 3", "error": "missing \")\" in min(" },
+    { "expr": "blorp(3)", "error": "unknown function \"blorp\"" },
+    { "expr": "log(3)", "error": "log() is not supported yet" },
+    { "expr": "sin(1; 2)", "error": "sin() takes 1 argument" },
+    { "expr": "min(1)", "error": "min() takes at least 2 arguments" },
+    { "expr": "if(1; 2)", "error": "if() takes 3 arguments" },
+    { "expr": "a.b", "values": { "a": 1 }, "error": "qualified names" },
+    { "expr": "2 $ 3", "error": "unexpected character \"$\"" },
+    { "expr": "1 < 2 < 3", "error": "do not chain" },
+    { "expr": "1 & 2", "error": "unexpected character \"&\"" },
+    { "expr": "wdith", "values": { "width": 40 }, "error": "unknown parameter \"wdith\"" },
+    { "expr": "1..2", "error": "invalid number \"1..2\"" },
+    { "expr": "1e999", "error": "invalid number \"1e999\"" },
+    { "expr": "2e", "error": "unexpected \"e\"" },
+    { "expr": "sin()", "error": "unexpected \")\"" },
+    { "expr": "1\n+ 2", "error": "unexpected character" },
+    { "expr": ")", "error": "unexpected \")\"" },
+    { "expr": "3 mm mm", "error": "unexpected \"mm\"" }
+  ],
+  "refs": [
+    { "expr": "if(a > b; c; !d)", "refs": ["a", "b", "c", "d"] },
+    { "expr": "width/2 + d1*PI", "refs": ["d1", "width"] },
+    { "expr": "min(a; b) + 5 mm + sin(c)", "refs": ["a", "b", "c"] },
+    { "expr": "42", "refs": [] },
+    { "expr": "a + a", "refs": ["a"] }
+  ],
+  "rename": [
+    { "expr": "if(a >= 2; a; 0)", "from": "a", "to": "rings", "expect": "if(rings >= 2; rings; 0)" },
+    { "expr": "width/2 + 5", "from": "width", "to": "w", "expect": "w/2 + 5" },
+    { "expr": "width + widths", "from": "width", "to": "w", "expect": "w + widths" },
+    { "expr": "min(width; 2*width)", "from": "width", "to": "size", "expect": "min(size; 2*size)" },
+    { "expr": "5 mm + width", "from": "mm", "to": "x", "expect": "5 mm + width" },
+    { "expr": "a  +  b", "from": "a", "to": "alpha", "expect": "alpha  +  b" },
+    { "expr": "no_match", "from": "x", "to": "y", "expect": "no_match" }
+  ],
+  "numericLiteral": [
+    { "expr": "25", "expect": true },
+    { "expr": "-3.5", "expect": true },
+    { "expr": "5 mm", "expect": true },
+    { "expr": "width", "expect": false },
+    { "expr": "5+3", "expect": false },
+    { "expr": "not an expr $$", "expect": false }
+  ],
+  "reserved": {
+    "yes": ["sin", "if", "mm", "PI", "min", "random", "rad", "tanh"],
+    "no": ["width", "d1", "thickness", "Sin", "e"]
+  },
+  "identNames": {
+    "yes": ["width", "_x", "d1", "A_b9"],
+    "no": ["", "9lives", "a.b", "a-b", "wé"]
+  },
+  "recompute": [
+    {
+      "name": "dependency order",
+      "defs": {
+        "d1": { "expr": "half + 5", "value": 0, "unit": "mm" },
+        "half": { "expr": "width / 2", "value": 0, "unit": "mm" },
+        "width": { "expr": "40", "value": 0, "unit": "mm" }
+      },
+      "values": { "d1": 25, "half": 20, "width": 40 },
+      "issues": {}
+    },
+    {
+      "name": "cycles and non-finite results keep the cached value",
+      "defs": {
+        "a": { "expr": "b + 1", "value": 11, "unit": "mm" },
+        "b": { "expr": "a + 1", "value": 10, "unit": "mm" },
+        "w": { "expr": "0", "value": 0, "unit": "mm" },
+        "q": { "expr": "10 / w", "value": 99, "unit": "mm" },
+        "fromCycle": { "expr": "a * 2", "value": 5, "unit": "mm" }
+      },
+      "values": { "a": 11, "b": 10, "w": 0, "q": 99, "fromCycle": 5 },
+      "issues": { "a": "circular reference", "b": "circular reference", "q": "finite", "fromCycle": "circular reference" }
+    },
+    {
+      "name": "self reference, bad syntax, unknown names",
+      "defs": {
+        "s": { "expr": "s + 1", "value": 3, "unit": "mm" },
+        "bad": { "expr": "2 +", "value": 7, "unit": "mm" },
+        "stale": { "expr": "gone * 2", "value": 8, "unit": "mm" },
+        "fine": { "expr": "bad + stale", "value": 0, "unit": "mm" }
+      },
+      "values": { "s": 3, "bad": 7, "stale": 8, "fine": 15 },
+      "issues": { "s": "circular reference", "bad": "invalid expression", "stale": "unknown parameter \"gone\"" }
+    },
+    {
+      "name": "conditions over counts",
+      "defs": {
+        "solid": { "expr": "0", "value": 1, "unit": "count" },
+        "wall": { "expr": "if(solid == 1; 0; 2.4)", "value": 0, "unit": "mm" },
+        "rings": { "expr": "max(1; floor(wall * 3))", "value": 0, "unit": "count" }
+      },
+      "values": { "solid": 0, "wall": 2.4, "rings": 7 },
+      "issues": {}
+    }
+  ],
+  "validate": [
+    {
+      "defs": { "a": { "expr": "10", "value": 10, "unit": "mm" }, "b": { "expr": "a * 2", "value": 20, "unit": "mm" } },
+      "cases": [
+        { "name": null, "expr": "a + missing", "error": "unknown parameter \"missing\"" },
+        { "name": "a", "expr": "a + 1", "error": "\"a\" cannot reference itself" },
+        { "name": "a", "expr": "b / 2", "error": "circular reference: a → b → a" },
+        { "name": null, "expr": "3 mm", "kind": "count", "error": "unitless" },
+        { "name": null, "expr": "3", "kind": "count", "ok": 3 },
+        { "name": null, "expr": "1 / 0", "error": "finite" },
+        { "name": null, "expr": "a + b", "ok": 30 },
+        { "name": null, "expr": "2 +", "error": "unexpected end" }
+      ]
+    }
+  ],
+  "checks": [
+    {
+      "defs": { "gap": { "expr": "0.2", "value": 0.2, "unit": "count" } },
+      "checks": [
+        { "id": "a", "expr": "gap >= 0.3", "message": "gap too small", "level": "warning" },
+        { "id": "b", "expr": "gap > 0", "message": "gap must exist", "level": "error" },
+        { "id": "c", "expr": "missing > 0", "message": "stale", "level": "error" },
+        { "id": "d", "expr": "sqrt(0 - gap)", "message": "nan", "level": "error" }
+      ],
+      "results": [
+        { "ok": false },
+        { "ok": true },
+        { "ok": false, "error": "unknown parameter" },
+        { "ok": false, "error": "does not evaluate to a number" }
+      ]
+    }
+  ]
+}
