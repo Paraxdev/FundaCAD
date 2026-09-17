@@ -119,7 +119,13 @@ OCCT 8.0 is tracked, not a prerequisite.
 - **Crash isolation:** a supervised worker process for the whole engine
   (section 2.1), not a child per risky operation. It is what the Python app
   does today, it makes cancel-by-kill uniform, and a pipe copy of a mesh is
-  cheap next to tessellating it.
+  cheap next to tessellating it. Offset Face and Press/Pull run BRepOffset in
+  process too, where the Python engine uses offset_child.py: the freeform
+  faces measured to crash are refused before any offset, as in Python, and on
+  OCCT 7.8.1 the chamfered bodies offset_child.py documents refuse cleanly
+  (128 offsets and pushes over every face of two chamfered spools, no crash,
+  the same errors as Python). The in-memory BREP round trip the child did is
+  kept.
 - **Plugin geometry:** a plugin's geometry stays in the plugin (docs/PLUGINS.md,
   no domain logic in core). The Python half of a bundle becomes a WebAssembly
   component the engine runs with wasmtime, built from a Rust crate inside the
