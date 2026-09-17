@@ -38,7 +38,7 @@ from OCP.gp import gp_Lin, gp_Pnt, gp_Pnt2d, gp_Vec
 from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
 from OCP.TColgp import TColgp_Array1OfPnt
 from OCP.TColStd import TColStd_Array1OfReal
-from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE, TopAbs_IN, TopAbs_ON, TopAbs_OUT, TopAbs_SOLID, TopAbs_VERTEX
+from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE, TopAbs_IN, TopAbs_ON, TopAbs_OUT, TopAbs_SHELL, TopAbs_SOLID, TopAbs_VERTEX
 from OCP.TopExp import TopExp, TopExp_Explorer
 from OCP.TopoDS import TopoDS
 from OCP.TopTools import TopTools_IndexedDataMapOfShapeListOfShape, TopTools_ListOfShape
@@ -879,7 +879,7 @@ def _trim_solid(g, at, size):
     return None
 
 
-def _ball_corners(shape, blended):
+def _ball_corners(shape, blended, continuity="G1", profile=0.0):
     """Where every edge into a corner of three faces is being rounded convex at
     one radius, the corner is the ball rolling into it.
 
@@ -889,13 +889,19 @@ def _ball_corners(shape, blended):
     parallelepiped between the ball centre and the planes touching the faces
     where the ball does; removing the part of it outside the ball is exactly
     the difference on planar faces, since every point of the ball is within the
-    radius of each edge's axis, and close to it on curved ones."""
+    radius of each edge's axis, and close to it on curved ones.
+
+    A profiled or G2 blend has no ball. Where the three faces are planes square
+    to each other its corner is `_patch_solid` instead, and elsewhere the edges
+    still meet as they are."""
     from OCP.BRepBuilderAPI import BRepBuilderAPI_GTransform
     from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeSphere
     from OCP.gp import gp_GTrsf, gp_Mat, gp_XYZ
 
     if len(blended) < 3:
         return []
+    weight = weight_scale(profile)
+    ball = continuity == "G1" and abs(weight - 1.0) < 1e-9
     vmap = TopTools_IndexedDataMapOfShapeListOfShape()
     TopExp.MapShapesAndAncestors_s(shape, TopAbs_VERTEX, TopAbs_EDGE, vmap)
     fmap = TopTools_IndexedDataMapOfShapeListOfShape()
@@ -921,10 +927,15 @@ def _ball_corners(shape, blended):
             faces = [TopoDS.Face_s(f) for f in _unique(fmap.FindFromIndex(fmap.FindIndex(v)))]
             if len(faces) != 3:
                 continue
-            got = _corner_ball(faces, BRep_Tool.Pnt_s(v), r)
+            setback = r * G2_SETBACK if continuity == "G2" else r
+            if not ball and not all(BRepAdaptor_Surface(f).GetType() == GeomAbs_Plane for f in faces):
+                continue
+            got = _corner_ball(faces, BRep_Tool.Pnt_s(v), setback)
             if got is None:
                 continue
             C, ns = got
+            if not ball and any(abs(ns[i].Dot(ns[j])) > 1e-6 for i, j in ((0, 1), (1, 2), (0, 2))):
+                continue
             curved = any(BRepAdaptor_Surface(f).GetType() != GeomAbs_Plane for f in faces)
             cols = []
             for k in range(3):
@@ -934,20 +945,89 @@ def _ball_corners(shape, blended):
                     break
                 # Past the touching plane: a concave face curves back into the
                 # body beyond it, and a cell short of that leaves a sliver.
-                cols.append(d.Multiplied((r * (1.5 if curved else 1.02) + 1e-3) / along))
+                cols.append(d.Multiplied((setback * (1.5 if curved else 1.02) + 1e-3) / along))
             if len(cols) != 3:
                 continue
             m = gp_Mat(cols[0].XYZ(), cols[1].XYZ(), cols[2].XYZ())
             g = gp_GTrsf(m, gp_XYZ(C.X(), C.Y(), C.Z()))
             cell = BRepBuilderAPI_GTransform(BRepPrimAPI_MakeBox(1.0, 1.0, 1.0).Shape(), g, True).Shape()
-            ball = BRepPrimAPI_MakeSphere(_p(C), r).Shape()
             try:
-                corner = _boolean(BRepAlgoAPI_Cut(), cell, [ball], 1e-6)
+                kept = BRepPrimAPI_MakeSphere(_p(C), r).Shape() if ball else _patch_solid(C, ns, setback, continuity, weight)
+                corner = _boolean(BRepAlgoAPI_Cut(), cell, [kept], 1e-6)
             except SectionBlendError:
                 continue
             if BRepCheck_Analyzer(corner).IsValid() and _sane_volume(corner):
                 out.append(corner)
     return out
+
+
+def _section_poles(Qa, K, Qb, continuity, k):
+    """Poles and weights of the section `_section` builds between contacts Qa
+    and Qb on faces square to each other, whose control corner is K."""
+    if continuity == "G2":
+        t = 1 - G2_TENSION
+        return ([Qa, Qa + (K - Qa).Multiplied(t), K, Qb + (K - Qb).Multiplied(t), Qb],
+                [1.0, 1.0, k, 1.0, 1.0])
+    return [Qa, K, Qb], [1.0, math.sin(math.pi / 4) * k, 1.0]
+
+
+def _patch_solid(A, ns, d, continuity, k):
+    """What a profiled or G2 blend keeps of a corner where three planes meet
+    square: the cell between A, the point `d` in from all three faces, and
+    the surface over it.
+
+    Every vertical slice through A's axis along ns[2] is the edges' own
+    section, from the pole on the third face down to the section of the edge
+    along ns[2]. A section's poles are affine in its contacts and corner, so
+    the whole surface is one rational Bezier patch whose rows are that edge's
+    section, and it meets all three edge blends exactly. At profile 0 in G1
+    it is the ball."""
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakePolygon, BRepBuilderAPI_Sewing
+    from OCP.Geom import Geom_BezierSurface
+    from OCP.ShapeFix import ShapeFix_Solid
+    from OCP.TColgp import TColgp_Array2OfPnt
+    from OCP.TColStd import TColStd_Array2OfReal
+
+    a, n1, n2, n3 = _v(A), ns[0], ns[1], ns[2]
+    up = n3.Multiplied(d)
+    pole = a + up
+    ring, ws = _section_poles(a + n1.Multiplied(d), a + n1.Multiplied(d) + n2.Multiplied(d), a + n2.Multiplied(d),
+                              continuity, k)
+    rows = [_section_poles(pole, e + up, e, continuity, k) for e in ring]
+    nu, nv = len(ring), len(rows[0][0])
+    poles = TColgp_Array2OfPnt(1, nu, 1, nv)
+    weights = TColStd_Array2OfReal(1, nu, 1, nv)
+    for i, (pts, wv) in enumerate(rows):
+        for j in range(nv):
+            poles.SetValue(i + 1, j + 1, _p(pts[j]))
+            weights.SetValue(i + 1, j + 1, ws[i] * wv[j])
+    surf = Geom_BezierSurface(poles, weights)
+    faces = [BRepBuilderAPI_MakeFace(surf, 0.0, 1.0, 0.0, 1.0, 1e-7).Face()]
+    for crv, ends in ((surf.UIso(0.0), (a + n1.Multiplied(d), pole)),
+                      (surf.UIso(1.0), (a + n2.Multiplied(d), pole)),
+                      (surf.VIso(1.0), (a + n1.Multiplied(d), a + n2.Multiplied(d)))):
+        wire = BRepBuilderAPI_MakeWire()
+        wire.Add(BRepBuilderAPI_MakeEdge(crv).Edge())
+        corner = BRepBuilderAPI_MakePolygon(_p(ends[1]), _p(a), _p(ends[0]))
+        wire.Add(corner.Wire())
+        if not wire.IsDone():
+            raise SectionBlendError("the corner patch did not close")
+        face = BRepBuilderAPI_MakeFace(wire.Wire(), True)
+        if not face.IsDone():
+            raise SectionBlendError("the corner patch did not close")
+        faces.append(face.Face())
+    sew = BRepBuilderAPI_Sewing(1e-6)
+    for f in faces:
+        sew.Add(f)
+    sew.Perform()
+    shell = TopExp_Explorer(sew.SewedShape(), TopAbs_SHELL)
+    if not shell.More():
+        raise SectionBlendError("the corner patch did not close")
+    fix = ShapeFix_Solid()
+    solid = fix.SolidFromShell(TopoDS.Shell_s(shell.Current()))
+    if not BRepCheck_Analyzer(solid).IsValid() or not _sane_volume(solid):
+        raise SectionBlendError("the corner patch did not close")
+    return solid
 
 
 def _corner_ball(faces, V, r):
@@ -1321,8 +1401,7 @@ def _section_blend(shape, edges, kind, size2, continuity, sizes, draft, profile)
         (cut if s > 0 else fuse).extend(tools)
         if s > 0:
             convex.append((e, sz))
-    round_corners = kind == "fillet" and continuity == "G1" and abs(weight_scale(profile) - 1.0) < 1e-9
-    corners = _ball_corners(shape, convex) if round_corners else []
+    corners = _ball_corners(shape, convex, continuity, profile) if kind == "fillet" else []
     if corners:
         # On copies: a boolean that fails can still raise the tolerances of its
         # arguments in place, and the retry without corners would inherit that.

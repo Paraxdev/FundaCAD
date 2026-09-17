@@ -490,6 +490,34 @@ def test_a_draft_preview_is_quicker_and_close_to_the_real_build():
     print(PASS, "a draft skips the kernel's per-edge attempts and adds within 5% of the real blend")
 
 
+def test_a_profiled_corner_rounds_instead_of_meeting_in_a_point():
+    """Three edges into one box corner at a profile or in G2 used to meet in the
+    sharp intersection of their three blends, a point sticking out of the
+    corner. The corner patch should land where the kernel's reweighted one
+    does, and G2 should build one too."""
+    import section_blend as sb
+    from conic_blend import conic_blend
+
+    box = Box(50, 50, 25.408, align=(Align.CENTER, Align.CENTER, Align.MIN))
+    edges = [e for e in box.edges() if e.center().X > 24 and e.center().Y < -24] +             [e for e in box.edges() if e.center().Z > 25 and (e.center().X > 24 or e.center().Y < -24)]
+    assert len(edges) == 3
+    raw = [e.wrapped for e in edges]
+    for profile in (0.888, -0.5):
+        kernel = _wrap_topods(conic_blend(box.wrapped, raw, 8, profile)).volume
+        patched = _blend(box, edges, kind="fillet", size=8, profile=profile).volume
+        real = sb._ball_corners
+        sb._ball_corners = lambda *a, **k: []
+        try:
+            square = _blend(box, edges, kind="fillet", size=8, profile=profile).volume
+        finally:
+            sb._ball_corners = real
+        assert abs(patched - kernel) < 0.1 * abs(square - kernel), (profile, kernel, patched, square)
+    assert len(sb._ball_corners(box.wrapped, [(e, 8.0) for e in raw], "G2", 0.888)) == 1, "G2 gets a corner patch"
+    big = _blend(box, edges, kind="fillet", size=16, profile=0.888)
+    assert big.is_valid and len(big.solids()) == 1
+    print(PASS, "a profiled corner rounds like the kernel's instead of meeting in a point, G2 gets one too")
+
+
 if __name__ == "__main__":
     try:
         test_matches_the_kernel_where_the_kernel_builds()
@@ -506,6 +534,7 @@ if __name__ == "__main__":
         test_every_edge_rounded_meets_in_a_ball()
         test_a_rim_rounded_by_its_own_radius_is_a_dome()
         test_a_corner_on_a_curved_face_and_a_tapered_one_round_like_the_kernel()
+        test_a_profiled_corner_rounds_instead_of_meeting_in_a_point()
         test_the_kernels_failed_attempts_leave_the_body_alone()
         test_a_draft_preview_is_quicker_and_close_to_the_real_build()
         print("\nALL PASS")
