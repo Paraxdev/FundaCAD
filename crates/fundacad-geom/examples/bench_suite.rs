@@ -258,11 +258,26 @@ fn stage_import(args: &[String]) {
         frame_ms = ms(t.elapsed());
         frame_mib = bytes.map_or(0, |b| b.len()) as f64 / (1024.0 * 1024.0);
     }
+    let out = std::env::temp_dir().join(format!("fundacad-bench-out-{}", std::process::id()));
+    std::fs::create_dir_all(&out).expect("a temp directory");
+    let mut exports = Map::new();
+    for fmt in ["stl", "3mf"] {
+        let target = out.join(format!("bench.{fmt}")).to_string_lossy().to_string();
+        let mut req = Map::new();
+        req.insert("format".into(), json!(fmt));
+        req.insert("path".into(), json!(target));
+        let t = Instant::now();
+        let r = fundacad_geom::export::export_built(&req, &doc, fmt, &target, &built.bodies, &built.errors);
+        exports.insert(fmt.into(), json!(ms(t.elapsed())));
+        assert!(!r.contains_key("error"), "{fmt} export failed: {r:?}");
+    }
+    let _ = std::fs::remove_dir_all(&out);
     let _ = std::fs::remove_dir_all(&root);
     println!(
         "{}",
         json!({
             "stage": "import",
+            "export_ms": exports,
             "file": path,
             "bodies": built.bodies.len(),
             "faces": faces,
