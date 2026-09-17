@@ -363,7 +363,7 @@ def test_colour_on_the_faces_beats_colour_on_the_product():
 def test_colour_on_a_solid_is_read_and_reaches_the_body():
     """A SolidWorks export styles the SOLID with the part's appearance and leaves
     feature colours on its faces. The solid's colour used to be read by nothing,
-    so the SV08 printer's black parts came in wearing their stale face red."""
+    so the reference frame assembly's black parts came in wearing their stale face red."""
     import tempfile
 
     import face_colors

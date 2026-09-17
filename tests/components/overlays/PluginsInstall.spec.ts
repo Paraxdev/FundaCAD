@@ -150,9 +150,9 @@ describe("reading a bundle from a link", () => {
     const block = candidateRow(w).get(".plug-consent");
     expect(block.find(".plug-can").text()).toContain("Change the document you have open");
     // The control. Widgets asked for two document permissions and nothing else,
-    // so a screen that listed the printer would be listing everything.
-    expect(block.find(".plug-can").text()).not.toContain("Send jobs to your printer");
-    expect(block.find(".plug-cannot").text()).toContain("Touch your printer");
+    // so a screen that listed the local network would be listing everything.
+    expect(block.find(".plug-can").text()).not.toContain("Talk to devices on your local network");
+    expect(block.find(".plug-cannot").text()).toContain("Reach devices on your local network");
   });
 
   it("reports a bundle it could not read, and offers nothing to install", async () => {

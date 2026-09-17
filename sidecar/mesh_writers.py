@@ -1,6 +1,6 @@
 """Binary STL, plain 3MF and GLB writers for meshed bodies.
 
-STL and 3MF exist because they are the printing formats that can carry a
+STL and 3MF exist because they are the mesh formats that can carry a
 TEXTURE-DISPLACED mesh (STEP is BRep-only; see server.py's _export_job, which
 keeps untextured bodies on the build123d BRep-native exporters.export() path and
 only routes textured targets here).
@@ -18,7 +18,72 @@ import zipfile
 
 import numpy as np
 
-from project3mf import CONTENT_TYPES, RELS, _mesh_chunks
+CONTENT_TYPES = """<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>
+</Types>"""
+
+RELS = """<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>
+</Relationships>"""
+
+
+def norm_color(c, fallback="#808080"):
+    """Accept '#RRGGBB'/'RRGGBB' (case-insensitive); return '#RRGGBB' upper."""
+    s = str(c or "").strip().lstrip("#")
+    if len(s) == 8:  # tolerate RRGGBBAA
+        s = s[:6]
+    if len(s) != 6 or any(ch not in "0123456789abcdefABCDEF" for ch in s):
+        return fallback
+    return "#" + s.upper()
+
+
+def mesh_xml(positions, indices):
+    """The whole mesh as one string. Kept for callers with small meshes and for
+    the tests; `mesh_chunks` is what the writer uses."""
+    return "".join(mesh_chunks(positions, indices))
+
+
+# Vertices per emitted chunk. Large enough that the per-chunk overhead is noise,
+# small enough that peak memory stays flat regardless of body size.
+_XML_CHUNK_VERTS = 4096
+
+
+def mesh_chunks(positions, indices):
+    """Yield a body's <mesh> XML in bounded pieces.
+
+    Built as a generator rather than one string because the caller streams it
+    straight into the zip. A 3,000-body assembly at export grade is millions of
+    triangles, and materialising that as a single Python str (plus the list of
+    per-element strings "".join consumes) costs many times the mesh itself, on
+    the one path that has no triangle budget of its own.
+    """
+    yield "<mesh><vertices>"
+    buf = []
+    for i in range(0, len(positions) - 2, 3):
+        buf.append(
+            f'<vertex x="{positions[i]:.6g}" y="{positions[i + 1]:.6g}" '
+            f'z="{positions[i + 2]:.6g}"/>'
+        )
+        if len(buf) >= _XML_CHUNK_VERTS:
+            yield "".join(buf)
+            buf = []
+    if buf:
+        yield "".join(buf)
+    yield "</vertices><triangles>"
+    buf = []
+    for i in range(0, len(indices) - 2, 3):
+        buf.append(
+            f'<triangle v1="{indices[i]}" v2="{indices[i + 1]}" v3="{indices[i + 2]}"/>'
+        )
+        if len(buf) >= _XML_CHUNK_VERTS:
+            yield "".join(buf)
+            buf = []
+    if buf:
+        yield "".join(buf)
+    yield "</triangles></mesh>"
 
 
 def write_stl(positions, indices, path):
@@ -78,11 +143,9 @@ def write_stl_ascii(positions, indices, path, name="FundaCAD"):
 
 
 def write_plain_3mf(positions, indices, path, unit="millimeter"):
-    """A minimal single-object plain 3MF (no Orca project metadata, see
-    project3mf.py for that variant). Reuses the SAME vertex/triangle
-    serialization as the Orca-project writer instead of forking it.
+    """A minimal single-object plain 3MF.
 
-    STREAMED, for the same reason write_project_3mf is: this is now the writer
+    STREAMED: this is the writer
     for EVERY stl/3mf export, textured or not, so materialising the model as one
     string would cost ~560 MB of peak for a 2M-triangle document (the join, the
     f-string interpolation and writestr's UTF-8 encode each hold a full copy) and
@@ -105,7 +168,7 @@ def write_plain_3mf(positions, indices, path, unit="millimeter"):
         z.writestr("_rels/.rels", RELS)
         with z.open("3D/3dmodel.model", "w") as fh:
             fh.write(head.encode("utf-8"))
-            for chunk in _mesh_chunks(positions, indices):
+            for chunk in mesh_chunks(positions, indices):
                 fh.write(chunk.encode("utf-8"))
             fh.write(tail.encode("utf-8"))
     return path

@@ -1266,7 +1266,7 @@ export class Viewport {
       const WALL = new THREE.Color(0x4aa3e2); // wall / steep-enough downward
       // a downward face is an overhang when its angle from straight-down (β) is
       // below the threshold; β=0 is a flat ceiling (worst), β=90° is a vertical
-      // wall (fine). Equivalent to slicers' "support below <threshold>°".
+      // wall (fine).
       this.highlighter.setBase((fid) => {
         const c = this.faceNormalWorld(fid).dot(B); // cos(angle to build dir)
         if (c >= -0.02) return c > 0.02 ? TOP : WALL; // up-facing or vertical

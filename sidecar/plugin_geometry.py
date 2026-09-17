@@ -9,7 +9,7 @@ actually displace a mesh lived in this directory, dispatched from a table in
 builder.py that named "texture" in plain text. Uninstalling it removed the way
 to make one and changed nothing about what the application could build.
 
-So a plugin registers here, and what it registers is of two kinds.
+So a plugin registers here, and what it registers is of three kinds.
 
 A FEATURE HANDLER is a rebuild-time verb: the same shape as everything in
 builder._FEATURE_HANDLERS, `(feature, ctx) -> None`, and it lands in the same
@@ -27,6 +27,17 @@ applied after it. A pass therefore gets three callables and a version:
     code_version() -> int
         bumped by the plugin when its algorithm changes, so a mesh displaced by
         the previous version is never served out of a disk cache
+
+An EXPORTER is a file format the plugin writes from the finished model:
+
+    write(bodies, path, options) -> path, or {"path": ..., "info": {...}}
+        bodies are [{"id", "name", "positions", "indices"}], every live body
+        meshed at export grade; options are the plugin's own, passed through
+        from the window untouched
+
+The engine does the rebuild, the meshing and the triangle budget, so an
+exporter only decides what the file looks like. `exportWith` in server.py is the
+op that runs one.
 
 WHERE THE SPECS LIVE. On the body dict under `BODY_KEY`, as a flat list, each
 entry carrying `"pass"` to say whose it is. The core plumbing that carries that
@@ -69,6 +80,10 @@ MANIFEST_ENTRY = "geometry"
 #: every plugin found on disk, not off the ones that registered.
 MANIFEST_TYPES = "featureTypes"
 
+#: The manifest field listing the exporters a plugin registers, read the same
+#: way, so an export can name the plugin it needs when that plugin is absent.
+MANIFEST_EXPORTERS = "exporters"
+
 
 class MeshPass:
     """One plugin's tessellation-time hook. See the module docstring."""
@@ -87,6 +102,10 @@ class MeshPass:
 _FEATURES = {}
 # pass name -> MeshPass
 _PASSES = {}
+# exporter name -> (write, plugin id)
+_EXPORTERS = {}
+# exporter name -> plugin id, for every plugin found on disk
+_EXPORT_OWNERS = {}
 # feature type -> plugin id, for every plugin FOUND ON DISK whether or not its
 # geometry loaded. This is what lets the warning name a plugin it could not run.
 _OWNERS = {}
@@ -123,6 +142,28 @@ def register_mesh_pass(name, plugin, resolve, displace, code_version):
             f"{plugin} cannot claim it too"
         )
     _PASSES[name] = MeshPass(name, plugin, resolve, displace, code_version)
+
+
+def register_exporter(name, plugin, write):
+    """Claim an export format. See the module docstring for `write`."""
+    if name in _EXPORTERS and _EXPORTERS[name][1] != plugin:
+        raise ValueError(
+            f"exporter {name!r} is already owned by {_EXPORTERS[name][1]}, "
+            f"{plugin} cannot claim it too"
+        )
+    _EXPORTERS[name] = (write, plugin)
+
+
+def exporter_for(name):
+    """The registered `write` for an export format, or None."""
+    hit = _EXPORTERS.get(name)
+    return hit[0] if hit else None
+
+
+def exporter_owner(name):
+    """The plugin whose manifest declares an exporter, loaded or not, or None."""
+    hit = _EXPORTERS.get(name)
+    return hit[1] if hit else _EXPORT_OWNERS.get(name)
 
 
 def stash(body, spec):
@@ -377,6 +418,8 @@ def discover(force=False):
             # present but broken can still be named by the warning.
             for t in man.get(MANIFEST_TYPES) or []:
                 _OWNERS.setdefault(t, pid)
+            for x in man.get(MANIFEST_EXPORTERS) or []:
+                _EXPORT_OWNERS.setdefault(x, pid)
             rel = man.get(MANIFEST_ENTRY)
             if not rel or pid in _LOADED or pid in _BROKEN:
                 continue
@@ -429,6 +472,8 @@ def _reset_for_tests():
     global _discovered
     _FEATURES.clear()
     _PASSES.clear()
+    _EXPORTERS.clear()
+    _EXPORT_OWNERS.clear()
     _OWNERS.clear()
     _LOADED.clear()
     _BROKEN.clear()

@@ -135,23 +135,21 @@ export interface GeometryBackend {
     doc: CadDocument,
     clearance?: number,
   ): Promise<{ ok: boolean; pairs?: ClashPair[]; clearances?: ClearancePair[]; truncated?: boolean; message?: string }>;
-  /** Colored multi-material 3MF PROJECT export (Orca format: one object per body,
-   *  palette slot → extruder). Optional, only the Python sidecar authors it; the
-   *  Rust spike backend omits it. Palette/bodyColors/bodyNames live in store
-   *  side-maps, NOT in `document`, so they're passed explicitly here. */
-  exportProject?(
+  /** Export through a format a plugin registered with the engine
+   *  (sidecar/plugin_geometry.py `register_exporter`). The engine rebuilds and
+   *  meshes; `options` reach the plugin's exporter untouched, and `info` is
+   *  whatever it reports back. Optional, only the Python sidecar has plugin
+   *  exporters. */
+  exportWith?(
     doc: CadDocument,
     path: string,
-    opts: {
-      palette: { name: string; color: string; material?: string }[];
-      bodyColors: Record<string, number>;
-      bodyNames: Record<string, string>;
-      settings?: Record<string, unknown>;
-    },
+    exporter: string,
+    options: Record<string, unknown>,
     onStarted?: (id: string) => void,
   ): Promise<{
     ok: boolean;
     path?: string;
+    info?: Record<string, unknown>;
     message?: string;
     cancelled?: boolean;
     warnings?: { message: string; feature_id?: string }[];
@@ -1034,30 +1032,31 @@ export class Geometry implements GeometryBackend {
     return { ok: false, message: msg.error?.message };
   }
 
-  async exportProject(
+  async exportWith(
     doc: CadDocument,
     path: string,
-    opts: {
-      palette: { name: string; color: string; material?: string }[];
-      bodyColors: Record<string, number>;
-      bodyNames: Record<string, string>;
-      settings?: Record<string, unknown>;
-    },
+    exporter: string,
+    options: Record<string, unknown>,
     onStarted?: (id: string) => void,
-  ): Promise<{ ok: boolean; path?: string; message?: string; cancelled?: boolean; warnings?: { message: string; feature_id?: string }[] }> {
-    const msg = await this.call<{ path?: string; warnings?: { message: string; feature_id?: string }[] }>("exportProject", {
-      document: doc,
-      path,
-      palette: opts.palette,
-      bodyColors: opts.bodyColors,
-      bodyNames: opts.bodyNames,
-      settings: opts.settings ?? {},
-    }, onStarted);
+  ): Promise<{
+    ok: boolean;
+    path?: string;
+    info?: Record<string, unknown>;
+    message?: string;
+    cancelled?: boolean;
+    warnings?: { message: string; feature_id?: string }[];
+  }> {
+    const msg = await this.call<{
+      path?: string;
+      info?: Record<string, unknown>;
+      warnings?: { message: string; feature_id?: string }[];
+    }>("exportWith", { document: doc, path, exporter, options }, onStarted);
     if (msg.ok) {
       const r = msg.result;
       return {
         ok: true,
         ...(r.path !== undefined ? { path: r.path } : {}),
+        ...(r.info !== undefined ? { info: r.info } : {}),
         ...(r.warnings !== undefined ? { warnings: r.warnings } : {}),
       };
     }

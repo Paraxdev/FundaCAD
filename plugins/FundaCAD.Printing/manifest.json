@@ -1,17 +1,22 @@
 {
   "id": "FundaCAD.Printing",
   "name": "Printer connection",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "kind": "builtin",
   "summary": "Sends jobs to a printer on your network, reads its status, and opens a model in your slicer.",
   "enabledByDefault": true,
   "grants": [
     "document.read",
+    "files.read",
     "files.write",
-    "printer.control",
+    "network.local",
     "process.spawn"
   ],
   "formerIds": [
     "printing"
+  ],
+  "geometry": "geometry/register.py",
+  "exporters": [
+    "print-project-3mf"
   ]
 }

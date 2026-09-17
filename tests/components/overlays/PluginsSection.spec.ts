@@ -64,10 +64,10 @@ describe("what is offered", () => {
     const block = offerRow(w, "FundaCAD.MultiColor").get(consent);
     expect(block.text()).toContain("Change the document you have open");
     // The control: a plugin that reads and writes the document is not thereby a
-    // plugin that touches your printer, and the screen has to be able to tell
+    // plugin that reaches your local network, and the screen has to be able to tell
     // those apart or it says nothing.
-    expect(block.find(".plug-can").text()).not.toContain("Send jobs to your printer");
-    expect(block.find(".plug-cannot").text()).toContain("Touch your printer");
+    expect(block.find(".plug-can").text()).not.toContain("Talk to devices on your local network");
+    expect(block.find(".plug-cannot").text()).toContain("Reach devices on your local network");
   });
 });
 
@@ -95,7 +95,7 @@ describe("the plugins that are downloaded", () => {
 
     // And the control: a permission it did NOT ask for must not appear as one
     // it has. Without this the test passes on a block that lists everything.
-    expect(block.find(".plug-can").text()).not.toContain("Send jobs to your printer");
+    expect(block.find(".plug-can").text()).not.toContain("Talk to devices on your local network");
   });
 
   it("says a process plugin is a program on the machine", async () => {

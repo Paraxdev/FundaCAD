@@ -5,9 +5,9 @@
 // and unit formatting of the numbers those produce.
 //
 // The app's own panels only. A capability that wants a floating panel brings its
-// own component and its own state; a printer camera used to be a fifth field on
-// the store below and a fifth function here, which put "which printer is being
-// watched" in the same object as "which bodies are overlapping".
+// own component and its own state; a plugin's camera view used to be a fifth
+// field on the store below and a fifth function here, which put "which device
+// is being watched" in the same object as "which bodies are overlapping".
 
 import type { DocumentStore } from "../document/store";
 import type { Viewport } from "../viewport/viewport";

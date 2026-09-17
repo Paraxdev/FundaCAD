@@ -485,7 +485,7 @@ def _budget_refusal(ntri):
 
     ONE mechanism, because this had drifted into three: two raising sites and one
     returning an error dict, with the WARN threshold duplicated beside two of
-    them and missing from the third, which is how exportProject came to have no
+    them and missing from the third, which is how one export op came to have no
     budget at all. A new export format now cannot be added without it.
 
     Deliberately NOT worded "textured": since untextured stl/3mf was routed
@@ -883,7 +883,7 @@ def _export_job(document, fmt, path, body=None, separate=False,
         goes through exporters.export(): that path serialises body["shape"], and
         texture displacement lives only in the mesh, so a textured body would
         export silently untextured."""
-        from project3mf import _norm_color
+        from mesh_writers import norm_color
 
         pal = palette or []
         slots = body_colors or {}
@@ -903,7 +903,7 @@ def _export_job(document, fmt, path, body=None, separate=False,
                 "name": b.get("name") or b["id"],
                 "positions": pos,
                 "indices": idx,
-                "color": _norm_color(entry.get("color")) if entry else None,
+                "color": norm_color(entry.get("color")) if entry else None,
             })
         warn = _budget_warning(ntri)
         if warn:
@@ -983,12 +983,23 @@ def _export_job(document, fmt, path, body=None, separate=False,
     return _done({"path": export(part, fmt, path)})
 
 
-def _export_project_job(document, path, palette, body_colors, body_names, settings):
-    """Worker: rebuild + write an Orca-project 3MF (one object per body, palette
-    slot → extruder). Same export-what-built semantics as _export_job: failed
-    features become warnings; only zero live bodies is a hard error."""
+def _plugin_export_job(document, path, exporter, options):
+    """Worker: rebuild, mesh every live body at export grade, and hand the meshes
+    to an exporter a plugin registered (plugin_geometry.register_exporter). Same
+    export-what-built semantics as _export_job: failed features become warnings;
+    only zero live bodies is a hard error. What the file looks like is entirely
+    the exporter's."""
+    import plugin_geometry
     from builder import rebuild_cached
-    from project3mf import sanitize_inputs, write_project_3mf
+
+    plugin_geometry.discover()
+    write = plugin_geometry.exporter_for(exporter)
+    if write is None:
+        owner = plugin_geometry.exporter_owner(exporter)
+        if owner:
+            why = plugin_geometry.broken_plugins().get(owner, "it did not register it")
+            return {"error": {"message": f"the {exporter!r} export needs {owner}, which did not load: {why}"}}
+        return {"error": {"message": f"no installed plugin provides the {exporter!r} export"}}
 
     part, errors, bodies = rebuild_cached(document)
     live = [b for b in bodies if b.get("shape") is not None]
@@ -999,7 +1010,6 @@ def _export_project_job(document, path, palette, body_colors, body_names, settin
             return {"error": _err_wire(e)}
         return {"error": {"message": "nothing to export, no bodies built yet"}}
 
-    palette, body_colors, body_names = sanitize_inputs(palette, body_colors, body_names)
     meshed = []
     ntri = 0
     for b in live:
@@ -1008,9 +1018,8 @@ def _export_project_job(document, path, palette, body_colors, body_names, settin
         positions, indices = _export_mesh(b)
         if not len(indices):
             continue  # degenerate body with no triangulation, skip, like exports do
-        # This path had NO budget at all, which made it the way round every cap
-        # the plain export enforces. Checked per body, before the mesh is kept,
-        # so the allocation is bounded to the cap plus one body.
+        # Checked per body, before the mesh is kept, so the allocation is
+        # bounded to the cap plus one body.
         ntri += len(indices) // 3
         refusal = _budget_refusal(ntri)
         if refusal:
@@ -1021,7 +1030,17 @@ def _export_project_job(document, path, palette, body_colors, body_names, settin
     if not meshed:
         return {"error": {"message": "nothing to export, no meshable bodies"}}
 
-    res = {"path": write_project_3mf(meshed, path, palette, body_colors, body_names, settings)}
+    try:
+        out = write(meshed, path, options)
+    except (ValueError, OSError) as ex:
+        return {"error": {"message": f"{exporter}: {ex}"}}
+    res = {"path": path}
+    if isinstance(out, dict):
+        res["path"] = out.get("path") or path
+        if isinstance(out.get("info"), dict):
+            res["info"] = out["info"]
+    elif isinstance(out, str):
+        res["path"] = out
     if errors:
         res["warnings"] = [
             _err_wire(e) for e in errors
@@ -1788,17 +1807,18 @@ async def _dispatch(ws, loop, req, req_id, op):
         res = await _run_stall(loop, _export_job, req["document"], req["format"], req["path"], req.get("body"), req.get("separate", False), req.get("palette") or [], req.get("bodyColors") or {}, req.get("mesh"), stall=_export_stall_budget(req["document"]))
         await ws.send(_reply_for(req_id, res))
 
-    elif op == "exportProject":
-        # settings is written into the 3MF verbatim (project config for
-        # the slicer); cap its size like any untrusted request field.
-        settings = req.get("settings") or {}
-        if not isinstance(settings, dict) or len(json.dumps(settings)) > 262144:
-            await ws.send(_err(req_id, "exportProject: bad settings"))
+    elif op == "exportWith":
+        # options go to plugin code verbatim; cap them like any untrusted field.
+        options = req.get("options") or {}
+        exporter = req.get("exporter")
+        if not isinstance(exporter, str) or not exporter or len(exporter) > 100:
+            await ws.send(_err(req_id, "exportWith: bad exporter"))
+            return
+        if not isinstance(options, dict) or len(json.dumps(options)) > 262144:
+            await ws.send(_err(req_id, "exportWith: bad options"))
             return
         res = await _run_stall(
-            loop, _export_project_job, req["document"], req["path"],
-            req.get("palette") or [], req.get("bodyColors") or {},
-            req.get("bodyNames") or {}, settings,
+            loop, _plugin_export_job, req["document"], req["path"], exporter, options,
             stall=_export_stall_budget(req["document"]),
         )
         await ws.send(_reply_for(req_id, res))

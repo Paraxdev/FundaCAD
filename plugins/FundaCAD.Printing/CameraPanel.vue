@@ -1,7 +1,7 @@
 <script setup lang="ts">
-// Live printer camera. The webview never dials the LAN, Rust polls the
-// printer's webcam and pushes JPEG data: URLs (CSP img-src already allows
-// data:), so this only ever sets img.src.
+// Live printer camera. Snapshots are fetched through the app's local-network
+// request and arrive as JPEG data: URLs (CSP img-src already allows data:), so
+// this only ever sets img.src.
 //
 // The subscriptions and the poller are tied to the component's lifetime.
 // Previously they hung off FloatingPanel's onClose hook precisely because every
@@ -29,20 +29,20 @@ async function start(id: string) {
   }
 }
 
-async function attach(id: string) {
-  unlistenFrame = await onPrinterCameraFrame((e) => {
+function attach(id: string) {
+  unlistenFrame = onPrinterCameraFrame((e) => {
     if (e.id !== id) return;
     offline.value = false;
     frame.value = e.data_url;
   });
-  unlistenOffline = await onPrinterCameraOffline((offlineId) => {
+  unlistenOffline = onPrinterCameraOffline((offlineId) => {
     if (offlineId === id) offline.value = true;
   });
-  await start(id);
+  void start(id);
 }
 
 function detach(id: string) {
-  void printerCameraStop(id).catch(() => {});
+  printerCameraStop(id);
   unlistenFrame?.();
   unlistenOffline?.();
   unlistenFrame = null;
@@ -57,7 +57,7 @@ watch(
   () => cameraPanel.value,
   (id, prevId) => {
     if (prevId) detach(prevId);
-    if (id) void attach(id);
+    if (id) attach(id);
   },
   { immediate: true, flush: "sync" },
 );

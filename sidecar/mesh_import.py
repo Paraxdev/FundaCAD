@@ -123,7 +123,7 @@ def _peek_triangle_count(path, fmt):
     Returns None when it can't tell.
 
     A 3MF is summed over EVERY .model part, not just the first: the production
-    extension that Bambu, Orca and PrusaSlicer write leaves 3D/3dmodel.model as
+    extension that multi-object 3MF writers use leaves 3D/3dmodel.model as
     a manifest of <build><item> references with zero triangles and puts the
     geometry in 3D/Objects/*.model, so reading the first part alone counted 0
     for the whole file. The sum errs LONG by one per part, for that part's

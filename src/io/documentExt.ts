@@ -25,7 +25,7 @@
 /** The extension new documents are saved as: readable JSON. */
 export const DOC_EXT = "funda";
 
-/** The compact binary document, like `.bgcode` beside `.gcode`. Rust picks the
+/** The compact binary document. Rust picks the
  *  format from this extension when saving (src-tauri/src/json_doc.rs); opening
  *  reads the format from the bytes, so a misnamed file still opens. */
 export const BINARY_DOC_EXT = "fundab";

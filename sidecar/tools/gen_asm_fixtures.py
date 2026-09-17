@@ -303,9 +303,9 @@ def asm_face_colors(path):
 
 def asm_solid_colors(path):
     """Colour on each SOLID of a two-solid product, with a different colour on
-    one face of the first. A SolidWorks export writes a part's appearance on its
+    one face of the first. An export from another CAD program writes a part's appearance on its
     solid and leaves stale feature colours on its faces, which is how the SV08
-    printer's black frame came in red."""
+    assembly's black frame came in red."""
     doc, st, ct = _doc()
     root = _empty_assembly(st, "Painted Solids")
     product = _part(st, root, _boxes((10, 10, 10, 0, 0, 0), (4, 4, 4, 20, 0, 0)).wrapped, "Pair")

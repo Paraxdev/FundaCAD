@@ -355,7 +355,7 @@ def _near_pairs(faces, surf, shape, already):
     The screen uses plain boxes and a tolerance from the plain body box, both of
     which only ever err large, so it lets through a superset of the pairs the
     exact figures would. The exact tolerance needs an optimal box of the whole
-    body, measured at 45 s across the SV08 printer's parts when it was taken for
+    body, measured at 45 s across the reference frame assembly's parts when it was taken for
     every body and every face, and it can only lie between GAP_ABS and that
     screening figure, so it is taken only for a distance that falls between the
     two."""

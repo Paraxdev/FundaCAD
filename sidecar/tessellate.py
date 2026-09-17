@@ -597,7 +597,7 @@ def edge_polylines_by_body(bodies, deflection=_EDGE_DEFLECTION, hide_coplanar_se
       * the UV SEAM of a closed periodic face. A cylinder/cone/sphere/torus wraps
         onto itself, and OCCT records that closure as a real topological edge at
         u = 0 = 2pi. It is pure parametrisation bookkeeping: no tangent break, no
-        crease, nothing a printer reproduces. Drawn, it put a vertical line down
+        crease, nothing a part reproduces. Drawn, it put a vertical line down
         the side of every plain cylinder. The coplanar test above cannot catch it,
         because a seam has ONE face listed twice rather than two faces.
 

@@ -124,20 +124,27 @@ def test_the_triangle_budget_is_checked_per_body_not_after_everything():
     print(f"{PASS} budget refused after {len(seen)} of 4 bodies, not all 4")
 
 
-def test_export_project_has_a_budget_at_all():
-    """This path had none, which made it the way around every cap."""
+def test_plugin_export_has_a_budget_at_all():
+    """A plugin's exporter gets meshes the engine made, so the engine's budget
+    has to apply before the exporter ever sees them."""
+    import plugin_geometry
+
+    wrote = []
+    plugin_geometry.register_exporter(
+        "gates-sink", "Test.Gates", lambda bodies, path, options: wrote.append(path) or path)
     server._EXPORT_MESH_CACHE.clear()
     old_cap = server.EXPORT_TRIANGLE_HARD_CAP
     server.EXPORT_TRIANGLE_HARD_CAP = 20
     try:
         with tempfile.TemporaryDirectory() as d:
-            res = server._export_project_job(
-                _box_doc(4), os.path.join(d, "p.3mf"), [], {}, {}, {})
-        assert "error" in res, f"project export ignored the budget: {res}"
+            res = server._plugin_export_job(
+                _box_doc(4), os.path.join(d, "p.bin"), "gates-sink", {})
+        assert "error" in res, f"plugin export ignored the budget: {res}"
         assert "too dense" in res["error"]["message"], res
+        assert not wrote, "the exporter ran past the budget"
     finally:
         server.EXPORT_TRIANGLE_HARD_CAP = old_cap
-    print(f"{PASS} exportProject refuses past the triangle budget")
+    print(f"{PASS} exportWith refuses past the triangle budget")
 
 
 # --- 3.5 one bbox per body, not one per pair ---------------------------------
@@ -244,7 +251,7 @@ if __name__ == "__main__":
     print("export gates")
     test_the_export_cache_keys_on_tolerance()
     test_the_triangle_budget_is_checked_per_body_not_after_everything()
-    test_export_project_has_a_budget_at_all()
+    test_plugin_export_has_a_budget_at_all()
     test_the_interference_sweep_computes_each_bbox_once()
     test_the_sweep_still_finds_real_clashes()
     test_windows_reserved_names_are_defused()

@@ -123,7 +123,7 @@ PROFILE_EPS = 1e-6
 #:
 #: Nothing is lost by stopping there. The section's departure from its chord is
 #: k/(1+2k) of the corner offset, so the whole of the discarded range moves the
-#: surface by 0.035mm on that 5mm blend, under a printer's layer, under a
+#: surface by 0.035mm on that 5mm blend, under a layer height, under a
 #: mill's step, and indistinguishable from the chamfer it is approaching. The
 #: sharp end gains as well: +0.999 used to reach a corner the seam solver had to
 #: refuse outright, and the slider no longer goes there.

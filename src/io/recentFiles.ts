@@ -1,5 +1,5 @@
 // Recent-files list for the welcome screen. Display concern → localStorage
-// (same convention as fundacad.activePrinter); paths are not secrets. Newest
+// (same convention as the other fundacad.* keys); paths are not secrets. Newest
 // first, deduped by path, capped.
 
 import { readSetting } from "../ui/storedSetting";

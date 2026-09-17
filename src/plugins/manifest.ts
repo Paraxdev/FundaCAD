@@ -27,7 +27,7 @@ export const GRANTS = [
   "files.read",
   "files.write",
   "network",
-  "printer.control",
+  "network.local",
   "device.input",
   "ui.panel",
   "process.spawn",
@@ -73,9 +73,12 @@ const COPY: Record<Grant, GrantCopy> = {
   // `can` is filled in with the hosts, which is the whole reason this grant
   // carries them: "can use the internet" is not a decision anybody can make.
   "network": { can: "Connect to the internet", cannot: "Use the internet" },
-  "printer.control": {
-    can: "Send jobs to your printer and read its status",
-    cannot: "Touch your printer",
+  // No host list, unlike `network`: what it reaches is bounded by address
+  // (private and link-local only, see src-tauri/src/plugins/localnet.rs), and
+  // the devices a person has on their own network are theirs to name.
+  "network.local": {
+    can: "Talk to devices on your local network",
+    cannot: "Reach devices on your local network",
   },
   "device.input": {
     can: "Read the 3D mouse or other input device you have plugged in",
@@ -133,7 +136,7 @@ export interface PluginManifest {
    *  same question the geometry engine answers.
    *
    *  Empty for a plugin that adds no feature of its own, which is most of them:
-   *  a panel, a device, a printer connection all leave the document alone. */
+   *  a panel, a device, a network connection all leave the document alone. */
   featureTypes: string[];
 }
 

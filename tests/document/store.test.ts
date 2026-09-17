@@ -105,7 +105,7 @@ describe("palette persistence", () => {
       { name: "Polymaker PLA", color: "#ff8800", material: "PLA" },
       { name: "eSun PETG", color: "#0044ff", material: "PETG" },
     ];
-    store.applyFilamentSync(synced);
+    store.replacePaletteSlots(synced);
     const reloaded = new DocumentStore(stubBackend([]), doc());
     reloaded.load(store.toJSON());
     expect(reloaded.colorPalette[0]).toMatchObject(synced[0]!);

@@ -11,11 +11,9 @@ mod geom;
 pub mod container;
 pub mod fnda;
 pub mod json_doc;
-mod printer;
 pub mod plugins;
 pub mod session_file;
 mod sidecar;
-mod slicer;
 mod spacemouse;
 // WebKitGTK only exists on Linux; macOS and Windows use WKWebView and WebView2.
 #[cfg(target_os = "linux")]
@@ -296,23 +294,6 @@ pub fn run() {
         container::container_open_checked,
         container::container_verify,
         container::container_is_container,
-        printer::printers_list,
-        printer::printers_upsert,
-        printer::printers_remove,
-        printer::printer_probe,
-        printer::printer_filaments,
-        printer::printer_status,
-        printer::printer_upload_and_print,
-        printer::printer_set_filament,
-        printer::printer_monitor_start,
-        printer::printer_monitor_stop,
-        printer::printer_camera_start,
-        printer::printer_camera_stop,
-        slicer::settings_get,
-        slicer::settings_set,
-        slicer::print_staging_path,
-        slicer::slicer_open,
-        slicer::slicer_project_settings,
         plugins::plugin_list,
         plugins::plugin_inspect_url,
         plugins::plugin_inspect_file,
@@ -326,6 +307,13 @@ pub fn run() {
         plugins::files::plugin_file_read,
         plugins::files::plugin_file_write,
         plugins::files::plugin_app_info,
+        plugins::data::plugin_data_read,
+        plugins::data::plugin_data_write,
+        plugins::data::plugin_data_path,
+        plugins::data::plugin_data_adopt,
+        plugins::localnet::plugin_local_request,
+        plugins::launch::plugin_system_dirs,
+        plugins::launch::plugin_launch,
         spacemouse::spacemouse_inventory,
         spacemouse::spacemouse_start,
         spacemouse::spacemouse_stop
@@ -345,23 +333,6 @@ pub fn run() {
         container::container_open_checked,
         container::container_verify,
         container::container_is_container,
-        printer::printers_list,
-        printer::printers_upsert,
-        printer::printers_remove,
-        printer::printer_probe,
-        printer::printer_filaments,
-        printer::printer_status,
-        printer::printer_upload_and_print,
-        printer::printer_set_filament,
-        printer::printer_monitor_start,
-        printer::printer_monitor_stop,
-        printer::printer_camera_start,
-        printer::printer_camera_stop,
-        slicer::settings_get,
-        slicer::settings_set,
-        slicer::print_staging_path,
-        slicer::slicer_open,
-        slicer::slicer_project_settings,
         plugins::plugin_list,
         plugins::plugin_inspect_url,
         plugins::plugin_inspect_file,
@@ -375,14 +346,19 @@ pub fn run() {
         plugins::files::plugin_file_read,
         plugins::files::plugin_file_write,
         plugins::files::plugin_app_info,
+        plugins::data::plugin_data_read,
+        plugins::data::plugin_data_write,
+        plugins::data::plugin_data_path,
+        plugins::data::plugin_data_adopt,
+        plugins::localnet::plugin_local_request,
+        plugins::launch::plugin_system_dirs,
+        plugins::launch::plugin_launch,
         spacemouse::spacemouse_inventory,
         spacemouse::spacemouse_start,
         spacemouse::spacemouse_stop
     ]);
 
     let app = builder
-        .manage(printer::Monitors::default())
-        .manage(printer::Cameras::default())
         .manage(spacemouse::Inventory::default())
         // The files a person has handed to a plugin this session. Session-lived
         // and nowhere on disk: a plugin cannot come back tomorrow holding a

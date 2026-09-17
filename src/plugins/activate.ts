@@ -2,7 +2,7 @@
 //
 // One place where the app says "run whatever is active" instead of naming the
 // things it runs. That sentence is the whole point of this file: nothing in
-// app/ imports the 3D mouse or the printer, and adding a capability is adding a
+// app/ imports a plugin, and adding a capability is adding a
 // directory under plugins/ rather than an edit to anything here. This file
 // names no plugin at all.
 //

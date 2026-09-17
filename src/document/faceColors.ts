@@ -126,9 +126,9 @@ export function importedFacePaint(
 
 // --- a body's colour against its faces' -------------------------------------
 //
-// A file can style a part twice and disagree with itself. The SV08 printer, a
-// SolidWorks export, styles every solid with the part's real appearance (black,
-// cyan) and ALSO leaves its faces wearing SolidWorks' feature colours, yellow
+// A file can style a part twice and disagree with itself. The reference frame
+// assembly, exported from another CAD program, styles every solid with the part's real appearance (black,
+// cyan) and ALSO leaves its faces wearing that program's feature colours, yellow
 // on a boss and red on a cut, which nobody meant as the look of the part.
 // Reading the faces there turns a black frame red. The reference PN532 board
 // is the opposite case: its faces are the real colours and its products wear a

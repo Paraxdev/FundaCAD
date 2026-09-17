@@ -1761,87 +1761,6 @@ def test_export_despite_errors():
           "feature named; nothing-built still refuses")
 
 
-def test_export_project_3mf():
-    """Orca-project 3MF export job: zip layout, per-object extruder metadata
-    (1-based = slot+1, unassigned → 1), palette → filament_colour, shared
-    bed-centering transform, and input sanitizing (bad colors / bad slots)."""
-    import json
-    import zipfile
-    import xml.etree.ElementTree as ET
-    import server
-    from project3mf import sanitize_inputs
-
-    palette, colors0, _ = sanitize_inputs(
-        [{"name": "Red", "color": "#e03030"}, {"name": "Blue", "color": "3050E0FF"}],
-        {"x": 99}, {},
-    )
-    assert palette[1]["color"] == "#3050E0", "RRGGBBAA should normalize to #RRGGBB"
-    assert not colors0, "out-of-range slot must be dropped"
-    pal_mat, _, _ = sanitize_inputs(
-        [{"name": "Red", "color": "#e03030", "material": "PLA"},
-         {"name": "Blue", "color": "#3050E0"}], {}, {})
-    assert pal_mat[0]["material"] == "PLA", "material must survive sanitize"
-    assert "material" not in pal_mat[1], "absent material stays absent"
-
-    doc = {"parameters": {}, "features": [
-        {"id": "s1", "type": "sketch", "plane": "XY",
-         "entities": [{"type": "rectangle", "width": 20, "height": 20, "x": 0, "y": 0}]},
-        {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 5, "operation": "new"},
-        {"id": "s2", "type": "sketch", "plane": "XY",
-         "entities": [{"type": "rectangle", "width": 20, "height": 20, "x": 40, "y": 0}]},
-        {"id": "e2", "type": "extrude", "sketch": "s2", "distance": 5, "operation": "new"},
-    ]}
-    _, _, bodies = rebuild(doc)
-    assert len(bodies) == 2
-    b0, b1 = bodies[0]["id"], bodies[1]["id"]
-
-    with tempfile.TemporaryDirectory() as td:
-        path = os.path.join(td, "proj.3mf")
-        res = server._export_project_job(
-            doc, path,
-            [{"name": "Red", "color": "#E03030", "material": "PETG"},
-             {"name": "Blue", "color": "#3050E0"}],
-            {b1: 1},                # b0 unassigned → extruder 1
-            {b0: "Left"},
-            {"printer_model": "Snapmaker U1"},
-        )
-        assert "error" not in res, f"exportProject failed: {res}"
-
-        with zipfile.ZipFile(res["path"]) as z:
-            entries = set(z.namelist())
-            for want in ("[Content_Types].xml", "_rels/.rels", "3D/3dmodel.model",
-                         "Metadata/model_settings.config",
-                         "Metadata/project_settings.config"):
-                assert want in entries, f"missing zip entry {want}"
-            model = ET.fromstring(z.read("3D/3dmodel.model"))
-            cfg = ET.fromstring(z.read("Metadata/model_settings.config"))
-            proj = json.loads(z.read("Metadata/project_settings.config"))
-
-    core = "{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
-    objs = model.findall(f".//{core}object")
-    assert len(objs) == 2
-    assert objs[0].get("name") == "Left", "bodyNames rename must win"
-    items = model.findall(f".//{core}item")
-    assert len(items) == 2 and items[0].get("transform") == items[1].get("transform"), \
-        "assembly must share ONE transform"
-
-    # the shared transform lands the combined bbox center at bed center (135,135)
-    # and drops z-min to 0: doc spans x∈[-10,50] y∈[-10,10] z∈[0,5] → tx=115 ty=135
-    tx, ty, tz = (float(v) for v in items[0].get("transform").split()[9:])
-    assert abs(tx - 115) < 0.1 and abs(ty - 135) < 0.1 and abs(tz) < 0.1, (tx, ty, tz)
-
-    ext = {o.get("id"): o.find("./metadata[@key='extruder']").get("value")
-           for o in cfg.findall("./object")}
-    assert ext["2"] == "1", "unassigned body → extruder 1"
-    assert ext["3"] == "2", "slot 1 → extruder 2 (1-based)"
-    assert proj["filament_colour"] == ["#E03030", "#3050E0"]
-    assert proj["filament_type"] == ["PETG", "PLA"], \
-        "material → filament_type at its slot; material-less slot defaults PLA"
-    assert proj["printer_model"] == "Snapmaker U1", "caller settings must survive"
-    print("  project-3MF OK: zip layout, extruder metadata, filament_colour, "
-          "filament_type, shared centering transform, sanitize")
-
-
 def test_face_selector_on_concentric_cylinders():
     """Selecting a ring's OUTER wall must not resolve to its INNER wall.
 
@@ -1899,7 +1818,6 @@ if __name__ == "__main__":
     test_presspull_upto()
     test_presspull_upto_exact()
     test_export_despite_errors()
-    test_export_project_3mf()
     test_sketch_patterns()
     test_sketch_spline_extrude()
     test_sketch_pattern_with_spline()

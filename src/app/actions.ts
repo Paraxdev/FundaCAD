@@ -51,8 +51,8 @@ export function createActions(e: Engine): (action: string) => void {
   return function handleAction(action: string) {
     // for "Repeat <command>". A contributed action is never repeatable, and the
     // default is that way round because the core cannot tell whether re-running
-    // somebody else's action is safe: a "Repeat" that quietly uploads a second
-    // job to a printer is worse than a "Repeat" that is missing one entry.
+    // somebody else's action is safe: a "Repeat" that quietly sends a second
+    // job to a machine is worse than a "Repeat" that is missing one entry.
     if (!NON_REPEATABLE.has(action) && !contributedAction(action)) e.lastAction = action;
     // sketch CREATE tools: switch tool while sketching, else start a sketch with it
     if (SKETCH_TOOLS.has(action)) {

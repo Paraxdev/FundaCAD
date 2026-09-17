@@ -9,15 +9,18 @@
 // mirrored flags, a `camera` field on the panels store, a `filament` field and a
 // printer-typed request on the dialogs store, a colored-3MF project exporter in
 // io/files.ts, and a printer probe with a thirty-second staleness poll inside
-// the browser panel. Every one of those was a place a person adding a second
-// kind of machine would have had to edit.
+// the browser panel. It also carried the printer protocol and the slicer
+// hand-off in Rust, and the project 3MF writer in the geometry engine. Every one
+// of those was a place a person adding a second kind of machine would have had
+// to edit.
 //
-// What is left is this file. The work is in this directory: the typed wrappers
-// over the Rust commands (printerClient), the two flows (printFlow), the
-// filament mapping (printDialog), the project export (exportProject), the
-// status pill, the camera and the mapping dialog. None of it is in the bundle
-// on a machine with the capability switched off, because plugins/activate.ts
-// only ever imports this file, and only when it is on.
+// What is left is this file. The work is in this directory: the Moonraker
+// protocol over the app's generic local-network request (printerClient), the
+// slicer's install locations (slicer), the two flows (printFlow), the filament
+// mapping (printDialog), the project export (exportProject, with its writer in
+// geometry/), the status pill, the camera and the mapping dialog. None of it is
+// in the bundle on a machine with the capability switched off, because
+// plugins/activate.ts only ever imports this file, and only when it is on.
 
 import { activePrinterId, printerProbe, printerFilaments, asPrinterError } from "./printerClient";
 import { setPrinterPillClick } from "./printStatusLine";
@@ -30,6 +33,15 @@ import { choose, contribute, toast } from "fundacad";
 import type { DocumentStore, Engine } from "fundacad";
 
 const ID = "FundaCAD.Printing";
+
+const ICONS: Record<string, string> = {
+  print:
+    '<path d="M6 9V3h12v6"/><rect x="4" y="9" width="16" height="8" rx="1.5"/><rect x="7" y="14" width="10" height="6"/><circle cx="17" cy="12" r="0.9" fill="currentColor"/>',
+  slicer:
+    '<rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><path d="M11 14h5m0 0l-2-2m2 2l-2 2"/>',
+  printerSend:
+    '<path d="M6 8V3h9l3 3v2"/><rect x="4" y="8" width="16" height="7" rx="1.5"/><path d="M8 15h5v6H8z"/><path d="M15 19h6m0 0l-2-2m2 2l-2 2"/>',
+};
 
 /** Start the capability. Returns the teardown that stops it. */
 export async function activate(e: Engine): Promise<() => void> {
@@ -90,6 +102,8 @@ export async function activate(e: Engine): Promise<() => void> {
     },
 
     overlays: [PrintStatusPill, CameraPanel, FilamentMappingHost],
+
+    icons: ICONS,
 
     // What a machine has loaded in its toolheads, offered to whoever wants it.
     //
@@ -182,7 +196,7 @@ function filamentSource() {
         if (go !== "apply") return false;
       }
 
-      store.applyFilamentSync(proposed);
+      store.replacePaletteSlots(proposed);
       toast("Palette synced from printer.", { kind: "info" });
       return true;
     },

@@ -683,32 +683,28 @@ async def main():
             assert not results[1]["ok"] and "created after this sketch" in results[1]["error"]
             print("  WS projectGeometry OK: 4 boundary lines + 1 error entry")
 
-            # exportProject: the colored-3MF op, over the real socket (dispatch +
-            # settings-size guard + threaded palette/bodyColors).
+            # exportWith: dispatch to a plugin's exporter, the refusal when no
+            # plugin provides the named one, and the options-size guard.
             import os
             import tempfile
             with tempfile.TemporaryDirectory() as td:
-                out = os.path.join(td, "ws.3mf")
+                out = os.path.join(td, "ws.bin")
                 await ws.send(json.dumps({
-                    "id": "xp", "op": "exportProject", "document": EXAMPLE, "path": out,
-                    "palette": [{"name": "Red", "color": "#E03030"}],
-                    "bodyColors": {}, "bodyNames": {},
-                    "settings": {"printer_model": "Snapmaker U1"},
+                    "id": "xw", "op": "exportWith", "document": EXAMPLE, "path": out,
+                    "exporter": "no-such-exporter", "options": {},
                 }))
-                xp = json.loads(await ws.recv())
-                assert xp["id"] == "xp" and xp["ok"], f"exportProject failed: {xp}"
-                assert os.path.exists(xp["result"]["path"]) and os.path.getsize(out) > 0
-                print(f"  WS exportProject OK: wrote {os.path.getsize(out)} bytes")
+                xw = json.loads(await ws.recv())
+                assert xw["id"] == "xw" and not xw.get("ok"), f"unknown exporter ran: {xw}"
+                assert "no-such-exporter" in json.dumps(xw), xw
+                print("  WS exportWith OK: an exporter nobody registered is refused by name")
 
-                # oversized settings must be refused (untrusted-input cap)
                 await ws.send(json.dumps({
-                    "id": "xp2", "op": "exportProject", "document": EXAMPLE, "path": out,
-                    "palette": [], "bodyColors": {}, "bodyNames": {},
-                    "settings": {"junk": "x" * 300000},
+                    "id": "xw2", "op": "exportWith", "document": EXAMPLE, "path": out,
+                    "exporter": "no-such-exporter", "options": {"junk": "x" * 300000},
                 }))
-                xp2 = json.loads(await ws.recv())
-                assert not xp2.get("ok"), "oversized settings must be rejected"
-                print("  WS exportProject settings-cap OK")
+                xw2 = json.loads(await ws.recv())
+                assert not xw2.get("ok"), "oversized options must be rejected"
+                print("  WS exportWith options-cap OK")
 
     # LAST, deliberately: this one does real geometry (import + two rebuilds) in
     # THIS process, and the socket tests above are supervised by a 60 s stall

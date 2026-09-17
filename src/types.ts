@@ -611,7 +611,7 @@ export interface CadDocument {
    *  always did, at the top level or under its import's own assembly node. */
   bodyElement?: Record<string, string>;
   /** The material library, display only. Absent is the untouched starter set. Not the
-   *  filament `palette`, which is physical toolhead slots. */
+   *  filament `palette`, which is what a part is made from. */
   materials?: {
     id: string; name: string; color: string;
     metalness?: number; roughness?: number; opacity?: number; emissive?: number;
@@ -625,8 +625,8 @@ export interface CadDocument {
   /** import feature id → "faces" where an import's parts wear their face
    *  colours over their body colours. Absent means "bodies". */
   importColorSource?: Record<string, ImportColorSource>;
-  /** filament palette (≤4 slots for the U1 toolchanger); slot index → name+hex,
-   *  plus an optional material type (e.g. "PLA") when synced from the printer. */
+  /** filament palette; slot index → name+hex, plus an optional material type
+   *  (e.g. "PLA"). */
   palette?: { name: string; color: string; material?: string }[];
   /** per-body palette-slot assignment (body id → slot index into `palette`). */
   bodyColors?: Record<string, number>;

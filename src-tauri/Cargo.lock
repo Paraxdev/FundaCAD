@@ -1272,7 +1272,6 @@ dependencies = [
  "tauri-plugin-single-instance",
  "tauri-plugin-updater",
  "threemf",
- "tokio",
  "windows 0.58.0",
  "zip 4.6.1",
 ]

@@ -37,8 +37,7 @@ button.finish:hover {
   color: var(--text);
   /* Roomier than any other pill in the app, and that is the point: this is the
      banner that tells you what the armed tool wants next, so it has to read as
-     an announcement rather than as another piece of chrome. Same pair as
-     .print-status-pill, the only other free-floating HUD banner. */
+     an announcement rather than as another piece of chrome. */
   padding: var(--s-3) var(--s-5);
   border-radius: var(--r-pill);
   font-size: 12px;

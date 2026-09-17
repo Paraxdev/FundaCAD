@@ -8,9 +8,8 @@
 // byte-identically to one that never had any.
 //
 // WHY IT IS NOT THE FILAMENT PALETTE. The document already carries a `palette`
-// of up to four slots, and those mean "print this part from the filament in
-// toolhead N". That is a manufacturing instruction with a physical machine
-// behind it, which is why it is capped at four and why the multi-colour
+// of up to four slots, and those mean "make this part from filament N".
+// That is a manufacturing instruction, which is why it is capped at four and why the multi-colour
 // capability owns it. A material library has neither cap nor machine, is about
 // what a part LOOKS like, and is the thing an imported assembly's own colours
 // land in. They coexist: a body can carry both, and where it does the palette

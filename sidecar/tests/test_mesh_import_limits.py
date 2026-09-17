@@ -11,7 +11,7 @@ split into fifty bodies would stroll in unbounded.
 
 The 3MF counter is the third thing here, and it was blind in a way nothing else
 would have caught: every counter read the FIRST .model part, and in the
-production extension that Bambu, Orca and PrusaSlicer write that part is a
+production extension that multi-object writers use that part is a
 manifest of build items with no triangles at all.
 
 Run: uv run python tests/test_mesh_import_limits.py
@@ -32,7 +32,7 @@ import mesh_import
 PASS = "  ok"
 
 # One .model part holding a single triangle, and a root part that holds only
-# build items, the shape of a real slicer project.
+# build items, the shape of a real multi-object project.
 GEOM = """<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter"><resources><object id="1" type="model"><mesh>
 <vertices><vertex x="0" y="0" z="0"/><vertex x="1" y="0" z="0"/><vertex x="0" y="1" z="0"/></vertices>
@@ -67,7 +67,7 @@ def box_stl(path, boxes):
 
 
 def test_a_3mf_is_counted_over_every_part():
-    """The slicers' own layout: a manifest at 3D/3dmodel.model and the geometry
+    """The production extension's layout: a manifest at 3D/3dmodel.model and the geometry
     under 3D/Objects/. Reading the first part alone counted the manifest.
 
     The control is the count itself: 2 parts of one triangle each read as 4 (one

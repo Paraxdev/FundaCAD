@@ -136,8 +136,8 @@ export { useBrowserStore } from "../stores/browser";
 //
 // It is here because the capabilities that need it cannot exist without it. A
 // 3D mouse plugin's whole job is `spacemouse_start` and an event stream; a
-// printer plugin's is a dozen printer commands. Neither is expressible as a
-// broker op, and inventing one op per Rust command would be the same reach
+// plugin talking to a device on the network needs `plugin_local_request`.
+// Neither is expressible as a broker op, and inventing one op per Rust command would be the same reach
 // wearing a longer name.
 //
 // So it is the reason a bundle carrying app-side code may be loaded ONLY from

@@ -1,7 +1,7 @@
 // Reading a user setting that has been stored under more than one name.
 //
 // The settings modules (theme, icons, units, browserFilter,
-// welcome, recentFiles, printerClient, spacemouse) each keep one localStorage
+// welcome, recentFiles, and the plugins') each keep one localStorage
 // key, read once at module load. Renaming those keys during the rebrand would
 // silently reset every one of them: the app would find nothing under the new
 // name and fall back to its default, which reads as "it forgot my settings"

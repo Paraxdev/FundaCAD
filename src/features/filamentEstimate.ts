@@ -4,7 +4,7 @@
 //
 // The estimate is deliberately simple and says so in the UI: solid volume at
 // 100% infill, and for partial infill an approximate shell (surface area times
-// a wall thickness) plus the interior's infill fraction. It is not a slicer.
+// a wall thickness) plus the interior's infill fraction. It is an estimate, not a toolpath.
 
 export interface MaterialPreset {
   id: string;

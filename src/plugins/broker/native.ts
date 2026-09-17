@@ -40,7 +40,7 @@ export interface PickedFile {
 }
 
 /** A file's contents. Exactly one of `text` and `base64` is set: text when the
- *  bytes are valid UTF-8, which covers JSON, CSV, SVG, STEP and G-code, and
+ *  bytes are valid UTF-8, which covers JSON, CSV, SVG, STEP and machine code, and
  *  base64 when they are not, which covers STL and 3MF. */
 export interface FileBody {
   name: string;

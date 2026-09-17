@@ -4,7 +4,7 @@ OCCT's mesher bounds deviation, not size, so a large flat face comes out as a
 few long slivers. Splitting every edge longer than the cap at its midpoint, and
 re-triangulating each triangle by how many of its edges were split, keeps the
 mesh conforming: both triangles on an edge see the same split and share the
-new vertex, so no cracks open for a slicer to find.
+new vertex, so no cracks open in the mesh.
 """
 
 import numpy as np

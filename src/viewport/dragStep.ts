@@ -37,7 +37,7 @@ export const DRAG_GRANULARITY_PX = 1;
 export const FINE_DIVISOR = 10;
 
 /** Finest lattice that is a lattice at all, see the note above about round().
- *  One micron, which is finer than any printer or cutter this is aimed at. */
+ *  One micron, which is finer than any machine this is aimed at. */
 export const MIN_STEP = 0.001;
 
 /** The step a drag should snap to at this zoom, in mm.

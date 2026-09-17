@@ -31,28 +31,19 @@ hidapi = "2"
 getrandom = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-# Printer device layer (printer.rs): LAN Moonraker HTTP client. No TLS backend
-# is selected because there is nothing to secure: base_url() builds `http://`
-# only, and valid_host() rejects a host carrying a scheme. The pure-Rust
-# rustls-tls that used to be here existed for a hosted-service layer that is
-# gone; carrying a TLS stack no call site can reach is just build time.
-# TLS is back, for one caller. The comment above used to say no TLS backend was
-# selected because printer.rs builds `http://` only, and that is still true of
-# printer.rs. plugins.rs is the exception: it fetches the plugin index and the
-# plugin bundles from the releases host over HTTPS, and the transport is where
-# the authenticity of both comes from (the sha256 in the index pins the bytes
-# after that, but it cannot vouch for the index itself). rustls, not native-tls,
-# so no system OpenSSL joins the build.
+# HTTP client for two callers. plugins/mod.rs fetches plugin bundles from any
+# HTTPS host, and the transport is where the authenticity of a download comes
+# from. plugins/localnet.rs sends a plugin's requests to devices on the local
+# network, with a file part in a form. rustls, not native-tls, so no system
+# OpenSSL joins the build.
 reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls-native-roots"] }
 # Bundle integrity for downloaded plugins (plugins.rs). sha256 rather than the
 # blake2 already here because the release job computes it with `sha256sum` and a
 # digest nobody can reproduce from a shell is a digest nobody checks.
 sha2 = "0.10"
-# G-code and thumbnails cross Tauri IPC as base64 strings (a JSON Vec<u8> would
-# be pathological at ~1 MB); container.rs and printer.rs decode/encode with this.
+# Binary payloads cross Tauri IPC as base64 strings (a JSON Vec<u8> would be
+# pathological at ~1 MB); container.rs and the plugin commands use this.
 base64 = "0.22"
-# explicit for the status-monitor task's sleep; tauri already runs the tokio rt.
-tokio = { version = "1", features = ["time"] }
 # --- Rust/OCCT geometry spike (opt-in only) ---------------------------------
 # These four crates are used ONLY by src-tauri/src/geom.rs (the experimental
 # in-Rust OCCT geometry path, VITE_GEOM=rust). They are `optional` and behind the

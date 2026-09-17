@@ -694,62 +694,6 @@
   text-align: right;
 }
 
-/* --- print pipeline: filament-mapping dialog + live status pill --- */
-.print-map-card {
-  min-width: 360px;
-}
-.print-map-rows {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-1);
-  margin-bottom: var(--s-4);
-}
-.print-map-row {
-  display: flex;
-  align-items: center;
-  gap: var(--s-3);
-  padding: var(--s-1) var(--s-0);
-}
-.print-map-slot {
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
-  min-width: 130px;
-  font-size: 12px;
-  color: var(--text, #e6e8ec);
-}
-.print-swatch {
-  width: 14px;
-  height: 14px;
-  border-radius: var(--r-xs);
-  border: 1px solid var(--line-strong, #323843);
-  display: inline-block;
-  flex: none;
-}
-.print-map-arrow {
-  color: var(--text-mute, #6b7280);
-}
-.print-map-select {
-  flex: 1;
-  background: var(--raised, #22262e);
-  border: 1px solid var(--line, #262a31);
-  border-radius: var(--r-md, 8px);
-  color: var(--text, #e6e8ec);
-  font-size: 12px;
-  padding: var(--s-2) var(--s-3);
-  cursor: pointer;
-}
-.print-map-opts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s-3);
-  margin-bottom: var(--s-4);
-}
-/* One rung tighter than a full-width .choice-check, because in here they are
-   wrapping chips rather than rows of a list. */
-.print-map-opts .choice-check {
-  padding: var(--s-1) var(--s-3);
-}
 .bug-report-card {
   width: 440px;
   max-width: calc(100vw - 32px);
@@ -783,24 +727,6 @@
   border-radius: var(--r-sm);
   padding: var(--s-2) var(--s-3);
   white-space: pre-wrap;
-}
-
-.print-status-pill {
-  position: fixed;
-  bottom: 46px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 3900;
-  background: var(--panel-2, #1c1f26);
-  border: 1px solid var(--accent, #ff7a3c);
-  border-radius: var(--r-pill);
-  /* Same pair as .prompt: the app's two free-floating HUD banners, and a live
-     print job is exactly as much of an announcement as a tool instruction. */
-  padding: var(--s-3) var(--s-5);
-  font-size: 12px;
-  color: var(--text, #e6e8ec);
-  box-shadow: var(--shadow-2, 0 2px 8px rgba(0, 0, 0, 0.4));
-  pointer-events: none;
 }
 
 /* --- Materials dialog ---

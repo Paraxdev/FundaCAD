@@ -14,40 +14,20 @@ metadata is 1-based. A body with no palette assignment goes to extruder 1.
 """
 
 import json
-import os
 import zipfile
-from xml.sax.saxutils import escape, quoteattr
+from xml.sax.saxutils import quoteattr
+
+from mesh_writers import CONTENT_TYPES, RELS, mesh_chunks, norm_color
 
 # Orca/BambuStudio treat a 3MF as *their* project format when this marker
 # metadata is present in the model; without it the file risks the plain-3MF
 # import path, which drops extruder assignments.
 _BBS_NS = "http://schemas.bambulab.com/package/2021"
 
-CONTENT_TYPES = """<?xml version="1.0" encoding="UTF-8"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-  <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>
-</Types>"""
-
-RELS = """<?xml version="1.0" encoding="UTF-8"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>
-</Relationships>"""
-
 # Slot cap matches the palette (≤4 U1 toolheads) with headroom; server-side
 # validation, not a format limit.
 MAX_SLOTS = 8
 MAX_NAME = 100
-
-
-def _norm_color(c, fallback="#808080"):
-    """Accept '#RRGGBB'/'RRGGBB' (case-insensitive); return '#RRGGBB' upper."""
-    s = str(c or "").strip().lstrip("#")
-    if len(s) == 8:  # tolerate RRGGBBAA from printer-side sources
-        s = s[:6]
-    if len(s) != 6 or any(ch not in "0123456789abcdefABCDEF" for ch in s):
-        return fallback
-    return "#" + s.upper()
 
 
 def sanitize_inputs(palette, body_colors, body_names):
@@ -59,7 +39,7 @@ def sanitize_inputs(palette, body_colors, body_names):
         slot = slot if isinstance(slot, dict) else {}
         entry = {
             "name": str(slot.get("name") or f"Filament {len(pal) + 1}")[:MAX_NAME],
-            "color": _norm_color(slot.get("color")),
+            "color": norm_color(slot.get("color")),
         }
         material = str(slot.get("material") or "").strip()[:MAX_NAME]
         if material:
@@ -90,52 +70,6 @@ def _bbox(bodies):
                 if v > hi[a]:
                     hi[a] = v
     return lo, hi
-
-
-def _mesh_xml(positions, indices):
-    """The whole mesh as one string. Kept for callers with small meshes and for
-    the tests; `_mesh_chunks` is what the writer uses."""
-    return "".join(_mesh_chunks(positions, indices))
-
-
-# Vertices per emitted chunk. Large enough that the per-chunk overhead is noise,
-# small enough that peak memory stays flat regardless of body size.
-_XML_CHUNK_VERTS = 4096
-
-
-def _mesh_chunks(positions, indices):
-    """Yield a body's <mesh> XML in bounded pieces.
-
-    Built as a generator rather than one string because the caller streams it
-    straight into the zip. A 3,000-body assembly at export grade is millions of
-    triangles, and materialising that as a single Python str (plus the list of
-    per-element strings "".join consumes) costs many times the mesh itself, on
-    the one path that has no triangle budget of its own.
-    """
-    yield "<mesh><vertices>"
-    buf = []
-    for i in range(0, len(positions) - 2, 3):
-        buf.append(
-            f'<vertex x="{positions[i]:.6g}" y="{positions[i + 1]:.6g}" '
-            f'z="{positions[i + 2]:.6g}"/>'
-        )
-        if len(buf) >= _XML_CHUNK_VERTS:
-            yield "".join(buf)
-            buf = []
-    if buf:
-        yield "".join(buf)
-    yield "</vertices><triangles>"
-    buf = []
-    for i in range(0, len(indices) - 2, 3):
-        buf.append(
-            f'<triangle v1="{indices[i]}" v2="{indices[i + 1]}" v3="{indices[i + 2]}"/>'
-        )
-        if len(buf) >= _XML_CHUNK_VERTS:
-            yield "".join(buf)
-            buf = []
-    if buf:
-        yield "".join(buf)
-    yield "</triangles></mesh>"
 
 
 def write_project_3mf(bodies, path, palette, body_colors, body_names, settings,
@@ -203,7 +137,7 @@ def write_project_3mf(bodies, path, palette, body_colors, body_names, settings,
         )
         for b, header in objects_meta:
             yield header
-            yield from _mesh_chunks(b["positions"], b["indices"])
+            yield from mesh_chunks(b["positions"], b["indices"])
             yield "</object>"
         yield f"</resources>\n <build>{''.join(items_xml)}</build>\n</model>"
 

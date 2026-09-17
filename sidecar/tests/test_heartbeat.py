@@ -221,7 +221,7 @@ def test_progress_tick_survives_a_broken_hook():
 
 # --- stall supervision (Wave 1.2) --------------------------------------------
 #
-# export / exportProject / interference / projectGeometry moved off a 120 s wall
+# export / exportWith / interference / projectGeometry moved off a 120 s wall
 # clock onto _run_stall. The contract that move depends on is exactly two
 # things, so both are asserted here against the real _run_stall with a stubbed
 # pool: work that keeps ticking is NEVER reaped for merely being long, and work
@@ -322,13 +322,13 @@ def test_the_document_ops_no_longer_use_a_wall_clock():
 
     src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "server.py")).read()
     assert "DOC_TIMEOUT = " not in src, "DOC_TIMEOUT is back"
-    for op, job in (("export", "_export_job"), ("exportProject", "_export_project_job"),
+    for op, job in (("export", "_export_job"), ("exportWith", "_plugin_export_job"),
                     ("interference", "_interference_job"),
                     ("projectGeometry", "_project_geometry_job")):
         m = re.search(r"_run(_stall)?\(\s*\n?\s*loop,\s*" + job + r"\b", src)
         assert m, f"{op}: no dispatch found for {job}"
         assert m.group(1) == "_stall", f"{op} ({job}) is on a wall clock again"
-    print(f"{PASS} export/exportProject/interference/projectGeometry all on _run_stall")
+    print(f"{PASS} export/exportWith/interference/projectGeometry all on _run_stall")
 
 
 def _silent_slow_job(hb):

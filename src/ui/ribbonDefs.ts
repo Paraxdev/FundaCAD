@@ -186,8 +186,8 @@ const CONTRIBUTED_PRIORITY = 10;
  *  MODEL above stays the full definition of what the APP has, and this is the
  *  answer to "what can be reached", which became a different question the moment
  *  a capability could be turned off. It used to be answered by filtering MODEL:
- *  a PRINT group was written out here and two of its three buttons were removed
- *  again when the printer capability was off, so this file held both the
+ *  a plugin's group was written out here and two of its three buttons were
+ *  removed again when that capability was off, so this file held both the
  *  capability's buttons and the rule for hiding them. Now it holds neither, and
  *  a group that is not contributed is not drawn because it does not exist.
  *

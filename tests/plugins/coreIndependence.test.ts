@@ -231,6 +231,53 @@ describe("the core does not depend on the capabilities it can turn off", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("knows no printer or slicer exists, in the window, the shell or the engine", () => {
+    // The printer connection is a plugin in the full sense: its protocol, its
+    // slicer hand-off, its project format and its settings are all under
+    // plugins/FundaCAD.Printing/. What the app offers it is generic, a request
+    // to a device on the local network, a program started with a file, a file
+    // in the plugin's own data directory and an exporter hook in the engine,
+    // the same things any other plugin could use. So the words themselves are
+    // refused, comments included, because a comment explaining how the core
+    // talks to a printer is the first sign that it does again.
+    const core = {
+      ...(import.meta.glob(["../../src/**/*.{ts,vue,scss}"], {
+        query: "?raw",
+        import: "default",
+        eager: true,
+      }) as Record<string, string>),
+      ...(import.meta.glob(["../../src-tauri/src/**/*.rs", "../../src-tauri/Cargo.toml", "../../src-tauri/*.json", "../../src-tauri/capabilities/*.json"], {
+        query: "?raw",
+        import: "default",
+        eager: true,
+      }) as Record<string, string>),
+      ...(import.meta.glob(["../../sidecar/**/*.py", "!../../sidecar/.venv/**"], {
+        query: "?raw",
+        import: "default",
+        eager: true,
+      }) as Record<string, string>),
+    };
+    const WORDS = /printer|slicer|\borca|bambu|moonraker|octoprint|prusa|klipper|snapmaker|\bqidi\b|toolhead|\bb?g-?code\b/i;
+
+    const files = Object.keys(core);
+    expect(files.some((f) => f.endsWith(".rs")), "no Rust source found").toBe(true);
+    expect(files.some((f) => f.endsWith(".py")), "no sidecar source found").toBe(true);
+    expect(files.some((f) => f.includes("/src/") && f.endsWith(".ts")), "no window source found").toBe(true);
+
+    const offenders: string[] = [];
+    for (const [file, src] of Object.entries(core)) {
+      src.split("\n").forEach((line, i) => {
+        if (WORDS.test(line)) offenders.push(`${file}:${i + 1}: ${line.trim()}`);
+      });
+    }
+    expect(offenders).toEqual([]);
+
+    // The control: the pattern matches what the core used to say.
+    expect(WORDS.test("mod printer;")).toBe(true);
+    expect(WORDS.test('invoke("slicer_open")')).toBe(true);
+    expect(WORDS.test("a filament estimate")).toBe(false);
+  });
+
   it("leaves no capability code in the app's own tree", () => {
     // The claim the file's opening sentence makes, checked directly rather than
     // inferred from the import graph. A file can sit inside src/ unimported for

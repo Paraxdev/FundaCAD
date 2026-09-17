@@ -1,5 +1,5 @@
 //! The readable document file: `.funda` is pretty JSON, `.fundab` is the binary
-//! format in fnda.rs, the way `.gcode` and `.bgcode` split.
+//! format in fnda.rs.
 //!
 //! JSON has nowhere to put an imported body's BREP, so the geometry the document
 //! references rides along in one top-level map, content hash to base64 BinTools

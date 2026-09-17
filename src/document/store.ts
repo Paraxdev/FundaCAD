@@ -133,8 +133,7 @@ export function prefixFeatures(
   return out.filter((f) => !suppressed.has(f.id));
 }
 
-// Default filament palette (≤4 slots for the Snapmaker U1 toolchanger). Editable;
-// bodies/faces reference a slot index so it maps 1:1 to a physical toolhead.
+// Default filament palette. Editable; bodies/faces reference a slot index.
 const DEFAULT_PALETTE: { name: string; color: string }[] = [
   { name: "White", color: "#e8e8e8" },
   { name: "Black", color: "#202020" },
@@ -1474,12 +1473,12 @@ export class DocumentStore {
   }
 
   // --- color palette + per-body color (multi-color; display + export metadata) -
-  /** the project's filament palette (≤4 slots map to U1 toolheads). */
+  /** the project's filament palette. */
   get colorPalette(): { name: string; color: string; material?: string }[] {
     return this.palette;
   }
-  /** true when the palette is still the untouched default, lets the printer-sync
-   *  UI skip its "overwrite?" confirmation when there's nothing to lose. */
+  /** true when the palette is still the untouched default, lets a sync from
+   *  elsewhere skip its "overwrite?" confirmation when there's nothing to lose. */
   paletteIsDefault(): boolean {
     return (
       this.palette.length === DEFAULT_PALETTE.length &&
@@ -1498,10 +1497,9 @@ export class DocumentStore {
     this.markDirty();
     this.emitBuild();
   }
-  /** Replace slots from the printer's loaded filaments (name/color/material),
-   *  by index, in ONE emit. Empty entries (undefined) leave that slot untouched,
-   *  an unloaded toolhead shouldn't blank a slot. */
-  applyFilamentSync(slots: ({ name: string; color: string; material?: string } | undefined)[]) {
+  /** Replace slots (name/color/material) by index, in ONE emit. Empty entries
+   *  (undefined) leave that slot untouched. */
+  replacePaletteSlots(slots: ({ name: string; color: string; material?: string } | undefined)[]) {
     let changed = false;
     slots.forEach((s, i) => {
       if (!s || i >= this.palette.length) return;

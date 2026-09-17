@@ -7,8 +7,8 @@
 // mainstream MCAD.
 //
 // A filament palette used to be a section here, with two node kinds of its own,
-// a connection dot, a one-shot printer probe and a thirty-second staleness poll,
-// a panel about a machine on the network, inside the panel that lists what is
+// a connection dot, a one-shot network probe and a thirty-second staleness poll,
+// a panel about something outside the document, inside the panel that lists what is
 // in the document, behind checks on two capabilities. It is contributed now, by
 // the capability whose subject it is, and this file does not know it exists.
 //

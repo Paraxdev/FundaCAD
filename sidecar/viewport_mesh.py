@@ -24,7 +24,7 @@ _MESH_CACHE = {}
 # Textured-face triangle budgets. Viewport stays interactive while scrubbing
 # depth/scale; export gets much more headroom (per-face cap + a document-wide
 # hard cap + a printable-sweet-spot warning, both applied in _export_job /
-# _export_project_job below).
+# _plugin_export_job below).
 VIEWPORT_DENSITY_CAP = 80_000
 
 
@@ -338,7 +338,7 @@ _PRECOMPUTED = {}
 
 # Parallel payloads only pay for their helpers' start-up (each imports OCCT and
 # build123d, about 2 s) on a big enough job. Faces are the proxy for the work:
-# the SV08 printer's 446 unique bodies are 43k faces and about 60 s serial.
+# the reference frame assembly's 446 unique bodies are 43k faces and about 60 s serial.
 _PARALLEL_MIN_FACES = 6000
 
 
@@ -346,7 +346,7 @@ _PARALLEL_MAX_HELPERS = 12
 
 
 # Resident memory one helper costs with OCCT loaded and a large body in hand:
-# measured 484 MiB peak meshing the SV08 printer's largest parts.
+# measured 484 MiB peak meshing the reference frame assembly's largest parts.
 _HELPER_BYTES = 512 << 20
 
 

@@ -374,11 +374,9 @@ export function extToFormat(path: string): ExportFormat {
   return "step";
 }
 
-// The colored 3MF project export used to live here, with the slicer preset it
-// writes into the file and a post-export check that asked a printer which
-// filaments it had loaded. Both moved out with the capability that owns them:
-// this file writes the formats the app itself understands, and a project format
-// aimed at one machine's toolchanger was never one of those.
+// This file writes the formats the app itself understands. A format a plugin
+// owns is written by that plugin's exporter in the geometry engine, reached
+// through GeometryBackend.exportWith.
 
 /** Import an external mesh / B-rep file (STL / 3MF / STEP / OBJ) as a new body.
  *  The sidecar reads the file by path and returns an embeddable BREP payload, so

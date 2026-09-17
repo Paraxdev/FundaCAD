@@ -49,7 +49,7 @@ export type Unregister = () => void;
  *
  *  `menu` is matched by label against what the core built, and a label that
  *  matches nothing becomes a new menu appended before Help. Both cases are
- *  wanted: the printer adds to File, and the 3D mouse owns the whole of View. */
+ *  wanted: one plugin adds to File, and the 3D mouse owns the whole of View. */
 export interface MenuContribution {
   menu: string;
   items: MenuItem[];

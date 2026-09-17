@@ -40,6 +40,19 @@ const MAX_FILE: u64 = 32 * 1024 * 1024;
 #[derive(Default)]
 pub struct Handles(Mutex<Table>);
 
+impl Handles {
+    /// The path behind a handle this plugin was given, for another command that
+    /// takes a handle in place of a path.
+    pub(crate) fn path_for(&self, plugin: &str, handle: &str) -> Result<std::path::PathBuf, String> {
+        self.0
+            .lock()
+            .map_err(|_| POISONED.to_string())?
+            .path_for(plugin, handle)
+            .map(|p| p.to_path_buf())
+            .ok_or_else(|| "that file was not offered to this plugin".to_string())
+    }
+}
+
 /// What a plugin gets back for a file it may now read.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -52,8 +65,8 @@ pub struct Picked {
 
 /// A file's contents, as whichever of the two a plugin can actually use.
 ///
-/// Both fields rather than always base64: a plugin reading JSON, CSV, SVG, a
-/// STEP file or G-code wants text, and making every one of them decode base64
+/// Both fields rather than always base64: a plugin reading JSON, CSV, SVG, STEP
+/// or another text format wants text, and making every one of them decode base64
 /// would be a worse API for the common case. Binary (STL, 3MF) still works, and
 /// which one arrived is not a guess, because exactly one is ever set.
 #[derive(Serialize)]

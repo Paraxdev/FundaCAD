@@ -1,46 +1,44 @@
 // The colored 3MF PROJECT export, and the post-export check that goes with it.
 //
-// This used to be two functions and a settings table in src/io/files.ts, beside
-// the app's own STEP/STL/3MF export. It is not one of those. A project 3MF is
-// aimed at one slicer, carries a preset naming one printer model, maps palette
-// slots onto physical toolheads, and finishes by asking a machine on the network
-// which filaments it has loaded. Every sentence in it is about a printer, which
-// is why it lives with the printer.
+// A project 3MF is aimed at one slicer, carries a preset naming one printer
+// model, maps palette slots onto physical toolheads, and finishes by asking a
+// machine on the network which filaments it has loaded. The file itself is
+// written by this plugin's exporter inside the geometry engine
+// (geometry/register.py), which the app reaches through its generic
+// `exportWith`.
 //
-// The app's own `exportModel` is unchanged and still writes 3MF among its
-// formats. The difference is the word PROJECT: one object per body with a
-// toolhead assignment each, rather than one mesh.
+// The app's own `Export…` is unchanged and still writes 3MF among its formats.
+// The difference is the word PROJECT: one object per body with a toolhead
+// assignment each, rather than one mesh.
 
 import { contributedPalette, listModal, reportError, saveDialog, stripDocumentExt, toast } from "fundacad";
 import type { DocumentStore, GeometryBackend } from "fundacad";
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;
 
-// The slicer preset the exported project should land on, minimal keys Orca needs
-// to select the user's Snapmaker U1 machine on "open as project". Stage D.v2 (CLI)
-// overrides these with a fully-flattened config via `opts.settings`.
-const U1_PROJECT_SETTINGS: Record<string, unknown> = {
-  printer_model: "Snapmaker U1",
-  printer_variant: "0.4",
-  version: "2.4.0.0",
-};
+export const PROJECT_EXPORTER = "print-project-3mf";
+
+export interface ProjectExport {
+  path: string;
+  /** Whether the user's slicer presets were flattened into the project, when asked. */
+  presets?: boolean;
+}
 
 /** Export a colored multi-material 3MF PROJECT (Orca format): one object per body,
- *  palette slot → toolhead, so the multi-color palette actually prints. With
- *  `opts.path` it writes there silently (Stage D staging → open in Orca); without,
- *  it prompts with a save dialog. Returns the written path, or null (cancelled /
- *  error). Palette/bodyColors/bodyNames are threaded explicitly, they live in
- *  store side-maps, never inside `document`. */
+ *  palette slot → toolhead. With `opts.path` it writes there silently (the
+ *  staging path the slicer hand-off opens); without, it prompts with a save
+ *  dialog. `opts.presets` asks the exporter to flatten the user's slicer presets
+ *  into the project. Returns null when cancelled or failed. */
 export async function exportPrintProject(
   store: DocumentStore,
   geometry: GeometryBackend,
-  opts: { path?: string; settings?: Record<string, unknown> } = {},
-): Promise<string | null> {
+  opts: { path?: string; presets?: { datadir: string | null; filamentCount: number } } = {},
+): Promise<ProjectExport | null> {
   if (!isTauri()) {
     console.warn("print export needs the native app (a real filesystem path)");
     return null;
   }
-  if (!geometry.exportProject) {
+  if (!geometry.exportWith) {
     await reportError("Colored 3MF export needs the Python sidecar backend (run without VITE_GEOM=rust).");
     return null;
   }
@@ -61,45 +59,46 @@ export async function exportPrintProject(
     path = picked;
   }
 
-  // Same busy/cancel treatment as the app's own export and import, this path
-  // tessellates every body at export grade before writing the project, so it is
-  // every bit as long-running as a plain export on a large document.
+  const options: Record<string, unknown> = {
+    palette: store.colorPalette,
+    bodyColors: store.bodyColorsMap(),
+    bodyNames: store.bodyNamesMap(),
+  };
+  if (opts.presets) options.presets = opts.presets;
+
+  // Same busy/cancel treatment as the app's own export and import: this path
+  // tessellates every body at export grade before writing the project.
   const res = await store.runBusy(
     `Exporting ${path.split(/[\\/]/).pop() ?? "project"}`,
-    (onStarted) => geometry.exportProject!(store.document, path, {
-      palette: store.colorPalette,
-      bodyColors: store.bodyColorsMap(),
-      bodyNames: store.bodyNamesMap(),
-      settings: { ...U1_PROJECT_SETTINGS, ...(opts.settings ?? {}) },
-    }, onStarted),
+    (onStarted) => geometry.exportWith!(store.document, path, PROJECT_EXPORTER, options, onStarted),
   );
   if (!res.ok) {
-    if (res.cancelled) return null;  // the user stopped it, not an error
+    if (res.cancelled) return null;
     await reportError(`Print export failed: ${res.message ?? "unknown error"}`);
     return null;
   }
   void warnUnloadedFilaments(store, bodies.map((b) => b.id));
-  // Only surface a modal when there are warnings (features that didn't build),
-  // the silent-staging path (Stage D) shouldn't pop a dialog on the happy path.
+  // Only a modal when there are warnings (features that didn't build); the
+  // silent staging path shouldn't pop a dialog on the happy path.
   if (res.warnings?.length) {
     const lines = res.warnings.map(
       (w) => `Warning: ${w.feature_id ?? "feature"} failed, its result is NOT in the export: ${w.message}`,
     );
     await listModal("Exported project, with warnings", [res.path ?? path, ...lines]);
   }
-  return res.path ?? path;
+  const out: ProjectExport = { path: res.path ?? path };
+  if (typeof res.info?.presets === "boolean") out.presets = res.info.presets;
+  if (res.info?.presetError) console.warn("slicer presets not flattened:", res.info.presetError);
+  return out;
 }
 
 /** Best-effort post-export check: warn when the design uses palette slots whose
  *  toolhead has no filament loaded, or leaves bodies unassigned (they export as
- *  extruder 1). Fire-and-forget and bounded to 1.5s client-side (the shared
- *  Rust HTTP client has a 10s timeout, a warning arriving that late is worse
- *  than none): unreachable/slow/unconfigured printer → silently no warning.
- *  Never blocks or fails the export itself.
+ *  extruder 1). Fire-and-forget and bounded to 1.5 s: an unreachable, slow or
+ *  unconfigured printer means no warning. Never blocks or fails the export.
  *
  *  Silent when nothing offers a palette. Every sentence it can produce is about
- *  toolheads and slot assignments, "3 bodies are unassigned (defaulting to
- *  slot 1)" is a warning about a choice the user was never offered. */
+ *  toolheads and slot assignments, which is a choice the user was never offered. */
 async function warnUnloadedFilaments(store: DocumentStore, bodyIds: string[]) {
   if (!contributedPalette().length) return;
   try {
@@ -113,7 +112,7 @@ async function warnUnloadedFilaments(store: DocumentStore, bodyIds: string[]) {
       const slot = assigned[id];
       if (slot == null) {
         unassigned++;
-        usedSlots.add(0); // project3mf defaults unassigned bodies to slot 0
+        usedSlots.add(0); // the exporter defaults unassigned bodies to slot 0
       } else {
         usedSlots.add(slot);
       }

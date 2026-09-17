@@ -21,8 +21,8 @@ import type { BugReportDeps } from "../ui/bugReporter";
  *
  *  ONLY THE APP'S OWN DIALOGS. A capability's window keeps its open/closed state
  *  in that capability's own directory, next to the component that reads it. Two
- *  used to live here, a 3D-mouse settings flag and a filament-mapping request,
- *  the second of which dragged two type imports from the printer client into
+ *  used to live here, a 3D-mouse settings flag and a plugin's request object,
+ *  the second of which dragged two type imports from that plugin into
  *  every module that touches a dialog, and a fourth capability with a window
  *  would have meant a third. */
 

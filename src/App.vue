@@ -44,8 +44,8 @@ const ui = useUiStore();
 
 // The overlays the running plugins add, mounted at the end of the stack.
 //
-// This file used to name four of them, a print-status pill, a printer camera,
-// a 3D-mouse settings window and a filament mapping dialog, and carry three
+// This file used to name four of them, each a capability's own window, and
+// carry three
 // mirrored capability flags to decide which to draw. That was the app knowing
 // what its capabilities ARE, spelled out in the one file that should be able to
 // say least about them, and it was four more edits for anybody adding a fifth.

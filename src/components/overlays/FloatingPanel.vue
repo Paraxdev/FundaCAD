@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // The "measure-panel" floating popup shell: Properties, Interference, Overhang,
-// the printer camera and the Parameters dialog all wear it. Replaces the
+// the Parameters dialog and plugins' own panels all wear it. Replaces the
 // FloatingPanel class, which existed to dedupe element creation + an optional
 // Esc listener + dismiss bookkeeping.
 //
