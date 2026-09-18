@@ -1070,7 +1070,7 @@ fn py_json(v: &Value) -> String {
     }
 }
 
-/// `json.dumps(v, indent=n)`, which is two things serde_json's pretty printer
+/// `json.dumps(v, indent=n)`, which is two things serde_json's PrettyFormatter
 /// is not: any indent width, and a space after every colon.
 fn pretty(v: &Value, indent: usize) -> String {
     let pad = " ".repeat(indent);

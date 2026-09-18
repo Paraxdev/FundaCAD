@@ -1,6 +1,6 @@
-//! tests/vectors/body_ids.json and tests/vectors/face_colors.json, recorded from
-//! sidecar/body_ids.py and sidecar/face_colors.py and also replayed by
-//! sidecar/tests/test_shared_vectors.py and tests/document/faceColorVectors.test.ts.
+//! tests/vectors/body_ids.json, face_colors.json and hole_standards.json, recorded
+//! from the Python engine before it was retired and also replayed by
+//! tests/document/faceColorVectors.test.ts and tests/features/holeStandards.test.ts.
 
 use std::path::Path;
 
@@ -140,5 +140,30 @@ fn face_colors() {
             "{}",
             c["colors"]
         );
+    }
+}
+
+#[test]
+fn hole_standards() {
+    use fundacad_core::hole_standards::{clearance, counterbore, countersink, insert, tap_drill, SIZES};
+    let v = vectors("hole_standards.json");
+    let row = |table: &str, size: &str| -> Option<Vec<f64>> {
+        match &v[table][size] {
+            Value::Null => None,
+            Value::Array(a) => Some(a.iter().map(|x| x.as_f64().expect("number")).collect()),
+            x => Some(vec![x.as_f64().expect("number")]),
+        }
+    };
+    for table in ["CLEARANCE", "TAP_DRILL", "COUNTERBORE", "COUNTERSINK", "INSERT"] {
+        for size in v[table].as_object().expect(table).keys() {
+            assert!(SIZES.contains(&size.as_str()), "{table} {size} is not a size the engine knows");
+        }
+    }
+    for size in SIZES {
+        assert_eq!(clearance(size).map(|r| r.to_vec()), row("CLEARANCE", size), "CLEARANCE {size}");
+        assert_eq!(tap_drill(size).map(|r| vec![r]), row("TAP_DRILL", size), "TAP_DRILL {size}");
+        assert_eq!(counterbore(size).map(|r| r.to_vec()), row("COUNTERBORE", size), "COUNTERBORE {size}");
+        assert_eq!(countersink(size).map(|r| vec![r]), row("COUNTERSINK", size), "COUNTERSINK {size}");
+        assert_eq!(insert(size).map(|r| r.to_vec()), row("INSERT", size), "INSERT {size}");
     }
 }
