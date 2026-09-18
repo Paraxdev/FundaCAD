@@ -24,7 +24,7 @@ export function createActions(e: Engine): (action: string) => void {
   const palette = useSketchPaletteStore();
 
   // Offset Face / Thicken: one interactive tool for both (pick face → scrub along
-  // its normal → commit), with a real sidecar preview since neither can be faked
+  // its normal → commit), with a real engine preview since neither can be faked
   // client-side.
   function startFaceOffset(mode: FaceOffsetMode) {
     if (e.toolBusy()) return;

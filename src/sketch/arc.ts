@@ -1,6 +1,6 @@
 // 3-point arc math (start, end, and a point the arc passes through). Shared by
 // rendering (overlay), region tessellation, snapping, and dimensions. The
-// sidecar builds the authoritative B-rep arc edge from the same three points.
+// engine builds the authoritative B-rep arc edge from the same three points.
 
 import * as THREE from "three";
 

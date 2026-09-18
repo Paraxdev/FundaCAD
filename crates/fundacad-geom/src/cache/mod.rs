@@ -1,10 +1,10 @@
-//! Not rebuilding what has not changed, sidecar/rebuild_cache.py and the
+//! Not rebuilding what has not changed, the Python engine's `rebuild_cache.py` and the
 //! `rebuild_cached` half of builder.py, over the store of geomstore.py.
 //!
 //! Two tiers resume a rebuild at the longest unchanged prefix of chain keys:
 //! a ring of per-feature snapshots in this process, and disk checkpoints that
 //! outlive it. Built payloads are kept the same two ways. Every hit is counted
-//! in `CacheStats`, which is also logged the way the sidecar logs it.
+//! in `CacheStats`, which is also logged the way the Python engine logs it.
 
 pub mod checkpoint;
 pub mod keys;
@@ -125,7 +125,11 @@ impl RebuildCache {
     }
 
     pub fn chain_keys(&mut self, raw: &Value) -> Vec<String> {
-        keys::chain_keys(raw, &self.env, &mut self.brep_sigs)
+        #[cfg(feature = "plugins")]
+        let plugins = crate::plugins::feature_identities();
+        #[cfg(not(feature = "plugins"))]
+        let plugins = HashMap::new();
+        keys::chain_keys(raw, &self.env, &plugins, &mut self.brep_sigs)
     }
 
     /// `reset_cache` and the mesh cache: this process forgets, the disk does not.

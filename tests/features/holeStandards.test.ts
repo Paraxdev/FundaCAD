@@ -4,7 +4,7 @@ import {
   holeChoicePatch, holeFieldApplies, newHoleFields, parseHoleSize, standardDims,
 } from "../../src/features/holeStandards";
 import type { Feature } from "../../src/types";
-import py from "../../sidecar/hole_feature.py?raw";
+import vectors from "../vectors/hole_standards.json";
 
 type Hole = Extract<Feature, { type: "hole" }>;
 
@@ -16,7 +16,7 @@ const hole = (over: Partial<Hole> = {}): Hole => ({
 });
 
 describe("hole standard tables", () => {
-  it("hold the ISO values the sidecar holds", () => {
+  it("hold the ISO values", () => {
     expect(CLEARANCE.M3).toEqual([3.2, 3.4, 3.6]);
     expect(TAP_DRILL.M5).toBe(4.2);
     expect(COUNTERBORE.M4).toEqual([8.0, 4.4]);
@@ -24,20 +24,16 @@ describe("hole standard tables", () => {
     expect(INSERT.M3).toEqual([4.0, 6.0]);
   });
 
-  it("match sidecar/hole_feature.py row for row", () => {
-    const num = (v: number) => (Number.isInteger(v) ? `${v}.0` : String(v));
-    const row = (name: string, size: string, vals: readonly number[]) => {
-      const block = new RegExp(`^${name} = \\{([\\s\\S]*?)^\\}`, "m").exec(py)?.[1] ?? "";
-      const text = vals.length === 1 ? num(vals[0]!) : `(${vals.map(num).join(", ")})`;
-      expect(block, `${name} ${size}`).toContain(`"${size}": ${text}`);
-    };
+  it("match tests/vectors/hole_standards.json row for row, as the Rust tables do", () => {
+    const sizes = (t: Record<string, unknown>) => Object.keys(t).sort();
+    expect(sizes(CLEARANCE)).toEqual(sizes(vectors.CLEARANCE));
+    expect(sizes(INSERT)).toEqual(sizes(vectors.INSERT));
     for (const s of HOLE_SIZES) {
-      row("CLEARANCE", s, CLEARANCE[s]);
-      row("TAP_DRILL", s, [TAP_DRILL[s]]);
-      row("COUNTERBORE", s, COUNTERBORE[s]);
-      row("COUNTERSINK", s, [COUNTERSINK[s]]);
-      const ins = INSERT[s];
-      if (ins) row("INSERT", s, ins);
+      expect(CLEARANCE[s], s).toEqual(vectors.CLEARANCE[s]);
+      expect(TAP_DRILL[s], s).toBe(vectors.TAP_DRILL[s]);
+      expect(COUNTERBORE[s], s).toEqual(vectors.COUNTERBORE[s]);
+      expect(COUNTERSINK[s], s).toBe(vectors.COUNTERSINK[s]);
+      expect(INSERT[s], s).toEqual((vectors.INSERT as Record<string, number[]>)[s]);
     }
   });
 });

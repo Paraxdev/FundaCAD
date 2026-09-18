@@ -20,7 +20,7 @@ body {
   display: grid;
   /* An explicit minmax(0, 1fr) column, not the implicit auto one: an `auto`
      grid track is sized to its items' MAX-CONTENT width, so one wide row (the
-     titlebar carrying a long sidecar error) used to stretch the whole app past
+     titlebar carrying a long engine error) used to stretch the whole app past
      the window, the ribbon un-collapsed, the browser and inspector slid out of
      bounds. The 0 minimum lets every row be narrower than its content instead. */
   grid-template-columns: minmax(0, 1fr);

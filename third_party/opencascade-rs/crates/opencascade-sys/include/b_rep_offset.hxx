@@ -7,7 +7,7 @@
 #include <bindings_common.hxx>
 
 // Local single-face surface offset (the "true" Press/Pull for curved faces).
-// Mirrors sidecar/builder.py:_offset_face — BRepOffset_MakeOffset in Skin mode
+// Mirrors the Python engine's `builder.py`:_offset_face — BRepOffset_MakeOffset in Skin mode
 // with a global offset of 0 plus a per-face offset, GeomAbs_Intersection join.
 inline std::unique_ptr<BRepOffset_MakeOffset> BRepOffset_MakeOffset_new() {
   return std::unique_ptr<BRepOffset_MakeOffset>(new BRepOffset_MakeOffset());

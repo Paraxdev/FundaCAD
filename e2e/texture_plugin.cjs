@@ -2,7 +2,7 @@
 //
 // The unit tests drive the tool against a viewport they wrote. This drives it
 // against the real one: the real bundle, the real plugin loaded by the real
-// activate.ts, a real body built by the real sidecar, a real face picked out of
+// activate.ts, a real body built by the real engine, a real face picked out of
 // a real raycast, and the panel read back out of the DOM.
 //
 // WHAT IT IS FOR, and why it is not a duplicate of plugin_surfaces.cjs. That
@@ -14,10 +14,10 @@
 // contribution table. Every one of those crosses the plugin boundary, and every
 // one of them was an ordinary function call inside src/ a commit ago.
 //
-// Usage (from the repo root, with vite on 5173 and the sidecar running):
+// Usage (from the repo root, with vite on 5173 and the engine running):
 //   node e2e/texture_plugin.cjs
 // SC_CHROME names a Chromium/Brave binary if the default is wrong.
-// SC_URL must carry the sidecar token in a dev browser: ...?token=...
+// SC_URL must carry the engine token in a dev browser: ...?token=...
 
 const { chromium } = require("playwright-core");
 
@@ -134,7 +134,7 @@ async function view(page) {
   check("back on: the tool returns", (await view(page)).inInventory);
 
   // --- 3. the gesture, on a real body -------------------------------------
-  // A box from the real sidecar, so there is a real face to click.
+  // A box from the real engine, so there is a real face to click.
   await page.evaluate(async () => {
     const a = window.__fundacad;
     a.store.addFeature({ id: "b1", type: "box", length: 40, width: 40, height: 20 });
@@ -174,7 +174,7 @@ async function view(page) {
   //
   // The check above raced past it: it polls every 100 ms and the pick satisfies
   // it before the preview is even scheduled. So wait for the preview to have
-  // been through the sidecar and landed, and only THEN ask.
+  // been through the engine and landed, and only THEN ask.
   // A SOFT wait, not `until`: when this regresses, the preview never lands at
   // all (the tool clears it along with the members), and a thrown timeout would
   // report itself instead of the two named checks below.

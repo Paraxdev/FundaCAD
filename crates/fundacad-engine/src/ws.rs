@@ -1,7 +1,7 @@
 //! The WebSocket transport, for a browser, the e2e scripts and the Python
 //! protocol suites (docs/RUST-PIVOT.md, section 2.1).
 //!
-//! Replaces the serving half of `sidecar/server.py` (`main`, `handle`,
+//! Replaces the serving half of the Python engine's `server.py` (`main`, `handle`,
 //! `_authorized`, `_mint_token`, `_ip_conns`): the same loopback address, port
 //! variable, token and Origin gate, per address connection cap, close codes,
 //! stdout readiness lines and port in use exit.
@@ -28,7 +28,8 @@ use tungstenite::{Error as WsError, Message as WsMessage, WebSocket};
 pub const HOST: &str = "127.0.0.1";
 pub const DEFAULT_PORT: u16 = 8765;
 
-/// server.py `EXIT_PORT_IN_USE`, a contract with `src-tauri/src/sidecar.rs`.
+/// The exit code of a `--ws` engine whose port is taken, so a launcher can say
+/// so rather than report a crash.
 pub const EXIT_PORT_IN_USE: i32 = 3;
 
 /// server.py `MAX_CONNS_PER_IP`. Every client is on 127.0.0.1, so in practice
@@ -52,12 +53,18 @@ const CANCEL_GRACE: Duration = Duration::from_secs(2);
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 const CLOSE_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// `FUNDACAD_<suffix>` or a retired spelling, like `sidecar/appenv.py`. An
-/// empty value is a value, not a miss.
+/// `FUNDACAD_<suffix>` or a retired spelling. An empty value is a value, not a
+/// miss.
 pub fn appenv(suffix: &str) -> Option<String> {
     ["FUNDACAD_", "SINDRI_", "SINDRICAD_"]
         .iter()
         .find_map(|p| std::env::var(format!("{p}{suffix}")).ok())
+}
+
+/// `FUNDACAD_ENGINE_<suffix>`, else the retired `FUNDACAD_SIDECAR_<suffix>`
+/// from the Python engine, which a script or a shell profile may still set.
+pub fn engine_env(suffix: &str) -> Option<String> {
+    appenv(&format!("ENGINE_{suffix}")).or_else(|| appenv(&format!("SIDECAR_{suffix}")))
 }
 
 /// The token and Origin check every connection passes, server.py `_authorized`.
@@ -256,9 +263,9 @@ impl Server {
 }
 
 /// `fundacad-engine --ws`: the environment, the readiness lines and the exit
-/// codes of `python server.py`.
+/// codes of the engine that serves its own socket.
 pub fn run<J: Jobs + Default>(jobs: J) -> ! {
-    let token = match appenv("SIDECAR_TOKEN").filter(|t| !t.is_empty()) {
+    let token = match engine_env("TOKEN").filter(|t| !t.is_empty()) {
         Some(t) => t,
         None => match mint_token() {
             Ok(t) => {
@@ -271,9 +278,9 @@ pub fn run<J: Jobs + Default>(jobs: J) -> ! {
             }
         },
     };
-    let port_text = appenv("SIDECAR_PORT").unwrap_or_else(|| DEFAULT_PORT.to_string());
+    let port_text = engine_env("PORT").unwrap_or_else(|| DEFAULT_PORT.to_string());
     let Ok(port) = port_text.trim().parse::<u16>() else {
-        eprintln!("FATAL: FUNDACAD_SIDECAR_PORT is not a port: {port_text:?}");
+        eprintln!("FATAL: FUNDACAD_ENGINE_PORT is not a port: {port_text:?}");
         std::process::exit(1);
     };
     let gate = Gate::new(token, &appenv("EXTRA_ORIGINS").unwrap_or_default());

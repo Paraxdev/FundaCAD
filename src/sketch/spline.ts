@@ -1,6 +1,6 @@
 // Fit-point spline math: a Catmull-Rom curve interpolating the given points,
 // sampled to a polyline for rendering, region tracing, and snapping. The
-// sidecar builds the authoritative B-spline edge through the same fit points.
+// engine builds the authoritative B-spline edge through the same fit points.
 
 import * as THREE from "three";
 

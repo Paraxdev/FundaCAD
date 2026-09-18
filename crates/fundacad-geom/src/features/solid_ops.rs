@@ -1,5 +1,5 @@
-//! Shell, thicken and draft: sidecar/solid_ops.py `_shell`, `_draft` and the
-//! handlers of sidecar/builder.py that drive them.
+//! Shell, thicken and draft: the Python engine's `solid_ops.py` `_shell`, `_draft` and the
+//! handlers of the Python engine's `builder.py` that drive them.
 
 use fundacad_core::schema::{Draft, OneOrMany, Selector, Shell, Thicken};
 use glam::DVec3;

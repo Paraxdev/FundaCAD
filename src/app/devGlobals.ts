@@ -78,7 +78,7 @@ export function installDevGlobals(e: Engine): void {
     // document + build result. Exposed so a harness can prove a followed datum
     // is DRAWN where its resolved mark says, by writing a mark onto the build
     // result and asking the viewport to reflect it, the render-side twin of the
-    // sidecar's datum_marks test.
+    // engine's datum_marks test.
     syncDatumPlanes: () => e.syncDatumPlanes(),
     // Direct handles on the two global overlay facades, so a harness can drive
     // them without needing an operation that happens to raise one.

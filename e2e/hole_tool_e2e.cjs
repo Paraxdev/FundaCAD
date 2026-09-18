@@ -9,8 +9,8 @@
 //   5. Picking M3 in the Size row under the feature re-derives the diameter and
 //      the counterbore.
 //
-// Usage (from the repo root, with vite + sidecar running):
-//   SC_TOKEN=<sidecar token> SC_CHROME=<chrome.exe> [SC_URL=http://localhost:5173/] [SC_SIDECAR_PORT=8765] node e2e/hole_tool_e2e.cjs [outDir]
+// Usage (from the repo root, with vite + engine running):
+//   SC_TOKEN=<engine token> SC_CHROME=<chrome.exe> [SC_URL=http://localhost:5173/] [SC_ENGINE_PORT=8765] node e2e/hole_tool_e2e.cjs [outDir]
 const { chromium } = require("playwright-core");
 const fs = require("fs");
 const path = require("path");
@@ -18,7 +18,7 @@ const path = require("path");
 const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const URL = process.env.SC_URL || "http://localhost:5173/";
-const WS_PORT = process.env.SC_SIDECAR_PORT || "8765";
+const WS_PORT = process.env.SC_ENGINE_PORT || "8765";
 const OUT = path.resolve(process.argv[2] || "hole_tool_shots");
 if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
 let failures = 0;

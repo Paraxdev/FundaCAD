@@ -9,7 +9,7 @@ export const CANCEL_DELAY_MS = 700;
  *
  *  The meshing (payload) phase reports feature = -1 for its whole duration,
  *  measured at 136 s on the reference assembly, so it used to render as a bar
- *  pinned at 0% under a static "meshing…". When the sidecar supplies the
+ *  pinned at 0% under a static "meshing…". When the engine supplies the
  *  per-body counts, show the real fraction; fall back to the indeterminate
  *  label when it can't. */
 export function buildProgress(

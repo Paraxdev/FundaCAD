@@ -1,5 +1,5 @@
-//! Byte equality against `sidecar/wire.py`, on the fixtures
-//! `tests/golden/gen_golden.py` wrote from the Python encoders.
+//! Byte equality against the Python engine's `wire.py`, on the fixtures
+//! `tests/golden/gen_golden.py on the legacy branch` wrote from the Python encoders.
 
 use fundacad_protocol::body::{Edge, FullBody, JobResult, MeshResult, WireBody};
 use fundacad_protocol::stream::{send_reply, CancelToken, ReplyOptions};

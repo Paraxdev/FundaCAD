@@ -1,4 +1,4 @@
-//! Joints, sidecar/joints.py: one body placed by mating a frame on it to a
+//! Joints, the Python engine's `joints.py`: one body placed by mating a frame on it to a
 //! frame on another, both re-resolved every rebuild so the assembly follows
 //! the parts.
 

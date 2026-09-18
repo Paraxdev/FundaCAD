@@ -162,8 +162,8 @@ export function commitDecision(o: {
   return { action: "wait" };
 }
 
-/** A kernel refusal, said the way a person would say it. `code` is the sidecar's
- *  machine category (sidecar/errors.py); the message is only read for the older
+/** A kernel refusal, said the way a person would say it. `code` is the engine's
+ *  machine category (the Python engine's `errors.py`); the message is only read for the older
  *  wording that carried no code. */
 export function blendRefusalReason(
   kind: EdgeTreatment,

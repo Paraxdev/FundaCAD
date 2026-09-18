@@ -21,7 +21,7 @@
 import { describe, expect, it } from "vitest";
 import shippedRaw from "../../plugins/FundaCAD.Screws/manifest.json?raw";
 import { parseManifest, promiseOf } from "../../src/plugins/manifest";
-import { officialPlugins, pluginReleaseTag } from "../../src/plugins";
+import { RELEASE_TAG, officialPlugins } from "../../src/plugins";
 import { bundleAsset } from "../../src/plugins/shipped";
 
 const RELEASES = "https://github.com/Paraxdev/fundacad/releases/download/";
@@ -74,12 +74,12 @@ describe("the plugins this build offers", () => {
     }
   });
 
-  it("installs from the release built with the same engine as the app", () => {
-    // A Rust engine build runs plugin geometry as components, which its own
-    // release carries from the same commit as its host.
-    expect(pluginReleaseTag("python")).toBe("beta");
-    expect(pluginReleaseTag("rust")).toBe("alpha");
-    for (const p of officialPlugins(pluginReleaseTag("rust"))) {
+  it("installs from the alpha release, never the Python beta's", () => {
+    // The engine runs plugin geometry as components, which the alpha release
+    // carries from the same commit as its host. The beta's bundles are the
+    // Python halves, built on the legacy branch.
+    expect(RELEASE_TAG).toBe("alpha");
+    for (const p of officialPlugins()) {
       expect(p.url).toBe(`${RELEASES}alpha/${p.asset}`);
     }
   });

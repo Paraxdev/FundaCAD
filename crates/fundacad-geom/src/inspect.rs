@@ -1,5 +1,5 @@
 //! Exact B-rep measurements and clash checks of the live bodies: the `inspect`
-//! op (sidecar/inspect_model.py, server.py `_inspect_job`) and the
+//! op (the Python engine's `inspect_model.py`, server.py `_inspect_job`) and the
 //! `interference` op (server.py `_interference_job`, `_min_distance`).
 
 use std::collections::HashSet;

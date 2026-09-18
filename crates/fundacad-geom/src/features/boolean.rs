@@ -1,5 +1,5 @@
 //! Merging a new solid into the model and body to body booleans:
-//! sidecar/handler_util.py `_combine` and sidecar/booleans.py
+//! the Python engine's `handler_util.py` `_combine` and the Python engine's `booleans.py`
 //! `_boolean_into_bodies`, `_do_boolean`, `_noop_eps`, `_sealed_void_diag`.
 
 use std::collections::HashSet;

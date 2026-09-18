@@ -16,7 +16,7 @@ describe("export settings", () => {
       .toBe(REFINEMENTS.medium.surfaceDeviation);
   });
 
-  it("sends units, format and faceting to the sidecar", () => {
+  it("sends units, format and faceting to the engine", () => {
     const s = { ...DEFAULT_SETTINGS, unit: "in" as const, binary: false, faceting: { surfaceDeviation: 0.01, normalDeviation: 10, maxEdgeLength: 5 } };
     expect(meshWire(s)).toEqual({ unit: "in", binary: false, surfaceDeviation: 0.01, normalDeviation: 10, maxEdgeLength: 5 });
   });

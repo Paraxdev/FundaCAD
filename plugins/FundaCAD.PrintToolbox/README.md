@@ -42,7 +42,7 @@ It reads no files, writes no files, and reaches no network.
 ## What happens to these features if you remove this
 
 The file opens and every value is kept. What stops is the building: the geometry
-is in `geometry/`, so without this plugin the holes build in their plain shape
+is in `geometry-rs/`, so without this plugin the holes build in their plain shape
 and each feature's row says, by name, that this plugin is not running. Install it
 again and the same file builds as it did.
 
@@ -55,14 +55,14 @@ again and the same file builds as it did.
 | `faceTool.ts` | the one pick tool every face-target verb runs through |
 | `bodyTool.ts` | the pick-free counterpart for a verb that acts on a body: the chamfer and the fillet |
 | `bedFit.ts` | the bed fit check's pure math, presets and remembered setting; not a feature |
-| `geometry/register.py` | claims the feature types from the geometry engine |
-| `geometry/ptb_holes.py` | teardrop and roof bridge |
-| `geometry/ptb_layers.py` | counterbore bridge and sacrificial layer |
-| `geometry/ptb_ribs.py` | thread-forming ribs |
-| `geometry/ptb_zip.py` | zip-tie channel |
-| `geometry/ptb_edges.py` | elephant-foot chamfer and vertical edge fillet |
-| `geometry/ptb_read.py`, `ptb_occ.py` | reading picked holes, floors and bodies, and the kernel helpers |
+| `geometry-rs/src/lib.rs` | claims the feature types from the geometry engine |
+| `geometry-rs/src/holes.rs` | teardrop and roof bridge |
+| `geometry-rs/src/layers.rs` | counterbore bridge and sacrificial layer |
+| `geometry-rs/src/ribs.rs` | thread-forming ribs |
+| `geometry-rs/src/zip.rs` | zip-tie channel |
+| `geometry-rs/src/edges.rs` | elephant-foot chamfer and vertical edge fillet |
+| `geometry-rs/src/read.rs`, `g.rs` | reading picked holes, floors and bodies, and the kernel helpers |
 
 Adding a tool is a `PrintTool` in `printForm.ts` listed in `PRINT_TOOLS`, an icon
-in `main.ts`, a handler in `geometry/register.py`, and its type in the manifest's
+in `main.ts`, a handler in `geometry-rs/src/lib.rs`, and its type in the manifest's
 `featureTypes`.

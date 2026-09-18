@@ -4,8 +4,8 @@
 //      the face centre lands in the middle of the canvas.
 //   2. Leave and reopen the same sketch: still centred on its face.
 //
-// Usage (from the repo root, with vite + sidecar running):
-//   SC_TOKEN=<sidecar token> SC_CHROME=<chrome.exe> [SC_URL=http://localhost:5173/] node e2e/sketch_face_focus_e2e.cjs [outDir]
+// Usage (from the repo root, with vite + engine running):
+//   SC_TOKEN=<engine token> SC_CHROME=<chrome.exe> [SC_URL=http://localhost:5173/] node e2e/sketch_face_focus_e2e.cjs [outDir]
 const { chromium } = require("playwright-core");
 const fs = require("fs");
 const path = require("path");

@@ -1,4 +1,4 @@
-//! What a document means when it names a plane, sidecar/plane_spec.py.
+//! What a document means when it names a plane, the Python engine's `plane_spec.py`.
 
 use fundacad_core::schema::{PlaneDef, PlaneSpec, Real};
 use indexmap::IndexMap;

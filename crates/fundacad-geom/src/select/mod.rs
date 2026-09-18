@@ -1,5 +1,5 @@
-//! Selector resolution, replacing sidecar/geom_select.py (with its tuning,
-//! sidecar/selector_tuning.json).
+//! Selector resolution, replacing the Python engine's `geom_select.py` (with its tuning,
+//! selector_tuning.json beside it).
 //!
 //! Geometry is never referenced by index: a selector is a stored description
 //! (a pick point, a fingerprint, a direction) re-resolved against the rebuilt
@@ -34,7 +34,7 @@ use entity::{
 pub use plane::plane_fallback_reason;
 pub use tuning::Tuning;
 
-/// The reference codes of sidecar/errors.py.
+/// The reference codes of the Python engine's `errors.py`.
 pub const AMBIGUOUS_REFERENCE: &str = "ambiguousReference";
 pub const REFERENCE_NOT_FOUND: &str = "referenceNotFound";
 pub const PLANE_TILTED: &str = "planeTilted";

@@ -1,14 +1,14 @@
 // Real-app check of the CHUNKED rebuild reply on the reference assembly.
 //
 // Drives the real client (src/geometry/client.ts) in a real browser against a
-// real sidecar, over the real socket, the only thing faked is the Tauri file
+// real engine, over the real socket, the only thing faked is the Tauri file
 // dialog, which a browser harness cannot reach anyway. Counts the frames that
 // actually cross the wire by adding a passive "message" listener to every
 // WebSocket the app opens (it fires alongside the app's own onmessage, so the
 // app is untouched), and peeks each binary frame's JSON header to tell a
 // chunked stream from a single frame.
 //
-// Usage (from the repo root, with vite on 5173 + sidecar on 8765):
+// Usage (from the repo root, with vite on 5173 + engine on 8765 (`fundacad-engine --ws`)):
 //   SC_TOKEN=<token> node e2e/chunked_reference.cjs [--tag NAME]
 const { chromium } = require("playwright-core");
 const fs = require("fs");

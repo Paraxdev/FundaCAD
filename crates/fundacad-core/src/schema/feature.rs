@@ -1,5 +1,5 @@
 //! The timeline's features: `CoreFeature` and `PluginFeature` in `src/types.ts`,
-//! as the handlers of sidecar/builder.py read them.
+//! as the handlers of the Python engine's `builder.py` read them.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -70,7 +70,7 @@ open_enum! {
 }
 
 /// Every feature's `id`, its type's own fields, the `activeWhen` any feature may
-/// carry (sidecar/builder.py `_is_inactive`), and the keys this build does not know.
+/// carry (the Python engine's `builder.py` `_is_inactive`), and the keys this build does not know.
 macro_rules! feature_struct {
     ($(#[$meta:meta])* $name:ident { $($(#[$fmeta:meta])* $field:ident : $ty:ty),* $(,)? }) => {
         $(#[$meta])*

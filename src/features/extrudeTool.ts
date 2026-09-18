@@ -47,7 +47,7 @@ const TAPER_EPS = 0.05;
  *  the lever is too short to read and the handle is not offered. */
 const TAPER_MIN_DEPTH = 1;
 
-/** Steepest taper the tool offers, degrees. Just under the sidecar's own limit
+/** Steepest taper the tool offers, degrees. Just under the engine's own limit
  *  (it refuses at or past 89, where a wall folds through itself), so a value the
  *  handle or field allows is always one the kernel will attempt. Unlike Draft
  *  this is not held to 60: an extrude taper has no neutral line to outswing, and
@@ -130,14 +130,14 @@ export class ExtrudeTool {
   private taperGrabbing = false;
   private taperGrabProj = 0;
   private taperGrabInset = 0;
-  /** Stable id for the sidecar preview AND the committed feature, one per gesture
+  /** Stable id for the engine preview AND the committed feature, one per gesture
    *  so a tapered preview replaces itself instead of piling up. */
   private previewId = "";
-  /** true while the exact tapered solid is being previewed through the sidecar
+  /** true while the exact tapered solid is being previewed through the engine
    *  (the frontend prism is hidden), so the switch back to straight knows to
    *  clear it. */
   private taperPreviewOn = false;
-  /** depth+sign+taper+selection of the tapered preview last asked of the sidecar,
+  /** depth+sign+taper+selection of the tapered preview last asked of the engine,
    *  so an unchanged drag does not re-trigger an OCCT rebuild. */
   private taperKey = "";
 
@@ -537,7 +537,7 @@ export class ExtrudeTool {
   private beginDrag() {
     this.phase = "drag";
     this.overlay.setHoverRegion(null);
-    // One id for the whole gesture: the sidecar taper preview and the committed
+    // One id for the whole gesture: the engine taper preview and the committed
     // feature share it, so a live tapered preview replaces itself each rebuild
     // rather than accumulating a new body per drag step.
     this.previewId = this.editId ?? this.store.nextId();
@@ -903,7 +903,7 @@ export class ExtrudeTool {
     return this.viewport.rayFrom(x, y).intersectObjects(this.taperHandle.group.children, false).length > 0;
   }
 
-  /** The feature this gesture would commit (also what the sidecar previews while
+  /** The feature this gesture would commit (also what the engine previews while
    *  a taper is being swung). `taper` is written only when it bites, so a plain
    *  extrude's JSON is byte-identical to what earlier builds wrote. */
   private buildFeature(): Feature {
@@ -1041,7 +1041,7 @@ export class ExtrudeTool {
       }
     }
     // Feature construction (id, regions, symmetric, taper, captured participants)
-    // is shared with the live sidecar preview, so the thing committed is exactly
+    // is shared with the live engine preview, so the thing committed is exactly
     // the thing that was on screen. See buildFeature.
     const feature = this.buildFeature();
     const id = feature.id;

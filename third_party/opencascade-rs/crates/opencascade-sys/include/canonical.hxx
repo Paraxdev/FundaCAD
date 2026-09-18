@@ -1,5 +1,5 @@
 #pragma once
-// Canonical recognition for B-rep imports, sidecar/mesh_import.py
+// Canonical recognition for B-rep imports, the Python engine's `mesh_import.py`
 // `_canonicalize` and `_conversion_meshes`: swept surfaces made elementary,
 // near analytic spline faces rebuilt on planes, cylinders, cones and spheres,
 // kept only where the mesher still draws them.

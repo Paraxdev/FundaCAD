@@ -6,11 +6,11 @@
 //! cap. Binary BinTools is 224.1 MiB, deflates to 83.5 MiB, and reloads in 1.9 s
 //! against 189.0 s to re-import from STEP.
 //!
-//! RUST OWNS IT, not the sidecar: sidecar.rs deliberately does not auto-respawn, so
-//! a save routed through it would leave the user unable to save at all with unsaved
-//! work in front of them. Saving needs no geometry, the document comes from the
+//! THE APP OWNS IT, not the engine worker: a save routed through a worker that is
+//! restarting would leave the user unable to save with unsaved work in front of
+//! them. Saving needs no geometry, the document comes from the
 //! frontend and the blobs are already bytes on disk. Nothing here interprets a
-//! shape, so "Rust never touches geometry" still holds.
+//! shape, so "only the engine touches geometry" still holds.
 //!
 //! TWO LOAD-BEARING RULES:
 //!
@@ -94,7 +94,7 @@ pub struct Manifest {
 /// Not called on any production path, Rust only ever VERIFIES a hash, and does
 /// that while streaming, so it hashes incrementally rather than over a slice.
 /// This is kept as the executable statement of which digest the format uses, and
-/// is what `hash_matches_python` pins against the sidecar's copy.
+/// is what `hash_matches_python` pins against the Python engine's copy.
 #[allow(dead_code)]
 pub fn hash_bytes(data: &[u8]) -> String {
     let mut h = Blake2b128::new();
@@ -555,10 +555,10 @@ mod tests {
     }
 
     /// The blob store is written by BOTH Rust (extracting a container) and the
-    /// Python sidecar (importing geometry), and addressed purely by content
+    /// Python engine (importing geometry), and addressed purely by content
     /// hash. If the two languages ever disagree about that hash, every container
     /// reference dangles and it looks to the user like the geometry vanished.
-    /// These vectors are duplicated verbatim in sidecar/test_blobstore.py so
+    /// These vectors are duplicated verbatim in the Python engine's `test_blobstore.py` so
     /// both sides are pinned to the same constants.
     #[test]
     fn hash_matches_python() {

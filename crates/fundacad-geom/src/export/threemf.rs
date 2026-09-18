@@ -1,5 +1,5 @@
 //! Plain single-object 3MF, replaces `write_plain_3mf` and `mesh_chunks` of
-//! `sidecar/mesh_writers.py`. The model part is streamed into the zip.
+//! the Python engine's `mesh_writers.py`. The model part is streamed into the zip.
 
 use std::io::{self, Seek, Write};
 use std::path::Path;

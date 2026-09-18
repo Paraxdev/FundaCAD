@@ -1,5 +1,5 @@
-//! Selector resolution against sidecar/geom_select.py, per `by` kind, on the
-//! same B-reps (tests/select/gen.py writes the parts and tests/select/fixtures.json).
+//! Selector resolution against the Python engine's `geom_select.py`, per `by` kind, on the
+//! same B-reps (tests/select/gen.py on the legacy branch writes the parts and tests/select/fixtures.json).
 
 use std::collections::HashMap;
 

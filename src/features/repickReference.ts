@@ -4,12 +4,12 @@
 // Kept DOM-free and free of viewport/store imports so it can be tested directly,
 // the interactive half (highlight a face, click it) lives in featureStarters,
 // which already owns picking. This module is only the part that is easy to get
-// quietly wrong: deciding WHICH of a feature's selectors the sidecar was
+// quietly wrong: deciding WHICH of a feature's selectors the engine was
 // complaining about.
 //
-// The sidecar reports the failing selector by its own stored POINT (ResolveDiag
+// The engine reports the failing selector by its own stored POINT (ResolveDiag
 // `at`), not by an index, because a selector's position in the feature is not
-// stable across the sidecar's own grouping (see _group_sels_by_body). Matching
+// stable across the engine's own grouping (see _group_sels_by_body). Matching
 // on the point is what keeps the two sides from having to agree on an ordering.
 
 import type { Feature, Selector } from "../types";
@@ -26,7 +26,7 @@ export interface SelectorSite {
   index: number | null;
 }
 
-// The sidecar rounds `at` to 6 decimals; the document keeps full precision. A
+// The engine rounds `at` to 6 decimals; the document keeps full precision. A
 // tolerance well below any real modelling distance, but above that rounding.
 const MATCH_TOL = 1e-4;
 
@@ -84,7 +84,7 @@ export function replaceSelectorAt(
 // into a rotated basis and move everything downstream). So re-picking the tilted
 // face on the body that tilted reproduces the identical diagnostic, every time.
 // A button that cannot clear the chip beside it is the dead end this file exists
-// to avoid, and the sidecar's prose for that code says what does work instead.
+// to avoid, and the engine's prose for that code says what does work instead.
 const REPAIRABLE_CODES = new Set(["ambiguousReference", "referenceNotFound"]);
 
 /** The repairable-reference diagnostic for a feature, if this build reported one.
@@ -94,14 +94,14 @@ const REPAIRABLE_CODES = new Set(["ambiguousReference", "referenceNotFound"]);
  *  cached plane rather than failing the build, and says why, the face is gone,
  *  or the reference no longer names exactly one face. Both are answered by the
  *  same gesture, so both get the same button. Without them the "Re-pick the
- *  face" prose the sidecar writes would have nothing behind it.
+ *  face" prose the engine writes would have nothing behind it.
  *
  *  `at` is still required: it is the stored selector point, and without it
  *  findSelectorAt cannot say WHICH selector to swap.
  *
  *  The prose fallback is DELIBERATE and stays. Matching `reason === "ambiguous
  *  nearest pick"` across the language boundary is what this used to do, so a
- *  sidecar older than the `code` field, most commonly server.py run by hand
+ *  engine older than the `code` field, most commonly server.py run by hand
  *  from another checkout, which is a routine workflow here, would otherwise
  *  lose the Re-pick affordance with nothing to explain it. */
 export function repairableDiagFor(

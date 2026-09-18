@@ -27,7 +27,7 @@ use value::{nullable, open_enum, tagged_enum};
 
 plain_struct!(
     /// Per-face colours as a palette plus `[count, paletteIndex]` runs over face
-    /// order, index -1 meaning no colour of its own (sidecar/face_colors.py).
+    /// order, index -1 meaning no colour of its own (the Python engine's `face_colors.py`).
     FaceColorRuns { palette: Vec<String>, runs: Vec<[Real; 2]> }
 );
 

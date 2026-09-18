@@ -1,7 +1,7 @@
 // The previews a drag paints before the kernel has said anything.
 //
 // Split out of viewport.ts. Every one of these is the same bargain: a rebuild
-// through the sidecar is exact and takes long enough that a drag would lurch,
+// through the engine is exact and takes long enough that a drag would lurch,
 // so the frontend draws what the result is going to be and the real feature is
 // committed on release. Nothing here ever reaches the document.
 //
@@ -118,7 +118,7 @@ export class GhostLayer {
   }
 
   // --- Move ghost: translate the selected bodies' mesh + edges live during a drag,
-  // with NO sidecar rebuild (a rigid move needs no geometry recompute), so dragging
+  // with NO engine rebuild (a rigid move needs no geometry recompute), so dragging
   // is snappy. The real `move` feature is committed on release. With per-body meshes
   // this is a pure object-transform offset: zero vertex writes, zero GPU uploads.
   // Raycasts (bodyIdAt, pointInSolid parity) follow matrixWorld, refreshed eagerly

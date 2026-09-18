@@ -1,5 +1,5 @@
 //! Edge and face selectors and their fingerprints, `Selector` in `src/types.ts`
-//! (resolved by sidecar/geom_select.py).
+//! (resolved by the Python engine's `geom_select.py`).
 
 use serde::ser::Error as _;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};

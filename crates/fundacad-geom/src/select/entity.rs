@@ -1,5 +1,5 @@
 //! Edges and faces measured once, with the fingerprint readings, keys and costs
-//! of sidecar/geom_select.py.
+//! of the Python engine's `geom_select.py`.
 
 use std::cmp::Ordering;
 

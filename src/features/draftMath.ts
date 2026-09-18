@@ -12,7 +12,7 @@
 //
 // The angle comes from the drag the same way a carpenter reads one: the face
 // pivots about the line where it meets the NEUTRAL plane (the body's near end
-// along the pull axis, which is where the sidecar puts it, builder._draft), so
+// along the pull axis, which is where the engine puts it, builder._draft), so
 // the far edge swings by lever * tan(angle). Dragging that edge d millimetres
 // along the face's own normal therefore means atan(d / lever), and the number in
 // the readout is the angle a protractor laid on the part would show.
@@ -50,7 +50,7 @@ export function alongAxis(v: readonly [number, number, number], axis: Axis3): nu
 }
 
 /** How far the grabbed point sits from the neutral plane, measured along the
- *  pull axis. The sidecar puts the neutral plane at the body's MINIMUM along
+ *  pull axis. The engine puts the neutral plane at the body's MINIMUM along
  *  that axis, so this is the height of the grab above the bottom of the part. */
 export function draftLever(
   anchor: readonly [number, number, number],

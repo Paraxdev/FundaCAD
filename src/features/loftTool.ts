@@ -2,7 +2,7 @@
 // the loft previews live as soon as the second profile is added, click more to
 // add, click a picked one again to drop it, Enter to commit, Esc to cancel. Each
 // profile keeps its holes, so two concentric-ring profiles loft into a tube (the
-// sidecar resolves each region anchor to its face; see builder._handle_loft).
+// engine resolves each region anchor to its face; see builder._handle_loft).
 //
 // Profiles are stored as {sketch, anchor} DATA, not live WorldRegion refs: a
 // preview rebuild re-detects regions, so a held ref would go stale. The anchor

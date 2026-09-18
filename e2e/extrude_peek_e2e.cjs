@@ -9,9 +9,9 @@
 // face, the inner disc cut down into it, next to a glowing box, a glass
 // cylinder and a hidden body.
 //
-// Usage (from the repo root, with vite on 5173 + sidecar on 8765):
-//   SC_TOKEN=<sidecar token> SC_CHROME=<chrome.exe> node e2e/extrude_peek_e2e.cjs [outDir]
-// SC_APP_PORT and SC_SIDECAR_PORT move it off 5173/8765 (the sidecar then needs
+// Usage (from the repo root, with vite on 5173 + engine on 8765 (`fundacad-engine --ws`)):
+//   SC_TOKEN=<engine token> SC_CHROME=<chrome.exe> node e2e/extrude_peek_e2e.cjs [outDir]
+// SC_APP_PORT and SC_ENGINE_PORT move it off 5173/8765 (the engine then needs
 // FUNDACAD_EXTRA_ORIGINS for that app port). SC_REAL_GPU=1 drops swiftshader,
 // which otherwise forces the low-power tier and turns glass off.
 const { chromium } = require("playwright-core");
@@ -21,7 +21,7 @@ const path = require("path");
 const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const APP_PORT = process.env.SC_APP_PORT || "5173";
-const WS_PORT = process.env.SC_SIDECAR_PORT || "8765";
+const WS_PORT = process.env.SC_ENGINE_PORT || "8765";
 const ARGS = process.env.SC_REAL_GPU ? ["--no-sandbox"] : ["--use-angle=swiftshader", "--no-sandbox"];
 const OUT = path.resolve(process.argv[2] || "extrude_peek_shots");
 if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }

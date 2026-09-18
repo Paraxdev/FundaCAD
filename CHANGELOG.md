@@ -66,6 +66,21 @@ This file starts on 2026-08-03. For anything before that, see the
   file, network or environment access beyond what its manifest grants, a
   memory cap and the same time budgets the beta used.
 
+- **The 1.0 alpha carries no Python at all.** The Python geometry engine, its
+  bundled runtime and the Python half of every plugin are gone from `main`;
+  the Rust engine is the only engine, and plugin bundles carry only their
+  WebAssembly component. The engine's answers are still checked against the
+  Python engine's, frozen on every corpus it was compared on. The Python engine
+  continues on the `legacy` branch, which keeps publishing the beta. A plugin
+  the alpha installs has no Python half, so on a machine running both, the
+  beta builds that plugin's features again once it reinstalls its own copy.
+
+- **Saving a document with an imported part works in the alpha.** The engine
+  kept imported geometry in a directory of its own choosing rather than the
+  app's, so saving a document with an import stopped with "could not be found
+  in local storage". It is told the app's directory now, as the beta's engine
+  always was.
+
 ### Added
 
 - **A Hole tool.** Click a flat face to drill a hole there, click more spots to add holes and click a hole to take it away. Type a size like M3 or a plain diameter, and a depth or "through". The switch in the box steps through simple, counterbore, countersink and heat-set insert. Sizes follow ISO clearance holes (close, normal or loose fit) or tap drills from M2 to M10, counterbores fit socket head screws and countersinks 90 degree flat heads, and the insert preset sizes a bore with a small lead-in for M2 to M5 brass inserts. Every dimension is a row under the feature afterwards, parameters can drive them, and double-clicking the hole reopens it to move, add or remove positions. An optional 118 degree drill point and a Tapped label are there too.

@@ -1,10 +1,11 @@
-//! Disk checkpoints of the build state, sidecar/rebuild_cache.py
+//! Disk checkpoints of the build state, the Python engine's `rebuild_cache.py`
 //! `_persist_tick`, `_save_checkpoint`, `_restore_from_disk` and
 //! `_body_fingerprint`.
 //!
-//! Body state that is not in the shape (owners, node ref, colours, `intact`)
-//! is written from `Body` field by field, and read back the same way: a field
-//! left out here comes back empty on every reopen with nothing to notice it.
+//! Body state that is not in the shape (owners, node ref, colours, `intact`,
+//! a plugin's mesh pass specs) is written from `Body` field by field, and read
+//! back the same way: a field left out here comes back empty on every reopen
+//! with nothing to notice it.
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -104,6 +105,7 @@ impl Persist<'_> {
                 intact: b.intact,
                 face_colors: b.face_colors.clone(),
                 part_color: b.part_color.clone(),
+                mesh_passes: b.mesh_passes.clone(),
             });
         }
         let state = json!({
@@ -174,7 +176,7 @@ pub fn restore(store: &GeomStore, keys: &[String]) -> Option<(usize, Snapshot, M
             .and_then(|o| o.get(&entry.body_id))
             .and_then(|o| serde_json::from_value(o.clone()).ok())
             .unwrap_or_default();
-        let body = Body::restored(
+        let mut body = Body::restored(
             entry.body_id.clone(),
             entry.name.clone(),
             shape,
@@ -186,6 +188,7 @@ pub fn restore(store: &GeomStore, keys: &[String]) -> Option<(usize, Snapshot, M
                 intact: entry.intact,
             },
         );
+        body.mesh_passes = entry.mesh_passes.clone();
         modified.insert(entry.body_id.clone(), (body.identity(), entry.blob_key.clone()));
         bodies.push(body);
     }

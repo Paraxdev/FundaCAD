@@ -1,4 +1,4 @@
-// tests/vectors/face_colors.json, recorded from sidecar/face_colors.py and also
+// tests/vectors/face_colors.json, recorded from the Python engine's `face_colors.py` and also
 // replayed by fundacad-core (crates/fundacad-core/tests/shared_vectors.rs).
 
 import { describe, expect, it } from "vitest";

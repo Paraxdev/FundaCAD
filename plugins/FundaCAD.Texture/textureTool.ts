@@ -5,7 +5,7 @@
 // numeric knobs. An rAF tick diffs the ambient selection each frame (rather than
 // hijacking viewport.onSelectionChange, which main.ts owns) and refreshes the
 // panel's summary line + live preview when it changes. The preview is the REAL
-// sidecar-computed displacement at viewport density, debounced like Fillet/
+// engine-computed displacement at viewport density, debounced like Fillet/
 // PressPull (store.setPreview()/setEditPreview()). Commit promotes the preview
 // to a real feature (records undo); Esc (via the panel) or Cancel reverts.
 
@@ -17,7 +17,7 @@ import {
   type TextureMode, type TextureValues,
 } from "./textureForm";
 
-// Warm texture ticks are ~10-70ms sidecar-side (geometry-skeleton cache), so a
+// Warm texture ticks are ~10-70ms engine-side (geometry-skeleton cache), so a
 // short debounce keeps scrubbing responsive while still coalescing keystrokes.
 const PREVIEW_DEBOUNCE_MS = 150;
 
@@ -358,7 +358,7 @@ export class TextureTool {
   }
 
   /** Live preview: every change (selection or params, any kind) debounces into
-   *  the same sidecar-preview pipeline Fillet/PressPull use, the REAL
+   *  the same engine-preview pipeline Fillet/PressPull use, the REAL
    *  displaced mesh at viewport density, ~half a second behind the slider.
    *  (A GPU vertex-shader preview was tried and dropped: it can only move
    *  vertices that already exist, invisible on a 2-triangle flat face, and
@@ -393,30 +393,30 @@ export class TextureTool {
   }
 
   /** kind-specific extra fields, only the ones that apply to the chosen kind,
-   *  so the emitted JSON stays a clean match for the sidecar's per-kind reader
+   *  so the emitted JSON stays a clean match for the engine's per-kind reader
    *  instead of every kind carrying every other kind's leftover defaults. */
   private kindFields(v: TextureValues): Partial<Record<string, Num | boolean | string>> {
     const extra: Partial<Record<string, Num | boolean | string>> = {};
     if (v.offset) extra.offset = v.offset;
     // profile applies to EVERY kind, and is written out explicitly rather than
-    // relying on the sidecar default so a saved document says what it is
+    // relying on the engine default so a saved document says what it is
     extra.profile = v.profile;
     if (v.boundaryInset) extra.boundaryInset = v.boundaryInset;
     if (ANGLE_KINDS.has(v.kind) && v.angle) extra.angle = v.angle;
-    // direction is generic in the sidecar, it transforms the height field
+    // direction is generic in the engine, it transforms the height field
     // (out = h, in = h-1, both = centred) rather than the pattern, so EVERY
     // kind honours it. It used to ride along with the angle, which left
     // noise/voronoi/image permanently embossing outward.
     extra.direction = v.direction;
     // smooth low-passes the height field before it displaces, generic across
     // every kind (image included), so it rides here like direction. Emitted only
-    // when non-zero to match the sidecar, which drops it from the spec at zero so
+    // when non-zero to match the engine, which drops it from the spec at zero so
     // an untouched texture keeps its byte-for-byte geometry and cache identity.
     if (v.smooth) extra.smooth = v.smooth;
     // Projection and its seam control apply to a procedural pattern on a freeform
     // face (a heightmap keeps its own orientation, so it never carries them).
     // Only the seam control the chosen mode reads is sent, and projection is
-    // omitted at its triplanar default so a plain texture stays lean, the sidecar
+    // omitted at its triplanar default so a plain texture stays lean, the engine
     // then reproduces the default and old documents hash unchanged.
     if (PROJECTION_KINDS.has(v.kind)) {
       if (v.projection !== "triplanar") extra.projection = v.projection;
@@ -459,7 +459,7 @@ export class TextureTool {
     if (this.mode === "faces") {
       const sel = this.viewport.selectedFacesForPressPull();
       if (!sel || !sel.faceIds.length) return null;
-      // Bind the target body. Without it the sidecar falls back to the ACTIVE
+      // Bind the target body. Without it the engine falls back to the ACTIVE
       // (last-created) body and resolves the face selector against the wrong
       // shape, so with >1 body the texture lands on a random face of the last
       // body, not the one clicked. A texture applies to a single body, so if the

@@ -1,5 +1,5 @@
 // Shared API + document types. Source of truth for the TS side; mirrors the
-// Python sidecar contract.
+// engine's schema (crates/fundacad-core/src/schema).
 
 export type Params = Record<string, number>;
 export type Num = number | string; // literal or parameter name
@@ -7,7 +7,7 @@ export type Num = number | string; // literal or parameter name
 export type Vec3 = [number, number, number];
 
 /** Per-face colours from an imported file, as a palette plus run-length encoding over
- *  face order (sidecar/face_colors.py, document/faceColors.ts). */
+ *  face order (the Python engine's `face_colors.py`, document/faceColors.ts). */
 export interface FaceColorRuns {
   palette: string[];
   /** `[count, paletteIndex]`; index -1 means "no colour of its own". */
@@ -19,7 +19,7 @@ export interface FaceColorRuns {
 export type ImportColorSource = "bodies" | "faces";
 
 // Scalar invariants to re-find one edge or face after a rebuild; the resolver scores
-// whichever fields are present (sidecar/geom_select.py).
+// whichever fields are present (the Python engine's `geom_select.py`).
 export interface EdgeFingerprint {
   mid: Vec3; // midpoint (curve parameter 0.5), world mm
   dir: Vec3; // unit tangent at 0.5, sign-normalized (edges are unoriented)
@@ -57,7 +57,7 @@ export type Selector = (
 ) &
   SelectorBody;
 
-// A projected entity's cached 2D shape, authored by the sidecar (6 decimals). poly is the
+// A projected entity's cached 2D shape, authored by the engine (6 decimals). poly is the
 // sampled fallback for tilted circles, splines and silhouettes.
 export type ProjectedCurve =
   | { kind: "line"; x1: number; y1: number; x2: number; y2: number }
@@ -65,7 +65,7 @@ export type ProjectedCurve =
   | { kind: "arc"; x1: number; y1: number; x2: number; y2: number; mx: number; my: number }
   | { kind: "poly"; pts: [number, number][] };
 
-/** A poly's first and last points, one entry when closed (sidecar coordinates are exact). */
+/** A poly's first and last points, one entry when closed (engine coordinates are exact). */
 export function projEndSamples(cv: Extract<ProjectedCurve, { kind: "poly" }>): [number, number][] {
   const first = cv.pts[0], last = cv.pts[cv.pts.length - 1];
   if (!first) return [];
@@ -77,7 +77,7 @@ export function projEndSamples(cv: Extract<ProjectedCurve, { kind: "poly" }>): [
 export type ProjectedSource =
   | { kind: "edge" | "faceBoundary"; body: string; sel: Selector; group?: string }
   // `index`: this sibling's edge index within the source entity's deterministic
-  // edge list (multi-edge sources only), the sidecar's authoritative refresh
+  // edge list (multi-edge sources only), the engine's authoritative refresh
   // correspondence, stable across sibling deletions and source moves.
   | { kind: "sketchCurve"; sketch: string; entity: string; group?: string; index?: number }
   | { kind: "silhouette"; body: string; group?: string };
@@ -274,7 +274,7 @@ export type PlaneDef = {
 };
 export type PlaneSpec = Plane3 | PlaneDef;
 
-/** The handle the UI offers; the sidecar applies offset and angle whatever the mode. */
+/** The handle the UI offers; the engine applies offset and angle whatever the mode. */
 export type JointMode = "rigid" | "revolute" | "slider";
 
 /** One side of a joint: a frame on body geometry (re-resolved), on a datum, or given outright. */
@@ -304,7 +304,7 @@ export type CoreFeature =
       sketch: string;
       distance: Num;
       operation: "new" | "join" | "cut" | "intersect";
-      // interior points of the chosen profile areas (sidecar resolves each to a
+      // interior points of the chosen profile areas (engine resolves each to a
       // face, with holes, and unions them). `region` is the legacy single-area form.
       regions?: [number, number, number][];
       region?: [number, number, number];
@@ -427,7 +427,7 @@ export type CoreFeature =
   // Copies placed with a move's transform; each copy is a new body.
   | { id: string; type: "duplicate"; dx: Num; dy: Num; dz: Num; rx: Num; ry: Num; rz: Num; bodies?: string[] }
   // Place `moving` by aligning mate connectors (axes opposed unless `flush`), then slide
-  // by `offset` and spin by `angle` about the mate axis (sidecar/joints.py).
+  // by `offset` and spin by `angle` about the mate axis (the Python engine's `joints.py`).
   | { id: string; type: "joint"; moving: string; mate: MateConnector; to: MateConnector;
       mode?: JointMode; flush?: boolean; offset?: Num; angle?: Num; name?: string }
   // Repair boolean debris; parametric because later booleans make more of it.
@@ -505,7 +505,7 @@ export type ViewCubeSide =
   | "bottom";
 export type ViewOverride = { normal: [number, number, number]; up: [number, number, number] };
 
-// --- parameters/equations engine (frontend-only; the sidecar sees numbers) ---
+// --- parameters/equations engine (frontend-only; the engine sees numbers) ---
 
 /** Canonical unit kind of a parameter: lengths are mm, angles degrees, counts raw. */
 export type ParamUnit = "mm" | "deg" | "count";
@@ -577,7 +577,7 @@ export interface ParamExtras {
 export interface CadDocument {
   parameters: Params;
   /** Parameter table (source of truth for expressions). `parameters` is the
-   *  derived name→value cache regenerated from this on save/send, so the sidecar
+   *  derived name→value cache regenerated from this on save/send, so the engine
    *  and pre-v2 readers keep working off plain numbers. Absent = legacy doc. */
   paramDefs?: Record<string, ParamDef>;
   /** Groups, configurations and checks over the parameter table. Absent until used. */
@@ -705,7 +705,7 @@ export interface MeshExportOptions {
   maxEdgeLength: number;
 }
 
-// Import: the format the user picks, and the sidecar's reply for an `import` op,
+// Import: the format the user picks, and the engine's reply for an `import` op,
 // the content hash of the stored geometry plus a little metadata for the new
 // `import` feature.
 export type ImportFormat = "stl" | "3mf" | "step" | "obj" | "brep" | "glb";

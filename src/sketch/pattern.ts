@@ -1,6 +1,6 @@
 // Expand a sketch pattern DEFINITION into its derived entities (the copies). Kept
 // deliberately tiny and mirrored 1:1 by the Python port in builder.py (_expand_pattern)
-// so the frontend preview and the sidecar build agree. Derived ids are
+// so the frontend preview and the engine build agree. Derived ids are
 // "<pattern.id>#<n>", render/build-only, never targeted by constraints.
 
 import type { Num, Params, SketchPattern } from "../types";

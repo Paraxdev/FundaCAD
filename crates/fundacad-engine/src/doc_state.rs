@@ -1,6 +1,6 @@
 //! The document the worker holds between rebuilds, patched by deltas.
 //!
-//! Replaces `_apply_doc_ops` in `sidecar/server.py`. The client sends only the
+//! Replaces `_apply_doc_ops` in the Python engine's `server.py`. The client sends only the
 //! features that changed, `{baseRevision, revision, ops}`; anything the held
 //! document cannot answer (a respawned worker, a missed revision, a gap the ops
 //! leave) asks for the whole document once with `{"resync": true}`.

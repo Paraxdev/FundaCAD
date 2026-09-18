@@ -1,5 +1,5 @@
-//! Timeline replay, replacing sidecar/builder.py `rebuild` and the helpers of
-//! sidecar/handler_util.py.
+//! Timeline replay, replacing the Python engine's `builder.py` `rebuild` and the helpers of
+//! the Python engine's `handler_util.py`.
 //!
 //! The document's features run in order against an ordered list of bodies. A
 //! feature that fails is a no-op with an error naming it, and the build goes
@@ -26,7 +26,7 @@ pub use fmt::{py_g, py_g_prec};
 pub use owners::Owners;
 pub use plane::PlaneRecord;
 
-/// Machine codes of sidecar/errors.py.
+/// Machine codes of the Python engine's `errors.py`.
 pub const BAD_REQUEST: &str = "badRequest";
 
 /// Why a feature did nothing: the arms of the Python rebuild loop's `except`.
@@ -161,7 +161,7 @@ pub struct SketchEntry {
     pub face: Option<fundacad_core::schema::Selector>,
 }
 
-/// What a handler reads and edits, sidecar/builder.py `_RebuildCtx`.
+/// What a handler reads and edits, the Python engine's `builder.py` `_RebuildCtx`.
 pub struct Ctx {
     params: HashMap<String, f64>,
     pub datums: IndexMap<String, PlaneRecord>,
@@ -171,7 +171,7 @@ pub struct Ctx {
     pub hidden_bodies: HashSet<String>,
     pub sketch_planes: IndexMap<String, Value>,
     pub datum_marks: IndexMap<String, Value>,
-    /// Projected sketch entity refresh entries, sidecar/projection_refresh.py.
+    /// Projected sketch entity refresh entries, the Python engine's `projection_refresh.py`.
     pub projections: Vec<Value>,
     ids: BodyIds,
 }

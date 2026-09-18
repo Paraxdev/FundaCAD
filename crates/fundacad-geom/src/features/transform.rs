@@ -1,4 +1,4 @@
-//! Move, duplicate, scale, mirror and remove body, sidecar/builder.py
+//! Move, duplicate, scale, mirror and remove body, the Python engine's `builder.py`
 //! `_handle_move`, `_handle_duplicate`, `_handle_scale`, `_handle_mirror` and
 //! `_handle_remove_body`.
 

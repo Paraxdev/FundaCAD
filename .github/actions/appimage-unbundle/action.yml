@@ -1,17 +1,9 @@
 name: Un-bundle the system stack from the AppImage
 description: >
   Strip the bundled GTK/WebKit/GStreamer stack out of the AppImage, repack it
-  and re-sign it. Shared by the beta build and the alpha Rust build, so the
-  two cannot drift; the only difference between them is which payload has to
-  survive the strip.
+  and re-sign it.
 
 inputs:
-  engine:
-    description: >
-      Which geometry engine this bundle carries, "sidecar" for the Python
-      runtime under usr/lib/<product>/sidecar-runtime, "builtin" for the Rust
-      engine inside the executable. Decides what is checked for after the strip.
-    required: true
   signing-key:
     description: The minisign private key, empty to leave the AppImage unsigned.
     required: false
@@ -61,30 +53,22 @@ runs:
         rm -rf "$root/usr/lib/x86_64-linux-gnu"
 
         # The geometry engine must still be there, or we just shipped a dead app.
-        # The directory is named after productName, so it is READ from the config
-        # rather than written out here: hardcoding it meant this check silently
-        # named a directory that no longer existed the moment the app was renamed,
-        # and a `test -d` against the wrong path fails the job for the wrong reason.
-        #
-        # usr/lib/<product> holds the Python geometry engine and MUST survive: it
-        # is the app, not a system library, and no host provides it. The Rust
-        # build has nothing there at all, its engine is the executable, so what
-        # is checked is that the executable came through.
+        # It is the executable itself, so what is checked is that it came through.
+        bin=$(find "$root/usr/bin" -maxdepth 1 -type f ! -name fundacad-mcp | head -1)
+        test -n "$bin" && test -s "$bin" \
+          || { echo "::error::nothing left in usr/bin"; ls -la "$root/usr"; exit 1; }
+        # The MCP server ships beside the app (externalBin).
+        test -s "$root/usr/bin/fundacad-mcp" \
+          || { echo "::error::no usr/bin/fundacad-mcp"; ls -la "$root/usr/bin"; exit 1; }
+        # No Python anywhere: the retired engine's runtime, sidecar-runtime/, is
+        # 800 MB of dead weight and a sign a stale config was used. The
+        # directory under usr/lib is named after productName, read from the
+        # config rather than hardcoded so a rename cannot blind the check.
         product=$(node -p "require('./src-tauri/tauri.conf.json').productName")
-        if [ "${{ inputs.engine }}" = sidecar ]; then
-          test -d "$root/usr/lib/$product/sidecar-runtime" \
-            || { echo "::error::no sidecar-runtime under usr/lib/$product"; ls -la "$root/usr/lib"; exit 1; }
-        else
-          bin=$(find "$root/usr/bin" -maxdepth 1 -type f ! -name fundacad-mcp | head -1)
-          test -n "$bin" && test -s "$bin" \
-            || { echo "::error::nothing left in usr/bin"; ls -la "$root/usr"; exit 1; }
-          # The MCP server ships beside the app (externalBin).
-          test -s "$root/usr/bin/fundacad-mcp" \
-            || { echo "::error::no usr/bin/fundacad-mcp"; ls -la "$root/usr/bin"; exit 1; }
-          # A Rust-engine bundle that somehow still carries the Python runtime is
-          # 800 MB of dead weight and a sign the wrong config was used.
-          test ! -d "$root/usr/lib/$product/sidecar-runtime" \
-            || { echo "::error::the Rust build bundled sidecar-runtime"; exit 1; }
+        test ! -d "$root/usr/lib/$product/sidecar-runtime" \
+          || { echo "::error::the bundle carries a Python runtime"; exit 1; }
+        if [ -n "$(find "$root" \( -name 'python3*' -o -name 'libpython*' \) -print -quit)" ]; then
+          echo "::error::the bundle carries a Python interpreter"; exit 1
         fi
 
         wget -qO "$work/appimagetool" \

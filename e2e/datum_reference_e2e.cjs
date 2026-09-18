@@ -2,7 +2,7 @@
 // real browser.
 //
 // tests/ui/featureMeta.test.ts proves the document format knows the two new
-// types, and a sidecar check proves they build without error. Neither can prove
+// types, and an engine check proves they build without error. Neither can prove
 // the VIEWPORT draws them: a datum point is a sphere and a datum axis a thin
 // cylinder, placed from the document client-side (app/datumPlanes.ts) and
 // hit-tested through a live raycast (viewport.pickDatumAt), none of which a pure
@@ -14,8 +14,8 @@
 // a mark lands on the mark and nothing behind it, so "clicking it selects it" is
 // a clean signal rather than a race with the body in front.
 //
-// Usage (from the repo root, with vite on 5173 + sidecar on 8765):
-//   SC_TOKEN=<sidecar token> SC_CHROME=<chrome.exe> node e2e/datum_reference_e2e.cjs [outDir]
+// Usage (from the repo root, with vite on 5173 + engine on 8765 (`fundacad-engine --ws`)):
+//   SC_TOKEN=<engine token> SC_CHROME=<chrome.exe> node e2e/datum_reference_e2e.cjs [outDir]
 const { chromium } = require("playwright-core");
 const fs = require("fs");
 const path = require("path");

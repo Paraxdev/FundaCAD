@@ -15,6 +15,7 @@ use fundacad_protocol::{envelope, message_id};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, BufReader, BufWriter, Write};
+use std::path::Path;
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -59,7 +60,6 @@ struct Worker {
 /// `fundacad-mcp` starts as its private engine, so a packaged app needs no
 /// second copy of the kernel for it.
 pub fn run_worker() -> ! {
-    // server.py's startup `plugin_geometry.discover()`, over FUNDACAD_PLUGIN_DIR.
     fundacad_geom::plugins::load();
     if std::env::args().nth(2).as_deref() == Some("--ws") {
         fundacad_engine::ws::run(fundacad_geom::jobs::GeomJobs)
@@ -187,6 +187,30 @@ fn supervise(inner: Arc<Inner>) {
     }
 }
 
+/// 256-bit secret for the live session port, from the OS CSPRNG. A failure is
+/// fatal rather than a fallback to a guessable token.
+fn random_token() -> String {
+    let mut buf = [0u8; 32];
+    getrandom::getrandom(&mut buf).expect("OS CSPRNG unavailable");
+    buf.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// The worker's environment, split out so a test can assert it.
+///
+/// The blob store is told rather than left to the engine's default because the
+/// app's container (container.rs) reads and writes the same directory: an
+/// import the engine stored anywhere else is geometry a save cannot find.
+/// The plugin root is told because Rust is what unpacks a bundle into it.
+pub fn configure_env(cmd: &mut Command, blobs: Option<&Path>, plugins: Option<&Path>, live_token: &str) {
+    if let Some(dir) = blobs {
+        cmd.env("FUNDACAD_BLOB_DIR", dir);
+    }
+    if let Some(dir) = plugins {
+        cmd.env("FUNDACAD_PLUGIN_DIR", dir);
+    }
+    cmd.env(LIVE_TOKEN_ENV, live_token);
+}
+
 fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
     let exe = std::env::current_exe()?;
     let mut cmd = Command::new(exe);
@@ -194,13 +218,13 @@ fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    // Where installed plugins are, so the worker can run the geometry any of
-    // them ship, the same variable the Python sidecar is told (sidecar.rs).
-    if let Ok(dir) = crate::plugins::plugins_root(&inner.app) {
-        cmd.env("FUNDACAD_PLUGIN_DIR", dir);
-    }
-    let token = crate::sidecar::random_token();
-    cmd.env(LIVE_TOKEN_ENV, &token);
+    let token = random_token();
+    configure_env(
+        &mut cmd,
+        crate::container::blob_dir(&inner.app).ok().as_deref(),
+        crate::plugins::plugins_root(&inner.app).ok().as_deref(),
+        &token,
+    );
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -214,8 +238,8 @@ fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
         let session_dir = inner.session_dir.clone();
         std::thread::spawn(move || {
             for line in BufReader::new(stderr).lines().map_while(Result::ok) {
-                // Written once the port answers, as sidecar.rs does, so the file
-                // never names a port nobody is listening on yet.
+                // Written once the port answers, so the file never names a port
+                // nobody is listening on yet.
                 if let (Some(dir), Some(port)) = (&session_dir, line.strip_prefix("LISTENING ").and_then(|p| p.trim().parse::<u16>().ok())) {
                     let info = crate::session_file::SessionInfo {
                         port,
@@ -337,11 +361,6 @@ fn escalate_cancel(inner: Arc<Inner>, target: String) {
             let _ = w.child.kill();
         }
     });
-}
-
-#[tauri::command]
-pub fn engine_kind() -> &'static str {
-    "rust"
 }
 
 /// The `fundacad-mcp` bundled beside this executable, for the "How to connect

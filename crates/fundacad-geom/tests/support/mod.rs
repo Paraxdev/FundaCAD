@@ -1,4 +1,4 @@
-//! JSON compared with a numeric tolerance, for the Python oracles: the sidecar
+//! JSON compared with a numeric tolerance, for the Python oracles: the Python engine
 //! runs OCCT 7.9.3 and this engine 7.8.1.
 
 use serde_json::Value;

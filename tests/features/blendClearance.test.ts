@@ -175,7 +175,7 @@ describe("localClearance", () => {
 });
 
 /** A closed circle of radius r in the z = h plane, tessellated the way the
- *  sidecar emits one: n samples with the last point repeating the first. */
+ *  engine emits one: n samples with the last point repeating the first. */
 function circle(r: number, h: number, n = 48): Pt3[] {
   const pts: Pt3[] = [];
   for (let i = 0; i <= n; i++) {
@@ -200,7 +200,7 @@ describe("localClearance on a cylinder", () => {
   it("caps a rim by its own radius, not by the distance to the far rim", () => {
     // A tall thin cylinder: r = 5, h = 80. The bottom rim is 80mm away, so a
     // neighbour-distance measure alone would offer 40mm of travel on a rim whose
-    // fillet runs out of cap at 5. This is the case the sidecar's reference
+    // fillet runs out of cap at 5. This is the case the engine's reference
     // measure caps for the same reason, and the one where "it overshoots" is not
     // about thin walls at all.
     const top = { id: "top", points: circle(5, 80) };

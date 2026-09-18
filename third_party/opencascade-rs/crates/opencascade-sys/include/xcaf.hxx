@@ -1,8 +1,8 @@
 #pragma once
 // XCAF documents for STEP: a writer that labels shapes with product names and
-// colours (the sidecar reached it through build123d's `_create_xde` and
+// colours (the Python engine reached it through build123d's `_create_xde` and
 // `export_step`), and a reader that walks the product tree with names, colours
-// and placements (sidecar/step_assembly.py `read_assembly`).
+// and placements (the Python engine's `step_assembly.py` `read_assembly`).
 
 #include "rust/cxx.h"
 #include <APIHeaderSection_MakeHeader.hxx>

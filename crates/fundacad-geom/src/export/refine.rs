@@ -1,4 +1,4 @@
-//! Longest facet edge cap, replaces `sidecar/mesh_refine.py`. Every long edge
+//! Longest facet edge cap, replaces the Python engine's `mesh_refine.py`. Every long edge
 //! is split at its midpoint on both of its triangles, so the mesh stays
 //! conforming.
 

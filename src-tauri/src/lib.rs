@@ -1,19 +1,14 @@
-//! FundaCAD Tauri shell entry. Spawns the Python geometry sidecar on startup and
-//! kills it on exit. The frontend talks to the sidecar over a localhost
-//! WebSocket directly (not Tauri IPC); Rust only owns the window, native
-//! dialogs, and the sidecar lifecycle.
+//! FundaCAD Tauri shell entry. Supervises the geometry engine, this executable
+//! started again as `--engine` (engine.rs), and relays it to the webview over
+//! Tauri IPC; owns the window, native dialogs and the document container.
 
-#[cfg(feature = "rust-engine")]
-mod engine;
-// `pub` so the cross-language seam test (tests/container_seam.rs) can drive the
-// container the way `container_save` / `container_open` do. Nothing outside the
-// crate consumes it in the app itself.
+// `pub` so tests/container_seam.rs can drive the engine environment and the
+// container the way the app does.
+pub mod engine;
 pub mod container;
 pub use fundacad_format::{fnda, json_doc};
 pub mod plugins;
 pub mod session_file;
-#[cfg_attr(feature = "rust-engine", allow(dead_code))]
-mod sidecar;
 mod spacemouse;
 // WebKitGTK only exists on Linux; macOS and Windows use WKWebView and WebView2.
 #[cfg(target_os = "linux")]
@@ -28,23 +23,11 @@ const DOC_EXT: &str = "funda";
 /// with LEGACY_DOC_EXTS in src/io/documentExt.ts.
 const LEGACY_DOC_EXTS: [&str; 2] = ["neocad", "sindri"];
 
-use sidecar::Sidecar;
 use tauri::{Manager, RunEvent};
 
 /// `fundacad --engine`: this process is the geometry worker, not the app.
-#[cfg(feature = "rust-engine")]
 pub fn run_engine_worker() -> ! {
     engine::run_worker()
-}
-
-/// Hand the per-launch sidecar WebSocket auth token to the webview so the
-/// frontend can append it to its `ws://…?token=` URL. Only the privileged
-/// webview can call this (Tauri IPC), which is what keeps the token out of
-/// reach of other local processes and web pages.
-#[cfg_attr(feature = "rust-engine", allow(dead_code))]
-#[tauri::command]
-fn sidecar_token(state: tauri::State<'_, Sidecar>) -> String {
-    state.token.clone()
 }
 
 /// Restart the app after an update, tearing down the geometry engine and
@@ -52,19 +35,10 @@ fn sidecar_token(state: tauri::State<'_, Sidecar>) -> String {
 /// clean. Neither step can be left to a destructor, see the body.
 #[tauri::command]
 fn restart_for_update(app: tauri::AppHandle) {
-    // Kill the geometry engine EXPLICITLY rather than trusting a platform backstop.
-    // `app.restart()` ends this process through exit(), which does not run
-    // destructors, so `Sidecar::drop` never fires. Each platform has a fallback for
-    // that, but they are timing-dependent: macOS has no PR_SET_PDEATHSIG and polls
-    // getppid() once a SECOND (see `_die_with_parent` in sidecar/server.py), so the
-    // replacement process can start, find port 8765 still held by the old sidecar,
-    // and come up with a dead engine, reporting "another copy is already running"
-    // immediately after an update, which is both wrong and alarming.
-    // `Sidecar::kill` waits for the child, so the port is free before we return.
-    if let Some(sidecar) = app.try_state::<Sidecar>() {
-        sidecar.kill();
-    }
-    #[cfg(feature = "rust-engine")]
+    // Stop the geometry engine EXPLICITLY: `app.restart()` ends this process
+    // through exit(), which runs no destructors, and the worker only notices its
+    // stdin closing once the kernel call it is in returns. `Engine::stop` waits
+    // for the worker, so the replacement never meets the old one.
     if let Some(engine) = app.try_state::<engine::Engine>() {
         engine.stop();
     }
@@ -83,7 +57,7 @@ fn restart_for_update(app: tauri::AppHandle) {
 // Autosave lives OUTSIDE the webview's tightened fs scope on purpose: widening
 // `fs:scope` to an app-data dir would re-open part of the post-XSS persistence
 // channel the security round closed. Instead the frontend calls these commands
-// (privileged IPC, same pattern as `sidecar_token`) and Rust owns the recovery
+// (privileged IPC, same pattern as the container commands) and Rust owns the recovery
 // directory under app_data_dir()/recovery/. Writes are atomic (tmp + rename).
 
 fn recovery_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
@@ -218,9 +192,9 @@ fn frontend_ready(state: tauri::State<'_, FrontendReady>) {
 /// Watch for the frontend checking in, and write a diagnosis if it never does.
 ///
 /// The message deliberately rules the geometry engine out by name. That is the
-/// wrong turn this is built to prevent: the sidecar is the loudest thing in the
-/// log, so a blank window with a healthy `[sidecar] LISTENING 8765` above it
-/// reads as an engine problem to everyone who sees it, and it is not one.
+/// wrong turn this is built to prevent: the engine is the loudest thing in the
+/// log, so a blank window with a healthy engine above it reads as an engine
+/// problem to everyone who sees it, and it is not one.
 fn watch_frontend_load(app: tauri::AppHandle) {
     std::thread::spawn(move || {
         std::thread::sleep(FRONTEND_READY_TIMEOUT);
@@ -244,13 +218,7 @@ fn watch_frontend_load(app: tauri::AppHandle) {
             "[ui] Please report this log at https://github.com/Paraxdev/fundacad/issues"
                 .to_string(),
         ];
-        // Through the sidecar so the warning reaches sidecar.log, which is the
-        // file a bug report attaches. Without the sidecar (it failed to spawn)
-        // stdout is all there is, and that is still better than silence.
-        match app.try_state::<Sidecar>() {
-            Some(sidecar) => lines.iter().for_each(|l| sidecar.log_line(l)),
-            None => lines.iter().for_each(|l| println!("{l}")),
-        }
+        lines.iter().for_each(|l| eprintln!("{l}"));
     });
 }
 
@@ -265,7 +233,7 @@ pub fn run() {
     let builder = tauri::Builder::default()
         // MUST be registered before every other plugin (Tauri's documented
         // requirement). A second launch focuses the window that is already open
-        // instead of starting an app whose sidecar cannot take port 8765.
+        // instead of starting a second app on the same documents and plugins.
         // No `fileAssociations` exist, so `argv` carries nothing worth forwarding;
         // if one is ever added, this callback has to hand it to the running
         // instance or double-clicking a document file will silently do nothing.
@@ -282,52 +250,10 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init());
 
-    // generate_handler! takes no #[cfg] on entries, so the command list comes in
-    // two whole arms: the Rust engine's commands, or the sidecar token.
-    #[cfg(feature = "rust-engine")]
     let builder = builder.invoke_handler(tauri::generate_handler![
-        engine::engine_kind,
         engine::mcp_server,
         engine::engine_attach,
         engine::engine_send,
-        restart_for_update,
-        updates_supported,
-        frontend_ready,
-        recovery_write,
-        recovery_read,
-        recovery_list,
-        recovery_clear,
-        container::container_save,
-        container::container_open,
-        container::container_open_checked,
-        container::container_verify,
-        container::container_is_container,
-        plugins::plugin_list,
-        plugins::plugin_inspect_url,
-        plugins::plugin_inspect_file,
-        plugins::plugin_install,
-        plugins::plugin_install_file,
-        plugins::plugin_entry,
-        plugins::plugin_code,
-        plugins::plugin_remove,
-        plugins::files::plugin_file_pick,
-        plugins::files::plugin_file_read,
-        plugins::files::plugin_file_write,
-        plugins::files::plugin_app_info,
-        plugins::data::plugin_data_read,
-        plugins::data::plugin_data_write,
-        plugins::data::plugin_data_path,
-        plugins::data::plugin_data_adopt,
-        plugins::localnet::plugin_local_request,
-        plugins::launch::plugin_system_dirs,
-        plugins::launch::plugin_launch,
-        spacemouse::spacemouse_inventory,
-        spacemouse::spacemouse_start,
-        spacemouse::spacemouse_stop
-    ]);
-    #[cfg(not(feature = "rust-engine"))]
-    let builder = builder.invoke_handler(tauri::generate_handler![
-        sidecar_token,
         restart_for_update,
         updates_supported,
         frontend_ready,
@@ -371,26 +297,17 @@ pub fn run() {
         // token for a file somebody forgot they had offered it.
         .manage(plugins::files::Handles::default())
         .setup(|app| {
-            #[cfg(feature = "rust-engine")]
             app.manage(engine::Engine::start(app.handle()));
-            #[cfg(not(feature = "rust-engine"))]
-            match Sidecar::spawn(app.handle()) {
-                Ok(s) => {
-                    app.manage(s);
-                }
-                Err(e) => eprintln!("failed to spawn sidecar: {e}"),
-            }
             // The 3D-mouse reader is NOT started here any more. It is a
             // capability the user can turn off (Preferences, Plugins), and one
             // that is off must not hold the HID device open. The frontend
             // starts it with spacemouse_start once it has its listeners up,
             // which also removes the old race where the reader published its
             // inventory before anything was listening.
-            // LAST, so the sidecar is already managed and the warning can reach
-            // sidecar.log. Started here rather than before the builder because
-            // the clock should run from the window existing, not from process
-            // start: everything above it is work the frontend has to wait for
-            // anyway, and counting it would eat into the timeout.
+            // Started here rather than before the builder because the clock
+            // should run from the window existing, not from process start:
+            // everything above it is work the frontend has to wait for anyway,
+            // and counting it would eat into the timeout.
             app.manage(FrontendReady(std::sync::atomic::AtomicBool::new(false)));
             watch_frontend_load(app.handle().clone());
             Ok(())
@@ -400,10 +317,6 @@ pub fn run() {
 
     app.run(|app_handle, event| {
         if let RunEvent::ExitRequested { .. } | RunEvent::Exit = event {
-            if let Some(s) = app_handle.try_state::<Sidecar>() {
-                s.kill();
-            }
-            #[cfg(feature = "rust-engine")]
             if let Some(e) = app_handle.try_state::<engine::Engine>() {
                 e.stop();
             }

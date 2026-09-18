@@ -1,5 +1,5 @@
 //! FundaCAD over MCP: the tools another model uses to build, measure and look
-//! at a part. A port of `crates/fundacad-mcp/tools/python-oracle/server.py`.
+//! at a part. A port of the Python MCP server's `server.py`.
 //!
 //! The protocol is the official Rust MCP SDK over stdio. STDOUT IS THE
 //! PROTOCOL, as it was: nothing else may ever be written there, and everything
@@ -1070,7 +1070,7 @@ fn py_json(v: &Value) -> String {
     }
 }
 
-/// `json.dumps(v, indent=n)`, which is two things serde_json's pretty printer
+/// `json.dumps(v, indent=n)`, which is two things serde_json's PrettyFormatter
 /// is not: any indent width, and a space after every colon.
 fn pretty(v: &Value, indent: usize) -> String {
     let pad = " ".repeat(indent);
