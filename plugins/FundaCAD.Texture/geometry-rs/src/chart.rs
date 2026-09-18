@@ -6,6 +6,7 @@ use std::f64::consts::PI;
 
 use crate::fundacad::plugin::types::SurfaceFrame;
 use crate::height::pairwise_sum;
+use crate::mathx;
 use crate::spec::Spec;
 use crate::v3::{self, V};
 use crate::Shape;
@@ -80,7 +81,7 @@ impl<'a> Surf<'a> {
 fn reference_radius(s: &Surf) -> f64 {
     if s.frame.kind == "cone" {
         let v_mid = 0.5 * (s.frame.v_first + s.frame.v_last);
-        return (s.frame.radius + v_mid * s.frame.semi_angle.sin()).abs().max(1e-9);
+        return (s.frame.radius + v_mid * mathx::sin1(s.frame.semi_angle)).abs().max(1e-9);
     }
     s.frame.radius.max(1e-9)
 }
@@ -202,12 +203,15 @@ pub fn slope_mask(normals: &[V], spec: &Spec) -> Option<Vec<f64>> {
         return None;
     }
     let b: f64 = 15.0f64.max(1e-3);
+    let nz: Vec<f64> = normals
+        .iter()
+        .map(|n| (n[2] / v3::norm(*n).max(1e-12)).clamp(-1.0, 1.0))
+        .collect();
     Some(
-        normals
-            .iter()
-            .map(|n| {
-                let nz = (n[2] / v3::norm(*n).max(1e-12)).clamp(-1.0, 1.0);
-                let ang = nz.acos().to_degrees();
+        mathx::acos(&nz)
+            .into_iter()
+            .map(|a| {
+                let ang = a.to_degrees();
                 let m_lo = smoothstep(((ang - (lo - b)) / b).clamp(0.0, 1.0));
                 let m_hi = smoothstep((((hi + b) - ang) / b).clamp(0.0, 1.0));
                 m_lo.min(m_hi).clamp(0.0, 1.0)
@@ -218,10 +222,10 @@ pub fn slope_mask(normals: &[V], spec: &Spec) -> Option<Vec<f64>> {
 
 /// `_tp_weights`: (|nx|, |ny|, |nz|)^k normalised to one.
 pub fn tp_weights(normals: &[V], k: f64) -> Vec<V> {
-    normals
-        .iter()
-        .map(|n| {
-            let a = [n[0].abs().powf(k), n[1].abs().powf(k), n[2].abs().powf(k)];
+    let abs: Vec<f64> = normals.iter().flat_map(|n| [n[0].abs(), n[1].abs(), n[2].abs()]).collect();
+    let p = mathx::pow_scalar(&abs, k);
+    p.chunks_exact(3)
+        .map(|a| {
             let mut s = a[0] + a[1] + a[2];
             if s < 1e-12 {
                 s = 1.0;
@@ -263,10 +267,12 @@ pub fn face_frame(s: &Surf, uv: &[[f64; 2]], flip: bool) -> (Vec<V>, Vec<V>, Vec
             return (vec![got.0; n], vec![got.1; n], vec![got.2; n]);
         }
         let (x, y, z) = (s.x_dir(), s.y_dir(), s.z_dir());
-        let n_ref = v3::add(v3::scale(x, um.cos()), v3::scale(y, um.sin()));
+        let n_ref = v3::add(v3::scale(x, mathx::cos1(um)), v3::scale(y, mathx::sin1(um)));
         let sg = if v3::dot(got.0, n_ref) >= 0.0 { 1.0 } else { -1.0 };
-        for (i, p) in uv.iter().enumerate() {
-            let (cu, su) = (p[0].cos(), p[0].sin());
+        let us: Vec<f64> = uv.iter().map(|p| p[0]).collect();
+        let (cs, ss) = (mathx::cos(&us), mathx::sin(&us));
+        for i in 0..uv.len() {
+            let (cu, su) = (cs[i], ss[i]);
             let radial = v3::add(v3::scale(x, cu), v3::scale(y, su));
             normals[i] = v3::scale(radial, sg);
             tu[i] = v3::add(v3::scale(x, -su), v3::scale(y, cu));
@@ -297,16 +303,18 @@ pub fn uncharter<'a>(s: &'a Surf, period: f64) -> Option<impl Fn(&[[f64; 2]]) ->
         (s.frame.radius, s.frame.semi_angle)
     };
     let (loc, xd, yd, zd) = (s.origin(), s.x_dir(), s.y_dir(), s.z_dir());
-    let (sin_a, cos_a) = (half.sin(), half.cos());
+    let (sin_a, cos_a) = (mathx::sin1(half), mathx::cos1(half));
     let per_turn = turn_mm(s, period);
     Some(move |mm: &[[f64; 2]]| {
         let mut uv = Vec::with_capacity(mm.len());
         let mut xyz = Vec::with_capacity(mm.len());
-        for p in mm {
+        let us: Vec<f64> = mm.iter().map(|p| p[0] * (2.0 * PI) / per_turn).collect();
+        let (cs, ss) = (mathx::cos(&us), mathx::sin(&us));
+        for (k, p) in mm.iter().enumerate() {
             let v = p[1];
-            let u = p[0] * (2.0 * PI) / per_turn;
+            let u = us[k];
             let r = radius + v * sin_a;
-            let (cu, su) = (u.cos(), u.sin());
+            let (cu, su) = (cs[k], ss[k]);
             let mut q = [0.0; 3];
             for k in 0..3 {
                 q[k] = loc[k] + (r * cu) * xd[k] + (r * su) * yd[k] + (v * cos_a) * zd[k];

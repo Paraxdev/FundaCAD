@@ -26,6 +26,7 @@ use crate::builder::{Ctx, FResult, Fail};
 
 pub use crate::mesh::passes::FaceMesh;
 pub use host::MeshData;
+pub use kernel_ext::delaunay_2d as delaunay_planar;
 
 pub const MANIFEST_WASM: &str = "geometryWasm";
 pub const MANIFEST_TYPES: &str = "featureTypes";
@@ -292,7 +293,7 @@ pub fn run_feature(
     let Loaded::Ready(c) = &reg.entries[i].loaded else {
         return None;
     };
-    Some(c.run_feature(ctx, type_name, raw, cancel).map_err(Fail::msg))
+    Some(c.run_feature(ctx, type_name, raw, cancel).map_err(|(message, code)| Fail::Value { message, code }))
 }
 
 /// The `generateShape` op.

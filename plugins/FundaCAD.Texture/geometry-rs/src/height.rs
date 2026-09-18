@@ -9,11 +9,10 @@ use std::f64::consts::PI;
 
 use crate::np::fmod;
 use crate::spec::Spec;
-use crate::{nearest, rng};
+use crate::{mathx, nearest, rng};
 
 pub fn rotate(u: f64, v: f64, angle_deg: f64) -> (f64, f64) {
-    let a = angle_deg.to_radians();
-    let (ca, sa) = (a.cos(), a.sin());
+    let (ca, sa) = mathx::cos_sin_deg(angle_deg);
     (u * ca - v * sa, u * sa + v * ca)
 }
 
@@ -22,8 +21,9 @@ fn tri_wave(x: f64, period: f64) -> f64 {
     1.0 - (2.0 * t - 1.0).abs()
 }
 
-fn sharpen(h: f64, sharpness: f64) -> f64 {
-    h.powf(1.0 + 4.0 * sharpness.clamp(0.0, 1.0))
+/// `_sharpen` over a whole field at once, `h ** (1 + 4 s)` through libm.
+fn sharpen_all(h: Vec<f64>, sharpness: f64) -> Vec<f64> {
+    mathx::pow_scalar(&h, 1.0 + 4.0 * sharpness.clamp(0.0, 1.0))
 }
 
 fn clip01(x: f64) -> f64 {
@@ -56,20 +56,21 @@ fn steps_from(sharpness: f64) -> i64 {
     (2.0 + sharpness.clamp(0.0, 1.0) * 10.0).round_ties_even() as i64
 }
 
+/// Knurl before any sharpening: the facet itself, or the round product.
 fn knurl(u: f64, v: f64, scale: f64, angle: f64, sharp: f64, facet: bool) -> f64 {
     let (_, v1) = rotate(u, v, angle);
     let (_, v2) = rotate(u, v, angle + 90.0);
     if facet {
         return trapezoid(v1, scale, sharp).min(trapezoid(v2, scale, sharp));
     }
-    sharpen(tri_wave(v1, scale) * tri_wave(v2, scale), sharp)
+    tri_wave(v1, scale) * tri_wave(v2, scale)
 }
 
 pub fn hex_dirs() -> [[f64; 2]; 6] {
     let mut d = [[0.0; 2]; 6];
     for (k, e) in d.iter_mut().enumerate() {
-        let a = (60.0 * k as f64).to_radians();
-        *e = [a.cos(), a.sin()];
+        let (c, s) = mathx::cos_sin_deg(60.0 * k as f64);
+        *e = [c, s];
     }
     d
 }
@@ -77,8 +78,8 @@ pub fn hex_dirs() -> [[f64; 2]; 6] {
 pub fn hex_corners() -> [[f64; 2]; 6] {
     let mut d = [[0.0; 2]; 6];
     for (k, e) in d.iter_mut().enumerate() {
-        let a = (30.0 + 60.0 * k as f64).to_radians();
-        *e = [a.cos(), a.sin()];
+        let (c, s) = mathx::cos_sin_deg(30.0 + 60.0 * k as f64);
+        *e = [c, s];
     }
     d
 }
@@ -109,14 +110,26 @@ fn hex_nearest_site(u: f64, v: f64, a: f64) -> (f64, f64) {
     (b.0, b.1)
 }
 
-fn hex(u: f64, v: f64, scale: f64, sharp: f64, facet: bool) -> f64 {
-    if !facet {
-        let root3 = 3f64.sqrt();
-        let a = (2.0 * PI * u / scale).cos();
-        let b = (2.0 * PI * (u * 0.5 - v * root3 * 0.5) / scale).cos();
-        let c = (2.0 * PI * (u * 0.5 + v * root3 * 0.5) / scale).cos();
-        return clip01((a + b + c) / 3.0 * 0.5 + 0.5);
-    }
+/// The round hex: a three direction cosine interference sum.
+fn hex_round(u: &[f64], v: &[f64], scale: f64) -> Vec<f64> {
+    let root3 = 3f64.sqrt();
+    let a = mathx::cos(&u.iter().map(|&x| 2.0 * PI * x / scale).collect::<Vec<_>>());
+    let b = mathx::cos(
+        &u.iter()
+            .zip(v)
+            .map(|(&x, &y)| 2.0 * PI * (x * 0.5 - y * root3 * 0.5) / scale)
+            .collect::<Vec<_>>(),
+    );
+    let c = mathx::cos(
+        &u.iter()
+            .zip(v)
+            .map(|(&x, &y)| 2.0 * PI * (x * 0.5 + y * root3 * 0.5) / scale)
+            .collect::<Vec<_>>(),
+    );
+    (0..u.len()).map(|i| clip01((a[i] + b[i] + c[i]) / 3.0 * 0.5 + 0.5)).collect()
+}
+
+fn hex(u: f64, v: f64, scale: f64, sharp: f64) -> f64 {
     let (sx, sy) = hex_nearest_site(u, v, scale);
     let (du, dv) = (u - sx, v - sy);
     let d_edge = hex_dirs()
@@ -129,11 +142,20 @@ fn hex(u: f64, v: f64, scale: f64, sharp: f64, facet: bool) -> f64 {
 const WAVE_JOINS: usize = 8;
 
 pub fn wave_levels() -> [f64; WAVE_JOINS] {
-    let mut out = [0.0; WAVE_JOINS];
-    for (i, o) in out.iter_mut().enumerate() {
-        *o = 0.5 + 0.5 * (2.0 * PI * i as f64 / WAVE_JOINS as f64).sin();
+    thread_local! {
+        static LEVELS: std::cell::OnceCell<[f64; WAVE_JOINS]> = const { std::cell::OnceCell::new() };
     }
-    out
+    LEVELS.with(|l| {
+        *l.get_or_init(|| {
+            let args: Vec<f64> = (0..WAVE_JOINS).map(|i| 2.0 * PI * i as f64 / WAVE_JOINS as f64).collect();
+            let s = mathx::sin(&args);
+            let mut out = [0.0; WAVE_JOINS];
+            for (o, x) in out.iter_mut().zip(s) {
+                *o = 0.5 + 0.5 * x;
+            }
+            out
+        })
+    })
 }
 
 pub fn wave_phases() -> Vec<f64> {
@@ -157,20 +179,28 @@ fn facet_wave(x: f64, period: f64) -> f64 {
     lo + (lv[(i + 1) % WAVE_JOINS] - lo) * f
 }
 
-fn waves(u: f64, v: f64, scale: f64, angle: f64, sharp: f64, facet: bool) -> f64 {
-    let (u1, _) = rotate(u, v, angle);
-    if facet {
-        return facet_wave(u1, scale);
-    }
-    sharpen(0.5 + 0.5 * (2.0 * PI * u1 / scale).sin(), sharp)
+/// `0.5 + 0.5 sin(2 pi u1 / scale)` over the field, the round wave and the
+/// round stripe before sharpening.
+fn sine_bands(u: &[f64], v: &[f64], scale: f64, angle: f64) -> Vec<f64> {
+    let args: Vec<f64> = u
+        .iter()
+        .zip(v)
+        .map(|(&a, &b)| 2.0 * PI * rotate(a, b, angle).0 / scale)
+        .collect();
+    mathx::sin(&args).into_iter().map(|s| 0.5 + 0.5 * s).collect()
 }
 
+fn waves(u: f64, v: f64, scale: f64, angle: f64) -> f64 {
+    facet_wave(rotate(u, v, angle).0, scale)
+}
+
+/// Ribs before sharpening: the facet, or the round triangle wave.
 fn ribs(u: f64, v: f64, scale: f64, angle: f64, sharp: f64, facet: bool) -> f64 {
     let (u1, _) = rotate(u, v, angle);
     if facet {
         return trapezoid(u1, scale, sharp);
     }
-    sharpen(tri_wave(u1, scale), sharp)
+    tri_wave(u1, scale)
 }
 
 /// `_hash01`: a [0, 1) value from a cell index, int64 wrapping as numpy's.
@@ -287,12 +317,8 @@ fn smooth01(h: f64) -> f64 {
     h * h * (3.0 - 2.0 * h)
 }
 
-fn stripes(u: f64, v: f64, scale: f64, angle: f64, sharp: f64, facet: bool) -> f64 {
-    let (u1, _) = rotate(u, v, angle);
-    if facet {
-        return trapezoid(u1, scale, sharp.max(0.6));
-    }
-    sharpen(0.5 + 0.5 * (2.0 * PI * u1 / scale).sin(), sharp)
+fn stripes(u: f64, v: f64, scale: f64, angle: f64, sharp: f64) -> f64 {
+    trapezoid(rotate(u, v, angle).0, scale, sharp.max(0.6))
 }
 
 fn grid(u: f64, v: f64, scale: f64, angle: f64, sharp: f64, facet: bool) -> f64 {
@@ -397,7 +423,7 @@ fn grip(u: f64, v: f64, scale: f64, angle: f64, sharp: f64, facet: bool) -> f64 
     if facet {
         return trapezoid(x, scale, sharp);
     }
-    sharpen(tri_wave(x, scale), sharp)
+    tri_wave(x, scale)
 }
 
 fn leather(u: &[f64], v: &[f64], scale: f64, seed: i64, octaves: i64, facet: bool) -> Result<Vec<f64>, String> {
@@ -459,20 +485,24 @@ pub fn height_field(
     let scale = spec.scale.max(0.05);
     let (angle, sharp, facet) = (spec.angle, spec.sharpness, spec.facet());
     let per = |f: &dyn Fn(f64, f64) -> f64| -> Vec<f64> { u.iter().zip(v).map(|(&a, &b)| f(a, b)).collect() };
+    let sharpened = |h: Vec<f64>| if facet { h } else { sharpen_all(h, sharp) };
     Ok(match kind {
-        "knurl" => per(&|a, b| knurl(a, b, scale, angle, sharp, facet)),
-        "hex" => per(&|a, b| hex(a, b, scale, sharp, facet)),
-        "waves" => per(&|a, b| waves(a, b, scale, angle, sharp, facet)),
-        "ribs" => per(&|a, b| ribs(a, b, scale, angle, sharp, facet)),
+        "knurl" => sharpened(per(&|a, b| knurl(a, b, scale, angle, sharp, facet))),
+        "hex" if facet => per(&|a, b| hex(a, b, scale, sharp)),
+        "hex" => hex_round(u, v, scale),
+        "waves" if facet => per(&|a, b| waves(a, b, scale, angle)),
+        "waves" => sharpen_all(sine_bands(u, v, scale, angle), sharp),
+        "ribs" => sharpened(per(&|a, b| ribs(a, b, scale, angle, sharp, facet))),
         "voronoi" => voronoi(u, v, scale, spec.seed, sharp, facet),
-        "stripes" => per(&|a, b| stripes(a, b, scale, angle, sharp, facet)),
+        "stripes" if facet => per(&|a, b| stripes(a, b, scale, angle, sharp)),
+        "stripes" => sharpen_all(sine_bands(u, v, scale, angle), sharp),
         "grid" => per(&|a, b| grid(a, b, scale, angle, sharp, facet)),
         "dots" => per(&|a, b| dots(a, b, scale, angle, sharp, facet)),
         "brick" => per(&|a, b| brick(a, b, scale, angle, sharp, facet)),
         "basket" => per(&|a, b| basket(a, b, scale, angle, facet)),
         "carbon" => per(&|a, b| carbon(a, b, scale, angle, facet)),
         "isogrid" => per(&|a, b| isogrid(a, b, scale, angle, sharp, facet)),
-        "grip" => per(&|a, b| grip(a, b, scale, angle, sharp, facet)),
+        "grip" => sharpened(per(&|a, b| grip(a, b, scale, angle, sharp, facet))),
         "leather" => leather(u, v, scale, spec.seed, spec.octaves, facet)?,
         "noise" => {
             let h = noise(u, v, scale, spec.seed, spec.octaves)?;
@@ -499,15 +529,17 @@ pub fn height_field(
 
 fn smooth_taps() -> ([[f64; 2]; 9], [f64; 9]) {
     let mut taps = [[0.0; 2]; 9];
-    let mut w = [0.0; 9];
+    let mut arg = [0.0; 9];
     let mut k = 0;
-    for dy in [-1.0, 0.0, 1.0] {
-        for dx in [-1.0, 0.0, 1.0] {
+    for dy in [-1.0f64, 0.0, 1.0] {
+        for dx in [-1.0f64, 0.0, 1.0] {
             taps[k] = [dx, dy];
-            w[k] = (-0.5 * (dx * dx + dy * dy) as f64).exp();
+            arg[k] = -0.5 * (dx * dx + dy * dy);
             k += 1;
         }
     }
+    let mut w = [0.0; 9];
+    w.copy_from_slice(&mathx::exp(&arg));
     let s: f64 = pairwise_sum(&w);
     for x in w.iter_mut() {
         *x /= s;
@@ -603,7 +635,7 @@ pub fn u_period(spec: &Spec, scale: f64) -> f64 {
     if spec.kind != "ribs" && spec.kind != "waves" {
         return scale;
     }
-    let c = spec.angle.to_radians().cos().abs();
+    let c = mathx::cos_sin_deg(spec.angle).0.abs();
     if c > 1e-6 {
         scale / c
     } else {

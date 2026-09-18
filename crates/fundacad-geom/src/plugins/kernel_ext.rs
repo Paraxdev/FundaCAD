@@ -6,7 +6,6 @@ use opencascade::primitives::Shape;
 use opencascade_sys::plugin_ops as ffi;
 use serde_json::Value;
 
-use super::host::fail_text;
 use super::host::types::{
     BooleanOp, BooleanOptions, FaceTriangulation, Fuzzy, SurfaceFrame, SurfaceSample, Vec3,
 };
@@ -164,10 +163,40 @@ pub fn boolean_with(
     Ok(out)
 }
 
-pub fn select_faces(shape: &Shape, selectors: &str) -> Result<Vec<Shape>, String> {
-    let sel: Value =
-        serde_json::from_str(selectors).map_err(|e| format!("the selector does not parse: {e}"))?;
-    crate::select::Resolver::new(None, None)
-        .faces(shape, &sel)
-        .map_err(fail_text)
+extern "C" {
+    fn fc_delaunay_2d(xy: *const f64, n: i32, out: *mut i32, cap: i32, count: *mut i32, err: *mut u8, errlen: i32) -> i32;
+}
+
+/// scipy.spatial.Delaunay's triangles of 2D points, from the same Qhull run
+/// the same way (third_party/qhull/fc_delaunay.c).
+pub fn delaunay_2d(points: &[f64]) -> Result<Vec<u32>, String> {
+    if points.len() % 2 != 0 {
+        return Err("points come as x, y pairs".into());
+    }
+    if points.iter().any(|v| v.is_nan()) {
+        return Err("Points cannot contain NaN".into());
+    }
+    let n = i32::try_from(points.len() / 2).map_err(|_| "too many points".to_string())?;
+    let cap = n.saturating_mul(2).saturating_add(16);
+    let mut out = vec![0i32; cap as usize * 3];
+    let mut count = 0i32;
+    let mut err = vec![0u8; 2048];
+    // SAFETY: every buffer is sized as the call is told, and the C side only
+    // writes within `cap` triangles and `errlen` bytes.
+    let code = unsafe {
+        fc_delaunay_2d(points.as_ptr(), n, out.as_mut_ptr(), cap, &mut count, err.as_mut_ptr(), err.len() as i32)
+    };
+    if code != 0 {
+        let end = err.iter().position(|&b| b == 0).unwrap_or(err.len());
+        let text = String::from_utf8_lossy(&err[..end]).trim().to_string();
+        return Err(if text.is_empty() { format!("qhull failed with code {code}") } else { text });
+    }
+    out.truncate(count as usize * 3);
+    Ok(out.into_iter().map(|i| i as u32).collect())
+}
+
+pub fn select_faces(shape: &Shape, selectors: &str) -> Result<Vec<Shape>, crate::builder::Fail> {
+    let sel: Value = serde_json::from_str(selectors)
+        .map_err(|e| crate::builder::Fail::msg(format!("the selector does not parse: {e}")))?;
+    crate::select::Resolver::new(None, None).faces(shape, &sel)
 }

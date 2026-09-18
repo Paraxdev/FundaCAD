@@ -42,6 +42,7 @@ import harness_util as H
 VERTEX_TOL = 1e-5
 SURFACE_TOL = 1e-5
 NORMAL_TOL = 1e-4
+DEGENERATE_AREA = 1e-9
 TOLERANCE = 0.1
 
 
@@ -66,7 +67,7 @@ def deeper(doc):
     return d if hit else None
 
 
-async def run_docs(url, docs, outdir, tag):
+async def rebuild_docs(url, docs, outdir, tag):
     out = {}
     async with websockets.connect(url, max_size=H._MAX_WS, compression=None) as ws:
         for i, d in enumerate(docs):
@@ -79,21 +80,39 @@ async def run_docs(url, docs, outdir, tag):
             if other is not None:
                 changed = await H.ws_call(ws, "rebuild", f"c{i}", document=other,
                                           tolerance=TOLERANCE, binary=False)
-            path = os.path.join(outdir, f"{tag}-{i}.stl")
-            export = await H.ws_call(ws, "export", f"e{i}", document=d["document"], format="stl",
-                                     path=path, mesh={"binary": False})
-            out[d["name"]] = {"first": first, "again": again, "changed": changed,
-                              "export": export, "stl": path}
+            out[d["name"]] = {"first": first, "again": again, "changed": changed}
     return out
 
 
-def run_engine(cmd, docs, outdir, tag):
+async def export_docs(url, docs, outdir, tag):
+    out = {}
+    async with websockets.connect(url, max_size=H._MAX_WS, compression=None) as ws:
+        for i, d in enumerate(docs):
+            path = os.path.join(outdir, f"{tag}-{i}.stl")
+            export = await H.ws_call(ws, "export", f"e{i}", document=d["document"], format="stl",
+                                     path=path, mesh={"binary": False})
+            out[d["name"]] = {"export": export, "stl": path}
+    return out
+
+
+def spawned(cmd, job, docs, outdir, tag):
     with H.SpawnedServer(cmd=cmd) as srv:
         try:
-            return H.run(run_docs(srv.url, docs, outdir, tag))
+            return H.run(job(srv.url, docs, outdir, tag))
         finally:
             if sys.platform == "win32" and srv.proc.poll() is None:
                 subprocess.run(["taskkill", "/F", "/T", "/PID", str(srv.pid)], capture_output=True)
+
+
+def run_engine(cmd, docs, outdir, tag):
+    """The rebuilds and the exports each in a fresh engine. The Python engine keeps
+    its built shapes, and OpenCASCADE keeps a shape's finest triangulation for any
+    coarser request, so in one session an export would leave its triangles behind
+    for the next rebuild's viewport mesh, and a rebuild its own for the export."""
+    out = spawned(cmd, rebuild_docs, docs, outdir, tag)
+    for name, got in spawned(cmd, export_docs, docs, outdir, tag).items():
+        out[name].update(got)
+    return out
 
 
 def bodies(reply):
@@ -158,11 +177,21 @@ def compare_mesh(P, I, Q, J, what):
     s = max(surface_gap(P, I, Q, J), surface_gap(Q, J, P, I))
     if s > SURFACE_TOL:
         diffs.append(f"{what}: a triangle {s:.3g} off the other engine's surface")
-    key = lambda X, T: {tuple(sorted(tuple(np.round(X[v], 5)) for v in t)) for t in T}
-    moved = len(key(P, I) ^ key(Q, J)) // 2
+    moved = unmatched(P[I], Q[J])
     if moved:
         notes.append(f"{what}: {moved} triangle(s) on the other diagonal, same surface")
     return diffs, notes
+
+
+def unmatched(A, B):
+    """Triangles of A (T, 3, 3) that B has no triangle on the same three corners
+    for, the corners compared to VERTEX_TOL (one side travels as float32)."""
+    if not len(A) or not len(B):
+        return len(A)
+    _d, j = cKDTree(B.mean(axis=1)).query(A.mean(axis=1))
+    near = B[j]
+    gaps = np.linalg.norm(A[:, :, None, :] - near[:, None, :, :], axis=3).min(axis=2).max(axis=1)
+    return int((gaps > VERTEX_TOL).sum())
 
 
 def payload_mesh(b):
@@ -211,12 +240,25 @@ def compare_doc(py, rs):
             tree = cKDTree(P)
             dist, near = tree.query(Q)
             same = dist <= VERTEX_TOL
+            # A split crease gives a vertex its triangle's own normal, and a
+            # triangle of no area (three nodes on one line of the lattice) has
+            # a normal made of rounding noise on either engine: not compared.
+            # Measured on the reference's float64 positions.
+            area = np.linalg.norm(np.cross(P[I[:, 1]] - P[I[:, 0]], P[I[:, 2]] - P[I[:, 0]]), axis=1) / 2
+            uses = np.bincount(I.ravel(), minlength=len(P))
+            flat = np.zeros(len(P), dtype=bool)
+            flat[I[area < DEGENERATE_AREA].ravel()] = True
+            flat &= uses == 1
             # a split crease puts several vertices on one point with different
             # normals, so each is matched to the closest normal among them
             worst = 0.0
             for k in np.nonzero(same)[0]:
                 cands = tree.query_ball_point(Q[k], VERTEX_TOL)
-                worst = max(worst, min(float(np.abs(N[c] - M[k]).max()) for c in cands))
+                gaps = [(float(np.abs(N[c] - M[k]).max()), c) for c in cands]
+                gap, best = min(gaps)
+                if flat[best]:
+                    continue
+                worst = max(worst, gap)
             if worst > NORMAL_TOL:
                 diffs.append(f"{bid}: a normal off by {worst:.3g}")
         elif bool(len(N)) != bool(len(M)):

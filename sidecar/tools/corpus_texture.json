@@ -1,0 +1,3040 @@
+{
+ "about": "Write tools/corpus_texture.json and the heightmap images it reads. Written by tools/gen_texture_corpus.py.",
+ "documents": [
+  {
+   "name": "knurl_plate_all",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "s1",
+      "type": "sketch",
+      "plane": "XY",
+      "entities": [
+       {
+        "type": "rectangle",
+        "width": 20,
+        "height": 20,
+        "x": 0,
+        "y": 0
+       }
+      ]
+     },
+     {
+      "id": "e1",
+      "type": "extrude",
+      "sketch": "s1",
+      "distance": 5,
+      "operation": "new"
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "knurl",
+      "faces": {
+       "by": "all"
+      },
+      "depth": 0.4,
+      "scale": 2.0
+     }
+    ]
+   }
+  },
+  {
+   "name": "ribs_plate_top",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "s1",
+      "type": "sketch",
+      "plane": "XY",
+      "entities": [
+       {
+        "type": "rectangle",
+        "width": 20,
+        "height": 20,
+        "x": 0,
+        "y": 0
+       }
+      ]
+     },
+     {
+      "id": "e1",
+      "type": "extrude",
+      "sketch": "s1",
+      "distance": 5,
+      "operation": "new"
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "ribs",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.3,
+      "scale": 2.0
+     }
+    ]
+   }
+  },
+  {
+   "name": "noise_dense_all",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "s1",
+      "type": "sketch",
+      "plane": "XY",
+      "entities": [
+       {
+        "type": "rectangle",
+        "width": 10,
+        "height": 10,
+        "x": 0,
+        "y": 0
+       }
+      ]
+     },
+     {
+      "id": "e1",
+      "type": "extrude",
+      "sketch": "s1",
+      "distance": 5,
+      "operation": "new"
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "noise",
+      "faces": {
+       "by": "all"
+      },
+      "depth": 0.2,
+      "scale": 0.3,
+      "seed": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "knurl_facet_top",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "knurl",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.3,
+      "scale": 2.0,
+      "seed": 3
+     }
+    ]
+   }
+  },
+  {
+   "name": "hex_facet_top",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "hex",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.3,
+      "scale": 2.0,
+      "seed": 3
+     }
+    ]
+   }
+  },
+  {
+   "name": "waves_facet_top",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "waves",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.3,
+      "scale": 2.0,
+      "seed": 3
+     }
+    ]
+   }
+  },
+  {
+   "name": "ribs_facet_top",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "ribs",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.3,
+      "scale": 2.0,
+      "seed": 3
+     }
+    ]
+   }
+  },
+  {
+   "name": "voronoi_facet_top",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "voronoi",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.3,
+      "scale": 2.0,
+      "seed": 3
+     }
+    ]
+   }
+  },
+  {
+   "name": "noise_facet_top",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "noise",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.3,
+      "scale": 2.0,
+      "seed": 3
+     }
+    ]
+   }
+  },
+  {
+   "name": "stripes_facet_top",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "stripes",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.3,
+      "scale": 2.0,
+      "seed": 3
+     }
+    ]
+   }
+  },
+  {
+   "name": "grid_facet_top",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "grid",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.3,
+      "scale": 2.0,
+      "seed": 3
+     }
+    ]
+   }
+  },
+  {
+   "name": "dots_facet_top",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "dots",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.3,
+      "scale": 2.0,
+      "seed": 3
+     }
+    ]
+   }
+  },
+  {
+   "name": "brick_facet_top",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "brick",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.3,
+      "scale": 2.0,
+      "seed": 3
+     }
+    ]
+   }
+  },
+  {
+   "name": "basket_facet_top",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "basket",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.3,
+      "scale": 2.0,
+      "seed": 3
+     }
+    ]
+   }
+  },
+  {
+   "name": "carbon_facet_top",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "carbon",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.3,
+      "scale": 2.0,
+      "seed": 3
+     }
+    ]
+   }
+  },
+  {
+   "name": "isogrid_facet_top",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "isogrid",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.3,
+      "scale": 2.0,
+      "seed": 3
+     }
+    ]
+   }
+  },
+  {
+   "name": "grip_facet_top",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "grip",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.3,
+      "scale": 2.0,
+      "seed": 3
+     }
+    ]
+   }
+  },
+  {
+   "name": "leather_facet_top",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "leather",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.3,
+      "scale": 2.0,
+      "seed": 3
+     }
+    ]
+   }
+  },
+  {
+   "name": "knurl_round_top",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "knurl",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.3,
+      "scale": 2.0,
+      "seed": 3,
+      "profile": "round",
+      "sharpness": 0.7
+     }
+    ]
+   }
+  },
+  {
+   "name": "hex_round_top",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "hex",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.3,
+      "scale": 2.0,
+      "seed": 3,
+      "profile": "round",
+      "sharpness": 0.7
+     }
+    ]
+   }
+  },
+  {
+   "name": "waves_round_top",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "waves",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.3,
+      "scale": 2.0,
+      "seed": 3,
+      "profile": "round",
+      "sharpness": 0.7
+     }
+    ]
+   }
+  },
+  {
+   "name": "ribs_round_top",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "ribs",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.3,
+      "scale": 2.0,
+      "seed": 3,
+      "profile": "round",
+      "sharpness": 0.7
+     }
+    ]
+   }
+  },
+  {
+   "name": "noise_round_top",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "noise",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.3,
+      "scale": 2.0,
+      "seed": 3,
+      "profile": "round",
+      "sharpness": 0.7
+     }
+    ]
+   }
+  },
+  {
+   "name": "dots_round_top",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "dots",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.3,
+      "scale": 2.0,
+      "seed": 3,
+      "profile": "round",
+      "sharpness": 0.7
+     }
+    ]
+   }
+  },
+  {
+   "name": "grid_round_top",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "grid",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.3,
+      "scale": 2.0,
+      "seed": 3,
+      "profile": "round",
+      "sharpness": 0.7
+     }
+    ]
+   }
+  },
+  {
+   "name": "voronoi_round_top",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "voronoi",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.3,
+      "scale": 2.0,
+      "seed": 3,
+      "profile": "round",
+      "sharpness": 0.7
+     }
+    ]
+   }
+  },
+  {
+   "name": "brick_round_top",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "brick",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.3,
+      "scale": 2.0,
+      "seed": 3,
+      "profile": "round",
+      "sharpness": 0.7
+     }
+    ]
+   }
+  },
+  {
+   "name": "knurl_45_split_creases",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 30,
+      "width": 30,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "knurl",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.4,
+      "scale": 2.0,
+      "angle": 45
+     }
+    ]
+   }
+  },
+  {
+   "name": "knurl_30_long_ring",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 40,
+      "width": 40,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "knurl",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.4,
+      "scale": 2.0,
+      "angle": 30
+     }
+    ]
+   }
+  },
+  {
+   "name": "ribs_17deg",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "ribs",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.3,
+      "scale": 1.5,
+      "angle": 17
+     }
+    ]
+   }
+  },
+  {
+   "name": "waves_60deg_offset",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "waves",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.3,
+      "scale": 2.5,
+      "angle": 60,
+      "offset": 0.317
+     }
+    ]
+   }
+  },
+  {
+   "name": "ribs_in",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "ribs",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.3,
+      "scale": 2.0,
+      "direction": "in"
+     }
+    ]
+   }
+  },
+  {
+   "name": "knurl_both_inverted",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "knurl",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.3,
+      "scale": 2.0,
+      "direction": "both",
+      "invert": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "knurl_inset",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "knurl",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.4,
+      "scale": 2.0,
+      "boundaryInset": 1.5
+     }
+    ]
+   }
+  },
+  {
+   "name": "knurl_sharp_0",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "knurl",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.4,
+      "scale": 2.0,
+      "sharpness": 0.0
+     }
+    ]
+   }
+  },
+  {
+   "name": "knurl_sharp_095",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "knurl",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.4,
+      "scale": 2.0,
+      "sharpness": 0.95
+     }
+    ]
+   }
+  },
+  {
+   "name": "hex_sharp_1",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "hex",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.4,
+      "scale": 3.0,
+      "sharpness": 1.0
+     }
+    ]
+   }
+  },
+  {
+   "name": "knurl_grime",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 40,
+      "width": 40,
+      "height": 20
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "knurl",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.7,
+      "scale": 3.0,
+      "grime": 0.6
+     }
+    ]
+   }
+  },
+  {
+   "name": "knurl_grime_zero",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 40,
+      "width": 40,
+      "height": 20
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "knurl",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.7,
+      "scale": 3.0,
+      "grime": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "ribs_smooth",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 30,
+      "width": 30,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "ribs",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.5,
+      "scale": 2.0,
+      "smooth": 1.0
+     }
+    ]
+   }
+  },
+  {
+   "name": "hex_smooth_half",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "hex",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.4,
+      "scale": 3.0,
+      "smooth": 0.5
+     }
+    ]
+   }
+  },
+  {
+   "name": "ribs_amplitude",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 30,
+      "width": 30,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "ribs",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.6,
+      "scale": 2.0,
+      "amplitude": 0.5
+     }
+    ]
+   }
+  },
+  {
+   "name": "knurl_slope_masked_top",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "knurl",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.4,
+      "scale": 2.0,
+      "slopeMin": 60.0,
+      "slopeMax": 120.0
+     }
+    ]
+   }
+  },
+  {
+   "name": "knurl_slope_walls",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "knurl",
+      "faces": {
+       "by": "all"
+      },
+      "depth": 0.4,
+      "scale": 2.0,
+      "slopeMin": 45.0,
+      "slopeMax": 135.0
+     }
+    ]
+   }
+  },
+  {
+   "name": "noise_target_edge",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 30,
+      "width": 30,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "noise",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.4,
+      "scale": 2.0,
+      "seed": 3,
+      "targetEdge": 0.9
+     }
+    ]
+   }
+  },
+  {
+   "name": "noise_tri_budget",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 30,
+      "width": 30,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "noise",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.4,
+      "scale": 2.0,
+      "seed": 3,
+      "triBudget": 3000
+     }
+    ]
+   }
+  },
+  {
+   "name": "knurl_color_slot",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "knurl",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.4,
+      "scale": 2.0,
+      "colorSlot": 2
+     }
+    ]
+   }
+  },
+  {
+   "name": "knurl_then_fillet",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "s1",
+      "type": "sketch",
+      "plane": "XY",
+      "entities": [
+       {
+        "type": "rectangle",
+        "width": 20,
+        "height": 20,
+        "x": 0,
+        "y": 0
+       }
+      ]
+     },
+     {
+      "id": "e1",
+      "type": "extrude",
+      "sketch": "s1",
+      "distance": 10,
+      "operation": "new"
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "knurl",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.3,
+      "scale": 2.0
+     },
+     {
+      "id": "fl",
+      "type": "fillet",
+      "edges": {
+       "kind": "edge",
+       "by": "axis",
+       "axis": "Z"
+      },
+      "radius": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "knurl_top_with_hole",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "s1",
+      "type": "sketch",
+      "plane": "XY",
+      "entities": [
+       {
+        "type": "rectangle",
+        "width": 30,
+        "height": 30,
+        "x": 0,
+        "y": 0
+       }
+      ]
+     },
+     {
+      "id": "e1",
+      "type": "extrude",
+      "sketch": "s1",
+      "distance": 6,
+      "operation": "new"
+     },
+     {
+      "id": "sh",
+      "type": "sketch",
+      "plane": "XY",
+      "entities": [
+       {
+        "type": "circle",
+        "radius": 5,
+        "x": 4,
+        "y": -3
+       }
+      ]
+     },
+     {
+      "id": "eh",
+      "type": "extrude",
+      "sketch": "sh",
+      "distance": 20,
+      "symmetric": true,
+      "operation": "cut"
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "knurl",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.3,
+      "scale": 2.0,
+      "angle": 20
+     }
+    ]
+   }
+  },
+  {
+   "name": "hex_top_with_hole",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "s1",
+      "type": "sketch",
+      "plane": "XY",
+      "entities": [
+       {
+        "type": "rectangle",
+        "width": 30,
+        "height": 30,
+        "x": 0,
+        "y": 0
+       }
+      ]
+     },
+     {
+      "id": "e1",
+      "type": "extrude",
+      "sketch": "s1",
+      "distance": 6,
+      "operation": "new"
+     },
+     {
+      "id": "sh",
+      "type": "sketch",
+      "plane": "XY",
+      "entities": [
+       {
+        "type": "circle",
+        "radius": 5,
+        "x": 4,
+        "y": -3
+       }
+      ]
+     },
+     {
+      "id": "eh",
+      "type": "extrude",
+      "sketch": "sh",
+      "distance": 20,
+      "symmetric": true,
+      "operation": "cut"
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "hex",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.3,
+      "scale": 2.5
+     }
+    ]
+   }
+  },
+  {
+   "name": "two_bodies_bound",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "s1",
+      "type": "sketch",
+      "plane": "XY",
+      "entities": [
+       {
+        "type": "rectangle",
+        "width": 20,
+        "height": 20,
+        "x": 0,
+        "y": 0
+       }
+      ]
+     },
+     {
+      "id": "e1",
+      "type": "extrude",
+      "sketch": "s1",
+      "distance": 5,
+      "operation": "new"
+     },
+     {
+      "id": "s2",
+      "type": "sketch",
+      "plane": "XY",
+      "entities": [
+       {
+        "type": "rectangle",
+        "width": 20,
+        "height": 20,
+        "x": 100,
+        "y": 0
+       }
+      ]
+     },
+     {
+      "id": "e2",
+      "type": "extrude",
+      "sketch": "s2",
+      "distance": 5,
+      "operation": "new"
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "knurl",
+      "depth": 0.4,
+      "scale": 2.0,
+      "body": "body1",
+      "faces": {
+       "kind": "face",
+       "by": "nearest",
+       "point": [
+        0,
+        0,
+        5
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "two_bodies_ambiguous",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "s1",
+      "type": "sketch",
+      "plane": "XY",
+      "entities": [
+       {
+        "type": "rectangle",
+        "width": 20,
+        "height": 20,
+        "x": 0,
+        "y": 0
+       }
+      ]
+     },
+     {
+      "id": "e1",
+      "type": "extrude",
+      "sketch": "s1",
+      "distance": 5,
+      "operation": "new"
+     },
+     {
+      "id": "s2",
+      "type": "sketch",
+      "plane": "XY",
+      "entities": [
+       {
+        "type": "rectangle",
+        "width": 20,
+        "height": 20,
+        "x": 100,
+        "y": 0
+       }
+      ]
+     },
+     {
+      "id": "e2",
+      "type": "extrude",
+      "sketch": "s2",
+      "distance": 5,
+      "operation": "new"
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "knurl",
+      "depth": 0.4,
+      "scale": 2.0,
+      "faces": {
+       "kind": "face",
+       "by": "nearest",
+       "point": [
+        0,
+        0,
+        5
+       ]
+      }
+     }
+    ]
+   },
+   "expectError": true
+  },
+  {
+   "name": "knurl_cylinder_all",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "c",
+      "type": "cylinder",
+      "radius": 10,
+      "height": 20
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "knurl",
+      "faces": {
+       "by": "all"
+      },
+      "depth": 0.4,
+      "scale": 2.0
+     }
+    ]
+   }
+  },
+  {
+   "name": "ribs_cylinder_side",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "c",
+      "type": "cylinder",
+      "radius": 10,
+      "height": 20
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "ribs",
+      "faces": {
+       "kind": "face",
+       "by": "nearest",
+       "point": [
+        10,
+        0,
+        0
+       ]
+      },
+      "depth": 0.4,
+      "scale": 2.0
+     }
+    ]
+   }
+  },
+  {
+   "name": "ribs_cylinder_90",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "c",
+      "type": "cylinder",
+      "radius": 10,
+      "height": 20
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "ribs",
+      "faces": {
+       "kind": "face",
+       "by": "nearest",
+       "point": [
+        10,
+        0,
+        0
+       ]
+      },
+      "depth": 0.4,
+      "scale": 2.0,
+      "angle": 90
+     }
+    ]
+   }
+  },
+  {
+   "name": "waves_cylinder_30",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "c",
+      "type": "cylinder",
+      "radius": 10,
+      "height": 20
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "waves",
+      "faces": {
+       "kind": "face",
+       "by": "nearest",
+       "point": [
+        10,
+        0,
+        0
+       ]
+      },
+      "depth": 0.4,
+      "scale": 2.0,
+      "angle": 30
+     }
+    ]
+   }
+  },
+  {
+   "name": "hex_cylinder_side",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "c",
+      "type": "cylinder",
+      "radius": 10,
+      "height": 20
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "hex",
+      "faces": {
+       "kind": "face",
+       "by": "nearest",
+       "point": [
+        10,
+        0,
+        0
+       ]
+      },
+      "depth": 0.4,
+      "scale": 2.0
+     }
+    ]
+   }
+  },
+  {
+   "name": "voronoi_cylinder_side",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "c",
+      "type": "cylinder",
+      "radius": 10,
+      "height": 20
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "voronoi",
+      "faces": {
+       "kind": "face",
+       "by": "nearest",
+       "point": [
+        10,
+        0,
+        0
+       ]
+      },
+      "depth": 0.4,
+      "scale": 2.0,
+      "seed": 5
+     }
+    ]
+   }
+  },
+  {
+   "name": "hex_cylinder_small",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "c",
+      "type": "cylinder",
+      "radius": 4,
+      "height": 12
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "hex",
+      "faces": {
+       "kind": "face",
+       "by": "nearest",
+       "point": [
+        4,
+        0,
+        0
+       ]
+      },
+      "depth": 0.3,
+      "scale": 1.5,
+      "sharpness": 0.2
+     }
+    ]
+   }
+  },
+  {
+   "name": "knurl_cone_side",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "k",
+      "type": "cone",
+      "bottomRadius": 15,
+      "topRadius": 10,
+      "height": 18
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "knurl",
+      "faces": {
+       "kind": "face",
+       "by": "nearest",
+       "point": [
+        12.5,
+        0,
+        0
+       ]
+      },
+      "depth": 0.4,
+      "scale": 2.0
+     }
+    ]
+   }
+  },
+  {
+   "name": "hex_cone_side",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "k",
+      "type": "cone",
+      "bottomRadius": 15,
+      "topRadius": 10,
+      "height": 18
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "hex",
+      "faces": {
+       "kind": "face",
+       "by": "nearest",
+       "point": [
+        12.5,
+        0,
+        0
+       ]
+      },
+      "depth": 0.4,
+      "scale": 2.5
+     }
+    ]
+   }
+  },
+  {
+   "name": "ribs_cone_side",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "k",
+      "type": "cone",
+      "bottomRadius": 15,
+      "topRadius": 10,
+      "height": 18
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "ribs",
+      "faces": {
+       "kind": "face",
+       "by": "nearest",
+       "point": [
+        12.5,
+        0,
+        0
+       ]
+      },
+      "depth": 0.3,
+      "scale": 2.0,
+      "angle": 10
+     }
+    ]
+   }
+  },
+  {
+   "name": "noise_sphere",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "s",
+      "type": "sphere",
+      "radius": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "noise",
+      "faces": {
+       "by": "all"
+      },
+      "depth": 0.3,
+      "scale": 2.0,
+      "seed": 2
+     }
+    ]
+   }
+  },
+  {
+   "name": "knurl_sphere_auto",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "s",
+      "type": "sphere",
+      "radius": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "knurl",
+      "faces": {
+       "by": "all"
+      },
+      "depth": 0.3,
+      "scale": 2.0,
+      "projection": "auto"
+     }
+    ]
+   }
+  },
+  {
+   "name": "knurl_corner_auto",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 40,
+      "width": 40,
+      "height": 40
+     },
+     {
+      "id": "fx",
+      "type": "fillet",
+      "radius": 10,
+      "edges": [
+       {
+        "kind": "edge",
+        "by": "nearest",
+        "point": [
+         0,
+         20,
+         20
+        ]
+       },
+       {
+        "kind": "edge",
+        "by": "nearest",
+        "point": [
+         20,
+         0,
+         20
+        ]
+       },
+       {
+        "kind": "edge",
+        "by": "nearest",
+        "point": [
+         20,
+         20,
+         0
+        ]
+       }
+      ]
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "knurl",
+      "depth": 0.8,
+      "scale": 3.0,
+      "projection": "auto",
+      "faces": {
+       "by": "nearest",
+       "point": [
+        15,
+        15,
+        15
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "knurl_corner_triplanar",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 40,
+      "width": 40,
+      "height": 40
+     },
+     {
+      "id": "fx",
+      "type": "fillet",
+      "radius": 10,
+      "edges": [
+       {
+        "kind": "edge",
+        "by": "nearest",
+        "point": [
+         0,
+         20,
+         20
+        ]
+       },
+       {
+        "kind": "edge",
+        "by": "nearest",
+        "point": [
+         20,
+         0,
+         20
+        ]
+       },
+       {
+        "kind": "edge",
+        "by": "nearest",
+        "point": [
+         20,
+         20,
+         0
+        ]
+       }
+      ]
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "knurl",
+      "depth": 0.6,
+      "scale": 3.0,
+      "faces": {
+       "by": "nearest",
+       "point": [
+        15,
+        15,
+        15
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "knurl_corner_box",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 40,
+      "width": 40,
+      "height": 40
+     },
+     {
+      "id": "fx",
+      "type": "fillet",
+      "radius": 10,
+      "edges": [
+       {
+        "kind": "edge",
+        "by": "nearest",
+        "point": [
+         0,
+         20,
+         20
+        ]
+       },
+       {
+        "kind": "edge",
+        "by": "nearest",
+        "point": [
+         20,
+         0,
+         20
+        ]
+       },
+       {
+        "kind": "edge",
+        "by": "nearest",
+        "point": [
+         20,
+         20,
+         0
+        ]
+       }
+      ]
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "knurl",
+      "depth": 0.6,
+      "scale": 3.0,
+      "faces": {
+       "by": "nearest",
+       "point": [
+        15,
+        15,
+        15
+       ]
+      },
+      "projection": "box",
+      "seamBand": 0.2
+     }
+    ]
+   }
+  },
+  {
+   "name": "hex_corner_blend",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 40,
+      "width": 40,
+      "height": 40
+     },
+     {
+      "id": "fx",
+      "type": "fillet",
+      "radius": 10,
+      "edges": [
+       {
+        "kind": "edge",
+        "by": "nearest",
+        "point": [
+         0,
+         20,
+         20
+        ]
+       },
+       {
+        "kind": "edge",
+        "by": "nearest",
+        "point": [
+         20,
+         0,
+         20
+        ]
+       },
+       {
+        "kind": "edge",
+        "by": "nearest",
+        "point": [
+         20,
+         20,
+         0
+        ]
+       }
+      ]
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "hex",
+      "depth": 0.6,
+      "scale": 3.0,
+      "faces": {
+       "by": "nearest",
+       "point": [
+        15,
+        15,
+        15
+       ]
+      },
+      "seamBlend": 0.8
+     }
+    ]
+   }
+  },
+  {
+   "name": "grid_fillet_edge",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 40,
+      "width": 40,
+      "height": 40
+     },
+     {
+      "id": "fx",
+      "type": "fillet",
+      "radius": 10,
+      "edges": [
+       {
+        "kind": "edge",
+        "by": "nearest",
+        "point": [
+         0,
+         20,
+         20
+        ]
+       },
+       {
+        "kind": "edge",
+        "by": "nearest",
+        "point": [
+         20,
+         0,
+         20
+        ]
+       },
+       {
+        "kind": "edge",
+        "by": "nearest",
+        "point": [
+         20,
+         20,
+         0
+        ]
+       }
+      ]
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "grid",
+      "depth": 0.5,
+      "scale": 3.0,
+      "faces": {
+       "by": "nearest",
+       "point": [
+        18,
+        0,
+        18
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "image_rings_l_png",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "image",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.5,
+      "scale": 2.0,
+      "imagePath": "tools/corpus/texture/rings_l.png"
+     }
+    ]
+   }
+  },
+  {
+   "name": "image_rings_rgb_png",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "image",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.5,
+      "scale": 2.0,
+      "imagePath": "tools/corpus/texture/rings_rgb.png"
+     }
+    ]
+   }
+  },
+  {
+   "name": "image_rings_rgba_png",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "image",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.5,
+      "scale": 2.0,
+      "imagePath": "tools/corpus/texture/rings_rgba.png"
+     }
+    ]
+   }
+  },
+  {
+   "name": "image_rings_bmp",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "image",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.5,
+      "scale": 2.0,
+      "imagePath": "tools/corpus/texture/rings.bmp"
+     }
+    ]
+   }
+  },
+  {
+   "name": "image_rings_palette_png",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "image",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": 0.5,
+      "scale": 2.0,
+      "imagePath": "tools/corpus/texture/rings_palette.png"
+     }
+    ]
+   }
+  },
+  {
+   "name": "image_round_on_cylinder",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "c",
+      "type": "cylinder",
+      "radius": 10,
+      "height": 20
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "image",
+      "faces": {
+       "kind": "face",
+       "by": "nearest",
+       "point": [
+        10,
+        0,
+        0
+       ]
+      },
+      "depth": 0.5,
+      "scale": 2.0,
+      "profile": "round",
+      "imagePath": "tools/corpus/texture/rings_l.png"
+     }
+    ]
+   }
+  },
+  {
+   "name": "image_missing",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "s1",
+      "type": "sketch",
+      "plane": "XY",
+      "entities": [
+       {
+        "type": "rectangle",
+        "width": 10,
+        "height": 10,
+        "x": 0,
+        "y": 0
+       }
+      ]
+     },
+     {
+      "id": "e1",
+      "type": "extrude",
+      "sketch": "s1",
+      "distance": 5,
+      "operation": "new"
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "image",
+      "faces": {
+       "by": "all"
+      },
+      "depth": 0.3,
+      "scale": 2.0,
+      "imagePath": "/nonexistent/path/does-not-exist.png"
+     }
+    ]
+   },
+   "expectError": true
+  },
+  {
+   "name": "image_not_an_image",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "s1",
+      "type": "sketch",
+      "plane": "XY",
+      "entities": [
+       {
+        "type": "rectangle",
+        "width": 10,
+        "height": 10,
+        "x": 0,
+        "y": 0
+       }
+      ]
+     },
+     {
+      "id": "e1",
+      "type": "extrude",
+      "sketch": "s1",
+      "distance": 5,
+      "operation": "new"
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "image",
+      "faces": {
+       "by": "all"
+      },
+      "depth": 0.3,
+      "scale": 2.0,
+      "imagePath": "tools/gen_texture_corpus.py"
+     }
+    ]
+   },
+   "expectError": true
+  },
+  {
+   "name": "refused_kind",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "glitter",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      }
+     }
+    ]
+   },
+   "expectError": true
+  },
+  {
+   "name": "refused_depth",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "knurl",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "depth": -1
+     }
+    ]
+   },
+   "expectError": true
+  },
+  {
+   "name": "refused_direction",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "waves",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "direction": "sideways"
+     }
+    ]
+   },
+   "expectError": true
+  },
+  {
+   "name": "refused_projection",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "knurl",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "projection": "cubic"
+     }
+    ]
+   },
+   "expectError": true
+  },
+  {
+   "name": "refused_grime_bool",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "knurl",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "grime": true
+     }
+    ]
+   },
+   "expectError": true
+  },
+  {
+   "name": "refused_angle_text",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "knurl",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ]
+      },
+      "angle": "steep"
+     }
+    ]
+   },
+   "expectError": true
+  },
+  {
+   "name": "no_face_found",
+   "document": {
+    "parameters": {},
+    "features": [
+     {
+      "id": "b",
+      "type": "box",
+      "length": 20,
+      "width": 20,
+      "height": 10
+     },
+     {
+      "id": "t",
+      "type": "texture",
+      "kind": "knurl",
+      "faces": {
+       "kind": "face",
+       "by": "normal",
+       "dir": [
+        0.577,
+        0.577,
+        0.577
+       ]
+      }
+     }
+    ]
+   },
+   "expectError": true
+  }
+ ]
+}

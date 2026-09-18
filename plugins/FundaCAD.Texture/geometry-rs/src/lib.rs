@@ -23,6 +23,7 @@ mod displace;
 mod height;
 mod image;
 mod lattice;
+mod mathx;
 mod nearest;
 mod np;
 mod py;
