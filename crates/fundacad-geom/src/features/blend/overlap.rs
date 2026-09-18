@@ -31,7 +31,7 @@ pub fn new_faces(before: &Shape, after: &Shape) -> Vec<Shape> {
 
 /// Anything that cannot be measured is not a fold.
 pub fn folds_over_itself(before: &Shape, after: &Shape) -> bool {
-    let fresh = new_faces(before, after);
+    let fresh = crate::bench::phase("blend_new_faces", || new_faces(before, after));
     if fresh.is_empty() {
         return false;
     }

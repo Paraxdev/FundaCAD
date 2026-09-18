@@ -48,10 +48,8 @@ impl BlendErr {
     }
 }
 
-/// `(shape, edges, size, parented)`: one kernel blend. `parented` is false for
-/// edges taken from `_kernel_copy`, which build123d's own `chamfer()` cannot
-/// find a solid for, so an equal chamfer's combined call always refuses.
-type ParentedOp<'a> = dyn Fn(&Shape, &[Shape], f64, bool) -> Result<Shape, BlendErr> + 'a;
+/// `(shape, edges, size)`: one kernel blend.
+type BlendOp<'a> = dyn Fn(&Shape, &[Shape], f64) -> Result<Shape, BlendErr> + 'a;
 type SectionOp<'a> = dyn Fn(&Shape, &[Shape]) -> Result<Shape, SectionErr> + 'a;
 
 /// Why the lofted section blend did not build.
@@ -104,7 +102,7 @@ pub fn fillet(ctx: &mut Ctx, f: &Fillet) -> FResult {
     let draft = f.draft == Some(true);
 
     let op =
-        move |s: &Shape, es: &[Shape], size: f64, _parented: bool| -> Result<Shape, BlendErr> {
+        move |s: &Shape, es: &[Shape], size: f64| -> Result<Shape, BlendErr> {
             let radii: Vec<f64> = es
                 .iter()
                 .map(|e| {
@@ -142,7 +140,7 @@ pub fn fillet(ctx: &mut Ctx, f: &Fillet) -> FResult {
         );
     }
     let conic =
-        move |s: &Shape, es: &[Shape], size: f64, _parented: bool| -> Result<Shape, BlendErr> {
+        move |s: &Shape, es: &[Shape], size: f64| -> Result<Shape, BlendErr> {
             ops::conic(s, es, size, p)
         };
     match blend_edges(
@@ -217,9 +215,12 @@ pub fn chamfer(ctx: &mut Ctx, f: &Chamfer) -> FResult {
         _ => None,
     };
     let draft = f.draft == Some(true);
-    let op = move |s: &Shape, es: &[Shape], size: f64, parented: bool| -> Result<Shape, BlendErr> {
+    // The Python engine's combined equal chamfer always refused ("Nothing to
+    // chamfer", build123d found no solid for the copied edges), so every corner
+    // was cut one edge at a time and came out pointed. Cut together, three
+    // edges meeting at a corner end in one triangle.
+    let op = move |s: &Shape, es: &[Shape], size: f64| -> Result<Shape, BlendErr> {
         match d2 {
-            None if !parented => Err(BlendErr::Kernel("Nothing to chamfer".into())),
             None => build123d_chamfer(s, es, size),
             Some(d2) => native_two_distance_chamfer(s, es, size, d2 * size / d),
         }
@@ -450,7 +451,9 @@ pub(crate) fn sequential_blend(
                 still.push((orig, fp));
                 continue;
             }
-            let Some(target) = rematch_edge(&current, &fp, max_mid_dist, tol_pos) else {
+            let Some(target) = crate::bench::phase("blend_rematch", || {
+                rematch_edge(&current, &fp, max_mid_dist, tol_pos)
+            }) else {
                 still.push((orig, fp));
                 continue;
             };
@@ -594,7 +597,7 @@ fn blend_edges(
     fid: &str,
     sels: &OneOrMany<Selector>,
     label: &str,
-    op: &ParentedOp,
+    op: &BlendOp,
     blend_size: f64,
     draft: bool,
     section: Option<&SectionOp>,
@@ -657,8 +660,8 @@ fn blend_edges(
         let (work, work_edges) =
             ops::copy(&body_shape, &edges).unwrap_or((body_shape.clone(), edges.clone()));
         let one_edge_at =
-            |s: &Shape, e: &Shape, size: f64| op(s, std::slice::from_ref(e), size, false);
-        let new_shape = match op(&work, &work_edges, blend_size, false) {
+            |s: &Shape, e: &Shape, size: f64| op(s, std::slice::from_ref(e), size);
+        let new_shape = match op(&work, &work_edges, blend_size) {
             Ok(out) => out,
             Err(BlendErr::Conic(msg)) => return Err(value_err(msg, Some(CONIC_NOT_APPLICABLE))),
             Err(combined_err) => {
@@ -667,7 +670,7 @@ fn blend_edges(
                     (work.clone(), work_edges.clone())
                 } else {
                     let apply =
-                        |s: &Shape, e: &Shape| op(s, std::slice::from_ref(e), blend_size, true);
+                        |s: &Shape, e: &Shape| op(s, std::slice::from_ref(e), blend_size);
                     sequential_blend(&work, &work_edges, &apply, blend_size)
                 };
                 if unresolved.is_empty() {

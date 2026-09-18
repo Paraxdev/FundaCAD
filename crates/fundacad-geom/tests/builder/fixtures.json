@@ -1462,13 +1462,21 @@
       "c",
       "c",
       "c",
+      "c",
+      "c",
+      "c",
+      "c",
+      "c",
+      "c",
+      "c",
+      "c",
       "c"
      ],
-     "faces": 18,
+     "faces": 26,
      "id": "body1",
      "name": "Box",
      "solids": 1,
-     "volume": 3114.0
+     "volume": 3113.3333333333335
     }
    ],
    "bodyIds": {
@@ -1602,7 +1610,7 @@
    "errors": [
     {
      "feature_id": "c",
-     "message": "Chamfer failed on Box: Nothing to chamfer"
+     "message": "Chamfer failed on Box: Failed creating a chamfer, try a smaller length value(s)"
     }
    ]
   }
