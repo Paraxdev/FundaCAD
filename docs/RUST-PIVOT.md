@@ -409,7 +409,7 @@ old-asset sweep. What makes the bundle:
 - Title: `FundaCAD pre-alpha, Rust engine (rolling, WORK IN PROGRESS)`.
 - Release notes open with the warning, which is not optional: the Rust engine
   is incomplete, unported features fail in a rebuild with the skipped-feature
-  banner, plugin geometry does not run at all, files it saves open in the beta,
+  banner, plugin geometry runs only for plugins that ship a component (PrintToolbox so far), files it saves open in the beta,
   and it is not for real work.
 
 ### 6.1 The updater endpoint
@@ -467,9 +467,13 @@ deleted in phase 3 the base policy loses them too and the pair becomes one.
 - The updater is still off everywhere. `tauri.conf.json` carries upstream's
   minisign pubkey, so both release jobs withhold `latest.json` and say so in
   the notes. Generating a keypair turns both feeds on at once.
-- Plugin bundles are not published to this release, because the app asks the
-  beta release for them whatever build it is (`RELEASE_TAG` in
-  `src/plugins/index.ts`), and plugin geometry does not run on this engine yet.
+- Plugin bundles ARE published to this release now, packed by
+  `build-prealpha` with their geometry components, and a Rust engine build
+  installs from it (`pluginReleaseTag` in `src/plugins/index.ts`). Only
+  PrintToolbox has a component so far; the rest refuse their features by name.
+- `fundacad-mcp` ships beside the app (`externalBin`), its private engine is
+  the app started with `--engine --ws`, and the app's worker serves a loopback
+  WebSocket beside its stdio pipe for live sessions (docs/MCP.md).
 
 ## 7. Working agreements for the branch
 
