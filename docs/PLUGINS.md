@@ -418,17 +418,17 @@ folder.
   manifest grants `files.read` (a heightmap image, a slicer's own presets).
   That is a property of the format, not a promise the plugin makes.
 - Every in-repo plugin with engine geometry ships a component: PrintToolbox,
-  Screws, Printing and Texture. Each was held to the Python half it replaced on
-  its own corpus, and the Python half's answers are frozen in `tests/golden/`
+  Screws, Printing and Texture. Each was held to the sidecar half it replaced on
+  its own corpus, and the sidecar half's answers are frozen in `tests/golden/`
   (`plugins`, `screws_ops`, `printing_ops`, `texture`), checked on every push.
 
 On the window side the plugin contributes `numFields` and `targets` alongside
 the dropdowns it already contributed, because `document/numFields.ts` and
 `features/selectionTargets.ts` no longer name a type they do not own.
 
-A feature of a plugin with no `geometryWasm` fails by name. A bundle built for
-the Python beta has a `geometry` key naming its Python half instead, and the
-app offers the alpha's bundle of the same plugin in its place.
+A feature of a plugin with no `geometryWasm` fails by name. The beta on
+`legacy` uses its own manifest key instead, and the app offers the alpha's
+bundle of the same plugin in its place.
 
 The app installs its plugins from the `alpha` release (`RELEASE_TAG` in
 `src/plugins/index.ts`). `build-alpha` packs those bundles with their
@@ -569,7 +569,7 @@ checking its types. It was found by putting a deliberate type error in one and
 getting no output at all. `plugins/**/*.ts` is in `include` now.
 
 **Nothing should work out where the repository root is by counting directories
-up from itself.** The Python MCP server's engine link did, with two `dirname`
+up from itself.** The earlier plugin MCP server's engine link did, with two `dirname`
 calls that meant "the checkout" only while the plugin sat one level down. Its
 Rust successor (`crates/fundacad-mcp/src/link.rs`) walks upward until it finds a
 target directory, so the directory can be renamed under it, and it finds nothing
@@ -1058,7 +1058,6 @@ and the `process` sentence on the install screen says so.
 | `plugins/<id>/README.md` | why it asks for that |
 | `plugins/<id>/main.ts` | a shipped capability's activation module: everything it contributes |
 | `plugins/<id>/*.vue` | a capability's own components, mounted through `overlays` or `browserSections` |
-| `plugins/<id>/server.py` | a process plugin's entry point |
 | `plugins/<id>/geometry-rs/` | a plugin's geometry component, built into `geometry.wasm` |
 | `scripts/build-plugins.py` | packaging, run by the release job |
 
