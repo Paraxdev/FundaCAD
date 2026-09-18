@@ -21,7 +21,7 @@ document is the one you picked in that dialog.
 
 Your file opens, every value is kept, and nothing is dropped when you save it
 again. What stops is the building: the geometry that turns a texture into
-displaced mesh is in this plugin, in `geometry/`, so without it a textured body
+displaced mesh is in this plugin, in `geometry-rs/`, so without it a textured body
 builds smooth and the feature's row goes red saying, by name, that Surface
 Texture is not running. Install it or switch it back on and the same file builds
 exactly as it did, because the numbers never went anywhere.
@@ -29,7 +29,7 @@ exactly as it did, because the numbers never went anywhere.
 That is a deliberate change, and it used to be the other way round. The
 `texture` feature was part of the document format, its rows were in the
 application's own tables, and the two thousand lines that displace a mesh were
-in `sidecar/`, dispatched from a table that said `"texture"` in plain text. A
+in the engine, dispatched from a table that said `"texture"` in plain text. A
 file with a texture in it built on a machine where this plugin had never been
 installed, which sounds generous and meant something worse: this was a panel in
 front of a feature the application had anyway, and uninstalling it changed
@@ -48,19 +48,17 @@ what to call them, and a save writes them back untouched.
 | --- | --- |
 | `main.ts`, `textureTool.ts`, `TextureToolPanel.vue`, `panel.ts` | the tool, the panel, and everything it contributes to the window |
 | `textureForm.ts` | the feature's SCHEMA: its fields, its rows, its dropdowns, and which of them a given pattern reads |
-| `geometry/texture.py`, `texture_height.py`, `texture_mesh.py` | the displacement itself, imported into the geometry engine |
-| `geometry/register.py` | what claims the `texture` feature type and the mesh pass behind it |
+| `geometry-rs/` | the displacement itself: the height fields, the lattices and the mesh pass, a WebAssembly component the engine runs |
+| `geometry-rs/src/lib.rs` | what claims the `texture` feature type and the mesh pass behind it |
 
 The manifest names both halves: `featureTypes` is what lets the application say
-"this needs Surface Texture" while this plugin is not running, and `geometry` is
-the module the engine imports when it is. See `sidecar/plugin_geometry.py` for
-the registry on the other side.
+"this needs Surface Texture" while this plugin is not running, and
+`geometryWasm` is the component the engine runs when it is. See
+`crates/fundacad-geom/wit/plugin.wit` for the contract on the other side.
 
-Geometry a plugin registers runs inside the engine with everything that process
-has. There is no sandbox around it and there is not going to be one: geometry
-code that cannot call the kernel is not geometry code, which is the same bargain
-Blender, Rhino and Fusion make. `sandboxNote("builtin")` is where a person is
-told, in the words they read before installing.
+The component runs sandboxed in the engine's plugin host: no network, no files
+beyond what the manifest grants, a memory cap and a time budget
+(docs/PLUGINS.md).
 
 ## What it adds to the application
 
@@ -80,13 +78,13 @@ application naming this plugin.
   rows and what they are called, its Faces row, its three dropdowns and its
   switch, which of those rows a given pattern actually reads, what its shape
   slider is called, and what happens when you double-click it
-- **the geometry**, registered into the engine at startup: the feature handler
+- **the geometry**, loaded by the engine at startup: the feature handler
   that runs in the rebuild, and the mesh pass that displaces faces at
   tessellation time against the final shape
 
 ## Notes
 
-The preview is real geometry at display resolution, computed by the same sidecar
+The preview is real geometry at display resolution, computed by the same engine
 path the final build uses, about half a second behind the slider. Exports keep
 full detail. A vertex-shader preview was tried and dropped: it can only move
 vertices that already exist, so it is invisible on a flat face, and without

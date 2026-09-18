@@ -1,42 +1,48 @@
-# Sidecar wire protocol
+# Engine wire protocol
 
-The frontend and the Python geometry sidecar (`sidecar/server.py`) talk JSON over one
-persistent WebSocket, `ws://127.0.0.1:8765`. It is a request/response protocol: every
-request carries a client-generated `id`; every terminal reply echoes that `id`. There is
-one connection per app instance; concurrent calls are matched by `id`, not by ordering.
+The frontend and the geometry engine (`crates/fundacad-engine`, `crates/fundacad-geom`)
+talk JSON messages and binary reply frames. It is a request/response protocol: every
+request carries a client-generated `id`; every terminal reply echoes that `id`.
+Concurrent calls are matched by `id`, not by ordering.
 
-This document describes the wire shapes as implemented in `sidecar/server.py` (the
-dispatch in `handle()`) and consumed in `src/geometry/client.ts`. If the two ever
-disagree, the code is the source of truth, update this file to match it, not the other
-way around.
+This document describes the wire shapes as implemented by the engine (the dispatch in
+`crates/fundacad-engine/src/lib.rs` and `crates/fundacad-geom/src/jobs.rs`) and consumed
+in `src/geometry/client.ts`. If the two ever disagree, the code is the source of truth,
+update this file to match it, not the other way around.
 
-The Rust engine being ported in `crates/fundacad-engine`/`crates/fundacad-geom`
-answers the exact same JSON envelope and binary frames; only the transport
-differs. Its worker process (`fundacad --engine`) talks to the Tauri supervisor
-over stdio, one message per `[u32 LE payload_len][u8 kind][payload]`, kind `1`
-for UTF-8 JSON text and `2` for a binary reply frame, no handshake or token
-(`crates/fundacad-protocol/src/stdio.rs`, and see `docs/RUST-PIVOT.md` section
-2.1). `fundacad-engine --ws` also serves the WebSocket shape above, for
-`npm run dev`, the e2e scripts and the differential harness. As of this branch
-the Rust engine implements `rebuild`, `computeAll`, `export`, `import`, `ping`
-and `cancel`; every other op still answers `{"error": {"message": "unknown op:
-<op>"}}` there while its port lands (`docs/RUST-PIVOT.md`'s phase 2 list).
-Where the two engines' behaviour genuinely differs rather than one simply not
-being ported yet, a note says so inline.
+Two transports carry the same messages:
+
+- **Tauri IPC**, in the app. The engine is a worker process of the same executable
+  (`fundacad --engine`) and talks to the app's supervisor (`src-tauri/src/engine.rs`)
+  over stdio, one message per `[u32 LE payload_len][u8 kind][payload]`, kind `1` for
+  UTF-8 JSON text and `2` for a binary reply frame, no handshake or token
+  (`crates/fundacad-protocol/src/stdio.rs`, `docs/RUST-PIVOT.md` section 2.1). The
+  supervisor relays every message to the webview on one channel with the kind byte in
+  front (`IpcTransport` in `src/geometry/transport.ts`).
+- **A loopback WebSocket**, `ws://127.0.0.1:8765`, served by `fundacad-engine --ws` (and
+  `fundacad --engine --ws`) for `npm run dev` in a browser, the e2e scripts and the MCP
+  server's private engine, and by the app's own engine for a live session.
+
+The Python engine this protocol was first written for lives on the `legacy` branch.
+Where its behaviour differed from this engine's, the difference is recorded there.
 
 ## Connecting
 
-The URL carries the per-launch shared secret as a query parameter:
+Over the WebSocket, the URL carries a shared secret as a query parameter:
 
 ```
-ws://127.0.0.1:8765/?token=<FUNDACAD_SIDECAR_TOKEN>
+ws://127.0.0.1:8765/?token=<token>
 ```
 
-The Rust shell mints `FUNDACAD_SIDECAR_TOKEN` per launch and hands it to the frontend via
-the `sidecar_token` Tauri command; the frontend fetches it once in `Geometry.init()`
-before opening the socket. A connection missing or misquoting the token, or one whose
-`Origin` header isn't the Tauri webview / dev server, is closed with WebSocket close
-code 1008. There is no unauthenticated mode.
+`fundacad-engine --ws` takes the token and port from `FUNDACAD_ENGINE_TOKEN` and
+`FUNDACAD_ENGINE_PORT` (the retired `FUNDACAD_SIDECAR_*` names still answer), or mints a
+token and prints `TOKEN <t>` on its first line. A browser in development passes it on the
+page URL, `http://localhost:5173/?token=<t>`. The app's live session port has its own
+per-launch token, written to `session.json` for the MCP server (docs/MCP.md). A
+connection missing or misquoting the token, or one whose `Origin` header isn't the Tauri
+webview / dev server, is closed with WebSocket close code 1008. There is no
+unauthenticated mode. Over Tauri IPC there is no token: only the app's own webview can
+reach the supervisor.
 
 ## Request envelope
 
@@ -71,7 +77,7 @@ Rebuilds the document and returns tessellated geometry. Supports two request sha
   "tolerance": 0.1, "known": { "<bodyId>": "<etag>", ... } }
 ```
 
-**Delta send** (the sidecar worker already holds a document from a prior full send):
+**Delta send** (the engine already holds a document from a prior full send):
 ```jsonc
 { "op": "rebuild", "id": "...", "baseRevision": 1, "revision": 2,
   "ops": {
@@ -112,7 +118,7 @@ Reply `result` is one of:
   ```
 
   `bodyIds` is a body's id remembered against where it came from (the feature that made
-  it, and which of that feature's bodies it was, `sidecar/body_ids.py`), so switching
+  it, and which of that feature's bodies it was, `crates/fundacad-core/src/body_ids.rs`), so switching
   off, failing or reordering a feature leaves every other body's id alone; a document
   with no map yet is numbered by position, once, the same as before the map existed.
   It is present only when it changed from the document's own `bodyIds`, and the
@@ -152,18 +158,17 @@ Reply `result` is one of:
   parallel, so the plane kept its cached placement) and `sealedVoid` (a Cut closed a
   cavity inside a body instead of reaching its surface). Adding a code is a pure addition,
   an unrecognised one must read as "unclassified", and the prose match on `ambiguous
-  nearest pick` is still honoured, so a sidecar older than the field keeps its repair
+  nearest pick` is still honoured, so an engine older than the field keeps its repair
   affordance. The first two are repairable by picking a face; `planeTilted` is not,
   because the candidate filter is taken against the cached normal and re-picking the
   same tilted face reproduces the same diagnostic; neither is `sealedVoid`, which
   describes a RESULT rather than a resolution and has no reference to re-pick.
 - **Fatal**, nothing built at all: `{ "error": { "message": "...", "feature_id": "..." } }`.
 - **Stalled worker**, one operation ran past the stall timeout (60 s of no build
-  progress): the sidecar kills and respawns the geometry worker and returns
-  `{ "error": { "message": "one operation stalled for over N s, the geometry kernel was restarted; progress up to the last checkpoint is kept" } }`.
-  The Rust engine has no pool to kill, so it answers the same way and abandons
-  the job thread, which keeps its wedged call and never takes another job, while
-  a fresh thread takes the queue. Ops with a bounded cost keep a wall clock
+  progress): the engine returns
+  `{ "error": { "message": "one operation stalled for over N s, the geometry kernel was restarted; progress up to the last checkpoint is kept" } }`
+  and abandons the job thread, which keeps its wedged call and never takes another
+  job, while a fresh thread takes the queue. Ops with a bounded cost keep a wall clock
   instead (25 s, 180 s for `generateShape`) and answer
   `{ "error": { "message": "operation timed out, geometry too complex or degenerate" } }`.
 - **Crashed worker**: `{ "error": { "message": "the geometry kernel crashed on this operation" } }`.
@@ -200,16 +205,15 @@ shape for the rest of the app. If a stub's etag doesn't match anything the clien
 holding (e.g. state lost across a worker respawn), `assemble()` returns `null` and the
 client resyncs with one full request.
 
-`etag` only ever needs to compare equal, its VALUE carries no meaning to the client,
-but the two engines mint it differently. The Python sidecar hands out a random one per
-cache entry (`uuid4().hex`); the Rust engine hashes the payload itself (blake2b-128 of
+`etag` only ever needs to compare equal, its VALUE carries no meaning to the client.
+The engine hashes the payload itself (blake2b-128 of
 `positions`/`normals`/`indices`/`faceIds`/`edges`, 32 hex digits, envelope fields like
 `id`/`name`/colours excluded), so identical geometry gets the same etag even across a
 worker restart that emptied every cache, not just within one running worker's.
 
 ### `computeAll`
 
-MCAD-style "Compute All": bypasses every cache layer (the sidecar's RAM prefix cache,
+MCAD-style "Compute All": bypasses every cache layer (the engine's RAM prefix cache,
 mesh cache, and disk checkpoints/blobs) before doing one cold full rebuild. Always a
 full send, never a delta:
 
@@ -245,12 +249,11 @@ between the body and a facet), `normalDeviation` degrees in `[0.5, 90]` (default
 mm in `[0, 1e6]` (`0` disables the post-pass), `unit` one of `mm|cm|m|in|ft` (default
 `mm`, divides mesh-format positions only, STEP always writes native millimetres), and
 `binary` (default `true`, STL only, 3MF and GLB have no ASCII form). STL, 3MF and GLB
-are all hand-rolled writers on both engines, not an OCCT/build123d exporter, so a
+are all hand-rolled writers, not an OCCT exporter, so a
 plugin-textured body's per-face colour survives on those three formats; STEP goes
 through XCAF (`STEPCAFControl_Writer`), which is why textured bodies lose their surface
-detail there (see the warning below). The Rust engine's STEP writer additionally stamps
-the file's `FILE_NAME` originating-system field as `"FundaCAD"`; the Python path leaves
-OCCT/build123d's own default.
+detail there (see the warning below). The STEP writer additionally stamps the file's
+`FILE_NAME` originating-system field as `"FundaCAD"`.
 
 Reply:
 
@@ -272,8 +275,8 @@ count. `separate` into a folder that already exists is also a hard error naming 
 ### `exportWith`
 
 Rebuilds, meshes every live body at export grade (with the same triangle budget as
-`export`), and hands the meshes to an exporter a plugin registered with
-`plugin_geometry.register_exporter`. What the file looks like is the plugin's.
+`export`), and hands the meshes to an exporter a plugin's geometry component
+registered (docs/PLUGINS.md). What the file looks like is the plugin's.
 
 ```jsonc
 { "op": "exportWith", "id": "...", "document": { /* CadDocument */ },
@@ -288,10 +291,8 @@ rebuild runs. An exporter no installed plugin provides is an error naming it.
 Otherwise the reply matches `export`'s shape (`path` + optional `warnings`), plus an
 optional `info` object the exporter chose to report.
 
-Plugin geometry runs in the Python worker today, with full worker privileges and no
-sandbox. In the Rust engine it moves into WebAssembly components inside each plugin
-(`docs/RUST-PIVOT.md` section 2.3); until that host exists the Rust engine answers this
-op `unknown op`.
+Plugin geometry runs in WebAssembly components inside each plugin, sandboxed by the
+engine's plugin host (`docs/RUST-PIVOT.md` section 2.3).
 
 ### `interference`
 
@@ -423,7 +424,7 @@ failures never raise, they land in that source's own `results[i]` instead.
 ### `import`
 
 Reads an external geometry file into a blob-stored shape for an `import` feature.
-Path-based, the sidecar/engine reads the file directly, the frontend never ships file
+Path-based, the engine reads the file directly, the frontend never ships file
 bytes over the socket. Formats: `step`/`stp`, `brep`, `stl`, `3mf`, `obj`, `glb`.
 
 ```jsonc
@@ -450,15 +451,13 @@ prefers `geom` but falls back to `brep`, and a fresh `import` reply never writes
 again, `migrateGeometry` below one-way upgrades an old one.) Given a longer budget than
 a normal rebuild (mesh read + B-rep build can run longer).
 
-Both engines peek the file's own reported triangle count and refuse past 150,000 for
+The engine peeks the file's own reported triangle count and refuse past 150,000 for
 STL/3MF, and past the same count once parsed for OBJ, before building any B-rep. GLB
 import additionally refuses a file whose glTF keeps geometry in a buffer other than the
 embedded one ("this glTF keeps its geometry in an external buffer, only a
-self-contained .glb imports"): `RWGltf_CafReader`, the Python path's OCCT reader, would
-otherwise happily resolve an external buffer, but the Rust engine's hand-written GLB
-reader only ever looks at the embedded BIN chunk. STL/3MF/OBJ import has no OCCT reader
-binding in either engine's plan (`docs/RUST-PIVOT.md` section 4.1); the Rust engine
-parses these formats itself, the same "OCCT doesn't help here" precedent the export
+self-contained .glb imports"): the engine's hand-written GLB reader only ever looks at
+the embedded BIN chunk. STL/3MF/OBJ import has no OCCT reader
+binding (`docs/RUST-PIVOT.md` section 4.1); the engine parses these formats itself, the same "OCCT doesn't help here" precedent the export
 side's mesh writers already set.
 
 ### `migrateGeometry`
@@ -487,7 +486,7 @@ take anything important with it.
 
 ### `generateShape`
 
-Runs a shape generator a plugin registered (`plugin_geometry.register_shape_generator`) on plain JSON
+Runs a shape generator a plugin's geometry component registered (docs/PLUGINS.md) on plain JSON
 parameters, outside any document.
 
 ```jsonc
@@ -499,11 +498,10 @@ parameters, outside any document.
 Reply: `{ "solid": true, "solids": 1, "valid": true, "faces": 20, "volume": 132.2,
 "bbox": { "min": [...], "max": [...] } }` plus, for `mesh`, `"mesh": { "positions", "indices",
 "normals" }` (flat arrays, one normal per position) and, for `store`, `"geom"`: the blob store hash
-an `import` feature carries. An unknown generator, a generator's ValueError, a bad placement or a
+an `import` feature carries. An unknown generator, a generator's refusal, a bad placement or a
 result with no solid is `{ "error": { "message": "..." } }`. Budget 180 s, a modelled thread on a
-long bolt is thousands of helical faces. Like `exportWith`, this is plugin geometry: the
-Rust engine answers `unknown op` until its wasm plugin host exists (`docs/RUST-PIVOT.md`
-section 2.3).
+long bolt is thousands of helical faces. Like `exportWith`, this is plugin geometry, run by
+the engine's WebAssembly plugin host (`docs/RUST-PIVOT.md` section 2.3).
 
 ### `tessellateText`
 
@@ -536,20 +534,18 @@ No request fields beyond the envelope.
 
 Reply: `{ "families": [...] }`, a sorted, deduplicated list of font family names, never
 file paths or style variants. Never errors to the caller: an unreadable font, or a
-machine with nothing usable, just answers `{ "families": [] }`. The Python sidecar
-reads this from OCCT's `Font_FontMgr`; the Rust engine's port is planned to read it
-from `fontdb`'s own system font discovery instead, `Font_FontMgr` is deliberately not
-carried forward at all (`docs/RUST-PIVOT.md` section 2.3), keeping the same observable
-contract: sorted, deduplicated, never an error.
+machine with nothing usable, just answers `{ "families": [] }`. The engine reads it from
+`fontdb`'s own system font discovery, not OCCT's `Font_FontMgr` (`docs/RUST-PIVOT.md`
+section 2.3).
 
 ### `session_*`, the live session
 
 Five ops that share one document between the app window and an outside client
-(the MCP server in `crates/fundacad-mcp/tools/python-oracle/`). They are answered on the **read path**, never behind
+(the MCP server, `crates/fundacad-mcp`). They are answered on the **read path**, never behind
 the heavy-op lock: the window publishes on a loop, and a publish that queued
 behind a rebuild would make the window invisible to an agent for exactly as long
 as the agent's own build took. The rules, and why they are these rules, are in
-`sidecar/live_session.py`.
+`crates/fundacad-engine/src/live.rs`.
 
 One **host** (the window) owns the document and is the only thing that may raise
 its revision. Any number of **guests** may read it and propose a replacement.
@@ -590,7 +586,7 @@ the selector it wrote may now address a different face. Three named reasons
 rather than one failure, because the guest's next move differs for each: give
 up, read again, or wait.
 
-`status` is opaque to the sidecar and is passed through verbatim. The window puts
+`status` is opaque to the engine and is passed through verbatim. The window puts
 `canEdit` in it (so a guest refuses an edit up front instead of waiting out its
 own timeout) and `applied`, the ids of the proposals it has taken, which is the
 acknowledgement a guest waits on. Not "the revision moved", which also moves for
@@ -613,9 +609,9 @@ Reply: `{ "cancelled": true }` if something was actually stopped, `{ "cancelled"
 if nothing was running, or `target` named a request that had already finished (a race
 between the click and the job completing must not cancel a different, unrelated job
 that started meanwhile). Omitting `target` cancels whatever is currently running.
-Neither engine can interrupt a running kernel call any other way, so a cancel not
-honoured within a grace period kills and respawns the worker process (the Rust engine
-on `--ws`, which nothing supervises, abandons its job thread instead); the operation it
+The engine cannot interrupt a running kernel call any other way, so a cancel not
+honoured within a grace period makes the app's supervisor kill and respawn the worker
+process (an engine on `--ws`, which nothing supervises, abandons its job thread instead); the operation it
 was running then answers `{ "ok": false, "cancelled": true, ... }` rather than the
 generic "the geometry kernel crashed on this operation" reply, so the caller can tell a
 deliberate cancel apart from a real crash.
@@ -630,7 +626,7 @@ Any other `op` value replies `{ "error": { "message": "unknown op: <op>" } }`.
 
 ## Progress frames
 
-During a `rebuild` or `computeAll`, the sidecar sends interim frames on the same
+During a `rebuild` or `computeAll`, the engine sends interim frames on the same
 connection, reusing the request's `id` but with **no `ok` field**:
 
 ```jsonc
@@ -648,7 +644,7 @@ and never treat one as the terminal reply, the real `{ "ok": ... }` reply always
 follows once the rebuild finishes (or the worker is judged stalled/crashed, per the
 `rebuild` error cases above). Guarding on `status === "building"` alone is a trap: an
 unrecognised status then falls through to the pending-request map and resolves the
-caller with a frame carrying no `ok`, so the caller reports failure while the sidecar
+caller with a frame carrying no `ok`, so the caller reports failure while the engine
 happily keeps working.
 
 ## Binary mesh frames (`"binary": true`)
@@ -695,7 +691,7 @@ and each chunk decodes independently. The framing rides in one extra envelope fi
   **`manifest`**: one entry per body of the reply, in final order, as
   `{id, name, etag, nodeRef?, faceColors?, partColor?, unchanged?}` plus
   `{faceCount, nVerts3, nIdx, nTris, nEdges, hasNormals?}` **for full bodies only**.
-  Sizes are absent on stubs by design, the sidecar does not have them, because those
+  Sizes are absent on stubs by design, the engine does not have them, because those
   arrays live in the client's own per-body cache. The head carries no `bodies`.
 - **`seq: 1..N`** each carry a contiguous slice of `bodies` (plus its `$buffers`), in
   manifest order. Order is load-bearing: the client accumulates each body's global
@@ -719,7 +715,7 @@ Two invariants a client may rely on, neither of them local to the sending code:
 Chunking is **binary-only**. There is deliberately no JSON-text chunk form: a text frame
 carrying `status` is routed to progress listeners and dropped.
 
-Negotiation is per request, exactly like `binary`. An older sidecar ignores the unknown
+Negotiation is per request, exactly like `binary`. An older engine ignores the unknown
 flag and answers with one frame; an older client never sets it and gets one frame. So
 neither side can emit a stream the other cannot read. When the flag *is* set, every
 successful mesh reply is streamed, not just large ones, so the multi-frame path is

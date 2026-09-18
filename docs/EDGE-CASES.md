@@ -1,5 +1,8 @@
 # Edge-case sweep, geometry sidecar
 
+> **Historical.** This sweep was run against the Python engine, which lives on
+> the `legacy` branch since 1.0; `sidecar/` paths below are on that branch.
+
 Findings from a systematic sweep of degenerate and boundary-condition documents
 driven straight at `builder.rebuild()`, 2026-07-29. **Every defect below is fixed
 unless marked OPEN.**
