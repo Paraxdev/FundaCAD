@@ -3,17 +3,17 @@ import { fileURLToPath } from "node:url";
 import vue from "@vitejs/plugin-vue";
 
 // Tauri expects a fixed dev port and no auto-clearing of the screen so its
-// logs survive. Frontend talks to the Python sidecar over WS directly.
+// logs survive.
 export default defineConfig({
   plugins: [vue()],
   clearScreen: false,
   server: {
     port: 5173,
     strictPort: true,
-    // The sidecar's uv venv is ~800MB of Python files that Vite never serves.
-    // Watching it wastes inotify handles and, on a container with a modest
-    // fs.inotify.max_user_watches, crashes the dev server with ENOSPC.
-    watch: { ignored: ["**/sidecar/.venv/**", "**/src-tauri/target/**", "**/target/**", "**/target-*/**", "**/third_party/**"] },
+    // Build output Vite never serves. Watching it wastes inotify handles and,
+    // on a container with a modest fs.inotify.max_user_watches, crashes the dev
+    // server with ENOSPC.
+    watch: { ignored: ["**/src-tauri/target/**", "**/target/**", "**/target-*/**", "**/third_party/**"] },
   },
   // The plugin sandbox imports its bootstrap with `import`, from inside a blob
   // module worker, so the worker chunk has to BE an ES module. Vite's default

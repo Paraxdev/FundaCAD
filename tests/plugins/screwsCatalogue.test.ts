@@ -13,7 +13,7 @@ import { KINDS, PARTS, getPath, missingFields, specProblems, type FastenerSpec }
 import { exportLibrary, parseLibraryFile, type UserFastener } from "../../plugins/FundaCAD.Screws/library";
 import { NO_FILTERS, filterEntries, groupEntries, listEntries, parseQuery } from "../../plugins/FundaCAD.Screws/search";
 
-import SAMPLES from "../../plugins/FundaCAD.Screws/geometry/tests/samples.json";
+import CORPUS from "../golden/corpus/corpus_screws_ops.json";
 
 describe("the fastener catalogue", () => {
   it("is large, and says how large", () => {
@@ -120,7 +120,11 @@ describe("the fastener catalogue", () => {
     expect(rows.find((r) => r.label === "Mass (steel)")!.value).toBe("1.57 g");
   });
 
-  it("keeps the geometry tests' samples in step with the tables", async () => {
+  // The screws golden (tests/golden/screws_ops.golden.json) was frozen from
+  // these specs, every family at its smallest and largest size and length. A
+  // catalogue change that moves one leaves the golden answering for a fastener
+  // the library no longer makes, so it has to be re-recorded with the change.
+  it("still expands to the specs the screws golden was frozen from", () => {
     const samples: FastenerSpec[] = [];
     for (const f of FAMILIES) {
       const rows = [f.sizes[0]!, f.sizes[f.sizes.length - 1]!];
@@ -132,17 +136,16 @@ describe("the fastener catalogue", () => {
         }
       }
     }
-    if (import.meta.env["UPDATE_SCREW_SAMPLES"]) {
-      const fs = (await import(/* @vite-ignore */ `node:${"fs"}`)) as { writeFileSync: (p: URL, t: string) => void };
-      fs.writeFileSync(new URL("../../plugins/FundaCAD.Screws/geometry/tests/samples.json", import.meta.url), `${JSON.stringify(samples, null, 1)}\n`);
-      return;
-    }
-    expect(JSON.parse(JSON.stringify(samples))).toEqual(SAMPLES);
+    const frozen = (CORPUS.shapes as { name: string; params: unknown }[])
+      .filter((s) => s.name.startsWith("sample_"))
+      .map((s) => s.params);
+    expect(frozen.length).toBeGreaterThan(100);
+    expect(JSON.parse(JSON.stringify(samples))).toEqual(frozen);
   });
 
   it("is a manifest with a shape generator and no feature type of its own", () => {
     expect(manifest.id).toBe("FundaCAD.Screws");
-    expect(manifest.geometry).toBe("geometry/register.py");
+    expect(manifest.geometryWasm).toBe("geometry.wasm");
     expect(manifest.shapeGenerators).toEqual(["fastener"]);
     expect((manifest as { featureTypes?: string[] }).featureTypes).toBeUndefined();
   });
