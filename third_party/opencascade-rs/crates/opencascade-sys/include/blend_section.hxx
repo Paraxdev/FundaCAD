@@ -37,6 +37,7 @@
 #include <BRep_Builder.hxx>
 #include <BRep_Tool.hxx>
 #include <Bnd_Box.hxx>
+#include <Geom_TrimmedCurve.hxx>
 #include <GC_MakeArcOfCircle.hxx>
 #include <GC_MakeSegment.hxx>
 #include <GProp_GProps.hxx>

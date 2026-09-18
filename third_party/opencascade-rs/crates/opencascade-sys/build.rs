@@ -98,7 +98,9 @@ fn main() {
 
     build
         .cpp(true)
-        .flag_if_supported("-std=c++11")
+        // The shims use C++14 generic lambdas and later. MSVC defaults to C++14
+        // and ignores this flag, so only GCC and Clang ever saw the old c++11.
+        .flag_if_supported("-std=c++17")
         .define("_USE_MATH_DEFINES", "TRUE")
         .include(occt_config.include_dir)
         .include("include")
