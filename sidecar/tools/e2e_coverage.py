@@ -104,7 +104,7 @@ EXCLUDED_OPS = {
     #
     # Covered instead by two suites that run against a real socket:
     # sidecar/tests/test_live_session.py holds every rule with the clock injected
-    # and no server, and plugins/FundaCAD.MCP/tests/test_live_session.py drives all five ops
+    # and no server, and crates/fundacad-mcp/tools/python-oracle/tests/test_live_session.py drives all five ops
     # across three real processes, a spawned sidecar, a host loop, and the MCP
     # server over its own stdio protocol.
     "session_host", "session_release", "session_state", "session_propose",

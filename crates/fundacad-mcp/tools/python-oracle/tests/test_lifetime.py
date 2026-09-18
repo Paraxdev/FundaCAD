@@ -19,7 +19,7 @@ the sidecar itself and both already covered by its own tests; the job object
 exists because Windows has neither and the app's Rust shell is the only other
 thing that supplies one.
 
-Run: uv run python mcp/tests/test_lifetime.py
+Run: uv run python crates/fundacad-mcp/tools/python-oracle/tests/test_lifetime.py
 """
 
 import _bootstrap  # noqa: F401

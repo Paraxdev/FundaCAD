@@ -344,8 +344,8 @@ pub fn engine_kind() -> &'static str {
     "rust"
 }
 
-/// The `fundacad-mcp` bundled beside this executable, for the MCP plugin's
-/// "How to connect it". The bundle config ships it (`externalBin`).
+/// The `fundacad-mcp` bundled beside this executable, for the "How to connect
+/// it" block in Preferences. The bundle config ships it (`externalBin`).
 #[tauri::command]
 pub fn mcp_server() -> Result<String, String> {
     let name = if cfg!(windows) { "fundacad-mcp.exe" } else { "fundacad-mcp" };

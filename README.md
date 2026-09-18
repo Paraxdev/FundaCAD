@@ -53,6 +53,10 @@ anything that builds differently there is worth a report. Files open in both.
 These builds do not update themselves, so come back to those pages for a newer
 one.
 
+To let an AI assistant (Claude Code, Claude Desktop or any MCP host) build and
+edit models in the app, open **Preferences, AI assistants (MCP)**: the MCP
+server ships with the alpha, and that section gives the setup to paste.
+
 On Windows there is also a **portable zip** (`…_x64_portable.zip`). Unzip it
 anywhere and run `fundacad.exe`: no installer, no admin rights, and several builds
 can sit side by side. It carries the same files the installer lays down,
@@ -130,6 +134,6 @@ outlives its shell, so kill it by hand or it keeps port 8765.
 - [`docs/PROTOCOL.md`](docs/PROTOCOL.md), the WebSocket the frontend and sidecar speak
 - [`docs/FUNDA-FORMAT.md`](docs/FUNDA-FORMAT.md), the readable `.funda` JSON document and the self-repairing binary `.fundab`
 - [`docs/PACKAGING.md`](docs/PACKAGING.md), how the bundled Python runtime is built
-- [`docs/MCP.md`](docs/MCP.md), the MCP server another model builds, measures and looks at parts through
+- [`docs/MCP.md`](docs/MCP.md), MCP, built into the app: how an AI assistant builds, measures and looks at parts, and how to connect one
 - [`docs/PLUGINS.md`](docs/PLUGINS.md), optional parts of the app, what they may reach, and how that is asked
 - [`docs/EDGE-CASES.md`](docs/EDGE-CASES.md) / [`docs/IMPROVEMENT-AUDIT.md`](docs/IMPROVEMENT-AUDIT.md), known rough edges

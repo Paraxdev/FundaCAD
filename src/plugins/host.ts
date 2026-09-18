@@ -173,15 +173,3 @@ export async function openDialog(opts: {
   const picked = await open({ ...opts, multiple: false });
   return typeof picked === "string" ? picked : null;
 }
-
-// --- the one app setting a plugin governs ------------------------------------
-//
-// Here because the plugin that owns the "Assistants" block is the MCP bundle,
-// and the setting itself is the app's: it decides what the app will accept from
-// an assistant, so it has to keep meaning something with no plugin installed.
-export {
-  asLiveEditingMode,
-  liveEditingMode,
-  onLiveEditingChange,
-  setLiveEditingMode,
-} from "../ui/liveEditing";

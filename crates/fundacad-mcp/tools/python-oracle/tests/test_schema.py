@@ -10,7 +10,7 @@ Without this, a new feature type ships and the agent that could have used it
 never hears about it, the failure mode is silence, which is the kind no
 end-to-end test finds.
 
-Run: uv run python mcp/tests/test_schema.py
+Run: uv run python crates/fundacad-mcp/tools/python-oracle/tests/test_schema.py
 """
 
 import _bootstrap  # noqa: F401
@@ -22,9 +22,11 @@ import sys
 
 import schema as S
 
-# plugins/FundaCAD.MCP/tests/this_file -> tests -> FundaCAD.MCP -> plugins -> the checkout.
-SIDECAR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
-    os.path.dirname(os.path.abspath(__file__))))), "sidecar")
+# crates/fundacad-mcp/tools/python-oracle/tests/this_file, five levels under the checkout.
+_here = os.path.abspath(__file__)
+for _ in range(6):
+    _here = os.path.dirname(_here)
+SIDECAR = os.path.join(_here, "sidecar")
 
 
 def builder_types():

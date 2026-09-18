@@ -12,9 +12,13 @@ side the 3D-mouse reader never opens the device.
 **Installed.** Plugins that arrive from somewhere, and are agreed to before
 they run. From this project's releases, from any HTTPS URL, or from a zip
 already on the disk; once installed those are the same kind of thing, and the
-screen says which it was. The first is the MCP server (`docs/MCP.md`), which was
-already a separate process talking a defined protocol; it just was not called a
-plugin yet.
+screen says which it was.
+
+MCP is not a plugin. It began as one, a test of how deep a plugin could
+reach, and since an AI assistant driving the whole app is exactly what MCP is
+for, it moved into the core for 1.0: `fundacad-mcp` ships beside the app and
+Preferences has its own AI assistants (MCP) section (`docs/MCP.md`). An install
+that still has the old `FundaCAD.MCP` plugin has it removed on first start.
 
 ## The promise
 
@@ -88,12 +92,11 @@ table, so the reassuring half cannot go stale while the alarming half stays
 current. Hand-written reassurance goes stale silently and in the direction that
 hurts.
 
-## The eight plugins this project publishes
+## The seven plugins this project publishes
 
 | id | what it is | asks for | kind |
 | --- | --- | --- | --- |
 | `FundaCAD.ExtraParameters` | sliders, toggles and choices for parameters, groups, named configurations and checks | `document.read`, `document.write` | `builtin` |
-| `FundaCAD.MCP` | lets an assistant build, measure and edit the open model | `document.*`, `geometry.build`, `files.*` | `process` |
 | `FundaCAD.PrintToolbox` | teardrop and bridged holes, counterbore bridges, sacrificial layers, thread-forming ribs, zip-tie channels, an elephant-foot chamfer and a vertical edge fillet, plus a bed fit check, for printing without supports | `document.read`, `document.write` | `builtin` |
 | `FundaCAD.Screws` | a library of standard and your own screws, nuts, washers and inserts, inserted as solid bodies | `document.read`, `document.write`, `geometry.build`, `files.read`, `files.write` | `builtin` |
 | `FundaCAD.Printing` | printers on your network, and opening a model in a slicer | `document.read`, `files.read`, `files.write`, `network.local`, `process.spawn` | `builtin` |
@@ -138,8 +141,8 @@ is the half worth keeping:
   body, and a move is an edit. Omitting it because the edit arrives through a
   knob rather than a dialog would be describing the input device instead of the
   effect.
-- **The 3D mouse does not claim `process.spawn`**, and neither does the MCP
-  plugin. A vocabulary whose grants are claimed whenever they are technically
+- **The 3D mouse does not claim `process.spawn`**, and neither does the
+  fastener library. A vocabulary whose grants are claimed whenever they are technically
   defensible is one where every screen looks the same.
 
 ### Two controls, and they mean different things
@@ -518,7 +521,6 @@ packaged into something that cannot be installed.
 plugins/
   FundaCAD.ExtraParameters/ manifest.json, README.md, main.ts, view.ts, state.ts,
                            ParametersSection.vue, SetupPanel.vue
-  FundaCAD.MCP/            manifest.json, README.md, server.py and the rest
   FundaCAD.MultiColor/     manifest.json, README.md, main.ts, palette.ts,
                            PaletteSection.vue
   FundaCAD.PrintToolbox/   manifest.json, README.md, main.ts, printForm.ts,
@@ -747,7 +749,7 @@ otherwise is `(await b.call(op)).value`, which reads `undefined` off a refusal
 and fails ten lines later as a TypeError naming neither the op nor the missing
 grant.
 
-`tests/plugins/broker.test.ts` reads the op list out of `plugins/FundaCAD.MCP/server.py` rather
+`tests/plugins/broker.test.ts` reads the op list out of `crates/fundacad-mcp/src/server.rs` rather
 than restating it. Two copies of a list drift: someone adds a tool there, nobody
 adds a row here, and the new tool is either unreachable or reachable without a
 permission.
@@ -769,7 +771,7 @@ write it, run as a test so it cannot rot.
 
 **The document ops are real.** Parameters and the timeline are plain data with
 rules over them, so the double runs those rules: ids are assigned the way the
-app assigns them (checked against `plugins/FundaCAD.MCP/model.py`, so the two cannot drift), a
+app assigns them (checked against the MCP server's own model, so the two cannot drift), a
 bad edit is refused before anything is written, and a plugin that adds a feature
 and reads the document back sees it.
 
@@ -999,7 +1001,7 @@ synchronously and commits asynchronously and so cannot hand back the evaluated
 number. The double no longer promises one either.
 
 The same test also fixed a thing this document previously got wrong. There is
-more than one id scheme here: `plugins/FundaCAD.MCP/model.py` names features by type
+more than one id scheme here: the MCP server (`crates/fundacad-mcp/src/model.rs`) names features by type
 (`bx1`, `ex1`) and the app names them `f1`, `f2`, counting from what it already
 has. Both are hosts for one op vocabulary and both are right. The lesson holds
 either way: **read the id `feature_add` returns, never predict it.**
@@ -1045,8 +1047,7 @@ runtime in Rust would add tens of megabytes to the installer to duplicate an
 engine already in the process: the webview has a JIT'd one, and the policy in
 `src-tauri/tauri.conf.json` already permits instantiating it.
 
-**Python reuses what exists.** The app already ships an interpreter and hands it
-out (`plugin_python`), already speaks a token-gated protocol on loopback, and
+**Python reuses what exists.** The app already ships an interpreter, already speaks a token-gated protocol on loopback, and
 `sidecar/live_session.py` already implements the mediation a permission model
 needs: one host owns the document, guests propose replacements against a
 revision and cannot install one. A Python plugin is a guest. A second Python
@@ -1102,7 +1103,7 @@ grant would give them two chances to disagree about it.
 everything else; on a Windows box the app's own test binary cannot start (it
 links the webview stack and dies with `STATUS_ENTRYPOINT_NOT_FOUND` before the
 first test), so `scripts/check-plugin-guards.sh` compiles that one file in a
-crate with no Tauri in it and runs the same tests. It then builds the real MCP
+crate with no Tauri in it and runs the same tests. It then builds a real plugin
 bundle and unpacks it with the real extractor, which is the only test that
 covers the packaging script and the guard together.
 
@@ -1254,8 +1255,7 @@ there. It still falls back rather than failing the build, and now it says so.
    than merely compile.
 3. Somewhere to press "run". A compute plugin is installable and runnable in
    code today and has no button.
-4. MCP onto the broker, so it is a plugin in fact and not only in the
-   Preferences list.
+4. ~~MCP onto the broker.~~ Moot: MCP is part of the app now, not a plugin.
 5. Panel plugins. Note that the policy currently forbids frames outright, and
    changing that is load-bearing for their sandbox rather than incidental.
 6. OS sandboxing for process plugins, per platform.

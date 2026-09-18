@@ -1,5 +1,5 @@
 //! A file arriving inline, in one piece or in several. The upload half of
-//! `plugins/FundaCAD.MCP/server.py`.
+//! `crates/fundacad-mcp/tools/python-oracle/server.py`.
 //!
 //! `doc_import` takes a `path`, which assumes the file is on the machine
 //! FundaCAD runs on. Often it is not: a host that hands its model an upload

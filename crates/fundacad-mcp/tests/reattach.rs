@@ -1,5 +1,5 @@
 //! Does the server notice FundaCAD opening after it started? A port of
-//! `plugins/FundaCAD.MCP/tests/test_reattach.py`.
+//! `crates/fundacad-mcp/tools/python-oracle/tests/test_reattach.py`.
 //!
 //! `attach` asks "is the app open?" exactly once, at start-up, and start-up is
 //! not a moment the user controls: an MCP host launches its servers when the
