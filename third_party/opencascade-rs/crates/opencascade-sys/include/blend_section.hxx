@@ -151,7 +151,7 @@ inline gp_Vec V(const gp_Pnt &p) { return gp_Vec(p.X(), p.Y(), p.Z()); }
 inline gp_Pnt P(const gp_Vec &v) { return gp_Pnt(v.X(), v.Y(), v.Z()); }
 
 inline double conic_weight_scale(double profile) {
-  double p = std::isnan(profile) ? 0.0 : std::max(-0.99, std::min(0.99, profile));
+  double p = std::isnan(profile) ? 0.0 : std::max(-0.99, std::min(0.95, profile));
   return p <= 0 ? 1.0 + p : 1.0 / (1.0 - p);
 }
 

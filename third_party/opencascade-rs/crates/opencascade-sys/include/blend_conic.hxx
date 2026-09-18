@@ -49,7 +49,12 @@ namespace conic {
 
 const double TOL = 1e-7;
 const double PROFILE_EPS = 1e-6;
-const double PROFILE_LIMIT = 0.99;
+// Past 0.95 the middle weight nears 20 and OCCT's volumes and booleans on the
+// blend go wrong (0.97 came out lighter than 0.95, 0.99 lost 7000 mm3 and a cut
+// through it removed nothing), while the solid still checks valid. The chord
+// side stays sound to -0.99.
+const double PROFILE_MAX = 0.95;
+const double PROFILE_MIN = -0.99;
 const double SEAM_FIT = 1e-7;
 const double SEAM_LIMIT = 1e-4;
 const size_t SEAM_SAMPLES_MAX = 400;
@@ -69,7 +74,7 @@ inline std::string fmt(const char *f, double v) {
 
 inline double clamp_profile(double p) {
   if (std::isnan(p)) return 0.0;
-  return std::max(-PROFILE_LIMIT, std::min(PROFILE_LIMIT, p));
+  return std::max(PROFILE_MIN, std::min(PROFILE_MAX, p));
 }
 
 inline double weight_scale(double profile) {
@@ -111,6 +116,45 @@ inline void reweight(const BS &bs, bool along_u, double k) {
     for (int j = 1; j <= bs->NbVPoles(); ++j) bs->SetWeight(2, j, bs->Weight(2, j) * k);
   } else {
     for (int i = 1; i <= bs->NbUPoles(); ++i) bs->SetWeight(i, 2, bs->Weight(i, 2) * k);
+  }
+}
+
+// A heavy middle weight packs nearly the whole arc parameter into the corner,
+// the flanks get a sliver of it, and OCCT samples per knot span, so areas,
+// volumes and boolean intersections miss the flanks (profile 0.95 came out
+// lighter than 0.9, and a cut through the blend could add material). Knots
+// graded towards both ends give each part of the section its own spans.
+// Insertion keeps the surface exact and its parametrisation, so every pcurve
+// on it still fits. It runs on the finished solid, because the seam solving
+// reads each arc as one three pole span.
+inline void grade_knots(const BS &bs, bool along_u, double ratio) {
+  double a = along_u ? bs->UKnot(1) : bs->VKnot(1);
+  double b = along_u ? bs->UKnot(bs->NbUKnots()) : bs->VKnot(bs->NbVKnots());
+  double span = b - a;
+  double tol = 1e-9 * span;
+  auto insert = [&](double t) {
+    if (along_u) bs->InsertUKnot(a + t * span, 1, tol);
+    else bs->InsertVKnot(a + t * span, 1, tol);
+  };
+  // The flank is crossed over a parameter of about 1 / (2 * ratio).
+  for (double s = 0.125 / ratio; s < 0.5; s *= 2) {
+    insert(s);
+    insert(1.0 - s);
+  }
+  insert(0.5);
+}
+
+inline void grade_heavy_arcs(const TopoDS_Shape &shape) {
+  for (const TopoDS_Shape &f : sub(shape, TopAbs_FACE)) {
+    BS bs = Handle(Geom_BSplineSurface)::DownCast(BRep_Tool::Surface(TopoDS::Face(f)));
+    if (bs.IsNull()) continue;
+    for (bool along_u : {true, false}) {
+      int deg = along_u ? bs->UDegree() : bs->VDegree();
+      int n = along_u ? bs->NbUPoles() : bs->NbVPoles();
+      if (deg != 2 || n != 3) continue;
+      double ratio = (along_u ? bs->Weight(2, 1) : bs->Weight(1, 2)) / bs->Weight(1, 1);
+      if (ratio > 4.0) grade_knots(bs, along_u, ratio);
+    }
   }
 }
 
@@ -466,6 +510,7 @@ inline TopoDS_Shape conic_blend(const TopoDS_Shape &sharp, const std::vector<Top
   fix->Perform();
   out = fix->Shape();
   BRepLib::SameParameter(out, TOL, true);
+  grade_heavy_arcs(out);
 
   if (!BRepCheck_Analyzer(out).IsValid())
     throw ValueError{"the conic profile produced an invalid solid at profile " + fmt("%g", profile)};
