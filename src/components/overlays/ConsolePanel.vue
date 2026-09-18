@@ -17,11 +17,13 @@ import { computed, nextTick, onUnmounted, ref, watch } from "vue";
 import Icon from "../shell/Icon.vue";
 import {
   clearLog,
+  clearRevealed,
   consoleOpen,
   formatEntry,
   formatLog,
   logEntries,
   onLogChange,
+  revealedEntry,
   setConsoleOpen,
   type LogEntry,
   type LogLevel,
@@ -67,6 +69,21 @@ function toggleDetail(id: number) {
 
 const body = ref<HTMLElement | null>(null);
 const copied = ref<number | null>(null);
+const flashed = ref<number | null>(null);
+
+// The error notice was clicked: show that entry whole, whatever the filters.
+watch(tick, async () => {
+  const id = revealedEntry();
+  if (id === null) return;
+  clearRevealed();
+  const entry = logEntries().find((x) => x.id === id);
+  if (!entry) return;
+  show.value[entry.level] = true;
+  if (entry.detail) expanded.value = new Set(expanded.value).add(id);
+  flashed.value = id;
+  await nextTick();
+  body.value?.querySelector(`[data-log-id="${id}"]`)?.scrollIntoView({ block: "nearest" });
+}, { immediate: true });
 
 // Follow the tail, but only when already at it: scrolling up to read something
 // and being yanked back down by the next frame's error is the single most
@@ -134,7 +151,13 @@ const clockOf = (at: number) =>
         <p v-if="!rows.length" class="logcon-empty">
           Nothing here. Errors and warnings are kept in full, and stay until cleared.
         </p>
-        <div v-for="e in rows" :key="e.id" class="logcon-row" :class="`is-${e.level}`">
+        <div
+          v-for="e in rows"
+          :key="e.id"
+          class="logcon-row"
+          :class="[`is-${e.level}`, { 'is-revealed': flashed === e.id }]"
+          :data-log-id="e.id"
+        >
           <span class="logcon-time">{{ clockOf(e.at) }}</span>
           <span v-if="e.source" class="logcon-src">{{ e.source }}</span>
           <span class="logcon-msg">{{ e.message }}</span>

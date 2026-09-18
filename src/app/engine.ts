@@ -23,6 +23,7 @@ import { solveSketchFeature } from "../sketch/headlessSolve";
 import { initSolver } from "../sketch/solver";
 import { installAutosave, checkRecovery } from "../io/recovery";
 import { toast } from "../ui/toast";
+import { logWarning } from "../ui/logStore";
 import { crumb } from "../diagnostics/breadcrumbs";
 
 import { ExtrudeTool } from "../features/extrudeTool";
@@ -198,10 +199,26 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   e.lastAction = null;
   e.planePick = false;
 
-  // Was `statusEl.textContent = …; statusEl.className = \`status ${cls}\``.
-  // The pinia instance is created and made active in main.ts BEFORE this runs,
-  // so a store is usable here even though no component has mounted yet.
-  e.setStatus = (text, cls) => useUiStore().setStatus(text, cls);
+  // There is no status pill any more. A hint ("select a body first") is a short
+  // info toast, a repeat of the one still on screen is dropped; "connected"
+  // needs no word; the rest goes to the console. Build errors have their own
+  // notice (rebuildBridge).
+  let lastHint = { text: "", at: 0 };
+  // A reconnect loop repeats its warning every attempt, once a minute is plenty.
+  let lastWarning = { text: "", at: -Infinity };
+  e.setStatus = (text, cls) => {
+    if (!text || cls === "connected") return;
+    const now = performance.now();
+    if (cls === "error") {
+      if (text === lastWarning.text && now - lastWarning.at < 60000) return;
+      lastWarning = { text, at: now };
+      logWarning(text, { source: "status" });
+      return;
+    }
+    if (text === lastHint.text && now - lastHint.at < 3500) return;
+    lastHint = { text, at: now };
+    toast(text);
+  };
 
   e.viewport = new Viewport(canvas);
   // The grid spacing follows the zoom, so what one square is worth is a fact

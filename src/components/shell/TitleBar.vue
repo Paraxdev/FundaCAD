@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { toggleConsole } from "../../ui/logStore";
 import { markRaw, ref, onMounted, onUnmounted } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useUiStore } from "../../stores/ui";
@@ -9,6 +8,7 @@ import Icon from "./Icon.vue";
 import WorkspaceToggle from "./WorkspaceToggle.vue";
 import MenuBar from "./MenuBar.vue";
 import LiveSessionPill from "./LiveSessionPill.vue";
+import ErrorNotice from "./ErrorNotice.vue";
 import brandLockup from "../../../assets/brand/fundacad-lockup-app.svg";
 
 const engine = useEngine();
@@ -68,20 +68,7 @@ onUnmounted(() => offPlugins?.());
          document: someone else is in it. It renders nothing at all unless an
          assistant is actually attached. -->
     <LiveSessionPill />
-    <div class="spacer"></div>
+    <ErrorNotice />
     <WorkspaceToggle />
-    <!-- A button, not a span, because this is where a failure is first seen and
-         it is the one place in the app guaranteed to be showing a CLIPPED
-         version of it, the pill is narrow and the sentence is long, so the
-         tail that says what to do is exactly what gets cut. Clicking opens the
-         console, which keeps it whole. -->
-    <button
-      id="status"
-      type="button"
-      class="status"
-      :class="ui.statusClass"
-      :title="ui.statusText + ', click for the full text'"
-      @click="toggleConsole()"
-    >{{ ui.statusText }}</button>
   </header>
 </template>
