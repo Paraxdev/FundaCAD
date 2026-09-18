@@ -34,6 +34,7 @@ pub mod reply;
 pub mod select;
 pub mod text;
 pub mod topo;
+pub mod trace;
 
 pub use opencascade;
 

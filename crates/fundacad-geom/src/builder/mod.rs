@@ -72,6 +72,10 @@ pub struct FeatureError {
     pub feature_id: Option<String>,
     pub message: String,
     pub code: Option<String>,
+    /// For the error report: the kernel calls, the bodies and the parameter
+    /// values at the moment it failed. `None` for errors restored from a
+    /// checkpoint written before this existed.
+    pub detail: Option<Value>,
 }
 
 impl FeatureError {
@@ -87,6 +91,16 @@ impl FeatureError {
             m.insert("code".into(), Value::String(code.clone()));
         }
         Value::Object(m)
+    }
+
+    /// `wire` plus the report detail, for the app's `featureErrors` and the
+    /// checkpoint. Kept out of `wire`, which the parity and MCP replies compare.
+    pub fn wire_full(&self) -> Value {
+        let mut v = self.wire();
+        if let (Some(detail), Value::Object(m)) = (&self.detail, &mut v) {
+            m.insert("detail".into(), detail.clone());
+        }
+        v
     }
 }
 
@@ -478,6 +492,35 @@ fn typed(raw: &Value) -> Feature {
     parsed
 }
 
+/// What a bug report needs beside the message: the kernel calls the feature
+/// made, the bodies it was handed and the parameter values it resolved against.
+fn failure_detail(ctx: &Ctx, index: usize, type_name: Option<&str>, took: Duration) -> Value {
+    const BODIES: usize = 12;
+    let bodies: Vec<Value> = ctx
+        .bodies
+        .iter()
+        .take(BODIES)
+        .map(|b| json!({ "id": b.id, "name": b.name, "shape": kernel::describe(&b.shape) }))
+        .collect();
+    let mut params: Vec<(&String, &f64)> = ctx.params.iter().collect();
+    params.sort_by(|a, b| a.0.cmp(b.0));
+    let params: Map<String, Value> = params
+        .into_iter()
+        .take(64)
+        .map(|(k, v)| (k.clone(), json!(v)))
+        .collect();
+    json!({
+        "index": index,
+        "type": type_name,
+        "ms": (took.as_secs_f64() * 1e5).round() / 100.0,
+        "kernel": crate::trace::take().iter().map(crate::trace::Call::wire).collect::<Vec<_>>(),
+        "bodies": bodies,
+        "bodyCount": ctx.bodies.len(),
+        "params": params,
+        "occt": crate::OCCT_VERSION,
+    })
+}
+
 fn label_of(raw: &Value) -> String {
     let s = |k: &str| raw.get(k).and_then(Value::as_str).filter(|s| !s.is_empty());
     s("name")
@@ -676,6 +719,7 @@ pub fn rebuild_from(
             return Err(Cancelled);
         }
         let began = Instant::now();
+        crate::trace::begin();
         let fid = rawf.get("id").and_then(Value::as_str);
         ctx.ids.start_feature(fid.unwrap_or("None"));
         let type_name = rawf.get("type").and_then(Value::as_str);
@@ -702,6 +746,7 @@ pub fn rebuild_from(
             return Err(Cancelled);
         }
         let label = label_of(rawf);
+        let detail = || Some(failure_detail(&ctx, i, type_name, began.elapsed()));
         match outcome {
             Ok(Ran::Inactive) => {}
             Ok(Ran::Built) => {
@@ -716,11 +761,13 @@ pub fn rebuild_from(
                 feature_id: fid.map(str::to_owned),
                 message,
                 code: code.map(str::to_owned),
+                detail: detail(),
             }),
             Err(Fail::Missing(key)) => errors.push(FeatureError {
                 feature_id: fid.map(str::to_owned),
                 message: format!("{label} is missing the field \"{key}\""),
                 code: Some(BAD_REQUEST.to_owned()),
+                detail: detail(),
             }),
             Err(Fail::Internal(name)) => {
                 eprintln!("feature {} ({label}) failed: {name}", fid.unwrap_or("None"));
@@ -728,6 +775,7 @@ pub fn rebuild_from(
                     feature_id: fid.map(str::to_owned),
                     message: format!("{label} failed ({name})"),
                     code: None,
+                    detail: detail(),
                 });
             }
         }
@@ -880,7 +928,7 @@ pub fn result_fields(doc: &CadDocument, r: &Rebuild) -> Map<String, Value> {
             m.insert("featureError".into(), last.wire());
             m.insert(
                 "featureErrors".into(),
-                Value::Array(r.errors.iter().map(FeatureError::wire).collect()),
+                Value::Array(r.errors.iter().map(FeatureError::wire_full).collect()),
             );
         }
     }

@@ -14,7 +14,13 @@ use crate::kernel::{self, BoolKind, Kind};
 use crate::select::{group_by_body, Resolver};
 
 /// The class name an OpenCASCADE failure reaches Python as.
+///
+/// The class is what the user reads, the whole exception text goes to the
+/// error report through the trace.
 pub(crate) fn occt_class(e: &opencascade::Error) -> String {
+    if let opencascade::Error::Occt(m) = e {
+        crate::trace::failed("OpenCASCADE", None, m.clone(), None);
+    }
     match e {
         opencascade::Error::Occt(m) => m.split(':').next().unwrap_or(m).trim().to_owned(),
         opencascade::Error::Cancelled => "UserBreak".into(),
