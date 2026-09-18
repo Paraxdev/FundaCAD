@@ -143,6 +143,9 @@ fn check(golden_path: &Path, corpus_path: Option<&Path>) -> Result<bool, String>
     let work = std::env::temp_dir().join(format!("fundacad-golden-{}", std::process::id()));
     std::fs::create_dir_all(work.join("blobs"))
         .map_err(|e| format!("cannot create {}: {e}", work.display()))?;
+    // What harness_util.SpawnedServer gave every engine the diff tools drove: no
+    // geometry persisted from an earlier run, so a warm disk cache cannot answer.
+    std::env::set_var("FUNDACAD_DISK_CACHE", "0");
     if std::env::var_os("FUNDACAD_BLOB_DIR").is_none() {
         std::env::set_var("FUNDACAD_BLOB_DIR", work.join("blobs"));
     }
