@@ -27,7 +27,7 @@ pub mod wit {
     });
 }
 
-pub use wit::fundacad::plugin::{feature, files, host as host_api, kernel, output, types};
+pub use wit::fundacad::plugin::{feature, files, host as host_api, kernel, numeric, output, types};
 use wit::{DisplaceOptions, Plugin, PluginPre, Registration};
 
 use super::kernel_ext as kx;
@@ -61,6 +61,8 @@ pub struct State {
     scope: Scope,
     cancel: Option<CancelToken>,
     files_read: bool,
+    /// Kernel refusals that carried a code, as (message, code).
+    refusals: Vec<(String, &'static str)>,
 }
 
 // FeatureScope's pointer is only dereferenced inside the synchronous call that
@@ -189,6 +191,7 @@ impl Component {
                 scope,
                 cancel: cancel.clone(),
                 files_read: self.files_read,
+                refusals: Vec::new(),
             },
         );
         store.limiter(|s| &mut s.limits);
@@ -217,15 +220,24 @@ impl Component {
         type_name: &str,
         raw: &Value,
         cancel: Option<CancelToken>,
-    ) -> Result<(), String> {
+    ) -> Result<(), (String, Option<&'static str>)> {
         let scope = Scope::Feature(FeatureScope {
             ctx: ctx as *mut Ctx,
             raw: raw.clone(),
             feature_id: raw.get("id").and_then(Value::as_str).map(str::to_owned),
         });
-        self.call(scope, super::FEATURE_BUDGET, cancel, |p, s| {
-            p.call_run_feature(s, type_name)
-        })?
+        let r = self.call(scope, super::FEATURE_BUDGET, cancel, |p, s| {
+            let r = p.call_run_feature(&mut *s, type_name)?;
+            // A kernel refusal the plugin hands on as it is keeps its code.
+            Ok(r.map_err(|e| {
+                let code = s.data().refusals.iter().find(|(m, _)| *m == e).map(|(_, c)| *c);
+                (e, code)
+            }))
+        });
+        match r {
+            Ok(inner) => inner,
+            Err(e) => Err((e, None)),
+        }
     }
 
     pub fn generate_shape(
@@ -589,11 +601,15 @@ impl kernel::Host for State {
         self.made(r)
     }
 
+    fn delaunay_planar(&mut self, points: Vec<f64>) -> wasmtime::Result<Result<Vec<u32>, String>> {
+        Ok(kx::delaunay_2d(&points))
+    }
+
     fn select_faces(&mut self, s: Resource<HostShape>, selectors: String) -> wasmtime::Result<Result<Vec<Resource<HostShape>>, String>> {
         let r = kx::select_faces(self.shape(&s)?, &selectors);
         Ok(match r {
             Ok(v) => Ok(self.own_all(v)?),
-            Err(e) => Err(e),
+            Err(f) => Err(self.refused(f)),
         })
     }
 
@@ -619,6 +635,15 @@ impl kernel::Host for State {
 }
 
 impl State {
+    /// A kernel refusal as the plugin reads it, its code kept for the feature
+    /// error should the plugin hand the sentence on unchanged.
+    fn refused(&mut self, f: crate::builder::Fail) -> String {
+        if let crate::builder::Fail::Value { message, code: Some(code) } = &f {
+            self.refusals.push((message.clone(), code));
+        }
+        fail_text(f)
+    }
+
     fn blended(&mut self, r: Result<(Shape, u32), String>) -> wasmtime::Result<Result<kernel::Blended, String>> {
         Ok(match r {
             Ok((shape, skipped)) => Ok(kernel::Blended {
@@ -635,9 +660,13 @@ impl State {
         label: &str,
         edges: bool,
     ) -> wasmtime::Result<Result<Vec<feature::Picked>, String>> {
-        let groups = match self.feature().and_then(|(ctx, raw, fid)| pick(ctx, raw, fid, field, label, edges)) {
+        let groups = match self.feature() {
+            Ok((ctx, raw, fid)) => pick(ctx, raw, fid, field, label, edges),
+            Err(e) => Err(crate::builder::Fail::msg(e)),
+        };
+        let groups = match groups {
             Ok(g) => g,
-            Err(e) => return Ok(Err(e)),
+            Err(f) => return Ok(Err(self.refused(f))),
         };
         let mut out = Vec::with_capacity(groups.len());
         for (body, items) in groups {
@@ -667,15 +696,16 @@ fn pick(
     field: &str,
     label: &str,
     edges: bool,
-) -> Result<Vec<(u32, Vec<Shape>)>, String> {
+) -> Result<Vec<(u32, Vec<Shape>)>, crate::builder::Fail> {
+    use crate::builder::Fail;
     let what = if edges { "edge" } else { "face" };
     let sel = raw.get(field).filter(|v| crate::select::entity::truthy(Some(v)));
     let Some(sel) = sel else {
-        return Err(format!("{label}: pick at least one {what}"));
+        return Err(Fail::msg(format!("{label}: pick at least one {what}")));
     };
     let typed: OneOrMany<Selector> =
-        serde_json::from_value(sel.clone()).map_err(|e| format!("{label}: {e}"))?;
-    let groups = crate::select::group_by_body(ctx, &typed, label).map_err(fail_text)?;
+        serde_json::from_value(sel.clone()).map_err(|e| Fail::msg(format!("{label}: {e}")))?;
+    let groups = crate::select::group_by_body(ctx, &typed, label)?;
     let groups: Vec<(usize, Value)> = groups
         .into_iter()
         .map(|(b, sels)| (b, serde_json::to_value(sels).unwrap_or(Value::Null)))
@@ -689,10 +719,9 @@ fn pick(
             r.edges(&shape, &sels)
         } else {
             r.faces(&shape, &sels)
-        }
-        .map_err(fail_text)?;
+        }?;
         if items.is_empty() {
-            return Err(format!("{label}: the picked {what} is gone from {name}"));
+            return Err(Fail::msg(format!("{label}: the picked {what} is gone from {name}")));
         }
         out.push((body as u32, items));
     }
@@ -799,6 +828,36 @@ impl feature::Host for State {
             ctx.bodies[i].mesh_passes.push(v);
             Ok(())
         }))
+    }
+}
+
+impl numeric::Host for State {
+    fn unary(&mut self, op: numeric::UnaryOp, xs: Vec<f64>) -> wasmtime::Result<Vec<f64>> {
+        use numeric::UnaryOp as U;
+        let f: fn(f64) -> f64 = match op {
+            U::Sin => f64::sin,
+            U::Cos => f64::cos,
+            U::Tan => f64::tan,
+            U::Exp => f64::exp,
+            U::Log => f64::ln,
+            U::Acos => f64::acos,
+            U::Asin => f64::asin,
+            U::Atan => f64::atan,
+        };
+        Ok(xs.into_iter().map(f).collect())
+    }
+
+    fn binary(&mut self, op: numeric::BinaryOp, xs: Vec<f64>, ys: Vec<f64>) -> wasmtime::Result<Vec<f64>> {
+        use numeric::BinaryOp as B;
+        if xs.len() != ys.len() {
+            return Err(wasmtime::Error::msg("numeric.binary needs two lists of one length"));
+        }
+        let f: fn(f64, f64) -> f64 = match op {
+            B::Pow => f64::powf,
+            B::Hypot => f64::hypot,
+            B::Atan2 => f64::atan2,
+        };
+        Ok(xs.into_iter().zip(ys).map(|(x, y)| f(x, y)).collect())
     }
 }
 

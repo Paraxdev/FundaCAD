@@ -4,12 +4,11 @@
 //! revolved face is re-triangulated in its mm chart, and anything else is
 //! subdivided on the true surface.
 //!
-//! scipy's Delaunay (Qhull) is replaced by delaunator. Both give the Delaunay
-//! triangulation of the same points, which is unique except inside a cell
-//! whose corners are co-circular, where Qhull breaks the tie by its insertion
-//! order. Where that diagonal decides the surface, `force_cell_diagonals` and
-//! `flip_to_creases` pick it from the height field on both engines; where it
-//! does not, both diagonals lie in one plane.
+//! The Delaunay triangulations come from the engine's `delaunay-planar`, the same
+//! Qhull scipy runs, called the same way. Anything else would break the ties
+//! inside co-circular cells differently and hand back its triangles in another
+//! order with another first vertex, and the median first edge the wavelength
+//! clamp reads and the order the crease flips are tried in both follow those.
 
 use std::collections::HashMap;
 
@@ -391,10 +390,11 @@ pub fn flip_to_creases(
     Ok(tris)
 }
 
-fn delaunay(pts: &[P2]) -> Vec<Tri> {
-    let p: Vec<delaunator::Point> = pts.iter().map(|q| delaunator::Point { x: q[0], y: q[1] }).collect();
-    let t = delaunator::triangulate(&p);
-    t.triangles.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect()
+/// `Delaunay(pts).simplices`, from the engine's own Qhull run as scipy runs it.
+fn delaunay(pts: &[P2]) -> Result<Vec<Tri>, String> {
+    let flat: Vec<f64> = pts.iter().flat_map(|p| [p[0], p[1]]).collect();
+    let t = crate::kernel::delaunay_planar(&flat)?;
+    Ok(t.chunks_exact(3).map(|c| [c[0] as usize, c[1] as usize, c[2] as usize]).collect())
 }
 
 pub struct Refined {
@@ -452,8 +452,7 @@ pub fn aligned_grid_triangulation(a: &LatticeArgs) -> Result<Refined, String> {
         spacing = period / ((period / spacing).round_ties_even()).max(2.0);
     }
 
-    let ang = a.angle_deg.to_radians();
-    let (ca, sa) = (ang.cos(), ang.sin());
+    let (ca, sa) = crate::mathx::cos_sin_deg(a.angle_deg);
     let rp_u: Vec<f64> = p_mm.iter().map(|p| (p[0] + a.offset) * ca - p[1] * sa).collect();
     let rp_v: Vec<f64> = p_mm.iter().map(|p| (p[0] + a.offset) * sa + p[1] * ca).collect();
 
@@ -492,7 +491,7 @@ pub fn aligned_grid_triangulation(a: &LatticeArgs) -> Result<Refined, String> {
                 }
             }
         } else {
-            let seg_len = (p_mm[i1][0] - p_mm[i0][0]).hypot(p_mm[i1][1] - p_mm[i0][1]);
+            let seg_len = crate::mathx::hypot1(p_mm[i1][0] - p_mm[i0][0], p_mm[i1][1] - p_mm[i0][1]);
             let n_sub = (seg_len / spacing).ceil() as i64;
             if n_sub >= 2 {
                 for k in 1..n_sub {
@@ -650,7 +649,7 @@ pub fn aligned_grid_triangulation(a: &LatticeArgs) -> Result<Refined, String> {
 
     let mut tris: Vec<Tri>;
     if lattice {
-        tris = drop_outside(delaunay(&vmm), false);
+        tris = drop_outside(delaunay(&vmm)?, false);
         if let (false, Some((_, Some(_)))) = (cells_mode, a.phases.as_ref()) {
             let field = a.field.ok_or("a lattice needs its field")?;
             let mut quads: Vec<[usize; 4]> = Vec::new();
@@ -720,7 +719,7 @@ pub fn aligned_grid_triangulation(a: &LatticeArgs) -> Result<Refined, String> {
             }
         }
         let band_pts: Vec<P2> = band_ids.iter().map(|&k| vmm[k]).collect();
-        let band: Vec<Tri> = delaunay(&band_pts)
+        let band: Vec<Tri> = delaunay(&band_pts)?
             .into_iter()
             .map(|t| [band_ids[t[0]], band_ids[t[1]], band_ids[t[2]]])
             .collect();

@@ -22,8 +22,8 @@ KINDS = ["knurl", "hex", "waves", "ribs", "voronoi", "noise", "stripes", "grid",
 
 def main():
     rng = np.random.default_rng(20260918)
-    u = rng.uniform(-20, 20, 160)
-    v = rng.uniform(-20, 20, 160)
+    u = rng.uniform(-20, 20, 60)
+    v = rng.uniform(-20, 20, 60)
     # points exactly on pattern lines as well, where floor and mod decide
     u = np.concatenate([u, np.arange(-6, 6, 0.25)])
     v = np.concatenate([v, np.arange(-6, 6, 0.25)[::-1]])

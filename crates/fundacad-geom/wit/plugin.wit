@@ -176,6 +176,12 @@ interface kernel {
   // One boolean with its options, the base against every tool at once.
   boolean-with: func(op: boolean-op, base: borrow<shape>, tools: list<borrow<shape>>, options: boolean-options) -> result<shape, string>;
 
+  // The Delaunay triangulation of 2D points (x, y pairs) exactly as
+  // scipy.spatial.Delaunay makes it: Qhull 2020.2 with "Qbb Qc Qz Q12 Qt",
+  // three point indices per triangle, each counter-clockwise, in Qhull's facet
+  // order. A point Qhull finds coplanar is in no triangle.
+  delaunay-planar: func(points: list<f64>) -> result<list<u32>, string>;
+
   // The faces of a shape a face selector (JSON, one selector or a list, as a
   // feature stores it) resolves to, in the engine's lossy tolerant way.
   select-faces: func(shape: borrow<shape>, selectors: string) -> result<list<shape>, string>;
@@ -218,6 +224,18 @@ interface feature {
   stash-pass: func(body: u32, spec: string) -> result<_, string>;
 }
 
+// The engine's own C math library, element by element. A plugin whose numbers
+// must agree bit for bit with another implementation running on the same
+// machine (a Python half calling the platform's libm) reads its
+// transcendentals here instead of from its own compiled-in copies.
+interface numeric {
+  enum unary-op { sin, cos, tan, exp, log, acos, asin, atan }
+  enum binary-op { pow, hypot, atan2 }
+  unary: func(op: unary-op, xs: list<f64>) -> list<f64>;
+  // Pairwise over two lists of the same length.
+  binary: func(op: binary-op, xs: list<f64>, ys: list<f64>) -> list<f64>;
+}
+
 // Reading the machine's files, for a plugin whose manifest grants
 // "files.read"; every call is refused otherwise. Paths are absolute.
 interface files {
@@ -241,6 +259,7 @@ world plugin {
   import feature;
   import output;
   import files;
+  import numeric;
 
   use types.{mesh, export-body};
   use kernel.{shape};

@@ -119,8 +119,10 @@ fn a_face_reads_its_surface_and_stored_triangulation() {
 #[test]
 fn face_selectors_resolve_against_a_shape() {
     let b = k::make_box((0.0, 0.0, 0.0), (10.0, 10.0, 10.0)).unwrap();
-    assert_eq!(kx::select_faces(&b, r#"{"by": "all"}"#).unwrap().len(), 6);
-    let top = kx::select_faces(&b, r#"{"kind": "face", "by": "nearest", "point": [5, 5, 10]}"#).unwrap();
+    assert_eq!(kx::select_faces(&b, r#"{"by": "all"}"#).ok().map(|v| v.len()), Some(6));
+    let top = kx::select_faces(&b, r#"{"kind": "face", "by": "nearest", "point": [5, 5, 10]}"#)
+        .ok()
+        .expect("the top face");
     assert_eq!(top.len(), 1);
     assert!(kx::select_faces(&b, "not json").is_err());
 }
