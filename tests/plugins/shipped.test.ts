@@ -17,6 +17,7 @@ import { describe, expect, it } from "vitest";
 
 import { bundleAsset, shippedPlugins } from "../../src/plugins/shipped";
 import { PLUGIN_KINDS } from "../../src/plugins/manifest";
+import { compareVersions } from "../../src/plugins/updates";
 
 // Every file at the top of every plugin directory. `?raw` because what is
 // wanted is the file LIST; the contents are incidental, and the plugins are
@@ -114,6 +115,23 @@ describe("the plugins in this repository", () => {
     // literals in registry.ts and had nowhere to go when they left.
     for (const { dir } of shippedPlugins()) {
       expect(has(dir, "README.md"), `plugins/${dir} has no README.md`).toBe(true);
+    }
+  });
+
+  it("puts a bundle with a component above the version published without one", () => {
+    // The beta publishes these versions with the Python half only, into the
+    // plugin directory the alpha shares. A component bundle of the same number
+    // would read as already installed to anything comparing versions.
+    const withoutComponent: Record<string, string> = {
+      "FundaCAD.PrintToolbox": "1.0.0",
+      "FundaCAD.Screws": "1.0.0",
+      "FundaCAD.Texture": "2.0.0",
+      "FundaCAD.Printing": "2.0.0",
+    };
+    const withComponent = shippedPlugins().filter((p) => p.manifest.geometryWasm);
+    expect(withComponent.map((p) => p.dir).sort()).toEqual(Object.keys(withoutComponent).sort());
+    for (const { manifest } of withComponent) {
+      expect(compareVersions(manifest.version, withoutComponent[manifest.id]!), manifest.id).toBe(1);
     }
   });
 
