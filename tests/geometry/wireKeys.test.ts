@@ -2,14 +2,14 @@
 //
 // WHY THIS FILE EXISTS. Nothing here is clever; it is a grep in both directions
 // across a process boundary, and it is here because the boundary had gone quiet
-// on us. The sidecar sends one body as a flat JSON object, the window describes
+// on us. The engine sends one body as a flat JSON object, the window describes
 // that object as `WireBodyFull`, and the only thing tying a field in one to a
 // field in the other is that somebody spelled it the same way twice. TypeScript
 // cannot check that: an optional field nobody sends is not a type error, it is
 // `undefined`, which reads exactly like "this body has none of those".
 //
 // AND THAT IS WHAT HAPPENED. The per-face palette slots were `textureColorSlots`
-// on both sides. When the surface texture became a plugin the sidecar's half was
+// on both sides. When the surface texture became a plugin the engine's half was
 // renamed `faceColorSlots`, because the slots stopped being a texture's and
 // became any mesh pass's. The window's half was not renamed. So the reader went
 // on asking for a key nothing had sent since, found `undefined`, and took the
@@ -31,8 +31,11 @@ const raw = (pattern: Record<string, string>, endsWith: string): string => {
   return hit ? hit[1] : "";
 };
 
-const sidecarFiles = import.meta.glob("../../sidecar/*.py", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
-const server = raw(sidecarFiles, "/sidecar/server.py") + raw(sidecarFiles, "/sidecar/viewport_mesh.py");
+// crates/fundacad-geom/src/mesh/mod.rs builds the body payload the engine sends.
+const server = raw(
+  import.meta.glob("../../crates/fundacad-geom/src/mesh/mod.rs", { query: "?raw", import: "default", eager: true }) as Record<string, string>,
+  "/mesh/mod.rs",
+);
 const assembly = raw(
   import.meta.glob("../../src/geometry/*.ts", { query: "?raw", import: "default", eager: true }) as Record<string, string>,
   "/geometry/assembly.ts",
@@ -101,13 +104,13 @@ describe("the body on the wire is spelled the same on both sides", () => {
   it("names the palette slots the way the engine writes them", () => {
     // The specific regression, pinned by name rather than left to the general
     // rule above, so that a failure says what broke instead of listing a field.
-    expect(server).toContain('payload["faceColorSlots"]');
+    expect(server).toContain('payload.insert("faceColorSlots".into()');
     expect(fields).toContain("faceColorSlots");
     // and the name it used to have is gone from the CODE on both sides, so a
     // half-finished revert cannot pass by leaving the old spelling in the
     // reader. Comments may still say it: a note recording where a key came from
-    // is how the history stays legible, and both files carry one.
-    const serverCode = server.replace(/#.*/g, "");
+    // is how the history stays legible.
+    const serverCode = server.replace(/\/\/.*/g, "");
     expect(serverCode).not.toContain("textureColorSlots");
     expect(assembly).not.toMatch(/^\s*textureColorSlots\??\s*:/m);
   });
