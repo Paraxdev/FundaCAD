@@ -492,6 +492,19 @@ in the `rust-geom` job.
   human judgement, not parity with the old engine, and the commit says so. The
   coverage golden's constants are the tool's own arithmetic, not answers, and
   are edited by hand.
+- **Another platform's C math library.** The answers were frozen on Windows.
+  glibc and the Windows CRT round some `sin`, `cos` and `pow` results one ulp
+  apart (the plugin `numeric` import and OpenCASCADE both call the platform
+  libm), and where that ulp decides a tie, a Delaunay diagonal between
+  cocircular points, a mesh node on one of two symmetric sides or a coordinate
+  on a rounding boundary, Linux answers differently from Windows and neither is
+  wrong. Such a case keeps its Python answer and gains the platform's own
+  beside it: `golden-check <golden> --record-platform <names>`, run on that
+  platform after checking the difference is only such a tie, writes it under
+  `platformVariants.<os>`, and only that OS is held to it. Text cases need the
+  font they were frozen with; `golden-check` skips one whose font is not
+  installed rather than compare a stand in (CI installs Arial and Times New
+  Roman; Consolas has no Linux package).
 
 ## 6. The `alpha` rolling release (landed)
 
