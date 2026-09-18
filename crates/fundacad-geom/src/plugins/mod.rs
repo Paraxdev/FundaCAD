@@ -310,12 +310,12 @@ fn generate_shape(req: &Map<String, Value>, cancel: Option<CancelToken>) -> Resu
     let placement = req.get("placement").filter(|p| !p.is_null());
     let mut reg = registry();
     let i = component_for(&mut reg, Claim::Generator, name)
-        .map_err(|_| format!("no plugin that is running offers the shape {name:?}"))?;
+        .map_err(|_| format!("no plugin that is running offers the shape {}", host::py_repr(name)))?;
     if output != "mesh" && output != "store" {
-        return Err(format!("unknown output {output:?}, expected mesh or store"));
+        return Err(format!("unknown output {}, expected mesh or store", host::py_repr(output)));
     }
     let Loaded::Ready(c) = &reg.entries[i].loaded else {
-        return Err(format!("no plugin that is running offers the shape {name:?}"));
+        return Err(format!("no plugin that is running offers the shape {}", host::py_repr(name)));
     };
     let mut shape = c.generate_shape(name, &params, cancel)?;
     drop(reg);
@@ -348,19 +348,19 @@ fn exporter_call(
     let i = match component_for(&mut reg, Claim::Exporter, exporter) {
         Ok(i) => i,
         Err(Missing::Unknown) => {
-            return Err(format!("no installed plugin provides the {exporter:?} export"))
+            return Err(format!("no installed plugin provides the {} export", host::py_repr(exporter)))
         }
         Err(Missing::Broken(owner, why)) => {
-            return Err(format!("the {exporter:?} export needs {owner}, which did not load: {why}"))
+            return Err(format!("the {} export needs {owner}, which did not load: {why}", host::py_repr(exporter)))
         }
         Err(Missing::NotRegistered(owner)) => {
             return Err(format!(
-                "the {exporter:?} export needs {owner}, which did not load: it did not register it"
+                "the {} export needs {owner}, which did not load: it did not register it", host::py_repr(exporter)
             ))
         }
     };
     let Loaded::Ready(c) = &reg.entries[i].loaded else {
-        return Err(format!("no installed plugin provides the {exporter:?} export"));
+        return Err(format!("no installed plugin provides the {} export", host::py_repr(exporter)));
     };
     c.write_export(exporter, bodies, options, path, cancel)
         .map_err(|e| format!("{exporter}: {e}"))
@@ -371,12 +371,12 @@ fn exporter_declared(exporter: &str) -> Result<(), String> {
     let mut reg = registry();
     match component_for(&mut reg, Claim::Exporter, exporter) {
         Ok(_) => Ok(()),
-        Err(Missing::Unknown) => Err(format!("no installed plugin provides the {exporter:?} export")),
+        Err(Missing::Unknown) => Err(format!("no installed plugin provides the {} export", host::py_repr(exporter))),
         Err(Missing::Broken(owner, why)) => {
-            Err(format!("the {exporter:?} export needs {owner}, which did not load: {why}"))
+            Err(format!("the {} export needs {owner}, which did not load: {why}", host::py_repr(exporter)))
         }
         Err(Missing::NotRegistered(owner)) => Err(format!(
-            "the {exporter:?} export needs {owner}, which did not load: it did not register it"
+            "the {} export needs {owner}, which did not load: it did not register it", host::py_repr(exporter)
         )),
     }
 }

@@ -16,6 +16,7 @@
     "printing"
   ],
   "geometry": "geometry/register.py",
+  "geometryWasm": "geometry.wasm",
   "exporters": [
     "print-project-3mf"
   ]

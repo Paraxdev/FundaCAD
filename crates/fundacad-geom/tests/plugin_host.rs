@@ -140,7 +140,7 @@ fn an_op_names_the_plugin_it_cannot_find() {
     };
     assert_eq!(
         m["error"]["message"],
-        json!("no plugin that is running offers the shape \"nope\"")
+        json!("no plugin that is running offers the shape 'nope'")
     );
 
     let JobResult::Json(m) = fundacad_geom::plugins::export_with_result(
@@ -152,6 +152,6 @@ fn an_op_names_the_plugin_it_cannot_find() {
     };
     assert_eq!(
         m["error"]["message"],
-        json!("no installed plugin provides the \"nope\" export")
+        json!("no installed plugin provides the 'nope' export")
     );
 }

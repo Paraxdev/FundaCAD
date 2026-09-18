@@ -849,7 +849,7 @@ fn io_text(e: &std::io::Error, path: &str) -> String {
 }
 
 /// Python's `repr` of a str, for the common characters.
-fn py_repr(s: &str) -> String {
+pub(super) fn py_repr(s: &str) -> String {
     let quote = if s.contains('\'') && !s.contains('"') { '"' } else { '\'' };
     let mut out = String::with_capacity(s.len() + 2);
     out.push(quote);
