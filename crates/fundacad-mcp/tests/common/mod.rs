@@ -51,7 +51,11 @@ impl FakeEngine {
     pub fn start(
         answer: impl Fn(&str, &Map<String, Value>) -> Value + Send + Sync + 'static,
     ) -> FakeEngine {
-        let port = free_port();
+        // Bound here, before returning, so a client that connects straight
+        // away never races the listener into existence.
+        let std_listener = TcpListener::bind(("127.0.0.1", 0)).expect("a loopback port");
+        std_listener.set_nonblocking(true).expect("a nonblocking listener");
+        let port = std_listener.local_addr().expect("bound").port();
         let engine = FakeEngine {
             port,
             token: "test-token".into(),
@@ -62,9 +66,8 @@ impl FakeEngine {
         let calls = engine.calls.clone();
         let dead = engine.dead.clone();
         tokio::spawn(async move {
-            let listener = tokio::net::TcpListener::bind(("127.0.0.1", port))
-                .await
-                .expect("the port was free a moment ago");
+            let listener = tokio::net::TcpListener::from_std(std_listener)
+                .expect("the listener joins the runtime");
             loop {
                 let Ok((stream, _)) = listener.accept().await else {
                     continue;
