@@ -112,7 +112,7 @@ impl Persist<'_> {
             "datums": snap.datums,
             "sketch_planes": snap.sketch_planes,
             "datum_marks": snap.datum_marks,
-            "errors": snap.errors.iter().map(FeatureError::wire).collect::<Vec<_>>(),
+            "errors": snap.errors.iter().map(FeatureError::wire_full).collect::<Vec<_>>(),
             "diagnostics": snap.diagnostics,
             "ids": snap.id_events.iter().map(|e| json!([e.key, e.inherit, e.id])).collect::<Vec<_>>(),
             "owners": owners,
@@ -138,6 +138,7 @@ fn parse_error(v: &Value) -> Option<FeatureError> {
         message: v.get("message")?.as_str()?.to_owned(),
         feature_id: v.get("feature_id").and_then(Value::as_str).map(str::to_owned),
         code: v.get("code").and_then(Value::as_str).map(str::to_owned),
+        detail: v.get("detail").cloned(),
     })
 }
 

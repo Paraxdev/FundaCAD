@@ -41,8 +41,11 @@ fn built(
 pub fn fillet(shape: &Shape, edges: &[Shape], radii: &[f64]) -> Result<(Shape, Built), String> {
     let es = kernel::compound(edges);
     let mut status = 0;
+    let began = std::time::Instant::now();
     let r = crate::bench::phase("blend_fillet", || ffi::blend_fillet(shape.raw(), es.raw(), radii, &mut status));
-    built(r, status)
+    traced("BRepFilletAPI_MakeFillet", began, built(r, status), || {
+        format!("shape={}, {} edges, radii={radii:?}", kernel::describe(shape), edges.len())
+    })
 }
 
 pub fn chamfer(
@@ -53,8 +56,30 @@ pub fn chamfer(
 ) -> Result<(Shape, Built), String> {
     let es = kernel::compound(edges);
     let mut status = 0;
+    let began = std::time::Instant::now();
     let r = crate::bench::phase("blend_chamfer", || ffi::blend_chamfer(shape.raw(), es.raw(), d1, d2, &mut status));
-    built(r, status)
+    traced("BRepFilletAPI_MakeChamfer", began, built(r, status), || {
+        format!("shape={}, {} edges, d1={d1:?}, d2={d2:?}", kernel::describe(shape), edges.len())
+    })
+}
+
+/// A blend that throws, is not done, or builds an invalid shape all count as a
+/// failure for the error report, the caller still decides what to do with it.
+fn traced(
+    op: &'static str,
+    began: std::time::Instant,
+    r: Result<(Shape, Built), String>,
+    args: impl FnOnce() -> String,
+) -> Result<(Shape, Built), String> {
+    let ms = Some(began.elapsed().as_secs_f64() * 1000.0);
+    let error = match &r {
+        Err(e) => e.clone(),
+        Ok((_, Built::NotDone)) => "IsDone() is false".into(),
+        Ok((_, Built::Invalid)) => "result fails BRepCheck_Analyzer".into(),
+        Ok((_, Built::Done)) => return r,
+    };
+    crate::trace::failed(op, Some(args()), error, ms);
+    r
 }
 
 /// blends.py `_kernel_copy`, `None` when an edge has no image in the copy.

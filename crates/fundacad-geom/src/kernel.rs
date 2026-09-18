@@ -22,6 +22,43 @@ fn wrap(r: Result<UniquePtr<TopoDS_Shape>, cxx::Exception>) -> KResult<Shape> {
     }
 }
 
+fn run(
+    op: &'static str,
+    args: impl FnOnce() -> String,
+    f: impl FnOnce() -> Result<UniquePtr<TopoDS_Shape>, cxx::Exception>,
+) -> KResult<Shape> {
+    crate::trace::call(op, args, || wrap(f()))
+}
+
+/// A shape as one line of an error report: its type, topology and extent.
+pub fn describe(s: &Shape) -> String {
+    let Some(t) = shape_type(s) else {
+        return "null shape".into();
+    };
+    let mut out = format!(
+        "{t:?}(solids={}, faces={}, edges={}",
+        count(s, Kind::Solid),
+        count(s, Kind::Face),
+        count(s, Kind::Edge)
+    );
+    if let Some(b) = bbox(s) {
+        let r = |v: f64| (v * 1e4).round() / 1e4;
+        out.push_str(&format!(
+            ", bbox=[{}, {}, {}]..[{}, {}, {}]",
+            r(b[0]), r(b[1]), r(b[2]), r(b[3]), r(b[4]), r(b[5])
+        ));
+    }
+    out.push(')');
+    out
+}
+
+fn bool_args(base: &Shape, tools: &[&Shape], fuzz: f64) -> String {
+    let listed: Vec<String> = tools.iter().take(4).map(|t| describe(t)).collect();
+    let more = tools.len().saturating_sub(4);
+    let tail = if more > 0 { format!(" and {more} more") } else { String::new() };
+    format!("base={}, tools=[{}]{tail}, fuzzy={fuzz}", describe(base), listed.join("; "))
+}
+
 fn own(p: UniquePtr<TopoDS_Shape>) -> Shape {
     Shape::from_raw(p)
 }
@@ -97,7 +134,7 @@ pub fn count(s: &Shape, kind: Kind) -> usize {
 }
 
 pub fn copy(s: &Shape) -> KResult<Shape> {
-    wrap(ffi::bo_copy(s.raw()))
+    run("BRepBuilderAPI_Copy", || format!("shape={}", describe(s)), || ffi::bo_copy(s.raw()))
 }
 
 pub fn volume(s: &Shape) -> f64 {
@@ -147,15 +184,15 @@ pub fn location_translation(s: &Shape) -> [f64; 3] {
 }
 
 pub fn rotated(s: &Shape, r: [f64; 3]) -> KResult<Shape> {
-    wrap(ffi::bo_rotated(s.raw(), r[0], r[1], r[2]))
+    run("BRepBuilderAPI_Transform (rotate)", || format!("shape={}, euler_deg={r:?}", describe(s)), || ffi::bo_rotated(s.raw(), r[0], r[1], r[2]))
 }
 
 pub fn translated(s: &Shape, d: [f64; 3]) -> KResult<Shape> {
-    wrap(ffi::bo_translated(s.raw(), d[0], d[1], d[2]))
+    run("BRepBuilderAPI_Transform (translate)", || format!("shape={}, by={d:?}", describe(s)), || ffi::bo_translated(s.raw(), d[0], d[1], d[2]))
 }
 
 pub fn scaled(s: &Shape, f: [f64; 3], about: [f64; 3], uniform: bool) -> KResult<Shape> {
-    wrap(ffi::bo_scaled(
+    run("BRepBuilderAPI_GTransform (scale)", || format!("shape={}, factor={f:?}, about={about:?}, uniform={uniform}", describe(s)), || ffi::bo_scaled(
         s.raw(),
         f[0],
         f[1],
@@ -168,7 +205,7 @@ pub fn scaled(s: &Shape, f: [f64; 3], about: [f64; 3], uniform: bool) -> KResult
 }
 
 pub fn mirrored(s: &Shape, origin: [f64; 3], normal: [f64; 3]) -> KResult<Shape> {
-    wrap(ffi::bo_mirrored(
+    run("BRepBuilderAPI_Transform (mirror)", || format!("shape={}, origin={origin:?}, normal={normal:?}", describe(s)), || ffi::bo_mirrored(
         s.raw(),
         origin[0],
         origin[1],
@@ -206,7 +243,7 @@ impl Frame {
 
     pub fn locate(&self, s: &Shape) -> KResult<Shape> {
         let (o, x, n) = (self.origin, self.x, self.z);
-        wrap(ffi::bo_on_plane(
+        run("BRepBuilderAPI_Transform (to plane)", || format!("shape={}, frame={self:?}", describe(s)), || ffi::bo_on_plane(
             s.raw(),
             o[0],
             o[1],
@@ -222,23 +259,23 @@ impl Frame {
 }
 
 pub fn make_box(l: f64, w: f64, h: f64) -> KResult<Shape> {
-    wrap(ffi::bo_box(l, w, h))
+    run("BRepPrimAPI_MakeBox", || format!("l={l}, w={w}, h={h}"), || ffi::bo_box(l, w, h))
 }
 
 pub fn make_cylinder(r: f64, h: f64) -> KResult<Shape> {
-    wrap(ffi::bo_cylinder(r, h))
+    run("BRepPrimAPI_MakeCylinder", || format!("r={r}, h={h}"), || ffi::bo_cylinder(r, h))
 }
 
 pub fn make_sphere(r: f64) -> KResult<Shape> {
-    wrap(ffi::bo_sphere(r))
+    run("BRepPrimAPI_MakeSphere", || format!("r={r}"), || ffi::bo_sphere(r))
 }
 
 pub fn make_cone(r1: f64, r2: f64, h: f64) -> KResult<Shape> {
-    wrap(ffi::bo_cone(r1, r2, h))
+    run("BRepPrimAPI_MakeCone", || format!("r1={r1}, r2={r2}, h={h}"), || ffi::bo_cone(r1, r2, h))
 }
 
 pub fn make_torus(big: f64, small: f64) -> KResult<Shape> {
-    wrap(ffi::bo_torus(big, small))
+    run("BRepPrimAPI_MakeTorus", || format!("major={big}, minor={small}"), || ffi::bo_torus(big, small))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -248,10 +285,20 @@ pub enum BoolKind {
     Common = 2,
 }
 
+impl BoolKind {
+    pub fn occt(self) -> &'static str {
+        match self {
+            BoolKind::Fuse => "BRepAlgoAPI_Fuse",
+            BoolKind::Cut => "BRepAlgoAPI_Cut",
+            BoolKind::Common => "BRepAlgoAPI_Common",
+        }
+    }
+}
+
 /// build123d's operator: parallel, no fuzz, cleaned, a lone child unwrapped.
 pub fn boolean_op(base: &Shape, tools: &[&Shape], kind: BoolKind) -> KResult<Shape> {
     let t = compound(tools.iter().copied());
-    wrap(ffi::bo_boolean(
+    run(kind.occt(), || bool_args(base, tools, 0.0), || ffi::bo_boolean(
         base.raw(),
         t.raw(),
         kind as i32,
@@ -270,12 +317,13 @@ pub fn serial_bool(base: &Shape, tools: &[&Shape], kind: BoolKind) -> KResult<Sh
             ext = Some(ext.map_or(e, |m| m.max(e)));
         }
     }
-    wrap(ffi::bo_boolean(
+    let fuzz = pick_fuzz(ext);
+    run(kind.occt(), || bool_args(base, tools, fuzz), || ffi::bo_boolean(
         base.raw(),
         t.raw(),
         kind as i32,
         false,
-        pick_fuzz(ext),
+        fuzz,
         false,
     ))
 }
@@ -294,7 +342,7 @@ pub fn pick_fuzz(extent_mm: Option<f64>) -> f64 {
 }
 
 pub fn clean(s: &Shape) -> KResult<Shape> {
-    wrap(ffi::bo_clean(s.raw()))
+    run("ShapeUpgrade_UnifySameDomain", || format!("shape={}", describe(s)), || ffi::bo_clean(s.raw()))
 }
 
 pub fn unwrap_compound(s: &Shape) -> Shape {
@@ -310,35 +358,37 @@ pub fn unify_body(s: &Shape) -> Shape {
 }
 
 pub fn edge_line(a: [f64; 2], b: [f64; 2]) -> KResult<Shape> {
-    wrap(ffi::bo_edge_line(a[0], a[1], b[0], b[1]))
+    run("BRepBuilderAPI_MakeEdge (line)", || format!("from={a:?}, to={b:?}"), || ffi::bo_edge_line(a[0], a[1], b[0], b[1]))
 }
 
 pub fn edge_arc3(a: [f64; 2], m: [f64; 2], b: [f64; 2]) -> KResult<Shape> {
-    wrap(ffi::bo_edge_arc3(a[0], a[1], m[0], m[1], b[0], b[1]))
+    run("GC_MakeArcOfCircle", || format!("start={a:?}, mid={m:?}, end={b:?}"), || ffi::bo_edge_arc3(a[0], a[1], m[0], m[1], b[0], b[1]))
 }
 
 pub fn edge_circle(c: [f64; 2], r: f64) -> KResult<Shape> {
-    wrap(ffi::bo_edge_circle(c[0], c[1], r))
+    run("BRepBuilderAPI_MakeEdge (circle)", || format!("centre={c:?}, r={r}"), || ffi::bo_edge_circle(c[0], c[1], r))
 }
 
 pub fn edge_ellipse(c: [f64; 2], rx: f64, ry: f64, angle: f64) -> KResult<Shape> {
-    wrap(ffi::bo_edge_ellipse(c[0], c[1], rx, ry, angle))
+    run("BRepBuilderAPI_MakeEdge (ellipse)", || format!("centre={c:?}, rx={rx}, ry={ry}, angle={angle}"), || ffi::bo_edge_ellipse(c[0], c[1], rx, ry, angle))
 }
 
 pub fn edge_spline(points: &[[f64; 2]]) -> KResult<Shape> {
     let flat: Vec<f64> = points.iter().flatten().copied().collect();
-    wrap(ffi::bo_edge_spline(&flat))
+    run("GeomAPI_Interpolate", || format!("{} points {points:?}", points.len()), || ffi::bo_edge_spline(&flat))
 }
 
 pub fn face_rect(x: f64, y: f64, w: f64, h: f64, angle: f64) -> KResult<Shape> {
-    wrap(ffi::bo_face_rect(x, y, w, h, angle))
+    run("BRepBuilderAPI_MakeFace (rectangle)", || format!("x={x}, y={y}, w={w}, h={h}, angle={angle}"), || ffi::bo_face_rect(x, y, w, h, angle))
 }
 
 pub fn wires_from_edges(edges: &[Shape], tol: f64) -> KResult<Vec<Shape>> {
     let c = compound(edges);
-    ffi::bo_wires_from_edges(c.raw(), tol)
-        .map(list)
-        .map_err(|e| KernelError(e.what().to_owned()))
+    crate::trace::call(
+        "ShapeAnalysis_FreeBounds::ConnectEdgesToWires",
+        || format!("{} edges, tol={tol}", edges.len()),
+        || ffi::bo_wires_from_edges(c.raw(), tol).map(list).map_err(|e| KernelError(e.what().to_owned())),
+    )
 }
 
 pub fn wire_closed(w: &Shape) -> bool {
@@ -346,11 +396,11 @@ pub fn wire_closed(w: &Shape) -> bool {
 }
 
 pub fn wire_from_edge(e: &Shape) -> KResult<Shape> {
-    wrap(ffi::bo_wire_from_edge(e.raw()))
+    run("BRepBuilderAPI_MakeWire", || format!("edge={}", describe(e)), || ffi::bo_wire_from_edge(e.raw()))
 }
 
 pub fn face_from_wire(w: &Shape) -> KResult<Shape> {
-    wrap(ffi::bo_face_from_wire(w.raw()))
+    run("BRepBuilderAPI_MakeFace", || format!("wire={}", describe(w)), || ffi::bo_face_from_wire(w.raw()))
 }
 
 /// The normal at the middle of the face's UV bounds, build123d `normal_at()`.
@@ -409,7 +459,7 @@ pub fn face_has_holes(f: &Shape) -> bool {
 }
 
 pub fn prism(face: &Shape, d: [f64; 3]) -> KResult<Shape> {
-    wrap(ffi::bo_prism(face.raw(), d[0], d[1], d[2]))
+    run("BRepPrimAPI_MakePrism", || format!("face={}, vector={d:?}", describe(face)), || ffi::bo_prism(face.raw(), d[0], d[1], d[2]))
 }
 
 pub fn prism_taper(
@@ -420,7 +470,7 @@ pub fn prism_taper(
     dprism: bool,
 ) -> KResult<Shape> {
     let (o, x, n) = (plane.origin, plane.x, plane.z);
-    wrap(ffi::bo_prism_taper(
+    run("LocOpe_DPrism (tapered prism)", || format!("face={}, vector={d:?}, taper_deg={taper}, dprism={dprism}, plane={plane:?}", describe(face)), || ffi::bo_prism_taper(
         face.raw(),
         d[0],
         d[1],
@@ -440,7 +490,7 @@ pub fn prism_taper(
 }
 
 pub fn revolve(s: &Shape, origin: [f64; 3], dir: [f64; 3], angle_deg: f64) -> KResult<Shape> {
-    wrap(ffi::bo_revolve(
+    run("BRepPrimAPI_MakeRevol", || format!("shape={}, axis_origin={origin:?}, axis_dir={dir:?}, angle_deg={angle_deg}", describe(s)), || ffi::bo_revolve(
         s.raw(),
         origin[0],
         origin[1],
@@ -455,7 +505,7 @@ pub fn revolve(s: &Shape, origin: [f64; 3], dir: [f64; 3], angle_deg: f64) -> KR
 /// build123d `Face(Wire.make_polygon(pts, close=True))`.
 pub fn polygon_face(points: &[[f64; 3]]) -> KResult<Shape> {
     let flat: Vec<f64> = points.iter().flatten().copied().collect();
-    wrap(fo::fo_polygon_face(&flat))
+    run("BRepBuilderAPI_MakePolygon", || format!("{} points {points:?}", points.len()), || fo::fo_polygon_face(&flat))
 }
 
 pub fn distance_to_point(s: &Shape, p: [f64; 3]) -> Option<f64> {
@@ -470,12 +520,12 @@ pub fn length(s: &Shape) -> f64 {
 /// build123d `loft(sections)`, smooth.
 pub fn loft(sections: &[Shape]) -> KResult<Shape> {
     let c = compound(sections);
-    wrap(fo::fo_loft(c.raw(), false))
+    run("BRepOffsetAPI_ThruSections", || format!("sections=[{}]", sections.iter().map(describe).collect::<Vec<_>>().join("; ")), || fo::fo_loft(c.raw(), false))
 }
 
 /// build123d `sweep` with `Transition.RIGHT` and no Frenet frame.
 pub fn sweep(profile: &Shape, path: &Shape) -> KResult<Shape> {
-    wrap(fo::fo_sweep(profile.raw(), path.raw()))
+    run("BRepOffsetAPI_MakePipeShell", || format!("profile={}, path={}", describe(profile), describe(path)), || fo::fo_sweep(profile.raw(), path.raw()))
 }
 
 /// `(zmin, zmax)` of the shape in a frame at `origin` whose z is `dir`.
@@ -492,7 +542,7 @@ pub fn face_wire_list(face: &Shape) -> KResult<Vec<Shape>> {
 }
 
 pub fn axial_scale(s: &Shape, factor: f64, dir: [f64; 3], hold: f64) -> KResult<Shape> {
-    wrap(fo::fo_axial_scale(s.raw(), factor, dir[0], dir[1], dir[2], hold))
+    run("BRepBuilderAPI_GTransform (axial scale)", || format!("shape={}, factor={factor}, dir={dir:?}, hold={hold}", describe(s)), || fo::fo_axial_scale(s.raw(), factor, dir[0], dir[1], dir[2], hold))
 }
 
 /// A helix of `pitch` rising `height`, radius `radius`, on the plane at `origin`
@@ -510,7 +560,7 @@ pub fn screw_sweep(
     lefthand: bool,
 ) -> KResult<Shape> {
     let p = origin;
-    wrap(fo::fo_screw_sweep(
+    run("BRepOffsetAPI_MakePipeShell (helix)", || format!("profile={}, origin={origin:?}, radius={radius}, pitch={pitch}, height={height}, lefthand={lefthand}", describe(wire)), || fo::fo_screw_sweep(
         wire.raw(),
         p[0],
         p[1],
