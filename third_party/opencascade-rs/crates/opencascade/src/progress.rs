@@ -61,6 +61,13 @@ impl Progress {
     }
 }
 
+impl ProgressRange<'_> {
+    /// For a shim that takes the range itself.
+    pub fn raw(&self) -> &ffi::message::Message_ProgressRange {
+        &self.inner
+    }
+}
+
 impl ProgressRange<'static> {
     /// A range bound to no indicator: nothing reported, never cancelled.
     pub fn detached() -> Self {

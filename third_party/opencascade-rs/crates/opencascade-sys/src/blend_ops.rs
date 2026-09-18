@@ -11,6 +11,7 @@ mod inner {
         include!("opencascade-sys/include/blend_section.hxx");
 
         type TopoDS_Shape = crate::topo_ds::TopoDS_Shape;
+        type Message_ProgressRange = crate::message::Message_ProgressRange;
 
         pub fn blend_fillet(
             shape: &TopoDS_Shape,
@@ -48,7 +49,9 @@ mod inner {
             status: &mut i32,
             message: &mut String,
         ) -> UniquePtr<TopoDS_Shape>;
-        /// Never throws: `status` 0 built, 1 SectionBlendError, 2 another exception.
+        /// Never throws: `status` 0 built, 1 SectionBlendError, 2 another
+        /// exception, 3 cancelled through `progress`, checked between its steps
+        /// and inside every boolean.
         #[allow(clippy::too_many_arguments)]
         pub fn blend_section(
             shape: &TopoDS_Shape,
@@ -59,6 +62,7 @@ mod inner {
             g2: bool,
             draft: bool,
             profile: f64,
+            progress: &Message_ProgressRange,
             status: &mut i32,
             message: &mut String,
         ) -> UniquePtr<TopoDS_Shape>;

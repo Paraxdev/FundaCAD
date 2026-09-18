@@ -296,14 +296,11 @@ export class DraftTool {
       return;
     }
     const verdict = previewVerdict(this.store);
-    if (verdict.kind === "wait") {
-      requestAnimationFrame(() => { if (this.active && this.phase === "drag") this.commit(); });
-      return;
-    }
     if (verdict.kind === "refused") return; // tick() already says why and paints the handle
     const feature = this.buildFeature();
     this.store.setPreview(null); // addFeature re-adds it as a committed feature
     this.store.addFeature(feature);
+    if (verdict.kind === "wait") this.store.verifyCommit(feature.id, `Draft ${this.angle}°`);
     this.cleanup();
     this.onDone?.(feature.id);
   }
