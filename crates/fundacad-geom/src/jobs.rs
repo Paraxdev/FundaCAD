@@ -244,6 +244,37 @@ mod tests {
     }
 
     #[test]
+    fn an_edited_move_rebuilds_where_its_new_values_put_the_body() {
+        let doc = |dx: f64, rz: f64| {
+            json!({"features": [
+                {"id": "a", "type": "box", "length": 20, "width": 20, "height": 20},
+                {"id": "m", "type": "move", "dx": dx, "dy": 0, "dz": 0, "rx": 0, "ry": 0, "rz": rz, "bodies": ["body1"]},
+            ]})
+        };
+        let mut cache = cache::RebuildCache::new(None);
+        let mut known = Map::new();
+        let mut bbox_x = |d: Value, known: &mut Map<String, Value>| {
+            let JobResult::Mesh(m) = rebuild_result_cached(&d, 0.1, known, &NoWatch, &mut cache) else {
+                panic!("expected a mesh result");
+            };
+            let fundacad_protocol::WireBody::Full(body) = &m.bodies[0] else {
+                panic!("an edited move must resend its body, not a stub");
+            };
+            known.insert("body1".into(), body.fields["etag"].clone());
+            let b = &m.fields["bbox"];
+            (b["min"][0].as_f64().unwrap(), b["max"][0].as_f64().unwrap())
+        };
+        let (lo, hi) = bbox_x(doc(10.0, 0.0), &mut known);
+        assert!((lo - 0.0).abs() < 1e-6 && (hi - 20.0).abs() < 1e-6, "{lo} {hi}");
+        let (lo, hi) = bbox_x(doc(40.0, 0.0), &mut known);
+        assert!((lo - 30.0).abs() < 1e-6 && (hi - 50.0).abs() < 1e-6, "{lo} {hi}");
+        let half_diag = 10.0 * std::f64::consts::SQRT_2;
+        let (lo, hi) = bbox_x(doc(40.0, 45.0), &mut known);
+        assert!((lo - (40.0 - half_diag)).abs() < 1e-3, "{lo}");
+        assert!((hi - (40.0 + half_diag)).abs() < 1e-3, "{hi}");
+    }
+
+    #[test]
     fn an_unchanged_etag_is_answered_with_a_stub() {
         let doc = json!({"features": [{"id": "a", "type": "sphere", "radius": 3}]});
         let JobResult::Mesh(first) = run(doc.clone()) else {
