@@ -34,7 +34,7 @@ document has imported bodies, one more top-level key comes last:
   rest of the app never sees it.
 - A document without imports has no `geometry` key and is plain JSON.
 
-The reference writer and reader is `src-tauri/src/json_doc.rs`.
+The reference writer and reader is `crates/fundacad-format/src/json_doc.rs`.
 
 ## Binary (.fundab), format 2
 
@@ -44,7 +44,7 @@ checksum, every section carries Reed-Solomon parity, and the index that locates
 the sections is stored twice. Between the FundaCAD release that introduced format
 2 and the one that split the extensions, these files were also named `.funda`.
 
-The reference writer and reader is `src-tauri/src/fnda.rs`. This document is the
+The reference writer and reader is `crates/fundacad-format/src/fnda.rs`. This document is the
 contract; where the two disagree, the code has a bug.
 
 ## Goals

@@ -9,8 +9,7 @@ mod engine;
 // container the way `container_save` / `container_open` do. Nothing outside the
 // crate consumes it in the app itself.
 pub mod container;
-pub mod fnda;
-pub mod json_doc;
+pub use fundacad_format::{fnda, json_doc};
 pub mod plugins;
 pub mod session_file;
 #[cfg_attr(feature = "rust-engine", allow(dead_code))]
