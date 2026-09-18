@@ -2,7 +2,7 @@
 //! sidecar/tools/bench_rebuild.py. Every phase rebuilds and meshes.
 //!
 //!   cargo run --release -p fundacad-geom --example bench_rebuild -- \
-//!       sidecar/tools/corpus_engines.json fillet_g2_corners [--runs 5]
+//!       tests/golden/corpus/corpus_engines.json fillet_g2_corners [--runs 5]
 //!   cargo run --release -p fundacad-geom --example bench_rebuild -- --synth 60
 //!
 //! `--synth <holes>` builds a plate drilled that many times, a long timeline

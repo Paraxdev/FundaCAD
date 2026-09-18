@@ -15,7 +15,7 @@ use serde_json::Value;
 fn corpus_doc(name: &str) -> Value {
     let path = concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../sidecar/tools/corpus_engines.json"
+        "/../../tests/golden/corpus/corpus_engines.json"
     );
     let corpus: Value =
         serde_json::from_str(&std::fs::read_to_string(path).expect("the corpus")).expect("json");

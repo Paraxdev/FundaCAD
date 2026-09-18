@@ -5,7 +5,7 @@ corpus. Contract (Norn oracle): prints exactly ONE JSON line as the last line of
 stdout; keys are a fixed numeric set; all diagnostics go to stderr; exit 0 on a
 completed measurement, nonzero on a setup failure (bad args, unreadable corpus/config).
 
-  .venv/bin/python tools/eval_selector_survival.py --config selector_tuning.json --corpus tools/corpus_selectors.json
+  .venv/bin/python tools/eval_selector_survival.py --config selector_tuning.json --corpus ../tests/golden/corpus/corpus_selectors.json
 
 For each case: rebuild the mutated part from its stored spec, run the resolver under
 the config, and score survival = the resolved entity's identity key == the frozen

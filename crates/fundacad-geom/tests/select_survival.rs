@@ -1,10 +1,10 @@
-//! The selector survival gate on this engine: sidecar/tools/corpus/corpus_selectors.json
+//! The selector survival gate on this engine: tests/golden/corpus/corpus_selectors.json
 //! scored as sidecar/tools/eval_selector_survival.py scores it, at the Python gate.
 
 use fundacad_geom::select::{eval, Tuning};
 use serde_json::Value;
 
-const CORPUS: &str = include_str!("../../../sidecar/tools/corpus/corpus_selectors.json");
+const CORPUS: &str = include_str!("../../../tests/golden/corpus/corpus_selectors.json");
 
 #[test]
 fn survival_rate_meets_the_python_gate() {

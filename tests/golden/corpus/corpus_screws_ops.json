@@ -1,5 +1,5 @@
 {
- "about": "The fastener library's shape generator (plugins/FundaCAD.Screws), through generateShape on both engines: the Python engine runs geometry/scr_*.py, the Rust engine plugins/FundaCAD.Screws/geometry.wasm. Every catalogue family at its smallest and largest size and length (geometry/tests/samples.json), the modelled threads, drives and refusals of geometry/tests/test_fasteners.py, and stored, placed blobs rebuilt as imports. Run: python tools/diff_plugin_ops.py --corpus tools/corpus_screws_ops.json",
+ "about": "The fastener library's shape generator (plugins/FundaCAD.Screws), through generateShape on both engines: the Python engine runs geometry/scr_*.py, the Rust engine plugins/FundaCAD.Screws/geometry.wasm. Every catalogue family at its smallest and largest size and length (geometry/tests/samples.json), the modelled threads, drives and refusals of geometry/tests/test_fasteners.py, and stored, placed blobs rebuilt as imports. Run: python tools/diff_plugin_ops.py --corpus ../tests/golden/corpus/corpus_screws_ops.json",
  "shapes": [
   {
    "name": "sample_000_ISO 4762 M1.6x2.5",

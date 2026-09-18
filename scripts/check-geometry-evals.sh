@@ -78,7 +78,7 @@ fi
 
 note "selector survival"
 out=$($PY tools/eval_selector_survival.py --config selector_tuning.json \
-        --corpus tools/corpus/corpus_selectors.json 2>/dev/null | tail -1)
+        --corpus ../tests/golden/corpus/corpus_selectors.json 2>/dev/null | tail -1)
 echo "$out"
 # The oracle's contract: exactly ONE JSON line, last line of stdout.
 # $PY is a COMMAND WITH ARGS ("uv run python"), so it must stay unquoted here.
