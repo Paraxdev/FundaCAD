@@ -902,7 +902,7 @@
    "ocp": "7.9.3.1",
    "platform": "Windows-11-10.0.26200-SP0",
    "python": "3.12.13",
-   "sidecarCommit": "28e4a6abca8d17d33dafc19c49532c5d6dd6f90b"
+   "sidecarCommit": "0c919c56ec54491d2bd9df4cfa8569b66ea5daf4"
   },
   "rules": "Every case scored as eval_selector_survival.py scores it: invalid when the frozen key does not pin exactly one entity of the rebuilt part, survive when the resolver's first pick has the frozen key, else miss. Each case's outcome must equal python's, and so must every metric (rates rounded to six places).",
   "tool": "sidecar/tools/eval_selector_survival.py",

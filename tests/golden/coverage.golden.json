@@ -1748,7 +1748,7 @@
    "ocp": "7.9.3.1",
    "platform": "Windows-11-10.0.26200-SP0",
    "python": "3.12.13",
-   "sidecarCommit": "28e4a6abca8d17d33dafc19c49532c5d6dd6f90b"
+   "sidecarCommit": "0c919c56ec54491d2bd9df4cfa8569b66ea5daf4"
   },
   "rules": "e2e_coverage.py's explicit checks, in order, through register()'s gate: a unit is credited only by an assertion against its hardcoded expected constant, an exact body or pair count, a volume within volumeRel of it or a bbox within bboxAbs per component; a transform, pattern, remove, scale or move unit only through a delta kind that moved off its pre measure. The universe is python's (builder handlers, plugin feature types and server ops, less the excluded ops), and every unit python covered must be covered. The expected values are the tool's constants, not python answers; pythonActual is kept for reference.",
   "tolerances": {

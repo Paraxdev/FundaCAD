@@ -4890,7 +4890,7 @@
    "ocp": "7.9.3.1",
    "platform": "Windows-11-10.0.26200-SP0",
    "python": "3.12.13",
-   "sidecarCommit": "28e4a6abca8d17d33dafc19c49532c5d6dd6f90b"
+   "sidecarCommit": "0c919c56ec54491d2bd9df4cfa8569b66ea5daf4"
   },
   "rules": "Per body of the viewport rebuild: the body ids exact, the triangle count of every face id exact, every vertex within vertex of the other side's nearest vertex both ways, every triangle centroid within surface of the other side's surface (the nearest of the triangles whose centroids are the surfaceNeighbours closest), the normals of vertices both sides placed within vertex of each other within normal (the closest of the coincident candidates, skipping a once-used vertex of a triangle below degenerateArea), faceColorSlots exact. The ASCII STL export: ok, the error and the warnings exact, then the same triangle count, vertex and surface checks. Etags, checked on the candidate alone: a second identical rebuild keeps every etag, and a texture 1.5 times deeper changes the etag of every body whose positions it changed. Positions are stored as integers of positionQuantum and normals of normalQuantum, both as IVEC, the STL with coincident corners shared; flatVertices are the vertices the normal check skips, taken on python's float64 positions.",
   "tolerances": {

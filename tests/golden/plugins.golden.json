@@ -879,7 +879,7 @@
    "ocp": "7.9.3.1",
    "platform": "Windows-11-10.0.26200-SP0",
    "python": "3.12.13",
-   "sidecarCommit": "28e4a6abca8d17d33dafc19c49532c5d6dd6f90b"
+   "sidecarCommit": "0c919c56ec54491d2bd9df4cfa8569b66ea5daf4"
   },
   "rules": "body count and body ids exact; each body's mesh volume (signed tetra sum) within max(volumeRel * |python|, volumeFloor); every bbox corner within max(bboxAbs, bboxRelOfDiagonal * python bbox diagonal); the ordered (feature id, error class) list exact, an error class being the message with every number masked as # and whitespace collapsed, after the repository root is replaced by $REPO. An import fixture is imported through the engine's own import op first; the reply's fields other than geom must equal python's.",
   "tolerances": {

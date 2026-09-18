@@ -3279,7 +3279,7 @@
    "ocp": "7.9.3.1",
    "platform": "Windows-11-10.0.26200-SP0",
    "python": "3.12.13",
-   "sidecarCommit": "28e4a6abca8d17d33dafc19c49532c5d6dd6f90b"
+   "sidecarCommit": "0c919c56ec54491d2bd9df4cfa8569b66ea5daf4"
   },
   "rules": "exportWith: ok exact, the error exact, info and warnings exact, the written path's file name the requested one, the zip entry names in order and every entry's sha256, except that a .model entry whose bytes differ passes when the model with its triangle lists blanked is identical and every object has the same triangle count, area and signed volume to 1e-9 and the same free edges (the host mesher's other diagonal). generateShape: ok and the error exact; solid, solids, valid, faces exact; volume within volumeRel * |python|; bbox corners within bboxAbs; the preview mesh's triangle count exact and its vertices as a sorted list each within meshAbs; normals present on both or neither; a stored blob rebuilt as an import to the same body count and a mesh volume within importVolumeRel. $WORK stands for the run's temporary folder, $REPO for the repository root. The preview mesh's sorted points are integers of pointQuantum, the fifth decimal the engine rounds them to, as IVEC.",
   "tolerances": {
