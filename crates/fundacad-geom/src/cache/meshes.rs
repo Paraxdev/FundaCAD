@@ -19,6 +19,9 @@ const MAGIC: &[u8; 8] = b"FCMESH01";
 struct RamPayload {
     identity: (u64, u64),
     request: (u64, u64, u64),
+    /// `mesh::pass_key`: a mesh pass spec or its code version changing on the
+    /// same shape must mesh again.
+    passes: Option<String>,
     payload: FullBody,
 }
 
@@ -61,6 +64,23 @@ pub fn artifact_key(mesh_key: &str, tolerance: f64, profile: ViewportProfile) ->
     )
 }
 
+/// `artifact_key` with viewport_mesh's `-x<hash>` of the mesh pass key, so a
+/// displaced mesh is never served for another spec or code version.
+pub fn body_artifact_key(mesh_key: &str, passes: Option<&str>, tolerance: f64, profile: ViewportProfile) -> String {
+    let mut key = artifact_key(mesh_key, tolerance, profile);
+    if let Some(p) = passes {
+        use blake2::digest::{Update, VariableOutput};
+        let mut h = blake2::Blake2bVar::new(8).expect("an 8 byte blake2b");
+        h.update(p.as_bytes());
+        let mut out = [0u8; 8];
+        if h.finalize_variable(&mut out).is_ok() {
+            key.push_str("-x");
+            key.extend(out.iter().map(|b| format!("{b:02x}")));
+        }
+    }
+    key
+}
+
 pub struct Tiered<'a> {
     pub payloads: &'a mut Payloads,
     pub store: Option<&'a GeomStore>,
@@ -70,15 +90,16 @@ pub struct Tiered<'a> {
 impl PayloadCache for Tiered<'_> {
     fn get(&mut self, body: &MeshBody<'_>, tolerance: f64, profile: ViewportProfile) -> Option<FullBody> {
         let req = request(tolerance, profile);
+        let passes = mesh::pass_key(body);
         if let (Some(ident), Some(hit)) = (body.identity, self.payloads.ram.get(&body.id)) {
-            if hit.identity == ident && hit.request == req {
+            if hit.identity == ident && hit.request == req && hit.passes == passes {
                 self.payloads.ram_hits += 1;
                 return Some(hit.payload.clone());
             }
         }
         let store = self.store?;
         let key = body.mesh_key.as_deref()?;
-        let payload = decode(&store.get_mesh(&artifact_key(key, tolerance, profile))?)?;
+        let payload = decode(&store.get_mesh(&body_artifact_key(key, passes.as_deref(), tolerance, profile))?)?;
         self.payloads.disk_hits += 1;
         if let Some(identity) = body.identity {
             self.payloads.ram.insert(
@@ -86,6 +107,7 @@ impl PayloadCache for Tiered<'_> {
                 RamPayload {
                     identity,
                     request: req,
+                    passes,
                     payload: payload.clone(),
                 },
             );
@@ -95,20 +117,23 @@ impl PayloadCache for Tiered<'_> {
 
     fn put(&mut self, body: &MeshBody<'_>, tolerance: f64, profile: ViewportProfile, payload: &FullBody, build: Duration) {
         self.payloads.meshed += 1;
+        let passes = mesh::pass_key(body);
+        if let (Some(store), Some(key)) = (self.store, body.mesh_key.as_deref()) {
+            if build >= self.persist_after || profile.size_scale != 1.0 {
+                let at = body_artifact_key(key, passes.as_deref(), tolerance, profile);
+                let _ = store.put_mesh(&at, &encode(payload));
+            }
+        }
         if let Some(identity) = body.identity {
             self.payloads.ram.insert(
                 body.id.clone(),
                 RamPayload {
                     identity,
                     request: request(tolerance, profile),
+                    passes,
                     payload: payload.clone(),
                 },
             );
-        }
-        if let (Some(store), Some(key)) = (self.store, body.mesh_key.as_deref()) {
-            if build >= self.persist_after || profile.size_scale != 1.0 {
-                let _ = store.put_mesh(&artifact_key(key, tolerance, profile), &encode(payload));
-            }
         }
     }
 }
