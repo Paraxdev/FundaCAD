@@ -1550,17 +1550,14 @@ name = "fundacad"
 version = "0.2.0"
 dependencies = [
  "base64 0.22.1",
- "blake2",
- "ciborium",
- "crc32fast",
  "flate2",
  "fundacad-engine",
+ "fundacad-format",
  "fundacad-geom",
  "fundacad-protocol",
  "getrandom 0.2.17",
  "hidapi",
  "libc",
- "reed-solomon-erasure",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
@@ -1598,6 +1595,22 @@ dependencies = [
  "sysinfo",
  "tungstenite",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "fundacad-format"
+version = "0.2.0"
+dependencies = [
+ "base64 0.22.1",
+ "blake2",
+ "ciborium",
+ "crc32fast",
+ "flate2",
+ "getrandom 0.2.17",
+ "reed-solomon-erasure",
+ "serde",
+ "serde_json",
+ "zip",
 ]
 
 [[package]]

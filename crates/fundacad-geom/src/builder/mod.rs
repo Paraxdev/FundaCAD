@@ -22,7 +22,7 @@ use serde_json::{json, Map, Value};
 
 use crate::features;
 use crate::kernel::{self, KernelError};
-pub use fmt::py_g;
+pub use fmt::{py_g, py_g_prec};
 pub use owners::Owners;
 pub use plane::PlaneRecord;
 
@@ -337,6 +337,10 @@ pub trait Watch {
     }
     /// The flag behind `cancelled`, for work that polls it off this thread.
     fn cancel_token(&self) -> Option<fundacad_protocol::CancelToken> {
+        None
+    }
+    /// Proof of life a feature can give from inside one long kernel call.
+    fn heartbeat(&self) -> Option<crate::heartbeat::Beat> {
         None
     }
 }

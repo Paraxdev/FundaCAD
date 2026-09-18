@@ -7,11 +7,17 @@
 #include <BRepBuilderAPI_MakePolygon.hxx>
 #include <BRepBuilderAPI_MakeVertex.hxx>
 #include <BRepBuilderAPI_TransitionMode.hxx>
+#include <BRepLib.hxx>
 #include <BRepOffsetAPI_MakePipeShell.hxx>
+#include <Geom2d_Line.hxx>
+#include <Geom2d_TrimmedCurve.hxx>
+#include <Geom_CylindricalSurface.hxx>
 #include <TopoDS_Shell.hxx>
 #include <TopoDS_Solid.hxx>
+#include <gp_Mat.hxx>
 
 #include <climits>
+#include <cmath>
 
 // build123d `Face(Wire.make_polygon(pts, close=True))`, pts flat xyz.
 inline BoShape fo_polygon_face(rust::Slice<const double> pts) {
@@ -162,4 +168,91 @@ inline BoShape fo_sweep_impl(const TopoDS_Shape &profile, const TopoDS_Shape &pa
 
 inline BoShape fo_sweep(const TopoDS_Shape &profile, const TopoDS_Shape &path) {
   BO_GUARD(return fo_sweep_impl(profile, path);)
+}
+
+// revolve_feature.py `_screw_revolve`: the profile's extent along the axis, as
+// Plane(origin=O, z_dir=D).to_local_coords(profile).bounding_box() measures it.
+inline bool fo_axial_extent(const TopoDS_Shape &s, double ox, double oy, double oz, double dx,
+                            double dy, double dz, rust::Slice<double> out) {
+  try {
+    if (s.IsNull() || out.size() < 2) return false;
+    gp_Trsf t;
+    t.SetTransformation(gp_Ax3(gp_Pnt(ox, oy, oz), gp_Dir(dx, dy, dz)));
+    TopoDS_Shape local = BRepBuilderAPI_Transform(s, t).Shape();
+    Bnd_Box box;
+    BRepBndLib::AddOptimal(local, box, true, false);
+    if (box.IsVoid()) return false;
+    double x0, y0, z0, x1, y1, z1;
+    box.Get(x0, y0, z0, x1, y1, z1);
+    out[0] = z0;
+    out[1] = z1;
+    return true;
+  } catch (...) {
+    return false;
+  }
+}
+
+// A compound of the face's outer wire followed by its inner wires.
+inline BoShape fo_face_wire_list(const TopoDS_Shape &face) {
+  BO_GUARD(
+      TopoDS_Wire outer;
+      std::vector<TopoDS_Wire> inner;
+      fo_face_wires(TopoDS::Face(face), outer, inner);
+      BoShape out = bo_compound_new();
+      bo_compound_add(*out, outer);
+      for (const auto &w : inner) bo_compound_add(*out, w);
+      return out;)
+}
+
+// `_axial_scale`: scale by `factor` along the unit `d` only, holding the plane at
+// axial coordinate `hold`.
+inline BoShape fo_axial_scale(const TopoDS_Shape &s, double factor, double dx, double dy,
+                              double dz, double hold) {
+  auto run = [&]() {
+      double d[3] = {dx, dy, dz};
+      double k = factor - 1.0;
+      gp_Mat m;
+      for (int i = 0; i < 3; ++i)
+        for (int j = 0; j < 3; ++j) m.SetValue(i + 1, j + 1, 1.0 * (i == j) + k * d[i] * d[j]);
+      gp_GTrsf g;
+      g.SetVectorialPart(m);
+      double off = -k * hold;
+      g.SetTranslationPart(gp_XYZ(dx * off, dy * off, dz * off));
+      return bo_own(BRepBuilderAPI_GTransform(s, g, true).Shape());
+  };
+  BO_GUARD(return run();)
+}
+
+// `_screw_revolve`'s sweep of one wire: build123d Edge.make_helix placed on the
+// frame (p, x, z), then a pipe shell with its binormal pinned to the axis `d`.
+// Throws "ScrewSweepNotDone" when the sweep does not build.
+inline BoShape fo_screw_sweep(const TopoDS_Shape &wire, double px, double py, double pz,
+                              double xx, double xy, double xz, double zx, double zy, double zz,
+                              double dx, double dy, double dz, double radius, double pitch,
+                              double height, bool lefthand) {
+  auto run = [&]() {
+      Handle(Geom_Surface) surf =
+          new Geom_CylindricalSurface(gp_Ax3(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1)), radius);
+      gp_Vec dir = gp_Vec((lefthand ? -1.0 : 1.0) * 6.283185307179586, pitch, 0).Normalized();
+      double len = (height / dir.Y()) / std::cos(0.0);
+      Handle(Geom2d_Line) line = new Geom2d_Line(gp_Pnt2d(0, 0), gp_Dir2d(dir.X(), dir.Y()));
+      Handle(Geom2d_TrimmedCurve) curve = new Geom2d_TrimmedCurve(line, 0, len, true, true);
+      TopoDS_Edge edge = BRepBuilderAPI_MakeEdge(curve, surf).Edge();
+      BRepLib::BuildCurves3d(edge, 1e-9, GeomAbs_C1, 14, 2000);
+      TopoDS_Shape placed =
+          edge.Moved(TopLoc_Location(bo_plane_trsf(px, py, pz, xx, xy, xz, zx, zy, zz)));
+      TopTools_ListOfShape edges;
+      edges.Append(placed);
+      BRepBuilderAPI_MakeWire mw;
+      mw.Add(edges);
+      mw.Build();
+      BRepOffsetAPI_MakePipeShell mk(mw.Wire());
+      mk.SetMode(gp_Dir(dx, dy, dz));
+      mk.Add(wire, false, false);
+      mk.Build();
+      if (!mk.IsDone()) throw std::runtime_error("ScrewSweepNotDone");
+      mk.MakeSolid();
+      return bo_own(mk.Shape());
+  };
+  BO_GUARD(return run();)
 }

@@ -32,7 +32,7 @@ What the backend pivot buys:
   engine is one more mode of the same executable.
 - The seam is already drawn. `GeometryBackend` in `src/geometry/client.ts` is
   the only thing the frontend depends on, and fourteen test files stub it.
-- The file formats are already Rust (`fnda.rs`, `container.rs`, `json_doc.rs`).
+- The file formats are already Rust, the `fundacad-format` crate.
 - About 1,700 lines of algorithms are duplicated between TS and Python
   (pattern expansion, region detection, face footprints, hole standards, face
   colour encoding) to keep preview and build in agreement. They get one Rust

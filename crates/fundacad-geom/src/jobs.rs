@@ -35,6 +35,11 @@ impl Watch for EngineWatch<'_> {
     fn cancel_token(&self) -> Option<fundacad_protocol::CancelToken> {
         Some(self.0.cancel.clone())
     }
+
+    fn heartbeat(&self) -> Option<crate::heartbeat::Beat> {
+        let progress = self.0.progress.clone();
+        Some(std::sync::Arc::new(move || progress.tick()))
+    }
 }
 
 /// server.py `_rebuild_job`, without the caches.
@@ -65,6 +70,7 @@ fn rebuild_with(
     watch: &dyn Watch,
     mut cache: Option<&mut RebuildCache>,
 ) -> JobResult {
+    let _beat = crate::heartbeat::install(watch.heartbeat());
     let typed: CadDocument = match serde_json::from_value(doc.clone()) {
         Ok(d) => d,
         Err(e) => return error_result(&format!("the document does not parse: {e}")),
