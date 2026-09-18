@@ -74,9 +74,11 @@ fundacad (Tauri main process)          fundacad --engine (worker process)
   `fundacad-engine --ws` serves the same frames on 127.0.0.1 with the existing
   token and Origin gate. It is what `npm run dev` in a plain browser, the
   Playwright e2e scripts, `test_ws.py` and the differential harness use. The
-  MCP live session reaches a running app through a loopback endpoint the main
-  process opens with the same gate and publishes in `session.json`, relaying to
-  the worker; that is decided in detail in its brick.
+  MCP live session reaches a running app through a loopback endpoint with the
+  same gate that the WORKER opens beside its stdio pipe (`FUNDACAD_LIVE_TOKEN`
+  from the app, `LISTENING <port>` back on stderr), serving the same engine
+  and so the same live session; the main process publishes it in
+  `session.json`. No relay: a guest's frames never pass through the window.
 - **Worker state.** The in-memory prefix and mesh caches live in the worker
   and are lost on a restart; the blob store is on disk and survives, as today.
 
@@ -409,8 +411,9 @@ old-asset sweep. What makes the bundle:
 - Title: `FundaCAD pre-alpha, Rust engine (rolling, WORK IN PROGRESS)`.
 - Release notes open with the warning, which is not optional: the Rust engine
   is incomplete, unported features fail in a rebuild with the skipped-feature
-  banner, plugin geometry runs only for plugins that ship a component (PrintToolbox so far), files it saves open in the beta,
-  and it is not for real work.
+  banner, plugin geometry runs only for plugins that ship a component
+  (PrintToolbox so far), files it saves open in the beta, and it is not for
+  real work.
 
 ### 6.1 The updater endpoint
 
