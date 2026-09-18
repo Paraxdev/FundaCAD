@@ -28,7 +28,7 @@ pub fn tuple(v: [f64; 3]) -> Vec3 {
 }
 
 
-fn nonnull(p: UniquePtr<TopoDS_Shape>, what: &str) -> Result<Shape, String> {
+pub(super) fn nonnull(p: UniquePtr<TopoDS_Shape>, what: &str) -> Result<Shape, String> {
     let s = Shape::from_raw(p);
     if kernel::is_null(&s) {
         Err(format!("the kernel could not make {what}"))
@@ -211,7 +211,7 @@ pub fn triangulate(face: &Shape, deflection: f64) -> Result<Mesh, String> {
     })
 }
 
-fn finite(v: &[f64]) -> Result<(), String> {
+pub(super) fn finite(v: &[f64]) -> Result<(), String> {
     if v.iter().all(|x| x.is_finite()) {
         Ok(())
     } else {
@@ -219,7 +219,7 @@ fn finite(v: &[f64]) -> Result<(), String> {
     }
 }
 
-fn unit(v: Vec3) -> Result<Vec3, String> {
+pub(super) fn unit(v: Vec3) -> Result<Vec3, String> {
     let n = (v.0 * v.0 + v.1 * v.1 + v.2 * v.2).sqrt();
     if !(n > 1e-12) || !n.is_finite() {
         return Err("a direction must not be zero".into());
@@ -513,7 +513,7 @@ pub fn export_with(
     let mut meshed = Vec::new();
     let mut ntri = 0;
     for b in &r.bodies {
-        let (positions, indices) = export::export_mesh(&b.shape, &opts);
+        let (positions, indices) = export::export_mesh_with(&b.shape, &opts, &b.mesh_passes);
         if indices.is_empty() {
             continue;
         }

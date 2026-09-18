@@ -1,0 +1,4037 @@
+{
+ "about": "The fastener library's shape generator (plugins/FundaCAD.Screws), through generateShape on both engines: the Python engine runs geometry/scr_*.py, the Rust engine plugins/FundaCAD.Screws/geometry.wasm. Every catalogue family at its smallest and largest size and length (geometry/tests/samples.json), the modelled threads, drives and refusals of geometry/tests/test_fasteners.py, and stored, placed blobs rebuilt as imports. Run: python tools/diff_plugin_ops.py --corpus tools/corpus_screws_ops.json",
+ "shapes": [
+  {
+   "name": "sample_000_ISO 4762 M1.6x2.5",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 4762 M1.6x2.5",
+    "standard": "ISO 4762",
+    "head": {
+     "type": "socketCap",
+     "diameter": 3,
+     "height": 1.6
+    },
+    "drive": {
+     "type": "hex",
+     "size": 1.5,
+     "depth": 0.7
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 1.6,
+     "pitch": 0.35,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M1.6",
+     "length": 2.5
+    },
+    "length": 2.5
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_001_ISO 4762 M1.6x16",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 4762 M1.6x16",
+    "standard": "ISO 4762",
+    "head": {
+     "type": "socketCap",
+     "diameter": 3,
+     "height": 1.6
+    },
+    "drive": {
+     "type": "hex",
+     "size": 1.5,
+     "depth": 0.7
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 1.6,
+     "pitch": 0.35,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M1.6",
+     "length": 16
+    },
+    "length": 16
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_002_ISO 4762 M24x40",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 4762 M24x40",
+    "standard": "ISO 4762",
+    "head": {
+     "type": "socketCap",
+     "diameter": 36,
+     "height": 24
+    },
+    "drive": {
+     "type": "hex",
+     "size": 19,
+     "depth": 12
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 24,
+     "pitch": 3,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M24",
+     "length": 40
+    },
+    "length": 40
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_003_ISO 4762 M24x200",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 4762 M24x200",
+    "standard": "ISO 4762",
+    "head": {
+     "type": "socketCap",
+     "diameter": 36,
+     "height": 24
+    },
+    "drive": {
+     "type": "hex",
+     "size": 19,
+     "depth": 12
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 24,
+     "pitch": 3,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M24",
+     "length": 60
+    },
+    "length": 200
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_004_ISO 7380-1 M3x4",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 7380-1 M3x4",
+    "standard": "ISO 7380-1",
+    "head": {
+     "type": "button",
+     "diameter": 5.7,
+     "height": 1.65
+    },
+    "drive": {
+     "type": "hex",
+     "size": 2,
+     "depth": 1.04
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 3,
+     "pitch": 0.5,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M3",
+     "length": 4
+    },
+    "length": 4
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_005_ISO 7380-1 M3x20",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 7380-1 M3x20",
+    "standard": "ISO 7380-1",
+    "head": {
+     "type": "button",
+     "diameter": 5.7,
+     "height": 1.65
+    },
+    "drive": {
+     "type": "hex",
+     "size": 2,
+     "depth": 1.04
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 3,
+     "pitch": 0.5,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M3",
+     "length": 20
+    },
+    "length": 20
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_006_ISO 7380-1 M16x30",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 7380-1 M16x30",
+    "standard": "ISO 7380-1",
+    "head": {
+     "type": "button",
+     "diameter": 28,
+     "height": 8.8
+    },
+    "drive": {
+     "type": "hex",
+     "size": 10,
+     "depth": 5.2
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 16,
+     "pitch": 2,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M16",
+     "length": 30
+    },
+    "length": 30
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_007_ISO 7380-1 M16x60",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 7380-1 M16x60",
+    "standard": "ISO 7380-1",
+    "head": {
+     "type": "button",
+     "diameter": 28,
+     "height": 8.8
+    },
+    "drive": {
+     "type": "hex",
+     "size": 10,
+     "depth": 5.2
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 16,
+     "pitch": 2,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M16",
+     "length": 60
+    },
+    "length": 60
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_008_DIN 7984 M3x5",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "DIN 7984 M3x5",
+    "standard": "DIN 7984",
+    "head": {
+     "type": "lowHead",
+     "diameter": 5.5,
+     "height": 2
+    },
+    "drive": {
+     "type": "hex",
+     "size": 2,
+     "depth": 1.5
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 3,
+     "pitch": 0.5,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M3",
+     "length": 5
+    },
+    "length": 5
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_009_DIN 7984 M3x20",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "DIN 7984 M3x20",
+    "standard": "DIN 7984",
+    "head": {
+     "type": "lowHead",
+     "diameter": 5.5,
+     "height": 2
+    },
+    "drive": {
+     "type": "hex",
+     "size": 2,
+     "depth": 1.5
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 3,
+     "pitch": 0.5,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M3",
+     "length": 20
+    },
+    "length": 20
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_010_DIN 7984 M20x40",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "DIN 7984 M20x40",
+    "standard": "DIN 7984",
+    "head": {
+     "type": "lowHead",
+     "diameter": 30,
+     "height": 11
+    },
+    "drive": {
+     "type": "hex",
+     "size": 14,
+     "depth": 6.5
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 20,
+     "pitch": 2.5,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M20",
+     "length": 40
+    },
+    "length": 40
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_011_DIN 7984 M20x100",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "DIN 7984 M20x100",
+    "standard": "DIN 7984",
+    "head": {
+     "type": "lowHead",
+     "diameter": 30,
+     "height": 11
+    },
+    "drive": {
+     "type": "hex",
+     "size": 14,
+     "depth": 6.5
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 20,
+     "pitch": 2.5,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M20",
+     "length": 52
+    },
+    "length": 100
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_012_ISO 10642 M3x8",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 10642 M3x8",
+    "standard": "ISO 10642",
+    "head": {
+     "type": "countersunk",
+     "angle": 90,
+     "diameter": 6.72,
+     "height": 1.86
+    },
+    "drive": {
+     "type": "hex",
+     "size": 2,
+     "depth": 1.1
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 3,
+     "pitch": 0.5,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M3",
+     "length": 6.14
+    },
+    "length": 8
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_013_ISO 10642 M3x30",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 10642 M3x30",
+    "standard": "ISO 10642",
+    "head": {
+     "type": "countersunk",
+     "angle": 90,
+     "diameter": 6.72,
+     "height": 1.86
+    },
+    "drive": {
+     "type": "hex",
+     "size": 2,
+     "depth": 1.1
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 3,
+     "pitch": 0.5,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M3",
+     "length": 18
+    },
+    "length": 30
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_014_ISO 10642 M20x35",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 10642 M20x35",
+    "standard": "ISO 10642",
+    "head": {
+     "type": "countersunk",
+     "angle": 90,
+     "diameter": 40.32,
+     "height": 10.16
+    },
+    "drive": {
+     "type": "hex",
+     "size": 12,
+     "depth": 5.6
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 20,
+     "pitch": 2.5,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M20",
+     "length": 24.84
+    },
+    "length": 35
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_015_ISO 10642 M20x100",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 10642 M20x100",
+    "standard": "ISO 10642",
+    "head": {
+     "type": "countersunk",
+     "angle": 90,
+     "diameter": 40.32,
+     "height": 10.16
+    },
+    "drive": {
+     "type": "hex",
+     "size": 12,
+     "depth": 5.6
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 20,
+     "pitch": 2.5,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M20",
+     "length": 52
+    },
+    "length": 100
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_016_ISO 7046-1 M1.6x3 PH",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 7046-1 M1.6x3 PH",
+    "standard": "ISO 7046-1",
+    "head": {
+     "type": "countersunk",
+     "angle": 90,
+     "diameter": 3.6,
+     "height": 1
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "drive": {
+     "number": 0,
+     "size": 1.9,
+     "depth": 0.9,
+     "type": "phillips"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 1.6,
+     "pitch": 0.35,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M1.6",
+     "length": 2
+    },
+    "length": 3
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_017_ISO 7046-1 M1.6x16 PH",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 7046-1 M1.6x16 PH",
+    "standard": "ISO 7046-1",
+    "head": {
+     "type": "countersunk",
+     "angle": 90,
+     "diameter": 3.6,
+     "height": 1
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "drive": {
+     "number": 0,
+     "size": 1.9,
+     "depth": 0.9,
+     "type": "phillips"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 1.6,
+     "pitch": 0.35,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M1.6",
+     "length": 15
+    },
+    "length": 16
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_018_ISO 7046-1 M10x12 PH",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 7046-1 M10x12 PH",
+    "standard": "ISO 7046-1",
+    "head": {
+     "type": "countersunk",
+     "angle": 90,
+     "diameter": 20,
+     "height": 5
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "drive": {
+     "number": 4,
+     "size": 10,
+     "depth": 4.8,
+     "type": "phillips"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 10,
+     "pitch": 1.5,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M10",
+     "length": 7
+    },
+    "length": 12
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_019_ISO 7046-1 M10x60 PH",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 7046-1 M10x60 PH",
+    "standard": "ISO 7046-1",
+    "head": {
+     "type": "countersunk",
+     "angle": 90,
+     "diameter": 20,
+     "height": 5
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "drive": {
+     "number": 4,
+     "size": 10,
+     "depth": 4.8,
+     "type": "phillips"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 10,
+     "pitch": 1.5,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M10",
+     "length": 38
+    },
+    "length": 60
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_020_ISO 7045 M1.6x3 PH",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 7045 M1.6x3 PH",
+    "standard": "ISO 7045",
+    "head": {
+     "type": "pan",
+     "diameter": 3.2,
+     "height": 1.3
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "drive": {
+     "number": 0,
+     "size": 1.6,
+     "depth": 0.7,
+     "type": "phillips"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 1.6,
+     "pitch": 0.35,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M1.6",
+     "length": 3
+    },
+    "length": 3
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_021_ISO 7045 M1.6x16 PH",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 7045 M1.6x16 PH",
+    "standard": "ISO 7045",
+    "head": {
+     "type": "pan",
+     "diameter": 3.2,
+     "height": 1.3
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "drive": {
+     "number": 0,
+     "size": 1.6,
+     "depth": 0.7,
+     "type": "phillips"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 1.6,
+     "pitch": 0.35,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M1.6",
+     "length": 16
+    },
+    "length": 16
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_022_ISO 7045 M10x12 PH",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 7045 M10x12 PH",
+    "standard": "ISO 7045",
+    "head": {
+     "type": "pan",
+     "diameter": 20,
+     "height": 7.5
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "drive": {
+     "number": 4,
+     "size": 9.8,
+     "depth": 4.6,
+     "type": "phillips"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 10,
+     "pitch": 1.5,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M10",
+     "length": 12
+    },
+    "length": 12
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_023_ISO 7045 M10x60 PH",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 7045 M10x60 PH",
+    "standard": "ISO 7045",
+    "head": {
+     "type": "pan",
+     "diameter": 20,
+     "height": 7.5
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "drive": {
+     "number": 4,
+     "size": 9.8,
+     "depth": 4.6,
+     "type": "phillips"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 10,
+     "pitch": 1.5,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M10",
+     "length": 38
+    },
+    "length": 60
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_024_ISO 14583 M2x3",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 14583 M2x3",
+    "standard": "ISO 14583",
+    "head": {
+     "type": "pan",
+     "diameter": 4,
+     "height": 1.6
+    },
+    "drive": {
+     "type": "torx",
+     "number": 6,
+     "size": 1.75,
+     "depth": 0.63
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 2,
+     "pitch": 0.4,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M2",
+     "length": 3
+    },
+    "length": 3
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_025_ISO 14583 M2x20",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 14583 M2x20",
+    "standard": "ISO 14583",
+    "head": {
+     "type": "pan",
+     "diameter": 4,
+     "height": 1.6
+    },
+    "drive": {
+     "type": "torx",
+     "number": 6,
+     "size": 1.75,
+     "depth": 0.63
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 2,
+     "pitch": 0.4,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M2",
+     "length": 20
+    },
+    "length": 20
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_026_ISO 14583 M10x12",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 14583 M10x12",
+    "standard": "ISO 14583",
+    "head": {
+     "type": "pan",
+     "diameter": 20,
+     "height": 7.5
+    },
+    "drive": {
+     "type": "torx",
+     "number": 50,
+     "size": 8.95,
+     "depth": 3
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 10,
+     "pitch": 1.5,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M10",
+     "length": 12
+    },
+    "length": 12
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_027_ISO 14583 M10x60",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 14583 M10x60",
+    "standard": "ISO 14583",
+    "head": {
+     "type": "pan",
+     "diameter": 20,
+     "height": 7.5
+    },
+    "drive": {
+     "type": "torx",
+     "number": 50,
+     "size": 8.95,
+     "depth": 3
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 10,
+     "pitch": 1.5,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M10",
+     "length": 38
+    },
+    "length": 60
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_028_ISO 1207 M1.6x2",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 1207 M1.6x2",
+    "standard": "ISO 1207",
+    "head": {
+     "type": "cheese",
+     "diameter": 3,
+     "height": 1.1
+    },
+    "drive": {
+     "type": "slot",
+     "size": 0.4,
+     "depth": 0.45
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 1.6,
+     "pitch": 0.35,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M1.6",
+     "length": 2
+    },
+    "length": 2
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_029_ISO 1207 M1.6x16",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 1207 M1.6x16",
+    "standard": "ISO 1207",
+    "head": {
+     "type": "cheese",
+     "diameter": 3,
+     "height": 1.1
+    },
+    "drive": {
+     "type": "slot",
+     "size": 0.4,
+     "depth": 0.45
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 1.6,
+     "pitch": 0.35,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M1.6",
+     "length": 16
+    },
+    "length": 16
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_030_ISO 1207 M10x12",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 1207 M10x12",
+    "standard": "ISO 1207",
+    "head": {
+     "type": "cheese",
+     "diameter": 16,
+     "height": 6
+    },
+    "drive": {
+     "type": "slot",
+     "size": 2.5,
+     "depth": 2.4
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 10,
+     "pitch": 1.5,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M10",
+     "length": 12
+    },
+    "length": 12
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_031_ISO 1207 M10x80",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 1207 M10x80",
+    "standard": "ISO 1207",
+    "head": {
+     "type": "cheese",
+     "diameter": 16,
+     "height": 6
+    },
+    "drive": {
+     "type": "slot",
+     "size": 2.5,
+     "depth": 2.4
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 10,
+     "pitch": 1.5,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M10",
+     "length": 38
+    },
+    "length": 80
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_032_ISO 4014 M1.6x12",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 4014 M1.6x12",
+    "standard": "ISO 4014",
+    "head": {
+     "type": "hex",
+     "acrossFlats": 3.2,
+     "height": 1.1
+    },
+    "drive": {
+     "type": "none"
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 1.6,
+     "pitch": 0.35,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M1.6",
+     "length": 9.2
+    },
+    "length": 12
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_033_ISO 4014 M1.6x16",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 4014 M1.6x16",
+    "standard": "ISO 4014",
+    "head": {
+     "type": "hex",
+     "acrossFlats": 3.2,
+     "height": 1.1
+    },
+    "drive": {
+     "type": "none"
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 1.6,
+     "pitch": 0.35,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M1.6",
+     "length": 9.2
+    },
+    "length": 16
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_034_ISO 4014 M24x90",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 4014 M24x90",
+    "standard": "ISO 4014",
+    "head": {
+     "type": "hex",
+     "acrossFlats": 36,
+     "height": 15
+    },
+    "drive": {
+     "type": "none"
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 24,
+     "pitch": 3,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M24",
+     "length": 54
+    },
+    "length": 90
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_035_ISO 4014 M24x200",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 4014 M24x200",
+    "standard": "ISO 4014",
+    "head": {
+     "type": "hex",
+     "acrossFlats": 36,
+     "height": 15
+    },
+    "drive": {
+     "type": "none"
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 24,
+     "pitch": 3,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M24",
+     "length": 60
+    },
+    "length": 200
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_036_ISO 4017 M1.6x2",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 4017 M1.6x2",
+    "standard": "ISO 4017",
+    "head": {
+     "type": "hex",
+     "acrossFlats": 3.2,
+     "height": 1.1
+    },
+    "drive": {
+     "type": "none"
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 1.6,
+     "pitch": 0.35,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M1.6",
+     "length": 2
+    },
+    "length": 2
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_037_ISO 4017 M1.6x16",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 4017 M1.6x16",
+    "standard": "ISO 4017",
+    "head": {
+     "type": "hex",
+     "acrossFlats": 3.2,
+     "height": 1.1
+    },
+    "drive": {
+     "type": "none"
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 1.6,
+     "pitch": 0.35,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M1.6",
+     "length": 16
+    },
+    "length": 16
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_038_ISO 4017 M24x50",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 4017 M24x50",
+    "standard": "ISO 4017",
+    "head": {
+     "type": "hex",
+     "acrossFlats": 36,
+     "height": 15
+    },
+    "drive": {
+     "type": "none"
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 24,
+     "pitch": 3,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M24",
+     "length": 50
+    },
+    "length": 50
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_039_ISO 4017 M24x150",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 4017 M24x150",
+    "standard": "ISO 4017",
+    "head": {
+     "type": "hex",
+     "acrossFlats": 36,
+     "height": 15
+    },
+    "drive": {
+     "type": "none"
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 24,
+     "pitch": 3,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M24",
+     "length": 150
+    },
+    "length": 150
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_040_DIN 6921 M5x10",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "DIN 6921 M5x10",
+    "standard": "DIN 6921",
+    "head": {
+     "type": "hexFlange",
+     "acrossFlats": 8,
+     "height": 5.4,
+     "flangeDiameter": 11.8,
+     "flangeThickness": 1
+    },
+    "drive": {
+     "type": "none"
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 5,
+     "pitch": 0.8,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M5",
+     "length": 10
+    },
+    "length": 10
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_041_DIN 6921 M5x50",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "DIN 6921 M5x50",
+    "standard": "DIN 6921",
+    "head": {
+     "type": "hexFlange",
+     "acrossFlats": 8,
+     "height": 5.4,
+     "flangeDiameter": 11.8,
+     "flangeThickness": 1
+    },
+    "drive": {
+     "type": "none"
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 5,
+     "pitch": 0.8,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M5",
+     "length": 16
+    },
+    "length": 50
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_042_DIN 6921 M16x30",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "DIN 6921 M16x30",
+    "standard": "DIN 6921",
+    "head": {
+     "type": "hexFlange",
+     "acrossFlats": 24,
+     "height": 14.7,
+     "flangeDiameter": 34.5,
+     "flangeThickness": 2.4
+    },
+    "drive": {
+     "type": "none"
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 16,
+     "pitch": 2,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M16",
+     "length": 30
+    },
+    "length": 30
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_043_DIN 6921 M16x120",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "DIN 6921 M16x120",
+    "standard": "DIN 6921",
+    "head": {
+     "type": "hexFlange",
+     "acrossFlats": 24,
+     "height": 14.7,
+     "flangeDiameter": 34.5,
+     "flangeThickness": 2.4
+    },
+    "drive": {
+     "type": "none"
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 16,
+     "pitch": 2,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M16",
+     "length": 38
+    },
+    "length": 120
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_044_ISO 4026 M1.6x2",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 4026 M1.6x2",
+    "standard": "ISO 4026",
+    "head": {
+     "type": "none"
+    },
+    "drive": {
+     "type": "hex",
+     "size": 0.7,
+     "depth": 0.7
+    },
+    "point": {
+     "type": "flat",
+     "diameter": 0.8
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 1.6,
+     "pitch": 0.35,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M1.6",
+     "length": 2
+    },
+    "length": 2
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_045_ISO 4026 M1.6x8",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 4026 M1.6x8",
+    "standard": "ISO 4026",
+    "head": {
+     "type": "none"
+    },
+    "drive": {
+     "type": "hex",
+     "size": 0.7,
+     "depth": 0.7
+    },
+    "point": {
+     "type": "flat",
+     "diameter": 0.8
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 1.6,
+     "pitch": 0.35,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M1.6",
+     "length": 8
+    },
+    "length": 8
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_046_ISO 4026 M24x25",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 4026 M24x25",
+    "standard": "ISO 4026",
+    "head": {
+     "type": "none"
+    },
+    "drive": {
+     "type": "hex",
+     "size": 12,
+     "depth": 10
+    },
+    "point": {
+     "type": "flat",
+     "diameter": 18
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 24,
+     "pitch": 3,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M24",
+     "length": 25
+    },
+    "length": 25
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_047_ISO 4026 M24x60",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 4026 M24x60",
+    "standard": "ISO 4026",
+    "head": {
+     "type": "none"
+    },
+    "drive": {
+     "type": "hex",
+     "size": 12,
+     "depth": 10
+    },
+    "point": {
+     "type": "flat",
+     "diameter": 18
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 24,
+     "pitch": 3,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M24",
+     "length": 60
+    },
+    "length": 60
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_048_ISO 4027 M1.6x2.5",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 4027 M1.6x2.5",
+    "standard": "ISO 4027",
+    "head": {
+     "type": "none"
+    },
+    "drive": {
+     "type": "hex",
+     "size": 0.7,
+     "depth": 0.7
+    },
+    "point": {
+     "type": "cone"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 1.6,
+     "pitch": 0.35,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M1.6",
+     "length": 2.5
+    },
+    "length": 2.5
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_049_ISO 4027 M1.6x8",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 4027 M1.6x8",
+    "standard": "ISO 4027",
+    "head": {
+     "type": "none"
+    },
+    "drive": {
+     "type": "hex",
+     "size": 0.7,
+     "depth": 0.7
+    },
+    "point": {
+     "type": "cone"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 1.6,
+     "pitch": 0.35,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M1.6",
+     "length": 8
+    },
+    "length": 8
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_050_ISO 4027 M24x30",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 4027 M24x30",
+    "standard": "ISO 4027",
+    "head": {
+     "type": "none"
+    },
+    "drive": {
+     "type": "hex",
+     "size": 12,
+     "depth": 10
+    },
+    "point": {
+     "type": "cone"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 24,
+     "pitch": 3,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M24",
+     "length": 30
+    },
+    "length": 30
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_051_ISO 4027 M24x60",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 4027 M24x60",
+    "standard": "ISO 4027",
+    "head": {
+     "type": "none"
+    },
+    "drive": {
+     "type": "hex",
+     "size": 12,
+     "depth": 10
+    },
+    "point": {
+     "type": "cone"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 24,
+     "pitch": 3,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M24",
+     "length": 60
+    },
+    "length": 60
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_052_ISO 4029 M1.6x2",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 4029 M1.6x2",
+    "standard": "ISO 4029",
+    "head": {
+     "type": "none"
+    },
+    "drive": {
+     "type": "hex",
+     "size": 0.7,
+     "depth": 0.7
+    },
+    "point": {
+     "type": "cup",
+     "diameter": 0.8
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 1.6,
+     "pitch": 0.35,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M1.6",
+     "length": 2
+    },
+    "length": 2
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_053_ISO 4029 M1.6x8",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 4029 M1.6x8",
+    "standard": "ISO 4029",
+    "head": {
+     "type": "none"
+    },
+    "drive": {
+     "type": "hex",
+     "size": 0.7,
+     "depth": 0.7
+    },
+    "point": {
+     "type": "cup",
+     "diameter": 0.8
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 1.6,
+     "pitch": 0.35,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M1.6",
+     "length": 8
+    },
+    "length": 8
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_054_ISO 4029 M24x25",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 4029 M24x25",
+    "standard": "ISO 4029",
+    "head": {
+     "type": "none"
+    },
+    "drive": {
+     "type": "hex",
+     "size": 12,
+     "depth": 10
+    },
+    "point": {
+     "type": "cup",
+     "diameter": 16
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 24,
+     "pitch": 3,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M24",
+     "length": 25
+    },
+    "length": 25
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_055_ISO 4029 M24x60",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 4029 M24x60",
+    "standard": "ISO 4029",
+    "head": {
+     "type": "none"
+    },
+    "drive": {
+     "type": "hex",
+     "size": 12,
+     "depth": 10
+    },
+    "point": {
+     "type": "cup",
+     "diameter": 16
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 24,
+     "pitch": 3,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M24",
+     "length": 60
+    },
+    "length": 60
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_056_ISO 7379 M5x10",
+   "generator": "fastener",
+   "params": {
+    "kind": "shoulderScrew",
+    "units": "mm",
+    "name": "ISO 7379 M5x10",
+    "standard": "ISO 7379",
+    "head": {
+     "type": "socketCap",
+     "diameter": 10,
+     "height": 4.5
+    },
+    "drive": {
+     "type": "hex",
+     "size": 3,
+     "depth": 2.4
+    },
+    "shoulder": {
+     "type": "plain",
+     "diameter": 6
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 5,
+     "pitch": 0.8,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M5",
+     "length": 9.75
+    },
+    "length": 10,
+    "info": {
+     "size": "6 mm shoulder, M5"
+    }
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_057_ISO 7379 M5x40",
+   "generator": "fastener",
+   "params": {
+    "kind": "shoulderScrew",
+    "units": "mm",
+    "name": "ISO 7379 M5x40",
+    "standard": "ISO 7379",
+    "head": {
+     "type": "socketCap",
+     "diameter": 10,
+     "height": 4.5
+    },
+    "drive": {
+     "type": "hex",
+     "size": 3,
+     "depth": 2.4
+    },
+    "shoulder": {
+     "type": "plain",
+     "diameter": 6
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 5,
+     "pitch": 0.8,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M5",
+     "length": 9.75
+    },
+    "length": 40,
+    "info": {
+     "size": "6 mm shoulder, M5"
+    }
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_058_ISO 7379 M20x30",
+   "generator": "fastener",
+   "params": {
+    "kind": "shoulderScrew",
+    "units": "mm",
+    "name": "ISO 7379 M20x30",
+    "standard": "ISO 7379",
+    "head": {
+     "type": "socketCap",
+     "diameter": 36,
+     "height": 16
+    },
+    "drive": {
+     "type": "hex",
+     "size": 12,
+     "depth": 10
+    },
+    "shoulder": {
+     "type": "plain",
+     "diameter": 24
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 20,
+     "pitch": 2.5,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M20",
+     "length": 27.4
+    },
+    "length": 30,
+    "info": {
+     "size": "24 mm shoulder, M20"
+    }
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_059_ISO 7379 M20x120",
+   "generator": "fastener",
+   "params": {
+    "kind": "shoulderScrew",
+    "units": "mm",
+    "name": "ISO 7379 M20x120",
+    "standard": "ISO 7379",
+    "head": {
+     "type": "socketCap",
+     "diameter": 36,
+     "height": 16
+    },
+    "drive": {
+     "type": "hex",
+     "size": 12,
+     "depth": 10
+    },
+    "shoulder": {
+     "type": "plain",
+     "diameter": 24
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 20,
+     "pitch": 2.5,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M20",
+     "length": 27.4
+    },
+    "length": 120,
+    "info": {
+     "size": "24 mm shoulder, M20"
+    }
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_060_DIN 464 M3x4",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "DIN 464 M3x4",
+    "standard": "DIN 464",
+    "head": {
+     "type": "knurled",
+     "diameter": 12,
+     "height": 7.5,
+     "collarDiameter": 6,
+     "collarHeight": 2.5
+    },
+    "drive": {
+     "type": "none"
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 3,
+     "pitch": 0.5,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M3",
+     "length": 4
+    },
+    "length": 4
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_061_DIN 464 M3x20",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "DIN 464 M3x20",
+    "standard": "DIN 464",
+    "head": {
+     "type": "knurled",
+     "diameter": 12,
+     "height": 7.5,
+     "collarDiameter": 6,
+     "collarHeight": 2.5
+    },
+    "drive": {
+     "type": "none"
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 3,
+     "pitch": 0.5,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M3",
+     "length": 20
+    },
+    "length": 20
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_062_DIN 464 M10x12",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "DIN 464 M10x12",
+    "standard": "DIN 464",
+    "head": {
+     "type": "knurled",
+     "diameter": 36,
+     "height": 22,
+     "collarDiameter": 20,
+     "collarHeight": 8
+    },
+    "drive": {
+     "type": "none"
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 10,
+     "pitch": 1.5,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M10",
+     "length": 12
+    },
+    "length": 12
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_063_DIN 464 M10x40",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "DIN 464 M10x40",
+    "standard": "DIN 464",
+    "head": {
+     "type": "knurled",
+     "diameter": 36,
+     "height": 22,
+     "collarDiameter": 20,
+     "collarHeight": 8
+    },
+    "drive": {
+     "type": "none"
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 10,
+     "pitch": 1.5,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M10",
+     "length": 40
+    },
+    "length": 40
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_064_ISO 7049 ST2.2x4.5 PH",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 7049 ST2.2x4.5 PH",
+    "standard": "ISO 7049",
+    "head": {
+     "type": "pan",
+     "diameter": 4,
+     "height": 1.6
+    },
+    "point": {
+     "type": "tapping"
+    },
+    "drive": {
+     "number": 0,
+     "size": 1.9,
+     "depth": 0.9,
+     "type": "phillips"
+    },
+    "thread": {
+     "type": "tapping",
+     "diameter": 2.2,
+     "pitch": 0.8,
+     "hand": "right",
+     "modelled": false,
+     "designation": "ST2.2",
+     "length": 4.5
+    },
+    "length": 4.5
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_065_ISO 7049 ST2.2x16 PH",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 7049 ST2.2x16 PH",
+    "standard": "ISO 7049",
+    "head": {
+     "type": "pan",
+     "diameter": 4,
+     "height": 1.6
+    },
+    "point": {
+     "type": "tapping"
+    },
+    "drive": {
+     "number": 0,
+     "size": 1.9,
+     "depth": 0.9,
+     "type": "phillips"
+    },
+    "thread": {
+     "type": "tapping",
+     "diameter": 2.2,
+     "pitch": 0.8,
+     "hand": "right",
+     "modelled": false,
+     "designation": "ST2.2",
+     "length": 16
+    },
+    "length": 16
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_066_ISO 7049 ST6.3x13 PH",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 7049 ST6.3x13 PH",
+    "standard": "ISO 7049",
+    "head": {
+     "type": "pan",
+     "diameter": 12,
+     "height": 4.6
+    },
+    "point": {
+     "type": "tapping"
+    },
+    "drive": {
+     "number": 3,
+     "size": 6.6,
+     "depth": 3.1,
+     "type": "phillips"
+    },
+    "thread": {
+     "type": "tapping",
+     "diameter": 6.3,
+     "pitch": 1.8,
+     "hand": "right",
+     "modelled": false,
+     "designation": "ST6.3",
+     "length": 13
+    },
+    "length": 13
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_067_ISO 7049 ST6.3x38 PH",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 7049 ST6.3x38 PH",
+    "standard": "ISO 7049",
+    "head": {
+     "type": "pan",
+     "diameter": 12,
+     "height": 4.6
+    },
+    "point": {
+     "type": "tapping"
+    },
+    "drive": {
+     "number": 3,
+     "size": 6.6,
+     "depth": 3.1,
+     "type": "phillips"
+    },
+    "thread": {
+     "type": "tapping",
+     "diameter": 6.3,
+     "pitch": 1.8,
+     "hand": "right",
+     "modelled": false,
+     "designation": "ST6.3",
+     "length": 38
+    },
+    "length": 38
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_068_ISO 4032 M1.6",
+   "generator": "fastener",
+   "params": {
+    "kind": "nut",
+    "units": "mm",
+    "name": "ISO 4032 M1.6",
+    "standard": "ISO 4032",
+    "nut": {
+     "type": "hex",
+     "acrossFlats": 3.2,
+     "height": 1.3
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 1.6,
+     "pitch": 0.35,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M1.6"
+    }
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_069_ISO 4032 M24",
+   "generator": "fastener",
+   "params": {
+    "kind": "nut",
+    "units": "mm",
+    "name": "ISO 4032 M24",
+    "standard": "ISO 4032",
+    "nut": {
+     "type": "hex",
+     "acrossFlats": 36,
+     "height": 21.5
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 24,
+     "pitch": 3,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M24"
+    }
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_070_ISO 4035 M1.6",
+   "generator": "fastener",
+   "params": {
+    "kind": "nut",
+    "units": "mm",
+    "name": "ISO 4035 M1.6",
+    "standard": "ISO 4035",
+    "nut": {
+     "type": "hex",
+     "acrossFlats": 3.2,
+     "height": 1
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 1.6,
+     "pitch": 0.35,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M1.6"
+    }
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_071_ISO 4035 M24",
+   "generator": "fastener",
+   "params": {
+    "kind": "nut",
+    "units": "mm",
+    "name": "ISO 4035 M24",
+    "standard": "ISO 4035",
+    "nut": {
+     "type": "hex",
+     "acrossFlats": 36,
+     "height": 12
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 24,
+     "pitch": 3,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M24"
+    }
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_072_ISO 7040 M3",
+   "generator": "fastener",
+   "params": {
+    "kind": "nut",
+    "units": "mm",
+    "name": "ISO 7040 M3",
+    "standard": "ISO 7040",
+    "nut": {
+     "type": "nyloc",
+     "acrossFlats": 5.5,
+     "height": 4.5,
+     "hexHeight": 3
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 3,
+     "pitch": 0.5,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M3"
+    }
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_073_ISO 7040 M24",
+   "generator": "fastener",
+   "params": {
+    "kind": "nut",
+    "units": "mm",
+    "name": "ISO 7040 M24",
+    "standard": "ISO 7040",
+    "nut": {
+     "type": "nyloc",
+     "acrossFlats": 36,
+     "height": 27.1,
+     "hexHeight": 20
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 24,
+     "pitch": 3,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M24"
+    }
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_074_DIN 6923 M5",
+   "generator": "fastener",
+   "params": {
+    "kind": "nut",
+    "units": "mm",
+    "name": "DIN 6923 M5",
+    "standard": "DIN 6923",
+    "nut": {
+     "type": "flange",
+     "acrossFlats": 8,
+     "height": 5,
+     "flangeDiameter": 11.8,
+     "flangeThickness": 1
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 5,
+     "pitch": 0.8,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M5"
+    }
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_075_DIN 6923 M20",
+   "generator": "fastener",
+   "params": {
+    "kind": "nut",
+    "units": "mm",
+    "name": "DIN 6923 M20",
+    "standard": "DIN 6923",
+    "nut": {
+     "type": "flange",
+     "acrossFlats": 30,
+     "height": 20,
+     "flangeDiameter": 42.8,
+     "flangeThickness": 3
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 20,
+     "pitch": 2.5,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M20"
+    }
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_076_DIN 562 M2",
+   "generator": "fastener",
+   "params": {
+    "kind": "nut",
+    "units": "mm",
+    "name": "DIN 562 M2",
+    "standard": "DIN 562",
+    "nut": {
+     "type": "square",
+     "acrossFlats": 4,
+     "height": 1.2
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 2,
+     "pitch": 0.4,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M2"
+    }
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_077_DIN 562 M10",
+   "generator": "fastener",
+   "params": {
+    "kind": "nut",
+    "units": "mm",
+    "name": "DIN 562 M10",
+    "standard": "DIN 562",
+    "nut": {
+     "type": "square",
+     "acrossFlats": 17,
+     "height": 5
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 10,
+     "pitch": 1.5,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M10"
+    }
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_078_ISO 7089 M1.6",
+   "generator": "fastener",
+   "params": {
+    "kind": "washer",
+    "units": "mm",
+    "name": "ISO 7089 M1.6",
+    "standard": "ISO 7089",
+    "washer": {
+     "type": "plain",
+     "inner": 1.7,
+     "outer": 4,
+     "thickness": 0.3
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 1.6,
+     "pitch": 0.35,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M1.6"
+    }
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_079_ISO 7089 M24",
+   "generator": "fastener",
+   "params": {
+    "kind": "washer",
+    "units": "mm",
+    "name": "ISO 7089 M24",
+    "standard": "ISO 7089",
+    "washer": {
+     "type": "plain",
+     "inner": 25,
+     "outer": 44,
+     "thickness": 4
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 24,
+     "pitch": 3,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M24"
+    }
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_080_ISO 7093-1 M3",
+   "generator": "fastener",
+   "params": {
+    "kind": "washer",
+    "units": "mm",
+    "name": "ISO 7093-1 M3",
+    "standard": "ISO 7093-1",
+    "washer": {
+     "type": "plain",
+     "inner": 3.2,
+     "outer": 9,
+     "thickness": 0.8
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 3,
+     "pitch": 0.5,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M3"
+    }
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_081_ISO 7093-1 M24",
+   "generator": "fastener",
+   "params": {
+    "kind": "washer",
+    "units": "mm",
+    "name": "ISO 7093-1 M24",
+    "standard": "ISO 7093-1",
+    "washer": {
+     "type": "plain",
+     "inner": 26,
+     "outer": 72,
+     "thickness": 5
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 24,
+     "pitch": 3,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M24"
+    }
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_082_DIN 127 B M2",
+   "generator": "fastener",
+   "params": {
+    "kind": "washer",
+    "units": "mm",
+    "name": "DIN 127 B M2",
+    "standard": "DIN 127 B",
+    "washer": {
+     "type": "spring",
+     "inner": 2.1,
+     "outer": 4.4,
+     "thickness": 0.5
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 2,
+     "pitch": 0.4,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M2"
+    }
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_083_DIN 127 B M24",
+   "generator": "fastener",
+   "params": {
+    "kind": "washer",
+    "units": "mm",
+    "name": "DIN 127 B M24",
+    "standard": "DIN 127 B",
+    "washer": {
+     "type": "spring",
+     "inner": 24.5,
+     "outer": 40,
+     "thickness": 5
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 24,
+     "pitch": 3,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M24"
+    }
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_084_Heat-set insert M2x3",
+   "generator": "fastener",
+   "params": {
+    "kind": "insert",
+    "units": "mm",
+    "name": "Heat-set insert M2x3",
+    "standard": "Common knurled insert",
+    "insert": {
+     "type": "knurled",
+     "outer": 3.6,
+     "length": 3
+    },
+    "info": {
+     "hole": 3.2
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 2,
+     "pitch": 0.4,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M2"
+    }
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_085_Heat-set insert M2x4",
+   "generator": "fastener",
+   "params": {
+    "kind": "insert",
+    "units": "mm",
+    "name": "Heat-set insert M2x4",
+    "standard": "Common knurled insert",
+    "insert": {
+     "type": "knurled",
+     "outer": 3.6,
+     "length": 4
+    },
+    "info": {
+     "hole": 3.2
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 2,
+     "pitch": 0.4,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M2"
+    }
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_086_Heat-set insert M8x8",
+   "generator": "fastener",
+   "params": {
+    "kind": "insert",
+    "units": "mm",
+    "name": "Heat-set insert M8x8",
+    "standard": "Common knurled insert",
+    "insert": {
+     "type": "knurled",
+     "outer": 10,
+     "length": 8
+    },
+    "info": {
+     "hole": 9.5
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 8,
+     "pitch": 1.25,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M8"
+    }
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_087_Heat-set insert M8x12.7",
+   "generator": "fastener",
+   "params": {
+    "kind": "insert",
+    "units": "mm",
+    "name": "Heat-set insert M8x12.7",
+    "standard": "Common knurled insert",
+    "insert": {
+     "type": "knurled",
+     "outer": 10,
+     "length": 12.7
+    },
+    "info": {
+     "hole": 9.5
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 8,
+     "pitch": 1.25,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M8"
+    }
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_088_ASME B18.3 #2-56 UNC x 1/8",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "in",
+    "name": "ASME B18.3 #2-56 UNC x 1/8",
+    "standard": "ASME B18.3",
+    "head": {
+     "type": "socketCap",
+     "diameter": 0.14,
+     "height": 0.086
+    },
+    "drive": {
+     "type": "hex",
+     "size": 0.078,
+     "depth": 0.051
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "unified",
+     "diameter": 0.086,
+     "pitch": 0.017857,
+     "hand": "right",
+     "modelled": false,
+     "designation": "#2-56 UNC",
+     "length": 0.125
+    },
+    "length": 0.125
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_089_ASME B18.3 #2-56 UNC x 3/4",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "in",
+    "name": "ASME B18.3 #2-56 UNC x 3/4",
+    "standard": "ASME B18.3",
+    "head": {
+     "type": "socketCap",
+     "diameter": 0.14,
+     "height": 0.086
+    },
+    "drive": {
+     "type": "hex",
+     "size": 0.078,
+     "depth": 0.051
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "unified",
+     "diameter": 0.086,
+     "pitch": 0.017857,
+     "hand": "right",
+     "modelled": false,
+     "designation": "#2-56 UNC",
+     "length": 0.75
+    },
+    "length": 0.75
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_090_ASME B18.3 1/2-13 UNC x 3/4",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "in",
+    "name": "ASME B18.3 1/2-13 UNC x 3/4",
+    "standard": "ASME B18.3",
+    "head": {
+     "type": "socketCap",
+     "diameter": 0.75,
+     "height": 0.5
+    },
+    "drive": {
+     "type": "hex",
+     "size": 0.375,
+     "depth": 0.3
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "unified",
+     "diameter": 0.5,
+     "pitch": 0.076923,
+     "hand": "right",
+     "modelled": false,
+     "designation": "1/2-13 UNC",
+     "length": 0.75
+    },
+    "length": 0.75
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_091_ASME B18.3 1/2-13 UNC x 6",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "in",
+    "name": "ASME B18.3 1/2-13 UNC x 6",
+    "standard": "ASME B18.3",
+    "head": {
+     "type": "socketCap",
+     "diameter": 0.75,
+     "height": 0.5
+    },
+    "drive": {
+     "type": "hex",
+     "size": 0.375,
+     "depth": 0.3
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "unified",
+     "diameter": 0.5,
+     "pitch": 0.076923,
+     "hand": "right",
+     "modelled": false,
+     "designation": "1/2-13 UNC",
+     "length": 1.5
+    },
+    "length": 6
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_092_ASME B18.3 #2-56 UNC x 1/8",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "in",
+    "name": "ASME B18.3 #2-56 UNC x 1/8",
+    "standard": "ASME B18.3",
+    "head": {
+     "type": "button",
+     "diameter": 0.164,
+     "height": 0.046
+    },
+    "drive": {
+     "type": "hex",
+     "size": 0.05,
+     "depth": 0.028
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "unified",
+     "diameter": 0.086,
+     "pitch": 0.017857,
+     "hand": "right",
+     "modelled": false,
+     "designation": "#2-56 UNC",
+     "length": 0.125
+    },
+    "length": 0.125
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_093_ASME B18.3 #2-56 UNC x 1/2",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "in",
+    "name": "ASME B18.3 #2-56 UNC x 1/2",
+    "standard": "ASME B18.3",
+    "head": {
+     "type": "button",
+     "diameter": 0.164,
+     "height": 0.046
+    },
+    "drive": {
+     "type": "hex",
+     "size": 0.05,
+     "depth": 0.028
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "unified",
+     "diameter": 0.086,
+     "pitch": 0.017857,
+     "hand": "right",
+     "modelled": false,
+     "designation": "#2-56 UNC",
+     "length": 0.5
+    },
+    "length": 0.5
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_094_ASME B18.3 1/2-13 UNC x 3/4",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "in",
+    "name": "ASME B18.3 1/2-13 UNC x 3/4",
+    "standard": "ASME B18.3",
+    "head": {
+     "type": "button",
+     "diameter": 0.875,
+     "height": 0.265
+    },
+    "drive": {
+     "type": "hex",
+     "size": 0.312,
+     "depth": 0.175
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "unified",
+     "diameter": 0.5,
+     "pitch": 0.076923,
+     "hand": "right",
+     "modelled": false,
+     "designation": "1/2-13 UNC",
+     "length": 0.75
+    },
+    "length": 0.75
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_095_ASME B18.3 1/2-13 UNC x 3",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "in",
+    "name": "ASME B18.3 1/2-13 UNC x 3",
+    "standard": "ASME B18.3",
+    "head": {
+     "type": "button",
+     "diameter": 0.875,
+     "height": 0.265
+    },
+    "drive": {
+     "type": "hex",
+     "size": 0.312,
+     "depth": 0.175
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "unified",
+     "diameter": 0.5,
+     "pitch": 0.076923,
+     "hand": "right",
+     "modelled": false,
+     "designation": "1/2-13 UNC",
+     "length": 3
+    },
+    "length": 3
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_096_ASME B18.3 #2-56 UNC x 3/16",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "in",
+    "name": "ASME B18.3 #2-56 UNC x 3/16",
+    "standard": "ASME B18.3",
+    "head": {
+     "type": "countersunk",
+     "angle": 82,
+     "diameter": 0.197,
+     "height": 0.064
+    },
+    "drive": {
+     "type": "hex",
+     "size": 0.05,
+     "depth": 0.025
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "unified",
+     "diameter": 0.086,
+     "pitch": 0.017857,
+     "hand": "right",
+     "modelled": false,
+     "designation": "#2-56 UNC",
+     "length": 0.1235
+    },
+    "length": 0.1875
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_097_ASME B18.3 #2-56 UNC x 3/4",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "in",
+    "name": "ASME B18.3 #2-56 UNC x 3/4",
+    "standard": "ASME B18.3",
+    "head": {
+     "type": "countersunk",
+     "angle": 82,
+     "diameter": 0.197,
+     "height": 0.064
+    },
+    "drive": {
+     "type": "hex",
+     "size": 0.05,
+     "depth": 0.025
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "unified",
+     "diameter": 0.086,
+     "pitch": 0.017857,
+     "hand": "right",
+     "modelled": false,
+     "designation": "#2-56 UNC",
+     "length": 0.686
+    },
+    "length": 0.75
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_098_ASME B18.3 1/2-13 UNC x 1",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "in",
+    "name": "ASME B18.3 1/2-13 UNC x 1",
+    "standard": "ASME B18.3",
+    "head": {
+     "type": "countersunk",
+     "angle": 82,
+     "diameter": 0.938,
+     "height": 0.298
+    },
+    "drive": {
+     "type": "hex",
+     "size": 0.312,
+     "depth": 0.156
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "unified",
+     "diameter": 0.5,
+     "pitch": 0.076923,
+     "hand": "right",
+     "modelled": false,
+     "designation": "1/2-13 UNC",
+     "length": 0.702
+    },
+    "length": 1
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_099_ASME B18.3 1/2-13 UNC x 5",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "in",
+    "name": "ASME B18.3 1/2-13 UNC x 5",
+    "standard": "ASME B18.3",
+    "head": {
+     "type": "countersunk",
+     "angle": 82,
+     "diameter": 0.938,
+     "height": 0.298
+    },
+    "drive": {
+     "type": "hex",
+     "size": 0.312,
+     "depth": 0.156
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "unified",
+     "diameter": 0.5,
+     "pitch": 0.076923,
+     "hand": "right",
+     "modelled": false,
+     "designation": "1/2-13 UNC",
+     "length": 1.5
+    },
+    "length": 5
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_100_ASME B18.2.1 1/4-20 UNC x 1/2",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "in",
+    "name": "ASME B18.2.1 1/4-20 UNC x 1/2",
+    "standard": "ASME B18.2.1",
+    "head": {
+     "type": "hex",
+     "acrossFlats": 0.4375,
+     "height": 0.156
+    },
+    "drive": {
+     "type": "none"
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "unified",
+     "diameter": 0.25,
+     "pitch": 0.05,
+     "hand": "right",
+     "modelled": false,
+     "designation": "1/4-20 UNC",
+     "length": 0.5
+    },
+    "length": 0.5
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_101_ASME B18.2.1 1/4-20 UNC x 6",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "in",
+    "name": "ASME B18.2.1 1/4-20 UNC x 6",
+    "standard": "ASME B18.2.1",
+    "head": {
+     "type": "hex",
+     "acrossFlats": 0.4375,
+     "height": 0.156
+    },
+    "drive": {
+     "type": "none"
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "unified",
+     "diameter": 0.25,
+     "pitch": 0.05,
+     "hand": "right",
+     "modelled": false,
+     "designation": "1/4-20 UNC",
+     "length": 0.75
+    },
+    "length": 6
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_102_ASME B18.2.1 1/2-13 UNC x 1",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "in",
+    "name": "ASME B18.2.1 1/2-13 UNC x 1",
+    "standard": "ASME B18.2.1",
+    "head": {
+     "type": "hex",
+     "acrossFlats": 0.75,
+     "height": 0.312
+    },
+    "drive": {
+     "type": "none"
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "unified",
+     "diameter": 0.5,
+     "pitch": 0.076923,
+     "hand": "right",
+     "modelled": false,
+     "designation": "1/2-13 UNC",
+     "length": 1
+    },
+    "length": 1
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_103_ASME B18.2.1 1/2-13 UNC x 6",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "in",
+    "name": "ASME B18.2.1 1/2-13 UNC x 6",
+    "standard": "ASME B18.2.1",
+    "head": {
+     "type": "hex",
+     "acrossFlats": 0.75,
+     "height": 0.312
+    },
+    "drive": {
+     "type": "none"
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "unified",
+     "diameter": 0.5,
+     "pitch": 0.076923,
+     "hand": "right",
+     "modelled": false,
+     "designation": "1/2-13 UNC",
+     "length": 1.25
+    },
+    "length": 6
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_104_ASME B18.2.2 #2-56 UNC",
+   "generator": "fastener",
+   "params": {
+    "kind": "nut",
+    "units": "in",
+    "name": "ASME B18.2.2 #2-56 UNC",
+    "standard": "ASME B18.2.2",
+    "nut": {
+     "type": "hex",
+     "acrossFlats": 0.1875,
+     "height": 0.0625
+    },
+    "thread": {
+     "type": "unified",
+     "diameter": 0.086,
+     "pitch": 0.017857,
+     "hand": "right",
+     "modelled": false,
+     "designation": "#2-56 UNC"
+    }
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_105_ASME B18.2.2 1/2-13 UNC",
+   "generator": "fastener",
+   "params": {
+    "kind": "nut",
+    "units": "in",
+    "name": "ASME B18.2.2 1/2-13 UNC",
+    "standard": "ASME B18.2.2",
+    "nut": {
+     "type": "hex",
+     "acrossFlats": 0.75,
+     "height": 0.4375
+    },
+    "thread": {
+     "type": "unified",
+     "diameter": 0.5,
+     "pitch": 0.076923,
+     "hand": "right",
+     "modelled": false,
+     "designation": "1/2-13 UNC"
+    }
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_106_ASME B18.21.1 (SAE) #2-56 UNC",
+   "generator": "fastener",
+   "params": {
+    "kind": "washer",
+    "units": "in",
+    "name": "ASME B18.21.1 (SAE) #2-56 UNC",
+    "standard": "ASME B18.21.1 (SAE)",
+    "washer": {
+     "type": "plain",
+     "inner": 0.094,
+     "outer": 0.25,
+     "thickness": 0.022
+    },
+    "thread": {
+     "type": "unified",
+     "diameter": 0.086,
+     "pitch": 0.017857,
+     "hand": "right",
+     "modelled": false,
+     "designation": "#2-56 UNC"
+    }
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "sample_107_ASME B18.21.1 (SAE) 1/2-13 UNC",
+   "generator": "fastener",
+   "params": {
+    "kind": "washer",
+    "units": "in",
+    "name": "ASME B18.21.1 (SAE) 1/2-13 UNC",
+    "standard": "ASME B18.21.1 (SAE)",
+    "washer": {
+     "type": "plain",
+     "inner": 0.531,
+     "outer": 1.062,
+     "thickness": 0.095
+    },
+    "thread": {
+     "type": "unified",
+     "diameter": 0.5,
+     "pitch": 0.076923,
+     "hand": "right",
+     "modelled": false,
+     "designation": "1/2-13 UNC"
+    }
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "modelled_m16_right",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 4762 M1.6x2.5",
+    "standard": "ISO 4762",
+    "head": {
+     "type": "socketCap",
+     "diameter": 3,
+     "height": 1.6
+    },
+    "drive": {
+     "type": "hex",
+     "size": 1.5,
+     "depth": 0.7
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 1.6,
+     "pitch": 0.35,
+     "hand": "right",
+     "modelled": true,
+     "designation": "M1.6",
+     "length": 10
+    },
+    "length": 10
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "modelled_m16_left",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 4762 M1.6x2.5",
+    "standard": "ISO 4762",
+    "head": {
+     "type": "socketCap",
+     "diameter": 3,
+     "height": 1.6
+    },
+    "drive": {
+     "type": "hex",
+     "size": 1.5,
+     "depth": 0.7
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 1.6,
+     "pitch": 0.35,
+     "hand": "left",
+     "modelled": true,
+     "designation": "M1.6",
+     "length": 10
+    },
+    "length": 10
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "modelled_nut",
+   "generator": "fastener",
+   "params": {
+    "kind": "nut",
+    "units": "mm",
+    "name": "ISO 4032 M1.6",
+    "standard": "ISO 4032",
+    "nut": {
+     "type": "hex",
+     "acrossFlats": 3.2,
+     "height": 1.3
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 1.6,
+     "pitch": 0.35,
+     "hand": "right",
+     "modelled": true,
+     "designation": "M1.6"
+    }
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "modelled_insert",
+   "generator": "fastener",
+   "params": {
+    "kind": "insert",
+    "units": "mm",
+    "name": "Heat-set insert M2x3",
+    "standard": "Common knurled insert",
+    "insert": {
+     "type": "knurled",
+     "outer": 3.6,
+     "length": 3
+    },
+    "info": {
+     "hole": 3.2
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 2,
+     "pitch": 0.4,
+     "hand": "right",
+     "modelled": true,
+     "designation": "M2"
+    }
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "modelled_bolt",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 4014 M1.6x12",
+    "standard": "ISO 4014",
+    "head": {
+     "type": "hex",
+     "acrossFlats": 3.2,
+     "height": 1.1
+    },
+    "drive": {
+     "type": "none"
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 1.6,
+     "pitch": 0.35,
+     "hand": "right",
+     "modelled": true,
+     "designation": "M1.6",
+     "length": 9.2
+    },
+    "length": 12
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "modelled_inch_screw",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "in",
+    "name": "ASME B18.3 #2-56 UNC x 1/8",
+    "standard": "ASME B18.3",
+    "head": {
+     "type": "socketCap",
+     "diameter": 0.14,
+     "height": 0.086
+    },
+    "drive": {
+     "type": "hex",
+     "size": 0.078,
+     "depth": 0.051
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "unified",
+     "diameter": 0.086,
+     "pitch": 0.017857,
+     "hand": "right",
+     "modelled": true,
+     "designation": "#2-56 UNC",
+     "length": 0.125
+    },
+    "length": 0.125
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "drive_phillips",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 7045 M1.6x3 PH",
+    "standard": "ISO 7045",
+    "head": {
+     "type": "pan",
+     "diameter": 3.2,
+     "height": 1.3
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "drive": {
+     "number": 0,
+     "size": 1.6,
+     "depth": 0.7,
+     "type": "phillips"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 1.6,
+     "pitch": 0.35,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M1.6",
+     "length": 3
+    },
+    "length": 3
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "drive_pozidriv",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 7045 M1.6x3 PH",
+    "standard": "ISO 7045",
+    "head": {
+     "type": "pan",
+     "diameter": 3.2,
+     "height": 1.3
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "drive": {
+     "number": 0,
+     "size": 1.6,
+     "depth": 0.7,
+     "type": "pozidriv"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 1.6,
+     "pitch": 0.35,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M1.6",
+     "length": 3
+    },
+    "length": 3
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "refused_missing",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 4762 M1.6x2.5",
+    "standard": "ISO 4762",
+    "head": {
+     "type": "socketCap",
+     "height": 1.6
+    },
+    "drive": {
+     "type": "hex",
+     "size": 1.5
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 1.6,
+     "pitch": 0.35,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M1.6",
+     "length": 2.5
+    },
+    "length": 2.5
+   }
+  },
+  {
+   "name": "refused_no_washer",
+   "generator": "fastener",
+   "params": {
+    "kind": "washer",
+    "units": "mm",
+    "name": "w"
+   }
+  },
+  {
+   "name": "refused_impossible",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 4762 M1.6x2.5",
+    "standard": "ISO 4762",
+    "head": {
+     "type": "socketCap",
+     "diameter": 1.2800000000000002,
+     "height": 1.6
+    },
+    "drive": {
+     "type": "hex",
+     "size": 1.5,
+     "depth": 0.7
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 1.6,
+     "pitch": 0.35,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M1.6",
+     "length": 7.5
+    },
+    "length": 2.5
+   }
+  },
+  {
+   "name": "refused_whole_spec",
+   "generator": "fastener",
+   "params": {
+    "kind": "rivet"
+   }
+  },
+  {
+   "name": "refused_bad_hand",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 4762 M1.6x2.5",
+    "standard": "ISO 4762",
+    "head": {
+     "type": "socketCap",
+     "diameter": 3,
+     "height": 1.6
+    },
+    "drive": {
+     "type": "hex",
+     "size": 1.5,
+     "depth": 0.7
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 1.6,
+     "pitch": 0.35,
+     "hand": "sideways",
+     "modelled": false,
+     "designation": "M1.6",
+     "length": 2.5
+    },
+    "length": 2.5
+   }
+  },
+  {
+   "name": "unknown_generator",
+   "generator": "no-such-shape",
+   "params": {}
+  },
+  {
+   "name": "unknown_output",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 4762 M1.6x2.5",
+    "standard": "ISO 4762",
+    "head": {
+     "type": "socketCap",
+     "diameter": 3,
+     "height": 1.6
+    },
+    "drive": {
+     "type": "hex",
+     "size": 1.5,
+     "depth": 0.7
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 1.6,
+     "pitch": 0.35,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M1.6",
+     "length": 2.5
+    },
+    "length": 2.5
+   },
+   "output": "png"
+  },
+  {
+   "name": "inch_thumb_screw",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "in",
+    "name": "Thumb screw 1/4-20",
+    "head": {
+     "type": "knurled",
+     "diameter": 0.75,
+     "height": 0.4,
+     "collarDiameter": 0.4,
+     "collarHeight": 0.1
+    },
+    "drive": {
+     "type": "slot",
+     "size": 0.06,
+     "depth": 0.08
+    },
+    "thread": {
+     "type": "unified",
+     "diameter": 0.25,
+     "pitch": 0.05,
+     "length": 1.0,
+     "hand": "right"
+    },
+    "length": 1.0,
+    "point": {
+     "type": "cone"
+    }
+   },
+   "output": "mesh"
+  },
+  {
+   "name": "store_placed",
+   "generator": "fastener",
+   "params": {
+    "kind": "screw",
+    "units": "mm",
+    "name": "ISO 4762 M1.6x2.5",
+    "standard": "ISO 4762",
+    "head": {
+     "type": "socketCap",
+     "diameter": 3,
+     "height": 1.6
+    },
+    "drive": {
+     "type": "hex",
+     "size": 1.5,
+     "depth": 0.7
+    },
+    "point": {
+     "type": "chamfer"
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 1.6,
+     "pitch": 0.35,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M1.6",
+     "length": 2.5
+    },
+    "length": 2.5
+   },
+   "output": "store",
+   "placement": {
+    "origin": [
+     10,
+     0,
+     5
+    ],
+    "zAxis": [
+     0,
+     0,
+     1
+    ]
+   }
+  },
+  {
+   "name": "store_tilted",
+   "generator": "fastener",
+   "params": {
+    "kind": "nut",
+    "units": "mm",
+    "name": "ISO 4032 M1.6",
+    "standard": "ISO 4032",
+    "nut": {
+     "type": "hex",
+     "acrossFlats": 3.2,
+     "height": 1.3
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 1.6,
+     "pitch": 0.35,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M1.6"
+    }
+   },
+   "output": "store",
+   "placement": {
+    "origin": [
+     -3,
+     4,
+     2
+    ],
+    "zAxis": [
+     1,
+     1,
+     0
+    ]
+   }
+  },
+  {
+   "name": "placement_zero_axis",
+   "generator": "fastener",
+   "params": {
+    "kind": "nut",
+    "units": "mm",
+    "name": "ISO 4032 M1.6",
+    "standard": "ISO 4032",
+    "nut": {
+     "type": "hex",
+     "acrossFlats": 3.2,
+     "height": 1.3
+    },
+    "thread": {
+     "type": "metric",
+     "diameter": 1.6,
+     "pitch": 0.35,
+     "hand": "right",
+     "modelled": false,
+     "designation": "M1.6"
+    }
+   },
+   "output": "mesh",
+   "placement": {
+    "origin": [
+     0,
+     0,
+     0
+    ],
+    "zAxis": [
+     0,
+     0,
+     0
+    ]
+   }
+  }
+ ]
+}

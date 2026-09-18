@@ -114,19 +114,130 @@ fn an_unknown_type_still_reads_unknown() {
     assert_eq!(r.errors[0].message, "unknown feature type: noSuchFeature");
 }
 
-/// The three sentences of `plugin_geometry.unregistered`: a plugin that is on
-/// disk but has no component for this engine is named, and says why.
+fn built(name: &str) -> bool {
+    fundacad_geom::plugins::load();
+    let p = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("../../plugins/{name}/geometry.wasm"));
+    if !p.is_file() {
+        eprintln!("skipped: build {name} with scripts/build-plugin-wasm.py");
+    }
+    p.is_file()
+}
+
+fn job(r: fundacad_protocol::JobResult) -> serde_json::Map<String, Value> {
+    match r {
+        fundacad_protocol::JobResult::Json(m) => m,
+        _ => panic!("a json reply"),
+    }
+}
+
+/// A texture on the top of a plate: the rebuild stashes its spec, the viewport
+/// mesh of that face is displaced (more triangles, raised within its depth,
+/// its colour slot on the payload) and the other faces are untouched.
 #[test]
-fn a_plugin_without_a_component_is_named() {
-    if !component_built() {
+fn a_texture_displaces_its_face_and_only_its_face() {
+    if !built("FundaCAD.Texture") {
         return;
     }
-    let r = build(vec![json!({"id": "t", "type": "texture", "faces": []})]);
-    let m = &r.errors[0].message;
-    assert!(
-        m.starts_with("this needs the \"FundaCAD.Texture\" plugin, which is installed but would not load:"),
-        "{m}"
-    );
+    let mut f = block(20.0, 20.0, 5.0);
+    let plain = build(f.clone());
+    f.push(json!({"id": "t", "type": "texture", "kind": "knurl", "depth": 0.4, "scale": 2.0, "colorSlot": 1,
+                  "faces": {"kind": "face", "by": "normal", "dir": [0, 0, 1]}}));
+    let r = build(f);
+    assert!(r.errors.is_empty(), "{:?}", r.errors);
+    assert_eq!(r.bodies[0].mesh_passes.len(), 1);
+    let mesh = |b: &builder::BuiltBody| {
+        let mb = fundacad_geom::mesh::MeshBody {
+            id: b.id.clone(),
+            name: b.name.clone(),
+            shape: Some(&b.shape),
+            mesh_passes: b.mesh_passes.clone(),
+            ..Default::default()
+        };
+        let out = fundacad_geom::mesh::mesh_result(&[mb], 0.1, &Default::default());
+        match out.bodies.into_iter().next() {
+            Some(fundacad_protocol::WireBody::Full(full)) => full,
+            _ => panic!("a full body"),
+        }
+    };
+    let (a, b) = (mesh(&plain.bodies[0]), mesh(&r.bodies[0]));
+    assert!(b.indices.len() > 10 * a.indices.len(), "{} vs {}", b.indices.len(), a.indices.len());
+    let top = b.positions.chunks_exact(3).map(|p| p[2]).fold(f32::MIN, f32::max);
+    assert!(top > 5.3 && top <= 5.4 + 1e-4, "{top}");
+    assert_eq!(b.fields["faceColorSlots"].as_array().map(|s| s.iter().filter(|v| **v == json!(1)).count()), Some(1));
+    assert_ne!(a.fields["etag"], b.fields["etag"]);
+    let untouched = |m: &fundacad_protocol::FullBody, face: u32| m.face_ids.iter().filter(|&&f| f == face).count();
+    let top_face = b.face_ids.iter().copied().max_by_key(|&f| untouched(&b, f)).unwrap();
+    for face in 0..6u32 {
+        if face != top_face {
+            assert_eq!(untouched(&a, face), untouched(&b, face), "face {face}");
+        }
+    }
+}
+
+#[test]
+fn a_bad_texture_value_is_the_features_error() {
+    if !built("FundaCAD.Texture") {
+        return;
+    }
+    let mut f = block(20.0, 20.0, 5.0);
+    f.push(json!({"id": "t", "type": "texture", "kind": "glitter", "faces": {"by": "all"}}));
+    let r = build(f);
+    assert_eq!(r.errors[0].message, "unknown texture kind: 'glitter'");
+    assert_eq!(r.errors[0].feature_id.as_deref(), Some("t"));
+}
+
+/// generateShape through the fastener generator: a valid solid, and a spec
+/// with holes refused with every missing field named.
+#[test]
+fn a_fastener_is_generated() {
+    if !built("FundaCAD.Screws") {
+        return;
+    }
+    let spec = json!({"kind": "washer", "units": "mm", "name": "M4 washer",
+                      "washer": {"type": "plain", "inner": 4.3, "outer": 9.0, "thickness": 0.8}});
+    let m = job(fundacad_geom::plugins::generate_shape_result(
+        &serde_json::from_value(json!({"generator": "fastener", "params": spec, "output": "mesh"})).unwrap(),
+        None,
+    ));
+    assert_eq!(m["valid"], json!(true));
+    let want = PI * (4.5f64.powi(2) - 2.15f64.powi(2)) * 0.8;
+    assert!((m["volume"].as_f64().unwrap() - want).abs() < 1e-6 * want);
+    let m = job(fundacad_geom::plugins::generate_shape_result(
+        &serde_json::from_value(json!({"generator": "fastener", "params": {"kind": "washer", "units": "mm", "name": "w"}}))
+            .unwrap(),
+        None,
+    ));
+    assert_eq!(m["error"]["message"], json!("Fastener: missing washer type"));
+}
+
+/// exportWith through the slicer project exporter: the file lands at the path
+/// the host chose and is a zip with the project's five entries.
+#[test]
+fn a_slicer_project_is_exported() {
+    if !built("FundaCAD.Printing") {
+        return;
+    }
+    let dir = std::env::temp_dir().join(format!("fc-plugin-export-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("proj.3mf");
+    let doc = json!({"parameters": {}, "features": block(20.0, 20.0, 5.0)});
+    let m = job(fundacad_geom::plugins::export_with_result(
+        &serde_json::from_value(json!({"exporter": "print-project-3mf", "path": path.to_string_lossy(), "document": doc,
+                                       "options": {"palette": [{"name": "Red", "color": "#e03030"}]}}))
+        .unwrap(),
+        &NoWatch,
+        None,
+    ));
+    assert_eq!(m["info"], json!({}), "{m:?}");
+    let bytes = std::fs::read(&path).unwrap();
+    let _ = std::fs::remove_dir_all(&dir);
+    let names: Vec<&str> = ["[Content_Types].xml", "_rels/.rels", "3D/3dmodel.model", "Metadata/model_settings.config",
+        "Metadata/project_settings.config"]
+    .to_vec();
+    for n in names {
+        assert!(bytes.windows(n.len()).any(|w| w == n.as_bytes()), "{n} is in the zip");
+    }
+    assert_eq!(&bytes[..4], b"PK\x03\x04");
 }
 
 #[test]
@@ -140,7 +251,7 @@ fn an_op_names_the_plugin_it_cannot_find() {
     };
     assert_eq!(
         m["error"]["message"],
-        json!("no plugin that is running offers the shape \"nope\"")
+        json!("no plugin that is running offers the shape 'nope'")
     );
 
     let JobResult::Json(m) = fundacad_geom::plugins::export_with_result(
@@ -152,6 +263,6 @@ fn an_op_names_the_plugin_it_cannot_find() {
     };
     assert_eq!(
         m["error"]["message"],
-        json!("no installed plugin provides the \"nope\" export")
+        json!("no installed plugin provides the 'nope' export")
     );
 }

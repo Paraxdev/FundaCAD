@@ -151,16 +151,36 @@ use for them).
   against the manifest's `featureTypes`, `exporters` and `shapeGenerators`),
   `run-feature`, `resolve-pass` + `displace` with a `code-version` that rides
   in the mesh etag and the mesh cache key, `write-export`, `generate-shape`.
+  `resolve-pass` hands back each claimed face with a tag that rides into its
+  `displace` (a component keeps no state between calls, so what Python keeps
+  in a module global between the two travels there), and `displace` reads the
+  face's stored triangulation, with `split-creases` on for the viewport only.
+  Displaced triangles take their face's place in face order, under its id,
+  with `faceColorSlots` from a spec's `colorSlot`, in the viewport (80,000
+  triangles a face), the exports and `exportWith` (200,000); the payload and
+  export caches key on the passes.
 - **Imports, the generic kernel:** an opaque `shape` resource (never BREP
   bytes per call) with its measurements, surfaces, curves, classification and
-  triangulation; primitives, polygon faces, sketch profiles, prism, revolve,
-  booleans, unify, fillet and chamfer with the one-edge-at-a-time fallback;
-  the blob store; a feature context (the feature JSON, parameter values,
-  selector picks grouped by body, body shapes in and out, diagnostics, mesh
-  pass specs); `output.write` for an exporter, to a path the host chose; and
-  `cancelled`, `progress`, `log`.
+  triangulation, its surface frame and samples of the surface at (u, v), its
+  stored triangulation with the (u, v) of every node, and its orientation;
+  primitives, polygon faces, line, arc and circle edges and wires, sketch
+  profiles, prism, revolve, a helical sweep (a revolve that climbs), a
+  rotation, booleans plain or with build123d's options (parallel, a fuzzy
+  value or the picked-geometry one, cleaned), unify, fillet and chamfer with
+  the one-edge-at-a-time fallback, face selectors resolved against any shape,
+  and the Delaunay triangulation of planar points exactly as
+  `scipy.spatial.Delaunay` makes it (Qhull 2020.2, vendored in
+  `third_party/qhull`, same options, same facet walk); the blob store; a
+  feature context (the feature JSON, parameter values, selector picks grouped
+  by body, body shapes in and out, diagnostics, mesh pass specs);
+  `output.write` for an exporter, to a path the host chose; `numeric`, the
+  engine's own C math library, so a plugin's sines and powers round as the
+  Python half's do on the same machine; `files` reads, only for a manifest
+  that grants `files.read`; and `cancelled`, `progress`, `log`. A kernel
+  refusal a plugin hands on unchanged keeps its error code.
 - **Sandbox:** WASI with no preopened directories, no environment, no
-  arguments and sockets refused; a `StoreLimits` memory cap of 1 GiB;
+  arguments and sockets refused; files only through `files`, read only, and
+  only with the grant; a `StoreLimits` memory cap of 1 GiB;
   epoch interruption on a 20 ms tick with the same budgets the Python engine
   gives a job, 60 s per feature and per mesh pass, 180 s for `generateShape`;
   cancellation polled in the same callback, so a cancel stops a plugin mid
@@ -173,10 +193,37 @@ use for them).
   type", exactly as the Python builder alone does. A component is compiled the
   first time one of its declared names is used, and the three sentences of
   `unregistered()` (absent, installed but broken, unknown) are kept.
-- **Proof:** PrintToolbox's eight feature types are ported
-  (`plugins/FundaCAD.PrintToolbox/geometry-rs`, 192 KiB of wasm) and
-  `sidecar/tools/corpus_plugins.json` runs 40 documents through both engines,
-  volumes and refusals alike.
+- **Proof:** every in-repo plugin's geometry is ported, each crate in its
+  plugin's `geometry-rs`, and each checked on both engines:
+  - PrintToolbox, eight feature types: `sidecar/tools/corpus_plugins.json`, 40
+    documents through `diff_engines.py`, volumes and refusals alike.
+  - Screws, the `fastener` generator with its modelled threads on the kernel's
+    helical sweep: `corpus_screws_ops.json`, 127 `generateShape` cases (every
+    catalogue family at both ends of its table, the threads, drives and
+    refusals) through `diff_plugin_ops.py`: solids, validity and face counts
+    exact, volumes to 1e-6, the preview mesh vertex for vertex, and a stored
+    blob rebuilt as an import.
+  - Printing, the slicer project exporter, with the person's slicer presets
+    read through `files`: `corpus_printing_ops.json`, 14 `exportWith` cases
+    compared entry by entry inside the zip.
+  - Texture, the feature and its mesh pass: `corpus_texture.json`, 84
+    documents (every kind, every control, planes, cylinders, cones, spheres,
+    fillet corners, images, grime, several bodies, refusals) through
+    `diff_engines.py` and `diff_meshes.py`, which holds the meshes to the same
+    triangles per face, every vertex and triangle to 1e-5 of the other
+    engine's, the normals to 1e-4, the export, and the etags (stable on an
+    identical rebuild, changed with the texture). They agree triangle for
+    triangle. What makes that possible is recorded in the crate: numpy's
+    pairwise sums and its row by row axis-0 reductions, its float `%`,
+    `round`, `arange` and `unique`, PCG64 and SeedSequence for the noise
+    table, Qhull for every Delaunay, and the platform libm for every
+    transcendental. The last two cannot be anything else: Qhull breaks a
+    co-circular tie by its own insertion order, and one ulp of a cosine moves
+    such a tie. What stays apart: numpy's `lstsq` (LAPACK) and the port's QR
+    agree to rounding, which only shows in the normal of a triangle with no
+    area; and a JPEG heightmap's decoder (libjpeg-turbo there, zune-jpeg here)
+    may round a pixel one level differently.
+  - MultiColor, ExtraParameters and SpaceMouse have no engine geometry.
 
 - **Shared algorithms:** the TypeScript copies stay (the frontend needs them
   synchronously for previews); the Rust twin is ported from the TypeScript,
@@ -252,8 +299,8 @@ progress is planned wrong.
    export (STEP, STL, 3MF with colours, GLB), `inspect`, `interference`,
    `projectGeometry`, `tessellateText`, `listFonts`, `migrateGeometry`.
 6. Plugin host (section 2.3, in) and the in-repo plugins' geometry ported to
-   wasm components: PrintToolbox is ported, Screws, Printing and Texture are
-   not.
+   wasm components: PrintToolbox, Screws, Printing and Texture are ported
+   (section 2.3, Proof).
 7. `fundacad-mcp` on rmcp, same tool vocabulary (docs/MCP.md). Done: the two
    servers publish a byte-identical tool list, the eleven Python suites have
    Rust twins, and `crates/fundacad-mcp/tools/diff_servers.py` runs a scripted
@@ -311,7 +358,7 @@ LOC are `wc -l` of the current tree. "Oracle" is what proves the port right.
 | exporters.py, export_tree.py | 202 | fundacad-geom::export::step | medium | STEP re-read round trip |
 | inspect_model.py | 249 | fundacad-geom::inspect | low | MCP tests |
 | rebuild_cache.py, geomstore.py | 1,104 | fundacad-geom::cache | medium | test_checkpoint, test_geomstore |
-| shape_generate.py, plugin_geometry.py | 624 | fundacad-geom::plugins (wasmtime host, done) | design | corpus_plugins.json, tests/plugin_host.rs |
+| shape_generate.py, plugin_geometry.py | 624 | fundacad-geom::plugins (wasmtime host, done) | design | corpus_plugins.json, corpus_screws_ops.json, corpus_printing_ops.json, corpus_texture.json, tests/plugin_host.rs, tests/qhull_parity.rs |
 | server.py | 2,139 | fundacad-engine | medium | test_ws, test_cancel, test_conn_limit, test_fullstack, test_heartbeat |
 
 ### 4.1b The Python MCP plugin

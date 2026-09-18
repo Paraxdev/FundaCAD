@@ -133,7 +133,7 @@ fn brep_import_stores_a_readable_blob() {
 }
 
 fn body<'a>(id: &'a str, name: &'a str, shape: &'a Shape, node_ref: Option<&'a str>) -> ExportBody<'a> {
-    ExportBody { id, name, shape, node_ref }
+    ExportBody { id, name, shape, node_ref, mesh_passes: &[] }
 }
 
 #[test]
