@@ -41,6 +41,22 @@ fn main() {
     let target = std::env::var("TARGET").expect("No TARGET environment variable defined");
     let is_windows = target.to_lowercase().contains("windows");
     let is_windows_gnu = target.to_lowercase().contains("windows-gnu");
+    // A MinGW (GCC 16) kernel links once windowscodecs is added, then segfaults
+    // inside Extrema_ExtCC during ordinary fillets, so refuse it outright.
+    if is_windows_gnu && std::env::var_os("FUNDACAD_ALLOW_WINDOWS_GNU").is_none() {
+        panic!(
+            r#"
+
+FundaCAD's kernel crashes when built with the MinGW (windows-gnu) toolchain.
+A MinGW cargo, such as Chocolatey's, is probably first on PATH. Build with
+MSVC instead, for example in PowerShell:
+
+    $env:PATH = "$HOME\.rustup\toolchains\stable-x86_64-pc-windows-msvc\bin;$env:PATH"
+
+Set FUNDACAD_ALLOW_WINDOWS_GNU=1 to build it anyway.
+"#
+        );
+    }
 
     let occt_config = OcctConfig::detect();
 
