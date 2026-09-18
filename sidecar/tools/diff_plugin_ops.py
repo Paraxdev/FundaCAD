@@ -302,7 +302,9 @@ def main():
         for i, e in enumerate(exports):
             e = copy.deepcopy(e)
             if "datadir" in e:
-                root = os.path.join(work, f"datadir{i}", "user", "OrcaSlicer")
+                # a `user` folder above the data directory, which must not make
+                # every file under it the person's own
+                root = os.path.join(work, f"datadir{i}", "user", "app-data")
                 write_datadir(root, e["datadir"])
                 e = substitute(e, "$DATADIR", root)
             e = substitute(e, "$MISSING", os.path.join(work, "no-such-folder"))
