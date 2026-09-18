@@ -247,7 +247,12 @@ impl Socket {
         // engine's header parser refuses it, drops the connection, and the
         // client reports an unfinished handshake with nothing to point at.
         let url = format!("ws://127.0.0.1:{port}/?token={token}");
-        let (ws, _) = tokio_tungstenite::connect_async(url)
+        // A rebuild reply of a large assembly is tens of MB, far past
+        // tungstenite's 16 MiB default. The Python server sets max_size=None.
+        let config = tokio_tungstenite::tungstenite::protocol::WebSocketConfig::default()
+            .max_message_size(None)
+            .max_frame_size(None);
+        let (ws, _) = tokio_tungstenite::connect_async_with_config(url, Some(config), false)
             .await
             .map_err(|e| io::Error::new(io::ErrorKind::ConnectionRefused, e.to_string()))?;
         Ok(Socket { ws })
