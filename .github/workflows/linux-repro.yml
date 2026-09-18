@@ -1,0 +1,79 @@
+# Diagnostic only, run by hand: rebuilds one document on a Linux release build
+# with the phase trace on, next to a debug build, a release build with the C++
+# shims at -O0, and a sanitised build, to tell a GCC optimiser problem from a
+# slow path.
+name: linux-repro
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["diag/**"]
+
+jobs:
+  repro:
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [release, debug, release-shims-O0, sanitize]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache the static OpenCASCADE build
+        uses: actions/cache@v4
+        with:
+          path: target/OCCT
+          key: occt-static-${{ runner.os }}-${{ hashFiles('third_party/opencascade-rs/crates/occt-sys/src/lib.rs', 'third_party/opencascade-rs/crates/opencascade-sys/build.rs', 'third_party/opencascade-rs/crates/opencascade-sys/Cargo.toml') }}
+
+      - name: Build
+        shell: bash
+        run: |
+          set -x
+          case "${{ matrix.variant }}" in
+            release) cargo build --release -p fundacad-cli ;;
+            debug) cargo build -p fundacad-cli ;;
+            release-shims-O0) CXXFLAGS="-O0" cargo build --release -p fundacad-cli ;;
+            sanitize)
+              CXXFLAGS="-fsanitize=undefined,address -fno-omit-frame-pointer -O2 -g" \
+              RUSTFLAGS="-C link-arg=-fsanitize=undefined,address" \
+                cargo build --release -p fundacad-cli ;;
+          esac
+
+      - name: Rebuild the corner chamfer
+        shell: bash
+        env:
+          FUNDACAD_BENCH_PHASES: "1"
+          FUNDACAD_BENCH_TRACE: "1"
+          RUST_BACKTRACE: "1"
+          ASAN_OPTIONS: detect_leaks=0:halt_on_error=0
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=0
+        run: |
+          cat > doc.json <<'DOC'
+          {"parameters":{},"features":[{"id":"f1","type":"sketch","plane":"XY","entities":[{"type":"rectangle","id":"e0","width":40,"height":40,"x":0,"y":0}]},{"id":"f2","type":"extrude","sketch":"f1","distance":15.23,"operation":"new","regions":[[0,0,0]],"hiddenBodies":[]},{"id":"f3","type":"chamfer","edges":[{"kind":"edge","by":"nearest","point":[0,-20,15.229999542236328],"body":"body1"},{"kind":"edge","by":"nearest","point":[20,0,15.229999542236328],"body":"body1"},{"kind":"edge","by":"nearest","point":[20,-20,7.614999771118164],"body":"body1"}],"distance":3.35}],"bodyIds":{"f2:0":"body1"},"paramDefs":{},"version":9}
+          DOC
+          case "${{ matrix.variant }}" in debug) bin=target/debug ;; *) bin=target/release ;; esac
+          start=$(date +%s.%N)
+          set +e
+          timeout -s INT 180 $bin/fundacad-engine rebuild doc.json --json > out.json 2> err.txt
+          code=$?
+          set -e
+          end=$(date +%s.%N)
+          echo "exit $code after $(echo "$end - $start" | bc) s"
+          tail -n 400 err.txt
+          python3 - <<'PY'
+          import json
+          try:
+              r = json.loads(open("out.json").read().splitlines()[0])
+          except Exception as e:
+              print("no reply", e)
+              raise SystemExit
+          print("ok", r.get("ok"), r.get("error"))
+          res = r.get("result") or {}
+          for b in res.get("bodies", []):
+              print({k: v for k, v in b.items() if not isinstance(v, (list, dict))})
+          print(json.dumps(res.get("diagnostics"))[:2000])
+          PY
+          test $code -eq 0

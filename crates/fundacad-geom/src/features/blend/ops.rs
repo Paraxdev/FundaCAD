@@ -60,7 +60,7 @@ pub fn chamfer(
 /// blends.py `_kernel_copy`, `None` when an edge has no image in the copy.
 pub fn copy(shape: &Shape, edges: &[Shape]) -> Option<(Shape, Vec<Shape>)> {
     let es = kernel::compound(edges);
-    let v = ffi::blend_copy(shape.raw(), es.raw()).ok()?;
+    let v = crate::bench::phase("blend_copy", || ffi::blend_copy(shape.raw(), es.raw())).ok()?;
     let mut all: Vec<Shape> = v.as_ref()?.iter().map(Shape::from_raw_ref).collect();
     if all.is_empty() {
         return None;
@@ -70,13 +70,15 @@ pub fn copy(shape: &Shape, edges: &[Shape]) -> Option<(Shape, Vec<Shape>)> {
 }
 
 pub fn is_seam(shape: &Shape, edge: &Shape) -> bool {
-    ffi::blend_is_seam(shape.raw(), edge.raw())
+    crate::bench::phase("blend_is_seam", || ffi::blend_is_seam(shape.raw(), edge.raw()))
 }
 
 /// blends.py `_edge_dihedral_deg`.
 pub fn dihedral_deg(shape: &Shape, edge: &Shape) -> Option<f64> {
     let mid = EdgeEnt::new(edge.clone()).ok()?.mid;
-    let d = ffi::blend_dihedral_deg(shape.raw(), edge.raw(), mid.x, mid.y, mid.z);
+    let d = crate::bench::phase("blend_dihedral", || {
+        ffi::blend_dihedral_deg(shape.raw(), edge.raw(), mid.x, mid.y, mid.z)
+    });
     (d >= 0.0).then_some(d)
 }
 
