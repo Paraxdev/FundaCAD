@@ -51,6 +51,14 @@ This file starts on 2026-08-03. For anything before that, see the
   the Rust engine is less tested than the beta; its notes ask for a report of
   anything that builds differently. Files open in both.
 
+- **MCP is part of the app.** The MCP server an AI assistant drives FundaCAD
+  through is no longer a plugin to install: it ships beside the app as
+  `fundacad-mcp`, and Preferences has an AI assistants (MCP) section with the
+  live document setting, who is connected right now, and the setup to paste
+  into Claude Code, Claude Desktop or any other MCP host, with a Copy button.
+  An install that still has the old MCP server plugin has it removed on first
+  start, with a note saying where the new settings are.
+
 - **Plugin geometry runs on the Rust engine as sandboxed WebAssembly.** The
   3D Printing Toolbox, Screws, Printing and Texture plugins each ship a
   component beside their Python half, and each matches it on its own test

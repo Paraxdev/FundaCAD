@@ -1,34 +1,73 @@
 # FundaCAD over MCP
 
-`plugins/FundaCAD.MCP/` is a Model Context Protocol server that lets another model build, measure,
-look at and describe FundaCAD parts. It speaks JSON-RPC 2.0 over stdio, which is
-all MCP is on a stdio transport, and it is hand-rolled, no SDK is pinned into
-this repository, and the whole protocol is one `handle()` in `plugins/FundaCAD.MCP/server.py`.
+MCP is part of FundaCAD. It is how an AI assistant drives the app: build,
+measure, look at and describe a part, on the document open in the window or on
+a copy of its own. It is not a plugin and there is nothing to install.
 
-`.mcp.json` at the repository root registers it, so a client that reads that file
-(Claude Code among them) picks it up with no further setup:
+The server is `fundacad-mcp` (`crates/fundacad-mcp`), a Model Context Protocol
+server on the official Rust SDK (`rmcp`, stdio transport, `#[tool]`). Every
+build of the app ships it beside the executable (`externalBin` in
+`src-tauri/tauri.alpha.conf.json`, staged by `scripts/stage-mcp-server.mjs`), in
+the installer and in the portable zip alike.
+
+## Connecting an assistant
+
+**Preferences, AI assistants (MCP)** is the whole of it:
+
+- **Live document** decides what an assistant may do with the document that is
+  open (see [The window's half](#the-windows-half)).
+- **Status** says whether the document is shared and which assistant, if any, is
+  connected right now, and whether it can edit.
+- **How to connect it** gives the setup for the bundled server in the shape each
+  host takes, with a Copy button:
+
+| assistant | what to do with it |
+| --- | --- |
+| Claude Code | run `claude mcp add --scope user fundacad -- "<install dir>/fundacad-mcp.exe"` in a terminal |
+| Claude Desktop | add the block below to `claude_desktop_config.json` (Settings, Developer, Edit Config) and restart it |
+| another MCP host | start `<install dir>/fundacad-mcp.exe` over stdio with no arguments; hosts that read an `mcpServers` block take the same one |
 
 ```json
 { "mcpServers": { "fundacad": {
-    "command": "uv",
-    "args": ["run", "--project", "sidecar", "python", "plugins/FundaCAD.MCP/server.py"] } } }
+    "command": "<install dir>/fundacad-mcp.exe",
+    "args": [],
+    "env": {} } } }
 ```
 
-It runs on the sidecar's own virtual environment because everything it needs is
-already a sidecar dependency: `websockets` for the link, `numpy` for the
-renderer, `pillow` for the PNG.
+The path is the real one on that machine: the app asks for it with the Tauri
+command `mcp_server` (`src-tauri/src/engine.rs`), which refuses rather than
+guesses when the binary is not beside it. The setup is built in
+`src/live/mcpConnect.ts` and shown by `src/components/overlays/McpSection.vue`.
 
-## The Rust port
+It needs no path to anything else. A private session starts the app beside it
+as its engine, `fundacad --engine --ws`, rather than a second shipped
+`fundacad-engine`: the kernel is linked statically, so a second binary would be
+a second copy of it, twice the download for the same code, and one that could
+drift from the version the window runs. A live session attaches to the running
+window: its worker serves a loopback WebSocket beside its stdio pipe, sharing
+the one engine and so the one live session, and the app writes that port and a
+per launch token to `session.json`.
 
-`crates/fundacad-mcp` is the same server in Rust, on the official MCP SDK
-(`rmcp`, stdio transport, `#[tool]`), and it is what survives the sidecar's
-deletion (docs/RUST-PIVOT.md, Phase 2 item 7). Same tool vocabulary, same
-argument names, same defaults, same refusals: the tool list the two publish is
-byte-identical, which is asserted rather than hoped for (see the parity script
-below). It is registered beside the Python one while both exist:
+### An install that had the old MCP plugin
+
+Before 1.0 the MCP server was the `FundaCAD.MCP` plugin: the Python server
+downloaded into `<app data>/plugins/FundaCAD.MCP`, plus a companion that added
+an Assistants block to Preferences. The app removes that directory the first
+time it lists its plugins (`RETIRED_PLUGINS` in `src/plugins/index.ts`), says
+so in a toast, and never starts the companion. It is removed rather than hidden
+because it can no longer do anything useful: the server in it runs on the
+Python engine this build does not have, and its settings block would be a
+second copy of the core section. An assistant configured with the old
+`server.py` path needs the new setup from the section above.
+
+## From a checkout
+
+`.mcp.json` at the repository root registers the same server for this
+repository's own sessions, so a client that reads that file (Claude Code among
+them) picks it up with no further setup:
 
 ```json
-{ "mcpServers": { "fundacad-rust": {
+{ "mcpServers": { "fundacad": {
     "command": "node",
     "args": ["scripts/mcp-rust.mjs"] } } }
 ```
@@ -43,108 +82,28 @@ cargo build --release -p fundacad-mcp -p fundacad-cli
 `target/debug` (or `CARGO_TARGET_DIR`), and with none it exits at once saying
 the command above. It used to be `cargo run`, and a first compile outlasts an
 MCP host's 30 s connect timeout, which the host reports as a bare timeout.
-`fundacad-cli` is the `fundacad-engine` a private session starts, and needs
-OpenCASCADE (`FUNDACAD_OCCT_ROOT`); attaching to a running app needs only
-`fundacad-mcp`. A packaged app ships the binary, see below.
-
-What differs, and why:
-
-- It does not link the geometry kernel. A PRIVATE session spawns
-  `fundacad-engine --ws` and talks to it over the same loopback socket a LIVE
-  session uses, so the two worlds are one code path and an OpenCASCADE abort
-  takes the engine rather than the conversation. The binary to spawn is named by
-  `FUNDACAD_ENGINE_CMD`, which is the variable the protocol suites already drive
-  both engines with, or found next to this one: `fundacad-engine`, then the app
-  itself (`fundacad --engine --ws`, recognised as a Rust engine build by its
-  bytes, so a Python build's window is never started by mistake), then the
-  workspace `target/` directories. The spawned engine is told the app's plugin
-  directory unless `FUNDACAD_PLUGIN_DIR` is already set.
-- Tool calls are answered in the order they arrive. The SDK spawns a task per
-  request, so the server runs on a single-threaded runtime and holds one turn
-  lock, which is what the Python server's single read loop gave for free.
-- The renderer is the same rasteriser with no numpy and the PNG comes from the
-  `png` crate rather than Pillow; the pictures are the same pictures.
-- `expr.py` is gone: expressions are `fundacad-core::params`, the Rust twin of
-  `src/params/{parse,eval}.ts`, so there is one fewer copy of the grammar to
-  keep in step. Its error wording follows the app's rather than the Python
-  port's (`unknown parameter "x"`, not `unknown parameter 'x'`).
-
-Both servers can be driven over one scripted session and their replies compared:
-
-```sh
-python crates/fundacad-mcp/tools/diff_servers.py crates/fundacad-mcp/tools/parity.jsonl
-python crates/fundacad-mcp/tools/diff_servers.py --tools
-```
-
-The Python suite in `plugins/FundaCAD.MCP/tests/` is the oracle, and every file
-in it has a twin under `crates/fundacad-mcp/tests/`.
-
-## Without a clone: installing it as a plugin
-
-That command line needs this repository on disk. For someone who has an
-installer instead, the same server is the app's first plugin: **Preferences ▸
-Plugins ▸ MCP server ▸ Install**. It is not shipped in the bundle and nothing
-downloads it until the install screen has been answered.
-
-The screen lists what it will be able to do (read and change the document, use
-the geometry engine, read and save files you choose) and what it will not (use
-the internet, reach devices on your local network, start other programs). It also says that a
-process plugin runs as a normal program on the machine, which is true and is
-the reason the list is worth reading rather than dismissing. See
-`docs/PLUGINS.md`.
-
-Once installed, **How to connect it** produces the block to paste into an MCP
-host's settings, pointing at the interpreter the app already installed:
-
-```json
-{ "mcpServers": { "fundacad": {
-    "command": "<the app's bundled python>",
-    "args": ["<app data>/plugins/FundaCAD.MCP/server.py"],
-    "env": {
-      "PYTHONPATH": "<the app's bundled site-packages>",
-      "FUNDACAD_SIDECAR_DIR": "<the app's geometry engine sources>" } } } }
-```
-
-`FUNDACAD_SIDECAR_DIR` is what a standalone session needs to find an engine to
-spawn. From a checkout `sidecar_link.py` looks for a sibling `sidecar/`
-directory; an installed plugin lives under the app data directory and has no
-sibling, so the app hands the path over. An override naming a directory that is
-not there is ignored rather than believed, so a wrong setting reads as "no
-engine" and not as a `FileNotFoundError` from deep inside a spawn.
-
-The plugin is not a replacement for the clone: `.mcp.json` above is how this
-repository's own sessions run, and that stays.
-
-### In the Rust engine build
-
-The alpha (`--features rust-engine`, `tauri.alpha.conf.json`) has no
-Python, so it ships the Rust server instead: `fundacad-mcp` is bundled beside
-the app executable (`externalBin`, staged by `scripts/stage-mcp-server.mjs`),
-in the installer and in the portable zip. **How to connect it** hands out that
-binary and nothing else:
-
-```json
-{ "mcpServers": { "fundacad": {
-    "command": "<install dir>/fundacad-mcp.exe",
-    "args": [],
-    "env": {} } } }
-```
-
-It needs no path to anything. A private session starts the app beside it as
-its engine, `fundacad --engine --ws`, rather than a second shipped
-`fundacad-engine`: the kernel is linked statically, so a second binary would
-be a second copy of it, twice the download for the same code, and one that
-could drift from the version the window runs. A live session attaches to the
-running window: its worker serves a loopback WebSocket beside its stdio pipe,
-sharing the one engine and so the one live session, and the app writes that
-port and a per launch token to `session.json` as the Python build does.
+`fundacad-cli` is the `fundacad-engine` a private session starts from a
+checkout, and needs OpenCASCADE (`FUNDACAD_OCCT_ROOT`); attaching to a running
+app needs only `fundacad-mcp`.
 
 ## What it talks to
 
-It drives the **sidecar**, the same geometry engine the app drives. That is the
-whole point of the design: a gap an agent hits here is a gap a user hits in the
-viewport, which is what makes driving the sidecar worth more than calling
-build123d from this process.
+It drives the **engine**, the same one the app drives. That is the whole point
+of the design: a gap an agent hits here is a gap a user hits in the viewport.
+
+It does not link the geometry kernel itself. A private session spawns an engine
+with `--ws` and talks to it over the same loopback socket a live session uses,
+so the two worlds are one code path and an OpenCASCADE abort takes the engine
+rather than the conversation. The binary to spawn is named by
+`FUNDACAD_ENGINE_CMD`, or found next to this one: `fundacad-engine`, then the
+app itself (`fundacad --engine --ws`, recognised as a Rust engine build by its
+bytes, so a Python build's window is never started by mistake), then the
+workspace `target/` directories. The spawned engine is told the app's plugin
+directory unless `FUNDACAD_PLUGIN_DIR` is already set.
+
+Tool calls are answered in the order they arrive: the SDK spawns a task per
+request, so the server runs on a single-threaded runtime and holds one turn
+lock.
 
 There are two worlds it can be in.
 
@@ -152,11 +111,10 @@ There are two worlds it can be in.
 document that window has open. Edits appear on screen as they are made, each one
 a single undo. This is the default when a window is open.
 
-**Private**, it spawns its own sidecar on its own port with its own minted
-token. It never competes with a running app for the serialised worker and never
-touches what the user has open; an agent working this way works on its own copy
-and hands the result back as a `.funda` file. This is what it does when no
-window is open, and the only thing it did before live sessions existed.
+**Private**, it spawns its own engine on its own port with its own minted
+token. It never competes with a running app and never touches what the user has
+open; an agent working this way works on its own copy and hands the result back
+as a `.funda` file. This is what it does when no window is open.
 
 ### Choosing
 
@@ -178,10 +136,12 @@ in here can reach.)
 
 A running app writes `session.json` into its app data directory naming its
 engine's port and token, and removes it on the way out
-(`src-tauri/src/session_file.rs`). `plugins/FundaCAD.MCP/app_session.py` reads it and then does
-the thing that actually settles the question: dials that port with that token and
-pings. The file is a hint, it survives a crash, so a stale one costs one
-connect and is then ignored.
+(`src-tauri/src/session_file.rs`). `crates/fundacad-mcp/src/app_session.rs`
+reads it and then does the thing that actually settles the question: dials that
+port with that token and pings. The file is a hint, it survives a crash, so a
+stale one costs one connect and is then ignored. An assistant that started
+before the app did asks again while the answer can still change, and switches
+to the open document once one appears.
 
 The token being on disk is a real change and is documented where it is written.
 It is written user-only, so anything that can read it can already read the user's
@@ -190,7 +150,7 @@ that it is visible and revocable, not that it is small.
 
 ### The window's half
 
-Sharing is a setting in FundaCAD's Preferences, under **Assistants**:
+Sharing is the **Live document** setting in Preferences, AI assistants (MCP):
 
 - **Do not share**, nothing is published; an agent falls back to a private copy.
 - **Share, read only**, an agent can read and measure, and its edits are refused
@@ -199,23 +159,20 @@ Sharing is a setting in FundaCAD's Preferences, under **Assistants**:
   document store, one undo step each.
 
 While an assistant is attached, a badge next to the document name says who it is
-and what it last did, and clicking it opens that setting.
+and what it last did, and clicking it opens Preferences.
 
-The rules live in `sidecar/live_session.py`: one HOST (the window, which owns the
-document and is the only thing that may raise its revision) and any number of
-GUESTS (which may read and PROPOSE, never write). A proposal names the revision
-it was written against and is refused if the document has moved on, so an agent
-cannot overwrite what a person did while it was thinking.
+The rules live in the engine (`crates/fundacad-engine/src/live.rs`): one HOST
+(the window, which owns the document and is the only thing that may raise its
+revision) and any number of GUESTS (which may read and PROPOSE, never write). A
+proposal names the revision it was written against and is refused if the
+document has moved on, so an agent cannot overwrite what a person did while it
+was thinking. The window's side is `src/live/liveSession.ts`.
 
-On Windows the sidecar it spawns is put in a job object with
-`KILL_ON_JOB_CLOSE`, so the sidecar and its OCCT worker die with this process
-however this process dies. That is not housekeeping: an MCP host kills its
-servers with `TerminateProcess`, which runs no cleanup, and the sidecar's own
-die-with-parent covers Linux and macOS only, its docstring says Windows is
-"covered by the Rust-side Job Object", which is true of the app and of nothing
-else. Measured without it: 46 orphaned worker processes, after which a fresh
-sidecar could no longer start one and every build failed with "the geometry
-engine could not start on this computer".
+On Windows the engine a private session spawns is put in a job object with
+`KILL_ON_JOB_CLOSE`, so it dies with this process however this process dies.
+That is not housekeeping: an MCP host kills its servers with `TerminateProcess`,
+which runs no cleanup. Measured without it: 46 orphaned worker processes, after
+which a fresh engine could no longer start one and every build failed.
 
 ## The tools
 
@@ -232,6 +189,11 @@ engine could not start on this computer".
 | `export` | STEP, STL, 3MF, OBJ, BREP |
 
 `schema` is also served as an MCP resource at `fundacad://schema`.
+
+The same names are the op vocabulary a compute plugin reaches the document
+through (`src/plugins/broker/ops.ts`), and `tests/plugins/broker.test.ts` reads
+the tool list out of `crates/fundacad-mcp/src/server.rs` so the two cannot
+drift.
 
 ### Getting a file in when there is no path to it
 
@@ -261,10 +223,10 @@ back up, and a piece ending in base64 padding is refused for saying so.
 
 Nothing is imported until the last piece arrives, so a half-sent file never
 reaches the document, and in a live session it never reaches the app: the
-document is unchanged, and `_call_live` offers nothing when a tool changed
-nothing. The pieces are spooled to a temporary directory rather than joined in
-memory, and that directory is removed as soon as the read returns, or after 30
-minutes if nobody comes back for it.
+document is unchanged, and nothing is offered when a tool changed nothing. The
+pieces are spooled to a temporary directory rather than joined in memory, and
+that directory is removed as soon as the read returns, or after 30 minutes if
+nobody comes back for it.
 
 What arrives inline is capped at 64 MiB across all the pieces, and what comes
 out of an archive at 512 MiB, above the engine's own 400 MiB limit for a STEP so
@@ -290,7 +252,7 @@ way nothing downstream catches: every measurement it takes afterwards is
 consistent with every other one. So the tool says the alternative out loud
 wherever the question comes up (a missing path, an oversized payload, the first
 piece of a long upload): ask the person for the path on the machine FundaCAD
-runs on, or ask them to open the file themselves with **File ▸ Import Mesh…**,
+runs on, or ask them to open the file themselves with **File, Import Mesh**,
 after which it is in the document and `inspect` measures the real geometry. In
 a live session that is the cheapest route by a wide margin, and no bytes cross
 the wire at all.
@@ -301,7 +263,7 @@ A feature addresses geometry that does not exist until the rebuild runs, through
 a `Selector`, usually `by:"match"` carrying a geometric fingerprint. An agent
 has never clicked on anything, so it cannot author one. `inspect` therefore
 returns, for every face and every edge, the exact selector that addresses it,
-authored by `geom_select`'s own fingerprint functions. Paste it into the next
+authored by the engine's own fingerprint functions. Paste it into the next
 feature.
 
 It also flags the two shapes that make later features fail:
@@ -327,22 +289,23 @@ The thing an agent most often needs to see is inside. `view` takes:
 - `highlight_faces: [...]`, paint named faces orange, to answer "which one is
   face 7".
 
-The renderer is a z-buffered flat rasteriser in `plugins/FundaCAD.MCP/render.py`: pure numpy,
-arrays in and an array out, no browser and no GPU. It is deliberately plain. The
-app's own renderer stays the authority for what a person sees; this answers "did
-that do what I meant".
+The renderer is a z-buffered flat rasteriser (`crates/fundacad-mcp/src/render.rs`,
+the PNG from `png.rs`): arrays in and an image out, no browser and no GPU. It is
+deliberately plain. The app's own renderer stays the authority for what a person
+sees; this answers "did that do what I meant".
 
 ## Driving it without an MCP host
 
-`plugins/FundaCAD.MCP/client.py` is a small client. It is in the repository because the end-to-end
-test needs one, testing the tools by calling their coroutines would skip the
-protocol, and the protocol is where a stray `print` to stdout or a reply to a
-notification breaks everything under a real host. It doubles as a command line:
+`crates/fundacad-mcp/tools/client.py` is a small generic MCP client. It speaks
+the protocol over a real pipe, which is where a stray print to stdout or a reply
+to a notification breaks everything under a real host, and it doubles as a
+command line. It drives the built `fundacad-mcp` (`FUNDACAD_MCP_BIN`, or the
+newest under `target/`) unless `--server` names another:
 
 ```sh
-uv run --project sidecar python plugins/FundaCAD.MCP/client.py                     # list the tools
-uv run --project sidecar python plugins/FundaCAD.MCP/client.py schema '{"type":"revolve"}'
-uv run --project sidecar python plugins/FundaCAD.MCP/client.py --script build.json
+python crates/fundacad-mcp/tools/client.py                     # list the tools
+python crates/fundacad-mcp/tools/client.py schema '{"type":"revolve"}'
+python crates/fundacad-mcp/tools/client.py --script build.json
 ```
 
 Each invocation is a fresh server with an empty document, so a sequence of
@@ -376,34 +339,46 @@ one-shot calls is not a session, use `--script`, which is either a JSON array of
 
 | file | what it holds |
 | --- | --- |
-| `server.py` | the protocol and the tools |
-| `sidecar_link.py` | spawning the sidecar and speaking to it |
-| `model.py` | the document: ids, the timeline, the parameter table, validation |
-| `expr.py` | the expression language, a port of `src/params/{parse,eval}.ts` |
-| `render.py` | the rasteriser: camera, clipping, z-buffer, shading |
-| `describe.py` | turning an `inspect` report into something worth reading |
-| `schema.py` | the feature reference the agent reads |
-| `client.py` | the client the tests and the command line use |
-| `winjob.py` | the Windows job object that makes the engine die with the server |
-| `manifest.json` | what it declares when installed as a plugin (`docs/PLUGINS.md`) |
+| `src/server.rs` | the protocol and the tools |
+| `src/tools.rs` | the tools' input schemas and descriptions |
+| `src/upload.rs` | inline `doc_import` content: decoding, pieces, archives |
+| `src/link.rs` | finding and spawning the engine, its lifetime, the Windows job object |
+| `src/app_session.rs`, `src/live.rs` | finding a running window and the live session |
+| `src/model.rs` | the document: ids, the timeline, the parameter table, validation |
+| `src/render.rs`, `src/png.rs` | the rasteriser and its PNG |
+| `src/describe.rs` | turning an `inspect` report into something worth reading |
+| `src/docfile.rs` | reading and writing `.funda` and `.fundab` |
+| `src/schema.rs`, `src/schema.json` | the feature reference the agent reads |
+| `tests/` | one suite per module, driving the built binaries over real stdio and a real socket |
+| `tools/client.py` | the generic client above |
 
-`crates/fundacad-mcp/src/` is the same list in Rust, module for module:
-`server.rs` (the tools), `link.rs` (the engine and its lifetime, `winjob.py`
-included), `model.rs`, `render.rs`, `png.rs`, `describe.rs`, `docfile.rs`,
-`upload.rs` (the inline half of `server.py`), `app_session.rs`, `live.rs`, and
-`schema.rs` with `schema.json`, which is `schema.py`'s tables carried over
-verbatim rather than retyped. There is no `expr.rs`: that is
-`fundacad-core::params`.
+Expressions are `fundacad-core::params`, the Rust twin of
+`src/params/{parse,eval}.ts`, so there is no copy of the grammar here to keep in
+step.
 
-`expr.py` and `schema.py` are both ports of things whose authority lives
-elsewhere, so both are pinned by tests: `plugins/FundaCAD.MCP/tests/test_expr.py` holds the
-grammar (degrees trig, right-associative `^`, semicolon arguments, comparisons
-with a 1e-9 tolerance on `==`, and `if()`) and
-`plugins/FundaCAD.MCP/tests/test_schema.py` holds every documented type against the sidecar's own
-`_FEATURE_HANDLERS` table, in both directions.
-
-Tests run the same way the sidecar's do, and CI globs both directories:
+The suites need the workspace binaries built first, `fundacad-engine` among
+them, or the engine discovery and live session tests have nothing to start:
 
 ```sh
-cd sidecar && uv run python ../plugins/FundaCAD.MCP/tests/test_render.py
+cargo build --workspace --features fundacad-engine/ws
+cargo test --workspace --features fundacad-engine/ws
 ```
+
+## The Python oracle, until the sidecar goes
+
+The server began in Python, as the plugin described above, and
+`crates/fundacad-mcp` is its port: the tool list the two publish is
+byte-identical and a scripted session answers the same, which is asserted
+rather than hoped for. The Python server is kept in
+`crates/fundacad-mcp/tools/python-oracle/`, with its eleven suites, only so the
+two can still be compared:
+
+```sh
+python crates/fundacad-mcp/tools/diff_servers.py crates/fundacad-mcp/tools/parity.jsonl
+python crates/fundacad-mcp/tools/diff_servers.py --tools
+uv run --project sidecar python crates/fundacad-mcp/tools/python-oracle/tests/test_render.py
+```
+
+It runs on the sidecar's virtual environment and needs the sidecar to spawn, so
+it is deleted together with `sidecar/`, and the left side of `diff_servers.py`
+with it. Every one of its suites has a twin under `crates/fundacad-mcp/tests/`.
