@@ -1,6 +1,6 @@
 //! Supervises the Rust geometry engine worker and relays it to the webview.
 //!
-//! The worker is this executable started with `--engine` (docs/RUST-PIVOT.md,
+//! The worker is this executable started with `--engine` (docs/ENGINE.md,
 //! section 2.1). It speaks framed messages on its stdin and stdout; every
 //! message it sends goes to the one channel the webview attached, prefixed
 //! with its kind byte. A worker that dies is restarted, and a job that does not

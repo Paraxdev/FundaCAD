@@ -34,6 +34,6 @@ See **Build** in [`README.md`](README.md). Before opening a PR:
 - `npx vitest run` and `cargo test --workspace --features fundacad-engine/ws`
   must pass, and so must every golden check,
   `fundacad-engine golden-check tests/golden/<name>.golden.json`.
-- Keep geometry in the engine (`crates/`); the frontend owns the document and viewport.
+- Keep geometry in the engine, the Funda Engine (`crates/`); the frontend owns the document and viewport.
 - Reference geometry by **queryable selectors** (axis / normal / nearest-point),
   never by topology index, so references survive edits that renumber topology.

@@ -16,14 +16,14 @@ Two transports carry the same messages:
   (`fundacad --engine`) and talks to the app's supervisor (`src-tauri/src/engine.rs`)
   over stdio, one message per `[u32 LE payload_len][u8 kind][payload]`, kind `1` for
   UTF-8 JSON text and `2` for a binary reply frame, no handshake or token
-  (`crates/fundacad-protocol/src/stdio.rs`, `docs/RUST-PIVOT.md` section 2.1). The
+  (`crates/fundacad-protocol/src/stdio.rs`, `docs/ENGINE.md` section 2.1). The
   supervisor relays every message to the webview on one channel with the kind byte in
   front (`IpcTransport` in `src/geometry/transport.ts`).
 - **A loopback WebSocket**, `ws://127.0.0.1:8765`, served by `fundacad-engine --ws` (and
   `fundacad --engine --ws`) for `npm run dev` in a browser, the e2e scripts and the MCP
   server's private engine, and by the app's own engine for a live session.
 
-The Python engine this protocol was first written for lives on the `legacy` branch.
+The sidecar this protocol was first written for lives on the `legacy` branch.
 Where its behaviour differed from this engine's, the difference is recorded there.
 
 ## Connecting
@@ -292,7 +292,7 @@ Otherwise the reply matches `export`'s shape (`path` + optional `warnings`), plu
 optional `info` object the exporter chose to report.
 
 Plugin geometry runs in WebAssembly components inside each plugin, sandboxed by the
-engine's plugin host (`docs/RUST-PIVOT.md` section 2.3).
+engine's plugin host (`docs/ENGINE.md` section 2.3).
 
 ### `interference`
 
@@ -457,7 +457,7 @@ import additionally refuses a file whose glTF keeps geometry in a buffer other t
 embedded one ("this glTF keeps its geometry in an external buffer, only a
 self-contained .glb imports"): the engine's hand-written GLB reader only ever looks at
 the embedded BIN chunk. STL/3MF/OBJ import has no OCCT reader
-binding (`docs/RUST-PIVOT.md` section 4.1); the engine parses these formats itself, the same "OCCT doesn't help here" precedent the export
+binding; the engine parses these formats itself, the same "OCCT doesn't help here" precedent the export
 side's mesh writers already set.
 
 ### `migrateGeometry`
@@ -501,7 +501,7 @@ Reply: `{ "solid": true, "solids": 1, "valid": true, "faces": 20, "volume": 132.
 an `import` feature carries. An unknown generator, a generator's refusal, a bad placement or a
 result with no solid is `{ "error": { "message": "..." } }`. Budget 180 s, a modelled thread on a
 long bolt is thousands of helical faces. Like `exportWith`, this is plugin geometry, run by
-the engine's WebAssembly plugin host (`docs/RUST-PIVOT.md` section 2.3).
+the engine's WebAssembly plugin host (`docs/ENGINE.md` section 2.3).
 
 ### `tessellateText`
 
@@ -535,7 +535,7 @@ No request fields beyond the envelope.
 Reply: `{ "families": [...] }`, a sorted, deduplicated list of font family names, never
 file paths or style variants. Never errors to the caller: an unreadable font, or a
 machine with nothing usable, just answers `{ "families": [] }`. The engine reads it from
-`fontdb`'s own system font discovery, not OCCT's `Font_FontMgr` (`docs/RUST-PIVOT.md`
+`fontdb`'s own system font discovery, not OCCT's `Font_FontMgr` (`docs/ENGINE.md`
 section 2.3).
 
 ### `session_*`, the live session

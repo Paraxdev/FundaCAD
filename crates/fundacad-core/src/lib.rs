@@ -1,6 +1,6 @@
 //! FundaCAD's document core: the schema the engine rebuilds from, the
 //! parameter expression language, body ids and face colour packing. No kernel
-//! (docs/RUST-PIVOT.md, section 2.2).
+//! (docs/ENGINE.md, section 2.2).
 
 pub mod body_ids;
 pub mod face_colors;

@@ -1,5 +1,5 @@
 # Cross-platform build + bundle for FundaCAD 1.0 alpha: Tauri 2 around the Rust
-# geometry engine (docs/RUST-PIVOT.md), which runs as a worker process of the
+# geometry engine (docs/ENGINE.md), which runs as a worker process of the
 # same executable.
 #
 # No SYSTEM OpenCASCADE anywhere, on any platform: the occt-sys crate carries
@@ -66,7 +66,7 @@ jobs:
       - name: The app ships no plugin code
         run: node scripts/check-no-plugin-code.mjs
 
-  # The alpha build (docs/RUST-PIVOT.md section 6), on three platforms. The
+  # The alpha build (docs/ENGINE.md section 6), on three platforms. The
   # engine is a worker process of the same executable, and there is no Python
   # in the bundle at all.
   #
@@ -576,7 +576,7 @@ jobs:
         if: failure()
         run: tail -50 /tmp/ci_engine.log /tmp/ci_vite.log || true
 
-  # The geometry engine (crates/, docs/RUST-PIVOT.md) and the app shell around
+  # The geometry engine (crates/, docs/ENGINE.md) and the app shell around
   # it. It compiles OpenCASCADE 7.8.1 from source through the occt-sys crate,
   # which is long on a cold runner and short once target/OCCT is cached, so the
   # static kernel gets its own cache keyed on the crate that builds it. It gates
@@ -639,9 +639,9 @@ jobs:
           echo ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true | sudo debconf-set-selections
           sudo apt-get install -y ttf-mscorefonts-installer
 
-      # Parity with the retired Python engine: every corpus rebuilt on this
-      # engine and compared with the Python engine's frozen answers in
-      # tests/golden (RUST-PIVOT, "Golden files"). The MCP transcript is
+      # Parity with the retired sidecar: every corpus rebuilt on this
+      # engine and compared with the sidecar's frozen answers in
+      # tests/golden (docs/ENGINE.md, "Golden files"). The MCP transcript is
       # crates/fundacad-mcp/tests/parity_golden.rs, run by the step above. Every
       # golden runs even after one fails, so a red build names them all.
       - name: Golden parity checks

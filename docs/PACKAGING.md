@@ -6,15 +6,15 @@ engine compiled in:
 - **Frontend**, TypeScript + Vite, built with `npm run build` (Node 22) into `dist/`.
 - **App shell**, Rust (`src-tauri/`): the window, native dialogs, the document
   container, plugins, and the supervisor of the geometry engine.
-- **Geometry engine**, Rust (`crates/`, docs/RUST-PIVOT.md) on OpenCASCADE, run as
+- **Geometry engine**, the Funda Engine, Rust (`crates/`, docs/ENGINE.md) on OpenCASCADE, run as
   a worker process of the same executable (`fundacad --engine`), so a bundle
   carries one executable and no runtime beside it.
 - **MCP server**, `fundacad-mcp`, shipped beside the app (docs/MCP.md).
 
 CI: [`.github/workflows/build.yml`](../.github/workflows/build.yml) builds
 Linux x86_64, macOS arm64 and Windows x64 and publishes the rolling `alpha`
-release from `main`. The Python engine's beta is built from the `legacy`
-branch by that branch's own copy of the workflow, and publishes the `beta`
+release from `main`. The beta, built from the `legacy` branch, runs the
+sidecar and is built by that branch's own copy of the workflow, and publishes the `beta`
 release; the two never meet: separate branches, jobs, tags, update feeds and
 artifact names.
 
@@ -67,13 +67,13 @@ Windows, plus CI's portable zip.
 
 ## Sizes
 
-Measured on Windows, 2026-09-17, against the last Python beta:
+Measured on Windows, 2026-09-17, against the last beta build of the sidecar:
 
 | | beta (0.2.125) | alpha |
 |---|---|---|
 | `.msi` | 162.7 MB | **23.3 MB** |
 | `-setup.exe` (NSIS) | 157.3 MB | **23.1 MB** |
-| `fundacad.exe` | small, plus an 800 MB Python runtime beside it | 62.4 MB, and nothing beside it |
+| `fundacad.exe` | small, plus an 800 MB sidecar runtime beside it | 62.4 MB, and nothing beside it |
 
 With `fundacad-mcp` beside it (2026-09-18): `.msi` 29.2 MB, `-setup.exe`
 28.9 MB, portable zip 28.9 MB; the folder is `fundacad.exe` 76.6 MB and
@@ -84,7 +84,7 @@ With `fundacad-mcp` beside it (2026-09-18): `.msi` 29.2 MB, `-setup.exe`
 - the bundle configs declare no `resources`;
 - the built binary registers `engine_attach`, the IPC command the webview
   reaches the engine through, and `fundacad-mcp` sits beside it;
-- the AppImage and the portable zip carry no Python interpreter;
+- the AppImage and the portable zip carry no sidecar runtime;
 - every plugin that names a `geometryWasm` component has it in its bundle.
 
 ## Code signing & notarization
