@@ -1,8 +1,7 @@
 # FundaCAD Rust workspace (docs/RUST-PIVOT.md).
 #
-# `crates/*` is the Rust pivot: the geometry engine, then the document core,
-# the protocol, the server and the native shell that replace the Python
-# sidecar and, later, the webview.
+# `crates/*`: the geometry engine, the document core and format, the protocol,
+# the engine server, the CLI and the MCP server.
 #
 # `src-tauri` (the shipping desktop shell) is EXCLUDED for now, on purpose: it
 # keeps its own Cargo.lock and its own `src-tauri/target`, which is where the
