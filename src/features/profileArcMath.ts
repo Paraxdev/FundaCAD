@@ -13,13 +13,13 @@
  *  exactly +1 there is no blend left to speak of and at exactly -1 the section's
  *  weight is zero, which is not a legal NURBS weight.
  *
- *  It stops well short of both, at 0.99, because the last thousandth is a shape
- *  nothing can draw: past it the viewport mesher loses the section and a mitred
- *  corner renders as a lens of surface standing proud of itself, while the
- *  kernel solid underneath is sound. conic_blend.PROFILE_LIMIT carries the
- *  measurements and the reasoning; the two must stay in step, and there is a
- *  test on each side that says so. */
-export const PROFILE_LIMIT = 0.99;
+ *  It stops short of both, and not evenly. Towards the sharp end the kernel
+ *  goes wrong first: past 0.95 the solid still checks valid but its volume and
+ *  every boolean on it are wrong (a cut through a 0.99 fillet added material).
+ *  The chamfer end stays sound to -0.99. blend_conic.hxx PROFILE_MAX and
+ *  PROFILE_MIN carry the measurements; the two must stay in step. */
+export const PROFILE_MAX = 0.95;
+export const PROFILE_MIN = -0.99;
 
 /** Half-width of the detent at 0, in profile units.
  *
@@ -33,7 +33,7 @@ export const PROFILE_DETENT = 0.02;
 
 export function clampProfile(p: number): number {
   if (!Number.isFinite(p)) return 0;
-  return Math.max(-PROFILE_LIMIT, Math.min(PROFILE_LIMIT, p));
+  return Math.max(PROFILE_MIN, Math.min(PROFILE_MAX, p));
 }
 
 /** Snap to the circular fillet inside the detent; clamp everywhere else. */
@@ -52,14 +52,17 @@ export function isPlainProfile(p: number | undefined): boolean {
  *  circular fillet, 1 at the sharp end. Linear on purpose, the underlying
  *  weight is wildly non-linear (it runs to infinity at +1), and mapping the
  *  TRACK to the weight would bunch every useful shape into a sliver at one end.
- *  The user is choosing a look, not a weight. */
+ *  The user is choosing a look, not a weight. Each half is linear to its own
+ *  limit, so the circular fillet stays at the middle of the track. */
 export function fractionFromProfile(p: number): number {
-  return (clampProfile(p) / PROFILE_LIMIT + 1) / 2;
+  const v = clampProfile(p);
+  return (v / (v < 0 ? -PROFILE_MIN : PROFILE_MAX) + 1) / 2;
 }
 
 export function profileFromFraction(t: number): number {
   if (!Number.isFinite(t)) return 0;
-  return clampProfile((Math.max(0, Math.min(1, t)) * 2 - 1) * PROFILE_LIMIT);
+  const s = Math.max(0, Math.min(1, t)) * 2 - 1;
+  return clampProfile(s * (s < 0 ? -PROFILE_MIN : PROFILE_MAX));
 }
 
 /** The readout beside the knob. Three decimals, and always signed, because the

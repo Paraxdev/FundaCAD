@@ -29,7 +29,10 @@ pub const BLEND_FOLDS_OVER: &str = "blendFoldsOver";
 const SMOOTH_EDGE_DEG: f64 = 1.0;
 const SIZE_PROBE_FRACTION: f64 = 0.05;
 const SIZE_PROBE_BODY_FRACTION: f64 = 1e-3;
-const PROFILE_LIMIT: f64 = 0.99;
+/// blend_conic.hxx `PROFILE_MAX` and `PROFILE_MIN`, where the kernel stops
+/// computing correctly on the blend.
+const PROFILE_MAX: f64 = 0.95;
+const PROFILE_MIN: f64 = -0.99;
 const PROFILE_EPS: f64 = 1e-6;
 
 /// Why one kernel attempt did not build, as the Python exception reads.
@@ -86,7 +89,7 @@ pub fn clamp_profile(p: f64) -> f64 {
     if p.is_nan() {
         0.0
     } else {
-        p.clamp(-PROFILE_LIMIT, PROFILE_LIMIT)
+        p.clamp(PROFILE_MIN, PROFILE_MAX)
     }
 }
 
