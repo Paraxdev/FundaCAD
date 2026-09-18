@@ -23,7 +23,7 @@ fn blob_dir() -> &'static PathBuf {
 
 fn fixture(name: &str) -> String {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join(format!("../../sidecar/fixtures/{name}.step"))
+        .join(format!("../../tests/fixtures/{name}.step"))
         .to_string_lossy()
         .into_owned()
 }

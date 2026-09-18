@@ -9,7 +9,7 @@ const os = require("os");
 
 const TOKEN = process.env.SC_TOKEN || "";
 if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
-const FIXTURE = path.resolve(__dirname, "../sidecar/fixtures/asm_nested.step");
+const FIXTURE = path.resolve(__dirname, "../tests/fixtures/asm_nested.step");
 const OUT = process.env.SC_OUT || path.join(os.tmpdir(), "plane_pick_camera_shots");
 let failures = 0;
 const check = (name, ok, detail) => {

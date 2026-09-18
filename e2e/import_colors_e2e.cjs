@@ -17,7 +17,7 @@ const path = require("path");
 const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const OUT = path.resolve(process.argv[2] || "import_color_shots");
-const FIXTURE = path.resolve(__dirname, "../sidecar/fixtures/asm_colors.step");
+const FIXTURE = path.resolve(__dirname, "../tests/fixtures/asm_colors.step");
 if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
 let failures = 0;
 const check = (name, ok, detail) => {

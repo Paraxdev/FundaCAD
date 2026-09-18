@@ -26,7 +26,7 @@ const path = require("path");
 const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const STEP = process.env.SC_STEP
-  || path.resolve(__dirname, "../sidecar/fixtures/asm_face_colors.step");
+  || path.resolve(__dirname, "../tests/fixtures/asm_face_colors.step");
 const OUT = path.resolve(process.argv[2] || "face_color_shots");
 if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
 let failures = 0;
