@@ -233,6 +233,7 @@ impl Jobs for GeomJobs {
         fresh: bool,
         ctx: &JobContext,
     ) -> JobResult {
+        let _tracked = crate::bench::track_this_thread();
         let mut cache = cache::global().lock().unwrap_or_else(|p| p.into_inner());
         if fresh {
             cache.purge(doc);
@@ -244,6 +245,7 @@ impl Jobs for GeomJobs {
     }
 
     fn run(&mut self, op: &str, req: &Map<String, Value>, ctx: &JobContext) -> JobResult {
+        let _tracked = crate::bench::track_this_thread();
         match op {
             "export" => crate::export::export_result(req, &EngineWatch(ctx)),
             "import" => crate::import::import_result(req),
@@ -265,5 +267,9 @@ impl Jobs for GeomJobs {
             ),
             other => error_result(&format!("unknown op: {other}")),
         }
+    }
+
+    fn doing() -> Option<String> {
+        crate::bench::doing()
     }
 }
