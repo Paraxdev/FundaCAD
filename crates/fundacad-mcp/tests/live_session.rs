@@ -1,5 +1,5 @@
 //! Three processes, one document. A port of
-//! `plugins/FundaCAD.MCP/tests/test_live_session.py`.
+//! `crates/fundacad-mcp/tools/python-oracle/tests/test_live_session.py`.
 //!
 //! Everything else about the live session is tested with the other side stubbed
 //! out: `fundacad-engine`'s own suite holds the rules with no socket, and

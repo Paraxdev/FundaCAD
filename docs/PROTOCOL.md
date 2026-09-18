@@ -545,7 +545,7 @@ contract: sorted, deduplicated, never an error.
 ### `session_*`, the live session
 
 Five ops that share one document between the app window and an outside client
-(the MCP server in `plugins/FundaCAD.MCP/`). They are answered on the **read path**, never behind
+(the MCP server in `crates/fundacad-mcp/tools/python-oracle/`). They are answered on the **read path**, never behind
 the heavy-op lock: the window publishes on a loop, and a publish that queued
 behind a rebuild would make the window invisible to an agent for exactly as long
 as the agent's own build took. The rules, and why they are these rules, are in
