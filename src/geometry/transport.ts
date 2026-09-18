@@ -129,19 +129,24 @@ export class IpcTransport implements GeometryTransport {
 
 /** The engine this app was built with: an app built with the Rust engine
  *  answers `engine_kind`, everything else (the Python sidecar, a plain browser)
- *  speaks WebSocket. */
+ *  is "python". */
+export async function engineKind(): Promise<"rust" | "python"> {
+  if (!("__TAURI_INTERNALS__" in globalThis)) return "python";
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return (await invoke<string>("engine_kind")) === "rust" ? "rust" : "python";
+  } catch {
+    // no such command, a Python sidecar build
+    return "python";
+  }
+}
+
+/** IPC to the Rust engine's worker, or the WebSocket every other engine speaks. */
 export class EngineTransport implements GeometryTransport {
   private inner: GeometryTransport = new WebSocketTransport();
 
   async start(sink: TransportSink): Promise<void> {
-    if ("__TAURI_INTERNALS__" in globalThis) {
-      try {
-        const { invoke } = await import("@tauri-apps/api/core");
-        if ((await invoke<string>("engine_kind")) === "rust") this.inner = new IpcTransport();
-      } catch {
-        // no such command, a Python sidecar build
-      }
-    }
+    if ((await engineKind()) === "rust") this.inner = new IpcTransport();
     await this.inner.start(sink);
   }
 
