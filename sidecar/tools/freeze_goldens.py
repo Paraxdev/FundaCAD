@@ -162,7 +162,7 @@ def freeze_rebuilds(name, corpus_file):
     roots = [(REPO_ROOT, "$REPO")]
     cases = {}
     for d in docs:
-        o = DE.outcome(replies[d["name"]], roots)
+        o = DE.outcome(replies[d["name"]], lambda t: normalise(t, roots))
         case = {
             "bodies": o["bodies"],
             "volumes": {k: sig(v, 10) for k, v in o["volumes"].items()},

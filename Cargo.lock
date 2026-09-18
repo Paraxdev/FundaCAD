@@ -804,11 +804,15 @@ dependencies = [
 name = "fundacad-cli"
 version = "0.2.0"
 dependencies = [
+ "base64 0.22.1",
+ "flate2",
  "fundacad-engine",
  "fundacad-format",
  "fundacad-geom",
  "fundacad-protocol",
  "serde_json",
+ "sha2",
+ "zip",
 ]
 
 [[package]]
