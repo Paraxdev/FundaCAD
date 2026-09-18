@@ -76,6 +76,82 @@ pub fn fillet(ctx: &Ctx) -> Result<bool, String> {
     Ok(super::verdict(bad, got.len()))
 }
 
+fn corpus_case<'a>(ctx: &'a Ctx, id: &str) -> Result<&'a Value, String> {
+    ctx.corpus["cases"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|c| c["id"] == id)
+        .ok_or_else(|| format!("the corpus has no case {id}"))
+}
+
+/// A fillet case's golden from this engine, as freeze_goldens.freeze_fillet writes it.
+pub fn record_fillet(ctx: &Ctx, id: &str) -> Result<Value, String> {
+    use fundacad_geom::features::blend::eval;
+    let case = corpus_case(ctx, id)?;
+    let r = eval::run(&serde_json::json!({"cases": [case]}), |_| {})?;
+    let outcome = r.outcomes.first().map_or("pass", |o| o.1);
+    let mut entry = serde_json::json!({"band": case["band"], "outcome": outcome});
+    if outcome == "fail" {
+        entry["message"] = r.messages.keys().next().cloned().into();
+        entry["taxonomy"] = if r.per_edge > 0 {
+            "per_edge"
+        } else if r.combination > 0 {
+            "combination"
+        } else {
+            "other"
+        }
+        .into();
+    }
+    Ok(entry)
+}
+
+pub fn refresh_fillet_summary(ctx: &mut Ctx) {
+    let cases = ctx.cases().as_object().cloned().unwrap_or_default();
+    let with = |o: &str| -> Vec<String> {
+        cases
+            .iter()
+            .filter(|(_, c)| c["outcome"] == o)
+            .map(|(k, _)| k.clone())
+            .collect()
+    };
+    let failed = with("fail");
+    ctx.golden["golden"]["summary"] = serde_json::json!({
+        "count": cases.len(), "failed": failed.len(),
+        "selectorMiss": with("selector-miss").len(), "failedIds": failed});
+    ctx.golden["golden"]["corpusSelfHash"] = ctx.corpus["self_hash"].clone();
+}
+
+/// A selector case's golden from this engine, as freeze_goldens.freeze_selectors writes it.
+pub fn record_selector(ctx: &Ctx, id: &str) -> Result<Value, String> {
+    use fundacad_geom::select::eval::{self, Outcome};
+    let case = corpus_case(ctx, id)?;
+    let (o, _) = eval::score_case(case, fundacad_geom::select::Tuning::shipped());
+    let name = match o {
+        Outcome::Survive => "survive",
+        Outcome::Miss => "miss",
+        Outcome::Invalid => "invalid",
+    };
+    Ok(serde_json::json!({"category": case["category"], "outcome": name}))
+}
+
+pub fn refresh_selector_metrics(ctx: &mut Ctx) {
+    use fundacad_geom::select::eval::{self, Outcome};
+    let cases = ctx.cases().as_object().cloned().unwrap_or_default();
+    let outcomes: Vec<(&str, Outcome)> = cases
+        .values()
+        .map(|c| {
+            let o = match c["outcome"].as_str() {
+                Some("survive") => Outcome::Survive,
+                Some("miss") => Outcome::Miss,
+                _ => Outcome::Invalid,
+            };
+            (c["category"].as_str().unwrap_or(""), o)
+        })
+        .collect();
+    ctx.golden["golden"]["metrics"] = Value::Object(eval::aggregate(&outcomes));
+}
+
 pub fn selectors(ctx: &Ctx) -> Result<bool, String> {
     use fundacad_geom::select::eval::{self, Outcome};
     use fundacad_geom::select::Tuning;

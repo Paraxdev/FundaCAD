@@ -197,6 +197,8 @@ fn seed(
     }
     let note = if same_blob {
         "the python blob hash".to_owned()
+    } else if spec["pythonGeom"].is_null() {
+        "recorded from this engine, no python blob to compare".to_owned()
     } else {
         format!(
             "imported here as blob {}, python stored {}",
@@ -272,4 +274,87 @@ pub fn check(ctx: &Ctx) -> Result<bool, String> {
         }
     }
     Ok(verdict(bad, rows.len()))
+}
+
+pub fn find_doc<'a>(ctx: &'a Ctx, name: &str) -> Result<&'a Value, String> {
+    ctx.corpus["documents"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|d| d["name"] == name)
+        .ok_or_else(|| format!("the corpus has no document {name}"))
+}
+
+/// A document's golden case from this engine, as freeze_goldens.freeze_rebuilds
+/// writes one from the Python engine.
+pub fn record_case(ctx: &Ctx, name: &str) -> Result<Value, String> {
+    use super::record::{fixed, object, sig};
+    let d = find_doc(ctx, name)?;
+    let mut doc = d["document"].clone();
+    absolute_image_paths(&mut doc, &ctx.repo);
+    let mut import = None;
+    if let Some(spec) = d.get("importFixture") {
+        let fixture = format!("sidecar/{}", spec["path"].as_str().unwrap_or(""));
+        let format = spec.get("format").cloned().unwrap_or(json!("step"));
+        let mut s = Session::start();
+        let reply = s.call(
+            "import",
+            json!({"path": ctx.repo.join(&fixture).to_string_lossy(), "format": format}),
+        );
+        if reply["ok"] != true {
+            return Err(format!(
+                "the import op refused {fixture}: {}",
+                reply["error"]
+            ));
+        }
+        let mut rest = reply["result"].as_object().cloned().unwrap_or_default();
+        rest.remove("geom");
+        let rec = object(vec![
+            ("feature", spec["feature"].clone()),
+            ("fixture", json!(fixture)),
+            ("format", format),
+            ("pythonGeom", Value::Null),
+            ("reply", ctx.normalise_all(&Value::Object(rest))),
+        ]);
+        seed(ctx, &mut s, &mut doc, &rec);
+        import = Some(rec);
+    }
+    let tolerance = ctx.header()["rebuildTolerance"].as_f64().unwrap_or(0.1);
+    let reply = Session::start().call(
+        "rebuild",
+        json!({"document": doc, "tolerance": tolerance, "binary": false}),
+    );
+    let o = outcome(ctx, &reply);
+    let bbox = o.bbox.as_ref().map_or(Value::Null, |b| {
+        let corner = |c: &str| {
+            Value::Array(
+                (0..3)
+                    .map(|i| fixed(b[c][i].as_f64().unwrap_or(0.0), 9))
+                    .collect(),
+            )
+        };
+        object(vec![("max", corner("max")), ("min", corner("min"))])
+    });
+    let mut case = object(vec![
+        ("bbox", bbox),
+        ("bodies", json!(o.bodies)),
+        (
+            "errors",
+            Value::Array(o.errors.iter().map(|(f, c)| json!([f, c])).collect()),
+        ),
+        ("fatal", json!(reply["ok"] != true)),
+        (
+            "volumes",
+            Value::Object(
+                o.volumes
+                    .iter()
+                    .map(|(k, v)| (k.clone(), sig(*v, 10)))
+                    .collect(),
+            ),
+        ),
+    ]);
+    if let Some(i) = import {
+        case["import"] = i;
+    }
+    Ok(case)
 }
