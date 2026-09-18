@@ -6,9 +6,6 @@
 //! bytes, written LAST so the feature tree is what a person sees first. Opening
 //! publishes each blob into the store only once its bytes prove the hash, the
 //! same rule the binary and ZIP readers follow.
-//!
-//! No Tauri in here, so the file can be compiled and tested on its own where the
-//! app's test binary cannot start (see scripts/check-plugin-guards.sh).
 
 use std::collections::BTreeMap;
 use std::fs::File;

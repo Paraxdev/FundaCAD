@@ -38,7 +38,7 @@ describe("documentExt", () => {
 
   it("names the binary document separately, the way bgcode sits beside gcode", () => {
     // Literal, not the constant: Rust picks the format from this exact string
-    // (src-tauri/src/json_doc.rs BINARY_DOC_EXT), so the two must not drift.
+    // (crates/fundacad-format/src/json_doc.rs BINARY_DOC_EXT), so the two must not drift.
     expect(BINARY_DOC_EXT).toBe("fundab");
     expect(isDocumentExt("fundab")).toBe(true);
     expect(isDocumentExt("FundaB")).toBe(true);

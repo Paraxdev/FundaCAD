@@ -6,7 +6,7 @@ The load-bearing test here is `test_hash_matches_rust`: this store is written by
 BOTH Rust (extracting a container) and Python (importing geometry), addressed
 purely by content hash. If the two languages ever disagree about that hash, every
 container reference dangles and the failure looks like "the geometry vanished".
-The vectors below are duplicated verbatim in src-tauri/src/container.rs so both
+The vectors below are duplicated verbatim in crates/fundacad-format/src/container.rs so both
 sides are pinned to the same constants.
 """
 
