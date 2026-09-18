@@ -16,7 +16,7 @@ name: build
 
 on:
   push:
-    branches: [main]
+    branches: [legacy]
   pull_request:
   workflow_dispatch:
 
@@ -497,11 +497,11 @@ jobs:
     # produced no run. Until that is settled, "publish the beta" has to be a
     # button someone can press, or a green build can never reach anyone.
     #
-    # Still main only: the ref check is what keeps a dispatch of some other
-    # branch from replacing the release, and it is unchanged.
+    # The Python engine lives on the legacy branch now that main carries the
+    # Rust engine, and only legacy may replace the beta release.
     if: >-
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-      && github.ref == 'refs/heads/main'
+      && github.ref == 'refs/heads/legacy'
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -666,11 +666,11 @@ jobs:
           if [ -z "$commits" ] || [ "$(jq 'length' <<<"$commits")" -eq 0 ]; then
             commits=$(gh api "repos/$R/commits?sha=$SHA&per_page=$MAX" \
               --jq '[.[] | select((.parents | length) < 2)]')
-            span="the newest on \`main\`"
+            span="the newest on \`legacy\`"
           fi
           total=$(jq 'length' <<<"$commits")
 
-          printf 'Rolling beta 0.1.%s, rebuilt from `main` at [`%s`](https://github.com/%s/commit/%s).\n' \
+          printf 'Rolling beta 0.1.%s, rebuilt from `legacy` at [`%s`](https://github.com/%s/commit/%s).\n' \
             '${{ github.run_number }}' "${SHA:0:7}" "$R" "$SHA" > notes.md
           {
             printf '\n## Changes, %s\n\n' "$span"
