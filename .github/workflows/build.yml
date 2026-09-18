@@ -628,6 +628,14 @@ jobs:
       - name: Rust workspace tests
         run: cargo test --workspace --features fundacad-engine/ws
 
+      # Text outlines come from the system's fonts, and the text goldens were
+      # frozen with Windows' Arial and Times New Roman. A case whose font is
+      # not installed is skipped rather than compared with a stand in.
+      - name: Install the fonts the text goldens were frozen with
+        run: |
+          echo ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true | sudo debconf-set-selections
+          sudo apt-get install -y ttf-mscorefonts-installer
+
       # Parity with the retired Python engine: every corpus rebuilt on this
       # engine and compared with the Python engine's frozen answers in
       # tests/golden (RUST-PIVOT, "Golden files"). The MCP transcript is

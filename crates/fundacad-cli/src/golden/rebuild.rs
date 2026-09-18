@@ -238,7 +238,20 @@ pub fn check(ctx: &Ctx) -> Result<bool, String> {
     let mut rows = Vec::new();
     let mut bad = 0;
     let mut notes = Vec::new();
+    let mut skipped = Vec::new();
     for (name, doc, mut diffs, note) in prepared {
+        let missing = missing_fonts(&doc);
+        if !missing.is_empty() {
+            skipped.push(name);
+            rows.push(vec![
+                name.to_owned(),
+                cases[name]["bodies"].to_string(),
+                "-".to_owned(),
+                "skipped".to_owned(),
+                format!("needs {}, not installed here", missing.join(", ")),
+            ]);
+            continue;
+        }
         let reply = session.call(
             "rebuild",
             json!({"document": doc, "tolerance": tolerance, "binary": false}),
@@ -273,7 +286,34 @@ pub fn check(ctx: &Ctx) -> Result<bool, String> {
             println!("{n}");
         }
     }
-    Ok(verdict(bad, rows.len()))
+    if !skipped.is_empty() {
+        println!(
+            "\n{} skipped for a font this machine does not have: {}",
+            skipped.len(),
+            skipped.join(", ")
+        );
+    }
+    Ok(verdict(bad, rows.len() - skipped.len()))
+}
+
+/// The fonts a document's text draws with that this machine does not have.
+/// Outlines come from the system's fonts, so a case frozen with a font that is
+/// missing here can only be compared with whatever stands in for it.
+fn missing_fonts(doc: &Value) -> Vec<String> {
+    let lib = fundacad_geom::text::fonts::library();
+    let mut out: Vec<String> = Vec::new();
+    for f in doc["features"].as_array().into_iter().flatten() {
+        for e in f["entities"].as_array().into_iter().flatten() {
+            if e["type"] != "text" {
+                continue;
+            }
+            let font = e["font"].as_str().filter(|s| !s.is_empty()).unwrap_or("Arial");
+            if !lib.is_installed(font) && !out.iter().any(|m| m == font) {
+                out.push(font.to_owned());
+            }
+        }
+    }
+    out
 }
 
 pub fn find_doc<'a>(ctx: &'a Ctx, name: &str) -> Result<&'a Value, String> {
