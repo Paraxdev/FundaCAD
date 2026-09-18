@@ -76,6 +76,67 @@ pub fn record(
     f.write_all(out.as_bytes()).map_err(|e| e.to_string())
 }
 
+/// Why a platform holds answers of its own: see `record_platform`.
+const PLATFORM_REASON: &str = "the python answers were frozen on Windows, whose C math library rounds some sin, cos and pow results one ulp away from this platform's; where that ulp decides a tie (a Delaunay diagonal between cocircular points, a node the mesher places on one of two symmetric sides, a coordinate on a rounding boundary) this platform's answer differs from Windows' only by that tie, and is this engine's here, recorded after a human check";
+
+/// `--record-platform`: this engine's answers for the named cases, kept under
+/// `platformVariants.<os>` beside the python answers, which every other
+/// platform is still held to.
+pub fn record_platform(ctx: &mut Ctx, golden_path: &Path, names: &[String]) -> Result<(), String> {
+    let kind = ctx.header()["kind"].as_str().unwrap_or("").to_owned();
+    let os = std::env::consts::OS;
+    for name in names {
+        if ctx.cases().get(name).is_none() {
+            return Err(format!("the golden has no answer for {name} to stand beside"));
+        }
+        let case = match kind.as_str() {
+            "rebuild" => super::rebuild::record_case(ctx, name)?,
+            "plugin-ops" => super::plugin_ops::record_case(ctx, name)?,
+            "meshes" => super::meshes::record_case(ctx, name)?,
+            other => return Err(format!("a golden of kind {other} holds no platform answers")),
+        };
+        let root = ctx.golden.as_object_mut().ok_or("the golden is not an object")?;
+        let variants = root
+            .entry("platformVariants")
+            .or_insert_with(|| Value::Object(Map::new()))
+            .as_object_mut()
+            .ok_or("platformVariants is not an object")?;
+        let this = variants
+            .entry(os)
+            .or_insert_with(|| serde_json::json!({"reason": PLATFORM_REASON, "cases": {}}));
+        this["cases"]
+            .as_object_mut()
+            .ok_or("platformVariants cases is not an object")?
+            .insert(name.clone(), case);
+        println!("recorded {name} for {os} from this engine, beside the python answer");
+    }
+    let mut out = python_dump(&ctx.golden);
+    out.push('\n');
+    let mut f = std::fs::File::create(golden_path)
+        .map_err(|e| format!("cannot write {}: {e}", golden_path.display()))?;
+    f.write_all(out.as_bytes()).map_err(|e| e.to_string())
+}
+
+/// This platform's own answers in place of the python ones they stand beside.
+pub fn apply_platform_variants(ctx: &mut Ctx) -> Vec<String> {
+    let os = std::env::consts::OS;
+    let own = ctx.golden["platformVariants"][os]["cases"].clone();
+    let Some(own) = own.as_object() else {
+        return Vec::new();
+    };
+    let Some(cases) = ctx.golden["cases"].as_object_mut() else {
+        return Vec::new();
+    };
+    let mut names = Vec::new();
+    for (name, case) in own {
+        if cases.contains_key(name) {
+            cases.insert(name.clone(), case.clone());
+            names.push(name.clone());
+        }
+    }
+    names
+}
+
 /// `json.dump(v, sort_keys=True, indent=1, ensure_ascii=True)`, byte for byte,
 /// so a recorded golden diffs only where it changed.
 pub fn python_dump(v: &Value) -> String {
