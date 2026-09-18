@@ -43,7 +43,7 @@ import {
 import { swipeOffsetPx } from "./edgeSwipe";
 import { clearanceLimit, localClearance } from "./blendClearance";
 import { fmtLength } from "../ui/units";
-import { ProfileArc } from "./profileArc";
+import { ProfileChip } from "./profileChip";
 import {
   clampProfile,
   formatProfile,
@@ -130,9 +130,9 @@ export class EdgeFeatureTool {
 
   private gizmo: THREE.Group | null = null;
   private handle: DragHandle | null = null;
-  /** The section-shape slider. Fillet only: a chamfer's section IS the chord,
-   *  so there is nothing left for a profile to say about it. */
-  private arc: ProfileArc;
+  /** Fillet only: a chamfer's section IS the chord, so a profile has nothing
+   *  to say about it. */
+  private chip: ProfileChip | null = null;
   /** Section shape in (-1, 1); 0 is the plain circular fillet. Survives a Tab to
    *  chamfer and back, so flipping to compare does not silently discard it. */
   private profile = 0;
@@ -141,7 +141,6 @@ export class EdgeFeatureTool {
   private options: Record<string, unknown> = {};
   private optionsKind: Kind | null = null;
   private continuity: "G1" | "G2" = "G1";
-  private draggingArc = false;
   private hovering = false;
   private grabbing = false;
   /** true when this drag began on the passive selection handle rather than on
@@ -168,7 +167,6 @@ export class EdgeFeatureTool {
       key: (e) => this.onKey(e),
       frame: () => this.tick(),
     });
-    this.arc = new ProfileArc(viewport);
   }
 
   private get field() {
@@ -660,6 +658,16 @@ export class EdgeFeatureTool {
    *  place to do it. `keepTyped` locks the value in as the user's own rather
    *  than letting the drag track over it. */
   private mountInput(keepTyped = false) {
+    this.chip?.dispose();
+    this.chip =
+      this.kind === "fillet"
+        ? new ProfileChip(this.profile, (p) => {
+            this.profile = p;
+            this.forgetBuildRange(); // a conic section has its own limit
+            this.pushPreview();
+            this.promptForPhase();
+          })
+        : null;
     this.dim.show([{ ...this.field, kind: "length" }], () => this.commit(), () => this.cancel(),
       this.kind === "fillet"
         ? {
@@ -673,7 +681,8 @@ export class EdgeFeatureTool {
               this.pushPreview();
             },
           }
-        : undefined);
+        : undefined,
+      this.chip?.el);
     this.dim.showOwnProblem(this.refusalShown);
     if (keepTyped) this.dim.seed(this.field.name, this.value);
     else this.dim.updateFromCursor({ [this.field.name]: this.value });
@@ -842,17 +851,6 @@ export class EdgeFeatureTool {
       this.viewport.domElement.style.cursor = hit ? "pointer" : "default";
       return;
     }
-    if (this.draggingArc) {
-      const p = this.arc.profileAt(e.clientX, e.clientY);
-      if (p !== this.profile) {
-        this.profile = p;
-        this.arc.setProfile(p);
-        this.forgetBuildRange(); // a conic section has its own limit
-        this.pushPreview();
-        this.promptForPhase();
-      }
-      return;
-    }
     if (this.grabbing) {
       let signed = scrubSigned({
         grabSigned: this.grabSigned,
@@ -892,16 +890,7 @@ export class EdgeFeatureTool {
       if (this.neutral !== wasNeutral || this.kind !== prevKind) this.promptForPhase();
       return;
     }
-    // idle: highlight whichever control is under the pointer so it reads as
-    // grabbable. The arc is checked first, it stands further out than the
-    // arrow, so a hit on it is unambiguous.
-    const onArc = this.arc.visible && this.arc.hitTest(e.clientX, e.clientY);
-    this.arc.setHot(onArc);
-    if (onArc) {
-      this.hovering = false;
-      this.viewport.domElement.style.cursor = "grab";
-      return;
-    }
+    // idle: highlight the handle under the pointer so it reads as grabbable
     this.hovering = this.hitGizmo(e.clientX, e.clientY);
     if (!this.hovering) {
       // ghosts and bare edges are toggle targets in BOTH modes, show it
@@ -928,14 +917,6 @@ export class EdgeFeatureTool {
     }
     // drag phase: grabbing the handle scrubs; a clean click elsewhere commits
     this.downPos = { x: e.clientX, y: e.clientY };
-    if (this.arc.visible && this.arc.hitTest(e.clientX, e.clientY)) {
-      e.preventDefault();
-      e.stopImmediatePropagation(); // never orbit while sliding the profile
-      this.draggingArc = true;
-      this.downOnGizmo = true; // this press is a control grab, not the commit click
-      this.viewport.domElement.style.cursor = "grabbing";
-      return;
-    }
     this.downOnGizmo = this.hitGizmo(e.clientX, e.clientY);
     if (this.downOnGizmo) {
       e.preventDefault();
@@ -973,15 +954,6 @@ export class EdgeFeatureTool {
 
   private onUp(e: PointerEvent) {
     if (e.button !== 0 || this.phase !== "drag") return;
-    if (this.draggingArc) {
-      // Never a commit, even from a fluent gesture: the profile is an adjustment
-      // to a blend you are already making, so letting go of it has to leave the
-      // tool up for the radius drag (or the commit) that follows.
-      this.draggingArc = false;
-      this.viewport.domElement.style.cursor = "grab";
-      this.promptForPhase();
-      return;
-    }
     if (this.grabbing) {
       const moved =
         Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
@@ -1092,26 +1064,13 @@ export class EdgeFeatureTool {
 
   /** keep the handle a constant on-screen size + oriented, and keep a typed value
    *  previewing live (the pointer may be still while the user types). */
-  /** Show the profile slider exactly when it has something to say: a fillet,
-   *  with members, actually applying. Reconciled per frame rather than at the
-   *  six places those can each change, the same trade selectionNudge makes,
-   *  and it costs one predicate per frame in a state the user is briefly in. */
-  private syncArc() {
-    const want =
-      this.phase === "drag" &&
-      this.kind === "fillet" &&
-      !this.neutral &&
-      this.currentSelectors().length > 0;
-    if (!want) {
-      if (this.arc.visible) this.arc.hide();
-      return;
-    }
-    if (!this.arc.visible) this.arc.show(this.anchor, this.axis, this.profile);
-    else {
-      this.arc.setAnchor(this.anchor, this.axis);
-      this.arc.setProfile(this.profile);
-    }
-    this.arc.update();
+  /** The profile only has something to say on a fillet with members that is
+   *  actually applying. Reconciled per frame rather than at the six places those
+   *  can each change. */
+  private syncChip() {
+    this.chip?.setVisible(
+      this.phase === "drag" && !this.neutral && this.currentSelectors().length > 0,
+    );
   }
 
   /** Keep the handle standing across an orbit.
@@ -1123,11 +1082,11 @@ export class EdgeFeatureTool {
    *  recomputes every frame, so the armed tool was also drifting away from the
    *  handle it is supposed to be indistinguishable from.
    *
-   *  Not while a gesture is live: the axis is what the drag measures along and what
-   *  profileAt reads its angles against, so moving it under a pressing hand would
+   *  Not while a gesture is live: the axis is what the drag measures along, so
+   *  moving it under a pressing hand would
    *  re-scale travel already made. Mid-gesture only the DRAWN direction leans. */
   private refreshAxis() {
-    if (!this.grabbing && !this.draggingArc) this.axis.copy(this.computeAxis());
+    if (!this.grabbing) this.axis.copy(this.computeAxis());
     const cam = this.viewport.camera;
     const fwd = cam.getWorldDirection(new THREE.Vector3());
     const camRight = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 0);
@@ -1135,10 +1094,8 @@ export class EdgeFeatureTool {
   }
 
   private tick() {
-    // Before syncArc: the arc takes the axis as its own reference direction, so
-    // a frame where the two disagreed would draw the track off the handle.
     if (this.phase === "drag") this.refreshAxis();
-    this.syncArc();
+    this.syncChip();
     if (this.phase === "drag" && this.gizmo) {
       const k = this.viewport.pixelWorldSize(this.anchor);
       this.gizmo.position.copy(this.anchor);
@@ -1290,12 +1247,12 @@ export class EdgeFeatureTool {
     this.gesture.detach();
     el.style.cursor = "default";
     this.dim.hide();
-    this.arc.hide();
+    this.chip?.dispose();
+    this.chip = null;
     this.profile = 0;
     this.options = {};
     this.optionsKind = null;
     this.continuity = "G1";
-    this.draggingArc = false;
     this.disposeGizmo();
     this.disposeGhosts();
     this.unsubBuild?.();

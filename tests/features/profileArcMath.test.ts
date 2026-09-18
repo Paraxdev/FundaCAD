@@ -9,6 +9,7 @@ import {
   fractionFromProfile,
   isPlainProfile,
   profileFromFraction,
+  sectionPath,
   snapProfile,
 } from "../../src/features/profileArcMath";
 
@@ -105,5 +106,21 @@ describe("describeProfile", () => {
     expect(describeProfile(-0.95)).toBe("nearly a chamfer");
     expect(describeProfile(0.3)).toBe("fuller");
     expect(describeProfile(-0.3)).toBe("flatter");
+  });
+});
+
+describe("sectionPath", () => {
+  const mid = (p: number) => {
+    const pts = sectionPath(p).split(/[ML]/).filter(Boolean).map((s) => s.trim().split(" ").map(Number));
+    return pts[1 + 10]!; // the curve's middle sample, after the top face start
+  };
+  it("draws the chord near -1, the circle at 0 and hugs the corner near +1", () => {
+    const [cx, cy] = [20, 4];
+    const d = (p: number) => Math.hypot(mid(p)[0]! - cx, mid(p)[1]! - cy);
+    expect(d(PROFILE_MIN)).toBeCloseTo(Math.hypot(8, 8), 0);
+    // a circle of radius 16 centred at (4, 20) passes 16*sqrt2 - 16 from the corner
+    expect(d(0)).toBeCloseTo(16 * Math.SQRT2 - 16, 1);
+    expect(d(PROFILE_MAX)).toBeLessThan(d(0));
+    expect(d(0)).toBeLessThan(d(PROFILE_MIN));
   });
 });

@@ -1,13 +1,7 @@
-// The arithmetic behind the profile arc, the curved slider that sets a
-// fillet's section shape, from a chamfer's flat chord through the circular
-// fillet to a corner that is barely rounded at all.
-//
-// Split from the gizmo for the same reason edgeDragMath.ts is split from
-// edgeFeatureTool.ts: the Three.js track, the knob and the hit test need a
-// camera and a canvas, and none of this does. What lives here is the part that
-// can be wrong in a way the user feels, where the knob sits for a given
-// profile, what profile a grab position means, and how hard it is to land back
-// on the circular fillet.
+// The arithmetic behind the fillet profile control (profileChip.ts): a section
+// shape from a chamfer's flat chord through the circular fillet to a corner
+// that is barely rounded at all, where a drag lands, and how hard it is to land
+// back on the circular fillet.
 
 /** How far the slider travels either side of centre. The interval is OPEN: at
  *  exactly +1 there is no blend left to speak of and at exactly -1 the section's
@@ -82,4 +76,28 @@ export function describeProfile(p: number): string {
   if (v > 0) return "fuller";
   if (v < -0.9) return "nearly a chamfer";
   return "flatter";
+}
+
+/** The kernel's middle-weight scale for a profile, blend_conic.hxx weight_scale. */
+export function weightScale(p: number): number {
+  const v = clampProfile(p);
+  return v <= 0 ? 1 + v : 1 / (1 - v);
+}
+
+/** SVG path data for a right-angle corner blended at this profile, in a 24 unit
+ *  box: the top face, the conic section, the side face. Sampled, because SVG has
+ *  no rational curve and the weight is the whole point of the picture. */
+export function sectionPath(p: number): string {
+  const [x0, y0, cx, cy, x2, y2] = [4, 4, 20, 4, 20, 20];
+  const w = Math.SQRT1_2 * weightScale(p);
+  const pts: string[] = [];
+  for (let i = 0; i <= 20; i++) {
+    const t = i / 20;
+    const a = (1 - t) * (1 - t);
+    const b = 2 * w * t * (1 - t);
+    const c = t * t;
+    const d = a + b + c;
+    pts.push(`${((a * x0 + b * cx + c * x2) / d).toFixed(2)} ${((a * y0 + b * cy + c * y2) / d).toFixed(2)}`);
+  }
+  return `M1 4 L${pts.join(" L")} L20 23`;
 }
