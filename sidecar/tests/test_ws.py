@@ -632,14 +632,20 @@ async def _protocol_conformance(url):
                                               "note": "x" * (4 * 1024 * 1024)}})
         assert roomy["ok"], "a 4 MiB request is under the cap"
 
-    async with websockets.connect(url, max_size=big, max_queue=None) as ws:
-        try:
-            await ws.send(json.dumps({"id": "x", "op": "ping", "pad": "x" * big}))
-            await asyncio.wait_for(ws.recv(), timeout=30)
-            raise AssertionError("a request over the frame cap was answered")
-        except websockets.exceptions.ConnectionClosed as ex:
-            code = ex.rcvd.code if ex.rcvd else None
-            assert code == 1009, f"closed with {code}, expected 1009"
+    # Not `async with`: the server has already dropped this socket, and on Linux
+    # with server.py in this process the close on exit reaches a transport whose
+    # loop is gone and raises AttributeError from inside websockets.
+    ws = await websockets.connect(url, max_size=big, max_queue=None)
+    try:
+        await ws.send(json.dumps({"id": "x", "op": "ping", "pad": "x" * big}))
+        await asyncio.wait_for(ws.recv(), timeout=30)
+        raise AssertionError("a request over the frame cap was answered")
+    except websockets.exceptions.ConnectionClosed as ex:
+        code = ex.rcvd.code if ex.rcvd else None
+        assert code == 1009, f"closed with {code}, expected 1009"
+    finally:
+        with contextlib.suppress(Exception):
+            await ws.close()
     print("  WS frame cap OK: 4 MiB accepted, over 128 MiB closed with 1009")
 
 
