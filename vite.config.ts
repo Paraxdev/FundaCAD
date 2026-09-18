@@ -13,7 +13,7 @@ export default defineConfig({
     // The sidecar's uv venv is ~800MB of Python files that Vite never serves.
     // Watching it wastes inotify handles and, on a container with a modest
     // fs.inotify.max_user_watches, crashes the dev server with ENOSPC.
-    watch: { ignored: ["**/sidecar/.venv/**", "**/src-tauri/target/**", "**/third_party/**"] },
+    watch: { ignored: ["**/sidecar/.venv/**", "**/src-tauri/target/**", "**/target/**", "**/target-*/**", "**/third_party/**"] },
   },
   // The plugin sandbox imports its bootstrap with `import`, from inside a blob
   // module worker, so the worker chunk has to BE an ES module. Vite's default
