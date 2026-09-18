@@ -111,7 +111,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [release, before-planar-fix]
+        variant: [release, sanitize]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -133,7 +133,7 @@ jobs:
             release|before-planar-fix) cargo build --release -p fundacad-cli -p fundacad-mcp ;;
             sanitize)
               CXXFLAGS="-fsanitize=undefined,address -fno-omit-frame-pointer -O2 -g" \
-              RUSTFLAGS="-C link-arg=-fsanitize=undefined,address" \
+              RUSTFLAGS="-C linker-features=-lld -C link-arg=-fsanitize=undefined,address" \
                 cargo build --release -p fundacad-cli ;;
           esac
 
@@ -228,6 +228,14 @@ jobs:
             python3 -c "import json;r=json.loads(open('out.json').readline());print('ok',r.get('ok'),r.get('error'),[b.get('faceCount') for b in (r.get('result') or {}).get('bodies',[])])" || true
             [ $code -eq 0 ] || fail=1
           done
+          if [ "${{ matrix.variant }}" = sanitize ]; then
+            for g in fillet_regression engines fillet; do
+              echo "=== sanitized golden $g"
+              timeout 1500 target/release/fundacad-engine golden-check tests/golden/$g.golden.json > g.out 2> g.err || echo "=== exit $?"
+              grep -E "match, [0-9]+ mismatch" g.out || true
+              grep -E "runtime error|ERROR: AddressSanitizer|SUMMARY" g.err | sort | uniq -c | head -n 40 || true
+            done
+          fi
           if [ "${{ matrix.variant }}" != sanitize ]; then
             FUNDACAD_MCP_MODE=standalone timeout 600 python3 timebuild.py target/release/fundacad-mcp diag/*.json
             for load in 0 3; do
