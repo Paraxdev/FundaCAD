@@ -1,6 +1,6 @@
 //! The mesh result a rebuild hands to the wire.
 //!
-//! Replaces the result dicts `sidecar/server.py` passes to `sidecar/wire.py`:
+//! Replaces the result dicts the Python engine's `server.py` passes to the Python engine's `wire.py`:
 //! the top-level result (`protocol`, `bbox`, `diagnostics`, ...) and its
 //! per-body payloads. The mesh arrays are typed, at the width they travel in,
 //! everything else stays JSON so a new field needs no protocol change.

@@ -1,5 +1,5 @@
 //! Turning an `inspect` report into something worth reading. A port of
-//! `crates/fundacad-mcp/tools/python-oracle/describe.py`.
+//! the Python MCP server's `describe.py`.
 //!
 //! The reply is a few hundred kilobytes of exact numbers. Handed over whole it
 //! costs an agent most of its context to learn that a box is a box, so this is

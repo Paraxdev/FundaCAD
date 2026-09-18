@@ -1,4 +1,4 @@
-// sidecar/section_blend.py: fillets and chamfers built from their cross section
+// the Python engine's `section_blend.py`: fillets and chamfers built from their cross section
 // for the ones BRepFilletAPI refuses. At each sample along the edge the two
 // faces give the ball centre, its contacts and the arc (a G2 curve, a conic or
 // a chord), the section closes a hair outside the body, the sections are lofted
@@ -1499,7 +1499,7 @@ inline TopoDS_Shape section_blend_once(const TopoDS_Shape &shape, const std::vec
 
 } // namespace secblend
 
-// sidecar/section_blend.py `section_blend`. size2 NaN for none. status 0 built,
+// the Python engine's `section_blend.py` `section_blend`. size2 NaN for none. status 0 built,
 // 1 SectionBlendError (message is its sentence), 2 any other exception (its class).
 inline std::unique_ptr<TopoDS_Shape> blend_section(const TopoDS_Shape &shape, const TopoDS_Shape &edges, bool chamfer,
                                                    rust::Slice<const double> sizes, double size2, bool g2, bool draft,

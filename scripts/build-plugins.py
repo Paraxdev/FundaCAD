@@ -16,22 +16,17 @@ from; see the ENTRY table below and src/plugins/shipped.ts, which says the same
 thing from the app's side. (This paragraph used to say builtins were skipped
 because they shipped inside the app. They have not for some time.)
 
-A plugin may carry PYTHON as well, under a path its manifest names in
-`geometry`. That is code the geometry engine imports so the plugin can own a
-feature type outright, rather than presenting one the application builds either
-way, and it is packaged like any other source: `check()` refuses a bundle that
-declares geometry and does not carry it.
+A plugin may own GEOMETRY as well: a WebAssembly component, named in its
+manifest's `geometryWasm`, which the engine's plugin host runs so the plugin can
+own a feature type outright, rather than presenting one the application builds
+either way. It is compiled here from the plugin's `geometry-rs` crate.
 
 The bundle is a zip with manifest.json and the plugin's sources at the TOP level,
-because the app runs `<plugin dir>/<entry>` and the entry point puts its own
-directory on sys.path. Nothing is vendored: for a Python plugin the interpreter
-and the packages both come from the runtime the app already installed, handed
-over in the launch command the Plugins section produces.
+because the app runs `<plugin dir>/<entry>`.
 
 Left out: tests (they import from the repository and could only ever fail from
-inside a bundle), every byte of __pycache__ (a compiled file from whichever
-interpreter happened to run last is not part of the plugin), and the build
-leftovers of a compiled plugin (`target/`, `node_modules/`).
+inside a bundle), every byte of __pycache__, and the build leftovers of a
+compiled plugin (`target/`, `node_modules/`).
 
 Python rather than a shell script with `zip`, for two reasons. The Windows
 development box has no `zip`, so a shell version could only ever be run in CI,
@@ -202,17 +197,16 @@ def check(pid, src):
     if not os.path.isfile(os.path.join(src, on_disk)):
         sys.exit(f"plugins/{pid} is kind {kind} and has no {on_disk}")
 
-    # A plugin may also own GEOMETRY: Python the sidecar imports so the plugin
-    # can build a feature type of its own (see sidecar/plugin_geometry.py). Two
+    # A plugin may also own GEOMETRY: a WebAssembly component the engine's
+    # plugin host runs so the plugin can build a feature type of its own
+    # (docs/PLUGINS.md), built here from the crate beside the manifest. Two
     # things are checked here rather than left to the install to discover,
     # because both produce the same silent result, a feature that is in the
     # document, has values, and reports its plugin missing on a machine where it
     # is plainly installed.
-    geometry = manifest.get("geometry")
-    if geometry:
-        gpath = os.path.join(src, *str(geometry).split("/"))
-        if not os.path.isfile(gpath):
-            sys.exit(f"plugins/{pid}/{MANIFEST} names geometry {geometry!r}, which is not there")
+    if manifest.get("geometryWasm"):
+        if not os.path.isfile(os.path.join(src, "geometry-rs", "Cargo.toml")):
+            sys.exit(f"plugins/{pid}/{MANIFEST} names geometryWasm and has no geometry-rs crate")
         if not (manifest.get("featureTypes") or manifest.get("exporters") or manifest.get("shapeGenerators")):
             # The types are how the app names this plugin in the warning when it
             # is NOT running, so geometry without them means a document full of
@@ -224,14 +218,6 @@ def check(pid, src):
                 f"plugins/{pid}/{MANIFEST} ships geometry but declares no featureTypes, "
                 "exporters or shapeGenerators, so nothing could name it when it is missing"
             )
-
-    # The same geometry for the Rust engine is a WebAssembly component, built
-    # here from the crate beside the manifest (docs/PLUGINS.md). Named but
-    # unbuildable is the same silent failure as above, one engine later.
-    if manifest.get("geometryWasm") and not os.path.isfile(
-        os.path.join(src, "geometry-rs", "Cargo.toml")
-    ):
-        sys.exit(f"plugins/{pid}/{MANIFEST} names geometryWasm and has no geometry-rs crate")
     return manifest
 
 

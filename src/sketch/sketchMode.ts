@@ -468,7 +468,7 @@ export class SketchMode {
     this.editingId = editId ?? null;
     this.plane = this.overlay.planeFor(plane);
     this.planeId = planeId ?? null;
-    // The face this sketch is drawn on, so the sidecar can re-derive the plane
+    // The face this sketch is drawn on, so the engine can re-derive the plane
     // every rebuild instead of the sketch recording where the face used to be.
     // A sketch on a base plane or on a datum has none, and neither needs one.
     this.face = face ?? null;

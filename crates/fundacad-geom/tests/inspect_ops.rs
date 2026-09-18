@@ -1,5 +1,5 @@
 //! The `inspect` and `interference` ops against the requests and replies
-//! tests/inspect/gen.py recorded from the sidecar, then over the protocol.
+//! tests/inspect/gen.py on the legacy branch recorded from the Python engine, then over the protocol.
 
 mod support;
 
@@ -86,7 +86,7 @@ fn canonical_order(res: &mut Value) {
 }
 
 #[test]
-fn inspect_and_interference_match_the_sidecar() {
+fn inspect_and_interference_match_the_python_engine() {
     let mut failures = Vec::new();
     for case in cases() {
         let name = case["name"].as_str().unwrap();

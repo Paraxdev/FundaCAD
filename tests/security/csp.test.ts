@@ -39,12 +39,7 @@ const conf = JSON.parse(confRaw) as {
   app: { security: { csp: string; devCsp: string } };
 };
 
-const alpha = JSON.parse(alphaRaw) as {
-  app: { security: { csp: string; devCsp: string } };
-};
-
-/** The loopback engine socket, the one thing the two policies differ by. */
-const SIDECAR_SOURCES = ["ws://127.0.0.1:8765", "http://127.0.0.1:8765"];
+const alpha = JSON.parse(alphaRaw) as { app?: unknown };
 
 /** One CSP directive's source list. */
 function directive(csp: string, name: string): string[] {
@@ -146,31 +141,16 @@ describe("Content-Security-Policy", () => {
   });
 });
 
-// The alpha Rust build's policy (src-tauri/tauri.alpha.conf.json).
-//
-// That build has no Python sidecar and no WebSocket: the engine is a worker
-// process the app supervises, and every frame reaches the webview over Tauri
-// IPC (src/geometry/transport.ts, IpcTransport). So the loopback grants the
-// beta needs are dead weight there, and a grant a build cannot use is a grant
-// that should not be in its policy: it is the one route by which anything
-// listening on that port could talk to a privileged webview.
-//
-// Two policies rather than one for as long as both engines ship. When the
-// sidecar is deleted (docs/RUST-PIVOT.md phase 3) the base policy loses the
-// loopback sources too and this whole block goes with them.
-describe("the alpha Rust build's Content-Security-Policy", () => {
-  it("is the shipped policy with the loopback engine socket taken out", () => {
-    for (const key of ["csp", "devCsp"] as const) {
-      const base = conf.app.security[key];
-      const want = base.replace(` ${SIDECAR_SOURCES.join(" ")}`, "");
-      expect(want, "the base policy no longer grants the loopback socket").not.toBe(base);
-      expect(alpha.app.security[key]).toBe(want);
-    }
-  });
-
+// The engine is a worker process the app supervises, and every frame reaches
+// the webview over Tauri IPC (src/geometry/transport.ts, IpcTransport). So the
+// policy grants no loopback origin: a grant a build cannot use is the one route
+// by which anything listening on a local port could talk to a privileged
+// webview. The Python beta needed ws://127.0.0.1:8765; it is built on the
+// legacy branch now.
+describe("the engine's reach", () => {
   it("grants no loopback origin at all", () => {
     for (const key of ["csp", "devCsp"] as const) {
-      expect(directive(alpha.app.security[key], "connect-src")).toEqual([
+      expect(directive(conf.app.security[key], "connect-src")).toEqual([
         "'self'",
         "ipc:",
         "http://ipc.localhost",
@@ -178,8 +158,12 @@ describe("the alpha Rust build's Content-Security-Policy", () => {
     }
   });
 
-  it("keeps the two alpha policies in step with each other", () => {
-    const { csp, devCsp } = alpha.app.security;
+  it("keeps the two policies in step with each other", () => {
+    const { csp, devCsp } = conf.app.security;
     expect(devCsp).toBe(csp);
+  });
+
+  it("leaves the policy to the base config, so the release build ships this one", () => {
+    expect(alpha.app).toBeUndefined();
   });
 });

@@ -1,5 +1,5 @@
-//! fundacad-geom::topo and ::faces against sidecar topo_adj.py and
-//! face_bands.py, on the BREP fixtures tests/faces/gen.py wrote.
+//! fundacad-geom::topo and ::faces against Python engine topo_adj.py and
+//! face_bands.py, on the BREP fixtures tests/faces/gen.py on the legacy branch wrote.
 
 use fundacad_geom::{faces, mesh, topo};
 use opencascade::mesh_access;

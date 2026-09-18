@@ -1,8 +1,8 @@
 // The path a climbing revolve's profile travels: a helix, in plain numbers.
 //
 // One arithmetic, used twice. The tool draws this curve while you drag the pitch
-// arrow, and the sidecar sweeps the profile along the same curve to build the
-// thread (sidecar/builder.py, _screw_revolve). If the two disagree, the dashed
+// arrow, and the engine sweeps the profile along the same curve to build the
+// thread (the Python engine's `builder.py`, _screw_revolve). If the two disagree, the dashed
 // line on screen is a lie about where the geometry is going, which is worse than
 // drawing nothing: a preview is believed.
 //
@@ -35,7 +35,7 @@ export function unit(a: Vec3): Vec3 | null {
  *  A revolve's `axis` is the field of record for one of the three world axes AND
  *  the resolved-line cache written beside a picked edge, so reading it answers
  *  both without resolving anything. A spec that names no direction at all falls
- *  back to Z, which is what the sidecar does with the same input. */
+ *  back to Z, which is what the engine does with the same input. */
 export function revolveAxis(spec: AxisSpec): { origin: Vec3; dir: Vec3 } {
   if (typeof spec === "string") {
     const dir: Vec3 = [spec === "X" ? 1 : 0, spec === "Y" ? 1 : 0, spec === "Z" ? 1 : 0];
@@ -71,7 +71,7 @@ export function pitchFromRise(rise: number, angleDeg: number): number | null {
  *  Past a full turn, a climb shorter than the profile is tall makes every turn
  *  run into the one before; OCCT builds that quite happily and hands back a
  *  self-intersecting solid that measures as though nothing were wrong, so the
- *  sidecar refuses it outright. The arrow stops there instead, which is what a
+ *  engine refuses it outright. The arrow stops there instead, which is what a
  *  hand on a handle expects.
  *
  *  Zero stays reachable, because zero is the flat revolve rather than a bad
@@ -126,7 +126,7 @@ export function unwrapTurn(prev: number, raw: number): number {
  *  The other half of clampDragPitch, and the same rule read from the far end.
  *  Past a full turn, a climb shorter than the profile is tall makes each turn
  *  run into the one before; OCCT builds that quite happily and hands back a
- *  self-intersecting solid, so the sidecar refuses it outright. The pitch arrow
+ *  self-intersecting solid, so the engine refuses it outright. The pitch arrow
  *  stops at the shortest climb that clears one turn of the last; the angle arrow
  *  stops at the last turn that clears, which for a pitch too small, a flat
  *  revolve very much included, is exactly one.
@@ -237,7 +237,7 @@ export function helixSegments(angleDeg: number, perTurn = 16, max = 2000): numbe
  *  curve starts THERE, which is what makes it readable as "this is where your
  *  section goes" rather than as an abstract spiral near the part. A point on the
  *  axis has no meridian to start from and returns nothing, the same refusal the
- *  sidecar makes for the same reason.
+ *  engine makes for the same reason.
  *
  *  The LAST point is the end of the sweep, and so the place to stand a handle:
  *  taking it from here rather than computing it again is what keeps the arrow on

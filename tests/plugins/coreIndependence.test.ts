@@ -13,8 +13,8 @@
 // catch the thing that was actually happening: the core carrying its own copy
 // of what a plugin's feature IS. `texture` was a variant of the Feature union
 // in src/types.ts, a row of numeric fields in document/numFields.ts, a
-// selection row in features/selectionTargets.ts, a handler in the sidecar's
-// dispatch table and two thousand lines of geometry in sidecar/. Not one line
+// selection row in features/selectionTargets.ts, a handler in the Python
+// engine's dispatch table and two thousand lines of geometry beside it. Not one line
 // of that imported the plugin, so every rule here passed, and the plugin was a
 // panel in front of code that shipped whether it was installed or not.
 //
@@ -82,7 +82,7 @@ const CAPABILITIES: Record<string, (path: string) => boolean> = {
   // the most on. A surface texture was a MODELING TOOL: files under src/ named
   // it, from the union that defined it to the dispatcher that ran it to the
   // properties panel that decided its Seed row was worth drawing, and the
-  // geometry that built it lived in sidecar/. Every one of those was the
+  // geometry that built it lived in the engine. Every one of those was the
   // application knowing what a texture is. It owns all of it now, the schema,
   // the rows, the handler and the mesh, which is what makes uninstalling it
   // mean something.
@@ -252,7 +252,7 @@ describe("the core does not depend on the capabilities it can turn off", () => {
         import: "default",
         eager: true,
       }) as Record<string, string>),
-      ...(import.meta.glob(["../../sidecar/**/*.py", "!../../sidecar/.venv/**"], {
+      ...(import.meta.glob(["../../crates/*/src/**/*.rs", "../../crates/*/Cargo.toml"], {
         query: "?raw",
         import: "default",
         eager: true,
@@ -262,7 +262,7 @@ describe("the core does not depend on the capabilities it can turn off", () => {
 
     const files = Object.keys(core);
     expect(files.some((f) => f.endsWith(".rs")), "no Rust source found").toBe(true);
-    expect(files.some((f) => f.endsWith(".py")), "no sidecar source found").toBe(true);
+    expect(files.some((f) => f.includes("/crates/fundacad-geom/src/")), "no engine source found").toBe(true);
     expect(files.some((f) => f.includes("/src/") && f.endsWith(".ts")), "no window source found").toBe(true);
 
     const offenders: string[] = [];

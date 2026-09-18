@@ -1,5 +1,5 @@
-//! The selector survival eval, sidecar/tools/eval_selector_survival.py over the
-//! frozen corpus of sidecar/tools/gen_selector_corpus.py, scored by this engine.
+//! The selector survival eval, the Python engine's `eval_selector_survival.py` over the
+//! frozen corpus of the Python engine's `gen_selector_corpus.py`, scored by this engine.
 //!
 //! Each case rebuilds its mutated part, checks the frozen key still names one
 //! entity (else the case is invalid and counts nowhere), resolves the stored
@@ -298,7 +298,7 @@ fn radius_of(shapes: &[Shape], i: usize) -> Result<f64, String> {
         .ok_or_else(|| "not a circle".into())
 }
 
-/// sidecar/tests/test_selector_v2.py, the eval's `tests_pass` guardrail, run on
+/// the Python engine's `test_selector_v2.py`, the eval's `tests_pass` guardrail, run on
 /// this engine under the tuning being scored.
 pub fn selector_v2_checks(tuning: &Tuning) -> Result<(), String> {
     use super::{edge_fingerprint_with, face_fingerprint};

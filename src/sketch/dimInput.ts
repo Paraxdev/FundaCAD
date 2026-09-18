@@ -435,7 +435,7 @@ export class DimInput {
 
   /** Say that what the boxes read cannot be built, or take it back.
    *
-   *  Every field turns, not just one, because the sidecar refuses a FEATURE and
+   *  Every field turns, not just one, because the engine refuses a FEATURE and
    *  not a field: "the profile is 3 mm tall but climbs only 1 mm each turn" is
    *  about the pitch and the angle together, and reddening whichever box was
    *  touched last would point at the wrong number half the time. The user is the

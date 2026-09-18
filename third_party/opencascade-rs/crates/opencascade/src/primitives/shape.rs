@@ -722,7 +722,7 @@ impl Shape {
 
     /// Local single-face surface offset (the "true" Press/Pull). The picked
     /// `face` moves along its normal by `distance` and the adjacent side walls
-    /// stretch to follow. Ports `sidecar/builder.py:_offset_face`: BRepOffset in
+    /// stretch to follow. Ports the Python engine's `builder.py:_offset_face`: BRepOffset in
     /// Skin mode with global offset 0 + a per-face offset, GeomAbs_Intersection
     /// join (the join that closes a local single-face offset cleanly), then the
     /// resulting shell is rebuilt into a solid.
@@ -1017,7 +1017,7 @@ impl Shape {
 
 /// Per-B-rep-face triangulation, in world coordinates, tagged with the face's
 /// index in `Shape::faces()` iteration order. Mirrors the payload the Python
-/// sidecar (`sidecar/tessellate.py`) produces: one `face_id` per triangle so the
+/// engine's `tessellate.py` produced: one `face_id` per triangle so the
 /// frontend can map a clicked triangle back to its whole CAD face.
 #[derive(Debug, Clone)]
 pub struct FaceMesh {
@@ -1043,11 +1043,11 @@ impl Shape {
     /// Mesh the whole solid, then read each B-rep face's triangulation back into
     /// world space, tagging every triangle with its face index. This is the
     /// in-crate equivalent of the loop in `src-tauri/src/geom.rs` and of the
-    /// Python sidecar's `tessellate()` — it needs `self.inner` (the `pub(crate)`
+    /// Python engine's `tessellate()` — it needs `self.inner` (the `pub(crate)`
     /// TopoDS), which is why it lives in the fork rather than the consumer.
     ///
     /// REVERSED faces have their winding flipped so client `computeVertexNormals`
-    /// yields outward normals, matching `sidecar/tessellate.py`.
+    /// yields outward normals, matching the Python engine's `tessellate.py`.
     pub fn tessellate_faces(&self, triangulation_tolerance: f64) -> Result<Vec<FaceMesh>, Error> {
         // Mesh in place: BRepMesh stores the triangulation on the shared TShape,
         // which we then read back per face below.
@@ -1098,7 +1098,7 @@ impl Shape {
     }
 
     /// Sample every B-rep edge as a polyline of `n + 1` world-space points
-    /// spanning the whole edge. Ports `sidecar/tessellate.py:edge_polylines`:
+    /// spanning the whole edge. Ports the Python engine's `tessellate.py:edge_polylines`:
     /// walk each edge's parameter range start->end at evenly spaced parameters.
     ///
     /// Shared edges are de-duplicated via an `IndexedMapOfShape` so a closed solid

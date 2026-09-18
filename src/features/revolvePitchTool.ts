@@ -14,7 +14,7 @@
 //
 // Nothing is written to the document until the gesture ends. A revolve of a
 // dozen turns is a real sweep through the kernel and a rebuild per frame would
-// make the drag lurch; the dashed helix is the same curve the sidecar sweeps
+// make the drag lurch; the dashed helix is the same curve the engine sweeps
 // along, so it says exactly where the geometry is going.
 //
 // TWO controls, because a revolve has two numbers and they are different KINDS
@@ -28,7 +28,7 @@
 // The curved one stops where the geometry would. Past one turn, a climb shorter
 // than the profile is tall makes each turn run into the last, so the arrow meets
 // a wall exactly there (screwMath.clampDragAngle) instead of letting the user
-// build something the sidecar will refuse. That wall is how the limit is meant
+// build something the engine will refuse. That wall is how the limit is meant
 // to be found: by feel, while asking for it.
 //
 // A TYPED value is not a drag, though, and used to get the drag's treatment: the
@@ -36,7 +36,7 @@
 // went on being the 360 it was built as. Two things on screen said different
 // numbers and the shaded one is the one that gets believed. So a value that is
 // typed goes through the store's edit preview once the typing settles, the real
-// feature, rebuilt by the sidecar, in the timeline position it will occupy. A
+// feature, rebuilt by the engine, in the timeline position it will occupy. A
 // preview is not an undo step, so the value box stays the thing that commits.
 
 import * as THREE from "three";
@@ -79,7 +79,7 @@ import { CanvasGesture } from "./canvasGesture";
 
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 
-/** How long a typed field has to stand still before the sidecar is asked to
+/** How long a typed field has to stand still before the engine is asked to
  *  build it. Long enough that typing "600" is one rebuild rather than three
  *  (of which "6" and "60" are sweeps nobody wants), short enough to read as
  *  the model answering the keystroke. */
@@ -204,7 +204,7 @@ export class RevolvePitchTool {
 
     const axis = revolveAxis(rev.axis);
     // screwPath is the arbiter of whether this revolve HAS a path: it refuses a
-    // profile centred on the axis, the same refusal the sidecar makes. Asking it
+    // profile centred on the axis, the same refusal the engine makes. Asking it
     // here means the arrow is never offered for a gesture that could not be
     // built, and means one implementation of the rule rather than two.
     if (!screwPath(at as Vec3, axis, rev.angle, savedPitch ?? 0, 2).length) return false;
@@ -406,7 +406,7 @@ export class RevolvePitchTool {
       // the first one was set and the second could not be reached without
       // reopening: drag the pitch, and the angle arc was already gone.
       //
-      // So a release stays armed and pushes the drag through the sidecar
+      // So a release stays armed and pushes the drag through the engine
       // instead. That is the other half of it, the drag itself only moves the
       // dashed helix, because a rebuild per frame lurches, so without a build on
       // release you would go on aiming the second handle at the shape you
@@ -511,7 +511,7 @@ export class RevolvePitchTool {
     this.viewport.addToScene(this.gizmo);
   }
 
-  /** The path the profile travels: the sidecar's spine, drawn. */
+  /** The path the profile travels: the engine's spine, drawn. */
   private buildHelix() {
     const mat = new THREE.LineDashedMaterial({
       color: 0xffd24a,

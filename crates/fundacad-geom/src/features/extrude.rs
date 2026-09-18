@@ -1,4 +1,4 @@
-//! Extrude, sidecar/builder.py `_handle_extrude` with build123d's `extrude`
+//! Extrude, the Python engine's `builder.py` `_handle_extrude` with build123d's `extrude`
 //! and `Solid.extrude_taper`.
 
 use std::collections::HashSet;

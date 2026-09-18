@@ -6,7 +6,6 @@
 // with `--engine --ws`, and it attaches to a running window by itself through
 // session.json.
 
-import { engineKind } from "../geometry/transport";
 
 export type McpHost = "claude-code" | "claude-desktop" | "other";
 
@@ -65,13 +64,10 @@ export function mcpSetupFor(host: McpHost, server: string): { text: string; hint
 }
 
 /** The bundled server's path. Throws with a sentence a person can read when this
- *  build has none: a plain browser session, or the Python engine build. */
+ *  build has none, a plain browser session. */
 export async function mcpServerPath(): Promise<string> {
   if (!("__TAURI_INTERNALS__" in globalThis)) {
     throw new Error("The MCP server runs beside the desktop app, not in a browser.");
-  }
-  if ((await engineKind()) !== "rust") {
-    throw new Error("This build runs the Python engine, which does not ship the MCP server.");
   }
   const { invoke } = await import("@tauri-apps/api/core");
   return await invoke<string>("mcp_server");

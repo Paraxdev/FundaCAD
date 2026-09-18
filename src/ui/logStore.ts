@@ -24,7 +24,7 @@ export interface LogEntry {
   at: number;
   /** The whole message. Never shortened, here or downstream. */
   message: string;
-  /** Where it came from, "rebuild", "sidecar", "window", a feature id. Shown
+  /** Where it came from, "rebuild", "engine", "window", a feature id. Shown
    *  as a tag so a wall of kernel errors can be told apart at a glance. */
   source?: string;
   /** Anything longer that belongs with it: a stack, a payload, a feature JSON.

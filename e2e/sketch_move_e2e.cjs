@@ -10,8 +10,8 @@
 //   5. Escape closes the gizmo and leaves the sketch open.
 //   6. A body slide steps by a tenth of the grid cell.
 //
-// Usage (from the repo root, with vite on 5173 + sidecar on 8765):
-//   SC_TOKEN=<sidecar token> SC_CHROME=<chrome.exe> node e2e/sketch_move_e2e.cjs [outDir]
+// Usage (from the repo root, with vite on 5173 + engine on 8765 (`fundacad-engine --ws`)):
+//   SC_TOKEN=<engine token> SC_CHROME=<chrome.exe> node e2e/sketch_move_e2e.cjs [outDir]
 const { chromium } = require("playwright-core");
 const fs = require("fs");
 const path = require("path");

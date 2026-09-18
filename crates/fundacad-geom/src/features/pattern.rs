@@ -1,6 +1,6 @@
-//! Body patterns, sidecar/builder.py `_handle_pattern_rect`,
+//! Body patterns, the Python engine's `builder.py` `_handle_pattern_rect`,
 //! `_handle_pattern_linear`, `_handle_pattern_circular` and `_pattern_targets`
-//! over sidecar/solid_ops.py `_pattern_*` and `_fuse_pattern_cells`. A pattern
+//! over the Python engine's `solid_ops.py` `_pattern_*` and `_fuse_pattern_cells`. A pattern
 //! rewrites its target body in place, so it mints no body ids.
 
 use fundacad_core::schema::{Axis3, PatternCircular, PatternLinear, PatternRect};

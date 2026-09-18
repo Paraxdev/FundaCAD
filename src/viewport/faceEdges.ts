@@ -4,7 +4,7 @@
 // It has to be geometry, because there is no topology to ask. The rebuild reply
 // carries faces (as triangles tagged with a face id) and edges (as polylines)
 // side by side and says nothing at all about which edges bound which face; the
-// sidecar's own edge->face map (tessellate.edge_polylines_by_body) is used to
+// engine's own edge->face map (tessellate.edge_polylines_by_body) is used to
 // drop coplanar seams and never crosses the wire. So an edge belongs to a face
 // when it LIES on it: every sample of its polyline sits on the face's surface.
 //
@@ -48,7 +48,7 @@ export function faceSurface(tris: readonly Tri[]): FaceSurface {
  *  of the comparison are meshed to different targets: edge polylines are sampled
  *  to a 0.01mm chord deviation (tessellate._EDGE_DEFLECTION) while surfaces get
  *  OCCT's relative deflection, measured at 0.05-0.15mm on real parts (see the
- *  _VIEWPORT_RELATIVE table in sidecar/server.py). A round edge therefore bulges
+ *  _VIEWPORT_RELATIVE table in the Python engine's `server.py`). A round edge therefore bulges
  *  OUTSIDE the flat chords of its own face by up to that surface deviation, and
  *  a tolerance tighter than it would reject a cylinder's own rim.
  *
@@ -147,7 +147,7 @@ const MAX_SAMPLES = 12;
 /** The points to test for one polyline: up to MAX_SAMPLES spread over its
  *  samples, always including both ends.
  *
- *  Straight edges are the reason for the segment midpoints. The sidecar sends a
+ *  Straight edges are the reason for the segment midpoints. The engine sends a
  *  straight edge as its two ENDPOINTS and nothing else
  *  (tessellate._line_endpoints), so testing "the polyline's points" alone would
  *  ask only about the two corners, and an edge that merely touches this face at

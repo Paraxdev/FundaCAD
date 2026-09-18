@@ -1,6 +1,6 @@
 //! Split a body by a plane and Divide a face by sketch curves:
-//! sidecar/booleans.py `_do_split` and sidecar/solid_ops.py `_imprint` with
-//! the handlers of sidecar/builder.py.
+//! the Python engine's `booleans.py` `_do_split` and the Python engine's `solid_ops.py` `_imprint` with
+//! the handlers of the Python engine's `builder.py`.
 
 use std::collections::HashMap;
 

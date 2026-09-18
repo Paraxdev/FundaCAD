@@ -1,6 +1,6 @@
 //! The engine worker: one request loop shared by every transport.
 //!
-//! Replaces the request handling of `sidecar/server.py` (`handle`,
+//! Replaces the request handling of the Python engine's `server.py` (`handle`,
 //! `_serialized`, `_dispatch`, `_cancel_running`, `_apply_doc_ops`). Heavy ops
 //! run one at a time on a job thread; `cancel` and `ping` answer on the read
 //! path so they are heard while a job runs. The geometry itself is behind

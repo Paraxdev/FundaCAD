@@ -56,7 +56,7 @@ export function toTextValues(f: TextForm): TextValues {
     text: f.text,
     ...(f.font ? { font: f.font } : {}),
     // `|| 10` and `|| 0` are the empty-field fallbacks, not defaults: NaN would
-    // reach the sidecar as null and fail the build.
+    // reach the engine as null and fail the build.
     height: parseFloat(f.height) || 10,
     style: styleOf(f.bold, f.italic),
     align: f.align,

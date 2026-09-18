@@ -1,6 +1,6 @@
 // An imported assembly's own colours become materials, and the parts wear them.
 //
-// This is end to end on purpose, through the real sidecar and the real store:
+// This is end to end on purpose, through the real engine and the real store:
 // the colours are read by the Python XCAF reader, travel in the import
 // manifest, are matched against the document's library in TypeScript, and land
 // on bodies whose ids do not exist until the rebuild has run. Every one of those
@@ -8,8 +8,8 @@
 // it was dropped at the last one, so a fully coloured assembly opened as a run
 // of identical grey bodies.
 //
-// Usage (from the repo root, with vite on 5173 + sidecar on 8765):
-//   SC_TOKEN=<sidecar token> node e2e/import_colors_e2e.cjs [outDir]
+// Usage (from the repo root, with vite on 5173 + engine on 8765 (`fundacad-engine --ws`)):
+//   SC_TOKEN=<engine token> node e2e/import_colors_e2e.cjs [outDir]
 const { chromium } = require("playwright-core");
 const fs = require("fs");
 const path = require("path");
@@ -17,7 +17,7 @@ const path = require("path");
 const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const OUT = path.resolve(process.argv[2] || "import_color_shots");
-const FIXTURE = path.resolve(__dirname, "../sidecar/fixtures/asm_colors.step");
+const FIXTURE = path.resolve(__dirname, "../tests/fixtures/asm_colors.step");
 if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
 let failures = 0;
 const check = (name, ok, detail) => {

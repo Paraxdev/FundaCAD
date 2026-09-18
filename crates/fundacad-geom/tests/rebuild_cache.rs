@@ -1,4 +1,4 @@
-//! The rebuild caches, the oracles of sidecar/tests/test_checkpoint.py and
+//! The rebuild caches, the oracles of the Python engine's `test_checkpoint.py` and
 //! the disk resume cases of test_assembly.py: a warm rebuild replays only
 //! what changed and answers exactly what a cold one does.
 
@@ -321,7 +321,7 @@ fn import_doc(fixture: &str, extra: Value) -> Value {
     let blobs = scratch("blobs-shared");
     std::fs::create_dir_all(&blobs).unwrap();
     std::env::set_var("FUNDACAD_BLOB_DIR", &blobs);
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("../../sidecar/fixtures/{fixture}.step"));
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("../../tests/fixtures/{fixture}.step"));
     let store = BlobStore::open(&blobs).unwrap();
     let mut f = import::import_geometry(&path.to_string_lossy(), "step", &store).unwrap();
     f.insert("id".into(), json!("f1"));

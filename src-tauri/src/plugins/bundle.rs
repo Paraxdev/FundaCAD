@@ -164,7 +164,7 @@ pub fn allowed_bundle_url(url: &str) -> bool {
 /// directory, or None if it may not be written at all.
 ///
 /// Zip entry names are attacker-controlled text. An entry called
-/// `../../../../sidecar-runtime/app/server.py` is a perfectly legal archive and
+/// `../../../../fundacad-mcp.exe` is a perfectly legal archive and
 /// a complete compromise of the app, so this is the guard the whole extractor
 /// stands on. Written by hand rather than leaning on the zip crate's
 /// `enclosed_name()`, because it is the one function here whose failure is

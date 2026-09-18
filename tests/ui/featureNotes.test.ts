@@ -1,7 +1,7 @@
 // The rule that decides which chip goes amber.
 //
 // Two lists arrive from a build and they overlap: `featureErrors` says what
-// went wrong, `diagnostics` says everything the sidecar noticed on the way,
+// went wrong, `diagnostics` says everything the engine noticed on the way,
 // including entries for features that then failed for an unrelated reason. One
 // chip, one tooltip, so exactly one of them has to win.
 //

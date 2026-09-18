@@ -1,6 +1,6 @@
 //! Flattening 3D geometry onto a sketch plane and recognising it again:
-//! sidecar/projection.py (curves, the HLR silhouette, the silhouette
-//! correspondence), sidecar/projection_refresh.py (the lenient refresh a
+//! the Python engine's `projection.py` (curves, the HLR silhouette, the silhouette
+//! correspondence), the Python engine's `projection_refresh.py` (the lenient refresh a
 //! rebuild runs per sketch, and the strict `projectGeometry` op) and
 //! builder.py `project_geometry`.
 //!

@@ -6,8 +6,8 @@
 // must stay flat. A text redraw once left its glyph lines on the GPU and grew the
 // geometry count by ten every cycle, which nothing else would have noticed.
 //
-// Usage (from the repo root, with vite on 5173 + sidecar on 8765):
-//   SC_TOKEN=<sidecar token> SC_CHROME=<chrome.exe> node e2e/memory_e2e.cjs
+// Usage (from the repo root, with vite on 5173 + engine on 8765 (`fundacad-engine --ws`)):
+//   SC_TOKEN=<engine token> SC_CHROME=<chrome.exe> node e2e/memory_e2e.cjs
 const { chromium } = require("playwright-core");
 
 const TOKEN = process.env.SC_TOKEN || "";

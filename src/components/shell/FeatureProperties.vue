@@ -320,7 +320,7 @@ function previewNumber(row: { key: string; kind: FieldKind }, raw: string): numb
  *  alternative to.
  *
  *  Through the store's edit preview, so what is on screen is the REAL feature
- *  rebuilt by the sidecar in the timeline position it will occupy, not a
+ *  rebuilt by the engine in the timeline position it will occupy, not a
  *  drawn approximation of it, which would be a second thing to keep in step and
  *  would go on looking right when the kernel had already refused. A preview is
  *  not an undo step, so Enter is still what commits.

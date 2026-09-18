@@ -1,4 +1,4 @@
-// Client cache for sidecar-tessellated glyph outlines. The sidecar owns all font
+// Client cache for engine-tessellated glyph outlines. The engine owns all font
 // work, so text preview outlines come from the `tessellateText` op, cached by a
 // content key so identical text/font/style/… reuses the result and re-renders are
 // instant. On a cache miss the op fires once and the overlay re-renders on arrival.

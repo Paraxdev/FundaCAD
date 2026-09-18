@@ -29,7 +29,7 @@ import { UNSERVED } from "./appHost";
 /** How the app names a new feature, mirroring `DocumentStore.nextId()`.
  *
  *  THIS IS NOT THE ONLY SCHEME IN THE SYSTEM, and an earlier version of this
- *  file said it was. `crates/fundacad-mcp/tools/python-oracle/model.py` names features by type, `bx1` for a
+ *  file said it was. The Python MCP server's `model.py` names features by type, `bx1` for a
  *  box and `ex1` for an extrude; the app names them `f1`, `f2`, counting from
  *  the number it already has. Both are hosts for the same op vocabulary and
  *  both are right, because an id is an id.

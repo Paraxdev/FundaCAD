@@ -11,8 +11,8 @@
 // immediately, carrying that axis's baked origin/dir. Without one selected, it
 // does not, it opens the axis pick and waits (the CONTROL).
 //
-// Usage (from the repo root, with vite on 5173 + sidecar on 8765):
-//   SC_TOKEN=<sidecar token> SC_CHROME=<chrome.exe> node e2e/revolve_datum_axis_e2e.cjs [outDir]
+// Usage (from the repo root, with vite on 5173 + engine on 8765 (`fundacad-engine --ws`)):
+//   SC_TOKEN=<engine token> SC_CHROME=<chrome.exe> node e2e/revolve_datum_axis_e2e.cjs [outDir]
 const { chromium } = require("playwright-core");
 const fs = require("fs");
 const path = require("path");

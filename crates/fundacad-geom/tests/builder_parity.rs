@@ -1,5 +1,5 @@
 //! The Rust builder against numbers measured on the Python builder
-//! (tests/builder/gen_fixtures.py writes tests/builder/fixtures.json).
+//! (tests/builder/gen_fixtures.py on the legacy branch writes tests/builder/fixtures.json).
 
 use fundacad_core::CadDocument;
 use fundacad_geom::builder::{self, NoWatch};

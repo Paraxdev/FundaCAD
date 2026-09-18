@@ -1,5 +1,5 @@
-//! A sketch or datum plane following the face it was made on, sidecar/builder.py
-//! `_face_anchor_plane` and `_nearest_cylinder_face` over sidecar/face_plane.py.
+//! A sketch or datum plane following the face it was made on, the Python engine's `builder.py`
+//! `_face_anchor_plane` and `_nearest_cylinder_face` over the Python engine's `face_plane.py`.
 
 use glam::DVec3;
 use opencascade::primitives::Shape;

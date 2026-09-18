@@ -1,10 +1,11 @@
 # The Rust pivot ("rustirisation")
 
-Status: alpha, work in progress. This document is the plan, the decision
-record and the conversion target list for moving FundaCAD's backend from Python
-to Rust. It is written to be executed one brick at a time by whoever picks up
-the `rustirisation` branch, human or agent, and every brick must leave every
-existing test suite green.
+Status: done, phase 3 landed on 2026-09-18. The Rust engine is `main` and
+ships as the rolling 1.0 alpha; the Python engine and its sidecar are gone from
+`main` and live on the `legacy` branch, which keeps publishing the beta. This
+document is the plan, the decision record and the conversion target list the
+move was executed from, one brick at a time, every brick leaving every test
+suite green. The Python paths it names are on `legacy`.
 
 Related: [ARCHITECTURE.md](ARCHITECTURE.md) (what exists today),
 [PROTOCOL.md](PROTOCOL.md) (the wire contract the new engine must honour),
@@ -15,7 +16,7 @@ Related: [ARCHITECTURE.md](ARCHITECTURE.md) (what exists today),
 FundaCAD stays a Tauri 2 application with a Vue 3 + three.js frontend, for
 good. Everything behind the frontend becomes Rust: geometry, tessellation,
 document rebuild, file formats, import and export, the MCP server. The Python
-sidecar, its bundled interpreter and the `uv` toolchain are deleted at the end.
+sidecar, its bundled interpreter and the `uv` toolchain were deleted at the end.
 
 An earlier draft of this plan kept a second end state open, a native egui +
 wgpu shell replacing the webview. That is dropped. The UI is the largest and
@@ -143,7 +144,7 @@ OCCT 8.0 is tracked, not a prerequisite.
 
 The world is `crates/fundacad-geom/wit/plugin.wit`, the host is
 `fundacad-geom::plugins` behind the crate feature `plugins`, which
-`fundacad-cli` and `src-tauri`'s `rust-engine` turn on (wasmtime and its WASI
+`fundacad-cli` and `src-tauri` turn on (wasmtime and its WASI
 are a large dependency tree and the default build of the geometry crate has no
 use for them).
 
@@ -241,8 +242,8 @@ use for them).
 
 ## 3. Phases
 
-Each phase ends with every suite green: vitest, the sidecar and plugin Python
-tests (until the sidecar is deleted), `cargo test` across the workspace, the
+Each phase ended with every suite green: vitest, the sidecar and plugin Python
+tests (until the sidecar was deleted), `cargo test` across the workspace, the
 geometry evals and the CI e2e scripts. A phase that needs a suite red to make
 progress is planned wrong.
 
@@ -315,19 +316,34 @@ progress is planned wrong.
    `test_conn_limit.py`, `test_fullstack.py`) run against
    `fundacad --engine --ws` through a `FUNDACAD_ENGINE_CMD` variable.
 
-### Phase 3, cutover
+### Phase 3, cutover (done)
 
-1. Rust becomes the default engine in the beta.
-2. After one beta with no engine regressions reported, delete `sidecar/`,
-   `scripts/build-sidecar-runtime.*`, `sidecar.rs`, the WebSocket client's
-   token fetch from Tauri, the `uv` steps in CI, the Python plugin geometry and
-   the `sidecar-runtime` bundle resource, in one commit.
-3. `fundacad-format` and `fundacad-cli` extracted; the three gated evals ported
-   to the CLI.
+1. The branches moved instead of a default flipping: `main` became the Rust
+   engine and publishes the `alpha`, and the Python engine went to `legacy`,
+   which publishes the `beta` (section 6).
+2. Every differential check against Python was frozen as a golden file
+   (section 5.1) and the Python engine's answers are checked on every push.
+3. Then `sidecar/` was deleted from `main` in one commit, with
+   `scripts/build-sidecar-runtime.*`, `src-tauri/src/sidecar.rs`, the
+   WebSocket client's token fetch from Tauri, every `uv` step in CI, the
+   Python MCP server, every plugin's Python geometry and its `geometry`
+   manifest key, and the `sidecar-runtime` bundle resource. The `rust-engine`
+   cargo feature went with them: the Rust engine is the app's only engine,
+   `tauri.conf.json` carries the alpha feed and a policy with no loopback
+   origin, and `tauri.alpha.conf.json` is only the release bundle settings.
+   What the Python tree held that the Rust side still needed moved first: the
+   STEP fixtures and the bench document to `tests/fixtures/`, the selector
+   tuning beside `fundacad-geom::select`, the hole tables to
+   `tests/vectors/hole_standards.json`, and `src-tauri/tests/container_seam.rs`
+   now drives an engine import through the app's container.
+4. `fundacad-format` and `fundacad-cli` extracted; the three gated evals ported
+   to the CLI (`select-eval`, `fillet-eval`, `golden-check`).
 
 ## 4. Conversion targets
 
-LOC are `wc -l` of the current tree. "Oracle" is what proves the port right.
+The record of what was ported from where. LOC were `wc -l` of the tree before
+the port; the Python sources named here are on the `legacy` branch. "Oracle"
+is what proved the port right.
 
 ### 4.1 Python sidecar
 
@@ -420,32 +436,36 @@ The TypeScript stays; these get a Rust twin and shared vectors.
 
 ## 5. Test strategy
 
-- **Nothing red, ever.** The Python engine is the reference until it is
-  deleted, and it is deleted in one commit, not eroded.
-- **Differential oracle.** `sidecar/tools/` holds frozen corpora:
-  `corpus_fillet.json` (500 cases), `corpus_selectors.json` (220),
-  `golden.json` (13 documents), `bench/rebuild_baseline.json`.
-  `diff_engines.py` drives both engines over the same documents and compares
-  body count, per-body volume (rel 0.005), bbox (abs 1e-4) and the error list.
-- **Protocol conformance.** The Python protocol suites take the server command
-  from `FUNDACAD_ENGINE_CMD`; CI runs them against both engines. A suite that
-  needs an op the engine under test has not got yet fails, unless
-  `FUNDACAD_SKIP_UNPORTED_OPS=1` is set, which prints every case it skips. The
-  engine answers a `testSleep` job under `FUNDACAD_ENGINE_TEST_OPS=1` and takes
-  its clocks from `FUNDACAD_STALL_TIMEOUT` and `FUNDACAD_JOB_TIMEOUT`, so
-  `test_cancel.py` has something long to cancel and `test_heartbeat.py` can
-  watch a reap without waiting a minute for one.
+- **Nothing red, ever.** The Python engine was the reference until it was
+  deleted, and it was deleted in one commit, not eroded.
+- **Differential oracle, frozen.** While both engines existed, the Python
+  diff tools (`diff_engines.py`, `diff_meshes.py`, `diff_plugin_ops.py`, the
+  fillet and selector evals, `e2e_coverage.py`) drove both over the same
+  corpora and compared body count, per-body volume (rel 0.005), bbox (abs
+  1e-4) and the error list. Their answers are the golden files of section 5.1,
+  and the corpora are in `tests/golden/corpus/`.
+- **Protocol conformance.** The Python protocol suites (`test_ws.py`,
+  `test_cancel.py`, `test_conn_limit.py`, `test_fullstack.py`,
+  `test_heartbeat.py`) ran against `fundacad-engine --ws` before the deletion;
+  their Rust twins are `crates/fundacad-engine`'s own tests. The engine answers
+  a `testSleep` job under `FUNDACAD_ENGINE_TEST_OPS=1` and takes its clocks from
+  `FUNDACAD_STALL_TIMEOUT` and `FUNDACAD_JOB_TIMEOUT`, so a cancel test has
+  something long to cancel and a reap can be watched without waiting a minute.
 - **Kernel tests in Rust.** `cargo test -p fundacad-geom` runs real
   OpenCASCADE tests from the first brick on.
-- **CI.** The `rust-geom` job caches `target/OCCT` and runs
-  `cargo test --workspace --features fundacad-engine/ws`, so the transport the
-  Python suites drive is compiled and tested; it gates once Phase 1 step 4 lands.
+- **Shared vectors.** A TypeScript mirror and its Rust twin both read one file
+  under `tests/vectors/` (body ids, face colours, hole standards, parameters),
+  recorded from the Python engine before it was deleted.
+- **CI.** The `rust-geom` job caches `target/OCCT`, runs
+  `cargo test --workspace --features fundacad-engine/ws`, every golden check,
+  and the app shell's tests (`src-tauri`, including the container seam); it
+  gates the alpha build.
 - **Hygiene.** `scripts/check-repo-hygiene.sh` applies to Rust too.
 
 ### 5.1 Golden files
 
 `tests/golden/*.golden.json` are the Python engine's answers, frozen once by
-`sidecar/tools/freeze_goldens.py` while the sidecar still existed, one file per
+`freeze_goldens.py` (on `legacy`, in `sidecar/tools/`) while it still existed, one file per
 corpus, holding exactly what each differential tool compared and the
 tolerances it used. The corpora they answer are in `tests/golden/corpus/`.
 Each header records the build123d, OCP and commit they came from. They live
@@ -477,10 +497,10 @@ in the `rust-geom` job.
 
 Renamed from `prealpha-rust` on 2026-09-18, when the branches moved: the Python
 engine lives on the `legacy` branch, which keeps publishing the rolling `beta`
-release and `beta/latest.json`, and the Rust engine is `main`, which publishes
-this rolling `alpha`. Alpha rather than beta because the Rust engine is the
-less tested of the two. In `build.yml` on `main` the beta's `build` and
-`release` jobs only run for `legacy`, and the alpha jobs run on `main`.
+release and `beta/latest.json` from its own copy of `build.yml`, and the Rust
+engine is `main`, which publishes this rolling `alpha`. Alpha rather than beta
+because the Rust engine is the less tested of the two. Since phase 3 the
+workflow on `main` has no beta jobs at all.
 
 A second rolling release beside `beta`, on the tag `alpha`. Two jobs in
 `.github/workflows/build.yml`, `build-alpha` and `release-alpha`, with
@@ -488,14 +508,15 @@ their own `concurrency.group` (`release-alpha`), their own rolling tag
 moved in place rather than deleted, their own `latest.json` and the same
 old-asset sweep. What makes the bundle:
 
-- `--features rust-engine`, so the engine is a worker process of the same
-  executable and `engine_kind` answers `"rust"`, which is what selects the IPC
-  transport in `src/geometry/transport.ts`.
-- `src-tauri/tauri.alpha.conf.json` instead of `tauri.bundle.conf.json`, so
-  no `sidecar-runtime` resource is bundled and no Python is needed at runtime.
-  The job also refuses to build if `src-tauri/sidecar-runtime` exists, and
-  checks the finished binary for the `engine_attach` command, so "this is the
-  Rust build" is a fact about the bytes rather than about the arguments.
+- The engine is a worker process of the same executable, reached over Tauri
+  IPC (`src/geometry/transport.ts`). Until phase 3 this was the `rust-engine`
+  cargo feature; it is now the only build.
+- `src-tauri/tauri.alpha.conf.json` on top of `tauri.conf.json` for the
+  release bundle settings and the MCP server beside the app. Neither declares
+  a resource, so no Python runtime can be bundled, and the job checks the
+  finished binary for the `engine_attach` command and the bundles for any
+  Python interpreter, so what shipped is a fact about the bytes rather than
+  about the arguments.
 - Title: `FundaCAD 1.0 alpha, Rust engine (rolling)`.
 - Release notes open with the warning, which is not optional: this is the new
   Rust engine and less tested than the beta, anything that builds differently
@@ -510,8 +531,9 @@ draft above said "no `latest.json`, so the updater never moves a beta install
 onto it". That answers the danger and loses the feature, and a rolling build
 that cannot roll is one people install once and never update again.
 
-The endpoint is compiled into the binary, so which feed a copy reads is settled
-when it is built and can never change afterwards:
+The endpoint is compiled into the binary (`tauri.conf.json` on `main`), so
+which feed a copy reads is settled when it is built and can never change
+afterwards:
 
 - a beta build reads `releases/download/beta/latest.json`, which only the
   `release` job writes, and only on `legacy`;
@@ -546,14 +568,13 @@ the notes and the feed say alpha instead.
 
 ### 6.3 The CSP
 
-The alpha config also tightens `connect-src`. The beta grants
-`ws://127.0.0.1:8765 http://127.0.0.1:8765` because the frontend talks to the
-Python sidecar over a loopback WebSocket; the Rust engine is a stdio worker
-reached over Tauri IPC, so that build's webview never opens a socket and the
-grant comes out. `ipc:` and `http://ipc.localhost` are all it keeps.
-`tests/security/csp.test.ts` pins the alpha policy as the shipped one minus
-exactly those two sources, so the two cannot drift, and when the sidecar is
-deleted in phase 3 the base policy loses them too and the pair becomes one.
+`connect-src` keeps `ipc:` and `http://ipc.localhost` and nothing else. The
+beta grants `ws://127.0.0.1:8765 http://127.0.0.1:8765` because its frontend
+talks to the Python engine over a loopback WebSocket; this engine is a stdio
+worker reached over Tauri IPC, so the webview never opens a socket. Until
+phase 3 the alpha config carried the tightened policy over a base that still
+granted the socket; the base policy is now the tightened one, and
+`tests/security/csp.test.ts` pins it.
 
 ### 6.4 Before the first alpha release is cut
 
@@ -564,22 +585,25 @@ deleted in phase 3 the base policy loses them too and the pair becomes one.
 - The updater is still off everywhere. `tauri.conf.json` carries upstream's
   minisign pubkey, so both release jobs withhold `latest.json` and say so in
   the notes. Generating a keypair turns both feeds on at once.
-- Plugin bundles ARE published to this release now, packed by
-  `build-alpha` with their geometry components, and a Rust engine build
-  installs from it (`pluginReleaseTag` in `src/plugins/index.ts`). Only
-  PrintToolbox has a component so far; the rest refuse their features by name.
+- Plugin bundles ARE published to this release, packed by `build-alpha` with
+  their geometry components and nothing else, and the app installs from it
+  (`RELEASE_TAG` in `src/plugins/index.ts`). Every plugin in the repository
+  ships a component. The beta and the alpha share one plugin directory on a
+  machine that has both, and a bundle the alpha installed has no Python half,
+  so the beta cannot build that plugin's features until the beta's own bundle
+  is installed again.
 - `fundacad-mcp` ships beside the app (`externalBin`), its private engine is
   the app started with `--engine --ws`, and the app's worker serves a loopback
   WebSocket beside its stdio pipe for live sessions (docs/MCP.md).
 
 ## 7. Working agreements for the branch
 
-- Branch: `rustirisation`. Each brick keeps every suite green.
+- Branch: `rustirisation`, then `main`. Each brick keeps every suite green.
 - Agents: research, surveys and docs on Sonnet; code that lands in the tree,
   and its review, on Opus.
 - No em or en dashes anywhere, a comma instead (house style and CI gate).
-- Rust doc comments say why; a module names the Python module it replaces in
-  its header until the Python is deleted.
+- Rust doc comments say why. A module named the Python module it replaced in
+  its header until the Python was deleted; those names are gone with it.
 - OpenCASCADE classes are added to the vendored bridge, never reached through
   `unsafe` shims in application crates.
 - `unwrap` is for tests. Engine errors carry the feature id so the frontend

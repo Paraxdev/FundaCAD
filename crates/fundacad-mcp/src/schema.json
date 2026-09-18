@@ -879,7 +879,7 @@
    "fields": {
     "origin": "[x,y,z], a point on the line",
     "dir": "[x,y,z], its direction; need not be unit length",
-    "axisEdge": "optional Selector anchoring the axis to a straight model EDGE; the sidecar re-resolves that edge every rebuild so the axis FOLLOWS the part, and origin/dir stay as the cache it falls back to",
+    "axisEdge": "optional Selector anchoring the axis to a straight model EDGE; the engine re-resolves that edge every rebuild so the axis FOLLOWS the part, and origin/dir stay as the cache it falls back to",
     "name": "optional label"
    },
    "example": {

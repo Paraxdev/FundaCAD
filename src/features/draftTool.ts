@@ -5,7 +5,7 @@
 //
 // Like Offset Face, the result cannot be faked client-side (OCCT's
 // BRepOffsetAPI_DraftAngle re-solves every neighbouring wall), so the preview is
-// sidecar-driven: the un-committed feature goes through store.setPreview() and
+// engine-driven: the un-committed feature goes through store.setPreview() and
 // the normal rebuild pipeline renders it. Commit promotes it (records undo);
 // Esc reverts.
 
@@ -117,7 +117,7 @@ export class DraftTool {
       return;
     }
     // Ctrl/Cmd-click another face on the SAME body adds it; every face in one
-    // draft shares the angle and the pull axis (which is what the sidecar's
+    // draft shares the angle and the pull axis (which is what the engine's
     // handler does with the list it is given).
     if (e.ctrlKey || e.metaKey) {
       const hit = this.viewport.pickFaceForPressPull(e.clientX, e.clientY);

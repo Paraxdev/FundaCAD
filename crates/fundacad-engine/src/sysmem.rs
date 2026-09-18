@@ -1,4 +1,4 @@
-//! Available physical memory, replaces `sidecar/sysmem.py`.
+//! Available physical memory, replaces the Python engine's `sysmem.py`.
 //!
 //! Every probe answers None rather than guessing: an unknown figure must leave
 //! the caller free to proceed, since refusing an import on a probe that failed

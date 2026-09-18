@@ -34,7 +34,7 @@ describe("feature ids follow the app, not the agent", () => {
 
   it("counts the way the store counts, which is not the lowest free number", async () => {
     // DocumentStore.nextId starts at `ids.size + 1` and climbs past anything
-    // taken. crates/fundacad-mcp/tools/python-oracle/model.py takes the lowest free number instead, so a
+    // taken. The Python MCP server's model.py takes the lowest free number instead, so a
     // gap gets reused there and not here. Pinned because the difference is
     // exactly the sort of thing a plugin author would otherwise discover by
     // having predicted an id.

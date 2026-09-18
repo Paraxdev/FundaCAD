@@ -33,7 +33,6 @@
 
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { describeGrants, sandboxNote } from "../../plugins/manifest";
-import { engineKind } from "../../geometry/transport";
 import {
   inspectFile,
   inspectUrl,
@@ -43,7 +42,6 @@ import {
   installedPlugins,
   officialPlugins,
   pickBundle,
-  pluginReleaseTag,
   removePlugin,
   type Candidate,
   type InstalledPlugin,
@@ -54,11 +52,6 @@ import { updateFor } from "../../plugins/updates";
 import { toast } from "../../ui/toast";
 
 const suggested = ref<OfficialPlugin[]>(officialPlugins());
-const engine = ref<"rust" | "python">("python");
-onMounted(async () => {
-  engine.value = await engineKind();
-  suggested.value = officialPlugins(pluginReleaseTag(engine.value));
-});
 
 const installed = ref<InstalledPlugin[]>([]);
 /** the id whose permission list is open, at most one */
@@ -105,7 +98,7 @@ const rows = computed(() =>
   installed.value.map((rec) => ({
     rec,
     manifest: installedManifest(rec),
-    update: updateFor(rec, suggested.value, engine.value),
+    update: updateFor(rec, suggested.value),
   })),
 );
 

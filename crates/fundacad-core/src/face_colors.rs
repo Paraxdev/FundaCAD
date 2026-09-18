@@ -1,5 +1,5 @@
 //! Per-face colours packed as a palette plus run-length encoding, the Rust twin
-//! of `src/document/faceColors.ts` (decode, dominant) and sidecar/face_colors.py
+//! of `src/document/faceColors.ts` (decode, dominant) and the Python engine's `face_colors.py`
 //! (encode, which only the engine writes).
 
 use indexmap::IndexMap;

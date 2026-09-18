@@ -320,7 +320,7 @@ builds it. What it may not do is make a file unreadable.**
 That is the second version of this rule. The first said a plugin owned how
 something was CREATED and PRESENTED, and never whether a saved file still built,
 so `texture` stayed in the `Feature` union in `src/types.ts`, its geometry stayed
-in `sidecar/`, and `document/numFields.ts` kept its numeric rows. It sounded
+in the engine, and `document/numFields.ts` kept its numeric rows. It sounded
 generous and it described something worse: an application that built textures
 whether or not the plugin existed, and a plugin that was a panel in front of it.
 Uninstalling changed nothing about what FundaCAD could do.
@@ -330,7 +330,7 @@ So the boundary moved, and it now runs where the honest cost is:
 | | owner |
 | --- | --- |
 | the feature's fields and rows (`textureForm.ts`) | the plugin |
-| the displacement (`geometry/*.py`, registered into the engine) | the plugin |
+| the displacement (`geometry-rs/`, a component the engine runs) | the plugin |
 | the rebuild-time handler for the `texture` type | the plugin |
 | carrying, saving and re-saving a feature nobody can build | the app |
 | saying which plugin is missing, by name | the app |
@@ -345,7 +345,7 @@ a plugin costs you the building, never the numbers.
 
 **What it costs.** A document that uses a plugin's feature needs that plugin.
 The build reports it per feature, with the plugin named
-(`sidecar/plugin_geometry.py`'s `unregistered`), and the app says it once at the
+(`missing` in `crates/fundacad-geom/src/plugins/mod.rs`), and the app says it once at the
 document level when the file opens (`src/document/missingPlugins.ts`). Both
 sentences lead with the reassurance that nothing has been lost, because the
 question a person actually has is whether their part survived.
@@ -369,8 +369,8 @@ Two declarations in `manifest.json`, and they answer two different questions:
 
 ```json
 {
-  "featureTypes": ["texture"],
-  "geometry": "geometry/register.py"
+  "featureTypes": ["teardropHole"],
+  "geometryWasm": "geometry.wasm"
 }
 ```
 
@@ -379,37 +379,9 @@ rather than off any contribution, which is the whole point: a plugin that is
 uninstalled or switched off contributes nothing, and this is what lets the
 warning name it anyway.
 
-`geometry` names a Python module the geometry engine imports at startup. Its
-`register(engine, plugin_id)` claims a feature handler (a rebuild-time verb,
-same signature as everything in `builder._FEATURE_HANDLERS`) and, if it needs
-one, a mesh pass (a tessellation-time hook that runs against the FINAL shape, so
-the effect survives the booleans and fillets applied after it). See
-`sidecar/plugin_geometry.py` for both contracts.
-
-On the window side the plugin contributes `numFields` and `targets` alongside
-the dropdowns it already contributed, because `document/numFields.ts` and
-`features/selectionTargets.ts` no longer name a type they do not own.
-
-**Registered geometry is not sandboxed.** It is imported into the geometry
-worker and runs with everything that process has. There is no cage and there is
-not going to be one: geometry code that cannot call the kernel is not geometry
-code, which is the bargain Blender, Rhino and Fusion all make.
-`sandboxNote("builtin")` is where a person is told, in the words they read
-before they install.
-
-#### The same geometry for the Rust engine, as a component
-
-The Rust engine (docs/RUST-PIVOT.md) does not import Python. A plugin's
-geometry for it is a **WebAssembly component** built from a Rust crate in the
-plugin folder, and a second manifest key names it:
-
-```json
-{
-  "featureTypes": ["teardropHole"],
-  "geometry": "geometry/register.py",
-  "geometryWasm": "geometry.wasm"
-}
-```
+`geometryWasm` names the plugin's geometry: a **WebAssembly component** the
+engine's plugin host runs (wasmtime), built from a Rust crate in the plugin
+folder.
 
 - The crate lives in `plugins/<id>/geometry-rs/`, is its own cargo workspace,
   builds as a `cdylib` for `wasm32-wasip2`, and generates its bindings from
@@ -420,11 +392,13 @@ plugin folder, and a second manifest key names it:
   like `main.js`, and `scripts/build-plugins.py` builds it again when it packs
   the bundle, so the zip carries the component and never the crate.
   `rustup target add wasm32-wasip2` once per machine.
-- The world exports the same four hooks the Python registry has: `run-feature`,
-  `resolve-pass` and `displace` (a mesh pass, with a `code-version` that keys
-  the mesh caches), `write-export` and `generate-shape`. `register` returns
-  what the component claims, and every name in it must be declared in the
-  manifest, or the plugin does not load.
+- The world exports four hooks: `run-feature` (a rebuild-time handler),
+  `resolve-pass` and `displace` (a mesh pass, a tessellation-time hook that runs
+  against the FINAL shape, so the effect survives the booleans and fillets
+  applied after it, with a `code-version` that keys the mesh caches),
+  `write-export` and `generate-shape`. `register` returns what the component
+  claims, and every name in it must be declared in the manifest, or the plugin
+  does not load.
 - It imports a generic kernel: solids from primitives, sketches, edges and
   wires, prisms, revolves and a helical sweep, booleans with their options,
   fillet and chamfer, face selectors, a face's surface and its stored
@@ -434,35 +408,32 @@ plugin folder, and a second manifest key names it:
   claims faces with a tag of its own that comes back with each face it
   displaces, because nothing a component holds survives from one call to the
   next.
-- Numbers that must match the Python half bit for bit come from the engine:
-  `numeric` is the platform's C math library, the one Python and numpy call,
-  and the Delaunay triangulation is the Qhull scipy runs. Transcendentals a
-  crate compiles in itself can land one ulp away, and on a lattice one ulp is
-  enough to flip a tie.
-- **This half IS sandboxed**, because it can be: no network, no environment, a
-  memory cap and a time budget, an export writes only to the path the host
-  chose, and files are read only through the `files` import, which is refused
-  unless the manifest grants `files.read` (a heightmap image, a slicer's own
-  presets). That is a property of the format, not a promise the plugin makes,
-  and it does not change what the person is told about the Python half while
-  both exist.
-- Every in-repo plugin with engine geometry ships both halves: PrintToolbox,
-  Screws, Printing and Texture. `sidecar/tools/diff_engines.py`,
-  `diff_plugin_ops.py` (generateShape, exportWith) and `diff_meshes.py` (a
-  mesh pass, triangle by triangle) hold the two halves to each other on the
-  corpora beside them.
+- Numbers come from the engine where they have to be exact: `numeric` is the
+  platform's C math library, and the Delaunay triangulation is Qhull.
+  Transcendentals a crate compiles in itself can land one ulp away, and on a
+  lattice one ulp is enough to flip a tie.
+- **It is sandboxed**, because it can be: no network, no environment, a memory
+  cap and a time budget, an export writes only to the path the host chose, and
+  files are read only through the `files` import, which is refused unless the
+  manifest grants `files.read` (a heightmap image, a slicer's own presets).
+  That is a property of the format, not a promise the plugin makes.
+- Every in-repo plugin with engine geometry ships a component: PrintToolbox,
+  Screws, Printing and Texture. Each was held to the Python half it replaced on
+  its own corpus, and the Python half's answers are frozen in `tests/golden/`
+  (`plugins`, `screws_ops`, `printing_ops`, `texture`), checked on every push.
 
-Both halves stay in the bundle until the Python engine is deleted: whichever
-engine is running loads its own, and a plugin that ships only one runs on only
-one. On the Rust engine a feature of a plugin with no `geometryWasm` fails by
-name: "its manifest names no geometryWasm, so the Rust engine has no geometry
-to run".
+On the window side the plugin contributes `numFields` and `targets` alongside
+the dropdowns it already contributed, because `document/numFields.ts` and
+`features/selectionTargets.ts` no longer name a type they do not own.
 
-The Rust engine build installs its plugins from its own `alpha`
-release rather than the beta's (`pluginReleaseTag` in `src/plugins/index.ts`,
-chosen from `engine_kind` at run time). `build-alpha` packs those bundles
-with their components, from the same commit as the host that runs them. The
-app tells its worker where installed plugins are with `FUNDACAD_PLUGIN_DIR`
+A feature of a plugin with no `geometryWasm` fails by name. A bundle built for
+the Python beta has a `geometry` key naming its Python half instead, and the
+app offers the alpha's bundle of the same plugin in its place.
+
+The app installs its plugins from the `alpha` release (`RELEASE_TAG` in
+`src/plugins/index.ts`). `build-alpha` packs those bundles with their
+components, from the same commit as the host that runs them. The app tells its
+worker where installed plugins are with `FUNDACAD_PLUGIN_DIR`
 (`<app data>/plugins`), and the shipped `fundacad-mcp` tells a private engine
 the same directory.
 
@@ -470,15 +441,11 @@ the same directory.
 
 Some geometry is worth generating once and then keeping, not rebuilding: a standard screw is the
 same solid every time, and a document full of them should not stop building the day the library is
-uninstalled. So a plugin's geometry module may also register a SHAPE GENERATOR:
-
-```python
-def register(engine, plugin_id):
-    engine.register_shape_generator("fastener", plugin_id, build)  # build(params) -> Shape
-```
+uninstalled. So a plugin's geometry component may also claim a SHAPE GENERATOR, `generate-shape`,
+named in the manifest's `shapeGenerators` (`plugins/FundaCAD.Screws` claims `fastener`).
 
 The window reaches it through `GeometryBackend.generateShape(name, params, opts)`, which runs the
-`generateShape` op (`sidecar/shape_generate.py`, `docs/PROTOCOL.md`). `output: "mesh"` answers a mesh
+`generateShape` op (`docs/PROTOCOL.md`). `output: "mesh"` answers a mesh
 for a preview the plugin draws itself. `output: "store"` writes the solid to the blob store and
 answers `geom`, the same content hash an imported STEP file gets, and `placement` carries the
 shape's origin to a point with its +Z along a direction first.
@@ -486,9 +453,9 @@ shape's origin to a point with its +Z along a direction first.
 The plugin then adds an ordinary `import` feature with that `geom`. It is saved in the container,
 rebuilt from the blob, and needs neither the generator nor the plugin again. `generatedBy` on the
 feature (`{ plugin, spec }`) records what it was made from, for the plugin to read back; the build
-ignores it. A ValueError raised by `build` reaches the person as its message.
+ignores it. A generator's refusal reaches the person as its message.
 
-The generator declares no feature type, so the manifest lists `shapeGenerators` beside `geometry`
+The generator declares no feature type, so the manifest lists `shapeGenerators` beside `geometryWasm`
 instead of `featureTypes` (the packager refuses geometry that declares neither), and there is nothing
 for the missing-plugin warning to say about a document that uses it.
 
@@ -524,16 +491,16 @@ plugins/
   FundaCAD.MultiColor/     manifest.json, README.md, main.ts, palette.ts,
                            PaletteSection.vue
   FundaCAD.PrintToolbox/   manifest.json, README.md, main.ts, printForm.ts,
-                           faceTool.ts, geometry/
+                           faceTool.ts, geometry-rs/
   FundaCAD.Printing/       manifest.json, README.md, main.ts, printerClient.ts,
                            native.ts, slicer.ts, printFlow.ts, printDialog.ts,
                            printStatusLine.ts, printStatus.ts, exportProject.ts,
                            state.ts, PrintStatusPill.vue, CameraPanel.vue,
                            FilamentMappingDialog.vue, FilamentMappingHost.vue,
-                           geometry/
+                           geometry-rs/
   FundaCAD.Screws/         manifest.json, README.md, main.ts, catalogue.ts, spec.ts,
                            search.ts, library.ts, state.ts, insert.ts, LibraryPanel.vue,
-                           FastenerPreview.vue, CustomForm.vue, catalogue/, geometry/
+                           FastenerPreview.vue, CustomForm.vue, catalogue/, geometry-rs/
   FundaCAD.SpaceMouse/     manifest.json, README.md, main.ts, spacemouse.ts,
                            state.ts, SettingsHost.vue, SpaceMouseModal.vue
 ```
@@ -602,12 +569,12 @@ checking its types. It was found by putting a deliberate type error in one and
 getting no output at all. `plugins/**/*.ts` is in `include` now.
 
 **Nothing should work out where the repository root is by counting directories
-up from itself.** `sidecar_link.py` did, with two `dirname` calls that meant "the
-checkout" only while the plugin sat one level down. It searches upward for a
-`sidecar/server.py` now, so the directory could be renamed under it without
-every geometry test failing at once, and it finds nothing when installed under
-the app data directory, which is exactly when the environment override is
-supposed to take over.
+up from itself.** The Python MCP server's engine link did, with two `dirname`
+calls that meant "the checkout" only while the plugin sat one level down. Its
+Rust successor (`crates/fundacad-mcp/src/link.rs`) walks upward until it finds a
+target directory, so the directory can be renamed under it, and it finds nothing
+when installed beside the app, which is exactly when the environment override
+is supposed to take over.
 
 ## Where a plugin comes from
 
@@ -899,12 +866,12 @@ and are exactly what a third-party plugin of the same kind would get:
 | `plugin_data_read`, `plugin_data_write`, `plugin_data_path` | small files in `app data/plugin-data/<id>/`, which survives reinstalling the plugin | none |
 | `plugin_data_adopt` | moves a JSON file the plugin's code kept directly under app data, from before it had a directory, into its own | none |
 
-And in the geometry engine, `register_exporter` (`sidecar/plugin_geometry.py`):
-the engine rebuilds, meshes every body at export grade and applies the triangle
+And in the geometry engine, an exporter a plugin's component claims
+(`write-export`, docs/PLUGINS.md's component section): the engine rebuilds, meshes every body at export grade and applies the triangle
 budget, then hands the meshes to the plugin's writer. The window reaches it with
 `GeometryBackend.exportWith`. The printer connection's project 3MF is written
 this way, and `tests/plugins/coreIndependence.test.ts` refuses any mention of a
-printer or a slicer anywhere in `src/`, `src-tauri/` or `sidecar/`.
+printer or a slicer anywhere in `src/`, `src-tauri/` or the engine's `crates/`.
 
 ### A plugin never names a file
 
@@ -1026,7 +993,7 @@ runners**, and the kind decides which.
 | --- | --- | --- | --- |
 | TypeScript | JavaScript | a Worker | `compute` |
 | Rust | WebAssembly | a Worker | `compute` |
-| Python | nothing | its own process | `process` |
+| anything | a program | its own process | `process` |
 
 WebAssembly compiles inside the sandbox, the e2e test checks it, because
 `'wasm-unsafe-eval'` is inherited by the Worker and it would be unpleasant to
@@ -1047,13 +1014,14 @@ runtime in Rust would add tens of megabytes to the installer to duplicate an
 engine already in the process: the webview has a JIT'd one, and the policy in
 `src-tauri/tauri.conf.json` already permits instantiating it.
 
-**Python reuses what exists.** The app already ships an interpreter, already speaks a token-gated protocol on loopback, and
-`sidecar/live_session.py` already implements the mediation a permission model
-needs: one host owns the document, guests propose replacements against a
-revision and cannot install one. A Python plugin is a guest. A second Python
-runner would be a second thing to be wrong.
+**A process plugin reuses what exists.** The engine already speaks a
+token-gated protocol on loopback, and its live session
+(`crates/fundacad-engine/src/live.rs`) already implements the mediation a
+permission model needs: one host owns the document, guests propose
+replacements against a revision and cannot install one. A process plugin is a
+guest. It brings its own runtime; the app ships no interpreter.
 
-What Python does not get is a claim of containment. A process runs as the user,
+What a process does not get is a claim of containment. A process runs as the user,
 and the `process` sentence on the install screen says so.
 
 ## Where the code is
@@ -1079,7 +1047,7 @@ and the `process` sentence on the install screen says so.
 | `src/plugins/activate.ts` | starting and stopping them, by dynamic import; names none of them |
 | `src/plugins/index.ts` | the plugins this build offers, and the bridge to Rust |
 | `src/components/overlays/PluginsSection.vue` | Preferences ▸ Plugins |
-| `src-tauri/src/plugins/mod.rs` | the commands: list, inspect, install, remove, python runtime |
+| `src-tauri/src/plugins/mod.rs` | the commands: list, inspect, install, remove |
 | `src-tauri/src/plugins/bundle.rs` | the refusals, split out so they can be tested |
 | `src-tauri/src/plugins/files.rs` | the dialogs and the disk |
 | `src-tauri/src/plugins/handed.rs` | which files a plugin holds, split out so it can be tested |
@@ -1091,6 +1059,7 @@ and the `process` sentence on the install screen says so.
 | `plugins/<id>/main.ts` | a shipped capability's activation module: everything it contributes |
 | `plugins/<id>/*.vue` | a capability's own components, mounted through `overlays` or `browserSections` |
 | `plugins/<id>/server.py` | a process plugin's entry point |
+| `plugins/<id>/geometry-rs/` | a plugin's geometry component, built into `geometry.wasm` |
 | `scripts/build-plugins.py` | packaging, run by the release job |
 
 The Rust side knows **nothing** about what a grant means, and must not learn.
@@ -1142,7 +1111,7 @@ them but three readers of a table that was already there.
 
 **And then the move finished, because the first pass had not.** Every number
 above was true and the headline was still wrong: the geometry stayed in
-`sidecar/`, the `texture` variant stayed in the `Feature` union, and the value
+the engine, the `texture` variant stayed in the `Feature` union, and the value
 rows and the Faces row stayed in the app's own tables. Nothing imported the
 plugin, so `coreIndependence.test.ts` passed, and it was measuring the import
 graph while the coupling lived in plain text. The second pass moved the schema
@@ -1183,7 +1152,7 @@ parameter can drive them, and the plugin decides which of them a knurl reads.
 ### And then driving it found a bug in the application
 
 The move above is a refactor: it says the tool can live outside `src/`, not that
-the tool works. Actually using it, a browser, the real sidecar, eight shapes and
+the tool works. Actually using it, a browser, the real engine, eight shapes and
 every pattern, twenty-eight gestures, said something else. **Ten of the
 twenty-eight worked.** The rest picked a face, showed it selected, and then
 refused Add with "No faces selected" over a face that was lit up on screen. Same

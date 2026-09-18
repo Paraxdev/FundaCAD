@@ -1,4 +1,4 @@
-//! sidecar/tools/eval_fillet_corpus.py on this engine: every case rebuilt, the
+//! the Python engine's `eval_fillet_corpus.py` on this engine: every case rebuilt, the
 //! blend feature failed on an error (not a selector miss), on a result that is
 //! not one valid solid, on too few faces, or on removed volume more than 2% off
 //! the reference. The corpus self hash is left to the Python tool, whose float

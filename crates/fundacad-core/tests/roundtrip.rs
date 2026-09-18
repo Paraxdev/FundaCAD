@@ -21,7 +21,7 @@ fn read(path: &Path) -> Value {
 /// (label, document) for every real document the repository holds.
 fn documents() -> Vec<(String, Value)> {
     let mut out = Vec::new();
-    for name in ["sidecar_tests.json", "plugin_tests.json", "app_shapes.json"] {
+    for name in ["python_engine_tests.json", "plugin_tests.json", "app_shapes.json"] {
         let Value::Array(rows) = read(
             &Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("tests/fixtures")
@@ -43,7 +43,7 @@ fn documents() -> Vec<(String, Value)> {
             out.push((format!("{corpus} {}", case["id"]), case["doc"].clone()));
         }
     }
-    let funda = "sidecar/tools/bench/textured_box.funda";
+    let funda = "tests/fixtures/textured_box.funda";
     out.push((funda.to_owned(), read(&repo().join(funda))));
     out
 }

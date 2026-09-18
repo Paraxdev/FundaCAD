@@ -1,6 +1,6 @@
 // In-app updates via tauri-plugin-updater: the packaged app checks the rolling
-// release's latest.json baked into its config (alpha/latest.json for the Rust build,
-// beta/latest.json for the Python one) and offers a one-click restart-and-update.
+// release's latest.json baked into its config (alpha/latest.json) and offers a
+// one-click restart-and-update.
 // Only meaningful where the updater can actually replace the install, the NSIS
 // install on Windows, the .app on macOS, the AppImage on Linux, so the Rust
 // `updates_supported` command gates deb/rpm installs (and plain-browser dev) out.

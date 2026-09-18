@@ -1,5 +1,5 @@
 //! The `import` op, replaces `import_geometry`, `_assembly_payload` and
-//! `_import_size_cap` of `sidecar/mesh_import.py`, with the product tree walk
+//! `_import_size_cap` of the Python engine's `mesh_import.py`, with the product tree walk
 //! of `step_assembly.py` in the vendored bindings (`opencascade::xcaf`).
 //!
 //! Not here yet: the free memory guard.

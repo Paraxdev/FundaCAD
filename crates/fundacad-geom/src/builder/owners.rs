@@ -1,5 +1,5 @@
-//! Face provenance, sidecar/builder.py `_update_owners` over the fingerprints
-//! of sidecar/defeature.py `_face_fp`: each face of a changed body is owned by
+//! Face provenance, the Python engine's `builder.py` `_update_owners` over the fingerprints
+//! of the Python engine's `defeature.py` `_face_fp`: each face of a changed body is owned by
 //! the feature that last made it, keyed by its rounded area and centre.
 
 use std::collections::HashMap;

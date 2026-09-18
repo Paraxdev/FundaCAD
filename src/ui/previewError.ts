@@ -1,7 +1,7 @@
 // The kernel's refusal of the value somebody is in the middle of choosing.
 //
-// A live preview asks the sidecar to build a value before it is committed, and
-// the sidecar sometimes says no: a thread whose turns would run into each other,
+// A live preview asks the engine to build a value before it is committed, and
+// the engine sometimes says no: a thread whose turns would run into each other,
 // a fillet larger than the edge it is on, a shell thicker than its wall. The
 // answer used to go nowhere a user was looking. rebuildBridge deliberately does
 // not toast a preview's failures, a drag through a bad range would emit one a
@@ -21,7 +21,7 @@
 // still being asked: it has to answer where the question is being typed, and
 // vanish the moment the value changes.
 
-/** What the sidecar said, or null when the previewed value builds (or when
+/** What the engine said, or null when the previewed value builds (or when
  *  nothing is being previewed). */
 let current: string | null = null;
 

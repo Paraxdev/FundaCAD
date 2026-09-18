@@ -1,7 +1,7 @@
 //! Chunked replies and the cancel check between chunks.
 //!
 //! Replaces `_chunk_bodies`, `_stream_binary_reply`, `_send_reply` and the
-//! cancel token plumbing (`_CANCEL`, `_cancelled_now`) of `sidecar/wire.py`.
+//! cancel token plumbing (`_CANCEL`, `_cancelled_now`) of the Python engine's `wire.py`.
 //! Transport-agnostic: a reply is an iterator of messages, and the transport
 //! pulls the next one only when it has sent the previous, which is where the
 //! Python loop awaited its send and where the cancel check sits.
@@ -58,7 +58,7 @@ pub fn chunk_bodies(bodies: &[WireBody], target: usize) -> Vec<Range<usize>> {
     out
 }
 
-/// A random 16 hex digit stream id, `secrets.token_hex(8)` in the sidecar. It
+/// A random 16 hex digit stream id, `secrets.token_hex(8)` in the Python engine. It
 /// only has to differ between replies on one connection, so std's randomly
 /// keyed hasher plus a counter is enough and needs no dependency.
 pub fn new_stream_id() -> String {

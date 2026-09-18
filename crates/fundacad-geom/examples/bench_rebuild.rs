@@ -1,5 +1,5 @@
 //! Cold against warm rebuild timing, the Rust side of
-//! sidecar/tools/bench_rebuild.py. Every phase rebuilds and meshes.
+//! the Python engine's `bench_rebuild.py`. Every phase rebuilds and meshes.
 //!
 //!   cargo run --release -p fundacad-geom --example bench_rebuild -- \
 //!       tests/golden/corpus/corpus_engines.json fillet_g2_corners [--runs 5]

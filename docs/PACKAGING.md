@@ -1,279 +1,117 @@
 # Packaging FundaCAD
 
-> **UPDATED (2026-07): no system OpenCASCADE is needed to build or ship.** The
-> Rust/OCCT path is now behind the off-by-default `rust-geom` Cargo feature, so the
-> default build links no OCCT and needs no cmake. Geometry ships in the **Python
-> sidecar**, bundled as a relocatable runtime built by
-> [`scripts/build-sidecar-runtime.sh`](../scripts/build-sidecar-runtime.sh) (`.ps1` on
-> Windows) from `cadquery-ocp-novtk` wheels, which carry their own OCCT. `tauri build
-> --config src-tauri/tauri.bundle.conf.json` ships it as a resource. CI:
-> [`.github/workflows/build.yml`](../.github/workflows/build.yml) (ubuntu / macos-14
-> arm64 / windows; Apple Silicon only).
->
-> **The OCCT sections below are LEGACY**, they apply only to building the optional
-> `rust-geom` spike (`cargo build --features rust-geom`), not to shipping.
-
-> **The alpha Rust bundle (2026-09):** there is now a second thing this
-> repository builds, and it has no Python in it. See
-> [the alpha section](#the-alpha-rust-bundle) below.
-
-FundaCAD is a [Tauri 2](https://v2.tauri.app) desktop app:
+FundaCAD is a [Tauri 2](https://v2.tauri.app) desktop app with its geometry
+engine compiled in:
 
 - **Frontend**, TypeScript + Vite, built with `npm run build` (Node 22) into `dist/`.
-- **Backend**, Rust (`src-tauri/`); the default build has no OCCT dependency (the
-  `opencascade-rs` fork is compiled only under `--features rust-geom`).
-- **Geometry sidecar**, a Python ([build123d](https://build123d.readthedocs.io))
-  process. In dev the Rust shell spawns the uv `.venv`; in a bundle it spawns the
-  relocatable `sidecar-runtime/` resource.
+- **App shell**, Rust (`src-tauri/`): the window, native dialogs, the document
+  container, plugins, and the supervisor of the geometry engine.
+- **Geometry engine**, Rust (`crates/`, docs/RUST-PIVOT.md) on OpenCASCADE, run as
+  a worker process of the same executable (`fundacad --engine`), so a bundle
+  carries one executable and no runtime beside it.
+- **MCP server**, `fundacad-mcp`, shipped beside the app (docs/MCP.md).
 
-CI: [`.github/workflows/build.yml`](../.github/workflows/build.yml).
+CI: [`.github/workflows/build.yml`](../.github/workflows/build.yml) builds
+Linux x86_64, macOS arm64 and Windows x64 and publishes the rolling `alpha`
+release from `main`. The Python engine's beta is built from the `legacy`
+branch by that branch's own copy of the workflow, and publishes the `beta`
+release; the two never meet: separate branches, jobs, tags, update feeds and
+artifact names.
 
----
-
-## The alpha Rust bundle
-
-A second bundle, from the same tree, whose geometry engine is compiled in. It
-is what the `build-alpha` and `release-alpha` jobs publish to the
-`alpha` rolling release; docs/RUST-PIVOT.md section 6 is the decision
-record, this is how to build one.
+## Building a bundle
 
 ```sh
-npx tauri build --config src-tauri/tauri.alpha.conf.json --features rust-engine
+npm ci
+npx tauri build --config src-tauri/tauri.alpha.conf.json
 ```
 
-Four things make it different from the beta bundle:
+What the pieces are:
 
-- **`--features rust-engine`.** `src-tauri` gains `fundacad-engine` and
-  `fundacad-geom`, `main.rs` dispatches `--engine` into the worker loop, and
-  the app registers `engine_attach` / `engine_send` / `engine_kind` instead of
-  `sidecar_token`. `engine_kind` answering `"rust"` is what makes
-  `src/geometry/transport.ts` choose IPC over the WebSocket.
-- **`tauri.alpha.conf.json` instead of `tauri.bundle.conf.json`.** It
-  declares no `resources`, so no `sidecar-runtime` is bundled and
-  `scripts/build-sidecar-runtime.{sh,ps1}` never has to run. It also points the
-  updater at the alpha feed and drops the loopback grant from the CSP,
-  which that build cannot use.
-- **`fundacad-mcp` ships beside the app.** The config's `externalBin`
-  (`binaries/fundacad-mcp`) is filled by its `beforeBuildCommand`, which runs
+- **`tauri.conf.json`** is the whole app: the window, the Content-Security-Policy
+  (no loopback origin, the engine is reached over Tauri IPC), the updater's
+  feed (`alpha/latest.json`) and the bundle targets. It declares no
+  `resources`, so nothing but the executable and the MCP server is bundled.
+- **`tauri.alpha.conf.json`** adds what only a release bundle needs: updater
+  artifacts, the rpm and NSIS compression settings, and `externalBin`
+  (`binaries/fundacad-mcp`), filled by its `beforeBuildCommand`, which runs
   `scripts/stage-mcp-server.mjs`: `cargo build --release -p fundacad-mcp` in
   the root workspace, copied to `src-tauri/binaries/fundacad-mcp-<triple>`.
-  Tauri installs it next to `fundacad.exe` (in `Contents/MacOS` and
-  `usr/bin` elsewhere), so the portable zip, unpacked from the `.msi`, has it
-  too. Its private engine is the app itself, `fundacad --engine --ws`, and
-  its live mode attaches to the window through `session.json`, so it needs no
-  second kernel and no checkout (docs/MCP.md).
+  Tauri installs it next to `fundacad.exe` (in `Contents/MacOS` and `usr/bin`
+  elsewhere), so the portable zip, unpacked from the `.msi`, has it too. Its
+  private engine is the app itself, `fundacad --engine --ws`, and its live mode
+  attaches to the window through `session.json`.
 - **OpenCASCADE 7.8.1 is compiled from source**, statically, by the `occt-sys`
-  crate the vendored bindings pull in. It needs cmake and a C++ toolchain, it
-  takes about twenty minutes cold, and it lands in `<target>/OCCT`, which is
-  what CI caches. On Windows use the rustup MSVC toolchain, a MinGW `cargo`
-  earlier on PATH picks the wrong cmake generator, and set
-  `CMAKE_POLICY_VERSION_MINIMUM=3.5`, because CMake 4 refuses OCCT 7.8.1's
+  crate the vendored bindings (`third_party/opencascade-rs`) pull in. It needs
+  cmake and a C++ toolchain, it takes about twenty minutes cold, and it lands in
+  `<target>/OCCT`, which is what CI caches. Several target directories can share
+  one build: point `FUNDACAD_OCCT_ROOT` at an installed kernel (its `cmake`,
+  `include` and `lib`) and the build script links it instead of building again.
+  On Windows use the rustup MSVC toolchain, a MinGW `cargo` earlier on PATH
+  picks the wrong cmake generator, and set `CMAKE_POLICY_VERSION_MINIMUM=3.5`
+  (the root `.cargo/config.toml` does), because CMake 4 refuses OCCT 7.8.1's
   declared minimum.
+- **Plugin bundles** are packed by `scripts/build-plugins.py`, which builds each
+  plugin's geometry component with `scripts/build-plugin-wasm.py` (the
+  `wasm32-wasip2` target), and are published to the same release.
 
-Measured on Windows, 2026-09-17, from that exact command:
-
-| | beta (0.2.125) | alpha, Rust engine |
-|---|---|---|
-| `.msi` | 162.7 MB | **23.3 MB** |
-| `-setup.exe` (NSIS) | 157.3 MB | **23.1 MB** |
-| `fundacad.exe` | small, plus an 800 MB `sidecar-runtime/` beside it | 62.4 MB, and nothing beside it |
-
-Seven times smaller, and it is the Python runtime that accounts for all of it:
-the engine, OpenCASCADE included, is 62 MB of executable. The same run also
-confirmed the three things that make the bundle, read back out of the compiled
-binary rather than assumed: `engine_attach` is registered and `sidecar_token`
-is not, the policy in it is the tightened one with no `ws://127.0.0.1:8765`
-anywhere, and the updater endpoint baked in is the alpha one with the beta
-one absent.
-
-With `fundacad-mcp` beside it (2026-09-18, same command): `.msi` 29.2 MB,
-`-setup.exe` 28.9 MB, portable zip 28.9 MB; the folder is `fundacad.exe`
-76.6 MB and `fundacad-mcp.exe` 4.2 MB, nothing else.
-
-The two never meet: separate branches (the beta builds from `legacy`, the
-alpha from `main`), separate jobs, separate tags, separate update feeds,
-separate artifact names.
-
-The OCCT sections below are about the OLD `rust-geom` system-linked spike and
-do not apply to this bundle, which links no system OCCT on any platform.
-
----
-
-## The OCCT version constraint (read this first)
-
-The Rust geometry path links the **system** OCCT (the fork is configured
-`default-features = false`, i.e. system-link, **not** the from-source `builtin`
-build). Two things pin the version:
-
-1. The fork's build script (`third_party/opencascade-rs/crates/opencascade-sys/build.rs`)
-   gates on `major == 7 && minor >= 8` and **panics** otherwise.
-2. The fork's C++ cxx-bridge sources were **patched for the OCCT 7.9.x API**
-   (the upstream targets 7.8 and does not compile against 7.9.3, `TopoDS`
-   class→namespace changes, etc.). So even an OCCT that *passes* the numeric gate
-   (e.g. 7.8) may **fail to compile** the bridge. In practice you want **7.9.x**.
-
-| Platform | OCCT source | Version | Matches 7.9 binding? |
-|----------|-------------|---------|----------------------|
-| Linux (Arch) | `opencascade` pacman pkg | 7.9.3 | ✅ verified locally |
-| Linux (Ubuntu apt) | `libocct-*-dev` | **7.6** | ❌ too old, fails gate *and* API. CI builds from source instead. |
-| macOS | Homebrew `opencascade` | 7.9.3 | ✅ exact (unverified in CI) |
-| Windows | vcpkg `opencascade` | 7.9.0 | ⚠️ passes gate; patch-level diff vs 7.9.3 (unverified) |
-
-Two environment variables drive the build everywhere:
-
-- `DEP_OCCT_ROOT`, install prefix passed to cmake's `find_package(OpenCASCADE)`.
-- `CMAKE_POLICY_VERSION_MINIMUM=3.5`, OCCT's exported CMake config and the fork's
-  helper `CMakeLists` declare an old minimum that **CMake 4 rejects** without this.
-
----
-
-## Per-OS build instructions
-
-### Linux
-
-**Arch (known-good, matches local dev):**
-
-```sh
-sudo pacman -S --needed opencascade webkit2gtk-4.1 base-devel cmake
-cd src-tauri
-DEP_OCCT_ROOT=/usr CMAKE_POLICY_VERSION_MINIMUM=3.5 cargo build      # debug
-# Full bundle:
-cd .. && DEP_OCCT_ROOT=/usr CMAKE_POLICY_VERSION_MINIMUM=3.5 npm run tauri build
-```
-
-**Ubuntu / Debian:** apt OCCT (7.6 on 24.04) is **too old**. Either build OCCT
-7.9.3 from source (what CI does, see the workflow's "Build OCCT from source"
-step) and point `DEP_OCCT_ROOT` at the install prefix, or use a PPA/conda that
-provides 7.9.x. Tauri's webkit deps on Ubuntu:
+Linux needs the WebKitGTK stack Tauri documents, plus cmake:
 
 ```sh
 sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
-  libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf libfuse2
+  libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf cmake
 ```
 
-Bundles produced: `.AppImage` and `.deb` (and `.rpm` if `rpmbuild` is present)
-under `src-tauri/target/release/bundle/`.
+Bundles land under `src-tauri/target/release/bundle/`: `.AppImage`, `.deb` and
+`.rpm` on Linux, `.app` and `.dmg` on macOS, `.msi` and NSIS `-setup.exe` on
+Windows, plus CI's portable zip.
 
-### macOS
+## Sizes
 
-```sh
-brew install opencascade        # 7.9.3
-export DEP_OCCT_ROOT="$(brew --prefix opencascade)"
-export CMAKE_POLICY_VERSION_MINIMUM=3.5
-npm ci && npm run tauri build
-```
+Measured on Windows, 2026-09-17, against the last Python beta:
 
-`brew --prefix opencascade` resolves the arch-correct keg (`/opt/homebrew/...`
-on Apple Silicon, `/usr/local/...` on Intel). Bundles: `.app` and `.dmg`.
+| | beta (0.2.125) | alpha |
+|---|---|---|
+| `.msi` | 162.7 MB | **23.3 MB** |
+| `-setup.exe` (NSIS) | 157.3 MB | **23.1 MB** |
+| `fundacad.exe` | small, plus an 800 MB Python runtime beside it | 62.4 MB, and nothing beside it |
 
-### Windows
+With `fundacad-mcp` beside it (2026-09-18): `.msi` 29.2 MB, `-setup.exe`
+28.9 MB, portable zip 28.9 MB; the folder is `fundacad.exe` 76.6 MB and
+`fundacad-mcp.exe` 4.2 MB, nothing else.
 
-```powershell
-vcpkg install opencascade:x64-windows          # 7.9.0
-$env:DEP_OCCT_ROOT = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows"
-$env:CMAKE_POLICY_VERSION_MINIMUM = "3.5"
-npm ci ; npm run tauri build
-```
+## What CI checks about a bundle
 
-`find_package(OpenCASCADE)` looks under `$DEP_OCCT_ROOT` for
-`share/opencascade/OpenCASCADEConfig.cmake`. The OCCT DLLs live in
-`...\x64-windows\bin` and must be on `PATH` at runtime (and bundled, see risks).
-Bundles: `.msi` (WiX) and/or `.exe` (NSIS). **This leg is the least certain; see
-[UNTESTED / RISKS](#untested--risks).**
-
----
-
-## The Python sidecar problem
-
-In its **default** mode the Rust shell spawns a Python build123d process at
-startup (`src-tauri/src/sidecar.rs`) and the frontend talks to it over a
-localhost WebSocket. Today that spawn:
-
-- looks for a **dev virtualenv** at `sidecar/.venv/bin/python`, and
-- falls back to a bare `python` on `PATH`.
-
-Neither exists on an end-user machine, so **the bundles produced by this
-workflow are NOT self-contained / distributable as-is.** A real package must do
-one of:
-
-1. **Freeze the sidecar per-OS** (e.g. [PyInstaller](https://pyinstaller.org))
-   into a standalone executable, register it as a Tauri
-   [sidecar binary](https://v2.tauri.app/develop/sidecar/) (`externalBin` +
-   `<name>-<target-triple>` naming), and have `sidecar.rs` launch the bundled
-   binary instead of the dev venv. build123d pulls in OCCT + numpy + scipy, so
-   the frozen artifact is large and must be built on each OS.
-2. **Finish the Rust geometry port** so the app no longer needs Python. There is
-   already an in-progress native path (`src-tauri/src/geom.rs`, gated by
-   `VITE_GEOM=rust`) that ports `sidecar/builder.py` + `tessellate.py` onto the
-   OCCT fork. Once it reaches parity, the sidecar (and this whole problem) can be
-   dropped. **This is the intended end state**, cross-reference the port plan.
-
-Until one of those lands, treat CI output as build-verification artifacts, not
-shippable installers.
-
----
+- the bundle configs declare no `resources`;
+- the built binary registers `engine_attach`, the IPC command the webview
+  reaches the engine through, and `fundacad-mcp` sits beside it;
+- the AppImage and the portable zip carry no Python interpreter;
+- every plugin that names a `geometryWasm` component has it in its bundle.
 
 ## Code signing & notarization
 
-### macOS (required for distribution outside the App Store)
+### macOS
 
-Unsigned/un-notarized `.app`/`.dmg` are blocked by Gatekeeper on other machines.
-Steps (see [Tauri macOS signing docs](https://v2.tauri.app/distribute/sign/macos/)):
+Unsigned `.app`/`.dmg` are blocked by Gatekeeper on other machines (the release
+notes give the `xattr` workaround). With an Apple Developer ID certificate, add
+the `APPLE_*` secrets and `--config src-tauri/tauri.macos-sign.conf.json`, which
+turns on the hardened runtime with `Entitlements.plist`: the plugin host
+compiles WebAssembly at run time, which the hardened runtime otherwise refuses.
+See the [Tauri macOS signing docs](https://v2.tauri.app/distribute/sign/macos/).
+Not configured here.
 
-1. Apple Developer Program membership + a **Developer ID Application** certificate.
-2. Export the cert as `.p12`; in CI provide it via secrets and configure
-   `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`,
-   and a keychain step.
-3. Notarize with an app-specific password or API key: `APPLE_ID`,
-   `APPLE_PASSWORD`, `APPLE_TEAM_ID` (tauri-action / `tauri build` will notarize
-   and staple when these are set).
-
-> **Not doable in CI here without secrets.** No Apple Developer cert is
-> configured in this repo, so the macOS leg produces **unsigned** bundles only.
-
-### Windows (optional)
+### Windows
 
 Signing avoids SmartScreen warnings but is not required to run. Needs an
-Authenticode certificate (OV/EV). See
+Authenticode certificate, see
 [Tauri Windows signing](https://v2.tauri.app/distribute/sign/windows/). Not
 configured here.
 
 ### Linux
 
-AppImage/.deb are not code-signed in the Apple/Windows sense; nothing to do.
+AppImage, `.deb` and `.rpm` are not code signed in the Apple or Windows sense.
 
----
+### The updater
 
-## UNTESTED / RISKS
-
-**Verified:**
-- ✅ Linux build with **system OCCT 7.9.3** on Arch
-  (`DEP_OCCT_ROOT=/usr CMAKE_POLICY_VERSION_MINIMUM=3.5 cargo build`).
-- ✅ `build.yml` and `tauri.conf.json` are well-formed (YAML/JSON parse-checked).
-
-**Unverified / risky (in rough order of concern):**
-
-1. **Windows MSVC + OCCT + cxx bridge, biggest unknown.** The fork's bridge has
-   only ever been compiled with the Arch/Linux toolchain. Whether it compiles
-   under MSVC against vcpkg's OCCT **7.9.0** (vs the 7.9.3 it was patched for) is
-   untested. Also unverified: that `find_package(OpenCASCADE)` resolves from the
-   vcpkg `installed/x64-windows` tree, and that OCCT DLLs get **bundled** so the
-   app runs on a clean machine (Tauri WiX/NSIS will not pick up vcpkg DLLs
-   automatically, they likely need `bundle.resources` / `externalBin` entries).
-2. **OCCT version mismatch class of bug.** The binding was hand-patched for
-   7.9.3. macOS Homebrew is 7.9.3 (safest), Windows vcpkg is 7.9.0, and the
-   Linux from-source step pins 7.9.3. Any runner drifting to a different
-   7.9.x, or a future 8.0, can reintroduce the same API breakage we already
-   patched for 7.9 (`TopoDS` namespace changes, etc.). **Do not** rely on
-   `apt`/distro OCCT (Ubuntu = 7.6: fails outright).
-3. **OCCT-from-source CMake flags (Linux).** The `-DBUILD_MODULE_*` set in the
-   workflow is a minimal guess (modeling kernel + data exchange + visualization,
-   no Draw/TK). If a toolkit the fork links is disabled, linking fails and the
-   flags need adjustment. Also slow (~10-20 min cold; mitigated by cache).
-4. **macOS leg unrun.** Command sequence is from docs; `brew --prefix
-   opencascade` path handling and arch (arm64 runner) are untested here.
-5. **Python sidecar not bundled** (see above), every produced bundle is
-   non-functional for an end user until the sidecar is frozen or the Rust path
-   ships. CI artifacts are build proof, not installers.
-6. **No code signing** on any platform (no secrets configured), macOS bundles
-   will be Gatekeeper-blocked on other machines.
+Tauri's updater verifies a release with the minisign key in `tauri.conf.json`,
+which is still upstream's, so the release job withholds `latest.json` until a
+key of this project's is generated (tests/security/updater.test.ts).

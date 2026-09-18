@@ -5,7 +5,7 @@
 // on-top, constant-screen-size gizmo you grab and scrub; a clean click commits.
 //
 // Like Fillet (and unlike sketch Extrude) the result can't be faked client-side,
-// a real surface offset needs build123d/OCCT, so the preview is sidecar-driven:
+// a real surface offset needs OCCT, so the preview is engine-driven:
 // the un-committed feature is appended via store.setPreview() and the normal
 // rebuild pipeline renders it. Commit promotes it (records undo); Esc reverts.
 
@@ -29,7 +29,7 @@ import { collapseDiameter, deltaForDiameter, radialDrag, type RoundFace } from "
 import { CanvasGesture } from "./canvasGesture";
 import { previewVerdict } from "./previewVerdict";
 
-/** Steepest taper the tool offers, degrees, just under the sidecar's 89 fold limit. */
+/** Steepest taper the tool offers, degrees, just under the engine's 89 fold limit. */
 const MAX_PP_TAPER = 88;
 /** A taper needs travel to swing about; under this the arc is not offered. */
 const PP_TAPER_MIN = 1;
@@ -92,7 +92,7 @@ export class PressPullTool {
   private taperGrabbing = false;
   private taperGrabProj = 0;
   private taperGrabInset = 0;
-  /** true while the exact tapered solid is previewed through the sidecar (the
+  /** true while the exact tapered solid is previewed through the engine (the
    *  instant frontend ghost cannot lean a wall), so the switch back knows to
    *  clear it and restore the ghost. */
   private taperPreviewOn = false;
@@ -451,7 +451,7 @@ export class PressPullTool {
   private refreshPreview() {
     this.syncPeek();
     // A leaning wall is not a prism, and the instant ghost cannot draw one, so a
-    // tapered push previews the EXACT solid through the sidecar, the way the
+    // tapered push previews the EXACT solid through the engine, the way the
     // extrude tool does. So does a push with an explicit operation, whose effect on
     // the bodies it reaches no ghost can show. Plain straight pushes keep the ghost.
     if ((this.canTaper() && Math.abs(this.taper) >= 0.05) || (this.mode !== "auto" && !this.round)) {
@@ -584,7 +584,7 @@ export class PressPullTool {
       ...(this.mode !== "auto" && !this.round ? { mode: this.mode } : {}),
       ...(this.bodyId != null ? { body: this.bodyId } : {}),
       ...(this.upTo ? { upTo: this.upTo } : {}),
-      // Taper rides a planar by-distance push only; the sidecar ignores it on a
+      // Taper rides a planar by-distance push only; the engine ignores it on a
       // curved face and on an up-to push, and it is written only when it bites.
       ...(!this.round && !this.upTo && Math.abs(this.taper) >= 0.05
         ? { taper: Math.round(this.taper * 1000) / 1000 }
@@ -637,7 +637,7 @@ export class PressPullTool {
     this.onDone?.(feature.id);
   }
 
-  /** Commit an "extrude up to a surface", the sidecar derives each face's distance
+  /** Commit an "extrude up to a surface", the engine derives each face's distance
    *  from the target, so we skip the near-zero-distance guard `commit()` applies. */
   private commitUpTo() {
     const feature = this.buildFeature();

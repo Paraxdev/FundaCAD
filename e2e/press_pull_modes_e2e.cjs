@@ -4,8 +4,8 @@
 //      one box's side face with Join merges it into the box 10mm away.
 //   2. In Auto, pushing a boss's top face past the plate under it cuts through.
 //
-// Usage (from the repo root, with vite + sidecar running):
-//   SC_TOKEN=<sidecar token> SC_CHROME=<chrome.exe> [SC_URL=http://localhost:5173/] node e2e/press_pull_modes_e2e.cjs [outDir]
+// Usage (from the repo root, with vite + engine running):
+//   SC_TOKEN=<engine token> SC_CHROME=<chrome.exe> [SC_URL=http://localhost:5173/] node e2e/press_pull_modes_e2e.cjs [outDir]
 const { chromium } = require("playwright-core");
 const fs = require("fs");
 const path = require("path");

@@ -50,7 +50,7 @@ export interface RebuildState {
   result: RebuildResult | null;
   errorFeatureId: string | null;
   errorMessage: string | null;
-  // while building: the feature index the sidecar is currently executing
+  // while building: the feature index the engine is currently executing
   // (-1 = tessellating), streamed ~1/s during long rebuilds; null otherwise
   progress: number | null;
   /** During the meshing (payload) phase: bodies meshed so far and the total.
@@ -93,7 +93,7 @@ export interface BuildChunk {
 }
 
 /** A long cancellable operation, kept apart from RebuildState so nothing keyed on
- *  `building` misreads it. `id` is the sidecar request id a cancel targets. */
+ *  `building` misreads it. `id` is the engine request id a cancel targets. */
 export interface BusyState {
   active: boolean;
   label: string;
@@ -332,7 +332,7 @@ export class DocumentStore {
   }
 
   /** Stop the busy op, if any. Resolves to whether anything was stopped, false
-   *  covers both "nothing running" and "the sidecar had already finished". */
+   *  covers both "nothing running" and "the engine had already finished". */
   async cancelBusy(): Promise<boolean> {
     if (!this.busy.active) return false;
     // A rebuild never learns its id; undefined falls back to the client's lastHeavyId.
@@ -526,7 +526,7 @@ export class DocumentStore {
 
   /** consecutive doc-changing refreshes we applied (incremented in
    *  commitProjectionRefresh, open-sketch-only deliveries don't count, their
-   *  doc copy lags until finish() so the sidecar re-emits them every rebuild). */
+   *  doc copy lags until finish() so the engine re-emits them every rebuild). */
   private projStreak = 0;
   private projValveOpen = true;
 
@@ -580,7 +580,7 @@ export class DocumentStore {
     });
     if (!valid.length) return;
 
-    // stale transitions warn once per sketch (the sidecar only emits stale:true
+    // stale transitions warn once per sketch (the engine only emits stale:true
     // on the not-stale -> stale transition, so every entry here is news)
     for (const sid of new Set(valid.filter((u) => u.stale).map((u) => u.sketch))) {
       const f = sketchOf.get(sid)!;
@@ -628,7 +628,7 @@ export class DocumentStore {
       for (const [sid, nf] of replacements) {
         const i = d.features.findIndex((x) => x.id === sid);
         // REPLACE the feature object, the delta wire protocol diffs features
-        // by reference, so an in-place patch would never ship to the sidecar.
+        // by reference, so an in-place patch would never ship to the engine.
         if (i >= 0) d.features[i] = nf;
       }
     });
@@ -1699,7 +1699,7 @@ export class DocumentStore {
     }
     if (this.preview) features.push(...this.preview);
     features = features.map(withoutDisplayName);
-    // Body visibility travels with the rebuild so the sidecar can keep hidden
+    // Body visibility travels with the rebuild so the engine can keep hidden
     // bodies out of extrude booleans (a hidden body is protected from edits).
     const bodyVisibility = this.bodyVis.size ? Object.fromEntries(this.bodyVis.entries()) : undefined;
     return {
