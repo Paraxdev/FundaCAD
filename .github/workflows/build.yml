@@ -623,13 +623,19 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         run: sudo apt-get install -y cmake
 
+      # wasm32-wasip2 for the plugin geometry components packed below.
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip2
 
+      # The root workspace too: fundacad-mcp is built there.
       - name: Cache Cargo
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri -> target
+          workspaces: |
+            src-tauri -> target
+            . -> target
           key: prealpha
 
       # occt-sys installs the kernel into <target>/OCCT, which rust-cache does
@@ -691,6 +697,48 @@ jobs:
           config: src-tauri/tauri.prealpha.conf.json
           signing-key: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
 
+      # The MCP server ships beside the app (`externalBin` in the pre-alpha
+      # config). The config's beforeBuildCommand stages it as well, which is
+      # what makes a local `tauri build` ship it; built here first so a compile
+      # failure is named as the MCP server's and not as the frontend's.
+      - name: Build the MCP server
+        shell: bash
+        run: node scripts/stage-mcp-server.mjs
+
+      # Plugin bundles for this release, built from the same commit as the
+      # engine that runs their components. Once, not per platform: a bundle is
+      # the same bytes whoever builds it.
+      - name: Package the plugins
+        if: matrix.platform == 'ubuntu-22.04'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/build-plugins.py dist-plugins
+          want=$(ls -d plugins/*/manifest.json | wc -l)
+          got=$(ls dist-plugins/plugin-*.zip | wc -l)
+          if [ "$want" != "$got" ]; then
+            echo "packaged $got bundles for $want plugin directories" >&2
+            exit 1
+          fi
+          # A plugin that names a component and ships without it would install
+          # and then refuse every feature it declares.
+          for m in plugins/*/manifest.json; do
+            wasm=$(node -p "require('./$m').geometryWasm || ''")
+            [ -n "$wasm" ] || continue
+            id=$(node -p "require('./$m').id")
+            unzip -l "dist-plugins/plugin-$id.zip" | grep -q " $wasm\$" \
+              || { echo "::error::plugin-$id.zip has no $wasm"; exit 1; }
+          done
+
+      - name: Upload plugin bundles
+        if: matrix.platform == 'ubuntu-22.04'
+        uses: actions/upload-artifact@v4
+        with:
+          name: fundacad-prealpha-plugins
+          retention-days: 7
+          if-no-files-found: error
+          path: dist-plugins/plugin-*.zip
+
       # --- build + bundle. `--features rust-engine` is what makes the engine
       #     the Rust worker, and tauri.prealpha.conf.json is what leaves the
       #     Python runtime out and points the updater at the pre-alpha feed. ---
@@ -727,6 +775,8 @@ jobs:
             }
             console.log('engine_attach found, this is the Rust engine build');
           " "$bin"
+          mcp=$(find src-tauri/target/release -maxdepth 1 -type f \( -name fundacad-mcp -o -name fundacad-mcp.exe \) | head -1)
+          [ -n "$mcp" ] || { echo "::error::no fundacad-mcp beside the app, the bundle ships no MCP server"; exit 1; }
 
       - name: Un-bundle the system stack from the AppImage
         if: matrix.platform == 'ubuntu-22.04'
@@ -787,9 +837,10 @@ jobs:
   # was rejected because a rolling build that cannot roll is one people install
   # once and never update; tests/security/updater.test.ts pins the pair.
   #
-  # No plugin bundles here. The app asks the BETA release for those
-  # (RELEASE_TAG in src/plugins/index.ts) whichever build it is, and plugin
-  # geometry does not run on this engine yet anyway.
+  # Its own plugin bundles, built by build-prealpha from the same commit as the
+  # engine whose plugin host runs their geometry components. A Rust engine
+  # build installs plugins from this release, not the beta's
+  # (pluginReleaseTag in src/plugins/index.ts).
   release-prealpha:
     needs: build-prealpha
     if: >-
@@ -843,7 +894,11 @@ jobs:
           files=$(find dist -type f \( -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' \
             -o -name '*.dmg' -o -name '*.msi' -o -name '*setup.exe' \
             -o -name '*_portable.zip' \
-            -o -name '*.app.tar.gz' -o -name '*.sig' \))
+            -o -name '*.app.tar.gz' -o -name '*.sig' -o -name 'plugin-*.zip' \))
+          # The plugin bundles this build installs from (pluginReleaseTag in
+          # src/plugins/index.ts). Without them every offered plugin is a 404.
+          grep -q 'plugin-' <<<"$files" \
+            || { echo "::error::no plugin bundles to publish"; exit 1; }
           # Updates in place, never delete and recreate: see the beta job for
           # the release that stayed gone for two hours when that was tried.
 
@@ -880,9 +935,12 @@ jobs:
           > - Features that are not ported yet fail during a rebuild and the
           >   skipped feature banner names them. The model comes back without
           >   them, which is not a corrupt document, it is a missing engine.
-          > - **Plugin geometry does not run at all.** Screws, PrintToolbox,
-          >   Printing and Texture need a plugin host that is still being
-          >   written, so those features do nothing here.
+          > - **Most plugin geometry does not run yet.** The 3D Printing
+          >   Toolbox runs; Screws, Printing and Texture have not been ported
+          >   to the new plugin host, and their features say so when used.
+          > - The MCP server for AI assistants ships beside the app as
+          >   `fundacad-mcp`; the Plugins page's How to connect it gives the
+          >   command.
           > - Documents this build saves are ordinary `.funda` files and open
           >   in the beta, so nothing drawn here is trapped in it.
           > - Keep real work in the [beta](https://github.com/Paraxdev/fundacad/releases/tag/beta),

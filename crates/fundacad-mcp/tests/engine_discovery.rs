@@ -14,7 +14,7 @@
 
 use std::path::{Path, PathBuf};
 
-use fundacad_mcp::link::{engine_command, split_command};
+use fundacad_mcp::link::{engine_command, is_rust_engine_app, split_command};
 
 const VARS: &[&str] = &[
     "FUNDACAD_ENGINE_CMD",
@@ -113,4 +113,18 @@ fn a_command_line_splits_the_way_a_shell_would() {
     );
     assert_eq!(split_command("  spaced   out  "), ["spaced", "out"]);
     assert!(split_command("   ").is_empty());
+}
+
+#[test]
+fn only_an_app_built_with_the_rust_engine_is_started_as_one() {
+    // A Python sidecar build ignores `--engine` and opens a window, which is
+    // not an engine however long the MCP server waits for LISTENING.
+    let dir = tempfile::tempdir().unwrap();
+    let rust = dir.path().join("rust.exe");
+    let python = dir.path().join("python.exe");
+    std::fs::write(&rust, b"MZ...\0engine_kind\0engine_attach\0engine_send\0").unwrap();
+    std::fs::write(&python, b"MZ...\0sidecar_token\0").unwrap();
+    assert!(is_rust_engine_app(&rust));
+    assert!(!is_rust_engine_app(&python));
+    assert!(!is_rust_engine_app(&dir.path().join("absent.exe")));
 }
