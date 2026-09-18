@@ -61,7 +61,7 @@ self-hash (sha256 of the canonical `cases` array, recomputed and enforced by eva
 
 Usage (sidecar venv):
     .venv/bin/python tools/gen_fillet_corpus.py --seed 1401 --count 500 \
-        --out tools/corpus_fillet.json
+        --out ../tests/golden/corpus/corpus_fillet.json
 Frozen main corpus: seed 1401, count 500. The evaluator regenerates a FRESH HOLDOUT at
 eval time with an unpublished --seed to a throwaway --out; that seed is never committed
 and implementers never see the holdout (see eval_fillet_corpus.py).
@@ -541,7 +541,8 @@ def main():
     ap = argparse.ArgumentParser(description="Generate the fillet/chamfer eval corpus")
     ap.add_argument("--seed", type=int, default=1401)
     ap.add_argument("--count", type=int, default=500)
-    ap.add_argument("--out", default=os.path.join(os.path.dirname(__file__), "corpus_fillet.json"))
+    ap.add_argument("--out", default=os.path.join(
+        os.path.dirname(__file__), "..", "..", "tests", "golden", "corpus", "corpus_fillet.json"))
     args = ap.parse_args()
 
     cases, stats = generate(args.seed, args.count)

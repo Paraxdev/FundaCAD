@@ -18,7 +18,7 @@ The corpus is JSON: {"exports": [...], "shapes": [...]}. An export may carry
 "$DATADIR" anywhere in the options.
 
 Usage (from sidecar/ with the sidecar venv):
-  python tools/diff_plugin_ops.py --corpus tools/corpus_printing_ops.json --rust "path/to/fundacad-engine --ws"
+  python tools/diff_plugin_ops.py --corpus ../tests/golden/corpus/corpus_printing_ops.json --rust "path/to/fundacad-engine --ws"
 """
 
 import argparse
@@ -279,6 +279,18 @@ def table(rows, headers):
         print(line(r))
 
 
+def prepare_export(e, i, work):
+    """The export with its data folder written under `work` and its placeholders filled."""
+    e = copy.deepcopy(e)
+    if "datadir" in e:
+        # a `user` folder above the data directory, which must not make
+        # every file under it the person's own
+        root = os.path.join(work, f"datadir{i}", "user", "app-data")
+        write_datadir(root, e["datadir"])
+        e = substitute(e, "$DATADIR", root)
+    return substitute(e, "$MISSING", os.path.join(work, "no-such-folder"))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--corpus", required=True)
@@ -298,17 +310,7 @@ def main():
     os.makedirs(blob_dir)
     os.environ["FUNDACAD_BLOB_DIR"] = blob_dir
     try:
-        prepared = []
-        for i, e in enumerate(exports):
-            e = copy.deepcopy(e)
-            if "datadir" in e:
-                # a `user` folder above the data directory, which must not make
-                # every file under it the person's own
-                root = os.path.join(work, f"datadir{i}", "user", "app-data")
-                write_datadir(root, e["datadir"])
-                e = substitute(e, "$DATADIR", root)
-            e = substitute(e, "$MISSING", os.path.join(work, "no-such-folder"))
-            prepared.append(e)
+        prepared = [prepare_export(e, i, work) for i, e in enumerate(exports)]
         py = run_engine("", prepared, shapes, work, "py")
         rs = run_engine(rust_cmd, prepared, shapes, work, "rs")
         rows, bad = [], 0

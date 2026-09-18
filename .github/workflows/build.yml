@@ -1144,3 +1144,34 @@ jobs:
 
       - name: Rust workspace tests
         run: cargo test --workspace --features fundacad-engine/ws
+
+      # Parity with the Python engine, with no Python: every corpus rebuilt on
+      # the Rust engine and compared with the Python engine's frozen answers in
+      # tests/golden (RUST-PIVOT, "Golden files"). The MCP transcript is
+      # crates/fundacad-mcp/tests/parity_golden.rs, run by the step above. Every
+      # golden runs even after one fails, so a red build names them all.
+      - name: Golden parity checks
+        shell: bash
+        run: |
+          fail=0
+          for g in tests/golden/*.golden.json; do
+            case "$g" in *mcp_parity*) continue ;; esac
+            # The engine's progress lines go to stderr; kept for a failure only.
+            ./target/debug/fundacad-engine golden-check "$g" 2>golden.err \
+              || { echo "::error::$g does not match the python engine"; tail -n 20 golden.err; fail=1; }
+          done
+          exit $fail
+
+      # The same answers from a warm disk cache: a first process checkpoints
+      # every build, a second reopens every document from those checkpoints, as
+      # the app does after a restart. The goldens whose documents run plugin
+      # features, where state that is not in the shape has to survive the disk.
+      - name: Golden parity checks, warm cache
+        shell: bash
+        run: |
+          fail=0
+          for g in texture plugins screws_ops; do
+            ./target/debug/fundacad-engine golden-check "tests/golden/$g.golden.json" --warm 2>golden.err \
+              || { echo "::error::$g does not match the python engine from a warm cache"; tail -n 20 golden.err; fail=1; }
+          done
+          exit $fail

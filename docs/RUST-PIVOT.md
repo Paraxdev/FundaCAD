@@ -195,7 +195,7 @@ use for them).
   `unregistered()` (absent, installed but broken, unknown) are kept.
 - **Proof:** every in-repo plugin's geometry is ported, each crate in its
   plugin's `geometry-rs`, and each checked on both engines:
-  - PrintToolbox, eight feature types: `sidecar/tools/corpus_plugins.json`, 40
+  - PrintToolbox, eight feature types: `tests/golden/corpus/corpus_plugins.json`, 40
     documents through `diff_engines.py`, volumes and refusals alike.
   - Screws, the `fastener` generator with its modelled threads on the kernel's
     helical sweep: `corpus_screws_ops.json`, 127 `generateShape` cases (every
@@ -441,6 +441,37 @@ The TypeScript stays; these get a Rust twin and shared vectors.
   `cargo test --workspace --features fundacad-engine/ws`, so the transport the
   Python suites drive is compiled and tested; it gates once Phase 1 step 4 lands.
 - **Hygiene.** `scripts/check-repo-hygiene.sh` applies to Rust too.
+
+### 5.1 Golden files
+
+`tests/golden/*.golden.json` are the Python engine's answers, frozen once by
+`sidecar/tools/freeze_goldens.py` while the sidecar still existed, one file per
+corpus, holding exactly what each differential tool compared and the
+tolerances it used. The corpora they answer are in `tests/golden/corpus/`.
+Each header records the build123d, OCP and commit they came from. They live
+at the repository root rather than in a crate because they span the CLI, the
+geometry crate and the MCP server, and outlive the engine that wrote them.
+
+`fundacad-engine golden-check tests/golden/<name>.golden.json` rebuilds the
+corpus on the Rust engine, in process, and compares with the same rules,
+printing the diff tool's table and exiting 1 on any mismatch;
+`crates/fundacad-mcp/tests/parity_golden.rs` replays `parity.jsonl` against the
+Rust MCP server and wants the recorded transcript word for word. CI runs both
+in the `rust-geom` job.
+
+- **A deliberate behaviour change** in the Rust engine that moves a golden
+  answer updates that golden in the same commit, with the reason in the commit
+  message. There is no Python engine left to ask: re-record the named case
+  with `golden-check <golden> --record <case>` (or edit the value by hand),
+  and review the diff, which touches only that case.
+- **A new corpus document** has no Python answer. Add it to the corpus, look at
+  what the Rust engine does with it (in the app, or measured by hand), and only
+  then run `golden-check <golden> --record <name>`, which writes this engine's
+  answer in the same shape, updates `corpusSha256` and lists the case under
+  `rustRecorded` in the header. That case is a regression check against a
+  human judgement, not parity with the old engine, and the commit says so. The
+  coverage golden's constants are the tool's own arithmetic, not answers, and
+  are edited by hand.
 
 ## 6. The `alpha` rolling release (landed)
 

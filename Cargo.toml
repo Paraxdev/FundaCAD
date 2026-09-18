@@ -46,3 +46,7 @@ codegen-units = 1
 opt-level = 3
 [profile.dev.package.occt-sys]
 opt-level = 3
+
+# golden-check compares meshes of a million vertices in the debug build CI runs.
+[profile.dev.package.fundacad-cli]
+opt-level = 2

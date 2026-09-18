@@ -26,6 +26,8 @@ pub struct Report {
     pub messages: BTreeMap<String, usize>,
     pub by_band: BTreeMap<String, (usize, usize)>,
     pub failed_ids: Vec<String>,
+    /// Every case in corpus order: its id and "pass", "fail" or "selector-miss".
+    pub outcomes: Vec<(String, &'static str)>,
 }
 
 fn is_selector_miss(msg: &str) -> bool {
@@ -39,6 +41,7 @@ fn score(case: &Value, r: &mut Report) -> Result<(), String> {
         serde_json::from_value(doc.clone()).map_err(|e| format!("document: {e}"))?;
     let built = builder::rebuild(&typed, doc, &NoWatch).map_err(|_| "cancelled".to_owned())?;
     let op_id = case["op_feature_id"].as_str().unwrap_or("");
+    let id = case["id"].as_str().unwrap_or("?").to_owned();
     let band = case["band"].as_str().unwrap_or("").to_owned();
     r.by_band.entry(band.clone()).or_default().0 += 1;
 
@@ -50,6 +53,7 @@ fn score(case: &Value, r: &mut Report) -> Result<(), String> {
     {
         if is_selector_miss(&err.message) {
             r.selector_miss += 1;
+            r.outcomes.push((id, "selector-miss"));
             return Ok(());
         }
         failed = true;
@@ -117,10 +121,10 @@ fn score(case: &Value, r: &mut Report) -> Result<(), String> {
     }
     if failed {
         r.failed += 1;
-        r.failed_ids
-            .push(case["id"].as_str().unwrap_or("?").to_owned());
+        r.failed_ids.push(id.clone());
         r.by_band.entry(band).or_default().1 += 1;
     }
+    r.outcomes.push((id, if failed { "fail" } else { "pass" }));
     Ok(())
 }
 

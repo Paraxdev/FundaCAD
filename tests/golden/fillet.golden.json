@@ -1,0 +1,2030 @@
+{
+ "cases": {
+  "case_0001": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0002": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0003": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0004": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0005": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0006": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0007": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0008": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0009": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0010": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0011": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0012": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0013": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0014": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0015": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0016": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0017": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0018": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0019": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0020": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0021": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0022": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0023": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0024": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0025": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0026": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0027": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0028": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0029": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0030": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0031": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0032": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0033": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0034": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0035": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0036": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0037": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0038": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0039": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0040": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0041": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0042": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0043": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0044": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0045": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0046": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0047": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0048": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0049": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0050": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0051": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0052": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0053": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0054": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0055": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0056": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0057": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0058": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0059": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0060": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0061": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0062": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0063": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0064": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0065": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0066": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0067": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0068": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0069": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0070": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0071": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0072": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0073": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0074": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0075": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0076": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0077": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0078": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0079": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0080": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0081": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0082": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0083": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0084": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0085": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0086": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0087": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0088": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0089": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0090": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0091": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0092": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0093": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0094": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0095": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0096": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0097": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0098": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0099": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0100": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0101": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0102": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0103": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0104": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0105": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0106": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0107": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0108": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0109": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0110": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0111": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0112": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0113": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0114": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0115": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0116": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0117": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0118": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0119": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0120": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0121": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0122": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0123": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0124": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0125": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0126": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0127": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0128": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0129": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0130": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0131": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0132": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0133": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0134": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0135": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0136": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0137": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0138": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0139": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0140": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0141": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0142": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0143": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0144": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0145": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0146": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0147": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0148": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0149": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0150": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0151": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0152": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0153": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0154": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0155": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0156": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0157": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0158": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0159": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0160": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0161": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0162": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0163": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0164": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0165": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0166": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0167": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0168": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0169": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0170": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0171": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0172": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0173": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0174": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0175": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0176": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0177": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0178": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0179": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0180": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0181": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0182": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0183": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0184": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0185": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0186": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0187": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0188": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0189": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0190": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0191": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0192": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0193": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0194": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0195": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0196": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0197": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0198": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0199": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0200": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0201": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0202": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0203": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0204": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0205": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0206": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0207": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0208": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0209": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0210": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0211": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0212": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0213": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0214": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0215": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0216": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0217": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0218": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0219": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0220": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0221": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0222": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0223": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0224": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0225": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0226": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0227": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0228": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0229": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0230": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0231": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0232": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0233": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0234": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0235": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0236": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0237": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0238": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0239": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0240": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0241": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0242": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0243": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0244": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0245": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0246": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0247": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0248": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0249": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0250": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0251": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0252": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0253": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0254": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0255": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0256": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0257": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0258": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0259": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0260": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0261": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0262": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0263": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0264": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0265": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0266": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0267": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0268": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0269": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0270": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0271": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0272": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0273": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0274": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0275": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0276": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0277": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0278": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0279": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0280": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0281": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0282": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0283": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0284": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0285": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0286": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0287": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0288": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0289": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0290": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0291": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0292": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0293": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0294": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0295": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0296": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0297": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0298": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0299": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0300": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0301": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0302": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0303": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0304": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0305": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0306": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0307": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0308": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0309": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0310": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0311": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0312": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0313": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0314": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0315": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0316": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0317": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0318": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0319": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0320": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0321": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0322": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0323": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0324": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0325": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0326": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0327": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0328": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0329": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0330": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0331": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0332": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0333": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0334": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0335": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0336": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0337": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0338": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0339": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0340": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0341": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0342": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0343": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0344": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0345": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0346": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0347": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0348": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0349": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0350": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0351": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0352": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0353": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0354": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0355": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0356": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0357": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0358": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0359": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0360": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0361": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0362": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0363": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0364": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0365": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0366": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0367": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0368": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0369": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0370": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0371": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0372": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0373": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0374": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0375": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0376": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0377": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0378": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0379": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0380": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0381": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0382": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0383": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0384": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0385": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0386": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0387": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0388": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0389": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0390": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0391": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0392": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0393": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0394": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0395": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0396": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0397": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0398": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0399": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0400": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0401": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0402": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0403": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0404": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0405": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0406": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0407": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0408": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0409": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0410": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0411": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0412": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0413": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0414": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0415": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0416": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0417": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0418": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0419": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0420": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0421": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0422": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0423": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0424": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0425": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0426": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0427": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0428": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0429": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0430": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0431": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0432": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0433": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0434": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0435": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0436": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0437": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0438": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0439": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0440": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0441": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0442": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0443": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0444": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0445": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0446": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0447": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0448": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0449": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0450": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0451": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0452": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0453": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0454": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0455": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0456": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0457": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0458": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0459": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0460": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0461": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0462": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0463": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0464": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0465": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0466": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0467": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0468": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0469": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0470": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0471": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0472": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0473": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0474": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0475": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0476": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0477": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0478": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0479": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0480": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0481": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0482": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0483": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0484": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0485": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0486": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0487": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0488": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0489": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0490": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0491": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0492": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0493": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0494": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0495": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0496": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  },
+  "case_0497": {
+   "band": "1.2-1.5",
+   "outcome": "pass"
+  },
+  "case_0498": {
+   "band": "1.5-2.0",
+   "outcome": "pass"
+  },
+  "case_0499": {
+   "band": "2.0-3.0",
+   "outcome": "pass"
+  },
+  "case_0500": {
+   "band": "3.0-inf",
+   "outcome": "pass"
+  }
+ },
+ "golden": {
+  "corpus": "tests/golden/corpus/corpus_fillet.json",
+  "corpusSelfHash": "1cf74a0452a4e4c079d9b42375d6b887ade38919885a8b5ce0b0c5dc950b3294",
+  "corpusSha256": "61d9b9b3e16296b18b3edd9e8f2cbff1856155a323ef20634c31f68f2845f9eb",
+  "frozen": true,
+  "kind": "fillet",
+  "reference": {
+   "build123d": "0.11.1",
+   "engine": "python sidecar (sidecar/server.py)",
+   "ocp": "7.9.3.1",
+   "platform": "Windows-11-10.0.26200-SP0",
+   "python": "3.12.13",
+   "sidecarCommit": "0c919c56ec54491d2bd9df4cfa8569b66ea5daf4"
+  },
+  "rules": "Every case rebuilt and scored as eval_fillet_corpus.py scores it: a selector miss (an error saying no edge found) is counted apart, any other error of the blend feature fails, and so does a result that is not one valid solid, has fewer faces than min_faces (else pre_op_faces + n_edges), or removes a volume that is not positive or is more than volumeRel off the reference. Each case's outcome, pass, fail or selector-miss, must equal python's.",
+  "summary": {
+   "count": 500,
+   "failed": 0,
+   "failedIds": [],
+   "selectorMiss": 0
+  },
+  "tolerances": {
+   "volumeRel": 0.02
+  },
+  "tool": "sidecar/tools/eval_fillet_corpus.py"
+ }
+}

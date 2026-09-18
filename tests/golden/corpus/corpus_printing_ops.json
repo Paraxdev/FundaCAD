@@ -1,5 +1,5 @@
 {
-  "about": "The printer connection's slicer project exporter (plugins/FundaCAD.Printing), through exportWith on both engines: the Python engine runs geometry/print_project3mf.py and print_presets.py, the Rust engine plugins/FundaCAD.Printing/geometry.wasm. Cases come from geometry/tests/test_project3mf.py, plus the untrusted-input and preset-failure edges the writer defends against. Run: python tools/diff_plugin_ops.py --corpus tools/corpus_printing_ops.json",
+  "about": "The printer connection's slicer project exporter (plugins/FundaCAD.Printing), through exportWith on both engines: the Python engine runs geometry/print_project3mf.py and print_presets.py, the Rust engine plugins/FundaCAD.Printing/geometry.wasm. Cases come from geometry/tests/test_project3mf.py, plus the untrusted-input and preset-failure edges the writer defends against. Run: python tools/diff_plugin_ops.py --corpus ../tests/golden/corpus/corpus_printing_ops.json",
   "exports": [
     {"name": "two_bodies_palette", "exporter": "print-project-3mf",
      "document": {"parameters": {}, "features": [

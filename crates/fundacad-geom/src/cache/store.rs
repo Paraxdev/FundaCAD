@@ -39,6 +39,8 @@ pub struct ManifestEntry {
     pub face_colors: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub part_color: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mesh_passes: Vec<Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -478,6 +480,7 @@ mod tests {
             intact: false,
             face_colors: None,
             part_color: None,
+            mesh_passes: Vec::new(),
         }
     }
 

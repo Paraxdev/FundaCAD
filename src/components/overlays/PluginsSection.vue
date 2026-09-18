@@ -50,11 +50,14 @@ import {
   type OfficialPlugin,
 } from "../../plugins";
 import { onPluginChange, pluginEnabled, setPluginEnabled } from "../../plugins/registry";
+import { updateFor } from "../../plugins/updates";
 import { toast } from "../../ui/toast";
 
 const suggested = ref<OfficialPlugin[]>(officialPlugins());
+const engine = ref<"rust" | "python">("python");
 onMounted(async () => {
-  suggested.value = officialPlugins(pluginReleaseTag(await engineKind()));
+  engine.value = await engineKind();
+  suggested.value = officialPlugins(pluginReleaseTag(engine.value));
 });
 
 const installed = ref<InstalledPlugin[]>([]);
@@ -96,10 +99,21 @@ function toggle(id: string, ev: Event) {
 
 const record = (id: string) => installed.value.find((r) => r.id === id);
 
-/** Rows for what is installed, each with a manifest to describe it by. */
+/** Rows for what is installed, each with a manifest to describe it by and the
+ *  update on offer for it, if any. */
 const rows = computed(() =>
-  installed.value.map((rec) => ({ rec, manifest: installedManifest(rec) })),
+  installed.value.map((rec) => ({
+    rec,
+    manifest: installedManifest(rec),
+    update: updateFor(rec, suggested.value, engine.value),
+  })),
 );
+
+/** An update whose promise grew installs only from its own consent screen. */
+function update(u: NonNullable<ReturnType<typeof updateFor>>) {
+  if (u.covered) void accept(u.offer, "updated");
+  else showing.value = `update:${u.offer.manifest.id}`;
+}
 
 /** Suggestions not yet installed. Once one is installed it is an ordinary row
  *  above, because there is nothing left about it that is a suggestion. */
@@ -131,13 +145,13 @@ onMounted(refresh);
 
 // --- installing one we suggested -------------------------------------------
 
-async function accept(plugin: OfficialPlugin) {
+async function accept(plugin: OfficialPlugin, done: "installed" | "updated" = "installed") {
   busy.value = plugin.manifest.id;
   try {
     await installPlugin(plugin);
     showing.value = "";
     await refresh();
-    toast(`${plugin.manifest.name} is installed.`);
+    toast(`${plugin.manifest.name} is ${done}.`);
   } catch (err) {
     // Shown in full. Every refusal on the way down names itself (a URL that is
     // not allowed, a bundle asking for more than the screen said, an entry
@@ -217,7 +231,7 @@ async function drop(id: string, name: string) {
 
   <div v-if="rows.length === 0" class="sm-hint">Nothing installed yet.</div>
 
-  <div v-for="{ rec, manifest } in rows" :key="rec.id" class="plug-row" :data-plugin="rec.id">
+  <div v-for="{ rec, manifest, update: u } in rows" :key="rec.id" class="plug-row" :data-plugin="rec.id">
     <div class="plug-head">
       <div>
         <div class="plug-name">{{ manifest ? manifest.name : rec.id }}</div>
@@ -248,6 +262,40 @@ async function drop(id: string, name: string) {
       >
         {{ showing === rec.id ? "Hide what it uses" : "What it uses" }}
       </button>
+    </div>
+
+    <div v-if="u" class="plug-update" data-plugin-update>
+      <span>{{ u.reason }}</span>
+      <button
+        v-if="showing !== `update:${rec.id}`"
+        class="btn btn-primary"
+        :disabled="busy === rec.id"
+        @click="update(u)"
+      >
+        {{ busy === rec.id ? "Updating…" : "Update" }}
+      </button>
+    </div>
+
+    <div v-if="u && showing === `update:${rec.id}`" class="plug-consent">
+      <div class="plug-can">
+        <div class="plug-listhead">Version {{ u.offer.manifest.version }} will be able to</div>
+        <ul>
+          <li v-for="line in describeGrants(u.offer.manifest).can" :key="line">{{ line }}</li>
+        </ul>
+      </div>
+      <div class="plug-cannot">
+        <div class="plug-listhead">It will not be able to</div>
+        <ul>
+          <li v-for="line in describeGrants(u.offer.manifest).cannot" :key="line">{{ line }}</li>
+        </ul>
+      </div>
+      <div class="sm-hint">{{ sandboxNote(u.offer.manifest.kind) }}</div>
+      <div class="plug-actions">
+        <button class="btn" :disabled="busy === rec.id" @click="showing = ''">Cancel</button>
+        <button class="btn btn-primary" :disabled="busy === rec.id" @click="accept(u.offer, 'updated')">
+          {{ busy === rec.id ? "Updating…" : "Update" }}
+        </button>
+      </div>
     </div>
 
     <div v-if="!manifest" class="sm-hint">
