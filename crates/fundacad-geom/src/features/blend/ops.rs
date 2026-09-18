@@ -126,6 +126,8 @@ pub fn section(
     let es = kernel::compound(edges);
     let mut status = 0;
     let mut message = String::new();
+    let progress = crate::cancel::progress();
+    let range = progress.start();
     let out = crate::bench::phase("blend_section", || {
         ffi::blend_section(
             shape.raw(),
@@ -136,6 +138,7 @@ pub fn section(
             g2,
             draft,
             profile,
+            range.raw(),
             &mut status,
             &mut message,
         )
@@ -152,6 +155,7 @@ pub fn section(
             }
         }
         1 => Err(SectionErr::Blend(message)),
+        3 => Err(SectionErr::Cancelled),
         _ => Err(SectionErr::Internal(message)),
     }
 }
