@@ -253,7 +253,9 @@ inline TopoDS_Wire make_wire(const std::vector<gp_Pnt> &points, const Handle(Geo
   BRepBuilderAPI_MakeWire mk;
   for (size_t i = 0; i + 1 < points.size(); ++i) {
     if (points[i].Distance(points[i + 1]) < 1e-9) continue;
-    Handle(Geom_Curve) seg = GC_MakeSegment(points[i], points[i + 1]).Value();
+    // From the pointer: GCC will not apply OCCT's templated upcast operator
+    // to this copy initialisation, which MSVC accepts.
+    Handle(Geom_Curve) seg(GC_MakeSegment(points[i], points[i + 1]).Value().get());
     mk.Add(BRepBuilderAPI_MakeEdge(seg).Edge());
   }
   mk.Add(BRepBuilderAPI_MakeEdge(curve).Edge());
