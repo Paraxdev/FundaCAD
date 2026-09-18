@@ -1,4 +1,5 @@
 #include <GCE2d_MakeSegment.hxx>
+#include <Geom_TrimmedCurve.hxx>
 #include <GC_MakeArcOfCircle.hxx>
 #include <GC_MakeSegment.hxx>
 #include <bindings_common.hxx>
