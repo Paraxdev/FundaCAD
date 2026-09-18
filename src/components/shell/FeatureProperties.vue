@@ -190,8 +190,17 @@ function commitSketchDim(row: { key: string; index: number; field: string }, raw
 // Written straight onto the feature: unlike a value row there is no expression
 // path and no unit to reinterpret, so `updateFeature` IS the whole commit.
 
-const choiceRows = useDocValue((doc) => {
-  const f = doc.features.find((x) => x.id === props.featureId);
+// The choices, switches and numbers show the feature as the model on screen has
+// it. While a tool edits the feature that is the tool's live version: the
+// heads-up box read G2 while this row still said G1, the value committed.
+const bridge = engine.bridge;
+const liveFeature = (): Feature | null => {
+  bridge.editPreviewVersion.value;
+  return store.liveFeature(props.featureId);
+};
+
+const choiceRows = useDocValue(() => {
+  const f = liveFeature();
   if (!f) return [];
   const values = f as unknown as Record<string, unknown>;
   return choiceFieldsFor(f.type)
@@ -208,8 +217,8 @@ const fileRows = useDocValue((doc) => {
     .map((c) => ({ ...c, current: fileValue(f, c) }));
 });
 
-const toggleRows = useDocValue((doc) => {
-  const f = doc.features.find((x) => x.id === props.featureId);
+const toggleRows = useDocValue(() => {
+  const f = liveFeature();
   if (!f) return [];
   const values = f as unknown as Record<string, unknown>;
   return toggleFieldsFor(f.type)
@@ -231,8 +240,8 @@ function setOption(field: string, value: string | boolean) {
   store.updateFeature(props.featureId, patch as unknown as Partial<Feature>);
 }
 
-const featureRows = useDocValue((doc) => {
-  const f = doc.features.find((x) => x.id === props.featureId);
+const featureRows = useDocValue(() => {
+  const f = liveFeature();
   if (!f || f.type === "sketch") return [];
   const values = f as unknown as Record<string, unknown>;
   // featureNumFields, not the app's own table: a plugin owns the rows of the

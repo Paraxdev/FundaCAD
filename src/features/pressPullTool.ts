@@ -617,10 +617,6 @@ export class PressPullTool {
       this.taper = Math.max(-MAX_PP_TAPER, Math.min(MAX_PP_TAPER, tv));
     }
     const verdict = previewVerdict(this.store);
-    if (verdict.kind === "wait") {
-      requestAnimationFrame(() => { if (this.active && this.phase === "drag") this.commit(); });
-      return;
-    }
     if (verdict.kind === "refused") {
       setPrompt(`Press/Pull refused: ${verdict.reason} · drag back or Esc`);
       return;
@@ -633,6 +629,7 @@ export class PressPullTool {
       this.taperPreviewOn = false;
     }
     this.store.addFeature(feature);
+    if (verdict.kind === "wait") this.store.verifyCommit(feature.id, "Press/Pull");
     this.cleanup();
     this.onDone?.(feature.id);
   }

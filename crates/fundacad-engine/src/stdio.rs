@@ -44,7 +44,10 @@ pub fn serve<J: Jobs + Default>(jobs: J, beside: impl FnOnce(&Arc<Engine>)) -> !
     let engine = Arc::new(Engine::start_with(
         jobs,
         Some(Arc::new(J::default)),
-        EngineOptions::from_env(),
+        EngineOptions {
+            exit_on_breach: true,
+            ..EngineOptions::from_env()
+        },
         Arc::new(FrameOut(Mutex::new(BufWriter::new(frames)))),
     ));
     beside(&engine);

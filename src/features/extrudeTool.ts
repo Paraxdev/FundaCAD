@@ -1027,12 +1027,10 @@ export class ExtrudeTool {
     // A typed value has not been previewed until the pointer moves, and the
     // kernel has to have seen the tapered solid before it can be judged.
     if (Math.abs(this.taper) >= 0.05) this.updatePreview();
+    let unverified = false;
     if (this.taperPreviewOn) {
       const verdict = previewVerdict(this.store);
-      if (verdict.kind === "wait") {
-        requestAnimationFrame(() => { if (this.active && this.phase === "drag") this.commit(); });
-        return;
-      }
+      unverified = verdict.kind === "wait";
       if (verdict.kind === "refused") {
         setPrompt(`Extrude refused: ${verdict.reason} · drag back or Esc`);
         this.depthHandle?.paint({ refused: true });
@@ -1065,6 +1063,7 @@ export class ExtrudeTool {
     } else {
       this.store.addFeature(feature);
     }
+    if (unverified) this.store.verifyCommit(id, "Extrude");
     this.overlay.clearRegionSelection();
     this.cleanup();
     this.onDone?.(id);

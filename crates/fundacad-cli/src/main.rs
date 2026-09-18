@@ -135,6 +135,9 @@ fn rebuild(args: &[String]) -> ExitCode {
     };
 
     let ok = reply["ok"] == true;
+    if std::env::var_os("FUNDACAD_BENCH_PHASES").is_some_and(|v| v != "0") {
+        eprintln!("phases {}", fundacad_geom::bench::report());
+    }
     let written = if as_json {
         writeln!(out, "{reply}")
     } else {

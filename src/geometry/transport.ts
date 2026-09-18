@@ -16,11 +16,14 @@ export interface GeometryTransport {
   start(sink: TransportSink): Promise<void>;
   send(raw: string): void;
   readonly open: boolean;
+  /** Whether the engine behind it takes a soft cancel, see GeometryBackend.softCancel. */
+  readonly softCancel?: boolean;
 }
 
 /** `fundacad-engine --ws` (or `fundacad --engine --ws`) on a loopback socket,
  *  for a plain browser in development and the e2e scripts. */
 export class WebSocketTransport implements GeometryTransport {
+  readonly softCancel = true;
   private ws: WebSocket | null = null;
   private token = "";
   private sink: TransportSink | null = null;
@@ -80,6 +83,7 @@ export class WebSocketTransport implements GeometryTransport {
  *  (1 text, 2 binary) followed by the message, so a mesh never passes through
  *  JSON or base64. */
 export class IpcTransport implements GeometryTransport {
+  readonly softCancel = true;
   private up = false;
   private sink: TransportSink | null = null;
   private invoke: (typeof import("@tauri-apps/api/core"))["invoke"] | null = null;
@@ -133,6 +137,10 @@ export class EngineTransport implements GeometryTransport {
 
   get open(): boolean {
     return this.inner.open;
+  }
+
+  get softCancel(): boolean {
+    return this.inner.softCancel === true;
   }
 
   send(raw: string): void {

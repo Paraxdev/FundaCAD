@@ -692,7 +692,7 @@ export type DatumMark =
 
 export type RebuildReply =
   | { ok: true; result: RebuildResult }
-  | { ok: false; error: { feature_id?: string; message: string } };
+  | { ok: false; error: { feature_id?: string; message: string }; cancelled?: boolean };
 
 export type ExportFormat = "step" | "stl" | "3mf" | "glb";
 

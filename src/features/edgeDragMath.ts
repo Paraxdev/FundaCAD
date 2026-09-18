@@ -130,9 +130,8 @@ export function blendVerdict(range: BlendRange, value: number): BlendVerdict {
 }
 
 export type CommitDecision =
-  | { action: "commit"; value: number }
+  | { action: "commit"; value: number; unverified?: true }
   | { action: "cancel" }
-  | { action: "wait" }
   | { action: "stay" };
 
 /** What confirming the gesture does with the value on the handle.
@@ -143,8 +142,10 @@ export type CommitDecision =
  *
  *  A refused drag commits what the user is looking at, or nothing. A refused
  *  TYPED value stays open instead: swapping someone's typed number for another
- *  one on Enter is not a thing to do silently. A value still on its way to the
- *  kernel waits for the answer rather than committing a guess. */
+ *  one on Enter is not a thing to do silently. A value the kernel has not
+ *  answered for yet commits at once, `unverified`, and the store undoes it if
+ *  the kernel then refuses it (DocumentStore.verifyCommit): confirming never
+ *  waits on the kernel. */
 export function commitDecision(o: {
   value: number;
   verdict: BlendVerdict;
@@ -158,8 +159,8 @@ export function commitDecision(o: {
       ? { action: "commit", value: o.shown }
       : { action: "cancel" };
   }
-  if (o.settled) return { action: "commit", value: o.value };
-  return { action: "wait" };
+  if (o.settled || o.verdict === "builds") return { action: "commit", value: o.value };
+  return { action: "commit", value: o.value, unverified: true };
 }
 
 /** A kernel refusal, said the way a person would say it. `code` is the engine's

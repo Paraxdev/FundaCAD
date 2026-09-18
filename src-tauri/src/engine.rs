@@ -24,6 +24,11 @@ use tauri::ipc::{Channel, InvokeResponseBody, Request};
 use tauri::{AppHandle, Emitter, Manager};
 
 const CANCEL_GRACE: Duration = Duration::from_secs(3);
+/// A soft cancel stops a superseded preview at the job's next checkpoint, and
+/// the section blend and its booleans check often. A job still running this
+/// long after one is inside a single kernel call that may never return, and
+/// every request behind it waits, so the worker is restarted after all.
+const SOFT_CANCEL_GRACE: Duration = Duration::from_secs(10);
 const RESTART_FLOOR: Duration = Duration::from_millis(500);
 const RESTART_CEILING: Duration = Duration::from_secs(10);
 /// A worker that stayed up this long crashed for a new reason, not in a loop.
@@ -39,8 +44,9 @@ struct Inner {
     generation: AtomicU64,
     /// Requests sent and not yet answered by a terminal message, by id.
     in_flight: Mutex<HashSet<String>>,
-    /// Cancel requests awaiting their acknowledgement, to the id they target.
-    cancels: Mutex<HashMap<String, String>>,
+    /// Cancel requests awaiting their acknowledgement, to the id they target
+    /// and how long that job then has.
+    cancels: Mutex<HashMap<String, (String, Duration)>>,
     stopping: AtomicBool,
     /// The generation last ended on purpose by a cancel, which is no crash.
     cancel_killed: AtomicU64,
@@ -156,9 +162,12 @@ fn supervise(inner: Arc<Inner>) {
                 if inner.stopping.load(Ordering::SeqCst) {
                     return;
                 }
+                // A worker that ended itself over a stalled job has already
+                // told the client why, a crash toast on top would be wrong.
+                let planned = status.and_then(|s| s.code()) == Some(fundacad_engine::EXIT_BREACH);
                 let how = status.map(|s| s.to_string()).unwrap_or(cause);
                 eprintln!("[engine] worker ended: {how}");
-                if inner.cancel_killed.load(Ordering::SeqCst) == generation {
+                if planned || inner.cancel_killed.load(Ordering::SeqCst) == generation {
                     delay = Duration::ZERO;
                 } else {
                     let _ = inner.app.emit(
@@ -250,7 +259,10 @@ fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
                         eprintln!("[engine] no session file: {e}");
                     }
                 }
-                eprintln!("[engine] {line}");
+                // Never eprintln: with no one reading our stderr it panics, this
+                // thread stops draining the worker's, and the worker blocks on
+                // its next log line in the middle of a job.
+                let _ = writeln!(std::io::stderr(), "[engine] {line}");
             }
         });
     }
@@ -282,9 +294,9 @@ fn relay(inner: &Arc<Inner>, stdout: std::process::ChildStdout) -> String {
 /// starts the grace period of a cancel the worker says reached a running job.
 fn settle(inner: &Arc<Inner>, msg: &Message) {
     let Some(Value::String(id)) = message_id(msg) else { return };
-    if let Some(target) = lock(&inner.cancels).remove(&id) {
+    if let Some((target, grace)) = lock(&inner.cancels).remove(&id) {
         if cancel_hit(msg) {
-            escalate_cancel(inner.clone(), target);
+            escalate_cancel(inner.clone(), target, grace);
         }
         return;
     }
@@ -346,10 +358,10 @@ fn send_to_worker(inner: &Inner, msg: &Message) -> Result<(), String> {
 
 /// Restarts the worker when `target` is still running after the grace period,
 /// answering it as cancelled first so the client reports a cancel, not a crash.
-fn escalate_cancel(inner: Arc<Inner>, target: String) {
+fn escalate_cancel(inner: Arc<Inner>, target: String, grace: Duration) {
     std::thread::spawn(move || {
         let generation = inner.generation.load(Ordering::SeqCst);
-        std::thread::sleep(CANCEL_GRACE);
+        std::thread::sleep(grace);
         if !lock(&inner.in_flight).contains(&target) || inner.generation.load(Ordering::SeqCst) != generation {
             return;
         }
@@ -397,7 +409,7 @@ pub fn engine_send(state: tauri::State<'_, Engine>, request: Request<'_>) -> Res
         return Err("engine_send takes the request as raw bytes".into());
     };
     let text = String::from_utf8(bytes.clone()).map_err(|e| e.to_string())?;
-    let (id, op, target) = head(&text);
+    let Head { id, op, target, soft } = head(&text);
     // Recorded before sending: a fast reply can be relayed before
     // send_to_worker returns, and would find nothing to settle.
     let Some(id) = id else {
@@ -406,8 +418,9 @@ pub fn engine_send(state: tauri::State<'_, Engine>, request: Request<'_>) -> Res
     match op.as_deref() {
         Some("cancel") => {
             let target = target.or_else(|| lock(&state.0.in_flight).iter().next().cloned());
+            let grace = if soft { SOFT_CANCEL_GRACE } else { CANCEL_GRACE };
             if let Some(target) = target {
-                lock(&state.0.cancels).insert(id.clone(), target);
+                lock(&state.0.cancels).insert(id.clone(), (target, grace));
             }
         }
         Some("ping") | None => {}
@@ -421,33 +434,42 @@ pub fn engine_send(state: tauri::State<'_, Engine>, request: Request<'_>) -> Res
     })
 }
 
-/// `id`, `op` and `target` of a request without parsing a multi-megabyte
-/// document: the client writes them first, so a prefix almost always holds
-/// them, and a full parse is the fallback.
-fn head(text: &str) -> (Option<String>, Option<String>, Option<String>) {
+#[derive(Debug, PartialEq, Eq, Default)]
+struct Head {
+    id: Option<String>,
+    op: Option<String>,
+    target: Option<String>,
+    soft: bool,
+}
+
+/// The head of a request without parsing a multi-megabyte document: the
+/// client writes it first, so a prefix almost always holds it, and a full
+/// parse is the fallback.
+fn head(text: &str) -> Head {
     #[derive(serde::Deserialize)]
-    struct Head {
+    struct Raw {
         id: Option<Value>,
         op: Option<String>,
         target: Option<Value>,
+        soft: Option<bool>,
     }
-    let pick = |h: Head| {
+    let pick = |h: Raw| {
         let s = |v: Option<Value>| v.and_then(|v| v.as_str().map(str::to_owned));
-        (s(h.id), h.op, s(h.target))
+        Head { id: s(h.id), op: h.op, target: s(h.target), soft: h.soft == Some(true) }
     };
     let prefix_end = text.char_indices().nth(512).map_or(text.len(), |(i, _)| i);
     if let Some(close) = text[..prefix_end].find(",\"") {
         let rest = &text[close + 1..prefix_end];
         if let Some(second) = rest.find(",\"").map(|i| close + 1 + i) {
             let candidate = format!("{}}}", &text[..second]);
-            if let Ok(h) = serde_json::from_str::<Head>(&candidate) {
+            if let Ok(h) = serde_json::from_str::<Raw>(&candidate) {
                 if h.op.is_some() && h.op.as_deref() != Some("cancel") {
                     return pick(h);
                 }
             }
         }
     }
-    serde_json::from_str::<Head>(text).map(pick).unwrap_or((None, None, None))
+    serde_json::from_str::<Raw>(text).map(pick).unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -456,14 +478,24 @@ mod tests {
 
     #[test]
     fn the_head_of_a_request_is_read_from_its_prefix() {
+        let h = |id: Option<&str>, op: Option<&str>, target: Option<&str>, soft: bool| Head {
+            id: id.map(Into::into),
+            op: op.map(Into::into),
+            target: target.map(Into::into),
+            soft,
+        };
         let big = format!(r#"{{"id":"a","op":"rebuild","document":{{"x":"{}"}}}}"#, "y".repeat(10_000));
-        assert_eq!(head(&big), (Some("a".into()), Some("rebuild".into()), None));
+        assert_eq!(head(&big), h(Some("a"), Some("rebuild"), None, false));
         assert_eq!(
             head(r#"{"id":"c","op":"cancel","target":"a"}"#),
-            (Some("c".into()), Some("cancel".into()), Some("a".into()))
+            h(Some("c"), Some("cancel"), Some("a"), false)
         );
-        assert_eq!(head(r#"{"op":"ping"}"#), (None, Some("ping".into()), None));
-        assert_eq!(head("not json"), (None, None, None));
+        assert_eq!(
+            head(r#"{"id":"c","op":"cancel","target":"a","soft":true}"#),
+            h(Some("c"), Some("cancel"), Some("a"), true)
+        );
+        assert_eq!(head(r#"{"op":"ping"}"#), h(None, Some("ping"), None, false));
+        assert_eq!(head("not json"), Head::default());
     }
 
     #[test]
