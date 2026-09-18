@@ -1,0 +1,24 @@
+[package]
+name = "screws-geometry"
+description = "The fastener library's shape generator, as a FundaCAD plugin component"
+version = "1.0.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+publish = false
+
+# Its own workspace: a plugin builds for wasm32-wasip2, never with the engine.
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen = "0.46"
+serde_json = { version = "1", features = ["preserve_order"] }
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true
+codegen-units = 1
+panic = "abort"

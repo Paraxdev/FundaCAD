@@ -15,5 +15,6 @@
   "shapeGenerators": [
     "fastener"
   ],
-  "geometry": "geometry/register.py"
+  "geometry": "geometry/register.py",
+  "geometryWasm": "geometry.wasm"
 }
