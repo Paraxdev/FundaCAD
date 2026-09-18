@@ -1,4 +1,4 @@
-"""A small MCP client, so the server can be driven without an MCP host.
+"""A small MCP client, so an MCP server can be driven without an MCP host.
 
 Two jobs, and the second is the reason it is in the repository rather than in a
 scratch directory:
@@ -11,9 +11,13 @@ scratch directory:
   * a person (or an agent with a shell and no MCP host) can drive the server
     from a terminal:
 
-        python mcp/client.py schema '{"type": "revolve"}'
-        python mcp/client.py build
-        python mcp/client.py --script build.jsonl
+        python crates/fundacad-mcp/tools/client.py schema '{"type": "revolve"}'
+        python crates/fundacad-mcp/tools/client.py build
+        python crates/fundacad-mcp/tools/client.py --script build.jsonl
+        python crates/fundacad-mcp/tools/client.py --server path/to/server list
+
+    The server is the built `fundacad-mcp` (FUNDACAD_MCP_BIN, or the newest
+    under target/) unless --server names another.
 
     Each invocation is a FRESH server with an EMPTY document, so a sequence of
     one-shot calls is not a session, use --script, which sends a whole list of
@@ -31,7 +35,22 @@ import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
 PROTOCOL = "2025-06-18"
+
+
+def rust_binary():
+    """The built `fundacad-mcp`, from the environment or the workspace target."""
+    named = os.environ.get("FUNDACAD_MCP_BIN")
+    if named and os.path.isfile(named):
+        return named
+    name = "fundacad-mcp.exe" if sys.platform == "win32" else "fundacad-mcp"
+    target = os.environ.get("CARGO_TARGET_DIR") or os.path.join(ROOT, "target")
+    built = [os.path.join(target, profile, name) for profile in ("debug", "release")]
+    built = [p for p in built if os.path.isfile(p)]
+    if not built:
+        raise SystemExit("cargo build -p fundacad-mcp first, or set FUNDACAD_MCP_BIN")
+    return max(built, key=os.path.getmtime)
 
 
 class McpClient:
@@ -39,7 +58,7 @@ class McpClient:
 
     def __init__(self, python=None, server=None, env=None):
         self.python = python or sys.executable
-        self.server = server or os.path.join(HERE, "server.py")
+        self.server = server or rust_binary()
         self.env = env
         self.proc = None
         self._id = 0
@@ -57,16 +76,15 @@ class McpClient:
             env.update(self.env)
         # A `.py` server is run by this interpreter; anything else is a program
         # and is run as one, which is how the same client drives the Rust
-        # `fundacad-mcp` binary and this one over the same script.
+        # `fundacad-mcp` binary and the Python oracle over the same script.
         argv = ([self.python, self.server] if str(self.server).endswith(".py")
                 else [self.server])
         self.proc = await asyncio.create_subprocess_exec(
             # The CALLER's directory, not this file's. The server resolves a
             # relative `path` against its own working directory, so launching it
-            # in `mcp/` made `doc_save "part.funda"` land inside the repository
-            # while the person who typed it watched their own directory stay
-            # empty. It does not need to be here: server.py puts its own
-            # directory on sys.path itself.
+            # in its own directory made `doc_save "part.funda"` land inside the
+            # repository while the person who typed it watched their own
+            # directory stay empty.
             *argv, cwd=os.getcwd(), env=env,
             stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
             stderr=None,  # inherit: the server's diagnostics belong on OUR stderr

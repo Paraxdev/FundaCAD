@@ -579,32 +579,4 @@ pub fn plugin_remove(app: AppHandle, id: String) -> Result<(), String> {
     std::fs::remove_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))
 }
 
-/// What a process plugin written in Python needs to be launched by somebody
-/// else: the interpreter the app already installed, and the packages beside it.
-///
-/// Handed out rather than used, because nothing here launches an MCP server.
-/// The host does (Claude Code, Claude Desktop, an editor), and it needs a
-/// command line it can be given. Producing that command line is the entire
-/// remaining job of installing the MCP plugin.
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PythonRuntime {
-    pub python: String,
-    pub pythonpath: Option<String>,
-    /// Where the geometry engine's sources are, for a plugin that has to start
-    /// one of its own. Installed plugins live under the app data directory and
-    /// have no path back to the app's resources otherwise.
-    pub sidecar_dir: String,
-}
-
-#[tauri::command]
-pub fn plugin_python(app: AppHandle) -> Result<PythonRuntime, String> {
-    let rt = crate::sidecar::python_runtime(&app).map_err(|e| e.to_string())?;
-    Ok(PythonRuntime {
-        python: rt.0.to_string_lossy().to_string(),
-        pythonpath: rt.1.map(|p| p.to_string_lossy().to_string()),
-        sidecar_dir: rt.2.to_string_lossy().to_string(),
-    })
-}
-
 // ---------------------------------------------------------------------------

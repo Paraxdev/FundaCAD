@@ -3,7 +3,7 @@
 The binary case builds a format 2 file by the spec in docs/FUNDA-FORMAT.md, with
 parity shards the reader must step over, since the app's own writer is Rust.
 
-Run: uv run python mcp/tests/test_docfile.py
+Run: uv run python crates/fundacad-mcp/tools/python-oracle/tests/test_docfile.py
 """
 
 import _bootstrap  # noqa: F401

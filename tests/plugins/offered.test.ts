@@ -19,16 +19,9 @@
 // build can ship an entry the enforced copy would refuse.
 
 import { describe, expect, it } from "vitest";
-import shippedRaw from "../../plugins/FundaCAD.MCP/manifest.json?raw";
+import shippedRaw from "../../plugins/FundaCAD.Screws/manifest.json?raw";
 import { parseManifest, promiseOf } from "../../src/plugins/manifest";
-import {
-  mcpConfigBlock,
-  mcpConfigJson,
-  mcpLaunch,
-  mcpServerLaunch,
-  officialPlugins,
-  pluginReleaseTag,
-} from "../../src/plugins";
+import { officialPlugins, pluginReleaseTag } from "../../src/plugins";
 import { bundleAsset } from "../../src/plugins/shipped";
 
 const RELEASES = "https://github.com/Paraxdev/fundacad/releases/download/";
@@ -39,7 +32,7 @@ describe("the plugins this build offers", () => {
     // it is the assertion. Listing the ids as well keeps a silently emptied
     // list from passing.
     const offered = officialPlugins();
-    expect(offered.map((p) => p.manifest.id)).toContain("FundaCAD.MCP");
+    expect(offered.map((p) => p.manifest.id)).toContain("FundaCAD.Screws");
   });
 
   it("offers every plugin this repository has, builtins included", () => {
@@ -51,7 +44,6 @@ describe("the plugins this build offers", () => {
     const offered = officialPlugins().map((p) => p.manifest.id).sort();
     expect(offered).toEqual([
       "FundaCAD.ExtraParameters",
-      "FundaCAD.MCP",
       "FundaCAD.MultiColor",
       "FundaCAD.PrintToolbox",
       "FundaCAD.Printing",
@@ -93,9 +85,9 @@ describe("the plugins this build offers", () => {
   });
 });
 
-describe("the MCP bundle and the entry that describes it", () => {
+describe("a bundle and the entry that describes it", () => {
   const shipped = parseManifest(JSON.parse(shippedRaw));
-  const offered = officialPlugins().find((p) => p.manifest.id === "FundaCAD.MCP")!;
+  const offered = officialPlugins().find((p) => p.manifest.id === "FundaCAD.Screws")!;
 
   it("ships a manifest of its own that parses", () => {
     expect(shipped.ok ? "" : shipped.why).toBe("");
@@ -103,7 +95,7 @@ describe("the MCP bundle and the entry that describes it", () => {
 
   it("is described from that file and not from a copy of it", () => {
     // The point of the restructure, asserted rather than trusted. This suite
-    // reads plugins/FundaCAD.MCP/manifest.json off disk with ?raw; the app
+    // reads plugins/FundaCAD.Screws/manifest.json off disk with ?raw; the app
     // reaches the same bytes through import.meta.glob. If the app ever grows a
     // second copy, this is what tells you before a release does.
     if (!shipped.ok) throw new Error(shipped.why);
@@ -128,57 +120,9 @@ describe("the MCP bundle and the entry that describes it", () => {
   it("does not quietly hold the permissions it has no business holding", () => {
     if (!shipped.ok) throw new Error(shipped.why);
     // Not a style preference. `network` and `process.spawn` are the two that
-    // would turn the MCP server from a thing that drives this app into a thing
-    // that can do anything, and it reaches its engine over loopback and starts
-    // only the engine this app shipped.
+    // would turn a fastener library into a thing that can do anything.
     expect(shipped.manifest.grants).not.toContain("network");
     expect(shipped.manifest.grants).not.toContain("process.spawn");
     expect(shipped.manifest.hosts).toEqual([]);
-  });
-});
-
-describe("the command line an MCP host is given", () => {
-  const runtime = {
-    python: "C:\\Users\\a\\AppData\\Roaming\\dev.fundacad.app\\python\\python.exe",
-    pythonpath: "C:\\resources\\sidecar-runtime\\site-packages",
-    sidecarDir: "C:\\resources\\sidecar-runtime\\app",
-  };
-
-  it("points at the installed server with the separator the path already uses", () => {
-    const win = mcpLaunch("C:\\Users\\a\\AppData\\Roaming\\dev.fundacad.app\\plugins\\FundaCAD.MCP", runtime);
-    expect(win.args).toEqual([
-      "C:\\Users\\a\\AppData\\Roaming\\dev.fundacad.app\\plugins\\FundaCAD.MCP\\server.py",
-    ]);
-    const posix = mcpLaunch("/home/a/.local/share/dev.fundacad.app/plugins/FundaCAD.MCP", runtime);
-    expect(posix.args).toEqual(["/home/a/.local/share/dev.fundacad.app/plugins/FundaCAD.MCP/server.py"]);
-  });
-
-  it("carries the packages and the engine's whereabouts", () => {
-    const cfg = mcpLaunch("/plugins/FundaCAD.MCP", runtime);
-    expect(cfg.command).toBe(runtime.python);
-    expect(cfg.env.PYTHONPATH).toBe(runtime.pythonpath);
-    // Without this an installed plugin looks for the engine beside itself,
-    // under the app data directory, where there has never been one.
-    expect(cfg.env.FUNDACAD_SIDECAR_DIR).toBe(runtime.sidecarDir);
-  });
-
-  it("leaves out what it does not have rather than setting it empty", () => {
-    // An empty PYTHONPATH is not the same as no PYTHONPATH: it puts the
-    // current directory on the path in some interpreters, which is exactly the
-    // kind of surprise a launch command should not carry.
-    const cfg = mcpLaunch("/plugins/FundaCAD.MCP", { ...runtime, pythonpath: null });
-    expect("PYTHONPATH" in cfg.env).toBe(false);
-  });
-
-  it("hands a Rust engine build's host the bundled server and nothing else", () => {
-    const server = "C:\\Program Files\\FundaCAD\\fundacad-mcp.exe";
-    const parsed = JSON.parse(mcpConfigBlock(mcpServerLaunch(server)));
-    expect(parsed.mcpServers.fundacad).toEqual({ command: server, args: [], env: {} });
-  });
-
-  it("is the block an MCP host expects, not just a hint at one", () => {
-    const parsed = JSON.parse(mcpConfigJson("/plugins/FundaCAD.MCP", runtime));
-    expect(parsed.mcpServers.fundacad.args).toEqual(["/plugins/FundaCAD.MCP/server.py"]);
-    expect(parsed.mcpServers.fundacad.command).toBe(runtime.python);
   });
 });

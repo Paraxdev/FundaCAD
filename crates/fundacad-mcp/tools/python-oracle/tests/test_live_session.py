@@ -23,7 +23,7 @@ useless:
   * a window sharing read-only must refuse the edit BY NAME. A refusal that
     arrived as a timeout would be indistinguishable from a hung app.
 
-Run:  cd sidecar && uv run python ../mcp/tests/test_live_session.py
+Run:  cd sidecar && uv run python ../crates/fundacad-mcp/tools/python-oracle/tests/test_live_session.py
 """
 
 import _bootstrap  # noqa: F401
@@ -43,9 +43,9 @@ import websockets
 
 from winjob import kill_tree
 
-HERE = os.path.dirname(os.path.abspath(__file__))       # plugins/FundaCAD.MCP/tests
-MCP = os.path.dirname(HERE)                             # plugins/FundaCAD.MCP
-ROOT = os.path.dirname(os.path.dirname(MCP))            # the checkout
+HERE = os.path.dirname(os.path.abspath(__file__))       # python-oracle/tests
+MCP = os.path.dirname(HERE)                             # python-oracle
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(MCP))))  # the checkout
 SIDECAR = os.path.join(ROOT, "sidecar")
 sys.path.insert(0, os.path.join(SIDECAR, "tools"))
 from harness_util import engine_command  # noqa: E402

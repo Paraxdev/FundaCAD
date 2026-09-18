@@ -36,12 +36,18 @@ afterEach(() => localStorage.clear());
 describe("what is offered", () => {
   it("offers every plugin this project publishes, and none of them is already here", () => {
     const w = mount(PluginsSection);
-    for (const name of ["MCP server", "Printer connection", "3D mouse", "Multi-material"]) {
+    for (const name of ["Fasteners", "Printer connection", "3D mouse", "Multi-material"]) {
       expect(w.text(), name).toContain(name);
     }
     // Nothing installed, so no switch: the only control on an offer is Install.
     expect(w.findAll("input[type=checkbox]").length).toBe(0);
     expect(w.text()).toContain("Nothing installed yet.");
+  });
+
+  it("does not offer the MCP server, which is part of the app", () => {
+    const w = mount(PluginsSection);
+    expect(w.find('[data-plugin="FundaCAD.MCP"]').exists()).toBe(false);
+    expect(w.text()).not.toContain("How to connect it");
   });
 
   it("says a builtin runs with the app's own reach", async () => {
@@ -72,11 +78,11 @@ describe("what is offered", () => {
 });
 
 describe("the plugins that are downloaded", () => {
-  const downloadRow = (w: ReturnType<typeof mount>) => row(w, "FundaCAD.MCP");
+  const downloadRow = (w: ReturnType<typeof mount>) => row(w, "FundaCAD.Screws");
 
   it("offers one, and asks nothing until the button is pressed", () => {
     const w = mount(PluginsSection);
-    expect(w.text()).toContain("MCP server");
+    expect(w.text()).toContain("Fasteners");
     expect(w.find(consent).exists()).toBe(false);
   });
 
@@ -88,23 +94,14 @@ describe("the plugins that are downloaded", () => {
     expect(block.text()).toContain("Change the document you have open");
     expect(block.text()).toContain("Use the geometry engine");
 
-    // The half that makes the other half mean something. The MCP server asks
-    // for neither of these, so both belong on this side.
+    // The half that makes the other half mean something. The fastener library
+    // asks for neither of these, so both belong on this side.
     expect(block.find(".plug-cannot").text()).toContain("Use the internet");
     expect(block.find(".plug-cannot").text()).toContain("Start other programs on your computer");
 
     // And the control: a permission it did NOT ask for must not appear as one
     // it has. Without this the test passes on a block that lists everything.
     expect(block.find(".plug-can").text()).not.toContain("Talk to devices on your local network");
-  });
-
-  it("says a process plugin is a program on the machine", async () => {
-    const w = mount(PluginsSection);
-    await downloadRow(w).get(".btn").trigger("click");
-    // The one sentence on this screen that is about the limits of the promise
-    // rather than the promise. It goes when process plugins are sandboxed by
-    // the OS, and not before.
-    expect(downloadRow(w).get(consent).text()).toContain("normal program on your computer");
   });
 
   it("can be backed out of, leaving nothing decided", async () => {

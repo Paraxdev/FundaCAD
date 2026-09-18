@@ -18,8 +18,8 @@
 # and zip and nothing else, and run its tests against the real file. Same
 # source, no webview, no excuse.
 #
-# It then does one thing the unit tests cannot: builds the MCP plugin bundle
-# the release job publishes, and unpacks THAT with the same extractor the app
+# It then does one thing the unit tests cannot: builds a plugin bundle the way
+# the release job does, and unpacks THAT with the same extractor the app
 # uses. The unit tests build their zips in memory, so they prove the guard
 # rejects what it should; this proves the archive we actually ship is one it
 # accepts. A packaging script that quietly produces something the installer
@@ -70,8 +70,8 @@ RS
 # The bundle as it will be published, built by the same script CI runs.
 BUNDLE="$OUT/bundle"
 rm -rf "$BUNDLE"
-python "$REPO/scripts/build-plugins.py" "$BUNDLE" FundaCAD.MCP >/dev/null
-ZIP="$(cygpath -m "$BUNDLE/plugin-FundaCAD.MCP.zip" 2>/dev/null || echo "$BUNDLE/plugin-FundaCAD.MCP.zip")"
+python "$REPO/scripts/build-plugins.py" "$BUNDLE" FundaCAD.MultiColor >/dev/null
+ZIP="$(cygpath -m "$BUNDLE/plugin-FundaCAD.MultiColor.zip" 2>/dev/null || echo "$BUNDLE/plugin-FundaCAD.MultiColor.zip")"
 
 mkdir -p "$OUT/tests"
 cat > "$OUT/tests/real_bundle.rs" <<'RS'
@@ -82,7 +82,7 @@ cat > "$OUT/tests/real_bundle.rs" <<'RS'
 use plugin_guard::bundle::extract_into;
 
 #[test]
-fn the_published_mcp_bundle_unpacks_and_declares_itself() {
+fn a_published_bundle_unpacks_and_declares_itself() {
     let zip = std::env::var("PLUGIN_ZIP").expect("PLUGIN_ZIP must name the built bundle");
     let bytes = std::fs::read(&zip).expect("the packaging script produced no zip");
     let dir = std::env::temp_dir().join("fundacad-plugin-guard-unpack");
@@ -93,7 +93,7 @@ fn the_published_mcp_bundle_unpacks_and_declares_itself() {
 
     // The two files the installer and the launch command depend on by name.
     assert!(dir.join("manifest.json").is_file(), "no manifest.json in the bundle");
-    assert!(dir.join("server.py").is_file(), "no server.py in the bundle");
+    assert!(dir.join("main.js").is_file(), "no main.js in the bundle");
 
     // Tests are deliberately not packaged, so a bundle carrying them means the
     // exclusion in the packaging script stopped working.

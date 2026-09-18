@@ -84,7 +84,6 @@ describe("the plugins in this repository", () => {
     // about where it came from.
     expect(shippedPlugins().map((p) => p.manifest.id)).toEqual([
       "FundaCAD.ExtraParameters",
-      "FundaCAD.MCP",
       "FundaCAD.MultiColor",
       "FundaCAD.PrintToolbox",
       "FundaCAD.Printing",
@@ -104,14 +103,14 @@ describe("the plugins in this repository", () => {
     }
     // The control: the check can fail. Without it, a `has()` that had stopped
     // matching anything would pass every case above.
-    expect(has("FundaCAD.MCP", "server.py")).toBe(true);
-    expect(has("FundaCAD.MCP", "not-a-file.py")).toBe(false);
+    expect(has("FundaCAD.Screws", "main.ts")).toBe(true);
+    expect(has("FundaCAD.Screws", "not-a-file.ts")).toBe(false);
   });
 
   it("explains itself in a README beside the manifest", () => {
     // JSON has no comments, and the reasoning behind a grant list is the part
     // worth keeping: why the printer connection asks for process.spawn and why
-    // the MCP server does not. That reasoning used to sit next to the JSON
+    // the fastener library does not. That reasoning used to sit next to the JSON
     // literals in registry.ts and had nowhere to go when they left.
     for (const { dir } of shippedPlugins()) {
       expect(has(dir, "README.md"), `plugins/${dir} has no README.md`).toBe(true);
@@ -121,6 +120,6 @@ describe("the plugins in this repository", () => {
   it("names a plugin's asset the one way", () => {
     // The app builds a download URL from this and the packager writes a file
     // with it. Two spellings is a download that 404s.
-    expect(bundleAsset("FundaCAD.MCP")).toBe("plugin-FundaCAD.MCP.zip");
+    expect(bundleAsset("FundaCAD.Screws")).toBe("plugin-FundaCAD.Screws.zip");
   });
 });

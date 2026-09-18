@@ -1,16 +1,21 @@
-"""Puts mcp/ on sys.path so `import render` resolves.
+"""Puts the oracle and the shared client on sys.path so `import render` and
+`from client import McpClient` resolve.
 
 The same arrangement sidecar/tests/_bootstrap.py uses, and for the same reason:
-these files run directly (`uv run python mcp/tests/test_render.py`), which puts
-tests/ on sys.path and not mcp/.
+these files run directly, which puts tests/ on sys.path and neither of those.
 """
 
 import os
 import sys
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _ROOT not in sys.path:
-    sys.path.insert(0, _ROOT)
+_TOOLS = os.path.dirname(_ROOT)
+for _p in (_TOOLS, _ROOT):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+#: The server these suites test. The shared client defaults to the Rust one.
+ORACLE_SERVER = os.path.join(_ROOT, "server.py")
 
 # NO TEST MAY FIND THE RUNNING APP.
 #

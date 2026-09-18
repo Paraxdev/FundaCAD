@@ -4,7 +4,7 @@ The property worth the most here is that a REFUSED edit changes nothing. An
 agent works by trying things, and a tool that half-applies a bad edit leaves it
 debugging a document it did not write.
 
-Run: uv run python mcp/tests/test_model.py
+Run: uv run python crates/fundacad-mcp/tools/python-oracle/tests/test_model.py
 """
 
 import _bootstrap  # noqa: F401

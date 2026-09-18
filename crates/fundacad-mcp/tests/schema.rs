@@ -1,5 +1,5 @@
 //! The schema, held to the engine. A port of
-//! `plugins/FundaCAD.MCP/tests/test_schema.py`.
+//! `crates/fundacad-mcp/tools/python-oracle/tests/test_schema.py`.
 //!
 //! `schema.json` is hand-written, because the authority, `src/types.ts`, is a
 //! TypeScript union whose value is in its comments, and no generator turns that

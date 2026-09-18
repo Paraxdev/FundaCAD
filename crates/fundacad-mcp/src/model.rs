@@ -1,5 +1,5 @@
 //! The document an agent is editing: features, parameters, and the edits to
-//! both. A port of `plugins/FundaCAD.MCP/model.py`.
+//! both. A port of `crates/fundacad-mcp/tools/python-oracle/model.py`.
 //!
 //! A FundaCAD document is a declarative feature list plus a parameter table,
 //! and nothing here knows how to build it, that is the engine's job. What lives

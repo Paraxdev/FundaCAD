@@ -36,7 +36,7 @@ import {
 } from "./manifest";
 import { bundleAsset, shippedPlugins } from "./shipped";
 import type { DocumentStore } from "../document/store";
-import { engineKind } from "../geometry/transport";
+import { toast } from "../ui/toast";
 import type { RunOutcome } from "./runner/host";
 
 /** Where this project's own bundles are published. Mirrors BUNDLE_PREFIX in
@@ -108,12 +108,6 @@ export interface InstalledPlugin {
   official: boolean;
 }
 
-export interface PythonRuntime {
-  python: string;
-  pythonpath: string | null;
-  sidecarDir: string;
-}
-
 const isTauri = () => "__TAURI_INTERNALS__" in window;
 
 async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
@@ -126,9 +120,41 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
  *  rather than an error to render. */
 export async function installedPlugins(): Promise<InstalledPlugin[]> {
   if (!isTauri()) return [];
-  const list = await call<InstalledPlugin[]>("plugin_list");
+  const list = await retire(await call<InstalledPlugin[]>("plugin_list"));
   noteInstalled(list.map((r) => r.id));
   return list;
+}
+
+/** Plugins whose job moved into the app itself, removed from disk on sight.
+ *
+ *  FundaCAD.MCP was the Python MCP server with a settings companion. The app
+ *  ships `fundacad-mcp` and its own MCP section now, so an installed copy is a
+ *  server for an engine this build does not have plus a second copy of a core
+ *  setting. Removed rather than hidden, so a stale bundle cannot start its
+ *  companion or linger in the app data directory. */
+export const RETIRED_PLUGINS: readonly { id: string; note: string }[] = [
+  {
+    id: "FundaCAD.MCP",
+    note: "The MCP server is part of FundaCAD now, so its plugin was removed. Preferences, AI assistants has the new connection settings.",
+  },
+];
+
+async function retire(list: InstalledPlugin[]): Promise<InstalledPlugin[]> {
+  const kept: InstalledPlugin[] = [];
+  for (const rec of list) {
+    const retired = RETIRED_PLUGINS.find((r) => sameId(r.id, rec.id));
+    if (!retired) {
+      kept.push(rec);
+      continue;
+    }
+    try {
+      await call<void>("plugin_remove", { id: rec.id });
+      toast(retired.note);
+    } catch (err) {
+      console.error(`[plugins] could not remove the retired ${rec.id}:`, err);
+    }
+  }
+  return kept;
 }
 
 // ---------------------------------------------------------------------------
@@ -298,12 +324,6 @@ export async function removePlugin(id: string): Promise<void> {
   await call<void>("plugin_remove", { id });
 }
 
-/** The interpreter and packages the app already installed, for a plugin that
- *  something else has to launch. */
-export async function pythonRuntime(): Promise<PythonRuntime> {
-  return await call<PythonRuntime>("plugin_python");
-}
-
 // ---------------------------------------------------------------------------
 // a bundle nobody has seen yet
 // ---------------------------------------------------------------------------
@@ -427,66 +447,4 @@ export async function pickBundle(): Promise<string | null> {
     filters: [{ name: "Plugin bundle", extensions: ["zip"] }],
   });
   return typeof picked === "string" ? picked : null;
-}
-
-// ---------------------------------------------------------------------------
-// launching the MCP plugin, which is not this app's job
-// ---------------------------------------------------------------------------
-
-export interface LaunchConfig {
-  command: string;
-  args: string[];
-  env: Record<string, string>;
-}
-
-/** Windows paths keep backslashes, everything else keeps slashes. Written out
- *  rather than imported: this runs in the webview, which has no path module,
- *  and the only input is a path the app itself produced. */
-function join(dir: string, name: string): string {
-  const sep = dir.includes("\\") && !dir.includes("/") ? "\\" : "/";
-  return dir.endsWith(sep) ? `${dir}${name}` : `${dir}${sep}${name}`;
-}
-
-/** How to start the installed MCP server: the command line an MCP host needs.
- *
- *  Pure, and separate from everything above, because this is the part people
- *  copy into another program's settings and the part worth testing. The app
- *  never runs this itself; the host does.
- *
- *  PYTHONPATH carries the bundled packages. `server.py` puts its own directory
- *  on the path already, so the plugin's own modules need no entry.
- *  FUNDACAD_SIDECAR_DIR is how a plugin living under the app data directory
- *  finds the geometry engine's sources, which are in the app's resources and
- *  nowhere near it. */
-export function mcpLaunch(dir: string, runtime: PythonRuntime): LaunchConfig {
-  const env: Record<string, string> = {};
-  if (runtime.pythonpath) env.PYTHONPATH = runtime.pythonpath;
-  if (runtime.sidecarDir) env.FUNDACAD_SIDECAR_DIR = runtime.sidecarDir;
-  return { command: runtime.python, args: [join(dir, "server.py")], env };
-}
-
-/** How to start the `fundacad-mcp` a Rust engine build ships beside itself.
- *  It needs nothing else: its private engine is the app, started with
- *  `--engine --ws`, and it attaches to a running window by itself. */
-export function mcpServerLaunch(server: string): LaunchConfig {
-  return { command: server, args: [], env: {} };
-}
-
-/** A launch command as the block an MCP host expects in its config file. */
-export function mcpConfigBlock(launch: LaunchConfig): string {
-  return JSON.stringify({ mcpServers: { fundacad: launch } }, null, 2);
-}
-
-/** The same thing as the block an MCP host expects in its config file. */
-export function mcpConfigJson(dir: string, runtime: PythonRuntime): string {
-  return mcpConfigBlock(mcpLaunch(dir, runtime));
-}
-
-/** The block for this build: the bundled `fundacad-mcp` in a Rust engine
- *  build, the Python server in the installed plugin otherwise. */
-export async function mcpSetup(dir: string): Promise<string> {
-  if ((await engineKind()) === "rust") {
-    return mcpConfigBlock(mcpServerLaunch(await call<string>("mcp_server")));
-  }
-  return mcpConfigJson(dir, await pythonRuntime());
 }

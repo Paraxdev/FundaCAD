@@ -155,6 +155,18 @@ describe("reading a bundle from a link", () => {
     expect(block.find(".plug-cannot").text()).toContain("Reach devices on your local network");
   });
 
+  it("says a process plugin is a program on the machine", async () => {
+    // The one sentence on this screen that is about the limits of the promise
+    // rather than the promise. It goes when process plugins are sandboxed by
+    // the OS, and not before.
+    inspectUrl.mockResolvedValue(
+      candidateFrom({ ...STRANGER, manifest: { ...STRANGER.manifest, kind: "process" } }, "url"),
+    );
+    const w = await mounted();
+    await readUrl(w, "https://plugins.example.com/widgets.zip");
+    expect(candidateRow(w).get(".plug-consent").text()).toContain("normal program on your computer");
+  });
+
   it("reports a bundle it could not read, and offers nothing to install", async () => {
     inspectUrl.mockRejectedValue(new Error('unknown permission: "gpu.direct"'));
     const w = await mounted();
@@ -282,11 +294,11 @@ describe("the list of what is installed", () => {
   });
 
   it("stops offering a suggestion once it is installed", async () => {
-    installedPlugins.mockResolvedValue([record({ id: "FundaCAD.MCP" })]);
+    installedPlugins.mockResolvedValue([record({ id: "FundaCAD.Screws" })]);
     const w = await mounted();
     // One row, not two: the suggested entry and the installed one are the same
     // plugin, and a screen showing both offers to install what is installed.
-    expect(w.findAll('[data-plugin="FundaCAD.MCP"]').length).toBe(1);
-    expect(w.get('[data-plugin="FundaCAD.MCP"]').text()).toContain("Remove");
+    expect(w.findAll('[data-plugin="FundaCAD.Screws"]').length).toBe(1);
+    expect(w.get('[data-plugin="FundaCAD.Screws"]').text()).toContain("Remove");
   });
 });

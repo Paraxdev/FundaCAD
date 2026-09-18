@@ -32,7 +32,7 @@
 // different from a greedy one at a glance.
 
 import { computed, onMounted, onUnmounted, ref } from "vue";
-import { describeGrants, sameId, sandboxNote } from "../../plugins/manifest";
+import { describeGrants, sandboxNote } from "../../plugins/manifest";
 import { engineKind } from "../../geometry/transport";
 import {
   inspectFile,
@@ -41,7 +41,6 @@ import {
   installPlugin,
   installedManifest,
   installedPlugins,
-  mcpSetup,
   officialPlugins,
   pickBundle,
   pluginReleaseTag,
@@ -53,8 +52,6 @@ import {
 import { onPluginChange, pluginEnabled, setPluginEnabled } from "../../plugins/registry";
 import { toast } from "../../ui/toast";
 
-const MCP_ID = "FundaCAD.MCP";
-
 const suggested = ref<OfficialPlugin[]>(officialPlugins());
 onMounted(async () => {
   suggested.value = officialPlugins(pluginReleaseTag(await engineKind()));
@@ -65,8 +62,6 @@ const installed = ref<InstalledPlugin[]>([]);
 const showing = ref("");
 /** the id being installed or removed, so its buttons can say so */
 const busy = ref("");
-/** id to the launch config, once someone has asked to see it */
-const setup = ref<Record<string, string>>({});
 
 /** what the user typed, before anything has been fetched */
 const url = ref("");
@@ -100,7 +95,6 @@ function toggle(id: string, ev: Event) {
 }
 
 const record = (id: string) => installed.value.find((r) => r.id === id);
-const setupFor = (id: string) => setup.value[id] ?? "";
 
 /** Rows for what is installed, each with a manifest to describe it by. */
 const rows = computed(() =>
@@ -204,33 +198,12 @@ async function drop(id: string, name: string) {
   busy.value = id;
   try {
     await removePlugin(id);
-    delete setup.value[id];
     await refresh();
     toast(`${name} is removed.`);
   } catch (err) {
     toast(`Could not remove ${name}. ${String(err)}`, { kind: "error" });
   } finally {
     busy.value = "";
-  }
-}
-
-/** The command line an MCP host needs. Asked for rather than always shown: it
- *  is four lines of JSON that only mean something to someone who is about to
- *  paste them somewhere. */
-async function showSetup(rec: InstalledPlugin) {
-  try {
-    setup.value = { ...setup.value, [rec.id]: await mcpSetup(rec.dir) };
-  } catch (err) {
-    toast(`Could not work out how to start it. ${String(err)}`, { kind: "error" });
-  }
-}
-
-async function copy(text: string) {
-  try {
-    await navigator.clipboard.writeText(text);
-    toast("Copied.");
-  } catch {
-    toast("Could not copy. Select the text and copy it.", { kind: "error" });
   }
 }
 </script>
@@ -275,22 +248,11 @@ async function copy(text: string) {
       >
         {{ showing === rec.id ? "Hide what it uses" : "What it uses" }}
       </button>
-      <button v-if="sameId(rec.id, MCP_ID)" class="plug-link" @click="showSetup(rec)">
-        How to connect it
-      </button>
     </div>
 
     <div v-if="!manifest" class="sm-hint">
       This app cannot read what this plugin agreed to. Remove it and install it
       again.
-    </div>
-
-    <div v-if="setupFor(rec.id)" class="plug-setup">
-      <div class="sm-hint">
-        Paste this into your assistant's MCP settings, then restart it.
-      </div>
-      <pre class="plug-config">{{ setupFor(rec.id) }}</pre>
-      <button class="btn" @click="copy(setupFor(rec.id))">Copy</button>
     </div>
 
     <div v-if="showing === rec.id && manifest" class="plug-consent">

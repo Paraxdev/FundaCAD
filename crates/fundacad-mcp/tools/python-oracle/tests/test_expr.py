@@ -5,7 +5,7 @@ expression still evaluates, it just gives a different number than the same text
 gives in the app. A parametric document that means one thing to the agent that
 wrote it and another to the person who opens it is worse than one that fails.
 
-Run: uv run python mcp/tests/test_expr.py
+Run: uv run python crates/fundacad-mcp/tools/python-oracle/tests/test_expr.py
 """
 
 import _bootstrap  # noqa: F401

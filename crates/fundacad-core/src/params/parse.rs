@@ -1,5 +1,5 @@
 //! Tokenizer and parser for parameter expressions, a port of `src/params/parse.ts`
-//! (twinned in Python by plugins/FundaCAD.MCP/expr.py).
+//! (twinned in Python by crates/fundacad-mcp/tools/python-oracle/expr.py).
 //!
 //! Grammar, loosest first:
 //! `or := and ('||' and)*`, `and := cmp ('&&' cmp)*`,

@@ -28,7 +28,7 @@ The end-to-end case is covered separately by driving the real server against
 sidecar/fixtures/asm_flat.step; this file is about the parts that are hard to
 provoke on purpose.
 
-Run: uv run python plugins/FundaCAD.MCP/tests/test_import.py
+Run: uv run python crates/fundacad-mcp/tools/python-oracle/tests/test_import.py
 """
 
 import _bootstrap  # noqa: F401

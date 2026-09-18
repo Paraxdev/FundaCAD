@@ -1,11 +1,6 @@
 {
   "mcpServers": {
     "fundacad": {
-      "command": "uv",
-      "args": ["run", "--project", "sidecar", "python", "plugins/FundaCAD.MCP/server.py"],
-      "env": {}
-    },
-    "fundacad-rust": {
       "command": "node",
       "args": ["scripts/mcp-rust.mjs"],
       "env": {}

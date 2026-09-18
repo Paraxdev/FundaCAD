@@ -3,7 +3,7 @@
 //! Written out rather than derived from a Rust struct, and for the reason the
 //! Python server wrote them out: the descriptions ARE the tool. An agent that
 //! has never clicked on anything decides what to send from these sentences, so
-//! they are carried over word for word from `plugins/FundaCAD.MCP/server.py`
+//! they are carried over word for word from `crates/fundacad-mcp/tools/python-oracle/server.py`
 //! and the shapes stay the ones a host already knows.
 
 use rmcp::model::JsonObject;

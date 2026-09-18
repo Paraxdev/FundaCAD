@@ -19,6 +19,7 @@ import { contributedSettings, onContribChange } from "../../plugins/contrib";
 import { useDialogStore } from "../../stores/dialogs";
 import { useModalGate } from "../../composables/useModalGate";
 import ModalFrame from "./ModalFrame.vue";
+import McpSection from "./McpSection.vue";
 import PluginsSection from "./PluginsSection.vue";
 import {
   addCustomTheme,
@@ -73,11 +74,6 @@ const unit = ref(getUnit());
 const render = ref(renderPrefs());
 const dwell = ref(getHoverDwellMs());
 
-// The blocks the running plugins add. An "Assistants" block used to be written
-// out below, configuring what an assistant connected over MCP may do to the
-// open document, a question that decides nothing when no such plugin is
-// installed, and a control that decides nothing is worse than a missing one.
-// It is contributed now, by the plugin it is about.
 const sections = shallowRef(contributedSettings());
 
 const stops: (() => void)[] = [];
@@ -287,6 +283,8 @@ function onPerformanceMode(ev: Event) { setRenderPref("performanceMode", (ev.tar
         instead of the whole part. A click selects whatever is highlighted, so a
         longer delay makes it easier to select whole parts.
       </div>
+
+      <McpSection />
 
       <!-- What the running plugins ask about. Each brings its own heading, so a
            plugin that is not installed leaves no gap where its block was. -->
