@@ -2478,6 +2478,281 @@
       }
     },
     {
+      "name": "revolve_pitch_screw_thread",
+      "document": {
+        "parameters": {
+          "p": 1.5
+        },
+        "features": [
+          {
+            "id": "c",
+            "type": "cylinder",
+            "radius": 4,
+            "height": 20
+          },
+          {
+            "id": "s",
+            "type": "sketch",
+            "plane": "XZ",
+            "entities": [
+              {
+                "type": "line",
+                "x1": 3.9,
+                "y1": -8,
+                "x2": 5,
+                "y2": -7.25
+              },
+              {
+                "type": "line",
+                "x1": 5,
+                "y1": -7.25,
+                "x2": 3.9,
+                "y2": -6.5
+              },
+              {
+                "type": "line",
+                "x1": 3.9,
+                "y1": -6.5,
+                "x2": 3.9,
+                "y2": -8
+              }
+            ]
+          },
+          {
+            "id": "rv",
+            "type": "revolve",
+            "sketch": "s",
+            "axis": "Z",
+            "angle": 2880,
+            "pitch": "p",
+            "operation": "join",
+            "targets": [
+              "body1"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "revolve_pitch_multi_turn_helix",
+      "document": {
+        "parameters": {},
+        "features": [
+          {
+            "id": "s",
+            "type": "sketch",
+            "plane": "XZ",
+            "entities": [
+              {
+                "type": "rectangle",
+                "width": 1,
+                "height": 1,
+                "x": 10,
+                "y": 0
+              }
+            ]
+          },
+          {
+            "id": "rv",
+            "type": "revolve",
+            "sketch": "s",
+            "axis": "Z",
+            "angle": 1800,
+            "pitch": 3
+          }
+        ]
+      }
+    },
+    {
+      "name": "revolve_pitch_partial_angle",
+      "document": {
+        "parameters": {},
+        "features": [
+          {
+            "id": "s",
+            "type": "sketch",
+            "plane": "XZ",
+            "entities": [
+              {
+                "type": "circle",
+                "radius": 2,
+                "x": 12,
+                "y": 0
+              }
+            ]
+          },
+          {
+            "id": "rv",
+            "type": "revolve",
+            "sketch": "s",
+            "axis": "Z",
+            "angle": 120,
+            "pitch": 10
+          }
+        ]
+      }
+    },
+    {
+      "name": "revolve_pitch_left_hand_down",
+      "document": {
+        "parameters": {},
+        "features": [
+          {
+            "id": "s",
+            "type": "sketch",
+            "plane": "XZ",
+            "entities": [
+              {
+                "type": "rectangle",
+                "width": 2,
+                "height": 1,
+                "x": 8,
+                "y": 0
+              }
+            ]
+          },
+          {
+            "id": "rv",
+            "type": "revolve",
+            "sketch": "s",
+            "axis": "Z",
+            "angle": -540,
+            "pitch": -4
+          }
+        ]
+      }
+    },
+    {
+      "name": "revolve_pitch_cut_nut",
+      "document": {
+        "parameters": {},
+        "features": [
+          {
+            "id": "b",
+            "type": "box",
+            "length": 30,
+            "width": 30,
+            "height": 10
+          },
+          {
+            "id": "s",
+            "type": "sketch",
+            "plane": "XZ",
+            "entities": [
+              {
+                "type": "line",
+                "x1": 6.1,
+                "y1": -3,
+                "x2": 5,
+                "y2": -2.2
+              },
+              {
+                "type": "line",
+                "x1": 5,
+                "y1": -2.2,
+                "x2": 6.1,
+                "y2": -1.4
+              },
+              {
+                "type": "line",
+                "x1": 6.1,
+                "y1": -1.4,
+                "x2": 6.1,
+                "y2": -3
+              }
+            ]
+          },
+          {
+            "id": "rv",
+            "type": "revolve",
+            "sketch": "s",
+            "axis": "Z",
+            "angle": 1080,
+            "pitch": 2,
+            "operation": "cut",
+            "targets": [
+              "body1"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "revolve_pitch_turns_overlap_fails",
+      "expectError": true,
+      "document": {
+        "parameters": {},
+        "features": [
+          {
+            "id": "b",
+            "type": "box",
+            "length": 5,
+            "width": 5,
+            "height": 5
+          },
+          {
+            "id": "s",
+            "type": "sketch",
+            "plane": "XZ",
+            "entities": [
+              {
+                "type": "rectangle",
+                "width": 1,
+                "height": 5,
+                "x": 10,
+                "y": 0
+              }
+            ]
+          },
+          {
+            "id": "rv",
+            "type": "revolve",
+            "sketch": "s",
+            "axis": "Z",
+            "angle": 720,
+            "pitch": 2
+          }
+        ]
+      }
+    },
+    {
+      "name": "revolve_pitch_on_axis_fails",
+      "expectError": true,
+      "document": {
+        "parameters": {},
+        "features": [
+          {
+            "id": "b",
+            "type": "box",
+            "length": 5,
+            "width": 5,
+            "height": 5
+          },
+          {
+            "id": "s",
+            "type": "sketch",
+            "plane": "XZ",
+            "entities": [
+              {
+                "type": "circle",
+                "radius": 2,
+                "x": 0,
+                "y": 0
+              }
+            ]
+          },
+          {
+            "id": "rv",
+            "type": "revolve",
+            "sketch": "s",
+            "axis": "Z",
+            "angle": 90,
+            "pitch": 2
+          }
+        ]
+      }
+    },
+    {
       "name": "pattern_linear",
       "document": {
         "parameters": {},
