@@ -81,9 +81,12 @@ fn centroids(p: &[P3], tris: &[[usize; 3]]) -> Vec<P3> {
 }
 
 /// diff_meshes.surface_gap: the largest distance from a triangle centroid of
-/// (p, i) to the surface (q, j), each measured against the triangles whose
-/// centroids are the nearest few.
-fn surface_gap(p: &[P3], i: &[[usize; 3]], q: &[P3], j: &[[usize; 3]], k: usize) -> f64 {
+/// (p, i) to the surface (q, j), measured against the triangles whose
+/// centroids are the nearest few, then against every triangle for a centroid
+/// those leave further than `tol`. A large fan triangle of a planar cap can
+/// have no centroid among the nearest few while lying flat on the other side's
+/// cap, which the same disk triangulated the other way round.
+fn surface_gap(p: &[P3], i: &[[usize; 3]], q: &[P3], j: &[[usize; 3]], k: usize, tol: f64) -> f64 {
     if i.is_empty() || j.is_empty() {
         return if i.len() == j.len() {
             0.0
@@ -94,15 +97,19 @@ fn surface_gap(p: &[P3], i: &[[usize; 3]], q: &[P3], j: &[[usize; 3]], k: usize)
     let cen = centroids(p, i);
     let tree = KdTree::new(&centroids(q, j));
     let k = k.min(j.len());
+    let to = |c: P3, t: &[usize; 3]| point_triangle_distance(c, q[t[0]], q[t[1]], q[t[2]]);
     cen.iter()
         .map(|c| {
-            tree.knn(*c, k)
+            let near = tree
+                .knn(*c, k)
                 .into_iter()
-                .map(|t| {
-                    let t = j[t];
-                    point_triangle_distance(*c, q[t[0]], q[t[1]], q[t[2]])
-                })
-                .fold(f64::INFINITY, f64::min)
+                .map(|t| to(*c, &j[t]))
+                .fold(f64::INFINITY, f64::min);
+            if near > tol {
+                j.iter().map(|t| to(*c, t)).fold(f64::INFINITY, f64::min)
+            } else {
+                near
+            }
         })
         .fold(0.0, f64::max)
 }
@@ -167,7 +174,8 @@ fn compare_mesh(
             "{what}: a vertex {gap:.3e} from the other engine's nearest"
         ));
     }
-    let s = surface_gap(p, i, q, j, tol.neighbours).max(surface_gap(q, j, p, i, tol.neighbours));
+    let s = surface_gap(p, i, q, j, tol.neighbours, tol.surface)
+        .max(surface_gap(q, j, p, i, tol.neighbours, tol.surface));
     if s > tol.surface {
         diffs.push(format!(
             "{what}: a triangle {s:.3e} off the other engine's surface"
