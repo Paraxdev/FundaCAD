@@ -27,8 +27,10 @@ pub mod wit {
     });
 }
 
-pub use wit::fundacad::plugin::{feature, host as host_api, kernel, output, types};
-use wit::{Plugin, PluginPre, Registration};
+pub use wit::fundacad::plugin::{feature, files, host as host_api, kernel, numeric, output, types};
+use wit::{DisplaceOptions, Plugin, PluginPre, Registration};
+
+use super::kernel_ext as kx;
 
 /// A kernel shape held for a plugin.
 pub struct HostShape(pub Shape);
@@ -58,6 +60,9 @@ pub struct State {
     limits: StoreLimits,
     scope: Scope,
     cancel: Option<CancelToken>,
+    files_read: bool,
+    /// Kernel refusals that carried a code, as (message, code).
+    refusals: Vec<(String, &'static str)>,
 }
 
 // FeatureScope's pointer is only dereferenced inside the synchronous call that
@@ -111,6 +116,8 @@ impl Drop for Ticker {
 pub struct Component {
     pre: PluginPre<State>,
     pub registration: Registration,
+    /// The manifest grants "files.read".
+    files_read: bool,
 }
 
 fn text(e: impl std::fmt::Display) -> String {
@@ -132,7 +139,7 @@ fn trap_text(e: wasmtime::Error) -> String {
 }
 
 impl Component {
-    pub fn load(path: &Path) -> Result<Component, String> {
+    pub fn load(path: &Path, files_read: bool) -> Result<Component, String> {
         let component = wasmtime::component::Component::from_file(engine(), path).map_err(text)?;
         let mut linker: Linker<State> = Linker::new(engine());
         wasmtime_wasi::p2::add_to_linker_sync(&mut linker).map_err(text)?;
@@ -146,6 +153,7 @@ impl Component {
                 exporters: vec![],
                 shape_generators: vec![],
             },
+            files_read,
         };
         c.registration = c.call(Scope::None, Duration::from_secs(10), None, |p, s| {
             p.call_register(s)
@@ -182,6 +190,8 @@ impl Component {
                 limits,
                 scope,
                 cancel: cancel.clone(),
+                files_read: self.files_read,
+                refusals: Vec::new(),
             },
         );
         store.limiter(|s| &mut s.limits);
@@ -210,15 +220,24 @@ impl Component {
         type_name: &str,
         raw: &Value,
         cancel: Option<CancelToken>,
-    ) -> Result<(), String> {
+    ) -> Result<(), (String, Option<&'static str>)> {
         let scope = Scope::Feature(FeatureScope {
             ctx: ctx as *mut Ctx,
             raw: raw.clone(),
             feature_id: raw.get("id").and_then(Value::as_str).map(str::to_owned),
         });
-        self.call(scope, super::FEATURE_BUDGET, cancel, |p, s| {
-            p.call_run_feature(s, type_name)
-        })?
+        let r = self.call(scope, super::FEATURE_BUDGET, cancel, |p, s| {
+            let r = p.call_run_feature(&mut *s, type_name)?;
+            // A kernel refusal the plugin hands on as it is keeps its code.
+            Ok(r.map_err(|e| {
+                let code = s.data().refusals.iter().find(|(m, _)| *m == e).map(|(_, c)| *c);
+                (e, code)
+            }))
+        });
+        match r {
+            Ok(inner) => inner,
+            Err(e) => Err((e, None)),
+        }
     }
 
     pub fn generate_shape(
@@ -258,12 +277,16 @@ impl Component {
             .map_err(|e| format!("the exporter's info is not JSON: {e}"))
     }
 
-    pub fn resolve_pass(&self, pass: &str, body: &Shape, spec: &Value) -> Result<Vec<Shape>, String> {
+    /// The faces one spec claims, each with the tag that goes back with it.
+    pub fn resolve_pass(&self, pass: &str, body: &Shape, spec: &Value) -> Result<Vec<(Shape, String)>, String> {
         self.call(Scope::None, super::MESH_PASS_BUDGET, None, |p, s| {
             let h = s.data_mut().table.push(HostShape(body.clone()))?;
             let r = p.call_resolve_pass(&mut *s, pass, h, &spec.to_string())?;
             Ok(match r {
-                Ok(hs) => hs.into_iter().map(|h| take(s.data_mut(), h)).collect(),
+                Ok(hs) => hs
+                    .into_iter()
+                    .map(|c| take(s.data_mut(), c.face).map(|f| (f, c.tag)))
+                    .collect(),
                 Err(e) => Err(e),
             })
         })?
@@ -273,13 +296,18 @@ impl Component {
         &self,
         pass: &str,
         face: &Shape,
-        triangles: MeshData,
         spec: &Value,
+        tag: &str,
         density_cap: u32,
+        split_creases: bool,
     ) -> Result<MeshData, String> {
         self.call(Scope::None, super::MESH_PASS_BUDGET, None, |p, s| {
             let h = s.data_mut().table.push(HostShape(face.clone()))?;
-            p.call_displace(&mut *s, pass, h, &triangles, &spec.to_string(), density_cap)
+            let options = DisplaceOptions {
+                density_cap,
+                split_creases,
+            };
+            p.call_displace(&mut *s, pass, h, &spec.to_string(), tag, options)
         })?
     }
 }
@@ -443,6 +471,22 @@ impl kernel::HostShape for State {
         Ok(k::triangulate(self.shape(&s)?, deflection))
     }
 
+    fn triangulation(&mut self, s: Resource<HostShape>) -> wasmtime::Result<Option<types::FaceTriangulation>> {
+        Ok(kx::triangulation(self.shape(&s)?))
+    }
+
+    fn is_reversed(&mut self, s: Resource<HostShape>) -> wasmtime::Result<bool> {
+        Ok(kx::is_reversed(self.shape(&s)?))
+    }
+
+    fn surface_frame(&mut self, s: Resource<HostShape>) -> wasmtime::Result<Option<types::SurfaceFrame>> {
+        Ok(kx::surface_frame(self.shape(&s)?))
+    }
+
+    fn surface_samples(&mut self, s: Resource<HostShape>, uvs: Vec<f64>, tolerance: f64) -> wasmtime::Result<Vec<types::SurfaceSample>> {
+        Ok(kx::surface_samples(self.shape(&s)?, &uvs, tolerance))
+    }
+
     fn drop(&mut self, s: Resource<HostShape>) -> wasmtime::Result<()> {
         self.table.delete(s)?;
         Ok(())
@@ -523,6 +567,52 @@ impl kernel::Host for State {
         self.own(c)
     }
 
+    fn rotate(&mut self, s: Resource<HostShape>, origin: types::Vec3, axis: types::Vec3, degrees: f64) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
+        let r = kx::rotate(self.shape(&s)?, origin, axis, degrees);
+        self.made(r)
+    }
+
+    fn line_edge(&mut self, start: types::Vec3, end: types::Vec3) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
+        self.made(kx::line_edge(start, end))
+    }
+
+    fn arc_edge(&mut self, start: types::Vec3, middle: types::Vec3, end: types::Vec3) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
+        self.made(kx::arc_edge(start, middle, end))
+    }
+
+    fn circle_edge(&mut self, center: types::Vec3, normal: types::Vec3, radius: f64) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
+        self.made(kx::circle_edge(center, normal, radius))
+    }
+
+    fn wire_from_edges(&mut self, edges: Vec<Resource<HostShape>>) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
+        let es: Vec<&Shape> = edges.iter().map(|t| self.shape(t)).collect::<wasmtime::Result<_>>()?;
+        let r = kx::wire_from_edges(&es);
+        self.made(r)
+    }
+
+    fn helical_sweep(&mut self, profile: Resource<HostShape>, origin: types::Vec3, axis: types::Vec3, degrees: f64, pitch: f64) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
+        let r = kx::helical_sweep(self.shape(&profile)?, origin, axis, degrees, pitch);
+        self.made(r)
+    }
+
+    fn boolean_with(&mut self, op: types::BooleanOp, base: Resource<HostShape>, tools: Vec<Resource<HostShape>>, options: types::BooleanOptions) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
+        let ts: Vec<&Shape> = tools.iter().map(|t| self.shape(t)).collect::<wasmtime::Result<_>>()?;
+        let r = kx::boolean_with(op, self.shape(&base)?, &ts, &options);
+        self.made(r)
+    }
+
+    fn delaunay_planar(&mut self, points: Vec<f64>) -> wasmtime::Result<Result<Vec<u32>, String>> {
+        Ok(kx::delaunay_2d(&points))
+    }
+
+    fn select_faces(&mut self, s: Resource<HostShape>, selectors: String) -> wasmtime::Result<Result<Vec<Resource<HostShape>>, String>> {
+        let r = kx::select_faces(self.shape(&s)?, &selectors);
+        Ok(match r {
+            Ok(v) => Ok(self.own_all(v)?),
+            Err(f) => Err(self.refused(f)),
+        })
+    }
+
     fn fillet(&mut self, s: Resource<HostShape>, edges: Vec<Resource<HostShape>>, radius: f64, one_by_one: bool) -> wasmtime::Result<Result<kernel::Blended, String>> {
         let es: Vec<Shape> = edges.iter().map(|e| self.shape(e).cloned()).collect::<wasmtime::Result<_>>()?;
         let r = k::blend(self.shape(&s)?, &es, k::Blend::Fillet(radius), one_by_one);
@@ -545,6 +635,15 @@ impl kernel::Host for State {
 }
 
 impl State {
+    /// A kernel refusal as the plugin reads it, its code kept for the feature
+    /// error should the plugin hand the sentence on unchanged.
+    fn refused(&mut self, f: crate::builder::Fail) -> String {
+        if let crate::builder::Fail::Value { message, code: Some(code) } = &f {
+            self.refusals.push((message.clone(), code));
+        }
+        fail_text(f)
+    }
+
     fn blended(&mut self, r: Result<(Shape, u32), String>) -> wasmtime::Result<Result<kernel::Blended, String>> {
         Ok(match r {
             Ok((shape, skipped)) => Ok(kernel::Blended {
@@ -561,9 +660,13 @@ impl State {
         label: &str,
         edges: bool,
     ) -> wasmtime::Result<Result<Vec<feature::Picked>, String>> {
-        let groups = match self.feature().and_then(|(ctx, raw, fid)| pick(ctx, raw, fid, field, label, edges)) {
+        let groups = match self.feature() {
+            Ok((ctx, raw, fid)) => pick(ctx, raw, fid, field, label, edges),
+            Err(e) => Err(crate::builder::Fail::msg(e)),
+        };
+        let groups = match groups {
             Ok(g) => g,
-            Err(e) => return Ok(Err(e)),
+            Err(f) => return Ok(Err(self.refused(f))),
         };
         let mut out = Vec::with_capacity(groups.len());
         for (body, items) in groups {
@@ -593,15 +696,16 @@ fn pick(
     field: &str,
     label: &str,
     edges: bool,
-) -> Result<Vec<(u32, Vec<Shape>)>, String> {
+) -> Result<Vec<(u32, Vec<Shape>)>, crate::builder::Fail> {
+    use crate::builder::Fail;
     let what = if edges { "edge" } else { "face" };
     let sel = raw.get(field).filter(|v| crate::select::entity::truthy(Some(v)));
     let Some(sel) = sel else {
-        return Err(format!("{label}: pick at least one {what}"));
+        return Err(Fail::msg(format!("{label}: pick at least one {what}")));
     };
     let typed: OneOrMany<Selector> =
-        serde_json::from_value(sel.clone()).map_err(|e| format!("{label}: {e}"))?;
-    let groups = crate::select::group_by_body(ctx, &typed, label).map_err(fail_text)?;
+        serde_json::from_value(sel.clone()).map_err(|e| Fail::msg(format!("{label}: {e}")))?;
+    let groups = crate::select::group_by_body(ctx, &typed, label)?;
     let groups: Vec<(usize, Value)> = groups
         .into_iter()
         .map(|(b, sels)| (b, serde_json::to_value(sels).unwrap_or(Value::Null)))
@@ -615,10 +719,9 @@ fn pick(
             r.edges(&shape, &sels)
         } else {
             r.faces(&shape, &sels)
-        }
-        .map_err(fail_text)?;
+        }?;
         if items.is_empty() {
-            return Err(format!("{label}: the picked {what} is gone from {name}"));
+            return Err(Fail::msg(format!("{label}: the picked {what} is gone from {name}")));
         }
         out.push((body as u32, items));
     }
@@ -726,6 +829,104 @@ impl feature::Host for State {
             Ok(())
         }))
     }
+}
+
+impl numeric::Host for State {
+    fn unary(&mut self, op: numeric::UnaryOp, xs: Vec<f64>) -> wasmtime::Result<Vec<f64>> {
+        use numeric::UnaryOp as U;
+        let f: fn(f64) -> f64 = match op {
+            U::Sin => f64::sin,
+            U::Cos => f64::cos,
+            U::Tan => f64::tan,
+            U::Exp => f64::exp,
+            U::Log => f64::ln,
+            U::Acos => f64::acos,
+            U::Asin => f64::asin,
+            U::Atan => f64::atan,
+        };
+        Ok(xs.into_iter().map(f).collect())
+    }
+
+    fn binary(&mut self, op: numeric::BinaryOp, xs: Vec<f64>, ys: Vec<f64>) -> wasmtime::Result<Vec<f64>> {
+        use numeric::BinaryOp as B;
+        if xs.len() != ys.len() {
+            return Err(wasmtime::Error::msg("numeric.binary needs two lists of one length"));
+        }
+        let f: fn(f64, f64) -> f64 = match op {
+            B::Pow => f64::powf,
+            B::Hypot => f64::hypot,
+            B::Atan2 => f64::atan2,
+        };
+        Ok(xs.into_iter().zip(ys).map(|(x, y)| f(x, y)).collect())
+    }
+}
+
+const NO_FILES: &str = "this plugin's manifest does not grant files.read";
+
+impl files::Host for State {
+    fn read(&mut self, path: String) -> wasmtime::Result<Result<Vec<u8>, String>> {
+        if !self.files_read {
+            return Ok(Err(NO_FILES.into()));
+        }
+        Ok(std::fs::read(&path).map_err(|e| io_text(&e, &path)))
+    }
+
+    fn list_dir(&mut self, path: String) -> wasmtime::Result<Result<Vec<types::DirEntry>, String>> {
+        if !self.files_read {
+            return Ok(Err(NO_FILES.into()));
+        }
+        let rd = match std::fs::read_dir(&path) {
+            Ok(rd) => rd,
+            Err(e) => return Ok(Err(io_text(&e, &path))),
+        };
+        Ok(Ok(rd
+            .filter_map(|e| e.ok())
+            .map(|e| types::DirEntry {
+                name: e.file_name().to_string_lossy().into_owned(),
+                is_dir: e.path().is_dir(),
+            })
+            .collect()))
+    }
+
+    fn is_dir(&mut self, path: String) -> wasmtime::Result<bool> {
+        Ok(self.files_read && Path::new(&path).is_dir())
+    }
+
+    fn is_file(&mut self, path: String) -> wasmtime::Result<bool> {
+        Ok(self.files_read && Path::new(&path).is_file())
+    }
+}
+
+/// An OS error the way Python's OSError prints it, which plugin messages quote.
+fn io_text(e: &std::io::Error, path: &str) -> String {
+    let (code, what) = match e.kind() {
+        std::io::ErrorKind::NotFound => (2, "No such file or directory"),
+        std::io::ErrorKind::PermissionDenied => (13, "Permission denied"),
+        _ => return format!("{e}: {}", py_repr(path)),
+    };
+    format!("[Errno {code}] {what}: {}", py_repr(path))
+}
+
+/// Python's `repr` of a str, for the common characters.
+pub(super) fn py_repr(s: &str) -> String {
+    let quote = if s.contains('\'') && !s.contains('"') { '"' } else { '\'' };
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push(quote);
+    for c in s.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if c == quote => {
+                out.push('\\');
+                out.push(c);
+            }
+            c => out.push(c),
+        }
+    }
+    out.push(quote);
+    out
 }
 
 impl output::Host for State {

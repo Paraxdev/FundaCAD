@@ -99,11 +99,11 @@ impl Guest for Toolbox {
         }
     }
 
-    fn resolve_pass(pass: String, _body: &Shape, _spec: String) -> Result<Vec<Shape>, String> {
+    fn resolve_pass(pass: String, _body: &Shape, _spec: String) -> Result<Vec<Claimed>, String> {
         Err(format!("no mesh pass {pass:?} here"))
     }
 
-    fn displace(pass: String, _face: &Shape, _triangles: Mesh, _spec: String, _cap: u32) -> Result<Mesh, String> {
+    fn displace(pass: String, _face: &Shape, _spec: String, _tag: String, _options: DisplaceOptions) -> Result<Mesh, String> {
         Err(format!("no mesh pass {pass:?} here"))
     }
 

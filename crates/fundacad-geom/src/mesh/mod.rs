@@ -114,18 +114,21 @@ fn body_payload_for(
     profile: ViewportProfile,
 ) -> FullBody {
     let access = crate::bench::phase("mesh_access", || MeshAccess::new(shape));
-    let tess = tessellate(
+    let claims = crate::bench::phase("resolve_passes", || PassClaims::resolve(shape, &body.mesh_passes));
+    let tess = claims.tessellate(
         shape,
         &access,
         MeshParams {
             linear: effective_tolerance(tolerance, profile.size_scale),
             angular: profile.angular,
             relative: true,
-            display: profile.display_normals(),
+            // A displaced face's shading lives in its normals, so a pass keeps
+            // them even on the coarse large-document tiers.
+            display: profile.display_normals() || !claims.is_empty(),
             force_remesh: false,
         },
+        VIEWPORT_DENSITY_CAP,
     );
-    let tess = crate::bench::phase("displace", || displace(body, shape, tess));
     let lines = crate::bench::phase("edges", || edge_polylines(&access));
     let from_map: Vec<Value> = match body.owner_map {
         Some(owners) if body.face_owners.is_empty() => {
@@ -181,6 +184,11 @@ fn body_payload_for(
     if !bands.is_empty() {
         payload.insert("faceBands".into(), serde_json::json!(bands));
     }
+    if !claims.is_empty() {
+        if let Some(slots) = passes::face_color_slots(access.face_count(), |k| claims.spec(k)) {
+            payload.insert("faceColorSlots".into(), Value::Array(slots));
+        }
+    }
     if b.normals.is_some() {
         payload.insert("normals".into(), Value::Null);
     }
@@ -188,28 +196,91 @@ fn body_payload_for(
     with_envelope(body, b)
 }
 
-/// Every mesh pass on the body run over the faces it claims of the final
-/// shape. Without the plugin host, or with no pass, the tessellation as it is.
-fn displace(body: &MeshBody<'_>, shape: &Shape, tess: Tessellation) -> Tessellation {
+/// `viewport_mesh.VIEWPORT_DENSITY_CAP`, a displaced face's triangle budget on
+/// screen; an export gets `export::EXPORT_DENSITY_CAP_PER_FACE`.
+pub const VIEWPORT_DENSITY_CAP: u32 = 80_000;
+
+/// The faces of a body its mesh passes claim, resolved against the final
+/// shape. Empty without the plugin host or without a pass.
+pub struct PassClaims {
+    faces: Vec<Shape>,
     #[cfg(feature = "plugins")]
-    {
-        if body.mesh_passes.is_empty() {
-            return tess;
+    claims: std::collections::HashMap<usize, crate::plugins::PassClaim>,
+}
+
+impl PassClaims {
+    pub fn resolve(shape: &Shape, specs: &[Value]) -> PassClaims {
+        #[cfg(feature = "plugins")]
+        {
+            if specs.is_empty() {
+                return PassClaims {
+                    faces: Vec::new(),
+                    claims: Default::default(),
+                };
+            }
+            let faces = crate::kernel::subshapes(shape, crate::kernel::Kind::Face);
+            let claims = crate::plugins::claim_faces(shape, &faces, specs);
+            PassClaims { faces, claims }
         }
-        let faces = crate::kernel::subshapes(shape, crate::kernel::Kind::Face);
-        let displaced = crate::plugins::displace_body(
-            shape,
-            &faces,
-            &body.mesh_passes,
-            &|face| passes::face_mesh(&tess, face as u32),
-            crate::export::EXPORT_DENSITY_CAP_PER_FACE as u32,
-        );
-        return passes::apply(tess, &displaced);
+        #[cfg(not(feature = "plugins"))]
+        {
+            let _ = (shape, specs);
+            PassClaims { faces: Vec::new() }
+        }
     }
-    #[cfg(not(feature = "plugins"))]
-    {
-        let _ = (body, shape);
-        tess
+
+    pub fn is_empty(&self) -> bool {
+        #[cfg(feature = "plugins")]
+        {
+            self.claims.is_empty()
+        }
+        #[cfg(not(feature = "plugins"))]
+        {
+            true
+        }
+    }
+
+    /// The spec that claimed face `k`.
+    pub fn spec(&self, k: usize) -> Option<&Value> {
+        #[cfg(feature = "plugins")]
+        {
+            self.claims.get(&k).map(|c| &c.spec)
+        }
+        #[cfg(not(feature = "plugins"))]
+        {
+            let _ = k;
+            None
+        }
+    }
+
+    /// Face `k` displaced by the pass that claimed it.
+    pub fn displace(&self, k: usize, density_cap: u32, split_creases: bool) -> Option<passes::FaceMesh> {
+        #[cfg(feature = "plugins")]
+        {
+            let claim = self.claims.get(&k)?;
+            crate::plugins::displace_face(self.faces.get(k)?, claim, density_cap, split_creases)
+        }
+        #[cfg(not(feature = "plugins"))]
+        {
+            let _ = (k, density_cap, split_creases, &self.faces);
+            None
+        }
+    }
+
+    /// Mesh `shape` with the claimed faces displaced.
+    pub fn tessellate(
+        &self,
+        shape: &Shape,
+        access: &MeshAccess,
+        params: MeshParams,
+        density_cap: u32,
+    ) -> Tessellation {
+        if self.is_empty() {
+            return tessellate(shape, access, params);
+        }
+        let split = params.display;
+        let d = |k: usize| self.displace(k, density_cap, split);
+        tessellate::tessellate_with(shape, access, params, Some(&d))
     }
 }
 

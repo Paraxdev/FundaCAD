@@ -1,0 +1,109 @@
+{
+  "about": "The printer connection's slicer project exporter (plugins/FundaCAD.Printing), through exportWith on both engines: the Python engine runs geometry/print_project3mf.py and print_presets.py, the Rust engine plugins/FundaCAD.Printing/geometry.wasm. Cases come from geometry/tests/test_project3mf.py, plus the untrusted-input and preset-failure edges the writer defends against. Run: python tools/diff_plugin_ops.py --corpus tools/corpus_printing_ops.json",
+  "exports": [
+    {"name": "two_bodies_palette", "exporter": "print-project-3mf",
+     "document": {"parameters": {}, "features": [
+       {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 20, "height": 20, "x": 0, "y": 0}]},
+       {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 5, "operation": "new"},
+       {"id": "s2", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 20, "height": 20, "x": 40, "y": 0}]},
+       {"id": "e2", "type": "extrude", "sketch": "s2", "distance": 5, "operation": "new"}]},
+     "options": {"palette": [{"name": "Red", "color": "#E03030", "material": "PETG"}, {"name": "Blue", "color": "#3050E0"}],
+                 "bodyColors": {"body2": 1}, "bodyNames": {"body1": "Left"}, "settings": {"printer_variant": "0.6"}}},
+    {"name": "no_palette", "exporter": "print-project-3mf",
+     "document": {"parameters": {}, "features": [
+       {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "circle", "radius": 12, "x": 3, "y": -4}]},
+       {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 7.5, "operation": "new"}]},
+     "options": {}},
+    {"name": "untrusted_palette", "exporter": "print-project-3mf",
+     "document": {"parameters": {}, "features": [
+       {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 10, "height": 6, "x": -30, "y": 10}]},
+       {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 4, "operation": "new"},
+       {"id": "s2", "type": "sketch", "plane": "XY", "entities": [{"type": "circle", "radius": 5, "x": 20, "y": 0}]},
+       {"id": "e2", "type": "extrude", "sketch": "s2", "distance": 9, "operation": "new"},
+       {"id": "s3", "type": "sketch", "plane": "XZ", "entities": [{"type": "rectangle", "width": 4, "height": 4, "x": 0, "y": -8}]},
+       {"id": "e3", "type": "extrude", "sketch": "s3", "distance": 3, "operation": "new"}]},
+     "options": {"palette": [{"name": "Red & <hot> \"one\"", "color": "e0303080"}, {"color": "not a colour", "material": "  PLA  "},
+                             {"name": 7, "color": "#abc"}, "just a string", {"name": "Ümlaut 'quoted'", "color": "#00ff00"},
+                             {"name": "x"}, {"name": "y"}, {"name": "z"}, {"name": "ninth, dropped"}],
+                 "bodyColors": {"body1": "2", "body2": 99, "body3": "x", "nope": 1},
+                 "bodyNames": {"body3": "", "body2": "A name that is longer than one hundred characters, so the writer has to cut it off at exactly one hundred of them"},
+                 "settings": {"layer_height": 0.2, "tiny": 1e-05, "big": 1e16, "note": "Größe ☃", "flag": true, "nothing": null}}},
+    {"name": "presets_flatten", "exporter": "print-project-3mf",
+     "document": {"parameters": {}, "features": [
+       {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 20, "height": 20, "x": 0, "y": 0}]},
+       {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 5, "operation": "new"}]},
+     "datadir": {
+       "OrcaSlicer.conf": {"presets": {"machine": "My U1"}},
+       "system/Vendor/machine/base.json": {"name": "Base U1", "printer_model": "Snapmaker U1", "nozzle_diameter": ["0.4"]},
+       "user/default/machine/mine.json": {"name": "My U1", "inherits": "Base U1", "print_host": "192.168.0.46"},
+       "system/Vendor/process/sys.json": {"name": "0.20mm Standard", "compatible_printers": ["Base U1"], "line_width": "0.42"},
+       "user/default/process/tuned.json": {"name": "Tuned 0.20", "inherits": "0.20mm Standard", "line_width": "0.45"},
+       "system/Vendor/filament/sub/pla.json": {"name": "Generic PLA", "compatible_printers": ["My U1"], "filament_type": ["PLA"], "filament_colour": ["#FFFFFF"]},
+       "system/Vendor/filament/broken.json": "{ this is not json",
+       "system/Vendor/filament/list.json": [1, 2, 3]},
+     "options": {"palette": [{"name": "Red", "color": "#E03030"}], "presets": {"datadir": "$DATADIR", "filamentCount": 3}}},
+    {"name": "presets_count_as_text", "exporter": "print-project-3mf",
+     "document": {"parameters": {}, "features": [
+       {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 20, "height": 20, "x": 0, "y": 0}]},
+       {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 5, "operation": "new"}]},
+     "datadir": {
+       "OrcaSlicer.conf": {"presets": {"machine": "Base U1"}},
+       "system/Vendor/machine/base.json": {"name": "Base U1", "printer_model": "Snapmaker U1"},
+       "system/Vendor/process/a.json": {"name": "Coarse", "compatible_printers": ["Base U1"]},
+       "system/Vendor/process/b.json": {"name": "Fine", "compatible_printers": ["Base U1"]},
+       "system/Vendor/filament/petg.json": {"name": "Generic PETG", "compatible_printers": ["Base U1"], "temperature": [240, 250]}},
+     "options": {"presets": {"datadir": "$DATADIR", "filamentCount": "2"}}},
+    {"name": "presets_bad_count", "exporter": "print-project-3mf",
+     "document": {"parameters": {}, "features": [
+       {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 20, "height": 20, "x": 0, "y": 0}]},
+       {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 5, "operation": "new"}]},
+     "datadir": {
+       "OrcaSlicer.conf": {"presets": {"machine": "Base U1"}},
+       "system/Vendor/machine/base.json": {"name": "Base U1"}},
+     "options": {"presets": {"datadir": "$DATADIR", "filamentCount": "two"}}},
+    {"name": "presets_missing_datadir", "exporter": "print-project-3mf",
+     "document": {"parameters": {}, "features": [
+       {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 20, "height": 20, "x": 0, "y": 0}]},
+       {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 5, "operation": "new"}]},
+     "options": {"presets": {"datadir": "$MISSING", "filamentCount": 1}}},
+    {"name": "presets_no_datadir", "exporter": "print-project-3mf",
+     "document": {"parameters": {}, "features": [
+       {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 20, "height": 20, "x": 0, "y": 0}]},
+       {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 5, "operation": "new"}]},
+     "options": {"presets": {}}},
+    {"name": "presets_no_conf", "exporter": "print-project-3mf",
+     "document": {"parameters": {}, "features": [
+       {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 20, "height": 20, "x": 0, "y": 0}]},
+       {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 5, "operation": "new"}]},
+     "datadir": {"system/Vendor/machine/base.json": {"name": "Base U1"}},
+     "options": {"presets": {"datadir": "$DATADIR"}}},
+    {"name": "presets_no_machine", "exporter": "print-project-3mf",
+     "document": {"parameters": {}, "features": [
+       {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 20, "height": 20, "x": 0, "y": 0}]},
+       {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 5, "operation": "new"}]},
+     "datadir": {"OrcaSlicer.conf": {"presets": {"process": "x"}}},
+     "options": {"presets": {"datadir": "$DATADIR"}}},
+    {"name": "presets_broken_chain", "exporter": "print-project-3mf",
+     "document": {"parameters": {}, "features": [
+       {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 20, "height": 20, "x": 0, "y": 0}]},
+       {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 5, "operation": "new"}]},
+     "datadir": {
+       "OrcaSlicer.conf": {"presets": {"machine": "Child"}},
+       "user/default/machine/child.json": {"name": "Child", "inherits": "Gone Parent"}},
+     "options": {"presets": {"datadir": "$DATADIR"}}},
+    {"name": "warnings_ride_along", "exporter": "print-project-3mf",
+     "document": {"parameters": {}, "features": [
+       {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 20, "height": 20, "x": 0, "y": 0}]},
+       {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 5, "operation": "new"},
+       {"id": "f1", "type": "fillet", "edges": {"kind": "edge", "by": "nearest", "point": [900, 900, 900]}, "radius": 1}]},
+     "options": {"palette": [{"name": "Only", "color": "#123456"}]}},
+    {"name": "unknown_exporter", "exporter": "no-such-exporter",
+     "document": {"parameters": {}, "features": [
+       {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 20, "height": 20, "x": 0, "y": 0}]},
+       {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 5, "operation": "new"}]},
+     "options": {}},
+    {"name": "nothing_built", "exporter": "print-project-3mf",
+     "document": {"parameters": {}, "features": []},
+     "options": {}}
+  ]
+}

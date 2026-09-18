@@ -36,6 +36,20 @@ pub struct MeshParams {
 /// triangulation. A reversed face has its winding flipped so facet normals
 /// point outward.
 pub fn tessellate(shape: &Shape, access: &MeshAccess, params: MeshParams) -> Tessellation {
+    tessellate_with(shape, access, params, None)
+}
+
+/// A mesh pass's triangles for face `fid`, or `None` to mesh it plainly.
+pub type Displacer<'a> = &'a dyn Fn(usize) -> Option<super::passes::FaceMesh>;
+
+/// `tessellate`, with every face `displace` answers for replaced in place by
+/// its displaced triangles.
+pub fn tessellate_with(
+    shape: &Shape,
+    access: &MeshAccess,
+    params: MeshParams,
+    displace: Option<Displacer<'_>>,
+) -> Tessellation {
     crate::bench::phase("brep_mesh", || {
         mesh_access::mesh(
             shape,
@@ -51,6 +65,12 @@ pub fn tessellate(shape: &Shape, access: &MeshAccess, params: MeshParams) -> Tes
         let Some(tri) = access.face_triangulation(fid, params.display) else {
             continue;
         };
+        if let Some(m) = displace.and_then(|d| d(fid)) {
+            out.normals = normals.take();
+            super::passes::append(&mut out, fid as u32, &m, params.display);
+            normals = out.normals.take();
+            continue;
+        }
         let flip = access.face_reversed(fid);
         let mut t: Vec<u32> = tri.triangles.iter().map(|&i| i.max(0) as u32).collect();
         if flip {

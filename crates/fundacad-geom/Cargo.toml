@@ -37,6 +37,10 @@ ttf-parser = "0.25.1"
 wasmtime = { version = "48", optional = true, default-features = false, features = ["runtime", "cranelift", "component-model", "std", "parallel-compilation", "anyhow"] }
 wasmtime-wasi = { version = "48", optional = true, default-features = false, features = ["p2"] }
 
+[build-dependencies]
+# Qhull for the plugin kernel's delaunay-2d, only with `plugins` (build.rs).
+cc = "1"
+
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = ["Win32_Storage_FileSystem"] }
 

@@ -855,6 +855,7 @@ name = "fundacad-geom"
 version = "0.2.0"
 dependencies = [
  "blake2",
+ "cc",
  "cxx",
  "flate2",
  "fontdb",

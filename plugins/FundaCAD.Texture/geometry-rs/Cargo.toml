@@ -1,0 +1,25 @@
+[package]
+name = "texture-geometry"
+description = "The surface texture's feature and mesh pass, as a FundaCAD plugin component"
+version = "2.0.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+publish = false
+
+# Its own workspace: a plugin builds for wasm32-wasip2, never with the engine.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = "0.46"
+serde_json = { version = "1", features = ["preserve_order"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "bmp"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = true
+codegen-units = 1
+panic = "abort"
