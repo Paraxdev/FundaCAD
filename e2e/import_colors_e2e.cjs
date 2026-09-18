@@ -1,6 +1,6 @@
 // An imported assembly's own colours become materials, and the parts wear them.
 //
-// This is end to end on purpose, through the real sidecar and the real store:
+// This is end to end on purpose, through the real engine and the real store:
 // the colours are read by the Python XCAF reader, travel in the import
 // manifest, are matched against the document's library in TypeScript, and land
 // on bodies whose ids do not exist until the rebuild has run. Every one of those

@@ -1,10 +1,10 @@
 // Reading the per-face colours an imported file carried.
 //
-// The packing is written by sidecar/face_colors.py and read here, so the risk is
+// The packing is written by the Python engine's `face_colors.py` and read here, so the risk is
 // not that either half is wrong on its own but that they stop agreeing. The
 // PACKED fixtures below are copied verbatim from that file's own test output
-// (sidecar/tests/test_face_colors.py, `test_fixtures_for_the_other_side`), and
-// each is checked to unpack to the list the sidecar packed. A change on either
+// (the Python engine's `test_face_colors.py`, `test_fixtures_for_the_other_side`), and
+// each is checked to unpack to the list the engine packed. A change on either
 // side that breaks the agreement fails here.
 
 import { describe, expect, it } from "vitest";
@@ -21,7 +21,7 @@ const RED = "#ff2b2b";
 const WHITE = "#ffffff";
 const GREY = "#3b3b3b";
 
-/** [name, what the sidecar packed, what it packed FROM]. */
+/** [name, what the engine packed, what it packed FROM]. */
 const CASES: [string, FaceColorRuns, (string | null)[]][] = [
   ["uniform", { palette: [RED], runs: [[5, 0]] }, Array(5).fill(RED)],
   [
@@ -47,7 +47,7 @@ const CASES: [string, FaceColorRuns, (string | null)[]][] = [
   ],
 ];
 
-describe("decodeFaceColors agrees with the sidecar's packer", () => {
+describe("decodeFaceColors agrees with the engine's packer", () => {
   for (const [name, packed, expected] of CASES) {
     it(name, () => {
       expect(decodeFaceColors(packed, expected.length)).toEqual(expected);

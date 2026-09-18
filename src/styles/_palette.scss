@@ -227,7 +227,7 @@
 }
 
 /* ---- status pill ---- */
-/* inline-BLOCK, not inline-flex: a sidecar error can be a whole sentence, and
+/* inline-BLOCK, not inline-flex: an engine error can be a whole sentence, and
    text-overflow only ellipses real inline text, inside a flex box the text is
    an anonymous flex item and just gets clipped mid-glyph instead. The dot is
    kept in line with vertical-align. */

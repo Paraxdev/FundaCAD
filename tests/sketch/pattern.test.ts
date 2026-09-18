@@ -1,5 +1,5 @@
 // Unit tests for expandPattern (src/sketch/pattern.ts). Mirrors the Python port
-// (sidecar/builder.py _expand_pattern), see the file header comment there.
+// (the Python engine's `builder.py` _expand_pattern), see the file header comment there.
 import { describe, it, expect } from "vitest";
 import { expandPattern, scaled, rotated } from "../../src/sketch/pattern";
 import type { ResolvedEntity } from "../../src/sketch/snap";
@@ -65,7 +65,7 @@ describe("expandPattern / patternRect", () => {
     expect(c0?.y).toBeCloseTo(10 * Math.sin(Math.PI / 4), 12);
   });
 
-  // The seam: sidecar/tests/test_pattern_angle.py asserts these same numbers, a
+  // The seam: the Python engine's `test_pattern_angle.py` asserts these same numbers, a
   // preview that disagrees with the build is a sketch nobody drew.
   it("places a 45 degree 3x2 grid on the angled axes", () => {
     const grid: SketchPattern = { ...pat, angle: 45 };
@@ -129,7 +129,7 @@ describe("expandPattern / patternCircular", () => {
   });
 
   // KNOWN ISSUE (docs/IMPROVEMENT-AUDIT.md §5.2 / §1.2): the TS preview and the
-  // Python build (sidecar/builder.py _expand_pattern) round non-integer counts
+  // Python build (the Python engine's `builder.py` _expand_pattern) round non-integer counts
   // differently, JS `Math.round` rounds .5 away from zero, Python's `round()`
   // rounds .5 to even (banker's rounding). A half-integer count like 2.5 is
   // therefore NOT guaranteed to produce the same instance count in both halves

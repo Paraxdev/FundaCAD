@@ -1,6 +1,6 @@
-//! Moving faces: press/pull and offset face, sidecar/solid_ops.py `_press_pull`,
+//! Moving faces: press/pull and offset face, the Python engine's `solid_ops.py` `_press_pull`,
 //! `_offset_faces`, `_thicken_press_pull`, `_sweep_press_pull` and the
-//! handlers of sidecar/builder.py.
+//! handlers of the Python engine's `builder.py`.
 //!
 //! The Python engine runs the whole-body BRepOffset pass in offset_child.py
 //! because it has crashed its worker. Here it runs in process: the engine is

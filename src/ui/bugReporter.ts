@@ -38,7 +38,7 @@ export interface BugReportForm {
   version: string;
   /** Both snapshotted when the dialog opened, the crumbs so that filling the
    *  form in doesn't push the interesting events off the end of the list, and
-   *  `connected` so the report says what the sidecar was doing when the user
+   *  `connected` so the report says what the engine was doing when the user
    *  decided something was wrong, not when they finished typing. */
   connected: boolean;
   crumbs: string[];

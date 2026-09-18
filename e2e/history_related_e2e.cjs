@@ -5,7 +5,7 @@
 //      and hides the other body's.
 //   3. The chip turns the filter off, and the choice sticks.
 //
-// Usage (from the repo root, with vite + sidecar running):
+// Usage (from the repo root, with vite + engine running):
 //   SC_TOKEN=<engine token> SC_CHROME=<chrome.exe> [SC_URL=http://localhost:5173/] node e2e/history_related_e2e.cjs [outDir]
 const { chromium } = require("playwright-core");
 const fs = require("fs");

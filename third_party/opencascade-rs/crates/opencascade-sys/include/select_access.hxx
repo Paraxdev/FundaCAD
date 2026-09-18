@@ -1,6 +1,6 @@
 #pragma once
 // Geometry readback for selector resolution (fundacad-geom::select), each probe
-// computing what build123d computes for the same property in sidecar/geom_select.py,
+// computing what build123d computes for the same property in the Python engine's `geom_select.py`,
 // so both engines score the same numbers. Probes never throw: an OCCT failure
 // reads as a false return, which the resolver maps to Python's `except` branch.
 

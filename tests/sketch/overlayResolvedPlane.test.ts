@@ -1,7 +1,7 @@
 // A sketch that follows a body face is drawn where the BUILD put it.
 //
 // The sketch's own `plane` is the cache written when the pick was made. Once the
-// sketch follows a face, that cache and the plane the sidecar actually built on
+// sketch follows a face, that cache and the plane the engine actually built on
 // part company the moment anything upstream moves, and the overlay is the half
 // the user sees. Drawing the cache means the profile outline sits at the old
 // height while the pocket cut from it sits at the new one: one model, two
@@ -62,7 +62,7 @@ describe("SketchOverlay.resolvedPlanes", () => {
 
   it("follows the datum a sketch is bound to", () => {
     // A sketch made by "Offset plane" has no anchor of its own: the datum holds
-    // it, and the sidecar builds the sketch through that link. Without this the
+    // it, and the engine builds the sketch through that link. Without this the
     // geometry follows and only the drawing stays behind.
     const o = new SketchOverlay();
     o.resolvedPlanes = () => ({ datumPlanes: { d1: MOVED } });

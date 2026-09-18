@@ -1,10 +1,10 @@
-//! Not rebuilding what has not changed, sidecar/rebuild_cache.py and the
+//! Not rebuilding what has not changed, the Python engine's `rebuild_cache.py` and the
 //! `rebuild_cached` half of builder.py, over the store of geomstore.py.
 //!
 //! Two tiers resume a rebuild at the longest unchanged prefix of chain keys:
 //! a ring of per-feature snapshots in this process, and disk checkpoints that
 //! outlive it. Built payloads are kept the same two ways. Every hit is counted
-//! in `CacheStats`, which is also logged the way the sidecar logs it.
+//! in `CacheStats`, which is also logged the way the Python engine logs it.
 
 pub mod checkpoint;
 pub mod keys;

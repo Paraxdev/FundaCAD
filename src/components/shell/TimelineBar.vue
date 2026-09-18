@@ -138,7 +138,7 @@ const busyText = computed(() =>
   busy.value.pct === null ? busy.value.label : `${busy.value.label} ${busy.value.pct}%`,
 );
 
-// Cancelling is not instant (the sidecar kills the worker and spawns a fresh
+// Cancelling is not instant (the engine kills the worker and spawns a fresh
 // one), so the button disables itself in flight, a second press would target
 // an op that is already gone.
 const cancelling = ref(false);

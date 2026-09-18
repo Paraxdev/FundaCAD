@@ -1,4 +1,4 @@
-//! Input addressed cache keys, sidecar/rebuild_cache.py `_feature_sig`,
+//! Input addressed cache keys, the Python engine's `rebuild_cache.py` `_feature_sig`,
 //! `_param_closure`, `_feature_scope`, `_chain_keys_scoped`, `_env_sig` and
 //! `_blob_key`.
 //!
@@ -177,7 +177,7 @@ pub fn feature_scope(
 }
 
 /// `_env_sig`: everything outside the document that shapes geometry. The
-/// engine binary stands in for the sidecar's source files, so any rebuild of
+/// engine binary stands in for the Python engine's source files, so any rebuild of
 /// it starts every document cold. `FUNDACAD_ENV_SIG` overrides it.
 pub fn env_sig() -> String {
     if let Some(forced) = std::env::var("FUNDACAD_ENV_SIG").ok().filter(|s| !s.is_empty()) {

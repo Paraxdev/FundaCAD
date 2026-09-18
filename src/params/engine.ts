@@ -2,7 +2,7 @@
 // writes evaluated numbers into bound fields, and owns the lifecycle rules
 // (bind/rename/delete/cycle). All functions mutate the given document IN PLACE
 // and are meant to run inside one store.mutate() so a parameter edit and its
-// write-back cascade land as a single undo step. The sidecar never sees any of
+// write-back cascade land as a single undo step. The engine never sees any of
 // this, only the derived `doc.parameters` numbers and the fields themselves.
 //
 // Invariants:
@@ -151,7 +151,7 @@ export function recompute(doc: CadDocument): RecomputeResult {
     if (w?.sketch) affectedSketches.add(w.sketch);
   }
 
-  // --- refresh the derived cache the sidecar/legacy readers consume ---
+  // --- refresh the derived cache the engine/legacy readers consume ---
   doc.parameters = Object.fromEntries(Object.entries(defs).map(([n, d]) => [n, d.value]));
 
   return { affectedSketches, issues };

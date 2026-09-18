@@ -1,5 +1,5 @@
 //! The viewport mesh of a body in the protocol v2 payload shape, replaces
-//! `sidecar/tessellate.py` and the payload half of `sidecar/viewport_mesh.py`
+//! the Python engine's `tessellate.py` and the payload half of the Python engine's `viewport_mesh.py`
 //! (`_compute_payload`, `_body_payload`, `_union_bbox`), plus the body loop of
 //! `server._rebuild_job`.
 //!
@@ -23,7 +23,7 @@ use opencascade::mesh_access::MeshAccess;
 use opencascade::primitives::Shape;
 use serde_json::{json, Map, Value};
 
-/// Bumped with `sidecar/tessellate.py`'s CODE_VERSION whenever the payload
+/// Bumped with the Python engine's `tessellate.py`'s CODE_VERSION whenever the payload
 /// changes for the same input, it keys the mesh artifact cache.
 pub const CODE_VERSION: u32 = 8;
 
@@ -171,7 +171,7 @@ fn body_payload_for(
             .collect(),
         ..Default::default()
     };
-    // The mesh keys hold placeholders so they keep the sidecar's key order.
+    // The mesh keys hold placeholders so they keep the Python engine's key order.
     let mut payload = Map::new();
     payload.insert("positions".into(), Value::Null);
     payload.insert("indices".into(), Value::Null);
@@ -321,7 +321,7 @@ fn bbox_value(bb: Option<([f64; 3], [f64; 3])>) -> Value {
 }
 
 /// The body's etag: blake2b-128 of everything the payload carries, as 32 hex
-/// digits. The sidecar hands out a random one per cache entry; a content hash
+/// digits. The Python engine hands out a random one per cache entry; a content hash
 /// is the same promise without the cache, and survives a worker restart.
 /// Envelope keys (`id`, `name`, `nodeRef`, colours) are not part of it.
 pub fn etag(body: &FullBody) -> String {

@@ -4,7 +4,7 @@
 //   2. Grabbing it arms Fillet at that same point, so nothing jumps.
 //   3. CONTROL: an edge selected without a click still gets the midpoint.
 //
-// Usage (from the repo root, with vite + sidecar running):
+// Usage (from the repo root, with vite + engine running):
 //   SC_TOKEN=<engine token> SC_CHROME=<chrome.exe> [SC_URL=http://localhost:5173/] node e2e/edge_handle_at_click_e2e.cjs [outDir]
 const { chromium } = require("playwright-core");
 const fs = require("fs");

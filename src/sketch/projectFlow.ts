@@ -6,7 +6,7 @@
 // DimFlow precedent: ProjectHost below is a set of live accessors into
 // SketchMode, never a copy, so nothing here can hold a stale entity list. That
 // matters more here than anywhere else in the sketch, because projectClick
-// AWAITS the sidecar: the sketch can be finished and a new one entered while a
+// AWAITS the engine: the sketch can be finished and a new one entered while a
 // pick is in flight, and the session check at the end of that await only works
 // because `entities()` reads the current array rather than one captured at
 // construction.
@@ -33,7 +33,7 @@ import { edgeProbePoint } from "./planeEdgePick";
 import { toast } from "../ui/toast";
 
 // Tolerant edge-fingerprint compare for the Project tool's duplicate-pick check.
-// Fingerprints carry unrounded float noise (sidecar-authored), so byte equality
+// Fingerprints carry unrounded float noise (engine-authored), so byte equality
 // is meaningless, same midpoint (within 1e-3 mm), same unoriented tangent, and
 // a matching length when both carry one, is "the same edge".
 function fpClose(a: EdgeFingerprint, b: EdgeFingerprint): boolean {
@@ -69,7 +69,7 @@ export interface ProjectHost {
 }
 
 export class ProjectFlow {
-  // one pick at a time: projectClick awaits the sidecar, and a double-click
+  // one pick at a time: projectClick awaits the engine, and a double-click
   // would otherwise race two ops against the same sketch
   private projectBusy = false;
 
@@ -87,7 +87,7 @@ export class ProjectFlow {
 
   /** a committed sketch's REAL entity by id, with its owning sketch feature,
    *  derived pattern copies (ids carry "#") resolve to null: they don't exist
-   *  in the document, so the sidecar could never re-find them. */
+   *  in the document, so the engine could never re-find them. */
   private committedSource(
     sketchId: string,
     entityId: string,
@@ -278,7 +278,7 @@ export class ProjectFlow {
       return;
     }
     if (!r.ok) {
-      toast(r.error ?? "projection failed"); // sidecar message verbatim ("created after this sketch"…)
+      toast(r.error ?? "projection failed"); // engine message verbatim ("created after this sketch"…)
       return;
     }
     // body-edge duplicates are detected against the returned fingerprints (the
@@ -300,7 +300,7 @@ export class ProjectFlow {
         source.kind === "sketchCurve"
           ? // `index: i` is sound because sketch-curve results carry no fps, so
             // the dedup filter above never drops any, i IS the edge index in
-            // the sidecar's deterministic _entity_edges order (the refresh
+            // the engine's deterministic _entity_edges order (the refresh
             // handler's authoritative sibling correspondence).
             { kind: "sketchCurve", sketch: source.sketch, entity: source.entity, ...group, ...(fresh.length > 1 ? { index: i } : {}) }
           : source.kind === "silhouette"

@@ -2,7 +2,7 @@
 // real browser.
 //
 // tests/ui/featureMeta.test.ts proves the document format knows the two new
-// types, and a sidecar check proves they build without error. Neither can prove
+// types, and an engine check proves they build without error. Neither can prove
 // the VIEWPORT draws them: a datum point is a sphere and a datum axis a thin
 // cylinder, placed from the document client-side (app/datumPlanes.ts) and
 // hit-tested through a live raycast (viewport.pickDatumAt), none of which a pure

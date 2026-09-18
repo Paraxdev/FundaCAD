@@ -1,4 +1,4 @@
-//! The durable checkpoint store, sidecar/geomstore.py: one binary BREP blob
+//! The durable checkpoint store, the Python engine's `geomstore.py`: one binary BREP blob
 //! per body state, mesh artifacts, and a checkpoint record per chain key.
 //!
 //! Where geomstore keeps its checkpoint rows in SQLite, a record here is the
@@ -72,7 +72,7 @@ pub fn default_root() -> PathBuf {
                 .unwrap_or_default();
             PathBuf::from(home).join(".cache")
         });
-    // Apart from the sidecar's `geom`: its SQLite eviction reclaims every blob
+    // Apart from the Python engine's `geom`: its SQLite eviction reclaims every blob
     // no row of its own references, which would be all of these.
     base.join("fundacad").join("engine-geom")
 }

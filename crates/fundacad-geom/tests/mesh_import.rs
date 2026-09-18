@@ -1,4 +1,4 @@
-//! Mesh import against the Python sidecar's (tests/mesh_import/gen.py). The input
+//! Mesh import against the Python engine's (tests/mesh_import/gen.py on the legacy branch). The input
 //! files are written here by the Rust writers, byte for byte the Python ones.
 
 use fundacad_geom::export::{glb, stl, threemf};

@@ -10,7 +10,7 @@ import type {
   WireBody, WireBodyFull, WireEdgeList, WireManifestEntry, WireRebuildResult,
 } from "./assembly";
 
-// The sidecar's wire-level reply envelope (see sidecar/server.py's _ok/_err):
+// The engine's wire-level reply envelope (see the Python engine's `server.py`'s _ok/_err):
 // every call resolves to one of these two shapes; `result`'s type is per-op,
 // supplied as call<T>()'s generic parameter at each call site.
 interface WireError {
@@ -33,7 +33,7 @@ type StatusListener = (connected: boolean) => void;
 export type TextFace = { outer: [number, number][]; holes: [number, number][][] };
 
 /** Per-source outcome of a projectGeometry call. `curves` carries one entry per
- *  resolved edge (a face boundary yields several); `fp` is the sidecar-authored
+ *  resolved edge (a face boundary yields several); `fp` is the engine-authored
  *  edge fingerprint for body-edge sources, the caller wraps it into a
  *  by:"match" selector, and absent for sketch-curve sources (stable ids).
  *  `ok: false` + `error` = strict resolution refused (missing/ambiguous source). */
@@ -47,7 +47,7 @@ export interface ProjectionResult {
 // One overlapping body pair from an interference check. `positions`/`indices`
 // are a coarse triangulation of the OVERLAP SOLID itself (display only, never
 // written to the document), for drawing it as a highlighted overlay; absent if
-// the sidecar couldn't tessellate that particular intersection.
+// the engine couldn't tessellate that particular intersection.
 export interface ClashPair {
   a: string;
   b: string;
@@ -95,7 +95,7 @@ export type GeneratedShapeReply = { ok: true; shape: GeneratedShape } | { ok: fa
 // either engine's transport, and tests stub it by hand.
 export interface GeometryBackend {
   rebuild(doc: CadDocument, tolerance?: number): Promise<RebuildReply>;
-  /** Per-glyph 2D outlines for a sketch text entity (the sidecar owns fonts, so
+  /** Per-glyph 2D outlines for a sketch text entity (the engine owns fonts, so
    *  preview outlines come from it and match the extruded solid exactly). */
   tessellateText(entity: object, pathEntity?: object): Promise<TextFace[]>;
   /** Project 3D sources (body edges / face boundaries / cross-sketch curves)
@@ -111,7 +111,7 @@ export interface GeometryBackend {
   /** One-way v4 -> v5: turn a pre-container document's inline base64 BREP into
    *  blobs in the durable store, returning the content hash for each feature.
    *  Best-effort by design, the document keeps its inline copy, so a failure
-   *  (or a dead sidecar) costs nothing. */
+   *  (or a dead engine) costs nothing. */
   migrateGeometry(items: { id: string; brep: string }[]): Promise<{ id: string; geom: string }[]>;
   export(
     doc: CadDocument,
@@ -143,15 +143,15 @@ export interface GeometryBackend {
     warnings?: { message: string; feature_id?: string }[];
   }>;
   // Read an external geometry file into an embeddable BREP payload (for an
-  // `import` feature). Path-based: the sidecar reads the file directly.
+  // `import` feature). Path-based: the engine reads the file directly.
   // `onStarted` receives the request id, so a caller that may later cancel
   // can target THIS op rather than whatever ran most recently.
   importGeometry(path: string, format: ImportFormat, onStarted?: (id: string) => void): Promise<ImportReply>;
-  /** A solid from a shape generator a plugin registered with the geometry engine
-   *  (sidecar/plugin_geometry.py `register_shape_generator`). "mesh" is for a preview;
+  /** A solid from a shape generator a plugin's geometry component registered with
+   *  the engine (docs/PLUGINS.md). "mesh" is for a preview;
    *  "store" writes the solid to the blob store, and an `import` feature carrying the
    *  returned `geom` rebuilds with neither the generator nor its plugin present.
-   *  Optional, only the Python sidecar runs plugin geometry. */
+   *  Optional, a test backend may have no plugin host. */
   generateShape?(
     generator: string,
     params: object,
@@ -165,11 +165,10 @@ export interface GeometryBackend {
     doc: CadDocument,
     clearance?: number,
   ): Promise<{ ok: boolean; pairs?: ClashPair[]; clearances?: ClearancePair[]; truncated?: boolean; message?: string }>;
-  /** Export through a format a plugin registered with the engine
-   *  (sidecar/plugin_geometry.py `register_exporter`). The engine rebuilds and
-   *  meshes; `options` reach the plugin's exporter untouched, and `info` is
-   *  whatever it reports back. Optional, only the Python sidecar has plugin
-   *  exporters. */
+  /** Export through a format a plugin's geometry component registered with the
+   *  engine. The engine rebuilds and meshes; `options` reach the plugin's
+   *  exporter untouched, and `info` is whatever it reports back. Optional, a
+   *  test backend may have no plugin host. */
   exportWith?(
     doc: CadDocument,
     path: string,
@@ -184,12 +183,12 @@ export interface GeometryBackend {
     cancelled?: boolean;
     warnings?: { message: string; feature_id?: string }[];
   }>;
-  // Fetch the per-launch sidecar auth token from the Rust shell (Tauri) and
-  // open the socket. Must be called once before any backend op; the store
-  // queues into the outbox until the socket opens, so ordering is non-critical.
+  // Open the transport to the engine. Must be called once before any backend
+  // op; the store queues into the outbox until it opens, so ordering is
+  // non-critical.
   init(): Promise<void>;
   onStatus(fn: StatusListener): () => void;
-  /** Interim build progress: fires with the feature index the sidecar is
+  /** Interim build progress: fires with the feature index the engine is
    *  currently building (-1 = tessellating) roughly once a second during a
    *  long rebuild. Optional, the in-process backend doesn't stream.
    *
@@ -209,11 +208,11 @@ export interface GeometryBackend {
   cancel?(target?: string): Promise<boolean>;
   /** Coarse phase progress for a long op (import). Optional. */
   onOpProgress?(fn: (pct: number, label: string) => void): () => void;
-  /** One live-session op (see sidecar/live_session.py): publish what this window
+  /** One live-session op (see the Python engine's `live_session.py`): publish what this window
    *  has open, collect what an attached assistant has asked for.
    *
    *  Deliberately one untyped passthrough rather than five methods. The session
-   *  is a conversation between this window and the sidecar's own state machine,
+   *  is a conversation between this window and the engine's own state machine,
    *  not part of the geometry surface every other method here belongs to, and
    *  the in-process backend has nothing to say about it at all, hence optional.
    *  Resolves to null when the backend cannot speak it or the call failed, so
@@ -238,7 +237,7 @@ interface WireEdgesPacked {
  *  every edge, flattened, in the same order.
  *
  *  Exported for its own test: this is the client half of the wire change that
- *  keeps a large assembly's reply under the frame cap, and the sidecar-side
+ *  keeps a large assembly's reply under the frame cap, and the engine-side
  *  test can only prove the encoder. */
 export function expandPackedEdges(
   pts: Float32Array,
@@ -282,8 +281,8 @@ interface BinaryHeader {
 }
 
 /** Longest gap tolerated between two frames of one chunked reply before the
- *  client gives up on it. Chunks are sent back to back off a result the sidecar
- *  already holds in full, so any real gap is a sidecar bug, this exists so
+ *  client gives up on it. Chunks are sent back to back off a result the engine
+ *  already holds in full, so any real gap is an engine bug, this exists so
  *  that bug surfaces as one failed rebuild instead of a permanently wedged UI. */
 type RebuildBodyMeta = NonNullable<RebuildResult["bodies"]>[number];
 
@@ -325,7 +324,7 @@ const STREAM_IDLE_MS = 30_000;
  *  unchanged: each chunk carries its own header, pad and $buffers table and is
  *  independently decodable.
  *
- *  Exported for its own test, like expandPackedEdges, the sidecar-side test can
+ *  Exported for its own test, like expandPackedEdges, the engine-side test can
  *  only prove the encoder. */
 export function decodeBinaryFrame(buf: ArrayBuffer): BinaryHeader {
   const dv = new DataView(buf);
@@ -391,8 +390,8 @@ interface RebuildFullPayload {
 }
 type RebuildPayload = RebuildDeltaPayload | RebuildFullPayload;
 
-/** Largest message the sidecar will accept, mirroring `max_size` on
- *  `websockets.serve` in sidecar/server.py. Keep the two in step: anything past
+/** Largest message the engine will accept, mirroring `MAX_FRAME` in
+ *  crates/fundacad-protocol. Keep the two in step: anything past
  *  it is answered with a 1009 close rather than an error reply, so the client
  *  has to catch it BEFORE sending. */
 export const MAX_MESSAGE_BYTES = 128 * 1024 * 1024;
@@ -416,7 +415,7 @@ export function tooLargeToSend(len: number): string | null {
 export class Geometry implements GeometryBackend {
   private readonly transport: GeometryTransport;
   private pending = new Map<string, Pending>();
-  // The heavy op most recently sent, for cancel() to target. The sidecar
+  // The heavy op most recently sent, for cancel() to target. The engine
   // serializes heavy ops, so at most one is actually running; targeting by id
   // keeps a late Cancel click from killing the NEXT op instead.
   private lastHeavyId: string | null = null;
@@ -424,7 +423,7 @@ export class Geometry implements GeometryBackend {
   private statusListeners = new Set<StatusListener>();
   private opProgressListeners = new Set<(pct: number, label: string) => void>();
   private progressListeners = new Set<(feature: number, meshed: number, meshTotal: number) => void>();
-  // Protocol-v2 per-body mesh cache: the sidecar answers unchanged bodies with
+  // Protocol-v2 per-body mesh cache: the engine answers unchanged bodies with
   // an etag stub instead of re-sending their (multi-MB) mesh; we keep the last
   // full payload per body and reassemble the merged RebuildResult locally, so
   // everything downstream (render/picking/store) sees the same shape as before.
@@ -451,7 +450,7 @@ export class Geometry implements GeometryBackend {
    *  ~98 MiB of typed arrays, see the fast path in assemble(). */
   private lastAssembled: RebuildResult | null = null;
   private lastAssembledSig: string | null = null;
-  // Delta wire protocol: the sidecar worker holds the last document; we send
+  // Delta wire protocol: the engine worker holds the last document; we send
   // {baseRevision, revision, ops} with only the CHANGED features (reference
   // inequality against the last sent feature list, effectiveDoc() reuses
   // feature objects, so an untouched feature is the same object). Any doubt
@@ -461,8 +460,8 @@ export class Geometry implements GeometryBackend {
 
   constructor(transport: GeometryTransport = new EngineTransport()) {
     this.transport = transport;
-    // Does NOT connect, call init() once so the transport can fetch what it
-    // needs from the Rust shell (the sidecar token) before its first open.
+    // Does NOT connect, call init() once so the transport can pick IPC or the
+    // WebSocket before its first open.
   }
 
   async init(): Promise<void> {
@@ -532,7 +531,7 @@ export class Geometry implements GeometryBackend {
       // was a trap for the next frame type: an unrecognised status fell
       // through to the pending map and resolved the caller's promise with a
       // frame carrying no `ok`, so the caller reported failure while the
-      // sidecar happily kept working for another minute.
+      // engine happily kept working for another minute.
       if (msg.status === "building") {
         const f = typeof msg.feature === "number" ? msg.feature : -1;
         const m = typeof msg.meshed === "number" ? msg.meshed : -1;
@@ -549,7 +548,7 @@ export class Geometry implements GeometryBackend {
     if (resolve) {
       this.pending.delete(msg.id);
       // A terminal TEXT reply for an id with a stream in flight is how the
-      // sidecar aborts one mid-send (cancel, or a single body over the frame
+      // engine aborts one mid-send (cancel, or a single body over the frame
       // cap). Drop the partial stream, this reply supersedes it.
       this.dropStream(msg.id);
       resolve(msg);
@@ -566,7 +565,7 @@ export class Geometry implements GeometryBackend {
         + "Remove or simplify the imported body, then try again."
       : "geometry engine connection lost";
     // Settle every in-flight call with a synthetic error reply shaped like a
-    // real sidecar error, matching the `msg.ok === false` contract every
+    // real engine error, matching the `msg.ok === false` contract every
     // caller already checks (rebuild/export/etc). Without this, a call made
     // before the drop just hangs forever, e.g. DocumentStore.rebuildNow()'s
     // `await this.geometry.rebuild(...)` never returns, so its finally-block
@@ -718,7 +717,7 @@ export class Geometry implements GeometryBackend {
     clearTimeout(s.timer);
     if (!st.final) {
       // Chunks are sent back to back with no worker involvement, so this can
-      // only fire on a sidecar bug, but without it that bug wedges the UI
+      // only fire on an engine bug, but without it that bug wedges the UI
       // permanently, since nothing else will ever settle the pending call.
       s.timer = setTimeout(
         () => this.abortStream(id, "the geometry engine stopped part-way through its reply"),
@@ -769,7 +768,7 @@ export class Geometry implements GeometryBackend {
   }
 
   /** The single teardown path for a stream that cannot finish: drop it AND
-   *  settle its pending call with an error shaped like a real sidecar one. */
+   *  settle its pending call with an error shaped like a real engine one. */
   private abortStream(id: string, message: string) {
     this.dropStream(id);
     const resolve = this.pending.get(id);
@@ -779,7 +778,7 @@ export class Geometry implements GeometryBackend {
     }
   }
 
-  /** See GeometryBackend.session. Answered on the sidecar's READ path, so it
+  /** See GeometryBackend.session. Answered on the engine's READ path, so it
    *  never queues behind a rebuild, which is the whole reason the host can keep
    *  publishing while its own build is running. */
   async session(op: string, payload: object = {}): Promise<Record<string, unknown> | null> {
@@ -791,7 +790,7 @@ export class Geometry implements GeometryBackend {
     const id = crypto.randomUUID();
     const raw = JSON.stringify({ id, op, ...extra });
     return new Promise((resolve) => {
-      // Refuse an over-cap message rather than let the sidecar close the socket
+      // Refuse an over-cap message rather than let the engine close the socket
       // on it. websockets answers anything past `max_size` with a 1009 close,
       // which took the WHOLE session down: the oversized body stays in the
       // document, so every following rebuild re-sent it and re-killed the
@@ -806,7 +805,7 @@ export class Geometry implements GeometryBackend {
       // storing this call's typed resolver erases to Pending here, the one
       // type-erasing cast the generic requires.
       // Recorded only once the call is actually going out: an id set before
-      // the refusal above would name a request the sidecar never saw, and
+      // the refusal above would name a request the engine never saw, and
       // cancelling it would silently no-op.
       //
       // The exclusions are every op that is NOT a job someone could want to
@@ -829,7 +828,7 @@ export class Geometry implements GeometryBackend {
    *  flags are set in exactly one place. They were easy to get wrong scattered:
    *  of the four call sites, the two that matter most are the RESYNC paths,
    *  which re-request the whole document with no `known` map, i.e. the largest
-   *  reply the sidecar can produce, and precisely the one that must not fall
+   *  reply the engine can produce, and precisely the one that must not fall
    *  back to a single frame. */
   private rebuildCall(op: "rebuild" | "computeAll", extra: object) {
     return this.call<WireRebuildResult>(op, { ...extra, binary: true, chunked: true });
@@ -1004,7 +1003,7 @@ export class Geometry implements GeometryBackend {
       "export",
       {
         document: doc, format, path, body: opts.body, separate: opts.separate,
-        // GLB writes one material per body from these; the sidecar defaults both
+        // GLB writes one material per body from these; the engine defaults both
         // to empty, so other formats are unaffected by sending them.
         palette: opts.palette, bodyColors: opts.bodyColors, mesh: opts.mesh,
       },
@@ -1074,18 +1073,18 @@ export class Geometry implements GeometryBackend {
     return { ok: false, message: msg.error?.message ?? "import failed" };
   }
 
-  /** Stop the geometry op in flight. Answered on the sidecar's READ path, so it
+  /** Stop the geometry op in flight. Answered on the engine's READ path, so it
    *  is heard DURING a long job rather than queued behind it, that is the whole
    *  reason it exists. Resolves to whether anything was actually stopped; the
    *  cancelled op settles separately, with `cancelled: true` on its own reply.
    *
-   *  A pool job cannot be interrupted, so the sidecar kills the worker and
+   *  A pool job cannot be interrupted, so the engine kills the worker and
    *  brings up a fresh one. Geometry keeps working; the next call pays a pool
    *  respawn. */
   async cancel(target?: string): Promise<boolean> {
     // ALWAYS prefer an explicit target. The document stays editable during a
     // long import, so any rebuild the user triggers meanwhile overwrites
-    // lastHeavyId, and the sidecar, which matches the running id against the
+    // lastHeavyId, and the engine, which matches the running id against the
     // target, would then refuse to cancel the very import the user is waiting
     // on. lastHeavyId is only a fallback for callers that never learned an id.
     const id = target ?? this.lastHeavyId;

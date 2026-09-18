@@ -1,5 +1,5 @@
 //! Binary and ASCII STL, replaces `write_stl` and `write_stl_ascii` of
-//! `sidecar/mesh_writers.py`.
+//! the Python engine's `mesh_writers.py`.
 
 use std::io::{self, BufWriter, Write};
 use std::path::Path;

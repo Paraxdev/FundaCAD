@@ -5,8 +5,8 @@
 // a file you had to open. Everything an agent did was a round trip through the
 // disk, and nothing it did was visible while it did it.
 //
-// This is the window's half of the live session. The sidecar holds the shared
-// state (sidecar/live_session.py); this publishes what is open, collects what
+// This is the window's half of the live session. The engine holds the shared
+// state (the Python engine's `live_session.py`); this publishes what is open, collects what
 // an attached assistant has asked for, and applies it the same way a person's
 // edit is applied, through the document store, as one undo step, with a
 // rebuild after it. That last part is the whole point: an agent's edit is not a
@@ -14,7 +14,7 @@
 //
 // WHAT THIS IS NOT: a channel the assistant can write down. It can only offer a
 // document, and this decides whether to take it. The asymmetry lives in the
-// sidecar and is enforced there; the reason it is worth restating here is that
+// engine and is enforced there; the reason it is worth restating here is that
 // nothing in this file should ever grow a path that writes without going
 // through `apply`.
 //
@@ -61,7 +61,7 @@ export interface LiveState {
 
 type Listener = (s: LiveState) => void;
 
-/** One proposal as the sidecar hands it over. Only the fields this reads. */
+/** One proposal as the engine hands it over. Only the fields this reads. */
 interface Proposal {
   id: string;
   name: string;
@@ -117,7 +117,7 @@ export class LiveSessionHost {
     if (this.running) return;
     this.running = true;
     // The revision is what makes an assistant's edit safe: it names the document
-    // the edit was written against, and the sidecar refuses a proposal whose
+    // the edit was written against, and the engine refuses a proposal whose
     // base has moved. So it has to move on EVERY change, not only on the ones
     // an assistant caused, a user dragging a face while an agent writes an edit
     // is exactly the race this exists to lose loudly.
@@ -132,9 +132,9 @@ export class LiveSessionHost {
     void this.tick();
   }
 
-  /** Stop publishing, and tell the sidecar so, an assistant that keeps reading
+  /** Stop publishing, and tell the engine so, an assistant that keeps reading
    *  a document no window is sharing would be measuring a part nobody has open.
-   *  Best-effort: the sidecar drops the host when the socket closes anyway, so a
+   *  Best-effort: the engine drops the host when the socket closes anyway, so a
    *  failed release costs nothing but a few seconds of a stale answer. */
   async stop(): Promise<void> {
     this.running = false;
@@ -172,7 +172,7 @@ export class LiveSessionHost {
       });
       if (res) await this.collect(res);
     } catch {
-      // A dropped socket, a sidecar mid-restart. The reconnect is the geometry
+      // A dropped socket, an engine mid-restart. The reconnect is the geometry
       // client's job; here it is one missed tick, and the next one re-publishes
       // from scratch because every publish carries the whole document.
     } finally {

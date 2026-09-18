@@ -1,6 +1,6 @@
 //! `golden-check`: the Rust engine against the Python engine's frozen answers.
 //!
-//! tests/golden/*.golden.json hold what sidecar/tools/freeze_goldens.py recorded
+//! tests/golden/*.golden.json hold what the Python engine's `freeze_goldens.py` recorded
 //! from the Python engine, reduced to what each differential tool compared. Each
 //! kind here rebuilds the corpus on this engine, in process, and compares with
 //! that tool's rules and tolerances, which the golden's header restates.
@@ -185,7 +185,7 @@ fn check(
     }
     let reference = &ctx.header()["reference"];
     println!(
-        "golden {} ({kind}), frozen from the python engine: build123d {}, OCP {}, sidecar {}\n",
+        "golden {} ({kind}), frozen from the python engine: build123d {}, OCP {}, commit {}\n",
         golden_path.display(),
         reference["build123d"].as_str().unwrap_or("?"),
         reference["ocp"].as_str().unwrap_or("?"),

@@ -1,4 +1,4 @@
-//! The payload caches of sidecar/viewport_mesh.py: in memory by body
+//! The payload caches of the Python engine's `viewport_mesh.py`: in memory by body
 //! identity (`_MESH_CACHE`), and on disk as mesh artifacts keyed by the body's
 //! checkpoint blob key, `mesh::CODE_VERSION` and the deflections.
 

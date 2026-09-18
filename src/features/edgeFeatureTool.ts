@@ -2,7 +2,7 @@
 // drag handle on that edge and drag it to set the radius (fillet) or
 // setback (chamfer), with a LIVE preview. Unlike Extrude, a fillet/chamfer
 // can't be faked client-side (a real rounded/beveled edge needs build123d/OCCT),
-// so the preview is sidecar-driven: the un-committed feature is appended to the
+// so the preview is engine-driven: the un-committed feature is appended to the
 // tree via store.setPreview() and the normal rebuild pipeline renders it.
 // Commit promotes it to a real feature (records undo); Esc clears + reverts.
 //
@@ -234,7 +234,7 @@ export class EdgeFeatureTool {
     return swipeOffsetPx(o, edgeDir, along(this.axis), { x: clientX, y: clientY }) * px;
   }
 
-  /** The largest size the sidecar has built during this gesture, and the
+  /** The largest size the engine has built during this gesture, and the
    *  smallest it has refused, see blendVerdict.
    *
    *  Reset whenever the question changes: a different treatment, profile or set
@@ -487,7 +487,7 @@ export class EdgeFeatureTool {
 
   /** Match each saved selector to a rendered sharp edge and build its ghost.
    *  Selectors that don't match (stale midpoint) are kept for commit but have
-   *  no visual, the sidecar still resolves them by nearest at build time. */
+   *  no visual, the engine still resolves them by nearest at build time. */
   private seedGhosts(sels: Selector[]) {
     for (const sel of sels) {
       if (!("point" in sel)) {
@@ -818,7 +818,7 @@ export class EdgeFeatureTool {
     this.refreshRefusal();
   }
 
-  /** Paint ghosts red when the sidecar's failure probe names their edge (the
+  /** Paint ghosts red when the engine's failure probe names their edge (the
    *  edgeOpFailed diagnostic carries the failed edges' midpoints). */
   private recolorGhostsFromDiagnostics(diags: import("../types").ResolveDiag[] | undefined) {
     const entry = diags?.find(

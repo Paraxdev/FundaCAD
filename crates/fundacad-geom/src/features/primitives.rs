@@ -1,4 +1,4 @@
-//! Box, cylinder, sphere, cone and torus, sidecar/builder.py `_handle_box` and
+//! Box, cylinder, sphere, cone and torus, the Python engine's `builder.py` `_handle_box` and
 //! its siblings with handler_util.py `_require_positive`. Every primitive is
 //! centred on the origin on all three axes.
 

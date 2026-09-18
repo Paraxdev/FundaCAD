@@ -6,7 +6,7 @@
 //   3. The committed pattern shows a badge; clicking it reopens the pattern for
 //      editing, and a new sweep replaces the old angle.
 //
-// Usage (from the repo root, with vite + sidecar running):
+// Usage (from the repo root, with vite + engine running):
 //   SC_TOKEN=<engine token> SC_CHROME=<chrome.exe> [SC_URL=http://localhost:5173/] node e2e/pattern_pick_and_badge_e2e.cjs [outDir]
 const { chromium } = require("playwright-core");
 const fs = require("fs");

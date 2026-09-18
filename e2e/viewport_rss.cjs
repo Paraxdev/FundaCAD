@@ -18,7 +18,7 @@
 // enough to ratchet.
 //
 // Usage (from the repo root, with vite on 5173 + engine on 8765 (`fundacad-engine --ws`)):
-//   sidecar/.venv/bin/python e2e/gen_perf_docs.py
+//   e2e/gen_perf_docs.py on the legacy branch writes the documents (the Python engine builds their blobs)
 //   SC_TOKEN=<engine token> node e2e/viewport_rss.cjs
 const { chromium } = require("playwright-core");
 const fs = require("fs");

@@ -1,4 +1,4 @@
-//! Face-anchored sketch and datum planes, sidecar/geom_select.py
+//! Face-anchored sketch and datum planes, the Python engine's `geom_select.py`
 //! `resolve_face_on_plane` and its fallback prose.
 
 use glam::DVec3;

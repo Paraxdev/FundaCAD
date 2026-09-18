@@ -408,7 +408,7 @@ describe("FeatureProperties", () => {
 
   it("hides a row the chosen pattern will never read", () => {
     // The defect this rule exists for: the panel offered Seed and Angle on every
-    // texture. A knurl reads no seed, the sidecar ignores it, so turning that
+    // texture. A knurl reads no seed, the engine ignores it, so turning that
     // row did nothing and nothing said why.
     withTexturePlugin();
     const knurl = makeEngine({

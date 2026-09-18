@@ -1,7 +1,7 @@
 //! The WebSocket transport, for a browser, the e2e scripts and the Python
 //! protocol suites (docs/RUST-PIVOT.md, section 2.1).
 //!
-//! Replaces the serving half of `sidecar/server.py` (`main`, `handle`,
+//! Replaces the serving half of the Python engine's `server.py` (`main`, `handle`,
 //! `_authorized`, `_mint_token`, `_ip_conns`): the same loopback address, port
 //! variable, token and Origin gate, per address connection cap, close codes,
 //! stdout readiness lines and port in use exit.
@@ -61,9 +61,8 @@ pub fn appenv(suffix: &str) -> Option<String> {
         .find_map(|p| std::env::var(format!("{p}{suffix}")).ok())
 }
 
-/// `FUNDACAD_ENGINE_<suffix>`, else the name it had while the engine was the
-/// Python sidecar, `FUNDACAD_SIDECAR_<suffix>`, which a script or a shell
-/// profile may still set.
+/// `FUNDACAD_ENGINE_<suffix>`, else the retired `FUNDACAD_SIDECAR_<suffix>`
+/// from the Python engine, which a script or a shell profile may still set.
 pub fn engine_env(suffix: &str) -> Option<String> {
     appenv(&format!("ENGINE_{suffix}")).or_else(|| appenv(&format!("SIDECAR_{suffix}")))
 }

@@ -1,4 +1,4 @@
-//! A blend that folded back over itself, sidecar/blend_overlap.py.
+//! A blend that folded back over itself, the Python engine's `blend_overlap.py`.
 //!
 //! BRepCheck calls such a solid valid; what is wrong is that faces the blend
 //! made lie on top of each other and the depth buffer flickers between them.

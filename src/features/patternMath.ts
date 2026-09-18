@@ -1,11 +1,11 @@
 // Where a pattern's copies go.
 //
 // One arithmetic, used twice: the tool draws ghosts from it while you drag, and
-// the sidecar builds the real solids from the same rule. The two MUST agree,
+// the engine builds the real solids from the same rule. The two MUST agree,
 // a preview that shows five copies evenly spread and a build that produces four
 // bunched at one end is worse than no preview at all, because it is believed.
 // (sketch/pattern.ts makes the same argument for the 2D patterns, and this is
-// the body-level twin of it; sidecar/builder.py's _pattern_linear and
+// the body-level twin of it; the Python engine's `builder.py`'s _pattern_linear and
 // _pattern_circular are the other side.)
 //
 // No THREE and no viewport, so the rules can be pinned down in vitest rather

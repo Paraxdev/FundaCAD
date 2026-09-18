@@ -1,5 +1,5 @@
 //! File stems for a separate-bodies export, replaces `_safe_part_filename` of
-//! `sidecar/server.py`.
+//! the Python engine's `server.py`.
 
 const MAX_NAME_BYTES: usize = 200;
 

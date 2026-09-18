@@ -98,7 +98,7 @@ export function installRebuildBridge(e: Engine): void {
   // toast every NEW failure; if it's the feature the user JUST committed from an
   // interactive tool, select it immediately (red chip scrolls into view).
   let prevErrorIds = new Set<string>();
-  // Failed fillet/chamfer edges (midpoints per feature id), survives sidecar
+  // Failed fillet/chamfer edges (midpoints per feature id), survives engine
   // cache-hit rebuilds that re-emit the error without its diagnostics.
   const failedEdgeMids = new Map<string, [number, number, number][]>();
   let lastCommittedId: string | null = null;
@@ -137,7 +137,7 @@ export function installRebuildBridge(e: Engine): void {
     if (s.result && !s.building) {
       if (s.result.mesh.positions.length > 0) {
         // hide the faces AND wireframe of any body the user toggled off (filtered
-        // in the render, no sidecar rebuild, setBodyVisibility re-emits the build).
+        // in the render, no engine rebuild, setBodyVisibility re-emits the build).
         const hidden = (s.result.bodies ?? [])
           .filter((b) => !e.store.isBodyVisible(b.id))
           .map((b) => b.id);
@@ -171,7 +171,7 @@ export function installRebuildBridge(e: Engine): void {
       }
       // Failed-edge red paint (fillet/chamfer edgeOpFailed diagnostics). Runs for
       // BOTH committed and preview builds (a just-toggled bad edge should turn
-      // red live), unlike the toast gate below. The sidecar's prefix cache
+      // red live), unlike the toast gate below. The engine's prefix cache
       // re-emits errors but NOT diagnostics on cache-hit resumes, so failed mids
       // are cached per feature here and dropped only when the feature's error
       // clears from featureErrors (content-keyed caching guarantees the cached

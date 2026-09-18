@@ -10,7 +10,7 @@
 //
 // Like Fillet/Press-Pull-on-curved-faces, neither result can be faked
 // client-side, a real surface offset needs build123d/OCCT, so the preview is
-// sidecar-driven: the un-committed feature goes through store.setPreview() and
+// engine-driven: the un-committed feature goes through store.setPreview() and
 // the normal rebuild pipeline renders it. Commit promotes it (records undo);
 // Esc reverts.
 
@@ -137,7 +137,7 @@ export class FaceOffsetTool {
       return;
     }
     // Ctrl/Cmd-click another face on the SAME body adds it; all faces share the
-    // one distance (matching how press-pull and the sidecar handler treat them)
+    // one distance (matching how press-pull and the engine handler treat them)
     if (e.ctrlKey || e.metaKey) {
       const hit = this.viewport.pickFaceForPressPull(e.clientX, e.clientY);
       if (hit && hit.bodyId === this.bodyId) {
@@ -320,7 +320,7 @@ export class FaceOffsetTool {
       return {
         id: this.previewId, type: "thicken", faces, thickness: v,
         // thickening faces OF an existing solid should grow that solid; a
-        // standalone surface body has nothing to join, and the sidecar's
+        // standalone surface body has nothing to join, and the engine's
         // _boolean_into_bodies falls back to a new body in that case anyway
         operation: "join",
         ...(this.symmetric ? { symmetric: true } : {}),

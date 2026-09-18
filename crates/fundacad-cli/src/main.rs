@@ -1,6 +1,6 @@
 //! `fundacad-engine`, the Rust engine outside the app.
 //!
-//! `--ws` serves the engine the way `python sidecar/server.py` does, for a
+//! `--ws` serves the engine the way the Python engine's `server.py` did, for a
 //! browser, the e2e scripts and the Python protocol suites. `--stdio` is the
 //! worker protocol the app speaks to `fundacad --engine`. `rebuild` runs one
 //! document through the same jobs, for CI and scripts. `doc-json` reads any
@@ -29,10 +29,10 @@ const USAGE: &str = "usage:
                                           geometry into --blob-dir (default FUNDACAD_BLOB_DIR)
   fundacad-engine select-eval <corpus.json> [--config <tuning.json>]
                                           score selector survival on a frozen corpus, as
-                                          sidecar/tools/eval_selector_survival.py does
+                                          the Python engine's eval_selector_survival.py did
   fundacad-engine fillet-eval <corpus.json> [--show-ids]
                                           score a fillet and chamfer corpus, as
-                                          sidecar/tools/eval_fillet_corpus.py does
+                                          the Python engine's eval_fillet_corpus.py did
   fundacad-engine golden-check <golden.json> [--corpus <corpus.json>] [--record <names>]
                                           compare this engine with the Python engine's
                                           frozen answers in tests/golden, exit 1 on any
@@ -223,7 +223,7 @@ fn read_json(path: &str) -> Result<Value, String> {
     serde_json::from_str(&text).map_err(|e| format!("{path} is not JSON: {e}"))
 }
 
-/// sidecar/tools/eval_selector_survival.py on this engine: one JSON line of
+/// the Python engine's `eval_selector_survival.py` on this engine: one JSON line of
 /// metrics last on stdout, everything else on stderr, exit 2 on a setup failure.
 /// --config overrides the shipped tuning key by key, as `configure` does after
 /// geom_select.py loaded selector_tuning.json at import.
@@ -283,7 +283,7 @@ fn select_eval(args: &[String]) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-/// sidecar/tools/eval_fillet_corpus.py on this engine, the same report and last line.
+/// the Python engine's `eval_fillet_corpus.py` on this engine, the same report and last line.
 fn fillet_eval(args: &[String]) -> ExitCode {
     use fundacad_geom::features::blend::eval;
     let mut corpus_path = None;

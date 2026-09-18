@@ -1,9 +1,9 @@
 //! Edge polylines for the outline pass, replaces `edge_polylines_by_body`,
-//! `_edge_points` and `_meets_smoothly` of `sidecar/tessellate.py`.
+//! `_edge_points` and `_meets_smoothly` of the Python engine's `tessellate.py`.
 //!
 //! Dropped, as in any MCAD: the seam between two coplanar planar faces, the
 //! wrap-around seam of a closed periodic face (one face listed twice) and a
-//! degenerate edge (a pole or an apex). The sidecar's per-TShape polyline memo
+//! degenerate edge (a pole or an apex). The Python engine's per-TShape polyline memo
 //! is a cache and is not ported.
 
 use opencascade::mesh_access::MeshAccess;

@@ -1,5 +1,5 @@
-//! STEP import against the Python sidecar's reading of sidecar/fixtures/asm_*.step
-//! (tests/step/gen.py), and STEP export read back through the same reader.
+//! STEP import against the Python engine's reading of tests/fixtures/asm_*.step
+//! (tests/step/gen.py on the legacy branch), and STEP export read back through the same reader.
 
 use fundacad_geom::export::{step, ExportBody};
 use fundacad_geom::import::{self, blobstore::BlobStore};

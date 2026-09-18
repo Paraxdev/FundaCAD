@@ -1,5 +1,5 @@
 //! The selector survival gate on this engine: tests/golden/corpus/corpus_selectors.json
-//! scored as sidecar/tools/eval_selector_survival.py scores it, at the Python gate.
+//! scored as the Python engine's `eval_selector_survival.py` scores it, at the Python gate.
 
 use fundacad_geom::select::{eval, Tuning};
 use serde_json::Value;

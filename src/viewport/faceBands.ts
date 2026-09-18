@@ -7,7 +7,7 @@
  *  spool document has a run of seven. Clicking one and pulling gives you a
  *  stripe, which is not what anybody meant by that click.
  *
- *  The sidecar (face_bands.py) decides what a run is, since only it can read the
+ *  The engine (face_bands.py) decides what a run is, since only it can read the
  *  surfaces; this side only has to turn its per-body answer into "given the face
  *  you clicked, which faces did you mean". Kept apart from the viewport so the
  *  lookup can be tested against plain numbers, with no scene and no kernel.

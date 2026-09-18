@@ -1,5 +1,5 @@
 // Whole operations the FundaCAD timeline builder needs, each one call from Rust.
-// They mirror what build123d does for sidecar/builder.py and its helpers, so the
+// They mirror what build123d does for the Python engine's `builder.py` and its helpers, so the
 // same document meets the same OpenCASCADE calls in both engines.
 #pragma once
 #include "rust/cxx.h"

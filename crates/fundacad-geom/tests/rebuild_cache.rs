@@ -1,4 +1,4 @@
-//! The rebuild caches, the oracles of sidecar/tests/test_checkpoint.py and
+//! The rebuild caches, the oracles of the Python engine's `test_checkpoint.py` and
 //! the disk resume cases of test_assembly.py: a warm rebuild replays only
 //! what changed and answers exactly what a cold one does.
 

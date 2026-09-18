@@ -1,4 +1,4 @@
-//! Stable body ids, a port of sidecar/body_ids.py.
+//! Stable body ids, a port of the Python engine's `body_ids.py`.
 //!
 //! A body's id is remembered against where it came from (the feature that made
 //! it, and which of that feature's bodies it was) in the document's `bodyIds`

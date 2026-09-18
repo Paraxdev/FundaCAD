@@ -257,7 +257,7 @@ export function detectRegions(
     // Split every segment at all pairwise interior intersections, then extract the
     // planar arrangement's minimal faces. This is what lets a line crossing a
     // profile carve it into separately-selectable sub-areas (MCAD parity); it
-    // mirrors the sidecar's OCCT arrangement (builder.py _subdivide_faces).
+    // mirrors the engine's OCCT arrangement (builder.py _subdivide_faces).
     loops = traceLoops(planarize(perEntity));
   } else {
     // Fast path (non-crossing sketches): a curve that comes back to where it
@@ -451,7 +451,7 @@ function mkRegion(
 
 /** Build a selectable Region from one tessellated glyph face (outer boundary +
  *  holes, in sketch-2D mm). Text skips the line/arc arrangement entirely, its
- *  faces arrive pre-formed from the sidecar's font tessellation (cached client-
+ *  faces arrive pre-formed from the engine's font tessellation (cached client-
  *  side), so each glyph face becomes its own extrudable profile. */
 export function glyphRegion(
   sketchId: string,
@@ -620,7 +620,7 @@ function segCross(a: Seg, b: Seg): THREE.Vector2 | null {
  *  endpoints (within EPS), else null. Detects T-junctions: one entity's VERTEX
  *  touching another's edge interior, e.g. a hexagon whose corner sits on a
  *  boundary rectangle's edge. OCCT splits there, so we must too, or the frontend
- *  region and the sidecar cell disagree. */
+ *  region and the engine cell disagree. */
 function pointOnSegInterior(px: number, py: number, s: Seg): number | null {
   const rx = s.x2 - s.x1, ry = s.y2 - s.y1;
   const len2 = rx * rx + ry * ry;

@@ -5,7 +5,7 @@
 // clicked point, so there is no natural anchor to follow.
 //
 // Which rows a given kind/profile shows is decided by textureRows() in
-// textureForm.ts, pure, and tested, because that logic encodes real sidecar
+// textureForm.ts, pure, and tested, because that logic encodes real engine
 // behaviour and has been wrong before.
 //
 // MOUNTED FOR THE WHOLE LIFE OF THE PLUGIN, and draws nothing until the tool
@@ -219,7 +219,7 @@ const noBtn: CSSProperties = { ...btn, background: "var(--raised, #555)", color:
         />
       </div>
 
-      <!-- Direction is NOT an angle-kind thing: the sidecar applies it to the
+      <!-- Direction is NOT an angle-kind thing: the engine applies it to the
            height field itself (out = h, in = h-1, both = centred), so every kind
            honours it. Gating it behind ANGLE_KINDS left noise/voronoi/image able
            only to GROW the part, changing its dimensions instead of texturing

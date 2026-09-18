@@ -1,6 +1,6 @@
 // Incremental (chunked) assembly must be indistinguishable from single-shot.
 //
-// A chunked reply (sidecar/server.py's _stream_binary_reply) names every body in
+// A chunked reply (the Python engine's `server.py`'s _stream_binary_reply) names every body in
 // the head frame's manifest, then delivers payloads across later frames.
 // RebuildAssembly plans every array offset from that manifest up front, so a
 // body can be written the moment it arrives. This suite pins the two properties

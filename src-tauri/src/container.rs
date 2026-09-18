@@ -13,8 +13,9 @@ pub use fundacad_format::container::*;
 /// drops any blob with refcount 0 and `purge()` is wired to the Compute All
 /// button, so a container blob there would be deleted by a button press.
 ///
-/// This directory is the SEAM between the two languages, Rust writes it when
-/// opening a container, the sidecar writes it at import, both read it. Safe with no
+/// This directory is the SEAM between the app and its engine worker: the app
+/// writes it when opening a container, the engine writes it at import, both read
+/// it (tests/container_seam.rs). Safe with no
 /// locking because the path is a pure function of the content hash: two writers
 /// racing on the same hash write byte-identical data, and each publishes by rename.
 ///
@@ -56,8 +57,8 @@ pub fn mesh_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 ///
 /// `hashes` are the content hashes the document's import features carry; the
 /// frontend collects them because it owns the document. Deliberately does NOT
-/// consult the sidecar: `sidecar.rs` does not auto-respawn, so a save that
-/// needed it would be impossible for the rest of the session.
+/// consult the engine, so a save never waits on a worker that crashed or is
+/// restarting.
 #[tauri::command]
 pub async fn container_save(
     app: tauri::AppHandle,

@@ -1,6 +1,6 @@
 // A face-anchored sketch must survive being REOPENED.
 //
-// Storing the face is what lets the sidecar re-derive the plane every rebuild,
+// Storing the face is what lets the engine re-derive the plane every rebuild,
 // so the sketch follows the body face it was drawn on instead of recording where
 // that face used to be. The trap is that the anchor has to ride through THREE
 // places in one class: enter() takes it, enter() re-adopts it from the feature

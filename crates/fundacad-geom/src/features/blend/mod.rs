@@ -1,5 +1,5 @@
-//! Fillets and chamfers, sidecar/blends.py and the fillet and chamfer handlers
-//! of sidecar/builder.py.
+//! Fillets and chamfers, the Python engine's `blends.py` and the fillet and chamfer handlers
+//! of the Python engine's `builder.py`.
 //!
 //! One kernel call on the whole group first, on a copy of the body. When that
 //! refuses, the edges are blended one at a time on the evolving body in a
