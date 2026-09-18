@@ -89,7 +89,11 @@ jobs:
           dpkg-deb -x *_amd64.deb app
           find app -type f -perm -u+x | head -n 20
           mcp=$(find app -name fundacad-mcp -type f | head -n1)
-          timeout 900 python3 timebuild.py "$mcp" diag/*.json
+          nproc
+          for cpus in 0-3 0-1 0; do
+            echo "=== cpus $cpus"
+            timeout 300 taskset -c $cpus python3 timebuild.py "$mcp" diag/*.json || echo "=== cpus $cpus exit $?"
+          done
 
   repro:
     runs-on: ubuntu-22.04
