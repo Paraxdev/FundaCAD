@@ -42,7 +42,11 @@
 @use "float";
 @use "targetedit";
 @use "console";
+@use "notice";
+@use "prefs";
 // After every surface it repaints, so its finish is the one that shows.
 @use "glass";
 // Last on purpose, see the header of _icons.scss.
 @use "icons";
+// Truly last, it switches every animation off when asked.
+@use "motion";

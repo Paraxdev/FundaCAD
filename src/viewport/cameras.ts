@@ -12,6 +12,7 @@ import CameraControls from "camera-controls";
 import { frameRotation, pivotShift, viewQuaternion } from "./orbitPivot";
 import { anchorDolly, orthoZoomStep } from "./zoomAnchor";
 import { ease, flightSeconds, worthFlying } from "./viewFlight";
+import { motionOn } from "../ui/motion";
 import {
   MIN_PERSP_DIST, NEAR_AT_REST, maxViewHalfHeight, orthoDepth, perspFar, perspNear,
 } from "./clipPlanes";
@@ -578,7 +579,7 @@ export function createCameraRig(
       controls.updateCameraUp();
       const home = HOME_EYE.clone();
       if (!box || box.isEmpty()) {
-        controls.setLookAt(home.x, home.y, home.z, 0, 0, 0, true);
+        controls.setLookAt(home.x, home.y, home.z, 0, 0, 0, motionOn());
         return;
       }
       const c = box.getCenter(new THREE.Vector3());
@@ -655,7 +656,7 @@ export function createCameraRig(
         controls.setLookAt(eye.x, eye.y, eye.z, origin.x, origin.y, origin.z, false);
         opts?.onArrive?.();
       };
-      if (!opts?.animate || !worthFlying(turn, zoomRatio)) {
+      if (!opts?.animate || !motionOn() || !worthFlying(turn, zoomRatio)) {
         land();
         return;
       }

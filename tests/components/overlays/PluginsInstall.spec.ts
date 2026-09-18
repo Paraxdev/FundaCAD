@@ -41,7 +41,7 @@ vi.mock("../../../src/plugins", async (importOriginal) => {
 const PluginsSection = (await import("../../../src/components/overlays/PluginsSection.vue"))
   .default;
 const { candidateFrom } = await import("../../../src/plugins");
-const { useToastStore } = await import("../../../src/stores/toasts");
+const { errorNotice } = await import("../../../src/ui/errorNotice");
 
 enableAutoUnmount(afterEach);
 
@@ -176,8 +176,7 @@ describe("reading a bundle from a link", () => {
     expect(installCandidate).not.toHaveBeenCalled();
     // Reported in full, naming the line that was wrong. "Could not install" on
     // its own is a message nobody can tell from a flat network.
-    const said = useToastStore().items.map((t) => t.message).join(" ");
-    expect(said).toContain("gpu.direct");
+    expect(errorNotice()?.message).toContain("gpu.direct");
   });
 });
 

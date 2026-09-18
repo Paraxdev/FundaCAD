@@ -147,3 +147,20 @@ export function setConsoleOpen(next: boolean) {
 export function toggleConsole() {
   setConsoleOpen(!open);
 }
+
+let revealed: number | null = null;
+
+/** The entry the console should scroll to, expand and flash, once. */
+export function revealedEntry(): number | null {
+  return revealed;
+}
+
+export function revealEntry(id: number) {
+  revealed = id;
+  open = true;
+  emit();
+}
+
+export function clearRevealed() {
+  revealed = null;
+}

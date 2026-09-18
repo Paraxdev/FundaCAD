@@ -1,5 +1,5 @@
 import { toast } from "../ui/toast";
-import { logError } from "../ui/logStore";
+import { featureFailureReport } from "../ui/errorReport";
 import { featureMeta } from "../ui/featureMeta";
 import { repairableDiagFor } from "../features/repickReference";
 import { contributedPaint, onContribChange } from "../plugins/contrib";
@@ -208,15 +208,17 @@ export function installRebuildBridge(e: Engine): void {
           const action = amb?.at
             ? { label: "Re-pick face", onClick: () => e.starters.repickReference(id, amb.at!) }
             : { label: "Show", onClick: () => e.selectFeature(id) };
-          // Logged with the FEATURE beside it, not just the sentence. A kernel
-          // refusal is usually about the geometry it was handed, so the message
-          // alone leaves out half the evidence, and the toast that carries the
-          // message is clipped and gone in eight seconds either way.
-          logError(`${label} failed: ${err.message}`, {
-            source: id,
-            detail: f ? JSON.stringify(f, null, 2) : undefined,
+          // A kernel refusal is usually about the geometry it was handed, so the
+          // console entry carries the whole report, not just the sentence.
+          const detail = featureFailureReport({
+            label,
+            message: err.message,
+            code: err.code,
+            feature: f,
+            detail: err.detail,
+            diagnostics: (s.result?.diagnostics ?? []).filter((d) => d.feature_id === id),
           });
-          toast(`${label} failed: ${err.message}`, { kind: "error", action });
+          toast(`${label} failed: ${err.message}`, { kind: "error", action, detail, source: id });
           if (id === lastCommittedId) e.selectFeature(id);
         }
         prevErrorIds = ids;
@@ -237,10 +239,5 @@ export function installRebuildBridge(e: Engine): void {
     // value on screen builds. A held refusal is the exception: the model on
     // screen is the last value that did build, which is what the tool keeps.
     e.viewport.setStaleModel(refused !== null && !s.heldRefusal);
-    if (s.errorMessage && !s.heldRefusal) {
-      e.setStatus(`${s.errorFeatureId ?? ""}: ${s.errorMessage}`, "error");
-    } else if (!s.building) {
-      e.setStatus("ready", "connected");
-    }
   });
 }

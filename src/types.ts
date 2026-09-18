@@ -669,7 +669,7 @@ export interface RebuildResult {
   // Failed features alongside what did build. featureError is the most downstream one.
   // `code` is a machine category the UI can act on.
   featureError?: { feature_id?: string; message: string; code?: string };
-  featureErrors?: { feature_id?: string; message: string; code?: string }[];
+  featureErrors?: { feature_id?: string; message: string; code?: string; detail?: FeatureErrorDetail }[];
   // projected-curve refresh entries from this rebuild (absent at steady state);
   // the store lands them via a derived, no-undo commit, see
   // DocumentStore.commitProjectionRefresh.
@@ -718,3 +718,17 @@ export type ImportReply =
   // `cancelled` = the user stopped it. Distinct from a failure so the UI can
   // dismiss quietly instead of showing an error the user already knows about.
   | { ok: false; cancelled?: boolean; message: string };
+
+/** The engine's account of a failed feature, for the error report
+ *  (fundacad-geom builder `failure_detail`). */
+export interface FeatureErrorDetail {
+  index: number;
+  type: string | null;
+  ms: number;
+  /** The OpenCASCADE calls the feature made, oldest first. */
+  kernel: { op: string; ms?: number; args?: string; error?: string }[];
+  bodies: { id: string; name: string; shape: string }[];
+  bodyCount: number;
+  params: Record<string, number>;
+  occt: string;
+}

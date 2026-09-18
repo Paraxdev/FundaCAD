@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Preferences: one surface for the settings that were scattered across the
 // title bar (theme, icons, units) plus the shell arrangement, which had no
-// surface at all.
+// surface at all. Categories down the side, each one a grid of cards.
 //
 // A surface over the existing setting modules, NOT a store of its own. Every
 // value here already persists itself and already notifies its own subscribers,
@@ -13,6 +13,9 @@
 // The mirrors are refs re-read from each module's own subscription rather than
 // bound with v-model, because those modules are deliberately Vue-free (that is
 // what lets the headless suite import them) and so nothing tracks them.
+//
+// Every pane stays in the DOM (v-show), so a control keeps its id whichever
+// category is open.
 
 import { computed, onMounted, onUnmounted, ref, shallowRef } from "vue";
 import { contributedSettings, onContribChange } from "../../plugins/contrib";
@@ -33,6 +36,7 @@ import {
 } from "../../ui/theme";
 import { asIconPackId, getIconPack, iconPacks, onIconPackChange, setIconPack } from "../../ui/icons";
 import { asUnit, getUnit, onUnitChange, setUnit } from "../../ui/units";
+import { motionOn, onMotionChange, setMotion } from "../../ui/motion";
 import {
   getHoverDwellMs,
   MAX_DWELL_MS,
@@ -73,6 +77,7 @@ const pack = ref(getIconPack());
 const unit = ref(getUnit());
 const render = ref(renderPrefs());
 const dwell = ref(getHoverDwellMs());
+const motion = ref(motionOn());
 
 const sections = shallowRef(contributedSettings());
 
@@ -84,10 +89,40 @@ onMounted(() => {
     onUnitChange(() => { unit.value = getUnit(); }),
     onRenderPrefsChange(() => { render.value = renderPrefs(); }),
     onHoverDwellChange(() => { dwell.value = getHoverDwellMs(); }),
+    onMotionChange(() => { motion.value = motionOn(); }),
     onContribChange(() => { sections.value = contributedSettings(); }),
   );
 });
 onUnmounted(() => { for (const stop of stops) stop(); });
+
+// Plugin sections come after the core categories, in the order the plugins
+// registered them, and the plugin list itself is last.
+const categories = computed(() => [
+  { id: "appearance", label: "Appearance" },
+  { id: "viewport", label: "Viewport" },
+  { id: "access", label: "Accessibility" },
+  { id: "mcp", label: "AI assistants" },
+  ...sections.value.map((x) => ({ id: `plugin:${x.key}`, label: x.section.title })),
+  { id: "plugins", label: "Plugins" },
+]);
+const category = ref("appearance");
+
+const UNITS = [
+  { id: "mm", label: "mm" },
+  { id: "cm", label: "cm" },
+  { id: "in", label: "in" },
+];
+const BACKGROUNDS = [
+  { id: "theme", label: "Theme" },
+  { id: "dark", label: "Dark" },
+  { id: "grey", label: "Grey" },
+  { id: "light", label: "Light" },
+];
+const TANGENT = [
+  { id: "show", label: "Show" },
+  { id: "faint", label: "Faint" },
+  { id: "hide", label: "Hide" },
+];
 
 const value = (ev: Event) => (ev.target as HTMLSelectElement).value;
 
@@ -135,165 +170,248 @@ function onRemoveTheme() {
   if (activeIsCustom.value) removeCustomTheme(theme.value);
 }
 function onPack(ev: Event) { const v = asIconPackId(value(ev)); if (v) setIconPack(v); }
-function onUnit(ev: Event) { const v = asUnit(value(ev)); if (v) setUnit(v); }
+function pickUnit(id: string) { const v = asUnit(id); if (v) setUnit(v); }
 function onEnvironment(ev: Event) { const v = asEnvironment(value(ev)); if (v) setRenderPref("environment", v); }
-function onBackground(ev: Event) { const v = asBackground(value(ev)); if (v) setRenderPref("background", v); }
+function pickBackground(id: string) { const v = asBackground(id); if (v) setRenderPref("background", v); }
 function onBrightness(ev: Event) { setRenderPref("brightness", Number.parseFloat(value(ev))); }
 function onDwell(ev: Event) { setHoverDwellMs(Number.parseFloat(value(ev))); }
 function onBloom(ev: Event) { const v = asBloom(value(ev)); if (v !== null) setRenderPref("bloom", v); }
-function onTangentEdges(ev: Event) { const v = asTangentEdges(value(ev)); if (v) setRenderPref("tangentEdges", v); }
+function pickTangent(id: string) { const v = asTangentEdges(id); if (v) setRenderPref("tangentEdges", v); }
 function onPerformanceMode(ev: Event) { setRenderPref("performanceMode", (ev.target as HTMLInputElement).checked); }
+function onMotion(ev: Event) { setMotion((ev.target as HTMLInputElement).checked); }
 </script>
 
 <template>
-  <ModalFrame @close="close()">
+  <ModalFrame panel-class="prefs-panel" @close="close()">
     <template #title>Preferences</template>
 
     <div class="modal-body prefs">
-      <div class="sm-section">Appearance</div>
-      <label class="prefs-row">
-        <span class="prefs-label">Theme</span>
-        <select id="prefs-theme" class="sm-select" :value="theme" @change="onTheme">
-          <option v-for="t in themeList" :key="t.id" :value="t.id">{{ t.label }}</option>
-        </select>
-      </label>
-      <div class="prefs-row">
-        <span class="prefs-label"></span>
-        <div class="prefs-actions">
-          <input
-            ref="fileInput"
-            id="prefs-theme-file"
-            class="hidden"
-            type="file"
-            accept="application/json,.json"
-            @change="onUpload"
-          />
-          <button type="button" class="btn" @click="pickThemeFile">Upload theme…</button>
-          <button v-if="activeIsCustom" type="button" class="btn" @click="onRemoveTheme">Remove</button>
-        </div>
-      </div>
-      <div v-if="themeError" class="sm-hint prefs-theme-error">{{ themeError }}</div>
-      <div class="sm-hint">
-        One theme ships with FundaCAD. Upload a JSON palette to add your own, it
-        is stored in this browser's preferences. Keys are colour tokens like
-        <code>--bg</code> and <code>--accent</code>, values are hex or rgb().
-      </div>
-      <label class="prefs-row">
-        <span class="prefs-label">Icons</span>
-        <select id="prefs-iconpack" class="sm-select" :value="pack" @change="onPack">
-          <option v-for="p in iconPacks()" :key="p.id" :value="p.id">{{ p.label }}</option>
-        </select>
-      </label>
-      <label class="prefs-row">
-        <span class="prefs-label">Units</span>
-        <select id="prefs-unit" class="sm-select" :value="unit" @change="onUnit">
-          <option value="mm">Millimetres</option>
-          <option value="cm">Centimetres</option>
-          <option value="in">Inches</option>
-        </select>
-      </label>
-      <div class="sm-hint">Geometry is always stored in millimetres, this is display only.</div>
+      <nav class="prefs-nav" aria-label="Preference categories">
+        <button
+          v-for="c in categories"
+          :key="c.id"
+          type="button"
+          class="prefs-nav-btn"
+          :class="{ active: category === c.id }"
+          :aria-current="category === c.id ? 'page' : undefined"
+          :data-category="c.id"
+          @click="category = c.id"
+        >{{ c.label }}</button>
+      </nav>
 
-      <div class="sm-section">Viewport</div>
-      <label class="prefs-row">
-        <span class="prefs-label">Reflections</span>
-        <select id="prefs-environment" class="sm-select" :value="render.environment" @change="onEnvironment">
-          <option v-for="e in ENVIRONMENTS_LIST" :key="e.id" :value="e.id">{{ e.label }}</option>
-        </select>
-      </label>
-      <div class="sm-hint">
-        A metal is almost entirely reflection, so with none it renders nearly
-        black. Flat is the clearer way to read shape.
-      </div>
-      <label class="prefs-row">
-        <span class="prefs-label">Background</span>
-        <select id="prefs-background" class="sm-select" :value="render.background" @change="onBackground">
-          <option value="theme">Follow the theme</option>
-          <option value="dark">Dark</option>
-          <option value="grey">Mid grey</option>
-          <option value="light">Light</option>
-        </select>
-      </label>
-      <label class="prefs-row">
-        <span class="prefs-label">Brightness</span>
-        <input
-          id="prefs-brightness"
-          class="sm-slider"
-          type="range"
-          :min="MIN_BRIGHTNESS"
-          :max="MAX_BRIGHTNESS"
-          step="0.05"
-          :value="render.brightness"
-          @input="onBrightness"
-        />
-      </label>
-      <div class="sm-hint">Lights and reflections together, so the two stay in step.</div>
-      <label class="prefs-row">
-        <span class="prefs-label">Tangent edges</span>
-        <select id="prefs-tangent-edges" class="sm-select" :value="render.tangentEdges" @change="onTangentEdges">
-          <option value="show">Show</option>
-          <option value="faint">Faint</option>
-          <option value="hide">Hide</option>
-        </select>
-      </label>
-      <div class="sm-hint">
-        Where two faces meet smoothly, like the borders of a fillet, there is no
-        corner to see, only a line across one continuous surface.
-      </div>
-      <label class="prefs-row">
-        <span class="prefs-label">Bloom</span>
-        <input id="prefs-bloom" class="sm-slider" type="range" min="0" max="1" step="0.05"
-          :value="render.bloom" @input="onBloom" />
-      </label>
-      <div class="sm-hint">
-        Light spilling off the brightest parts of the image. The lower half reaches
-        a material with Glow turned up and a hard specular highlight and nothing
-        else, so an ordinary part looks the same; turn it up to catch everyday
-        highlights too.
-      </div>
-      <label class="prefs-row">
-        <span class="prefs-label">Performance</span>
-        <span class="param-switch prefs-switch">
-          <input
-            id="prefs-performance-mode"
-            type="checkbox"
-            :checked="render.performanceMode"
-            @change="onPerformanceMode"
-          />
-          <span class="track"><span class="knob"></span></span>
-        </span>
-      </label>
-      <div class="sm-hint">
-        Drops glass refraction, the high pixel ratio and the emitter shadows for a
-        lighter render. Weak GPUs get it automatically; turn it on if the viewport
-        stutters or a laptop runs hot.
-      </div>
+      <div class="prefs-panes">
+        <section v-show="category === 'appearance'" class="prefs-pane">
+          <h3 class="prefs-pane-title">Appearance</h3>
+          <div class="prefs-grid">
+            <div class="pref-card wide">
+              <div class="pref-head">
+                <label class="pref-title" for="prefs-theme">Theme</label>
+                <select id="prefs-theme" class="sm-select" :value="theme" @change="onTheme">
+                  <option v-for="t in themeList" :key="t.id" :value="t.id">{{ t.label }}</option>
+                </select>
+              </div>
+              <p class="pref-hint">
+                One theme ships with FundaCAD. Upload a JSON palette to add your own, it
+                is stored in this browser's preferences. Keys are colour tokens like
+                <code>--bg</code> and <code>--accent</code>, values are hex or rgb().
+              </p>
+              <div class="prefs-actions">
+                <input
+                  ref="fileInput"
+                  id="prefs-theme-file"
+                  class="hidden"
+                  type="file"
+                  accept="application/json,.json"
+                  @change="onUpload"
+                />
+                <button type="button" class="btn" @click="pickThemeFile">Upload theme…</button>
+                <button v-if="activeIsCustom" type="button" class="btn" @click="onRemoveTheme">Remove</button>
+              </div>
+              <p v-if="themeError" class="pref-hint prefs-theme-error">{{ themeError }}</p>
+            </div>
+            <div class="pref-card">
+              <div class="pref-head">
+                <label class="pref-title" for="prefs-iconpack">Icons</label>
+                <select id="prefs-iconpack" class="sm-select" :value="pack" @change="onPack">
+                  <option v-for="p in iconPacks()" :key="p.id" :value="p.id">{{ p.label }}</option>
+                </select>
+              </div>
+            </div>
+            <div class="pref-card">
+              <div class="pref-head">
+                <span class="pref-title">Units</span>
+                <div id="prefs-unit" class="pref-seg" role="radiogroup" aria-label="Units">
+                  <button
+                    v-for="u in UNITS"
+                    :key="u.id"
+                    type="button"
+                    role="radio"
+                    :aria-checked="unit === u.id"
+                    :class="{ on: unit === u.id }"
+                    @click="pickUnit(u.id)"
+                  >{{ u.label }}</button>
+                </div>
+              </div>
+              <p class="pref-hint">Geometry is always stored in millimetres, this is display only.</p>
+            </div>
+          </div>
+        </section>
 
-      <div class="sm-section">Accessibility</div>
-      <label class="prefs-row">
-        <span class="prefs-label">Hover delay</span>
-        <span class="prefs-slider-readout">
-          <input id="prefs-hover-dwell" class="sm-slider" type="range" :min="MIN_DWELL_MS" :max="MAX_DWELL_MS"
-            step="50" :value="dwell" @input="onDwell" />
-          <span class="prefs-readout">{{ (dwell / 1000).toFixed(2) }} s</span>
-        </span>
-      </label>
-      <div class="sm-hint">
-        How long the pointer rests on a part before its face is highlighted
-        instead of the whole part. A click selects whatever is highlighted, so a
-        longer delay makes it easier to select whole parts.
+        <section v-show="category === 'viewport'" class="prefs-pane">
+          <h3 class="prefs-pane-title">Viewport</h3>
+          <div class="prefs-grid">
+            <div class="pref-card">
+              <div class="pref-head">
+                <label class="pref-title" for="prefs-environment">Reflections</label>
+                <select id="prefs-environment" class="sm-select" :value="render.environment" @change="onEnvironment">
+                  <option v-for="e in ENVIRONMENTS_LIST" :key="e.id" :value="e.id">{{ e.label }}</option>
+                </select>
+              </div>
+              <p class="pref-hint">
+                A metal is almost entirely reflection, so with none it renders nearly
+                black. Flat is the clearer way to read shape.
+              </p>
+            </div>
+            <div class="pref-card">
+              <div class="pref-head">
+                <span class="pref-title">Background</span>
+                <div id="prefs-background" class="pref-seg" role="radiogroup" aria-label="Background">
+                  <button
+                    v-for="b in BACKGROUNDS"
+                    :key="b.id"
+                    type="button"
+                    role="radio"
+                    :aria-checked="render.background === b.id"
+                    :class="{ on: render.background === b.id }"
+                    @click="pickBackground(b.id)"
+                  >{{ b.label }}</button>
+                </div>
+              </div>
+            </div>
+            <div class="pref-card">
+              <div class="pref-head">
+                <label class="pref-title" for="prefs-brightness">Brightness</label>
+              </div>
+              <input
+                id="prefs-brightness"
+                class="sm-slider pref-slider"
+                type="range"
+                :min="MIN_BRIGHTNESS"
+                :max="MAX_BRIGHTNESS"
+                step="0.05"
+                :value="render.brightness"
+                @input="onBrightness"
+              />
+              <p class="pref-hint">Lights and reflections together, so the two stay in step.</p>
+            </div>
+            <div class="pref-card">
+              <div class="pref-head">
+                <span class="pref-title">Tangent edges</span>
+                <div id="prefs-tangent-edges" class="pref-seg" role="radiogroup" aria-label="Tangent edges">
+                  <button
+                    v-for="t in TANGENT"
+                    :key="t.id"
+                    type="button"
+                    role="radio"
+                    :aria-checked="render.tangentEdges === t.id"
+                    :class="{ on: render.tangentEdges === t.id }"
+                    @click="pickTangent(t.id)"
+                  >{{ t.label }}</button>
+                </div>
+              </div>
+              <p class="pref-hint">
+                Where two faces meet smoothly, like the borders of a fillet, there is no
+                corner to see, only a line across one continuous surface.
+              </p>
+            </div>
+            <div class="pref-card">
+              <div class="pref-head">
+                <label class="pref-title" for="prefs-bloom">Bloom</label>
+              </div>
+              <input id="prefs-bloom" class="sm-slider pref-slider" type="range" min="0" max="1" step="0.05"
+                :value="render.bloom" @input="onBloom" />
+              <p class="pref-hint">
+                Light spilling off the brightest parts of the image. The lower half reaches
+                a material with Glow turned up and a hard specular highlight and nothing
+                else, so an ordinary part looks the same; turn it up to catch everyday
+                highlights too.
+              </p>
+            </div>
+            <div class="pref-card">
+              <label class="pref-head">
+                <span class="pref-title">Performance mode</span>
+                <span class="param-switch">
+                  <input
+                    id="prefs-performance-mode"
+                    type="checkbox"
+                    :checked="render.performanceMode"
+                    @change="onPerformanceMode"
+                  />
+                  <span class="track"><span class="knob"></span></span>
+                </span>
+              </label>
+              <p class="pref-hint">
+                Drops glass refraction, the high pixel ratio and the emitter shadows for a
+                lighter render. Weak GPUs get it automatically; turn it on if the viewport
+                stutters or a laptop runs hot.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section v-show="category === 'access'" class="prefs-pane">
+          <h3 class="prefs-pane-title">Accessibility</h3>
+          <div class="prefs-grid">
+            <div class="pref-card">
+              <label class="pref-head">
+                <span class="pref-title">Animations</span>
+                <span class="param-switch">
+                  <input id="prefs-motion" type="checkbox" :checked="motion" @change="onMotion" />
+                  <span class="track"><span class="knob"></span></span>
+                </span>
+              </label>
+              <p class="pref-hint">
+                Off makes every transition instant: menus, panels, the error notice
+                and camera moves all jump straight to where they end. Follows the
+                system's reduce motion setting until changed here.
+              </p>
+            </div>
+            <div class="pref-card">
+              <div class="pref-head">
+                <label class="pref-title" for="prefs-hover-dwell">Hover delay</label>
+                <span class="prefs-readout">{{ (dwell / 1000).toFixed(2) }} s</span>
+              </div>
+              <input id="prefs-hover-dwell" class="sm-slider pref-slider" type="range" :min="MIN_DWELL_MS"
+                :max="MAX_DWELL_MS" step="50" :value="dwell" @input="onDwell" />
+              <p class="pref-hint">
+                How long the pointer rests on a part before its face is highlighted
+                instead of the whole part. A click selects whatever is highlighted, so a
+                longer delay makes it easier to select whole parts.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section v-show="category === 'mcp'" class="prefs-pane prefs-pane-flow">
+          <McpSection />
+        </section>
+
+        <!-- What the running plugins ask about. A plugin that is not installed
+             leaves no category behind. -->
+        <section
+          v-for="x in sections"
+          v-show="category === `plugin:${x.key}`"
+          :key="x.key"
+          class="prefs-pane prefs-pane-flow"
+        >
+          <h3 class="prefs-pane-title">{{ x.section.title }}</h3>
+          <component :is="x.section.component" />
+        </section>
+
+        <section v-show="category === 'plugins'" class="prefs-pane prefs-pane-flow">
+          <PluginsSection />
+        </section>
       </div>
-
-      <McpSection />
-
-      <!-- What the running plugins ask about. Each brings its own heading, so a
-           plugin that is not installed leaves no gap where its block was. -->
-      <template v-for="s in sections" :key="s.key">
-        <div class="sm-section">{{ s.section.title }}</div>
-        <component :is="s.section.component" />
-      </template>
-
-      <PluginsSection />
     </div>
 
     <div class="modal-foot">

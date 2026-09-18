@@ -12,7 +12,7 @@
      `overflow: hidden`: .menu-popup is absolutely positioned at top:100%, i.e.
      it hangs BELOW this 36px bar while still being a child of it, so clipping
      here makes every File/Edit/View menu invisible. The shrinking is done by
-     .status giving up its width instead. */
+     the error notice's slot giving up its width instead. */
   min-width: 0;
 }
 
@@ -72,7 +72,7 @@
   /* The vertical margin is what gives the hover fill its height inside a 36px
      bar; the 1px horizontal is NOT a spacing rung, it is the hairline that stops
      two adjacent hover fills from touching, and putting it on the scale would
-     widen the whole menu bar by a dozen pixels at .status's expense. */
+     widen the whole menu bar by a dozen pixels at the notice slot's expense. */
   margin: var(--s-2) 1px;
   cursor: pointer;
   border-radius: var(--r-sm);
@@ -243,7 +243,6 @@
 #workspace-toggle.segmented {
   display: flex;
   align-items: stretch;
-  margin-right: var(--s-3);
   border: 1px solid var(--line);
   border-radius: var(--r-md);
   background: var(--panel-2);
