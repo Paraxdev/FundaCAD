@@ -1,5 +1,5 @@
 //! Where the server looks for the geometry engine. A port of
-//! `plugins/FundaCAD.MCP/tests/test_sidecar_dir.py`, which asked the same three
+//! `crates/fundacad-mcp/tools/python-oracle/tests/test_sidecar_dir.py`, which asked the same three
 //! questions of the Python sidecar's directory.
 //!
 //! From a checkout the answer is the binary this workspace built. Installed as

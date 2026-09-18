@@ -1,5 +1,5 @@
 //! A picture of the model, drawn without a browser. A port of
-//! `plugins/FundaCAD.MCP/render.py`.
+//! `crates/fundacad-mcp/tools/python-oracle/render.py`.
 //!
 //! An agent that can build geometry but cannot look at it is working blind, and
 //! "looks right" is a question no list of numbers answers. The app's own

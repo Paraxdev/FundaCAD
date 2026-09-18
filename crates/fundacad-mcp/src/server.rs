@@ -1,5 +1,5 @@
 //! FundaCAD over MCP: the tools another model uses to build, measure and look
-//! at a part. A port of `plugins/FundaCAD.MCP/server.py`.
+//! at a part. A port of `crates/fundacad-mcp/tools/python-oracle/server.py`.
 //!
 //! The protocol is the official Rust MCP SDK over stdio. STDOUT IS THE
 //! PROTOCOL, as it was: nothing else may ever be written there, and everything

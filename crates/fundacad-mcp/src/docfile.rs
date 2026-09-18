@@ -1,5 +1,5 @@
 //! FundaCAD document files on disk, in either format. A port of
-//! `plugins/FundaCAD.MCP/docfile.py`.
+//! `crates/fundacad-mcp/tools/python-oracle/docfile.py`.
 //!
 //! `.funda` is pretty JSON, `.fundab` is the binary format 2
 //! (docs/FUNDA-FORMAT.md), and a reader decides by the first bytes, never the

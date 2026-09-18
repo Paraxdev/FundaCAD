@@ -1,5 +1,5 @@
 //! The line to the geometry engine, and the engine's own lifetime. A port of
-//! `plugins/FundaCAD.MCP/sidecar_link.py` and `winjob.py`, on the Rust engine.
+//! `crates/fundacad-mcp/tools/python-oracle/sidecar_link.py` and `winjob.py`, on the Rust engine.
 //!
 //! Everything the MCP server can say about a model, it learns by asking the
 //! same engine the app asks. That is deliberate: a gap an agent hits here is a
@@ -593,7 +593,7 @@ pub fn args(pairs: impl IntoIterator<Item = (&'static str, Value)>) -> Value {
 #[cfg(windows)]
 pub mod job {
     //! The Windows job object that makes the engine die with this process,
-    //! a port of `plugins/FundaCAD.MCP/winjob.py`.
+    //! a port of `crates/fundacad-mcp/tools/python-oracle/winjob.py`.
     //!
     //! Not housekeeping: an MCP host kills its servers with TerminateProcess,
     //! which runs no cleanup, and the engine's own die-with-parent covers Linux

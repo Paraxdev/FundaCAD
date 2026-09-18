@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The `fundacad-rust` entry in .mcp.json: runs a fundacad-mcp that is already
+// The `fundacad` entry in .mcp.json: runs a fundacad-mcp that is already
 // built, or exits at once saying how to build it. `cargo run` was the entry
 // before, and a first compile outlasts an MCP host's 30 s connect timeout, which
 // the host reports as a timeout with no hint of the cause.

@@ -1,4 +1,4 @@
-//! FundaCAD over MCP, the Rust port of `plugins/FundaCAD.MCP/` (docs/MCP.md).
+//! FundaCAD over MCP, the Rust port of `crates/fundacad-mcp/tools/python-oracle/` (docs/MCP.md).
 //!
 //! The tools another model uses to build, measure and look at a part. The
 //! protocol is the official Rust MCP SDK (`rmcp`) over stdio; everything below
