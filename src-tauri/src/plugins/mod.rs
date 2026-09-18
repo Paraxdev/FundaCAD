@@ -94,6 +94,11 @@ pub struct Installed {
     /// smaller problem than one wrongly labelled as ours.
     #[serde(default)]
     pub official: bool,
+    /// Whether the files on disk hold the geometry component the manifest
+    /// names, read off the directory each time it is listed. False for a bundle
+    /// built for the Python engine, which the Rust engine cannot run.
+    #[serde(default)]
+    pub component: bool,
 }
 
 const RECORD: &str = "installed.json";
@@ -125,7 +130,20 @@ pub(crate) fn plugins_root(app: &AppHandle) -> Result<PathBuf, String> {
 
 fn read_record(dir: &Path) -> Option<Installed> {
     let text = std::fs::read_to_string(dir.join(RECORD)).ok()?;
-    serde_json::from_str(&text).ok()
+    let mut rec: Installed = serde_json::from_str(&text).ok()?;
+    rec.component = has_component(dir);
+    Some(rec)
+}
+
+/// The manifest field and file sidecar/plugin_geometry.py never reads and
+/// crates/fundacad-geom/src/plugins runs.
+fn has_component(dir: &Path) -> bool {
+    std::fs::read(dir.join(MANIFEST))
+        .ok()
+        .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
+        .and_then(|m| m.get("geometryWasm")?.as_str().map(str::to_owned))
+        .filter(|rel| !rel.is_empty())
+        .is_some_and(|rel| rel.split('/').fold(dir.to_path_buf(), |p, part| p.join(part)).is_file())
 }
 
 /// Every plugin currently installed. A directory with no readable record is not
@@ -226,6 +244,7 @@ fn install_bytes(
         dir: String::new(),
         consented: found,
         official,
+        component: false,
     };
     let text = serde_json::to_string_pretty(&record).map_err(|e| e.to_string())?;
     if let Err(e) = std::fs::write(staging.join(RECORD), text) {

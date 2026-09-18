@@ -15,28 +15,72 @@ fn a_pass_key_carries_minus_one_for_an_unknown_pass() {
     assert!(pass_cache_key(&[]).is_none());
 }
 
-/// The three sentences of `plugin_geometry.unregistered`, the middle one for a
-/// plugin on disk whose manifest names no component for this engine.
+fn temp_root(tag: &str) -> PathBuf {
+    let root = std::env::temp_dir().join(format!("fundacad-plugins-{tag}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    root
+}
+
+fn put_manifest(root: &Path, id: &str, man: Value) {
+    let dir = root.join(id);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("manifest.json"), man.to_string()).unwrap();
+}
+
+/// A bundle built for the Python engine, as the beta publishes it: it declares
+/// what it owns and names no component. It owns those names all the same, so
+/// every sentence names the plugin and says an update fixes it.
 #[test]
-fn a_plugin_without_a_component_is_named() {
-    let d = Declared {
-        id: "Some.Plugin".into(),
-        dir: std::env::temp_dir(),
-        wasm: None,
-        types: vec!["legacyThing".into()],
-        exporters: vec![],
-        generators: vec![],
-        files_read: false,
-    };
-    let Loaded::Broken(why) = compile(&d) else {
-        panic!("a manifest without a component is broken");
-    };
-    assert_eq!(
-        missing_feature("legacyThing", Missing::Broken(d.id.clone(), why)),
-        "this needs the \"Some.Plugin\" plugin, which is installed but would not load: its manifest names no geometryWasm, so the Rust engine has no geometry to run"
+fn a_plugin_without_a_component_owns_its_names() {
+    let root = temp_root("owner");
+    put_manifest(
+        &root,
+        "Some.Plugin",
+        json!({"id": "Some.Plugin", "version": "1.0.0", "geometry": "geometry/register.py",
+               "featureTypes": ["legacyThing"], "shapeGenerators": ["widget"], "exporters": ["legacy-3mf"]}),
     );
-    assert_eq!(missing_feature("x", Missing::Unknown), "unknown feature type: x");
-    assert!(missing_feature("x", Missing::NotRegistered("P".into())).contains("is not installed"));
+    let mut reg = Registry::default();
+    reg.replace(discover_in(std::slice::from_ref(&root)));
+    let mut say = |claim, name: &str| {
+        let m = component_for(&mut reg, claim, name).err().expect("nothing runs it");
+        missing(claim, name, m)
+    };
+    let why = "which is installed but would not load: the installed copy was made for the previous engine and has no component for FundaCAD 1.0, updating the plugin in Preferences, Plugins fixes it";
+    assert_eq!(say(Claim::Feature, "legacyThing"), format!("this needs the \"Some.Plugin\" plugin, {why}"));
+    assert_eq!(say(Claim::Generator, "widget"), format!("the shape 'widget' needs the \"Some.Plugin\" plugin, {why}"));
+    assert_eq!(say(Claim::Exporter, "legacy-3mf"), format!("the 'legacy-3mf' export needs the \"Some.Plugin\" plugin, {why}"));
+
+    assert_eq!(say(Claim::Feature, "x"), "unknown feature type: x");
+    assert_eq!(say(Claim::Generator, "x"), "no plugin that is running offers the shape 'x'");
+    assert_eq!(say(Claim::Exporter, "x"), "no installed plugin provides the 'x' export");
+    assert_eq!(
+        missing(Claim::Feature, "t", Missing::NotRegistered("P".into())),
+        "this needs the \"P\" plugin, which is installed but would not load: its component does not register it"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A plugin installed after the engine started is found by the next look, and
+/// one that did not change keeps what it had loaded.
+#[test]
+fn a_rescan_finds_a_plugin_installed_later() {
+    let root = temp_root("rescan");
+    put_manifest(&root, "A.One", json!({"id": "A.One", "featureTypes": ["one"]}));
+    let mut reg = Registry::default();
+    reg.replace(discover_in(std::slice::from_ref(&root)));
+    reg.entries[0].loaded = Loaded::Broken("kept".into());
+    assert!(matches!(component_for(&mut reg, Claim::Feature, "two"), Err(Missing::Unknown)));
+
+    put_manifest(&root, "B.Two", json!({"id": "B.Two", "featureTypes": ["two"]}));
+    reg.replace(discover_in(std::slice::from_ref(&root)));
+    assert!(matches!(component_for(&mut reg, Claim::Feature, "two"), Err(Missing::Broken(id, _)) if id == "B.Two"));
+    assert!(matches!(&reg.entries[0].loaded, Loaded::Broken(why) if why == "kept"));
+
+    put_manifest(&root, "A.One", json!({"id": "A.One", "featureTypes": ["one"], "version": "1.1.0"}));
+    reg.replace(discover_in(std::slice::from_ref(&root)));
+    assert!(matches!(&reg.entries[0].loaded, Loaded::NotYet), "a replaced bundle is read again");
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 fn close(a: f64, b: f64, rel: f64) -> bool {

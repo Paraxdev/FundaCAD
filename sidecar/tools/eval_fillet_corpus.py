@@ -41,7 +41,7 @@ The secret seed is never committed, never written to any report the implementer 
 read, and never left in the loop transcript. Do not reuse 1401 or 9973.
 
 Usage (sidecar venv):
-    .venv/bin/python tools/eval_fillet_corpus.py --corpus tools/corpus_fillet.json
+    .venv/bin/python tools/eval_fillet_corpus.py --corpus ../tests/golden/corpus/corpus_fillet.json
 """
 from __future__ import annotations
 
@@ -167,7 +167,8 @@ def evaluate(cases):
 
 def main():
     ap = argparse.ArgumentParser(description="Evaluate a fillet/chamfer corpus")
-    ap.add_argument("--corpus", default=os.path.join(os.path.dirname(__file__), "corpus_fillet.json"))
+    ap.add_argument("--corpus", default=os.path.join(
+        os.path.dirname(__file__), "..", "..", "tests", "golden", "corpus", "corpus_fillet.json"))
     ap.add_argument("--show-ids", action="store_true", help="list the failing case ids")
     args = ap.parse_args()
 

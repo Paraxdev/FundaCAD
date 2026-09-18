@@ -1,0 +1,893 @@
+{
+ "cases": {
+  "counterbore_curved_face_refused": {
+   "bbox": {
+    "max": [
+     15.0,
+     15.0,
+     20.0
+    ],
+    "min": [
+     -15.0,
+     -15.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [
+    [
+     "cb",
+     "Counterbore bridge: pick the flat floor of a counterbore, this face is curved"
+    ]
+   ],
+   "fatal": false,
+   "volumes": {
+    "body1": 17141.14337
+   }
+  },
+  "counterbore_no_bore_refused": {
+   "bbox": {
+    "max": [
+     15.0,
+     15.0,
+     20.0
+    ],
+    "min": [
+     -15.0,
+     -15.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [
+    [
+     "cb",
+     "Counterbore bridge: the picked floor needs exactly one round bore through it (found #)"
+    ]
+   ],
+   "fatal": false,
+   "volumes": {
+    "body1": 17435.27235
+   }
+  },
+  "counterbore_three_layers": {
+   "bbox": {
+    "max": [
+     15.0,
+     15.0,
+     20.0
+    ],
+    "min": [
+     -15.0,
+     -15.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 17131.8801
+   }
+  },
+  "counterbore_turned": {
+   "bbox": {
+    "max": [
+     15.0,
+     15.0,
+     20.0
+    ],
+    "min": [
+     -15.0,
+     -15.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 17132.14813
+   }
+  },
+  "counterbore_two_layers": {
+   "bbox": {
+    "max": [
+     15.0,
+     15.0,
+     20.0
+    ],
+    "min": [
+     -15.0,
+     -15.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 17132.09952
+   }
+  },
+  "elephant_foot": {
+   "bbox": {
+    "max": [
+     10.0,
+     7.5,
+     10.0
+    ],
+    "min": [
+     -10.0,
+     -7.5,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 2994.485333
+   }
+  },
+  "elephant_foot_with_a_hole": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     10.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 3868.190301
+   }
+  },
+  "elephant_foot_zero_refused": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     10.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [
+    [
+     "ef",
+     "Elephant-foot chamfer: the chamfer size must be between # and # mm (got #)"
+    ]
+   ],
+   "fatal": false,
+   "volumes": {
+    "body1": 4000.0
+   }
+  },
+  "ribs_blind_hole": {
+   "bbox": {
+    "max": [
+     15.0,
+     10.0,
+     20.0
+    ],
+    "min": [
+     -15.0,
+     -10.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 11727.70633
+   }
+  },
+  "ribs_default": {
+   "bbox": {
+    "max": [
+     15.0,
+     10.0,
+     20.0
+    ],
+    "min": [
+     -15.0,
+     -10.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 11455.53351
+   }
+  },
+  "ribs_explicit": {
+   "bbox": {
+    "max": [
+     15.0,
+     10.0,
+     20.0
+    ],
+    "min": [
+     -15.0,
+     -10.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 11471.09026
+   }
+  },
+  "ribs_overlap_refused": {
+   "bbox": {
+    "max": [
+     15.0,
+     10.0,
+     20.0
+    ],
+    "min": [
+     -15.0,
+     -10.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [
+    [
+     "tr",
+     "Thread-forming ribs: # ribs of # mm would overlap around a # mm hole, use fewer ribs or a narrower width"
+    ]
+   ],
+   "fatal": false,
+   "volumes": {
+    "body1": 11435.27235
+   }
+  },
+  "roof_bridge_flush": {
+   "bbox": {
+    "max": [
+     15.0,
+     10.0,
+     20.0
+    ],
+    "min": [
+     -15.0,
+     -10.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 11357.63618
+   }
+  },
+  "roof_bridge_raised": {
+   "bbox": {
+    "max": [
+     15.0,
+     10.0,
+     20.0
+    ],
+    "min": [
+     -15.0,
+     -10.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 11285.63618
+   }
+  },
+  "sacrificial_at_depth": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     10.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 3811.757451
+   }
+  },
+  "sacrificial_bottom": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     10.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 3807.835732
+   }
+  },
+  "sacrificial_counterbore_floor": {
+   "bbox": {
+    "max": [
+     15.0,
+     15.0,
+     20.0
+    ],
+    "min": [
+     -15.0,
+     -15.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 17145.06509
+   }
+  },
+  "sacrificial_fractional_layers_refused": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     10.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [
+    [
+     "sl",
+     "Sacrificial layer: the number of layers must be a whole number from # to # (got #)"
+    ]
+   ],
+   "fatal": false,
+   "volumes": {
+    "body1": 3803.914012
+   }
+  },
+  "sacrificial_too_deep_refused": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     10.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [
+    [
+     "sl",
+     "Sacrificial layer: # mm deep plus # mm of layers runs past the end of the # mm hole"
+    ]
+   ],
+   "fatal": false,
+   "volumes": {
+    "body1": 3803.914012
+   }
+  },
+  "sacrificial_top": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     10.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 3807.835732
+   }
+  },
+  "teardrop_30": {
+   "bbox": {
+    "max": [
+     15.0,
+     10.0,
+     20.0
+    ],
+    "min": [
+     -15.0,
+     -10.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 11311.7387
+   }
+  },
+  "teardrop_45": {
+   "bbox": {
+    "max": [
+     15.0,
+     10.0,
+     20.0
+    ],
+    "min": [
+     -15.0,
+     -10.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 11396.4437
+   }
+  },
+  "teardrop_60_flat": {
+   "bbox": {
+    "max": [
+     15.0,
+     10.0,
+     20.0
+    ],
+    "min": [
+     -15.0,
+     -10.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 11425.4565
+   }
+  },
+  "teardrop_blind_hole": {
+   "bbox": {
+    "max": [
+     15.0,
+     10.0,
+     20.0
+    ],
+    "min": [
+     -15.0,
+     -10.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 11758.57748
+   }
+  },
+  "teardrop_boss_refused": {
+   "bbox": {
+    "max": [
+     15.0,
+     15.0,
+     22.9969792
+    ],
+    "min": [
+     -15.0,
+     -15.0,
+     0.0
+    ]
+   },
+   "bodies": 2,
+   "errors": [
+    [
+     "td",
+     "Teardrop: the picked cylinder is a boss, not a hole"
+    ]
+   ],
+   "fatal": false,
+   "volumes": {
+    "body1": 9000.0,
+    "body2": 564.7276461
+   }
+  },
+  "teardrop_build_dir_x": {
+   "bbox": {
+    "max": [
+     15.0,
+     10.0,
+     20.0
+    ],
+    "min": [
+     -15.0,
+     -10.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 11396.44358
+   }
+  },
+  "teardrop_flat_face_refused": {
+   "bbox": {
+    "max": [
+     15.0,
+     10.0,
+     20.0
+    ],
+    "min": [
+     -15.0,
+     -10.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [
+    [
+     "td",
+     "Teardrop: pick the inside face of a round hole, this face is not cylindrical"
+    ]
+   ],
+   "fatal": false,
+   "volumes": {
+    "body1": 11435.27235
+   }
+  },
+  "teardrop_tilted_body": {
+   "bbox": {
+    "max": [
+     15.0,
+     8.660254038,
+     22.320508076
+    ],
+    "min": [
+     -15.0,
+     -18.660254038,
+     -5.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 11396.4437
+   }
+  },
+  "teardrop_two_holes": {
+   "bbox": {
+    "max": [
+     20.0,
+     10.0,
+     20.0
+    ],
+    "min": [
+     -20.0,
+     -10.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 14792.88739
+   }
+  },
+  "teardrop_vertical_refused": {
+   "bbox": {
+    "max": [
+     15.0,
+     15.0,
+     20.0
+    ],
+    "min": [
+     -15.0,
+     -15.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [
+    [
+     "td",
+     "Teardrop: this hole runs along the build direction, so it already prints round. Pick a hole that lies across the build direction."
+    ]
+   ],
+   "fatal": false,
+   "volumes": {
+    "body1": 17435.27235
+   }
+  },
+  "vertical_fillet": {
+   "bbox": {
+    "max": [
+     10.0,
+     7.5,
+     10.0
+    ],
+    "min": [
+     -10.0,
+     -7.5,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 2965.50427
+   }
+  },
+  "vertical_fillet_l_shape": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     10.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 2991.376067
+   }
+  },
+  "vertical_fillet_no_edges_refused": {
+   "bbox": {
+    "max": [
+     10.0,
+     9.997552767,
+     10.0
+    ],
+    "min": [
+     -9.990212265,
+     -9.997552767,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [
+    [
+     "vf",
+     "Vertical edge fillet: no edges run parallel to the build direction on this body"
+    ]
+   ],
+   "fatal": false,
+   "volumes": {
+    "body1": 3137.493713
+   }
+  },
+  "vertical_fillet_only_convex": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     10.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 2989.220084
+   }
+  },
+  "zip_breakthrough_allowed": {
+   "bbox": {
+    "max": [
+     15.0,
+     15.0,
+     5.05
+    ],
+    "min": [
+     -15.0,
+     -15.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 4401.0
+   }
+  },
+  "zip_breakthrough_refused": {
+   "bbox": {
+    "max": [
+     15.0,
+     15.0,
+     5.05
+    ],
+    "min": [
+     -15.0,
+     -15.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [
+    [
+     "zt",
+     "Zip-tie channel: the channel would break through the part's far side; reduce the inset depth or allow breakthrough"
+    ]
+   ],
+   "fatal": false,
+   "volumes": {
+    "body1": 4545.0
+   }
+  },
+  "zip_channel": {
+   "bbox": {
+    "max": [
+     15.0,
+     15.0,
+     10.0
+    ],
+    "min": [
+     -15.0,
+     -15.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 8856.0
+   }
+  },
+  "zip_channel_turned": {
+   "bbox": {
+    "max": [
+     15.0,
+     15.0,
+     10.0
+    ],
+    "min": [
+     -15.0,
+     -15.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 8856.0
+   }
+  },
+  "zip_curved_face_refused": {
+   "bbox": {
+    "max": [
+     15.0,
+     10.0,
+     20.0
+    ],
+    "min": [
+     -15.0,
+     -10.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [
+    [
+     "zt",
+     "Zip-tie channel: pick a flat face for the zip-tie channel"
+    ]
+   ],
+   "fatal": false,
+   "volumes": {
+    "body1": 11435.27235
+   }
+  },
+  "zip_span_refused": {
+   "bbox": {
+    "max": [
+     15.0,
+     15.0,
+     10.0
+    ],
+    "min": [
+     -15.0,
+     -15.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [
+    [
+     "zt",
+     "Zip-tie channel: the span must be greater than the channel height (got span #, height #)"
+    ]
+   ],
+   "fatal": false,
+   "volumes": {
+    "body1": 9000.0
+   }
+  }
+ },
+ "golden": {
+  "corpus": "tests/golden/corpus/corpus_plugins.json",
+  "corpusSha256": "2268a4520700b4432925ddb444dbfab157d50c2f237df591ec57ef1f39b7a718",
+  "frozen": true,
+  "kind": "rebuild",
+  "rebuildTolerance": 0.1,
+  "reference": {
+   "build123d": "0.11.1",
+   "engine": "python sidecar (sidecar/server.py)",
+   "ocp": "7.9.3.1",
+   "platform": "Windows-11-10.0.26200-SP0",
+   "python": "3.12.13",
+   "sidecarCommit": "0c919c56ec54491d2bd9df4cfa8569b66ea5daf4"
+  },
+  "rules": "body count and body ids exact; each body's mesh volume (signed tetra sum) within max(volumeRel * |python|, volumeFloor); every bbox corner within max(bboxAbs, bboxRelOfDiagonal * python bbox diagonal); the ordered (feature id, error class) list exact, an error class being the message with every number masked as # and whitespace collapsed, after the repository root is replaced by $REPO. An import fixture is imported through the engine's own import op first; the reply's fields other than geom must equal python's.",
+  "tolerances": {
+   "bboxAbs": 0.0001,
+   "bboxRelOfDiagonal": 0.001,
+   "volumeFloor": 1e-09,
+   "volumeRel": 0.005
+  },
+  "tool": "sidecar/tools/diff_engines.py"
+ }
+}

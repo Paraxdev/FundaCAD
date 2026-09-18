@@ -1,5 +1,5 @@
 {
- "about": "Write tools/corpus_texture.json and the heightmap images it reads. Written by tools/gen_texture_corpus.py.",
+ "about": "The surface texture documents and the heightmap images they read, written by sidecar/tools/gen_texture_corpus.py. Image paths are relative to the repository root.",
  "documents": [
   {
    "name": "knurl_plate_all",
@@ -2574,7 +2574,7 @@
       },
       "depth": 0.5,
       "scale": 2.0,
-      "imagePath": "tools/corpus/texture/rings_l.png"
+      "imagePath": "tests/golden/corpus/texture/rings_l.png"
      }
     ]
    }
@@ -2606,7 +2606,7 @@
       },
       "depth": 0.5,
       "scale": 2.0,
-      "imagePath": "tools/corpus/texture/rings_rgb.png"
+      "imagePath": "tests/golden/corpus/texture/rings_rgb.png"
      }
     ]
    }
@@ -2638,7 +2638,7 @@
       },
       "depth": 0.5,
       "scale": 2.0,
-      "imagePath": "tools/corpus/texture/rings_rgba.png"
+      "imagePath": "tests/golden/corpus/texture/rings_rgba.png"
      }
     ]
    }
@@ -2670,7 +2670,7 @@
       },
       "depth": 0.5,
       "scale": 2.0,
-      "imagePath": "tools/corpus/texture/rings.bmp"
+      "imagePath": "tests/golden/corpus/texture/rings.bmp"
      }
     ]
    }
@@ -2702,7 +2702,7 @@
       },
       "depth": 0.5,
       "scale": 2.0,
-      "imagePath": "tools/corpus/texture/rings_palette.png"
+      "imagePath": "tests/golden/corpus/texture/rings_palette.png"
      }
     ]
    }
@@ -2734,7 +2734,7 @@
       "depth": 0.5,
       "scale": 2.0,
       "profile": "round",
-      "imagePath": "tools/corpus/texture/rings_l.png"
+      "imagePath": "tests/golden/corpus/texture/rings_l.png"
      }
     ]
    }
@@ -2815,7 +2815,7 @@
       },
       "depth": 0.3,
       "scale": 2.0,
-      "imagePath": "tools/gen_texture_corpus.py"
+      "imagePath": "tests/golden/corpus/texture/not_an_image.txt"
      }
     ]
    },

@@ -1,11 +1,13 @@
-"""Write tools/corpus_texture.json and the heightmap images it reads.
+"""The surface texture documents and the heightmap images they read, written by
+sidecar/tools/gen_texture_corpus.py. Image paths are relative to the repository root.
 
 The surface texture plugin's documents for diff_engines.py (volume, bbox, errors)
 and diff_meshes.py (triangles, vertices, surface, normals, etags, the export),
 drawn from plugins/FundaCAD.Texture/geometry/tests: every kind on a plane, the
 lattice kinds on cylinders and cones where the seam matters, freeform faces under
 each projection, every spec control, downstream edits, several bodies, and the
-refusals. Image paths are relative to sidecar/, which both engines run in.
+refusals. Both diff tools make an image path absolute against the repository root
+before a document reaches an engine, so the engine's working directory does not matter.
 
 Run from sidecar/ with the sidecar venv: python tools/gen_texture_corpus.py
 """
@@ -17,7 +19,8 @@ import os
 from PIL import Image
 
 TOOLS = os.path.dirname(os.path.abspath(__file__))
-IMAGES = os.path.join(TOOLS, "corpus", "texture")
+CORPUS = os.path.join(os.path.dirname(os.path.dirname(TOOLS)), "tests", "golden", "corpus")
+IMAGES = os.path.join(CORPUS, "texture")
 
 KINDS = ["knurl", "hex", "waves", "ribs", "voronoi", "noise", "stripes", "grid", "dots", "brick",
          "basket", "carbon", "isogrid", "grip", "leather"]
@@ -151,14 +154,14 @@ def corpus():
                                                       faces={"by": "nearest", "point": [18, 0, 18]})]))
     for name in ("rings_l.png", "rings_rgb.png", "rings_rgba.png", "rings.bmp", "rings_palette.png"):
         out.append(doc("image_" + name.replace(".", "_"), [box, tex(
-            kind="image", faces=TOP, depth=0.5, scale=2.0, imagePath=f"tools/corpus/texture/{name}")]))
+            kind="image", faces=TOP, depth=0.5, scale=2.0, imagePath=f"tests/golden/corpus/texture/{name}")]))
     out.append(doc("image_round_on_cylinder", [cyl, tex(kind="image", faces=side, depth=0.5, scale=2.0,
-                                                          profile="round", imagePath="tools/corpus/texture/rings_l.png")]))
+                                                          profile="round", imagePath="tests/golden/corpus/texture/rings_l.png")]))
     out.append(doc("image_missing", plate(10, 10, 5) + [tex(kind="image", faces={"by": "all"}, depth=0.3, scale=2.0,
                                                              imagePath="/nonexistent/path/does-not-exist.png")],
                    expectError=True))
     out.append(doc("image_not_an_image", plate(10, 10, 5) + [tex(kind="image", faces={"by": "all"}, depth=0.3,
-                                                                  scale=2.0, imagePath="tools/gen_texture_corpus.py")],
+                                                                  scale=2.0, imagePath="tests/golden/corpus/texture/not_an_image.txt")],
                    expectError=True))
     out.append(doc("refused_kind", [box, tex(kind="glitter", faces=TOP)], expectError=True))
     out.append(doc("refused_depth", [box, tex(kind="knurl", faces=TOP, depth=-1)], expectError=True))
@@ -174,8 +177,8 @@ def corpus():
 def main():
     images()
     docs = corpus()
-    with open(os.path.join(TOOLS, "corpus_texture.json"), "w", encoding="utf-8", newline="\n") as fh:
-        json.dump({"about": __doc__.split("\n\n")[0] + " Written by tools/gen_texture_corpus.py.",
+    with open(os.path.join(CORPUS, "corpus_texture.json"), "w", encoding="utf-8", newline="\n") as fh:
+        json.dump({"about": " ".join(__doc__.split("\n\n")[0].split()),
                    "documents": docs}, fh, indent=1)
     print(len(docs), "documents")
 

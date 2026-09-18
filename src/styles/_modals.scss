@@ -390,6 +390,13 @@
   justify-content: flex-end;
   gap: var(--s-2);
 }
+.plug-update {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  font-size: 12px;
+}
 /* The row that takes a link or opens a file picker. Wraps rather than
    scrolling: a URL field that has to be scrolled to read is a URL field whose
    host is off screen, which is the one part of it that has to be read. */

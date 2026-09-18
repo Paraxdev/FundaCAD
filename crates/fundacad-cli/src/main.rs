@@ -4,7 +4,10 @@
 //! browser, the e2e scripts and the Python protocol suites. `--stdio` is the
 //! worker protocol the app speaks to `fundacad --engine`. `rebuild` runs one
 //! document through the same jobs, for CI and scripts. `doc-json` reads any
-//! saved document, .funda or .fundab, and prints its JSON.
+//! saved document, .funda or .fundab, and prints its JSON. `golden-check`
+//! holds this engine to the Python engine's answers frozen in tests/golden.
+
+mod golden;
 
 use fundacad_engine::{Engine, Outbox};
 use fundacad_geom::jobs::GeomJobs;
@@ -29,7 +32,14 @@ const USAGE: &str = "usage:
                                           sidecar/tools/eval_selector_survival.py does
   fundacad-engine fillet-eval <corpus.json> [--show-ids]
                                           score a fillet and chamfer corpus, as
-                                          sidecar/tools/eval_fillet_corpus.py does";
+                                          sidecar/tools/eval_fillet_corpus.py does
+  fundacad-engine golden-check <golden.json> [--corpus <corpus.json>] [--record <names>] [--warm]
+                                          compare this engine with the Python engine's
+                                          frozen answers in tests/golden, exit 1 on any
+                                          mismatch; --record writes this engine's answer
+                                          for the named cases first, after a human check;
+                                          --warm checks twice in two processes against one
+                                          disk cache, so the second answers from it";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -43,6 +53,7 @@ fn main() -> ExitCode {
         Some("doc-json") => doc_json(&args[1..]),
         Some("select-eval") => select_eval(&args[1..]),
         Some("fillet-eval") => fillet_eval(&args[1..]),
+        Some("golden-check") => golden::run(&args[1..]),
         Some("-h" | "--help") => {
             println!("{USAGE}");
             ExitCode::SUCCESS

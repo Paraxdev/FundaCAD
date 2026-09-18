@@ -36,7 +36,7 @@ corpus, enforced by the evaluator.
 
 Usage (sidecar venv):
     .venv/bin/python tools/gen_fillet_regression.py --seed 4242 --count 60 \
-        --out tools/corpus_fillet_regression.json
+        --out ../tests/golden/corpus/corpus_fillet_regression.json
 """
 from __future__ import annotations
 
@@ -211,7 +211,8 @@ def main():
     ap = argparse.ArgumentParser(description="Generate the box_all/cyl_all regression stratum")
     ap.add_argument("--seed", type=int, default=4242)
     ap.add_argument("--count", type=int, default=60)
-    ap.add_argument("--out", default=os.path.join(os.path.dirname(__file__), "corpus_fillet_regression.json"))
+    ap.add_argument("--out", default=os.path.join(
+        os.path.dirname(__file__), "..", "..", "tests", "golden", "corpus", "corpus_fillet_regression.json"))
     args = ap.parse_args()
 
     cases, stats = generate(args.seed, args.count)

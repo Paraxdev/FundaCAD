@@ -35,8 +35,8 @@ fn documents() -> Vec<(String, Value)> {
         }
     }
     for corpus in [
-        "sidecar/tools/corpus_fillet.json",
-        "sidecar/tools/corpus_fillet_regression.json",
+        "tests/golden/corpus/corpus_fillet.json",
+        "tests/golden/corpus/corpus_fillet_regression.json",
     ] {
         let v = read(&repo().join(corpus));
         for case in v["cases"].as_array().expect("cases") {

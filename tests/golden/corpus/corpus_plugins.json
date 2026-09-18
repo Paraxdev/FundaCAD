@@ -1,5 +1,5 @@
 {
-  "about": "Documents whose features belong to a PLUGIN, not to the engine. diff_engines.py rebuilds them through the Python engine (which imports plugins/FundaCAD.PrintToolbox/geometry/*.py) and the Rust engine (which runs plugins/FundaCAD.PrintToolbox/geometry.wasm, built by scripts/build-plugin-wasm.py), so the two halves of the same plugin are compared on the same parts. The shapes are the ones the plugin's own tests measure analytically (plugins/FundaCAD.PrintToolbox/geometry/tests). Run: python tools/diff_engines.py --corpus tools/corpus_plugins.json",
+  "about": "Documents whose features belong to a PLUGIN, not to the engine. diff_engines.py rebuilds them through the Python engine (which imports plugins/FundaCAD.PrintToolbox/geometry/*.py) and the Rust engine (which runs plugins/FundaCAD.PrintToolbox/geometry.wasm, built by scripts/build-plugin-wasm.py), so the two halves of the same plugin are compared on the same parts. The shapes are the ones the plugin's own tests measure analytically (plugins/FundaCAD.PrintToolbox/geometry/tests). Run: python tools/diff_engines.py --corpus ../tests/golden/corpus/corpus_plugins.json",
   "documents": [
     {"name": "teardrop_45", "document": {"parameters": {}, "features": [
       {"id": "s1", "type": "sketch", "plane": "XY", "entities": [{"type": "rectangle", "width": 30, "height": 20, "x": 0, "y": 0}]},

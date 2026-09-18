@@ -34,7 +34,8 @@ import harness_util as H
 
 TOOLS_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(H.SIDECAR_DIR)
-DEFAULT_CORPUS = os.path.join(TOOLS_DIR, "corpus_engines.json")
+CORPUS_DIR = os.path.join(REPO_ROOT, "tests", "golden", "corpus")
+DEFAULT_CORPUS = os.path.join(CORPUS_DIR, "corpus_engines.json")
 
 VOLUME_REL_TOL = 0.005
 BBOX_ABS_TOL = 1e-4
@@ -66,8 +67,23 @@ def load_corpus(path, only):
     return docs
 
 
-def outcome(reply):
-    """The compared invariants of one rebuild reply, fatal refusals included."""
+def absolute_image_paths(docs):
+    """A texture's relative imagePath made absolute against the repository root,
+    which is what corpus paths are relative to, whatever the engine's cwd."""
+    for d in docs:
+        for f in d["document"].get("features", []):
+            p = f.get("imagePath")
+            if isinstance(p, str) and p and not os.path.isabs(p) and not p.startswith("/"):
+                f["imagePath"] = os.path.join(REPO_ROOT, *p.split("/"))
+
+
+def outcome(reply, normalise=None):
+    """The compared invariants of one rebuild reply, fatal refusals included.
+    `normalise` rewrites a message before its class is taken, which is how
+    freeze_goldens.py keeps a machine's own paths out of a golden."""
+    def masked(message):
+        return H.error_class(normalise(message) if normalise else message)
+
     if not reply.get("ok"):
         err = reply.get("error") or {}
         message = err.get("message", "") if isinstance(err, dict) else str(err)
@@ -77,7 +93,7 @@ def outcome(reply):
             "volumes": {},
             "bbox": None,
             "errors": [(err.get("feature_id") if isinstance(err, dict) else None,
-                        H.error_class(message))],
+                        masked(message))],
             "messages": [message],
         }
     result = reply.get("result") or {}
@@ -92,7 +108,7 @@ def outcome(reply):
         "bodies": len(bodies),
         "volumes": volumes,
         "bbox": result.get("bbox"),
-        "errors": [(e.get("feature_id"), H.error_class(e.get("message", ""))) for e in ferrs],
+        "errors": [(e.get("feature_id"), masked(e.get("message", ""))) for e in ferrs],
         "messages": [e.get("message", "") for e in ferrs],
     }
 
@@ -242,6 +258,7 @@ def main():
     args = ap.parse_args()
 
     docs = load_corpus(args.corpus, [n for n in (args.only or "").split(",") if n])
+    absolute_image_paths(docs)
     blob_dir = seed_imports(docs)
     try:
         return run(args, docs)
