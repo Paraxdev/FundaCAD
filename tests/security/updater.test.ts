@@ -79,7 +79,7 @@ describe("updater", () => {
   // reads is decided by the config it was built with and can never change
   // afterwards. A shipped beta reads beta/latest.json; an alpha build reads
   // alpha/latest.json. Nothing else separates them, and nothing else
-  // could: the alpha version is 0.3.x, which is NEWER than the beta's
+  // could: the alpha version is 1.0.x, which is NEWER than the beta's
   // 0.2.x, so a beta install offered the alpha manifest would take it and
   // land on an engine that cannot rebuild most documents.
   //

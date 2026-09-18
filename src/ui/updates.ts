@@ -1,6 +1,6 @@
 // In-app updates via tauri-plugin-updater: the packaged app checks the rolling
-// beta release's latest.json (assembled by the release job in
-// .github/workflows/build.yml) and offers a one-click restart-and-update.
+// release's latest.json baked into its config (alpha/latest.json for the Rust build,
+// beta/latest.json for the Python one) and offers a one-click restart-and-update.
 // Only meaningful where the updater can actually replace the install, the NSIS
 // install on Windows, the .app on macOS, the AppImage on Linux, so the Rust
 // `updates_supported` command gates deb/rpm installs (and plain-browser dev) out.
@@ -22,7 +22,7 @@ async function updatesSupported(): Promise<boolean> {
 }
 
 /** the packaged app's version ("dev" in a plain-browser session). CI stamps
- *  packaged builds 0.2.<run>; local builds carry tauri.conf.json's 0.2.0. */
+ *  packaged alpha builds 1.0.<run>; local builds carry tauri.conf.json's 1.0.0. */
 export async function appVersion(): Promise<string> {
   if (!isTauri()) return "dev";
   try {
@@ -39,7 +39,7 @@ export async function showAbout(): Promise<void> {
   await listModal("About FundaCAD", [`Version ${await appVersion()}`]);
 }
 
-/** Check the beta feed and prompt to install when an update exists. An available
+/** Check this build's feed and prompt to install when an update exists. An available
  *  update always prompts; `interactive` additionally surfaces "up to date",
  *  "not applicable here", and failures (the quiet startup check stays silent). */
 export async function checkForUpdates(interactive: boolean): Promise<void> {

@@ -42,12 +42,14 @@ This file starts on 2026-08-03. For anything before that, see the
   so a beta install is never offered one of these builds and the beta stays the
   complete app. Nothing is published from it until the first green run.
 
-- **The Rust engine is `main` now and releases as the rolling `alpha`**
-  (it was `prealpha-rust`). The Python engine moved to the `legacy` branch,
-  which keeps publishing the rolling `beta` and its update feed, so beta
-  installs carry on as before. Alpha because the Rust engine is less tested
-  than the beta; its notes ask for a report of anything that builds
-  differently. Each install still reads only its own feed.
+- **FundaCAD 1.0.0 alpha: the Rust engine is `main` now and releases as the
+  rolling `alpha`** (it was `prealpha-rust`, versioned 0.3). The new engine
+  is the major upgrade, so the app is 1.0.0 and each alpha build is
+  `1.0.<build number>`. The Python engine moved to the `legacy` branch, which
+  keeps publishing the rolling `beta` (0.2) and its update feed, so beta
+  installs carry on as before and are never offered a 1.0 build. Alpha because
+  the Rust engine is less tested than the beta; its notes ask for a report of
+  anything that builds differently. Files open in both.
 
 ### Added
 

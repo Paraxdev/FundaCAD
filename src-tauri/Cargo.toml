@@ -1,6 +1,6 @@
 [package]
 name = "fundacad"
-version = "0.2.0"
+version = "1.0.0"
 description = "FundaCAD, a parametric CAD app driving build123d"
 authors = ["Paraxdev"]
 edition = "2021"

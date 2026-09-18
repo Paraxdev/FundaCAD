@@ -671,20 +671,18 @@ jobs:
             if (j.bundle.resources) { console.error('the alpha config bundles resources'); process.exit(1); }
           "
 
-      # Rolling alpha versioning, 0.3.<run_number>.
+      # Rolling alpha versioning, 1.0.<run_number>: the Rust engine is the
+      # major upgrade, against the beta's 0.2.
       #
-      # docs/RUST-PIVOT.md section 6 asked for `0.3.<run number>-rust`, and the
-      # suffix cannot be had: tauri's msi target refuses a version whose
+      # No `-alpha` suffix: tauri's msi target refuses a version whose
       # pre-release identifier is not numeric ("optional pre-release identifier
-      # in app version must be numeric-only"), so `-rust` fails the Windows leg
+      # in app version must be numeric-only"), so it fails the Windows leg
       # outright and NSIS silently rewrites it to 0 in VIProductVersion. The
-      # minor carries the distinction instead, 0.3 against the beta's 0.2, and
-      # the tag, the title and the update feed carry the rest. When the beta
-      # reaches 0.3 this has to move up with it.
+      # tag, the title and the update feed say alpha instead.
       - name: Stamp rolling version
         shell: bash
         run: |
-          v="0.3.${{ github.run_number }}"
+          v="1.0.${{ github.run_number }}"
           node -e "const fs=require('fs');const f='src-tauri/tauri.conf.json';const j=JSON.parse(fs.readFileSync(f));j.version='$v';fs.writeFileSync(f,JSON.stringify(j,null,2)+'\n')"
           echo "stamped $v"
 
@@ -829,7 +827,7 @@ jobs:
   # (tauri.alpha.conf.json points at alpha/latest.json), so a beta
   # install reads the beta feed and can never be offered a build of this one.
   # That separation has to come from the endpoint and not from the version:
-  # 0.3.x is NEWER than the beta's 0.2.x, so a beta install that ever read this
+  # 1.0.x is NEWER than the beta's 0.2.x, so a beta install that ever read this
   # manifest would take it. Section 6's own answer, publish no manifest at all,
   # was rejected because a rolling build that cannot roll is one people install
   # once and never update; tests/security/updater.test.ts pins the pair.
@@ -867,7 +865,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          v="0.3.${{ github.run_number }}"
+          v="1.0.${{ github.run_number }}"
           base="https://github.com/${{ github.repository }}/releases/download/alpha"
           d="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           jq -n --arg v "$v" --arg d "$d" '{version:$v, pub_date:$d, platforms:{}}' > latest.json
@@ -945,7 +943,7 @@ jobs:
 
           WARN
 
-          printf 'Rolling alpha 0.3.%s, Rust engine, rebuilt from `main` at [`%s`](https://github.com/%s/commit/%s).\n' \
+          printf 'Rolling FundaCAD 1.0 alpha (1.0.%s), Rust engine, rebuilt from `main` at [`%s`](https://github.com/%s/commit/%s).\n' \
             '${{ github.run_number }}' "${SHA:0:7}" "$R" "$SHA" >> notes.md
 
           # The commit the rolling tag is on RIGHT NOW: the build this replaces.
@@ -999,7 +997,7 @@ jobs:
           gh api -X PATCH "repos/$R/git/refs/tags/alpha" -f sha="$SHA" -F force=true \
             || gh api -X POST "repos/$R/git/refs" -f ref=refs/tags/alpha -f sha="$SHA"
 
-          TITLE='FundaCAD alpha, Rust engine (rolling)'
+          TITLE='FundaCAD 1.0 alpha, Rust engine (rolling)'
           if gh release view alpha --repo "$R" >/dev/null 2>&1; then
             gh release edit alpha --repo "$R" --prerelease \
               --title "$TITLE" --notes-file notes.md
