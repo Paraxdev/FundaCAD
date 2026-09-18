@@ -138,6 +138,9 @@ export interface PluginManifest {
    *  Empty for a plugin that adds no feature of its own, which is most of them:
    *  a panel, a device, a network connection all leave the document alone. */
   featureTypes: string[];
+  /** The bundle path of the WebAssembly component the Rust engine runs, "" for
+   *  a plugin with no geometry or a bundle built for the Python engine only. */
+  geometryWasm: string;
 }
 
 export type ParseResult =
@@ -274,6 +277,7 @@ export function parseManifest(raw: unknown): ParseResult {
       enabledByDefault: r.enabledByDefault !== false,
       formerIds,
       featureTypes,
+      geometryWasm: str(r.geometryWasm),
     },
   };
 }

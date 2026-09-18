@@ -106,6 +106,8 @@ export interface InstalledPlugin {
   consented: { kind: string; version: string; grants: string[]; hosts: string[] };
   /** whether `source` is one of this project's own release assets */
   official: boolean;
+  /** whether the files on disk hold the component the Rust engine runs */
+  component?: boolean;
 }
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;
