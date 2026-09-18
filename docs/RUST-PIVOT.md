@@ -101,7 +101,7 @@ crates/
                      watchdog, stdio and WebSocket transports, live session.
   fundacad-format    fnda.rs, container.rs, json_doc.rs moved out of src-tauri
                      so the engine, the CLI and the app share them.
-  fundacad-mcp       the MCP server on rmcp, replacing plugins/FundaCAD.MCP.
+  fundacad-mcp       the MCP server on rmcp, part of the app (docs/MCP.md).
   fundacad-cli       headless rebuild/export/inspect for CI and evals.
 src-tauri/           the app. engine.rs (supervisor, IPC relay) replaces
                      sidecar.rs; `--engine` dispatches into fundacad-engine.
@@ -306,7 +306,10 @@ progress is planned wrong.
    Rust twins, and `crates/fundacad-mcp/tools/diff_servers.py` runs a scripted
    session through both and diffs the replies. It does not link the kernel: a
    private session spawns `fundacad-engine --ws`, which is the same socket a
-   live session uses.
+   live session uses. MCP left the plugin system for 1.0: the server ships
+   beside the app, Preferences has a core MCP section, and the Python server
+   moved to `crates/fundacad-mcp/tools/python-oracle/`, the parity oracle, which
+   is deleted with the sidecar.
 8. Gates: `eval_fillet_corpus` 0/500, `e2e_coverage.py` 34/34, the golden
    corpus, and the Python protocol suites (`test_ws.py`, `test_cancel.py`,
    `test_conn_limit.py`, `test_fullstack.py`) run against
@@ -361,9 +364,9 @@ LOC are `wc -l` of the current tree. "Oracle" is what proves the port right.
 | shape_generate.py, plugin_geometry.py | 624 | fundacad-geom::plugins (wasmtime host, done) | design | corpus_plugins.json, corpus_screws_ops.json, corpus_printing_ops.json, corpus_texture.json, tests/plugin_host.rs, tests/qhull_parity.rs |
 | server.py | 2,139 | fundacad-engine | medium | test_ws, test_cancel, test_conn_limit, test_fullstack, test_heartbeat |
 
-### 4.1b The Python MCP plugin
+### 4.1b The Python MCP server (was the FundaCAD.MCP plugin)
 
-| Source (plugins/FundaCAD.MCP/) | LOC | Target | Risk | Oracle |
+| Source (crates/fundacad-mcp/tools/python-oracle/) | LOC | Target | Risk | Oracle |
 |---|---|---|---|---|
 | server.py | 1,498 | fundacad-mcp::{server,upload} | medium | tests/{protocol,import}.rs |
 | schema.py | 758 | fundacad-mcp::schema (+ schema.json) | low | tests/schema.rs, held to `Feature::KNOWN` |
