@@ -122,7 +122,7 @@ fn only_an_app_built_with_the_rust_engine_is_started_as_one() {
     let dir = tempfile::tempdir().unwrap();
     let rust = dir.path().join("rust.exe");
     let python = dir.path().join("python.exe");
-    std::fs::write(&rust, b"MZ...\0engine_kind\0engine_attach\0engine_send\0").unwrap();
+    std::fs::write(&rust, b"MZ...\0engine_attach\0engine_send\0").unwrap();
     std::fs::write(&python, b"MZ...\0sidecar_token\0").unwrap();
     assert!(is_rust_engine_app(&rust));
     assert!(!is_rust_engine_app(&python));

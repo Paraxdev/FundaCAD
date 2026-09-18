@@ -1,5 +1,5 @@
 //! The server over a real pipe, spoken to by a real client. A port of
-//! `crates/fundacad-mcp/tools/python-oracle/tests/test_protocol.py`.
+//! the Python MCP server's `test_protocol.py`.
 //!
 //! Everything else here tests a function. This tests the PROTOCOL, which is
 //! where the failures nothing else can see live: a stray write to stdout

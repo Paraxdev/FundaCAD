@@ -1,5 +1,5 @@
 //! Is FundaCAD open, and how do I reach it? A port of
-//! `crates/fundacad-mcp/tools/python-oracle/app_session.py`.
+//! the Python MCP server's `app_session.py`.
 //!
 //! The app drops a small file naming its engine's port and token while it runs
 //! (src-tauri/src/session_file.rs). This reads it, and then does the only thing

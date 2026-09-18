@@ -604,7 +604,7 @@ pub fn args(pairs: impl IntoIterator<Item = (&'static str, Value)>) -> Value {
 #[cfg(windows)]
 pub mod job {
     //! The Windows job object that makes the engine die with this process,
-    //! a port of `crates/fundacad-mcp/tools/python-oracle/winjob.py`.
+    //! a port of the Python MCP server's `winjob.py`.
     //!
     //! Not housekeeping: an MCP host kills its servers with TerminateProcess,
     //! which runs no cleanup, and the engine's own die-with-parent covers Linux
