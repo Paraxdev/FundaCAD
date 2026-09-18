@@ -415,7 +415,7 @@ old-asset sweep. What makes the bundle:
   The job also refuses to build if `src-tauri/sidecar-runtime` exists, and
   checks the finished binary for the `engine_attach` command, so "this is the
   Rust build" is a fact about the bytes rather than about the arguments.
-- Title: `FundaCAD alpha, Rust engine (rolling)`.
+- Title: `FundaCAD 1.0 alpha, Rust engine (rolling)`.
 - Release notes open with the warning, which is not optional: this is the new
   Rust engine and less tested than the beta, anything that builds differently
   from the beta is worth a report, plugin geometry runs only for plugins that
@@ -443,19 +443,25 @@ installers cannot be published to the other's page. `tests/security/updater.
 test.ts` holds the pair apart.
 
 The separation has to be the endpoint and cannot be the version: the alpha
-is `0.3.x` and the beta is `0.2.x`, so a beta install that ever read the
+is `1.0.x` and the beta is `0.2.x`, so a beta install that ever read the
 alpha manifest would happily take it.
 
 ### 6.2 The version
 
-`0.3.<run number>`, not the `0.3.<run number>-rust` the draft asked for. Tauri's
-msi target refuses a version whose pre-release identifier is not numeric
-("optional pre-release identifier in app version must be numeric-only and
-cannot be greater than 65535 for msi target"), so `-rust` fails the Windows leg
-outright, and the NSIS target silently rewrites a non-numeric field to `0` in
-`VIProductVersion`. The minor carries the distinction instead, and the tag, the
-title, the notes and the feed carry the rest. **When the beta reaches `0.3` the
-alpha has to move up with it**, or the two version ranges meet.
+`1.0.<run number>`: the Rust engine is the major upgrade, so it is 1.0 (the
+base version in `package.json`, `src-tauri/Cargo.toml` and
+`src-tauri/tauri.conf.json` is `1.0.0`), and the title says `FundaCAD 1.0
+alpha`. It was `0.3.<run number>` while the channel was the pre-alpha.
+
+No `-alpha` or `-rust` suffix. Tauri's msi target refuses a version whose
+pre-release identifier is not numeric ("optional pre-release identifier in app
+version must be numeric-only and cannot be greater than 65535 for msi target"),
+so a suffix fails the Windows leg outright, and the NSIS target silently
+rewrites a non-numeric field to `0` in `VIProductVersion`. The tag, the title,
+the notes and the feed say alpha instead.
+
+`tauri.alpha.conf.json` must not declare a `version`: CI stamps the one in
+`tauri.conf.json`, and a version in the merged config would override the stamp.
 
 ### 6.3 The CSP
 
