@@ -117,7 +117,7 @@ repository's own sessions run, and that stays.
 
 ### In the Rust engine build
 
-The pre-alpha (`--features rust-engine`, `tauri.prealpha.conf.json`) has no
+The alpha (`--features rust-engine`, `tauri.alpha.conf.json`) has no
 Python, so it ships the Rust server instead: `fundacad-mcp` is bundled beside
 the app executable (`externalBin`, staged by `scripts/stage-mcp-server.mjs`),
 in the installer and in the portable zip. **How to connect it** hands out that

@@ -49,11 +49,11 @@ const RELEASES = "https://github.com/Paraxdev/fundacad/releases/download/";
 const RELEASE_TAG = "beta";
 /** The Rust engine build's own release. Its bundles carry the geometry
  *  components its plugin host runs, built from the same commit as the host. */
-const PREALPHA_RELEASE_TAG = "prealpha-rust";
+const ALPHA_RELEASE_TAG = "alpha";
 
 /** Which release this build installs plugins from. */
 export function pluginReleaseTag(engine: "rust" | "python"): string {
-  return engine === "rust" ? PREALPHA_RELEASE_TAG : RELEASE_TAG;
+  return engine === "rust" ? ALPHA_RELEASE_TAG : RELEASE_TAG;
 }
 
 export interface OfficialPlugin {

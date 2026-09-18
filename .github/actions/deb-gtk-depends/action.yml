@@ -1,7 +1,7 @@
 name: Depend on the renamed GTK package (deb)
 description: >
   Rewrite the .deb control member's Depends line. Shared by the beta build and
-  the pre-alpha Rust build; the payload differs, the dependency does not.
+  the alpha Rust build; the payload differs, the dependency does not.
 
 runs:
   using: composite

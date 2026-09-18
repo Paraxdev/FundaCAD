@@ -26,7 +26,7 @@ import { describe, expect, it } from "vitest";
 // Loaded through vite rather than node:fs, the way tests/components/vHtmlPolicy
 // does, so this file needs no node type declarations and no __dirname.
 import confRaw from "../../src-tauri/tauri.conf.json?raw";
-import prealphaRaw from "../../src-tauri/tauri.prealpha.conf.json?raw";
+import alphaRaw from "../../src-tauri/tauri.alpha.conf.json?raw";
 // The glue the app actually loads: src/sketch/solver.ts imports
 // `@salusoft89/planegcs`, which resolves to this file.
 import glue from "../../node_modules/@salusoft89/planegcs/dist/planegcs_dist/planegcs.js?raw";
@@ -39,7 +39,7 @@ const conf = JSON.parse(confRaw) as {
   app: { security: { csp: string; devCsp: string } };
 };
 
-const prealpha = JSON.parse(prealphaRaw) as {
+const alpha = JSON.parse(alphaRaw) as {
   app: { security: { csp: string; devCsp: string } };
 };
 
@@ -146,7 +146,7 @@ describe("Content-Security-Policy", () => {
   });
 });
 
-// The pre-alpha Rust build's policy (src-tauri/tauri.prealpha.conf.json).
+// The alpha Rust build's policy (src-tauri/tauri.alpha.conf.json).
 //
 // That build has no Python sidecar and no WebSocket: the engine is a worker
 // process the app supervises, and every frame reaches the webview over Tauri
@@ -158,19 +158,19 @@ describe("Content-Security-Policy", () => {
 // Two policies rather than one for as long as both engines ship. When the
 // sidecar is deleted (docs/RUST-PIVOT.md phase 3) the base policy loses the
 // loopback sources too and this whole block goes with them.
-describe("the pre-alpha Rust build's Content-Security-Policy", () => {
+describe("the alpha Rust build's Content-Security-Policy", () => {
   it("is the shipped policy with the loopback engine socket taken out", () => {
     for (const key of ["csp", "devCsp"] as const) {
       const base = conf.app.security[key];
       const want = base.replace(` ${SIDECAR_SOURCES.join(" ")}`, "");
       expect(want, "the base policy no longer grants the loopback socket").not.toBe(base);
-      expect(prealpha.app.security[key]).toBe(want);
+      expect(alpha.app.security[key]).toBe(want);
     }
   });
 
   it("grants no loopback origin at all", () => {
     for (const key of ["csp", "devCsp"] as const) {
-      expect(directive(prealpha.app.security[key], "connect-src")).toEqual([
+      expect(directive(alpha.app.security[key], "connect-src")).toEqual([
         "'self'",
         "ipc:",
         "http://ipc.localhost",
@@ -178,8 +178,8 @@ describe("the pre-alpha Rust build's Content-Security-Policy", () => {
     }
   });
 
-  it("keeps the two pre-alpha policies in step with each other", () => {
-    const { csp, devCsp } = prealpha.app.security;
+  it("keeps the two alpha policies in step with each other", () => {
+    const { csp, devCsp } = alpha.app.security;
     expect(devCsp).toBe(csp);
   });
 });

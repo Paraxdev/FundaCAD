@@ -1,6 +1,6 @@
 # The Rust pivot ("rustirisation")
 
-Status: pre-alpha, work in progress. This document is the plan, the decision
+Status: alpha, work in progress. This document is the plan, the decision
 record and the conversion target list for moving FundaCAD's backend from Python
 to Rust. It is written to be executed one brick at a time by whoever picks up
 the `rustirisation` branch, human or agent, and every brick must leave every
@@ -228,7 +228,7 @@ progress is planned wrong.
    a developer setting (`engine: "python" | "rust"`), Python the default. The
    `VITE_GEOM=rust` spike and `src-tauri/src/geom.rs` are deleted; its tests
    move into `fundacad-geom`.
-7. The `prealpha-rust` rolling release (section 6). Done.
+7. The `alpha` rolling release (section 6). Done.
 
 ### Phase 2, parity
 
@@ -392,28 +392,35 @@ The TypeScript stays; these get a Rust twin and shared vectors.
   Python suites drive is compiled and tested; it gates once Phase 1 step 4 lands.
 - **Hygiene.** `scripts/check-repo-hygiene.sh` applies to Rust too.
 
-## 6. The `prealpha-rust` rolling release (landed)
+## 6. The `alpha` rolling release (landed)
 
-A second rolling release beside `beta`, on the tag `prealpha-rust`. Two jobs in
-`.github/workflows/build.yml`, `build-prealpha` and `release-prealpha`, with
-their own `concurrency.group` (`release-prealpha-rust`), their own rolling tag
+Renamed from `prealpha-rust` on 2026-09-18, when the branches moved: the Python
+engine lives on the `legacy` branch, which keeps publishing the rolling `beta`
+release and `beta/latest.json`, and the Rust engine is `main`, which publishes
+this rolling `alpha`. Alpha rather than beta because the Rust engine is the
+less tested of the two. In `build.yml` on `main` the beta's `build` and
+`release` jobs only run for `legacy`, and the alpha jobs run on `main`.
+
+A second rolling release beside `beta`, on the tag `alpha`. Two jobs in
+`.github/workflows/build.yml`, `build-alpha` and `release-alpha`, with
+their own `concurrency.group` (`release-alpha`), their own rolling tag
 moved in place rather than deleted, their own `latest.json` and the same
 old-asset sweep. What makes the bundle:
 
 - `--features rust-engine`, so the engine is a worker process of the same
   executable and `engine_kind` answers `"rust"`, which is what selects the IPC
   transport in `src/geometry/transport.ts`.
-- `src-tauri/tauri.prealpha.conf.json` instead of `tauri.bundle.conf.json`, so
+- `src-tauri/tauri.alpha.conf.json` instead of `tauri.bundle.conf.json`, so
   no `sidecar-runtime` resource is bundled and no Python is needed at runtime.
   The job also refuses to build if `src-tauri/sidecar-runtime` exists, and
   checks the finished binary for the `engine_attach` command, so "this is the
   Rust build" is a fact about the bytes rather than about the arguments.
-- Title: `FundaCAD pre-alpha, Rust engine (rolling, WORK IN PROGRESS)`.
-- Release notes open with the warning, which is not optional: the Rust engine
-  is incomplete, unported features fail in a rebuild with the skipped-feature
-  banner, plugin geometry runs only for plugins that ship a component
-  (PrintToolbox so far), files it saves open in the beta, and it is not for
-  real work.
+- Title: `FundaCAD alpha, Rust engine (rolling)`.
+- Release notes open with the warning, which is not optional: this is the new
+  Rust engine and less tested than the beta, anything that builds differently
+  from the beta is worth a report, plugin geometry runs only for plugins that
+  ship a WebAssembly component (PrintToolbox so far), the beta continues on
+  the Python engine from `legacy`, and files open in both.
 
 ### 6.1 The updater endpoint
 
@@ -426,18 +433,18 @@ The endpoint is compiled into the binary, so which feed a copy reads is settled
 when it is built and can never change afterwards:
 
 - a beta build reads `releases/download/beta/latest.json`, which only the
-  `release` job writes;
-- a pre-alpha build reads `releases/download/prealpha-rust/latest.json`, which
-  only `release-prealpha` writes.
+  `release` job writes, and only on `legacy`;
+- an alpha build reads `releases/download/alpha/latest.json`, which
+  only `release-alpha` writes, and only on `main`.
 
 Neither job touches the other's release, and the two builds download their
-artifacts by pattern (`fundacad-beta-*`, `fundacad-prealpha-*`) so one run's
+artifacts by pattern (`fundacad-beta-*`, `fundacad-alpha-*`) so one run's
 installers cannot be published to the other's page. `tests/security/updater.
 test.ts` holds the pair apart.
 
-The separation has to be the endpoint and cannot be the version: the pre-alpha
+The separation has to be the endpoint and cannot be the version: the alpha
 is `0.3.x` and the beta is `0.2.x`, so a beta install that ever read the
-pre-alpha manifest would happily take it.
+alpha manifest would happily take it.
 
 ### 6.2 The version
 
@@ -448,22 +455,22 @@ cannot be greater than 65535 for msi target"), so `-rust` fails the Windows leg
 outright, and the NSIS target silently rewrites a non-numeric field to `0` in
 `VIProductVersion`. The minor carries the distinction instead, and the tag, the
 title, the notes and the feed carry the rest. **When the beta reaches `0.3` the
-pre-alpha has to move up with it**, or the two version ranges meet.
+alpha has to move up with it**, or the two version ranges meet.
 
 ### 6.3 The CSP
 
-The pre-alpha config also tightens `connect-src`. The beta grants
+The alpha config also tightens `connect-src`. The beta grants
 `ws://127.0.0.1:8765 http://127.0.0.1:8765` because the frontend talks to the
 Python sidecar over a loopback WebSocket; the Rust engine is a stdio worker
 reached over Tauri IPC, so that build's webview never opens a socket and the
 grant comes out. `ipc:` and `http://ipc.localhost` are all it keeps.
-`tests/security/csp.test.ts` pins the pre-alpha policy as the shipped one minus
+`tests/security/csp.test.ts` pins the alpha policy as the shipped one minus
 exactly those two sources, so the two cannot drift, and when the sidecar is
 deleted in phase 3 the base policy loses them too and the pair becomes one.
 
-### 6.4 Before the first pre-alpha release is cut
+### 6.4 Before the first alpha release is cut
 
-- The `build-prealpha` job has never run. It compiles OpenCASCADE from source
+- The `build-alpha` job has never run. It compiles OpenCASCADE from source
   on all three runners, about twenty minutes cold, cached at
   `src-tauri/target/OCCT`; the Linux leg installs `cmake`, which
   `.github/actions/linux-deps` deliberately leaves out.
@@ -471,7 +478,7 @@ deleted in phase 3 the base policy loses them too and the pair becomes one.
   minisign pubkey, so both release jobs withhold `latest.json` and say so in
   the notes. Generating a keypair turns both feeds on at once.
 - Plugin bundles ARE published to this release now, packed by
-  `build-prealpha` with their geometry components, and a Rust engine build
+  `build-alpha` with their geometry components, and a Rust engine build
   installs from it (`pluginReleaseTag` in `src/plugins/index.ts`). Only
   PrintToolbox has a component so far; the rest refuse their features by name.
 - `fundacad-mcp` ships beside the app (`externalBin`), its private engine is

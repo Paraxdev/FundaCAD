@@ -86,9 +86,9 @@ describe("the plugins this build offers", () => {
     // A Rust engine build runs plugin geometry as components, which its own
     // release carries from the same commit as its host.
     expect(pluginReleaseTag("python")).toBe("beta");
-    expect(pluginReleaseTag("rust")).toBe("prealpha-rust");
+    expect(pluginReleaseTag("rust")).toBe("alpha");
     for (const p of officialPlugins(pluginReleaseTag("rust"))) {
-      expect(p.url).toBe(`${RELEASES}prealpha-rust/${p.asset}`);
+      expect(p.url).toBe(`${RELEASES}alpha/${p.asset}`);
     }
   });
 });

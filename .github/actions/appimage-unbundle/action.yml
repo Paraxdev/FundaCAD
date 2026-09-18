@@ -1,7 +1,7 @@
 name: Un-bundle the system stack from the AppImage
 description: >
   Strip the bundled GTK/WebKit/GStreamer stack out of the AppImage, repack it
-  and re-sign it. Shared by the beta build and the pre-alpha Rust build, so the
+  and re-sign it. Shared by the beta build and the alpha Rust build, so the
   two cannot drift; the only difference between them is which payload has to
   survive the strip.
 

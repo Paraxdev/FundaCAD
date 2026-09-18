@@ -85,5 +85,5 @@ memory/
 # its own copy and attaches it to the beta release; a local one is a scratch
 # file for testing an install.
 dist-plugins/
-# fundacad-mcp staged for the pre-alpha bundle by scripts/stage-mcp-server.mjs
+# fundacad-mcp staged for the alpha bundle by scripts/stage-mcp-server.mjs
 src-tauri/binaries/
