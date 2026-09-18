@@ -121,6 +121,26 @@
     "body1": 3795.25
    }
   },
+  "chamfer_corner_three_edges": {
+   "bbox": {
+    "max": [
+     20.0,
+     20.0,
+     15.23
+    ],
+    "min": [
+     -20.0,
+     -20.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 23858.70352
+   }
+  },
   "chamfer_large_all_fallback": {
    "bbox": {
     "max": [
@@ -2619,7 +2639,7 @@
  },
  "golden": {
   "corpus": "tests/golden/corpus/corpus_engines.json",
-  "corpusSha256": "d7c5c9646743b8c4a0cd6dc07df3da227331c31d481770ec731d84f4752361f4",
+  "corpusSha256": "b80fae9b9fff1bea47288a549e3b6ca569990cbce2ca9bac2f3c63a622f773b2",
   "frozen": true,
   "kind": "rebuild",
   "rebuildTolerance": 0.1,
@@ -2632,6 +2652,9 @@
    "sidecarCommit": "0c919c56ec54491d2bd9df4cfa8569b66ea5daf4"
   },
   "rules": "body count and body ids exact; each body's mesh volume (signed tetra sum) within max(volumeRel * |python|, volumeFloor); every bbox corner within max(bboxAbs, bboxRelOfDiagonal * python bbox diagonal); the ordered (feature id, error class) list exact, an error class being the message with every number masked as # and whitespace collapsed, after the repository root is replaced by $REPO. An import fixture is imported through the engine's own import op first; the reply's fields other than geom must equal python's.",
+  "rustRecorded": [
+   "chamfer_corner_three_edges"
+  ],
   "tolerances": {
    "bboxAbs": 0.0001,
    "bboxRelOfDiagonal": 0.001,

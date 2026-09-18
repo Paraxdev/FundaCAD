@@ -136,6 +136,11 @@ fn rebuild(args: &[String]) -> ExitCode {
         }
     };
 
+    let phases = fundacad_geom::bench::report();
+    if phases.as_object().is_some_and(|m| !m.is_empty()) {
+        eprintln!("phases: {phases}");
+    }
+
     let ok = reply["ok"] == true;
     if std::env::var_os("FUNDACAD_BENCH_PHASES").is_some_and(|v| v != "0") {
         eprintln!("phases {}", fundacad_geom::bench::report());

@@ -609,6 +609,86 @@
       }
     },
     {
+      "name": "chamfer_corner_three_edges",
+      "document": {
+        "parameters": {},
+        "features": [
+          {
+            "id": "f1",
+            "type": "sketch",
+            "plane": "XY",
+            "entities": [
+              {
+                "type": "rectangle",
+                "id": "e0",
+                "width": 40,
+                "height": 40,
+                "x": 0,
+                "y": 0
+              }
+            ]
+          },
+          {
+            "id": "f2",
+            "type": "extrude",
+            "sketch": "f1",
+            "distance": 15.23,
+            "operation": "new",
+            "regions": [
+              [
+                0,
+                0,
+                0
+              ]
+            ],
+            "hiddenBodies": []
+          },
+          {
+            "id": "f3",
+            "type": "chamfer",
+            "edges": [
+              {
+                "kind": "edge",
+                "by": "nearest",
+                "point": [
+                  0,
+                  -20,
+                  15.229999542236328
+                ],
+                "body": "body1"
+              },
+              {
+                "kind": "edge",
+                "by": "nearest",
+                "point": [
+                  20,
+                  0,
+                  15.229999542236328
+                ],
+                "body": "body1"
+              },
+              {
+                "kind": "edge",
+                "by": "nearest",
+                "point": [
+                  20,
+                  -20,
+                  7.614999771118164
+                ],
+                "body": "body1"
+              }
+            ],
+            "distance": 3.35
+          }
+        ],
+        "bodyIds": {
+          "f2:0": "body1"
+        },
+        "paramDefs": {},
+        "version": 9
+      }
+    },
+    {
       "name": "fillet_tangent_chain",
       "document": {
         "parameters": {},

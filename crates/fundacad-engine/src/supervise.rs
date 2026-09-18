@@ -111,11 +111,23 @@ pub enum Breach {
 impl Breach {
     /// The result the request is answered with, server.py's wording.
     pub fn result(self) -> Map<String, Value> {
+        self.result_in(None)
+    }
+
+    /// [`Breach::result`], naming what a stalled job was inside when known, so
+    /// a report of a stall that cannot be reproduced still says where it was.
+    pub fn result_in(self, doing: Option<&str>) -> Map<String, Value> {
         let message = match self {
-            Breach::Stalled(d) => format!(
-                "one operation stalled for over {} s, the geometry kernel was restarted; progress up to the last checkpoint is kept",
-                d.as_secs()
-            ),
+            Breach::Stalled(d) => {
+                let mut m = format!(
+                    "one operation stalled for over {} s, the geometry kernel was restarted; progress up to the last checkpoint is kept",
+                    d.as_secs()
+                );
+                if let Some(at) = doing {
+                    m.push_str(&format!(" (it was stuck in {at})"));
+                }
+                m
+            }
             Breach::TimedOut => "operation timed out, geometry too complex or degenerate".into(),
             Breach::IgnoredCancel => {
                 if let Value::Object(m) = fundacad_protocol::envelope::cancelled_result() {
@@ -271,5 +283,13 @@ mod tests {
         let m = Breach::Stalled(Duration::from_secs(60)).result();
         assert!(m["error"]["message"].as_str().unwrap().starts_with("one operation stalled for over 60 s"));
         assert_eq!(Breach::IgnoredCancel.result()["cancelled"], true);
+    }
+
+    #[test]
+    fn a_stall_names_where_it_was() {
+        let m = Breach::Stalled(Duration::from_secs(60)).result_in(Some("chamfer > blend_section"));
+        let text = m["error"]["message"].as_str().unwrap();
+        assert!(text.starts_with("one operation stalled for over 60 s"));
+        assert!(text.ends_with("(it was stuck in chamfer > blend_section)"), "{text}");
     }
 }
