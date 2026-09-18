@@ -377,6 +377,23 @@ export class DocumentStore {
     this.abortListeners.add(fn);
     return () => this.abortListeners.delete(fn);
   }
+  /** Notified when the feature under edit changes live, see liveFeature. */
+  onEditPreview(fn: () => void): () => void {
+    this.editPreviewListeners.add(fn);
+    return () => this.editPreviewListeners.delete(fn);
+  }
+  private editPreviewListeners = new Set<() => void>();
+  private emitEditPreview() {
+    for (const fn of this.editPreviewListeners) fn();
+  }
+
+  /** `id` as the model on screen shows it: the tool's live version while one
+   *  edits it, so a panel beside the tool never contradicts it. */
+  liveFeature(id: string): Feature | null {
+    if (this.editPreview?.id === id && this.editPreview.feature) return this.editPreview.feature;
+    return this.doc.features.find((f) => f.id === id) ?? null;
+  }
+
   /** notified when the file path or dirty flag changes (for the titlebar). */
   onMeta(fn: MetaListener): () => void {
     this.metaListeners.add(fn);
@@ -991,18 +1008,21 @@ export class DocumentStore {
   beginEditPreview(id: string, feature: Feature | null = null) {
     this.editPreview = { id, feature };
     this.previewHold = false;
+    this.emitEditPreview();
     this.scheduleRebuild(true);
   }
   setEditPreview(feature: Feature | null, opts?: { hold?: boolean }) {
     if (!this.editPreview) return;
     this.editPreview = { id: this.editPreview.id, feature };
     this.previewHold = feature !== null && !!opts?.hold;
+    this.emitEditPreview();
     this.scheduleRebuild(true);
   }
   endEditPreview(rebuild = true) {
     if (!this.editPreview) return;
     this.editPreview = null;
     this.previewHold = false;
+    this.emitEditPreview();
     if (rebuild) this.leavePreview();
   }
   get editPreviewId(): string | null {
