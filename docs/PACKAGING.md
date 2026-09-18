@@ -86,6 +86,10 @@ is not, the policy in it is the tightened one with no `ws://127.0.0.1:8765`
 anywhere, and the updater endpoint baked in is the pre-alpha one with the beta
 one absent.
 
+With `fundacad-mcp` beside it (2026-09-18, same command): `.msi` 29.2 MB,
+`-setup.exe` 28.9 MB, portable zip 28.9 MB; the folder is `fundacad.exe`
+76.6 MB and `fundacad-mcp.exe` 4.2 MB, nothing else.
+
 Nothing about the beta path changes, and the two never meet: separate jobs,
 separate tags, separate update feeds, separate artifact names.
 
