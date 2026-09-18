@@ -32,7 +32,7 @@ What the backend pivot buys:
   engine is one more mode of the same executable.
 - The seam is already drawn. `GeometryBackend` in `src/geometry/client.ts` is
   the only thing the frontend depends on, and fourteen test files stub it.
-- The file formats are already Rust (`fnda.rs`, `container.rs`, `json_doc.rs`).
+- The file formats are already Rust, the `fundacad-format` crate.
 - About 1,700 lines of algorithms are duplicated between TS and Python
   (pattern expansion, region detection, face footprints, hole standards, face
   colour encoding) to keep preview and build in agreement. They get one Rust
@@ -74,9 +74,11 @@ fundacad (Tauri main process)          fundacad --engine (worker process)
   `fundacad-engine --ws` serves the same frames on 127.0.0.1 with the existing
   token and Origin gate. It is what `npm run dev` in a plain browser, the
   Playwright e2e scripts, `test_ws.py` and the differential harness use. The
-  MCP live session reaches a running app through a loopback endpoint the main
-  process opens with the same gate and publishes in `session.json`, relaying to
-  the worker; that is decided in detail in its brick.
+  MCP live session reaches a running app through a loopback endpoint with the
+  same gate that the WORKER opens beside its stdio pipe (`FUNDACAD_LIVE_TOKEN`
+  from the app, `LISTENING <port>` back on stderr), serving the same engine
+  and so the same live session; the main process publishes it in
+  `session.json`. No relay: a guest's frames never pass through the window.
 - **Worker state.** The in-memory prefix and mesh caches live in the worker
   and are lost on a restart; the blob store is on disk and survives, as today.
 
@@ -456,8 +458,9 @@ old-asset sweep. What makes the bundle:
 - Title: `FundaCAD pre-alpha, Rust engine (rolling, WORK IN PROGRESS)`.
 - Release notes open with the warning, which is not optional: the Rust engine
   is incomplete, unported features fail in a rebuild with the skipped-feature
-  banner, plugin geometry does not run at all, files it saves open in the beta,
-  and it is not for real work.
+  banner, plugin geometry runs only for plugins that ship a component
+  (PrintToolbox so far), files it saves open in the beta, and it is not for
+  real work.
 
 ### 6.1 The updater endpoint
 
@@ -514,9 +517,13 @@ deleted in phase 3 the base policy loses them too and the pair becomes one.
 - The updater is still off everywhere. `tauri.conf.json` carries upstream's
   minisign pubkey, so both release jobs withhold `latest.json` and say so in
   the notes. Generating a keypair turns both feeds on at once.
-- Plugin bundles are not published to this release, because the app asks the
-  beta release for them whatever build it is (`RELEASE_TAG` in
-  `src/plugins/index.ts`), and plugin geometry does not run on this engine yet.
+- Plugin bundles ARE published to this release now, packed by
+  `build-prealpha` with their geometry components, and a Rust engine build
+  installs from it (`pluginReleaseTag` in `src/plugins/index.ts`). Only
+  PrintToolbox has a component so far; the rest refuse their features by name.
+- `fundacad-mcp` ships beside the app (`externalBin`), its private engine is
+  the app started with `--engine --ws`, and the app's worker serves a loopback
+  WebSocket beside its stdio pipe for live sessions (docs/MCP.md).
 
 ## 7. Working agreements for the branch
 

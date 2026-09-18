@@ -523,7 +523,7 @@ export class Geometry implements GeometryBackend {
     try {
       msg = JSON.parse(data);
     } catch (err) {
-      console.error("[geometry] bad JSON from sidecar:", err, "payload:", data.slice(0, 200));
+      console.error("[geometry] bad JSON from the engine:", err, "payload:", data.slice(0, 200));
       return;
     }
     if (msg && typeof msg.status === "string") {
@@ -616,7 +616,7 @@ export class Geometry implements GeometryBackend {
       // enough to know the id, settle the caller: leaving it pending is worse
       // than an error, because rebuildNow()'s `rebuilding` flag never clears
       // and every later rebuild silently no-ops (see the onclose comment).
-      console.error("[geometry] bad binary frame from sidecar:", err);
+      console.error("[geometry] bad binary frame from the engine:", err);
       const id = header?.id;
       if (id !== undefined) this.abortStream(id, "the geometry engine sent an unreadable reply");
     }

@@ -50,7 +50,7 @@ import { WelcomeScreen, welcomeOnStartup } from "../ui/welcome";
 import { scheduleStartupUpdateCheck } from "../ui/updates";
 import { openDocumentAtPath } from "../io/files";
 
-import { installSidecarDiedToast } from "./sidecarWatch";
+import { installEngineDiedToast } from "./engineWatch";
 import { activatePlugins } from "../plugins/activate";
 import { createSelection } from "./selection";
 import { DraftTool } from "../features/draftTool";
@@ -216,7 +216,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
 
   e.geometry = new Geometry();
   void e.geometry.init(); // picks the engine transport and opens it
-  installSidecarDiedToast();
+  installEngineDiedToast();
 
   // Start on a blank canvas. It used to open a built-in example bracket, which
   // meant every launch began by rebuilding geometry nobody asked for, and "File →
@@ -477,7 +477,7 @@ export function mountUi(e: Engine): void {
   activatePlugins(e);
 
   e.geometry.onStatus((connected) => {
-    if (!connected) e.setStatus("connecting to sidecar…", "error");
+    if (!connected) e.setStatus("connecting to the geometry engine…", "error");
     else void e.store.rebuildNow();
   });
 

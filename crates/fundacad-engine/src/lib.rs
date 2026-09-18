@@ -62,6 +62,10 @@ impl Progress {
         self.beats.fetch_add(1, Ordering::Relaxed);
     }
 
+    pub fn beats(&self) -> u64 {
+        self.beats.load(Ordering::Relaxed)
+    }
+
     fn reset(&self) {
         self.feature.store(-1, Ordering::Relaxed);
         self.meshed.store(-1, Ordering::Relaxed);
