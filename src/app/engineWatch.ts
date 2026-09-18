@@ -4,6 +4,8 @@ import { toast } from "../ui/toast";
 interface Death {
   kind: string;
   cause: string;
+  /** The supervisor's crash report, the console entry's detail. */
+  detail?: string;
 }
 
 /** What to tell the user when the geometry engine goes away. `kind` separates
@@ -31,6 +33,11 @@ export function deathMessage(p: Partial<Death> | null | undefined): string {
 export function installEngineDiedToast(): void {
   if (!("__TAURI_INTERNALS__" in window)) return;
   void listen<Death>("engine:died", (e) => {
-    toast(deathMessage(e.payload), { kind: "error", timeout: 60000 });
+    toast(deathMessage(e.payload), {
+      kind: "error",
+      timeout: 60000,
+      source: "engine",
+      detail: e.payload.detail,
+    });
   });
 }
