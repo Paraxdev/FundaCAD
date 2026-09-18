@@ -17,9 +17,9 @@
 // the question it answers ("does the collapsed tree pay for itself?") was
 // answered once. Re-run it by hand when the Browser's rendering changes.
 //
-// Usage (from the repo root, with vite on 5173 + sidecar on 8765):
-//   sidecar/.venv/bin/python e2e/gen_perf_docs.py
-//   SC_TOKEN=<sidecar token> node e2e/browser_tree_perf.cjs
+// Usage (from the repo root, with vite on 5173 + engine on 8765 (`fundacad-engine --ws`)):
+//   e2e/gen_perf_docs.py on the legacy branch writes the documents (the Python engine builds their blobs)
+//   SC_TOKEN=<engine token> node e2e/browser_tree_perf.cjs
 const { chromium } = require("playwright-core");
 const fs = require("fs");
 
@@ -37,7 +37,7 @@ const REPEATS = 7;
   const page = await browser.newPage();
   page.on("pageerror", (e) => console.error("PAGE ERROR:", e.message));
 
-  // SUBSTITUTE the token into the sidecar URL, the app already builds `?token=`
+  // SUBSTITUTE the token into the engine URL, the app already builds `?token=`
   // (empty outside Tauri), and the override must be scoped to 8765 or vite's own
   // HMR socket breaks and fills the run with red herrings.
   await page.addInitScript((t) => {
@@ -66,7 +66,7 @@ const REPEATS = 7;
       if (!fs.existsSync(docPath)) {
         console.error(
           `missing ${docPath}, generate the benchmark documents first:\n` +
-            `  sidecar/.venv/bin/python e2e/gen_perf_docs.py`,
+            `  e2e/gen_perf_docs.py, on the legacy branch (it builds the blobs with the Python engine)`,
         );
         process.exit(1);
       }

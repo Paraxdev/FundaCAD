@@ -1,5 +1,5 @@
 #pragma once
-// The rebuild cache's restore check, sidecar/rebuild_cache.py `_body_fingerprint`.
+// The rebuild cache's restore check, the Python engine's `rebuild_cache.py` `_body_fingerprint`.
 // The box must not use triangulation: a body is meshed when its checkpoint is
 // written and never when it is restored, which moves such a box by up to 0.5 mm.
 

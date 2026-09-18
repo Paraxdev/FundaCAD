@@ -44,7 +44,7 @@
 // a feature it cannot build: the values survive, unlabelled but typed and still
 // parameter-drivable, a save writes them back untouched, and the build names the
 // plugin rather than shrugging. See src/document/missingPlugins.ts and
-// sidecar/plugin_geometry.py, which are the two halves of saying so.
+// the Python engine's `plugin_geometry.py`, which are the two halves of saying so.
 
 import { contribute } from "fundacad";
 import type { Engine } from "fundacad";

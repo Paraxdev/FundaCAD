@@ -10,7 +10,7 @@ import type { ElementDef } from "../../src/document/elements";
 
 type Node = { name: string; parent: number | null };
 
-/** The shape sidecar/step_assembly.py emits for asm_nested.step: a root with a
+/** The shape the Python engine's `step_assembly.py` emits for asm_nested.step: a root with a
  *  subassembly instanced twice, each holding two products. */
 const NESTED: Node[] = [
   { name: "Robot", parent: null },       // 0

@@ -1,6 +1,6 @@
 // Floating panel for the sketch Text tool. DimInput is numeric-only, so text
 // gets its own small panel: a multi-line string, a system-font picker (fonts come
-// from the sidecar's listFonts op), size, bold/italic, alignment and rotation. On
+// from the engine's listFonts op), size, bold/italic, alignment and rotation. On
 // every edit it fires onChange for a live preview; Add/Enter commits, Cancel/Esc cancels.
 //
 // This is now a FACADE over stores/toolPanels.ts +

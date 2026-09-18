@@ -1,7 +1,7 @@
 // Assembling one rebuild reply's per-body payloads into the single flat
 // RebuildResult the rest of the app consumes.
 //
-// Split out of client.ts because a CHUNKED reply (sidecar/server.py's
+// Split out of client.ts because a CHUNKED reply (the Python engine's `server.py`'s
 // _stream_binary_reply) needs the same arithmetic applied incrementally: the
 // head frame's manifest names every body up front, so every array offset and
 // every body's global faceStart can be planned BEFORE any payload arrives.
@@ -11,7 +11,7 @@
 
 import type { FaceColorRuns, F32Wire, RebuildResult, U32Wire } from "../types";
 
-// --- Protocol-v2 wire shapes (see sidecar/server.py's _rebuild_job / _body_payload) ---
+// --- Protocol-v2 wire shapes (see the Python engine's `server.py`'s _rebuild_job / _body_payload) ---
 // One body's per-body payload: either the full mesh (positions/indices/faceIds
 // etc.) or an "unchanged" stub referencing an etag the client already caches
 // locally. `unchanged` is the discriminant.
@@ -44,9 +44,9 @@ export interface WireBodyFull {
    *  pass covers each face. The core carries the number and never looks up what
    *  colour it means; the capability that owns a palette does that.
    *
-   *  THE NAME IS A CONTRACT with sidecar/server.py, which writes this key into
-   *  the payload. It was `textureColorSlots` on both sides until the surface
-   *  texture became a plugin and the sidecar half was renamed, at which point
+   *  THE NAME IS A CONTRACT with crates/fundacad-geom/src/mesh/mod.rs, which writes this key
+   *  into the payload. It was `textureColorSlots` on both sides until the surface
+   *  texture became a plugin and the engine half was renamed, at which point
    *  this half went on reading a key nothing sent and every two-tone inlay
    *  silently stopped being painted. tests/geometry/wireKeys.test.ts is what now
    *  fails if the two halves drift apart again. */
@@ -71,7 +71,7 @@ export type WireBody = WireBodyFull | WireBodyStub;
  *  anything else, so this stays the single downstream contract. */
 export type WireEdgeList = { points: [number, number, number][]; body?: string; smooth?: boolean }[];
 
-// The sidecar's raw rebuild/computeAll result before local reassembly: a
+// The engine's raw rebuild/computeAll result before local reassembly: a
 // resync request, a protocol-v2 per-body result, or (defensively) the legacy
 // single-mesh shape a backend could still return directly. Modeled as one flat
 // shape with everything optional (rather than a discriminated union) so the ad
@@ -107,7 +107,7 @@ export interface WireRebuildResult {
 /** One row of a chunked reply's manifest (server.py's _manifest_entry): every
  *  body of the reply, in final order, in the head frame.
  *
- *  Sizes are absent on stubs BY DESIGN, the sidecar does not have them,
+ *  Sizes are absent on stubs BY DESIGN, the engine does not have them,
  *  because those arrays live in this client's own per-body cache. That is not a
  *  gap: resolving a stub against the cache is something begin() has to do
  *  anyway, to decide whether it can still back that etag at all. */
@@ -148,7 +148,7 @@ interface BodyPlan {
 
 /** Build manifest entries from a non-chunked reply's own bodies, so the single
  *  frame path and the chunked path run the same code. Sizes come off the
- *  payloads that are already in hand; stubs get none, exactly as the sidecar
+ *  payloads that are already in hand; stubs get none, exactly as the engine
  *  would have sent them. */
 export function manifestFromBodies(bodies: WireBody[]): WireManifestEntry[] {
   return bodies.map((b) => {
@@ -295,7 +295,7 @@ export class RebuildAssembly {
       vOff += nVerts3; iOff += nIdx; tOff += nTris; faceBase += faceCount; edgeBase += nEdges;
     }
 
-    // the sidecar sends explicit normals at shipping quality and for textured
+    // the engine sends explicit normals at shipping quality and for textured
     // bodies; a body without them keeps its zero-initialized slice, and render.ts
     // falls back to computeVertexNormals for an all-zero slice.
     const anyNormals = sizes.some((m) => m.hasNormals);

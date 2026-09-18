@@ -1,7 +1,7 @@
 //! Sketches turned into located profiles and region cells, replacing
-//! sidecar/sketch_build.py (`_build_sketch`, `_entity_edges`,
+//! the Python engine's `sketch_build.py` (`_build_sketch`, `_entity_edges`,
 //! `_expand_pattern`, `_faces_from_edges`, `_subdivide_faces`, `_region_*`) and
-//! the `split_profile_cells` rule of sidecar/face_footprint.py.
+//! the `split_profile_cells` rule of the Python engine's `face_footprint.py`.
 //!
 //! A sketch follows the face it was made on through face_anchor.rs, and its
 //! text entities are drawn by the text module.

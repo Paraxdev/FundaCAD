@@ -96,7 +96,7 @@ pub struct Installed {
     pub official: bool,
     /// Whether the files on disk hold the geometry component the manifest
     /// names, read off the directory each time it is listed. False for a bundle
-    /// built for the Python engine, which the Rust engine cannot run.
+    /// built for the Python beta, which this engine cannot run.
     #[serde(default)]
     pub component: bool,
 }
@@ -114,10 +114,10 @@ const CODE: &str = "main.js";
 
 /// Where installed plugins live, one directory each.
 ///
-/// `pub(crate)` because the sidecar needs it too: a plugin may ship geometry the
-/// engine imports (see sidecar/plugin_geometry.py), and Rust tells it this path
-/// rather than letting Python guess, for the same reason it does for the blob
-/// store. The two must agree exactly, and only one of them installs anything.
+/// `pub(crate)` because the engine worker needs it too: a plugin may ship geometry
+/// the engine runs, and the app tells it this path rather than letting it guess,
+/// for the same reason it does for the blob store. The two must agree exactly, and
+/// only one of them installs anything.
 pub(crate) fn plugins_root(app: &AppHandle) -> Result<PathBuf, String> {
     let dir = app
         .path()
@@ -135,8 +135,7 @@ fn read_record(dir: &Path) -> Option<Installed> {
     Some(rec)
 }
 
-/// The manifest field and file sidecar/plugin_geometry.py never reads and
-/// crates/fundacad-geom/src/plugins runs.
+/// The manifest field and file crates/fundacad-geom/src/plugins runs.
 fn has_component(dir: &Path) -> bool {
     std::fs::read(dir.join(MANIFEST))
         .ok()

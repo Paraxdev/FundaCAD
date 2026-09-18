@@ -101,7 +101,7 @@ describe("assemble (protocol v2, multi-body)", () => {
 // Regression: an "unchanged" stub carries its OWN identity.
 //
 // assemble() backs a stub with the CACHED mesh for that etag, then used to read
-// id/name straight off that cached payload, so anything the sidecar changed
+// id/name straight off that cached payload, so anything the engine changed
 // without changing the geometry was discarded. `name` was already wrong this
 // way and only looked right because a rename changes the etag, which turns the
 // body back into a full payload. `nodeRef` (the imported assembly tree) has no

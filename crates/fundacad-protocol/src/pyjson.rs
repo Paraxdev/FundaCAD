@@ -1,6 +1,6 @@
 //! JSON text exactly as Python's `json.dumps` writes it with default arguments.
 //!
-//! Replaces the implicit dependency of `sidecar/wire.py` on the stdlib encoder.
+//! Replaces the implicit dependency of the Python engine's `wire.py` on the stdlib encoder.
 //! The defaults differ from serde_json in three visible ways: `", "` and `": "`
 //! separators, `ensure_ascii` (every non-ASCII character and DEL as `\uXXXX`),
 //! and floats in `repr` form (`1e-05`, `1e+16`, `1.0`). Matching them is what

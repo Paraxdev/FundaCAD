@@ -1,15 +1,8 @@
 name: Portable zip (Windows)
 description: >
-  Unpack the .msi and zip the payload as a portable folder. Shared by the beta
-  build and the alpha Rust build, so the two zips are assembled the same
-  way; only what has to be inside them differs.
+  Unpack the .msi and zip the payload as a portable folder.
 
 inputs:
-  engine:
-    description: >
-      "sidecar" for the Python runtime, which must be in the payload, or
-      "builtin" for the Rust engine, which must not have brought one.
-    required: true
   release-tag:
     description: The release this build is published to, for the readme link.
     required: true
@@ -55,24 +48,14 @@ runs:
         if (-not $exe) { throw "no fundacad.exe in the unpacked payload" }
         $root = $exe.Directory.FullName
 
-        $python = Join-Path $root "sidecar-runtime/python/python.exe"
-        if ("${{ inputs.engine }}" -eq "sidecar") {
-          # The geometry engine IS the app, not an extra. A zip with the exe and
-          # no interpreter starts, opens a window, and can never build anything.
-          if (-not (Test-Path $python)) {
-            Get-ChildItem $root | Select-Object -ExpandProperty Name
-            throw "no bundled Python at sidecar-runtime/python/python.exe"
-          }
-        } else {
-          # The Rust engine is the executable. A Python runtime in this payload
-          # means the wrong bundle config was used, and 800 MB of it.
-          if (Test-Path $python) { throw "the Rust build bundled sidecar-runtime" }
-          # The MCP server ships beside the app (externalBin), and its private
-          # engine is this same executable started with --engine --ws.
-          if (-not (Test-Path (Join-Path $root "fundacad-mcp.exe"))) {
-            Get-ChildItem $root | Select-Object -ExpandProperty Name
-            throw "no fundacad-mcp.exe beside fundacad.exe in the Rust build"
-          }
+        # The engine is the executable. A Python runtime in this payload means
+        # a stale bundle config was used, and 800 MB of it.
+        if (Get-ChildItem $root -Recurse -Filter python*.exe) { throw "the bundle carries a Python interpreter" }
+        # The MCP server ships beside the app (externalBin), and its private
+        # engine is this same executable started with --engine --ws.
+        if (-not (Test-Path (Join-Path $root "fundacad-mcp.exe"))) {
+          Get-ChildItem $root | Select-Object -ExpandProperty Name
+          throw "no fundacad-mcp.exe beside fundacad.exe"
         }
 
         $version = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
@@ -85,17 +68,14 @@ runs:
         # An ARRAY, not a here-string: a here-string's closing marker has to sit
         # at column 0, and every line of this script is indented by the YAML
         # block it lives in.
-        $mcpLines = @()
-        if ("${{ inputs.engine }}" -eq "builtin") {
-          $mcpLines = @(
-            "",
-            "fundacad-mcp.exe is the MCP server, for an AI assistant to build and",
-            "inspect models. In the app, Preferences, AI assistants (MCP) gives the",
-            "setup for Claude Code, Claude Desktop or any other MCP host.",
-            "It works on the document open in FundaCAD, or on its own copy when",
-            "FundaCAD is closed."
-          )
-        }
+        $mcpLines = @(
+          "",
+          "fundacad-mcp.exe is the MCP server, for an AI assistant to build and",
+          "inspect models. In the app, Preferences, AI assistants (MCP) gives the",
+          "setup for Claude Code, Claude Desktop or any other MCP host.",
+          "It works on the document open in FundaCAD, or on its own copy when",
+          "FundaCAD is closed."
+        )
         Set-Content -Path (Join-Path $folder "README.txt") -Encoding utf8 -Value (@(
           "FundaCAD $version, portable build",
           "",

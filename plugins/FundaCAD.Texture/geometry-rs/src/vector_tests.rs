@@ -1,5 +1,5 @@
 //! The Python half's own numbers (tests/vectors.json, written by
-//! tests/make_vectors.py) against this crate's.
+//! tests/make_vectors.py on the legacy branch) against this crate's.
 
 use serde_json::Value;
 

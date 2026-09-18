@@ -1,6 +1,6 @@
 //! The engine worker: one request loop shared by every transport.
 //!
-//! Replaces the request handling of `sidecar/server.py` (`handle`,
+//! Replaces the request handling of the Python engine's `server.py` (`handle`,
 //! `_serialized`, `_dispatch`, `_cancel_running`, `_apply_doc_ops`). Heavy ops
 //! run one at a time on a job thread; `cancel` and `ping` answer on the read
 //! path so they are heard while a job runs. The geometry itself is behind
@@ -128,7 +128,16 @@ pub struct EngineOptions {
     pub clocks: Clocks,
     /// Answer `testSleep`, see [`supervise::test_sleep`].
     pub test_ops: bool,
+    /// End the process with [`EXIT_BREACH`] after answering a job that
+    /// stalled or overstayed, rather than abandoning its thread. For a worker
+    /// whose supervisor restarts it: a kernel call that never returns keeps
+    /// OpenCASCADE's shared thread pool, and every job after it stalled too.
+    pub exit_on_breach: bool,
 }
+
+/// The exit code of a worker that ended itself over a stalled job, which its
+/// supervisor restarts without reporting a crash.
+pub const EXIT_BREACH: i32 = 75;
 
 impl EngineOptions {
     pub fn from_env() -> EngineOptions {
@@ -136,6 +145,7 @@ impl EngineOptions {
             cancel_grace: None,
             clocks: Clocks::from_env(),
             test_ops: supervise::test_ops_enabled(),
+            exit_on_breach: false,
         }
     }
 }
@@ -399,7 +409,12 @@ fn run_one<J: Jobs>(
     let on_breach = {
         let pool = pool.clone();
         let abandoned = abandoned.clone();
-        move || abandon(&pool, &abandoned, serial)
+        move || {
+            if pool.opts.exit_on_breach {
+                std::process::exit(EXIT_BREACH);
+            }
+            abandon(&pool, &abandoned, serial)
+        }
     };
     let watchdog = spawn_watchdog(
         WatchedJob {

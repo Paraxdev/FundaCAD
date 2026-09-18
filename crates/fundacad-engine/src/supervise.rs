@@ -1,6 +1,6 @@
 //! How long a job may run, and what ends one that overstays.
 //!
-//! Replaces the supervision half of `sidecar/server.py`: `_run` (a wall clock,
+//! Replaces the supervision half of the Python engine's `server.py`: `_run` (a wall clock,
 //! `JOB_TIMEOUT`), `_run_stall` (a progress clock, `STALL_TIMEOUT`),
 //! `_export_stall_budget` and the import budget. A Python worker that overstays
 //! is killed with its pool; a Rust job thread cannot be killed, so it is

@@ -79,7 +79,7 @@ impl Face {
     }
 
     /// Closes on itself in u or v (a cylinder side, a full torus), as
-    /// sidecar/topo_adj.py `face_wraps`.
+    /// the Python engine's `topo_adj.py` `face_wraps`.
     pub fn wraps(&self) -> bool {
         self.closure().is_ok_and(|c| c.u_closed || c.v_closed)
     }

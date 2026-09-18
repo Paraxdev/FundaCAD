@@ -1,5 +1,5 @@
 //! `projectGeometry` and the rebuild's projection refresh against what
-//! tests/projection/gen.py recorded from the sidecar.
+//! tests/projection/gen.py on the legacy branch recorded from the Python engine.
 
 mod support;
 
@@ -48,7 +48,7 @@ fn run(case: &Value) -> Value {
 }
 
 #[test]
-fn projection_matches_the_sidecar() {
+fn projection_matches_the_python_engine() {
     let mut failures = Vec::new();
     for case in cases() {
         let name = format!("{}:{}", case["kind"].as_str().unwrap(), case["name"].as_str().unwrap());

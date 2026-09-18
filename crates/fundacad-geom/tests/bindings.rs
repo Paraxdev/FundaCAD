@@ -37,7 +37,7 @@ fn solid_from_shell(shell: &Shape) -> Shape {
 // FORWARD solid around a reversed shell (what sewing an inward shell gives).
 // ShapeFix rights both, but ShapeFix_Solid::Perform only records the flip in
 // its status (DONE2) and returns false, so `modified` stays false. BRepCheck
-// calls both valid, which is why the sidecar tests the volume sign instead.
+// calls both valid, which is why the Python engine tests the volume sign instead.
 #[test]
 fn shape_fix_turns_an_inside_out_solid_the_right_way() {
     let cube = Shape::box_with_dimensions(10.0, 10.0, 10.0);

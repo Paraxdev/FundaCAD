@@ -1,7 +1,7 @@
 // How requests reach the geometry engine and its frames come back. The Geometry
 // client owns the protocol (pending calls, streams, assembly); a transport only
 // moves whole messages, text JSON or binary frames, exactly as PROTOCOL.md
-// defines them, so both engines and both transports share one client.
+// defines them, so both transports share one client.
 
 export interface TransportSink {
   opened(): void;
@@ -16,10 +16,14 @@ export interface GeometryTransport {
   start(sink: TransportSink): Promise<void>;
   send(raw: string): void;
   readonly open: boolean;
+  /** Whether the engine behind it takes a soft cancel, see GeometryBackend.softCancel. */
+  readonly softCancel?: boolean;
 }
 
-/** The Python sidecar, and `fundacad --engine --ws`, on a loopback socket. */
+/** `fundacad-engine --ws` (or `fundacad --engine --ws`) on a loopback socket,
+ *  for a plain browser in development and the e2e scripts. */
 export class WebSocketTransport implements GeometryTransport {
+  readonly softCancel = true;
   private ws: WebSocket | null = null;
   private token = "";
   private sink: TransportSink | null = null;
@@ -30,17 +34,11 @@ export class WebSocketTransport implements GeometryTransport {
 
   async start(sink: TransportSink): Promise<void> {
     this.sink = sink;
-    try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      this.token = await invoke<string>("sidecar_token");
-    } catch {
-      // Plain browser, no Tauri. DEV builds accept a token on the URL so the app
-      // can be driven against a hand-started engine (demo capture, e2e); a
-      // production bundle keeps "" and simply has no engine.
-      this.token = import.meta.env.DEV
-        ? (new URLSearchParams(location.search).get("token") ?? "")
-        : "";
-    }
+    // DEV builds take the token from the URL (`?token=`), so the app can be
+    // driven against a hand-started engine; a production bundle keeps "".
+    this.token = import.meta.env.DEV
+      ? (new URLSearchParams(location.search).get("token") ?? "")
+      : "";
     this.connect();
   }
 
@@ -85,6 +83,7 @@ export class WebSocketTransport implements GeometryTransport {
  *  (1 text, 2 binary) followed by the message, so a mesh never passes through
  *  JSON or base64. */
 export class IpcTransport implements GeometryTransport {
+  readonly softCancel = true;
   private up = false;
   private sink: TransportSink | null = null;
   private invoke: (typeof import("@tauri-apps/api/core"))["invoke"] | null = null;
@@ -127,31 +126,21 @@ export class IpcTransport implements GeometryTransport {
   }
 }
 
-/** The engine this app was built with: an app built with the Rust engine
- *  answers `engine_kind`, everything else (the Python sidecar, a plain browser)
- *  is "python". */
-export async function engineKind(): Promise<"rust" | "python"> {
-  if (!("__TAURI_INTERNALS__" in globalThis)) return "python";
-  try {
-    const { invoke } = await import("@tauri-apps/api/core");
-    return (await invoke<string>("engine_kind")) === "rust" ? "rust" : "python";
-  } catch {
-    // no such command, a Python sidecar build
-    return "python";
-  }
-}
-
-/** IPC to the Rust engine's worker, or the WebSocket every other engine speaks. */
+/** IPC to the app's engine worker, or the WebSocket in a plain browser. */
 export class EngineTransport implements GeometryTransport {
   private inner: GeometryTransport = new WebSocketTransport();
 
   async start(sink: TransportSink): Promise<void> {
-    if ((await engineKind()) === "rust") this.inner = new IpcTransport();
+    if ("__TAURI_INTERNALS__" in globalThis) this.inner = new IpcTransport();
     await this.inner.start(sink);
   }
 
   get open(): boolean {
     return this.inner.open;
+  }
+
+  get softCancel(): boolean {
+    return this.inner.softCancel === true;
   }
 
   send(raw: string): void {

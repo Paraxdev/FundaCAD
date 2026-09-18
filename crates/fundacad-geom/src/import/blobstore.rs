@@ -1,4 +1,4 @@
-//! The durable geometry blob store, replaces `sidecar/blobstore.py`: one
+//! The durable geometry blob store, replaces the Python engine's `blobstore.py`: one
 //! `<blake2b-128 hex>.bbrep` file per content hash, published by rename.
 
 use blake2::digest::{Update, VariableOutput};

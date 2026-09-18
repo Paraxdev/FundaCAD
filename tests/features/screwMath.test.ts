@@ -1,10 +1,10 @@
 // The path a climbing revolve's profile travels. The dashed helix the pitch
-// arrow draws and the spine the sidecar sweeps along come from the same rule, so
+// arrow draws and the spine the engine sweeps along come from the same rule, so
 // anything wrong here is a preview that lies about where the geometry is going.
 //
 // The sign conventions are the point of this file. The angle decides which way
 // the sweep turns and the pitch decides which way it climbs, INDEPENDENTLY, and
-// all four combinations are different solids. sidecar/tests/test_thread_revolve.py
+// all four combinations are different solids. the Python engine's `test_thread_revolve.py`
 // asserts the same four on the built geometry.
 import { describe, expect, it } from "vitest";
 import {
@@ -148,7 +148,7 @@ describe("screwPath", () => {
 
   it("refuses a profile sitting on the axis", () => {
     // No meridian to start from, and no radius to sweep: the same refusal the
-    // sidecar makes, so the arrow is never offered for an impossible gesture.
+    // engine makes, so the arrow is never offered for an impossible gesture.
     expect(screwPath([0, 0, 4], Z, 360, 1)).toEqual([]);
   });
 
@@ -225,7 +225,7 @@ describe("clampDragAngle", () => {
 
   it("stops at one turn while the climb is shorter than the profile is tall", () => {
     // The wall the user is meant to feel: turn two would run into turn one, and
-    // the sidecar refuses that build. clampDragPitch draws the same line from
+    // the engine refuses that build. clampDragPitch draws the same line from
     // the pitch side.
     expect(clampDragAngle(400, TALL - 0.5, TALL)).toBe(360);
     expect(clampDragPitch(TALL - 0.5, TALL, 400)).toBe(TALL);

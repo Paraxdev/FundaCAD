@@ -10,8 +10,8 @@
 //   3. Do the real context menu and its Visibility submenu act on a Shift run?
 //   4. Does a curved body reach the viewport carrying surface normals?
 //
-// Usage (from the repo root, with vite on 5173 + sidecar on 8765):
-//   SC_TOKEN=<sidecar token> SC_CHROME=<chromium or brave> node e2e/visibility_paint_e2e.cjs <doc.funda> [outDir]
+// Usage (from the repo root, with vite on 5173 + engine on 8765 (`fundacad-engine --ws`)):
+//   SC_TOKEN=<engine token> SC_CHROME=<chromium or brave> node e2e/visibility_paint_e2e.cjs <doc.funda> [outDir]
 // The document needs a few dozen sketches and several bodies; any real part does.
 const { chromium } = require("playwright-core");
 const fs = require("fs");

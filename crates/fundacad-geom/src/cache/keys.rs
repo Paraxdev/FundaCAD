@@ -1,4 +1,4 @@
-//! Input addressed cache keys, sidecar/rebuild_cache.py `_feature_sig`,
+//! Input addressed cache keys, the Python engine's `rebuild_cache.py` `_feature_sig`,
 //! `_param_closure`, `_feature_scope`, `_chain_keys_scoped`, `_env_sig` and
 //! `_blob_key`.
 //!
@@ -177,7 +177,7 @@ pub fn feature_scope(
 }
 
 /// `_env_sig`: everything outside the document that shapes geometry. The
-/// engine binary stands in for the sidecar's source files, so any rebuild of
+/// engine binary stands in for the Python engine's source files, so any rebuild of
 /// it starts every document cold. `FUNDACAD_ENV_SIG` overrides it.
 pub fn env_sig() -> String {
     if let Some(forced) = std::env::var("FUNDACAD_ENV_SIG").ok().filter(|s| !s.is_empty()) {
@@ -202,8 +202,16 @@ pub fn env_sig() -> String {
     ])
 }
 
-/// `_chain_keys_scoped` over a document's features.
-pub fn chain_keys(raw: &Value, env: &str, brep_sigs: &mut HashMap<String, String>) -> Vec<String> {
+/// `_chain_keys_scoped` over a document's features. `plugins` maps a feature
+/// type to the identity of the plugin bundle that runs it, so a checkpoint
+/// past a plugin feature is never served once that bundle changes, arrives or
+/// goes.
+pub fn chain_keys(
+    raw: &Value,
+    env: &str,
+    plugins: &HashMap<String, String>,
+    brep_sigs: &mut HashMap<String, String>,
+) -> Vec<String> {
     let empty = serde_json::Map::new();
     let params = raw
         .get("parameters")
@@ -224,7 +232,16 @@ pub fn chain_keys(raw: &Value, env: &str, brep_sigs: &mut HashMap<String, String
     for f in raw.get("features").and_then(Value::as_array).into_iter().flatten() {
         let sig = feature_sig(f, brep_sigs);
         let scope = feature_scope(f, params, &closure, &hidden_json);
-        k = hash_hex(&[k.as_bytes(), sig.as_bytes(), scope.as_bytes()]);
+        let plugin = f
+            .get("type")
+            .and_then(Value::as_str)
+            .and_then(|t| plugins.get(t))
+            .map_or("", String::as_str);
+        k = if plugin.is_empty() {
+            hash_hex(&[k.as_bytes(), sig.as_bytes(), scope.as_bytes()])
+        } else {
+            hash_hex(&[k.as_bytes(), sig.as_bytes(), scope.as_bytes(), b"|plugin:", plugin.as_bytes()])
+        };
         keys.push(k.clone());
     }
     keys
@@ -261,11 +278,26 @@ mod tests {
             ]})
         };
         let mut memo = HashMap::new();
-        let k5 = chain_keys(&doc(5), "env", &mut memo);
-        let k6 = chain_keys(&doc(6), "env", &mut memo);
+        let k5 = chain_keys(&doc(5), "env", &HashMap::new(), &mut memo);
+        let k6 = chain_keys(&doc(6), "env", &HashMap::new(), &mut memo);
         assert_eq!(k5[..2], k6[..2]);
         assert_ne!(k5[2], k6[2]);
-        assert_ne!(chain_keys(&doc(5), "other", &mut memo)[0], k5[0]);
+        assert_ne!(chain_keys(&doc(5), "other", &HashMap::new(), &mut memo)[0], k5[0]);
+    }
+
+    #[test]
+    fn a_plugin_bundle_moves_keys_from_its_first_feature() {
+        let doc = json!({"features": [
+            {"id": "a", "type": "box", "length": 1, "width": 1, "height": 1},
+            {"id": "t", "type": "texture", "kind": "knurl"},
+            {"id": "b", "type": "box", "length": 2, "width": 1, "height": 1},
+        ]});
+        let mut memo = HashMap::new();
+        let none = chain_keys(&doc, "env", &HashMap::new(), &mut memo);
+        let v1 = chain_keys(&doc, "env", &HashMap::from([("texture".into(), "v1".into())]), &mut memo);
+        let v2 = chain_keys(&doc, "env", &HashMap::from([("texture".into(), "v2".into())]), &mut memo);
+        assert_eq!(none[0], v1[0]);
+        assert!(none[1] != v1[1] && v1[1] != v2[1] && v1[2] != v2[2]);
     }
 
     #[test]

@@ -118,7 +118,7 @@
   border-color: var(--accent);
 }
 /* An entry this build cannot place on screen. Kept and carried through the
-   commit, the sidecar resolves these better than the viewport does, so it is
+   commit, the engine resolves these better than the viewport does, so it is
    marked rather than hidden, because a set of four that displayed as three would
    lose one on the next Done. */
 .tgt-unresolved .tgt-label {

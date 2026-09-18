@@ -50,7 +50,7 @@ export interface RebuildState {
   result: RebuildResult | null;
   errorFeatureId: string | null;
   errorMessage: string | null;
-  // while building: the feature index the sidecar is currently executing
+  // while building: the feature index the engine is currently executing
   // (-1 = tessellating), streamed ~1/s during long rebuilds; null otherwise
   progress: number | null;
   /** During the meshing (payload) phase: bodies meshed so far and the total.
@@ -93,7 +93,7 @@ export interface BuildChunk {
 }
 
 /** A long cancellable operation, kept apart from RebuildState so nothing keyed on
- *  `building` misreads it. `id` is the sidecar request id a cancel targets. */
+ *  `building` misreads it. `id` is the engine request id a cancel targets. */
 export interface BusyState {
   active: boolean;
   label: string;
@@ -116,6 +116,13 @@ const isIdMap = (v: unknown): v is Record<string, string> =>
   !!v && typeof v === "object" && !Array.isArray(v) && Object.values(v).every((x) => typeof x === "string");
 
 export const EMPTY_DOCUMENT: CadDocument = { parameters: {}, features: [], bodyIds: {} };
+
+/** What a build of `doc` depends on. Body ids are left out: they are what a
+ *  build hands back, recorded into the document after it. */
+function buildKey(doc: CadDocument): string {
+  const { bodyIds: _ids, ...rest } = doc;
+  return JSON.stringify(rest);
+}
 
 /** What a sketch may reference: features up to the rollback marker, unsuppressed, and
  *  strictly before the sketch being edited. */
@@ -252,6 +259,21 @@ export class DocumentStore {
 
   private busy: BusyState = { active: false, label: "", id: null, pct: null };
 
+  /** The last build of the document without a preview, and what it was built
+   *  from. Leaving a tool, or undoing a commit the kernel refused, lands back on
+   *  exactly this document, so it is shown again at once instead of rebuilt. */
+  private committedShown: { key: string; state: RebuildState } | null = null;
+  /** The rebuild on the wire, and the id a supersede cancels. */
+  private inflight: { gen: number; id: string | null; cancelled: boolean } | null = null;
+  private sendGen = 0;
+  /** Replies to rebuilds sent at or before this are stale and never published. */
+  private staleThrough = 0;
+  /** A commit the kernel had not answered for yet, see verifyCommit. */
+  private provisional: { id: string; what: string; key: string } | null = null;
+  /** Set when a preview is dropped or a refused commit undone, the only times
+   *  the committed model may be shown again without asking the engine. */
+  private restoreArmed = false;
+
   /** surfaced when the store hits something worth telling the user without
    *  failing (newer-version file on load, a dropped sketch binding, a param
    *  commit that failed mid-cascade). Wired to a toast in main.ts. */
@@ -332,7 +354,7 @@ export class DocumentStore {
   }
 
   /** Stop the busy op, if any. Resolves to whether anything was stopped, false
-   *  covers both "nothing running" and "the sidecar had already finished". */
+   *  covers both "nothing running" and "the engine had already finished". */
   async cancelBusy(): Promise<boolean> {
     if (!this.busy.active) return false;
     // A rebuild never learns its id; undefined falls back to the client's lastHeavyId.
@@ -355,6 +377,23 @@ export class DocumentStore {
     this.abortListeners.add(fn);
     return () => this.abortListeners.delete(fn);
   }
+  /** Notified when the feature under edit changes live, see liveFeature. */
+  onEditPreview(fn: () => void): () => void {
+    this.editPreviewListeners.add(fn);
+    return () => this.editPreviewListeners.delete(fn);
+  }
+  private editPreviewListeners = new Set<() => void>();
+  private emitEditPreview() {
+    for (const fn of this.editPreviewListeners) fn();
+  }
+
+  /** `id` as the model on screen shows it: the tool's live version while one
+   *  edits it, so a panel beside the tool never contradicts it. */
+  liveFeature(id: string): Feature | null {
+    if (this.editPreview?.id === id && this.editPreview.feature) return this.editPreview.feature;
+    return this.doc.features.find((f) => f.id === id) ?? null;
+  }
+
   /** notified when the file path or dirty flag changes (for the titlebar). */
   onMeta(fn: MetaListener): () => void {
     this.metaListeners.add(fn);
@@ -398,6 +437,9 @@ export class DocumentStore {
       heldRefusal: null,
     };
     this.emitBuild();
+    this.committedShown = null;
+    this.provisional = null;
+    this.restoreArmed = false;
     // No-op when nothing is running. Cancel kills the pool worker, which is the
     // only way to interrupt an OCCT call already under way.
     void this.cancelBusy();
@@ -526,7 +568,7 @@ export class DocumentStore {
 
   /** consecutive doc-changing refreshes we applied (incremented in
    *  commitProjectionRefresh, open-sketch-only deliveries don't count, their
-   *  doc copy lags until finish() so the sidecar re-emits them every rebuild). */
+   *  doc copy lags until finish() so the engine re-emits them every rebuild). */
   private projStreak = 0;
   private projValveOpen = true;
 
@@ -580,7 +622,7 @@ export class DocumentStore {
     });
     if (!valid.length) return;
 
-    // stale transitions warn once per sketch (the sidecar only emits stale:true
+    // stale transitions warn once per sketch (the engine only emits stale:true
     // on the not-stale -> stale transition, so every entry here is news)
     for (const sid of new Set(valid.filter((u) => u.stale).map((u) => u.sketch))) {
       const f = sketchOf.get(sid)!;
@@ -628,7 +670,7 @@ export class DocumentStore {
       for (const [sid, nf] of replacements) {
         const i = d.features.findIndex((x) => x.id === sid);
         // REPLACE the feature object, the delta wire protocol diffs features
-        // by reference, so an in-place patch would never ship to the sidecar.
+        // by reference, so an in-place patch would never ship to the engine.
         if (i >= 0) d.features[i] = nf;
       }
     });
@@ -934,9 +976,21 @@ export class DocumentStore {
    *  `hold`: if the kernel refuses a previewed feature, keep the last model that
    *  built on screen instead of the model without it (see heldRefusal). */
   setPreview(feature: Feature | Feature[] | null, opts?: { hold?: boolean }) {
+    const had = this.preview !== null;
     this.preview = feature === null ? null : Array.isArray(feature) ? feature : [feature];
     this.previewHold = feature !== null && !!opts?.hold;
-    this.scheduleRebuild(true);
+    if (feature === null && had) this.leavePreview();
+    else this.scheduleRebuild(true);
+  }
+
+  /** Rebuild after a preview is dropped, a microtask later: a commit drops its
+   *  preview and adds the feature in one go, and only a drop that nothing
+   *  follows may show the committed model again (restoreCommitted). */
+  private leavePreview() {
+    this.restoreArmed = true;
+    queueMicrotask(() => {
+      if (this.restoreArmed) this.scheduleRebuild(true);
+    });
   }
   private previewHold = false;
   /** true while an un-committed live-preview feature is appended to rebuilds
@@ -954,19 +1008,22 @@ export class DocumentStore {
   beginEditPreview(id: string, feature: Feature | null = null) {
     this.editPreview = { id, feature };
     this.previewHold = false;
+    this.emitEditPreview();
     this.scheduleRebuild(true);
   }
   setEditPreview(feature: Feature | null, opts?: { hold?: boolean }) {
     if (!this.editPreview) return;
     this.editPreview = { id: this.editPreview.id, feature };
     this.previewHold = feature !== null && !!opts?.hold;
+    this.emitEditPreview();
     this.scheduleRebuild(true);
   }
   endEditPreview(rebuild = true) {
     if (!this.editPreview) return;
     this.editPreview = null;
     this.previewHold = false;
-    if (rebuild) this.scheduleRebuild(true);
+    this.emitEditPreview();
+    if (rebuild) this.leavePreview();
   }
   get editPreviewId(): string | null {
     return this.editPreview?.id ?? null;
@@ -1699,7 +1756,7 @@ export class DocumentStore {
     }
     if (this.preview) features.push(...this.preview);
     features = features.map(withoutDisplayName);
-    // Body visibility travels with the rebuild so the sidecar can keep hidden
+    // Body visibility travels with the rebuild so the engine can keep hidden
     // bodies out of extrude booleans (a hidden body is protected from edits).
     const bodyVisibility = this.bodyVis.size ? Object.fromEntries(this.bodyVis.entries()) : undefined;
     return {
@@ -1812,8 +1869,10 @@ export class DocumentStore {
   /** Rebuild, resolving once the latest document's result is published, including
    *  when another rebuild was already running (callers need the new body ids). */
   async rebuildNow(): Promise<void> {
+    if (this.restoreCommitted()) return;
     if (this.rebuilding) {
       this.rebuildQueued = true;
+      this.supersede();
       await this.rebuildDrain;
       return;
     }
@@ -1828,7 +1887,17 @@ export class DocumentStore {
             const sent = this.doc;
             const previewing = !!(this.preview || this.editPreview);
             const sentPreview = this.previewSnapshot();
-            const reply = await this.geometry.rebuild(this.effectiveDoc());
+            const effective = this.effectiveDoc();
+            const key = previewing ? null : buildKey(effective);
+            const flight = { gen: ++this.sendGen, id: null as string | null, cancelled: false };
+            this.inflight = flight;
+            const reply = await this.geometry.rebuild(effective, undefined, (id) => { flight.id = id; });
+            this.inflight = null;
+            if (flight.gen <= this.staleThrough) continue;
+            // Superseded and stopped, so there is nothing to show: the newer
+            // request queued behind it is what the user is waiting for.
+            if (!reply.ok && reply.cancelled && this.rebuildQueued) continue;
+            if (key !== null && this.refusedProvisional(reply, key)) continue;
             if (!previewing) this.keepBodyIds(sent, reply);
             const settled = this.settledBuild(reply, sentPreview);
             // A stream that was in flight but never completed has left a PARTIAL
@@ -1836,6 +1905,7 @@ export class DocumentStore {
             // which on a failure is the PREVIOUS document, renders over the top.
             if (this.build.streamed !== null && (!reply.ok || settled.heldRefusal)) this.emitBuildAbort();
             this.build = settled;
+            if (key !== null && reply.ok) this.committedShown = { key, state: settled };
             this.emitBuild();
             // After publishing; a failed rebuild says nothing about projections.
             if (reply.ok) this.maybeQueueProjectionRefresh(reply.result.projectionUpdates);
@@ -1844,6 +1914,7 @@ export class DocumentStore {
           // Here, not in the outer finally: runBusy's teardown awaits, and a refresh
           // queued in that window would be dropped.
           this.rebuilding = false;
+          this.inflight = null;
         }
       });
     })();
@@ -1854,6 +1925,59 @@ export class DocumentStore {
       this.rebuilding = false; // belt and braces if runBusy throws before the callback
       this.rebuildDrain = null;
     }
+  }
+
+  /** Stop the rebuild on the wire, whose document nobody wants any more. Only
+   *  where the engine can stop it without a restart: killing the worker to save
+   *  a draft preview would throw away every cached feature before it. */
+  private supersede() {
+    const f = this.inflight;
+    if (!f || f.cancelled || !f.id || !this.geometry.softCancel) return;
+    f.cancelled = true;
+    void this.geometry.cancel?.(f.id, { soft: true });
+  }
+
+  /** Show the committed model again when the document to build is the one it
+   *  was built from, the state a cancelled tool returns to. */
+  private restoreCommitted(): boolean {
+    if (!this.restoreArmed) return false;
+    this.restoreArmed = false;
+    const c = this.committedShown;
+    if (!c || this.preview || this.editPreview) return false;
+    if (buildKey(this.effectiveDoc()) !== c.key) return false;
+    if (!this.build.building && this.build.result === c.state.result && !this.inflight) return true;
+    this.staleThrough = this.sendGen;
+    this.rebuildQueued = false;
+    this.supersede();
+    if (this.build.streamed !== null) this.emitBuildAbort();
+    this.build = { ...c.state };
+    this.emitBuild();
+    return true;
+  }
+
+  /** Commit `featureId` without waiting for the kernel's verdict on it, so the
+   *  tool that made it can close at once. If the rebuild of this exact document
+   *  then refuses the feature, the commit is undone and `what` is named in the
+   *  warning: a refused value is never left in the history. */
+  verifyCommit(featureId: string, what: string) {
+    this.provisional = { id: featureId, what, key: buildKey(this.effectiveDoc()) };
+  }
+
+  /** True when `reply` refused the provisional commit and it was undone. */
+  private refusedProvisional(reply: RebuildReply, key: string): boolean {
+    const p = this.provisional;
+    if (!p) return false;
+    this.provisional = null;
+    if (p.key !== key || (!reply.ok && reply.cancelled)) return false;
+    const errs = reply.ok
+      ? (reply.result.featureErrors ?? (reply.result.featureError ? [reply.result.featureError] : []))
+      : [reply.error];
+    const err = errs.find((e) => e.feature_id === p.id);
+    if (!err) return false;
+    this.onWarning?.(`${p.what} was refused, nothing changed: ${err.message}`);
+    this.restoreArmed = true;
+    this.undo();
+    return true;
   }
 
   /** Rebuild past every cache layer, for a suspected stale result. */

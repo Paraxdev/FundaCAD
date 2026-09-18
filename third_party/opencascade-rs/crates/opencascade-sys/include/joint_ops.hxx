@@ -1,5 +1,5 @@
 // Joint placement: the rigid move that mates one connector frame onto another,
-// composed the way sidecar/joints.py composes build123d Locations.
+// composed the way the Python engine's `joints.py` composes build123d Locations.
 #pragma once
 #include "rust/cxx.h"
 #include <bindings_common.hxx>

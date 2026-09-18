@@ -1,4 +1,4 @@
-//! One document, an app and an agent both working on it, sidecar/live_session.py.
+//! One document, an app and an agent both working on it, the Python engine's `live_session.py`.
 //!
 //! Exactly one HOST (the running app) owns the document and is the only thing
 //! that may raise its revision. Any number of GUESTS read it and PROPOSE a

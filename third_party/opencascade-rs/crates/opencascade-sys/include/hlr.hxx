@@ -1,6 +1,6 @@
 #pragma once
 // Hidden line removal for sketch projection (fundacad-geom::projection), the
-// sequence sidecar/projection.py `_project_silhouette` runs.
+// sequence the Python engine's `projection.py` `_project_silhouette` runs.
 
 #include "rust/cxx.h"
 #include <BRepLib.hxx>

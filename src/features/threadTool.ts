@@ -15,7 +15,7 @@
 //
 // It is previewed in two registers, and the split is the same one the revolve's
 // pitch arrow makes for the same reason. While the hand is moving there is a
-// dashed helix: the actual curve the sidecar will sweep along, drawn from the
+// dashed helix: the actual curve the engine will sweep along, drawn from the
 // same arithmetic (screwMath), so it costs nothing per frame and cannot drift
 // from what gets built. When the value settles there is the REAL thing, cut by
 // the kernel, in the timeline position it will occupy. A twenty turn thread is a
@@ -68,7 +68,7 @@ export class ThreadTool {
   private armed = false;
   private grabLength = 0;
   private grabProj = 0;
-  /** The curve the sidecar will sweep the profile along, drawn. */
+  /** The curve the engine will sweep the profile along, drawn. */
   private helix: THREE.Line | null = null;
   private previewTimer = 0;
   /** Set once a real build has been asked for, so it can be withdrawn on the way
@@ -246,7 +246,7 @@ export class ThreadTool {
     }, SETTLE_MS);
   }
 
-  /** The path the profile travels, from the same function the sidecar's spine
+  /** The path the profile travels, from the same function the engine's spine
    *  comes from. A curve drawn any other way would be a second thing to keep in
    *  step, and a preview that has drifted is worse than none: it is believed. */
   private drawHelix() {
@@ -287,7 +287,7 @@ export class ThreadTool {
   /** Cut the thread for real, where it will land in the timeline.
    *
    *  A thread that cannot be built says so on the value boxes rather than
-   *  silently doing nothing: the sidecar's refusal reaches them through the
+   *  silently doing nothing: the engine's refusal reaches them through the
    *  preview-error channel, which is watching this same build. */
   private pushPreview() {
     if (this.phase !== "size") return;

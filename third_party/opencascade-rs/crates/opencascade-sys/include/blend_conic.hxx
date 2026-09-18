@@ -1,4 +1,4 @@
-// sidecar/conic_blend.py: OCCT's own fillet with the middle weight row of every
+// the Python engine's `conic_blend.py`: OCCT's own fillet with the middle weight row of every
 // blend face scaled, which walks the section from a chord (k = 0) through the
 // circular arc (k = 1) towards the sharp corner. Boundaries that moved are
 // rebuilt from their pcurves, mitre seams are re-solved section by section.

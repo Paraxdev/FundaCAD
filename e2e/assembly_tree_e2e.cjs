@@ -1,19 +1,19 @@
 // End-to-end check of the imported-assembly Browser tree, in a real browser.
 //
-// Everything else about Phase C is unit tests, sidecar tests and row COUNTS.
-// This is the one that actually looks at the panel: real sidecar import of
+// Everything else about Phase C is unit tests, engine tests and row COUNTS.
+// This is the one that actually looks at the panel: real engine import of
 // asm_nested.step, real store, real BrowserTree, real DOM, then screenshots
 // it, expands it, toggles a subassembly's eye, and round-trips the document
 // through save/load to prove the tree survives.
 //
-// Usage (from the repo root, with vite on 5173 + sidecar on 8765):
+// Usage (from the repo root, with vite on 5173 + engine on 8765 (`fundacad-engine --ws`)):
 //   SC_TOKEN=<token> node e2e/assembly_tree_e2e.cjs
 const { chromium } = require("playwright-core");
 const path = require("path");
 
 const TOKEN = process.env.SC_TOKEN || "";
 if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
-const FIXTURE = path.resolve(__dirname, "../sidecar/fixtures/asm_nested.step");
+const FIXTURE = path.resolve(__dirname, "../tests/fixtures/asm_nested.step");
 const OUT = "/tmp/assembly_tree_shots";
 let failures = 0;
 const check = (name, ok, detail) => {

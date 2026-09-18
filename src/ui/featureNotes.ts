@@ -1,7 +1,7 @@
 // Which features built but had something to say, and which simply failed.
 //
 // A build hands back two lists that overlap: `featureErrors` names what went
-// wrong, and `diagnostics` carries everything the sidecar noticed on the way,
+// wrong, and `diagnostics` carries everything the engine noticed on the way,
 // including entries for features that then failed for a different reason. The
 // timeline has one chip per feature and one tooltip per chip, so those two have
 // to resolve to at most one thing to say about each.
@@ -12,7 +12,7 @@
 // message is the useful one; an advisory about a cut that was then thrown away
 // is noise stacked on top of a failure.
 //
-// Kept generic rather than keyed to a list of codes. The sidecar only records
+// Kept generic rather than keyed to a list of codes. The engine only records
 // diagnostics worth acting on, so every advisory it learns to emit should light
 // the chip the day it lands rather than the day someone remembers to extend a
 // list here.

@@ -1,5 +1,5 @@
 //! Document files in both formats: `.funda` JSON and `.fundab` binary. A port
-//! of `crates/fundacad-mcp/tools/python-oracle/tests/test_docfile.py`.
+//! of the Python MCP server's `test_docfile.py`.
 //!
 //! The binary case builds a format 2 file by the spec in docs/FUNDA-FORMAT.md,
 //! with parity shards the reader must step over, since the app's own writer is

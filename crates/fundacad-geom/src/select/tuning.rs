@@ -1,5 +1,5 @@
-//! The scoring constants of `by:"match"` and `by:"nearest"`, sidecar/geom_select.py
-//! `_DEFAULTS` overridden by sidecar/selector_tuning.json.
+//! The scoring constants of `by:"match"` and `by:"nearest"`, the Python engine's `geom_select.py`
+//! `_DEFAULTS` overridden by selector_tuning.json.
 //!
 //! The shipped JSON is compiled in and is what the app runs with: its TIE_BAND
 //! (0.05) is not the code default (0.15). An eval hands a different file to
@@ -9,7 +9,7 @@ use std::sync::OnceLock;
 
 use serde_json::Value;
 
-const SHIPPED: &str = include_str!("../../../../sidecar/selector_tuning.json");
+const SHIPPED: &str = include_str!("selector_tuning.json");
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Tuning {

@@ -102,7 +102,7 @@ function typeNumFields(type: string, values?: Record<string, unknown>): readonly
 }
 
 /** Rows any feature may carry whatever its type. The build leaves a feature out
- *  while its `activeWhen` is 0 (sidecar/builder._is_inactive).
+ *  while its `activeWhen` is 0 (the engine's `is_inactive`).
  *
  *  Listed only on a feature that HAS the field. The parameter engine deletes a
  *  model parameter whose target stops resolving and writes into every target
@@ -269,14 +269,9 @@ export function featureWithTarget(
   value: number,
 ): Feature | null {
   const id = targetFeatureId(target);
-  const src = doc.features.find((f) => f.id === id);
-  if (!src) return null;
-  const copy = structuredClone(src);
-  const view: CadDocument = {
-    ...doc,
-    features: doc.features.map((f) => (f.id === id ? copy : f)),
-  };
-  return writeTarget(view, target, value) ? copy : null;
+  if (!doc.features.some((f) => f.id === id)) return null;
+  const view: CadDocument = { ...doc, features: doc.features.slice() };
+  return writeTarget(view, target, value) ? view.features.find((f) => f.id === id)! : null;
 }
 
 export function writeTarget(doc: CadDocument, target: ParamTarget, value: number): { sketch?: string } | null {
@@ -285,6 +280,13 @@ export function writeTarget(doc: CadDocument, target: ParamTarget, value: number
   if (!rt) return null;
   const v = coerceForField(rt.field, value);
   if (rt.holder[rt.field] === v) return null;
-  rt.holder[rt.field] = v;
+  // The owning feature is replaced, never patched: the rebuild wire protocol
+  // ships only features whose object changed, so an in-place write was silently
+  // left out of the next build.
+  const i = doc.features.findIndex((f) => f.id === targetFeatureId(target));
+  if (i < 0) return null;
+  doc.features[i] = structuredClone(doc.features[i]!);
+  const fresh = resolveTarget(doc, target)!;
+  fresh.holder[fresh.field] = v;
   return rt.sketch !== undefined ? { sketch: rt.sketch } : {};
 }

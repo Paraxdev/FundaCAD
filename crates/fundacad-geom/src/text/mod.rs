@@ -1,4 +1,4 @@
-//! Sketch text, replacing sidecar/sketch_build.py `_text_faces`,
+//! Sketch text, replacing the Python engine's `sketch_build.py` `_text_faces`,
 //! `tessellate_text` and `list_fonts` (build123d `Text` over OCCT's
 //! `Font_BRepTextBuilder`).
 //!

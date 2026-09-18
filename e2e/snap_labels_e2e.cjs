@@ -6,8 +6,8 @@
 //   3. Pulling a circle out from that centre puts the diameter field halfway
 //      along the radius, on the drawn diameter line.
 //
-// Usage (from the repo root, with vite + sidecar running):
-//   SC_TOKEN=<sidecar token> SC_CHROME=<chrome.exe> [SC_URL=http://localhost:5173/] node e2e/snap_labels_e2e.cjs [outDir]
+// Usage (from the repo root, with vite + engine running):
+//   SC_TOKEN=<engine token> SC_CHROME=<chrome.exe> [SC_URL=http://localhost:5173/] node e2e/snap_labels_e2e.cjs [outDir]
 const { chromium } = require("playwright-core");
 const fs = require("fs");
 const path = require("path");

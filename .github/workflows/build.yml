@@ -1,23 +1,14 @@
-# Cross-platform build + bundle for FundaCAD (Tauri 2 + bundled Python sidecar).
+# Cross-platform build + bundle for FundaCAD 1.0 alpha: Tauri 2 around the Rust
+# geometry engine (docs/RUST-PIVOT.md), which runs as a worker process of the
+# same executable.
 #
-# No SYSTEM OpenCASCADE anywhere, on any platform: the beta's geometry runs in the
-# Python sidecar, whose cadquery-ocp-novtk wheels bundle their own OCCT, and the
-# alpha's is the occt-sys crate, which carries the 7.8.1 sources and builds them
-# statically into the binary. So this workflow still has no brew or vcpkg OCCT step,
-# and no apt one either.
+# No SYSTEM OpenCASCADE anywhere, on any platform: the occt-sys crate carries
+# the 7.8.1 sources and builds them statically into the binary. So this
+# workflow has no brew, vcpkg or apt OCCT step.
 #
-# Per OS it: builds a relocatable Python "sidecar-runtime" (uv + python-build-standalone
-# installed from sidecar/uv.lock), then runs `tauri build` with the bundle-only config
-# that ships that runtime as a resource, and uploads the installers.
-#
-# TWO rolling releases, kept apart on purpose, and each has its own branch.
-# `build` + `release` make the beta, the app on the Python engine, and run only
-# for the `legacy` branch, which publishes the `beta` release and its feed.
-# `build-alpha` + `release-alpha` make the alpha, the Rust engine build
-# (docs/RUST-PIVOT.md section 6), which compiles OpenCASCADE into the app, ships
-# no Python at all, and has its own tag, its own update feed and its own warning.
-# It publishes from `main`. That pair is the only place in this file where OCCT
-# is built from source.
+# `build-alpha` + `release-alpha` publish the rolling `alpha` release and its
+# update feed from `main`. The Python engine's beta lives on the `legacy`
+# branch, with its own copy of this workflow and its own `beta` release.
 #
 # Scope: x86_64 Linux, Apple Silicon macOS, x86_64 Windows. (No Intel-mac / linux-arm64.)
 
@@ -30,9 +21,9 @@ on:
   workflow_dispatch:
 
 jobs:
-  # Gates the build matrix: sidecar tests, Rust unit tests, and the (new) vitest
-  # frontend tests all run BEFORE any installer is built. Runs once on Linux only,
-  # the build matrix below still builds/bundles on all three platforms regardless.
+  # Gates the build matrix with the frontend checks, BEFORE any installer is
+  # built. Runs once on Linux only. The engine's own tests are `rust-geom`,
+  # which gates the build too.
   test:
     runs-on: ubuntu-22.04
     steps:
@@ -45,27 +36,11 @@ jobs:
       - name: Repo hygiene
         run: sh scripts/check-repo-hygiene.sh
 
-      # Same system deps as the build job's Linux leg: `cargo test --lib` links the
-      # tauri crate, which needs the webkit2gtk stack + libudev (Rust device APIs).
-      - name: Install Linux system dependencies
-        uses: ./.github/actions/linux-deps
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache Cargo
-        uses: swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri -> target
-
       - name: Install Node
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
 
       - name: Install frontend dependencies
         run: npm ci
@@ -91,505 +66,16 @@ jobs:
       - name: The app ships no plugin code
         run: node scripts/check-no-plugin-code.mjs
 
-      - name: Install Python 3.12 + sync sidecar deps (locked)
-        run: |
-          uv python install 3.12
-          cd sidecar && uv sync
-
-      # The sidecar tests are `__main__` scripts, not pytest-discoverable. This
-      # used to be a hand-listed set and it kept rotting: eleven files across two
-      # incidents sat here passing locally and never running in CI. The script
-      # globs sidecar/tests and every plugin's tests, so a new test is covered the
-      # moment it exists; SKIP is the only way out and every entry needs a reason.
-      #
-      # Four at a time on the runner's four cores. One after another this step
-      # took 13.5 of the gate's 17 minutes, and every installer waits on the gate.
-      # Files that bind the sidecar's port still run alone, after the rest.
-      - name: Sidecar and plugin tests
-        env:
-          SKIP: test_conic_fuzz.py  # minutes-long blend sweep; runs in the eval job
-          JOBS: 4
-        run: bash scripts/run-sidecar-tests.sh
-
-      # Geometry eval harnesses (fillet corpus, selector survival, real-server op
-      # coverage). They are measurement oracles that always exit 0, so the script
-      # supplies the thresholds. ~1 minute. Nothing ran these before, which is how
-      # op coverage decayed 28/34 -> 23/34 unnoticed.
-      - name: Geometry evals (thresholded)
-        run: sh scripts/check-geometry-evals.sh
-
-      # --tests, not --lib: tests/container_seam.rs drives a real STEP import
-      # through the sidecar, packages it with the Rust container writer, extracts
-      # it somewhere fresh and rebuilds from it. Nothing else proves the two
-      # halves of that seam compose. It needs sidecar/.venv, which the `uv sync`
-      # step above created.
-      - name: Rust tests (unit + cross-language seam)
-        working-directory: src-tauri
-        run: cargo test --tests
-
-  # The Python beta belongs to `legacy` now, so `main` and `rustirisation`
-  # skip it; `main` is the Rust engine's branch.
-  build:
-    needs: test
-    if: github.ref == 'refs/heads/legacy' || github.base_ref == 'legacy'
-    permissions:
-      contents: write # tauri-action may attach artifacts to a draft release
-    strategy:
-      fail-fast: false # one OS failing must not hide the others' status
-      matrix:
-        include:
-          # ubuntu-22.04: webkit2gtk-4.1 + a lower glibc, so the AppImage/.deb runs
-          # on more systems than a -24.04 build would.
-          - platform: ubuntu-22.04
-          - platform: macos-14 # Apple Silicon (arm64) runner
-          - platform: windows-latest
-    runs-on: ${{ matrix.platform }}
-
-    steps:
-      - uses: actions/checkout@v4
-        # third_party/opencascade-rs is vendored in-repo (no submodules), and the
-        # default build never compiles it, so a plain checkout is enough.
-
-      - name: Install Linux system dependencies
-        if: matrix.platform == 'ubuntu-22.04'
-        uses: ./.github/actions/linux-deps
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache Cargo
-        uses: swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri -> target
-
-      - name: Install Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-
-      - name: Install frontend dependencies
-        run: npm ci
-
-      # --- the bundled Python geometry runtime (relocatable, novtk, from the lock) ---
-      - name: Build sidecar runtime (Linux/macOS)
-        if: matrix.platform != 'windows-latest'
-        run: bash scripts/build-sidecar-runtime.sh
-
-      - name: Build sidecar runtime (Windows)
-        if: matrix.platform == 'windows-latest'
-        shell: pwsh
-        run: ./scripts/build-sidecar-runtime.ps1
-
-      # linuxdeploy resolves every ELF's dependencies by soname lookup, which can't
-      # see the runtime's manylinux-vendored dirs (scipy.libs etc. reference their
-      # mangled sonames via $ORIGIN rpaths). First AppImage run died on exactly that:
-      # "Could not find dependency: libquadmath-2284e583.so.0.0.0". Put every runtime
-      # dir holding a real shared library (lib*.so*, not python extension modules)
-      # on LD_LIBRARY_PATH so dependency deployment can find the vendored names.
-      - name: Expose vendored sidecar libs to linuxdeploy (AppImage)
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          dirs=$(find "$PWD/src-tauri/sidecar-runtime" -name 'lib*.so*' -printf '%h\n' | sort -u | paste -sd: -)
-          echo "LD_LIBRARY_PATH=$dirs" >> "$GITHUB_ENV"
-          echo "vendored lib dirs:"; echo "$dirs" | tr ':' '\n'
-
-      # Rolling-beta versioning: the updater compares semver, and every build being
-      # 0.2.0 would mean "never an update". CI builds get 0.2.<run_number>; local
-      # dev builds stay at the checked-in 0.2.0. The minor went from 1 to 2 with the
-      # floating shell, and semver keeps every 0.2 build newer than any 0.1 one.
-      - name: Stamp rolling version
-        shell: bash
-        run: |
-          v="0.2.${{ github.run_number }}"
-          node -e "const fs=require('fs');const f='src-tauri/tauri.conf.json';const j=JSON.parse(fs.readFileSync(f));j.version='$v';fs.writeFileSync(f,JSON.stringify(j,null,2)+'\n')"
-          echo "stamped $v"
-
-      # Why a run without a usable signing key must not produce updater
-      # artifacts is in the action. Shared with the alpha Rust build below.
-      - name: Disable updater artifacts when they could not be trusted
-        uses: ./.github/actions/updater-artifacts
-        with:
-          config: src-tauri/tauri.bundle.conf.json
-          signing-key: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-
-      # --- build + bundle. The bundle-only config ships sidecar-runtime/ as a resource
-      #     and (on macOS) turns on hardened runtime + entitlements. ---
-      - name: Build + bundle Tauri app
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # In-app updater: updater bundles are minisign-signed with this key
-          # (createUpdaterArtifacts in the bundle overlay config). Separate from OS
-          # code signing, which stays deferred below.
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
-          # linuxdeploy's strip pass chokes on the bundled sidecar runtime's
-          # OCCT/CPython shared objects (AppImage leg: "failed to run linuxdeploy").
-          # NO_STRIP is linuxdeploy's own escape hatch; harmless on the other OSes.
-          NO_STRIP: true
-          # UNSIGNED builds for now (Apple Developer Program deferred, no budget).
-          # macOS ships unsigned, which current Gatekeeper reports as "the app is
-          # damaged and can't be opened", right-click -> Open is NOT enough for an
-          # app with no signature at all, and saying so in the README and release
-          # notes is what sent the reporter of #5 to the issue tracker. The command
-          # that works is `xattr -dr com.apple.quarantine /Applications/FundaCAD.app`.
-          # Windows unsigned runs with a SmartScreen warning. To SIGN later: add the
-          # APPLE_* / Windows signing secrets back here AND append the signing config:
-          #   args: --config src-tauri/tauri.bundle.conf.json --config src-tauri/tauri.macos-sign.conf.json
-        with:
-          # bundle-only config ships sidecar-runtime/ as a resource. (No macOS signing
-          # block here, so tauri produces an unsigned .app without attempting codesign.)
-          # --verbose so bundler sub-tool failures (linuxdeploy) show their real output.
-          args: --verbose --config src-tauri/tauri.bundle.conf.json
-
-      # KNOWN FOLLOW-UP (macOS notarization): notarization is NOT recursive, so every
-      # embedded Mach-O under sidecar-runtime (libpython + the cadquery-ocp .dylibs)
-      # must be signed with the hardened runtime. If notarization fails on the first
-      # signed mac run, add a recursive `codesign --force --options runtime --sign
-      # "$APPLE_SIGNING_IDENTITY"` pass over src-tauri/sidecar-runtime BEFORE this step.
-      # Windows Authenticode: set bundle.windows.signCommand in the bundle config +
-      # a signing secret to clear SmartScreen (optional; unsigned still runs).
-
-      # Why the bundled GTK stack has to come out, and what has to survive the
-      # strip, are in the action. Shared with the alpha Rust build below.
-      - name: Un-bundle the system stack from the AppImage
-        if: matrix.platform == 'ubuntu-22.04'
-        uses: ./.github/actions/appimage-unbundle
-        with:
-          engine: sidecar
-          signing-key: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          signing-key-password: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-
-      - name: Depend on the renamed GTK package (deb)
-        if: matrix.platform == 'ubuntu-22.04'
-        uses: ./.github/actions/deb-gtk-depends
-
-      - name: Portable zip (Windows)
-        if: matrix.platform == 'windows-latest'
-        uses: ./.github/actions/windows-portable
-        with:
-          engine: sidecar
-          release-tag: beta
-
-      # These exist to hand the installers to the `release` job below, in this
-      # same run, and for a person to download from a red build. Nothing reads
-      # them afterwards: a green build's installers are on the beta release
-      # within minutes and the artifact is a second copy of them.
-      #
-      # The default retention is 90 days, and at ~1.6 GB a run that is where the
-      # storage went: 98 artifacts and 55 GB, which is what made FinalizeArtifact
-      # answer 403 Forbidden and fail an otherwise green build. A day is longer
-      # than the only two uses this has.
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          # The variant is in the NAME because both rolling builds upload into
-          # the same run, and each release job downloads by pattern. Without it
-          # the beta release would publish whatever the alpha leg built.
-          name: fundacad-beta-${{ matrix.platform }}
-          retention-days: 1
-          if-no-files-found: warn
-          path: |
-            src-tauri/target/release/bundle/**/*.AppImage
-            src-tauri/target/release/bundle/**/*.deb
-            src-tauri/target/release/bundle/**/*.rpm
-            src-tauri/target/release/bundle/**/*.dmg
-            src-tauri/target/release/bundle/**/*.app
-            src-tauri/target/release/bundle/**/*.msi
-            src-tauri/target/release/bundle/**/*.exe
-            src-tauri/target/release/bundle/**/*.app.tar.gz
-            src-tauri/target/release/bundle/**/*_portable.zip
-            src-tauri/target/release/bundle/**/*.sig
-
-  # Rolling "beta" pre-release: every green `legacy` build replaces the
-  # installers on the releases/tag/beta page, so the download link in the README
-  # is stable and needs no GitHub login (Actions artifacts do). latest.json feeds
-  # the in-app updater (tauri-plugin-updater): per-platform updater-bundle URL +
-  # minisign signature. Beta installs in the field read beta/latest.json, so
-  # only `legacy` may write it. Job-level concurrency serializes racing pushes.
-  release:
-    needs: build
-    # A manual run publishes too, so the ref check is what keeps a dispatch of
-    # any other branch from replacing the beta.
-    if: >-
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-      && github.ref == 'refs/heads/legacy'
-    runs-on: ubuntu-22.04
-    permissions:
-      contents: write
-    concurrency:
-      group: release-beta
-      cancel-in-progress: false
-    env:
-      GH_TOKEN: ${{ github.token }}
-    steps:
-      # Must come BEFORE download-artifact: actions/checkout cleans the workspace
-      # by default and would delete dist/.
-      #
-      # A FULL checkout, and it used to be a sparse one naming four paths. Full
-      # in breadth only: it is still one commit deep with no tags, which is why
-      # the release notes below read history through the API and not `git log`.
-      #
-      # Packaging a plugin now BUILDS its app-side module, and that build resolves
-      # `fundacad` against src/plugins/host.ts, which reaches most of src/. The
-      # sparse list would have had to name the whole application, one path at a
-      # time, and be corrected every time a host export gained a dependency,
-      # with the failure being a release that publishes a bundle missing its
-      # code.
-      - uses: actions/checkout@v4
-
-      # By PATTERN, not everything: the alpha Rust build uploads into this
-      # same run, and a bare download would put its installers in dist/ for the
-      # find below to publish to the beta release.
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: fundacad-beta-*
-          path: dist
-
-      # The plugin bundles are built here rather than in the platform matrix:
-      # a bundle is the same bytes whoever builds it, so one copy serves every
-      # platform, and building them three times would only raise the question of
-      # which one got published.
-      #
-      # Every directory under plugins/ with a manifest.json, so a new plugin
-      # needs a directory and not an edit here. MCP is not one: it is part of
-      # the app and ships as the fundacad-mcp binary beside it.
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      # A plugin that owns geometry for the Rust engine carries a Rust crate
-      # that builds to a WebAssembly component (docs/PLUGINS.md), packed into
-      # the bundle by build-plugins.py.
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-wasip2
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Package the plugins
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 scripts/build-plugins.py .
-          # Every plugin this repository has, or the release is missing one and
-          # the app's offer list points at a 404. Counted rather than trusted:
-          # build-plugins.py exits 0 having built nothing if its discovery ever
-          # stops finding a directory.
-          want=$(ls -d plugins/*/manifest.json | wc -l)
-          got=$(ls plugin-*.zip | wc -l)
-          if [ "$want" != "$got" ]; then
-            echo "packaged $got bundles for $want plugin directories" >&2
-            exit 1
-          fi
-
-
-
-      - name: Assemble latest.json
-        shell: bash
-        run: |
-          set -euo pipefail
-          v="0.2.${{ github.run_number }}"
-          base="https://github.com/${{ github.repository }}/releases/download/beta"
-          d="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          jq -n --arg v "$v" --arg d "$d" '{version:$v, pub_date:$d, platforms:{}}' > latest.json
-          add() { # $1 = updater platform key, $2 = updater bundle path
-            [ -n "$2" ] && [ -f "$2" ] || { echo "NOTE: no bundle for $1"; return 0; }
-            sig="$2.sig"
-            [ -f "$sig" ] || { echo "WARNING: $2 has no .sig, $1 left out of latest.json"; return 0; }
-            jq --arg k "$1" --arg u "$base/$(basename "$2")" --rawfile s "$sig" \
-              '.platforms[$k] = {signature: $s, url: $u}' latest.json > t && mv t latest.json
-          }
-          add linux-x86_64  "$(find dist -name '*.AppImage'   | head -1)"
-          add windows-x86_64 "$(find dist -name '*setup.exe'  | head -1)"
-          add darwin-aarch64 "$(find dist -name '*.app.tar.gz' | head -1)"  # macos-14 runners are arm64
-          cat latest.json
-
-      - name: Publish rolling beta release
-        shell: bash
-        run: |
-          set -euo pipefail
-          # No spaces in Tauri bundle filenames, so plain word-splitting is safe here.
-          files=$(find dist -type f \( -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' \
-            -o -name '*.dmg' -o -name '*.msi' -o -name '*setup.exe' \
-            -o -name '*_portable.zip' \
-            -o -name '*.app.tar.gz' -o -name '*.sig' \))
-          # Appended rather than found under dist/: the bundles are written
-          # beside the workflow. Being in $files is also what keeps the
-          # retention sweep at the end of this step from deleting them as
-          # assets from an older build. A glob rather than a list, so a new
-          # plugin is published by existing.
-          files="$files $(ls plugin-*.zip)"
-          # Deliberately NOT `gh release delete ... --cleanup-tag` first. That left a
-          # window with no release at all, and since the delete came BEFORE the
-          # asset upload, the window was however long ~2GB takes to push, during
-          # which downloads 404 and the updater has no latest.json to read. If the
-          # create then failed the release simply stayed gone, which happened for
-          # real on 2026-08-05. Everything below updates in place instead, so a
-          # release always exists and a retry repairs rather than destroys.
-
-          # Whether latest.json may be published. Installed copies verify an
-          # update against the minisign pubkey baked into tauri.conf.json, and
-          # while that is still the one inherited at the fork, nothing this
-          # project can sign will verify against it.
-          #
-          # This used to FAIL the job, which was too blunt: it withheld the
-          # installers too, and the installers are fine, they are what people
-          # actually download. What must not be published is a manifest that
-          # points installed copies at bundles they will reject, or one with no
-          # platforms in it at all, which is what an unsigned build produces.
-          # So the release goes out either way and only the manifest is held
-          # back, with the notes saying which of the two builds this is.
-          #
-          # tests/security/updater.test.ts has how to generate a keypair and
-          # what to replace to turn updates back on.
-          UPSTREAM_PUBKEY='dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDUwMkY3MDMzN0E1RUREMUYKUldRZjNWNTZNM0F2VU81ZU9YLzBPdDV6UVdkVklPOWg1S01zdU1lWitDMGR6aFg1cmJoZnYrMWIK'
-          pubkey=$(node -p "require('./src-tauri/tauri.conf.json').plugins.updater.pubkey")
-          platforms=$(jq '.platforms | length' latest.json)
-          if [ "$pubkey" = "$UPSTREAM_PUBKEY" ]; then
-            echo "::warning::The updater pubkey in tauri.conf.json is still upstream's, so no update this project signs could verify. Publishing the installers WITHOUT latest.json: this build does not update itself."
-            SELF_UPDATES=no
-          elif [ "$platforms" -eq 0 ]; then
-            echo "::warning::latest.json has no platforms in it (nothing was signed). Publishing the installers without it."
-            SELF_UPDATES=no
-          else
-            SELF_UPDATES=yes
-          fi
-
-          R='${{ github.repository }}'
-          SHA='${{ github.sha }}'
-          MAX=25
-
-          # Release notes: a short header, then ONE LINE PER COMMIT.
-          #
-          # This used to paste in the whole open "## Unreleased" section of
-          # CHANGELOG.md, which is written for a human reading a version, not
-          # for a page rebuilt on every push: it grows for as long as a version
-          # stays uncut, and the last one ran to nine hundred lines, almost all
-          # of it about builds the reader already has. The only question a
-          # rolling release raises is what is in this build that was not in the
-          # one it replaces, so that is what it answers now.
-          #
-          # Through the API rather than `git log`, because the checkout in this
-          # job has one commit of history and no tags.
-
-          # The commit the rolling tag is on RIGHT NOW: the build this replaces.
-          # Read BEFORE the tag is moved, further down.
-          prev=$(gh api "repos/$R/git/ref/tags/beta" --jq .object.sha 2>/dev/null || true)
-          commits=''
-          if [ -n "$prev" ] && [ "$prev" != "$SHA" ]; then
-            commits=$(gh api "repos/$R/compare/$prev...$SHA" \
-              --jq '[.commits[] | select((.parents | length) < 2)] | reverse' 2>/dev/null || true)
-          fi
-          span="since [\`${prev:0:7}\`](https://github.com/$R/compare/$prev...$SHA)"
-          # No tag yet, a force-push that left the two unrelated, or an API that
-          # said no. A list that reaches back too far still tells the reader
-          # what they have; an empty one tells them the build changed nothing.
-          if [ -z "$commits" ] || [ "$(jq 'length' <<<"$commits")" -eq 0 ]; then
-            commits=$(gh api "repos/$R/commits?sha=$SHA&per_page=$MAX" \
-              --jq '[.[] | select((.parents | length) < 2)]')
-            span="the newest on \`legacy\`"
-          fi
-          total=$(jq 'length' <<<"$commits")
-
-          printf 'Rolling beta 0.1.%s, rebuilt from `legacy` at [`%s`](https://github.com/%s/commit/%s).\n' \
-            '${{ github.run_number }}' "${SHA:0:7}" "$R" "$SHA" > notes.md
-          {
-            printf '\n## Changes, %s\n\n' "$span"
-            # Merges are dropped (two parents): they carry no change of their
-            # own and their subject is never about the work. Square brackets go
-            # too, since the subject becomes the text of a link.
-            jq -r --arg base "https://github.com/$R/commit/" --argjson max "$MAX" '
-              def clip($n): if (length) > $n then (.[0:$n] | sub("\\s+$"; "")) + "…" else . end;
-              .[0:$max][]
-              | .sha as $sha
-              | (.commit.message | split("\n")) as $l
-              | ($l[0] | gsub("[\\[\\]]"; "")) as $subject
-              | ($l[1:] | map(select(test("\\S"))) | join(" ")
-                        | gsub("\\s+"; " ") | gsub("[\\[\\]]"; "")) as $body
-              | (($subject | capture("^(?<t>[a-z]+)(\\([^)]*\\))?!?: (?<r>.+)$"))
-                  // {t: "commit", r: $subject}) as $c
-              | "- " + $c.t + "(`" + $sha[0:7] + "`): ["
-                + ($c.r | clip(90)) + "](" + $base + $sha + ")"
-                + (if ($body | length) == 0 then "" else " " + ($body | clip(160)) end)
-            ' <<<"$commits"
-            if [ "$total" -gt "$MAX" ]; then
-              printf '\nand %d more.\n' "$((total - MAX))"
-            fi
-          } >> notes.md
-
-          # The footer is two facts and a link, and used to be a paragraph of
-          # each. Anyone who needs the long version follows the README.
-          printf '\n---\n\nUnsigned: Windows SmartScreen needs "More info", then "Run anyway"; macOS may call the app damaged, which `xattr -dr com.apple.quarantine /Applications/FundaCAD.app` clears. [Install notes](https://github.com/%s#install).\n' \
-            "$R" >> notes.md
-          if [ "$SELF_UPDATES" = yes ]; then
-            printf '\nInstalled apps update themselves from this release.\n' >> notes.md
-          else
-            printf '\nThis build does not update itself, so take a new installer from this page when you want a newer one.\n' >> notes.md
-          fi
-
-          # Move the rolling tag onto this commit (create it if it is missing).
-          # Moving beats delete+recreate: the tag never stops existing, so the
-          # release attached to it never does either.
-          gh api -X PATCH "repos/$R/git/refs/tags/beta" -f sha="$SHA" -F force=true \
-            || gh api -X POST "repos/$R/git/refs" -f ref=refs/tags/beta -f sha="$SHA"
-
-          # Create only when there is nothing there; otherwise refresh the notes.
-          if gh release view beta --repo "$R" >/dev/null 2>&1; then
-            gh release edit beta --repo "$R" --prerelease \
-              --title "FundaCAD beta (rolling)" --notes-file notes.md
-          else
-            gh release create beta --repo "$R" --prerelease \
-              --title "FundaCAD beta (rolling)" --notes-file notes.md
-          fi
-
-          # Binaries first, latest.json LAST. Ordering is the whole point: the
-          # previous build's assets stay live while these upload, so the manifest
-          # on the release always names files that exist. It only starts pointing
-          # at this build once every binary of this build is up.
-          gh release upload beta --repo "$R" --clobber $files
-          if [ "$SELF_UPDATES" = yes ]; then
-            gh release upload beta --repo "$R" --clobber latest.json
-          else
-            echo "latest.json withheld (see the warning above); the installers above are complete"
-          fi
-
-          # Only now retire assets from older builds. Their filenames carry the
-          # version, so they do not get clobbered by name and would otherwise pile
-          # up forever. Failing here leaves extra files, which is harmless next to
-          # leaving none.
-          keep=$(for f in $files latest.json; do basename "$f"; done | sort -u)
-          gh release view beta --repo "$R" --json assets -q '.assets[].name' \
-            | while read -r asset; do
-                printf '%s\n' "$keep" | grep -qxF "$asset" \
-                  || gh release delete-asset beta "$asset" --repo "$R" --yes || true
-              done
-
-  # The alpha Rust engine build (docs/RUST-PIVOT.md section 6).
-  #
-  # The same three platforms as `build`, as its OWN job rather than two more
-  # rows of that matrix, since the two run on different branches (`main` here,
-  # `legacy` there). Nothing needs this job except the alpha release below.
-  #
-  # Two differences make the bundle, and they are the whole point: the app is
-  # built with the `rust-engine` cargo feature, so the engine is a worker
-  # process of the same executable, and the bundle config ships no
-  # sidecar-runtime resource, so there is no Python in it at all.
+  # The alpha build (docs/RUST-PIVOT.md section 6), on three platforms. The
+  # engine is a worker process of the same executable, and there is no Python
+  # in the bundle at all.
   #
   # Pushes and dispatches only, never a pull request. OpenCASCADE 7.8.1 is
   # compiled from source into the binary on each platform, twenty minutes cold,
   # and a pull request is already told whether the engine compiles by the
   # `rust-geom` job.
   build-alpha:
-    needs: test
+    needs: [test, rust-geom]
     permissions:
       contents: write # tauri-action may attach artifacts to a draft release
     # Also builds on the Rust pivot branch so its CI can go green before a merge.
@@ -615,8 +101,7 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         uses: ./.github/actions/linux-deps
 
-      # The one thing linux-deps deliberately leaves out, because the beta build
-      # has no C++ to compile and this one has OpenCASCADE.
+      # The one thing linux-deps leaves out, for the OpenCASCADE build.
       - name: Install cmake (Linux)
         if: matrix.platform == 'ubuntu-22.04'
         run: sudo apt-get install -y cmake
@@ -658,22 +143,19 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      # No sidecar runtime is built here, and this is what proves it stayed
-      # that way. `tauri.alpha.conf.json` declares no resources, so a
-      # directory left behind by some other step could not be bundled anyway,
-      # but a build that found one would mean the wrong config was in use.
-      - name: No Python runtime is anywhere near this build
+      # The bundle configs declare no resources, so nothing beside the
+      # executable and the MCP server can end up in the bundle by accident.
+      - name: The bundle declares no resources
         shell: bash
         run: |
-          test ! -d src-tauri/sidecar-runtime \
-            || { echo "::error::src-tauri/sidecar-runtime exists in a Rust engine build"; exit 1; }
           node -e "
-            const j = require('./src-tauri/tauri.alpha.conf.json');
-            if (j.bundle.resources) { console.error('the alpha config bundles resources'); process.exit(1); }
+            for (const f of ['./src-tauri/tauri.conf.json', './src-tauri/tauri.alpha.conf.json']) {
+              if (require(f).bundle.resources) { console.error(f + ' bundles resources'); process.exit(1); }
+            }
           "
 
       # Rolling alpha versioning, 1.0.<run_number>: the Rust engine is the
-      # major upgrade, against the beta's 0.2.
+      # major upgrade, against the Python beta's 0.2.
       #
       # No `-alpha` suffix: tauri's msi target refuses a version whose
       # pre-release identifier is not numeric ("optional pre-release identifier
@@ -735,10 +217,9 @@ jobs:
           if-no-files-found: error
           path: dist-plugins/plugin-*.zip
 
-      # --- build + bundle. `--features rust-engine` is what makes the engine
-      #     the Rust worker, and tauri.alpha.conf.json is what leaves the
-      #     Python runtime out and points the updater at the alpha feed. ---
-      - name: Build + bundle Tauri app (Rust engine)
+      # --- build + bundle. tauri.alpha.conf.json adds the release bundle
+      #     settings and ships the MCP server beside the app. ---
+      - name: Build + bundle Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -749,14 +230,13 @@ jobs:
           CMAKE_POLICY_VERSION_MINIMUM: "3.5"
           NO_STRIP: true
         with:
-          args: --verbose --config src-tauri/tauri.alpha.conf.json --features rust-engine
+          args: --verbose --config src-tauri/tauri.alpha.conf.json
 
-      # The claim this whole job exists to make, checked against the bytes
-      # rather than against the arguments that were meant to produce them.
-      # `engine_attach` is the IPC command only the rust-engine build registers
-      # (src-tauri/src/lib.rs), so its absence means the feature flag did not
-      # take and the bundle is a Python build with no Python in it.
-      - name: The shipped binary is the Rust engine
+      # Checked against the bytes rather than the arguments: `engine_attach` is
+      # the IPC command the webview reaches the engine through
+      # (src-tauri/src/lib.rs), and it is also what fundacad-mcp looks for to
+      # recognise an app it can start as its engine.
+      - name: The shipped binary carries the engine
         shell: bash
         run: |
           set -euo pipefail
@@ -766,10 +246,10 @@ jobs:
             const fs = require('fs');
             const hay = fs.readFileSync(process.argv[1]);
             if (hay.indexOf(Buffer.from('engine_attach')) < 0) {
-              console.error('::error::the binary registers no engine_attach command, so it was not built with --features rust-engine');
+              console.error('::error::the binary registers no engine_attach command, so the webview cannot reach the engine');
               process.exit(1);
             }
-            console.log('engine_attach found, this is the Rust engine build');
+            console.log('engine_attach found');
           " "$bin"
           mcp=$(find src-tauri/target/release -maxdepth 1 -type f \( -name fundacad-mcp -o -name fundacad-mcp.exe \) | head -1)
           [ -n "$mcp" ] || { echo "::error::no fundacad-mcp beside the app, the bundle ships no MCP server"; exit 1; }
@@ -778,7 +258,6 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         uses: ./.github/actions/appimage-unbundle
         with:
-          engine: builtin
           signing-key: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           signing-key-password: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
@@ -790,14 +269,10 @@ jobs:
         if: matrix.platform == 'windows-latest'
         uses: ./.github/actions/windows-portable
         with:
-          engine: builtin
           release-tag: alpha
 
-      # A week rather than the beta's one day, and still inside the cap
-      # tests/build/artifactRetention.test.ts holds. These installers are the
-      # only copy of a build nobody has a Python runtime for, and the alpha
-      # release can be republished from them by hand while the job that does it
-      # is still new.
+      # A week, the cap tests/build/artifactRetention.test.ts holds, so the
+      # alpha release can be republished from them by hand.
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         if: always()
@@ -817,16 +292,14 @@ jobs:
             src-tauri/target/release/bundle/**/*_portable.zip
             src-tauri/target/release/bundle/**/*.sig
 
-  # Rolling "alpha" pre-release, the beta's twin for the Rust engine.
+  # Rolling "alpha" pre-release.
   #
-  # Its own concurrency group, so an alpha publish and a beta publish never
-  # serialize behind one another, and its own tag, moved in place exactly the
-  # way the beta's is.
+  # Its own concurrency group and its own tag, moved in place, never deleted.
   #
-  # ITS OWN latest.json, on its own release, and that is the decision section 6
-  # left open. The updater endpoint is baked into the binary at build time
-  # (tauri.alpha.conf.json points at alpha/latest.json), so a beta
-  # install reads the beta feed and can never be offered a build of this one.
+  # ITS OWN latest.json, on its own release. The updater endpoint is baked into
+  # the binary at build time (tauri.conf.json points at alpha/latest.json), and
+  # a beta install, built on `legacy`, reads the beta feed and can never be
+  # offered a build of this one.
   # That separation has to come from the endpoint and not from the version:
   # 1.0.x is NEWER than the beta's 0.2.x, so a beta install that ever read this
   # manifest would take it. Section 6's own answer, publish no manifest at all,
@@ -834,9 +307,9 @@ jobs:
   # once and never update; tests/security/updater.test.ts pins the pair.
   #
   # Its own plugin bundles, built by build-alpha from the same commit as the
-  # engine whose plugin host runs their geometry components. A Rust engine
-  # build installs plugins from this release, not the beta's
-  # (pluginReleaseTag in src/plugins/index.ts).
+  # engine whose plugin host runs their geometry components. The app installs
+  # plugins from this release, not the beta's (RELEASE_TAG in
+  # src/plugins/index.ts), and the beta never reads this one.
   release-alpha:
     needs: build-alpha
     if: >-
@@ -855,8 +328,7 @@ jobs:
       # default and would delete dist/.
       - uses: actions/checkout@v4
 
-      # By pattern, so the beta installers built in this same run stay out of
-      # dist/ and off this release.
+      # By pattern, so only this build's installers and bundles reach dist/.
       - uses: actions/download-artifact@v4
         with:
           pattern: fundacad-alpha-*
@@ -891,15 +363,15 @@ jobs:
             -o -name '*.dmg' -o -name '*.msi' -o -name '*setup.exe' \
             -o -name '*_portable.zip' \
             -o -name '*.app.tar.gz' -o -name '*.sig' -o -name 'plugin-*.zip' \))
-          # The plugin bundles this build installs from (pluginReleaseTag in
+          # The plugin bundles this build installs from (RELEASE_TAG in
           # src/plugins/index.ts). Without them every offered plugin is a 404.
           grep -q 'plugin-' <<<"$files" \
             || { echo "::error::no plugin bundles to publish"; exit 1; }
           # Updates in place, never delete and recreate: a beta release that
           # was recreated once stayed gone for two hours.
 
-          # Same gate as the beta's, for the same reason: a manifest pointing
-          # installed copies at bundles they will reject is worse than none.
+          # A manifest pointing installed copies at bundles they will reject is
+          # worse than none.
           UPSTREAM_PUBKEY='dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDUwMkY3MDMzN0E1RUREMUYKUldRZjNWNTZNM0F2VU81ZU9YLzBPdDV6UVdkVklPOWg1S01zdU1lWitDMGR6aFg1cmJoZnYrMWIK'
           pubkey=$(node -p "require('./src-tauri/tauri.conf.json').plugins.updater.pubkey")
           platforms=$(jq '.platforms | length' latest.json)
@@ -1029,10 +501,13 @@ jobs:
 
   # Browser end-to-end checks for the imported-assembly Browser tree.
   #
-  # Deliberately NON-GATING: nothing `needs:` this job, exactly like
-  # rust-geom below, so a browser flake can never block a beta publish.
-  # That matters here because a green `build` auto-publishes to users who
-  # auto-update, and browser e2e is the classic flaky surface.
+  # Deliberately NON-GATING: nothing `needs:` this job, so a browser flake can
+  # never block an alpha publish. That matters here because a green build
+  # auto-publishes to users who auto-update, and browser e2e is the classic
+  # flaky surface.
+  #
+  # The engine is the one `rust-geom` built and tested, handed over as an
+  # artifact rather than compiled again with OpenCASCADE here.
   #
   # These exist because everything else about the assembly tree is unit tests and
   # row counts. The render-signature bug (a document whose product NAMES changed
@@ -1043,6 +518,7 @@ jobs:
   # and installs playwright-core with --no-save so the main build path keeps its
   # dependency set unchanged.
   e2e:
+    needs: rust-geom
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -1055,29 +531,28 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-
       - name: Install frontend dependencies
         run: |
           npm ci
           npm i --no-save playwright-core@1.56.0
 
-      - name: Install Python 3.12 + sync sidecar deps (locked)
-        run: |
-          uv python install 3.12
-          cd sidecar && uv sync
+      - name: Fetch the engine rust-geom built
+        uses: actions/download-artifact@v4
+        with:
+          name: fundacad-engine-linux
+          path: engine-bin
 
-      - name: Start the geometry sidecar and vite
+      - name: Start the geometry engine and vite
         run: |
-          cd sidecar && FUNDACAD_SIDECAR_PORT=8765 FUNDACAD_SIDECAR_TOKEN=citoken \
-            uv run python server.py > /tmp/ci_sidecar.log 2>&1 &
-          cd "$GITHUB_WORKSPACE" && npx vite --port 5173 > /tmp/ci_vite.log 2>&1 &
+          chmod +x engine-bin/fundacad-engine
+          FUNDACAD_ENGINE_PORT=8765 FUNDACAD_ENGINE_TOKEN=citoken \
+            engine-bin/fundacad-engine --ws > /tmp/ci_engine.log 2>&1 &
+          npx vite --port 5173 > /tmp/ci_vite.log 2>&1 &
           for i in $(seq 1 60); do
-            grep -q "LISTENING 8765" /tmp/ci_sidecar.log 2>/dev/null && break
+            grep -q "LISTENING 8765" /tmp/ci_engine.log 2>/dev/null && break
             sleep 2
           done
-          grep -q "LISTENING 8765" /tmp/ci_sidecar.log || { echo "sidecar never listened"; cat /tmp/ci_sidecar.log; exit 1; }
+          grep -q "LISTENING 8765" /tmp/ci_engine.log || { echo "the engine never listened"; cat /tmp/ci_engine.log; exit 1; }
 
       # e2e/browser_tree_perf.cjs is deliberately NOT run here: it is a
       # benchmark whose verdict compares two medians, and a shared runner's
@@ -1094,21 +569,27 @@ jobs:
           SC_CHROME: /usr/bin/google-chrome
         run: node e2e/history_side_e2e.cjs
 
-      - name: Sidecar log on failure
+      - name: Engine log on failure
         if: failure()
-        run: tail -50 /tmp/ci_sidecar.log /tmp/ci_vite.log || true
+        run: tail -50 /tmp/ci_engine.log /tmp/ci_vite.log || true
 
-  # The Rust geometry engine (crates/fundacad-geom, docs/RUST-PIVOT.md). It
-  # compiles OpenCASCADE 7.8.1 from source through the occt-sys crate, which is
-  # long on a cold runner and short once target/OCCT is cached, so the static
-  # kernel gets its own cache keyed on the crate that builds it. Not in the gate
-  # yet: it becomes `needs:` for the build matrix once the cache has proven
-  # itself on a few runs (Phase 1 of the pivot). It is a real test job, not a
-  # probe: red here means the engine is broken.
+  # The geometry engine (crates/, docs/RUST-PIVOT.md) and the app shell around
+  # it. It compiles OpenCASCADE 7.8.1 from source through the occt-sys crate,
+  # which is long on a cold runner and short once target/OCCT is cached, so the
+  # static kernel gets its own cache keyed on the crate that builds it. It gates
+  # the alpha build: red here means the engine is broken.
   rust-geom:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
+
+      # src-tauri links the tauri crate, which needs the webkit2gtk stack and
+      # libudev; cmake builds OpenCASCADE.
+      - name: Install Linux system dependencies
+        uses: ./.github/actions/linux-deps
+
+      - name: Install cmake
+        run: sudo apt-get install -y cmake
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -1118,7 +599,9 @@ jobs:
       - name: Cache Cargo
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: . -> target
+          workspaces: |
+            . -> target
+            src-tauri -> target
 
       - name: Cache the static OpenCASCADE build
         uses: actions/cache@v4
@@ -1129,8 +612,8 @@ jobs:
       # The whole workspace, not the kernel crate alone: the engine's request
       # loop, its transports and the protocol have tests of their own, and the
       # WebSocket transport is behind a feature, so without it the server the
-      # Python protocol suites drive is never compiled here (RUST-PIVOT section
-      # 5, Phase 2). It also covers fundacad-mcp, whose suites drive the built
+      # browser and the e2e scripts talk to is never compiled here. It also
+      # covers fundacad-mcp, whose suites drive the built
       # binaries rather than the library: the MCP server over its real stdio
       # protocol, and `fundacad-engine` over a real socket for the live session.
       # The plugin host suites load each plugin's built component and skip
@@ -1145,8 +628,8 @@ jobs:
       - name: Rust workspace tests
         run: cargo test --workspace --features fundacad-engine/ws
 
-      # Parity with the Python engine, with no Python: every corpus rebuilt on
-      # the Rust engine and compared with the Python engine's frozen answers in
+      # Parity with the retired Python engine: every corpus rebuilt on this
+      # engine and compared with the Python engine's frozen answers in
       # tests/golden (RUST-PIVOT, "Golden files"). The MCP transcript is
       # crates/fundacad-mcp/tests/parity_golden.rs, run by the step above. Every
       # golden runs even after one fails, so a red build names them all.
@@ -1158,9 +641,43 @@ jobs:
             case "$g" in *mcp_parity*) continue ;; esac
             # The engine's progress lines go to stderr; kept for a failure only.
             ./target/debug/fundacad-engine golden-check "$g" 2>golden.err \
-              || { echo "::error::$g does not match the python engine"; tail -n 20 golden.err; fail=1; }
+              || { echo "::error::$g does not match its golden answers"; tail -n 20 golden.err; fail=1; }
           done
           exit $fail
+
+      # The same answers from a warm disk cache: a first process checkpoints
+      # every build, a second reopens every document from those checkpoints, as
+      # the app does after a restart. The goldens whose documents run plugin
+      # features, where state that is not in the shape has to survive the disk.
+      - name: Golden parity checks, warm cache
+        shell: bash
+        run: |
+          fail=0
+          for g in texture plugins screws_ops; do
+            ./target/debug/fundacad-engine golden-check "tests/golden/$g.golden.json" --warm 2>golden.err \
+              || { echo "::error::$g does not match its golden answers from a warm cache"; tail -n 20 golden.err; fail=1; }
+          done
+          exit $fail
+
+      # The app shell, including tests/container_seam.rs: an import the engine
+      # stored survives the app's container into a fresh blob store and
+      # rebuilds there. Links the kernel this job already built, and a `dist`
+      # stands in for the frontend, which the Tauri context embeds.
+      - name: App shell tests (unit + container seam)
+        working-directory: src-tauri
+        env:
+          FUNDACAD_OCCT_ROOT: ${{ github.workspace }}/target/OCCT
+        run: |
+          mkdir -p ../dist
+          cargo test --tests
+
+      - name: Upload the engine for the e2e job
+        uses: actions/upload-artifact@v4
+        with:
+          name: fundacad-engine-linux
+          retention-days: 1
+          if-no-files-found: error
+          path: target/debug/fundacad-engine
 
       # The shipped engine is an optimised GCC build, which the debug build above
       # is not: undefined behaviour in the C++ shims has shown up only there. The

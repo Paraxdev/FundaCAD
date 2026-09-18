@@ -21,8 +21,8 @@ describe("findSelectorAt", () => {
     });
   });
 
-  // The sidecar rounds `at` to 6 decimals; the document keeps what the pick gave.
-  it("tolerates the sidecar's rounding of the reported point", () => {
+  // The engine rounds `at` to 6 decimals; the document keeps what the pick gave.
+  it("tolerates the engine's rounding of the reported point", () => {
     const f = pressPull(near([-65.8189741234, 0.9, 7.0857141234]));
     expect(findSelectorAt(f, [-65.818974, 0.9, 7.085714])).not.toBeNull();
   });

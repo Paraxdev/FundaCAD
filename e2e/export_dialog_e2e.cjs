@@ -6,11 +6,11 @@
 //   3. STEP hides the mesh settings.
 //   4. Export remembers the choices for the next time the dialog opens.
 //
-// The file itself is written by the sidecar (sidecar/tests/test_export_options.py),
+// The file itself is written by the engine (the Python engine's `test_export_options.py`),
 // a plain browser has no save dialog to give it a path.
 //
-// Usage (from the repo root, with vite + sidecar running):
-//   SC_TOKEN=<sidecar token> SC_CHROME=<chrome.exe> [SC_URL=http://localhost:5173/] node e2e/export_dialog_e2e.cjs [outDir]
+// Usage (from the repo root, with vite + engine running):
+//   SC_TOKEN=<engine token> SC_CHROME=<chrome.exe> [SC_URL=http://localhost:5173/] node e2e/export_dialog_e2e.cjs [outDir]
 const { chromium } = require("playwright-core");
 const fs = require("fs");
 const path = require("path");

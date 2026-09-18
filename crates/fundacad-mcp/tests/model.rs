@@ -1,5 +1,5 @@
 //! The document an agent edits: ids, the timeline, and the parameter table.
-//! A port of `crates/fundacad-mcp/tools/python-oracle/tests/test_model.py`.
+//! A port of the Python MCP server's `test_model.py`.
 //!
 //! The property worth the most here is that a REFUSED edit changes nothing. An
 //! agent works by trying things, and a tool that half-applies a bad edit leaves

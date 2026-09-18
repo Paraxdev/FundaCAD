@@ -7,7 +7,7 @@
 // wearing a default nobody chose, so a reader that asks only the product tree
 // draws a red circuit board flat grey, and a see-through one at that.
 //
-// The unit tests cover the packing and the sidecar tests cover the walk from
+// The unit tests cover the packing and the engine tests cover the walk from
 // XCAF to the body dict. What only exists once there are pixels is the last
 // hop: that the face the file painted red is drawn red, and that a body whose
 // faces all agree is drawn from its material like any other body rather than
@@ -17,8 +17,8 @@
 // state), not off a screenshot: a pixel diff of a lit solid is a test that fails
 // when a graphics driver changes. The screenshots are there to be looked at.
 //
-// Usage (from the repo root, with vite on 5173 + sidecar on 8765):
-//   SC_TOKEN=<sidecar token> node e2e/import_face_colors_e2e.cjs [outDir]
+// Usage (from the repo root, with vite on 5173 + engine on 8765 (`fundacad-engine --ws`)):
+//   SC_TOKEN=<engine token> node e2e/import_face_colors_e2e.cjs [outDir]
 const { chromium } = require("playwright-core");
 const fs = require("fs");
 const path = require("path");
@@ -26,7 +26,7 @@ const path = require("path");
 const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const STEP = process.env.SC_STEP
-  || path.resolve(__dirname, "../sidecar/fixtures/asm_face_colors.step");
+  || path.resolve(__dirname, "../tests/fixtures/asm_face_colors.step");
 const OUT = path.resolve(process.argv[2] || "face_color_shots");
 if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
 let failures = 0;

@@ -1,7 +1,7 @@
 #pragma once
 // Surface parameters, boxes and arc-length samples for face bands, inspect and
 // projection (fundacad-geom::{faces, inspect, projection}), each the build123d
-// or OCP call the sidecar makes for the same number.
+// or OCP call the Python engine makes for the same number.
 
 #include "rust/cxx.h"
 #include <BRepAdaptor_Curve.hxx>

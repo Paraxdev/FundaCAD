@@ -34,7 +34,7 @@ export interface InterferenceData {
   title: string;
   clashes: ClashRow[];
   clearances: ClearanceRow[];
-  /** Set when the sidecar capped the candidate-pair sweep on a dense assembly. */
+  /** Set when the engine capped the candidate-pair sweep on a dense assembly. */
   truncatedMessage?: string;
 }
 

@@ -73,7 +73,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   } = deps;
 
   // Interactive Fillet / Chamfer: pick an edge (or use a Ctrl-click pre-selection),
-  // then drag an arrow to scrub the radius/distance with a live sidecar preview.
+  // then drag an arrow to scrub the radius/distance with a live engine preview.
   const edgeFeatureDone = (id: string | null) => { noteCommitted(id); if (id) selectFeature(id); };
   const startFillet = () => {
     if (toolBusy()) return;
@@ -404,7 +404,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   }
 
   // Datum Axis on an edge: pick a straight model edge and the axis becomes its
-  // line, and STAYS its line, the sidecar re-resolves the edge every rebuild so
+  // line, and STAYS its line, the engine re-resolves the edge every rebuild so
   // the axis follows the part (the datumPlane-on-a-face story, for an axis). The
   // baked origin/dir written here are the cache the follow falls back to.
   function createDatumAxisOnEdge() {
@@ -720,7 +720,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   // unify glued/overlapping solids, then collapse facet debris (slivers +
   // near-coplanar staircases). Booleans on ragged imports re-manufacture debris,
   // so run it again after a heavy Press/Pull or boolean session to keep Delete
-  // Face and downstream booleans reliable. Best-effort in the sidecar: a body it
+  // Face and downstream booleans reliable. Best-effort in the engine: a body it
   // can't confidently clean passes through unchanged.
   function startCleanUp() {
     if (toolBusy()) return;
@@ -1095,7 +1095,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       e.preventDefault();
       e.stopImmediatePropagation();
       cleanup();
-      // Stamp the body that owns the clicked face. Without it the sidecar falls
+      // Stamp the body that owns the clicked face. Without it the engine falls
       // back to the active (last-created) body and the face selector resolves
       // against the wrong shape, so on a multi-body model the shell/draft would
       // land on a body the user never touched (same fault as the texture bug).
@@ -1168,12 +1168,12 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   // equally-close candidates, so ask which one was meant and swap that ONE
   // selector. Everything else about the feature is left alone.
   //
-  // `kind` is the sidecar's own word for what went ambiguous, and it decides what
+  // `kind` is the engine's own word for what went ambiguous, and it decides what
   // is picked. This used to pick a face unconditionally, so repairing a fillet
   // put a FACE selector into its `edges` field, where the resolver read the face's
   // pick point as an edge point and rounded whichever edge sat nearest it.
   //
-  // Only the selector the sidecar named is touched, located by its stored point,
+  // Only the selector the engine named is touched, located by its stored point,
   // not by index (see repickReference.ts). If it can't be found the feature has
   // moved on since the failed build (already re-picked, or edited), which is not
   // an error: say so and do nothing rather than "repairing" the wrong reference.

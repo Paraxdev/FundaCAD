@@ -37,7 +37,7 @@ describe("describe", () => {
   it("never renders an object as [object Object]", () => {
     // A logger that turns a real failure into "[object Object]" is worse than no
     // logger: it destroys the evidence while looking like it captured it. The
-    // sidecar reports failures as objects, so this is the common path.
+    // engine reports failures as objects, so this is the common path.
     const out = describeValue({ feature_id: "f5", message: "worker died" });
     expect(out).not.toContain("[object Object]");
     expect(out).toContain("f5");

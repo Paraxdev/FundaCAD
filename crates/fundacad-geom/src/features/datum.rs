@@ -1,4 +1,4 @@
-//! Datum planes and axes, sidecar/builder.py `_handle_datum_plane` and
+//! Datum planes and axes, the Python engine's `builder.py` `_handle_datum_plane` and
 //! `_handle_datum_axis`.
 //!
 //! A datum plane made on a face follows it (face_anchor.rs) and an axis made

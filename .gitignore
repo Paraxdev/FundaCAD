@@ -11,8 +11,10 @@ plugins/*/geometry-rs/target/
 plugins/*/geometry.wasm
 src-tauri/gen/
 
-# python sidecar
+# python bytecode, and the retired Python engine's venv and bundled runtime,
+# which a checkout that switches to the legacy branch and back leaves behind
 sidecar/.venv/
+src-tauri/sidecar-runtime/
 __pycache__/
 *.pyc
 
@@ -41,15 +43,12 @@ green-select.png
 *.step
 *.stl
 *.3mf
-!sidecar/tools/bench/textured_box.funda
-!sidecar/fixtures/asm_*.step
+!tests/fixtures/textured_box.funda
+!tests/fixtures/asm_*.step
 !third_party/opencascade-rs/crates/viewer/models/*.step
 
 # research / experiment shelf: kept out of the repo
 proving-ground/
-
-# bundled Python sidecar runtime (built by scripts/build-sidecar-runtime.sh, ~800MB)
-src-tauri/sidecar-runtime/
 
 # secrets / local env: never commit
 .env

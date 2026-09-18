@@ -6,7 +6,7 @@
 // portable zip is unpacked from, the AppImage and the .app.
 //
 // Run by the alpha config's beforeBuildCommand, so a plain
-// `npx tauri build --config src-tauri/tauri.alpha.conf.json --features rust-engine`
+// `npx tauri build --config src-tauri/tauri.alpha.conf.json`
 // ships it. `--no-build` stages a binary built earlier.
 
 import { execFileSync } from "node:child_process";

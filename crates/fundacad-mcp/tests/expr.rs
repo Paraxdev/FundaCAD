@@ -1,5 +1,5 @@
 //! The parameter expression language, held to the app's. A port of
-//! `crates/fundacad-mcp/tools/python-oracle/tests/test_expr.py`.
+//! the Python MCP server's `test_expr.py`.
 //!
 //! The MCP server no longer carries its own evaluator, it uses
 //! `fundacad-core::params`, which is the Rust twin of `src/params/{parse,eval}.ts`.

@@ -4,7 +4,7 @@
 // switch steps the hole type. Everything else, fit, tap drill, counterbore and
 // countersink dimensions, drill point, is a row under the feature afterwards.
 //
-// The preview is the real cut from the sidecar, so a hole that cannot be built
+// The preview is the real cut from the engine, so a hole that cannot be built
 // says why in the box instead of committing a red history entry.
 
 import * as THREE from "three";
@@ -393,10 +393,6 @@ export class HoleTool {
       this.pushPreview();
     }
     const verdict = previewVerdict(this.store);
-    if (verdict.kind === "wait") {
-      requestAnimationFrame(() => { if (this.active && this.phase === "place") this.commit(); });
-      return;
-    }
     if (verdict.kind === "refused") {
       setPrompt(`Hole refused: ${verdict.reason} · change it or Esc`);
       return;
@@ -410,6 +406,7 @@ export class HoleTool {
     } else {
       this.store.addFeature(feature);
     }
+    if (verdict.kind === "wait") this.store.verifyCommit(feature.id, "Hole");
     this.onDone?.(feature.id);
   }
 

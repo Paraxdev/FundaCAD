@@ -1,5 +1,5 @@
 //! The plugin kernel's delaunay-planar against scipy.spatial.Delaunay on the
-//! same points (tests/qhull/cases.json, written by tests/qhull/make_cases.py):
+//! same points (tests/qhull/cases.json, written by tests/qhull/make_cases.py on the legacy branch):
 //! the same triangles, each with the same first vertex, in the same order.
 #![cfg(feature = "plugins")]
 

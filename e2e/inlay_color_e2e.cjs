@@ -3,7 +3,7 @@
 // WHY THIS EXISTS. A mesh pass can tag the faces it covers with a palette slot,
 // and the palette capability turns that slot into a colour on those faces. Every
 // link in that chain had a test, and the chain was still broken for as long as it
-// took to notice: the sidecar wrote the slots under one key, the window read
+// took to notice: the engine wrote the slots under one key, the window read
 // them under another, and the reader's "this body has no inlays" early exit is
 // indistinguishable from a key that was never sent. The document was right, the
 // build was right, the payload was right, and nothing was painted.
@@ -13,10 +13,10 @@
 // now compares the two real files, which is the cheap half. This is the other
 // half: it looks at the pixels.
 //
-// Usage (from the repo root, with vite on 5173 and the sidecar running):
+// Usage (from the repo root, with vite on 5173 and the engine running):
 //   node e2e/inlay_color_e2e.cjs
 // SC_CHROME names a Chromium/Brave binary if the default is wrong.
-// SC_URL must carry the sidecar token in a dev browser: ...?token=...
+// SC_URL must carry the engine token in a dev browser: ...?token=...
 // SC_OUT is where the pictures land (default: the system temp directory).
 
 const { chromium } = require("playwright-core");

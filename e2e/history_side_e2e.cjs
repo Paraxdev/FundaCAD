@@ -7,19 +7,19 @@
 //   3. The last row can be scrolled fully into view, clear of anything floating
 //      over the panel's corner.
 //
-// Usage (from the repo root, with vite on 5173 + sidecar on 8765):
-//   SC_TOKEN=<sidecar token> SC_CHROME=<chromium or brave> node e2e/history_side_e2e.cjs [doc.funda]
+// Usage (from the repo root, with vite on 5173 + engine on 8765 (`fundacad-engine --ws`)):
+//   SC_TOKEN=<engine token> SC_CHROME=<chromium or brave> node e2e/history_side_e2e.cjs [doc.funda]
 // With no document it makes a 60 step one (a long history is the whole point);
 // any real part works too, the radio reprod is a good heavy one.
-// SC_APP_PORT and SC_SIDECAR_PORT move it off 5173/8765, to run beside a dev
-// session (the sidecar then needs FUNDACAD_EXTRA_ORIGINS for that app port).
+// SC_APP_PORT and SC_ENGINE_PORT move it off 5173/8765, to run beside a dev
+// session (the engine then needs FUNDACAD_EXTRA_ORIGINS for that app port).
 const { chromium } = require("playwright-core");
 const fs = require("fs");
 
 const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const APP_PORT = process.env.SC_APP_PORT || "5173";
-const WS_PORT = process.env.SC_SIDECAR_PORT || "8765";
+const WS_PORT = process.env.SC_ENGINE_PORT || "8765";
 if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
 
 function longHistory(pairs) {

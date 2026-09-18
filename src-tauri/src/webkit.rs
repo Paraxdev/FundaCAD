@@ -4,7 +4,7 @@
 //! read none of these variables, which is why the whole module is Linux-gated.
 //!
 //! Split into a pure `decide` plus a thin applier for the same reason
-//! `sidecar::configure_env` is split out: this is behaviour that only misfires
+//! `engine::configure_env` is split out: this is behaviour that only misfires
 //! on hardware nobody here builds on, so the decision has to be assertable
 //! without the hardware. Nothing in this file has been exercised against an
 //! actual Nvidia GPU by me, see the test module.

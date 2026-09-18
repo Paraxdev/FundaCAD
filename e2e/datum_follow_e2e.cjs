@@ -1,16 +1,16 @@
 // A datum axis is DRAWN where its resolved follow mark says, in a real browser.
 //
-// The sidecar side is proven headless (tests/test_datum_axis.py): an axis
+// The engine side is proven headless (tests/test_datum_axis.py): an axis
 // anchored to an edge resolves to that edge's line and follows it, reported in
 // the rebuild's `datumMarks` header. This is the render-side other half: when a
 // datumMark is present for a datum axis, the viewport draws the axis at the
 // RESOLVED line, not at the baked coordinate in the document. Proven by writing
 // a mark onto the build result and asking the viewport to reflect it, so it does
-// not depend on which sidecar build is running, only on the frontend code path
+// not depend on which engine build is running, only on the frontend code path
 // that reads datumMarks (app/datumPlanes.ts).
 //
-// Usage (from the repo root, with vite on 5173 + sidecar on 8765):
-//   SC_TOKEN=<sidecar token> SC_CHROME=<chrome.exe> node e2e/datum_follow_e2e.cjs [outDir]
+// Usage (from the repo root, with vite on 5173 + engine on 8765 (`fundacad-engine --ws`)):
+//   SC_TOKEN=<engine token> SC_CHROME=<chrome.exe> node e2e/datum_follow_e2e.cjs [outDir]
 const { chromium } = require("playwright-core");
 const fs = require("fs");
 const path = require("path");

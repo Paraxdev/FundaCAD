@@ -18,7 +18,7 @@
 // SHAPES. Three of them, and the difference is real rather than historical:
 //
 //   * a SELECTOR (`edges`, `faces`, `face`) is a saved description of geometry
-//     that the sidecar re-resolves on every rebuild, so it survives the part
+//     that the engine re-resolves on every rebuild, so it survives the part
 //     changing underneath it.
 //   * a BODY ID (`tools`, `bodies`, `target`) is positional and does not
 //     survive much of anything, which is a fact about the document rather than
@@ -227,7 +227,7 @@ export function describeTarget(t: TargetField, count: number): string {
  *  removed and a click can toggle rather than pile up duplicates.
  *
  *  A body id compares by value. A selector compares by its POINT, because that
- *  is what a picked selector carries and what the sidecar resolves it by; two
+ *  is what a picked selector carries and what the engine resolves it by; two
  *  selectors naming the same edge from the same pick have the same point, and
  *  nothing else about them is stable across a rebuild. Selectors with no point
  *  (by:"all", by:"axis", a v2 fingerprint) compare by full value, they are not
@@ -247,7 +247,7 @@ export function sameEntry(a: TargetEntry, b: TargetEntry): boolean {
 }
 
 /** Two picked points naming the same thing. The tolerance is well below any
- *  real modelling distance and above the 6-decimal rounding the sidecar applies
+ *  real modelling distance and above the 6-decimal rounding the engine applies
  *  to a point it hands back. */
 function samePoint(a: readonly number[], b: readonly number[]): boolean {
   return a.every((v, i) => Math.abs(v - (b[i] ?? NaN)) <= 1e-4);
@@ -266,7 +266,7 @@ export function pointOf(sel: Selector): [number, number, number] | null {
 //
 // REVOLVE'S AXIS EDGE is a selector like any other, and it is left out because
 // it does not stand alone: `revolve.axis` is written beside it as the RESOLVED
-// line, a cache the sidecar falls back to when the edge stops resolving and
+// line, a cache the engine falls back to when the edge stops resolving and
 // older builds read instead of the reference. Writing a new `axisEdge` through
 // the generic editor would leave that cache describing the OLD edge, harmless
 // while the new one resolves, and quietly wrong the moment it stops. Keeping the

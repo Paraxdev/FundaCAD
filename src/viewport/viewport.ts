@@ -1157,7 +1157,7 @@ export class Viewport {
    *  cast against the merged (closed, manifold) body mesh: an odd number of
    *  crossings means the point is enclosed. False when there's no model. Used by
    *  Extrude to tell whether pushing along a direction enters material (→ Cut) or
-   *  leaves it (→ Join). A heuristic: the sidecar boolean guard is the authority. */
+   *  leaves it (→ Join). A heuristic: the engine boolean guard is the authority. */
   pointInSolid(p: THREE.Vector3): boolean {
     if (!this.model) return false;
     this.psRay.set(p, this.psDir);
@@ -1787,7 +1787,7 @@ export class Viewport {
 
   /** Find the rendered edge whose polyline midpoint is nearest `mid` (world
    *  units, model-scaled tolerance), the rebuild-stable way to re-locate an
-   *  edge a saved selector or a sidecar diagnostic refers to. */
+   *  edge a saved selector or an engine diagnostic refers to. */
   edgeLineByMid(mid: [number, number, number]): EdgeRef | null {
     if (!this.model) return null;
     const edges = this.model.edges.map((e) => ({ points: e.points }));
@@ -1813,7 +1813,7 @@ export class Viewport {
     this.requestRender();
   }
 
-  /** The face whose surface is nearest `point`, as the sidecar's by:"nearest" resolves.
+  /** The face whose surface is nearest `point`, as the engine's by:"nearest" resolves.
    *  Never compare against faceCentroidWorld: triangle centroids move with tessellation
    *  density. `extraTol` covers a known offset such as a texture's depth. */
   faceIdNear(point: [number, number, number], extraTol = 0): number | null {

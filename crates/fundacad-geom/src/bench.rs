@@ -1,5 +1,5 @@
 //! Phase timings for the benchmarks, the Rust side of `_timed` in
-//! sidecar/tools/bench_import.py.
+//! the Python engine's `bench_import.py`.
 //!
 //! Recording is off unless `FUNDACAD_BENCH_PHASES` is set, so the shipped
 //! engine pays one relaxed atomic load per phase for it. A job thread also

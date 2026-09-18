@@ -1,4 +1,4 @@
-//! Which faces of a shape touch which, sidecar/topo_adj.py.
+//! Which faces of a shape touch which, the Python engine's `topo_adj.py`.
 //!
 //! "Share an edge" means the same TShape through the kernel's own ancestor
 //! map, so two bodies pressed face to face are not adjacent.

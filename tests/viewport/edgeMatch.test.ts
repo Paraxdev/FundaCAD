@@ -18,7 +18,7 @@ describe("polylineMid", () => {
 
   // The bug this fixes: a straight edge is sampled as ONLY its two endpoints
   // (tessellate._line_endpoints), so the old floor(len/2) returned the END
-  // point. The sidecar then resolved "nearest edge to that point" from a
+  // point. The engine then resolved "nearest edge to that point" from a
   // CORNER, clicking a tall box's vertical edge filleted a short top edge,
   // whose centre is nearer the corner.
   it("handles a two-sample straight edge (the pick-one-edge-fillet-another bug)", () => {
@@ -102,7 +102,7 @@ describe("nearestEdgeByMid, legacy selector compatibility", () => {
 
 describe("edgeSelectorFrom, the body stamp", () => {
   // Regression for the silent wrong-body bug: a fillet/chamfer selector that
-  // does not name its body lets the sidecar fall back to the last-created body,
+  // does not name its body lets the engine fall back to the last-created body,
   // and `by:"nearest"` then blends an edge of a body the user never clicked.
   const vertical = { points: [[0, 0, 0], [0, 0, 35]] as Vec3[] };
 

@@ -1,5 +1,5 @@
 #pragma once
-// A triangle mesh made into B-rep, as sidecar/mesh_import.py does it: one
+// A triangle mesh made into B-rep, as the Python engine's `mesh_import.py` does it: one
 // planar face per triangle sewn into a solid (build123d `Mesher._get_shape`),
 // coplanar facets merged (`shape_util._maybe_unify`), the facts and the face
 // rebuild `shape_util._refacet_clean` works with.

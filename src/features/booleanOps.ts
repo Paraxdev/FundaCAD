@@ -9,7 +9,7 @@
 //
 // The operation names are the words on the buttons, not the kernel's. OCCT
 // calls them fuse/cut/common and the old Combine feature called them
-// join/cut/intersect; the sidecar still translates at its own edge. What a user
+// join/cut/intersect; the engine still translates at its own edge. What a user
 // selects two bodies and asks for is a union.
 
 import type { Feature } from "../types";

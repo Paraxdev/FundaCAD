@@ -17,10 +17,10 @@
 //
 // Selectors are NOT re-minted from what the rollback happens to render. An entry
 // that still matches a rendered edge gets a highlight; one that does not is kept
-// exactly as it was saved and carried through the commit untouched. The sidecar
+// exactly as it was saved and carried through the commit untouched. The engine
 // resolves `by:"nearest"` against the real geometry, which is a better matcher
 // than this one, so a point this tool cannot place on screen is not evidence
-// that the sidecar cannot place it either. Dropping such an entry would silently
+// that the engine cannot place it either. Dropping such an entry would silently
 // delete part of a working feature.
 //
 // The panel is a plain reader: it subscribes, renders `entries`, and calls back.
@@ -267,7 +267,7 @@ export class TargetEditTool {
    *
    *  The EDGE selector is the pick's own, which viewport/picking.ts already
    *  minted through edgeSelectorFrom, the one path that stamps the owning body,
-   *  without which the sidecar falls back to the active body and blends an edge
+   *  without which the engine falls back to the active body and blends an edge
    *  of the wrong one with no error at all.
    *
    *  The FACE selector is not. A pick prefers `by:"normal"` on an axis-aligned

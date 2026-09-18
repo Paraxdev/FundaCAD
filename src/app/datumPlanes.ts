@@ -8,7 +8,7 @@ export function createDatumPlanes(e: Engine): Pick<Engine, "datumPlaneDef" | "sy
    *  The feature's `plane` is the placement recorded when the datum was made. For
    *  a datum that follows a face that is a cache, and it goes stale the moment
    *  anything upstream of the face moves: the sketches on the datum are placed by
-   *  the sidecar, which re-resolves the face, while the quad drawn here would
+   *  the engine, which re-resolves the face, while the quad drawn here would
    *  still be at the pick-time position. Two planes, one name.
    *
    *  So the last rebuild's answer wins when there is one. It arrives with the
@@ -59,7 +59,7 @@ export function createDatumPlanes(e: Engine): Pick<Engine, "datumPlaneDef" | "sy
       });
     e.viewport.setDatumPlanes(planes);
     // Datum points and axes ride the same visibility gate and the same rebuild
-    // pass. An anchored datum (an axis following an edge) resolves in the sidecar
+    // pass. An anchored datum (an axis following an edge) resolves in the engine
     // and arrives in the rebuild's `datumMarks`, so that placement WINS when
     // present, exactly as a face-following sketch reads its resolved plane; a
     // baked datum has no entry and falls back to the coordinate in the document.

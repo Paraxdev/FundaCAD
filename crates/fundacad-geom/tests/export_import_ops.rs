@@ -177,7 +177,7 @@ fn step_round_trips_through_export_and_import() {
     let geom = res["geom"].as_str().unwrap();
     assert!(PathBuf::from(blob).join(format!("{geom}.bbrep")).exists());
 
-    let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../sidecar/fixtures/asm_colors.step");
+    let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/asm_colors.step");
     let r = c.call(json!({"id": 3, "op": "import", "format": "STEP", "path": fixture}));
     assert_eq!(r["result"]["parts"][0], json!({"node": 1, "faces": 6, "color": "#e51919"}));
 
