@@ -1,7 +1,7 @@
 // End-to-end check of the body-then-face click, folder selection in the item
 // tree, its indentation, and the rotate dial, on a real import of asm_nested.step.
 //
-// Usage (from the repo root, with vite on 5173 + sidecar on 8765):
+// Usage (from the repo root, with vite on 5173 + engine on 8765 (`fundacad-engine --ws`)):
 //   SC_TOKEN=<token> SC_CHROME=<browser> node e2e/selection_intent_e2e.cjs
 const { chromium } = require("playwright-core");
 const path = require("path");

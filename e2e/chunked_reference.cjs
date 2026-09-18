@@ -8,7 +8,7 @@
 // app is untouched), and peeks each binary frame's JSON header to tell a
 // chunked stream from a single frame.
 //
-// Usage (from the repo root, with vite on 5173 + sidecar on 8765):
+// Usage (from the repo root, with vite on 5173 + engine on 8765 (`fundacad-engine --ws`)):
 //   SC_TOKEN=<token> node e2e/chunked_reference.cjs [--tag NAME]
 const { chromium } = require("playwright-core");
 const fs = require("fs");

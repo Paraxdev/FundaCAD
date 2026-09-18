@@ -5,8 +5,8 @@
 //   2. A box dragged rightward takes only what lies wholly inside it.
 //   3. A box dragged leftward takes whatever it touches.
 //
-// Usage (from the repo root, with vite on 5173 + sidecar on 8765):
-//   SC_TOKEN=<sidecar token> SC_CHROME=<chrome.exe> node e2e/sketch_box_e2e.cjs [outDir]
+// Usage (from the repo root, with vite on 5173 + engine on 8765 (`fundacad-engine --ws`)):
+//   SC_TOKEN=<engine token> SC_CHROME=<chrome.exe> node e2e/sketch_box_e2e.cjs [outDir]
 const { chromium } = require("playwright-core");
 const fs = require("fs");
 const path = require("path");

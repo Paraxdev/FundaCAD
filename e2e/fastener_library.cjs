@@ -5,7 +5,7 @@
 // onto the model. Screenshots land in SC_OUT (default: the working directory).
 //
 // Usage (from the repo root, with vite and the sidecar running):
-//   SC_TOKEN=<sidecar token> SC_CHROME=<chromium or brave> SC_APP_PORT=5199 SC_SIDECAR_PORT=8799 \
+//   SC_TOKEN=<engine token> SC_CHROME=<chromium or brave> SC_APP_PORT=5199 SC_ENGINE_PORT=8799 \
 //     node e2e/fastener_library.cjs
 const { chromium } = require("playwright-core");
 const path = require("path");
@@ -13,7 +13,7 @@ const path = require("path");
 const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const APP_PORT = process.env.SC_APP_PORT || "5173";
-const WS_PORT = process.env.SC_SIDECAR_PORT || "8765";
+const WS_PORT = process.env.SC_ENGINE_PORT || "8765";
 const OUT = process.env.SC_OUT || ".";
 if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
 

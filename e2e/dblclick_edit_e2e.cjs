@@ -13,8 +13,8 @@
 // precisely because a box has no draggable edit and so would not move the
 // signal either way.
 //
-// Usage (from the repo root, with vite on 5173 + sidecar on 8765):
-//   SC_TOKEN=<sidecar token> SC_CHROME=<chrome.exe> node e2e/dblclick_edit_e2e.cjs [outDir]
+// Usage (from the repo root, with vite on 5173 + engine on 8765 (`fundacad-engine --ws`)):
+//   SC_TOKEN=<engine token> SC_CHROME=<chrome.exe> node e2e/dblclick_edit_e2e.cjs [outDir]
 const { chromium } = require("playwright-core");
 const fs = require("fs");
 const path = require("path");

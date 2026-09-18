@@ -17,7 +17,7 @@
 // Usage (from the repo root, with vite on 5173 and the sidecar running):
 //   node e2e/texture_plugin.cjs
 // SC_CHROME names a Chromium/Brave binary if the default is wrong.
-// SC_URL must carry the sidecar token in a dev browser: ...?token=...
+// SC_URL must carry the engine token in a dev browser: ...?token=...
 
 const { chromium } = require("playwright-core");
 

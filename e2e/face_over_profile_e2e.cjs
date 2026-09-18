@@ -8,7 +8,7 @@
 //      to the side with nothing in front of it still is.
 //
 // Usage (from the repo root, with vite + sidecar running):
-//   SC_TOKEN=<sidecar token> SC_CHROME=<chrome.exe> node e2e/face_over_profile_e2e.cjs [outDir]
+//   SC_TOKEN=<engine token> SC_CHROME=<chrome.exe> node e2e/face_over_profile_e2e.cjs [outDir]
 // SC_URL (default http://localhost:5173/) and SC_PORT (the sidecar port, default
 // 8765) point it at servers that are not on the default ports.
 const { chromium } = require("playwright-core");

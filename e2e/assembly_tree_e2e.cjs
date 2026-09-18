@@ -6,7 +6,7 @@
 // it, expands it, toggles a subassembly's eye, and round-trips the document
 // through save/load to prove the tree survives.
 //
-// Usage (from the repo root, with vite on 5173 + sidecar on 8765):
+// Usage (from the repo root, with vite on 5173 + engine on 8765 (`fundacad-engine --ws`)):
 //   SC_TOKEN=<token> node e2e/assembly_tree_e2e.cjs
 const { chromium } = require("playwright-core");
 const path = require("path");

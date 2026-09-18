@@ -17,9 +17,9 @@
 // Deliberately not a CI gate, RSS on a shared runner is not reproducible
 // enough to ratchet.
 //
-// Usage (from the repo root, with vite on 5173 + sidecar on 8765):
+// Usage (from the repo root, with vite on 5173 + engine on 8765 (`fundacad-engine --ws`)):
 //   sidecar/.venv/bin/python e2e/gen_perf_docs.py
-//   SC_TOKEN=<sidecar token> node e2e/viewport_rss.cjs
+//   SC_TOKEN=<engine token> node e2e/viewport_rss.cjs
 const { chromium } = require("playwright-core");
 const fs = require("fs");
 
