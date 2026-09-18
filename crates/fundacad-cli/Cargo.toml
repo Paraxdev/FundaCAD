@@ -12,6 +12,10 @@ name = "fundacad-engine"
 path = "src/main.rs"
 
 [dependencies]
+base64 = "0.22"
+flate2 = "1"
+sha2 = "0.10"
+zip = { version = "4", default-features = false, features = ["deflate-flate2"] }
 fundacad-engine = { path = "../fundacad-engine", features = ["ws"] }
 fundacad-format = { path = "../fundacad-format" }
 fundacad-geom = { path = "../fundacad-geom", features = ["plugins"] }

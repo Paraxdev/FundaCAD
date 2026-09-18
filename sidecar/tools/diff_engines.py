@@ -77,15 +77,12 @@ def absolute_image_paths(docs):
                 f["imagePath"] = os.path.join(REPO_ROOT, *p.split("/"))
 
 
-def outcome(reply, roots=()):
+def outcome(reply, normalise=None):
     """The compared invariants of one rebuild reply, fatal refusals included.
-    `roots` is (path, placeholder) pairs replaced in a message before its class
-    is taken, so a golden recorded on one machine reads the same on another."""
+    `normalise` rewrites a message before its class is taken, which is how
+    freeze_goldens.py keeps a machine's own paths out of a golden."""
     def masked(message):
-        for real, token in roots:
-            for form in {real, real.replace("\\", "/"), real.replace("/", "\\")}:
-                message = message.replace(form, token)
-        return H.error_class(message)
+        return H.error_class(normalise(message) if normalise else message)
 
     if not reply.get("ok"):
         err = reply.get("error") or {}
