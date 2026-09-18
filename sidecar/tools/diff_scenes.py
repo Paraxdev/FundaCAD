@@ -99,21 +99,22 @@ def main():
             o = D.outcome(py[d["name"]])
             rows.append([d["name"], o["bodies"], f"{sum(o['volumes'].values()):.2f}",
                          o["fatal"] or ("; ".join(o["messages"]) or "ok")])
-        print(D.table(rows, ["scene", "bodies", "volume", "status"]))
+        D.table(rows, ["scene", "bodies", "volume", "status"])
         return
 
     print(f"rust engine: {args.rust}")
     rs = D.run_engine(args.rust, docs)
-    rows, bad = [], 0
+    rows, bad, refused = [], 0, []
     for d in docs:
         name = d["name"]
         p, r = D.outcome(py[name]), D.outcome(rs[name])
         diffs = D.compare(p, r)
         if diffs:
             bad += 1
+        refused += [(name, side, o["fatal"]) for side, o in (("python", p), ("rust", r)) if o["fatal"]]
         rows.append([name, p["bodies"], r["bodies"],
                      "MISMATCH" if diffs else "match", "; ".join(diffs)[:140]])
-    print(D.table(rows, ["scene", "py bodies", "rust bodies", "status", "detail"]))
+    D.table(rows, ["scene", "py bodies", "rust bodies", "status", "detail"])
     for name, note in unsupported:
         print(f"unsupported: {name}, {note}")
     print(f"\n{len(docs) - bad} match, {bad} mismatch")
