@@ -14,7 +14,7 @@ Only the latest release is supported; older installers are not patched.
 
 In scope:
 
-- the desktop app: Tauri shell (Rust), webview frontend (TypeScript), the geometry engine (Rust, a worker process of the app)
+- the desktop app: Tauri shell (Rust), webview frontend (TypeScript), the geometry engine, the Funda Engine (Rust, a worker process of the app)
 - the engine's localhost WebSocket (token-gated, bound to 127.0.0.1), served by `fundacad-engine --ws` and by the app's engine for a live session
 - the live session: while the app runs it writes its engine's port and token to `session.json` in its per-user app data directory, owner-only, so an AI assistant connected through MCP can join it (`docs/MCP.md`). Holding that token means driving the geometry engine; reaching the DOCUMENT the user has open additionally requires the app's own live-editing setting, which is visible in the window while anyone is attached. Reports about that file's permissions, or about the session rules in `crates/fundacad-engine/src/live.rs`, are in scope
 - the signed update pipeline (release artifacts and `latest.json`)
