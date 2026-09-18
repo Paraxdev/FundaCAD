@@ -111,9 +111,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [release, sanitize]
+        variant: [release, before-planar-fix]
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.variant == 'before-planar-fix' && 'd7c14e629688d19b569b01bf2027ea1ddec2682b' || github.sha }}
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -128,7 +130,7 @@ jobs:
         shell: bash
         run: |
           case "${{ matrix.variant }}" in
-            release) cargo build --release -p fundacad-cli -p fundacad-mcp ;;
+            release|before-planar-fix) cargo build --release -p fundacad-cli -p fundacad-mcp ;;
             sanitize)
               CXXFLAGS="-fsanitize=undefined,address -fno-omit-frame-pointer -O2 -g" \
               RUSTFLAGS="-C link-arg=-fsanitize=undefined,address" \
@@ -226,7 +228,7 @@ jobs:
             python3 -c "import json;r=json.loads(open('out.json').readline());print('ok',r.get('ok'),r.get('error'),[b.get('faceCount') for b in (r.get('result') or {}).get('bodies',[])])" || true
             [ $code -eq 0 ] || fail=1
           done
-          if [ "${{ matrix.variant }}" = release ]; then
+          if [ "${{ matrix.variant }}" != sanitize ]; then
             FUNDACAD_MCP_MODE=standalone timeout 600 python3 timebuild.py target/release/fundacad-mcp diag/*.json
             for load in 0 3; do
               for cpus in 0-3 0; do
