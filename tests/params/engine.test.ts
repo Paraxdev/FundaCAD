@@ -151,29 +151,30 @@ describe("params engine", () => {
 
   it("activeWhen is bindable while the feature has it, and its parameter goes with it", () => {
     const doc = fixture({ solid: { expr: "1", value: 1, unit: "count" } });
-    const f2 = doc.features[1] as unknown as Record<string, unknown>;
+    // A write replaces the feature object, so it is read fresh each time.
+    const f2x = () => doc.features[1] as unknown as Record<string, unknown>;
     const target = { kind: "feature", feature: "f2", field: "activeWhen" } as const;
 
     // control: with no field on the feature there is nothing to bind to, which
     // is what lets "Remove condition" end the binding
     commitFieldExpr(doc, target, "solid == 0", "count");
     recompute(doc);
-    expect(f2["activeWhen"]).toBeUndefined();
+    expect(f2x()["activeWhen"]).toBeUndefined();
     expect(boundParam(doc, target)).toBeNull();
 
-    f2["activeWhen"] = 1;
+    f2x()["activeWhen"] = 1;
     commitFieldExpr(doc, target, "solid == 0", "count");
     recompute(doc);
-    expect(f2["activeWhen"]).toBe(0);
+    expect(f2x()["activeWhen"]).toBe(0);
     doc.paramDefs!["solid"]!.expr = "0";
     recompute(doc);
-    expect(f2["activeWhen"]).toBe(1);
+    expect(f2x()["activeWhen"]).toBe(1);
     expect(deleteBlockers(doc, "solid")).not.toBeNull();
 
-    delete f2["activeWhen"];
+    delete f2x()["activeWhen"];
     recompute(doc);
     expect(boundParam(doc, target)).toBeNull();
-    expect(f2["activeWhen"]).toBeUndefined(); // not written back by a parameter left behind
+    expect(f2x()["activeWhen"]).toBeUndefined(); // not written back by a parameter left behind
     expect(deleteBlockers(doc, "solid")).toBeNull();
   });
 
