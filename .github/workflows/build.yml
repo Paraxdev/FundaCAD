@@ -929,10 +929,10 @@ jobs:
           >   or changed face, a fillet that refuses, a feature the skipped
           >   feature banner names, please report it with the file. That
           >   difference is exactly what this release exists to find.
-          > - Plugin geometry runs only for plugins that ship a WebAssembly
-          >   component, which today is the 3D Printing Toolbox. Screws,
-          >   Printing and Texture features say so by name when used; plugins
-          >   with no geometry of their own work as they do in the beta.
+          > - Plugin geometry runs as sandboxed WebAssembly components. Every
+          >   plugin in this repository ships one (3D Printing Toolbox, Screws,
+          >   Printing, Texture); a third party plugin without one says so by
+          >   name when its feature is used.
           > - The MCP server for AI assistants ships beside the app as
           >   `fundacad-mcp`; the Plugins page's How to connect it gives the
           >   command.
@@ -1109,6 +1109,8 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip2
 
       - name: Cache Cargo
         uses: swatinem/rust-cache@v2
@@ -1119,7 +1121,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: target/OCCT
-          key: occt-static-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'third_party/opencascade-rs/crates/opencascade-sys/build.rs') }}
+          key: occt-static-${{ runner.os }}-${{ hashFiles('third_party/opencascade-rs/crates/occt-sys/src/lib.rs', 'third_party/opencascade-rs/crates/opencascade-sys/build.rs', 'third_party/opencascade-rs/crates/opencascade-sys/Cargo.toml') }}
 
       # The whole workspace, not the kernel crate alone: the engine's request
       # loop, its transports and the protocol have tests of their own, and the
@@ -1128,5 +1130,14 @@ jobs:
       # 5, Phase 2). It also covers fundacad-mcp, whose suites drive the built
       # binaries rather than the library: the MCP server over its real stdio
       # protocol, and `fundacad-engine` over a real socket for the live session.
+      # The plugin host suites load each plugin's built component and skip
+      # without it, and the MCP suites drive the built engine binary, so both
+      # are built first or those tests pass without testing anything.
+      - name: Build the plugin components
+        run: python3 scripts/build-plugin-wasm.py
+
+      - name: Build the workspace binaries
+        run: cargo build --workspace --features fundacad-engine/ws
+
       - name: Rust workspace tests
         run: cargo test --workspace --features fundacad-engine/ws
