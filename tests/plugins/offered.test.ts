@@ -21,7 +21,14 @@
 import { describe, expect, it } from "vitest";
 import shippedRaw from "../../plugins/FundaCAD.MCP/manifest.json?raw";
 import { parseManifest, promiseOf } from "../../src/plugins/manifest";
-import { mcpConfigJson, mcpLaunch, officialPlugins } from "../../src/plugins";
+import {
+  mcpConfigBlock,
+  mcpConfigJson,
+  mcpLaunch,
+  mcpServerLaunch,
+  officialPlugins,
+  pluginReleaseTag,
+} from "../../src/plugins";
 import { bundleAsset } from "../../src/plugins/shipped";
 
 const RELEASES = "https://github.com/Paraxdev/fundacad/releases/download/";
@@ -72,6 +79,16 @@ describe("the plugins this build offers", () => {
       expect(p.url).not.toContain("..");
       expect(p.url).not.toContain("@");
       expect(p.url.slice(RELEASES.length)).toBe(`${p.tag}/${p.asset}`);
+    }
+  });
+
+  it("installs from the release built with the same engine as the app", () => {
+    // A Rust engine build runs plugin geometry as components, which its own
+    // release carries from the same commit as its host.
+    expect(pluginReleaseTag("python")).toBe("beta");
+    expect(pluginReleaseTag("rust")).toBe("prealpha-rust");
+    for (const p of officialPlugins(pluginReleaseTag("rust"))) {
+      expect(p.url).toBe(`${RELEASES}prealpha-rust/${p.asset}`);
     }
   });
 });
@@ -151,6 +168,12 @@ describe("the command line an MCP host is given", () => {
     // kind of surprise a launch command should not carry.
     const cfg = mcpLaunch("/plugins/FundaCAD.MCP", { ...runtime, pythonpath: null });
     expect("PYTHONPATH" in cfg.env).toBe(false);
+  });
+
+  it("hands a Rust engine build's host the bundled server and nothing else", () => {
+    const server = "C:\\Program Files\\FundaCAD\\fundacad-mcp.exe";
+    const parsed = JSON.parse(mcpConfigBlock(mcpServerLaunch(server)));
+    expect(parsed.mcpServers.fundacad).toEqual({ command: server, args: [], env: {} });
   });
 
   it("is the block an MCP host expects, not just a hint at one", () => {

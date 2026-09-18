@@ -250,3 +250,33 @@ fn a_minted_token_looks_like_token_urlsafe_32() {
         .all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_'));
     assert_ne!(t, mint_token().unwrap());
 }
+
+struct Sink;
+
+impl Outbox for Sink {
+    fn send(&self, _msgs: &mut dyn Iterator<Item = Message>) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+#[test]
+fn a_guest_beside_the_app_transport_sees_the_document_the_app_hosts() {
+    let jobs = Slow {
+        now: Arc::default(),
+        peak: Arc::default(),
+    };
+    let engine = Arc::new(Engine::start(jobs, Arc::new(Sink)));
+    let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
+    let server = Server::for_engine(engine.clone(), addr, Gate::new(TOKEN, "")).unwrap();
+    let port = server.port();
+    std::thread::spawn(move || server.serve());
+
+    let host = json!({"id": "h", "op": "session_host", "document": {"features": []}, "revision": 1, "title": "part"});
+    engine.handle(Message::Text(host.to_string()));
+
+    let mut ws = connect(port, &good_query(), None);
+    let state = call(&mut ws, json!({"id": "g", "op": "session_state"}));
+    assert_eq!(state["ok"], json!(true), "{state}");
+    assert_eq!(state["result"]["attached"], json!(true), "{state}");
+    assert_eq!(state["result"]["title"], json!("part"), "{state}");
+}

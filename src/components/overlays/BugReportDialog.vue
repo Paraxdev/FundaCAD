@@ -42,7 +42,7 @@ const preview = computed(() =>
     faults
       ? `render pipeline: FAULTS DETECTED, ${pipeline.length} lines attached`
       : `render pipeline: no faults, ${pipeline.length} lines attached`,
-    `+ sidecar log tail (if checked), usernames/paths redacted`,
+    `+ engine log tail (if checked), usernames/paths redacted`,
     `+ current document (only if checked)`,
   ].join("\n"),
 );

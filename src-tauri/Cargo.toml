@@ -38,11 +38,11 @@ serde_json = "1"
 # OpenSSL joins the build.
 reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls-native-roots"] }
 # Bundle integrity for downloaded plugins (plugins.rs). sha256 rather than the
-# blake2 already here because the release job computes it with `sha256sum` and a
+# blake2 the document format uses because the release job computes it with `sha256sum` and a
 # digest nobody can reproduce from a shell is a digest nobody checks.
 sha2 = "0.10"
 # Binary payloads cross Tauri IPC as base64 strings (a JSON Vec<u8> would be
-# pathological at ~1 MB); container.rs and the plugin commands use this.
+# pathological at ~1 MB); the plugin commands use this.
 base64 = "0.22"
 # --- Rust engine (docs/RUST-PIVOT.md) ----------------------------------------
 # The worker loop and the geometry crate link OpenCASCADE statically, a long
@@ -53,11 +53,12 @@ fundacad-engine = { path = "../crates/fundacad-engine", optional = true }
 fundacad-geom = { path = "../crates/fundacad-geom", optional = true }
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
-# The document container (container.rs): a ZIP holding document.json plus the
-# geometry it references by content hash. Rust owns it, NOT the sidecar, because
-# sidecar.rs deliberately does not auto-respawn, a dead sidecar is permanent for
-# the session, and a save that needed it would leave the user unable to save at
-# all. Saving is byte plumbing over files already on disk, so it needs no OCCT.
+# The document files (.fundab, the ZIP container, the JSON .funda) live in the
+# fundacad-format crate, shared with the engine and the CLI. Rust owns them, NOT
+# the sidecar, because sidecar.rs deliberately does not auto-respawn, and a save
+# that needed it would leave the user unable to save at all. No OCCT in it.
+fundacad-format = { path = "../crates/fundacad-format" }
+# Plugin bundles are ZIPs (plugins/bundle.rs).
 #
 # `deflate-flate2`, NOT the `deflate` umbrella: that one also pulls
 # `deflate-zopfli`, a much slower alternative compressor we have no use for and
@@ -73,20 +74,11 @@ zip = { version = "4", default-features = false, features = ["deflate-flate2"] }
 # Linux and macOS built clean. Pure Rust (miniz_oxide), so this pulls in no C
 # zlib; feature unification is additive and cannot change updater behaviour.
 flate2 = "1"
-# content hashing for the container's blob ids. blake2b-128, matching the digest
-# size the sidecar already uses for its own keys.
-blake2 = "0.10"
-# The document file, format 2 (src/fnda.rs, docs/FUNDA-FORMAT.md): Reed-Solomon
-# parity so damaged shards are rebuilt, a CRC per shard to find them, and the
-# document stored as CBOR rather than JSON text.
-reed-solomon-erasure = "6"
-crc32fast = "1"
-ciborium = "0.2"
 
 [features]
 # Off by default: the default build ships the Python sidecar and needs no
 # OpenCASCADE. On, the app runs the Rust engine as its own worker process.
-rust-engine = ["dep:fundacad-protocol", "dep:fundacad-engine", "dep:fundacad-geom", "fundacad-geom/plugins"]
+rust-engine = ["dep:fundacad-protocol", "dep:fundacad-engine", "dep:fundacad-geom", "fundacad-geom/plugins", "fundacad-engine/ws"]
 
 # Windows-only: a Job Object with KILL_ON_JOB_CLOSE reaps the sidecar (and its
 # ProcessPoolExecutor workers) when the app exits or crashes. Unix uses a process

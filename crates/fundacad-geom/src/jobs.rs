@@ -21,12 +21,24 @@ impl Watch for EngineWatch<'_> {
             .feature(i64::try_from(index).unwrap_or(i64::MAX));
     }
 
+    fn meshing(&self, done: usize, total: usize) {
+        self.0.progress.meshing(
+            i64::try_from(done).unwrap_or(i64::MAX),
+            i64::try_from(total).unwrap_or(i64::MAX),
+        );
+    }
+
     fn cancelled(&self) -> bool {
         self.0.cancel.is_cancelled()
     }
 
     fn cancel_token(&self) -> Option<fundacad_protocol::CancelToken> {
         Some(self.0.cancel.clone())
+    }
+
+    fn heartbeat(&self) -> Option<crate::heartbeat::Beat> {
+        let progress = self.0.progress.clone();
+        Some(std::sync::Arc::new(move || progress.tick()))
     }
 }
 
@@ -58,6 +70,7 @@ fn rebuild_with(
     watch: &dyn Watch,
     mut cache: Option<&mut RebuildCache>,
 ) -> JobResult {
+    let _beat = crate::heartbeat::install(watch.heartbeat());
     let typed: CadDocument = match serde_json::from_value(doc.clone()) {
         Ok(d) => d,
         Err(e) => return error_result(&format!("the document does not parse: {e}")),
@@ -144,6 +157,24 @@ mod tests {
             (bbox["min"][0].as_f64().unwrap() + 5.0).abs() < 1e-6,
             "{bbox}"
         );
+    }
+
+    #[test]
+    fn every_meshed_body_beats_the_stall_watchdog() {
+        let ctx = JobContext {
+            cancel: Default::default(),
+            progress: Default::default(),
+        };
+        let doc = json!({"features": [
+            {"id": "a", "type": "box", "length": 10, "width": 10, "height": 10},
+            {"id": "b", "type": "box", "length": 4, "width": 4, "height": 4},
+            {"id": "c", "type": "box", "length": 2, "width": 2, "height": 2},
+        ]});
+        let JobResult::Mesh(m) = rebuild_result(&doc, 0.1, &Map::new(), &EngineWatch(&ctx)) else {
+            panic!("expected a mesh result");
+        };
+        assert_eq!(m.bodies.len(), 3);
+        assert_eq!(ctx.progress.beats(), 6, "one beat per feature and one per meshed body");
     }
 
     #[test]

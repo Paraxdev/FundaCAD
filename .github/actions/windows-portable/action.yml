@@ -67,6 +67,12 @@ runs:
           # The Rust engine is the executable. A Python runtime in this payload
           # means the wrong bundle config was used, and 800 MB of it.
           if (Test-Path $python) { throw "the Rust build bundled sidecar-runtime" }
+          # The MCP server ships beside the app (externalBin), and its private
+          # engine is this same executable started with --engine --ws.
+          if (-not (Test-Path (Join-Path $root "fundacad-mcp.exe"))) {
+            Get-ChildItem $root | Select-Object -ExpandProperty Name
+            throw "no fundacad-mcp.exe beside fundacad.exe in the Rust build"
+          }
         }
 
         $version = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
@@ -79,7 +85,18 @@ runs:
         # An ARRAY, not a here-string: a here-string's closing marker has to sit
         # at column 0, and every line of this script is indented by the YAML
         # block it lives in.
-        Set-Content -Path (Join-Path $folder "README.txt") -Encoding utf8 -Value @(
+        $mcpLines = @()
+        if ("${{ inputs.engine }}" -eq "builtin") {
+          $mcpLines = @(
+            "",
+            "fundacad-mcp.exe is the MCP server, for an AI assistant to build and",
+            "inspect models. Point the assistant's MCP settings at it, or install",
+            "the MCP server plugin and use How to connect it in the app.",
+            "It works on the document open in FundaCAD, or on its own copy when",
+            "FundaCAD is closed."
+          )
+        }
+        Set-Content -Path (Join-Path $folder "README.txt") -Encoding utf8 -Value (@(
           "FundaCAD $version, portable build",
           "",
           "Run fundacad.exe. There is nothing to install and no admin rights are",
@@ -99,7 +116,7 @@ runs:
           "",
           "This build does not update itself. Newer ones are at",
           "https://github.com/Paraxdev/fundacad/releases/tag/${{ inputs.release-tag }}"
-        )
+        ) + $mcpLines)
 
         $zip = Join-Path $out "FundaCAD_${version}_x64_portable.zip"
         # .NET rather than Compress-Archive: the payload is a few thousand files

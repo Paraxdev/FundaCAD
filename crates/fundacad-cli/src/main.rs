@@ -3,7 +3,8 @@
 //! `--ws` serves the engine the way `python sidecar/server.py` does, for a
 //! browser, the e2e scripts and the Python protocol suites. `--stdio` is the
 //! worker protocol the app speaks to `fundacad --engine`. `rebuild` runs one
-//! document through the same jobs, for CI and scripts.
+//! document through the same jobs, for CI and scripts. `doc-json` reads any
+//! saved document, .funda or .fundab, and prints its JSON.
 
 use fundacad_engine::{Engine, Outbox};
 use fundacad_geom::jobs::GeomJobs;
@@ -19,6 +20,10 @@ const USAGE: &str = "usage:
   fundacad-engine --stdio                 serve the worker protocol on stdin and stdout
   fundacad-engine rebuild <doc.json> [--json] [--tolerance <t>]
                                           rebuild one document; --json prints the whole reply
+  fundacad-engine doc-json <file> [--blob-dir <dir>]
+                                          print a saved document's JSON (.funda, JSON or
+                                          container, or .fundab), publishing its embedded
+                                          geometry into --blob-dir (default FUNDACAD_BLOB_DIR)
   fundacad-engine select-eval <corpus.json> [--config <tuning.json>]
                                           score selector survival on a frozen corpus, as
                                           sidecar/tools/eval_selector_survival.py does
@@ -35,6 +40,7 @@ fn main() -> ExitCode {
         Some("--ws") => fundacad_engine::ws::run(GeomJobs),
         Some("--stdio") => fundacad_engine::stdio::run(GeomJobs),
         Some("rebuild") => rebuild(&args[1..]),
+        Some("doc-json") => doc_json(&args[1..]),
         Some("select-eval") => select_eval(&args[1..]),
         Some("fillet-eval") => fillet_eval(&args[1..]),
         Some("-h" | "--help") => {
@@ -130,6 +136,46 @@ fn rebuild(args: &[String]) -> ExitCode {
         ExitCode::SUCCESS
     } else {
         ExitCode::from(1)
+    }
+}
+
+/// Exit 0 with the document on stdout, 1 when the file cannot be read as a
+/// document, 2 on a usage error.
+fn doc_json(args: &[String]) -> ExitCode {
+    let mut path = None;
+    let mut blob_dir = std::env::var_os("FUNDACAD_BLOB_DIR").map(std::path::PathBuf::from);
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--blob-dir" => match it.next() {
+                Some(d) => blob_dir = Some(d.into()),
+                None => return usage("--blob-dir needs a directory"),
+            },
+            other if path.is_none() && !other.starts_with("--") => path = Some(other.to_string()),
+            other => return usage(&format!("unexpected argument {other}")),
+        }
+    }
+    let Some(path) = path else {
+        return usage("doc-json needs a document path");
+    };
+    let Some(blob_dir) = blob_dir else {
+        return usage("doc-json needs --blob-dir or FUNDACAD_BLOB_DIR for the document's geometry");
+    };
+    if let Err(e) = std::fs::create_dir_all(&blob_dir) {
+        return fail(&format!("cannot create {}: {e}", blob_dir.display()));
+    }
+    match fundacad_format::read_document(std::path::Path::new(&path), &blob_dir) {
+        Ok(doc) => {
+            let mut out = io::stdout().lock();
+            if writeln!(out, "{doc}").and_then(|_| out.flush()).is_err() {
+                return ExitCode::from(2);
+            }
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("fundacad-engine: {path}: {e}");
+            ExitCode::from(1)
+        }
     }
 }
 
