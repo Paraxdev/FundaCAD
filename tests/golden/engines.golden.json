@@ -1,0 +1,2643 @@
+{
+ "cases": {
+  "boolean_intersect": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     10.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     -10.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 7159.305186
+   }
+  },
+  "boolean_subtract": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     10.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     -10.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 6431.312094
+   }
+  },
+  "boolean_union": {
+   "bbox": {
+    "max": [
+     20.0,
+     10.0,
+     10.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     -10.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 12000.0
+   }
+  },
+  "box": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     10.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     -10.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 8000.0
+   }
+  },
+  "boxes_move_two_bodies": {
+   "bbox": {
+    "max": [
+     20.0,
+     5.0,
+     5.0
+    ],
+    "min": [
+     -20.0,
+     -5.0,
+     -5.0
+    ]
+   },
+   "bodies": 2,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 1000.0,
+    "body2": 1000.0
+   }
+  },
+  "chamfer_all_edges_sequential": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     5.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     -5.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 3795.25
+   }
+  },
+  "chamfer_large_all_fallback": {
+   "bbox": {
+    "max": [
+     9.0,
+     9.0,
+     5.0
+    ],
+    "min": [
+     -9.0,
+     -9.0,
+     -5.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 1730.666667
+   }
+  },
+  "chamfer_plain": {
+   "bbox": {
+    "max": [
+     20.0,
+     20.0,
+     10.0
+    ],
+    "min": [
+     -20.0,
+     -20.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 15995.0
+   }
+  },
+  "chamfer_two_distance": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     5.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     -5.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 3950.0
+   }
+  },
+  "chamfer_two_distance_large_fallback": {
+   "bbox": {
+    "max": [
+     10.0,
+     9.5,
+     5.0
+    ],
+    "min": [
+     -10.0,
+     -9.5,
+     -5.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 3300.0
+   }
+  },
+  "clean_up_every_body": {
+   "bbox": {
+    "max": [
+     22.0,
+     5.0,
+     5.0
+    ],
+    "min": [
+     -5.0,
+     -5.0,
+     -5.0
+    ]
+   },
+   "bodies": 2,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 1000.0,
+    "body2": 64.0
+   }
+  },
+  "clean_up_unresolved_tolerance_fails": {
+   "bbox": {
+    "max": [
+     5.0,
+     5.0,
+     5.0
+    ],
+    "min": [
+     -5.0,
+     -5.0,
+     -5.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [
+    [
+     "c",
+     "unresolved parameter or expression \"tol\", expected a number (expressions are evaluated by the app before building)"
+    ]
+   ],
+   "fatal": false,
+   "volumes": {
+    "body1": 1000.0
+   }
+  },
+  "cone": {
+   "bbox": {
+    "max": [
+     12.0,
+     11.99706332,
+     10.0
+    ],
+    "min": [
+     -11.988254718,
+     -11.99706332,
+     -10.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 4785.013543
+   }
+  },
+  "cylinder": {
+   "bbox": {
+    "max": [
+     5.0,
+     4.994965333,
+     15.0
+    ],
+    "min": [
+     -5.0,
+     -4.994965333,
+     -15.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 2353.031859
+   }
+  },
+  "datum_on_face_follows_with_offset": {
+   "bbox": {
+    "max": [
+     20.0,
+     15.0,
+     21.5
+    ],
+    "min": [
+     -20.0,
+     -15.0,
+     -12.5
+    ]
+   },
+   "bodies": 2,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 30000.0,
+    "body2": 400.0
+   }
+  },
+  "delete_face_bevel_strip_chain": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     11.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body2": 4370.666667
+   }
+  },
+  "delete_face_bore": {
+   "bbox": {
+    "max": [
+     15.0,
+     15.0,
+     5.0
+    ],
+    "min": [
+     -15.0,
+     -15.0,
+     -5.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 9000.0
+   }
+  },
+  "delete_face_box_side_fails": {
+   "bbox": {
+    "max": [
+     5.0,
+     5.0,
+     5.0
+    ],
+    "min": [
+     -5.0,
+     -5.0,
+     -5.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [
+    [
+     "x",
+     "can't heal after removing that face, wedge-filling didn't apply either, use Press/Pull to cut it instead (OCCT: BOPAlgo_AlertUnableToRemoveTheFeature)"
+    ]
+   ],
+   "fatal": false,
+   "volumes": {
+    "body1": 1000.0
+   }
+  },
+  "delete_face_corner_chamfer": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     10.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 4000.0
+   }
+  },
+  "delete_face_retargets_by_pick": {
+   "bbox": {
+    "max": [
+     34.0,
+     5.0,
+     8.0
+    ],
+    "min": [
+     -5.0,
+     -5.0,
+     -5.0
+    ]
+   },
+   "bodies": 2,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 1000.0,
+    "body2": 124.7076581
+   }
+  },
+  "draft_side_walls": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     20.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 6681.82689
+   }
+  },
+  "draft_top_face_fails": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     10.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     -10.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [
+    [
+     "dr",
+     "draft failed (Standard_ConstructionError)"
+    ]
+   ],
+   "fatal": false,
+   "volumes": {
+    "body1": 8000.0
+   }
+  },
+  "fillet_conic_chamfer_side": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     5.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     -5.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 3888.12057
+   }
+  },
+  "fillet_conic_corner_patches": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     5.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     -5.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 3787.731713
+   }
+  },
+  "fillet_conic_mitre_seams": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     5.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     -5.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 3978.508703
+   }
+  },
+  "fillet_g2_corners": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     5.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     -5.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 3817.933933
+   }
+  },
+  "fillet_large_radius_fallback": {
+   "bbox": {
+    "max": [
+     9.832159566,
+     9.832159566,
+     5.0
+    ],
+    "min": [
+     -9.832159566,
+     -9.832159566,
+     -5.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 2769.281198
+   }
+  },
+  "fillet_plain": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     10.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 3965.50427
+   }
+  },
+  "fillet_rim_dome": {
+   "bbox": {
+    "max": [
+     5.0,
+     4.998776383,
+     5.0
+    ],
+    "min": [
+     -4.995106133,
+     -4.998776383,
+     -5.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 653.2333771
+   }
+  },
+  "fillet_tangent_chain": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     5.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     -5.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 3906.555401
+   }
+  },
+  "fillet_tangent_edges_off": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     5.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     -5.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 3922.384607
+   }
+  },
+  "hole_counterbore_m3_through": {
+   "bbox": {
+    "max": [
+     20.0,
+     20.0,
+     20.0
+    ],
+    "min": [
+     -20.0,
+     -20.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 31736.81652
+   }
+  },
+  "hole_countersink_m4_side": {
+   "bbox": {
+    "max": [
+     20.0,
+     20.0,
+     20.0
+    ],
+    "min": [
+     -20.0,
+     -20.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 31709.38545
+   }
+  },
+  "hole_drill_point_circle_centres": {
+   "bbox": {
+    "max": [
+     20.0,
+     20.0,
+     20.0
+    ],
+    "min": [
+     -20.0,
+     -20.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 31789.17554
+   }
+  },
+  "hole_face_selector": {
+   "bbox": {
+    "max": [
+     20.0,
+     20.0,
+     20.0
+    ],
+    "min": [
+     -20.0,
+     -20.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 31799.20795
+   }
+  },
+  "hole_insert_m3": {
+   "bbox": {
+    "max": [
+     20.0,
+     20.0,
+     20.0
+    ],
+    "min": [
+     -20.0,
+     -20.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 31923.01414
+   }
+  },
+  "hole_simple_sketch_points": {
+   "bbox": {
+    "max": [
+     20.0,
+     20.0,
+     20.0
+    ],
+    "min": [
+     -20.0,
+     -20.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 31943.52724
+   }
+  },
+  "import_assembly_nested": {
+   "bbox": {
+    "max": [
+     58.5,
+     10.0,
+     6.5
+    ],
+    "min": [
+     -40.0,
+     -10.0,
+     -1.0
+    ]
+   },
+   "bodies": 7,
+   "errors": [],
+   "fatal": false,
+   "import": {
+    "feature": "im",
+    "fixture": "sidecar/fixtures/asm_nested.step",
+    "format": "step",
+    "pythonGeom": "3b71e4a984a0708b75cb62f451a1b671",
+    "reply": {
+     "faces": 42,
+     "name": "asm_nested",
+     "nodes": [
+      {
+       "name": "Robot",
+       "parent": null
+      },
+      {
+       "name": "Electronics",
+       "parent": 0
+      },
+      {
+       "name": "Board",
+       "parent": 1
+      },
+      {
+       "name": "MCU",
+       "parent": 2
+      },
+      {
+       "name": "Header (x2)",
+       "parent": 2
+      },
+      {
+       "name": "Board",
+       "parent": 1
+      },
+      {
+       "name": "MCU",
+       "parent": 5
+      },
+      {
+       "name": "Header (x2)",
+       "parent": 5
+      },
+      {
+       "name": "Chassis",
+       "parent": 0
+      }
+     ],
+     "parts": [
+      {
+       "faces": 6,
+       "node": 3
+      },
+      {
+       "faces": 6,
+       "node": 4
+      },
+      {
+       "faces": 6,
+       "node": 4
+      },
+      {
+       "faces": 6,
+       "node": 6
+      },
+      {
+       "faces": 6,
+       "node": 7
+      },
+      {
+       "faces": 6,
+       "node": 7
+      },
+      {
+       "faces": 6,
+       "node": 8
+      }
+     ],
+     "solid": true
+    }
+   },
+   "volumes": {
+    "body1": 16.0,
+    "body2": 3.0,
+    "body3": 3.0,
+    "body4": 16.0,
+    "body5": 3.0,
+    "body6": 3.0,
+    "body7": 3200.0
+   }
+  },
+  "import_empty_product": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     6.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     -1.0
+    ]
+   },
+   "bodies": 2,
+   "errors": [],
+   "fatal": false,
+   "import": {
+    "feature": "im",
+    "fixture": "sidecar/fixtures/asm_empty_product.step",
+    "format": "step",
+    "pythonGeom": "f64671b3aa3bc64d2a99f4d8bf64ef23",
+    "reply": {
+     "faces": 7,
+     "name": "asm_empty_product",
+     "nodes": [
+      {
+       "name": "WithDecal",
+       "parent": null
+      },
+      {
+       "name": "Panel",
+       "parent": 0
+      },
+      {
+       "name": "Decal",
+       "parent": 0
+      }
+     ],
+     "parts": [
+      {
+       "faces": 6,
+       "node": 1
+      },
+      {
+       "faces": 1,
+       "node": 2
+      }
+     ],
+     "solid": true
+    }
+   },
+   "volumes": {
+    "body1": 800.0,
+    "body2": 36.0
+   }
+  },
+  "import_face_colors": {
+   "bbox": {
+    "max": [
+     22.5,
+     5.0,
+     5.0
+    ],
+    "min": [
+     -5.0,
+     -5.0,
+     -5.0
+    ]
+   },
+   "bodies": 2,
+   "errors": [],
+   "fatal": false,
+   "import": {
+    "feature": "im",
+    "fixture": "sidecar/fixtures/asm_face_colors.step",
+    "format": "step",
+    "pythonGeom": "802bef5a40d9ced9db407a2aec838d8e",
+    "reply": {
+     "faces": 12,
+     "name": "asm_face_colors",
+     "nodes": [
+      {
+       "name": "Painted Faces",
+       "parent": null
+      },
+      {
+       "color": "#1919e5",
+       "name": "Two Tone Box",
+       "parent": 0
+      },
+      {
+       "name": "Plain Box",
+       "parent": 0
+      }
+     ],
+     "parts": [
+      {
+       "color": "#1919e5",
+       "faceColors": {
+        "palette": [
+         "#e51919",
+         "#ffffff"
+        ],
+        "runs": [
+         [
+          1,
+          0
+         ],
+         [
+          1,
+          1
+         ],
+         [
+          4,
+          -1
+         ]
+        ]
+       },
+       "faces": 6,
+       "node": 1
+      },
+      {
+       "faces": 6,
+       "node": 2
+      }
+     ],
+     "solid": true
+    }
+   },
+   "volumes": {
+    "body1": 1000.0,
+    "body2": 125.0
+   }
+  },
+  "import_flat": {
+   "bbox": {
+    "max": [
+     33.0,
+     31.997986133,
+     6.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     -6.0
+    ]
+   },
+   "bodies": 3,
+   "errors": [],
+   "fatal": false,
+   "import": {
+    "feature": "im",
+    "fixture": "sidecar/fixtures/asm_flat.step",
+    "format": "step",
+    "pythonGeom": "dcbb8a24dfe130f837513bbf1e21a25b",
+    "reply": {
+     "faces": 15,
+     "name": "asm_flat",
+     "nodes": [
+      {
+       "name": "Widget",
+       "parent": null
+      },
+      {
+       "name": "Plate",
+       "parent": 0
+      },
+      {
+       "name": "Bracket",
+       "parent": 0
+      },
+      {
+       "name": "Pin",
+       "parent": 0
+      }
+     ],
+     "parts": [
+      {
+       "faces": 6,
+       "node": 1
+      },
+      {
+       "faces": 6,
+       "node": 2
+      },
+      {
+       "faces": 3,
+       "node": 3
+      }
+     ],
+     "solid": true
+    }
+   },
+   "volumes": {
+    "body1": 800.0,
+    "body2": 360.0,
+    "body3": 150.594039
+   }
+  },
+  "import_multisolid_names": {
+   "bbox": {
+    "max": [
+     17.5,
+     21.5,
+     1.0
+    ],
+    "min": [
+     -15.0,
+     -5.0,
+     -1.0
+    ]
+   },
+   "bodies": 4,
+   "errors": [],
+   "fatal": false,
+   "import": {
+    "feature": "im",
+    "fixture": "sidecar/fixtures/asm_multisolid.step",
+    "format": "step",
+    "pythonGeom": "df988bd93ee6c3fc1c5bc89f628051ab",
+    "reply": {
+     "faces": 24,
+     "name": "asm_multisolid",
+     "nodes": [
+      {
+       "name": "Fasteners",
+       "parent": null
+      },
+      {
+       "name": "M3 Nut (x3)",
+       "parent": 0
+      },
+      {
+       "name": "Plate",
+       "parent": 0
+      }
+     ],
+     "parts": [
+      {
+       "faces": 6,
+       "node": 1
+      },
+      {
+       "faces": 6,
+       "node": 1
+      },
+      {
+       "faces": 6,
+       "node": 1
+      },
+      {
+       "faces": 6,
+       "node": 2
+      }
+     ],
+     "solid": true
+    }
+   },
+   "volumes": {
+    "body1": 18.0,
+    "body2": 18.0,
+    "body3": 18.0,
+    "body4": 600.0
+   }
+  },
+  "import_nested_collapsed": {
+   "bbox": {
+    "max": [
+     58.5,
+     10.0,
+     6.5
+    ],
+    "min": [
+     -40.0,
+     -10.0,
+     -1.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "import": {
+    "feature": "im",
+    "fixture": "sidecar/fixtures/asm_nested.step",
+    "format": "step",
+    "pythonGeom": "3b71e4a984a0708b75cb62f451a1b671",
+    "reply": {
+     "faces": 42,
+     "name": "asm_nested",
+     "nodes": [
+      {
+       "name": "Robot",
+       "parent": null
+      },
+      {
+       "name": "Electronics",
+       "parent": 0
+      },
+      {
+       "name": "Board",
+       "parent": 1
+      },
+      {
+       "name": "MCU",
+       "parent": 2
+      },
+      {
+       "name": "Header (x2)",
+       "parent": 2
+      },
+      {
+       "name": "Board",
+       "parent": 1
+      },
+      {
+       "name": "MCU",
+       "parent": 5
+      },
+      {
+       "name": "Header (x2)",
+       "parent": 5
+      },
+      {
+       "name": "Chassis",
+       "parent": 0
+      }
+     ],
+     "parts": [
+      {
+       "faces": 6,
+       "node": 3
+      },
+      {
+       "faces": 6,
+       "node": 4
+      },
+      {
+       "faces": 6,
+       "node": 4
+      },
+      {
+       "faces": 6,
+       "node": 6
+      },
+      {
+       "faces": 6,
+       "node": 7
+      },
+      {
+       "faces": 6,
+       "node": 7
+      },
+      {
+       "faces": 6,
+       "node": 8
+      }
+     ],
+     "solid": true
+    }
+   },
+   "volumes": {
+    "body1": 3244.0
+   }
+  },
+  "imprint_cross_on_top": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     10.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     -10.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 8000.0
+   }
+  },
+  "imprint_missing_sketch_fails": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     10.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     -10.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [
+    [
+     "i",
+     "the sketch this divide depends on (nope) did not build, fix that sketch first"
+    ]
+   ],
+   "fatal": false,
+   "volumes": {
+    "body1": 8000.0
+   }
+  },
+  "joint_datum_and_edge_connectors": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     10.0
+    ],
+    "min": [
+     -10.0,
+     -15.0,
+     -10.0
+    ]
+   },
+   "bodies": 2,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 8000.0,
+    "body2": 216.0
+   }
+  },
+  "joint_face_mate": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     16.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     -10.0
+    ]
+   },
+   "bodies": 2,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 8000.0,
+    "body2": 216.0
+   }
+  },
+  "joint_offset_angle_flush": {
+   "bbox": {
+    "max": [
+     10.0,
+     9.997552767,
+     14.0
+    ],
+    "min": [
+     -9.990212265,
+     -9.997552767,
+     -10.0
+    ]
+   },
+   "bodies": 2,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 6274.987426,
+    "body2": 128.0
+   }
+  },
+  "joint_reference_gone_leaves_the_body": {
+   "bbox": {
+    "max": [
+     53.0,
+     10.0,
+     10.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     -10.0
+    ]
+   },
+   "bodies": 2,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 8000.0,
+    "body2": 216.0
+   }
+  },
+  "joint_zero_axis_fails": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     10.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     -10.0
+    ]
+   },
+   "bodies": 2,
+   "errors": [
+    [
+     "j",
+     "joint: a connector's axis is zero length"
+    ]
+   ],
+   "fatal": false,
+   "volumes": {
+    "body1": 8000.0,
+    "body2": 216.0
+   }
+  },
+  "loft_join_tangent_tube": {
+   "bbox": {
+    "max": [
+     300.3329101,
+     26.0,
+     639.315243322
+    ],
+    "min": [
+     -532.169566557,
+     -26.0,
+     259.567648657
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body2": 2505612.594
+   }
+  },
+  "loft_join_tube_end_to_end": {
+   "bbox": {
+    "max": [
+     12.0,
+     11.987916798,
+     85.0
+    ],
+    "min": [
+     -12.0,
+     -11.987916798,
+     -30.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body2": 45724.58931
+   }
+  },
+  "loft_rect_to_circle": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     25.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 6071.65326
+   }
+  },
+  "loft_ring_regions_join": {
+   "bbox": {
+    "max": [
+     15.0,
+     15.0,
+     16.0
+    ],
+    "min": [
+     -15.0,
+     -15.0,
+     -2.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body2": 5673.643587
+   }
+  },
+  "offset_face_chamfered_rim": {
+   "bbox": {
+    "max": [
+     30.0,
+     29.992658301,
+     5.0
+    ],
+    "min": [
+     -29.970636796,
+     -29.992658301,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 13239.95525
+   }
+  },
+  "offset_face_freeform_fails": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     25.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [
+    [
+     "o",
+     "Offset face needs a flat or a regularly-curved face (round, cone, sphere or torus), this one is freeform"
+    ]
+   ],
+   "fatal": false,
+   "volumes": {
+    "body1": 6071.65326
+   }
+  },
+  "offset_face_two_faces": {
+   "bbox": {
+    "max": [
+     12.0,
+     10.0,
+     12.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     -10.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 9680.0
+   }
+  },
+  "organic_bike": {
+   "bbox": {
+    "max": [
+     840.0,
+     217.194818255,
+     693.76289267
+    ],
+    "min": [
+     -840.0,
+     -214.96865876,
+     0.332288041
+    ]
+   },
+   "bodies": 5,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 2934669.251,
+    "body2": 2934669.251,
+    "body3": 4092825.468,
+    "body4": 303359.075,
+    "body5": 767793.4881
+   }
+  },
+  "pattern_circular": {
+   "bbox": {
+    "max": [
+     45.0,
+     41.47114317,
+     10.0
+    ],
+    "min": [
+     -45.0,
+     -41.47114317,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 6000.0
+   }
+  },
+  "pattern_linear": {
+   "bbox": {
+    "max": [
+     100.0,
+     10.0,
+     20.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 32000.0
+   }
+  },
+  "pattern_rect": {
+   "bbox": {
+    "max": [
+     22.0,
+     12.0,
+     2.0
+    ],
+    "min": [
+     -2.0,
+     -2.0,
+     -2.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 384.0
+   }
+  },
+  "press_pull_bore_offset": {
+   "bbox": {
+    "max": [
+     15.0,
+     15.0,
+     5.0
+    ],
+    "min": [
+     -15.0,
+     -15.0,
+     -5.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 8717.636177
+   }
+  },
+  "press_pull_loft_side_sweeps": {
+   "bbox": {
+    "max": [
+     10.989687677,
+     10.124341371,
+     25.071116287
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 6251.624326
+   }
+  },
+  "press_pull_mode_new": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     15.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     -10.0
+    ]
+   },
+   "bodies": 2,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 8000.0,
+    "body2": 2000.0
+   }
+  },
+  "press_pull_taper_fails": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     10.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     -10.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [
+    [
+     "p",
+     "Press/Pull: taper must be between # and # degrees (got #)"
+    ]
+   ],
+   "fatal": false,
+   "volumes": {
+    "body1": 8000.0
+   }
+  },
+  "press_pull_top_and_side_tapered": {
+   "bbox": {
+    "max": [
+     14.0,
+     10.0,
+     24.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 11067.35192
+   }
+  },
+  "press_pull_up_to_other_body": {
+   "bbox": {
+    "max": [
+     5.0,
+     5.0,
+     30.0
+    ],
+    "min": [
+     -5.0,
+     -5.0,
+     -5.0
+    ]
+   },
+   "bodies": 2,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 2500.0,
+    "body2": 1000.0
+   }
+  },
+  "revolve_270": {
+   "bbox": {
+    "max": [
+     14.0,
+     13.993851711,
+     5.0
+    ],
+    "min": [
+     -13.993851711,
+     -14.0,
+     -5.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 2258.967577
+   }
+  },
+  "revolve_join_end_to_end": {
+   "bbox": {
+    "max": [
+     10.0,
+     9.989930665,
+     65.0
+    ],
+    "min": [
+     -10.0,
+     -9.989930665,
+     -30.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body2": 29805.07021
+   }
+  },
+  "revolve_join_tangent_ring": {
+   "bbox": {
+    "max": [
+     34.0,
+     33.965764262,
+     50.0
+    ],
+    "min": [
+     -34.0,
+     -33.965764262,
+     -50.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body2": 156513.608
+   }
+  },
+  "revolve_pitch_cut_nut": {
+   "bbox": {
+    "max": [
+     15.0,
+     15.0,
+     5.0
+    ],
+    "min": [
+     -15.0,
+     -15.0,
+     -5.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 8904.73826
+   }
+  },
+  "revolve_pitch_left_hand_down": {
+   "bbox": {
+    "max": [
+     9.0,
+     8.997810961,
+     6.5
+    ],
+    "min": [
+     -9.0,
+     -8.999696254,
+     -0.5
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 150.6288985
+   }
+  },
+  "revolve_pitch_multi_turn_helix": {
+   "bbox": {
+    "max": [
+     10.5,
+     10.497350205,
+     15.5
+    ],
+    "min": [
+     -10.499954669,
+     -10.499961236,
+     -0.5
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 313.9776782
+   }
+  },
+  "revolve_pitch_on_axis_fails": {
+   "bbox": {
+    "max": [
+     2.5,
+     2.5,
+     2.5
+    ],
+    "min": [
+     -2.5,
+     -2.5,
+     -2.5
+    ]
+   },
+   "bodies": 1,
+   "errors": [
+    [
+     "rv",
+     "Revolve: a climbing revolve needs a profile that sits off to one side of the axis. This one is centred on it, so there is no direction for it to start from."
+    ]
+   ],
+   "fatal": false,
+   "volumes": {
+    "body1": 125.0
+   }
+  },
+  "revolve_pitch_partial_angle": {
+   "bbox": {
+    "max": [
+     14.0,
+     13.996765523,
+     5.331712105
+    ],
+    "min": [
+     -7.0,
+     0.0,
+     -1.998845528
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 314.4872864
+   }
+  },
+  "revolve_pitch_screw_thread": {
+   "bbox": {
+    "max": [
+     5.0,
+     5.00001336,
+     10.0
+    ],
+    "min": [
+     -4.99995884,
+     -5.000023424,
+     -10.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body2": 1152.005471
+   }
+  },
+  "revolve_pitch_turns_overlap_fails": {
+   "bbox": {
+    "max": [
+     2.5,
+     2.5,
+     2.5
+    ],
+    "min": [
+     -2.5,
+     -2.5,
+     -2.5
+    ]
+   },
+   "bodies": 1,
+   "errors": [
+    [
+     "rv",
+     "Revolve: the profile is # mm tall along the axis but climbs only # mm each turn, so every turn would run into the one before. Raise the pitch, or draw a shorter profile, or stay within one turn."
+    ]
+   ],
+   "fatal": false,
+   "volumes": {
+    "body1": 125.0
+   }
+  },
+  "shell_closed_sealed_void": {
+   "bbox": {
+    "max": [
+     20.0,
+     20.0,
+     10.0
+    ],
+    "min": [
+     -20.0,
+     -20.0,
+     -10.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 13625.0
+   }
+  },
+  "shell_open_top": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     20.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 3392.0
+   }
+  },
+  "shell_second_body_opening": {
+   "bbox": {
+    "max": [
+     35.0,
+     5.0,
+     5.0
+    ],
+    "min": [
+     -5.0,
+     -5.0,
+     -5.0
+    ]
+   },
+   "bodies": 2,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 1000.0,
+    "body2": 424.0
+   }
+  },
+  "shell_too_thick_fails": {
+   "bbox": {
+    "max": [
+     5.0,
+     5.0,
+     5.0
+    ],
+    "min": [
+     -5.0,
+     -5.0,
+     -5.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [
+    [
+     "sh",
+     "Shell failed with a wall of #mm, this is usually thicker than the body's narrowest span; try a smaller thickness. [RuntimeError]"
+    ]
+   ],
+   "fatal": false,
+   "volumes": {
+    "body1": 1000.0
+   }
+  },
+  "simplify_mesh_merges_facets": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     5.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 1562.393915
+   }
+  },
+  "simplify_mesh_unresolved_tolerance_fails": {
+   "bbox": {
+    "max": [
+     5.0,
+     5.0,
+     5.0
+    ],
+    "min": [
+     -5.0,
+     -5.0,
+     -5.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [
+    [
+     "m",
+     "unresolved parameter or expression \"angle\", expected a number (expressions are evaluated by the app before building)"
+    ]
+   ],
+   "fatal": false,
+   "volumes": {
+    "body1": 1000.0
+   }
+  },
+  "sketch_circle_extrude_cut": {
+   "bbox": {
+    "max": [
+     20.0,
+     10.0,
+     5.0
+    ],
+    "min": [
+     -20.0,
+     -10.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 3858.818088
+   }
+  },
+  "sketch_circle_extrude_join": {
+   "bbox": {
+    "max": [
+     20.0,
+     10.0,
+     15.0
+    ],
+    "min": [
+     -20.0,
+     -10.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body2": 5129.455292
+   }
+  },
+  "sketch_on_face_follows_raised_box": {
+   "bbox": {
+    "max": [
+     20.0,
+     20.0,
+     20.0
+    ],
+    "min": [
+     -20.0,
+     -20.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 30996.03974
+   }
+  },
+  "sketch_on_face_gone_keeps_cache": {
+   "bbox": {
+    "max": [
+     5.0,
+     5.0,
+     22.0
+    ],
+    "min": [
+     -5.0,
+     -5.0,
+     -5.0
+    ]
+   },
+   "bodies": 2,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 1000.0,
+    "body2": 24.0
+   }
+  },
+  "sketch_polygon_extrude_cut": {
+   "bbox": {
+    "max": [
+     20.0,
+     20.0,
+     10.0
+    ],
+    "min": [
+     -20.0,
+     -20.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 15064.69256
+   }
+  },
+  "sketch_rectangle_extrude_new": {
+   "bbox": {
+    "max": [
+     20.0,
+     10.0,
+     5.0
+    ],
+    "min": [
+     -20.0,
+     -10.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 4000.0
+   }
+  },
+  "sketch_slot_extrude_cut": {
+   "bbox": {
+    "max": [
+     20.0,
+     20.0,
+     10.0
+    ],
+    "min": [
+     -20.0,
+     -20.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 14757.63618
+   }
+  },
+  "sketch_slot_extrude_new": {
+   "bbox": {
+    "max": [
+     3.0,
+     10.9969792,
+     4.0
+    ],
+    "min": [
+     -3.0,
+     -10.9969792,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 496.9455292
+   }
+  },
+  "sketch_text_counters_cut": {
+   "bbox": {
+    "max": [
+     30.0,
+     10.0,
+     3.0
+    ],
+    "min": [
+     -30.0,
+     -10.0,
+     -3.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 7006.042709
+   }
+  },
+  "sketch_text_extrude": {
+   "bbox": {
+    "max": [
+     15.72265625,
+     3.637695362,
+     2.0
+    ],
+    "min": [
+     0.0,
+     -3.637695263,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 68.74964028
+   }
+  },
+  "sketch_text_on_path": {
+   "bbox": {
+    "max": [
+     -9.292054071,
+     31.372302914,
+     3.0
+    ],
+    "min": [
+     -28.845566255,
+     16.235662728,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 99.04991354
+   }
+  },
+  "sketch_text_rotated_with_rectangle": {
+   "bbox": {
+    "max": [
+     30.0,
+     0.0,
+     10.0
+    ],
+    "min": [
+     -30.0,
+     -4.0,
+     -12.16664965
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 4810.986611
+   }
+  },
+  "sphere": {
+   "bbox": {
+    "max": [
+     10.0,
+     9.997552767,
+     10.0
+    ],
+    "min": [
+     -9.990212265,
+     -9.997552767,
+     -10.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 4176.746607
+   }
+  },
+  "split_datum_keep_bottom": {
+   "bbox": {
+    "max": [
+     10.0,
+     5.0,
+     2.0
+    ],
+    "min": [
+     -10.0,
+     -5.0,
+     -5.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 1400.0
+   }
+  },
+  "split_listed_bodies": {
+   "bbox": {
+    "max": [
+     35.0,
+     5.0,
+     5.0
+    ],
+    "min": [
+     -5.0,
+     -5.0,
+     -5.0
+    ]
+   },
+   "bodies": 4,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 500.0,
+    "body2": 500.0,
+    "body3": 500.0,
+    "body4": 500.0
+   }
+  },
+  "split_misses_fails": {
+   "bbox": {
+    "max": [
+     5.0,
+     5.0,
+     5.0
+    ],
+    "min": [
+     -5.0,
+     -5.0,
+     -5.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [
+    [
+     "sp",
+     "the plane does not intersect the body"
+    ]
+   ],
+   "fatal": false,
+   "volumes": {
+    "body1": 1000.0
+   }
+  },
+  "split_tilted_both": {
+   "bbox": {
+    "max": [
+     10.0,
+     5.0,
+     5.0
+    ],
+    "min": [
+     -10.0,
+     -5.0,
+     -5.0
+    ]
+   },
+   "bodies": 2,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 900.0,
+    "body2": 1100.0
+   }
+  },
+  "sweep_cut_groove": {
+   "bbox": {
+    "max": [
+     20.0,
+     20.0,
+     5.0
+    ],
+    "min": [
+     -20.0,
+     -20.0,
+     -5.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 15749.00994
+   }
+  },
+  "sweep_join_end_to_end_tubes": {
+   "bbox": {
+    "max": [
+     231.48171541,
+     10.0,
+     27.87943491
+    ],
+    "min": [
+     0.0,
+     -10.0,
+     -9.993034634
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body2": 72542.03457
+   }
+  },
+  "sweep_join_tangent_tubes": {
+   "bbox": {
+    "max": [
+     300.353404162,
+     26.000000185,
+     639.315243322
+    ],
+    "min": [
+     -532.169566557,
+     -26.0,
+     250.183658957
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body2": 2690798.246
+   }
+  },
+  "sweep_l_path": {
+   "bbox": {
+    "max": [
+     15.0,
+     2.0,
+     22.0
+    ],
+    "min": [
+     -2.0,
+     -2.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 560.0
+   }
+  },
+  "sweep_ring_along_arc": {
+   "bbox": {
+    "max": [
+     20.000000193,
+     2.996979208,
+     23.0
+    ],
+    "min": [
+     -3.0,
+     -2.996979208,
+     -1.93e-07
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 886.2451621
+   }
+  },
+  "thicken_cylinder_side_new": {
+   "bbox": {
+    "max": [
+     12.0,
+     11.99706332,
+     10.0
+    ],
+    "min": [
+     -11.988254718,
+     -11.99706332,
+     -10.0
+    ]
+   },
+   "bodies": 2,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 6274.987426,
+    "body2": 5020.140855
+   }
+  },
+  "thicken_top_join": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     13.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     -10.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body2": 9200.0
+   }
+  },
+  "thicken_zero_fails": {
+   "bbox": {
+    "max": [
+     10.0,
+     10.0,
+     10.0
+    ],
+    "min": [
+     -10.0,
+     -10.0,
+     -10.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [
+    [
+     "t",
+     "Thicken: the thickness is zero"
+    ]
+   ],
+   "fatal": false,
+   "volumes": {
+    "body1": 8000.0
+   }
+  },
+  "torus_move": {
+   "bbox": {
+    "max": [
+     55.0,
+     -5.005034667,
+     29.974826664
+    ],
+    "min": [
+     5.0,
+     -14.994965333,
+     -19.974826664
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 9843.126983
+   }
+  }
+ },
+ "golden": {
+  "corpus": "tests/golden/corpus/corpus_engines.json",
+  "corpusSha256": "d7c5c9646743b8c4a0cd6dc07df3da227331c31d481770ec731d84f4752361f4",
+  "frozen": true,
+  "kind": "rebuild",
+  "rebuildTolerance": 0.1,
+  "reference": {
+   "build123d": "0.11.1",
+   "engine": "python sidecar (sidecar/server.py)",
+   "ocp": "7.9.3.1",
+   "platform": "Windows-11-10.0.26200-SP0",
+   "python": "3.12.13",
+   "sidecarCommit": "28e4a6abca8d17d33dafc19c49532c5d6dd6f90b"
+  },
+  "rules": "body count and body ids exact; each body's mesh volume (signed tetra sum) within max(volumeRel * |python|, volumeFloor); every bbox corner within max(bboxAbs, bboxRelOfDiagonal * python bbox diagonal); the ordered (feature id, error class) list exact, an error class being the message with every number masked as # and whitespace collapsed, after the repository root is replaced by $REPO. An import fixture is imported through the engine's own import op first; the reply's fields other than geom must equal python's.",
+  "tolerances": {
+   "bboxAbs": 0.0001,
+   "bboxRelOfDiagonal": 0.001,
+   "volumeFloor": 1e-09,
+   "volumeRel": 0.005
+  },
+  "tool": "sidecar/tools/diff_engines.py"
+ }
+}

@@ -1,0 +1,911 @@
+{
+ "cases": {
+  "added_000": {
+   "category": "added_feature",
+   "outcome": "survive"
+  },
+  "added_001": {
+   "category": "added_feature",
+   "outcome": "survive"
+  },
+  "added_002": {
+   "category": "added_feature",
+   "outcome": "survive"
+  },
+  "added_003": {
+   "category": "added_feature",
+   "outcome": "survive"
+  },
+  "added_004": {
+   "category": "added_feature",
+   "outcome": "survive"
+  },
+  "added_005": {
+   "category": "added_feature",
+   "outcome": "survive"
+  },
+  "added_006": {
+   "category": "added_feature",
+   "outcome": "survive"
+  },
+  "added_007": {
+   "category": "added_feature",
+   "outcome": "survive"
+  },
+  "added_008": {
+   "category": "added_feature",
+   "outcome": "survive"
+  },
+  "added_009": {
+   "category": "added_feature",
+   "outcome": "survive"
+  },
+  "added_010": {
+   "category": "added_feature",
+   "outcome": "survive"
+  },
+  "added_011": {
+   "category": "added_feature",
+   "outcome": "survive"
+  },
+  "added_012": {
+   "category": "added_feature",
+   "outcome": "survive"
+  },
+  "added_013": {
+   "category": "added_feature",
+   "outcome": "survive"
+  },
+  "added_014": {
+   "category": "added_feature",
+   "outcome": "survive"
+  },
+  "added_015": {
+   "category": "added_feature",
+   "outcome": "survive"
+  },
+  "added_016": {
+   "category": "added_feature",
+   "outcome": "survive"
+  },
+  "added_017": {
+   "category": "added_feature",
+   "outcome": "survive"
+  },
+  "added_018": {
+   "category": "added_feature",
+   "outcome": "survive"
+  },
+  "added_019": {
+   "category": "added_feature",
+   "outcome": "survive"
+  },
+  "added_020": {
+   "category": "added_feature",
+   "outcome": "survive"
+  },
+  "added_021": {
+   "category": "added_feature",
+   "outcome": "survive"
+  },
+  "added_022": {
+   "category": "added_feature",
+   "outcome": "survive"
+  },
+  "added_023": {
+   "category": "added_feature",
+   "outcome": "survive"
+  },
+  "added_024": {
+   "category": "added_feature",
+   "outcome": "survive"
+  },
+  "added_025": {
+   "category": "added_feature",
+   "outcome": "survive"
+  },
+  "added_026": {
+   "category": "added_feature",
+   "outcome": "survive"
+  },
+  "added_027": {
+   "category": "added_feature",
+   "outcome": "survive"
+  },
+  "added_028": {
+   "category": "added_feature",
+   "outcome": "survive"
+  },
+  "added_029": {
+   "category": "added_feature",
+   "outcome": "survive"
+  },
+  "bool_000": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_001": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_002": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_003": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_004": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_005": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_006": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_007": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_008": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_009": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_010": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_011": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_012": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_013": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_014": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_015": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_016": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_017": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_018": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_019": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_020": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_021": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_022": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_023": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_024": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_025": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_026": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_027": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_028": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_029": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_030": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_031": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_032": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_033": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_034": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_035": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_036": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_037": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_038": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "bool_039": {
+   "category": "boolean_stack",
+   "outcome": "survive"
+  },
+  "conc_000": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_001": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_002": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_003": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_004": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_005": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_006": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_007": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_008": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_009": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_010": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_011": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_012": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_013": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_014": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_015": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_016": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_017": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_018": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_019": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_020": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_021": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_022": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_023": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_024": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_025": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_026": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_027": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_028": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_029": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_030": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_031": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_032": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_033": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_034": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_035": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_036": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_037": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_038": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_039": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_040": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_041": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_042": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_043": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "conc_044": {
+   "category": "concentric",
+   "outcome": "survive"
+  },
+  "dim_000": {
+   "category": "dimension_change",
+   "outcome": "survive"
+  },
+  "dim_001": {
+   "category": "dimension_change",
+   "outcome": "survive"
+  },
+  "dim_002": {
+   "category": "dimension_change",
+   "outcome": "survive"
+  },
+  "dim_003": {
+   "category": "dimension_change",
+   "outcome": "survive"
+  },
+  "dim_004": {
+   "category": "dimension_change",
+   "outcome": "survive"
+  },
+  "dim_005": {
+   "category": "dimension_change",
+   "outcome": "survive"
+  },
+  "dim_006": {
+   "category": "dimension_change",
+   "outcome": "survive"
+  },
+  "dim_007": {
+   "category": "dimension_change",
+   "outcome": "survive"
+  },
+  "dim_008": {
+   "category": "dimension_change",
+   "outcome": "survive"
+  },
+  "dim_009": {
+   "category": "dimension_change",
+   "outcome": "survive"
+  },
+  "dim_010": {
+   "category": "dimension_change",
+   "outcome": "survive"
+  },
+  "dim_011": {
+   "category": "dimension_change",
+   "outcome": "survive"
+  },
+  "dim_012": {
+   "category": "dimension_change",
+   "outcome": "survive"
+  },
+  "dim_013": {
+   "category": "dimension_change",
+   "outcome": "survive"
+  },
+  "dim_014": {
+   "category": "dimension_change",
+   "outcome": "survive"
+  },
+  "dim_015": {
+   "category": "dimension_change",
+   "outcome": "survive"
+  },
+  "dim_016": {
+   "category": "dimension_change",
+   "outcome": "survive"
+  },
+  "dim_017": {
+   "category": "dimension_change",
+   "outcome": "survive"
+  },
+  "dim_018": {
+   "category": "dimension_change",
+   "outcome": "survive"
+  },
+  "dim_019": {
+   "category": "dimension_change",
+   "outcome": "survive"
+  },
+  "dim_020": {
+   "category": "dimension_change",
+   "outcome": "survive"
+  },
+  "dim_021": {
+   "category": "dimension_change",
+   "outcome": "survive"
+  },
+  "dim_022": {
+   "category": "dimension_change",
+   "outcome": "survive"
+  },
+  "dim_023": {
+   "category": "dimension_change",
+   "outcome": "survive"
+  },
+  "dim_024": {
+   "category": "dimension_change",
+   "outcome": "survive"
+  },
+  "dim_025": {
+   "category": "dimension_change",
+   "outcome": "survive"
+  },
+  "dim_026": {
+   "category": "dimension_change",
+   "outcome": "survive"
+  },
+  "dim_027": {
+   "category": "dimension_change",
+   "outcome": "survive"
+  },
+  "dim_028": {
+   "category": "dimension_change",
+   "outcome": "survive"
+  },
+  "dim_029": {
+   "category": "dimension_change",
+   "outcome": "survive"
+  },
+  "mirror_000": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_001": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_002": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_003": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_004": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_005": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_006": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_007": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_008": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_009": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_010": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_011": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_012": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_013": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_014": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_015": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_016": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_017": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_018": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_019": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_020": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_021": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_022": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_023": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_024": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_025": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_026": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_027": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_028": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_029": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_030": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_031": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_032": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_033": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_034": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_035": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_036": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_037": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_038": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_039": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_040": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_041": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_042": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_043": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "mirror_044": {
+   "category": "mirrored_twin",
+   "outcome": "survive"
+  },
+  "moved_000": {
+   "category": "moved_sketch",
+   "outcome": "survive"
+  },
+  "moved_001": {
+   "category": "moved_sketch",
+   "outcome": "survive"
+  },
+  "moved_002": {
+   "category": "moved_sketch",
+   "outcome": "survive"
+  },
+  "moved_003": {
+   "category": "moved_sketch",
+   "outcome": "survive"
+  },
+  "moved_004": {
+   "category": "moved_sketch",
+   "outcome": "survive"
+  },
+  "moved_005": {
+   "category": "moved_sketch",
+   "outcome": "survive"
+  },
+  "moved_006": {
+   "category": "moved_sketch",
+   "outcome": "survive"
+  },
+  "moved_007": {
+   "category": "moved_sketch",
+   "outcome": "miss"
+  },
+  "moved_008": {
+   "category": "moved_sketch",
+   "outcome": "survive"
+  },
+  "moved_009": {
+   "category": "moved_sketch",
+   "outcome": "survive"
+  },
+  "moved_010": {
+   "category": "moved_sketch",
+   "outcome": "survive"
+  },
+  "moved_011": {
+   "category": "moved_sketch",
+   "outcome": "survive"
+  },
+  "moved_012": {
+   "category": "moved_sketch",
+   "outcome": "survive"
+  },
+  "moved_013": {
+   "category": "moved_sketch",
+   "outcome": "survive"
+  },
+  "moved_014": {
+   "category": "moved_sketch",
+   "outcome": "survive"
+  },
+  "moved_015": {
+   "category": "moved_sketch",
+   "outcome": "survive"
+  },
+  "moved_016": {
+   "category": "moved_sketch",
+   "outcome": "survive"
+  },
+  "moved_017": {
+   "category": "moved_sketch",
+   "outcome": "survive"
+  },
+  "moved_018": {
+   "category": "moved_sketch",
+   "outcome": "survive"
+  },
+  "moved_019": {
+   "category": "moved_sketch",
+   "outcome": "survive"
+  },
+  "moved_020": {
+   "category": "moved_sketch",
+   "outcome": "survive"
+  },
+  "moved_021": {
+   "category": "moved_sketch",
+   "outcome": "survive"
+  },
+  "moved_022": {
+   "category": "moved_sketch",
+   "outcome": "survive"
+  },
+  "moved_023": {
+   "category": "moved_sketch",
+   "outcome": "survive"
+  },
+  "moved_024": {
+   "category": "moved_sketch",
+   "outcome": "survive"
+  },
+  "moved_025": {
+   "category": "moved_sketch",
+   "outcome": "survive"
+  },
+  "moved_026": {
+   "category": "moved_sketch",
+   "outcome": "survive"
+  },
+  "moved_027": {
+   "category": "moved_sketch",
+   "outcome": "miss"
+  },
+  "moved_028": {
+   "category": "moved_sketch",
+   "outcome": "survive"
+  },
+  "moved_029": {
+   "category": "moved_sketch",
+   "outcome": "survive"
+  }
+ },
+ "golden": {
+  "corpus": "tests/golden/corpus/corpus_selectors.json",
+  "corpusSha256": "f53a1eb7f47763772b77a1e3b98702743884016e179afcf0791e5d3478e4ddb1",
+  "frozen": true,
+  "kind": "selectors",
+  "metrics": {
+   "added_feature": 1.0,
+   "boolean_stack": 1.0,
+   "concentric": 1.0,
+   "dimension_change": 1.0,
+   "invalid_count": 0.0,
+   "mirrored_twin": 1.0,
+   "moved_sketch": 0.933333,
+   "v2_rate": 0.990909
+  },
+  "reference": {
+   "build123d": "0.11.1",
+   "engine": "python sidecar (sidecar/server.py)",
+   "ocp": "7.9.3.1",
+   "platform": "Windows-11-10.0.26200-SP0",
+   "python": "3.12.13",
+   "sidecarCommit": "28e4a6abca8d17d33dafc19c49532c5d6dd6f90b"
+  },
+  "rules": "Every case scored as eval_selector_survival.py scores it: invalid when the frozen key does not pin exactly one entity of the rebuilt part, survive when the resolver's first pick has the frozen key, else miss. Each case's outcome must equal python's, and so must every metric (rates rounded to six places).",
+  "tool": "sidecar/tools/eval_selector_survival.py",
+  "tuning": "the shipped selector tuning (sidecar/selector_tuning.json when frozen)"
+ }
+}
