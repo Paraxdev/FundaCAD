@@ -6,8 +6,8 @@
       "env": {}
     },
     "fundacad-rust": {
-      "command": "cargo",
-      "args": ["run", "--quiet", "--package", "fundacad-mcp"],
+      "command": "node",
+      "args": ["scripts/mcp-rust.mjs"],
       "env": {}
     }
   }

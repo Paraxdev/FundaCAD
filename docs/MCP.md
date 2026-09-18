@@ -29,22 +29,36 @@ below). It is registered beside the Python one while both exist:
 
 ```json
 { "mcpServers": { "fundacad-rust": {
-    "command": "cargo",
-    "args": ["run", "--quiet", "--package", "fundacad-mcp"] } } }
+    "command": "node",
+    "args": ["scripts/mcp-rust.mjs"] } } }
 ```
 
-`cargo run` rather than a path, because a path needs an extension on Windows and
-a build that has happened; this works from a checkout either way, and after the
-first build it costs nothing. An installed plugin gets the binary itself.
+Build it once, then reconnect:
+
+```sh
+cargo build --release -p fundacad-mcp -p fundacad-cli
+```
+
+`scripts/mcp-rust.mjs` runs the newest `fundacad-mcp` under `target/release` or
+`target/debug` (or `CARGO_TARGET_DIR`), and with none it exits at once saying
+the command above. It used to be `cargo run`, and a first compile outlasts an
+MCP host's 30 s connect timeout, which the host reports as a bare timeout.
+`fundacad-cli` is the `fundacad-engine` a private session starts, and needs
+OpenCASCADE (`FUNDACAD_OCCT_ROOT`); attaching to a running app needs only
+`fundacad-mcp`. A packaged app ships the binary, see below.
 
 What differs, and why:
 
 - It does not link the geometry kernel. A PRIVATE session spawns
   `fundacad-engine --ws` and talks to it over the same loopback socket a LIVE
   session uses, so the two worlds are one code path and an OpenCASCADE abort
-  takes the engine rather than the conversation. The binary to spawn is found
-  next to this one, or named by `FUNDACAD_ENGINE_CMD`, which is the variable the
-  protocol suites already drive both engines with.
+  takes the engine rather than the conversation. The binary to spawn is named by
+  `FUNDACAD_ENGINE_CMD`, which is the variable the protocol suites already drive
+  both engines with, or found next to this one: `fundacad-engine`, then the app
+  itself (`fundacad --engine --ws`, recognised as a Rust engine build by its
+  bytes, so a Python build's window is never started by mistake), then the
+  workspace `target/` directories. The spawned engine is told the app's plugin
+  directory unless `FUNDACAD_PLUGIN_DIR` is already set.
 - Tool calls are answered in the order they arrive. The SDK spawns a task per
   request, so the server runs on a single-threaded runtime and holds one turn
   lock, which is what the Python server's single read loop gave for free.
@@ -100,6 +114,30 @@ engine" and not as a `FileNotFoundError` from deep inside a spawn.
 
 The plugin is not a replacement for the clone: `.mcp.json` above is how this
 repository's own sessions run, and that stays.
+
+### In the Rust engine build
+
+The pre-alpha (`--features rust-engine`, `tauri.prealpha.conf.json`) has no
+Python, so it ships the Rust server instead: `fundacad-mcp` is bundled beside
+the app executable (`externalBin`, staged by `scripts/stage-mcp-server.mjs`),
+in the installer and in the portable zip. **How to connect it** hands out that
+binary and nothing else:
+
+```json
+{ "mcpServers": { "fundacad": {
+    "command": "<install dir>/fundacad-mcp.exe",
+    "args": [],
+    "env": {} } } }
+```
+
+It needs no path to anything. A private session starts the app beside it as
+its engine, `fundacad --engine --ws`, rather than a second shipped
+`fundacad-engine`: the kernel is linked statically, so a second binary would
+be a second copy of it, twice the download for the same code, and one that
+could drift from the version the window runs. A live session attaches to the
+running window: its worker serves a loopback WebSocket beside its stdio pipe,
+sharing the one engine and so the one live session, and the app writes that
+port and a per launch token to `session.json` as the Python build does.
 
 ## What it talks to
 
