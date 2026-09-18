@@ -30,9 +30,19 @@ pub fn run(args: &[String]) -> ExitCode {
     let mut golden_path = None;
     let mut corpus_path = None;
     let mut record = Vec::new();
+    let mut warm = false;
+    let mut pass = None;
     let mut it = args.iter();
     while let Some(a) = it.next() {
         match a.as_str() {
+            "--warm" => warm = true,
+            "--warm-pass" => match it.next() {
+                Some(p) => pass = Some(p.clone()),
+                None => {
+                    eprintln!("fundacad-engine: --warm-pass needs a pass name");
+                    return ExitCode::from(2);
+                }
+            },
             "--corpus" => corpus_path = it.next().cloned(),
             "--record" => match it.next() {
                 Some(names) => record.extend(
@@ -59,10 +69,18 @@ pub fn run(args: &[String]) -> ExitCode {
         eprintln!("fundacad-engine: golden-check needs a golden file");
         return ExitCode::from(2);
     };
+    if warm {
+        if !record.is_empty() {
+            eprintln!("fundacad-engine: --warm checks answers, it does not record them");
+            return ExitCode::from(2);
+        }
+        return run_warm(&golden_path, corpus_path.as_deref());
+    }
     match check(
         Path::new(&golden_path),
         corpus_path.as_deref().map(Path::new),
         &record,
+        pass.is_some(),
     ) {
         Ok(true) => ExitCode::SUCCESS,
         Ok(false) => ExitCode::from(1),
@@ -71,6 +89,56 @@ pub fn run(args: &[String]) -> ExitCode {
             ExitCode::from(2)
         }
     }
+}
+
+/// `--warm`: the check twice, each in its own engine process, against one disk
+/// cache that every build checkpoints into. The first pass fills it, the
+/// second reopens every document from it, as the app does after a restart.
+fn run_warm(golden_path: &str, corpus_path: Option<&str>) -> ExitCode {
+    let exe = match std::env::current_exe() {
+        Ok(e) => e,
+        Err(e) => {
+            eprintln!("fundacad-engine: golden-check --warm cannot find itself: {e}");
+            return ExitCode::from(2);
+        }
+    };
+    let cache = std::env::temp_dir().join(format!("fundacad-golden-cache-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&cache);
+    let mut worst = 0u8;
+    for pass in ["filling", "warm"] {
+        println!("== {pass} pass, disk cache {}", cache.display());
+        let mut cmd = std::process::Command::new(&exe);
+        cmd.arg("golden-check").arg(golden_path).args(["--warm-pass", pass]);
+        if let Some(c) = corpus_path {
+            cmd.args(["--corpus", c]);
+        }
+        let out = cmd
+            .env("XDG_CACHE_HOME", &cache)
+            .env("FUNDACAD_DISK_CACHE", "1")
+            .stderr(std::process::Stdio::piped())
+            .output();
+        let out = match out {
+            Ok(o) => o,
+            Err(e) => {
+                eprintln!("fundacad-engine: golden-check --warm could not run a pass: {e}");
+                return ExitCode::from(2);
+            }
+        };
+        let log = String::from_utf8_lossy(&out.stderr);
+        eprint!("{log}");
+        print!("{}", String::from_utf8_lossy(&out.stdout));
+        let rebuilds = log.matches("[rebuild-cached]").count();
+        let from_disk = log.matches("src=disk").count();
+        println!("{pass} pass: {from_disk} of {rebuilds} cached rebuilds resumed from the disk cache\n");
+        let code = out.status.code().map_or(2, |c| u8::try_from(c).unwrap_or(2));
+        worst = worst.max(code);
+        if pass == "warm" && rebuilds > 0 && from_disk == 0 {
+            println!("the warm pass never resumed from the disk cache, so it checked nothing warm");
+            worst = worst.max(1);
+        }
+    }
+    let _ = std::fs::remove_dir_all(&cache);
+    ExitCode::from(worst)
 }
 
 /// The golden file, its corpus and the scratch space one check needs.
@@ -125,6 +193,7 @@ fn check(
     golden_path: &Path,
     corpus_path: Option<&Path>,
     record: &[String],
+    warm: bool,
 ) -> Result<bool, String> {
     let golden = read_json(golden_path)?;
     let header = golden["golden"].clone();
@@ -164,9 +233,18 @@ fn check(
     let work = std::env::temp_dir().join(format!("fundacad-golden-{}", std::process::id()));
     std::fs::create_dir_all(work.join("blobs"))
         .map_err(|e| format!("cannot create {}: {e}", work.display()))?;
-    // What harness_util.SpawnedServer gave every engine the diff tools drove: no
-    // geometry persisted from an earlier run, so a warm disk cache cannot answer.
-    std::env::set_var("FUNDACAD_DISK_CACHE", "0");
+    if warm {
+        let mut cache = fundacad_geom::cache::global()
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        cache.budget_ms = 0.0;
+        cache.tip_after = std::time::Duration::ZERO;
+        cache.mesh_persist_after = std::time::Duration::ZERO;
+    } else {
+        // What harness_util.SpawnedServer gave every engine the diff tools drove:
+        // no geometry persisted from an earlier run, so a warm disk cache cannot answer.
+        std::env::set_var("FUNDACAD_DISK_CACHE", "0");
+    }
     if std::env::var_os("FUNDACAD_BLOB_DIR").is_none() {
         std::env::set_var("FUNDACAD_BLOB_DIR", work.join("blobs"));
     }

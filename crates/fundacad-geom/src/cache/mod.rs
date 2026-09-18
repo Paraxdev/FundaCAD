@@ -125,7 +125,11 @@ impl RebuildCache {
     }
 
     pub fn chain_keys(&mut self, raw: &Value) -> Vec<String> {
-        keys::chain_keys(raw, &self.env, &mut self.brep_sigs)
+        #[cfg(feature = "plugins")]
+        let plugins = crate::plugins::feature_identities();
+        #[cfg(not(feature = "plugins"))]
+        let plugins = HashMap::new();
+        keys::chain_keys(raw, &self.env, &plugins, &mut self.brep_sigs)
     }
 
     /// `reset_cache` and the mesh cache: this process forgets, the disk does not.

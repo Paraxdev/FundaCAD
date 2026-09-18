@@ -65,6 +65,7 @@ enum Loaded {
 struct Entry {
     declared: Declared,
     loaded: Loaded,
+    identity: Option<String>,
 }
 
 #[derive(Default)]
@@ -82,11 +83,14 @@ impl Registry {
         self.entries = found
             .into_iter()
             .map(|declared| {
-                let loaded = old
+                let (loaded, identity) = old
                     .iter()
                     .position(|e| e.declared == declared)
-                    .map_or(Loaded::NotYet, |i| old.swap_remove(i).loaded);
-                Entry { declared, loaded }
+                    .map_or((Loaded::NotYet, None), |i| {
+                        let e = old.swap_remove(i);
+                        (e.loaded, e.identity)
+                    });
+                Entry { declared, loaded, identity }
             })
             .collect();
     }
@@ -458,27 +462,62 @@ fn exporter_declared(exporter: &str) -> Result<(), String> {
         .map_err(|m| missing(Claim::Exporter, exporter, m))
 }
 
-/// `plugin_geometry.cache_key`: every pass on a body with its code version,
-/// `None` when it has none. A pass whose plugin is not loaded keys as -1.
+/// A bundle's identity for the rebuild caches: its manifest and component
+/// bytes hashed, remembered until the files' stamp changes.
+fn identity(entry: &mut Entry) -> String {
+    if let Some(id) = &entry.identity {
+        return id.clone();
+    }
+    let d = &entry.declared;
+    let manifest = std::fs::read(d.dir.join("manifest.json")).unwrap_or_default();
+    let wasm = d
+        .wasm
+        .as_deref()
+        .and_then(|rel| std::fs::read(wasm_path(&d.dir, rel)).ok())
+        .unwrap_or_default();
+    let id = crate::cache::keys::hash_hex(&[d.id.as_bytes(), b"\0", &manifest, b"\0", &wasm]);
+    entry.identity = Some(id.clone());
+    id
+}
+
+/// Each feature type a plugin on disk declares, to the identity of the bundle
+/// that runs it, so a cached build of a plugin feature is keyed on the code
+/// that made it. A type no plugin declares is absent.
+pub fn feature_identities() -> HashMap<String, String> {
+    let mut reg = current();
+    let mut out = HashMap::new();
+    for e in reg.entries.iter_mut() {
+        if e.declared.types.is_empty() {
+            continue;
+        }
+        let id = identity(e);
+        for t in &e.declared.types {
+            out.entry(t.clone()).or_insert_with(|| id.clone());
+        }
+    }
+    out
+}
+
+/// `plugin_geometry.cache_key`: every pass on a body with its code version and
+/// its bundle's identity, `None` when it has none. A pass whose plugin is not
+/// loaded keys as -1.
 pub fn pass_cache_key(specs: &[Value]) -> Option<String> {
     if specs.is_empty() {
         return None;
     }
-    let mut versions: std::collections::BTreeMap<String, i64> = std::collections::BTreeMap::new();
+    let mut versions: std::collections::BTreeMap<String, Value> = std::collections::BTreeMap::new();
     let mut reg = current();
     for spec in specs {
         let name = spec.get("pass").and_then(Value::as_str).unwrap_or("").to_owned();
         let v = pass_owner(&mut reg, &name)
-            .and_then(|i| match &reg.entries[i].loaded {
-                Loaded::Ready(c) => c
-                    .registration
-                    .mesh_passes
-                    .iter()
-                    .find(|p| p.name == name)
-                    .map(|p| i64::from(p.code_version)),
-                _ => None,
+            .and_then(|i| {
+                let Loaded::Ready(c) = &reg.entries[i].loaded else {
+                    return None;
+                };
+                let version = c.registration.mesh_passes.iter().find(|p| p.name == name)?.code_version;
+                Some(json!([version, identity(&mut reg.entries[i])]))
             })
-            .unwrap_or(-1);
+            .unwrap_or(json!(-1));
         versions.insert(name, v);
     }
     Some(format!("{}:{}", json!(versions), Value::Array(specs.to_vec())))

@@ -33,11 +33,13 @@ const USAGE: &str = "usage:
   fundacad-engine fillet-eval <corpus.json> [--show-ids]
                                           score a fillet and chamfer corpus, as
                                           the Python engine's eval_fillet_corpus.py did
-  fundacad-engine golden-check <golden.json> [--corpus <corpus.json>] [--record <names>]
+  fundacad-engine golden-check <golden.json> [--corpus <corpus.json>] [--record <names>] [--warm]
                                           compare this engine with the Python engine's
                                           frozen answers in tests/golden, exit 1 on any
                                           mismatch; --record writes this engine's answer
-                                          for the named cases first, after a human check";
+                                          for the named cases first, after a human check;
+                                          --warm checks twice in two processes against one
+                                          disk cache, so the second answers from it";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
