@@ -36,6 +36,7 @@ import {
 } from "./manifest";
 import { bundleAsset, shippedPlugins } from "./shipped";
 import type { DocumentStore } from "../document/store";
+import { engineKind } from "../geometry/transport";
 import type { RunOutcome } from "./runner/host";
 
 /** Where this project's own bundles are published. Mirrors BUNDLE_PREFIX in
@@ -46,6 +47,14 @@ const RELEASES = "https://github.com/Paraxdev/fundacad/releases/download/";
 /** The release the assets hang off. "beta" is the rolling one the installers
  *  and the update feed already use. */
 const RELEASE_TAG = "beta";
+/** The Rust engine build's own release. Its bundles carry the geometry
+ *  components its plugin host runs, built from the same commit as the host. */
+const PREALPHA_RELEASE_TAG = "prealpha-rust";
+
+/** Which release this build installs plugins from. */
+export function pluginReleaseTag(engine: "rust" | "python"): string {
+  return engine === "rust" ? PREALPHA_RELEASE_TAG : RELEASE_TAG;
+}
 
 export interface OfficialPlugin {
   manifest: PluginManifest;
@@ -68,14 +77,14 @@ export interface OfficialPlugin {
  *
  *  The asset name comes from `bundleAsset`, which is also what the packager
  *  uses, so this cannot come to expect a file the release does not carry. */
-export function officialPlugins(): OfficialPlugin[] {
+export function officialPlugins(tag: string = RELEASE_TAG): OfficialPlugin[] {
   return shippedPlugins().map(({ manifest }) => {
     const asset = bundleAsset(manifest.id);
     return {
       manifest,
-      tag: RELEASE_TAG,
+      tag,
       asset,
-      url: `${RELEASES}${RELEASE_TAG}/${asset}`,
+      url: `${RELEASES}${tag}/${asset}`,
     };
   });
 }
@@ -456,7 +465,28 @@ export function mcpLaunch(dir: string, runtime: PythonRuntime): LaunchConfig {
   return { command: runtime.python, args: [join(dir, "server.py")], env };
 }
 
+/** How to start the `fundacad-mcp` a Rust engine build ships beside itself.
+ *  It needs nothing else: its private engine is the app, started with
+ *  `--engine --ws`, and it attaches to a running window by itself. */
+export function mcpServerLaunch(server: string): LaunchConfig {
+  return { command: server, args: [], env: {} };
+}
+
+/** A launch command as the block an MCP host expects in its config file. */
+export function mcpConfigBlock(launch: LaunchConfig): string {
+  return JSON.stringify({ mcpServers: { fundacad: launch } }, null, 2);
+}
+
 /** The same thing as the block an MCP host expects in its config file. */
 export function mcpConfigJson(dir: string, runtime: PythonRuntime): string {
-  return JSON.stringify({ mcpServers: { fundacad: mcpLaunch(dir, runtime) } }, null, 2);
+  return mcpConfigBlock(mcpLaunch(dir, runtime));
+}
+
+/** The block for this build: the bundled `fundacad-mcp` in a Rust engine
+ *  build, the Python server in the installed plugin otherwise. */
+export async function mcpSetup(dir: string): Promise<string> {
+  if ((await engineKind()) === "rust") {
+    return mcpConfigBlock(mcpServerLaunch(await call<string>("mcp_server")));
+  }
+  return mcpConfigJson(dir, await pythonRuntime());
 }

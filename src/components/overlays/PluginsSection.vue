@@ -32,7 +32,8 @@
 // different from a greedy one at a glance.
 
 import { computed, onMounted, onUnmounted, ref } from "vue";
-import { describeGrants, sandboxNote } from "../../plugins/manifest";
+import { describeGrants, sameId, sandboxNote } from "../../plugins/manifest";
+import { engineKind } from "../../geometry/transport";
 import {
   inspectFile,
   inspectUrl,
@@ -40,10 +41,10 @@ import {
   installPlugin,
   installedManifest,
   installedPlugins,
-  mcpConfigJson,
+  mcpSetup,
   officialPlugins,
   pickBundle,
-  pythonRuntime,
+  pluginReleaseTag,
   removePlugin,
   type Candidate,
   type InstalledPlugin,
@@ -52,7 +53,12 @@ import {
 import { onPluginChange, pluginEnabled, setPluginEnabled } from "../../plugins/registry";
 import { toast } from "../../ui/toast";
 
-const suggested = officialPlugins();
+const MCP_ID = "FundaCAD.MCP";
+
+const suggested = ref<OfficialPlugin[]>(officialPlugins());
+onMounted(async () => {
+  suggested.value = officialPlugins(pluginReleaseTag(await engineKind()));
+});
 
 const installed = ref<InstalledPlugin[]>([]);
 /** the id whose permission list is open, at most one */
@@ -103,7 +109,7 @@ const rows = computed(() =>
 
 /** Suggestions not yet installed. Once one is installed it is an ordinary row
  *  above, because there is nothing left about it that is a suggestion. */
-const notYet = computed(() => suggested.filter((p) => !record(p.manifest.id)));
+const notYet = computed(() => suggested.value.filter((p) => !record(p.manifest.id)));
 
 /** Where a row came from, for anything we did not publish. Ours says nothing,
  *  because a label on every row is a label nobody reads. */
@@ -213,8 +219,7 @@ async function drop(id: string, name: string) {
  *  paste them somewhere. */
 async function showSetup(rec: InstalledPlugin) {
   try {
-    const rt = await pythonRuntime();
-    setup.value = { ...setup.value, [rec.id]: mcpConfigJson(rec.dir, rt) };
+    setup.value = { ...setup.value, [rec.id]: await mcpSetup(rec.dir) };
   } catch (err) {
     toast(`Could not work out how to start it. ${String(err)}`, { kind: "error" });
   }
@@ -270,7 +275,7 @@ async function copy(text: string) {
       >
         {{ showing === rec.id ? "Hide what it uses" : "What it uses" }}
       </button>
-      <button v-if="rec.id === 'mcp'" class="plug-link" @click="showSetup(rec)">
+      <button v-if="sameId(rec.id, MCP_ID)" class="plug-link" @click="showSetup(rec)">
         How to connect it
       </button>
     </div>

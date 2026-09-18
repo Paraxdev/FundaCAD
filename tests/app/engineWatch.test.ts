@@ -17,9 +17,10 @@ describe("what a dead geometry engine is called", () => {
   });
 
   it("never calls it the sidecar, whichever shell sent it", () => {
-    for (const kind of ["restarted", "start_failed", "port_in_use", "exited", undefined]) {
+    for (const kind of ["restarted", "start_failed", "port_in_use", "exited"]) {
       expect(deathMessage({ kind, cause: "x" }).toLowerCase()).not.toContain("sidecar");
     }
+    expect(deathMessage({ cause: "x" }).toLowerCase()).not.toContain("sidecar");
     expect(deathMessage(null)).toBe("The geometry engine crashed. Save your work, then restart FundaCAD.");
   });
 });
