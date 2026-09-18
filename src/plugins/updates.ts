@@ -2,10 +2,10 @@
 //
 // Two reasons, and the second is why this exists. A newer version is the usual
 // one. The other is a bundle whose version says it is current and whose files
-// cannot run on this engine: the beta and the alpha share one plugin directory,
-// the beta publishes bundles with only the Python half, and the alpha's bundle
-// of the SAME version carries the component its engine runs. Compared by
-// version alone the alpha would call such a bundle up to date forever, while
+// cannot run on this engine: the Python beta and this app share one plugin
+// directory, the beta publishes bundles with only a Python half, and this
+// app's bundle of the SAME version carries the component its engine runs.
+// Compared by version alone such a bundle would look up to date forever, while
 // every feature it owns fails to build.
 
 import { promiseCovers, sameId } from "./manifest";
@@ -37,14 +37,13 @@ export function compareVersions(a: string, b: string): number {
 export function updateFor(
   rec: InstalledPlugin,
   offered: readonly OfficialPlugin[],
-  engine: "rust" | "python",
 ): PluginUpdate | null {
   const offer = offered.find((p) => sameId(p.manifest.id, rec.id));
   if (!offer) return null;
   const had = installedManifest(rec);
   const covered = had !== null && promiseCovers(had, offer.manifest);
   const version = offer.manifest.version;
-  if (engine === "rust" && offer.manifest.geometryWasm && !rec.component) {
+  if (offer.manifest.geometryWasm && !rec.component) {
     return {
       offer,
       covered,

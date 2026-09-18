@@ -1,7 +1,7 @@
 [package]
 name = "fundacad"
 version = "1.0.0"
-description = "FundaCAD, a parametric CAD app driving build123d"
+description = "FundaCAD, a parametric CAD app"
 authors = ["Paraxdev"]
 edition = "2021"
 rust-version = "1.77"
@@ -20,14 +20,11 @@ tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 # system-browser opener for the handful of outbound links (docs, the tracker).
 tauri-plugin-opener = "2"
-# One app instance only. Two instances each spawn a sidecar, and the second one
-# cannot bind 127.0.0.1:8765, so it dies and the user is told the geometry engine
-# crashed (field report 2c0cd78a, 0.1.84 on Windows).
+# One app instance only: two would share one plugin directory, one blob store
+# and one session file.
 tauri-plugin-single-instance = "2"
-libc = "0.2"
 hidapi = "2"
-# portable CSPRNG for the sidecar WebSocket token (replaces a /dev/urandom read that
-# fell back to a weak token on Windows).
+# portable CSPRNG for the live session token and plugin file handles.
 getrandom = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -44,19 +41,17 @@ sha2 = "0.10"
 # Binary payloads cross Tauri IPC as base64 strings (a JSON Vec<u8> would be
 # pathological at ~1 MB); the plugin commands use this.
 base64 = "0.22"
-# --- Rust engine (docs/RUST-PIVOT.md) ----------------------------------------
-# The worker loop and the geometry crate link OpenCASCADE statically, a long
-# C++ build, so they are opt-in until the Rust engine replaces the sidecar.
-# `cargo build --features rust-engine`.
-fundacad-protocol = { path = "../crates/fundacad-protocol", optional = true }
-fundacad-engine = { path = "../crates/fundacad-engine", optional = true }
-fundacad-geom = { path = "../crates/fundacad-geom", optional = true }
+# The geometry engine, a worker process of this same executable (engine.rs).
+# The geometry crate links OpenCASCADE statically.
+fundacad-protocol = { path = "../crates/fundacad-protocol" }
+fundacad-engine = { path = "../crates/fundacad-engine", features = ["ws"] }
+fundacad-geom = { path = "../crates/fundacad-geom", features = ["plugins"] }
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 # The document files (.fundab, the ZIP container, the JSON .funda) live in the
-# fundacad-format crate, shared with the engine and the CLI. Rust owns them, NOT
-# the sidecar, because sidecar.rs deliberately does not auto-respawn, and a save
-# that needed it would leave the user unable to save at all. No OCCT in it.
+# fundacad-format crate, shared with the engine and the CLI. The app owns them,
+# not the engine worker, so a save never waits on a worker that is restarting.
+# No OCCT in it.
 fundacad-format = { path = "../crates/fundacad-format" }
 # Plugin bundles are ZIPs (plugins/bundle.rs).
 #
@@ -75,21 +70,8 @@ zip = { version = "4", default-features = false, features = ["deflate-flate2"] }
 # zlib; feature unification is additive and cannot change updater behaviour.
 flate2 = "1"
 
-[features]
-# Off by default: the default build ships the Python sidecar and needs no
-# OpenCASCADE. On, the app runs the Rust engine as its own worker process.
-rust-engine = ["dep:fundacad-protocol", "dep:fundacad-engine", "dep:fundacad-geom", "fundacad-geom/plugins", "fundacad-engine/ws"]
-
-# Windows-only: a Job Object with KILL_ON_JOB_CLOSE reaps the sidecar (and its
-# ProcessPoolExecutor workers) when the app exits or crashes. Unix uses a process
-# group + PR_SET_PDEATHSIG instead (no extra dep).
-[target.'cfg(windows)'.dependencies]
-windows = { version = "0.58", features = [
-    "Win32_Foundation",
-    "Win32_Security",
-    "Win32_System_JobObjects",
-    "Win32_System_Threading",
-] }
+[dev-dependencies]
+fundacad-core = { path = "../crates/fundacad-core" }
 
 # The shipped engine's own crates compile as one unit, which is what the root
 # workspace's release profile does for the standalone engine. Kept per package

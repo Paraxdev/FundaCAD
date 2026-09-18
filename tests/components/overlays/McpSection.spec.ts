@@ -6,13 +6,11 @@ import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 
 const tauri = vi.hoisted(() => ({
-  kind: "rust" as string,
   server: "C:\\Program Files\\FundaCAD\\fundacad-mcp.exe" as string | null,
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: async (cmd: string) => {
-    if (cmd === "engine_kind") return tauri.kind;
     if (cmd === "mcp_server") {
       if (tauri.server === null) throw "fundacad-mcp.exe is missing, this build did not ship the MCP server";
       return tauri.server;
@@ -64,7 +62,6 @@ const inTauri = (on: boolean) => {
 beforeEach(() => {
   setActivePinia(createPinia());
   setLiveEditingMode("edit");
-  tauri.kind = "rust";
   tauri.server = "C:\\Program Files\\FundaCAD\\fundacad-mcp.exe";
   inTauri(true);
 });
@@ -140,11 +137,5 @@ describe("how to connect it", () => {
     const w = await mounted();
     expect(w.find("#prefs-mcp-config").exists()).toBe(false);
     expect(w.get("#prefs-mcp-unavailable").text()).toContain("did not ship the MCP server");
-  });
-
-  it("says so in the Python engine build rather than asking for a path", async () => {
-    tauri.kind = "python";
-    const w = await mounted();
-    expect(w.get("#prefs-mcp-unavailable").text()).toContain("Python engine");
   });
 });

@@ -1,26 +1,21 @@
-//! End-to-end check of the Rust<->Python seam for the document container.
+//! End-to-end check of the seam between the engine and the document container.
 //!
-//! Everything else is verified on one side of the boundary: `container.rs`'s unit
-//! tests round-trip synthetic bytes, and the sidecar's `test_blob_rebuild.py`
-//! rebuilds from a blob the sidecar itself wrote. Neither proves the two halves
-//! compose, that a blob PYTHON produced survives RUST's zip round-trip and is
-//! still readable by Python afterwards. A mismatch in the hash, the filename
-//! convention, or the byte handling would slip through both suites and show up
-//! as "the geometry vanished" on a user's machine.
-//!
-//! SKIPS (rather than fails) when the sidecar venv is absent, so a Rust-only
-//! checkout still runs `cargo test` clean.
+//! The engine stores an import's geometry in the blob store, and the app's
+//! container (container.rs) packs that store into a saved file and unpacks it
+//! somewhere else. Each half has its own tests; this proves they compose: a
+//! blob the ENGINE wrote survives the app's container round trip into a store
+//! that has never seen it, and the engine rebuilds from it there. A mismatch in
+//! the hash, the filename convention or the directory the worker is told would
+//! slip through both halves and show up as "the geometry vanished" on a user's
+//! machine.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-fn sidecar_python() -> Option<PathBuf> {
-    let p = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()?
-        .join("sidecar/.venv/bin/python");
-    p.exists().then_some(p)
-}
+use fundacad_core::CadDocument;
+use fundacad_geom::builder::{self, NoWatch};
+use fundacad_geom::import::{self, blobstore::BlobStore};
 
 fn tmpdir(tag: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("fundacad_seam_{tag}_{}", std::process::id()));
@@ -29,52 +24,34 @@ fn tmpdir(tag: &str) -> PathBuf {
     d
 }
 
-/// Run a snippet inside the sidecar, with the blob store pointed at `blobs`.
-fn py(python: &Path, blobs: &Path, code: &str) -> String {
-    let sidecar = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().join("sidecar");
-    let out = Command::new(python)
-        .arg("-c")
-        .arg(code)
-        .current_dir(&sidecar)
-        .env("FUNDACAD_BLOB_DIR", blobs)
-        .output()
-        .expect("failed to run the sidecar python");
-    assert!(
-        out.status.success(),
-        "sidecar snippet failed:\n{}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-    String::from_utf8_lossy(&out.stdout).trim().lines().last().unwrap_or("").to_string()
+fn fixture(name: &str) -> String {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../tests/fixtures")
+        .join(name)
+        .to_string_lossy()
+        .into_owned()
 }
 
 #[test]
-fn a_python_blob_survives_the_container_and_rebuilds() {
-    let Some(python) = sidecar_python() else {
-        eprintln!("skipping: sidecar/.venv not present");
-        return;
-    };
+fn an_engine_blob_survives_the_container_and_rebuilds() {
     let dir = tmpdir("e2e");
-    let blobs_a = dir.join("blobs_a"); // the "authoring machine"
+    let blobs_a = dir.join("blobs_a"); // the authoring machine
     let blobs_b = dir.join("blobs_b"); // a machine that has never seen this file
-    std::fs::create_dir_all(&blobs_a).unwrap();
 
-    // 1. Python imports a real STEP assembly and stores its geometry.
-    let hash = py(
-        &python,
-        &blobs_a,
-        "import sys; sys.path.insert(0,'.'); import builder; \
-         print(builder.import_geometry('fixtures/asm_nested.step','step')['geom'])",
-    );
+    // 1. The engine imports a real STEP assembly and stores its geometry.
+    let store = BlobStore::open(&blobs_a).unwrap();
+    let imported = import::import_geometry(&fixture("asm_nested.step"), "step", &store).unwrap();
+    let hash = imported["geom"].as_str().expect("the import names its blob").to_owned();
     assert_eq!(hash.len(), 32, "expected a blake2b-128 hex hash, got {hash:?}");
 
     // The filename convention has to match on both sides or every reference
     // dangles; assert it rather than trusting two independent format! calls.
     let blob = blobs_a.join(format!("{hash}.bbrep"));
-    assert!(blob.exists(), "sidecar did not write {}", blob.display());
+    assert!(blob.exists(), "the engine did not write {}", blob.display());
 
-    // 2. Rust packages it, exactly as `container_save` does.
+    // 2. The app packages it, exactly as `container_save` does.
     let doc = format!(
-        r#"{{"version":5,"parameters":{{}},"features":[{{"id":"f1","type":"import","name":"Asm","geom":"{hash}"}}]}}"#
+        r#"{{"version":5,"parameters":{{}},"features":[{{"id":"f1","type":"import","name":"Asm","format":"step","geom":"{hash}"}}]}}"#
     );
     let mut map = BTreeMap::new();
     map.insert(hash.clone(), blob);
@@ -82,7 +59,7 @@ fn a_python_blob_survives_the_container_and_rebuilds() {
     fundacad_lib::container::write_container(&dest, &doc, &map, &BTreeMap::new(), "seam-test")
         .expect("write_container failed");
 
-    // 3. Rust opens it somewhere that has never seen this geometry.
+    // 3. The app opens it somewhere that has never seen this geometry.
     let (got_doc, manifest) =
         fundacad_lib::container::read_container(&dest, &blobs_b, None).expect("read_container");
     assert_eq!(
@@ -93,29 +70,42 @@ fn a_python_blob_survives_the_container_and_rebuilds() {
     assert_eq!(manifest.blobs.len(), 1);
     assert!(blobs_b.join(format!("{hash}.bbrep")).exists());
 
-    // 4. Python rebuilds from the EXTRACTED blob, with no other geometry around.
-    //    Prints the body count; asm_nested is a 7-body assembly.
-    let bodies = py(
-        &python,
-        &blobs_b,
-        &format!(
-            "import sys,json; sys.path.insert(0,'.'); import builder; \
-             d={{'parameters':{{}},'features':[{{'id':'f1','type':'import','name':'Asm','geom':'{hash}'}}]}}; \
-             p,e,b=builder.rebuild(d); \
-             print(json.dumps({{'n':len(b),'errors':[str(x) for x in e]}}))"
-        ),
-    );
-    let v: serde_json::Value = serde_json::from_str(&bodies).expect("rebuild output");
-    assert_eq!(
-        v["errors"].as_array().map(|a| a.len()),
-        Some(0),
-        "rebuild reported errors: {}",
-        v["errors"]
-    );
-    assert!(
-        v["n"].as_u64().unwrap_or(0) > 0,
-        "the extracted blob produced no bodies"
-    );
+    // 4. The engine rebuilds from the EXTRACTED blob, with no other geometry
+    //    around. The builder reads the store the worker is told about, the
+    //    variable `engine::configure_env` sets.
+    std::env::set_var("FUNDACAD_BLOB_DIR", &blobs_b);
+    let value: serde_json::Value = serde_json::from_str(&got_doc).unwrap();
+    let typed: CadDocument = serde_json::from_value(value.clone()).unwrap();
+    let rebuilt = builder::rebuild(&typed, &value, &NoWatch).unwrap_or_else(|_| panic!("cancelled"));
+    assert!(rebuilt.errors.is_empty(), "rebuild reported errors: {:?}", rebuilt.errors);
+    assert_eq!(rebuilt.bodies.len(), 7, "asm_nested is a 7-body assembly");
 
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The worker has to be told the same blob store the container reads, or an
+/// import is geometry a save cannot find.
+#[test]
+fn the_engine_worker_is_told_the_containers_blob_store() {
+    let mut cmd = Command::new("fundacad");
+    fundacad_lib::engine::configure_env(
+        &mut cmd,
+        Some(Path::new("/data/blobs")),
+        Some(Path::new("/data/plugins")),
+        "tok",
+    );
+    let env: BTreeMap<String, Option<String>> = cmd
+        .get_envs()
+        .map(|(k, v)| (k.to_string_lossy().into_owned(), v.map(|v| v.to_string_lossy().into_owned())))
+        .collect();
+    assert_eq!(env["FUNDACAD_BLOB_DIR"].as_deref(), Some("/data/blobs"));
+    assert_eq!(env["FUNDACAD_PLUGIN_DIR"].as_deref(), Some("/data/plugins"));
+    assert_eq!(env["FUNDACAD_LIVE_TOKEN"].as_deref(), Some("tok"));
+
+    let mut bare = Command::new("fundacad");
+    fundacad_lib::engine::configure_env(&mut bare, None, None, "tok");
+    assert!(
+        !bare.get_envs().any(|(k, _)| k == "FUNDACAD_BLOB_DIR" || k == "FUNDACAD_PLUGIN_DIR"),
+        "an unresolved directory leaves the engine's own default"
+    );
 }

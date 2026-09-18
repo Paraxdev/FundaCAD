@@ -40,7 +40,7 @@ const conf = JSON.parse(confRaw) as {
 };
 
 const alpha = JSON.parse(alphaRaw) as {
-  plugins: { updater: { endpoints: string[] } };
+  plugins?: unknown;
 };
 
 /** Upstream's minisign public key, as inherited at the fork point. Recorded so
@@ -77,31 +77,25 @@ describe("updater", () => {
   //
   // The endpoint is baked into the binary at build time, so which feed a copy
   // reads is decided by the config it was built with and can never change
-  // afterwards. A shipped beta reads beta/latest.json; an alpha build reads
-  // alpha/latest.json. Nothing else separates them, and nothing else
-  // could: the alpha version is 1.0.x, which is NEWER than the beta's
-  // 0.2.x, so a beta install offered the alpha manifest would take it and
-  // land on an engine that cannot rebuild most documents.
+  // afterwards. This branch builds the alpha, which reads alpha/latest.json;
+  // the Python beta is built on the legacy branch and reads beta/latest.json.
+  // Nothing else separates them, and nothing else could: the alpha version is
+  // 1.0.x, which is NEWER than the beta's 0.2.x, so a beta install offered the
+  // alpha manifest would take it.
   //
   // docs/RUST-PIVOT.md section 6 has the decision and why it is not "publish no
   // manifest at all": an alpha that cannot update itself is an alpha
   // nobody re-downloads, and the point of a rolling build is the next one.
-  it("keeps the alpha feed away from the beta one", () => {
+  it("reads the alpha feed and never the beta one", () => {
     const path = (urls: string[]) => urls.map((u) => new URL(u).pathname);
     expect(path(conf.plugins.updater.endpoints)).toEqual([
-      "/Paraxdev/fundacad/releases/download/beta/latest.json",
-    ]);
-    expect(path(alpha.plugins.updater.endpoints)).toEqual([
       "/Paraxdev/fundacad/releases/download/alpha/latest.json",
     ]);
+    expect(confRaw + alphaRaw).not.toContain("/beta/latest.json");
   });
 
-  it("fetches the alpha feed from this project's own releases too", () => {
-    for (const url of alpha.plugins.updater.endpoints) {
-      expect(new URL(url).origin, `updater endpoint ${url}`).toBe("https://github.com");
-      expect(new URL(url).pathname.startsWith("/Paraxdev/fundacad/"), `updater endpoint ${url}`)
-        .toBe(true);
-    }
+  it("leaves the feed to the base config, so the release build cannot diverge from it", () => {
+    expect(alpha.plugins).toBeUndefined();
   });
 
   it("still carries UPSTREAM's key, which the release job must refuse", () => {
