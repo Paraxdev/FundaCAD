@@ -45,22 +45,22 @@ the goal is it to make this a personalized version of a CAD with features I like
 ## Install
 
 Prebuilt installers for Windows, macOS (Apple Silicon) and Linux are on the
-[beta release](https://github.com/Paraxdev/fundacad/releases/tag/beta), rebuilt
-from the `legacy` branch on every green build, with the Python geometry engine.
-The new Rust engine is on the [alpha release](https://github.com/Paraxdev/fundacad/releases/tag/alpha),
-rebuilt from `main`: smaller, no Python, and less tested than the beta, so
-anything that builds differently there is worth a report. Files open in both.
-These builds do not update themselves, so come back to those pages for a newer
-one.
+[alpha release](https://github.com/Paraxdev/fundacad/releases/tag/alpha),
+FundaCAD 1.0 on the Rust geometry engine, rebuilt from `main` on every green
+build. It is less tested than the
+[beta release](https://github.com/Paraxdev/fundacad/releases/tag/beta), which
+continues on the Python engine from the `legacy` branch, so anything that
+builds differently in the alpha is worth a report. Files open in both. These
+builds do not update themselves, so come back to those pages for a newer one.
 
 To let an AI assistant (Claude Code, Claude Desktop or any MCP host) build and
 edit models in the app, open **Preferences, AI assistants (MCP)**: the MCP
-server ships with the alpha, and that section gives the setup to paste.
+server ships with the app, and that section gives the setup to paste.
 
 On Windows there is also a **portable zip** (`…_x64_portable.zip`). Unzip it
 anywhere and run `fundacad.exe`: no installer, no admin rights, and several builds
 can sit side by side. It carries the same files the installer lays down,
-including the Python geometry engine, so it needs nothing else beyond the
+the geometry engine included, so it needs nothing else beyond the
 WebView2 runtime that Windows 11 and an up-to-date Windows 10 already have.
 Portable means no installer rather than no traces: preferences still live in
 your user profile.
@@ -95,45 +95,47 @@ The builds are **not code signed**, so each OS says so in its own way:
 
 ## Build
 
-Needs [Node](https://nodejs.org), [Rust](https://rustup.rs) (for the Tauri
-shell), and [uv](https://docs.astral.sh/uv) (which fetches Python for you).
+Needs [Node](https://nodejs.org), [Rust](https://rustup.rs), cmake and a C++
+toolchain: the geometry engine compiles OpenCASCADE from source on the first
+build, about twenty minutes, then it is cached (docs/PACKAGING.md). On Windows
+use the MSVC toolchain.
 
 ```bash
 git clone https://github.com/Paraxdev/fundacad.git
 cd fundacad
 npm install
-(cd sidecar && uv sync)
 ```
 
 Then:
 
 ```bash
-npm run tauri dev      # run it, starts vite and the sidecar for you
+npm run tauri dev      # run it, starts vite and the engine for you
 npm run tauri build    # package a desktop build
 npm test               # vitest
+cargo test --workspace --features fundacad-engine/ws   # the engine
 ```
 
 ### Frontend only
 
-Two terminals, if you are iterating on the UI and don't need a Rust rebuild:
+Two terminals, if you are iterating on the UI in a browser:
 
 ```bash
-cd sidecar && uv run python server.py   # ws://127.0.0.1:8765
-npm run dev                             # http://localhost:5173
+cargo run --bin fundacad-engine -- --ws   # ws://127.0.0.1:8765
+npm run dev                               # http://localhost:5173
 ```
 
-The sidecar prints `TOKEN <t>` on its first line and refuses connections without
+The engine prints `TOKEN <t>` on its first line and refuses connections without
 it, so open `http://localhost:5173/?token=<t>`. Without it the viewport connects,
-is refused, and silently never builds anything. A sidecar started this way also
-outlives its shell, so kill it by hand or it keeps port 8765.
+is refused, and silently never builds anything. `FUNDACAD_ENGINE_TOKEN` and
+`FUNDACAD_ENGINE_PORT` fix the token and the port instead.
 
 ## Docs
 
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), how the three processes fit together
-- [`docs/RUST-PIVOT.md`](docs/RUST-PIVOT.md), the plan and conversion list for moving the geometry engine, and later the whole app, to Rust (alpha, work in progress)
-- [`docs/PROTOCOL.md`](docs/PROTOCOL.md), the WebSocket the frontend and sidecar speak
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), how the processes fit together
+- [`docs/RUST-PIVOT.md`](docs/RUST-PIVOT.md), how the geometry engine moved from Python to Rust, and what proves it right
+- [`docs/PROTOCOL.md`](docs/PROTOCOL.md), the messages the frontend and the engine exchange
 - [`docs/FUNDA-FORMAT.md`](docs/FUNDA-FORMAT.md), the readable `.funda` JSON document and the self-repairing binary `.fundab`
-- [`docs/PACKAGING.md`](docs/PACKAGING.md), how the bundled Python runtime is built
+- [`docs/PACKAGING.md`](docs/PACKAGING.md), how a desktop bundle is built
 - [`docs/MCP.md`](docs/MCP.md), MCP, built into the app: how an AI assistant builds, measures and looks at parts, and how to connect one
 - [`docs/PLUGINS.md`](docs/PLUGINS.md), optional parts of the app, what they may reach, and how that is asked
 - [`docs/EDGE-CASES.md`](docs/EDGE-CASES.md) / [`docs/IMPROVEMENT-AUDIT.md`](docs/IMPROVEMENT-AUDIT.md), known rough edges
