@@ -7,7 +7,7 @@
 // Build once, from the repository root:
 //   cargo build --release -p fundacad-mcp -p fundacad-cli
 // fundacad-cli is the `fundacad-engine` its private mode starts, and needs
-// OpenCASCADE (FUNDACAD_OCCT_ROOT, docs/RUST-PIVOT.md). Attaching to a running
+// OpenCASCADE (FUNDACAD_OCCT_ROOT, docs/ENGINE.md). Attaching to a running
 // app needs only fundacad-mcp.
 
 import { spawn } from "node:child_process";

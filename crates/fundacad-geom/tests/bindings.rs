@@ -1,5 +1,5 @@
 //! Kernel tests for the OpenCASCADE classes added to the vendored bindings for
-//! the Rust engine port (docs/RUST-PIVOT.md section 4.1). Each asserts on what
+//! the Rust engine port (docs/ENGINE.md section 2.2). Each asserts on what
 //! the kernel computed, never only that a call returned.
 
 use glam::{dvec3, DVec3};

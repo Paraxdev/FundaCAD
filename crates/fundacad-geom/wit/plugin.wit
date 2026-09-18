@@ -1,5 +1,5 @@
 // The geometry half of a FundaCAD plugin bundle, as a WebAssembly component
-// (docs/RUST-PIVOT.md 2.3, docs/PLUGINS.md "Owning a feature type").
+// (docs/ENGINE.md 2.3, docs/PLUGINS.md "Owning a feature type").
 //
 // Shapes never cross as BREP bytes: the host keeps every solid, face, wire and
 // edge, and a plugin holds `shape` handles. A handle lives as long as the call

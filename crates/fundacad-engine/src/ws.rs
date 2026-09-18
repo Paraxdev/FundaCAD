@@ -1,5 +1,5 @@
 //! The WebSocket transport, for a browser, the e2e scripts and the Python
-//! protocol suites (docs/RUST-PIVOT.md, section 2.1).
+//! protocol suites (docs/ENGINE.md, section 2.1).
 //!
 //! Replaces the serving half of the Python engine's `server.py` (`main`, `handle`,
 //! `_authorized`, `_mint_token`, `_ip_conns`): the same loopback address, port

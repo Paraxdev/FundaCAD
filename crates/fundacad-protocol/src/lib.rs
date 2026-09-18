@@ -4,7 +4,7 @@
 //! replies with their size limits and cancel checks, and the status frames.
 //! Output is byte-identical to the Python encoder for the same input, which
 //! the golden tests hold it to. Adds the stdio framing the engine worker
-//! speaks to the app (docs/RUST-PIVOT.md, section 2.1).
+//! speaks to the app (docs/ENGINE.md, section 2.1).
 
 pub mod body;
 pub mod envelope;
