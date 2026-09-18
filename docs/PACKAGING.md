@@ -41,7 +41,7 @@ record, this is how to build one.
 npx tauri build --config src-tauri/tauri.prealpha.conf.json --features rust-engine
 ```
 
-Three things make it different from the beta bundle:
+Four things make it different from the beta bundle:
 
 - **`--features rust-engine`.** `src-tauri` gains `fundacad-engine` and
   `fundacad-geom`, `main.rs` dispatches `--engine` into the worker loop, and
@@ -53,6 +53,15 @@ Three things make it different from the beta bundle:
   `scripts/build-sidecar-runtime.{sh,ps1}` never has to run. It also points the
   updater at the pre-alpha feed and drops the loopback grant from the CSP,
   which that build cannot use.
+- **`fundacad-mcp` ships beside the app.** The config's `externalBin`
+  (`binaries/fundacad-mcp`) is filled by its `beforeBuildCommand`, which runs
+  `scripts/stage-mcp-server.mjs`: `cargo build --release -p fundacad-mcp` in
+  the root workspace, copied to `src-tauri/binaries/fundacad-mcp-<triple>`.
+  Tauri installs it next to `fundacad.exe` (in `Contents/MacOS` and
+  `usr/bin` elsewhere), so the portable zip, unpacked from the `.msi`, has it
+  too. Its private engine is the app itself, `fundacad --engine --ws`, and
+  its live mode attaches to the window through `session.json`, so it needs no
+  second kernel and no checkout (docs/MCP.md).
 - **OpenCASCADE 7.8.1 is compiled from source**, statically, by the `occt-sys`
   crate the vendored bindings pull in. It needs cmake and a C++ toolchain, it
   takes about twenty minutes cold, and it lands in `<target>/OCCT`, which is
