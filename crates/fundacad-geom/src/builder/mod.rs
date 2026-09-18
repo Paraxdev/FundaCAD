@@ -339,6 +339,10 @@ pub trait Watch {
     fn cancel_token(&self) -> Option<fundacad_protocol::CancelToken> {
         None
     }
+    /// Proof of life a feature can give from inside one long kernel call.
+    fn heartbeat(&self) -> Option<crate::heartbeat::Beat> {
+        None
+    }
 }
 
 pub struct NoWatch;

@@ -18,6 +18,7 @@ pub mod cache;
 pub mod export;
 pub mod faces;
 pub mod features;
+pub mod heartbeat;
 pub mod import;
 pub mod inspect;
 pub mod jobs;
