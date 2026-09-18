@@ -96,6 +96,14 @@ pub trait Jobs: Send + 'static {
     fn run(&mut self, op: &str, _req: &Map<String, Value>, _ctx: &JobContext) -> JobResult {
         error_result(&format!("unknown op: {op}"))
     }
+
+    /// What the running job is inside, for the reply to a job reaped as stalled.
+    fn doing() -> Option<String>
+    where
+        Self: Sized,
+    {
+        None
+    }
 }
 
 pub fn error_result(message: &str) -> JobResult {
@@ -402,6 +410,7 @@ fn run_one<J: Jobs>(
             claimed: claimed.clone(),
             cancel: cancel.clone(),
             out: out.clone(),
+            doing: J::doing,
             watchdog: supervise::Watchdog::new(
                 pool.opts.clocks.budget(&op, &req),
                 pool.opts.cancel_grace,
@@ -475,6 +484,7 @@ struct WatchedJob {
     claimed: Arc<AtomicBool>,
     cancel: CancelToken,
     out: Arc<dyn Outbox>,
+    doing: fn() -> Option<String>,
     watchdog: supervise::Watchdog,
 }
 
@@ -499,11 +509,19 @@ fn spawn_watchdog(
                 if job.claimed.swap(true, Ordering::SeqCst) {
                     return;
                 }
+                let doing = match breach {
+                    supervise::Breach::Stalled(_) => (job.doing)(),
+                    _ => None,
+                };
                 if !matches!(breach, supervise::Breach::IgnoredCancel) {
-                    eprintln!("[engine] {} {breach:?}, abandoning its job thread", job.id);
+                    eprintln!(
+                        "[engine] {} {breach:?} in {}, abandoning its job thread",
+                        job.id,
+                        doing.as_deref().unwrap_or("an unnamed phase")
+                    );
                 }
                 job.cancel.cancel();
-                let text = envelope::reply_for(&job.id, &breach.result());
+                let text = envelope::reply_for(&job.id, &breach.result_in(doing.as_deref()));
                 let _ = job.out.send(&mut std::iter::once(Message::Text(text)));
                 on_breach();
                 return;

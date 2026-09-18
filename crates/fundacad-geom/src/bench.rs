@@ -2,8 +2,11 @@
 //! sidecar/tools/bench_import.py.
 //!
 //! Recording is off unless `FUNDACAD_BENCH_PHASES` is set, so the shipped
-//! engine pays one relaxed atomic load per phase and nothing else.
+//! engine pays one relaxed atomic load per phase for it. A job thread also
+//! publishes the phases it is inside, so a job reaped for stalling can say
+//! where it was, see [`doing`].
 
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
@@ -40,6 +43,7 @@ fn since_start() -> f64 {
 /// `FUNDACAD_BENCH_TRACE` also prints every phase as it opens and closes, so a
 /// run that hangs names the phase it hangs in.
 pub fn phase<T>(name: &'static str, f: impl FnOnce() -> T) -> T {
+    let _at = Inside::enter(name);
     if !on() {
         return f();
     }
@@ -66,6 +70,7 @@ pub fn phase<T>(name: &'static str, f: impl FnOnce() -> T) -> T {
 /// is interned while recording is off.
 pub fn phase_named<T>(name: &str, f: impl FnOnce() -> T) -> T {
     if !on() {
+        let _at = Inside::enter(name);
         return f();
     }
     static NAMES: OnceLock<Mutex<std::collections::HashSet<&'static str>>> = OnceLock::new();
@@ -114,5 +119,88 @@ pub fn report() -> serde_json::Value {
 pub fn reset() {
     if let Ok(mut t) = table().lock() {
         t.clear();
+    }
+}
+
+thread_local! {
+    static STACK: RefCell<Option<Vec<String>>> = const { RefCell::new(None) };
+}
+
+fn published() -> &'static Mutex<String> {
+    static W: OnceLock<Mutex<String>> = OnceLock::new();
+    W.get_or_init(|| Mutex::new(String::new()))
+}
+
+fn publish(stack: &[String]) {
+    if let Ok(mut w) = published().lock() {
+        *w = stack.join(" > ");
+    }
+}
+
+/// While alive, the phases this thread enters are what [`doing`] reports.
+pub struct Tracked(());
+
+impl Drop for Tracked {
+    fn drop(&mut self) {
+        STACK.with(|s| *s.borrow_mut() = None);
+        publish(&[]);
+    }
+}
+
+pub fn track_this_thread() -> Tracked {
+    STACK.with(|s| *s.borrow_mut() = Some(Vec::new()));
+    publish(&[]);
+    Tracked(())
+}
+
+/// The phases the tracked thread is inside, outermost first.
+pub fn doing() -> Option<String> {
+    published().lock().ok().map(|w| w.clone()).filter(|w| !w.is_empty())
+}
+
+struct Inside(bool);
+
+impl Inside {
+    fn enter(name: &str) -> Inside {
+        Inside(STACK.with(|s| match s.borrow_mut().as_mut() {
+            Some(stack) => {
+                stack.push(name.to_owned());
+                publish(stack);
+                true
+            }
+            None => false,
+        }))
+    }
+}
+
+impl Drop for Inside {
+    fn drop(&mut self) {
+        if !self.0 {
+            return;
+        }
+        STACK.with(|s| {
+            if let Some(stack) = s.borrow_mut().as_mut() {
+                stack.pop();
+                publish(stack);
+            }
+        });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_tracked_thread_names_the_phases_it_is_inside() {
+        phase("untracked", || assert_eq!(doing(), None));
+        let _t = track_this_thread();
+        phase_named("chamfer", || {
+            phase("blend_section", || {
+                assert_eq!(doing().as_deref(), Some("chamfer > blend_section"));
+            });
+            assert_eq!(doing().as_deref(), Some("chamfer"));
+        });
+        assert_eq!(doing(), None);
     }
 }
