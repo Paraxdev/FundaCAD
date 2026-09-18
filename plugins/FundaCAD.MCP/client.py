@@ -70,6 +70,9 @@ class McpClient:
             *argv, cwd=os.getcwd(), env=env,
             stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
             stderr=None,  # inherit: the server's diagnostics belong on OUR stderr
+            # A view reply carries its PNG base64 on one line, past asyncio's
+            # 64 KiB readline default for any large render.
+            limit=256 * 1024 * 1024,
         )
         await self.request("initialize", {
             "protocolVersion": PROTOCOL,
