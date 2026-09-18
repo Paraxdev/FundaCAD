@@ -90,8 +90,8 @@ runs:
           $mcpLines = @(
             "",
             "fundacad-mcp.exe is the MCP server, for an AI assistant to build and",
-            "inspect models. Point the assistant's MCP settings at it, or install",
-            "the MCP server plugin and use How to connect it in the app.",
+            "inspect models. In the app, Preferences, AI assistants (MCP) gives the",
+            "setup for Claude Code, Claude Desktop or any other MCP host.",
             "It works on the document open in FundaCAD, or on its own copy when",
             "FundaCAD is closed."
           )

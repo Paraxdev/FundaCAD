@@ -357,7 +357,8 @@ jobs:
       # which one got published.
       #
       # Every directory under plugins/ with a manifest.json, so a new plugin
-      # needs a directory and not an edit here.
+      # needs a directory and not an edit here. MCP is not one: it is part of
+      # the app and ships as the fundacad-mcp binary beside it.
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -933,9 +934,11 @@ jobs:
           >   plugin in this repository ships one (3D Printing Toolbox, Screws,
           >   Printing, Texture); a third party plugin without one says so by
           >   name when its feature is used.
-          > - The MCP server for AI assistants ships beside the app as
-          >   `fundacad-mcp`; the Plugins page's How to connect it gives the
-          >   command.
+          > - MCP is part of the app: the server for AI assistants ships
+          >   beside it as `fundacad-mcp`, and Preferences, AI assistants
+          >   (MCP) gives the setup for Claude Code, Claude Desktop or any
+          >   MCP host. An installed MCP server plugin is removed on first
+          >   start.
           > - Files open in both: documents saved here are ordinary `.funda`
           >   files and open in the beta, and the other way round.
           > - The [beta](https://github.com/Paraxdev/fundacad/releases/tag/beta)
