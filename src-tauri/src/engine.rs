@@ -13,7 +13,7 @@
 use fundacad_protocol::stdio::{read_message, write_message, Message};
 use fundacad_protocol::{envelope, message_id};
 use serde_json::Value;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::Path;
 use std::process::{Child, ChildStdin, Command, Stdio};
@@ -52,6 +52,71 @@ struct Inner {
     cancel_killed: AtomicU64,
     /// Where `session.json` goes, None without an app data directory.
     session_dir: Option<std::path::PathBuf>,
+    /// What the crash report quotes: the worker's last stderr lines and the
+    /// requests it was sent last.
+    stderr_tail: Arc<Mutex<VecDeque<String>>>,
+    recent: Mutex<VecDeque<String>>,
+}
+
+const STDERR_KEEP: usize = 40;
+const RECENT_KEEP: usize = 12;
+
+fn remember(q: &Mutex<VecDeque<String>>, line: String, keep: usize) {
+    let mut q = lock(q);
+    if q.len() >= keep {
+        q.pop_front();
+    }
+    q.push_back(line);
+}
+
+/// The Windows name for the exit codes a native crash ends with.
+fn exit_meaning(code: Option<i32>) -> Option<&'static str> {
+    Some(match code? as u32 {
+        0xC000_0005 => "access violation, native code read or wrote memory it does not own",
+        0xC000_00FD => "stack overflow",
+        0xC000_0409 => "stack buffer overrun or a fast fail abort",
+        0xC000_001D => "illegal instruction",
+        0xC000_0094 => "integer divide by zero",
+        0xC000_0374 => "heap corruption",
+        0xC000_0135 => "a DLL the engine needs was not found",
+        0x8000_0003 => "breakpoint hit",
+        _ => return None,
+    })
+}
+
+/// The crash, pasteable into an issue: how it ended, what it was doing, and
+/// the last it said.
+fn crash_report(inner: &Inner, how: &str, code: Option<i32>, unanswered: &[String]) -> String {
+    let mut out = vec![
+        "### Geometry engine crashed".to_owned(),
+        String::new(),
+        format!("**Exit:** {how}"),
+    ];
+    if let Some(m) = exit_meaning(code) {
+        out.push(format!("**Meaning:** {m}"));
+    }
+    out.push(format!(
+        "**Build:** FundaCAD {}, {} {}, {} profile",
+        env!("CARGO_PKG_VERSION"),
+        std::env::consts::OS,
+        if cfg!(target_env = "msvc") { "MSVC" } else if cfg!(target_env = "gnu") { "GNU" } else { "" },
+        if cfg!(debug_assertions) { "debug" } else { "release" },
+    ));
+    if !unanswered.is_empty() {
+        out.push(format!("**Unanswered requests:** {}", unanswered.join(", ")));
+    }
+    let recent = lock(&inner.recent);
+    if !recent.is_empty() {
+        out.extend(["".into(), "#### Last requests, oldest first".into(), "".into()]);
+        out.extend(recent.iter().map(|r| format!("- {r}")));
+    }
+    let tail = lock(&inner.stderr_tail);
+    if !tail.is_empty() {
+        out.extend(["".into(), "#### Last engine output".into(), "".into(), "```".into()]);
+        out.extend(tail.iter().cloned());
+        out.push("```".into());
+    }
+    out.join("\n")
 }
 
 struct Worker {
@@ -109,6 +174,8 @@ impl Engine {
             stopping: AtomicBool::new(false),
             cancel_killed: AtomicU64::new(0),
             session_dir: app.path().app_data_dir().ok(),
+            stderr_tail: Arc::new(Mutex::new(VecDeque::new())),
+            recent: Mutex::new(VecDeque::new()),
         });
         let supervisor = inner.clone();
         std::thread::Builder::new()
@@ -147,6 +214,7 @@ fn supervise(inner: Arc<Inner>) {
                 set_up(&inner, true);
                 let generation = inner.generation.load(Ordering::SeqCst);
                 let cause = relay(&inner, stdout);
+                let unanswered: Vec<String> = lock(&inner.in_flight).iter().cloned().collect();
                 let status = lock(&inner.worker)
                     .as_mut()
                     .filter(|w| w.generation == generation)
@@ -165,14 +233,16 @@ fn supervise(inner: Arc<Inner>) {
                 // A worker that ended itself over a stalled job has already
                 // told the client why, a crash toast on top would be wrong.
                 let planned = status.and_then(|s| s.code()) == Some(fundacad_engine::EXIT_BREACH);
+                let code = status.and_then(|s| s.code());
                 let how = status.map(|s| s.to_string()).unwrap_or(cause);
                 eprintln!("[engine] worker ended: {how}");
                 if planned || inner.cancel_killed.load(Ordering::SeqCst) == generation {
                     delay = Duration::ZERO;
                 } else {
+                    let detail = crash_report(&inner, &how, code, &unanswered);
                     let _ = inner.app.emit(
                         DIED_EVENT,
-                        serde_json::json!({ "kind": "restarted", "cause": how }),
+                        serde_json::json!({ "kind": "restarted", "cause": how, "detail": detail }),
                     );
                 }
                 if started.elapsed() > HEALTHY_AFTER {
@@ -245,6 +315,8 @@ fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
     let stdout = child.stdout.take().ok_or_else(|| std::io::Error::other("no worker stdout"))?;
     if let Some(stderr) = child.stderr.take() {
         let session_dir = inner.session_dir.clone();
+        let tail = inner.stderr_tail.clone();
+        lock(&tail).clear();
         std::thread::spawn(move || {
             for line in BufReader::new(stderr).lines().map_while(Result::ok) {
                 // Written once the port answers, so the file never names a port
@@ -263,6 +335,7 @@ fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
                 // thread stops draining the worker's, and the worker blocks on
                 // its next log line in the middle of a job.
                 let _ = writeln!(std::io::stderr(), "[engine] {line}");
+                remember(&tail, line, STDERR_KEEP);
             }
         });
     }
@@ -410,6 +483,17 @@ pub fn engine_send(state: tauri::State<'_, Engine>, request: Request<'_>) -> Res
     };
     let text = String::from_utf8(bytes.clone()).map_err(|e| e.to_string())?;
     let Head { id, op, target, soft } = head(&text);
+    remember(
+        &state.0.recent,
+        format!(
+            "{} `{}` id {}, {} bytes",
+            clock_now(),
+            op.as_deref().unwrap_or("?"),
+            id.as_deref().unwrap_or("-"),
+            text.len()
+        ),
+        RECENT_KEEP,
+    );
     // Recorded before sending: a fast reply can be relayed before
     // send_to_worker returns, and would find nothing to settle.
     let Some(id) = id else {
@@ -432,6 +516,14 @@ pub fn engine_send(state: tauri::State<'_, Engine>, request: Request<'_>) -> Res
         lock(&state.0.in_flight).remove(&id);
         lock(&state.0.cancels).remove(&id);
     })
+}
+
+/// Seconds since the Unix epoch with milliseconds, no date crate needed.
+fn clock_now() -> String {
+    let t = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default();
+    format!("t={}.{:03}", t.as_secs(), t.subsec_millis())
 }
 
 #[derive(Debug, PartialEq, Eq, Default)]
