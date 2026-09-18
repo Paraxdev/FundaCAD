@@ -128,7 +128,7 @@ describe("expandPattern / patternCircular", () => {
     expect(out.map((e) => e.id)).toEqual(["p4#0", "p4#1"]);
   });
 
-  // KNOWN ISSUE (docs/IMPROVEMENT-AUDIT.md §5.2 / §1.2): the TS preview and the
+  // KNOWN ISSUE (the improvement audit on `legacy`, §5.2 / §1.2): the TS preview and the
   // Python build (the Python engine's `builder.py` _expand_pattern) round non-integer counts
   // differently, JS `Math.round` rounds .5 away from zero, Python's `round()`
   // rounds .5 to even (banker's rounding). A half-integer count like 2.5 is
