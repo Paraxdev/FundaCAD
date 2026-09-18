@@ -57,6 +57,12 @@ pub fn appenv(suffix: &str) -> Option<String> {
         .find_map(|p| std::env::var(format!("{p}{suffix}")).ok())
 }
 
+/// `FUNDACAD_ENGINE_<suffix>`, else the retired `FUNDACAD_SIDECAR_<suffix>`
+/// from when the engine was the Python sidecar.
+pub fn engine_env(suffix: &str) -> Option<String> {
+    appenv(&format!("ENGINE_{suffix}")).or_else(|| appenv(&format!("SIDECAR_{suffix}")))
+}
+
 /// What to do about a running app, from `FUNDACAD_MCP_MODE`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
@@ -360,9 +366,9 @@ impl EngineLink {
     /// A link configured by environment variables alone: the explicit
     /// override, which knows nothing about a running app.
     pub fn from_env() -> EngineLink {
-        match appenv("SIDECAR_TOKEN").filter(|t| !t.is_empty()) {
+        match engine_env("TOKEN").filter(|t| !t.is_empty()) {
             Some(token) => {
-                let port = appenv("SIDECAR_PORT")
+                let port = engine_env("PORT")
                     .and_then(|p| p.parse().ok())
                     .unwrap_or(8765);
                 EngineLink::attach(port, token)
@@ -384,7 +390,7 @@ impl EngineLink {
         mode: Mode,
         log: impl Fn(&str),
     ) -> Result<(EngineLink, Option<crate::app_session::AppSession>), String> {
-        if appenv("SIDECAR_TOKEN").is_some_and(|t| !t.is_empty()) {
+        if engine_env("TOKEN").is_some_and(|t| !t.is_empty()) {
             log("[mcp] attaching to the engine named in the environment");
             return Ok((EngineLink::from_env(), None));
         }
@@ -432,13 +438,18 @@ impl EngineLink {
         // cleared with them: a child handed two names that disagree would pick
         // whichever its own lookup order preferred, which is not a thing to
         // leave to chance when one of them is the auth token.
+        for prefix in std::iter::once(PREFIX).chain(LEGACY_PREFIXES.iter().copied()) {
+            for retired in ["SIDECAR_PORT", "SIDECAR_TOKEN"] {
+                cmd.env_remove(format!("{prefix}{retired}"));
+            }
+        }
         for legacy in LEGACY_PREFIXES {
-            cmd.env_remove(format!("{legacy}SIDECAR_PORT"));
-            cmd.env_remove(format!("{legacy}SIDECAR_TOKEN"));
+            cmd.env_remove(format!("{legacy}ENGINE_PORT"));
+            cmd.env_remove(format!("{legacy}ENGINE_TOKEN"));
             cmd.env_remove(format!("{legacy}BLOB_DIR"));
         }
-        cmd.env("FUNDACAD_SIDECAR_PORT", self.port.to_string());
-        cmd.env("FUNDACAD_SIDECAR_TOKEN", &self.token);
+        cmd.env("FUNDACAD_ENGINE_PORT", self.port.to_string());
+        cmd.env("FUNDACAD_ENGINE_TOKEN", &self.token);
         // The durable blob store, which the app's shell normally sets. Without
         // it the store falls back to a default this process chose, and an
         // `import` feature's `geom` is a content hash INTO that store: the

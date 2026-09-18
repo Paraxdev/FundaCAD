@@ -1,7 +1,7 @@
 // End-to-end check that a plane a tool asks for draws over the model and takes
 // the click through it, and that Reset camera and New put the view back home.
 //
-// Usage (from the repo root, with vite on 5173 + sidecar on 8765):
+// Usage (from the repo root, with vite on 5173 + engine on 8765 (`fundacad-engine --ws`)):
 //   SC_TOKEN=<token> SC_CHROME=<browser> node e2e/plane_pick_camera_e2e.cjs
 const { chromium } = require("playwright-core");
 const path = require("path");

@@ -17,9 +17,9 @@
 // the question it answers ("does the collapsed tree pay for itself?") was
 // answered once. Re-run it by hand when the Browser's rendering changes.
 //
-// Usage (from the repo root, with vite on 5173 + sidecar on 8765):
+// Usage (from the repo root, with vite on 5173 + engine on 8765 (`fundacad-engine --ws`)):
 //   sidecar/.venv/bin/python e2e/gen_perf_docs.py
-//   SC_TOKEN=<sidecar token> node e2e/browser_tree_perf.cjs
+//   SC_TOKEN=<engine token> node e2e/browser_tree_perf.cjs
 const { chromium } = require("playwright-core");
 const fs = require("fs");
 

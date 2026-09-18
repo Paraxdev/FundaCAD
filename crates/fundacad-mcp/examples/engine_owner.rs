@@ -32,8 +32,8 @@ async fn main() {
         let mut cmd = std::process::Command::new(&argv[0]);
         cmd.args(&argv[1..])
             .arg("--ws")
-            .env("FUNDACAD_SIDECAR_PORT", "0")
-            .env("FUNDACAD_SIDECAR_TOKEN", "lifetime-control")
+            .env("FUNDACAD_ENGINE_PORT", "0")
+            .env("FUNDACAD_ENGINE_TOKEN", "lifetime-control")
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null());
         cmd.spawn().expect("the engine binary is built").id()

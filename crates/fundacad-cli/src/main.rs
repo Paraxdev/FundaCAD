@@ -19,7 +19,7 @@ use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
 
 const USAGE: &str = "usage:
-  fundacad-engine --ws                    serve over WebSocket on 127.0.0.1 (FUNDACAD_SIDECAR_PORT, default 8765)
+  fundacad-engine --ws                    serve over WebSocket on 127.0.0.1 (FUNDACAD_ENGINE_PORT, default 8765)
   fundacad-engine --stdio                 serve the worker protocol on stdin and stdout
   fundacad-engine rebuild <doc.json> [--json] [--tolerance <t>]
                                           rebuild one document; --json prints the whole reply
