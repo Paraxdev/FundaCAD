@@ -195,7 +195,7 @@ use for them).
   `unregistered()` (absent, installed but broken, unknown) are kept.
 - **Proof:** every in-repo plugin's geometry is ported, each crate in its
   plugin's `geometry-rs`, and each checked on both engines:
-  - PrintToolbox, eight feature types: `sidecar/tools/corpus_plugins.json`, 40
+  - PrintToolbox, eight feature types: `tests/golden/corpus/corpus_plugins.json`, 40
     documents through `diff_engines.py`, volumes and refusals alike.
   - Screws, the `fastener` generator with its modelled threads on the kernel's
     helical sweep: `corpus_screws_ops.json`, 127 `generateShape` cases (every

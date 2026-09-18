@@ -20,7 +20,7 @@ four corners are co-circular differently. The surface check is what decides, a
 diagonal that mattered would move a centroid off the other engine's surface.
 
 Usage (from sidecar/ with the sidecar venv):
-  python tools/diff_meshes.py --corpus tools/corpus_texture.json --rust "path/to/fundacad-engine --ws"
+  python tools/diff_meshes.py --corpus ../tests/golden/corpus/corpus_texture.json --rust "path/to/fundacad-engine --ws"
 """
 
 import argparse
@@ -113,6 +113,12 @@ def run_engine(cmd, docs, outdir, tag):
     for name, got in spawned(cmd, export_docs, docs, outdir, tag).items():
         out[name].update(got)
     return out
+
+
+def absolute_image_paths(docs):
+    from diff_engines import absolute_image_paths as absolute
+
+    absolute(docs)
 
 
 def bodies(reply):
@@ -311,6 +317,7 @@ def main():
         docs = json.load(fh)["documents"]
     only = set(n for n in (args.only or "").split(",") if n)
     docs = [d for d in docs if not only or d["name"] in only]
+    absolute_image_paths(docs)
     rust_cmd = args.rust or os.environ.get("FUNDACAD_ENGINE_CMD") or default_rust_cmd()
     print(f"rust engine: {rust_cmd}\n")
     work = tempfile.mkdtemp(prefix="diff-meshes-")

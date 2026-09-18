@@ -20,7 +20,7 @@ identity key == the frozen key. build_part / the key + fingerprint helpers / the
 are shared with the eval by import, so both sides speak one geometry vocabulary and only
 the SCORING (the tuned constants) varies between runs.
 
-Run once to (re)generate:  .venv/bin/python tools/gen_selector_corpus.py --out tools/corpus_selectors.json
+Run once to (re)generate:  .venv/bin/python tools/gen_selector_corpus.py --out ../tests/golden/corpus/corpus_selectors.json
 Deterministic given --seed; the checked-in corpus is the sha256-pinned fixture.
 """
 
@@ -342,7 +342,8 @@ CATEGORIES = [
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "corpus", "corpus_selectors.json"))
+    ap.add_argument("--out", default=os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "..", "..", "tests", "golden", "corpus", "corpus_selectors.json"))
     ap.add_argument("--seed", type=int, default=20260714)
     args = ap.parse_args()
 

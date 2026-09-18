@@ -2,11 +2,11 @@
 //! and bench_import.py. One stage per invocation, one JSON line out.
 //!
 //!   cargo run --release -p fundacad-geom --example bench_suite -- \
-//!       corpus sidecar/tools/corpus_engines.json --runs 3
+//!       corpus tests/golden/corpus/corpus_engines.json --runs 3
 //!   cargo run --release -p fundacad-geom --example bench_suite -- doc gt2_spool.funda
 //!   cargo run --release -p fundacad-geom --example bench_suite -- import big.step
 //!   cargo run --release -p fundacad-geom --example bench_suite -- export gt2_spool.funda 3mf
-//!   cargo run --release -p fundacad-geom --example bench_suite -- faces sidecar/tools/corpus_engines.json
+//!   cargo run --release -p fundacad-geom --example bench_suite -- faces tests/golden/corpus/corpus_engines.json
 //!
 //! Stages measure whole-op work the way the worker runs it: `corpus` and `doc`
 //! rebuild AND mesh, `import` splits the phases the way bench_import.py does.
