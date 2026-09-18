@@ -142,10 +142,15 @@ describe("commitDecision", () => {
       .toEqual({ action: "commit", value: 30 });
   });
 
-  it("waits for the kernel on a value it has not answered for yet", () => {
-    // Released mid round-trip: committing now would be a guess.
-    expect(commitDecision({ ...base, verdict: "unknown", shown: 30 })).toEqual({ action: "wait" });
-    expect(commitDecision({ ...base, value: 20, verdict: "builds", shown: 30 })).toEqual({ action: "wait" });
+  it("commits a value the kernel has not answered for yet, for the store to verify", () => {
+    // Released mid round-trip: the tool closes now, the rebuild decides later.
+    expect(commitDecision({ ...base, verdict: "unknown", shown: 30 }))
+      .toEqual({ action: "commit", value: 41, unverified: true });
+  });
+
+  it("commits a size below one that built without asking again", () => {
+    expect(commitDecision({ ...base, value: 20, verdict: "builds", shown: 30 }))
+      .toEqual({ action: "commit", value: 20 });
   });
 });
 
