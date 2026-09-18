@@ -157,7 +157,11 @@ fn offset_faces(part: &Shape, pairs: &[(Shape, f64)]) -> FResult<Shape> {
     }
     let faces: Vec<Shape> = pairs.iter().map(|(f, _)| f.clone()).collect();
     let dists: Vec<f64> = pairs.iter().map(|(_, d)| *d).collect();
-    offset_pass(part, &faces, &dists).map_err(|r| match r {
+    // solid_ops.py waits on its offset child for _OFFSET_TIMEOUT, beating meanwhile.
+    crate::heartbeat::while_running(std::time::Duration::from_secs(180), || {
+        offset_pass(part, &faces, &dists)
+    })
+    .map_err(|r| match r {
         Refusal::Invalid => Fail::msg(RAN_PAST),
         Refusal::Refused => Fail::msg(CANT_OFFSET),
     })
