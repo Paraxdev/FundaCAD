@@ -35,7 +35,7 @@ describe("TextToolPanel", () => {
     document.body.innerHTML = "";
   });
 
-  it("reaches the store through the facade, with the fonts the sidecar listed", () => {
+  it("reaches the store through the facade, with the fonts the engine listed", () => {
     open();
     const store = useToolPanelStore();
     expect(store.text).not.toBeNull();

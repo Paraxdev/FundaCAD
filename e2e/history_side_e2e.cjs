@@ -12,7 +12,7 @@
 // With no document it makes a 60 step one (a long history is the whole point);
 // any real part works too, the radio reprod is a good heavy one.
 // SC_APP_PORT and SC_ENGINE_PORT move it off 5173/8765, to run beside a dev
-// session (the sidecar then needs FUNDACAD_EXTRA_ORIGINS for that app port).
+// session (the engine then needs FUNDACAD_EXTRA_ORIGINS for that app port).
 const { chromium } = require("playwright-core");
 const fs = require("fs");
 

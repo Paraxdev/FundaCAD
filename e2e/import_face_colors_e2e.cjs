@@ -7,7 +7,7 @@
 // wearing a default nobody chose, so a reader that asks only the product tree
 // draws a red circuit board flat grey, and a see-through one at that.
 //
-// The unit tests cover the packing and the sidecar tests cover the walk from
+// The unit tests cover the packing and the engine tests cover the walk from
 // XCAF to the body dict. What only exists once there are pixels is the last
 // hop: that the face the file painted red is drawn red, and that a body whose
 // faces all agree is drawn from its material like any other body rather than

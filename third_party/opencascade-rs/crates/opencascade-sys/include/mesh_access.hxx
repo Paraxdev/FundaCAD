@@ -309,7 +309,7 @@ inline bool mesh_access_edge_deflection(const MeshAccess &m, int32_t edge, doubl
   }
 }
 
-// _meets_smoothly of sidecar/tessellate.py, whole: whether the two ancestor
+// _meets_smoothly of the Python engine's `tessellate.py`, whole: whether the two ancestor
 // faces share a tangent plane along the edge, sampled at the middle first so a
 // crease costs one sample. The adaptors are built once for all three samples,
 // which is where this earns its place over the per-sample normal call below.

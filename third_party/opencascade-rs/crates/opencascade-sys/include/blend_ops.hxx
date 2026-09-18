@@ -1,4 +1,4 @@
-// Fillets and chamfers as sidecar/blends.py drives them, one call each from Rust.
+// Fillets and chamfers as the Python engine's `blends.py` drives them, one call each from Rust.
 #pragma once
 #include "rust/cxx.h"
 #include <bindings_common.hxx>

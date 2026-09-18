@@ -1,7 +1,7 @@
 //! Reply envelopes and the interim status frames.
 //!
 //! Replaces `_ok`, `_err`, `_reply_for` and `_cancelled_result` in
-//! `sidecar/wire.py`, and the progress frames `sidecar/server.py` builds inline
+//! the Python engine's `wire.py`, and the progress frames the Python engine's `server.py` builds inline
 //! (`_building_frame`, the `importing` callback, the cancel acknowledgement and
 //! the bad JSON reply). Every function returns the JSON text of one message.
 

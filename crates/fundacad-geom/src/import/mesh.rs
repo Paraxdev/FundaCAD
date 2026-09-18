@@ -1,5 +1,5 @@
 //! Mesh file import, replaces the STL, 3MF, OBJ and GLB half of
-//! `sidecar/mesh_import.py` (`_peek_triangle_count`, `_stl_distinct_normals`,
+//! the Python engine's `mesh_import.py` (`_peek_triangle_count`, `_stl_distinct_normals`,
 //! `_sew_mesh_file`, `_read_obj_triangles`, `_glb_dominant_color`,
 //! `_read_glb`) with `shape_util._maybe_unify`, `_refacet_clean` and
 //! `_explode_solids`. The file parsers stand in for lib3mf, which build123d's

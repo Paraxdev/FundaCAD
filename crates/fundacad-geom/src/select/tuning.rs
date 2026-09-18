@@ -1,4 +1,4 @@
-//! The scoring constants of `by:"match"` and `by:"nearest"`, sidecar/geom_select.py
+//! The scoring constants of `by:"match"` and `by:"nearest"`, the Python engine's `geom_select.py`
 //! `_DEFAULTS` overridden by selector_tuning.json.
 //!
 //! The shipped JSON is compiled in and is what the app runs with: its TIE_BAND

@@ -1,5 +1,5 @@
 //! The `export` op, replaces `_export_job`, `_mesh_options`, `_budget_refusal`
-//! and `_budget_warning` of `sidecar/server.py`, with the writers of
+//! and `_budget_warning` of the Python engine's `server.py`, with the writers of
 //! `mesh_writers.py`, `mesh_refine.py`, `exporters.py` and `export_tree.py`.
 //!
 //! Not here yet: the export mesh cache tiers and plugin mesh passes, so the

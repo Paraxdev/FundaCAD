@@ -32,7 +32,7 @@ export interface RoundFace {
 /** Below this fraction of its original radius, the face is treated as gone
  *  rather than resized.
  *
- *  Not a taste threshold, it is the kernel's. The sidecar caps an inward offset
+ *  Not a taste threshold, it is the kernel's. The engine caps an inward offset
  *  at 90% of the radius (`_clamp_cylinder` in builder.py), because collapsing a
  *  cylinder onto its own axis takes OCCT down rather than failing. So 10% of the
  *  starting radius is the smallest thing that can actually be built, and asking

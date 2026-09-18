@@ -9,7 +9,7 @@
 // into. A body in no element is an ORPHAN and shows where it always did.
 //
 // WHAT AN ELEMENT IS NOT. It is not geometry and it is not a feature. Nothing
-// here reaches the sidecar, nothing here changes a rebuild, and a document whose
+// here reaches the engine, nothing here changes a rebuild, and a document whose
 // elements are all deleted builds byte-identically to one that never had any.
 // That is deliberate: organising an import must never be able to change it.
 //

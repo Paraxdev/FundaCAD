@@ -1,4 +1,4 @@
-//! The import feature, the oracles of sidecar/tests/test_assembly.py and
+//! The import feature, the oracles of the Python engine's `test_assembly.py` and
 //! test_blob_rebuild.py: a STEP imported through the `import` op, rebuilt from
 //! its blob.
 

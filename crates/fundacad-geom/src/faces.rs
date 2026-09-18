@@ -1,5 +1,5 @@
 //! Which faces of a body are pieces of ONE surface that B-rep cannot store as
-//! one, sidecar/face_bands.py.
+//! one, the Python engine's `face_bands.py`.
 //!
 //! Two faces join only when they touch (a shared edge, or a gap no wider than
 //! the clearance the kernel inserts between screw turns) and sit on the same

@@ -273,7 +273,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   e.store.onProjectionsApplied = (updates) => e.sketch.syncProjectedCurves(updates);
   e.store.onParamSolveIssue = (id) =>
     toast(`Sketch ${id}: dimensions can't be satisfied, geometry left unchanged`);
-  // Sidecar owns fonts: glyph outlines arrive async via tessellateText; repaint the
+  // Engine owns fonts: glyph outlines arrive async via tessellateText; repaint the
   // right surface (active sketch or committed overlay) when they land.
   setTextBackend(e.geometry, () => {
     if (e.sketch.active) e.sketch.redraw();

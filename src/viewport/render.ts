@@ -18,7 +18,7 @@ export type { EdgeRef };
  *  B-rep faceId sub-range (global, per the wire protocol), `faceIds` below are
  *  NOT remapped, so a faceId is always globally meaningful even though the
  *  triangle/vertex indices that carry it are local to this body's own buffers.
- *  `etag` is the sidecar's content fingerprint as of this build (undefined if
+ *  `etag` is the engine's content fingerprint as of this build (undefined if
  *  the reply didn't carry one), Viewport.setModel() diffs on it to decide
  *  whether a body needs rebuilding at all. */
 export interface BodyMesh {
@@ -47,7 +47,7 @@ export interface ModelView {
   // already expect. These are REFERENCES now, not THREE objects: the drawable
   // lives on the owning body's BodyEdges (ref.draw).
   edges: EdgeRef[];
-  // Edges whose `body` doesn't name a live body id. The current sidecar/Rust
+  // Edges whose `body` doesn't name a live body id. The current
   // backend always tags every edge with its owning body, so in practice this is
   // always empty, kept as a defensive fallback (rebuilt fresh every setModel()
   // call, always visible, never moved with a body) so a body-less edge can't
@@ -250,7 +250,7 @@ export function buildBodyMesh(
   const nLocal = firstUse.length;
   const localPositions = new Float32Array(nLocal * 3);
   const localNormals = new Float32Array(meshNormals ? nLocal * 3 : 0);
-  let anyNormal = false; // an all-zero slice = "sidecar sent none for this body"
+  let anyNormal = false; // an all-zero slice = "engine sent none for this body"
   for (let li = 0; li < nLocal; li++) {
     const base = firstUse[li]! * 3;
     localPositions[li * 3] = positions[base] ?? 0;
@@ -279,7 +279,7 @@ export function buildBodyMesh(
   }
 
   // A textured face arrives fully de-indexed, 3 unique vertices per triangle
-  // (measured 2.99 verts/tri), which is how the sidecar delivers per-triangle
+  // (measured 2.99 verts/tri), which is how the engine delivers per-triangle
   // normals for faceted shading. Weld the duplicates back together.
   //
   // The key MUST include the faceId: welding on position+normal alone would let two
@@ -288,7 +288,7 @@ export function buildBodyMesh(
   //
   // Triangle ORDER is untouched, so localFaceIds and faceTriangles stay valid. Only
   // runs for a DE-INDEXED body. Every body now ships normals (true surface normals,
-  // with the sidecar already welding seam duplicates), and an ordinary indexed body
+  // with the engine already welding seam duplicates), and an ordinary indexed body
   // arrives at ~1 vertex per triangle or fewer: running this string-keyed pass over
   // it would find nothing to merge and cost a Map insert per index on every
   // live-preview tick.
@@ -328,7 +328,7 @@ export function buildBodyMesh(
   geo.setIndex(new THREE.BufferAttribute(
     vertsOut > 65535 ? localIndices : Uint16Array.from(localIndices), 1,
   ));
-  // The sidecar ships true surface normals at shipping quality (a displaced face
+  // The engine ships true surface normals at shipping quality (a displaced face
   // its plugin's), so shading does not depend on how fine the mesh is. A body
   // without them, a large document's coarsened tier, keeps the client-side
   // accumulation.

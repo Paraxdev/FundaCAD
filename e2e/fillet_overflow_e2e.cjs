@@ -5,7 +5,7 @@
 //   2. The G2 switch on the heads-up box stores continuity G2 and still builds.
 //   3. A rim fillet far wider than the rim's top face carves through and commits.
 //
-// Usage (from the repo root, with vite + sidecar running):
+// Usage (from the repo root, with vite + engine running):
 //   SC_TOKEN=<engine token> SC_CHROME=<chrome.exe> [SC_URL=http://localhost:5173/] node e2e/fillet_overflow_e2e.cjs [outDir]
 const { chromium } = require("playwright-core");
 const fs = require("fs");

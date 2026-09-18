@@ -1,6 +1,6 @@
 // GH #4, "Release build cannot open files larger than 245 MB".
 //
-// The sidecar's websockets server answers any frame past `max_size` with a 1009
+// The engine's websockets server answers any frame past `max_size` with a 1009
 // close instead of an error reply. That took the whole session down rather than
 // one operation: the oversized body stays in the document, so every following
 // rebuild re-sent it and re-killed the socket, and the only thing the user was
@@ -37,8 +37,8 @@ describe("oversized-payload guard", () => {
     expect(msg.toLowerCase()).toContain("remove or simplify");
   });
 
-  it("mirrors the sidecar's max_size", () => {
-    // sidecar/server.py: websockets.serve(..., max_size=128 * 1024 * 1024).
+  it("mirrors the engine's MAX_FRAME", () => {
+    // crates/fundacad-protocol: MAX_FRAME, the WebSocket's max_message_size.
     // If that changes and this does not, oversized frames go back to killing
     // the socket with no explanation.
     expect(MAX_MESSAGE_BYTES).toBe(128 * 1024 * 1024);

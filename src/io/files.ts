@@ -1,7 +1,7 @@
 // File I/O: save/open the document JSON and export STEP/STL/3MF. Uses Tauri
 // native dialogs + fs when running in the app; falls back to browser
 // download/upload in a plain dev browser. Export always writes server-side: we
-// get a path from the native save dialog and hand it to the sidecar, which
+// get a path from the native save dialog and hand it to the engine, which
 // writes the file directly (no fs round-trip through the webview).
 
 import type { DocumentStore } from "../document/store";
@@ -41,9 +41,8 @@ function referencedHashes(store: DocumentStore): string[] {
  *  format; Rust decides from the extension. Returns an error message, or null on
  *  success.
  *
- *  Goes through Rust, NOT the sidecar: `sidecar.rs` does not auto-respawn, so a
- *  save that needed the geometry engine would be impossible for the whole rest
- *  of the session once it died, with unsaved work on screen. Saving needs no
+ *  Goes through the app, NOT the engine: a save that needed the geometry engine
+ *  would be impossible while its worker is down, with unsaved work on screen. Saving needs no
  *  geometry anyway; the blobs are already bytes on disk. */
 async function writeContainer(store: DocumentStore, path: string): Promise<string | null> {
   const { invoke } = await import("@tauri-apps/api/core");
@@ -99,7 +98,7 @@ export async function saveDocumentAs(store: DocumentStore) {
     }
   } else {
     // Plain dev browser: no Tauri, so no container. Geometry lives in the
-    // sidecar's blob store either way, so this download is the document only,
+    // engine's blob store either way, so this download is the document only,
     // useful for inspecting a feature tree, NOT a portable file.
     downloadText(`${store.fileName}.${DOC_EXT}`, store.toJSON());
   }
@@ -217,7 +216,7 @@ async function migrateInlineGeometry(text: string, geometry: GeometryBackend): P
  *
  *  Once per open, at the document level, rather than per feature. The build
  *  already turns each affected row red with the same explanation (see
- *  sidecar/plugin_geometry.py), and thirty red rows do not tell you what to
+ *  the Python engine's `plugin_geometry.py`), and thirty red rows do not tell you what to
  *  install any better than one sentence does.
  *
  *  Longer than the default timeout on purpose: this one has an instruction in
@@ -259,7 +258,7 @@ export async function openDocumentAtPath(
   // One-way v4 -> v5, done on the PARSED text before `load()` rather than by
   // patching the store afterwards: patching would record an undo entry, mark a
   // freshly-opened document dirty, and fire a second rebuild. If anything here
-  // fails, a dead sidecar, an unreadable legacy body, `text` is untouched and
+  // fails, a dead engine, an unreadable legacy body, `text` is untouched and
   // the document opens exactly as it did before, still carrying its inline copy.
   if (!wasContainer && geometry) text = await migrateInlineGeometry(text, geometry);
 
@@ -379,7 +378,7 @@ export function extToFormat(path: string): ExportFormat {
 // through GeometryBackend.exportWith.
 
 /** Import an external mesh / B-rep file (STL / 3MF / STEP / OBJ) as a new body.
- *  The sidecar reads the file by path and returns an embeddable BREP payload, so
+ *  The engine reads the file by path and returns an embeddable BREP payload, so
  *  this needs the native app (a real filesystem path), like export. */
 export async function importModel(store: DocumentStore, geometry: GeometryBackend) {
   if (!isTauri()) {
@@ -501,7 +500,7 @@ export async function importPath(store: DocumentStore, geometry: GeometryBackend
 
   // The file's own colours become materials, and the bodies it produced wear
   // them. This is the half of an import that used to be thrown away: a STEP
-  // assembly's product colours were read by the sidecar, carried in the
+  // assembly's product colours were read by the engine, carried in the
   // manifest, and then never looked at, so a file that arrived fully coloured
   // opened as three thousand identical grey bodies.
   await adoptImportedColors(store, id, res);

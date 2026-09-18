@@ -1,4 +1,4 @@
-//! Disk checkpoints of the build state, sidecar/rebuild_cache.py
+//! Disk checkpoints of the build state, the Python engine's `rebuild_cache.py`
 //! `_persist_tick`, `_save_checkpoint`, `_restore_from_disk` and
 //! `_body_fingerprint`.
 //!

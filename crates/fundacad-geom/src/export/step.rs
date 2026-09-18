@@ -1,5 +1,5 @@
 //! STEP through an XCAF document, replaces `exporters.export` for STEP and
-//! `sidecar/export_tree.py` (`build_export_tree`).
+//! the Python engine's `export_tree.py` (`build_export_tree`).
 
 use std::collections::HashMap;
 use std::path::Path;

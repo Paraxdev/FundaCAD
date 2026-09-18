@@ -7,7 +7,7 @@
 // have each compete with the other's new geometry there, which is a real
 // interaction between the two tools and not what this checks.
 //
-// Usage (from the repo root, with vite + sidecar running):
+// Usage (from the repo root, with vite + engine running):
 //   SC_TOKEN=<engine token> SC_CHROME=<chrome.exe> [SC_URL=http://localhost:5195/] [SC_ENGINE_PORT=8795] node e2e/print_toolbox_phase2_e2e.cjs [outDir]
 const { chromium } = require("playwright-core");
 const fs = require("fs");

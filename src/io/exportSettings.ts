@@ -68,7 +68,7 @@ export function refinementOf(f: Faceting): Refinement {
   return "custom";
 }
 
-/** Clamped to what the sidecar accepts, so the dialog never sends a value it would replace. */
+/** Clamped to what the engine accepts, so the dialog never sends a value it would replace. */
 export function clampFaceting(f: Faceting): Faceting {
   const n = (v: number, lo: number, hi: number, d: number) =>
     Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d;
@@ -79,7 +79,7 @@ export function clampFaceting(f: Faceting): Faceting {
   };
 }
 
-/** The sidecar's `mesh` export options. */
+/** The engine's `mesh` export options. */
 export function meshWire(s: ExportSettings) {
   return { unit: s.unit, binary: s.binary, ...clampFaceting(s.faceting) };
 }

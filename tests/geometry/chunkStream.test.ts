@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { Geometry, decodeBinaryFrame } from "../../src/geometry/client";
 
-// The client half of the chunked rebuild reply (sidecar/server.py's
+// The client half of the chunked rebuild reply (the Python engine's `server.py`'s
 // _stream_binary_reply). test_ws.py proves the encoder and that a stream
 // reassembles to the same reply the single-frame encoder produces; this proves
 // the reader, and especially the failure paths, a stream that cannot finish
@@ -246,7 +246,7 @@ describe("chunked reply reassembly", () => {
   });
 
   it("lets a terminal reply supersede a half-received stream", () => {
-    // Two real paths reach here: the sidecar aborting mid-send (a cancel, or a
+    // Two real paths reach here: the engine aborting mid-send (a cancel, or a
     // single body over the frame cap, both sent as terminal TEXT), and the
     // encoder failing mid-loop and falling back to a whole single frame. Either
     // way the caller must get exactly one answer, and the partial stream must

@@ -102,7 +102,7 @@ function typeNumFields(type: string, values?: Record<string, unknown>): readonly
 }
 
 /** Rows any feature may carry whatever its type. The build leaves a feature out
- *  while its `activeWhen` is 0 (sidecar/builder._is_inactive).
+ *  while its `activeWhen` is 0 (the engine's `is_inactive`).
  *
  *  Listed only on a feature that HAS the field. The parameter engine deletes a
  *  model parameter whose target stops resolving and writes into every target

@@ -34,7 +34,7 @@ describe("radialDrag", () => {
   });
 
   it("becomes a removal at the smallest size the kernel will build", () => {
-    // The sidecar clamps an inward offset at 90% of the radius, so 10% is the
+    // The engine clamps an inward offset at 90% of the radius, so 10% is the
     // floor. Asking for less has to mean something other than "smaller".
     const r = 5;
     const floor = r * COLLAPSE_FRACTION;

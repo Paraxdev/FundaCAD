@@ -5,7 +5,7 @@
 // Pure, and imports nothing from the host. That is not an accident of what it
 // happens to need, it is what lets this file's tests run in a node environment
 // with no DOM and no app, which is where the interesting content is. The
-// visibility rules encode real sidecar behaviour (a FACETED wave has no shape
+// visibility rules encode real engine behaviour (a FACETED wave has no shape
 // parameter at all) and have been wrong before, in a way that shows up as a
 // slider with nothing on the other end of it rather than as an error.
 //
@@ -118,7 +118,7 @@ export function textureFieldApplies(field: string, values: Record<string, unknow
     case "sharpness":
       // The same slider means different things per surface, and for one pairing
       // it means nothing: a FACETED wave is a fixed eight-join polyline with no
-      // shape parameter (the sidecar's `_wave_levels` says why). Under `round`
+      // shape parameter (the engine's `_wave_levels` says why). Under `round`
       // waves is a real sine and the crispness still bites.
       return ANGLE_KINDS.has(kind) && !(values["profile"] === "facet" && kind === "waves");
     default:
@@ -441,7 +441,7 @@ export function toTextureValues(f: TextureForm): TextureValues {
 
 /** Which optional rows a given form shows.
  *
- *  `direction` is deliberately absent: the sidecar applies it to the height
+ *  `direction` is deliberately absent: the engine applies it to the height
  *  field itself (out = h, in = h-1, both = centred), so EVERY kind honours it.
  *  Gating it behind ANGLE_KINDS left noise/voronoi/image able only to GROW the
  *  part, changing its dimensions instead of texturing the surface it sits on. */

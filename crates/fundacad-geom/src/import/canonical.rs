@@ -1,6 +1,6 @@
 //! Canonical recognition at import, replaces `_canonicalize`,
 //! `_canonicalize_roots`, `_canonical_ok` and `_realign_face_colors` of
-//! `sidecar/mesh_import.py`.
+//! the Python engine's `mesh_import.py`.
 
 use std::collections::HashMap;
 

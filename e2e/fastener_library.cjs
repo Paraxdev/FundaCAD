@@ -1,10 +1,10 @@
-// The Fasteners plugin in a real browser, against the real sidecar.
+// The Fasteners plugin in a real browser, against the real engine.
 //
 // Opens the library, searches M3, selects a socket head cap screw and reads its preview and specs,
 // inserts it on a selected face, makes a custom screw from it and inserts that, and drags a nut
 // onto the model. Screenshots land in SC_OUT (default: the working directory).
 //
-// Usage (from the repo root, with vite and the sidecar running):
+// Usage (from the repo root, with vite and the engine running):
 //   SC_TOKEN=<engine token> SC_CHROME=<chromium or brave> SC_APP_PORT=5199 SC_ENGINE_PORT=8799 \
 //     node e2e/fastener_library.cjs
 const { chromium } = require("playwright-core");

@@ -1,6 +1,6 @@
 //! Message framing on the engine worker's stdin and stdout.
 //!
-//! No Python counterpart: the sidecar spoke WebSocket, whose text and binary
+//! No Python counterpart: the Python engine spoke WebSocket, whose text and binary
 //! messages this mirrors one to one so the app can relay without parsing.
 //!
 //! Each message is `[u32 LE payload_len][u8 kind][payload]`, where

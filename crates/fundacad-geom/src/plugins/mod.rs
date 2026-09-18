@@ -1,5 +1,5 @@
-//! The plugin host, replacing `sidecar/plugin_geometry.py` and
-//! `sidecar/shape_generate.py` (docs/RUST-PIVOT.md 2.3).
+//! The plugin host, replacing the Python engine's `plugin_geometry.py` and
+//! the Python engine's `shape_generate.py` (docs/RUST-PIVOT.md 2.3).
 //!
 //! A plugin bundle's geometry is a WebAssembly component (the world in
 //! `wit/plugin.wit`) named by the manifest's `geometryWasm`. Manifests are read

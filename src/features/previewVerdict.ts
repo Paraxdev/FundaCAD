@@ -1,6 +1,6 @@
 // Whether a release may commit, judged by the kernel's answer on the live preview.
 //
-// A tool that previews through the sidecar knows before committing whether the
+// A tool that previews through the engine knows before committing whether the
 // feature builds. Committing a refused one adds a history entry that fails on the
 // next rebuild, which reads as the release having broken the model.
 

@@ -1,7 +1,7 @@
 // Where a plane-carrying feature ACTUALLY sits after the last rebuild.
 //
 // A sketch or datum plane anchored to a body face has its placement re-derived
-// by the sidecar every rebuild, and the resolved frames come back keyed by
+// by the engine every rebuild, and the resolved frames come back keyed by
 // feature id. The feature's own `plane` is only the cache written when it was
 // last closed, so reading it directly draws the curves at the OLD position while
 // the cut lands at the new one, the two halves of the same model disagreeing on
@@ -20,8 +20,8 @@ export function planeOf(
 ): PlaneSpec {
   // The datum lookup is SECOND, and it is not redundant: a sketch made by
   // "Offset plane" carries no `face` of its own (the anchor rides on the DATUM,
-  // see featureStarters.offsetPlane), so the sidecar has no entry under this
-  // feature's id, while the datum it is bound to does move. The sidecar resolves
+  // see featureStarters.offsetPlane), so the engine has no entry under this
+  // feature's id, while the datum it is bound to does move. The engine resolves
   // that link when it BUILDS the sketch, so without this the geometry would
   // follow and only the drawing stay behind, the same split, one indirection
   // further out. A datum's entry already has its offset applied, which is

@@ -28,7 +28,7 @@ describe("where a plane-carrying feature actually sits", () => {
 
   it("follows the datum a sketch is bound to when the sketch has no entry", () => {
     // A sketch made by "Offset plane" carries no face of its own, the anchor
-    // rides on the DATUM, so the sidecar reports nothing under the sketch's id
+    // rides on the DATUM, so the engine reports nothing under the sketch's id
     // while the datum does move. Without this the geometry follows and only the
     // drawing stays behind.
     const f = { id: "s1", plane: spec(10), planeId: "d1" };

@@ -1,4 +1,4 @@
-//! Sketch text against the Python engine (tests/text/gen_fixtures.py writes
+//! Sketch text against the Python engine (tests/text/gen_fixtures.py on the legacy branch writes
 //! tests/text/fixtures.json).
 //!
 //! The two engines draw the same outlines through different machinery, OCCT's

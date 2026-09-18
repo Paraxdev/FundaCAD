@@ -1,5 +1,5 @@
 // Hole, loft and sweep operations for the FundaCAD builder, as build123d runs
-// them for sidecar/hole_feature.py and sidecar/builder.py `_handle_loft` and
+// them for the Python engine's `hole_feature.py` and the Python engine's `builder.py` `_handle_loft` and
 // `_handle_sweep`.
 #pragma once
 #include "builder_ops.hxx"

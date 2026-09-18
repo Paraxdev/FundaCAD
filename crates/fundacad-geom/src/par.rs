@@ -1,7 +1,7 @@
 //! Deterministic data parallelism over OpenCASCADE shapes.
 //!
 //! The Python engine was one job per process with OCCT's own thread pool
-//! inside BRepMesh and BOPAlgo (sidecar/occt_smp.py). Rust fans the passes
+//! inside BRepMesh and BOPAlgo (the Python engine's `occt_smp.py`). Rust fans the passes
 //! above the kernel out too, under one rule: a parallel pass must produce the
 //! bytes the serial pass produces. So every helper here collects by index and
 //! returns results in the input order, and nothing here sums, hashes or
@@ -37,7 +37,7 @@ impl<T> Shared<T> {
 }
 
 /// How many threads the engine may use, `FUNDACAD_THREADS` when set (the
-/// sidecar's `VERXA_THREADS`), else every logical processor.
+/// Python engine's `VERXA_THREADS`), else every logical processor.
 pub fn threads() -> usize {
     std::env::var("FUNDACAD_THREADS")
         .ok()
@@ -68,7 +68,7 @@ fn pool() -> &'static rayon::ThreadPool {
 }
 
 /// Point OCCT's own thread pool at the same thread count and turn on the
-/// parallel defaults BRepMesh and BOPAlgo read, sidecar/occt_smp.py. Once per
+/// parallel defaults BRepMesh and BOPAlgo read, the Python engine's `occt_smp.py`. Once per
 /// process, before any job: the pool must not be resized while an algorithm
 /// holds threads from it. Returns the count OCCT took.
 pub fn configure_occt() -> usize {

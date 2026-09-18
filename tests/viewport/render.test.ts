@@ -200,7 +200,7 @@ describe("buildBodyMesh with a partition", () => {
     expect(scanned.mesh.geometry.getAttribute("position").count).toBe(4);
   });
 
-  it("shades an ordinary indexed body with the sidecar's surface normals, untouched", () => {
+  it("shades an ordinary indexed body with the engine's surface normals, untouched", () => {
     // A strip of a curved face: 4 triangles over 6 shared vertices, the way an
     // ordinary (untextured) face arrives. Its normals are the SURFACE's, which a
     // coarse strip's own facets do not reproduce, so the attribute must be exactly

@@ -1,4 +1,4 @@
-//! Revolve about a world axis or a stored line, sidecar/revolve_feature.py
+//! Revolve about a world axis or a stored line, the Python engine's `revolve_feature.py`
 //! `_handle_revolve` and `_revolve_axis`.
 //!
 //! Not ported yet: re-resolving `axisEdge` against the bodies; an axis aimed at

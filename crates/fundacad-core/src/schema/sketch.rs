@@ -1,6 +1,6 @@
 //! Sketch entities, constraints, patterns and projected curves: `SketchEntity`,
 //! `SketchConstraint`, `SketchPattern`, `ProjectedCurve` and `ProjectedSource` in
-//! `src/types.ts` (built by sidecar/sketch_build.py).
+//! `src/types.ts` (built by the Python engine's `sketch_build.py`).
 
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
@@ -63,7 +63,7 @@ entity_struct!(
     Arc { x1: Num, y1: Num, x2: Num, y2: Num, mx: Num, my: Num }
 );
 entity_struct!(
-    /// Built by the Python engine (sidecar/sketch_build.py); `angle` in degrees.
+    /// Built as the Python engine's `sketch_build.py` built it; `angle` in degrees.
     Ellipse {
         rx: Num,
         ry: Num,

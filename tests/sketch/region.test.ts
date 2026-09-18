@@ -353,7 +353,7 @@ describe("rectCorners rotation", () => {
 
   it("gives entityPolyline a closed rotated loop", () => {
     // The one place an entity becomes points, everything downstream (regions,
-    // picking, snapping, the sidecar's own corners) reads through it.
+    // picking, snapping, the engine's own corners) reads through it.
     const p = entityPolyline({ type: "rectangle", id: "r", x: 0, y: 0, width: 10, height: 4, angle: 45 } as never);
     expect(p).toHaveLength(5);
     expect(at(p, 0).x).toBeCloseTo(at(p, 4).x, 9);

@@ -12,7 +12,7 @@
 // the faces of one feature of one part). The reference board packs 843 faces
 // into 3 palette entries and 9 runs.
 //
-// sidecar/face_colors.py writes it and holds the same two functions; the two are
+// the Python engine's `face_colors.py` writes it and holds the same two functions; the two are
 // checked against one another on the same fixtures. Pure list arithmetic, no
 // document and no renderer: what the colours MEAN is decided in rebuildBridge.
 
@@ -56,7 +56,7 @@ export function decodeFaceColors(
 
 /** The colour to treat as the whole body's own, or null.
  *
- *  By face COUNT, matching sidecar/face_colors.py's `dominant`, and for the same
+ *  By face COUNT, matching the Python engine's `face_colors.py`'s `dominant`, and for the same
  *  reason: area is the better answer to "what colour does this part look" and it
  *  costs a surface integration per face, which nothing on either side of the
  *  wire is holding when this is asked. It matters less than it sounds like,

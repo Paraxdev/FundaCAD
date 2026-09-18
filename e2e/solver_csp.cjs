@@ -9,7 +9,7 @@
 // The policy is READ FROM src-tauri/tauri.conf.json rather than written out
 // here, so this cannot certify a policy the app does not ship.
 //
-// Usage (from the repo root, no dev server and no sidecar needed):
+// Usage (from the repo root, no dev server and no engine needed):
 //   node e2e/solver_csp.cjs
 //
 // SC_CHROME picks the browser. Any Chromium build works.

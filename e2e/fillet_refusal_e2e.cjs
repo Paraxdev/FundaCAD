@@ -11,7 +11,7 @@
 //
 // Usage (from the repo root, with vite on 5173 + a engine on 8765 (`fundacad-engine --ws`)):
 //   SC_TOKEN=<engine token> SC_CHROME=<chrome.exe> node e2e/fillet_refusal_e2e.cjs [outDir]
-// SC_APP overrides the page URL, SC_ENGINE_PORT points the page at another sidecar.
+// SC_APP overrides the page URL, SC_ENGINE_PORT points the page at another engine.
 const { chromium } = require("playwright-core");
 const fs = require("fs");
 const path = require("path");

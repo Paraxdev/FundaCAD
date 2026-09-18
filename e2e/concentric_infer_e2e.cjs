@@ -4,7 +4,7 @@
 //      constraint, so moving the first circle takes the second with it.
 //   2. CONTROL: a circle started elsewhere records nothing.
 //
-// Usage (from the repo root, with vite + sidecar running):
+// Usage (from the repo root, with vite + engine running):
 //   SC_TOKEN=<engine token> SC_CHROME=<chrome.exe> [SC_URL=http://localhost:5173/] node e2e/concentric_infer_e2e.cjs [outDir]
 const { chromium } = require("playwright-core");
 const fs = require("fs");

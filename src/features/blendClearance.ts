@@ -7,7 +7,7 @@
 // built. The real constraint is LOCAL: a blend fails when it runs out of face to
 // sit on, which is decided by what is near THIS edge.
 //
-// Measured against EDGES, not faces. The sidecar has the real thing (edge-to-
+// Measured against EDGES, not faces. The engine has the real thing (edge-to-
 // nearest-non-touching-FACE via BRepExtrema, tools/gen_fillet_corpus.py) but it is
 // behind a round-trip and this number is needed live during a drag. Where the two
 // differ this reads SMALLER, which is the safe direction for a bound.

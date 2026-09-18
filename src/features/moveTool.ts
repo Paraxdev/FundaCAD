@@ -1,7 +1,7 @@
 // Interactive multi-body Move: one gizmo at the selection's centroid carrying
 // three arrows and three rings. Grab an arrow to slide the bodies along that
 // axis; grab a ring to turn them about it. Both drive a LIVE preview (the mesh
-// and its edges transformed in place, no sidecar round-trip), type a value for
+// and its edges transformed in place, no engine round-trip), type a value for
 // precision, click off the gizmo / Enter to commit, Esc to revert.
 //
 // Rotation is the addition, and it needed one thing that was not obvious. The
@@ -680,7 +680,7 @@ export class MoveTool {
     this.refreshPreview();
   }
 
-  /** Instant ghost, no sidecar round-trip; the real write happens on release. */
+  /** Instant ghost, no engine round-trip; the real write happens on release. */
   private refreshPreview() {
     this.target?.preview(this.transform(), this.copy);
   }

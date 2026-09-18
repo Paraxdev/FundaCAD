@@ -1,4 +1,4 @@
-//! The engine's benchmark set, the Rust side of sidecar/tools/bench_rebuild.py
+//! The engine's benchmark set, the Rust side of the Python engine's `bench_rebuild.py`
 //! and bench_import.py. One stage per invocation, one JSON line out.
 //!
 //!   cargo run --release -p fundacad-geom --example bench_suite -- \

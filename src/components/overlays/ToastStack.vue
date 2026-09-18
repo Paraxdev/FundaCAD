@@ -18,7 +18,7 @@ const toasts = useToastStore();
         :class="[`toast-${t.kind}`, { 'toast-out': t.leaving }]"
       >
         <!-- {{ }} escapes; the old code used textContent for the same reason.
-             Messages carry sidecar error text and document-sourced names. -->
+             Messages carry engine error text and document-sourced names. -->
         <span class="toast-msg">{{ t.message }}</span>
         <button
           v-if="t.action"

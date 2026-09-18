@@ -11,7 +11,7 @@
 //
 // Usage (from the repo root, with vite on 5173 + engine on 8765 (`fundacad-engine --ws`)):
 //   SC_TOKEN=<engine token> SC_CHROME=<chrome.exe> node e2e/extrude_peek_e2e.cjs [outDir]
-// SC_APP_PORT and SC_ENGINE_PORT move it off 5173/8765 (the sidecar then needs
+// SC_APP_PORT and SC_ENGINE_PORT move it off 5173/8765 (the engine then needs
 // FUNDACAD_EXTRA_ORIGINS for that app port). SC_REAL_GPU=1 drops swiftshader,
 // which otherwise forces the low-power tier and turns glass off.
 const { chromium } = require("playwright-core");
