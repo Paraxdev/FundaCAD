@@ -11,6 +11,7 @@
 
 mod host;
 mod kernel_api;
+mod kernel_ext;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -46,6 +47,7 @@ struct Declared {
     types: Vec<String>,
     exporters: Vec<String>,
     generators: Vec<String>,
+    files_read: bool,
 }
 
 enum Loaded {
@@ -157,6 +159,7 @@ fn discover() -> Vec<Declared> {
                 types: strings(&man, MANIFEST_TYPES),
                 exporters: strings(&man, MANIFEST_EXPORTERS),
                 generators: strings(&man, MANIFEST_GENERATORS),
+                files_read: strings(&man, "grants").iter().any(|g| g == "files.read"),
                 id,
                 dir,
             });
@@ -230,7 +233,7 @@ fn compile(d: &Declared) -> Loaded {
             "its manifest names {rel:?}, which is not in the bundle"
         ));
     }
-    match host::Component::load(&path) {
+    match host::Component::load(&path, d.files_read) {
         Ok(c) => {
             let undeclared: Vec<&String> = c
                 .registration
@@ -419,16 +422,22 @@ fn pass_owner(reg: &mut Registry, pass: &str) -> Option<usize> {
     None
 }
 
-/// `resolve` then `displace` for every spec on a body: face index in
-/// `faces` order to its displaced triangles. Later specs win a face.
-pub fn displace_body(
+/// One face a mesh pass claimed: the spec that won it and the pass's tag.
+#[derive(Clone)]
+pub struct PassClaim {
+    pub spec: Value,
+    pub tag: String,
+}
+
+/// `plugin_geometry.resolve` over every spec on a body, as face index in
+/// `faces` order to the claim on it. A later spec wins a face an earlier one
+/// also claimed, timeline order whichever plugins the two come from.
+pub fn claim_faces(
     shape: &opencascade::primitives::Shape,
     faces: &[opencascade::primitives::Shape],
     specs: &[Value],
-    triangles_of: &dyn Fn(usize) -> Option<FaceMesh>,
-    density_cap: u32,
-) -> HashMap<usize, FaceMesh> {
-    let mut claimed: Vec<(usize, &Value)> = Vec::new();
+) -> HashMap<usize, PassClaim> {
+    let mut out = HashMap::new();
     let mut reg = registry();
     for spec in specs {
         let name = spec.get("pass").and_then(Value::as_str).unwrap_or("");
@@ -440,45 +449,50 @@ pub fn displace_body(
         };
         match c.resolve_pass(name, shape, spec) {
             Ok(hits) => {
-                for hit in hits {
+                for (hit, tag) in hits {
                     if let Some(k) = faces.iter().position(|f| kernel_api::is_same(f, &hit)) {
-                        claimed.retain(|(j, _)| *j != k);
-                        claimed.push((k, spec));
+                        out.insert(
+                            k,
+                            PassClaim {
+                                spec: spec.clone(),
+                                tag,
+                            },
+                        );
                     }
                 }
             }
             Err(e) => eprintln!("[plugin-geometry] resolving {name:?} failed: {e}"),
         }
     }
-    let mut out = HashMap::new();
-    for (k, spec) in claimed {
-        let name = spec.get("pass").and_then(Value::as_str).unwrap_or("");
-        let (Some(i), Some(tri)) = (pass_owner(&mut reg, name), triangles_of(k)) else {
-            continue;
-        };
-        let Loaded::Ready(c) = &reg.entries[i].loaded else {
-            continue;
-        };
-        let sent = MeshData {
-            positions: tri.positions,
-            indices: tri.indices,
-            normals: tri.normals,
-        };
-        match c.displace(name, &faces[k], sent, spec, density_cap) {
-            Ok(m) => {
-                out.insert(
-                    k,
-                    FaceMesh {
-                        positions: m.positions,
-                        indices: m.indices,
-                        normals: m.normals,
-                    },
-                );
-            }
-            Err(e) => eprintln!("[plugin-geometry] displacing a face for {name:?} failed: {e}"),
+    out
+}
+
+/// One claimed face displaced by the pass that claimed it, `None` when the
+/// pass failed, which leaves the face as the kernel meshed it. The face must
+/// have just been meshed: the pass reads its stored triangulation.
+pub fn displace_face(
+    face: &opencascade::primitives::Shape,
+    claim: &PassClaim,
+    density_cap: u32,
+    split_creases: bool,
+) -> Option<FaceMesh> {
+    let name = claim.spec.get("pass").and_then(Value::as_str).unwrap_or("");
+    let mut reg = registry();
+    let i = pass_owner(&mut reg, name)?;
+    let Loaded::Ready(c) = &reg.entries[i].loaded else {
+        return None;
+    };
+    match c.displace(name, face, &claim.spec, &claim.tag, density_cap, split_creases) {
+        Ok(m) => Some(FaceMesh {
+            positions: m.positions,
+            indices: m.indices,
+            normals: m.normals,
+        }),
+        Err(e) => {
+            eprintln!("[{name}] a face fell back to flat: {e}");
+            None
         }
     }
-    out
 }
 
 #[cfg(test)]

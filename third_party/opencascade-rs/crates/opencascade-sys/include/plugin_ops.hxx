@@ -7,8 +7,20 @@
 #include "rust/cxx.h"
 #include <bindings_common.hxx>
 #include "select_access.hxx"
+#include "builder_ops.hxx"
 
 #include <BRepAdaptor_Curve.hxx>
+#include <BRepBuilderAPI_MakeEdge.hxx>
+#include <BRepBuilderAPI_MakeWire.hxx>
+#include <BRepLProp_SLProps.hxx>
+#include <BRepLib.hxx>
+#include <BRepOffsetAPI_MakePipeShell.hxx>
+#include <GC_MakeArcOfCircle.hxx>
+#include <Geom2d_Line.hxx>
+#include <Geom2d_TrimmedCurve.hxx>
+#include <Geom_CylindricalSurface.hxx>
+#include <Poly_Triangulation.hxx>
+#include <gp_Cone.hxx>
 #include <BRepAdaptor_Surface.hxx>
 #include <BRepAlgoAPI_Common.hxx>
 #include <BRepAlgoAPI_Cut.hxx>
@@ -445,6 +457,302 @@ inline PoShape po_place(const TopoDS_Shape &s, double ox, double oy, double oz, 
     t.SetTransformation(gp_Ax3(gp_Pnt(ox, oy, oz), gp_Dir(zx, zy, zz)), gp_Ax3());
     return po_own(s.Moved(TopLoc_Location(t)));
   } catch (...) {
+    return po_null();
+  }
+}
+
+inline bool po_is_reversed(const TopoDS_Shape &s) {
+  return !s.IsNull() && s.Orientation() == TopAbs_REVERSED;
+}
+
+static inline void po_put(rust::Slice<double> out, size_t at, const gp_XYZ &v) {
+  out[at] = v.X();
+  out[at + 1] = v.Y();
+  out[at + 2] = v.Z();
+}
+
+// A face's surface: [origin, x, y, z of its gp_Ax3, radius, semi-angle, u0, u1,
+// v0, v1] into `out` (18 numbers); the GeomAbs_SurfaceType, -1 not a face.
+inline int po_surface_frame(const TopoDS_Shape &face, rust::Slice<double> out) {
+  if (face.IsNull() || face.ShapeType() != TopAbs_FACE || out.size() < 18) return -1;
+  try {
+    BRepAdaptor_Surface s(TopoDS::Face(face));
+    for (size_t i = 0; i < 18; ++i) out[i] = 0.0;
+    GeomAbs_SurfaceType t = s.GetType();
+    gp_Ax3 ax;
+    bool placed = true;
+    if (t == GeomAbs_Plane) {
+      ax = s.Plane().Position();
+    } else if (t == GeomAbs_Cylinder) {
+      ax = s.Cylinder().Position();
+      out[12] = s.Cylinder().Radius();
+    } else if (t == GeomAbs_Cone) {
+      ax = s.Cone().Position();
+      out[12] = s.Cone().RefRadius();
+      out[13] = s.Cone().SemiAngle();
+    } else {
+      placed = false;
+    }
+    if (placed) {
+      po_put(out, 0, ax.Location().XYZ());
+      po_put(out, 3, ax.XDirection().XYZ());
+      po_put(out, 6, ax.YDirection().XYZ());
+      po_put(out, 9, ax.Direction().XYZ());
+    }
+    out[14] = s.FirstUParameter();
+    out[15] = s.LastUParameter();
+    out[16] = s.FirstVParameter();
+    out[17] = s.LastVParameter();
+    return static_cast<int>(t);
+  } catch (...) {
+    return -1;
+  }
+}
+
+// Per (u, v): point, D1U, D1V, a defined flag and the normal, 13 numbers, from
+// BRepLProp_SLProps on the face's adaptor. Empty when it is not a face.
+inline rust::Vec<double> po_surface_samples(const TopoDS_Shape &face, rust::Slice<const double> uvs,
+                                            double tol) {
+  rust::Vec<double> out;
+  if (face.IsNull() || face.ShapeType() != TopAbs_FACE) return out;
+  BRepAdaptor_Surface s(TopoDS::Face(face));
+  for (size_t i = 0; i + 1 < uvs.size(); i += 2) {
+    double v[13] = {0};
+    try {
+      BRepLProp_SLProps p(s, uvs[i], uvs[i + 1], 1, tol);
+      gp_Pnt pt = p.Value();
+      gp_Vec du = p.D1U(), dv = p.D1V();
+      v[0] = pt.X(); v[1] = pt.Y(); v[2] = pt.Z();
+      v[3] = du.X(); v[4] = du.Y(); v[5] = du.Z();
+      v[6] = dv.X(); v[7] = dv.Y(); v[8] = dv.Z();
+      if (p.IsNormalDefined()) {
+        gp_Dir n = p.Normal();
+        v[9] = 1.0;
+        v[10] = n.X(); v[11] = n.Y(); v[12] = n.Z();
+      }
+    } catch (...) {
+      for (double &x : v) x = 0.0;
+      v[9] = -1.0;
+    }
+    for (double x : v) out.push_back(x);
+  }
+  return out;
+}
+
+// The face's stored triangulation: [nodes, triangles, xyz..., uv..., 0-based
+// node indices...], placement applied to the nodes; empty when there is none.
+inline rust::Vec<double> po_triangulation(const TopoDS_Shape &face) {
+  rust::Vec<double> out;
+  if (face.IsNull() || face.ShapeType() != TopAbs_FACE) return out;
+  try {
+    TopLoc_Location loc;
+    Handle(Poly_Triangulation) tri = BRep_Tool::Triangulation(TopoDS::Face(face), loc);
+    if (tri.IsNull()) return out;
+    int n = tri->NbNodes(), m = tri->NbTriangles();
+    bool ident = loc.IsIdentity();
+    gp_Trsf trsf = loc.Transformation();
+    out.push_back(n);
+    out.push_back(m);
+    for (int i = 1; i <= n; ++i) {
+      gp_Pnt p = tri->Node(i);
+      if (!ident) p.Transform(trsf);
+      out.push_back(p.X());
+      out.push_back(p.Y());
+      out.push_back(p.Z());
+    }
+    bool uv = tri->HasUVNodes();
+    for (int i = 1; i <= n; ++i) {
+      gp_Pnt2d q = uv ? tri->UVNode(i) : gp_Pnt2d(0.0, 0.0);
+      out.push_back(q.X());
+      out.push_back(q.Y());
+    }
+    for (int i = 1; i <= m; ++i) {
+      int a, b, c;
+      tri->Triangle(i).Get(a, b, c);
+      out.push_back(a - 1);
+      out.push_back(b - 1);
+      out.push_back(c - 1);
+    }
+  } catch (...) {
+    out.clear();
+  }
+  return out;
+}
+
+inline PoShape po_rotate(const TopoDS_Shape &s, double ox, double oy, double oz, double ax, double ay,
+                         double az, double degrees) {
+  try {
+    gp_Trsf t;
+    t.SetRotation(gp_Ax1(gp_Pnt(ox, oy, oz), gp_Dir(ax, ay, az)), degrees * M_PI / 180.0);
+    return po_own(s.Moved(TopLoc_Location(t)));
+  } catch (...) {
+    return po_null();
+  }
+}
+
+inline PoShape po_line_edge(double ax, double ay, double az, double bx, double by, double bz) {
+  try {
+    BRepBuilderAPI_MakeEdge mk(gp_Pnt(ax, ay, az), gp_Pnt(bx, by, bz));
+    if (!mk.IsDone()) return po_null();
+    return po_own(mk.Edge());
+  } catch (...) {
+    return po_null();
+  }
+}
+
+// build123d `Edge.make_three_point_arc`.
+inline PoShape po_arc_edge(rust::Slice<const double> p) {
+  try {
+    if (p.size() < 9) return po_null();
+    GC_MakeArcOfCircle arc(gp_Pnt(p[0], p[1], p[2]), gp_Pnt(p[3], p[4], p[5]), gp_Pnt(p[6], p[7], p[8]));
+    if (!arc.IsDone()) return po_null();
+    BRepBuilderAPI_MakeEdge mk(arc.Value());
+    if (!mk.IsDone()) return po_null();
+    return po_own(mk.Edge());
+  } catch (...) {
+    return po_null();
+  }
+}
+
+// build123d `Edge.make_circle`, its seam where gp_Ax2 puts the X direction.
+inline PoShape po_circle_edge(double cx, double cy, double cz, double nx, double ny, double nz,
+                              double r) {
+  try {
+    gp_Circ c(gp_Ax2(gp_Pnt(cx, cy, cz), gp_Dir(nx, ny, nz)), r);
+    BRepBuilderAPI_MakeEdge mk(c);
+    if (!mk.IsDone()) return po_null();
+    return po_own(mk.Edge());
+  } catch (...) {
+    return po_null();
+  }
+}
+
+// build123d `Wire(edges)`: the children of a compound added as one list.
+inline PoShape po_wire(const TopoDS_Shape &edges) {
+  try {
+    TopTools_ListOfShape list;
+    for (TopoDS_Iterator it(edges); it.More(); it.Next()) list.Append(it.Value());
+    if (list.IsEmpty()) return po_null();
+    BRepBuilderAPI_MakeWire mk;
+    mk.Add(list);
+    mk.Build();
+    if (!mk.IsDone()) return po_null();
+    return po_own(mk.Wire());
+  } catch (...) {
+    return po_null();
+  }
+}
+
+static inline gp_Pnt po_face_center(const TopoDS_Face &f) {
+  Handle(Geom_Surface) surf = BRep_Tool::Surface(f);
+  if (!surf.IsNull() && GeomLib_IsPlanarSurface(surf, 1e-6).IsPlanar()) {
+    GProp_GProps p;
+    BRepGProp::SurfaceProperties(f, p);
+    return p.CentreOfMass();
+  }
+  double u0, u1, v0, v1;
+  BRepTools::UVBounds(f, u0, u1, v0, v1);
+  return BRepAdaptor_Surface(f).Value(0.5 * (u0 + u1), 0.5 * (v0 + v1));
+}
+
+// revolve_feature.py `_screw_revolve` without its clearance rules: a pipe
+// shell along a helix with the binormal pinned to the axis, the spine started
+// on the meridian the face already sits on, holes swept and cut out.
+inline PoShape po_helical_sweep(const TopoDS_Shape &profile, double ox, double oy, double oz,
+                                double dx, double dy, double dz, double degrees, double pitch) {
+  try {
+    gp_Dir D(dx, dy, dz);
+    gp_Vec Dv(D);
+    gp_Pnt O(ox, oy, oz);
+    std::vector<TopoDS_Face> faces;
+    for (TopExp_Explorer ex(profile, TopAbs_FACE); ex.More(); ex.Next())
+      faces.push_back(TopoDS::Face(ex.Current()));
+    if (faces.empty() || pitch == 0.0) return po_null();
+    double rise = degrees / 360.0 * pitch;
+    TopoDS_Shape out;
+    for (const TopoDS_Face &face : faces) {
+      gp_Vec rel(O, po_face_center(face));
+      double axial = rel.Dot(Dv);
+      gp_Vec radial = rel - Dv * axial;
+      double r = radial.Magnitude();
+      if (r < 1e-6) return po_null();
+      Handle(Geom_CylindricalSurface) surf =
+          new Geom_CylindricalSurface(gp_Ax3(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1)), r);
+      double sx = (pitch < 0 ? -1.0 : 1.0) * 2.0 * M_PI, sy = std::fabs(pitch);
+      double ln = std::sqrt(sx * sx + sy * sy);
+      sx /= ln;
+      sy /= ln;
+      double len = std::fabs(rise) / sy;
+      Handle(Geom2d_Line) line = new Geom2d_Line(gp_Pnt2d(0, 0), gp_Dir2d(sx, sy));
+      Handle(Geom2d_TrimmedCurve) trimmed = new Geom2d_TrimmedCurve(line, 0, len, true, true);
+      TopoDS_Edge helix = BRepBuilderAPI_MakeEdge(trimmed, surf).Edge();
+      BRepLib::BuildCurves3d(helix, 1e-9, GeomAbs_C1, 14, 2000);
+      gp_Trsf place;
+      place.SetTransformation(
+          gp_Ax3(O.Translated(Dv * axial), rise >= 0 ? D : D.Reversed(), gp_Dir(radial)), gp_Ax3());
+      TopoDS_Wire spine =
+          BRepBuilderAPI_MakeWire(TopoDS::Edge(helix.Moved(TopLoc_Location(place)))).Wire();
+      auto swept = [&](const TopoDS_Wire &w) -> TopoDS_Shape {
+        BRepOffsetAPI_MakePipeShell mps(spine);
+        mps.SetMode(D);
+        mps.Add(w, false, false);
+        mps.Build();
+        if (!mps.IsDone()) return TopoDS_Shape();
+        mps.MakeSolid();
+        return mps.Shape();
+      };
+      TopoDS_Wire outer = BRepTools::OuterWire(face);
+      TopoDS_Shape solid = swept(outer);
+      if (solid.IsNull()) return po_null();
+      for (TopExp_Explorer ex(face, TopAbs_WIRE); ex.More(); ex.Next()) {
+        if (ex.Current().IsSame(outer)) continue;
+        TopoDS_Shape hole = swept(TopoDS::Wire(ex.Current()));
+        if (hole.IsNull()) return po_null();
+        BRepAlgoAPI_Cut cut(solid, hole);
+        solid = bo_unwrap(bo_unify(cut.Shape()));
+      }
+      if (out.IsNull()) {
+        out = solid;
+      } else {
+        BRepAlgoAPI_Fuse fuse(out, solid);
+        out = bo_unwrap(bo_unify(fuse.Shape()));
+      }
+    }
+    return po_own(out);
+  } catch (...) {
+    return po_null();
+  }
+}
+
+// A boolean with its options. kind 0 fuse, 1 cut, 2 common; `clean` is
+// build123d's unify and unwrap. status: 0 done, 1 not done.
+inline PoShape po_boolean_with(int kind, const TopoDS_Shape &base, const TopoDS_Shape &tools,
+                               bool parallel, double fuzzy, bool clean, int32_t &status) {
+  status = 1;
+  try {
+    TopTools_ListOfShape args, tl;
+    args.Append(base);
+    for (TopoDS_Iterator it(tools); it.More(); it.Next()) tl.Append(it.Value());
+    std::unique_ptr<BRepAlgoAPI_BooleanOperation> op;
+    if (kind == 0)
+      op.reset(new BRepAlgoAPI_Fuse());
+    else if (kind == 1)
+      op.reset(new BRepAlgoAPI_Cut());
+    else
+      op.reset(new BRepAlgoAPI_Common());
+    op->SetArguments(args);
+    op->SetTools(tl);
+    op->SetRunParallel(parallel);
+    if (fuzzy > 0) op->SetFuzzyValue(fuzzy);
+    op->Build();
+    if (!op->IsDone()) return po_null();
+    TopoDS_Shape out = op->Shape();
+    if (clean) out = bo_unwrap(bo_unify(out));
+    if (out.IsNull()) return po_null();
+    status = 0;
+    return po_own(out);
+  } catch (...) {
+    status = 1;
     return po_null();
   }
 }

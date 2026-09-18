@@ -71,6 +71,56 @@ mod inner {
         ) -> UniquePtr<TopoDS_Shape>;
         pub fn po_unify(s: &TopoDS_Shape) -> UniquePtr<TopoDS_Shape>;
         pub fn po_translate(s: &TopoDS_Shape, dx: f64, dy: f64, dz: f64) -> UniquePtr<TopoDS_Shape>;
+        pub fn po_is_reversed(s: &TopoDS_Shape) -> bool;
+        pub fn po_surface_frame(face: &TopoDS_Shape, out: &mut [f64]) -> i32;
+        pub fn po_surface_samples(face: &TopoDS_Shape, uvs: &[f64], tol: f64) -> Vec<f64>;
+        pub fn po_triangulation(face: &TopoDS_Shape) -> Vec<f64>;
+        #[allow(clippy::too_many_arguments)]
+        pub fn po_rotate(
+            s: &TopoDS_Shape,
+            ox: f64,
+            oy: f64,
+            oz: f64,
+            ax: f64,
+            ay: f64,
+            az: f64,
+            degrees: f64,
+        ) -> UniquePtr<TopoDS_Shape>;
+        pub fn po_line_edge(ax: f64, ay: f64, az: f64, bx: f64, by: f64, bz: f64) -> UniquePtr<TopoDS_Shape>;
+        pub fn po_arc_edge(points: &[f64]) -> UniquePtr<TopoDS_Shape>;
+        #[allow(clippy::too_many_arguments)]
+        pub fn po_circle_edge(
+            cx: f64,
+            cy: f64,
+            cz: f64,
+            nx: f64,
+            ny: f64,
+            nz: f64,
+            r: f64,
+        ) -> UniquePtr<TopoDS_Shape>;
+        pub fn po_wire(edges: &TopoDS_Shape) -> UniquePtr<TopoDS_Shape>;
+        #[allow(clippy::too_many_arguments)]
+        pub fn po_helical_sweep(
+            profile: &TopoDS_Shape,
+            ox: f64,
+            oy: f64,
+            oz: f64,
+            dx: f64,
+            dy: f64,
+            dz: f64,
+            degrees: f64,
+            pitch: f64,
+        ) -> UniquePtr<TopoDS_Shape>;
+        #[allow(clippy::too_many_arguments)]
+        pub fn po_boolean_with(
+            kind: i32,
+            base: &TopoDS_Shape,
+            tools: &TopoDS_Shape,
+            parallel: bool,
+            fuzzy: f64,
+            clean: bool,
+            status: &mut i32,
+        ) -> UniquePtr<TopoDS_Shape>;
         #[allow(clippy::too_many_arguments)]
         pub fn po_place(
             s: &TopoDS_Shape,
