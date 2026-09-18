@@ -30,6 +30,11 @@ jobs:
           put("e_fillet", type="fillet", radius=3.35)
           for i, v in enumerate([0.5, 1.0, 1.7, 2.4, 3.0, 3.35]):
               put(f"f_drag{i}", distance=v, draft=True)
+          os.makedirs("sweep", exist_ok=True)
+          for i in range(1, 200):
+              d = json.loads(json.dumps(base))
+              d["features"][2].update(distance=round(i * 0.023, 3), draft=True)
+              json.dump(d, open(f"sweep/s{i:03d}.json", "w"))
           PY
           python3 gen.py
           cat > timebuild.py <<'PY'
@@ -89,10 +94,16 @@ jobs:
           dpkg-deb -x *_amd64.deb app
           find app -type f -perm -u+x | head -n 20
           mcp=$(find app -name fundacad-mcp -type f | head -n1)
-          nproc
-          for cpus in 0-3 0-1 0; do
-            echo "=== cpus $cpus"
-            timeout 300 taskset -c $cpus python3 timebuild.py "$mcp" diag/*.json || echo "=== cpus $cpus exit $?"
+          for load in 0 3; do
+            for cpus in 0-3 0; do
+              pids=""
+              for k in $(seq 1 $load); do taskset -c 0 sh -c 'while :; do :; done' & pids="$pids $!"; done
+              echo "=== sweep cpus $cpus load $load"
+              timeout 1200 taskset -c $cpus python3 timebuild.py "$mcp" sweep/*.json > sweep.txt || echo "=== exit $?"
+              [ -z "$pids" ] || kill $pids
+              awk '{print $2, $1}' sweep.txt | sort -rn | head -n 6
+              awk '{s+=$2} END {print "total", s, NR}' sweep.txt
+            done
           done
 
   repro:
@@ -142,6 +153,11 @@ jobs:
           put("e_fillet", type="fillet", radius=3.35)
           for i, v in enumerate([0.5, 1.0, 1.7, 2.4, 3.0, 3.35]):
               put(f"f_drag{i}", distance=v, draft=True)
+          os.makedirs("sweep", exist_ok=True)
+          for i in range(1, 200):
+              d = json.loads(json.dumps(base))
+              d["features"][2].update(distance=round(i * 0.023, 3), draft=True)
+              json.dump(d, open(f"sweep/s{i:03d}.json", "w"))
           PY
           python3 gen.py
           cat > timebuild.py <<'PY'
@@ -212,5 +228,16 @@ jobs:
           done
           if [ "${{ matrix.variant }}" = release ]; then
             FUNDACAD_MCP_MODE=standalone timeout 600 python3 timebuild.py target/release/fundacad-mcp diag/*.json
+            for load in 0 3; do
+              for cpus in 0-3 0; do
+                pids=""
+                for k in $(seq 1 $load); do taskset -c 0 sh -c 'while :; do :; done' & pids="$pids $!"; done
+                echo "=== sweep cpus $cpus load $load"
+                FUNDACAD_MCP_MODE=standalone timeout 1200 taskset -c $cpus python3 timebuild.py target/release/fundacad-mcp sweep/*.json > sweep.txt || echo "=== exit $?"
+                [ -z "$pids" ] || kill $pids
+                awk '{print $2, $1}' sweep.txt | sort -rn | head -n 6
+                awk '{s+=$2} END {print "total", s, NR}' sweep.txt
+              done
+            done
           fi
           exit $fail
