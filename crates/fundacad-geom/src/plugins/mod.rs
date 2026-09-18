@@ -278,6 +278,19 @@ fn component_for(reg: &mut Registry, claim: Claim, name: &str) -> Result<usize, 
     }
 }
 
+/// `component_for`, looking at the disk again first when it fails, so a plugin
+/// installed or repaired a moment ago is not refused for the rescan interval.
+fn lookup(reg: &mut Registry, claim: Claim, name: &str) -> Result<usize, Missing> {
+    match component_for(reg, claim, name) {
+        Err(_) if reg.discovered => {
+            reg.checked = None;
+            reg.rescan();
+            component_for(reg, claim, name)
+        }
+        found => found,
+    }
+}
+
 enum Missing {
     Unknown,
     Broken(String, String),
@@ -369,7 +382,7 @@ pub fn run_feature(
     cancel: Option<CancelToken>,
 ) -> Option<FResult> {
     let mut reg = current();
-    let i = match component_for(&mut reg, Claim::Feature, type_name) {
+    let i = match lookup(&mut reg, Claim::Feature, type_name) {
         Ok(i) => i,
         Err(Missing::Unknown) => return None,
         Err(m) => return Some(Err(Fail::msg(missing(Claim::Feature, type_name, m)))),
@@ -394,7 +407,7 @@ fn generate_shape(req: &Map<String, Value>, cancel: Option<CancelToken>) -> Resu
     let params = req.get("params").filter(|p| !p.is_null()).cloned().unwrap_or(json!({}));
     let placement = req.get("placement").filter(|p| !p.is_null());
     let mut reg = current();
-    let i = component_for(&mut reg, Claim::Generator, name).map_err(|m| missing(Claim::Generator, name, m))?;
+    let i = lookup(&mut reg, Claim::Generator, name).map_err(|m| missing(Claim::Generator, name, m))?;
     if output != "mesh" && output != "store" {
         return Err(format!("unknown output {}, expected mesh or store", host::py_repr(output)));
     }
@@ -429,7 +442,7 @@ fn exporter_call(
     cancel: Option<CancelToken>,
 ) -> Result<Option<Value>, String> {
     let mut reg = current();
-    let i = component_for(&mut reg, Claim::Exporter, exporter).map_err(|m| missing(Claim::Exporter, exporter, m))?;
+    let i = lookup(&mut reg, Claim::Exporter, exporter).map_err(|m| missing(Claim::Exporter, exporter, m))?;
     let Loaded::Ready(c) = &reg.entries[i].loaded else {
         return Err(format!("no installed plugin provides the {} export", host::py_repr(exporter)));
     };
@@ -440,7 +453,7 @@ fn exporter_call(
 /// Whether an exporter is declared by any plugin on disk, before the rebuild.
 fn exporter_declared(exporter: &str) -> Result<(), String> {
     let mut reg = current();
-    component_for(&mut reg, Claim::Exporter, exporter)
+    lookup(&mut reg, Claim::Exporter, exporter)
         .map(|_| ())
         .map_err(|m| missing(Claim::Exporter, exporter, m))
 }
