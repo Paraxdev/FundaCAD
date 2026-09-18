@@ -32,7 +32,7 @@ quick-xml = "0.37"
 rayon = "1"
 fontdb = "0.24.0"
 ttf-parser = "0.25.1"
-# The plugin host (src/plugins, docs/RUST-PIVOT.md 2.3). wasmtime and its WASI
+# The plugin host (src/plugins, docs/ENGINE.md 2.3). wasmtime and its WASI
 # are a large tree, so only the engine binaries turn the feature on.
 wasmtime = { version = "48", optional = true, default-features = false, features = ["runtime", "cranelift", "component-model", "std", "parallel-compilation", "anyhow"] }
 wasmtime-wasi = { version = "48", optional = true, default-features = false, features = ["p2"] }

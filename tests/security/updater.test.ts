@@ -83,7 +83,7 @@ describe("updater", () => {
   // 1.0.x, which is NEWER than the beta's 0.2.x, so a beta install offered the
   // alpha manifest would take it.
   //
-  // docs/RUST-PIVOT.md section 6 has the decision and why it is not "publish no
+  // docs/ENGINE.md section 6 has the decision and why it is not "publish no
   // manifest at all": an alpha that cannot update itself is an alpha
   // nobody re-downloads, and the point of a rolling build is the next one.
   it("reads the alpha feed and never the beta one", () => {
