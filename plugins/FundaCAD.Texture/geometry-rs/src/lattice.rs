@@ -13,7 +13,7 @@
 use std::collections::HashMap;
 
 use crate::chart::{self, Surf};
-use crate::height::{hex_corners, hex_wall_width, wave_levels};
+use crate::height::{hex_corners, hex_wall_width, wave_phases};
 use crate::nearest::Tree;
 use crate::np;
 use crate::spec::Spec;
@@ -165,11 +165,6 @@ pub fn crease_phases(land: f64) -> Vec<f64> {
         return vec![0.0, 0.5];
     }
     vec![k / 4.0, 0.5 - k / 4.0, 0.5 + k / 4.0, 1.0 - k / 4.0]
-}
-
-pub fn wave_phases() -> Vec<f64> {
-    let _ = wave_levels();
-    crate::height::wave_phases()
 }
 
 pub enum Axes {
