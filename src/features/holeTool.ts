@@ -393,10 +393,6 @@ export class HoleTool {
       this.pushPreview();
     }
     const verdict = previewVerdict(this.store);
-    if (verdict.kind === "wait") {
-      requestAnimationFrame(() => { if (this.active && this.phase === "place") this.commit(); });
-      return;
-    }
     if (verdict.kind === "refused") {
       setPrompt(`Hole refused: ${verdict.reason} · change it or Esc`);
       return;
@@ -410,6 +406,7 @@ export class HoleTool {
     } else {
       this.store.addFeature(feature);
     }
+    if (verdict.kind === "wait") this.store.verifyCommit(feature.id, "Hole");
     this.onDone?.(feature.id);
   }
 

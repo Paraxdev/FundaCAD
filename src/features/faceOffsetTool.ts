@@ -20,7 +20,7 @@ import type { DocumentStore } from "../document/store";
 import type { Feature, Selector } from "../types";
 import { DimInput } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
-import { snap } from "../ui/units";
+import { fmtLength, snap } from "../ui/units";
 import { axisDragDistance, createDragHandle, handleScale, type DragHandle } from "./manipulator";
 import { CanvasGesture } from "./canvasGesture";
 import { previewVerdict } from "./previewVerdict";
@@ -348,14 +348,11 @@ export class FaceOffsetTool {
       return;
     }
     const verdict = previewVerdict(this.store);
-    if (verdict.kind === "wait") {
-      requestAnimationFrame(() => { if (this.active && this.phase === "drag") this.commit(); });
-      return;
-    }
     if (verdict.kind === "refused") return; // tick() already says why and paints the handle
     const feature = this.buildFeature();
     this.store.setPreview(null); // addFeature re-adds it as a committed feature
     this.store.addFeature(feature);
+    if (verdict.kind === "wait") this.store.verifyCommit(feature.id, `Offset ${fmtLength(this.value)}`);
     this.cleanup();
     this.onDone?.(feature.id);
   }

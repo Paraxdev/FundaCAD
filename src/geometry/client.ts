@@ -94,7 +94,8 @@ export type GeneratedShapeReply = { ok: true; shape: GeneratedShape } | { ok: fa
 // The surface the rest of the app depends on. `Geometry` implements it over
 // either engine's transport, and tests stub it by hand.
 export interface GeometryBackend {
-  rebuild(doc: CadDocument, tolerance?: number): Promise<RebuildReply>;
+  /** `onId` receives the request id, again if a resync sends it a second time. */
+  rebuild(doc: CadDocument, tolerance?: number, onId?: (id: string) => void): Promise<RebuildReply>;
   /** Per-glyph 2D outlines for a sketch text entity (the sidecar owns fonts, so
    *  preview outlines come from it and match the extruded solid exactly). */
   tessellateText(entity: object, pathEntity?: object): Promise<TextFace[]>;
@@ -206,7 +207,11 @@ export interface GeometryBackend {
   /** Stop an op in flight. `target` is the request id to cancel, pass the id
    *  the busy state owns, NOT the most recent one. Optional (the in-process
    *  backend has nothing to cancel). Resolves to whether anything stopped. */
-  cancel?(target?: string): Promise<boolean>;
+  cancel?(target?: string, opts?: { soft?: boolean }): Promise<boolean>;
+  /** A soft cancel stops a job at its next checkpoint and never restarts the
+   *  engine to do it, which only the Rust worker offers. Without it a
+   *  superseded rebuild is left to finish. */
+  readonly softCancel?: boolean;
   /** Coarse phase progress for a long op (import). Optional. */
   onOpProgress?(fn: (pct: number, label: string) => void): () => void;
   /** One live-session op (see sidecar/live_session.py): publish what this window
@@ -831,11 +836,15 @@ export class Geometry implements GeometryBackend {
    *  which re-request the whole document with no `known` map, i.e. the largest
    *  reply the sidecar can produce, and precisely the one that must not fall
    *  back to a single frame. */
-  private rebuildCall(op: "rebuild" | "computeAll", extra: object) {
-    return this.call<WireRebuildResult>(op, { ...extra, binary: true, chunked: true });
+  private rebuildCall(op: "rebuild" | "computeAll", extra: object, onId?: (id: string) => void) {
+    return this.call<WireRebuildResult>(op, { ...extra, binary: true, chunked: true }, onId);
   }
 
-  async rebuild(doc: CadDocument, tolerance = 0.1): Promise<RebuildReply> {
+  get softCancel(): boolean {
+    return this.transport.softCancel === true;
+  }
+
+  async rebuild(doc: CadDocument, tolerance = 0.1, onId?: (id: string) => void): Promise<RebuildReply> {
     const known: Record<string, string> = {};
     for (const [id, p] of this.bodyMesh) known[id] = p.etag;
 
@@ -862,7 +871,7 @@ export class Geometry implements GeometryBackend {
     }
     if (!payload) payload = { document: doc, revision: this.revision + 1 };
 
-    let msg = await this.rebuildCall("rebuild", { ...payload, tolerance, known });
+    let msg = await this.rebuildCall("rebuild", { ...payload, tolerance, known }, onId);
     if (msg.ok && msg.result?.resync) {
       // worker respawned or lost sync, one full resend recovers everything
       pipe(`RESYNC asked by the engine, resending the whole document `
@@ -870,7 +879,7 @@ export class Geometry implements GeometryBackend {
       this.lastSent = null;
       this.bodyMesh.clear();
       payload = { document: doc, revision: this.revision + 1 };
-      msg = await this.rebuildCall("rebuild", { ...payload, tolerance });
+      msg = await this.rebuildCall("rebuild", { ...payload, tolerance }, onId);
     }
     if (msg.ok && !msg.result?.resync) {
       this.revision = payload.revision;
@@ -887,7 +896,7 @@ export class Geometry implements GeometryBackend {
         // the assemble cache is keyed on payloads that just went away
         this.lastAssembled = null;
         this.lastAssembledSig = null;
-        msg = await this.rebuildCall("rebuild", { document: doc, revision: ++this.revision, tolerance });
+        msg = await this.rebuildCall("rebuild", { document: doc, revision: ++this.revision, tolerance }, onId);
         if (msg.ok && msg.result?.protocol === 2) assembled = this.assemble(msg.result);
       }
       if (msg.ok && assembled !== null) return { ok: true, result: assembled };
@@ -897,7 +906,7 @@ export class Geometry implements GeometryBackend {
       if (legacy) return { ok: true, result: legacy };
       return { ok: false, error: { message: "geometry engine returned no mesh" } };
     }
-    return { ok: false, error: msg.error };
+    return msg.cancelled ? { ok: false, error: msg.error, cancelled: true } : { ok: false, error: msg.error };
   }
 
   /** MCAD-style "Compute All": bypass and rebuild every cache layer (RAM,
@@ -1082,7 +1091,7 @@ export class Geometry implements GeometryBackend {
    *  A pool job cannot be interrupted, so the sidecar kills the worker and
    *  brings up a fresh one. Geometry keeps working; the next call pays a pool
    *  respawn. */
-  async cancel(target?: string): Promise<boolean> {
+  async cancel(target?: string, opts?: { soft?: boolean }): Promise<boolean> {
     // ALWAYS prefer an explicit target. The document stays editable during a
     // long import, so any rebuild the user triggers meanwhile overwrites
     // lastHeavyId, and the sidecar, which matches the running id against the
@@ -1090,7 +1099,8 @@ export class Geometry implements GeometryBackend {
     // on. lastHeavyId is only a fallback for callers that never learned an id.
     const id = target ?? this.lastHeavyId;
     if (!id) return false;
-    const msg = await this.call<{ cancelled: boolean }>("cancel", { target: id });
+    const soft = opts?.soft && this.softCancel ? { soft: true } : {};
+    const msg = await this.call<{ cancelled: boolean }>("cancel", { target: id, ...soft });
     return msg.ok ? msg.result.cancelled : false;
   }
 

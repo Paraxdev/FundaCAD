@@ -232,9 +232,9 @@ describe("projection refresh (derived commit loop)", () => {
     const curveAtTrip = p1Of(store)?.curve;
     store.setPreview({ id: "pv", type: "extrude", sketch: "s1", distance: 1, operation: "new" } as Feature); // call 7 (quiet)
     await settle();
-    store.setPreview(null); // call 8: updates again, still paused
+    store.setPreview(null); // the committed model comes back without a rebuild
     await settle();
-    expect(calls.length).toBe(8); // no commit -> no follow-up rebuild
+    expect(calls.length).toBe(7); // no commit -> no follow-up rebuild
     expect(p1Of(store)?.curve).toEqual(curveAtTrip);
     expect(warnings.filter((w) => w.includes("paused automatic refresh"))).toHaveLength(1); // warned once, stayed shut
   });
