@@ -812,18 +812,39 @@ inline TopoDS_Shape boolean_one(Op op, const TopoDS_Shape &base, const TopoDS_Sh
   throw err("the blend would not combine with the body");
 }
 
+// The draft pass gives up on the first one-shot boolean that fails, and the full
+// pass then runs the same booleans again. When no section was thinned out for
+// the draft the tools are identical, so that one-shot is known to fail and
+// repeating it cost a whole extra minute on a full G2 corner.
+struct OneShotMemo {
+  int calls = 0;
+  int gave_up_at = -1;
+  bool thinned = false;
+  bool replay = false;
+};
+inline OneShotMemo &one_shot_memo() {
+  static thread_local OneShotMemo m;
+  return m;
+}
+
 inline TopoDS_Shape boolean_all(Op op, const TopoDS_Shape &base, const std::vector<TopoDS_Shape> &tools, double fuzz,
                                 bool one_shot) {
+  OneShotMemo &memo = one_shot_memo();
+  int call = memo.calls++;
+  bool known_bad = memo.replay && call == memo.gave_up_at && tools.size() > 1;
   using clock = std::chrono::steady_clock;
   auto started = clock::now();
   auto elapsed = [&]() { return std::chrono::duration<double>(clock::now() - started).count(); };
-  try {
-    TopoDS_Shape out = boolean(op, base, tools, fuzz);
-    if (sound(out, &base) && applied(op, base, out, tools)) return out;
-  } catch (const SectionError &) {
-    if (tools.size() == 1 && !one_shot) throw;
+  if (!known_bad) try {
+      TopoDS_Shape out = boolean(op, base, tools, fuzz);
+      if (sound(out, &base) && applied(op, base, out, tools)) return out;
+    } catch (const SectionError &) {
+      if (tools.size() == 1 && !one_shot) throw;
+    }
+  if (one_shot) {
+    memo.gave_up_at = call;
+    throw DraftGaveUp("the blend would not combine with the body");
   }
-  if (one_shot) throw DraftGaveUp("the blend would not combine with the body");
   if (tools.size() == 1) return boolean_one(op, base, tools[0], fuzz);
   double budget = std::max(20.0, 4 * elapsed());
   auto out_of_time = [&]() { return elapsed() > budget; };
@@ -1167,6 +1188,15 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
   sides[0]->normal_on_edge_cached = fm.n1;
   sides[1]->normal_on_edge_cached = fm.n2;
   face_limits(fm.P, fm.T, sides, s, chamfer, size, size2, g2);
+  // A convex edge gets no face limits, so a G2 section whose longer setback
+  // leaves the face would be lofted anyway and cut the body into a shape
+  // nobody asked for, or keep the boolean busy for minutes.
+  if (g2 && s > 0 && !chamfer) {
+    Contacts c = contacts(fm.P, fm.T, sides, s, chamfer, size, size2, g2);
+    for (int k = 0; k < 2; ++k)
+      if (!sides[k]->contains(c.Q[k], std::max(tol * 10, 1e-5)))
+        throw err("at this size the G2 blend runs off the face, it sets back 1.55 times the radius");
+  }
   double reach = size * (g2 ? G2_SETBACK : 1.0) + (std::isnan(size2) ? 0.0 : size2);
   double fuzz = std::max(tol * 10, 1e-5);
 
@@ -1238,6 +1268,7 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
   std::vector<TopoDS_Shape> tools;
   size_t half = wires.size() / 2;
   if (draft && wires.size() > 4) {
+    one_shot_memo().thinned = true;
     std::vector<size_t> keep;
     for (size_t k = 0; k < wires.size(); k += 3) keep.push_back(k);
     if (keep.back() != wires.size() - 1) keep.push_back(wires.size() - 1);
@@ -1560,12 +1591,16 @@ inline std::unique_ptr<TopoDS_Shape> blend_section(const TopoDS_Shape &shape, co
     bool bad = false;
     for (double x : sz) bad = bad || !(x > 0);
     if (bad || (!std::isnan(size2) && !(size2 > 0))) throw secblend::err("the size must be greater than 0");
+    secblend::one_shot_memo() = {};
     if (draft) {
       try {
         TopoDS_Shape out = secblend::section_blend_once(shape, es, chamfer, size2, g2, sz, true, profile);
         status = 0;
         return std::unique_ptr<TopoDS_Shape>(new TopoDS_Shape(out));
       } catch (const secblend::DraftGaveUp &) {
+        secblend::OneShotMemo &memo = secblend::one_shot_memo();
+        memo.replay = !memo.thinned;
+        memo.calls = 0;
       }
     }
     TopoDS_Shape out = secblend::section_blend_once(shape, es, chamfer, size2, g2, sz, false, profile);

@@ -264,6 +264,193 @@ button.finish:hover {
   background: var(--error-tint);
 }
 
+/* ---- fillet profile, a live section glyph in the heads-up row ---- */
+.profile-chip-wrap {
+  position: relative;
+  display: flex;
+}
+.profile-chip-wrap[hidden] {
+  display: none;
+}
+.dim-btn.profile-chip {
+  width: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  padding: 0 var(--s-2) 0 var(--s-1);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  cursor: ew-resize;
+  transition: border-color 0.12s, background 0.12s, color 0.12s;
+}
+.dim-btn.profile-chip:hover,
+.dim-btn.profile-chip.open {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.dim-btn.profile-chip.on {
+  color: var(--accent-hot);
+}
+.dim-btn.profile-chip.scrubbing {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+}
+.profile-chip-value {
+  min-width: 38px;
+  text-align: left;
+}
+.profile-glyph {
+  flex: none;
+  overflow: visible;
+}
+.profile-glyph-corner {
+  fill: none;
+  stroke: var(--text-mute);
+  stroke-width: 1;
+  stroke-dasharray: 1.5 1.5;
+  opacity: 0.7;
+}
+.profile-glyph-solid {
+  fill: currentColor;
+  opacity: 0.18;
+}
+.profile-glyph-edge {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.profile-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-3) var(--s-3);
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md, 8px);
+  box-shadow: var(--shadow-2);
+  cursor: default;
+  animation: profile-panel-in 0.14s ease-out;
+}
+@keyframes profile-panel-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-4px); }
+  to   { opacity: 1; transform: translateX(-50%); }
+}
+.profile-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--s-3);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--text-mute);
+}
+.profile-panel-value {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.profile-presets {
+  display: flex;
+  gap: var(--s-1);
+}
+.profile-preset {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--s-1) 0 3px;
+  min-width: 36px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: var(--panel-2);
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s, color 0.12s;
+}
+.profile-preset:hover {
+  color: var(--text);
+  border-color: var(--line-strong);
+}
+.profile-preset.active {
+  color: var(--accent-hot);
+  border-color: var(--accent);
+  background: var(--accent-tint);
+}
+.profile-track {
+  position: relative;
+  height: 18px;
+  margin: 2px auto 0;
+  cursor: ew-resize;
+  touch-action: none;
+}
+.profile-track::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 7px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-strong);
+}
+.profile-track-fill {
+  position: absolute;
+  top: 7px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.profile-track-notch {
+  position: absolute;
+  left: 50%;
+  top: 3px;
+  width: 2px;
+  height: 12px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--text-mute);
+}
+.profile-track-knob {
+  position: absolute;
+  top: 3px;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--panel);
+  box-shadow: 0 0 0 1px var(--accent);
+  transition: transform 0.1s;
+}
+.profile-track:hover .profile-track-knob,
+.profile-track.scrubbing .profile-track-knob {
+  transform: scale(1.2);
+}
+.profile-track-ends {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  color: var(--text-mute);
+}
+
 /* ---- toast notifications (bottom-center, above the timeline) ---- */
 .toast-stack {
   position: fixed;

@@ -186,6 +186,7 @@ export class DimInput {
     onCommit: (values: Record<string, number>) => void,
     onCancel?: () => void,
     toggle?: DimToggleDef,
+    extra?: HTMLElement,
   ) {
     this.hide();
     this.setClickThrough(false); // every other tool wants a clickable box
@@ -244,6 +245,7 @@ export class DimInput {
       this.sizeToContent(field);
       return field;
     });
+    if (extra) this.root.appendChild(extra);
     // The tool's own switch, ahead of confirm/cancel: it changes what is about
     // to be committed, so it belongs with the value rather than with the verbs.
     if (toggle) {
