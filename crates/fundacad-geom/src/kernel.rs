@@ -477,3 +477,56 @@ pub fn loft(sections: &[Shape]) -> KResult<Shape> {
 pub fn sweep(profile: &Shape, path: &Shape) -> KResult<Shape> {
     wrap(fo::fo_sweep(profile.raw(), path.raw()))
 }
+
+/// `(zmin, zmax)` of the shape in a frame at `origin` whose z is `dir`.
+pub fn axial_extent(s: &Shape, origin: [f64; 3], dir: [f64; 3]) -> Option<(f64, f64)> {
+    let mut out = [0.0; 2];
+    let [ox, oy, oz] = origin;
+    let [dx, dy, dz] = dir;
+    fo::fo_axial_extent(s.raw(), ox, oy, oz, dx, dy, dz, &mut out).then_some((out[0], out[1]))
+}
+
+/// The face's outer wire followed by its inner wires.
+pub fn face_wire_list(face: &Shape) -> KResult<Vec<Shape>> {
+    Ok(children(&wrap(fo::fo_face_wire_list(face.raw()))?))
+}
+
+pub fn axial_scale(s: &Shape, factor: f64, dir: [f64; 3], hold: f64) -> KResult<Shape> {
+    wrap(fo::fo_axial_scale(s.raw(), factor, dir[0], dir[1], dir[2], hold))
+}
+
+/// A helix of `pitch` rising `height`, radius `radius`, on the plane at `origin`
+/// with axes `x` and `z`, swept by `wire` with its binormal pinned to `axis`.
+#[allow(clippy::too_many_arguments)]
+pub fn screw_sweep(
+    wire: &Shape,
+    origin: [f64; 3],
+    x: [f64; 3],
+    z: [f64; 3],
+    axis: [f64; 3],
+    radius: f64,
+    pitch: f64,
+    height: f64,
+    lefthand: bool,
+) -> KResult<Shape> {
+    let p = origin;
+    wrap(fo::fo_screw_sweep(
+        wire.raw(),
+        p[0],
+        p[1],
+        p[2],
+        x[0],
+        x[1],
+        x[2],
+        z[0],
+        z[1],
+        z[2],
+        axis[0],
+        axis[1],
+        axis[2],
+        radius,
+        pitch,
+        height,
+        lefthand,
+    ))
+}

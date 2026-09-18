@@ -22,7 +22,7 @@ use serde_json::{json, Map, Value};
 
 use crate::features;
 use crate::kernel::{self, KernelError};
-pub use fmt::py_g;
+pub use fmt::{py_g, py_g_prec};
 pub use owners::Owners;
 pub use plane::PlaneRecord;
 
