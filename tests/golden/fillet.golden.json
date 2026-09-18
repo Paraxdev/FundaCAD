@@ -2013,7 +2013,7 @@
    "ocp": "7.9.3.1",
    "platform": "Windows-11-10.0.26200-SP0",
    "python": "3.12.13",
-   "sidecarCommit": "28e4a6abca8d17d33dafc19c49532c5d6dd6f90b"
+   "sidecarCommit": "0c919c56ec54491d2bd9df4cfa8569b66ea5daf4"
   },
   "rules": "Every case rebuilt and scored as eval_fillet_corpus.py scores it: a selector miss (an error saying no edge found) is counted apart, any other error of the blend feature fails, and so does a result that is not one valid solid, has fewer faces than min_faces (else pre_op_faces + n_edges), or removes a volume that is not positive or is more than volumeRel off the reference. Each case's outcome, pass, fail or selector-miss, must equal python's.",
   "summary": {

@@ -369,7 +369,7 @@
    "ocp": "7.9.3.1",
    "platform": "Windows-11-10.0.26200-SP0",
    "python": "3.12.13",
-   "sidecarCommit": "28e4a6abca8d17d33dafc19c49532c5d6dd6f90b"
+   "sidecarCommit": "0c919c56ec54491d2bd9df4cfa8569b66ea5daf4"
   },
   "rules": "The script replayed on one fresh server, private (FUNDACAD_MCP_MODE=standalone, a session file that cannot exist): every call's text (text blocks joined by a newline) and isError must equal python's word for word, after an absolute POSIX path argument and its folder, as the server resolved them, are put back as given.",
   "tool": "crates/fundacad-mcp/tools/diff_servers.py"
