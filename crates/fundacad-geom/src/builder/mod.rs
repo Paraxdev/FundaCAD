@@ -696,6 +696,11 @@ pub fn rebuild_from(
         };
 
         let outcome = run_feature(&mut ctx, f, type_name, watch);
+        // A feature a cancel cut short failed for no reason of its own, and
+        // must not reach the cache as though it had.
+        if watch.cancelled() {
+            return Err(Cancelled);
+        }
         let label = label_of(rawf);
         match outcome {
             Ok(Ran::Inactive) => {}

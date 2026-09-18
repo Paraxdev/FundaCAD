@@ -378,19 +378,23 @@ pub fn engine_send(state: tauri::State<'_, Engine>, request: Request<'_>) -> Res
         return Err("engine_send takes the request as raw bytes".into());
     };
     let text = String::from_utf8(bytes.clone()).map_err(|e| e.to_string())?;
-    let (id, op, target) = head(&text);
+    let Head { id, op, target, soft } = head(&text);
     // Recorded before sending: a fast reply can be relayed before
     // send_to_worker returns, and would find nothing to settle.
     let Some(id) = id else {
         return send_to_worker(&state.0, &Message::Text(text));
     };
     match op.as_deref() {
-        Some("cancel") => {
+        // A soft cancel stops a superseded preview at its next checkpoint. It is
+        // never escalated: restarting the worker would drop every cached
+        // feature to save a job whose reply nobody is waiting for.
+        Some("cancel") if !soft => {
             let target = target.or_else(|| lock(&state.0.in_flight).iter().next().cloned());
             if let Some(target) = target {
                 lock(&state.0.cancels).insert(id.clone(), target);
             }
         }
+        Some("cancel") => {}
         Some("ping") | None => {}
         Some(_) => {
             lock(&state.0.in_flight).insert(id.clone());
@@ -402,33 +406,42 @@ pub fn engine_send(state: tauri::State<'_, Engine>, request: Request<'_>) -> Res
     })
 }
 
-/// `id`, `op` and `target` of a request without parsing a multi-megabyte
-/// document: the client writes them first, so a prefix almost always holds
-/// them, and a full parse is the fallback.
-fn head(text: &str) -> (Option<String>, Option<String>, Option<String>) {
+#[derive(Debug, PartialEq, Eq, Default)]
+struct Head {
+    id: Option<String>,
+    op: Option<String>,
+    target: Option<String>,
+    soft: bool,
+}
+
+/// The head of a request without parsing a multi-megabyte document: the
+/// client writes it first, so a prefix almost always holds it, and a full
+/// parse is the fallback.
+fn head(text: &str) -> Head {
     #[derive(serde::Deserialize)]
-    struct Head {
+    struct Raw {
         id: Option<Value>,
         op: Option<String>,
         target: Option<Value>,
+        soft: Option<bool>,
     }
-    let pick = |h: Head| {
+    let pick = |h: Raw| {
         let s = |v: Option<Value>| v.and_then(|v| v.as_str().map(str::to_owned));
-        (s(h.id), h.op, s(h.target))
+        Head { id: s(h.id), op: h.op, target: s(h.target), soft: h.soft == Some(true) }
     };
     let prefix_end = text.char_indices().nth(512).map_or(text.len(), |(i, _)| i);
     if let Some(close) = text[..prefix_end].find(",\"") {
         let rest = &text[close + 1..prefix_end];
         if let Some(second) = rest.find(",\"").map(|i| close + 1 + i) {
             let candidate = format!("{}}}", &text[..second]);
-            if let Ok(h) = serde_json::from_str::<Head>(&candidate) {
+            if let Ok(h) = serde_json::from_str::<Raw>(&candidate) {
                 if h.op.is_some() && h.op.as_deref() != Some("cancel") {
                     return pick(h);
                 }
             }
         }
     }
-    serde_json::from_str::<Head>(text).map(pick).unwrap_or((None, None, None))
+    serde_json::from_str::<Raw>(text).map(pick).unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -437,14 +450,24 @@ mod tests {
 
     #[test]
     fn the_head_of_a_request_is_read_from_its_prefix() {
+        let h = |id: Option<&str>, op: Option<&str>, target: Option<&str>, soft: bool| Head {
+            id: id.map(Into::into),
+            op: op.map(Into::into),
+            target: target.map(Into::into),
+            soft,
+        };
         let big = format!(r#"{{"id":"a","op":"rebuild","document":{{"x":"{}"}}}}"#, "y".repeat(10_000));
-        assert_eq!(head(&big), (Some("a".into()), Some("rebuild".into()), None));
+        assert_eq!(head(&big), h(Some("a"), Some("rebuild"), None, false));
         assert_eq!(
             head(r#"{"id":"c","op":"cancel","target":"a"}"#),
-            (Some("c".into()), Some("cancel".into()), Some("a".into()))
+            h(Some("c"), Some("cancel"), Some("a"), false)
         );
-        assert_eq!(head(r#"{"op":"ping"}"#), (None, Some("ping".into()), None));
-        assert_eq!(head("not json"), (None, None, None));
+        assert_eq!(
+            head(r#"{"id":"c","op":"cancel","target":"a","soft":true}"#),
+            h(Some("c"), Some("cancel"), Some("a"), true)
+        );
+        assert_eq!(head(r#"{"op":"ping"}"#), h(None, Some("ping"), None, false));
+        assert_eq!(head("not json"), Head::default());
     }
 
     #[test]

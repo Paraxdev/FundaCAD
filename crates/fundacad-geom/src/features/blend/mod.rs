@@ -63,6 +63,17 @@ pub enum SectionErr {
     Value(String),
     /// An OpenCASCADE exception, by class.
     Internal(String),
+    /// The job was cancelled while it ran.
+    Cancelled,
+}
+
+/// Stop here when the job was cancelled. The builder drops whatever a
+/// cancelled feature returns, so the failure only has to end the work.
+fn checkpoint() -> FResult {
+    if crate::cancel::requested() {
+        return Err(Fail::msg("cancelled"));
+    }
+    Ok(())
 }
 
 fn value_err(message: impl Into<String>, code: Option<&'static str>) -> Fail {
@@ -428,6 +439,10 @@ pub(crate) fn sequential_blend(
         progressed = false;
         let mut still = Vec::new();
         for (orig, fp) in pending {
+            if crate::cancel::requested() {
+                still.push((orig, fp));
+                continue;
+            }
             let Some(target) = rematch_edge(&current, &fp, max_mid_dist, tol_pos) else {
                 still.push((orig, fp));
                 continue;
@@ -587,6 +602,7 @@ fn blend_edges(
     let groups = select::group_by_body(ctx, sels, label)?;
     let mut staged: Vec<(usize, Shape)> = Vec::new();
     for (index, group) in groups {
+        checkpoint()?;
         let body_shape = ctx.bodies[index].shape().clone();
         let body_name = ctx.bodies[index].name.clone();
         let sel_value = Value::Array(
@@ -619,6 +635,7 @@ fn blend_edges(
                 }
                 Some(Err(SectionErr::Value(e))) => return Err(Fail::msg(e)),
                 Some(Err(SectionErr::Internal(name))) => return Err(Fail::Internal(name)),
+                Some(Err(SectionErr::Cancelled)) => return Err(Fail::msg("cancelled")),
                 None => return Err(Fail::Internal("TypeError".into())),
             }
         }
@@ -638,6 +655,7 @@ fn blend_edges(
             Ok(out) => out,
             Err(BlendErr::Conic(msg)) => return Err(value_err(msg, Some(CONIC_NOT_APPLICABLE))),
             Err(combined_err) => {
+                checkpoint()?;
                 let (out, unresolved) = if draft && section.is_some() {
                     (work.clone(), work_edges.clone())
                 } else {
@@ -648,6 +666,7 @@ fn blend_edges(
                 if unresolved.is_empty() {
                     out
                 } else {
+                    checkpoint()?;
                     if let Some(built) = try_section(&body_shape, &edges) {
                         if draft {
                             remember_fell_back(fell_back);
@@ -655,6 +674,7 @@ fn blend_edges(
                         staged.push((index, built));
                         continue;
                     }
+                    checkpoint()?;
                     report_edge_failures(&mut ctx.diagnostics, fid, &unresolved, &|e| {
                         one_edge_at(&work, e, blend_size).is_ok()
                     });
@@ -673,6 +693,7 @@ fn blend_edges(
                 }
             }
         };
+        checkpoint()?;
         let new_shape = if overlap::folds_over_itself(&work, &new_shape) {
             match try_section(&body_shape, &edges) {
                 Some(built) => built,
