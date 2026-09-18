@@ -1161,3 +1161,26 @@ jobs:
               || { echo "::error::$g does not match the python engine"; tail -n 20 golden.err; fail=1; }
           done
           exit $fail
+
+      # The shipped engine is an optimised GCC build, which the debug build above
+      # is not: undefined behaviour in the C++ shims has shown up only there. The
+      # same goldens again on a release build, each under a clock, so a result
+      # that differs or a rebuild that hangs only once optimised fails here. A
+      # release build finds plugins only through FUNDACAD_PLUGIN_DIR.
+      - name: Build the release engine
+        run: cargo build --release -p fundacad-cli
+
+      - name: Golden parity checks, release build
+        shell: bash
+        env:
+          FUNDACAD_PLUGIN_DIR: plugins
+        run: |
+          fail=0
+          for g in tests/golden/*.golden.json; do
+            case "$g" in *mcp_parity*) continue ;; esac
+            code=0
+            timeout 900 ./target/release/fundacad-engine golden-check "$g" 2>golden.err || code=$?
+            [ $code -eq 124 ] && echo "::error::$g did not finish in 15 minutes on the release build"
+            [ $code -ne 0 ] && { echo "::error::$g fails on the release build"; tail -n 20 golden.err; fail=1; }
+          done
+          exit $fail
