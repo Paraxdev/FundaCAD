@@ -1,5 +1,5 @@
 //! Does the geometry engine die with the server that started it? A port of
-//! `crates/fundacad-mcp/tools/python-oracle/tests/test_lifetime.py`.
+//! the Python MCP server's `test_lifetime.py`.
 //!
 //! This is not housekeeping. Each session spawns an engine holding a loaded
 //! OpenCASCADE; an MCP host kills its servers with TerminateProcess, which runs

@@ -1,5 +1,5 @@
 //! Reading a geometry file into the timeline. A port of
-//! `crates/fundacad-mcp/tools/python-oracle/tests/test_import.py`.
+//! the Python MCP server's `test_import.py`.
 //!
 //! An agent asked to make something that fits a real part could not get the
 //! part. `import` was a feature type it was told not to author, and correctly:

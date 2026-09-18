@@ -1,5 +1,5 @@
 //! The agent's side of a live session: read the open document, offer an edit.
-//! A port of `crates/fundacad-mcp/tools/python-oracle/live_link.py`.
+//! A port of the Python MCP server's `live_link.py`.
 //!
 //! `fundacad-engine`'s `live` module holds the rules. This is the half that
 //! lives with the agent, and it exists to make one awkward thing invisible to
