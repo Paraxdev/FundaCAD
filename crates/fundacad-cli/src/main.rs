@@ -132,6 +132,11 @@ fn rebuild(args: &[String]) -> ExitCode {
         }
     };
 
+    let phases = fundacad_geom::bench::report();
+    if phases.as_object().is_some_and(|m| !m.is_empty()) {
+        eprintln!("phases: {phases}");
+    }
+
     let ok = reply["ok"] == true;
     let written = if as_json {
         writeln!(out, "{reply}")

@@ -428,7 +428,9 @@ pub(crate) fn sequential_blend(
         progressed = false;
         let mut still = Vec::new();
         for (orig, fp) in pending {
-            let Some(target) = rematch_edge(&current, &fp, max_mid_dist, tol_pos) else {
+            let Some(target) = crate::bench::phase("blend_rematch", || {
+                rematch_edge(&current, &fp, max_mid_dist, tol_pos)
+            }) else {
                 still.push((orig, fp));
                 continue;
             };

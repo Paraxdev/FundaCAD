@@ -10,6 +10,7 @@ use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
 
 static ON: AtomicBool = AtomicBool::new(false);
+static TRACE: AtomicBool = AtomicBool::new(false);
 static READ: OnceLock<()> = OnceLock::new();
 
 fn table() -> &'static Mutex<BTreeMap<&'static str, (f64, u64)>> {
@@ -21,19 +22,37 @@ fn on() -> bool {
     READ.get_or_init(|| {
         let set = std::env::var_os("FUNDACAD_BENCH_PHASES").is_some_and(|v| v != "0");
         ON.store(set, Ordering::Relaxed);
+        TRACE.store(
+            set && std::env::var_os("FUNDACAD_BENCH_TRACE").is_some_and(|v| v != "0"),
+            Ordering::Relaxed,
+        );
     });
     ON.load(Ordering::Relaxed)
 }
 
+fn since_start() -> f64 {
+    static T0: OnceLock<Instant> = OnceLock::new();
+    T0.get_or_init(Instant::now).elapsed().as_secs_f64()
+}
+
 /// Time `f` under `name`, summing calls. Nested phases each keep their own
 /// total, so an outer phase includes the inner ones, as bench_import.py's do.
+/// `FUNDACAD_BENCH_TRACE` also prints every phase as it opens and closes, so a
+/// run that hangs names the phase it hangs in.
 pub fn phase<T>(name: &'static str, f: impl FnOnce() -> T) -> T {
     if !on() {
         return f();
     }
+    let trace = TRACE.load(Ordering::Relaxed);
+    if trace {
+        eprintln!("[{:9.3}] > {name}", since_start());
+    }
     let began = Instant::now();
     let out = f();
     let secs = began.elapsed().as_secs_f64();
+    if trace {
+        eprintln!("[{:9.3}] < {name} {secs:.3}s", since_start());
+    }
     if let Ok(mut t) = table().lock() {
         let e = t.entry(name).or_insert((0.0, 0));
         e.0 += secs;
