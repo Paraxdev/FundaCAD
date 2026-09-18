@@ -10,7 +10,8 @@ and the model rebuilds from there.
 
 
 It started as a fork of [SindriCAD](https://github.com/MakerViking/sindricad) and
-has diverged quite a lot since, under the same AGPL-3.0 licence.
+has diverged quite a lot since, mainly UI and a rust backend 
+under the same AGPL-3.0 licence.
 
 
 ## Disclosure  
