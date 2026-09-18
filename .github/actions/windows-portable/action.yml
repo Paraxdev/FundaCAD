@@ -1,7 +1,7 @@
 name: Portable zip (Windows)
 description: >
   Unpack the .msi and zip the payload as a portable folder. Shared by the beta
-  build and the pre-alpha Rust build, so the two zips are assembled the same
+  build and the alpha Rust build, so the two zips are assembled the same
   way; only what has to be inside them differs.
 
 inputs:

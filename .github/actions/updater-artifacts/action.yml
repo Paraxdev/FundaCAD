@@ -2,7 +2,7 @@ name: Disable updater artifacts when they could not be trusted
 description: >
   Turn createUpdaterArtifacts off in a bundle config when there is no signing
   key, or when the key's public half is not the one the app verifies against.
-  Shared by the beta build and the pre-alpha Rust build, which each have their
+  Shared by the beta build and the alpha Rust build, which each have their
   own bundle config.
 
 inputs:

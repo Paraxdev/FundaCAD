@@ -30,10 +30,10 @@ This file starts on 2026-08-03. For anything before that, see the
   kernel tests (volume, boolean cut, per-face tessellation in the protocol v2
   body payload shape). Nothing shipped changes yet: the Python sidecar is still
   the engine. The plan, the decision record and the per-module conversion list
-  are in `docs/RUST-PIVOT.md`, including the `prealpha-rust` rolling
+  are in `docs/RUST-PIVOT.md`, including the `alpha` rolling
   release that will carry the Rust engine with a work-in-progress warning.
 
-- **A second rolling release, `prealpha-rust`, for the Rust engine.** It is
+- **A second rolling release, `alpha`, for the Rust engine.** It is
   built with the engine compiled into the app, carries no Python runtime at
   all, and opens its notes with a warning that it is a work in progress and not
   for real work: unported features fail in a rebuild with the skipped-feature
@@ -41,6 +41,13 @@ This file starts on 2026-08-03. For anything before that, see the
   `.funda` documents that open in the beta. It updates only from its own feed,
   so a beta install is never offered one of these builds and the beta stays the
   complete app. Nothing is published from it until the first green run.
+
+- **The Rust engine is `main` now and releases as the rolling `alpha`**
+  (it was `prealpha-rust`). The Python engine moved to the `legacy` branch,
+  which keeps publishing the rolling `beta` and its update feed, so beta
+  installs carry on as before. Alpha because the Rust engine is less tested
+  than the beta; its notes ask for a report of anything that builds
+  differently. Each install still reads only its own feed.
 
 ### Added
 

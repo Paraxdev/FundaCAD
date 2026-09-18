@@ -31,7 +31,7 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/Paraxdev/fundacad/releases/download/prealpha-rust/latest.json"
+        "https://github.com/Paraxdev/fundacad/releases/download/alpha/latest.json"
       ]
     }
   }

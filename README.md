@@ -46,8 +46,12 @@ the goal is it to make this a personalized version of a CAD with features I like
 
 Prebuilt installers for Windows, macOS (Apple Silicon) and Linux are on the
 [beta release](https://github.com/Paraxdev/fundacad/releases/tag/beta), rebuilt
-from `main` on every green build. These builds do not update themselves, so come
-back to that page for a newer one.
+from the `legacy` branch on every green build, with the Python geometry engine.
+The new Rust engine is on the [alpha release](https://github.com/Paraxdev/fundacad/releases/tag/alpha),
+rebuilt from `main`: smaller, no Python, and less tested than the beta, so
+anything that builds differently there is worth a report. Files open in both.
+These builds do not update themselves, so come back to those pages for a newer
+one.
 
 On Windows there is also a **portable zip** (`…_x64_portable.zip`). Unzip it
 anywhere and run `fundacad.exe`: no installer, no admin rights, and several builds
@@ -122,7 +126,7 @@ outlives its shell, so kill it by hand or it keeps port 8765.
 ## Docs
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), how the three processes fit together
-- [`docs/RUST-PIVOT.md`](docs/RUST-PIVOT.md), the plan and conversion list for moving the geometry engine, and later the whole app, to Rust (pre-alpha, work in progress)
+- [`docs/RUST-PIVOT.md`](docs/RUST-PIVOT.md), the plan and conversion list for moving the geometry engine, and later the whole app, to Rust (alpha, work in progress)
 - [`docs/PROTOCOL.md`](docs/PROTOCOL.md), the WebSocket the frontend and sidecar speak
 - [`docs/FUNDA-FORMAT.md`](docs/FUNDA-FORMAT.md), the readable `.funda` JSON document and the self-repairing binary `.fundab`
 - [`docs/PACKAGING.md`](docs/PACKAGING.md), how the bundled Python runtime is built

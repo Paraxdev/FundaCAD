@@ -438,9 +438,9 @@ one. On the Rust engine a feature of a plugin with no `geometryWasm` fails by
 name: "its manifest names no geometryWasm, so the Rust engine has no geometry
 to run".
 
-The Rust engine build installs its plugins from its own `prealpha-rust`
+The Rust engine build installs its plugins from its own `alpha`
 release rather than the beta's (`pluginReleaseTag` in `src/plugins/index.ts`,
-chosen from `engine_kind` at run time). `build-prealpha` packs those bundles
+chosen from `engine_kind` at run time). `build-alpha` packs those bundles
 with their components, from the same commit as the host that runs them. The
 app tells its worker where installed plugins are with `FUNDACAD_PLUGIN_DIR`
 (`<app data>/plugins`), and the shipped `fundacad-mcp` tells a private engine

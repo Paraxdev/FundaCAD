@@ -13,9 +13,9 @@
 > **The OCCT sections below are LEGACY**, they apply only to building the optional
 > `rust-geom` spike (`cargo build --features rust-geom`), not to shipping.
 
-> **The pre-alpha Rust bundle (2026-09):** there is now a second thing this
+> **The alpha Rust bundle (2026-09):** there is now a second thing this
 > repository builds, and it has no Python in it. See
-> [the pre-alpha section](#the-pre-alpha-rust-bundle) below.
+> [the alpha section](#the-alpha-rust-bundle) below.
 
 FundaCAD is a [Tauri 2](https://v2.tauri.app) desktop app:
 
@@ -30,15 +30,15 @@ CI: [`.github/workflows/build.yml`](../.github/workflows/build.yml).
 
 ---
 
-## The pre-alpha Rust bundle
+## The alpha Rust bundle
 
 A second bundle, from the same tree, whose geometry engine is compiled in. It
-is what the `build-prealpha` and `release-prealpha` jobs publish to the
-`prealpha-rust` rolling release; docs/RUST-PIVOT.md section 6 is the decision
+is what the `build-alpha` and `release-alpha` jobs publish to the
+`alpha` rolling release; docs/RUST-PIVOT.md section 6 is the decision
 record, this is how to build one.
 
 ```sh
-npx tauri build --config src-tauri/tauri.prealpha.conf.json --features rust-engine
+npx tauri build --config src-tauri/tauri.alpha.conf.json --features rust-engine
 ```
 
 Four things make it different from the beta bundle:
@@ -48,10 +48,10 @@ Four things make it different from the beta bundle:
   the app registers `engine_attach` / `engine_send` / `engine_kind` instead of
   `sidecar_token`. `engine_kind` answering `"rust"` is what makes
   `src/geometry/transport.ts` choose IPC over the WebSocket.
-- **`tauri.prealpha.conf.json` instead of `tauri.bundle.conf.json`.** It
+- **`tauri.alpha.conf.json` instead of `tauri.bundle.conf.json`.** It
   declares no `resources`, so no `sidecar-runtime` is bundled and
   `scripts/build-sidecar-runtime.{sh,ps1}` never has to run. It also points the
-  updater at the pre-alpha feed and drops the loopback grant from the CSP,
+  updater at the alpha feed and drops the loopback grant from the CSP,
   which that build cannot use.
 - **`fundacad-mcp` ships beside the app.** The config's `externalBin`
   (`binaries/fundacad-mcp`) is filled by its `beforeBuildCommand`, which runs
@@ -72,7 +72,7 @@ Four things make it different from the beta bundle:
 
 Measured on Windows, 2026-09-17, from that exact command:
 
-| | beta (0.2.125) | pre-alpha, Rust engine |
+| | beta (0.2.125) | alpha, Rust engine |
 |---|---|---|
 | `.msi` | 162.7 MB | **23.3 MB** |
 | `-setup.exe` (NSIS) | 157.3 MB | **23.1 MB** |
@@ -83,15 +83,16 @@ the engine, OpenCASCADE included, is 62 MB of executable. The same run also
 confirmed the three things that make the bundle, read back out of the compiled
 binary rather than assumed: `engine_attach` is registered and `sidecar_token`
 is not, the policy in it is the tightened one with no `ws://127.0.0.1:8765`
-anywhere, and the updater endpoint baked in is the pre-alpha one with the beta
+anywhere, and the updater endpoint baked in is the alpha one with the beta
 one absent.
 
 With `fundacad-mcp` beside it (2026-09-18, same command): `.msi` 29.2 MB,
 `-setup.exe` 28.9 MB, portable zip 28.9 MB; the folder is `fundacad.exe`
 76.6 MB and `fundacad-mcp.exe` 4.2 MB, nothing else.
 
-Nothing about the beta path changes, and the two never meet: separate jobs,
-separate tags, separate update feeds, separate artifact names.
+The two never meet: separate branches (the beta builds from `legacy`, the
+alpha from `main`), separate jobs, separate tags, separate update feeds,
+separate artifact names.
 
 The OCCT sections below are about the OLD `rust-geom` system-linked spike and
 do not apply to this bundle, which links no system OCCT on any platform.
