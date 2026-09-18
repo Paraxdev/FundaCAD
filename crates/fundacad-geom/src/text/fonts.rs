@@ -151,14 +151,26 @@ impl Library {
         if let Some(f) = self.fonts.get("arial") {
             return Some(f);
         }
-        let id = self.db.query(&fontdb::Query {
-            families: &[fontdb::Family::SansSerif],
-            ..fontdb::Query::default()
-        })?;
-        let family = self.db.face(id)?.families.first()?.0.to_lowercase();
-        self.fonts
-            .get(&family)
+        // fontdb's sans serif is Arial unless fontconfig names another, and
+        // the one it names need not be installed, so the query can find nothing.
+        self.db
+            .query(&fontdb::Query {
+                families: &[fontdb::Family::SansSerif],
+                ..fontdb::Query::default()
+            })
+            .and_then(|id| self.db.face(id)?.families.first().map(|f| f.0.to_lowercase()))
+            .and_then(|family| self.fonts.get(&family))
             .or_else(|| self.fonts.values().next())
+    }
+
+    /// Whether this name finds its own family, directly or through an alias,
+    /// rather than a fallback standing in for it.
+    pub fn is_installed(&self, name: &str) -> bool {
+        let key = name.to_lowercase();
+        self.fonts.contains_key(&key)
+            || ALIASES
+                .iter()
+                .any(|(from, to)| *from == key && self.fonts.contains_key(*to))
     }
 
     /// `FindFont` then `FontPathAny`: the aspect asked for, else regular with
@@ -414,4 +426,30 @@ pub fn names_by_key(lib: &Library) -> HashMap<String, String> {
         .iter()
         .map(|(k, v)| (k.clone(), v.name.clone()))
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_machine_without_arial_still_draws_text() {
+        let mut db = fontdb::Database::new();
+        db.load_system_fonts();
+        let arial: Vec<fontdb::ID> = db
+            .faces()
+            .filter(|f| f.families.iter().any(|(n, _)| n.eq_ignore_ascii_case("arial")))
+            .map(|f| f.id)
+            .collect();
+        for id in arial {
+            db.remove_face(id);
+        }
+        db.set_sans_serif_family("No Such Family");
+        if db.is_empty() {
+            return;
+        }
+        let lib = Library::build(db);
+        assert!(!lib.is_installed("Arial"));
+        assert!(lib.resolve("Arial", Aspect::Regular).is_some());
+    }
 }
