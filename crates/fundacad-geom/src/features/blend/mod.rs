@@ -240,20 +240,27 @@ pub fn chamfer(ctx: &mut Ctx, f: &Chamfer) -> FResult {
     )
 }
 
-/// `_DRAFT_FELL_BACK`: drags whose last frame needed the section build.
-static DRAFT_FELL_BACK: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+/// `_DRAFT_FELL_BACK`: drags that needed the section build, with the smallest
+/// size they needed it at.
+///
+/// Keyed by size, unlike blends.py: a drag that fell back at 43.7 mm and then
+/// came down to 3 mm went straight to the section build, which the kernel's
+/// own filleter would have answered at once, and the section build's boolean
+/// can hang outright on such a small conic blend.
+static DRAFT_FELL_BACK: std::sync::Mutex<Vec<(String, f64)>> = std::sync::Mutex::new(Vec::new());
 
-fn fell_back_before(key: &str) -> bool {
+fn fell_back_before(key: &str, size: f64) -> bool {
     DRAFT_FELL_BACK
         .lock()
-        .map(|v| v.iter().any(|k| k == key))
+        .map(|v| v.iter().any(|(k, at)| k == key && size >= *at))
         .unwrap_or(false)
 }
 
-fn remember_fell_back(key: String) {
+fn remember_fell_back(key: String, size: f64) {
     if let Ok(mut v) = DRAFT_FELL_BACK.lock() {
-        if !v.contains(&key) {
-            v.push(key);
+        match v.iter_mut().find(|(k, _)| *k == key) {
+            Some(entry) => entry.1 = entry.1.min(size),
+            None => v.push((key, size)),
         }
     }
 }
@@ -640,7 +647,7 @@ fn blend_edges(
             }
         }
         let fell_back = format!("{fid}|{}|{label}|{sel_value}", ctx.bodies[index].id);
-        if draft && fell_back_before(&fell_back) {
+        if draft && fell_back_before(&fell_back, blend_size) {
             if let Some(built) = try_section(&body_shape, &edges) {
                 staged.push((index, built));
                 continue;
@@ -669,7 +676,7 @@ fn blend_edges(
                     checkpoint()?;
                     if let Some(built) = try_section(&body_shape, &edges) {
                         if draft {
-                            remember_fell_back(fell_back);
+                            remember_fell_back(fell_back, blend_size);
                         }
                         staged.push((index, built));
                         continue;
@@ -713,6 +720,19 @@ fn blend_edges(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_drag_that_fell_back_asks_the_kernel_again_below_that_size() {
+        let key = "test-fell-back|body1|Fillet|[]".to_owned();
+        assert!(!fell_back_before(&key, 43.7));
+        remember_fell_back(key.clone(), 43.7);
+        assert!(fell_back_before(&key, 43.7));
+        assert!(fell_back_before(&key, 50.0));
+        assert!(!fell_back_before(&key, 3.0));
+        remember_fell_back(key.clone(), 37.0);
+        assert!(fell_back_before(&key, 40.0));
+        assert!(!fell_back_before(&key, 36.0));
+    }
 
     #[test]
     fn kernel_sentence_drops_the_max_fillet_tail() {
