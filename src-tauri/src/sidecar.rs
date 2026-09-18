@@ -56,7 +56,7 @@ unsafe impl Sync for Sidecar {}
 /// 256-bit shared secret for the sidecar WebSocket, from the OS CSPRNG (portable:
 /// Windows/macOS/Linux). A failure here is treated as fatal rather than falling back
 /// to a guessable token.
-fn random_token() -> String {
+pub(crate) fn random_token() -> String {
     let mut buf = [0u8; 32];
     getrandom::getrandom(&mut buf).expect("OS CSPRNG unavailable");
     buf.iter().map(|b| format!("{b:02x}")).collect()
