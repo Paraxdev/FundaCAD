@@ -1,0 +1,377 @@
+{
+ "cases": [
+  {
+   "args": {},
+   "isError": false,
+   "text": "# FundaCAD document schema\n\nWorking order that avoids most dead ends:\n\n1. `param_set` the driving dimensions FIRST, then write features that reference\n   them by name. Retrofitting parameters means rewriting every feature.\n2. `feature_add` a few features, then `build`. Build often: an error names the\n   feature that caused it, and one at a time is far easier to place than six.\n3. `inspect` after a build to learn the body ids, the face and edge lists, and\n   the ready-made selectors. Never guess a selector.\n4. `view` to look at it. Numbers say a hole is 8mm across; only the picture says\n   it is in the wrong place.\n5. `doc_save` to a .funda file, which the app opens directly.\n\nAsked to fit something to a part that exists as a file (STEP, STL, 3MF, OBJ,\nBREP, GLB)? `doc_import` it first, then `build` and `inspect` it: that gives the\nreal sizes and the selectors for its faces and edges, which is what makes the\nnext feature something other than a guess. Import once and keep the document, a\nlarge STEP is minutes of reading. If the file was given to you rather than left\non this machine, send it as `content` and skip looking for a path that is not\nthere: gzipped, and in pieces if it is still too big for one message.\n\nIf it is too big for even that, the answer is never to model against a\nsimplified stand-in you made up. A part fitted to an approximation of the\nreference is wrong in a way nothing downstream can detect, because every\nmeasurement you take afterwards agrees with every other one. Ask instead. The\nperson you are working with is at the machine FundaCAD is running on: they can\ngive you the file's path there, or open it themselves with File, Import Mesh,\nafter which it is in the document and `inspect` measures the real thing. Saying\n\"I cannot reach this file, what is its path on your machine?\" costs one message\nand gets the actual part.\n\nThings that are true here and not in every CAD:\n - Z is up. A sketch on XY is a floor plan; a sketch on XZ is a side elevation.\n - box, cylinder and sphere are CENTRED ON THE ORIGIN. Use `move` to place them.\n - Body ids (body1, body2, ...) are handed out at build time and are NOT feature\n   ids. Read them from `build` or `inspect`. A body keeps its id afterwards.\n - A feature can only reference features ABOVE it in the timeline.\n\n\n## Shared types\n\nNum: A number, or the NAME of a parameter as a string. `48` and `\"hub_d\"` are both valid; the string form is what makes the model parametric, and it is resolved against the document parameter table at build time.\n\nPlaneSpec: Either \"XY\", \"XZ\" or \"YZ\", or an explicit plane {\"origin\":[x,y,z], \"normal\":[x,y,z], \"xdir\":[x,y,z]} in world mm. In-plane Y is normal x xdir. FundaCAD is Z-UP.\n\nAxisSpec: Either \"X\", \"Y\" or \"Z\", or a line {\"origin\":[x,y,z], \"dir\":[x,y,z]}.\n\nSelector: How a feature names a face or an edge of a body that does not exist until the rebuild runs. Prefer the selector the `inspect` tool hands back for that exact face or edge, it carries a geometric fingerprint and survives small changes upstream. The forms are:\n  {\"kind\":\"face\"|\"edge\", \"by\":\"match\", \"fp\":{...}, \"nth\":k, \"body\":\"body1\"}\n  {\"kind\":\"face\", \"by\":\"nearest\", \"point\":[x,y,z], \"body\":\"body1\"}\n  {\"kind\":\"face\", \"by\":\"normal\", \"dir\":[0,0,1], \"body\":\"body1\"}   ALL faces facing that way\n  {\"kind\":\"edge\", \"by\":\"nearest\", \"point\":[x,y,z], \"body\":\"body1\"}\n  {\"kind\":\"edge\", \"by\":\"axis\", \"axis\":\"Z\", \"body\":\"body1\"}         ALL edges parallel to Z\n  {\"kind\":\"edge\", \"by\":\"all\", \"body\":\"body1\"}\n  {\"kind\":\"edge\", \"by\":\"ofFace\", \"face\":{...fp}, \"body\":\"body1\"}   the edges bounding a face\nALWAYS set `body`. Without it a pick on a multi-body model can land on the wrong body silently.\n\nregion: A 3D point INSIDE the closed sketch area you mean, in world mm. A sketch with several closed areas (a ring, a plate with holes, two separate outlines) needs one point per area you want. Omit `regions` entirely to use the whole sketch.\n\noperation: How the new material joins what is already there (default \"new\"): \"new\" makes a separate body, \"join\" fuses into the target, \"cut\" subtracts from it, \"intersect\" keeps only the overlap.\nWithout `targets`, a join/cut/intersect acts on EVERY visible body the new shape overlaps, not just the nearest one. That is what someone dragging a face across two parts means; it is not what building a second part beside a first one means. Set `targets` whenever more than one body exists.\n\ntargets: Optional list of body ids [\"body1\", ...] that a join/cut/intersect is allowed to touch. Bodies not named are left alone even where the new shape passes straight through them. Ignored when `operation` is \"new\". A join that names targets and reaches none of them is an error rather than a quietly-created extra body.\nBody ids are handed out AT BUILD TIME, so read them back from `build` or `inspect` rather than assuming them. Once built, a body keeps its id when other features are added, removed or switched off, and a join keeps the id of the body it merges into.\n\nactiveWhen: Optional on EVERY feature type: a Num. While it resolves to 0 the build leaves the feature out, exactly as if it were suppressed; any other value, or no field at all, builds it. Point it at a parameter whose expression is the condition: param_set coreOn = \"solidCore == 1\", then \"activeWhen\": \"coreOn\". A NaN condition is an error, never read as off.\nA feature that consumes a switched-off one fails and says so, so switch its consumers off with the same parameter. Skipping a body-creating feature renumbers every body after it, like suppress does.\n\nMateConnector: One side of a joint: a coordinate frame, an origin, a z axis that is the mating direction, and an optional x axis for rotational reference, named one of four ways:\n  {\"body\":\"body2\", \"face\": <Selector>}   the face centre, its outward normal is the axis\n  {\"body\":\"body2\", \"edge\": <Selector>}   the edge midpoint, its direction is the axis\n  {\"datum\": <datumAxis or datumPlane id>}   follows that datum\n  {\"origin\":[x,y,z], \"zdir\":[x,y,z], \"xdir\":[x,y,z]}   an explicit world frame\nA connector on geometry is a REFERENCE, re-resolved every rebuild, so the joint tracks the part as it changes. Set `body` whenever you use `face` or `edge`.\n\n\n## Feature types\n\n- boolean: Combine bodies.\n- box: An axis-aligned box CENTRED ON THE ORIGIN.\n- chamfer: Flatten one or more edges.\n- cleanUp: Merge faces that are pieces of one surface, drop slivers.\n- cone: A cone or frustum on the Z axis, CENTRED ON THE ORIGIN.\n- counterboreBridge: Cut the first layers above a counterbore floor into a slot then a square, so its ceiling bridges cleanly (3D Printing Toolbox plugin).\n- cylinder: A cylinder on the Z axis, CENTRED ON THE ORIGIN.\n- datumAxis: A reference axis, an infinite construction line other features (revolve, circular pattern, mirror, a joint) can be aimed at by name.\n- datumPlane: A construction plane other features can sit on.\n- datumPoint: A reference point in space, a marker with no geometry that other features and the user can snap to.\n- deleteFace: Remove faces and heal the wound (defeature: takes a blend or a boss off).\n- draft: Tilt faces by an angle about an axis (mould release).\n- duplicate: Copy bodies and place the copies, leaving the originals in place.\n- elephantFootChamfer: Chamfer the bottom edges of a body touching the build plate, to cancel first-layer squish (3D Printing Toolbox plugin).\n- extrude: Push a sketch profile along the sketch plane normal.\n- fillet: Round one or more edges.\n- hole: Drill holes into a flat face along its normal: simple, counterbore, countersink, or a heat-set insert bore.\n- import: A body read from a geometry file. Use the `doc_import` TOOL, never feature_add: `geom` is a content hash in the blob store, and only the import itself can put the geometry there, so a hand-written one names a blob that does not exist.\n- imprint: Divide a face into separate faces along a sketch drawn on it, adding and removing no material.\n- joint: Position one body against another by aligning a mate connector on each, and re-resolve those connectors every rebuild so the assembly follows the parts.\n- loft: Blend through two or more profiles in order.\n- mirror: Mirror the active body across a world plane.\n- move: Translate and rotate bodies.\n- offsetFace: Move faces along their normals without changing the rest.\n- patternCircular: Repeat bodies around an axis.\n- patternLinear: Repeat bodies along an axis.\n- patternRect: Repeat bodies on a 2D grid.\n- press-pull: Push one or more faces along their own normals.\n- removeBody: Delete bodies.\n- revolve: Spin a sketch profile around an axis. With `pitch` it climbs as it turns, which is how a thread is made.\n- roofBridge: Square off the top half of sideways round holes so the roof is a flat bridge (3D Printing Toolbox plugin).\n- sacrificialLayer: Close a round hole with a thin membrane to drill out after printing (3D Printing Toolbox plugin).\n- scale: Scale bodies, uniformly or per axis.\n- shell: Hollow a body to a wall thickness, optionally opening faces.\n- simplifyMesh: Decimate an imported mesh body.\n- sketch: A 2D profile on a plane. Makes no geometry by itself; extrude, revolve, sweep and loft consume it.\n- sphere: A sphere centred on the origin.\n- split: Cut bodies with a plane.\n- sweep: Sweep a closed profile sketch along an open path sketch.\n- teardropHole: Give sideways round holes a pointed or flat roof so they print without supports (3D Printing Toolbox plugin).\n- texture: Emboss or engrave a pattern onto faces.\n- thicken: Give a surface (or a set of faces) a thickness.\n- threadRibs: Turn a plain round hole into a self-tapping screw hole: thin axial ribs protrude inward for the screw to cut its own thread into (3D Printing Toolbox plugin).\n- torus: A torus (ring) around the Z axis, CENTRED ON THE ORIGIN.\n- verticalFillet: Fillet every edge of a body that runs parallel to the build direction (3D Printing Toolbox plugin).\n- zipTieChannel: Cut a U-shaped channel under a flat face so a zip tie can loop through the part (3D Printing Toolbox plugin).\n\nCall schema(type) for the fields, an example and the notes of one type.\n\n\n## Sketch entities\n\n- line: x1 (Num), y1 (Num), x2 (Num), y2 (Num)\n- circle: radius (Num), x (Num (default 0)), y (Num (default 0))\n- ellipse: rx (Num, radius along local x), ry (Num, radius along local y), x (Num centre (default 0)), y (Num centre (default 0)), angle (Num, degrees (default 0))\n- arc: x1 (Num), y1 (Num), x2 (Num), y2 (Num), mx (Num, a point ON the arc between the ends), my (Num)\n- rectangle: width (Num), height (Num), x (Num centre), y (Num centre), angle (Num, degrees)\n- polygon: x (Num centre), y (Num centre), radius (Num), sides (Num), angle (Num, degrees)\n- slot: x1 (Num), y1 (Num), x2 (Num), y2 (Num), width (Num)\n- spline: points ([{x, y}, ...])\n- point: x (Num), y (Num)\n- text: text (string), height (Num), x (Num), y (Num)\n\nEvery entity may carry an `id` (unique within the sketch) and `construction: true`, which draws it without letting it bound a profile.\nA profile that will be extruded or revolved must be CLOSED: consecutive endpoints must be numerically identical, not merely close.\nA sketch drawn on XZ has its 2D x along world X and its 2D y along world Z.",
+   "tool": "schema"
+  },
+  {
+   "args": {
+    "type": "revolve"
+   },
+   "isError": false,
+   "text": "## revolve\nSpin a sketch profile around an axis. With `pitch` it climbs as it turns, which is how a thread is made.\n\nFields:\n  sketch: the id of a sketch feature\n  axis: AxisSpec\n  angle: Num, degrees. 360 is a full turn\n  operation: How the new material joins what is already there (default \"new\"): \"new\" makes a separate body, \"join\" fuses into the target, \"cut\" subtracts from it, \"intersect\" keeps only the overlap.\nWithout `targets`, a join/cut/intersect acts on EVERY visible body the new shape overlaps, not just the nearest one. That is what someone dragging a face across two parts means; it is not what building a second part beside a first one means. Set `targets` whenever more than one body exists.\n  targets: Optional list of body ids [\"body1\", ...] that a join/cut/intersect is allowed to touch. Bodies not named are left alone even where the new shape passes straight through them. Ignored when `operation` is \"new\". A join that names targets and reaches none of them is an error rather than a quietly-created extra body.\nBody ids are handed out AT BUILD TIME, so read them back from `build` or `inspect` rather than assuming them. Once built, a body keeps its id when other features are added, removed or switched off, and a join keeps the id of the body it merges into.\n  pitch: optional Num, mm of climb per full turn. With a pitch, an `angle` over 360 means more than one turn: a 2mm pitch at 1080 degrees climbs 6mm over three turns. The SIGN is the direction of climb along the axis, and a thread that cuts nothing is usually a thread climbing away from the body: try the other sign. A field takes a number or a parameter NAME, so write -2 directly, or define a parameter whose expression is -pitch and name that. \"-pitch\" in the field itself is an expression and is refused.\n  axisEdge: optional Selector naming a model edge to spin about; wins over `axis`\n  regions: optional; A 3D point INSIDE the closed sketch area you mean, in world mm. A sketch with several closed areas (a ring, a plate with holes, two separate outlines) needs one point per area you want. Omit `regions` entirely to use the whole sketch.\n\nExample:\n{\n  \"id\": \"rev1\",\n  \"type\": \"revolve\",\n  \"sketch\": \"sk1\",\n  \"axis\": \"Z\",\n  \"angle\": 360,\n  \"operation\": \"new\"\n}\n\nNotes: The profile must lie entirely on ONE side of the axis and must not cross it. For a thread, draw the tooth cross-section in a plane THROUGH the axis (XZ for a Z axis), set `pitch`, and wind `angle` to 360 * number_of_turns.",
+   "tool": "schema"
+  },
+  {
+   "args": {
+    "type": "extrood"
+   },
+   "isError": false,
+   "text": "No feature type 'extrood'. Known types: boolean, box, chamfer, cleanUp, cone, counterboreBridge, cylinder, datumAxis, datumPlane, datumPoint, deleteFace, draft, duplicate, elephantFootChamfer, extrude, fillet, hole, import, imprint, joint, loft, mirror, move, offsetFace, patternCircular, patternLinear, patternRect, press-pull, removeBody, revolve, roofBridge, sacrificialLayer, scale, shell, simplifyMesh, sketch, sphere, split, sweep, teardropHole, texture, thicken, threadRibs, torus, verticalFillet, zipTieChannel",
+   "tool": "schema"
+  },
+  {
+   "args": {},
+   "isError": false,
+   "text": "{\n \"features\": [],\n \"parameters\": {},\n \"paramDefs\": {}\n}",
+   "tool": "doc_get"
+  },
+  {
+   "args": {
+    "expr": 20,
+    "name": "d"
+   },
+   "isError": false,
+   "text": "d = 20 -> 20 mm (1 parameters defined)",
+   "tool": "param_set"
+  },
+  {
+   "args": {
+    "expr": "d/2",
+    "name": "r"
+   },
+   "isError": false,
+   "text": "r = d/2 -> 10 mm (2 parameters defined)",
+   "tool": "param_set"
+  },
+  {
+   "args": {
+    "expr": "a + nope",
+    "name": "bad"
+   },
+   "isError": true,
+   "text": "DocumentError: bad = 'a + nope': unknown parameter a, nope",
+   "tool": "param_set"
+  },
+  {
+   "args": {
+    "expr": 1,
+    "name": "sin"
+   },
+   "isError": true,
+   "text": "DocumentError: 'sin' is a reserved name (a function, unit or constant)",
+   "tool": "param_set"
+  },
+  {
+   "args": {
+    "name": "d"
+   },
+   "isError": true,
+   "text": "DocumentError: d is used by r",
+   "tool": "param_remove"
+  },
+  {
+   "args": {
+    "feature": {
+     "height": 30,
+     "radius": "r",
+     "type": "cylinder"
+    }
+   },
+   "isError": false,
+   "text": "Added cy1.\ntimeline: cy1:cylinder",
+   "tool": "feature_add"
+  },
+  {
+   "args": {
+    "feature": {
+     "nope": 1
+    }
+   },
+   "isError": true,
+   "text": "DocumentError: a feature needs a `type`",
+   "tool": "feature_add"
+  },
+  {
+   "args": {
+    "feature": {
+     "height": 1,
+     "id": "cy1",
+     "length": 1,
+     "type": "box",
+     "width": 1
+    }
+   },
+   "isError": true,
+   "text": "DocumentError: feature id 'cy1' is already used",
+   "tool": "feature_add"
+  },
+  {
+   "args": {
+    "feature": {
+     "distance": 1,
+     "id": "ex1",
+     "operation": "new",
+     "sketch": "nothing",
+     "type": "extrude"
+    }
+   },
+   "isError": false,
+   "text": "Added ex1.\ntimeline: cy1:cylinder -> ex1:extrude\nproblems (these WILL fail a build):\n  ex1: sketch names 'nothing', which is not in the document",
+   "tool": "feature_add"
+  },
+  {
+   "args": {
+    "id": "ex1"
+   },
+   "isError": false,
+   "text": "Removed ex1 (extrude).\ntimeline: cy1:cylinder",
+   "tool": "feature_remove"
+  },
+  {
+   "args": {
+    "feature": {
+     "height": "r",
+     "id": "bx1",
+     "length": 40,
+     "type": "box",
+     "width": 30
+    }
+   },
+   "isError": false,
+   "text": "Added bx1.\ntimeline: cy1:cylinder -> bx1:box",
+   "tool": "feature_add"
+  },
+  {
+   "args": {
+    "id": "bx1",
+    "patch": {
+     "height": 12
+    }
+   },
+   "isError": false,
+   "text": "Updated bx1: {\"id\": \"bx1\", \"type\": \"box\", \"length\": 40, \"width\": 30, \"height\": 12}\ntimeline: cy1:cylinder -> bx1:box",
+   "tool": "feature_update"
+  },
+  {
+   "args": {
+    "id": "bx1",
+    "to": 0
+   },
+   "isError": false,
+   "text": "Moved bx1 to position 0.\ntimeline: bx1:box -> cy1:cylinder",
+   "tool": "feature_move"
+  },
+  {
+   "args": {
+    "id": "nope"
+   },
+   "isError": true,
+   "text": "DocumentError: no feature 'nope', have ['bx1', 'cy1']",
+   "tool": "feature_remove"
+  },
+  {
+   "args": {
+    "features_only": true
+   },
+   "isError": false,
+   "text": "{\n \"features\": [\n  {\n   \"id\": \"bx1\",\n   \"type\": \"box\",\n   \"length\": 40,\n   \"width\": 30,\n   \"height\": 12\n  },\n  {\n   \"type\": \"cylinder\",\n   \"radius\": \"r\",\n   \"height\": 30,\n   \"id\": \"cy1\"\n  }\n ]\n}",
+   "tool": "doc_get"
+  },
+  {
+   "args": {},
+   "isError": true,
+   "text": "Give either path (a file this machine can open) or content (the file itself, base64) with name.",
+   "tool": "doc_import"
+  },
+  {
+   "args": {
+    "path": "/no/such/part.step"
+   },
+   "isError": true,
+   "text": "No such file: /no/such/part.step\nIf you cannot reach the file from where you are, ask the person you are working with for its path on the machine FundaCAD runs on, or ask them to open it in FundaCAD themselves (File, Import Mesh), which puts it in the document for `inspect` to measure. Do not substitute a simplified stand-in for the real part: fitting to an approximation is the failure this tool exists to prevent.",
+   "tool": "doc_import"
+  },
+  {
+   "args": {
+    "content": "not base64 at all;",
+    "name": "a.step"
+   },
+   "isError": true,
+   "text": "Could not read what was sent: content is not valid base64. A text format (STEP, OBJ, ASCII STL) can be sent as it is with encoding \"text\". Pieces have to be one file's base64 split into parts, not a part each.",
+   "tool": "doc_import"
+  },
+  {
+   "args": {
+    "content": "c29saWQgcwplbmRzb2xpZCBzCg==",
+    "name": "p.stl",
+    "part": 1,
+    "parts": 4
+   },
+   "isError": true,
+   "text": "part 1 ends in base64 padding, so it looks separately encoded. Encode the whole file once and split the text that comes out, otherwise the pieces cannot be joined back into the file.",
+   "tool": "doc_import"
+  },
+  {
+   "args": {},
+   "isError": true,
+   "text": "No path given and this document has never been saved.",
+   "tool": "doc_save"
+  },
+  {
+   "args": {
+    "format": "step",
+    "path": "/no/such/dir/out.step"
+   },
+   "isError": true,
+   "text": "No such directory: /no/such/dir",
+   "tool": "export"
+  },
+  {
+   "args": {},
+   "isError": true,
+   "text": "No tool 'no_such_tool'. Have: build, doc_get, doc_import, doc_new, doc_open, doc_save, doc_set, export, feature_add, feature_move, feature_remove, feature_update, inspect, param_remove, param_set, schema, view",
+   "tool": "no_such_tool"
+  },
+  {
+   "args": {},
+   "isError": false,
+   "text": "body1 \"Box\": 40.0 x 30.0 x 12.0 mm, vol 14400 mm3, 6 faces, 12 triangles\nbody2 \"Cylinder\": 20.0 x 20.0 x 30.0 mm, vol 9424.78 mm3, 3 faces, 276 triangles",
+   "tool": "build"
+  },
+  {
+   "args": {},
+   "isError": false,
+   "text": "body1 \"Box\" | 40 x 30 x 12 mm | vol 14400 mm3 | 6 faces, 12 edges | 6 plane\nbody2 \"Cylinder\" | 20 x 20 x 30 mm | vol 9424.8 mm3 | 3 faces, 3 edges | 2 plane, 1 cylinder\n  ! 1 seam edge(s) (E1), a fillet or chamfer on one of these will be refused: both sides are the same face\n  ! 1 face(s) wrap all the way round (F0), press/pull thickens these along the surface rather than pushing them in a direction",
+   "tool": "inspect"
+  },
+  {
+   "args": {},
+   "isError": false,
+   "text": "New empty document.",
+   "tool": "doc_new"
+  },
+  {
+   "args": {},
+   "isError": false,
+   "text": "{\n \"features\": [],\n \"parameters\": {},\n \"paramDefs\": {}\n}",
+   "tool": "doc_get"
+  },
+  {
+   "args": {
+    "feature": {
+     "height": 20,
+     "id": "bx9",
+     "length": 20,
+     "type": "box",
+     "width": 20
+    }
+   },
+   "isError": false,
+   "text": "Added bx9.\ntimeline: bx9:box",
+   "tool": "feature_add"
+  },
+  {
+   "args": {},
+   "isError": false,
+   "text": "body1 \"Box\": 20.0 x 20.0 x 20.0 mm, vol 8000 mm3, 6 faces, 12 triangles",
+   "tool": "build"
+  },
+  {
+   "args": {
+    "bodies": [],
+    "height": 0,
+    "section": {},
+    "width": 0
+   },
+   "isError": false,
+   "text": "az 0 el 0 view of body1, 640x480",
+   "tool": "view"
+  },
+  {
+   "args": {
+    "height": 96,
+    "section": {
+     "axis": "Z",
+     "keep": "max"
+    },
+    "view": "top",
+    "width": 96
+   },
+   "isError": false,
+   "text": "top view of body1, 96x96, cut on Z at the middle, keeping above",
+   "tool": "view"
+  },
+  {
+   "args": {
+    "azimuth": 30,
+    "elevation": 20,
+    "height": 96,
+    "highlight_faces": [
+     1
+    ],
+    "width": 96
+   },
+   "isError": false,
+   "text": "az 30 el 20 view of body1, 96x96",
+   "tool": "view"
+  },
+  {
+   "args": {
+    "section": {
+     "axis": "Y",
+     "keep": "middle"
+    }
+   },
+   "isError": true,
+   "text": "ValueError: section keep='middle' is not a side of the plane. Use one of: +, -, above, below, bottom, far, high, low, max, min, near, over, top, under.",
+   "tool": "view"
+  },
+  {
+   "args": {
+    "detail": true,
+    "faces": [
+     0,
+     1
+    ]
+   },
+   "isError": false,
+   "text": "body1 \"Box\" | 20 x 20 x 20 mm | vol 8000 mm3 | 6 faces, 12 edges | 2 plane\n  faces:\n  F0 plane | area 400 | at (-10, 0, 0) | normal (-1, -0, 0)\n  F1 plane | area 400 | at (10, 0, 0) | normal (1, 0, -0)\n  edges:\n  E0 line | len 20 | mid (-10, -10, 0) | between F0 and F2\n  E1 line | len 20 | mid (-10, 0, 10) | between F0 and F5\n  E2 line | len 20 | mid (-10, 10, 0) | between F0 and F3\n  E3 line | len 20 | mid (-10, 0, -10) | between F0 and F4\n  E4 line | len 20 | mid (10, -10, 0) | between F1 and F2\n  E5 line | len 20 | mid (10, 0, 10) | between F1 and F5\n  E6 line | len 20 | mid (10, 10, 0) | between F1 and F3\n  E7 line | len 20 | mid (10, 0, -10) | between F1 and F4\n  E8 line | len 20 | mid (0, -10, -10) | between F2 and F4\n  E9 line | len 20 | mid (0, -10, 10) | between F2 and F5\n  E10 line | len 20 | mid (0, 10, -10) | between F3 and F4\n  E11 line | len 20 | mid (0, 10, 10) | between F3 and F5",
+   "tool": "inspect"
+  },
+  {
+   "args": {
+    "body": "body1"
+   },
+   "isError": false,
+   "text": "body1 \"Box\" | 20 x 20 x 20 mm | vol 8000 mm3 | 6 faces, 12 edges | 6 plane",
+   "tool": "inspect"
+  },
+  {
+   "args": {
+    "path": ""
+   },
+   "isError": true,
+   "text": "No path given and this document has never been saved.",
+   "tool": "doc_save"
+  }
+ ],
+ "golden": {
+  "corpus": "crates/fundacad-mcp/tools/parity.jsonl",
+  "corpusSha256": "4a51110ab74081315ef9dc4f5c355335c02f4e3030c01a21169128311d7fc2c3",
+  "frozen": true,
+  "kind": "mcp",
+  "reference": {
+   "build123d": "0.11.1",
+   "engine": "python sidecar (sidecar/server.py)",
+   "ocp": "7.9.3.1",
+   "platform": "Windows-11-10.0.26200-SP0",
+   "python": "3.12.13",
+   "sidecarCommit": "28e4a6abca8d17d33dafc19c49532c5d6dd6f90b"
+  },
+  "rules": "The script replayed on one fresh server, private (FUNDACAD_MCP_MODE=standalone, a session file that cannot exist): every call's text (text blocks joined by a newline) and isError must equal python's word for word, after an absolute POSIX path argument and its folder, as the server resolved them, are put back as given.",
+  "tool": "crates/fundacad-mcp/tools/diff_servers.py"
+ }
+}

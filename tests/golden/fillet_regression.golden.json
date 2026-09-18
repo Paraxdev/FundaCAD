@@ -1,0 +1,286 @@
+{
+ "cases": {
+  "reg_0001": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0002": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0003": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0004": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0005": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0006": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0007": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0008": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0009": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0010": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0011": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0012": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0013": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0014": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0015": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0016": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0017": {
+   "band": "regression",
+   "message": "invariant:volume-ref",
+   "outcome": "fail",
+   "taxonomy": "other"
+  },
+  "reg_0018": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0019": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0020": {
+   "band": "regression",
+   "message": "invariant:volume-ref",
+   "outcome": "fail",
+   "taxonomy": "other"
+  },
+  "reg_0021": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0022": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0023": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0024": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0025": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0026": {
+   "band": "regression",
+   "message": "invariant:volume-ref",
+   "outcome": "fail",
+   "taxonomy": "other"
+  },
+  "reg_0027": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0028": {
+   "band": "regression",
+   "message": "invariant:volume-ref",
+   "outcome": "fail",
+   "taxonomy": "other"
+  },
+  "reg_0029": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0030": {
+   "band": "regression",
+   "message": "invariant:volume-ref",
+   "outcome": "fail",
+   "taxonomy": "other"
+  },
+  "reg_0031": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0032": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0033": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0034": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0035": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0036": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0037": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0038": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0039": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0040": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0041": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0042": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0043": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0044": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0045": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0046": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0047": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0048": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0049": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0050": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0051": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0052": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0053": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0054": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0055": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0056": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0057": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0058": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0059": {
+   "band": "regression",
+   "outcome": "pass"
+  },
+  "reg_0060": {
+   "band": "regression",
+   "outcome": "pass"
+  }
+ },
+ "golden": {
+  "corpus": "tests/golden/corpus/corpus_fillet_regression.json",
+  "corpusSelfHash": "d895d2a72c4a4b2f325e1d90b74516005a11b81beb10527eb8f4dfdaa524580d",
+  "corpusSha256": "8c731d6afb6a90da69f80b19b698ddaa6a324d19789bf36172192c85a02f2bd7",
+  "frozen": true,
+  "kind": "fillet",
+  "reference": {
+   "build123d": "0.11.1",
+   "engine": "python sidecar (sidecar/server.py)",
+   "ocp": "7.9.3.1",
+   "platform": "Windows-11-10.0.26200-SP0",
+   "python": "3.12.13",
+   "sidecarCommit": "28e4a6abca8d17d33dafc19c49532c5d6dd6f90b"
+  },
+  "rules": "Every case rebuilt and scored as eval_fillet_corpus.py scores it: a selector miss (an error saying no edge found) is counted apart, any other error of the blend feature fails, and so does a result that is not one valid solid, has fewer faces than min_faces (else pre_op_faces + n_edges), or removes a volume that is not positive or is more than volumeRel off the reference. Each case's outcome, pass, fail or selector-miss, must equal python's.",
+  "summary": {
+   "count": 60,
+   "failed": 5,
+   "failedIds": [
+    "reg_0017",
+    "reg_0020",
+    "reg_0026",
+    "reg_0028",
+    "reg_0030"
+   ],
+   "selectorMiss": 0
+  },
+  "tolerances": {
+   "volumeRel": 0.02
+  },
+  "tool": "sidecar/tools/eval_fillet_corpus.py"
+ }
+}

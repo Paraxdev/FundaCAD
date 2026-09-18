@@ -1,0 +1,1814 @@
+{
+ "cases": {
+  "boolean": {
+   "asserts": [
+    {
+     "expected": 12000.0,
+     "kind": "volume",
+     "pythonActual": 12000.0,
+     "pythonCredited": true,
+     "unit": "boolean"
+    },
+    {
+     "expected": 1,
+     "kind": "bodies_eq",
+     "pythonActual": 1,
+     "pythonCredited": true,
+     "unit": "boolean"
+    }
+   ],
+   "measure": {
+    "features": [
+     {
+      "height": 20,
+      "id": "b1",
+      "length": 20,
+      "type": "box",
+      "width": 20
+     },
+     {
+      "height": 20,
+      "id": "b2",
+      "length": 20,
+      "type": "box",
+      "width": 20
+     },
+     {
+      "dx": 10,
+      "id": "mv",
+      "type": "move"
+     },
+     {
+      "id": "cb",
+      "operation": "join",
+      "target": "body1",
+      "tools": [
+       "body2"
+      ],
+      "type": "boolean"
+     }
+    ],
+    "proc": "rebuild"
+   },
+   "order": 26,
+   "pre": null
+  },
+  "box": {
+   "asserts": [
+    {
+     "expected": 8000.0,
+     "kind": "volume",
+     "pythonActual": 8000.0,
+     "pythonCredited": true,
+     "unit": "box"
+    },
+    {
+     "expected": [
+      -10,
+      -10,
+      -10,
+      10,
+      10,
+      10
+     ],
+     "kind": "bbox",
+     "pythonActual": [
+      -10.0,
+      -10.0,
+      -10.0,
+      10.0,
+      10.0,
+      10.0
+     ],
+     "pythonCredited": true,
+     "unit": "box"
+    }
+   ],
+   "measure": {
+    "features": [
+     {
+      "height": 20,
+      "id": "b",
+      "length": 20,
+      "type": "box",
+      "width": 20
+     }
+    ],
+    "proc": "rebuild"
+   },
+   "order": 0,
+   "pre": null
+  },
+  "chamfer": {
+   "asserts": [
+    {
+     "expected": 7840.0,
+     "kind": "volume",
+     "pythonActual": 7840.0,
+     "pythonCredited": true,
+     "unit": "chamfer"
+    },
+    {
+     "expected": 1,
+     "kind": "bodies_eq",
+     "pythonActual": 1,
+     "pythonCredited": true,
+     "unit": "chamfer"
+    }
+   ],
+   "measure": {
+    "features": [
+     {
+      "height": 20,
+      "id": "b",
+      "length": 20,
+      "type": "box",
+      "width": 20
+     },
+     {
+      "distance": 2,
+      "edges": {
+       "axis": "Z",
+       "by": "axis",
+       "kind": "edge"
+      },
+      "id": "ch",
+      "type": "chamfer"
+     }
+    ],
+    "proc": "rebuild"
+   },
+   "order": 18,
+   "pre": null
+  },
+  "computeAll": {
+   "asserts": [
+    {
+     "expected": 1,
+     "kind": "bodies_eq",
+     "pythonActual": 1,
+     "pythonCredited": true,
+     "unit": "computeAll"
+    },
+    {
+     "expected": 8000.0,
+     "kind": "volume",
+     "pythonActual": 8000.0,
+     "pythonCredited": true,
+     "unit": "computeAll"
+    }
+   ],
+   "measure": {
+    "extra": {
+     "revision": 1
+    },
+    "features": [
+     {
+      "height": 20,
+      "id": "b",
+      "length": 20,
+      "type": "box",
+      "width": 20
+     }
+    ],
+    "op": "computeAll",
+    "proc": "rebuild"
+   },
+   "order": 14,
+   "pre": null
+  },
+  "cylinder": {
+   "asserts": [
+    {
+     "expected": 628.3185307179587,
+     "kind": "volume",
+     "pythonActual": 628.2768669438926,
+     "pythonCredited": true,
+     "unit": "cylinder"
+    }
+   ],
+   "measure": {
+    "features": [
+     {
+      "height": 8,
+      "id": "c",
+      "radius": 5,
+      "type": "cylinder"
+     }
+    ],
+    "proc": "rebuild"
+   },
+   "order": 1,
+   "pre": null
+  },
+  "datumPlane": {
+   "asserts": [
+    {
+     "expected": 2000.0,
+     "kind": "volume",
+     "pythonActual": 2000.0,
+     "pythonCredited": true,
+     "unit": "datumPlane"
+    }
+   ],
+   "measure": {
+    "features": [
+     {
+      "height": 20,
+      "id": "b",
+      "length": 20,
+      "type": "box",
+      "width": 20
+     },
+     {
+      "id": "dp",
+      "offset": 5,
+      "plane": "XY",
+      "type": "datumPlane"
+     },
+     {
+      "id": "sp",
+      "keep": "top",
+      "planeId": "dp",
+      "type": "split"
+     }
+    ],
+    "proc": "rebuild"
+   },
+   "order": 24,
+   "pre": null
+  },
+  "deleteFace": {
+   "asserts": [
+    {
+     "expected": 4000.0,
+     "kind": "volume",
+     "pythonActual": 4000.0,
+     "pythonCredited": true,
+     "unit": "deleteFace"
+    },
+    {
+     "expected": [
+      -10,
+      -10,
+      -5,
+      10,
+      10,
+      5
+     ],
+     "kind": "bbox",
+     "pythonActual": [
+      -10.0,
+      -10.0,
+      -5.0,
+      10.0,
+      10.0,
+      5.0
+     ],
+     "pythonCredited": true,
+     "unit": "deleteFace"
+    }
+   ],
+   "measure": {
+    "features": [
+     {
+      "height": 10,
+      "id": "bx",
+      "length": 20,
+      "type": "box",
+      "width": 20
+     },
+     {
+      "distance": 3,
+      "edges": {
+       "by": "nearest",
+       "kind": "edge",
+       "point": [
+        0,
+        10,
+        5
+       ]
+      },
+      "id": "ch",
+      "type": "chamfer"
+     },
+     {
+      "face": {
+       "by": "nearest",
+       "kind": "face",
+       "point": [
+        0,
+        8.5,
+        3.5
+       ]
+      },
+      "id": "df",
+      "type": "deleteFace"
+     }
+    ],
+    "proc": "rebuild"
+   },
+   "order": 30,
+   "pre": null
+  },
+  "draft": {
+   "asserts": [
+    {
+     "expected": 7294.692,
+     "kind": "volume",
+     "pythonActual": 7294.692077166139,
+     "pythonCredited": true,
+     "unit": "draft"
+    },
+    {
+     "expected": 1,
+     "kind": "bodies_eq",
+     "pythonActual": 1,
+     "pythonCredited": true,
+     "unit": "draft"
+    }
+   ],
+   "measure": {
+    "features": [
+     {
+      "height": 20,
+      "id": "b",
+      "length": 20,
+      "type": "box",
+      "width": 20
+     },
+     {
+      "angle": 10,
+      "axis": "Z",
+      "faces": {
+       "by": "normal",
+       "dir": [
+        1,
+        0,
+        0
+       ],
+       "kind": "face"
+      },
+      "id": "dr",
+      "type": "draft"
+     }
+    ],
+    "proc": "rebuild"
+   },
+   "order": 19,
+   "pre": null
+  },
+  "export": {
+   "asserts": [
+    {
+     "expected": 8000.0,
+     "kind": "volume",
+     "pythonActual": 8000.0,
+     "pythonCredited": true,
+     "unit": "export"
+    }
+   ],
+   "measure": {
+    "features": [
+     {
+      "height": 20,
+      "id": "b",
+      "length": 20,
+      "type": "box",
+      "width": 20
+     }
+    ],
+    "proc": "exportReimport",
+    "then": []
+   },
+   "order": 16,
+   "pre": null
+  },
+  "extrude": {
+   "asserts": [
+    {
+     "expected": 4000.0,
+     "kind": "volume",
+     "pythonActual": 4000.0,
+     "pythonCredited": true,
+     "unit": "extrude"
+    }
+   ],
+   "measure": {
+    "features": [
+     {
+      "entities": [
+       {
+        "height": 20,
+        "type": "rectangle",
+        "width": 20,
+        "x": 0,
+        "y": 0
+       }
+      ],
+      "id": "s",
+      "plane": "XY",
+      "type": "sketch"
+     },
+     {
+      "distance": 10,
+      "id": "e",
+      "operation": "new",
+      "sketch": "s",
+      "type": "extrude"
+     }
+    ],
+    "proc": "rebuild"
+   },
+   "order": 3,
+   "pre": null
+  },
+  "fillet": {
+   "asserts": [
+    {
+     "expected": 7931.3274122871835,
+     "kind": "volume",
+     "pythonActual": 7931.294456231776,
+     "pythonCredited": true,
+     "unit": "fillet"
+    },
+    {
+     "expected": 1,
+     "kind": "bodies_eq",
+     "pythonActual": 1,
+     "pythonCredited": true,
+     "unit": "fillet"
+    }
+   ],
+   "measure": {
+    "features": [
+     {
+      "height": 20,
+      "id": "b",
+      "length": 20,
+      "type": "box",
+      "width": 20
+     },
+     {
+      "edges": {
+       "axis": "Z",
+       "by": "axis",
+       "kind": "edge"
+      },
+      "id": "fl",
+      "radius": 2,
+      "type": "fillet"
+     }
+    ],
+    "proc": "rebuild"
+   },
+   "order": 17,
+   "pre": null
+  },
+  "generateShape": {
+   "asserts": [
+    {
+     "expected": 129.4838828103569,
+     "kind": "volume",
+     "pythonActual": 129.4838828103569,
+     "pythonCredited": true,
+     "unit": "generateShape"
+    }
+   ],
+   "measure": {
+    "generator": "fastener",
+    "output": "mesh",
+    "params": {
+     "kind": "washer",
+     "name": "w",
+     "units": "mm",
+     "washer": {
+      "inner": 6.4,
+      "outer": 12,
+      "thickness": 1.6,
+      "type": "plain"
+     }
+    },
+    "proc": "shapeVolume"
+   },
+   "order": 35,
+   "pre": null
+  },
+  "hole": {
+   "asserts": [
+    {
+     "expected": 7497.345175425633,
+     "kind": "volume",
+     "pythonActual": 7497.477649174824,
+     "pythonCredited": true,
+     "unit": "hole"
+    },
+    {
+     "expected": 1,
+     "kind": "bodies_eq",
+     "pythonActual": 1,
+     "pythonCredited": true,
+     "unit": "hole"
+    }
+   ],
+   "measure": {
+    "features": [
+     {
+      "height": 20,
+      "id": "b",
+      "length": 20,
+      "type": "box",
+      "width": 20
+     },
+     {
+      "diameter": 4,
+      "extent": "through",
+      "face": {
+       "by": "nearest",
+       "kind": "face",
+       "point": [
+        0,
+        0,
+        10
+       ]
+      },
+      "id": "ho",
+      "points": [
+       [
+        -5,
+        0,
+        10
+       ],
+       [
+        5,
+        0,
+        10
+       ]
+      ],
+      "type": "hole"
+     }
+    ],
+    "proc": "rebuild"
+   },
+   "order": 20,
+   "pre": null
+  },
+  "inspect": {
+   "asserts": [
+    {
+     "expected": 6283.185307179587,
+     "kind": "volume",
+     "pythonActual": 6283.185307,
+     "pythonCredited": true,
+     "unit": "inspect"
+    }
+   ],
+   "measure": {
+    "features": [
+     {
+      "height": 20,
+      "id": "c1",
+      "radius": 10,
+      "type": "cylinder"
+     }
+    ],
+    "proc": "inspectVolume"
+   },
+   "order": 34,
+   "pre": null
+  },
+  "interference": {
+   "asserts": [
+    {
+     "expected": 1,
+     "kind": "pairs_eq",
+     "pythonActual": 1,
+     "pythonCredited": true,
+     "unit": "interference"
+    }
+   ],
+   "measure": {
+    "features": [
+     {
+      "height": 20,
+      "id": "b1",
+      "length": 20,
+      "type": "box",
+      "width": 20
+     },
+     {
+      "height": 20,
+      "id": "b2",
+      "length": 20,
+      "type": "box",
+      "width": 20
+     },
+     {
+      "dx": 10,
+      "id": "mv",
+      "type": "move"
+     }
+    ],
+    "proc": "interference"
+   },
+   "order": 15,
+   "pre": null
+  },
+  "loft": {
+   "asserts": [
+    {
+     "expected": 1,
+     "kind": "bodies_eq",
+     "pythonActual": 1,
+     "pythonCredited": true,
+     "unit": "loft"
+    },
+    {
+     "expected": [
+      -10,
+      -10,
+      0,
+      10,
+      10,
+      15
+     ],
+     "kind": "bbox",
+     "pythonActual": [
+      -10.0,
+      -10.0,
+      0.0,
+      10.0,
+      10.0,
+      15.0
+     ],
+     "pythonCredited": true,
+     "unit": "loft"
+    }
+   ],
+   "measure": {
+    "features": [
+     {
+      "entities": [
+       {
+        "height": 20,
+        "type": "rectangle",
+        "width": 20,
+        "x": 0,
+        "y": 0
+       }
+      ],
+      "id": "s1",
+      "plane": "XY",
+      "type": "sketch"
+     },
+     {
+      "entities": [
+       {
+        "radius": 6,
+        "type": "circle"
+       }
+      ],
+      "id": "s2",
+      "plane": {
+       "normal": [
+        0,
+        0,
+        1
+       ],
+       "origin": [
+        0,
+        0,
+        15
+       ],
+       "xdir": [
+        1,
+        0,
+        0
+       ]
+      },
+      "type": "sketch"
+     },
+     {
+      "id": "lf",
+      "sketches": [
+       "s1",
+       "s2"
+      ],
+      "type": "loft"
+     }
+    ],
+    "proc": "rebuild"
+   },
+   "order": 5,
+   "pre": null
+  },
+  "migrateGeometry": {
+   "asserts": [
+    {
+     "expected": 8000.0,
+     "kind": "volume",
+     "pythonActual": 8000.0,
+     "pythonCredited": true,
+     "unit": "migrateGeometry"
+    },
+    {
+     "expected": [
+      -10,
+      -10,
+      -10,
+      10,
+      10,
+      10
+     ],
+     "kind": "bbox",
+     "pythonActual": [
+      -10.0,
+      -10.0,
+      -10.0,
+      10.0,
+      10.0,
+      10.0
+     ],
+     "pythonCredited": true,
+     "unit": "migrateGeometry"
+    }
+   ],
+   "measure": {
+    "brep": "CkNBU0NBREUgVG9wb2xvZ3kgVjMsIChjKSBPcGVuIENhc2NhZGUKTG9jYXRpb25zIDEKMQogICAgICAgICAgICAgIDEgICAgICAgICAgICAgICAwICAgICAgICAgICAgICAgMCAgICAgICAgICAgICAtMTAgCiAgICAgICAgICAgICAgMCAgICAgICAgICAgICAgIDEgICAgICAgICAgICAgICAwICAgICAgICAgICAgIC0xMCAKICAgICAgICAgICAgICAwICAgICAgICAgICAgICAgMCAgICAgICAgICAgICAgIDEgICAgICAgICAgICAgLTEwIApDdXJ2ZTJkcyAyNAoxIDAgMCAxIDAgCjEgMCAwIDEgMCAKMSAyMCAwIDAgLTEgCjEgMCAwIDAgMSAKMSAwIC0yMCAxIDAgCjEgMCAwIDEgMCAKMSAwIDAgMCAtMSAKMSAwIDAgMCAxIAoxIDAgMCAxIDAgCjEgMCAyMCAxIDAgCjEgMjAgMCAwIC0xIAoxIDIwIDAgMCAxIAoxIDAgLTIwIDEgMCAKMSAwIDIwIDEgMCAKMSAwIDAgMCAtMSAKMSAyMCAwIDAgMSAKMSAwIDAgMCAxIAoxIDAgMCAxIDAgCjEgMjAgMCAwIDEgCjEgMCAwIDEgMCAKMSAwIDAgMCAxIAoxIDAgMjAgMSAwIAoxIDIwIDAgMCAxIAoxIDAgMjAgMSAwIApDdXJ2ZXMgMTIKMSAwIDAgMCAwIDAgMSAKMSAwIDAgMjAgLTAgMSAwIAoxIDAgMjAgMCAwIDAgMSAKMSAwIDAgMCAtMCAxIDAgCjEgMjAgMCAwIDAgMCAxIAoxIDIwIDAgMjAgLTAgMSAwIAoxIDIwIDIwIDAgMCAwIDEgCjEgMjAgMCAwIC0wIDEgMCAKMSAwIDAgMCAxIDAgLTAgCjEgMCAwIDIwIDEgMCAtMCAKMSAwIDIwIDAgMSAwIC0wIAoxIDAgMjAgMjAgMSAwIC0wIApQb2x5Z29uM0QgMApQb2x5Z29uT25Ucmlhbmd1bGF0aW9ucyAwClN1cmZhY2VzIDYKMSAwIDAgMCAxIDAgLTAgMCAwIDEgMCAtMSAwIAoxIDAgMCAwIC0wIDEgMCAwIDAgMSAxIDAgLTAgCjEgMCAwIDIwIDAgMCAxIDEgMCAtMCAtMCAxIDAgCjEgMCAyMCAwIC0wIDEgMCAwIDAgMSAxIDAgLTAgCjEgMCAwIDAgMCAwIDEgMSAwIC0wIC0wIDEgMCAKMSAyMCAwIDAgMSAwIC0wIDAgMCAxIDAgLTEgMCAKVHJpYW5ndWxhdGlvbnMgMAoKVFNoYXBlcyAzNQpWZQoxZS0wNwowIDAgMjAKMCAwCgowMTAxMTAxCioKVmUKMWUtMDcKMCAwIDAKMCAwCgowMTAxMTAxCioKRWQKIDFlLTA3IDEgMSAwCjEgIDEgMCAwIDIwCjIgIDEgMSAwIDAgMjAKMiAgMiAyIDAgMCAyMAowCgowMTAxMDAwCi0zNSAwICszNCAwICoKVmUKMWUtMDcKMCAyMCAyMAowIDAKCjAxMDExMDEKKgpFZAogMWUtMDcgMSAxIDAKMSAgMiAwIDAgMjAKMiAgMyAxIDAgMCAyMAoyICA0IDMgMCAwIDIwCjAKCjAxMDEwMDAKLTMyIDAgKzM1IDAgKgpWZQoxZS0wNwowIDIwIDAKMCAwCgowMTAxMTAxCioKRWQKIDFlLTA3IDEgMSAwCjEgIDMgMCAwIDIwCjIgIDUgMSAwIDAgMjAKMiAgNiA0IDAgMCAyMAowCgowMTAxMDAwCi0zMiAwICszMCAwICoKRWQKIDFlLTA3IDEgMSAwCjEgIDQgMCAwIDIwCjIgIDcgMSAwIDAgMjAKMiAgOCA1IDAgMCAyMAowCgowMTAxMDAwCi0zMCAwICszNCAwICoKV2kKCjAxMDExMDAKLTMzIDAgLTMxIDAgKzI5IDAgKzI4IDAgKgpGYQowICAxZS0wNyAxIDAKCjAxMTEwMDAKKzI3IDAgKgpWZQoxZS0wNwoyMCAwIDIwCjAgMAoKMDEwMTEwMQoqClZlCjFlLTA3CjIwIDAgMAowIDAKCjAxMDExMDEKKgpFZAogMWUtMDcgMSAxIDAKMSAgNSAwIDAgMjAKMiAgOSA2IDAgMCAyMAoyICAxMCAyIDAgMCAyMAowCgowMTAxMDAwCi0yNSAwICsyNCAwICoKVmUKMWUtMDcKMjAgMjAgMjAKMCAwCgowMTAxMTAxCioKRWQKIDFlLTA3IDEgMSAwCjEgIDYgMCAwIDIwCjIgIDExIDYgMCAwIDIwCjIgIDEyIDMgMCAwIDIwCjAKCjAxMDEwMDAKLTIyIDAgKzI1IDAgKgpWZQoxZS0wNwoyMCAyMCAwCjAgMAoKMDEwMTEwMQoqCkVkCiAxZS0wNyAxIDEgMAoxICA3IDAgMCAyMAoyICAxMyA2IDAgMCAyMAoyICAxNCA0IDAgMCAyMAowCgowMTAxMDAwCi0yMiAwICsyMCAwICoKRWQKIDFlLTA3IDEgMSAwCjEgIDggMCAwIDIwCjIgIDE1IDYgMCAwIDIwCjIgIDE2IDUgMCAwIDIwCjAKCjAxMDEwMDAKLTIwIDAgKzI0IDAgKgpXaQoKMDEwMTEwMAotMjMgMCAtMjEgMCArMTkgMCArMTggMCAqCkZhCjAgIDFlLTA3IDYgMAoKMDExMTAwMAorMTcgMCAqCkVkCiAxZS0wNyAxIDEgMAoxICA5IDAgMCAyMAoyICAxNyAyIDAgMCAyMAoyICAxOCA1IDAgMCAyMAowCgowMTAxMDAwCi0yNCAwICszNCAwICoKRWQKIDFlLTA3IDEgMSAwCjEgIDEwIDAgMCAyMAoyICAxOSAyIDAgMCAyMAoyICAyMCAzIDAgMCAyMAowCgowMTAxMDAwCi0yNSAwICszNSAwICoKV2kKCjAxMDExMDAKLTE1IDAgLTIzIDAgKzE0IDAgKzMzIDAgKgpGYQowICAxZS0wNyAyIDAKCjAxMTEwMDAKKzEzIDAgKgpFZAogMWUtMDcgMSAxIDAKMSAgMTEgMCAwIDIwCjIgIDIxIDQgMCAwIDIwCjIgIDIyIDUgMCAwIDIwCjAKCjAxMDEwMDAKLTIwIDAgKzMwIDAgKgpFZAogMWUtMDcgMSAxIDAKMSAgMTIgMCAwIDIwCjIgIDIzIDQgMCAwIDIwCjIgIDI0IDMgMCAwIDIwCjAKCjAxMDEwMDAKLTIyIDAgKzMyIDAgKgpXaQoKMDEwMTEwMAotMTEgMCAtMTkgMCArMTAgMCArMjkgMCAqCkZhCjAgIDFlLTA3IDQgMAoKMDExMTAwMAorOSAwICoKV2kKCjAxMDExMDAKLTI4IDAgLTExIDAgKzE4IDAgKzE1IDAgKgpGYQowICAxZS0wNyA1IDAKCjAxMTEwMDAKKzcgMCAqCldpCgowMTAxMTAwCi0zMSAwIC0xMCAwICsyMSAwICsxNCAwICoKRmEKMCAgMWUtMDcgMyAwCgowMTExMDAwCis1IDAgKgpTaAoKMDEwMTEwMAotMjYgMCArMTYgMCAtMTIgMCArOCAwIC02IDAgKzQgMCAqClNvCgowMTAwMDAwCiszIDAgKgpDbwoKMTEwMDAwMAorMiAxICoKCisxIDAg",
+    "proc": "migrate"
+   },
+   "order": 33,
+   "pre": null
+  },
+  "mirror": {
+   "asserts": [
+    {
+     "expected": {
+      "timesPre": 2
+     },
+     "kind": "delta_volume",
+     "pythonActual": 128.0,
+     "pythonCredited": true,
+     "unit": "mirror"
+    }
+   ],
+   "measure": {
+    "features": [
+     {
+      "height": 4,
+      "id": "b",
+      "length": 4,
+      "type": "box",
+      "width": 4
+     },
+     {
+      "dx": 20,
+      "id": "mv",
+      "type": "move"
+     },
+     {
+      "id": "mr",
+      "plane": "YZ",
+      "type": "mirror"
+     }
+    ],
+    "proc": "rebuild"
+   },
+   "order": 7,
+   "pre": {
+    "features": [
+     {
+      "height": 4,
+      "id": "b",
+      "length": 4,
+      "type": "box",
+      "width": 4
+     },
+     {
+      "dx": 20,
+      "id": "mv",
+      "type": "move"
+     }
+    ],
+    "proc": "rebuild"
+   }
+  },
+  "move": {
+   "asserts": [
+    {
+     "expected": [
+      40,
+      -10,
+      -10,
+      60,
+      10,
+      10
+     ],
+     "kind": "delta_bbox",
+     "pythonActual": [
+      40.0,
+      -10.0,
+      -10.0,
+      60.0,
+      10.0,
+      10.0
+     ],
+     "pythonCredited": true,
+     "unit": "move"
+    }
+   ],
+   "measure": {
+    "features": [
+     {
+      "height": 20,
+      "id": "b",
+      "length": 20,
+      "type": "box",
+      "width": 20
+     },
+     {
+      "dx": 50,
+      "id": "mv",
+      "type": "move"
+     }
+    ],
+    "proc": "rebuild"
+   },
+   "order": 12,
+   "pre": {
+    "features": [
+     {
+      "height": 20,
+      "id": "b",
+      "length": 20,
+      "type": "box",
+      "width": 20
+     }
+    ],
+    "proc": "rebuild"
+   }
+  },
+  "offsetFace": {
+   "asserts": [
+    {
+     "expected": 8800.0,
+     "kind": "volume",
+     "pythonActual": 8800.0,
+     "pythonCredited": true,
+     "unit": "offsetFace"
+    },
+    {
+     "expected": [
+      -10,
+      -10,
+      -10,
+      10,
+      10,
+      12
+     ],
+     "kind": "bbox",
+     "pythonActual": [
+      -10.0,
+      -10.0,
+      -10.0,
+      10.0,
+      10.0,
+      12.0
+     ],
+     "pythonCredited": true,
+     "unit": "offsetFace"
+    }
+   ],
+   "measure": {
+    "features": [
+     {
+      "height": 20,
+      "id": "b",
+      "length": 20,
+      "type": "box",
+      "width": 20
+     },
+     {
+      "distance": 2,
+      "faces": {
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ],
+       "kind": "face"
+      },
+      "id": "of",
+      "type": "offsetFace"
+     }
+    ],
+    "proc": "rebuild"
+   },
+   "order": 28,
+   "pre": null
+  },
+  "patternCircular": {
+   "asserts": [
+    {
+     "expected": {
+      "timesPre": 4
+     },
+     "kind": "delta_volume",
+     "pythonActual": 32.0,
+     "pythonCredited": true,
+     "unit": "patternCircular"
+    }
+   ],
+   "measure": {
+    "features": [
+     {
+      "height": 2,
+      "id": "b",
+      "length": 2,
+      "type": "box",
+      "width": 2
+     },
+     {
+      "dx": 20,
+      "id": "mv",
+      "type": "move"
+     },
+     {
+      "angle": 360,
+      "axis": "Z",
+      "count": 4,
+      "id": "pc",
+      "type": "patternCircular"
+     }
+    ],
+    "proc": "rebuild"
+   },
+   "order": 10,
+   "pre": {
+    "features": [
+     {
+      "height": 2,
+      "id": "b",
+      "length": 2,
+      "type": "box",
+      "width": 2
+     },
+     {
+      "dx": 20,
+      "id": "mv",
+      "type": "move"
+     }
+    ],
+    "proc": "rebuild"
+   }
+  },
+  "patternLinear": {
+   "asserts": [
+    {
+     "expected": {
+      "timesPre": 3
+     },
+     "kind": "delta_volume",
+     "pythonActual": 192.0,
+     "pythonCredited": true,
+     "unit": "patternLinear"
+    }
+   ],
+   "measure": {
+    "features": [
+     {
+      "height": 4,
+      "id": "b",
+      "length": 4,
+      "type": "box",
+      "width": 4
+     },
+     {
+      "axis": "X",
+      "count": 3,
+      "id": "pl",
+      "spacing": 10,
+      "type": "patternLinear"
+     }
+    ],
+    "proc": "rebuild"
+   },
+   "order": 9,
+   "pre": {
+    "features": [
+     {
+      "height": 4,
+      "id": "b",
+      "length": 4,
+      "type": "box",
+      "width": 4
+     }
+    ],
+    "proc": "rebuild"
+   }
+  },
+  "patternRect": {
+   "asserts": [
+    {
+     "expected": {
+      "timesPre": 6
+     },
+     "kind": "delta_volume",
+     "pythonActual": 384.0,
+     "pythonCredited": true,
+     "unit": "patternRect"
+    }
+   ],
+   "measure": {
+    "features": [
+     {
+      "height": 4,
+      "id": "b",
+      "length": 4,
+      "type": "box",
+      "width": 4
+     },
+     {
+      "countX": 3,
+      "countY": 2,
+      "id": "pr",
+      "spacingX": 10,
+      "spacingY": 10,
+      "type": "patternRect"
+     }
+    ],
+    "proc": "rebuild"
+   },
+   "order": 8,
+   "pre": {
+    "features": [
+     {
+      "height": 4,
+      "id": "b",
+      "length": 4,
+      "type": "box",
+      "width": 4
+     }
+    ],
+    "proc": "rebuild"
+   }
+  },
+  "press-pull": {
+   "asserts": [
+    {
+     "expected": 10000.0,
+     "kind": "volume",
+     "pythonActual": 10000.0,
+     "pythonCredited": true,
+     "unit": "press-pull"
+    },
+    {
+     "expected": [
+      -10,
+      -10,
+      -10,
+      10,
+      10,
+      15
+     ],
+     "kind": "bbox",
+     "pythonActual": [
+      -10.0,
+      -10.0,
+      -10.0,
+      10.0,
+      10.0,
+      15.0
+     ],
+     "pythonCredited": true,
+     "unit": "press-pull"
+    }
+   ],
+   "measure": {
+    "features": [
+     {
+      "height": 20,
+      "id": "b",
+      "length": 20,
+      "type": "box",
+      "width": 20
+     },
+     {
+      "distance": 5,
+      "face": {
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ],
+       "kind": "face"
+      },
+      "id": "pp",
+      "operation": "join",
+      "type": "press-pull"
+     }
+    ],
+    "proc": "rebuild"
+   },
+   "order": 27,
+   "pre": null
+  },
+  "projectGeometry": {
+   "asserts": [
+    {
+     "expected": [
+      -10,
+      -10,
+      0,
+      10,
+      10,
+      0
+     ],
+     "kind": "bbox",
+     "pythonActual": [
+      -10.0,
+      -10.0,
+      0,
+      10.0,
+      10.0,
+      0
+     ],
+     "pythonCredited": true,
+     "unit": "projectGeometry"
+    }
+   ],
+   "measure": {
+    "features": [
+     {
+      "entities": [
+       {
+        "height": 20,
+        "type": "rectangle",
+        "width": 20,
+        "x": 0,
+        "y": 0
+       }
+      ],
+      "id": "s1",
+      "plane": "XY",
+      "type": "sketch"
+     },
+     {
+      "distance": 10,
+      "id": "e1",
+      "operation": "new",
+      "sketch": "s1",
+      "type": "extrude"
+     }
+    ],
+    "plane": "XY",
+    "proc": "projectBbox",
+    "sources": [
+     {
+      "body": "body1",
+      "kind": "faceBoundary",
+      "sel": {
+       "by": "nearest",
+       "kind": "face",
+       "point": [
+        0,
+        0,
+        10
+       ]
+      }
+     }
+    ]
+   },
+   "order": 32,
+   "pre": null
+  },
+  "removeBody": {
+   "asserts": [
+    {
+     "expected": 1,
+     "kind": "delta_bodies",
+     "pythonActual": 1,
+     "pythonCredited": true,
+     "unit": "removeBody"
+    }
+   ],
+   "measure": {
+    "features": [
+     {
+      "height": 20,
+      "id": "b",
+      "length": 20,
+      "type": "box",
+      "width": 20
+     },
+     {
+      "height": 30,
+      "id": "c",
+      "radius": 4,
+      "type": "cylinder"
+     },
+     {
+      "bodies": [
+       "body2"
+      ],
+      "id": "rm",
+      "type": "removeBody"
+     }
+    ],
+    "proc": "rebuild"
+   },
+   "order": 13,
+   "pre": {
+    "features": [
+     {
+      "height": 20,
+      "id": "b",
+      "length": 20,
+      "type": "box",
+      "width": 20
+     },
+     {
+      "height": 30,
+      "id": "c",
+      "radius": 4,
+      "type": "cylinder"
+     }
+    ],
+    "proc": "rebuild"
+   }
+  },
+  "revolve": {
+   "asserts": [
+    {
+     "expected": 3015.928947446201,
+     "kind": "volume",
+     "pythonActual": 3015.8127770419737,
+     "pythonCredited": true,
+     "unit": "revolve"
+    }
+   ],
+   "measure": {
+    "features": [
+     {
+      "entities": [
+       {
+        "height": 10,
+        "type": "rectangle",
+        "width": 4,
+        "x": 12,
+        "y": 0
+       }
+      ],
+      "id": "s",
+      "plane": "XZ",
+      "type": "sketch"
+     },
+     {
+      "angle": 360,
+      "axis": "Z",
+      "id": "rv",
+      "sketch": "s",
+      "type": "revolve"
+     }
+    ],
+    "proc": "rebuild"
+   },
+   "order": 4,
+   "pre": null
+  },
+  "scale": {
+   "asserts": [
+    {
+     "expected": {
+      "timesPre": 8
+     },
+     "kind": "delta_volume",
+     "pythonActual": 64000.0,
+     "pythonCredited": true,
+     "unit": "scale"
+    }
+   ],
+   "measure": {
+    "features": [
+     {
+      "height": 20,
+      "id": "b",
+      "length": 20,
+      "type": "box",
+      "width": 20
+     },
+     {
+      "factor": 2,
+      "id": "sc",
+      "type": "scale"
+     }
+    ],
+    "proc": "rebuild"
+   },
+   "order": 11,
+   "pre": {
+    "features": [
+     {
+      "height": 20,
+      "id": "b",
+      "length": 20,
+      "type": "box",
+      "width": 20
+     }
+    ],
+    "proc": "rebuild"
+   }
+  },
+  "shell": {
+   "asserts": [
+    {
+     "expected": 1,
+     "kind": "bodies_eq",
+     "pythonActual": 1,
+     "pythonCredited": true,
+     "unit": "shell"
+    },
+    {
+     "expected": [
+      -10,
+      -10,
+      0,
+      10,
+      10,
+      20
+     ],
+     "kind": "bbox",
+     "pythonActual": [
+      -10.0,
+      -10.0,
+      0.0,
+      10.0,
+      10.0,
+      20.0
+     ],
+     "pythonCredited": true,
+     "unit": "shell"
+    }
+   ],
+   "measure": {
+    "features": [
+     {
+      "entities": [
+       {
+        "height": 20,
+        "type": "rectangle",
+        "width": 20,
+        "x": 0,
+        "y": 0
+       }
+      ],
+      "id": "s",
+      "plane": "XY",
+      "type": "sketch"
+     },
+     {
+      "distance": 20,
+      "id": "e",
+      "operation": "new",
+      "sketch": "s",
+      "type": "extrude"
+     },
+     {
+      "faces": {
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ],
+       "kind": "face"
+      },
+      "id": "sh",
+      "thickness": 2,
+      "type": "shell"
+     }
+    ],
+    "proc": "rebuild"
+   },
+   "order": 6,
+   "pre": null
+  },
+  "simplifyMesh": {
+   "asserts": [
+    {
+     "expected": 8000.0,
+     "kind": "volume",
+     "pythonActual": 8000.0,
+     "pythonCredited": true,
+     "unit": "simplifyMesh"
+    },
+    {
+     "expected": 1,
+     "kind": "bodies_eq",
+     "pythonActual": 1,
+     "pythonCredited": true,
+     "unit": "simplifyMesh"
+    }
+   ],
+   "measure": {
+    "features": [
+     {
+      "height": 20,
+      "id": "b",
+      "length": 20,
+      "type": "box",
+      "width": 20
+     }
+    ],
+    "proc": "exportReimport",
+    "then": [
+     {
+      "id": "sm",
+      "tolerance": 1,
+      "type": "simplifyMesh"
+     }
+    ]
+   },
+   "order": 22,
+   "pre": null
+  },
+  "sketch": {
+   "asserts": [
+    {
+     "expected": 480.0,
+     "kind": "volume",
+     "pythonActual": 480.0,
+     "pythonCredited": true,
+     "unit": "sketch"
+    },
+    {
+     "expected": [
+      -6,
+      -4,
+      0,
+      6,
+      4,
+      5
+     ],
+     "kind": "bbox",
+     "pythonActual": [
+      -6.0,
+      -4.0,
+      0.0,
+      6.0,
+      4.0,
+      5.0
+     ],
+     "pythonCredited": true,
+     "unit": "sketch"
+    }
+   ],
+   "measure": {
+    "features": [
+     {
+      "entities": [
+       {
+        "height": 8,
+        "type": "rectangle",
+        "width": 12,
+        "x": 0,
+        "y": 0
+       }
+      ],
+      "id": "s",
+      "plane": "XY",
+      "type": "sketch"
+     },
+     {
+      "distance": 5,
+      "id": "e",
+      "operation": "new",
+      "sketch": "s",
+      "type": "extrude"
+     }
+    ],
+    "proc": "rebuild"
+   },
+   "order": 25,
+   "pre": null
+  },
+  "sphere": {
+   "asserts": [
+    {
+     "expected": 904.7786842338603,
+     "kind": "volume",
+     "pythonActual": 904.6456215658778,
+     "pythonCredited": true,
+     "unit": "sphere"
+    }
+   ],
+   "measure": {
+    "features": [
+     {
+      "id": "s",
+      "radius": 6,
+      "type": "sphere"
+     }
+    ],
+    "proc": "rebuild"
+   },
+   "order": 2,
+   "pre": null
+  },
+  "split": {
+   "asserts": [
+    {
+     "expected": 2,
+     "kind": "bodies_eq",
+     "pythonActual": 2,
+     "pythonCredited": true,
+     "unit": "split"
+    }
+   ],
+   "measure": {
+    "features": [
+     {
+      "height": 20,
+      "id": "b",
+      "length": 20,
+      "type": "box",
+      "width": 20
+     },
+     {
+      "id": "dp",
+      "offset": 5,
+      "plane": "XY",
+      "type": "datumPlane"
+     },
+     {
+      "id": "sp",
+      "keep": "both",
+      "planeId": "dp",
+      "type": "split"
+     }
+    ],
+    "proc": "rebuild"
+   },
+   "order": 23,
+   "pre": null
+  },
+  "sweep": {
+   "asserts": [
+    {
+     "expected": 565.4866776461628,
+     "kind": "volume",
+     "pythonActual": 565.3623665160623,
+     "pythonCredited": true,
+     "unit": "sweep"
+    },
+    {
+     "expected": 1,
+     "kind": "bodies_eq",
+     "pythonActual": 1,
+     "pythonCredited": true,
+     "unit": "sweep"
+    }
+   ],
+   "measure": {
+    "features": [
+     {
+      "entities": [
+       {
+        "type": "line",
+        "x1": 0,
+        "x2": 20,
+        "y1": 0,
+        "y2": 0
+       }
+      ],
+      "id": "pa",
+      "plane": "XY",
+      "type": "sketch"
+     },
+     {
+      "entities": [
+       {
+        "radius": 3,
+        "type": "circle",
+        "x": 0,
+        "y": 0
+       }
+      ],
+      "id": "pr",
+      "plane": "YZ",
+      "type": "sketch"
+     },
+     {
+      "id": "sw",
+      "path": "pa",
+      "profile": "pr",
+      "type": "sweep"
+     }
+    ],
+    "proc": "rebuild"
+   },
+   "order": 21,
+   "pre": null
+  },
+  "texture": {
+   "asserts": [
+    {
+     "expected": 8071.166667,
+     "kind": "volume",
+     "pythonActual": 8071.166666666686,
+     "pythonCredited": true,
+     "unit": "texture"
+    }
+   ],
+   "measure": {
+    "features": [
+     {
+      "height": 20,
+      "id": "b",
+      "length": 20,
+      "type": "box",
+      "width": 20
+     },
+     {
+      "depth": 0.4,
+      "faces": {
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ],
+       "kind": "face"
+      },
+      "id": "tx",
+      "kind": "ribs",
+      "scale": 2.0,
+      "type": "texture"
+     }
+    ],
+    "proc": "rebuild"
+   },
+   "order": 31,
+   "pre": null
+  },
+  "thicken": {
+   "asserts": [
+    {
+     "expected": 9200.0,
+     "kind": "volume",
+     "pythonActual": 9200.0,
+     "pythonCredited": true,
+     "unit": "thicken"
+    },
+    {
+     "expected": 2,
+     "kind": "bodies_eq",
+     "pythonActual": 2,
+     "pythonCredited": true,
+     "unit": "thicken"
+    }
+   ],
+   "measure": {
+    "features": [
+     {
+      "height": 20,
+      "id": "b",
+      "length": 20,
+      "type": "box",
+      "width": 20
+     },
+     {
+      "faces": {
+       "by": "normal",
+       "dir": [
+        0,
+        0,
+        1
+       ],
+       "kind": "face"
+      },
+      "id": "th",
+      "thickness": 3,
+      "type": "thicken"
+     }
+    ],
+    "proc": "rebuild"
+   },
+   "order": 29,
+   "pre": null
+  }
+ },
+ "golden": {
+  "fineTolerance": 0.005,
+  "frozen": true,
+  "kind": "coverage",
+  "pythonCovered": [
+   "boolean",
+   "box",
+   "chamfer",
+   "computeAll",
+   "cylinder",
+   "datumPlane",
+   "deleteFace",
+   "draft",
+   "export",
+   "extrude",
+   "fillet",
+   "generateShape",
+   "hole",
+   "inspect",
+   "interference",
+   "loft",
+   "migrateGeometry",
+   "mirror",
+   "move",
+   "offsetFace",
+   "patternCircular",
+   "patternLinear",
+   "patternRect",
+   "press-pull",
+   "projectGeometry",
+   "removeBody",
+   "revolve",
+   "scale",
+   "shell",
+   "simplifyMesh",
+   "sketch",
+   "sphere",
+   "split",
+   "sweep",
+   "texture",
+   "thicken"
+  ],
+  "reference": {
+   "build123d": "0.11.1",
+   "engine": "python sidecar (sidecar/server.py)",
+   "ocp": "7.9.3.1",
+   "platform": "Windows-11-10.0.26200-SP0",
+   "python": "3.12.13",
+   "sidecarCommit": "28e4a6abca8d17d33dafc19c49532c5d6dd6f90b"
+  },
+  "rules": "e2e_coverage.py's explicit checks, in order, through register()'s gate: a unit is credited only by an assertion against its hardcoded expected constant, an exact body or pair count, a volume within volumeRel of it or a bbox within bboxAbs per component; a transform, pattern, remove, scale or move unit only through a delta kind that moved off its pre measure. The universe is python's (builder handlers, plugin feature types and server ops, less the excluded ops), and every unit python covered must be covered. The expected values are the tool's constants, not python answers; pythonActual is kept for reference.",
+  "tolerances": {
+   "bboxAbs": 0.0001,
+   "volumeRel": 0.005
+  },
+  "tool": "sidecar/tools/e2e_coverage.py",
+  "universe": [
+   "boolean",
+   "box",
+   "chamfer",
+   "computeAll",
+   "cone",
+   "counterboreBridge",
+   "cylinder",
+   "datumAxis",
+   "datumPlane",
+   "datumPoint",
+   "deleteFace",
+   "draft",
+   "duplicate",
+   "elephantFootChamfer",
+   "export",
+   "exportWith",
+   "extrude",
+   "fillet",
+   "generateShape",
+   "hole",
+   "imprint",
+   "inspect",
+   "interference",
+   "joint",
+   "loft",
+   "migrateGeometry",
+   "mirror",
+   "move",
+   "offsetFace",
+   "patternCircular",
+   "patternLinear",
+   "patternRect",
+   "press-pull",
+   "projectGeometry",
+   "removeBody",
+   "revolve",
+   "roofBridge",
+   "sacrificialLayer",
+   "scale",
+   "shell",
+   "simplifyMesh",
+   "sketch",
+   "sphere",
+   "split",
+   "sweep",
+   "teardropHole",
+   "texture",
+   "thicken",
+   "threadRibs",
+   "torus",
+   "verticalFillet",
+   "zipTieChannel"
+  ]
+ }
+}
