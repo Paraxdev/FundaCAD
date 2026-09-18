@@ -17,7 +17,7 @@ Nothing here starts an engine or an app. The probe, the link and the live
 session are all stubbed, because what is under test is the DECISION, and a test
 that needed a running app could not check the case where there isn't one.
 
-Run: uv run python plugins/FundaCAD.MCP/tests/test_reattach.py
+Run: uv run python crates/fundacad-mcp/tools/python-oracle/tests/test_reattach.py
 """
 
 import _bootstrap  # noqa: F401

@@ -1,6 +1,6 @@
 """Both MCP servers, one script, and the differences between their replies.
 
-`crates/fundacad-mcp` is a port of `plugins/FundaCAD.MCP`, and the thing that
+`crates/fundacad-mcp` is a port of the Python server in `python-oracle/`, and the thing that
 makes a port right is not that its own tests pass, it is that the two answer the
 same question the same way. So this drives a scripted session through each and
 prints, per call, the first line on which they disagree.
@@ -8,7 +8,7 @@ prints, per call, the first line on which they disagree.
     python crates/fundacad-mcp/tools/diff_servers.py scripts/spool.jsonl
     python crates/fundacad-mcp/tools/diff_servers.py --tools
 
-A script is what `plugins/FundaCAD.MCP/client.py --script` takes: one JSON array
+A script is what `client.py --script` takes: one JSON array
 of `{"tool": ..., "args": {...}}`, or one such object per line.
 
 Both servers are started PRIVATE (`FUNDACAD_MCP_MODE=standalone` and a session
@@ -29,25 +29,11 @@ import json
 import os
 import sys
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
-    os.path.abspath(__file__)))))
-PY_MCP = os.path.join(ROOT, "plugins", "FundaCAD.MCP")
-sys.path.insert(0, PY_MCP)
+HERE = os.path.dirname(os.path.abspath(__file__))
+PY_MCP = os.path.join(HERE, "python-oracle")
+sys.path.insert(0, HERE)
 
-from client import McpClient, _load_script  # noqa: E402
-
-
-def rust_binary():
-    """The built `fundacad-mcp`, from the environment or the workspace target."""
-    named = os.environ.get("FUNDACAD_MCP_BIN")
-    if named and os.path.isfile(named):
-        return named
-    name = "fundacad-mcp.exe" if sys.platform == "win32" else "fundacad-mcp"
-    for profile in ("debug", "release"):
-        candidate = os.path.join(ROOT, "target", profile, name)
-        if os.path.isfile(candidate):
-            return candidate
-    raise SystemExit("cargo build -p fundacad-mcp first, or set FUNDACAD_MCP_BIN")
+from client import McpClient, _load_script, rust_binary  # noqa: E402
 
 
 def private_env():
