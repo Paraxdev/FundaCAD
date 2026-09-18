@@ -39,7 +39,9 @@ import harness_util as H
 
 VOLUME_REL_TOL = 1e-6
 BBOX_ABS_TOL = 1e-4
-MESH_ABS_TOL = 1e-5
+# one unit of the fifth decimal the preview mesh is rounded to, which float noise
+# on either engine can tip a coordinate across
+MESH_ABS_TOL = 1e-5 * (1 + 1e-9)
 IMPORT_VOLUME_REL_TOL = 0.005
 
 NUM = re.compile(r"-?\d+(?:\.\d+)?(?:e[+-]\d+)?")
