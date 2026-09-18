@@ -23,7 +23,7 @@ name: build
 
 on:
   push:
-    branches: [main]
+    branches: [main, rustirisation]
   pull_request:
   workflow_dispatch:
 
@@ -596,9 +596,11 @@ jobs:
     needs: test
     permissions:
       contents: write # tauri-action may attach artifacts to a draft release
+    # Also builds on the Rust pivot branch so its CI can go green before a merge.
+    # release-prealpha still checks for main, so the branch never publishes.
     if: >-
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-      && github.ref == 'refs/heads/main'
+      && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/rustirisation')
     strategy:
       fail-fast: false
       matrix:
