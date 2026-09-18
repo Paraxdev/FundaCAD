@@ -15,6 +15,30 @@ fn a_pass_key_carries_minus_one_for_an_unknown_pass() {
     assert!(pass_cache_key(&[]).is_none());
 }
 
+/// The three sentences of `plugin_geometry.unregistered`, the middle one for a
+/// plugin on disk whose manifest names no component for this engine.
+#[test]
+fn a_plugin_without_a_component_is_named() {
+    let d = Declared {
+        id: "Some.Plugin".into(),
+        dir: std::env::temp_dir(),
+        wasm: None,
+        types: vec!["legacyThing".into()],
+        exporters: vec![],
+        generators: vec![],
+        files_read: false,
+    };
+    let Loaded::Broken(why) = compile(&d) else {
+        panic!("a manifest without a component is broken");
+    };
+    assert_eq!(
+        missing_feature("legacyThing", Missing::Broken(d.id.clone(), why)),
+        "this needs the \"Some.Plugin\" plugin, which is installed but would not load: its manifest names no geometryWasm, so the Rust engine has no geometry to run"
+    );
+    assert_eq!(missing_feature("x", Missing::Unknown), "unknown feature type: x");
+    assert!(missing_feature("x", Missing::NotRegistered("P".into())).contains("is not installed"));
+}
+
 fn close(a: f64, b: f64, rel: f64) -> bool {
     (a - b).abs() <= rel * b.abs().max(1.0)
 }
