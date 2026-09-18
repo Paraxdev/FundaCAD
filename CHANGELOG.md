@@ -51,6 +51,13 @@ This file starts on 2026-08-03. For anything before that, see the
   the Rust engine is less tested than the beta; its notes ask for a report of
   anything that builds differently. Files open in both.
 
+- **Plugin geometry runs on the Rust engine as sandboxed WebAssembly.** The
+  3D Printing Toolbox, Screws, Printing and Texture plugins each ship a
+  component beside their Python half, and each matches it on its own test
+  corpus, down to the textured mesh triangle by triangle. A component has no
+  file, network or environment access beyond what its manifest grants, a
+  memory cap and the same time budgets the beta used.
+
 ### Added
 
 - **A Hole tool.** Click a flat face to drill a hole there, click more spots to add holes and click a hole to take it away. Type a size like M3 or a plain diameter, and a depth or "through". The switch in the box steps through simple, counterbore, countersink and heat-set insert. Sizes follow ISO clearance holes (close, normal or loose fit) or tap drills from M2 to M10, counterbores fit socket head screws and countersinks 90 degree flat heads, and the insert preset sizes a bore with a small lead-in for M2 to M5 brass inserts. Every dimension is a row under the feature afterwards, parameters can drive them, and double-clicking the hole reopens it to move, add or remove positions. An optional 118 degree drill point and a Tapped label are there too.
