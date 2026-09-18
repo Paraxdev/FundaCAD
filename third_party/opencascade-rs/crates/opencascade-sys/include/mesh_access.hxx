@@ -138,7 +138,9 @@ inline bool mesh_access_face_plane_normal(const MeshAccess &m, int32_t face, rus
     if (surf.GetType() != GeomAbs_Plane) {
       return false;
     }
-    const gp_Dir &d = surf.Plane().Axis().Direction();
+    // By value: Plane() returns a temporary gp_Pln, so a reference into it
+    // dangles at the end of this statement.
+    const gp_Dir d = surf.Plane().Axis().Direction();
     out.push_back(d.X());
     out.push_back(d.Y());
     out.push_back(d.Z());
