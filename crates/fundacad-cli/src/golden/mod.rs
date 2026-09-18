@@ -30,6 +30,7 @@ pub fn run(args: &[String]) -> ExitCode {
     let mut golden_path = None;
     let mut corpus_path = None;
     let mut record = Vec::new();
+    let mut record_platform = Vec::new();
     let mut warm = false;
     let mut pass = None;
     let mut it = args.iter();
@@ -56,6 +57,18 @@ pub fn run(args: &[String]) -> ExitCode {
                     return ExitCode::from(2);
                 }
             },
+            "--record-platform" => match it.next() {
+                Some(names) => record_platform.extend(
+                    names
+                        .split(',')
+                        .filter(|n| !n.is_empty())
+                        .map(str::to_owned),
+                ),
+                None => {
+                    eprintln!("fundacad-engine: --record-platform needs comma separated case names");
+                    return ExitCode::from(2);
+                }
+            },
             other if golden_path.is_none() && !other.starts_with("--") => {
                 golden_path = Some(other.to_string());
             }
@@ -70,7 +83,7 @@ pub fn run(args: &[String]) -> ExitCode {
         return ExitCode::from(2);
     };
     if warm {
-        if !record.is_empty() {
+        if !record.is_empty() || !record_platform.is_empty() {
             eprintln!("fundacad-engine: --warm checks answers, it does not record them");
             return ExitCode::from(2);
         }
@@ -80,6 +93,7 @@ pub fn run(args: &[String]) -> ExitCode {
         Path::new(&golden_path),
         corpus_path.as_deref().map(Path::new),
         &record,
+        &record_platform,
         pass.is_some(),
     ) {
         Ok(true) => ExitCode::SUCCESS,
@@ -193,6 +207,7 @@ fn check(
     golden_path: &Path,
     corpus_path: Option<&Path>,
     record: &[String],
+    record_platform: &[String],
     warm: bool,
 ) -> Result<bool, String> {
     let golden = read_json(golden_path)?;
@@ -261,6 +276,10 @@ fn check(
         let corpus_file = corpus_file.ok_or("this golden has no corpus to record from")?;
         record::record(&mut ctx, golden_path, &corpus_file, record)?;
     }
+    if !record_platform.is_empty() {
+        record::record_platform(&mut ctx, golden_path, record_platform)?;
+    }
+    let own = record::apply_platform_variants(&mut ctx);
     let reference = &ctx.header()["reference"];
     println!(
         "golden {} ({kind}), frozen from the python engine: build123d {}, OCP {}, commit {}\n",
@@ -274,6 +293,16 @@ fn check(
             "{} case(s) have no python answer and hold this engine's, recorded after a human check: {}\n",
             own.len(),
             own.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(", ")
+        );
+    }
+    if !own.is_empty() {
+        println!(
+            "{} case(s) are held to this platform's own answer, recorded beside the python one because {}: {}\n",
+            own.len(),
+            ctx.golden["platformVariants"][std::env::consts::OS]["reason"]
+                .as_str()
+                .unwrap_or("?"),
+            own.join(", ")
         );
     }
     let result = match kind {
