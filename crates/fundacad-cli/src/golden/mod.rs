@@ -11,6 +11,7 @@ mod kdtree;
 mod meshes;
 mod plugin_ops;
 mod rebuild;
+mod record;
 
 use std::io;
 use std::path::{Path, PathBuf};
@@ -28,10 +29,23 @@ use sha2::{Digest, Sha256};
 pub fn run(args: &[String]) -> ExitCode {
     let mut golden_path = None;
     let mut corpus_path = None;
+    let mut record = Vec::new();
     let mut it = args.iter();
     while let Some(a) = it.next() {
         match a.as_str() {
             "--corpus" => corpus_path = it.next().cloned(),
+            "--record" => match it.next() {
+                Some(names) => record.extend(
+                    names
+                        .split(',')
+                        .filter(|n| !n.is_empty())
+                        .map(str::to_owned),
+                ),
+                None => {
+                    eprintln!("fundacad-engine: --record needs comma separated case names");
+                    return ExitCode::from(2);
+                }
+            },
             other if golden_path.is_none() && !other.starts_with("--") => {
                 golden_path = Some(other.to_string());
             }
@@ -48,6 +62,7 @@ pub fn run(args: &[String]) -> ExitCode {
     match check(
         Path::new(&golden_path),
         corpus_path.as_deref().map(Path::new),
+        &record,
     ) {
         Ok(true) => ExitCode::SUCCESS,
         Ok(false) => ExitCode::from(1),
@@ -106,11 +121,16 @@ impl Ctx {
     }
 }
 
-fn check(golden_path: &Path, corpus_path: Option<&Path>) -> Result<bool, String> {
+fn check(
+    golden_path: &Path,
+    corpus_path: Option<&Path>,
+    record: &[String],
+) -> Result<bool, String> {
     let golden = read_json(golden_path)?;
     let header = golden["golden"].clone();
     let kind = header["kind"].as_str().ok_or("the golden has no kind")?;
     let repo = repo_root(golden_path)?;
+    let mut corpus_file = None;
     let corpus = match kind {
         "coverage" => Value::Null,
         _ => {
@@ -124,9 +144,10 @@ fn check(golden_path: &Path, corpus_path: Option<&Path>) -> Result<bool, String>
             };
             let bytes =
                 std::fs::read(&path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+            corpus_file = Some(path.clone());
             let want = header["corpusSha256"].as_str().unwrap_or("");
             let got = sha256_hex(&fold_crlf(&bytes));
-            if got != want {
+            if got != want && record.is_empty() {
                 return Err(format!(
                     "{} is not the corpus this golden was frozen from (sha256 {got}, the golden says {want})",
                     path.display()
@@ -152,12 +173,16 @@ fn check(golden_path: &Path, corpus_path: Option<&Path>) -> Result<bool, String>
     let work = std::fs::canonicalize(&work)
         .map(strip_verbatim)
         .unwrap_or(work);
-    let ctx = Ctx {
+    let mut ctx = Ctx {
         golden,
         corpus,
         repo,
         work: work.clone(),
     };
+    if !record.is_empty() {
+        let corpus_file = corpus_file.ok_or("this golden has no corpus to record from")?;
+        record::record(&mut ctx, golden_path, &corpus_file, record)?;
+    }
     let reference = &ctx.header()["reference"];
     println!(
         "golden {} ({kind}), frozen from the python engine: build123d {}, OCP {}, sidecar {}\n",
@@ -166,6 +191,13 @@ fn check(golden_path: &Path, corpus_path: Option<&Path>) -> Result<bool, String>
         reference["ocp"].as_str().unwrap_or("?"),
         reference["sidecarCommit"].as_str().unwrap_or("?"),
     );
+    if let Some(own) = ctx.header()["rustRecorded"].as_array() {
+        println!(
+            "{} case(s) have no python answer and hold this engine's, recorded after a human check: {}\n",
+            own.len(),
+            own.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(", ")
+        );
+    }
     let result = match kind {
         "rebuild" => rebuild::check(&ctx),
         "plugin-ops" => plugin_ops::check(&ctx),

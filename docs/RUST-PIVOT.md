@@ -461,12 +461,17 @@ in the `rust-geom` job.
 
 - **A deliberate behaviour change** in the Rust engine that moves a golden
   answer updates that golden in the same commit, with the reason in the commit
-  message. Edit the value by hand; there is no Python engine left to ask.
-- **A new corpus document** has no Python answer. Add it to the corpus, run
-  the checker, look at what the Rust engine did (in the app, or measured by
-  hand), and only then record the Rust answer as its golden, updating
-  `corpusSha256` in the header. That golden is a regression check against a
-  human judgement, not parity with the old engine, and the commit says so.
+  message. There is no Python engine left to ask: re-record the named case
+  with `golden-check <golden> --record <case>` (or edit the value by hand),
+  and review the diff, which touches only that case.
+- **A new corpus document** has no Python answer. Add it to the corpus, look at
+  what the Rust engine does with it (in the app, or measured by hand), and only
+  then run `golden-check <golden> --record <name>`, which writes this engine's
+  answer in the same shape, updates `corpusSha256` and lists the case under
+  `rustRecorded` in the header. That case is a regression check against a
+  human judgement, not parity with the old engine, and the commit says so. The
+  coverage golden's constants are the tool's own arithmetic, not answers, and
+  are edited by hand.
 
 ## 6. The `alpha` rolling release (landed)
 

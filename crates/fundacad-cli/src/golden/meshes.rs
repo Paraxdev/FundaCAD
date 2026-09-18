@@ -414,6 +414,148 @@ fn compare_doc(
     Ok((diffs, notes))
 }
 
+/// freeze_goldens.flat_vertices on this engine's float64 positions.
+fn flat_vertices(p: &[P3], i: &[[usize; 3]], degenerate: f64) -> Vec<usize> {
+    let mut uses = vec![0usize; p.len()];
+    for t in i {
+        for v in t {
+            uses[*v] += 1;
+        }
+    }
+    let mut flat = vec![false; p.len()];
+    for t in i {
+        let (a, b, c) = (p[t[0]], p[t[1]], p[t[2]]);
+        let (u, w) = (sub(b, a), sub(c, a));
+        let n = [
+            u[1] * w[2] - u[2] * w[1],
+            u[2] * w[0] - u[0] * w[2],
+            u[0] * w[1] - u[1] * w[0],
+        ];
+        if norm(n) / 2.0 < degenerate {
+            for v in t {
+                flat[*v] = true;
+            }
+        }
+    }
+    (0..p.len()).filter(|v| flat[*v] && uses[*v] == 1).collect()
+}
+
+fn mesh_golden(p: &[P3], i: &[[usize; 3]], quantum: f64) -> serde_json::Map<String, Value> {
+    let flat: Vec<i64> = i.iter().flatten().map(|v| *v as i64).collect();
+    let mut m = serde_json::Map::new();
+    m.insert("vertices".into(), json!(p.len()));
+    m.insert("triangles".into(), json!(i.len()));
+    m.insert(
+        "positions".into(),
+        json!(super::record::quantised_columns(p, quantum)),
+    );
+    m.insert("indices".into(), json!(super::record::ivec(&flat)));
+    m
+}
+
+/// freeze_goldens.indexed_stl: coincident corners shared, the rows sorted.
+fn indexed(p: &[P3]) -> (Vec<P3>, Vec<[usize; 3]>) {
+    let mut order: Vec<usize> = (0..p.len()).collect();
+    order.sort_by(|a, b| {
+        p[*a]
+            .partial_cmp(&p[*b])
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    let mut uniq: Vec<P3> = Vec::new();
+    let mut inverse = vec![0usize; p.len()];
+    for k in order {
+        if uniq.last() != Some(&p[k]) {
+            uniq.push(p[k]);
+        }
+        inverse[k] = uniq.len() - 1;
+    }
+    (uniq, tris(&inverse))
+}
+
+/// A document's golden case from this engine, as freeze_goldens.freeze_meshes
+/// writes one from the Python engine.
+pub fn record_case(ctx: &Ctx, name: &str) -> Result<Value, String> {
+    let d = ctx.corpus["documents"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|d| d["name"] == name)
+        .ok_or_else(|| format!("the corpus has no document {name}"))?;
+    let mut doc = d["document"].clone();
+    absolute_image_paths(&mut doc, &ctx.repo);
+    let tolerance = ctx.header()["rebuildTolerance"].as_f64().unwrap_or(0.1);
+    let pq = ctx.header()["positionQuantum"].as_f64().unwrap_or(1e-6);
+    let nq = ctx.header()["normalQuantum"].as_f64().unwrap_or(1e-5);
+    let degenerate = ctx.tol("degenerateArea");
+    let req = json!({"document": doc, "tolerance": tolerance, "binary": false});
+    let (first, again) = {
+        let mut s = Session::start();
+        (s.call("rebuild", req.clone()), s.call("rebuild", req))
+    };
+    let stl = ctx.work.join("record.stl");
+    let export = Session::start().call(
+        "export",
+        json!({"document": doc, "format": "stl", "path": stl.to_string_lossy(), "mesh": {"binary": false}}),
+    );
+    let mut out = serde_json::Map::new();
+    let mut bodies_out = serde_json::Map::new();
+    for (bid, b) in bodies(&first) {
+        let p = rows3(&floats(&b["positions"]));
+        let i = tris(&indices(&b["indices"]));
+        let n = rows3(&floats(&b["normals"]));
+        let mut body = mesh_golden(&p, &i, pq);
+        let face_ids = indices(&b["faceIds"]);
+        let mut h = vec![0u64; face_ids.iter().max().map_or(0, |m| m + 1)];
+        for f in &face_ids {
+            h[*f] += 1;
+        }
+        body.insert("faceTriangles".into(), json!(h));
+        body.insert(
+            "normals".into(),
+            json!(if n.is_empty() {
+                String::new()
+            } else {
+                super::record::quantised_columns(&n, nq)
+            }),
+        );
+        body.insert(
+            "flatVertices".into(),
+            json!(flat_vertices(&p, &i, degenerate)),
+        );
+        body.insert(
+            "faceColorSlots".into(),
+            b.get("faceColorSlots").cloned().unwrap_or(Value::Null),
+        );
+        bodies_out.insert(bid, Value::Object(body));
+    }
+    let etags = |m: &BTreeMap<String, Value>| -> BTreeMap<String, Value> {
+        m.iter()
+            .map(|(k, v)| (k.clone(), v.get("etag").cloned().unwrap_or(Value::Null)))
+            .collect()
+    };
+    out.insert("ok".into(), json!(first["ok"] == true));
+    out.insert("bodies".into(), Value::Object(bodies_out));
+    out.insert(
+        "pythonEtagsStable".into(),
+        json!(etags(&bodies(&first)) == etags(&bodies(&again))),
+    );
+    let mut ex = serde_json::Map::new();
+    ex.insert("ok".into(), json!(export["ok"] == true));
+    if export["ok"] != true {
+        ex.insert("error".into(), ctx.normalise_all(&export["error"]));
+    } else {
+        ex.insert(
+            "warnings".into(),
+            ctx.normalise_all(&export["result"]["warnings"]),
+        );
+        let (p, _) = read_stl(&stl);
+        let (u, i) = indexed(&p);
+        ex.extend(mesh_golden(&u, &i, pq));
+    }
+    out.insert("export".into(), Value::Object(ex));
+    Ok(Value::Object(out))
+}
+
 pub fn check(ctx: &Ctx) -> Result<bool, String> {
     let docs = ctx.corpus["documents"]
         .as_array()

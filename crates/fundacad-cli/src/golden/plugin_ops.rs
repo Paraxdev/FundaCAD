@@ -445,6 +445,152 @@ fn compare_shape(
     Ok(diffs)
 }
 
+fn run_export(
+    ctx: &Ctx,
+    session: &mut Session,
+    e: &Value,
+    i: usize,
+) -> Result<(std::path::PathBuf, Value), String> {
+    let e = prepare_export(ctx, e, i)?;
+    let suffix = e["suffix"].as_str().unwrap_or(".3mf");
+    let path = ctx.work.join(format!("rs-{i}{suffix}"));
+    let options = e
+        .get("options")
+        .filter(|o| !o.is_null())
+        .cloned()
+        .unwrap_or(json!({}));
+    let reply = session.call(
+        "exportWith",
+        json!({"document": e["document"], "path": path.to_string_lossy(),
+               "exporter": e["exporter"], "options": options}),
+    );
+    Ok((path, reply))
+}
+
+/// generateShape, and for a stored shape its blob rebuilt as an import.
+fn run_shape(session: &mut Session, s: &Value) -> (Value, Option<Value>) {
+    let output = s["output"].as_str().unwrap_or("mesh");
+    let reply = session.call(
+        "generateShape",
+        json!({"generator": s["generator"], "params": s.get("params").cloned().unwrap_or(Value::Null),
+               "output": output, "placement": s.get("placement").cloned().unwrap_or(Value::Null)}),
+    );
+    let rebuilt = (output == "store" && reply["ok"] == true).then(|| {
+        let doc = json!({"parameters": {}, "features": [{
+            "id": "f1", "type": "import", "format": "brep", "name": "generated",
+            "geom": reply["result"]["geom"], "solid": true}]});
+        session.call(
+            "rebuild",
+            json!({"document": doc, "tolerance": 0.1, "binary": false}),
+        )
+    });
+    (reply, rebuilt)
+}
+
+/// freeze_goldens.zip_entry on this engine's file.
+fn zip_entry(name: &str, data: &[u8]) -> Value {
+    use super::record::object;
+    let mut entry = object(vec![
+        ("bytes", json!(data.len())),
+        ("name", json!(name)),
+        ("sha256", json!(sha256_hex(data))),
+    ]);
+    if name.ends_with(".model") {
+        let text = String::from_utf8_lossy(data);
+        let verts = blocks(&text, "<vertices>", "</vertices>");
+        let objects: Vec<Value> = blocks(&text, "<triangles>", "</triangles>")
+            .iter()
+            .zip(&verts)
+            .map(|((_, _, t), (_, _, v))| {
+                let (area, volume, free) = mesh_measure(v, t);
+                // The Python tool sorted the edges as pairs of strings.
+                let mut free: Vec<(u64, u64)> = free.into_iter().collect();
+                free.sort_by_key(|(i, j)| (i.to_string(), j.to_string()));
+                json!({"area": area, "volume": volume,
+                       "freeEdges": free.iter().map(|(i, j)| json!([i, j])).collect::<Vec<_>>(),
+                       "triangles": t.matches("<triangle").count(),
+                       "trianglesSha256": sha256_hex(t.as_bytes())})
+            })
+            .collect();
+        entry["skeletonSha256"] = json!(sha256_hex(skeleton(&text).as_bytes()));
+        entry["objects"] = Value::Array(objects);
+    }
+    entry
+}
+
+/// A case's golden from this engine, as freeze_goldens.freeze_plugin_ops writes it.
+pub fn record_case(ctx: &Ctx, name: &str) -> Result<Value, String> {
+    use super::record::{fixed, quantised_columns, sig};
+    let mut session = Session::start();
+    let exports = ctx.corpus["exports"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    if let Some((i, e)) = exports.iter().enumerate().find(|(_, e)| e["name"] == name) {
+        let (path, reply) = run_export(ctx, &mut session, e, i)?;
+        let mut case = json!({"op": "exportWith", "ok": reply["ok"] == true});
+        if reply["ok"] != true {
+            case["error"] = ctx.normalise_all(&reply["error"]);
+            return Ok(case);
+        }
+        case["info"] = ctx.normalise_all(&reply["result"]["info"]);
+        case["warnings"] = ctx.normalise_all(&reply["result"]["warnings"]);
+        let file = std::fs::File::open(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+        let mut zip = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
+        let mut entries = Vec::new();
+        for k in 0..zip.len() {
+            let mut f = zip.by_index(k).map_err(|e| e.to_string())?;
+            let mut data = Vec::new();
+            f.read_to_end(&mut data).map_err(|e| e.to_string())?;
+            entries.push(zip_entry(f.name(), &data));
+        }
+        case["entries"] = Value::Array(entries);
+        return Ok(case);
+    }
+    let shapes = ctx.corpus["shapes"].as_array().cloned().unwrap_or_default();
+    let s = shapes
+        .iter()
+        .find(|s| s["name"] == name)
+        .ok_or_else(|| format!("the corpus has no case {name}"))?;
+    let (reply, rebuilt) = run_shape(&mut session, s);
+    let mut case = json!({"op": "generateShape", "ok": reply["ok"] == true});
+    if reply["ok"] != true {
+        case["error"] = ctx.normalise_all(&reply["error"]);
+    } else {
+        let r = &reply["result"];
+        for key in ["solid", "solids", "valid", "faces"] {
+            case[key] = r.get(key).cloned().unwrap_or(Value::Null);
+        }
+        case["volume"] = sig(r["volume"].as_f64().unwrap_or(0.0), 15);
+        let corner = |c: &str| {
+            Value::Array(
+                (0..3)
+                    .map(|i| fixed(r["bbox"][c][i].as_f64().unwrap_or(0.0), 9))
+                    .collect(),
+            )
+        };
+        case["bbox"] = json!({"max": corner("max"), "min": corner("min")});
+        if let Some(m) = r.get("mesh") {
+            let points = sorted_points(m);
+            let q = ctx.header()["pointQuantum"].as_f64().unwrap_or(1e-5);
+            case["mesh"] = json!({
+                "normals": m["normals"].as_array().is_some_and(|a| !a.is_empty()),
+                "points": if points.is_empty() { String::new() } else { quantised_columns(&points, q) },
+                "triangles": m["indices"].as_array().map_or(0, Vec::len) / 3,
+                "vertices": points.len()});
+        }
+    }
+    if let Some(r) = rebuilt {
+        let bodies = r["result"]["bodies"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        let volume: f64 = bodies.iter().map(body_volume).sum();
+        case["rebuilt"] = json!({"bodies": bodies.len(), "volume": sig(volume, 10)});
+    }
+    Ok(case)
+}
+
 pub fn check(ctx: &Ctx) -> Result<bool, String> {
     let exports = ctx.corpus["exports"]
         .as_array()
@@ -460,14 +606,7 @@ pub fn check(ctx: &Ctx) -> Result<bool, String> {
         let py = cases
             .get(name)
             .ok_or_else(|| format!("the golden has no case {name}"))?;
-        let e = prepare_export(ctx, e, i)?;
-        let suffix = e["suffix"].as_str().unwrap_or(".3mf");
-        let path = ctx.work.join(format!("rs-{i}{suffix}"));
-        let reply = session.call(
-            "exportWith",
-            json!({"document": e["document"], "path": path.to_string_lossy(),
-                   "exporter": e["exporter"], "options": e.get("options").filter(|o| !o.is_null()).cloned().unwrap_or(json!({}))}),
-        );
+        let (path, reply) = run_export(ctx, &mut session, e, i)?;
         let (diffs, notes) = compare_export(ctx, py, &path, &reply);
         bad += usize::from(!diffs.is_empty());
         rows.push(vec![
@@ -491,21 +630,7 @@ pub fn check(ctx: &Ctx) -> Result<bool, String> {
         let py = cases
             .get(name)
             .ok_or_else(|| format!("the golden has no case {name}"))?;
-        let output = s["output"].as_str().unwrap_or("mesh");
-        let reply = session.call(
-            "generateShape",
-            json!({"generator": s["generator"], "params": s.get("params").cloned().unwrap_or(Value::Null),
-                   "output": output, "placement": s.get("placement").cloned().unwrap_or(Value::Null)}),
-        );
-        let rebuilt = (output == "store" && reply["ok"] == true).then(|| {
-            let doc = json!({"parameters": {}, "features": [{
-                "id": "f1", "type": "import", "format": "brep", "name": "generated",
-                "geom": reply["result"]["geom"], "solid": true}]});
-            session.call(
-                "rebuild",
-                json!({"document": doc, "tolerance": 0.1, "binary": false}),
-            )
-        });
+        let (reply, rebuilt) = run_shape(&mut session, s);
         let diffs = compare_shape(ctx, py, &reply, rebuilt.as_ref())?;
         bad += usize::from(!diffs.is_empty());
         rows.push(vec![
