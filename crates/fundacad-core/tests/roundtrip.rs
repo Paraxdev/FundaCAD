@@ -43,7 +43,7 @@ fn documents() -> Vec<(String, Value)> {
             out.push((format!("{corpus} {}", case["id"]), case["doc"].clone()));
         }
     }
-    let funda = "sidecar/tools/bench/textured_box.funda";
+    let funda = "tests/fixtures/textured_box.funda";
     out.push((funda.to_owned(), read(&repo().join(funda))));
     out
 }

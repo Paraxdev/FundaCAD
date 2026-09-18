@@ -294,7 +294,7 @@ pub fn record_case(ctx: &Ctx, name: &str) -> Result<Value, String> {
     absolute_image_paths(&mut doc, &ctx.repo);
     let mut import = None;
     if let Some(spec) = d.get("importFixture") {
-        let fixture = format!("sidecar/{}", spec["path"].as_str().unwrap_or(""));
+        let fixture = format!("tests/{}", spec["path"].as_str().unwrap_or(""));
         let format = spec.get("format").cloned().unwrap_or(json!("step"));
         let mut s = Session::start();
         let reply = s.call(

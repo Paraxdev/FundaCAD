@@ -35,7 +35,7 @@ fn step_import_matches_python() {
     let store = BlobStore::open(scratch("blobs")).unwrap();
     let mut failures = Vec::new();
     for (name, want) in oracle.as_object().unwrap() {
-        let path = root().join(format!("../../sidecar/fixtures/{name}.step"));
+        let path = root().join(format!("../../tests/fixtures/{name}.step"));
         let mut fail = |what: String| failures.push(format!("{name}: {what}"));
         let asm = xcaf::read_step_assembly(&path).unwrap();
         if json!(asm.is_assembly) != want["isAssembly"] {

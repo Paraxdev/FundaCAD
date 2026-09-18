@@ -57,7 +57,7 @@ done
 # synthetic or already public.
 echo "checking for tracked CAD models…"
 models=$(git ls-files -- '*.funda' '*.fundab' '*.neocad' '*.sindri' '*.3mf' '*.stl' '*.step' '*.stp' 2>/dev/null \
-  | grep -vE '^(sidecar/tools/bench/textured_box\.funda$|sidecar/fixtures/asm_[a-z_]+\.step$|third_party/)' || true)
+  | grep -vE '^(tests/fixtures/textured_box\.funda$|tests/fixtures/asm_[a-z_]+\.step$|third_party/)' || true)
 if [ -n "$models" ]; then
   note "tracked CAD model — is this a real part in a public repo?:"
   printf '%s\n' "$models" | sed 's/^/    /'

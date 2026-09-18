@@ -1,5 +1,5 @@
 //! Selector resolution, replacing sidecar/geom_select.py (with its tuning,
-//! sidecar/selector_tuning.json).
+//! selector_tuning.json beside it).
 //!
 //! Geometry is never referenced by index: a selector is a stored description
 //! (a pick point, a fingerprint, a direction) re-resolved against the rebuilt
