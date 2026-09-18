@@ -44,22 +44,15 @@ import type { RunOutcome } from "./runner/host";
  *  copy decides which of them get the label. */
 const RELEASES = "https://github.com/Paraxdev/fundacad/releases/download/";
 
-/** The release the assets hang off. "beta" is the rolling one the installers
- *  and the update feed already use. */
-const RELEASE_TAG = "beta";
-/** The Rust engine build's own release. Its bundles carry the geometry
- *  components its plugin host runs, built from the same commit as the host. */
-const ALPHA_RELEASE_TAG = "alpha";
-
-/** Which release this build installs plugins from. */
-export function pluginReleaseTag(engine: "rust" | "python"): string {
-  return engine === "rust" ? ALPHA_RELEASE_TAG : RELEASE_TAG;
-}
+/** The release the assets hang off, the rolling alpha the installers and the
+ *  update feed use. Its bundles carry the geometry components the engine's
+ *  plugin host runs, built from the same commit as the host. The Python beta
+ *  installs from its own `beta` release, which only the legacy branch writes. */
+export const RELEASE_TAG = "alpha";
 
 export interface OfficialPlugin {
   manifest: PluginManifest;
-  /** the release the asset hangs off. "beta" is the rolling one the installers
-   *  and the update feed already use. */
+  /** the release the asset hangs off, RELEASE_TAG */
   tag: string;
   /** the asset's file name on that release */
   asset: string;

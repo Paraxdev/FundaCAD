@@ -7,7 +7,6 @@ const host = vi.hoisted(() => ({
   channel: null as null | { onmessage: (b: ArrayBuffer) => void },
   state: null as null | ((e: { payload: boolean }) => void),
   sent: [] as Uint8Array[],
-  kind: "rust" as string | null,
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -20,11 +19,6 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: async (cmd: string, arg: unknown) => {
     if (cmd === "engine_attach") return true;
     if (cmd === "engine_send") host.sent.push(arg as Uint8Array);
-    if (cmd === "engine_kind") {
-      if (host.kind === null) throw new Error("unknown command");
-      return host.kind;
-    }
-    if (cmd === "sidecar_token") return "t";
     return undefined;
   },
 }));
@@ -59,7 +53,6 @@ afterEach(() => {
   host.channel = null;
   host.state = null;
   host.sent = [];
-  host.kind = "rust";
   delete (globalThis as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
 });
 
@@ -97,7 +90,7 @@ describe("IpcTransport", () => {
 });
 
 describe("EngineTransport", () => {
-  it("uses IPC when the app says it was built with the Rust engine", async () => {
+  it("uses IPC inside the app", async () => {
     (globalThis as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {};
     const t = new EngineTransport();
     await t.start(sink().s);
@@ -105,9 +98,8 @@ describe("EngineTransport", () => {
     expect(t.open).toBe(true);
   });
 
-  it("falls back to the WebSocket when the app has no engine_kind command", async () => {
-    (globalThis as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {};
-    host.kind = null;
+  it("dials the loopback WebSocket in a plain browser, with the token from the URL", async () => {
+    vi.stubGlobal("location", { search: "?token=t" });
     const opened: string[] = [];
     const fake = vi.fn(function (this: { readyState: number }, url: string) {
       opened.push(url);
