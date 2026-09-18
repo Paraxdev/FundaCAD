@@ -29,6 +29,45 @@ interface types {
   record mesh { positions: list<f64>, indices: list<u32>, normals: list<f32> }
 
   record export-body { id: string, name: string, positions: list<f64>, indices: list<u32> }
+
+  // A face's stored triangulation, the one the host last meshed it with:
+  // world positions, the surface (u, v) of every node, and three 0-based node
+  // indices per triangle wound as the surface is, the face orientation NOT
+  // applied.
+  record face-triangulation { positions: list<f64>, uvs: list<f64>, indices: list<u32> }
+
+  // A face's underlying surface as its adaptor sees it, placement applied:
+  // `kind` is plane, cylinder, cone or another surface type's name, the axes
+  // are the surface's own gp_Ax3 (a plane's too), `radius` a cylinder's
+  // radius or a cone's reference radius, `semi-angle` a cone's in radians,
+  // and the parameter bounds are the face's.
+  record surface-frame {
+    kind: string,
+    origin: vec3,
+    x-dir: vec3,
+    y-dir: vec3,
+    z-dir: vec3,
+    radius: f64,
+    semi-angle: f64,
+    u-first: f64,
+    u-last: f64,
+    v-first: f64,
+    v-last: f64,
+  }
+
+  // The surface at one (u, v): the point, the first derivatives, and the
+  // surface normal where it is defined (the face orientation NOT applied).
+  record surface-sample { point: vec3, du: vec3, dv: vec3, normal: option<vec3> }
+
+  // How far apart two surfaces may be and still be one: exact, a value in
+  // millimetres, or the engine's tolerance for geometry picked off the
+  // rendered mesh, sized by the extent of the shapes involved.
+  variant fuzzy { exact, value(f64), picked }
+  // `clean` merges faces split along a shared surface and unwraps a lone
+  // solid from its compound; no validity check is made.
+  record boolean-options { parallel: bool, fuzzy: fuzzy, clean: bool }
+
+  record dir-entry { name: string, is-dir: bool }
 }
 
 // Always available: cancellation, progress and the engine log.
@@ -43,7 +82,7 @@ interface host {
 // The generic kernel. Nothing here knows what a fastener, a texture or a
 // printer is.
 interface kernel {
-  use types.{vec3, shape-kind, surface, curve, point-state, boolean-op, mesh};
+  use types.{vec3, shape-kind, surface, curve, point-state, boolean-op, mesh, face-triangulation, surface-frame, surface-sample, boolean-options};
 
   resource shape {
     kind: func() -> shape-kind;
@@ -83,6 +122,14 @@ interface kernel {
     dihedral-deg: func(edge: borrow<shape>) -> option<f64>;
     // A face's triangulation at a linear deflection.
     triangulate: func(deflection: f64) -> result<mesh, string>;
+    // A face's stored triangulation, none when it has not been meshed.
+    triangulation: func() -> option<face-triangulation>;
+    // Whether the shape is REVERSED in its parent.
+    is-reversed: func() -> bool;
+    surface-frame: func() -> option<surface-frame>;
+    // The surface at every (u, v) of `uvs`, two numbers each. `tolerance` is
+    // the one a normal is judged defined with.
+    surface-samples: func(uvs: list<f64>, tolerance: f64) -> list<surface-sample>;
   }
 
   // A box from its minimum corner.
@@ -111,6 +158,27 @@ interface kernel {
   // Carry the local origin to `origin` and local +Z to `z-axis`.
   place: func(shape: borrow<shape>, origin: vec3, z-axis: vec3) -> result<shape, string>;
   compound: func(parts: list<borrow<shape>>) -> shape;
+  // Turned by `degrees` about the axis through `origin`.
+  rotate: func(shape: borrow<shape>, origin: vec3, axis: vec3, degrees: f64) -> result<shape, string>;
+
+  // Edges, and a wire of edges connected in the order given.
+  line-edge: func(start: vec3, end: vec3) -> result<shape, string>;
+  arc-edge: func(start: vec3, middle: vec3, end: vec3) -> result<shape, string>;
+  circle-edge: func(center: vec3, normal: vec3, radius: f64) -> result<shape, string>;
+  wire-from-edges: func(edges: list<borrow<shape>>) -> result<shape, string>;
+
+  // A planar face swept along a helix about the axis, `pitch` of climb per
+  // turn over `degrees` of turning, its plane always containing the axis: a
+  // revolve that climbs. A negative pitch climbs the other way. The face
+  // must sit off the axis.
+  helical-sweep: func(profile: borrow<shape>, origin: vec3, axis: vec3, degrees: f64, pitch: f64) -> result<shape, string>;
+
+  // One boolean with its options, the base against every tool at once.
+  boolean-with: func(op: boolean-op, base: borrow<shape>, tools: list<borrow<shape>>, options: boolean-options) -> result<shape, string>;
+
+  // The faces of a shape a face selector (JSON, one selector or a list, as a
+  // feature stores it) resolves to, in the engine's lossy tolerant way.
+  select-faces: func(shape: borrow<shape>, selectors: string) -> result<list<shape>, string>;
 
   record blended { shape: shape, skipped: u32 }
   // Every edge at once; with `one-by-one`, a refused batch falls back to one
@@ -150,6 +218,17 @@ interface feature {
   stash-pass: func(body: u32, spec: string) -> result<_, string>;
 }
 
+// Reading the machine's files, for a plugin whose manifest grants
+// "files.read"; every call is refused otherwise. Paths are absolute.
+interface files {
+  use types.{dir-entry};
+
+  read: func(path: string) -> result<list<u8>, string>;
+  list-dir: func(path: string) -> result<list<dir-entry>, string>;
+  is-dir: func(path: string) -> bool;
+  is-file: func(path: string) -> bool;
+}
+
 // Where an exporter's bytes go. The host picked the path; a plugin never
 // names a file.
 interface output {
@@ -161,11 +240,17 @@ world plugin {
   import kernel;
   import feature;
   import output;
+  import files;
 
   use types.{mesh, export-body};
   use kernel.{shape};
 
   record mesh-pass { name: string, code-version: u32 }
+  // A face a pass claims, with a tag that rides back into `displace` for it.
+  record claimed { face: shape, tag: string }
+  // `split-creases` is true for the viewport tessellation only, where a
+  // pass may hand back unshared vertices for hard shading.
+  record displace-options { density-cap: u32, split-creases: bool }
   record registration {
     features: list<string>,
     mesh-passes: list<mesh-pass>,
@@ -181,9 +266,11 @@ world plugin {
   export run-feature: func(type-name: string) -> result<_, string>;
 
   // register_mesh_pass: the faces of a finished body one stashed spec lands
-  // on, then one face's triangulation displaced.
-  export resolve-pass: func(pass: string, body: borrow<shape>, spec: string) -> result<list<shape>, string>;
-  export displace: func(pass: string, face: borrow<shape>, triangles: mesh, spec: string, density-cap: u32) -> result<mesh, string>;
+  // on, then one face displaced. The face has just been meshed, its
+  // `triangulation` is the one to displace, and the mesh handed back takes
+  // its place, wound outward, normals one per vertex or none.
+  export resolve-pass: func(pass: string, body: borrow<shape>, spec: string) -> result<list<claimed>, string>;
+  export displace: func(pass: string, face: borrow<shape>, spec: string, tag: string, options: displace-options) -> result<mesh, string>;
 
   // register_exporter: every live body meshed at export grade, written
   // through `output`. The result is an info object, JSON, or "".

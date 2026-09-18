@@ -27,8 +27,10 @@ pub mod wit {
     });
 }
 
-pub use wit::fundacad::plugin::{feature, host as host_api, kernel, output, types};
-use wit::{Plugin, PluginPre, Registration};
+pub use wit::fundacad::plugin::{feature, files, host as host_api, kernel, output, types};
+use wit::{DisplaceOptions, Plugin, PluginPre, Registration};
+
+use super::kernel_ext as kx;
 
 /// A kernel shape held for a plugin.
 pub struct HostShape(pub Shape);
@@ -58,6 +60,7 @@ pub struct State {
     limits: StoreLimits,
     scope: Scope,
     cancel: Option<CancelToken>,
+    files_read: bool,
 }
 
 // FeatureScope's pointer is only dereferenced inside the synchronous call that
@@ -111,6 +114,8 @@ impl Drop for Ticker {
 pub struct Component {
     pre: PluginPre<State>,
     pub registration: Registration,
+    /// The manifest grants "files.read".
+    files_read: bool,
 }
 
 fn text(e: impl std::fmt::Display) -> String {
@@ -132,7 +137,7 @@ fn trap_text(e: wasmtime::Error) -> String {
 }
 
 impl Component {
-    pub fn load(path: &Path) -> Result<Component, String> {
+    pub fn load(path: &Path, files_read: bool) -> Result<Component, String> {
         let component = wasmtime::component::Component::from_file(engine(), path).map_err(text)?;
         let mut linker: Linker<State> = Linker::new(engine());
         wasmtime_wasi::p2::add_to_linker_sync(&mut linker).map_err(text)?;
@@ -146,6 +151,7 @@ impl Component {
                 exporters: vec![],
                 shape_generators: vec![],
             },
+            files_read,
         };
         c.registration = c.call(Scope::None, Duration::from_secs(10), None, |p, s| {
             p.call_register(s)
@@ -182,6 +188,7 @@ impl Component {
                 limits,
                 scope,
                 cancel: cancel.clone(),
+                files_read: self.files_read,
             },
         );
         store.limiter(|s| &mut s.limits);
@@ -258,12 +265,16 @@ impl Component {
             .map_err(|e| format!("the exporter's info is not JSON: {e}"))
     }
 
-    pub fn resolve_pass(&self, pass: &str, body: &Shape, spec: &Value) -> Result<Vec<Shape>, String> {
+    /// The faces one spec claims, each with the tag that goes back with it.
+    pub fn resolve_pass(&self, pass: &str, body: &Shape, spec: &Value) -> Result<Vec<(Shape, String)>, String> {
         self.call(Scope::None, super::MESH_PASS_BUDGET, None, |p, s| {
             let h = s.data_mut().table.push(HostShape(body.clone()))?;
             let r = p.call_resolve_pass(&mut *s, pass, h, &spec.to_string())?;
             Ok(match r {
-                Ok(hs) => hs.into_iter().map(|h| take(s.data_mut(), h)).collect(),
+                Ok(hs) => hs
+                    .into_iter()
+                    .map(|c| take(s.data_mut(), c.face).map(|f| (f, c.tag)))
+                    .collect(),
                 Err(e) => Err(e),
             })
         })?
@@ -273,13 +284,18 @@ impl Component {
         &self,
         pass: &str,
         face: &Shape,
-        triangles: MeshData,
         spec: &Value,
+        tag: &str,
         density_cap: u32,
+        split_creases: bool,
     ) -> Result<MeshData, String> {
         self.call(Scope::None, super::MESH_PASS_BUDGET, None, |p, s| {
             let h = s.data_mut().table.push(HostShape(face.clone()))?;
-            p.call_displace(&mut *s, pass, h, &triangles, &spec.to_string(), density_cap)
+            let options = DisplaceOptions {
+                density_cap,
+                split_creases,
+            };
+            p.call_displace(&mut *s, pass, h, &spec.to_string(), tag, options)
         })?
     }
 }
@@ -443,6 +459,22 @@ impl kernel::HostShape for State {
         Ok(k::triangulate(self.shape(&s)?, deflection))
     }
 
+    fn triangulation(&mut self, s: Resource<HostShape>) -> wasmtime::Result<Option<types::FaceTriangulation>> {
+        Ok(kx::triangulation(self.shape(&s)?))
+    }
+
+    fn is_reversed(&mut self, s: Resource<HostShape>) -> wasmtime::Result<bool> {
+        Ok(kx::is_reversed(self.shape(&s)?))
+    }
+
+    fn surface_frame(&mut self, s: Resource<HostShape>) -> wasmtime::Result<Option<types::SurfaceFrame>> {
+        Ok(kx::surface_frame(self.shape(&s)?))
+    }
+
+    fn surface_samples(&mut self, s: Resource<HostShape>, uvs: Vec<f64>, tolerance: f64) -> wasmtime::Result<Vec<types::SurfaceSample>> {
+        Ok(kx::surface_samples(self.shape(&s)?, &uvs, tolerance))
+    }
+
     fn drop(&mut self, s: Resource<HostShape>) -> wasmtime::Result<()> {
         self.table.delete(s)?;
         Ok(())
@@ -521,6 +553,48 @@ impl kernel::Host for State {
         let ps: Vec<&Shape> = parts.iter().map(|t| self.shape(t)).collect::<wasmtime::Result<_>>()?;
         let c = crate::kernel::compound(ps);
         self.own(c)
+    }
+
+    fn rotate(&mut self, s: Resource<HostShape>, origin: types::Vec3, axis: types::Vec3, degrees: f64) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
+        let r = kx::rotate(self.shape(&s)?, origin, axis, degrees);
+        self.made(r)
+    }
+
+    fn line_edge(&mut self, start: types::Vec3, end: types::Vec3) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
+        self.made(kx::line_edge(start, end))
+    }
+
+    fn arc_edge(&mut self, start: types::Vec3, middle: types::Vec3, end: types::Vec3) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
+        self.made(kx::arc_edge(start, middle, end))
+    }
+
+    fn circle_edge(&mut self, center: types::Vec3, normal: types::Vec3, radius: f64) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
+        self.made(kx::circle_edge(center, normal, radius))
+    }
+
+    fn wire_from_edges(&mut self, edges: Vec<Resource<HostShape>>) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
+        let es: Vec<&Shape> = edges.iter().map(|t| self.shape(t)).collect::<wasmtime::Result<_>>()?;
+        let r = kx::wire_from_edges(&es);
+        self.made(r)
+    }
+
+    fn helical_sweep(&mut self, profile: Resource<HostShape>, origin: types::Vec3, axis: types::Vec3, degrees: f64, pitch: f64) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
+        let r = kx::helical_sweep(self.shape(&profile)?, origin, axis, degrees, pitch);
+        self.made(r)
+    }
+
+    fn boolean_with(&mut self, op: types::BooleanOp, base: Resource<HostShape>, tools: Vec<Resource<HostShape>>, options: types::BooleanOptions) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
+        let ts: Vec<&Shape> = tools.iter().map(|t| self.shape(t)).collect::<wasmtime::Result<_>>()?;
+        let r = kx::boolean_with(op, self.shape(&base)?, &ts, &options);
+        self.made(r)
+    }
+
+    fn select_faces(&mut self, s: Resource<HostShape>, selectors: String) -> wasmtime::Result<Result<Vec<Resource<HostShape>>, String>> {
+        let r = kx::select_faces(self.shape(&s)?, &selectors);
+        Ok(match r {
+            Ok(v) => Ok(self.own_all(v)?),
+            Err(e) => Err(e),
+        })
     }
 
     fn fillet(&mut self, s: Resource<HostShape>, edges: Vec<Resource<HostShape>>, radius: f64, one_by_one: bool) -> wasmtime::Result<Result<kernel::Blended, String>> {
@@ -726,6 +800,74 @@ impl feature::Host for State {
             Ok(())
         }))
     }
+}
+
+const NO_FILES: &str = "this plugin's manifest does not grant files.read";
+
+impl files::Host for State {
+    fn read(&mut self, path: String) -> wasmtime::Result<Result<Vec<u8>, String>> {
+        if !self.files_read {
+            return Ok(Err(NO_FILES.into()));
+        }
+        Ok(std::fs::read(&path).map_err(|e| io_text(&e, &path)))
+    }
+
+    fn list_dir(&mut self, path: String) -> wasmtime::Result<Result<Vec<types::DirEntry>, String>> {
+        if !self.files_read {
+            return Ok(Err(NO_FILES.into()));
+        }
+        let rd = match std::fs::read_dir(&path) {
+            Ok(rd) => rd,
+            Err(e) => return Ok(Err(io_text(&e, &path))),
+        };
+        Ok(Ok(rd
+            .filter_map(|e| e.ok())
+            .map(|e| types::DirEntry {
+                name: e.file_name().to_string_lossy().into_owned(),
+                is_dir: e.path().is_dir(),
+            })
+            .collect()))
+    }
+
+    fn is_dir(&mut self, path: String) -> wasmtime::Result<bool> {
+        Ok(self.files_read && Path::new(&path).is_dir())
+    }
+
+    fn is_file(&mut self, path: String) -> wasmtime::Result<bool> {
+        Ok(self.files_read && Path::new(&path).is_file())
+    }
+}
+
+/// An OS error the way Python's OSError prints it, which plugin messages quote.
+fn io_text(e: &std::io::Error, path: &str) -> String {
+    let (code, what) = match e.kind() {
+        std::io::ErrorKind::NotFound => (2, "No such file or directory"),
+        std::io::ErrorKind::PermissionDenied => (13, "Permission denied"),
+        _ => return format!("{e}: {}", py_repr(path)),
+    };
+    format!("[Errno {code}] {what}: {}", py_repr(path))
+}
+
+/// Python's `repr` of a str, for the common characters.
+fn py_repr(s: &str) -> String {
+    let quote = if s.contains('\'') && !s.contains('"') { '"' } else { '\'' };
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push(quote);
+    for c in s.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if c == quote => {
+                out.push('\\');
+                out.push(c);
+            }
+            c => out.push(c),
+        }
+    }
+    out.push(quote);
+    out
 }
 
 impl output::Host for State {

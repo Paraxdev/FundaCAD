@@ -90,8 +90,15 @@ pub fn budget_warning(ntri: usize) -> Option<String> {
 /// Export grade triangles of one shape: absolute deflection, the kernel's own
 /// winding with reversed faces flipped, faces never welded.
 pub fn export_mesh(shape: &Shape, opts: &MeshOptions) -> (Vec<f64>, Vec<u32>) {
+    export_mesh_with(shape, opts, &[])
+}
+
+/// `export_mesh` with the body's plugin mesh passes displacing the faces they
+/// claim, under the export density cap.
+pub fn export_mesh_with(shape: &Shape, opts: &MeshOptions, passes: &[Value]) -> (Vec<f64>, Vec<u32>) {
     let access = MeshAccess::new(shape);
-    let t = mesh::tessellate(
+    let claims = mesh::PassClaims::resolve(shape, passes);
+    let t = claims.tessellate(
         shape,
         &access,
         MeshParams {
@@ -101,6 +108,7 @@ pub fn export_mesh(shape: &Shape, opts: &MeshOptions) -> (Vec<f64>, Vec<u32>) {
             display: false,
             force_remesh: false,
         },
+        EXPORT_DENSITY_CAP_PER_FACE as u32,
     );
     if opts.max_edge > 0.0 {
         refine::cap_edge_length(&t.positions, &t.indices, opts.max_edge, EXPORT_TRIANGLE_HARD_CAP)
@@ -135,6 +143,8 @@ pub struct ExportBody<'a> {
     pub shape: &'a Shape,
     /// `"<import feature id>/<manifest node index>"` for an imported part.
     pub node_ref: Option<&'a str>,
+    /// The plugin mesh pass specs on the body, displaced into its mesh.
+    pub mesh_passes: &'a [Value],
 }
 
 pub struct Exporter<'a> {
@@ -170,7 +180,7 @@ impl Exporter<'_> {
             let work = crate::par::Shared((bodies, opts));
             let meshed = crate::par::map_grouped(&sub, move |i| {
                 let (bodies, opts) = *work.get();
-                export_mesh(bodies[i].shape, opts)
+                export_mesh_with(bodies[i].shape, opts, bodies[i].mesh_passes)
             });
             for (i, (pos, idx)) in meshed {
                 ntri += idx.len() / 3;
@@ -418,8 +428,20 @@ pub fn export_built(
     };
     let bodies: Vec<ExportBody<'_>> = built
         .iter()
-        .map(|b| ExportBody { id: &b.id, name: &b.name, shape: &b.shape, node_ref: b.node_ref.as_deref() })
+        .map(|b| ExportBody {
+            id: &b.id,
+            name: &b.name,
+            shape: &b.shape,
+            node_ref: b.node_ref.as_deref(),
+            mesh_passes: &b.mesh_passes,
+        })
         .collect();
+    if format.eq_ignore_ascii_case("step") && built.iter().any(|b| !b.mesh_passes.is_empty()) {
+        // Generic on purpose: true for whichever plugin put the displacement there.
+        exporter.warnings.push(json!({
+            "message": "surface displacement from a plugin is not represented in STEP exports"
+        }));
+    }
     let body = req.get("body").and_then(Value::as_str).filter(|s| !s.is_empty());
     let separate = fundacad_protocol::pyjson::truthy(req.get("separate"));
     export_bodies(&mut exporter, &bodies, path, body, separate)
