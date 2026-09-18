@@ -422,15 +422,32 @@ plugin folder, and a second manifest key names it:
   the mesh caches), `write-export` and `generate-shape`. `register` returns
   what the component claims, and every name in it must be declared in the
   manifest, or the plugin does not load.
-- It imports a generic kernel: solids from primitives and sketches, booleans,
-  fillet and chamfer, a face triangulation to displace, blobs, and one
+- It imports a generic kernel: solids from primitives, sketches, edges and
+  wires, prisms, revolves and a helical sweep, booleans with their options,
+  fillet and chamfer, face selectors, a face's surface and its stored
+  triangulation to displace, a planar Delaunay triangulation, blobs, and one
   `output.write` for an exporter's bytes. Shapes stay in the engine, a plugin
-  holds handles to them; nothing crosses as BREP bytes per call.
-- **This half IS sandboxed**, because it can be: no files, no network, no
-  environment, a memory cap and a time budget, and an export writes only to the
-  path the host chose. That is a property of the format, not a promise the
-  plugin makes, and it does not change what the person is told about the
-  Python half while both exist.
+  holds handles to them; nothing crosses as BREP bytes per call. A mesh pass
+  claims faces with a tag of its own that comes back with each face it
+  displaces, because nothing a component holds survives from one call to the
+  next.
+- Numbers that must match the Python half bit for bit come from the engine:
+  `numeric` is the platform's C math library, the one Python and numpy call,
+  and the Delaunay triangulation is the Qhull scipy runs. Transcendentals a
+  crate compiles in itself can land one ulp away, and on a lattice one ulp is
+  enough to flip a tie.
+- **This half IS sandboxed**, because it can be: no network, no environment, a
+  memory cap and a time budget, an export writes only to the path the host
+  chose, and files are read only through the `files` import, which is refused
+  unless the manifest grants `files.read` (a heightmap image, a slicer's own
+  presets). That is a property of the format, not a promise the plugin makes,
+  and it does not change what the person is told about the Python half while
+  both exist.
+- Every in-repo plugin with engine geometry ships both halves: PrintToolbox,
+  Screws, Printing and Texture. `sidecar/tools/diff_engines.py`,
+  `diff_plugin_ops.py` (generateShape, exportWith) and `diff_meshes.py` (a
+  mesh pass, triangle by triangle) hold the two halves to each other on the
+  corpora beside them.
 
 Both halves stay in the bundle until the Python engine is deleted: whichever
 engine is running loads its own, and a plugin that ships only one runs on only
