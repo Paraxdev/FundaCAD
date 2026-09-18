@@ -288,6 +288,7 @@ pub fn run() {
     #[cfg(feature = "rust-engine")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         engine::engine_kind,
+        engine::mcp_server,
         engine::engine_attach,
         engine::engine_send,
         restart_for_update,

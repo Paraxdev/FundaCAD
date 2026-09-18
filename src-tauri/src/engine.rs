@@ -20,7 +20,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::ipc::{Channel, InvokeResponseBody, Request};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 const CANCEL_GRACE: Duration = Duration::from_secs(3);
 const RESTART_FLOOR: Duration = Duration::from_millis(500);
@@ -43,6 +43,8 @@ struct Inner {
     stopping: AtomicBool,
     /// The generation last ended on purpose by a cancel, which is no crash.
     cancel_killed: AtomicU64,
+    /// Where `session.json` goes, None without an app data directory.
+    session_dir: Option<std::path::PathBuf>,
 }
 
 struct Worker {
@@ -52,10 +54,40 @@ struct Worker {
 }
 
 /// The worker entry point, called from `main` before Tauri starts.
+///
+/// `--engine --ws` is the same engine on its own WebSocket, what the shipped
+/// `fundacad-mcp` starts as its private engine, so a packaged app needs no
+/// second copy of the kernel for it.
 pub fn run_worker() -> ! {
     // server.py's startup `plugin_geometry.discover()`, over FUNDACAD_PLUGIN_DIR.
     fundacad_geom::plugins::load();
-    fundacad_engine::stdio::run(fundacad_geom::jobs::GeomJobs)
+    if std::env::args().nth(2).as_deref() == Some("--ws") {
+        fundacad_engine::ws::run(fundacad_geom::jobs::GeomJobs)
+    }
+    fundacad_engine::stdio::serve(fundacad_geom::jobs::GeomJobs, live_door)
+}
+
+/// The app's token for the live session port, handed to the worker it spawns.
+const LIVE_TOKEN_ENV: &str = "FUNDACAD_LIVE_TOKEN";
+
+/// A loopback WebSocket on the app's own engine, so an assistant attached
+/// through `session.json` shares the document on screen. The port goes to the
+/// app on stderr, since stdout carries the frames.
+fn live_door(engine: &Arc<fundacad_engine::Engine>) {
+    let Some(token) = std::env::var(LIVE_TOKEN_ENV).ok().filter(|t| !t.is_empty()) else {
+        return;
+    };
+    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 0));
+    let gate = fundacad_engine::ws::Gate::new(token, "");
+    match fundacad_engine::ws::Server::for_engine(engine.clone(), addr, gate) {
+        Ok(server) => {
+            eprintln!("LISTENING {}", server.port());
+            let _ = std::thread::Builder::new()
+                .name("live-door".into())
+                .spawn(move || server.serve());
+        }
+        Err(e) => eprintln!("no live session port: {e}"),
+    }
 }
 
 impl Engine {
@@ -70,6 +102,7 @@ impl Engine {
             cancels: Mutex::new(HashMap::new()),
             stopping: AtomicBool::new(false),
             cancel_killed: AtomicU64::new(0),
+            session_dir: app.path().app_data_dir().ok(),
         });
         let supervisor = inner.clone();
         std::thread::Builder::new()
@@ -81,6 +114,9 @@ impl Engine {
 
     pub fn stop(&self) {
         self.0.stopping.store(true, Ordering::SeqCst);
+        if let Some(dir) = &self.0.session_dir {
+            crate::session_file::remove_from(dir);
+        }
         if let Some(mut w) = lock(&self.0.worker).take() {
             let _ = w.child.kill();
             let _ = w.child.wait();
@@ -92,8 +128,12 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|p| p.into_inner())
 }
 
+/// Listened for by src/app/engineWatch.ts.
+const DIED_EVENT: &str = "engine:died";
+
 fn supervise(inner: Arc<Inner>) {
     let mut delay = RESTART_FLOOR;
+    let mut start_failed = false;
     while !inner.stopping.load(Ordering::SeqCst) {
         let started = Instant::now();
         match spawn(&inner) {
@@ -110,6 +150,9 @@ fn supervise(inner: Arc<Inner>) {
                         w.child.wait().ok()
                     });
                 set_up(&inner, false);
+                if let Some(dir) = &inner.session_dir {
+                    crate::session_file::remove_from(dir);
+                }
                 if inner.stopping.load(Ordering::SeqCst) {
                     return;
                 }
@@ -119,16 +162,24 @@ fn supervise(inner: Arc<Inner>) {
                     delay = Duration::ZERO;
                 } else {
                     let _ = inner.app.emit(
-                        "sidecar:died",
+                        DIED_EVENT,
                         serde_json::json!({ "kind": "restarted", "cause": how }),
                     );
                 }
                 if started.elapsed() > HEALTHY_AFTER {
                     delay = RESTART_FLOOR;
                 }
+                start_failed = false;
             }
             Err(e) => {
                 eprintln!("[engine] cannot start the worker: {e}");
+                if !start_failed {
+                    start_failed = true;
+                    let _ = inner.app.emit(
+                        DIED_EVENT,
+                        serde_json::json!({ "kind": "start_failed", "cause": e.to_string() }),
+                    );
+                }
             }
         }
         std::thread::sleep(delay);
@@ -148,6 +199,8 @@ fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
     if let Ok(dir) = crate::plugins::plugins_root(&inner.app) {
         cmd.env("FUNDACAD_PLUGIN_DIR", dir);
     }
+    let token = crate::sidecar::random_token();
+    cmd.env(LIVE_TOKEN_ENV, &token);
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -158,8 +211,21 @@ fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
     let stdin = child.stdin.take().ok_or_else(|| std::io::Error::other("no worker stdin"))?;
     let stdout = child.stdout.take().ok_or_else(|| std::io::Error::other("no worker stdout"))?;
     if let Some(stderr) = child.stderr.take() {
+        let session_dir = inner.session_dir.clone();
         std::thread::spawn(move || {
             for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+                // Written once the port answers, as sidecar.rs does, so the file
+                // never names a port nobody is listening on yet.
+                if let (Some(dir), Some(port)) = (&session_dir, line.strip_prefix("LISTENING ").and_then(|p| p.trim().parse::<u16>().ok())) {
+                    let info = crate::session_file::SessionInfo {
+                        port,
+                        token: token.clone(),
+                        pid: std::process::id(),
+                    };
+                    if let Err(e) = crate::session_file::write_into(dir, &info) {
+                        eprintln!("[engine] no session file: {e}");
+                    }
+                }
                 eprintln!("[engine] {line}");
             }
         });
@@ -276,6 +342,26 @@ fn escalate_cancel(inner: Arc<Inner>, target: String) {
 #[tauri::command]
 pub fn engine_kind() -> &'static str {
     "rust"
+}
+
+/// The `fundacad-mcp` bundled beside this executable, for the MCP plugin's
+/// "How to connect it". The bundle config ships it (`externalBin`).
+#[tauri::command]
+pub fn mcp_server() -> Result<String, String> {
+    let name = if cfg!(windows) { "fundacad-mcp.exe" } else { "fundacad-mcp" };
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let path = exe
+        .parent()
+        .map(|d| d.join(name))
+        .ok_or("the app has no directory")?;
+    if path.is_file() {
+        Ok(path.to_string_lossy().into_owned())
+    } else {
+        Err(format!(
+            "{} is missing, this build did not ship the MCP server",
+            path.display()
+        ))
+    }
 }
 
 /// The webview's one channel for engine messages. Returns whether the engine is up.
