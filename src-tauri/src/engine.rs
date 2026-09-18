@@ -23,6 +23,11 @@ use tauri::ipc::{Channel, InvokeResponseBody, Request};
 use tauri::{AppHandle, Emitter, Manager};
 
 const CANCEL_GRACE: Duration = Duration::from_secs(3);
+/// A soft cancel stops a superseded preview at the job's next checkpoint, and
+/// the section blend and its booleans check often. A job still running this
+/// long after one is inside a single kernel call that may never return, and
+/// every request behind it waits, so the worker is restarted after all.
+const SOFT_CANCEL_GRACE: Duration = Duration::from_secs(10);
 const RESTART_FLOOR: Duration = Duration::from_millis(500);
 const RESTART_CEILING: Duration = Duration::from_secs(10);
 /// A worker that stayed up this long crashed for a new reason, not in a loop.
@@ -38,8 +43,9 @@ struct Inner {
     generation: AtomicU64,
     /// Requests sent and not yet answered by a terminal message, by id.
     in_flight: Mutex<HashSet<String>>,
-    /// Cancel requests awaiting their acknowledgement, to the id they target.
-    cancels: Mutex<HashMap<String, String>>,
+    /// Cancel requests awaiting their acknowledgement, to the id they target
+    /// and how long that job then has.
+    cancels: Mutex<HashMap<String, (String, Duration)>>,
     stopping: AtomicBool,
     /// The generation last ended on purpose by a cancel, which is no crash.
     cancel_killed: AtomicU64,
@@ -156,9 +162,12 @@ fn supervise(inner: Arc<Inner>) {
                 if inner.stopping.load(Ordering::SeqCst) {
                     return;
                 }
+                // A worker that ended itself over a stalled job has already
+                // told the client why, a crash toast on top would be wrong.
+                let planned = status.and_then(|s| s.code()) == Some(fundacad_engine::EXIT_BREACH);
                 let how = status.map(|s| s.to_string()).unwrap_or(cause);
                 eprintln!("[engine] worker ended: {how}");
-                if inner.cancel_killed.load(Ordering::SeqCst) == generation {
+                if planned || inner.cancel_killed.load(Ordering::SeqCst) == generation {
                     delay = Duration::ZERO;
                 } else {
                     let _ = inner.app.emit(
@@ -226,7 +235,10 @@ fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
                         eprintln!("[engine] no session file: {e}");
                     }
                 }
-                eprintln!("[engine] {line}");
+                // Never eprintln: with no one reading our stderr it panics, this
+                // thread stops draining the worker's, and the worker blocks on
+                // its next log line in the middle of a job.
+                let _ = writeln!(std::io::stderr(), "[engine] {line}");
             }
         });
     }
@@ -258,9 +270,9 @@ fn relay(inner: &Arc<Inner>, stdout: std::process::ChildStdout) -> String {
 /// starts the grace period of a cancel the worker says reached a running job.
 fn settle(inner: &Arc<Inner>, msg: &Message) {
     let Some(Value::String(id)) = message_id(msg) else { return };
-    if let Some(target) = lock(&inner.cancels).remove(&id) {
+    if let Some((target, grace)) = lock(&inner.cancels).remove(&id) {
         if cancel_hit(msg) {
-            escalate_cancel(inner.clone(), target);
+            escalate_cancel(inner.clone(), target, grace);
         }
         return;
     }
@@ -322,10 +334,10 @@ fn send_to_worker(inner: &Inner, msg: &Message) -> Result<(), String> {
 
 /// Restarts the worker when `target` is still running after the grace period,
 /// answering it as cancelled first so the client reports a cancel, not a crash.
-fn escalate_cancel(inner: Arc<Inner>, target: String) {
+fn escalate_cancel(inner: Arc<Inner>, target: String, grace: Duration) {
     std::thread::spawn(move || {
         let generation = inner.generation.load(Ordering::SeqCst);
-        std::thread::sleep(CANCEL_GRACE);
+        std::thread::sleep(grace);
         if !lock(&inner.in_flight).contains(&target) || inner.generation.load(Ordering::SeqCst) != generation {
             return;
         }
@@ -385,16 +397,13 @@ pub fn engine_send(state: tauri::State<'_, Engine>, request: Request<'_>) -> Res
         return send_to_worker(&state.0, &Message::Text(text));
     };
     match op.as_deref() {
-        // A soft cancel stops a superseded preview at its next checkpoint. It is
-        // never escalated: restarting the worker would drop every cached
-        // feature to save a job whose reply nobody is waiting for.
-        Some("cancel") if !soft => {
+        Some("cancel") => {
             let target = target.or_else(|| lock(&state.0.in_flight).iter().next().cloned());
+            let grace = if soft { SOFT_CANCEL_GRACE } else { CANCEL_GRACE };
             if let Some(target) = target {
-                lock(&state.0.cancels).insert(id.clone(), target);
+                lock(&state.0.cancels).insert(id.clone(), (target, grace));
             }
         }
-        Some("cancel") => {}
         Some("ping") | None => {}
         Some(_) => {
             lock(&state.0.in_flight).insert(id.clone());
