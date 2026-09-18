@@ -468,9 +468,14 @@ jobs:
           fi
 
           # Move the rolling tag onto this commit (create it if it is missing),
-          # so the release attached to it never stops existing.
+          # so the release attached to it never stops existing. GitHub refuses
+          # this token a tag move across a commit that changes a workflow file,
+          # so a refused move keeps the old tag and still publishes this build.
           gh api -X PATCH "repos/$R/git/refs/tags/alpha" -f sha="$SHA" -F force=true \
-            || gh api -X POST "repos/$R/git/refs" -f ref=refs/tags/alpha -f sha="$SHA"
+            || gh api -X POST "repos/$R/git/refs" -f ref=refs/tags/alpha -f sha="$SHA" \
+            || { gh api "repos/$R/git/refs/tags/alpha" >/dev/null 2>&1 \
+                   && echo "::warning::the alpha tag could not move to $SHA (a workflow file changed), the installers are still this build"; } \
+            || { echo "::error::the alpha tag is missing and could not be created"; exit 1; }
 
           TITLE='FundaCAD 1.0 alpha, Rust engine (rolling)'
           if gh release view alpha --repo "$R" >/dev/null 2>&1; then
