@@ -215,3 +215,45 @@ describe("DimInput seed and takeOver", () => {
     expect(value()).toBe("12");
   });
 });
+
+describe("DimInput confirm and cancel", () => {
+  // Both act on the press and take the box away, so the release that follows
+  // lands on the canvas underneath. It used to be read there as a click on the
+  // model, which selected the body behind the cross and raised the Move gizmo.
+  const canvasHearing = () => {
+    const canvas = document.createElement("canvas");
+    document.body.appendChild(canvas);
+    const heard: string[] = [];
+    canvas.addEventListener("pointerup", () => heard.push("pointerup"));
+    canvas.addEventListener("click", () => heard.push("click"));
+    return { canvas, heard };
+  };
+
+  for (const which of [".dim-ok", ".dim-no"]) {
+    it(`${which} keeps its release off the canvas behind it`, () => {
+      const { canvas, heard } = canvasHearing();
+      let closed = 0;
+      const close = () => { closed++; dim.hide(); };
+      dim.show([{ name: "radius", label: "R" }], close, close);
+      press("pointerdown", root().querySelector<HTMLElement>(which)!);
+      expect(closed).toBe(1);
+      press("pointerup", canvas);
+      press("click", canvas);
+      expect(heard).toEqual([]);
+      canvas.remove();
+    });
+  }
+
+  it("lets the next press through", async () => {
+    const { canvas, heard } = canvasHearing();
+    dim.show([{ name: "radius", label: "R" }], () => dim.hide(), () => dim.hide());
+    press("pointerdown", root().querySelector<HTMLElement>(".dim-no")!);
+    press("pointerup", canvas);
+    press("click", canvas);
+    await new Promise((r) => setTimeout(r, 0));
+    press("pointerup", canvas);
+    press("click", canvas);
+    expect(heard).toEqual(["pointerup", "click"]);
+    canvas.remove();
+  });
+});
