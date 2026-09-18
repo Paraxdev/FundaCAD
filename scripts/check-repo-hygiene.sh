@@ -57,7 +57,7 @@ done
 # synthetic or already public.
 echo "checking for tracked CAD models…"
 models=$(git ls-files -- '*.funda' '*.fundab' '*.neocad' '*.sindri' '*.3mf' '*.stl' '*.step' '*.stp' 2>/dev/null \
-  | grep -vE '^(sidecar/tools/bench/textured_box\.funda$|sidecar/fixtures/asm_[a-z_]+\.step$|third_party/)' || true)
+  | grep -vE '^(tests/fixtures/textured_box\.funda$|tests/fixtures/asm_[a-z_]+\.step$|third_party/)' || true)
 if [ -n "$models" ]; then
   note "tracked CAD model — is this a real part in a public repo?:"
   printf '%s\n' "$models" | sed 's/^/    /'
@@ -83,9 +83,8 @@ fi
 # purpose and are not drift: the `.sindri` and `.neocad` extensions are still
 # opened (src/io/documentExt.ts), the pre-rename localStorage keys are still read
 # (src/ui/storedSetting.ts), the retired `SINDRI_*` / `SINDRICAD_*` environment
-# variables still answer alongside the `FUNDACAD_*` ones (sidecar/appenv.py,
-# src-tauri/src/webkit.rs), and an existing on-disk cache directory under the old
-# name is kept rather than orphaned (appenv.dir_under). Those are compatibility
+# variables still answer alongside the `FUNDACAD_*` ones (crates/fundacad-engine
+# src/ws.rs, crates/fundacad-mcp/src/link.rs, src-tauri/src/webkit.rs). Those are compatibility
 # with things outside this repository — a user's shell profile, their saved
 # settings, their cache — not leftovers.
 #

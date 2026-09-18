@@ -280,7 +280,7 @@ pub fn serial_bool(base: &Shape, tools: &[&Shape], kind: BoolKind) -> KResult<Sh
     ))
 }
 
-/// sidecar/pick_fuzz.py.
+/// the Python engine's `pick_fuzz.py`.
 pub fn pick_fuzz(extent_mm: Option<f64>) -> f64 {
     const FLOOR_MM: f64 = 1e-6;
     const CEILING_MM: f64 = 1e-3;

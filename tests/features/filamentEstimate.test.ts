@@ -1,5 +1,5 @@
 // The filament-estimate math (mass + length), kept pure of Vue/Three/the
-// geometry backend so it is testable without a viewport or a sidecar.
+// geometry backend so it is testable without a viewport or an engine.
 
 import { describe, it, expect } from "vitest";
 import {

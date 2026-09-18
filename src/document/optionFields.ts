@@ -226,7 +226,7 @@ export const FEATURE_TOGGLE_FIELDS: Partial<Record<FeatureType, ToggleField[]>> 
 /** Does this field mean anything, given what the feature's other fields say?
  *
  *  Applies to every kind of row, numeric included. A knurl reads no Seed and a
- *  faceted wave has no shape parameter at all, the sidecar simply ignores what
+ *  faceted wave has no shape parameter at all, the engine simply ignores what
  *  it is sent, so a row for either is a control the user can turn with nothing
  *  on the other end, which is worse than no row.
  *

@@ -1,4 +1,4 @@
-//! Holes drilled into a flat face along its normal, sidecar/hole_feature.py.
+//! Holes drilled into a flat face along its normal, the Python engine's `hole_feature.py`.
 //! Each hole is one revolved half section placed at its position, and every
 //! position is cut from the body in a single boolean.
 

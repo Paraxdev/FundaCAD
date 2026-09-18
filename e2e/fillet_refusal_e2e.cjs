@@ -9,9 +9,9 @@
 // nothing) rather than the refused one. A typed value is refused the same way,
 // and re-editing and the chamfer side behave alike.
 //
-// Usage (from the repo root, with vite on 5173 + a sidecar on 8765):
-//   SC_TOKEN=<sidecar token> SC_CHROME=<chrome.exe> node e2e/fillet_refusal_e2e.cjs [outDir]
-// SC_APP overrides the page URL, SC_SIDECAR_PORT points the page at another sidecar.
+// Usage (from the repo root, with vite on 5173 + a engine on 8765 (`fundacad-engine --ws`)):
+//   SC_TOKEN=<engine token> SC_CHROME=<chrome.exe> node e2e/fillet_refusal_e2e.cjs [outDir]
+// SC_APP overrides the page URL, SC_ENGINE_PORT points the page at another engine.
 const { chromium } = require("playwright-core");
 const fs = require("fs");
 const path = require("path");
@@ -19,7 +19,7 @@ const path = require("path");
 const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const APP = process.env.SC_APP || "http://localhost:5173/";
-const SIDECAR_PORT = process.env.SC_SIDECAR_PORT || "8765";
+const ENGINE_PORT = process.env.SC_ENGINE_PORT || "8765";
 const OUT = path.resolve(process.argv[2] || "fillet_refusal_shots");
 if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
 let failures = 0;
@@ -42,7 +42,7 @@ const check = (name, ok, detail) => {
       }
     }
     window.WebSocket = P;
-  }, [TOKEN, SIDECAR_PORT]);
+  }, [TOKEN, ENGINE_PORT]);
 
   await page.goto(APP);
   await page.waitForFunction(() => !!window.store && !!window.viewport && !!window.geometry, null, { timeout: 60000 });

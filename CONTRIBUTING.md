@@ -31,8 +31,9 @@ has authorized it).
 See **Build** in [`README.md`](README.md). Before opening a PR:
 
 - `npm run build` (TypeScript + Vite) must pass.
-- From `sidecar/`, `uv run python tests/test_smoke.py` (geometry) and `uv run
-  python tests/test_ws.py` (transport) must pass.
-- Keep geometry in the Python sidecar; the frontend owns the document and viewport.
+- `npx vitest run` and `cargo test --workspace --features fundacad-engine/ws`
+  must pass, and so must every golden check,
+  `fundacad-engine golden-check tests/golden/<name>.golden.json`.
+- Keep geometry in the engine (`crates/`); the frontend owns the document and viewport.
 - Reference geometry by **queryable selectors** (axis / normal / nearest-point),
   never by topology index, so references survive edits that renumber topology.

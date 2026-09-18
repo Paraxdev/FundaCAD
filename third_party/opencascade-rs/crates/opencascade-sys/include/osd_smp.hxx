@@ -1,5 +1,5 @@
 #pragma once
-// OpenCASCADE's shared memory parallelism, sidecar/occt_smp.py: one thread pool
+// OpenCASCADE's shared memory parallelism, the Python engine's `occt_smp.py`: one thread pool
 // feeds BRepMesh and BOPAlgo, and both take their parallel flag from a default
 // this sets. Call once per process before any job, the pool must not be resized
 // while an algorithm holds threads from it.

@@ -75,7 +75,7 @@ describe("the window's half of a live session", () => {
   });
 
   it("moves the revision for a PERSON's edit, not only an assistant's", async () => {
-    // The revision is what the sidecar checks a proposal against. If a user's
+    // The revision is what the engine checks a proposal against. If a user's
     // own edits did not move it, every stale check would pass and an assistant
     // could overwrite a change made while it was thinking.
     const host = new LiveSessionHost(store, geo, () => true);
@@ -188,7 +188,7 @@ describe("the window's half of a live session", () => {
   });
 
   it("survives a backend that is not there", async () => {
-    // The socket drops, the sidecar restarts. One missed tick, not a broken
+    // The socket drops, the engine restarts. One missed tick, not a broken
     // window, every publish carries the whole document, so the next one is a
     // complete recovery with no resync of any kind.
     const failing = {

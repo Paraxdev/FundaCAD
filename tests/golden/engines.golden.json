@@ -797,7 +797,7 @@
    "fatal": false,
    "import": {
     "feature": "im",
-    "fixture": "sidecar/fixtures/asm_nested.step",
+    "fixture": "tests/fixtures/asm_nested.step",
     "format": "step",
     "pythonGeom": "3b71e4a984a0708b75cb62f451a1b671",
     "reply": {
@@ -902,7 +902,7 @@
    "fatal": false,
    "import": {
     "feature": "im",
-    "fixture": "sidecar/fixtures/asm_empty_product.step",
+    "fixture": "tests/fixtures/asm_empty_product.step",
     "format": "step",
     "pythonGeom": "f64671b3aa3bc64d2a99f4d8bf64ef23",
     "reply": {
@@ -958,7 +958,7 @@
    "fatal": false,
    "import": {
     "feature": "im",
-    "fixture": "sidecar/fixtures/asm_face_colors.step",
+    "fixture": "tests/fixtures/asm_face_colors.step",
     "format": "step",
     "pythonGeom": "802bef5a40d9ced9db407a2aec838d8e",
     "reply": {
@@ -1036,7 +1036,7 @@
    "fatal": false,
    "import": {
     "feature": "im",
-    "fixture": "sidecar/fixtures/asm_flat.step",
+    "fixture": "tests/fixtures/asm_flat.step",
     "format": "step",
     "pythonGeom": "dcbb8a24dfe130f837513bbf1e21a25b",
     "reply": {
@@ -1101,7 +1101,7 @@
    "fatal": false,
    "import": {
     "feature": "im",
-    "fixture": "sidecar/fixtures/asm_multisolid.step",
+    "fixture": "tests/fixtures/asm_multisolid.step",
     "format": "step",
     "pythonGeom": "df988bd93ee6c3fc1c5bc89f628051ab",
     "reply": {
@@ -1167,7 +1167,7 @@
    "fatal": false,
    "import": {
     "feature": "im",
-    "fixture": "sidecar/fixtures/asm_nested.step",
+    "fixture": "tests/fixtures/asm_nested.step",
     "format": "step",
     "pythonGeom": "3b71e4a984a0708b75cb62f451a1b671",
     "reply": {

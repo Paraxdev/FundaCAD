@@ -384,10 +384,10 @@ impl RealEngine {
         std::fs::create_dir_all(&dir).expect("a temp dir");
         let mut cmd = Command::new(engine_binary());
         cmd.arg("--ws")
-            .env("FUNDACAD_SIDECAR_PORT", port.to_string())
-            .env("FUNDACAD_SIDECAR_TOKEN", &token)
-            .env_remove("SINDRI_SIDECAR_PORT")
-            .env_remove("SINDRI_SIDECAR_TOKEN")
+            .env("FUNDACAD_ENGINE_PORT", port.to_string())
+            .env("FUNDACAD_ENGINE_TOKEN", &token)
+            .env_remove("SINDRI_ENGINE_PORT")
+            .env_remove("SINDRI_ENGINE_TOKEN")
             .stdout(Stdio::piped())
             .stderr(Stdio::null());
         let mut child = cmd.spawn().expect("the engine binary is built");

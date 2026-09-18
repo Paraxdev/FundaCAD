@@ -45,7 +45,7 @@ pub type Vec3 = [Real; 3];
 /// A numeric field that may name a parameter instead: `number | string` in TS.
 /// The string is a parameter name on the legacy path; the app evaluates
 /// expressions before a build, so the engine resolves names only
-/// (sidecar/handler_util.py `_make_val`).
+/// (the Python engine's `handler_util.py` `_make_val`).
 #[derive(Debug, Clone, PartialEq)]
 pub enum Num {
     Number(Real),

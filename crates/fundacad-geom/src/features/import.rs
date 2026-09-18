@@ -1,4 +1,4 @@
-//! The import feature, sidecar/import_feature.py: the stored geometry of an
+//! The import feature, the Python engine's `import_feature.py`: the stored geometry of an
 //! imported file, bound to its assembly manifest when it has one.
 //!
 //! Not here: `heal_snapped.heal_stored`, which repairs blobs written before the

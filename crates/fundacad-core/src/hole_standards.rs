@@ -1,5 +1,5 @@
-//! Standard hole sizes, the tables of src/features/holeStandards.ts and
-//! sidecar/hole_feature.py `standard_dims`.
+//! Standard hole sizes, the Rust twin of src/features/holeStandards.ts, both
+//! checked against tests/vectors/hole_standards.json.
 
 pub const SIZES: [&str; 8] = ["M2", "M2.5", "M3", "M4", "M5", "M6", "M8", "M10"];
 

@@ -1,4 +1,4 @@
-//! Loft and sweep, sidecar/builder.py `_handle_loft` and `_handle_sweep`.
+//! Loft and sweep, the Python engine's `builder.py` `_handle_loft` and `_handle_sweep`.
 
 use fundacad_core::schema::{Loft, Sweep};
 

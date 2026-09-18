@@ -64,11 +64,14 @@ function withTexturePlugin() {
 function makeEngine(doc: CadDocument) {
   const docVersion = ref(0);
   const buildVersion = ref(0);
+  const editPreviewVersion = ref(0);
+  let live: Feature | null = null;
   const updates: { id: string; patch: Record<string, unknown> }[] = [];
   const values: { field: string; value: number }[] = [];
   const exprs: { field: string; raw: string }[] = [];
   const store = {
     get document() { return doc; },
+    liveFeature: (id: string) => (live?.id === id ? live : doc.features.find((f) => f.id === id) ?? null),
     updateFeature: (id: string, patch: Record<string, unknown>) => {
       updates.push({ id, patch });
       Object.assign(doc.features.find((f) => f.id === id)!, patch);
@@ -88,9 +91,14 @@ function makeEngine(doc: CadDocument) {
     updates,
     values,
     exprs,
+    /** What a tool editing the feature has on screen, as store.setEditPreview does. */
+    editLive: (f: Feature | null) => {
+      live = f;
+      editPreviewVersion.value++;
+    },
     engine: {
       store,
-      bridge: { docVersion, buildVersion },
+      bridge: { docVersion, buildVersion, editPreviewVersion },
       tools: { targetEdit },
       toolBusy: () => false,
     } as unknown as Engine,
@@ -326,6 +334,21 @@ describe("FeatureProperties", () => {
   // render numbers, so a texture created as a knurl stayed a knurl and an
   // extrude's boolean was whatever the tool had decided.
 
+  it("shows what the tool editing the feature has on screen, not what was committed", async () => {
+    // The field report: the fillet tool's chip read G2 while this row read G1.
+    const fillet = { id: "f1", type: "fillet", radius: 43.7, profile: 0.987 } as unknown as Feature;
+    const fake = makeEngine({ parameters: {}, features: [fillet] });
+    const w = render(fake, "f1");
+    expect(rows(w)).toContainEqual(["Continuity", "", "G1"]);
+    fake.editLive({ ...fillet, continuity: "G2", radius: 38 } as unknown as Feature);
+    await w.vm.$nextTick();
+    expect(rows(w)).toContainEqual(["Continuity", "", "G2"]);
+    expect(rows(w)).toContainEqual(["Radius", "mm", "38"]);
+    fake.editLive(null);
+    await w.vm.$nextTick();
+    expect(rows(w)).toContainEqual(["Continuity", "", "G1"]);
+  });
+
   it("offers a feature's fixed choices, not just its numbers", () => {
     const fake = makeEngine({ parameters: {}, features: [EXTRUDE] });
     expect(rows(render(fake, "e1"))).toContainEqual(["Operation", "", "new"]);
@@ -408,7 +431,7 @@ describe("FeatureProperties", () => {
 
   it("hides a row the chosen pattern will never read", () => {
     // The defect this rule exists for: the panel offered Seed and Angle on every
-    // texture. A knurl reads no seed, the sidecar ignores it, so turning that
+    // texture. A knurl reads no seed, the engine ignores it, so turning that
     // row did nothing and nothing said why.
     withTexturePlugin();
     const knurl = makeEngine({

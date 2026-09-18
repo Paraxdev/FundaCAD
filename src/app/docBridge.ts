@@ -6,6 +6,8 @@ export interface DocBridge {
   docVersion: Ref<number>;
   /** Bumped on every onBuild emit, including `building` ticks. */
   buildVersion: Ref<number>;
+  /** Bumped when a tool's live edit of a feature changes (store.liveFeature). */
+  editPreviewVersion: Ref<number>;
   /** BusyState is replaced wholesale on each emit, so its identity is already a
    *  correct change signal, no counter needed. */
   busy: ShallowRef<BusyState>;
@@ -31,6 +33,7 @@ export interface DocBridge {
 export function createDocBridge(store: DocumentStore): DocBridge {
   const docVersion = ref(0);
   const buildVersion = ref(0);
+  const editPreviewVersion = ref(0);
   const metaVersion = ref(0);
   const busy = shallowRef(store.busyState);
 
@@ -42,6 +45,7 @@ export function createDocBridge(store: DocumentStore): DocBridge {
   const offs = [
     store.onDocChange(() => { docVersion.value++; }),
     store.onBuild(() => { buildVersion.value++; }),
+    store.onEditPreview(() => { editPreviewVersion.value++; }),
     store.onBusy((b) => { busy.value = b; }),
     store.onMeta(() => { metaVersion.value++; }),
   ];
@@ -63,6 +67,7 @@ export function createDocBridge(store: DocumentStore): DocBridge {
   return {
     docVersion,
     buildVersion,
+    editPreviewVersion,
     busy,
     metaVersion,
     dispose: () => offs.forEach((off) => off()),

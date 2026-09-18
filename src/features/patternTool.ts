@@ -15,7 +15,7 @@
 // The copies are ghosts, not a rebuild. A pattern is a rigid repeat whose cells
 // this side knows exactly, so asking the kernel to union twenty solids per frame
 // would make the drag unusable in order to show it something it already has.
-// features/patternMath holds the arithmetic and sidecar/builder.py's
+// features/patternMath holds the arithmetic and the Python engine's `builder.py`'s
 // _pattern_linear / _pattern_circular apply the same rule, which is what makes
 // the ghost a preview rather than a suggestion.
 

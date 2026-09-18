@@ -83,7 +83,7 @@ export function paintFrom(store: DocumentStore): {
   for (const b of store.buildState.result?.bodies ?? []) {
     const slot = store.bodyColorSlot(b.id);
     if (slot != null && pal[slot]) bodies[b.id] = pal[slot].color;
-    // two-tone texture inlays: the sidecar's dense per-body face array becomes a
+    // two-tone texture inlays: the engine's dense per-body face array becomes a
     // sparse global-face-index key.
     const slots = b.faceColorSlots;
     if (!slots) continue;

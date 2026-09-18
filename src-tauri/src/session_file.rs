@@ -1,6 +1,6 @@
 //! Where a running FundaCAD says how to reach it.
 //!
-//! The sidecar's port and token live in this process's memory and nowhere else,
+//! The engine's live session port and token live in this process's memory and nowhere else,
 //! which is why an outside program, the MCP server `fundacad-mcp`, a probe script,
 //! has never been able to join a session in progress. It could only start a
 //! second engine of its own and work on a copy. That is a safe default and a

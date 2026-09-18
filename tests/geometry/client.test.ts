@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { expandPackedEdges } from "../../src/geometry/client";
 
-// The sidecar packs edge polylines into binary buffers (server.py's _pack_edges)
+// The engine packs edge polylines into binary buffers (server.py's _pack_edges)
 // because they are the largest tolerance-INVARIANT part of a large assembly's
 // reply, 97.1 MiB across 1,726,523 points on the 356 MiB reference file, the
 // same at every tolerance. server's test_ws.py proves the encoder; this proves

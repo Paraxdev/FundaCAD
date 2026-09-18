@@ -168,7 +168,7 @@ describe("identity", () => {
     expect(sameEntry(at(1, 2, 3), at(1, 2, 4))).toBe(false);
   });
 
-  it("tolerates the rounding a point survives a round trip through the sidecar with", () => {
+  it("tolerates the rounding a point survives a round trip through the engine with", () => {
     // Points come back rounded to six decimals; the document keeps full
     // precision. Compared exactly, every entry would fail to match itself after
     // one rebuild and the remove button would remove nothing.

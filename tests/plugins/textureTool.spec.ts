@@ -322,7 +322,7 @@ describe("TextureTool", () => {
       expect(panel.isOpen()).toBe(false);
     });
 
-    // Without the body binding the sidecar resolves the face selector against
+    // Without the body binding the engine resolves the face selector against
     // the ACTIVE (last-created) body, so with more than one body the texture
     // lands on a random face of the wrong shape. A texture applies to ONE body,
     // so a selection spanning two keeps only the faces on the bound one.

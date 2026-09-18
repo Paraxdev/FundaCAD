@@ -445,7 +445,7 @@ export async function compileAndSolve(
   // classification pass on ordinary sketches, incl. every drag frame.
   if (fixedPts.size) {
     // mm (radians for angles), comfortably above the residual floor left by the
-    // sidecar's 6-decimal curve rounding (a p2p distance between rounded points
+    // engine's 6-decimal curve rounding (a p2p distance between rounded points
     // can be off by ~1.4e-6 even when nominally exact), and matching its 1e-4 mm
     // change tolerance: a conceptually-satisfied inert dim must grade amber, not red
     const INERT_TOL = 1e-4;

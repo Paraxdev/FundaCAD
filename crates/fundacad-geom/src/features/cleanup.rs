@@ -1,5 +1,5 @@
-//! Simplify Mesh and Clean Up: sidecar/solid_ops.py `_simplify_mesh` and the
-//! `_refacet_clean` then `_unify_body` pass of sidecar/shape_util.py.
+//! Simplify Mesh and Clean Up: the Python engine's `solid_ops.py` `_simplify_mesh` and the
+//! `_refacet_clean` then `_unify_body` pass of the Python engine's `shape_util.py`.
 
 use std::collections::HashMap;
 

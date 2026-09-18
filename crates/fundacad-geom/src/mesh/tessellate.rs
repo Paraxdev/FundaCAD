@@ -1,5 +1,5 @@
 //! Face triangulations into one body mesh, replaces `tessellate`,
-//! `_display_face` and `mesh_bbox` of `sidecar/tessellate.py`.
+//! `_display_face` and `mesh_bbox` of the Python engine's `tessellate.py`.
 //!
 //! Mesh passes (plugin displacement) are not here, they wait for the plugin
 //! host.

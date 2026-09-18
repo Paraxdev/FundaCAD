@@ -1,4 +1,4 @@
-// sidecar/section_blend.py: fillets and chamfers built from their cross section
+// the Python engine's `section_blend.py`: fillets and chamfers built from their cross section
 // for the ones BRepFilletAPI refuses. At each sample along the edge the two
 // faces give the ball centre, its contacts and the arc (a G2 curve, a conic or
 // a chord), the section closes a hair outside the body, the sections are lofted
@@ -44,6 +44,8 @@
 #include <GeomAPI_ProjectPointOnSurf.hxx>
 #include <GeomAbs_CurveType.hxx>
 #include <GeomAbs_SurfaceType.hxx>
+#include <Message_ProgressRange.hxx>
+#include <Message_ProgressScope.hxx>
 #include <Geom_BezierCurve.hxx>
 #include <Geom_BezierSurface.hxx>
 #include <ShapeFix_Solid.hxx>
@@ -108,6 +110,42 @@ template <typename T> struct Opt {
 };
 
 inline SectionError err(const std::string &m) { return SectionError{m}; }
+
+// The job was cancelled. Not a SectionError, so no fallback swallows it.
+struct Cancelled {};
+
+// The cancel of the job this thread is building for, while blend_section runs.
+// Every boolean takes a fresh range from it, so OCCT can stop mid boolean too.
+struct CancelScope {
+  Message_ProgressScope scope;
+  CancelScope *prev;
+  explicit CancelScope(const Message_ProgressRange &range);
+  ~CancelScope();
+  CancelScope(const CancelScope &) = delete;
+  CancelScope &operator=(const CancelScope &) = delete;
+};
+
+inline CancelScope *&current_cancel() {
+  static thread_local CancelScope *cur = nullptr;
+  return cur;
+}
+
+inline CancelScope::CancelScope(const Message_ProgressRange &range)
+    : scope(range, nullptr, 1.0, true), prev(current_cancel()) {
+  current_cancel() = this;
+}
+
+inline CancelScope::~CancelScope() { current_cancel() = prev; }
+
+inline void check_cancel() {
+  CancelScope *c = current_cancel();
+  if (c != nullptr && c->scope.UserBreak()) throw Cancelled{};
+}
+
+inline Message_ProgressRange next_range() {
+  CancelScope *c = current_cancel();
+  return c != nullptr ? c->scope.Next() : Message_ProgressRange();
+}
 
 inline gp_Vec V(const gp_Pnt &p) { return gp_Vec(p.X(), p.Y(), p.Z()); }
 inline gp_Pnt P(const gp_Vec &v) { return gp_Pnt(v.X(), v.Y(), v.Z()); }
@@ -643,7 +681,9 @@ inline TopoDS_Shape boolean(Op op, const TopoDS_Shape &base, const std::vector<T
   alg->SetTools(b);
   alg->SetFuzzyValue(fuzz);
   alg->SetRunParallel(true);
-  alg->Build();
+  check_cancel();
+  alg->Build(next_range());
+  check_cancel();
   if (!alg->IsDone()) throw err("the blend would not combine with the body");
   TopoDS_Shape out = alg->Shape();
   if (op == Op::Cut && solid_count(out) > solid_count(base)) {
@@ -760,6 +800,7 @@ inline TopoDS_Shape boolean_one(Op op, const TopoDS_Shape &base, const TopoDS_Sh
   attempts.push_back(std::make_tuple(base, shrunk(tool, 2e-3), fuzz));
   attempts.push_back(std::make_tuple(base, shrunk(tool, 2e-2), fuzz));
   for (auto &at : attempts) {
+    check_cancel();
     TopoDS_Shape out;
     try {
       out = boolean(op, copy(std::get<0>(at)), {copy(std::get<1>(at))}, std::get<2>(at));
@@ -1159,6 +1200,7 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
   gp_Vec prev_inner, prev_T;
   gp_Pnt prev_P;
   for (double t : ts) {
+    check_cancel();
     Frame f = frame(t);
     sides[0]->normal_on_edge_cached = f.n1;
     sides[1]->normal_on_edge_cached = f.n2;
@@ -1184,6 +1226,7 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
     BRepOffsetAPI_ThruSections mk(true, ws.size() == 2, 1e-6);
     mk.CheckCompatibility(false);
     for (const TopoDS_Wire &w : ws) mk.AddWire(w);
+    check_cancel();
     mk.Build();
     if (!mk.IsDone()) throw err("the blend sections would not loft");
     return mk.Shape();
@@ -1348,6 +1391,7 @@ inline std::vector<TopoDS_Shape> ball_corners(const TopoDS_Shape &shape,
   TopExp::MapShapesAndAncestors(shape, TopAbs_VERTEX, TopAbs_FACE, fmap);
   std::vector<TopoDS_Shape> out, done;
   for (const auto &er : blended) {
+    check_cancel();
     double r = er.second;
     for (TopExp_Explorer ex(er.first, TopAbs_VERTEX); ex.More(); ex.Next()) {
       TopoDS_Vertex v = TopoDS::Vertex(ex.Current());
@@ -1450,6 +1494,7 @@ inline TopoDS_Shape combine(const TopoDS_Shape &shape, const std::vector<TopoDS_
   TopoDS_Shape out = shape;
   if (!cut.empty()) out = boolean_all(Op::Cut, out, cut, fuzz, one_shot);
   if (!fuse.empty()) out = boolean_all(Op::Fuse, out, fuse, fuzz, one_shot);
+  check_cancel();
   try {
     ShapeUpgrade_UnifySameDomain up(copy(out), true, true, false);
     up.Build();
@@ -1475,6 +1520,7 @@ inline TopoDS_Shape section_blend_once(const TopoDS_Shape &shape, const std::vec
   std::vector<TopoDS_Shape> cut, fuse;
   std::vector<std::pair<TopoDS_Shape, double>> convex;
   for (size_t k = 0; k < edges.size(); ++k) {
+    check_cancel();
     auto got = edge_tool(shape, TopoDS::Edge(edges[k]), chamfer, sizes[k], size2, g2, tol, draft, profile,
                          1.0 + 0.11 * static_cast<double>(k));
     auto &dst = got.first > 0 ? cut : fuse;
@@ -1499,11 +1545,14 @@ inline TopoDS_Shape section_blend_once(const TopoDS_Shape &shape, const std::vec
 
 } // namespace secblend
 
-// sidecar/section_blend.py `section_blend`. size2 NaN for none. status 0 built,
-// 1 SectionBlendError (message is its sentence), 2 any other exception (its class).
+// the Python engine's `section_blend.py` `section_blend`. size2 NaN for none. status 0 built,
+// 1 SectionBlendError (message is its sentence), 2 any other exception (its class),
+// 3 cancelled through `progress`.
 inline std::unique_ptr<TopoDS_Shape> blend_section(const TopoDS_Shape &shape, const TopoDS_Shape &edges, bool chamfer,
                                                    rust::Slice<const double> sizes, double size2, bool g2, bool draft,
-                                                   double profile, int32_t &status, rust::String &message) {
+                                                   double profile, const Message_ProgressRange &progress,
+                                                   int32_t &status, rust::String &message) {
+  secblend::CancelScope cancel(progress);
   std::vector<TopoDS_Shape> es;
   for (TopoDS_Iterator it(edges); it.More(); it.Next()) es.push_back(it.Value());
   std::vector<double> sz(sizes.begin(), sizes.end());
@@ -1522,6 +1571,9 @@ inline std::unique_ptr<TopoDS_Shape> blend_section(const TopoDS_Shape &shape, co
     TopoDS_Shape out = secblend::section_blend_once(shape, es, chamfer, size2, g2, sz, false, profile);
     status = 0;
     return std::unique_ptr<TopoDS_Shape>(new TopoDS_Shape(out));
+  } catch (const secblend::Cancelled &) {
+    status = 3;
+    message = "cancelled";
   } catch (const secblend::SectionError &e) {
     status = 1;
     message = e.msg;

@@ -37,7 +37,7 @@ export function createSelection(
 
   // Click a model FACE → select the feature that created it, so Del deletes that
   // feature (and the timeline/params show which one owns the face). Provenance is the
-  // per-face `faceOwners` the sidecar attaches to each body in the build result.
+  // per-face `faceOwners` the engine attaches to each body in the build result.
   const featureForFace = (faceId: number): string | null => {
     for (const b of e.store.buildState.result?.bodies ?? []) {
       if (faceId >= b.faceStart && faceId < b.faceStart + b.faceCount) {
@@ -115,7 +115,7 @@ export function createSelection(
         break;
       case "joint":
         // The arrow slides the joined body along the mate axis (its offset). It
-        // stands down when a parameter drives the offset or the sidecar could not
+        // stands down when a parameter drives the offset or the engine could not
         // place the axis this build, and those fall through to the rows.
         if (!e.tools.joint.startEdit(id, done)) e.setStatus(VALUES_IN_HISTORY, "");
         break;

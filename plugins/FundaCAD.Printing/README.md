@@ -33,8 +33,8 @@ Everything. The app contains no knowledge that a printer or a slicer exists, and
 - `printFlow.ts`: the two flows, open in the slicer and send to the printer.
 - `printDialog.ts`, `FilamentMappingDialog.vue`, `FilamentMappingHost.vue`: the
   filament mapping.
-- `exportProject.ts` and `geometry/`: the project 3MF. The engine rebuilds and
-  meshes, and `geometry/register.py` registers the writer that decides what
+- `exportProject.ts` and `geometry-rs/`: the project 3MF. The engine rebuilds and
+  meshes, and the component in `geometry-rs/` registers the writer that decides what
   the file looks like, including flattening the slicer's presets into it.
 - `PrintStatusPill.vue`, `CameraPanel.vue`: the live progress pill and camera.
 - `native.ts`: typed wrappers over the app's generic commands.

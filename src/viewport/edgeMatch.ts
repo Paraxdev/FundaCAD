@@ -11,7 +11,7 @@ export type Vec3 = [number, number, number];
  *  This used to be the index-middle sample, `points[floor(len/2)]`, which is
  *  the true middle only when the polyline has an odd number of samples. A
  *  STRAIGHT edge is sampled as just its two endpoints (tessellate._line_endpoints),
- *  so `floor(2/2)` returned the END POINT, and the sidecar's nearest-edge
+ *  so `floor(2/2)` returned the END POINT, and the engine's nearest-edge
  *  resolution then measured from a CORNER: on a 20×20×35 box, clicking a 35mm
  *  vertical edge stored its top corner and resolved to a 20mm TOP edge, whose
  *  centre is nearer. Picking one edge and filleting another was the visible
@@ -98,7 +98,7 @@ export function toggleSelectorByMid<S extends { point?: number[] }>(
   return [...selectors, { kind: "edge", by: "nearest", point: mid }];
 }
 
-/** Edit-mode matching tolerance: generous enough to absorb the sidecar's 3dp
+/** Edit-mode matching tolerance: generous enough to absorb the engine's 3dp
  *  rounding and polyline-vs-curve midpoint drift on coarse tessellation, but
  *  bounded so nearby parallel edges don't cross-match. */
 export function midMatchTol(bboxDiag: number): number {
@@ -108,7 +108,7 @@ export function midMatchTol(bboxDiag: number): number {
 /** Build the selector for a picked edge, stamped with the body that owns it.
  *
  *  EVERY site that mints an edge selector from a rendered edge must go through
- *  here. Without the body, the sidecar falls back to the active (last-created)
+ *  here. Without the body, the engine falls back to the active (last-created)
  *  body, and because `by:"nearest"` always returns SOME winner it then blends an
  *  edge of the wrong body with no error at all, the ring/hexagon bug.
  *

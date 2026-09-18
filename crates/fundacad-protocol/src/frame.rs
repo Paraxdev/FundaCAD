@@ -2,7 +2,7 @@
 //!
 //! Replaces `_pack_edges`, `_taker`, `_pack_bodies`, `_frame_bytes`,
 //! `_encode_binary_reply`, `_too_large_error` and `_reply_bytes` in
-//! `sidecar/wire.py`.
+//! the Python engine's `wire.py`.
 //!
 //! Layout, all integers little-endian:
 //! `[u32 header_len][header_len bytes UTF-8 JSON header][pad to 4][buf0][buf1]...`

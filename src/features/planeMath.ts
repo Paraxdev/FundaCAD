@@ -8,8 +8,8 @@
 //
 // And its answer is what gets WRITTEN DOWN: there is no face-referenced plane spec
 // on the wire, so a datumPlane carries a resolved {origin, normal, xdir} that the
-// sidecar simply rebuilds with. Nothing downstream re-derives or corrects it, and
-// a future face-following datum would have to reproduce these rules on the sidecar
+// engine simply rebuilds with. Nothing downstream re-derives or corrects it, and
+// a future face-following datum would have to reproduce these rules on the engine
 // side to stay compatible with planes already saved in people's documents.
 //
 // Plain tuples throughout: no THREE, no viewport, no camera, so vitest reaches it.
@@ -305,7 +305,7 @@ export function solidInsideCylinder(cyl: Cylinder, points: Vec3[], normals: Vec3
  *  `facing` decides which way the normal points: away from the axis on a shaft, but
  *  TOWARD it on a bore, where the face's own normal points into the void. Without
  *  it a datum on a hole wall would face into the material, its offset would run
- *  backwards, and it would disagree with the sidecar, which reads the direction
+ *  backwards, and it would disagree with the engine, which reads the direction
  *  straight off the B-rep face. Where the plane SITS is unaffected.
  *
  *  Null on the axis itself, where "radially outward" has no meaning. */
@@ -402,7 +402,7 @@ export function axisFromEdge(points: readonly Vec3[]): EdgeAxis | null {
 //
 // Both produce the same resolved PlaneDef a face-derived datum does, so
 // everything downstream (sketching, splitting, offsetting) already works on
-// them and the sidecar needs to know nothing new.
+// them and the engine needs to know nothing new.
 
 /** The plane through three points, or null when they are collinear (or two of
  *  them are the same point) and so name no plane at all.

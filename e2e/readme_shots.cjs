@@ -1,6 +1,6 @@
 // The README's screenshots, taken of a real document in a real browser.
 //
-// Usage (from the repo root, with the sidecar on 8765 and vite on 5173):
+// Usage (from the repo root, with the engine on 8765 (`fundacad-engine --ws`) and vite on 5173):
 //   SC_TOKEN=<token> node e2e/readme_shots.cjs [outDir]
 //
 // The parts below are the ones in the README: a shelf bracket, a knurled
@@ -214,7 +214,7 @@ function scene() {
 //
 //   node shots.cjs [outDir]
 //
-// Needs the sidecar on 8765 (token `probetoken`) and vite on 5173.
+// Needs the engine on 8765 (`fundacad-engine --ws`) (token `probetoken`) and vite on 5173.
 const { chromium } = require("playwright-core");
 const fs = require("fs");
 const path = require("path");

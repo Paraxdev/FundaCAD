@@ -1,5 +1,5 @@
-//! Canonical recognition against the Python sidecar's `_canonicalize` on the same
-//! NURBS shapes (tests/canonical/gen.py).
+//! Canonical recognition against the Python engine's `_canonicalize` on the same
+//! NURBS shapes (tests/canonical/gen.py on the legacy branch).
 
 use fundacad_geom::import::canonical;
 use fundacad_geom::kernel::{self, Kind};

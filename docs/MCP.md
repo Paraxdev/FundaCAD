@@ -96,8 +96,8 @@ with `--ws` and talks to it over the same loopback socket a live session uses,
 so the two worlds are one code path and an OpenCASCADE abort takes the engine
 rather than the conversation. The binary to spawn is named by
 `FUNDACAD_ENGINE_CMD`, or found next to this one: `fundacad-engine`, then the
-app itself (`fundacad --engine --ws`, recognised as a Rust engine build by its
-bytes, so a Python build's window is never started by mistake), then the
+app itself (`fundacad --engine --ws`, recognised by the `engine_attach` command in
+its bytes, so a Python beta's window is never started by mistake), then the
 workspace `target/` directories. The spawned engine is told the app's plugin
 directory unless `FUNDACAD_PLUGIN_DIR` is already set.
 
@@ -126,11 +126,12 @@ as a `.funda` file. This is what it does when no window is open.
 | `attach` | live, or refuse to start. For a host meant to work on the open document and nothing else, where falling back quietly would look like the edits are being ignored |
 | `standalone` | private, always, even with a window open |
 
-An explicit `FUNDACAD_SIDECAR_TOKEN` in the environment beats all three: someone
-who sets it is pointing this at a specific engine on purpose, and it is how the
-probe scripts in this repository drive a session they can watch. (The retired
-`SINDRI_` and `SINDRICAD_` spellings still answer, for a shell profile no rename
-in here can reach.)
+An explicit `FUNDACAD_ENGINE_TOKEN` (with `FUNDACAD_ENGINE_PORT`) in the
+environment beats all three: someone who sets it is pointing this at a specific
+engine on purpose, and it is how the probe scripts in this repository drive a
+session they can watch. (The retired `FUNDACAD_SIDECAR_` names and the `SINDRI_`
+and `SINDRICAD_` spellings still answer, for a shell profile no rename in here
+can reach.)
 
 ### How it finds a running window
 
@@ -364,21 +365,13 @@ cargo build --workspace --features fundacad-engine/ws
 cargo test --workspace --features fundacad-engine/ws
 ```
 
-## The Python oracle, until the sidecar goes
+## The Python server it replaced
 
 The server began in Python, as the plugin described above, and
-`crates/fundacad-mcp` is its port: the tool list the two publish is
-byte-identical and a scripted session answers the same, which is asserted
-rather than hoped for. The Python server is kept in
-`crates/fundacad-mcp/tools/python-oracle/`, with its eleven suites, only so the
-two can still be compared:
-
-```sh
-python crates/fundacad-mcp/tools/diff_servers.py crates/fundacad-mcp/tools/parity.jsonl
-python crates/fundacad-mcp/tools/diff_servers.py --tools
-uv run --project sidecar python crates/fundacad-mcp/tools/python-oracle/tests/test_render.py
-```
-
-It runs on the sidecar's virtual environment and needs the sidecar to spawn, so
-it is deleted together with `sidecar/`, and the left side of `diff_servers.py`
-with it. Every one of its suites has a twin under `crates/fundacad-mcp/tests/`.
+`crates/fundacad-mcp` is its port: the tool list the two published was
+byte-identical and a scripted session answered the same, which was asserted
+rather than hoped for. The Python server and its eleven suites were deleted with
+the Python engine; every suite has a twin under `crates/fundacad-mcp/tests/`, and
+`tests/parity_golden.rs` replays `tools/parity.jsonl` against the Rust server and
+wants the Python server's recorded transcript
+(`tests/golden/mcp_parity.golden.json`) word for word.

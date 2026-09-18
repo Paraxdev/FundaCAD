@@ -2,7 +2,7 @@
 // drag handle on that edge and drag it to set the radius (fillet) or
 // setback (chamfer), with a LIVE preview. Unlike Extrude, a fillet/chamfer
 // can't be faked client-side (a real rounded/beveled edge needs build123d/OCCT),
-// so the preview is sidecar-driven: the un-committed feature is appended to the
+// so the preview is engine-driven: the un-committed feature is appended to the
 // tree via store.setPreview() and the normal rebuild pipeline renders it.
 // Commit promotes it to a real feature (records undo); Esc clears + reverts.
 //
@@ -234,7 +234,7 @@ export class EdgeFeatureTool {
     return swipeOffsetPx(o, edgeDir, along(this.axis), { x: clientX, y: clientY }) * px;
   }
 
-  /** The largest size the sidecar has built during this gesture, and the
+  /** The largest size the engine has built during this gesture, and the
    *  smallest it has refused, see blendVerdict.
    *
    *  Reset whenever the question changes: a different treatment, profile or set
@@ -249,8 +249,6 @@ export class EdgeFeatureTool {
   private shown: number | null = null;
   /** the refusal currently painted on the handle, box and prompt */
   private refusalShown: string | null = null;
-  /** confirmed while the kernel was still answering for the value on the handle */
-  private pendingCommit = false;
 
   private forgetBuildRange() {
     this.range = EMPTY_BLEND_RANGE;
@@ -465,7 +463,6 @@ export class EdgeFeatureTool {
       if (this.phase !== "drag") return;
       this.noteBuildOutcome(s);
       this.refreshRefusal();
-      if (this.pendingCommit) this.commit();
     });
   }
 
@@ -487,7 +484,7 @@ export class EdgeFeatureTool {
 
   /** Match each saved selector to a rendered sharp edge and build its ghost.
    *  Selectors that don't match (stale midpoint) are kept for commit but have
-   *  no visual, the sidecar still resolves them by nearest at build time. */
+   *  no visual, the engine still resolves them by nearest at build time. */
   private seedGhosts(sels: Selector[]) {
     for (const sel of sels) {
       if (!("point" in sel)) {
@@ -818,7 +815,7 @@ export class EdgeFeatureTool {
     this.refreshRefusal();
   }
 
-  /** Paint ghosts red when the sidecar's failure probe names their edge (the
+  /** Paint ghosts red when the engine's failure probe names their edge (the
    *  edgeOpFailed diagnostic carries the failed edges' midpoints). */
   private recolorGhostsFromDiagnostics(diags: import("../types").ResolveDiag[] | undefined) {
     const entry = diags?.find(
@@ -839,7 +836,6 @@ export class EdgeFeatureTool {
   }
 
   private onMove(e: PointerEvent) {
-    if (this.pendingCommit) return;
     if (this.phase === "pick") {
       const hit = this.viewport.pickEdgeAt(e.clientX, e.clientY);
       this.viewport.hoverEdge(hit?.edge ?? null);
@@ -919,7 +915,7 @@ export class EdgeFeatureTool {
   }
 
   private onDown(e: PointerEvent) {
-    if (e.button !== 0 || this.pendingCommit) return;
+    if (e.button !== 0) return;
     if (this.phase === "pick") {
       const hit = this.viewport.pickEdgeAt(e.clientX, e.clientY);
       if (!hit) return; // missed an edge, let the click orbit
@@ -976,7 +972,7 @@ export class EdgeFeatureTool {
   }
 
   private onUp(e: PointerEvent) {
-    if (e.button !== 0 || this.phase !== "drag" || this.pendingCommit) return;
+    if (e.button !== 0 || this.phase !== "drag") return;
     if (this.draggingArc) {
       // Never a commit, even from a fluent gesture: the profile is an adjustment
       // to a blend you are already making, so letting go of it has to leave the
@@ -1036,7 +1032,7 @@ export class EdgeFeatureTool {
     // field) never sees it. Nothing is lost there: fillet and chamfer each
     // show exactly ONE field, so tabbing between fields was already a no-op
     // that only had the side effect of locking the field against the drag.
-    if (e.key === "Tab" && this.phase === "drag" && !this.pendingCommit) {
+    if (e.key === "Tab" && this.phase === "drag") {
       e.preventDefault();
       e.stopImmediatePropagation();
       this.flipKind();
@@ -1153,7 +1149,7 @@ export class EdgeFeatureTool {
       this.handle?.paint({ hot: this.hovering || this.grabbing, refused: this.refusalShown !== null });
       const s = this.viewport.projectToScreen(this.anchor);
       this.dim.position(s.x, s.y);
-      if (!this.grabbing && !this.pendingCommit && this.dim.isUserDriven(this.field.name)) {
+      if (!this.grabbing && this.dim.isUserDriven(this.field.name)) {
         const v = this.dim.getValue(this.field.name);
         if (v != null && Math.abs(v - this.value) > 1e-6) {
           const wasNeutral = this.neutral;
@@ -1253,7 +1249,6 @@ export class EdgeFeatureTool {
     // origin on purpose, and that means "don't do this after all".
     if (this.neutral) return this.cancel();
     if (this.currentSelectors().length === 0) {
-      this.pendingCommit = false;
       setPrompt("Click an edge · Esc");
       return; // deleting is an explicit timeline action, not an implicit empty commit
     }
@@ -1264,12 +1259,6 @@ export class EdgeFeatureTool {
       shown: this.shown,
       typed: this.dim.isUserDriven(this.field.name),
     });
-    if (decision.action === "wait") {
-      this.pendingCommit = true;
-      setPrompt(`Checking ${fmtLength(this.size())} with the kernel… · Esc`);
-      return;
-    }
-    this.pendingCommit = false;
     if (decision.action === "stay") return this.promptForPhase();
     if (decision.action === "cancel") return this.cancel();
     this.setValue(decision.value);
@@ -1281,6 +1270,9 @@ export class EdgeFeatureTool {
     } else {
       this.store.setPreview(null);
       this.store.addFeature(feature);
+    }
+    if (decision.unverified) {
+      this.store.verifyCommit(feature.id, `${treatmentLabel(this.kind)} ${fmtLength(decision.value)}`);
     }
     this.cleanup();
     this.onDone?.(feature.id);
@@ -1317,7 +1309,6 @@ export class EdgeFeatureTool {
     this.phase = "pick";
     this.grabbing = false;
     this.fluentGrab = false;
-    this.pendingCommit = false;
     this.refusalShown = null;
     this.forgetBuildRange();
     this.hovering = false;

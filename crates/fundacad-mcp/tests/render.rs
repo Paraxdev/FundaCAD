@@ -1,5 +1,5 @@
 //! The rasteriser `view` draws with. A port of
-//! `crates/fundacad-mcp/tools/python-oracle/tests/test_render.py`.
+//! the Python MCP server's `test_render.py`.
 //!
 //! Everything here is arrays in, array out, so the whole of it is testable by
 //! counting pixels, which is the reason the renderer is pure of the wire and of

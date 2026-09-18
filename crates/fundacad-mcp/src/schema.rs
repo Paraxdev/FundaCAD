@@ -1,5 +1,5 @@
 //! What a feature looks like, written for the thing that has to author one. A
-//! port of `crates/fundacad-mcp/tools/python-oracle/schema.py`.
+//! port of the Python MCP server's `schema.py`.
 //!
 //! An agent cannot click. Everything it builds it builds by putting a JSON
 //! object into the timeline, so the only thing standing between it and a

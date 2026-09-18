@@ -1,6 +1,6 @@
 // Standard hole sizes, and the dimensions a hole type and size default to.
 //
-// Mirrors sidecar/hole_feature.py, which fills in any dimension a document
+// Mirrors the Python engine's `hole_feature.py`, which fills in any dimension a document
 // leaves out. Both test files pin the same numbers.
 
 import type { Feature, HoleFit, HoleStandard, HoleType } from "../types";

@@ -25,7 +25,7 @@
 // So this run strips 'unsafe-eval' out of the policy before applying it, and
 // everything below has to pass anyway.
 //
-// Usage (from the repo root, no dev server and no sidecar needed):
+// Usage (from the repo root, no dev server and no engine needed):
 //   node e2e/sandbox_csp.cjs
 //
 // SC_CHROME picks the browser. Any Chromium build works.

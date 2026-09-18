@@ -8,7 +8,7 @@
 // the arrow and pull, or the dial and swing. The value boxes are still there and
 // still authoritative, the same contract every other manipulator keeps.
 //
-// Both handles stand on the REAL mate axis, which only the sidecar can place (it
+// Both handles stand on the REAL mate axis, which only the engine can place (it
 // alone resolves the two face selectors to a frame). It arrives each rebuild in
 // the build result's datumMarks, keyed by the joint's id (the joint handler
 // publishes it there, see builder._handle_joint). No mark, no handles: the tool
@@ -99,7 +99,7 @@ export class JointTool {
   }
 
   /** Open the handles on a committed joint. False sends the caller to the value
-   *  rows: a parameter drives the numbers, or the sidecar could not place the
+   *  rows: a parameter drives the numbers, or the engine could not place the
    *  mate axis this build (a reference no longer resolves), so there is no line
    *  to stand the handles on. */
   startEdit(featureId: string, onDone: (id: string | null) => void): boolean {

@@ -2,7 +2,7 @@
 // projectionUpdates land in the document via a DERIVED commit, no undo entry,
 // chained on the param queue, guarded against preview timelines, with a
 // stale-transition warning and a 5-strike oscillation valve. Driven against a
-// scripted stub backend (the sidecar side is covered by sidecar/test_refresh.py).
+// scripted stub backend (the engine side is covered by the Python engine's `test_refresh.py`).
 import { describe, it, expect, beforeEach } from "vitest";
 import { DocumentStore } from "../../src/document/store";
 import type { CadDocument, Feature, ProjectedCurve, ProjectionUpdate, RebuildReply, RebuildResult, SketchEntity } from "../../src/types";
@@ -189,7 +189,7 @@ describe("projection refresh (derived commit loop)", () => {
     const delivered: ProjectionUpdate[][] = [];
     store.onProjectionsApplied = (u) => void delivered.push(u);
     // 6 user edits while the sketch stays open: each rebuild re-delivers to the
-    // session (the doc copy lags until finish(), so the sidecar re-emits every
+    // session (the doc copy lags until finish(), so the engine re-emits every
     // time), nothing is oscillating, so the valve must NOT trip
     for (let i = 0; i < 6; i++) {
       store.mutate(() => {}, true);
@@ -232,9 +232,9 @@ describe("projection refresh (derived commit loop)", () => {
     const curveAtTrip = p1Of(store)?.curve;
     store.setPreview({ id: "pv", type: "extrude", sketch: "s1", distance: 1, operation: "new" } as Feature); // call 7 (quiet)
     await settle();
-    store.setPreview(null); // call 8: updates again, still paused
+    store.setPreview(null); // the committed model comes back without a rebuild
     await settle();
-    expect(calls.length).toBe(8); // no commit -> no follow-up rebuild
+    expect(calls.length).toBe(7); // no commit -> no follow-up rebuild
     expect(p1Of(store)?.curve).toEqual(curveAtTrip);
     expect(warnings.filter((w) => w.includes("paused automatic refresh"))).toHaveLength(1); // warned once, stayed shut
   });

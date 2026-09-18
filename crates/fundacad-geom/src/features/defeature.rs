@@ -1,5 +1,5 @@
-//! Delete Face, sidecar/defeature.py `_defeature` and its four rungs, with the
-//! re-targeting of sidecar/booleans.py `_retarget_delete_faces`.
+//! Delete Face, the Python engine's `defeature.py` `_defeature` and its four rungs, with the
+//! re-targeting of the Python engine's `booleans.py` `_retarget_delete_faces`.
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 
@@ -777,7 +777,7 @@ mod tests {
         faces.remove(0)
     }
 
-    // The numbers sidecar/tests/test_smoke.py test_tool_fill and
+    // The numbers the Python engine's `test_smoke.py` test_tool_fill and
     // test_defeature_chain assert on the Python rungs.
     #[test]
     fn a_corner_chain_fills_back_to_the_box() {

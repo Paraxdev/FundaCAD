@@ -57,6 +57,32 @@ function initialUnit(kind: DimFieldDef["kind"]): UnitDef | null {
   return unitById(kind === "angle" ? "deg" : getUnit());
 }
 
+/** Confirm and cancel act on the press and the box goes with it, so the release
+ *  lands on the canvas behind it, where it read as a click and selected the
+ *  body under the button. That one release, and its click, go nowhere. */
+export function swallowRelease(pointerId: number | undefined): void {
+  const opts = { capture: true } as const;
+  const stop = (ev: Event) => {
+    const id = (ev as Partial<PointerEvent>).pointerId;
+    if (ev.type === "pointerup" && typeof id === "number" && typeof pointerId === "number" && id !== pointerId) return;
+    ev.stopImmediatePropagation();
+    ev.preventDefault();
+    if (ev.type === "pointerup") setTimeout(done, 0);
+    else done();
+  };
+  const done = () => {
+    window.removeEventListener("pointerup", stop, opts);
+    window.removeEventListener("click", stop, opts);
+    window.removeEventListener("pointercancel", done, opts);
+    window.removeEventListener("pointerdown", done, opts);
+  };
+  window.addEventListener("pointerup", stop, opts);
+  window.addEventListener("click", stop, opts);
+  // A release that never comes must not take the next press's with it.
+  window.addEventListener("pointercancel", done, opts);
+  window.addEventListener("pointerdown", done, opts);
+}
+
 export class DimInput {
   private root: HTMLDivElement;
   private fields: Field[] = [];
@@ -247,6 +273,7 @@ export class DimInput {
     ok.addEventListener("pointerdown", (e) => {
       e.preventDefault();
       e.stopPropagation();
+      swallowRelease(e.pointerId);
       this.commit();
     });
     this.root.appendChild(ok);
@@ -258,6 +285,7 @@ export class DimInput {
       no.addEventListener("pointerdown", (e) => {
         e.preventDefault();
         e.stopPropagation();
+        swallowRelease(e.pointerId);
         this.onCancel?.();
       });
       this.root.appendChild(no);
@@ -435,7 +463,7 @@ export class DimInput {
 
   /** Say that what the boxes read cannot be built, or take it back.
    *
-   *  Every field turns, not just one, because the sidecar refuses a FEATURE and
+   *  Every field turns, not just one, because the engine refuses a FEATURE and
    *  not a field: "the profile is 3 mm tall but climbs only 1 mm each turn" is
    *  about the pitch and the angle together, and reddening whichever box was
    *  touched last would point at the wrong number half the time. The user is the

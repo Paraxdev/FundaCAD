@@ -1,5 +1,5 @@
 //! Booleans and splitters on argument and tool lists with the General Fuse
-//! options, as sidecar/booleans.py drives BRepAlgoAPI, with history.
+//! options, as the Python engine's `booleans.py` drives BRepAlgoAPI, with history.
 
 use crate::{primitives::Shape, progress::ProgressRange, Error};
 use cxx::{CxxVector, UniquePtr};

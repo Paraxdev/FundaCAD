@@ -2,7 +2,7 @@
 // pure function and can be tested without a DOM. Two things here are easy to get
 // wrong in a port and invisible afterwards: "bolditalic" has to light BOTH
 // checkboxes, and an empty numeric field has to fall back rather than reach the
-// sidecar as NaN.
+// engine as NaN.
 
 import { describe, it, expect } from "vitest";
 import { initialTextForm, styleOf, textPanelPos, toTextValues } from "../../src/sketch/textForm";

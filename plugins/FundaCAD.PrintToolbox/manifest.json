@@ -19,6 +19,5 @@
     "elephantFootChamfer",
     "verticalFillet"
   ],
-  "geometry": "geometry/register.py",
   "geometryWasm": "geometry.wasm"
 }

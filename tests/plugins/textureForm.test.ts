@@ -1,5 +1,5 @@
 // The Texture panel's conditional rows are the part of it worth pinning: they
-// encode sidecar behaviour rather than taste, and one of the rules here exists
+// encode engine behaviour rather than taste, and one of the rules here exists
 // because the opposite of it was a bug, Direction used to be gated behind
 // ANGLE_KINDS, which left the noise/voronoi/image kinds able only to GROW the
 // part instead of texturing the surface it sits on.
@@ -32,7 +32,7 @@ describe("textureRows", () => {
   });
 
   // A FACETED wave is a fixed 8-join sine polyline with no shape parameter at
-  // all (sidecar `_wave_levels`), so the slider goes away rather than sitting
+  // all (engine `_wave_levels`), so the slider goes away rather than sitting
   // there doing nothing. Under `round` it is a real sine and sharpness crisps it.
   it("drops the sharpness slider for the one combination it means nothing in", () => {
     expect(textureRows({ kind: "waves", profile: "facet" }).sharpness).toBe(false);

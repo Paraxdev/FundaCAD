@@ -7,8 +7,8 @@
 //      an update replaces the geometry in place and the history keeps its length.
 //   3. A step renamed in the history keeps its name through a rebuild.
 //
-// Usage (from the repo root, with vite on 5173 + sidecar on 8765):
-//   SC_TOKEN=<sidecar token> SC_CHROME=<chrome.exe> node e2e/funda_insert_e2e.cjs [outDir]
+// Usage (from the repo root, with vite on 5173 + engine on 8765 (`fundacad-engine --ws`)):
+//   SC_TOKEN=<engine token> SC_CHROME=<chrome.exe> node e2e/funda_insert_e2e.cjs [outDir]
 const { chromium } = require("playwright-core");
 const fs = require("fs");
 const os = require("os");

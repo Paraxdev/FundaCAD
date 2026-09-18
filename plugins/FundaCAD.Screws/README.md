@@ -90,9 +90,9 @@ It reaches no network.
 | `search.ts`, `library.ts`, `state.ts` | the list and its filters, your own fasteners, the window state |
 | `insert.ts` | generating and storing the solid, and where it goes |
 | `LibraryPanel.vue`, `FastenerPreview.vue`, `CustomForm.vue` | the window |
-| `geometry/` | the solids: `scr_spec.py` checks, `scr_build.py` builds, `scr_shapes.py` heads and drives, `scr_thread.py` threads |
+| `geometry-rs/` | the solids: `spec.rs` checks, `fastener.rs` builds, `shapes.rs` heads and drives, `thread.rs` threads |
 
 Adding a size is a row in a family's `sizes`. Adding a family is an entry in `metric.json` or
 `inch.json`: `fixed` for what every member shares, `columns` mapping the table's columns onto spec
 fields, `threadLength` for the thread length rule, and `lengths` naming a series in `threads.json`.
-A new head, drive or nut shape also needs its fields in `fields.json` and its solid in `geometry/`.
+A new head, drive or nut shape also needs its fields in `fields.json` and its solid in `geometry-rs/`.

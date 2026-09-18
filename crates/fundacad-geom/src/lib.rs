@@ -1,4 +1,4 @@
-//! FundaCAD geometry engine: the Rust replacement for the Python sidecar.
+//! FundaCAD geometry engine: the Rust replacement for the Python engine.
 //!
 //! This crate is the first brick of the Rust pivot (docs/RUST-PIVOT.md). It
 //! links OpenCASCADE statically through the vendored `opencascade` bindings and
@@ -9,12 +9,13 @@
 //! What is here today is deliberately small and fully tested: measurement and
 //! tessellation over shapes the bindings can already build. The feature
 //! builder that replays a `.funda` document lands module by module, each one
-//! moving a sidecar `*.py` file across; the conversion targets are listed in
+//! moving a Python engine `*.py` file across; the conversion targets are listed in
 //! the plan.
 
 pub mod bench;
 pub mod builder;
 pub mod cache;
+pub mod cancel;
 pub mod export;
 pub mod faces;
 pub mod features;
@@ -49,7 +50,7 @@ mod tests {
     use glam::dvec3;
     use opencascade::primitives::Shape;
 
-    /// A 20 x 20 x 10 box, the same part the spike's tests and the sidecar's
+    /// A 20 x 20 x 10 box, the same part the spike's tests and the Python engine's
     /// smallest fixtures use.
     fn box_20_20_10() -> Shape {
         Shape::box_with_dimensions(20.0, 20.0, 10.0)

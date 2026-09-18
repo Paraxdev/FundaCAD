@@ -17,7 +17,7 @@
 // from the reader's side a plugin that was never installed and a plugin that no
 // longer exists are the same situation and deserve the same sentence.
 //
-// The sidecar answers the same question independently, from the manifests it
+// The engine answers the same question independently, from the manifests it
 // finds on disk (see plugin_geometry.unregistered), and its answer is what turns
 // the feature's own timeline row red. This is the document-level summary: what
 // is missing, and what it costs.

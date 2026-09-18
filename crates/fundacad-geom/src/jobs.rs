@@ -71,6 +71,7 @@ fn rebuild_with(
     mut cache: Option<&mut RebuildCache>,
 ) -> JobResult {
     let _beat = crate::heartbeat::install(watch.heartbeat());
+    let _cancel = crate::cancel::install(watch.cancel_token());
     let typed: CadDocument = match serde_json::from_value(doc.clone()) {
         Ok(d) => d,
         Err(e) => return error_result(&format!("the document does not parse: {e}")),
@@ -201,6 +202,76 @@ mod tests {
             Value::Object(m),
             json!({"protocol": 2, "bodies": [], "bbox": null})
         );
+    }
+
+    /// The field report's fillet: three edges meeting at a corner, a radius
+    /// the kernel's own filleter refuses, so it falls back to the lofted
+    /// section blend, seconds of work in one feature.
+    fn corner_fillet(radius: f64) -> Value {
+        let edge = |p: [f64; 3]| json!({"kind": "edge", "by": "nearest", "point": p, "body": "body1"});
+        json!({"parameters": {}, "bodyIds": {"f2:0": "body1"}, "features": [
+            {"id": "f1", "type": "sketch", "plane": "XY", "entities": [
+                {"type": "rectangle", "id": "e0", "width": 100, "height": 100, "x": 0, "y": 0}]},
+            {"id": "f2", "type": "extrude", "sketch": "f1", "distance": 35.466, "operation": "new",
+             "regions": [[0, 0, 0]], "hiddenBodies": []},
+            {"id": "f3", "type": "fillet", "radius": radius, "profile": 0.987, "continuity": "G1", "edges": [
+                edge([-50.0, -50.0, 17.733]), edge([-50.0, 0.0, 35.466]), edge([0.0, -50.0, 35.466])]},
+        ]})
+    }
+
+    #[test]
+    fn a_cancel_stops_a_section_blend_inside_the_feature() {
+        let ctx = JobContext {
+            cancel: Default::default(),
+            progress: Default::default(),
+        };
+        let cancel = ctx.cancel.clone();
+        let delay = std::time::Duration::from_millis(400);
+        let canceller = std::thread::spawn(move || {
+            std::thread::sleep(delay);
+            cancel.cancel();
+            std::time::Instant::now()
+        });
+        let r = rebuild_result(&corner_fillet(37.0), 0.1, &Map::new(), &EngineWatch(&ctx));
+        let returned = std::time::Instant::now();
+        let cancelled_at = canceller.join().unwrap();
+        let JobResult::Json(m) = r else {
+            panic!("the blend finished before the cancel, the test proves nothing");
+        };
+        assert_eq!(Value::Object(m), json!({"error": {"message": "cancelled"}}));
+        let late = returned.saturating_duration_since(cancelled_at);
+        assert!(late < std::time::Duration::from_secs(2), "returned {late:?} after the cancel");
+    }
+
+    #[test]
+    fn an_edited_move_rebuilds_where_its_new_values_put_the_body() {
+        let doc = |dx: f64, rz: f64| {
+            json!({"features": [
+                {"id": "a", "type": "box", "length": 20, "width": 20, "height": 20},
+                {"id": "m", "type": "move", "dx": dx, "dy": 0, "dz": 0, "rx": 0, "ry": 0, "rz": rz, "bodies": ["body1"]},
+            ]})
+        };
+        let mut cache = cache::RebuildCache::new(None);
+        let mut known = Map::new();
+        let mut bbox_x = |d: Value, known: &mut Map<String, Value>| {
+            let JobResult::Mesh(m) = rebuild_result_cached(&d, 0.1, known, &NoWatch, &mut cache) else {
+                panic!("expected a mesh result");
+            };
+            let fundacad_protocol::WireBody::Full(body) = &m.bodies[0] else {
+                panic!("an edited move must resend its body, not a stub");
+            };
+            known.insert("body1".into(), body.fields["etag"].clone());
+            let b = &m.fields["bbox"];
+            (b["min"][0].as_f64().unwrap(), b["max"][0].as_f64().unwrap())
+        };
+        let (lo, hi) = bbox_x(doc(10.0, 0.0), &mut known);
+        assert!((lo - 0.0).abs() < 1e-6 && (hi - 20.0).abs() < 1e-6, "{lo} {hi}");
+        let (lo, hi) = bbox_x(doc(40.0, 0.0), &mut known);
+        assert!((lo - 30.0).abs() < 1e-6 && (hi - 50.0).abs() < 1e-6, "{lo} {hi}");
+        let half_diag = 10.0 * std::f64::consts::SQRT_2;
+        let (lo, hi) = bbox_x(doc(40.0, 45.0), &mut known);
+        assert!((lo - (40.0 - half_diag)).abs() < 1e-3, "{lo}");
+        assert!((hi - (40.0 + half_diag)).abs() < 1e-3, "{hi}");
     }
 
     #[test]

@@ -25,7 +25,7 @@ describe("buildProgress", () => {
   // measured at 136s on the reference assembly, so without per-body counts it
   // renders as a bar pinned at 0% under a static label. These two cases are the
   // difference between "is it frozen?" and a progress bar.
-  it("falls back to an indeterminate label when the sidecar sends no mesh counts", () => {
+  it("falls back to an indeterminate label when the engine sends no mesh counts", () => {
     expect(buildProgress(-1, null, null, 5)).toEqual({ label: "meshing…", pct: 0 });
     expect(buildProgress(-1, 3, 0, 5)).toEqual({ label: "meshing…", pct: 0 });
   });
