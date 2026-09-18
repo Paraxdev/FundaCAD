@@ -10,7 +10,7 @@ The last group builds real geometry, so it spawns a sidecar and is the slowest
 thing in this directory. It is here anyway: "can an agent go from an empty
 document to a solid" is the only question this whole server exists to answer.
 
-Run: uv run python mcp/tests/test_protocol.py
+Run: uv run python crates/fundacad-mcp/tools/python-oracle/tests/test_protocol.py
 """
 
 import _bootstrap  # noqa: F401
@@ -22,12 +22,13 @@ import os
 import tempfile
 
 from client import McpClient
+from _bootstrap import ORACLE_SERVER
 
 
 def drive(steps):
     """Run a list of (tool, args) against one server and return the results."""
     async def go():
-        async with McpClient() as c:
+        async with McpClient(server=ORACLE_SERVER) as c:
             return [await c.call(name, args) for name, args in steps]
     return asyncio.run(go())
 
@@ -41,7 +42,7 @@ def one(name, args=None):
 
 def test_the_server_initializes_and_lists_its_tools():
     async def go():
-        async with McpClient() as c:
+        async with McpClient(server=ORACLE_SERVER) as c:
             return await c.tools()
     tools = asyncio.run(go())
     names = {t["name"] for t in tools}

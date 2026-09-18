@@ -6,7 +6,7 @@ TRUE of the image and pairs it with the arrangement where it must be FALSE, a
 depth test that ignores depth still paints, an upside-down projection still
 fills the frame, and a section that clips nothing still looks like a model.
 
-Run: uv run python mcp/tests/test_render.py
+Run: uv run python crates/fundacad-mcp/tools/python-oracle/tests/test_render.py
 """
 
 import _bootstrap  # noqa: F401
