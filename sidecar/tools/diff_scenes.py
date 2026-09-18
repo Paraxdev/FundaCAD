@@ -7,8 +7,8 @@ the feature mix, the parameter tables and the imported bodies of real work.
 
 A .funda is either the pretty JSON form or the zip container (manifest.json,
 document.json, geom/<hash>.bbrep). Both are read here. The binary .fundab is
-read by the Rust crates only, so it is reported as unsupported rather than
-skipped quietly.
+read by the Rust crates only, so it is read through `fundacad-engine doc-json`,
+the program --rust names, and reported as unsupported when that fails.
 
   python tools/diff_scenes.py <dir or file> --rust "fundacad-engine.exe --ws"
 """
@@ -16,6 +16,8 @@ skipped quietly.
 import argparse
 import json
 import os
+import shlex
+import subprocess
 import sys
 import tempfile
 import zipfile
@@ -34,12 +36,29 @@ def document_of(raw):
     return {k: raw[k] for k in DOC_KEYS if k in raw}
 
 
-def read_scene(path, blob_dir):
+def engine_program(rust_cmd):
+    """The executable a --rust command starts, without its arguments."""
+    parts = shlex.split(rust_cmd, posix=os.name != "nt")
+    return parts[0].strip('"') if parts else None
+
+
+def read_fundab(path, blob_dir, rust_cmd):
+    exe = engine_program(rust_cmd or "")
+    if not exe:
+        return None, "no Rust engine to read the binary .fundab with"
+    run = subprocess.run([exe, "doc-json", path, "--blob-dir", blob_dir],
+                         capture_output=True, text=True, encoding="utf-8")
+    if run.returncode != 0:
+        return None, f"fundacad-engine doc-json failed: {run.stderr.strip()}"
+    return document_of(json.loads(run.stdout)), None
+
+
+def read_scene(path, blob_dir, rust_cmd=None):
     """(document, note). Embedded geometry is written into `blob_dir`, which
     both engines read through FUNDACAD_BLOB_DIR, so an import feature resolves
     to the same bytes on each side."""
     if path.lower().endswith(".fundab"):
-        return None, "the binary .fundab format is read by the Rust crates only"
+        return read_fundab(path, blob_dir, rust_cmd)
     with open(path, "rb") as fh:
         head = fh.read(2)
     if head == b"PK":
@@ -72,7 +91,7 @@ def scenes_in(target):
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("target", help="a .funda file or a directory of them")
+    ap.add_argument("target", help="a .funda or .fundab file or a directory of them")
     ap.add_argument("--rust", default=D.default_rust_cmd(),
                     help="command that starts the Rust engine's WebSocket server")
     ap.add_argument("--python-only", action="store_true")
@@ -83,7 +102,7 @@ def main():
     os.environ["FUNDACAD_BLOB_DIR"] = blob_dir
     docs, unsupported = [], []
     for path in scenes_in(args.target):
-        doc, note = read_scene(path, blob_dir)
+        doc, note = read_scene(path, blob_dir, args.rust)
         if doc is None:
             unsupported.append((os.path.basename(path), note))
             continue
@@ -99,7 +118,7 @@ def main():
             o = D.outcome(py[d["name"]])
             rows.append([d["name"], o["bodies"], f"{sum(o['volumes'].values()):.2f}",
                          o["fatal"] or ("; ".join(o["messages"]) or "ok")])
-        print(D.table(rows, ["scene", "bodies", "volume", "status"]))
+        D.table(rows, ["scene", "bodies", "volume", "status"])
         return
 
     print(f"rust engine: {args.rust}")
@@ -113,7 +132,7 @@ def main():
             bad += 1
         rows.append([name, p["bodies"], r["bodies"],
                      "MISMATCH" if diffs else "match", "; ".join(diffs)[:140]])
-    print(D.table(rows, ["scene", "py bodies", "rust bodies", "status", "detail"]))
+    D.table(rows, ["scene", "py bodies", "rust bodies", "status", "detail"])
     for name, note in unsupported:
         print(f"unsupported: {name}, {note}")
     print(f"\n{len(docs) - bad} match, {bad} mismatch")

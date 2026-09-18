@@ -805,6 +805,7 @@ name = "fundacad-cli"
 version = "0.2.0"
 dependencies = [
  "fundacad-engine",
+ "fundacad-format",
  "fundacad-geom",
  "fundacad-protocol",
  "serde_json",
