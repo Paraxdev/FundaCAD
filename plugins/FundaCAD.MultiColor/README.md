@@ -26,13 +26,14 @@ the render bridge, the browser panel, the body context menu, the import path,
 the texture tool and the exporters. Each one was a piece of the core that knew
 what a palette was and knew which switch decided whether it counted.
 
-## Why it is TypeScript and not Python
+## Why it is TypeScript and not a component
 
 It answers per rebuild, per body, per face, synchronously, inside the render
-path, `paint` is asked again for every chunk of a progressive load. A process
-on the other end of a socket cannot serve that. It is the "a view and some TS"
-case rather than the "drive it from Python" case, and the difference is not
-preference: it is whether the answer has to arrive within a frame.
+path, `paint` is asked again for every chunk of a progressive load. A
+component on the other end of the engine cannot serve that. It is the "a view
+and some TS" case rather than the "drive it through the engine" case, and the
+difference is not preference: it is whether the answer has to arrive within a
+frame.
 
 ## What stays in the app
 

@@ -1,5 +1,5 @@
-// Regression lock for the Wave-1 pattern-baking fix (docs/IMPROVEMENT-AUDIT.md
-// §1.2 / §5.2): SketchMode.enter() must resolve ONLY a sketch's real (persisted)
+// Regression lock for the Wave-1 pattern-baking fix (the improvement audit on
+// `legacy`, §1.2 / §5.2): SketchMode.enter() must resolve ONLY a sketch's real (persisted)
 // entities, never the pattern-derived copies, or else every enter/finish cycle
 // bakes the previous cycle's derived copies in as new real entities and the
 // sketch grows without bound. These tests exercise the resolve.ts round trip

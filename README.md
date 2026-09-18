@@ -3,11 +3,10 @@
 Free, open source parametric CAD for 3D printing. Sketch it, constrain it, model
 it, and export STEP, STL or 3MF. Windows, macOS and Linux.
 
-Built on the Open CASCADE geometry kernel through
-[build123d](https://github.com/gumyr/build123d), with a Rust
-([Tauri](https://tauri.app)) shell and a Vue + three.js viewport. A part is a
-timeline of features, so you can go back to any one of them, change it, and the
-model rebuilds from there.
+Built on the Open CASCADE geometry kernel through the Funda Engine (Rust),
+with a [Tauri](https://tauri.app) shell and a Vue + three.js viewport. A part
+is a timeline of features, so you can go back to any one of them, change it,
+and the model rebuilds from there.
 
 
 It started as a fork of [SindriCAD](https://github.com/MakerViking/sindricad) and
@@ -46,10 +45,10 @@ the goal is it to make this a personalized version of a CAD with features I like
 
 Prebuilt installers for Windows, macOS (Apple Silicon) and Linux are on the
 [alpha release](https://github.com/Paraxdev/fundacad/releases/tag/alpha),
-FundaCAD 1.0 on the Rust geometry engine, rebuilt from `main` on every green
+FundaCAD 1.0 on the Funda Engine, rebuilt from `main` on every green
 build. It is less tested than the
-[beta release](https://github.com/Paraxdev/fundacad/releases/tag/beta), which
-continues on the Python engine from the `legacy` branch, so anything that
+[beta release](https://github.com/Paraxdev/fundacad/releases/tag/beta), the
+beta built from the `legacy` branch and running the sidecar, so anything that
 builds differently in the alpha is worth a report. Files open in both. These
 builds do not update themselves, so come back to those pages for a newer one.
 
@@ -96,7 +95,7 @@ The builds are **not code signed**, so each OS says so in its own way:
 ## Build
 
 Needs [Node](https://nodejs.org), [Rust](https://rustup.rs), cmake and a C++
-toolchain: the geometry engine compiles OpenCASCADE from source on the first
+toolchain: the Funda Engine compiles OpenCASCADE from source on the first
 build, about twenty minutes, then it is cached (docs/PACKAGING.md). On Windows
 use the MSVC toolchain.
 
@@ -132,10 +131,9 @@ is refused, and silently never builds anything. `FUNDACAD_ENGINE_TOKEN` and
 ## Docs
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), how the processes fit together
-- [`docs/RUST-PIVOT.md`](docs/RUST-PIVOT.md), how the geometry engine moved from Python to Rust, and what proves it right
+- [`docs/ENGINE.md`](docs/ENGINE.md), the Funda Engine: its target architecture, test strategy and golden files, the alpha rolling release, and its performance work
 - [`docs/PROTOCOL.md`](docs/PROTOCOL.md), the messages the frontend and the engine exchange
 - [`docs/FUNDA-FORMAT.md`](docs/FUNDA-FORMAT.md), the readable `.funda` JSON document and the self-repairing binary `.fundab`
 - [`docs/PACKAGING.md`](docs/PACKAGING.md), how a desktop bundle is built
 - [`docs/MCP.md`](docs/MCP.md), MCP, built into the app: how an AI assistant builds, measures and looks at parts, and how to connect one
 - [`docs/PLUGINS.md`](docs/PLUGINS.md), optional parts of the app, what they may reach, and how that is asked
-- [`docs/EDGE-CASES.md`](docs/EDGE-CASES.md) / [`docs/IMPROVEMENT-AUDIT.md`](docs/IMPROVEMENT-AUDIT.md), known rough edges

@@ -50,13 +50,13 @@ per launch token to `session.json`.
 
 ### An install that had the old MCP plugin
 
-Before 1.0 the MCP server was the `FundaCAD.MCP` plugin: the Python server
+Before 1.0 the MCP server was the `FundaCAD.MCP` plugin: the server
 downloaded into `<app data>/plugins/FundaCAD.MCP`, plus a companion that added
 an Assistants block to Preferences. The app removes that directory the first
 time it lists its plugins (`RETIRED_PLUGINS` in `src/plugins/index.ts`), says
 so in a toast, and never starts the companion. It is removed rather than hidden
 because it can no longer do anything useful: the server in it runs on the
-Python engine this build does not have, and its settings block would be a
+sidecar this build does not have, and its settings block would be a
 second copy of the core section. An assistant configured with the old
 `server.py` path needs the new setup from the section above.
 
@@ -97,7 +97,7 @@ so the two worlds are one code path and an OpenCASCADE abort takes the engine
 rather than the conversation. The binary to spawn is named by
 `FUNDACAD_ENGINE_CMD`, or found next to this one: `fundacad-engine`, then the
 app itself (`fundacad --engine --ws`, recognised by the `engine_attach` command in
-its bytes, so a Python beta's window is never started by mistake), then the
+its bytes, so a beta window running the sidecar is never started by mistake), then the
 workspace `target/` directories. The spawned engine is told the app's plugin
 directory unless `FUNDACAD_PLUGIN_DIR` is already set.
 
@@ -365,13 +365,13 @@ cargo build --workspace --features fundacad-engine/ws
 cargo test --workspace --features fundacad-engine/ws
 ```
 
-## The Python server it replaced
+## The earlier plugin server it replaced
 
-The server began in Python, as the plugin described above, and
+The server began as the `FundaCAD.MCP` plugin described above, and
 `crates/fundacad-mcp` is its port: the tool list the two published was
 byte-identical and a scripted session answered the same, which was asserted
-rather than hoped for. The Python server and its eleven suites were deleted with
-the Python engine; every suite has a twin under `crates/fundacad-mcp/tests/`, and
+rather than hoped for. The plugin server and its eleven suites were deleted with
+the sidecar; every suite has a twin under `crates/fundacad-mcp/tests/`, and
 `tests/parity_golden.rs` replays `tools/parity.jsonl` against the Rust server and
-wants the Python server's recorded transcript
+wants the earlier server's recorded transcript
 (`tests/golden/mcp_parity.golden.json`) word for word.

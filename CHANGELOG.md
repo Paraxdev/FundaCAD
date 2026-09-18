@@ -25,16 +25,16 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
-- The Rust pivot begins: a root Cargo workspace and a `fundacad-geom` crate that
-  links OpenCASCADE 7.8.1 statically through the vendored bindings and runs real
-  kernel tests (volume, boolean cut, per-face tessellation in the protocol v2
-  body payload shape). Nothing shipped changes yet: the Python sidecar is still
-  the engine. The plan, the decision record and the per-module conversion list
-  are in `docs/RUST-PIVOT.md`, including the `alpha` rolling
-  release that will carry the Rust engine with a work-in-progress warning.
+- The Funda Engine begins: a root Cargo workspace and a `fundacad-geom` crate
+  that links OpenCASCADE 7.8.1 statically through the vendored bindings and
+  runs real kernel tests (volume, boolean cut, per-face tessellation in the
+  protocol v2 body payload shape). Nothing shipped changes yet: the sidecar is
+  still the engine. The plan, the decision record and the per-module list
+  are in `docs/ENGINE.md`, including the `alpha` rolling
+  release that will carry the Funda Engine with a work-in-progress warning.
 
-- **A second rolling release, `alpha`, for the Rust engine.** It is
-  built with the engine compiled into the app, carries no Python runtime at
+- **A second rolling release, `alpha`, for the Funda Engine.** It is
+  built with the engine compiled into the app, carries no sidecar runtime at
   all, and opens its notes with a warning that it is a work in progress and not
   for real work: unported features fail in a rebuild with the skipped-feature
   banner, and plugin geometry does not run yet. Files it saves are ordinary
@@ -42,14 +42,15 @@ This file starts on 2026-08-03. For anything before that, see the
   so a beta install is never offered one of these builds and the beta stays the
   complete app. Nothing is published from it until the first green run.
 
-- **FundaCAD 1.0.0 alpha: the Rust engine is `main` now and releases as the
+- **FundaCAD 1.0.0 alpha: the Funda Engine is `main` now and releases as the
   rolling `alpha`** (it was `prealpha-rust`, versioned 0.3). The new engine
   is the major upgrade, so the app is 1.0.0 and each alpha build is
-  `1.0.<build number>`. The Python engine moved to the `legacy` branch, which
-  keeps publishing the rolling `beta` (0.2) and its update feed, so beta
-  installs carry on as before and are never offered a 1.0 build. Alpha because
-  the Rust engine is less tested than the beta; its notes ask for a report of
-  anything that builds differently. Files open in both.
+  `1.0.<build number>`. The sidecar moved to the `legacy` branch, which
+  keeps publishing the rolling beta, built from the `legacy` branch (0.2), and
+  its update feed, so beta installs carry on as before and are never offered a
+  1.0 build. Alpha because the Funda Engine is less tested than the beta; its
+  notes ask for a report of anything that builds differently. Files open in
+  both.
 
 - **MCP is part of the app.** The MCP server an AI assistant drives FundaCAD
   through is no longer a plugin to install: it ships beside the app as
@@ -59,27 +60,27 @@ This file starts on 2026-08-03. For anything before that, see the
   An install that still has the old MCP server plugin has it removed on first
   start, with a note saying where the new settings are.
 
-- **Plugin geometry runs on the Rust engine as sandboxed WebAssembly.** The
+- **Plugin geometry runs on the Funda Engine as sandboxed WebAssembly.** The
   3D Printing Toolbox, Screws, Printing and Texture plugins each ship a
-  component beside their Python half, and each matches it on its own test
+  component beside their sidecar half, and each matches it on its own test
   corpus, down to the textured mesh triangle by triangle. A component has no
   file, network or environment access beyond what its manifest grants, a
   memory cap and the same time budgets the beta used.
 
-- **The 1.0 alpha carries no Python at all.** The Python geometry engine, its
-  bundled runtime and the Python half of every plugin are gone from `main`;
-  the Rust engine is the only engine, and plugin bundles carry only their
+- **The 1.0 alpha carries no sidecar at all.** The previous engine, its
+  bundled runtime and the sidecar half of every plugin are gone from `main`;
+  the Funda Engine is the only engine, and plugin bundles carry only their
   WebAssembly component. The engine's answers are still checked against the
-  Python engine's, frozen on every corpus it was compared on. The Python engine
+  sidecar's, frozen on every corpus it was compared on. The sidecar
   continues on the `legacy` branch, which keeps publishing the beta. A plugin
-  the alpha installs has no Python half, so on a machine running both, the
+  the alpha installs has no sidecar half, so on a machine running both, the
   beta builds that plugin's features again once it reinstalls its own copy.
 
-- **Saving a document with an imported part works in the alpha.** The engine
-  kept imported geometry in a directory of its own choosing rather than the
-  app's, so saving a document with an import stopped with "could not be found
-  in local storage". It is told the app's directory now, as the beta's engine
-  always was.
+- **Saving a document with an imported part works in the alpha.** The Funda
+  Engine kept imported geometry in a directory of its own choosing rather than
+  the app's, so saving a document with an import stopped with "could not be
+  found in local storage". It is told the app's directory now, as the beta's
+  sidecar always did.
 
 ### Added
 
@@ -121,7 +122,7 @@ This file starts on 2026-08-03. For anything before that, see the
 
 - **Plugins: optional parts of the app you download when you want them, and not before.** Preferences has a Plugins section. Each one says up front what it will be able to reach, and the screen shows two lists: what it asked for, and what it did not. Nothing is downloaded until that screen is answered, and a bundle that arrives asking for more than the screen showed is refused and deleted rather than installed. Downloads come from this project's own releases and nowhere else. A plugin that runs as its own program says so on the same screen, because the permissions describe what it can reach through the app, not a cage around it.
 
-- **The MCP server is the first plugin**, so an assistant can drive the app without a copy of the source. Installing it produces the settings block to paste into the assistant, pointing at the Python the app already installed. Nothing changes for anyone running it from a checkout.
+- **The MCP server is the first plugin**, so an assistant can drive the app without a copy of the source. Installing it produces the settings block to paste into the assistant, pointing at the sidecar's runtime the app already installed. Nothing changes for anyone running it from a checkout.
 
 - **An AI assistant can now work on the document you have open, instead of on a copy.** Connected through MCP, its edits appear in the window as it makes them, each one a single undo, and a badge next to the document name says who is connected and what they last did. Before this, an assistant started a geometry engine of its own and handed its work back as a file you had to open, so nothing it did was visible while it did it. Preferences has an Assistants section with three settings: don't share, share read-only, or share and allow edits. It can only ever *offer* an edit, the window decides whether to take it, and refuses one written against a model that has since changed, so an assistant cannot overwrite what you did while it was thinking.
 
@@ -1006,16 +1007,17 @@ This file starts on 2026-08-03. For anything before that, see the
   message now names the port and says what to do about it rather than blaming the
   geometry engine.
 
-- **The geometry engine starts on NixOS, and anywhere else PYTHONHOME is set.**
-  Running the AppImage through `appimage-run` exports `PYTHONHOME` pointing at
-  the AppDir, and the bundled interpreter inherited it, went looking for its
-  standard library in the wrong place and died with "No module named 'encodings'"
-  before running a line. The app then opened with a dead engine
-  ([#3](https://github.com/MakerViking/sindricad/issues/3)). The sidecar is now
-  started with `PYTHONHOME` cleared, since the bundled runtime works out its own
-  location. Packages installed with `pip install --user` are also kept off its
-  path now, so a mismatched numpy in a home directory can no longer shadow the
-  bundled one.
+- **The geometry engine starts on NixOS, and anywhere else the environment
+  points its runtime somewhere else.** Running the AppImage through
+  `appimage-run` exports a variable pointing at the AppDir, and the bundled
+  runtime inherited it, went looking for its standard library in the wrong
+  place and died with "No module named 'encodings'" before running a line.
+  The app then opened with a dead engine
+  ([#3](https://github.com/MakerViking/sindricad/issues/3)). The sidecar's
+  bundled runtime no longer picks up an inherited environment that pointed it
+  elsewhere. Packages installed into the user's own environment are also kept
+  off its path now, so a mismatched dependency in a home directory can no
+  longer shadow the bundled one.
 - **An engine crash now says how it died.** The message read only "The geometry
   engine crashed", and the exit status went to standard error, which a packaged
   build discards. So it never reached `sidecar.log`, the file a bug report

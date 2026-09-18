@@ -1,6 +1,6 @@
 //! FundaCAD geometry engine: the Rust replacement for the Python engine.
 //!
-//! This crate is the first brick of the Rust pivot (docs/RUST-PIVOT.md). It
+//! This crate is the first brick of the Rust pivot (docs/ENGINE.md). It
 //! links OpenCASCADE statically through the vendored `opencascade` bindings and
 //! exposes the pieces the app consumes: a solid built from the document, a
 //! viewport mesh in the wire format the frontend already speaks
