@@ -213,6 +213,21 @@ impl Server {
         })
     }
 
+    /// A server for an engine that already has a transport, the app's stdio
+    /// worker, whose clients then share the app's document and live session.
+    pub fn for_engine(engine: Arc<Engine>, addr: SocketAddr, gate: Gate) -> io::Result<Server> {
+        Ok(Server {
+            listener: TcpListener::bind(addr)?,
+            shared: Arc::new(Shared {
+                engine,
+                gate,
+                conns: Mutex::default(),
+                max_message: MAX_FRAME,
+                max_conns_per_ip: MAX_CONNS_PER_IP,
+            }),
+        })
+    }
+
     /// The largest message a client may send, closed with 1009 past it.
     pub fn with_max_message(mut self, bytes: usize) -> Server {
         if let Some(s) = Arc::get_mut(&mut self.shared) {

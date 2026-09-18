@@ -27,7 +27,7 @@
 //! and shutting down one thing each.
 
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
 
@@ -96,6 +96,23 @@ fn exe_name() -> &'static str {
     }
 }
 
+fn app_name() -> &'static str {
+    if cfg!(windows) {
+        "fundacad.exe"
+    } else {
+        "fundacad"
+    }
+}
+
+/// Whether `path` is an app built with the Rust engine, which answers
+/// `--engine --ws`. A Python sidecar build ignores `--engine` and opens a
+/// window, so it is recognised by the IPC command only the Rust build
+/// registers, the same test the pre-alpha CI job applies to its bundle.
+pub fn is_rust_engine_app(path: &Path) -> bool {
+    const MARKER: &[u8] = b"engine_attach";
+    std::fs::read(path).is_ok_and(|bytes| bytes.windows(MARKER.len()).any(|w| w == MARKER))
+}
+
 /// The command that starts a private engine: the program and its arguments
 /// before `--ws`.
 ///
@@ -104,9 +121,11 @@ fn exe_name() -> &'static str {
 /// an override naming a binary that is not there would otherwise turn "no
 /// engine" into a spawn failure naming a path nobody set.
 ///
-/// Without one, the binary next to this one, then the workspace target
-/// directories, found by walking UP until one turns up rather than by counting
-/// directories, because counting encodes where a file happens to live today.
+/// Without one, the binary next to this one, then the app next to this one
+/// (`fundacad --engine`, how a packaged app ships it, one copy of the kernel),
+/// then the workspace target directories, found by walking UP until one turns
+/// up rather than by counting directories, because counting encodes where a
+/// file happens to live today.
 pub fn engine_command() -> Vec<String> {
     if let Some(cmd) = appenv("ENGINE_CMD").filter(|c| !c.trim().is_empty()) {
         let parts = split_command(&cmd);
@@ -114,12 +133,22 @@ pub fn engine_command() -> Vec<String> {
             return parts;
         }
     }
-    if let Some(p) = std::env::current_exe()
+    let beside = std::env::current_exe()
         .ok()
-        .and_then(|e| e.parent().map(|d| d.join(exe_name())))
+        .and_then(|e| e.parent().map(PathBuf::from));
+    if let Some(p) = beside
+        .as_ref()
+        .map(|d| d.join(exe_name()))
         .filter(|p| p.is_file())
     {
         return vec![p.to_string_lossy().into_owned()];
+    }
+    if let Some(app) = beside
+        .as_ref()
+        .map(|d| d.join(app_name()))
+        .filter(|p| is_rust_engine_app(p))
+    {
+        return vec![app.to_string_lossy().into_owned(), "--engine".into()];
     }
     let mut here = std::env::current_exe()
         .ok()
@@ -218,7 +247,12 @@ impl Socket {
         // engine's header parser refuses it, drops the connection, and the
         // client reports an unfinished handshake with nothing to point at.
         let url = format!("ws://127.0.0.1:{port}/?token={token}");
-        let (ws, _) = tokio_tungstenite::connect_async(url)
+        // A rebuild reply of a large assembly is tens of MB, far past
+        // tungstenite's 16 MiB default. The Python server sets max_size=None.
+        let config = tokio_tungstenite::tungstenite::protocol::WebSocketConfig::default()
+            .max_message_size(None)
+            .max_frame_size(None);
+        let (ws, _) = tokio_tungstenite::connect_async_with_config(url, Some(config), false)
             .await
             .map_err(|e| io::Error::new(io::ErrorKind::ConnectionRefused, e.to_string()))?;
         Ok(Socket { ws })
@@ -418,9 +452,28 @@ impl EngineLink {
                 crate::app_session::app_data_dir().join("blobs"),
             );
         }
+        // The app's installed plugins, as the app tells its own worker, so a
+        // private engine runs the same plugin geometry the window does.
+        if appenv("PLUGIN_DIR").is_none() {
+            let plugins = crate::app_session::app_data_dir().join("plugins");
+            if plugins.is_dir() {
+                cmd.env("FUNDACAD_PLUGIN_DIR", plugins);
+            }
+        }
         cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
         cmd.kill_on_drop(true);
         let mut child = cmd.spawn()?;
+        // Drained for the life of the engine: a pipe nobody reads fills, and
+        // the engine then blocks on its next log line. Our stdout is the MCP
+        // protocol, so what it says goes to stderr, the host's log.
+        if let Some(stderr) = child.stderr.take() {
+            tokio::spawn(async move {
+                let mut lines = BufReader::new(stderr).lines();
+                while let Ok(Some(line)) = lines.next_line().await {
+                    eprintln!("[engine] {line}");
+                }
+            });
+        }
         // Adopted BEFORE the readiness wait, so anything it spawns during
         // start-up is inside the job too. An MCP host kills its servers with
         // TerminateProcess, which runs no cleanup at all.
@@ -444,6 +497,11 @@ impl EngineLink {
         .await;
         match ready {
             Ok(true) => {
+                tokio::spawn(async move {
+                    while let Ok(Some(line)) = lines.next_line().await {
+                        eprintln!("[engine] {line}");
+                    }
+                });
                 state.child = Some(child);
                 Ok(())
             }

@@ -86,7 +86,7 @@ ciborium = "0.2"
 [features]
 # Off by default: the default build ships the Python sidecar and needs no
 # OpenCASCADE. On, the app runs the Rust engine as its own worker process.
-rust-engine = ["dep:fundacad-protocol", "dep:fundacad-engine", "dep:fundacad-geom", "fundacad-geom/plugins"]
+rust-engine = ["dep:fundacad-protocol", "dep:fundacad-engine", "dep:fundacad-geom", "fundacad-geom/plugins", "fundacad-engine/ws"]
 
 # Windows-only: a Job Object with KILL_ON_JOB_CLOSE reaps the sidecar (and its
 # ProcessPoolExecutor workers) when the app exits or crashes. Unix uses a process

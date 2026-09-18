@@ -26,6 +26,12 @@ impl Outbox for FrameOut {
 /// Exiting on EOF is also what ends a worker whose app crashed, even while a
 /// kernel call is still running on the job thread.
 pub fn run<J: Jobs + Default>(jobs: J) -> ! {
+    serve(jobs, |_| {})
+}
+
+/// [`run`], with `beside` handed the engine first, so another transport can
+/// share its job thread, held document and live session.
+pub fn serve<J: Jobs + Default>(jobs: J, beside: impl FnOnce(&Arc<Engine>)) -> ! {
     let frames = match take_stdout() {
         Ok(f) => f,
         Err(e) => {
@@ -35,12 +41,13 @@ pub fn run<J: Jobs + Default>(jobs: J) -> ! {
     };
     // No cancel grace: the app's supervisor restarts a worker that ignores a
     // cancel, which frees what an abandoned job thread would keep.
-    let engine = Engine::start_with(
+    let engine = Arc::new(Engine::start_with(
         jobs,
         Some(Arc::new(J::default)),
         EngineOptions::from_env(),
         Arc::new(FrameOut(Mutex::new(BufWriter::new(frames)))),
-    );
+    ));
+    beside(&engine);
     let mut stdin = io::stdin().lock();
     loop {
         match read_message(&mut stdin) {
