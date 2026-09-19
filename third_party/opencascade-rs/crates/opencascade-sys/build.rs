@@ -60,6 +60,10 @@ Set FUNDACAD_ALLOW_WINDOWS_GNU=1 to build it anyway.
 
     let occt_config = OcctConfig::detect();
 
+    if !occt_config.is_dynamic {
+        let patched = patch_occt(&occt_config);
+        println!("cargo:rustc-link-search=native={}", patched.display());
+    }
     println!("cargo:rustc-link-search=native={}", occt_config.library_dir.to_str().unwrap());
 
     let lib_type = if occt_config.is_dynamic { "dylib" } else { "static" };
@@ -130,6 +134,71 @@ Set FUNDACAD_ALLOW_WINDOWS_GNU=1 to build it anyway.
     // tracked by cxx_build, so edits to them would otherwise not trigger a
     // recompile. Watch the whole include dir.
     println!("cargo:rerun-if-changed=include");
+}
+
+/// Our fixes to OCCT sources, each `occt-patch/<file>.cxx` replacing the
+/// member of that name in the toolkit library listed here. A copy of the
+/// library with the member swapped is searched before the kernel's own, so the
+/// link itself does not change and neither does the shared kernel install.
+const OCCT_PATCHES: &[(&str, &str)] = &[("ShapeAnalysis_Surface", "TKShHealing")];
+
+fn patch_occt(occt: &OcctConfig) -> std::path::PathBuf {
+    use std::path::{Path, PathBuf};
+    use std::process::Command;
+
+    println!("cargo:rerun-if-changed=occt-patch");
+    let out = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("occt-patched");
+    std::fs::create_dir_all(&out).unwrap();
+    let msvc = std::env::var("TARGET").unwrap().contains("msvc");
+    let lib_file = |name: &str| if msvc { format!("{name}.lib") } else { format!("lib{name}.a") };
+
+    let mut build = cc::Build::new();
+    build
+        .cpp(true)
+        .opt_level(2)
+        .flag_if_supported("-std=c++17")
+        .define("_USE_MATH_DEFINES", "TRUE")
+        .include(&occt.include_dir);
+    let run = |cmd: &mut Command| {
+        let got = cmd.output().unwrap_or_else(|e| panic!("could not run {cmd:?}: {e}"));
+        assert!(got.status.success(), "{cmd:?} failed: {}", String::from_utf8_lossy(&got.stderr));
+        String::from_utf8_lossy(&got.stdout).into_owned()
+    };
+    for (source, toolkit) in OCCT_PATCHES {
+        let objects = build.clone().file(format!("occt-patch/{source}.cxx")).compile_intermediates();
+        let original = occt.library_dir.join(lib_file(toolkit));
+        let copy = out.join(lib_file(toolkit));
+        let members = if msvc {
+            run(build.get_archiver().arg("/NOLOGO").arg("/LIST").arg(&original))
+        } else {
+            run(build.get_archiver().arg("t").arg(&original))
+        };
+        let wanted = |m: &&str| {
+            let file = Path::new(m.trim()).file_name().and_then(|f| f.to_str()).unwrap_or("");
+            let file = file.rsplit(['\\', '/']).next().unwrap_or(file);
+            file.starts_with(&format!("{source}.")) && (file.ends_with(".obj") || file.ends_with(".o"))
+        };
+        let member = members
+            .lines()
+            .find(wanted)
+            .unwrap_or_else(|| panic!("{} has no {source} member to replace", original.display()))
+            .trim()
+            .to_string();
+        if msvc {
+            run(build
+                .get_archiver()
+                .arg("/NOLOGO")
+                .arg(format!("/OUT:{}", copy.display()))
+                .arg(format!("/REMOVE:{member}"))
+                .arg(&original)
+                .args(&objects));
+        } else {
+            std::fs::copy(&original, &copy).unwrap();
+            run(build.get_archiver().arg("d").arg(&copy).arg(&member));
+            run(build.get_archiver().arg("rs").arg(&copy).args(&objects));
+        }
+    }
+    out
 }
 
 struct OcctConfig {

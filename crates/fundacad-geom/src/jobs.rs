@@ -319,7 +319,12 @@ impl Jobs for GeomJobs {
         let _tracked = crate::bench::track_this_thread();
         match op {
             "export" => crate::export::export_result(req, &EngineWatch(ctx)),
-            "import" => crate::import::import_result(req),
+            "import" => {
+                let watch = EngineWatch(ctx);
+                let _beat = crate::heartbeat::install(watch.heartbeat());
+                let _cancel = crate::cancel::install(watch.cancel_token());
+                crate::import::import_result(req)
+            }
             "listFonts" => crate::text::list_fonts_result(),
             "tessellateText" => crate::text::tessellate_result(req),
             "migrateGeometry" => crate::import::migrate_result(req),

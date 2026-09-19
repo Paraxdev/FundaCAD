@@ -32,6 +32,12 @@ pub fn install(beat: Option<Beat>) -> Installed {
     Installed(HOOK.with(|h| std::mem::replace(&mut *h.borrow_mut(), beat)))
 }
 
+/// The hook installed on this thread, for a kernel call that beats from the
+/// threads it polls on.
+pub fn current() -> Option<Beat> {
+    HOOK.with(|h| h.borrow().clone())
+}
+
 /// Run `f`, beating every quarter second for up to `limit` while it runs.
 pub fn while_running<T>(limit: Duration, f: impl FnOnce() -> T) -> T {
     let Some(beat) = HOOK.with(|h| h.borrow().clone()) else {

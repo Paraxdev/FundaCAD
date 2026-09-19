@@ -11,6 +11,7 @@
 #include <Message.hxx>
 #include <Message_Messenger.hxx>
 #include <Message_Printer.hxx>
+#include <Message_ProgressRange.hxx>
 #include <Quantity_Color.hxx>
 #include <Quantity_ColorRGBA.hxx>
 #include <STEPCAFControl_Controller.hxx>
@@ -355,7 +356,7 @@ struct StepAssemblyWalk {
   }
 };
 
-inline std::unique_ptr<StepAssembly> step_assembly_read(rust::Str path) {
+inline std::unique_ptr<StepAssembly> step_assembly_read(rust::Str path, const Message_ProgressRange &progress) {
   std::string file(path.data(), path.size());
   Handle(TDocStd_Document) doc = new TDocStd_Document(TCollection_ExtendedString("XCAF"));
   STEPCAFControl_Reader reader;
@@ -365,7 +366,10 @@ inline std::unique_ptr<StepAssembly> step_assembly_read(rust::Str path) {
   if (reader.ReadFile(file.c_str()) != IFSelect_RetDone) {
     throw std::runtime_error("could not read the STEP file (it may be truncated or not STEP)");
   }
-  if (!reader.Transfer(doc)) {
+  if (!reader.Transfer(doc, progress)) {
+    if (progress.UserBreak()) {
+      throw std::runtime_error("cancelled");
+    }
     throw std::runtime_error("the STEP file was read but contained no transferable shape");
   }
   std::unique_ptr<StepAssembly> tree(new StepAssembly());

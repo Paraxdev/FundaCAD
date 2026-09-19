@@ -27,5 +27,8 @@ mod inner {
         /// [axis dir, centre, radius], false when not a circle.
         pub fn FQ_edge_circle(edge: &TopoDS_Shape, out: &mut [f64]) -> Result<bool>;
         pub fn FQ_edge_closed(edge: &TopoDS_Shape) -> Result<bool>;
+        /// Each boundary edge within `deflection`, xyz triples, a NaN triple
+        /// after each edge. False when an edge will not sample.
+        pub fn FQ_face_boundary(face: &TopoDS_Shape, deflection: f64, out: &mut Vec<f64>) -> Result<bool>;
     }
 }

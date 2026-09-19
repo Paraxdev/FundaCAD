@@ -399,6 +399,79 @@ pub fn reply_bytes(id: &Value, res: &JobResult, binary: bool, limits: &Limits) -
     Message::Text(text)
 }
 
+/// A binary mesh frame read back into the envelope the text reply carries,
+/// every `$buf` inlined the way [`FullBody::to_json`] writes it, so a Rust
+/// client can take the streamed reply and keep its JSON handling.
+pub fn decode_frame(bytes: &[u8]) -> Result<Value, String> {
+    let word = |at: usize| -> Result<[u8; 4], String> {
+        bytes
+            .get(at..at + 4)
+            .and_then(|b| b.try_into().ok())
+            .ok_or_else(|| "the frame ends early".to_string())
+    };
+    let hl = u32::from_le_bytes(word(0)?) as usize;
+    let head = bytes.get(4..4 + hl).ok_or("the frame header ends early")?;
+    let mut env: Value = serde_json::from_slice(head).map_err(|e| e.to_string())?;
+    let Some(result) = env.get_mut("result").and_then(Value::as_object_mut) else {
+        return Ok(env);
+    };
+    let Some(Value::Array(meta)) = result.shift_remove("$buffers") else {
+        return Ok(env);
+    };
+    let mut at = 4 + hl + (4 - hl % 4) % 4;
+    let mut bufs: Vec<Vec<Value>> = Vec::with_capacity(meta.len());
+    for m in &meta {
+        let len = m.get("len").and_then(Value::as_u64).unwrap_or(0) as usize;
+        let float = m.get("dtype").and_then(Value::as_str) == Some(F32);
+        let mut vals = Vec::with_capacity(len);
+        for _ in 0..len {
+            let w = word(at)?;
+            at += 4;
+            vals.push(if float {
+                serde_json::Number::from_f64(f64::from(f32::from_le_bytes(w))).map_or(Value::Null, Value::Number)
+            } else {
+                Value::from(u32::from_le_bytes(w))
+            });
+        }
+        bufs.push(vals);
+    }
+    let mut take = |v: &Value| -> Option<Vec<Value>> {
+        let k = v.get("$buf")?.as_u64()? as usize;
+        bufs.get_mut(k).map(std::mem::take)
+    };
+    for body in result.get_mut("bodies").and_then(Value::as_array_mut).into_iter().flatten() {
+        let Some(b) = body.as_object_mut() else { continue };
+        for key in ["positions", "normals", "indices", "faceIds"] {
+            if let Some(vals) = b.get(key).and_then(&mut take) {
+                b.insert(key.into(), Value::Array(vals));
+            }
+        }
+        let Some(packed) = b.get("edges").filter(|e| e.get("$pts").is_some()).cloned() else {
+            continue;
+        };
+        let pts = packed.get("$pts").and_then(&mut take).unwrap_or_default();
+        let counts = packed.get("$counts").and_then(&mut take).unwrap_or_default();
+        let smooth: std::collections::HashSet<u64> =
+            packed.get("smooth").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_u64).collect();
+        let owner = packed.get("body").cloned().unwrap_or(Value::Null);
+        let mut next = pts.chunks_exact(3);
+        let mut edges = Vec::with_capacity(counts.len());
+        for (i, n) in counts.iter().enumerate() {
+            let n = n.as_u64().unwrap_or(0) as usize;
+            let points: Vec<Value> = next.by_ref().take(n).map(|p| Value::Array(p.to_vec())).collect();
+            let mut em = Map::new();
+            em.insert("points".into(), Value::Array(points));
+            em.insert("body".into(), owner.clone());
+            if smooth.contains(&(i as u64)) {
+                em.insert("smooth".into(), Value::Bool(true));
+            }
+            edges.push(Value::Object(em));
+        }
+        b.insert("edges".into(), Value::Array(edges));
+    }
+    Ok(env)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -444,6 +517,19 @@ mod tests {
         assert_eq!(edges["smooth"], json!([1]));
         assert_eq!(edges["body"], json!("b1"));
         assert!(header["result"]["bodies"][0].get("normals").is_none());
+    }
+
+    #[test]
+    fn decoded_frame_is_the_text_reply() {
+        let res = MeshResult {
+            fields: Map::new(),
+            bodies: vec![WireBody::Full(body())],
+        };
+        let frame = encode_binary_reply(&json!("r"), &res, &Limits::default()).expect("fits");
+        let decoded = decode_frame(&frame).expect("decodes");
+        let text: Value = serde_json::from_str(&envelope::reply_for(&json!("r"), &JobResult::Mesh(res).to_json()))
+            .expect("json");
+        assert_eq!(decoded, text);
     }
 
     #[test]

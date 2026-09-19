@@ -12,6 +12,8 @@
 #include <BRep_Tool.hxx>
 #include <Bnd_Box.hxx>
 #include <GCPnts_AbscissaPoint.hxx>
+#include <GCPnts_QuasiUniformDeflection.hxx>
+#include <TopExp_Explorer.hxx>
 #include <GProp_GProps.hxx>
 #include <GeomAbs_CurveType.hxx>
 #include <GeomAbs_SurfaceType.hxx>
@@ -31,6 +33,7 @@
 #include <gp_Vec.hxx>
 
 #include <cstdint>
+#include <limits>
 #include <stdexcept>
 
 inline void fq_require(const rust::Slice<double> &out, size_t n) {
@@ -199,6 +202,26 @@ inline bool FQ_edge_circle(const TopoDS_Shape &shape, rust::Slice<double> out) {
   fq_put(out, 0, circ.Axis().Direction().XYZ());
   fq_put(out, 3, circ.Position().Location().XYZ());
   out[6] = circ.Radius();
+  return true;
+}
+
+// Every boundary edge of `face` as a polyline within `deflection` of the
+// curve, each followed by a NaN triple. False when an edge will not sample.
+inline bool FQ_face_boundary(const TopoDS_Shape &face, double deflection, rust::Vec<double> &out) {
+  for (TopExp_Explorer x(face, TopAbs_EDGE); x.More(); x.Next()) {
+    const TopoDS_Edge &edge = TopoDS::Edge(x.Current());
+    if (BRep_Tool::Degenerated(edge)) continue;
+    BRepAdaptor_Curve c(edge);
+    GCPnts_QuasiUniformDeflection pts(c, deflection);
+    if (!pts.IsDone() || pts.NbPoints() < 2) return false;
+    for (int i = 1; i <= pts.NbPoints(); ++i) {
+      const gp_Pnt p = pts.Value(i);
+      out.push_back(p.X());
+      out.push_back(p.Y());
+      out.push_back(p.Z());
+    }
+    for (int k = 0; k < 3; ++k) out.push_back(std::numeric_limits<double>::quiet_NaN());
+  }
   return true;
 }
 

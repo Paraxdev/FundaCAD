@@ -891,6 +891,7 @@ dependencies = [
  "blake2",
  "flate2",
  "fundacad-core",
+ "fundacad-protocol",
  "futures-util",
  "getrandom 0.3.4",
  "png",
@@ -1587,6 +1588,7 @@ dependencies = [
 name = "opencascade-sys"
 version = "0.2.0"
 dependencies = [
+ "cc",
  "cmake",
  "cxx",
  "cxx-build",

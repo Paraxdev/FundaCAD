@@ -40,6 +40,19 @@ pub fn progress() -> Progress {
     Progress::new(move || token.as_ref().is_some_and(CancelToken::is_cancelled))
 }
 
+/// [`progress`] that also beats the job's heartbeat each time OCCT polls it,
+/// for a long kernel call with nothing else to show it is alive.
+pub fn progress_beating() -> Progress {
+    let token = TOKEN.with(|t| t.borrow().clone());
+    let beat = crate::heartbeat::current();
+    Progress::new(move || {
+        if let Some(b) = &beat {
+            b();
+        }
+        token.as_ref().is_some_and(CancelToken::is_cancelled)
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
