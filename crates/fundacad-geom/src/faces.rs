@@ -280,6 +280,7 @@ fn near_pairs(
         let mut out = Vec::new();
         let boxes: HashMap<usize, [f64; 6]> =
             group.iter().filter_map(|&i| Some((i, bbox(&faces[i], false)?))).collect();
+        let mut lines: HashMap<usize, Option<Vec<Vec<V3>>>> = HashMap::new();
         for a in 0..group.len() {
             for b in a + 1..group.len() {
                 let (i, j) = (group[a], group[b]);
@@ -303,6 +304,9 @@ fn near_pairs(
                 if !same_surface(surf[i].as_ref(), surf[j].as_ref()) {
                     continue;
                 }
+                if !apart_at_boundary(&mut lines, faces, surf, i, j, screen) {
+                    continue;
+                }
                 let Ok(d) = faces[i].distance(&faces[j], 0.0) else {
                     continue;
                 };
@@ -319,6 +323,119 @@ fn near_pairs(
         out
     });
     found.into_iter().collect()
+}
+
+/// How far the sampled boundaries may stray from the edges. The exact
+/// distance costs minutes on a pair of long spline edges, the samples do not.
+const BOUNDARY_DEFLECTION: f64 = 0.02;
+
+/// Whether faces `i` and `j` could still be within `screen`, false only when
+/// their sampled boundaries prove they are not. Pieces of one plane,
+/// cylinder, cone or sphere are nearest along their boundaries; a torus can
+/// be nearest across its hole, so it is always left to the exact distance.
+fn apart_at_boundary(
+    lines: &mut HashMap<usize, Option<Vec<Vec<V3>>>>,
+    faces: &[Shape],
+    surf: &[Option<Surface>],
+    i: usize,
+    j: usize,
+    screen: f64,
+) -> bool {
+    if matches!(surf[i], Some(Surface::Torus { .. }) | None) {
+        return true;
+    }
+    for k in [i, j] {
+        lines.entry(k).or_insert_with(|| boundary(&faces[k]));
+    }
+    let (Some(Some(a)), Some(Some(b))) = (lines.get(&i), lines.get(&j)) else {
+        return true;
+    };
+    polyline_gap(a, b, screen + 2.0 * BOUNDARY_DEFLECTION) - 2.0 * BOUNDARY_DEFLECTION <= screen
+}
+
+fn boundary(face: &Shape) -> Option<Vec<Vec<V3>>> {
+    let mut flat = Vec::new();
+    if !matches!(fq::FQ_face_boundary(face.raw(), BOUNDARY_DEFLECTION, &mut flat), Ok(true)) {
+        return None;
+    }
+    let mut out = vec![Vec::new()];
+    for c in flat.chunks_exact(3) {
+        if c[0].is_nan() {
+            out.push(Vec::new());
+        } else if let Some(last) = out.last_mut() {
+            last.push([c[0], c[1], c[2]]);
+        }
+    }
+    out.retain(|l| !l.is_empty());
+    Some(out)
+}
+
+/// The least distance between two sets of polylines, stopping early once it
+/// is known to be no more than `enough`.
+fn polyline_gap(a: &[Vec<V3>], b: &[Vec<V3>], enough: f64) -> f64 {
+    let bounds = |l: &Vec<V3>| {
+        let mut lo = l[0];
+        let mut hi = l[0];
+        for p in l {
+            for k in 0..3 {
+                lo[k] = lo[k].min(p[k]);
+                hi[k] = hi[k].max(p[k]);
+            }
+        }
+        (lo, hi)
+    };
+    let (ba, bb): (Vec<_>, Vec<_>) = (a.iter().map(bounds).collect(), b.iter().map(bounds).collect());
+    let mut best = f64::INFINITY;
+    for (la, (loa, hia)) in a.iter().zip(&ba) {
+        for (lb, (lob, hib)) in b.iter().zip(&bb) {
+            let sep: V3 = std::array::from_fn(|k| (lob[k] - hia[k]).max(loa[k] - hib[k]).max(0.0));
+            if norm(sep) >= best {
+                continue;
+            }
+            for sa in la.windows(2) {
+                for sb in lb.windows(2) {
+                    best = best.min(segment_gap(sa[0], sa[1], sb[0], sb[1]));
+                    if best <= enough {
+                        return best;
+                    }
+                }
+            }
+        }
+    }
+    best
+}
+
+fn segment_gap(p0: V3, p1: V3, q0: V3, q1: V3) -> f64 {
+    let (d1, d2, r) = (sub(p1, p0), sub(q1, q0), sub(p0, q0));
+    let (a, e, f) = (dot(d1, d1), dot(d2, d2), dot(d2, r));
+    let clamp = |x: f64| x.clamp(0.0, 1.0);
+    let (s, t) = if a <= f64::EPSILON && e <= f64::EPSILON {
+        (0.0, 0.0)
+    } else if a <= f64::EPSILON {
+        (0.0, clamp(f / e))
+    } else {
+        let c = dot(d1, r);
+        if e <= f64::EPSILON {
+            (clamp(-c / a), 0.0)
+        } else {
+            let b = dot(d1, d2);
+            let denom = a * e - b * b;
+            let mut s = if denom > 0.0 { clamp((b * f - c * e) / denom) } else { 0.0 };
+            let mut t = (b * s + f) / e;
+            if t < 0.0 {
+                t = 0.0;
+                s = clamp(-c / a);
+            } else if t > 1.0 {
+                t = 1.0;
+                s = clamp((b - c) / a);
+            }
+            (s, t)
+        }
+    };
+    norm(sub(
+        [p0[0] + d1[0] * s, p0[1] + d1[1] * s, p0[2] + d1[2] * s],
+        [q0[0] + d2[0] * t, q0[1] + d2[1] * t, q0[2] + d2[2] * t],
+    ))
 }
 
 /// `face_bands`: runs of two or more face positions (`shape.faces()` order)
@@ -370,4 +487,29 @@ pub fn face_bands_capped(shape: &Shape, faces: &[Shape], cap: usize) -> Vec<Vec<
     let mut out: Vec<Vec<usize>> = runs.into_values().filter(|v| v.len() > 1).collect();
     out.sort_by_key(|v| v[0]);
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn segment_gap_handles_crossing_parallel_and_end_cases() {
+        let g = segment_gap([0.0, 0.0, 0.0], [2.0, 0.0, 0.0], [1.0, -1.0, 1.0], [1.0, 1.0, 1.0]);
+        assert!((g - 1.0).abs() < 1e-12);
+        let g = segment_gap([0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.5, 0.0], [1.0, 0.5, 0.0]);
+        assert!((g - 0.5).abs() < 1e-12);
+        let g = segment_gap([0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [3.0, 0.0, 0.0], [4.0, 0.0, 0.0]);
+        assert!((g - 2.0).abs() < 1e-12);
+        let g = segment_gap([0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 3.0, 4.0], [0.0, 3.0, 4.0]);
+        assert!((g - 5.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn polyline_gap_finds_the_nearest_pair_and_stops_once_close_enough() {
+        let a = vec![vec![[0.0, 0.0, 0.0], [10.0, 0.0, 0.0]], vec![[0.0, 5.0, 0.0], [10.0, 5.0, 0.0]]];
+        let b = vec![vec![[5.0, 7.0, 0.0], [5.0, 9.0, 0.0]]];
+        assert!((polyline_gap(&a, &b, 0.0) - 2.0).abs() < 1e-12);
+        assert!(polyline_gap(&a, &b, 3.0) <= 3.0);
+    }
 }

@@ -106,8 +106,14 @@ impl StepAssembly {
 }
 
 pub fn read_step_assembly(path: &Path) -> Result<StepAssembly, Error> {
+    read_step_assembly_with(path, &ProgressRange::detached())
+}
+
+/// [`read_step_assembly`] reporting its transfer into `progress`, which OCCT
+/// polls between entities and faces, so a cancel stops it there.
+pub fn read_step_assembly_with(path: &Path, progress: &ProgressRange) -> Result<StepAssembly, Error> {
     let lock = step_lock();
-    let a = ffi::step_assembly_read(path_str(path)?)?;
+    let a = ffi::step_assembly_read(path_str(path)?, progress.raw())?;
     drop(lock);
     let raw = a;
     let a = raw.as_ref().ok_or(Error::StepReadFailed)?;

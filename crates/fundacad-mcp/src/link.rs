@@ -265,10 +265,15 @@ impl Socket {
     }
 
     /// One request, one reply. Progress frames are dropped: they carry a
-    /// percentage for a progress bar nobody here is drawing.
+    /// percentage for a progress bar nobody here is drawing. A mesh reply is
+    /// asked for as the app gets it, streamed in binary chunks, since as one
+    /// JSON message a large assembly is refused at the frame cap.
     pub async fn request(&mut self, id: &str, request: &Value) -> io::Result<Value> {
         let mut payload = request.as_object().cloned().unwrap_or_default();
         payload.insert("id".into(), json!(id));
+        payload.insert("binary".into(), json!(true));
+        payload.insert("chunked".into(), json!(true));
+        let mut streamed: Option<(Map<String, Value>, Vec<Value>)> = None;
         let text = Value::Object(payload).to_string();
         self.ws
             .send(Message::Text(text.into()))
@@ -284,7 +289,27 @@ impl Socket {
             let msg = msg.map_err(closed)?;
             let text = match msg {
                 Message::Text(t) => t.to_string(),
-                Message::Binary(b) => String::from_utf8_lossy(&b).into_owned(),
+                Message::Binary(b) => {
+                    let mut value = fundacad_protocol::frame::decode_frame(&b)
+                        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+                    let Some(stream) = value.get("stream").cloned() else {
+                        return Ok(value);
+                    };
+                    let (fields, bodies) = streamed.get_or_insert_with(Default::default);
+                    if let Some(Value::Object(mut result)) = value.get_mut("result").map(Value::take) {
+                        if let Some(Value::Array(chunk)) = result.shift_remove("bodies") {
+                            bodies.extend(chunk);
+                        }
+                        result.shift_remove("manifest");
+                        fields.extend(result);
+                    }
+                    if stream.get("final") != Some(&Value::Bool(true)) {
+                        continue;
+                    }
+                    let (mut fields, bodies) = streamed.take().unwrap_or_default();
+                    fields.insert("bodies".into(), Value::Array(bodies));
+                    return Ok(json!({"id": value.get("id"), "ok": true, "result": fields}));
+                }
                 Message::Close(_) => {
                     return Err(io::Error::new(
                         io::ErrorKind::BrokenPipe,

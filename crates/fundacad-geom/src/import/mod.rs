@@ -140,7 +140,8 @@ pub fn assembly_payload(asm: &StepAssembly) -> Imported {
 
 /// The STEP half of `import_geometry`.
 pub fn read_step(path: &Path) -> Result<Imported, String> {
-    let asm = crate::bench::phase("step_read", || xcaf::read_step_assembly(path))
+    let progress = crate::cancel::progress_beating();
+    let asm = crate::bench::phase("step_read", || xcaf::read_step_assembly_with(path, &progress.start()))
         .map_err(|e| occt_message(&e))?;
     if asm.is_assembly {
         return Ok(crate::bench::phase("assembly_payload", || assembly_payload(&asm)));

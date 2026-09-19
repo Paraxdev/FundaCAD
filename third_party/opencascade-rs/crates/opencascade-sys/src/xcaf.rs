@@ -6,6 +6,7 @@ mod inner {
         include!("opencascade-sys/include/xcaf.hxx");
 
         type TopoDS_Shape = crate::topo_ds::TopoDS_Shape;
+        type Message_ProgressRange = crate::message::Message_ProgressRange;
 
         type XcafStepWriter;
         pub fn xcaf_step_writer_new() -> Result<UniquePtr<XcafStepWriter>>;
@@ -27,7 +28,10 @@ mod inner {
         ) -> Result<()>;
 
         type StepAssembly;
-        pub fn step_assembly_read(path: &str) -> Result<UniquePtr<StepAssembly>>;
+        pub fn step_assembly_read(
+            path: &str,
+            progress: &Message_ProgressRange,
+        ) -> Result<UniquePtr<StepAssembly>>;
         pub fn step_assembly_node_count(a: &StepAssembly) -> i32;
         pub fn step_assembly_node_names(a: &StepAssembly, i: i32) -> Result<Vec<u8>>;
         pub fn step_assembly_node_parent(a: &StepAssembly, i: i32) -> Result<i32>;
