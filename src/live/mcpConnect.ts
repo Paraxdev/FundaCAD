@@ -1,4 +1,4 @@
-// How an MCP host starts the `fundacad-mcp` this app ships beside itself.
+// How an MCP host starts this executable's embedded MCP server.
 //
 // The app never runs the server, the host does (Claude Code, Claude Desktop, an
 // editor), so what the app hands out is the command line in the shape each host
@@ -26,7 +26,7 @@ export interface LaunchConfig {
 }
 
 export function mcpServerLaunch(server: string): LaunchConfig {
-  return { command: server, args: [], env: {} };
+  return { command: server, args: ["--mcp"], env: {} };
 }
 
 /** The `mcpServers` block Claude Desktop and most hosts read from a config file. */
@@ -45,7 +45,7 @@ export function mcpSetupFor(host: McpHost, server: string): { text: string; hint
   switch (host) {
     case "claude-code":
       return {
-        text: `claude mcp add --scope user fundacad -- ${quoted(server)}`,
+        text: `claude mcp add --scope user fundacad -- ${quoted(server)} --mcp`,
         hint: "Run this in a terminal, then start a new Claude Code session.",
       };
     case "claude-desktop":
@@ -56,18 +56,18 @@ export function mcpSetupFor(host: McpHost, server: string): { text: string; hint
       };
     case "other":
       return {
-        text: server,
+        text: `${quoted(server)} --mcp`,
         hint:
-          "Start this program over stdio, with no arguments. Hosts that read an mcpServers block take the same one Claude Desktop does.",
+          "Start this program over stdio with --mcp. Hosts that read an mcpServers block take the same one Claude Desktop does.",
       };
   }
 }
 
-/** The bundled server's path. Throws with a sentence a person can read when this
- *  build has none, a plain browser session. */
+/** This executable's path. Throws with a sentence a person can read in a plain
+ *  browser session. */
 export async function mcpServerPath(): Promise<string> {
   if (!("__TAURI_INTERNALS__" in globalThis)) {
-    throw new Error("The MCP server runs beside the desktop app, not in a browser.");
+    throw new Error("MCP mode runs in the desktop app executable, not in a browser.");
   }
   const { invoke } = await import("@tauri-apps/api/core");
   return await invoke<string>("mcp_server");

@@ -173,14 +173,6 @@ jobs:
           config: src-tauri/tauri.alpha.conf.json
           signing-key: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
 
-      # The MCP server ships beside the app (`externalBin` in the alpha
-      # config). The config's beforeBuildCommand stages it as well, which is
-      # what makes a local `tauri build` ship it; built here first so a compile
-      # failure is named as the MCP server's and not as the frontend's.
-      - name: Build the MCP server
-        shell: bash
-        run: node scripts/stage-mcp-server.mjs
-
       # Plugin bundles for this release, built from the same commit as the
       # engine that runs their components. Once, not per platform: a bundle is
       # the same bytes whoever builds it.
@@ -215,8 +207,8 @@ jobs:
           if-no-files-found: error
           path: dist-plugins/plugin-*.zip
 
-      # --- build + bundle. tauri.alpha.conf.json adds the release bundle
-      #     settings and ships the MCP server beside the app. ---
+      # --- build + bundle. The app also exposes the MCP server through its
+      #     --mcp mode. ---
       - name: Build + bundle Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
@@ -249,8 +241,15 @@ jobs:
             }
             console.log('engine_attach found');
           " "$bin"
-          mcp=$(find src-tauri/target/release -maxdepth 1 -type f \( -name fundacad-mcp -o -name fundacad-mcp.exe \) | head -1)
-          [ -n "$mcp" ] || { echo "::error::no fundacad-mcp beside the app, the bundle ships no MCP server"; exit 1; }
+          node -e "
+            const fs = require('fs');
+            const hay = fs.readFileSync(process.argv[1]);
+            if (hay.indexOf(Buffer.from('the stdio transport failed')) < 0) {
+              console.error('::error::the binary carries no MCP stdio server');
+              process.exit(1);
+            }
+            console.log('MCP stdio server found');
+          " "$bin"
 
       - name: Un-bundle the system stack from the AppImage
         if: matrix.platform == 'ubuntu-22.04'
@@ -262,12 +261,6 @@ jobs:
       - name: Depend on the renamed GTK package (deb)
         if: matrix.platform == 'ubuntu-22.04'
         uses: ./.github/actions/deb-gtk-depends
-
-      - name: Portable zip (Windows)
-        if: matrix.platform == 'windows-latest'
-        uses: ./.github/actions/windows-portable
-        with:
-          release-tag: alpha
 
       # A week, the cap tests/build/artifactRetention.test.ts holds, so the
       # alpha release can be republished from them by hand.
@@ -287,7 +280,7 @@ jobs:
             src-tauri/target/release/bundle/**/*.msi
             src-tauri/target/release/bundle/**/*.exe
             src-tauri/target/release/bundle/**/*.app.tar.gz
-            src-tauri/target/release/bundle/**/*_portable.zip
+            src-tauri/target/release/fundacad.exe
             src-tauri/target/release/bundle/**/*.sig
 
   # Rolling "alpha" pre-release.
@@ -359,7 +352,7 @@ jobs:
           # No spaces in Tauri bundle filenames, so plain word-splitting is safe here.
           files=$(find dist -type f \( -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' \
             -o -name '*.dmg' -o -name '*.msi' -o -name '*setup.exe' \
-            -o -name '*_portable.zip' \
+            -o -name 'fundacad.exe' \
             -o -name '*.app.tar.gz' -o -name '*.sig' -o -name 'plugin-*.zip' \))
           # The plugin bundles this build installs from (RELEASE_TAG in
           # src/plugins/index.ts). Without them every offered plugin is a 404.
@@ -404,8 +397,8 @@ jobs:
           >   plugin in this repository ships one (3D Printing Toolbox, Screws,
           >   Printing, Texture); a third party plugin without one says so by
           >   name when its feature is used.
-          > - MCP is part of the app: the server for AI assistants ships
-          >   beside it as `fundacad-mcp`, and Preferences, AI assistants
+          > - MCP is part of the app: `fundacad --mcp` is the server for AI
+          >   assistants, and Preferences, AI assistants
           >   (MCP) gives the setup for Claude Code, Claude Desktop or any
           >   MCP host. An installed MCP server plugin is removed on first
           >   start.

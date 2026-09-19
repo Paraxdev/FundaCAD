@@ -57,14 +57,7 @@ To let an AI assistant (Claude Code, Claude Desktop or any MCP host) build and
 edit models in the app, open **Preferences, AI assistants (MCP)**: the MCP
 server ships with the app, and that section gives the setup to paste.
 
-On Windows there is also a **portable zip** (`…_x64_portable.zip`). Unzip it
-anywhere and run `fundacad.exe`: no installer, no admin rights, and several builds
-can sit side by side. It carries the same files the installer lays down,
-the geometry engine included, so it needs nothing else beyond the
-WebView2 runtime that Windows 11 and an up-to-date Windows 10 already have.
-Portable means no installer rather than no traces: preferences still live in
-your user profile.
-
+On Windows, `fundacad.exe` is a portable single contained exe. you may use it from anywhere, you just need WebView2 installed. win11 comes with it shipped and win10 includes it with newer updates.
 The builds are **not code signed**, so each OS says so in its own way:
 
 - **Windows**, SmartScreen shows "Windows protected your PC". Choose **More

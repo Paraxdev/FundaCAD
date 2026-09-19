@@ -30,3 +30,36 @@ pub mod schema;
 pub mod server;
 pub mod tools;
 pub mod upload;
+
+/// Runs the MCP server on stdio for either the standalone binary or the
+/// desktop executable's `--mcp` mode.
+pub fn run_stdio() -> Result<(), ()> {
+	let runtime = tokio::runtime::Builder::new_current_thread()
+		.enable_all()
+		.build()
+		.map_err(|e| {
+			server::log(&format!("[mcp] could not start the runtime: {e}"));
+		})?;
+	runtime.block_on(async {
+		use rmcp::ServiceExt;
+
+		let service = match server::FundaCad::attach(link::mode_from_env()).await {
+			Ok(service) => service,
+			Err(why) => {
+				server::log(&format!("[mcp] {why}"));
+				return Err(());
+			}
+		};
+		let running = match service.clone().serve(rmcp::transport::stdio()).await {
+			Ok(running) => running,
+			Err(e) => {
+				server::log(&format!("[mcp] the stdio transport failed: {e}"));
+				service.shutdown().await;
+				return Err(());
+			}
+		};
+		let _ = running.waiting().await;
+		service.shutdown().await;
+		Ok(())
+	})
+}

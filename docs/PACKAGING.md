@@ -9,7 +9,8 @@ engine compiled in:
 - **Geometry engine**, the Funda Engine, Rust (`crates/`, docs/ENGINE.md) on OpenCASCADE, run as
   a worker process of the same executable (`fundacad --engine`), so a bundle
   carries one executable and no runtime beside it.
-- **MCP server**, `fundacad-mcp`, shipped beside the app (docs/MCP.md).
+- **MCP server**, `fundacad-mcp`, linked into the app and started with
+  `fundacad --mcp` (docs/MCP.md).
 
 CI: [`.github/workflows/build.yml`](../.github/workflows/build.yml) builds
 Linux x86_64, macOS arm64 and Windows x64 and publishes the rolling `alpha`
@@ -32,14 +33,11 @@ What the pieces are:
   feed (`alpha/latest.json`) and the bundle targets. It declares no
   `resources`, so nothing but the executable and the MCP server is bundled.
 - **`tauri.alpha.conf.json`** adds what only a release bundle needs: updater
-  artifacts, the rpm and NSIS compression settings, and `externalBin`
-  (`binaries/fundacad-mcp`), filled by its `beforeBuildCommand`, which runs
-  `scripts/stage-mcp-server.mjs`: `cargo build --release -p fundacad-mcp` in
-  the root workspace, copied to `src-tauri/binaries/fundacad-mcp-<triple>`.
-  Tauri installs it next to `fundacad.exe` (in `Contents/MacOS` and `usr/bin`
-  elsewhere), so the portable zip, unpacked from the `.msi`, has it too. Its
-  private engine is the app itself, `fundacad --engine --ws`, and its live mode
-  attaches to the window through `session.json`.
+  artifacts and the rpm and NSIS compression settings. `fundacad-mcp` is a
+  library dependency of the app, so every bundled `fundacad` also serves MCP
+  over stdio when started with `--mcp`. Its private engine is the same app,
+  `fundacad --engine --ws`, and its live mode attaches to the window through
+  `session.json`.
 - **OpenCASCADE 7.8.1 is compiled from source**, statically, by the `occt-sys`
   crate the vendored bindings (`third_party/opencascade-rs`) pull in. It needs
   cmake and a C++ toolchain, it takes about twenty minutes cold, and it lands in
@@ -63,7 +61,8 @@ sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
 
 Bundles land under `src-tauri/target/release/bundle/`: `.AppImage`, `.deb` and
 `.rpm` on Linux, `.app` and `.dmg` on macOS, `.msi` and NSIS `-setup.exe` on
-Windows, plus CI's portable zip.
+Windows. CI also publishes `src-tauri/target/release/fundacad.exe` as the
+portable Windows download.
 
 ## Sizes
 
@@ -75,16 +74,15 @@ Measured on Windows, 2026-09-17, against the last beta build of the sidecar:
 | `-setup.exe` (NSIS) | 157.3 MB | **23.1 MB** |
 | `fundacad.exe` | small, plus an 800 MB sidecar runtime beside it | 62.4 MB, and nothing beside it |
 
-With `fundacad-mcp` beside it (2026-09-18): `.msi` 29.2 MB, `-setup.exe`
-28.9 MB, portable zip 28.9 MB; the folder is `fundacad.exe` 76.6 MB and
-`fundacad-mcp.exe` 4.2 MB, nothing else.
+MCP is linked into `fundacad.exe`, so the Windows portable download is that
+single executable. It still requires the system WebView2 runtime.
 
 ## What CI checks about a bundle
 
 - the bundle configs declare no `resources`;
 - the built binary registers `engine_attach`, the IPC command the webview
-  reaches the engine through, and `fundacad-mcp` sits beside it;
-- the AppImage and the portable zip carry no sidecar runtime;
+  reaches the engine through, and contains the MCP stdio server;
+- the AppImage carries no sidecar runtime;
 - every plugin that names a `geometryWasm` component has it in its bundle.
 
 ## Code signing & notarization
