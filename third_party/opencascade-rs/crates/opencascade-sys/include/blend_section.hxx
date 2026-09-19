@@ -155,6 +155,34 @@ inline double conic_weight_scale(double profile) {
   return p <= 0 ? 1.0 + p : 1.0 / (1.0 - p);
 }
 
+// A G2 section with every weight 1. The profile used to scale the middle
+// weight, up to 20, and 400 at a corner patch, which kept OCCT's booleans busy
+// for minutes. Here it slides the control points instead: towards the corner
+// for a fuller section, towards the chord for a flatter one. The first three
+// points stay on each face's tangent line, so the curvature still meets the
+// face at zero, and profile 0 is exactly the plain G2 section.
+inline std::vector<gp_Vec> g2_poles(const gp_Vec &Qa, const gp_Vec &K, const gp_Vec &Qb, double profile) {
+  double p = std::isnan(profile) ? 0.0 : std::max(-0.99, std::min(0.95, profile));
+  double t = 1 - G2_TENSION;
+  std::vector<gp_Vec> ps = {Qa, Qa + (K - Qa).Multiplied(t), K, Qb + (K - Qb).Multiplied(t), Qb};
+  for (int n = 4; n < 6; ++n) {
+    std::vector<gp_Vec> up = {ps.front()};
+    for (int i = 1; i <= n; ++i) {
+      double a = static_cast<double>(i) / (n + 1);
+      up.push_back(ps[i - 1].Multiplied(a) + ps[i].Multiplied(1 - a));
+    }
+    up.push_back(ps.back());
+    ps = up;
+  }
+  if (std::abs(p) < 1e-12) return ps;
+  gp_Vec M = (Qa + Qb).Multiplied(0.5);
+  std::vector<gp_Vec> limit = p > 0 ? std::vector<gp_Vec>{Qa, K, K, K, K, K, Qb}
+                                    : std::vector<gp_Vec>{Qa, Qa, Qa, M, Qb, Qb, Qb};
+  double w = std::abs(p);
+  for (size_t i = 1; i + 1 < ps.size(); ++i) ps[i] = ps[i].Multiplied(1 - w) + limit[i].Multiplied(w);
+  return ps;
+}
+
 enum class Op { Cut, Fuse, Common };
 
 inline int solid_count(const TopoDS_Shape &s) {
@@ -464,21 +492,19 @@ inline Section section(const gp_Pnt &Pp, const gp_Vec &T, Sides &sides, int s, b
     bool clamped = axis != nullptr && clamp_to_axis(Q, K, Pp, *axis);
     clamped = clamp_to_limits(Q, K, sides) || clamped;
     double k = conic_weight_scale(profile);
-    if (g2) {
+    if (g2 && std::abs(profile) < 1e-12) {
       TColgp_Array1OfPnt poles(1, 5);
       poles.SetValue(1, Q[1]);
       poles.SetValue(2, P(V(Q[1]) + (V(K) - V(Q[1])).Multiplied(1 - G2_TENSION)));
       poles.SetValue(3, K);
       poles.SetValue(4, P(V(Q[0]) + (V(K) - V(Q[0])).Multiplied(1 - G2_TENSION)));
       poles.SetValue(5, Q[0]);
-      if (std::abs(k - 1.0) < 1e-9) {
-        curve = new Geom_BezierCurve(poles);
-      } else {
-        TColStd_Array1OfReal weights(1, 5);
-        double ws[5] = {1.0, 1.0, k, 1.0, 1.0};
-        for (int j = 0; j < 5; ++j) weights.SetValue(j + 1, ws[j]);
-        curve = new Geom_BezierCurve(poles, weights);
-      }
+      curve = new Geom_BezierCurve(poles);
+    } else if (g2) {
+      std::vector<gp_Vec> ps = g2_poles(V(Q[1]), V(K), V(Q[0]), profile);
+      TColgp_Array1OfPnt poles(1, static_cast<int>(ps.size()));
+      for (size_t j = 0; j < ps.size(); ++j) poles.SetValue(static_cast<int>(j) + 1, P(ps[j]));
+      curve = new Geom_BezierCurve(poles);
     } else if (clamped || std::abs(k - 1.0) > 1e-9) {
       gp_Vec a = V(Q[0]) - V(K), b = V(Q[1]) - V(K);
       if (a.Magnitude() < 1e-9 || b.Magnitude() < 1e-9) throw err("the blend centre sits on the edge");
@@ -788,7 +814,47 @@ inline bool applied_by(Op op, const TopoDS_Shape &base, const TopoDS_Shape &out,
   return kept_base(base, out, tools, verify);
 }
 
+// A face of a cut that lies inside one of the tools is body the cut left behind.
+// The tools reach a little past the body, so a face the cut made is on a tool
+// and a face that survived is outside every tool. applied_by forgives a missed
+// point that another tool also covers, which is exactly where overlapping tools
+// leave a corner standing: two tools met on a G2 corner at 19 mm and 1400 mm3
+// of the box stayed, with all its old faces.
+inline bool left_inside(const TopoDS_Shape &out, const std::vector<TopoDS_Shape> &tools) {
+  std::vector<std::pair<Bnd_Box, std::unique_ptr<BRepClass3d_SolidClassifier>>> around;
+  for (const TopoDS_Shape &t : tools) {
+    Bnd_Box box;
+    BRepBndLib::Add(t, box);
+    if (box.IsVoid()) continue;
+    around.emplace_back(box, std::unique_ptr<BRepClass3d_SolidClassifier>(new BRepClass3d_SolidClassifier(t)));
+  }
+  const double uv[5][2] = {{0.5, 0.5}, {0.3, 0.7}, {0.7, 0.3}, {0.25, 0.25}, {0.75, 0.75}};
+  for (TopExp_Explorer ex(out, TopAbs_FACE); ex.More(); ex.Next()) {
+    TopoDS_Face f = TopoDS::Face(ex.Current());
+    double u0, u1, v0, v1;
+    BRepTools::UVBounds(f, u0, u1, v0, v1);
+    BRepAdaptor_Surface surf(f);
+    int inside = 0;
+    for (auto &q : uv) {
+      gp_Pnt2d at(u0 + (u1 - u0) * q[0], v0 + (v1 - v0) * q[1]);
+      if (BRepClass_FaceClassifier(f, at, 1e-7).State() != TopAbs_IN) continue;
+      gp_Pnt p = surf.Value(at.X(), at.Y());
+      for (auto &n : around) {
+        if (n.first.IsOut(p)) continue;
+        n.second->Perform(p, 1e-4);
+        if (n.second->State() == TopAbs_IN) {
+          inside += 1;
+          break;
+        }
+      }
+    }
+    if (inside >= 2) return true;
+  }
+  return false;
+}
+
 inline bool applied(Op op, const TopoDS_Shape &base, const TopoDS_Shape &out, const std::vector<TopoDS_Shape> &tools) {
+  if (op == Op::Cut && left_inside(out, tools)) return false;
   return applied_by(op, base, out, tools, false) || applied_by(op, base, out, tools, true);
 }
 
@@ -821,6 +887,7 @@ struct OneShotMemo {
   int gave_up_at = -1;
   bool thinned = false;
   bool replay = false;
+  bool never = false;
 };
 inline OneShotMemo &one_shot_memo() {
   static thread_local OneShotMemo m;
@@ -831,7 +898,7 @@ inline TopoDS_Shape boolean_all(Op op, const TopoDS_Shape &base, const std::vect
                                 bool one_shot) {
   OneShotMemo &memo = one_shot_memo();
   int call = memo.calls++;
-  bool known_bad = memo.replay && call == memo.gave_up_at && tools.size() > 1;
+  bool known_bad = tools.size() > 1 && (memo.never || (memo.replay && call == memo.gave_up_at));
   using clock = std::chrono::steady_clock;
   auto started = clock::now();
   auto elapsed = [&]() { return std::chrono::duration<double>(clock::now() - started).count(); };
@@ -881,7 +948,7 @@ inline TopoDS_Shape boolean_all(Op op, const TopoDS_Shape &base, const std::vect
       if (failed.size() == pending.size()) break;
       pending = failed;
     }
-    if (pending.empty()) return cur;
+    if (pending.empty() && (op != Op::Cut || !left_inside(cur, tools))) return cur;
   }
   throw err("the blend would not combine with the body");
 }
@@ -1294,21 +1361,28 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
 // --- corners -----------------------------------------------------------------
 
 inline std::pair<std::vector<gp_Vec>, std::vector<double>> section_poles(const gp_Vec &Qa, const gp_Vec &K,
-                                                                         const gp_Vec &Qb, bool g2, double k) {
-  if (g2) {
+                                                                         const gp_Vec &Qb, bool g2, double k,
+                                                                         double profile) {
+  if (g2 && std::abs(profile) < 1e-12) {
     double t = 1 - G2_TENSION;
-    return {{Qa, Qa + (K - Qa).Multiplied(t), K, Qb + (K - Qb).Multiplied(t), Qb}, {1.0, 1.0, k, 1.0, 1.0}};
+    return {{Qa, Qa + (K - Qa).Multiplied(t), K, Qb + (K - Qb).Multiplied(t), Qb}, {1.0, 1.0, 1.0, 1.0, 1.0}};
+  }
+  if (g2) {
+    std::vector<gp_Vec> ps = g2_poles(Qa, K, Qb, profile);
+    return {ps, std::vector<double>(ps.size(), 1.0)};
   }
   return {{Qa, K, Qb}, {1.0, std::sin(M_PI / 4) * k, 1.0}};
 }
 
-inline TopoDS_Shape patch_solid(const gp_Vec &A, const std::vector<gp_Vec> &ns, double d, bool g2, double k) {
+inline TopoDS_Shape patch_solid(const gp_Vec &A, const std::vector<gp_Vec> &ns, double d, bool g2, double k,
+                                double profile) {
   gp_Vec a = A, n1 = ns[0], n2 = ns[1], n3 = ns[2];
   gp_Vec up = n3.Multiplied(d);
   gp_Vec pole = a + up;
-  auto ring = section_poles(a + n1.Multiplied(d), a + n1.Multiplied(d) + n2.Multiplied(d), a + n2.Multiplied(d), g2, k);
+  auto ring =
+      section_poles(a + n1.Multiplied(d), a + n1.Multiplied(d) + n2.Multiplied(d), a + n2.Multiplied(d), g2, k, profile);
   std::vector<std::pair<std::vector<gp_Vec>, std::vector<double>>> rows;
-  for (const gp_Vec &e : ring.first) rows.push_back(section_poles(pole, e + up, e, g2, k));
+  for (const gp_Vec &e : ring.first) rows.push_back(section_poles(pole, e + up, e, g2, k, profile));
   int nu = static_cast<int>(ring.first.size()), nv = static_cast<int>(rows[0].first.size());
   TColgp_Array2OfPnt poles(1, nu, 1, nv);
   TColStd_Array2OfReal weights(1, nu, 1, nv);
@@ -1472,7 +1546,7 @@ inline std::vector<TopoDS_Shape> ball_corners(const TopoDS_Shape &shape,
       TopoDS_Shape cell = BRepBuilderAPI_GTransform(BRepPrimAPI_MakeBox(1.0, 1.0, 1.0).Shape(), g, true).Shape();
       TopoDS_Shape cornerv;
       try {
-        TopoDS_Shape kept = is_ball ? BRepPrimAPI_MakeSphere(P(C), r).Shape() : patch_solid(C, ns, setback, g2, weight);
+        TopoDS_Shape kept = is_ball ? BRepPrimAPI_MakeSphere(P(C), r).Shape() : patch_solid(C, ns, setback, g2, weight, profile);
         cornerv = boolean(Op::Cut, cell, {kept}, 1e-6);
       } catch (const SectionError &) {
         continue;
@@ -1581,7 +1655,7 @@ inline TopoDS_Shape section_blend_once(const TopoDS_Shape &shape, const std::vec
 // 3 cancelled through `progress`.
 inline std::unique_ptr<TopoDS_Shape> blend_section(const TopoDS_Shape &shape, const TopoDS_Shape &edges, bool chamfer,
                                                    rust::Slice<const double> sizes, double size2, bool g2, bool draft,
-                                                   double profile, const Message_ProgressRange &progress,
+                                                   double profile, bool one_shot, const Message_ProgressRange &progress,
                                                    int32_t &status, rust::String &message) {
   secblend::CancelScope cancel(progress);
   std::vector<TopoDS_Shape> es;
@@ -1592,7 +1666,8 @@ inline std::unique_ptr<TopoDS_Shape> blend_section(const TopoDS_Shape &shape, co
     for (double x : sz) bad = bad || !(x > 0);
     if (bad || (!std::isnan(size2) && !(size2 > 0))) throw secblend::err("the size must be greater than 0");
     secblend::one_shot_memo() = {};
-    if (draft) {
+    secblend::one_shot_memo().never = !one_shot;
+    if (draft && one_shot) {
       try {
         TopoDS_Shape out = secblend::section_blend_once(shape, es, chamfer, size2, g2, sz, true, profile);
         status = 0;

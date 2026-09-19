@@ -8061,15 +8061,13 @@
       "f",
       "f",
       "f",
-      "f",
-      "f",
       "f"
      ],
-     "faces": 28,
+     "faces": 26,
      "id": "body1",
      "name": "Box",
      "solids": 1,
-     "volume": 3755.466075221267
+     "volume": 3540.4977597359252
     }
    ],
    "bodyIds": {
