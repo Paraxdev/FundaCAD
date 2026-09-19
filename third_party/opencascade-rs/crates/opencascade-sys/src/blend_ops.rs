@@ -51,7 +51,8 @@ mod inner {
         ) -> UniquePtr<TopoDS_Shape>;
         /// Never throws: `status` 0 built, 1 SectionBlendError, 2 another
         /// exception, 3 cancelled through `progress`, checked between its steps
-        /// and inside every boolean.
+        /// and inside every boolean. `one_shot` false skips cutting every tool
+        /// at once, for when that answer left faces lying on each other.
         #[allow(clippy::too_many_arguments)]
         pub fn blend_section(
             shape: &TopoDS_Shape,
@@ -62,6 +63,7 @@ mod inner {
             g2: bool,
             draft: bool,
             profile: f64,
+            one_shot: bool,
             progress: &Message_ProgressRange,
             status: &mut i32,
             message: &mut String,

@@ -139,6 +139,12 @@ pub fn conic(shape: &Shape, edges: &[Shape], radius: f64, profile: f64) -> Resul
 }
 
 /// section_blend.py `section_blend` through blends.py `section_fn`.
+///
+/// Cutting every tool at once can leave the tools' faces inside the result,
+/// lying on the faces that replaced them. BRepCheck passes such a solid, the
+/// viewport draws both layers and a section cap streaks. Which answer folds
+/// depends on how the body happens to be oriented, so a folded one is built
+/// again without the one-shot cut, and refused if that folds too.
 #[allow(clippy::too_many_arguments)]
 pub fn section(
     shape: &Shape,
@@ -149,6 +155,31 @@ pub fn section(
     g2: bool,
     draft: bool,
     profile: f64,
+) -> Result<Shape, SectionErr> {
+    let built = section_with(shape, edges, chamfer, sizes, size2, g2, draft, profile, true)?;
+    if !super::overlap::folds_over_itself(shape, &built) {
+        return Ok(built);
+    }
+    let again = section_with(shape, edges, chamfer, sizes, size2, g2, draft, profile, false)?;
+    if super::overlap::folds_over_itself(shape, &again) {
+        return Err(SectionErr::Blend(
+            "at this size the blend folds over itself".into(),
+        ));
+    }
+    Ok(again)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn section_with(
+    shape: &Shape,
+    edges: &[Shape],
+    chamfer: bool,
+    sizes: &[f64],
+    size2: Option<f64>,
+    g2: bool,
+    draft: bool,
+    profile: f64,
+    one_shot: bool,
 ) -> Result<Shape, SectionErr> {
     let es = kernel::compound(edges);
     let mut status = 0;
@@ -165,6 +196,7 @@ pub fn section(
             g2,
             draft,
             profile,
+            one_shot,
             range.raw(),
             &mut status,
             &mut message,

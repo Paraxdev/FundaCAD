@@ -135,6 +135,7 @@ pub fn fillet(ctx: &mut Ctx, f: &Fillet) -> FResult {
             &f.id,
             &f.edges,
             "Fillet",
+            &format!("round {p} {g2} {chord}"),
             &op,
             r,
             draft,
@@ -151,6 +152,7 @@ pub fn fillet(ctx: &mut Ctx, f: &Fillet) -> FResult {
         &f.id,
         &f.edges,
         "Fillet",
+        &format!("conic {p} {chord}"),
         &conic,
         r,
         draft,
@@ -167,6 +169,7 @@ pub fn fillet(ctx: &mut Ctx, f: &Fillet) -> FResult {
                 &f.id,
                 &f.edges,
                 "Fillet",
+                &format!("conic round {p} {chord}"),
                 &op,
                 r,
                 draft,
@@ -181,6 +184,7 @@ pub fn fillet(ctx: &mut Ctx, f: &Fillet) -> FResult {
                         &f.id,
                         &f.edges,
                         "Fillet",
+                        &format!("round 0 false {chord}"),
                         &op,
                         r,
                         draft,
@@ -236,6 +240,7 @@ pub fn chamfer(ctx: &mut Ctx, f: &Chamfer) -> FResult {
         &f.id,
         &f.edges,
         "Chamfer",
+        &format!("{d2:?}"),
         &op,
         d,
         draft,
@@ -600,6 +605,10 @@ fn blend_edges(
     fid: &str,
     sels: &OneOrMany<Selector>,
     label: &str,
+    // What else shapes the blend: a fall back remembered for one profile says
+    // nothing about another, and would send its preview down another path
+    // than the commit takes.
+    variant: &str,
     op: &BlendOp,
     blend_size: f64,
     draft: bool,
@@ -652,7 +661,7 @@ fn blend_edges(
                 None => return Err(Fail::Internal("TypeError".into())),
             }
         }
-        let fell_back = format!("{fid}|{}|{label}|{sel_value}", ctx.bodies[index].id);
+        let fell_back = format!("{fid}|{}|{label}|{variant}|{sel_value}", ctx.bodies[index].id);
         if draft && fell_back_before(&fell_back, blend_size) {
             if let Some(built) = try_section(&body_shape, &edges) {
                 staged.push((index, built));
