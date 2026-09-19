@@ -391,7 +391,8 @@ pub fn do_boolean(ctx: &mut Ctx, f: &BooleanFeature) -> FResult {
     }
     let after = vol(&shape);
     let eps = noop_eps(before);
-    if kind == BoolKind::Cut && after >= before - eps {
+    let tool_vol: f64 = tools.iter().map(|&t| vol(ctx.bodies[t].shape())).sum();
+    if kind == BoolKind::Cut && after >= before - noop_eps(tool_vol.min(before)) {
         return Err(Fail::msg(format!(
             "{label} removed nothing, no tool body overlaps the one being kept."
         )));

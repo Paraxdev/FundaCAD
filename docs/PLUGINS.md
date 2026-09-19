@@ -16,8 +16,9 @@ screen says which it was.
 
 MCP is not a plugin. It began as one, a test of how deep a plugin could
 reach, and since an AI assistant driving the whole app is exactly what MCP is
-for, it moved into the core for 1.0: `fundacad-mcp` ships beside the app and
-Preferences has its own AI assistants (MCP) section (`docs/MCP.md`). An install
+for, it moved into the core for 1.0: `fundacad-mcp` is linked into the app and
+starts with `fundacad --mcp`; Preferences has its own AI assistants (MCP)
+section (`docs/MCP.md`). An install
 that still has the old `FundaCAD.MCP` plugin has it removed on first start.
 
 ## The promise
@@ -434,8 +435,7 @@ The app installs its plugins from the `alpha` release (`RELEASE_TAG` in
 `src/plugins/index.ts`). `build-alpha` packs those bundles with their
 components, from the same commit as the host that runs them. The app tells its
 worker where installed plugins are with `FUNDACAD_PLUGIN_DIR`
-(`<app data>/plugins`), and the shipped `fundacad-mcp` tells a private engine
-the same directory.
+(`<app data>/plugins`), and MCP mode tells a private engine the same directory.
 
 ### Geometry that becomes an import, not a feature
 

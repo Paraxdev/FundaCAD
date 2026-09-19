@@ -380,3 +380,25 @@ fn text_fields_are_not_mistaken_for_parameters() {
     .unwrap();
     assert_eq!(m::validate(&mut d), Vec::<String>::new());
 }
+
+#[test]
+fn hole_enum_fields_are_not_mistaken_for_parameters() {
+    let mut d = m::new_document();
+    m::add_feature(
+        &mut d,
+        &json!({
+            "id": "ho1",
+            "type": "hole",
+            "holeType": "simple",
+            "standard": "custom",
+            "size": "M3",
+            "fit": "normal",
+            "extent": "blind",
+            "diameter": 3.3,
+            "depth": 10.1
+        }),
+        None,
+    )
+    .unwrap();
+    assert_eq!(m::validate(&mut d), Vec::<String>::new());
+}

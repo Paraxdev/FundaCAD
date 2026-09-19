@@ -164,7 +164,7 @@ per-body etag mechanisms that make this fast without changing the statelessness 
 
 ## What ships
 
-One executable, `fundacad`, with the Funda Engine and OpenCASCADE 7.8.1 compiled
-into it statically, and `fundacad-mcp` beside it. No runtime, interpreter or
-system OpenCASCADE is needed on the machine the app runs on. See
+One executable, `fundacad`, with the Funda Engine, MCP server and OpenCASCADE
+7.8.1 compiled into it statically. No runtime, interpreter or system
+OpenCASCADE is needed on the machine the app runs on. See
 [PACKAGING.md](PACKAGING.md) for the build.

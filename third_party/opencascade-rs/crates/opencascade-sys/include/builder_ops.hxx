@@ -5,6 +5,7 @@
 #include "rust/cxx.h"
 #include <bindings_common.hxx>
 
+#include <BOPAlgo_BOP.hxx>
 #include <BOPAlgo_Splitter.hxx>
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepAlgoAPI_BooleanOperation.hxx>
@@ -418,7 +419,61 @@ inline TopoDS_Shape bo_unify(const TopoDS_Shape &s) {
   }
 }
 
-// kind 0 fuse, 1 cut, 2 common. `tools` is a compound whose children are the
+// Whether `r` is a volume the operation could give from these inputs. Only
+// judged when every input is a solid with volume, else always true.
+inline bool bo_volume_plausible(int kind, double a, const std::vector<double> &tools, double r) {
+  if (!(a > 0)) return true;
+  double sum = 0, most = a;
+  for (double v : tools) {
+    if (!(v > 0)) return true;
+    sum += v;
+    most = std::max(most, v);
+  }
+  double eps = 1e-6 * std::max(a, sum) + 1e-9;
+  if (kind == 0) return r >= most - eps && r <= a + sum + eps;
+  if (kind == 1) return r >= a - sum - eps && r <= a + eps && r >= -eps;
+  return r >= -eps && r <= std::min(a, sum) + eps;
+}
+
+// OCCT gets some coincident cylinders wrong with the operands one way round
+// and right the other (a cut that grows the body, a common of negative
+// volume), so an impossible result is redone with the operands swapped.
+inline TopoDS_Shape bo_checked(const TopoDS_Shape &result, const TopoDS_Shape &base, const TopTools_ListOfShape &tools,
+                               int kind, bool parallel, double fuzzy) {
+  double a = bo_volume(base);
+  std::vector<double> tv;
+  for (TopTools_ListOfShape::Iterator it(tools); it.More(); it.Next()) tv.push_back(bo_volume(it.Value()));
+  double r = bo_volume(result);
+  double sum = 0;
+  for (double v : tv) sum += v;
+  bool ok = bo_volume_plausible(kind, a, tv, r);
+  // A fuse that added nothing is only right when the tools were inside.
+  if (ok && kind == 0 && a > 0 && sum > 0 && r < a + 1e-6 * (a + sum) + 1e-9) {
+    BRepAlgoAPI_Common inside;
+    TopTools_ListOfShape objs;
+    objs.Append(base);
+    inside.SetArguments(tools);
+    inside.SetTools(objs);
+    inside.SetRunParallel(parallel);
+    if (fuzzy > 0) inside.SetFuzzyValue(fuzzy);
+    inside.Build();
+    ok = inside.IsDone() && bo_volume(inside.Shape()) > sum - 1e-6 * (a + sum) - 1e-9;
+  }
+  if (ok) return result;
+  BOPAlgo_BOP bop;
+  for (TopTools_ListOfShape::Iterator it(tools); it.More(); it.Next()) bop.AddArgument(it.Value());
+  bop.AddTool(base);
+  bop.SetOperation(kind == 0 ? BOPAlgo_FUSE : kind == 1 ? BOPAlgo_CUT21 : BOPAlgo_COMMON);
+  bop.SetRunParallel(parallel);
+  if (fuzzy > 0) bop.SetFuzzyValue(fuzzy);
+  bop.Perform();
+  if (bop.HasErrors()) return result;
+  double r2 = bo_volume(bop.Shape());
+  if (!bo_volume_plausible(kind, a, tv, r2) || (kind == 0 && r2 <= r)) return result;
+  return bop.Shape();
+}
+
+// kind 0 fuse, 1 cut, 2 common.// kind 0 fuse, 1 cut, 2 common. `tools` is a compound whose children are the
 // tool list. `parallel` true with no fuzz is build123d's operator; false with a
 // fuzz is booleans.py `_serial_bool`.
 inline BoShape bo_boolean(const TopoDS_Shape &base, const TopoDS_Shape &tools, int kind,
@@ -438,7 +493,8 @@ inline BoShape bo_boolean(const TopoDS_Shape &base, const TopoDS_Shape &tools, i
       if (fuzzy > 0) op->SetFuzzyValue(fuzzy);
       op->Build();
       if (!op->IsDone()) throw std::runtime_error("StdFail_NotDone");
-      TopoDS_Shape out = bo_unify(op->Shape());
+      TopoDS_Shape out = bo_checked(op->Shape(), base, tl, kind, parallel, fuzzy);
+      out = bo_unify(out);
       if (unwrap) out = bo_unwrap(out);
       return bo_own(out);)
 }

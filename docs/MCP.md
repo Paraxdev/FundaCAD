@@ -5,10 +5,9 @@ measure, look at and describe a part, on the document open in the window or on
 a copy of its own. It is not a plugin and there is nothing to install.
 
 The server is `fundacad-mcp` (`crates/fundacad-mcp`), a Model Context Protocol
-server on the official Rust SDK (`rmcp`, stdio transport, `#[tool]`). Every
-build of the app ships it beside the executable (`externalBin` in
-`src-tauri/tauri.alpha.conf.json`, staged by `scripts/stage-mcp-server.mjs`), in
-the installer and in the portable zip alike.
+server on the official Rust SDK (`rmcp`, stdio transport, `#[tool]`). Release
+builds link it into `fundacad`; start the same application executable with
+`--mcp`, in an installer or as the portable Windows download.
 
 ## Connecting an assistant
 
@@ -23,20 +22,19 @@ the installer and in the portable zip alike.
 
 | assistant | what to do with it |
 | --- | --- |
-| Claude Code | run `claude mcp add --scope user fundacad -- "<install dir>/fundacad-mcp.exe"` in a terminal |
+| Claude Code | run `claude mcp add --scope user fundacad -- "<install dir>/fundacad.exe" --mcp` in a terminal |
 | Claude Desktop | add the block below to `claude_desktop_config.json` (Settings, Developer, Edit Config) and restart it |
-| another MCP host | start `<install dir>/fundacad-mcp.exe` over stdio with no arguments; hosts that read an `mcpServers` block take the same one |
+| another MCP host | start `<install dir>/fundacad.exe --mcp` over stdio; hosts that read an `mcpServers` block take the same one |
 
 ```json
 { "mcpServers": { "fundacad": {
-    "command": "<install dir>/fundacad-mcp.exe",
-    "args": [],
+    "command": "<install dir>/fundacad.exe",
+    "args": ["--mcp"],
     "env": {} } } }
 ```
 
-The path is the real one on that machine: the app asks for it with the Tauri
-command `mcp_server` (`src-tauri/src/engine.rs`), which refuses rather than
-guesses when the binary is not beside it. The setup is built in
+The path is the real one on that machine: the app asks for its executable with
+the Tauri command `mcp_server` (`src-tauri/src/engine.rs`). The setup is built in
 `src/live/mcpConnect.ts` and shown by `src/components/overlays/McpSection.vue`.
 
 It needs no path to anything else. A private session starts the app beside it

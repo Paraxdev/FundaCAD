@@ -6,13 +6,13 @@ import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 
 const tauri = vi.hoisted(() => ({
-  server: "C:\\Program Files\\FundaCAD\\fundacad-mcp.exe" as string | null,
+  server: "C:\\Program Files\\FundaCAD\\fundacad.exe" as string | null,
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: async (cmd: string) => {
     if (cmd === "mcp_server") {
-      if (tauri.server === null) throw "fundacad-mcp.exe is missing, this build did not ship the MCP server";
+      if (tauri.server === null) throw "fundacad.exe is missing";
       return tauri.server;
     }
     throw new Error(`unexpected ${cmd}`);
@@ -62,7 +62,7 @@ const inTauri = (on: boolean) => {
 beforeEach(() => {
   setActivePinia(createPinia());
   setLiveEditingMode("edit");
-  tauri.server = "C:\\Program Files\\FundaCAD\\fundacad-mcp.exe";
+  tauri.server = "C:\\Program Files\\FundaCAD\\fundacad.exe";
   inTauri(true);
 });
 afterEach(() => {
@@ -112,16 +112,16 @@ describe("the live session status", () => {
 });
 
 describe("how to connect it", () => {
-  it("hands out the bundled server, per host, without installing anything", async () => {
+  it("hands out the bundled MCP mode, per host, without installing anything", async () => {
     const w = await mounted();
-    const server = "C:\\Program Files\\FundaCAD\\fundacad-mcp.exe";
-    expect(w.get("#prefs-mcp-config").text()).toBe(`claude mcp add --scope user fundacad -- "${server}"`);
+    const server = "C:\\Program Files\\FundaCAD\\fundacad.exe";
+    expect(w.get("#prefs-mcp-config").text()).toBe(`claude mcp add --scope user fundacad -- "${server}" --mcp`);
 
     await w.get("#prefs-mcp-host").setValue("claude-desktop");
     expect(JSON.parse(w.get("#prefs-mcp-config").text()).mcpServers.fundacad.command).toBe(server);
 
     await w.get("#prefs-mcp-host").setValue("other");
-    expect(w.get("#prefs-mcp-config").text()).toBe(server);
+    expect(w.get("#prefs-mcp-config").text()).toBe(`"${server}" --mcp`);
   });
 
   it("copies what is shown", async () => {
@@ -132,10 +132,10 @@ describe("how to connect it", () => {
     expect(writeText).toHaveBeenCalledWith(w.get("#prefs-mcp-config").text());
   });
 
-  it("says why when this build has no server", async () => {
+  it("says why when the app cannot name its executable", async () => {
     tauri.server = null;
     const w = await mounted();
     expect(w.find("#prefs-mcp-config").exists()).toBe(false);
-    expect(w.get("#prefs-mcp-unavailable").text()).toContain("did not ship the MCP server");
+    expect(w.get("#prefs-mcp-unavailable").text()).toContain("fundacad.exe is missing");
   });
 });

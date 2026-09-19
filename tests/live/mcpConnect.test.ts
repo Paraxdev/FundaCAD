@@ -1,4 +1,4 @@
-// What an MCP host is handed to start the bundled `fundacad-mcp`.
+// What an MCP host is handed to start FundaCAD's embedded MCP mode.
 
 import { describe, expect, it } from "vitest";
 import {
@@ -10,19 +10,19 @@ import {
   mcpSetupFor,
 } from "../../src/live/mcpConnect";
 
-const WIN = "C:\\Program Files\\FundaCAD\\fundacad-mcp.exe";
-const MAC = "/Applications/FundaCAD.app/Contents/MacOS/fundacad-mcp";
+const WIN = "C:\\Program Files\\FundaCAD\\fundacad.exe";
+const MAC = "/Applications/FundaCAD.app/Contents/MacOS/fundacad";
 
 describe("the command line an MCP host is given", () => {
-  it("is the bundled server and nothing else", () => {
+  it("starts the bundled MCP mode", () => {
     const parsed = JSON.parse(mcpConfigBlock(mcpServerLaunch(WIN)));
-    expect(parsed.mcpServers.fundacad).toEqual({ command: WIN, args: [], env: {} });
+    expect(parsed.mcpServers.fundacad).toEqual({ command: WIN, args: ["--mcp"], env: {} });
   });
 
   it("gives Claude Code a command with the path quoted, spaces and all", () => {
     const { text } = mcpSetupFor("claude-code", WIN);
-    expect(text).toBe(`claude mcp add --scope user fundacad -- "${WIN}"`);
-    expect(mcpSetupFor("claude-code", MAC).text).toBe(`claude mcp add --scope user fundacad -- "${MAC}"`);
+    expect(text).toBe(`claude mcp add --scope user fundacad -- "${WIN}" --mcp`);
+    expect(mcpSetupFor("claude-code", MAC).text).toBe(`claude mcp add --scope user fundacad -- "${MAC}" --mcp`);
   });
 
   it("gives Claude Desktop the block its config file takes", () => {
@@ -33,7 +33,7 @@ describe("the command line an MCP host is given", () => {
 
   it("gives any other host the program to start", () => {
     const { text, hint } = mcpSetupFor("other", MAC);
-    expect(text).toBe(MAC);
+    expect(text).toBe(`"${MAC}" --mcp`);
     expect(hint).toContain("stdio");
   });
 

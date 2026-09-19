@@ -372,9 +372,10 @@ worker reached over Tauri IPC, so the webview never opens a socket.
   machine that has both, and a bundle the alpha installed has no sidecar
   half, so the beta cannot build that plugin's features until the beta's own
   bundle is installed again.
-- `fundacad-mcp` ships beside the app (`externalBin`), its private engine is
-  the app started with `--engine --ws`, and the app's worker serves a loopback
-  WebSocket beside its stdio pipe for live sessions (docs/MCP.md).
+- `fundacad-mcp` is linked into the app and runs through `fundacad --mcp`, its
+  private engine is the app started with `--engine --ws`, and the app's worker
+  serves a loopback WebSocket beside its stdio pipe for live sessions
+  (docs/MCP.md).
 
 ## 8. Performance
 

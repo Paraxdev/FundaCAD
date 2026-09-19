@@ -448,24 +448,13 @@ fn escalate_cancel(inner: Arc<Inner>, target: String, grace: Duration) {
     });
 }
 
-/// The `fundacad-mcp` bundled beside this executable, for the "How to connect
-/// it" block in Preferences. The bundle config ships it (`externalBin`).
+/// This executable's MCP mode, for the "How to connect it" block in
+/// Preferences.
 #[tauri::command]
 pub fn mcp_server() -> Result<String, String> {
-    let name = if cfg!(windows) { "fundacad-mcp.exe" } else { "fundacad-mcp" };
-    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    let path = exe
-        .parent()
-        .map(|d| d.join(name))
-        .ok_or("the app has no directory")?;
-    if path.is_file() {
-        Ok(path.to_string_lossy().into_owned())
-    } else {
-        Err(format!(
-            "{} is missing, this build did not ship the MCP server",
-            path.display()
-        ))
-    }
+    std::env::current_exe()
+        .map(|path| path.to_string_lossy().into_owned())
+        .map_err(|e| e.to_string())
 }
 
 /// The webview's one channel for engine messages. Returns whether the engine is up.

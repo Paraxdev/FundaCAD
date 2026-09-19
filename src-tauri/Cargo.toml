@@ -46,6 +46,7 @@ base64 = "0.22"
 fundacad-protocol = { path = "../crates/fundacad-protocol" }
 fundacad-engine = { path = "../crates/fundacad-engine", features = ["ws"] }
 fundacad-geom = { path = "../crates/fundacad-geom", features = ["plugins"] }
+fundacad-mcp = { path = "../crates/fundacad-mcp" }
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 # The document files (.fundab, the ZIP container, the JSON .funda) live in the
