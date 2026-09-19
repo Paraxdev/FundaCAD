@@ -38,6 +38,13 @@ pub fn current() -> Option<Beat> {
     HOOK.with(|h| h.borrow().clone())
 }
 
+/// Beat once, for a loop over many small pieces of work.
+pub fn beat() {
+    if let Some(b) = current() {
+        b();
+    }
+}
+
 /// Run `f`, beating every quarter second for up to `limit` while it runs.
 pub fn while_running<T>(limit: Duration, f: impl FnOnce() -> T) -> T {
     let Some(beat) = HOOK.with(|h| h.borrow().clone()) else {

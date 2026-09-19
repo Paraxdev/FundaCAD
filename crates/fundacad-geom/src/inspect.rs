@@ -31,7 +31,11 @@ pub fn rebuild_request(req: &Map<String, Value>, watch: &dyn Watch) -> Result<(V
     };
     let typed: CadDocument = serde_json::from_value(doc.clone())
         .map_err(|e| error_result(&format!("the document does not parse: {e}")))?;
-    let r = builder::rebuild(&typed, doc, watch).map_err(|_| error_result("cancelled"))?;
+    // Through the rebuild's own cache: an inspect right after a build of the
+    // same document replays nothing, where a cold rebuild of an import is
+    // most of a minute.
+    let mut cache = crate::cache::global().lock().unwrap_or_else(|p| p.into_inner());
+    let r = cache.rebuild(&typed, doc, watch).map_err(|_| error_result("cancelled"))?;
     Ok((doc.clone(), r))
 }
 
@@ -179,6 +183,7 @@ pub fn inspect_bodies(
 ) -> builder::FResult<Vec<Value>> {
     let mut out = Vec::new();
     for b in bodies {
+        crate::heartbeat::beat();
         let Some(comp) = b.shape else {
             out.push(json!({"id": b.id, "name": b.name, "empty": true}));
             continue;
@@ -250,6 +255,7 @@ fn cap(req: &Map<String, Value>, key: &str, default: usize) -> usize {
 
 /// The `inspect` op.
 pub fn inspect_result(req: &Map<String, Value>, watch: &dyn Watch) -> JobResult {
+    let _beat = crate::heartbeat::install(watch.heartbeat());
     let (_, r) = match rebuild_request(req, watch) {
         Ok(x) => x,
         Err(e) => return e,
