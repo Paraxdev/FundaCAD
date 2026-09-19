@@ -1,0 +1,611 @@
+{
+ "parameters": {
+  "base_z": -1.9,
+  "cove_R": 35.5,
+  "cove_mid_r": 44.69238815542512,
+  "cove_mid_z": 4.807611844574881,
+  "cove_r": 13.0,
+  "cove_top_z": 14.0,
+  "floor_z": 1.0,
+  "inner_r": 48.5,
+  "knee_r": 3.139685,
+  "knee_z": 29.481856,
+  "notch_edge_r": 2.0,
+  "notch_flat": 1.0,
+  "notch_floor_z": 9.0,
+  "notch_half": 6.0,
+  "notch_inner_r": 1.63,
+  "notch_knee_z": 14.0,
+  "notch_mid_u": 4.535533905932738,
+  "notch_mid_z": 10.464466094067262,
+  "notch_neg_flat": -1.0,
+  "notch_neg_half": -6.0,
+  "notch_neg_mid_u": -4.535533905932738,
+  "notch_round": 5.0,
+  "notch_top_z": 31.1,
+  "outer_r": 52.0,
+  "rim_round": 1.1313708498984762,
+  "rim_z": 26.1,
+  "shoulder_r": 1.12175,
+  "shoulder_z": 44.378951,
+  "tip_mid_r": 0.939411,
+  "tip_mid_z": 44.940442,
+  "tip_r": 0.69758,
+  "tip_z": 45.39,
+  "wall_t": 3.5
+ },
+ "features": [
+  {
+   "id": "profile",
+   "type": "sketch",
+   "name": "debowler profile",
+   "plane": "YZ",
+   "entities": [
+    {
+     "id": "base",
+     "type": "line",
+     "x1": 0,
+     "y1": "base_z",
+     "x2": "outer_r",
+     "y2": "base_z"
+    },
+    {
+     "id": "outer",
+     "type": "line",
+     "x1": "outer_r",
+     "y1": "base_z",
+     "x2": "outer_r",
+     "y2": "rim_z"
+    },
+    {
+     "id": "rim",
+     "type": "line",
+     "x1": "outer_r",
+     "y1": "rim_z",
+     "x2": "inner_r",
+     "y2": "rim_z"
+    },
+    {
+     "id": "inner",
+     "type": "line",
+     "x1": "inner_r",
+     "y1": "rim_z",
+     "x2": "inner_r",
+     "y2": "cove_top_z"
+    },
+    {
+     "id": "cove",
+     "type": "arc",
+     "x1": "inner_r",
+     "y1": "cove_top_z",
+     "mx": "cove_mid_r",
+     "my": "cove_mid_z",
+     "x2": "cove_R",
+     "y2": "floor_z"
+    },
+    {
+     "id": "flare",
+     "type": "spline",
+     "points": [
+      {
+       "x": "cove_R",
+       "y": "floor_z"
+      },
+      {
+       "x": 33.583,
+       "y": 1.0706
+      },
+      {
+       "x": 31.7895,
+       "y": 1.2387
+      },
+      {
+       "x": 29.9391,
+       "y": 1.5163
+      },
+      {
+       "x": 28.0747,
+       "y": 1.9059
+      },
+      {
+       "x": 26.2798,
+       "y": 2.39
+      },
+      {
+       "x": 24.5409,
+       "y": 2.9653
+      },
+      {
+       "x": 22.4854,
+       "y": 3.7889
+      },
+      {
+       "x": 20.49,
+       "y": 4.7488
+      },
+      {
+       "x": 18.5637,
+       "y": 5.8406
+      },
+      {
+       "x": 16.7152,
+       "y": 7.0598
+      },
+      {
+       "x": 14.9528,
+       "y": 8.4003
+      },
+      {
+       "x": 13.2847,
+       "y": 9.8565
+      },
+      {
+       "x": 11.9589,
+       "y": 11.1633
+      },
+      {
+       "x": 10.727,
+       "y": 12.5295
+      },
+      {
+       "x": 9.5635,
+       "y": 13.9686
+      },
+      {
+       "x": 8.4919,
+       "y": 15.4648
+      },
+      {
+       "x": 7.4972,
+       "y": 17.0245
+      },
+      {
+       "x": 6.5867,
+       "y": 18.6561
+      },
+      {
+       "x": 5.7859,
+       "y": 20.2926
+      },
+      {
+       "x": 5.0737,
+       "y": 21.9904
+      },
+      {
+       "x": 4.4511,
+       "y": 23.7318
+      },
+      {
+       "x": 3.9337,
+       "y": 25.4977
+      },
+      {
+       "x": 3.5097,
+       "y": 27.2989
+      },
+      {
+       "x": "knee_r",
+       "y": "knee_z"
+      }
+     ]
+    },
+    {
+     "id": "spike",
+     "type": "line",
+     "x1": "knee_r",
+     "y1": "knee_z",
+     "x2": "shoulder_r",
+     "y2": "shoulder_z"
+    },
+    {
+     "id": "tip1",
+     "type": "line",
+     "x1": "shoulder_r",
+     "y1": "shoulder_z",
+     "x2": "tip_mid_r",
+     "y2": "tip_mid_z"
+    },
+    {
+     "id": "tip2",
+     "type": "line",
+     "x1": "tip_mid_r",
+     "y1": "tip_mid_z",
+     "x2": "tip_r",
+     "y2": "tip_z"
+    },
+    {
+     "id": "top",
+     "type": "line",
+     "x1": "tip_r",
+     "y1": "tip_z",
+     "x2": 0,
+     "y2": "tip_z"
+    },
+    {
+     "id": "axis",
+     "type": "line",
+     "x1": 0,
+     "y1": "tip_z",
+     "x2": 0,
+     "y2": "base_z"
+    }
+   ]
+  },
+  {
+   "id": "body",
+   "type": "revolve",
+   "name": "dish, wall and spike",
+   "sketch": "profile",
+   "axis": "Z",
+   "angle": 360,
+   "operation": "new"
+  },
+  {
+   "id": "notch_sk",
+   "type": "sketch",
+   "name": "rest notch",
+   "plane": {
+    "origin": [
+     40,
+     0,
+     0
+    ],
+    "normal": [
+     1,
+     0,
+     0
+    ],
+    "xdir": [
+     0,
+     1,
+     0
+    ]
+   },
+   "entities": [
+    {
+     "id": "wall_a",
+     "type": "line",
+     "x1": "notch_neg_half",
+     "y1": "notch_top_z",
+     "x2": "notch_neg_half",
+     "y2": "notch_knee_z"
+    },
+    {
+     "id": "corner_a",
+     "type": "arc",
+     "x1": "notch_neg_half",
+     "y1": "notch_knee_z",
+     "mx": "notch_neg_mid_u",
+     "my": "notch_mid_z",
+     "x2": "notch_neg_flat",
+     "y2": "notch_floor_z"
+    },
+    {
+     "id": "floor",
+     "type": "line",
+     "x1": "notch_neg_flat",
+     "y1": "notch_floor_z",
+     "x2": "notch_flat",
+     "y2": "notch_floor_z"
+    },
+    {
+     "id": "corner_b",
+     "type": "arc",
+     "x1": "notch_flat",
+     "y1": "notch_floor_z",
+     "mx": "notch_mid_u",
+     "my": "notch_mid_z",
+     "x2": "notch_half",
+     "y2": "notch_knee_z"
+    },
+    {
+     "id": "wall_b",
+     "type": "line",
+     "x1": "notch_half",
+     "y1": "notch_knee_z",
+     "x2": "notch_half",
+     "y2": "notch_top_z"
+    },
+    {
+     "id": "lid",
+     "type": "line",
+     "x1": "notch_half",
+     "y1": "notch_top_z",
+     "x2": "notch_neg_half",
+     "y2": "notch_top_z"
+    }
+   ]
+  },
+  {
+   "id": "notch_cutter",
+   "type": "extrude",
+   "name": "notch cutter",
+   "sketch": "notch_sk",
+   "distance": 20,
+   "operation": "new"
+  },
+  {
+   "id": "notch_pair",
+   "type": "patternCircular",
+   "name": "a notch each side",
+   "count": 2,
+   "angle": 360,
+   "axis": "Z",
+   "bodies": [
+    "body2"
+   ]
+  },
+  {
+   "id": "cut_notches",
+   "type": "boolean",
+   "name": "cut the rest notches",
+   "operation": "subtract",
+   "target": "body1",
+   "tools": [
+    "body2"
+   ]
+  },
+  {
+   "id": "notch_round_edges",
+   "type": "fillet",
+   "name": "round the notch outer edges",
+   "radius": "notch_edge_r",
+   "edges": [
+    {
+     "kind": "edge",
+     "by": "nearest",
+     "point": [
+      -51.653,
+      6,
+      20.05
+     ],
+     "body": "body1"
+    },
+    {
+     "kind": "edge",
+     "by": "nearest",
+     "point": [
+      -51.802,
+      4.535,
+      10.464
+     ],
+     "body": "body1"
+    },
+    {
+     "kind": "edge",
+     "by": "nearest",
+     "point": [
+      -52,
+      0,
+      9
+     ],
+     "body": "body1"
+    },
+    {
+     "kind": "edge",
+     "by": "nearest",
+     "point": [
+      -51.802,
+      -4.535,
+      10.464
+     ],
+     "body": "body1"
+    },
+    {
+     "kind": "edge",
+     "by": "nearest",
+     "point": [
+      -51.653,
+      -6,
+      20.05
+     ],
+     "body": "body1"
+    },
+    {
+     "kind": "edge",
+     "by": "nearest",
+     "point": [
+      51.653,
+      -6,
+      20.05
+     ],
+     "body": "body1"
+    },
+    {
+     "kind": "edge",
+     "by": "nearest",
+     "point": [
+      51.802,
+      -4.535,
+      10.464
+     ],
+     "body": "body1"
+    },
+    {
+     "kind": "edge",
+     "by": "nearest",
+     "point": [
+      52,
+      0,
+      9
+     ],
+     "body": "body1"
+    },
+    {
+     "kind": "edge",
+     "by": "nearest",
+     "point": [
+      51.802,
+      4.535,
+      10.464
+     ],
+     "body": "body1"
+    },
+    {
+     "kind": "edge",
+     "by": "nearest",
+     "point": [
+      51.653,
+      6,
+      20.05
+     ],
+     "body": "body1"
+    }
+   ]
+  },
+  {
+   "id": "notch_round_inner",
+   "type": "fillet",
+   "name": "round the notch inner edges",
+   "radius": "notch_inner_r",
+   "edges": [
+    {
+     "kind": "edge",
+     "by": "nearest",
+     "point": [
+      -48.127,
+      6,
+      20.05
+     ],
+     "body": "body1"
+    },
+    {
+     "kind": "edge",
+     "by": "nearest",
+     "point": [
+      -47.795,
+      4.536,
+      10.465
+     ],
+     "body": "body1"
+    },
+    {
+     "kind": "edge",
+     "by": "nearest",
+     "point": [
+      -47.5,
+      0,
+      9
+     ],
+     "body": "body1"
+    },
+    {
+     "kind": "edge",
+     "by": "nearest",
+     "point": [
+      -47.795,
+      -4.536,
+      10.465
+     ],
+     "body": "body1"
+    },
+    {
+     "kind": "edge",
+     "by": "nearest",
+     "point": [
+      -48.127,
+      -6,
+      20.05
+     ],
+     "body": "body1"
+    },
+    {
+     "kind": "edge",
+     "by": "nearest",
+     "point": [
+      48.127,
+      -6,
+      20.05
+     ],
+     "body": "body1"
+    },
+    {
+     "kind": "edge",
+     "by": "nearest",
+     "point": [
+      47.795,
+      -4.536,
+      10.465
+     ],
+     "body": "body1"
+    },
+    {
+     "kind": "edge",
+     "by": "nearest",
+     "point": [
+      47.5,
+      0,
+      9
+     ],
+     "body": "body1"
+    },
+    {
+     "kind": "edge",
+     "by": "nearest",
+     "point": [
+      47.795,
+      4.536,
+      10.465
+     ],
+     "body": "body1"
+    },
+    {
+     "kind": "edge",
+     "by": "nearest",
+     "point": [
+      48.127,
+      6,
+      20.05
+     ],
+     "body": "body1"
+    }
+   ]
+  },
+  {
+   "id": "rim_edges",
+   "type": "fillet",
+   "name": "round the rim",
+   "radius": "rim_round",
+   "edges": [
+    {
+     "kind": "edge",
+     "by": "ofFace",
+     "face": {
+      "centroid": [
+       0,
+       34.59288996446567,
+       26.1
+      ],
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "area": 506.83424428740136,
+      "surface": "plane"
+     },
+     "body": "body1"
+    },
+    {
+     "kind": "edge",
+     "by": "ofFace",
+     "face": {
+      "centroid": [
+       0,
+       -34.59288996446563,
+       26.1
+      ],
+      "normal": [
+       0,
+       0,
+       1
+      ],
+      "area": 506.83424428740346,
+      "surface": "plane"
+     },
+     "body": "body1"
+    }
+   ]
+  }
+ ]
+}

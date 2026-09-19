@@ -653,10 +653,15 @@
     ]
    },
    "bodies": 1,
-   "errors": [],
+   "errors": [
+    [
+     "f2",
+     "Fillet failed on Box: # of the edges could not be blended at this size"
+    ]
+   ],
    "fatal": false,
    "volumes": {
-    "body1": 3922.384607
+    "body1": 3922.384601
    }
   },
   "hole_counterbore_m3_through": {
@@ -2653,7 +2658,8 @@
   },
   "rules": "body count and body ids exact; each body's mesh volume (signed tetra sum) within max(volumeRel * |python|, volumeFloor); every bbox corner within max(bboxAbs, bboxRelOfDiagonal * python bbox diagonal); the ordered (feature id, error class) list exact, an error class being the message with every number masked as # and whitespace collapsed, after the repository root is replaced by $REPO. An import fixture is imported through the engine's own import op first; the reply's fields other than geom must equal python's.",
   "rustRecorded": [
-   "chamfer_corner_three_edges"
+   "chamfer_corner_three_edges",
+   "fillet_tangent_edges_off"
   ],
   "tolerances": {
    "bboxAbs": 0.0001,

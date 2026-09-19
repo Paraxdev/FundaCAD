@@ -17,7 +17,7 @@ use crate::builder::{self, BuiltBody, FeatureError, Rebuild, Watch};
 use crate::kernel::{self, BoolKind};
 use crate::mesh::{tessellate, MeshParams};
 use crate::select::entity::py_round;
-use crate::select::{edge_fingerprint, face_fingerprint};
+use crate::select::{edge_fingerprints, face_fingerprint};
 use crate::topo::{face_wraps, FaceAdjacency};
 
 pub const MAX_FACES: usize = 400;
@@ -130,12 +130,11 @@ fn face_entry(
 fn edge_entry(
     i: usize,
     edge: &Shape,
-    part: &Shape,
+    fp: Value,
     adj: &FaceAdjacency,
     renum: &dyn Fn(usize) -> Option<usize>,
     body_id: &Value,
 ) -> builder::FResult<Value> {
-    let fp = edge_fingerprint(edge, part)?;
     let faces: Vec<usize> = adj.faces_of_edge(edge).into_iter().filter_map(renum).collect();
     let mut e = Map::new();
     e.insert("i".into(), json!(i));
@@ -219,10 +218,12 @@ pub fn inspect_bodies(
                 .enumerate()
                 .map(|(k, f)| face_entry(k, f, &adj, &renum, &b.id))
                 .collect::<Result<Vec<_>, _>>()?;
+            let fps = edge_fingerprints(es, comp)?;
             let edge_list = es
                 .iter()
+                .zip(fps)
                 .enumerate()
-                .map(|(k, e)| edge_entry(k, e, comp, &adj, &renum, &b.id))
+                .map(|(k, (e, fp))| edge_entry(k, e, fp, &adj, &renum, &b.id))
                 .collect::<Result<Vec<_>, _>>()?;
             entry.insert("faces".into(), Value::Array(face_list));
             entry.insert("edges".into(), Value::Array(edge_list));

@@ -157,11 +157,12 @@ pub fn section(
     profile: f64,
 ) -> Result<Shape, SectionErr> {
     let built = section_with(shape, edges, chamfer, sizes, size2, g2, draft, profile, true)?;
-    if !super::overlap::folds_over_itself(shape, &built) {
+    let size = sizes.iter().copied().fold(f64::INFINITY, f64::min).min(size2.unwrap_or(f64::INFINITY));
+    if !super::overlap::folds_over_itself(shape, &built, size) {
         return Ok(built);
     }
     let again = section_with(shape, edges, chamfer, sizes, size2, g2, draft, profile, false)?;
-    if super::overlap::folds_over_itself(shape, &again) {
+    if super::overlap::folds_over_itself(shape, &again, size) {
         return Err(SectionErr::Blend(
             "at this size the blend folds over itself".into(),
         ));

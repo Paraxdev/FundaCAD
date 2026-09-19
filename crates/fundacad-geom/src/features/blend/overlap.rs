@@ -30,12 +30,18 @@ pub fn new_faces(before: &Shape, after: &Shape) -> Vec<Shape> {
 }
 
 /// Anything that cannot be measured is not a fold.
-pub fn folds_over_itself(before: &Shape, after: &Shape) -> bool {
+///
+/// The allowance grows with the blend: a fold runs along an edge, so what it
+/// doubles is at least about `size` squared. A fixed 0.01 mm2 refused a
+/// 1.13 mm rim round for 0.12 mm2 where it meets two notch rounds, a junction
+/// the reference CAD model has too.
+pub fn folds_over_itself(before: &Shape, after: &Shape, size: f64) -> bool {
     let fresh = crate::bench::phase("blend_new_faces", || new_faces(before, after));
     if fresh.is_empty() {
         return false;
     }
-    doubled_area(&fresh).is_some_and(|a| a > FOLD_AREA_MM2)
+    let allowed = FOLD_AREA_MM2.max(0.25 * size * size);
+    doubled_area(&fresh).is_some_and(|a| a > allowed)
 }
 
 struct Tri {
@@ -179,6 +185,6 @@ mod tests {
         let (out, built) = ops::fillet(&a, &edges, &vec![2.0; edges.len()]).unwrap();
         assert_eq!(built, ops::Built::Done);
         assert!(!new_faces(&a, &out).is_empty());
-        assert!(!folds_over_itself(&a, &out));
+        assert!(!folds_over_itself(&a, &out, 2.0));
     }
 }

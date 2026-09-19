@@ -429,6 +429,38 @@ fn rematch_edge(
     best.map(|b| b.1)
 }
 
+/// Blending a neighbour trims an edge but leaves it on its own curve, where an
+/// edge that blend made lies somewhere else. Without this the nearest edge was
+/// taken whatever it was: a notch corner's round landed on a 0.03 mm sliver its
+/// neighbour had left, and the corner stayed sharp with no error.
+fn still_on(orig: &Shape, target: &Shape, tol: f64) -> bool {
+    let Ok(t) = EdgeEnt::new(target.clone()) else {
+        return false;
+    };
+    crate::kernel::distance_to_point(orig, t.mid.to_array()).is_some_and(|d| d <= tol)
+}
+
+/// The asked for edges that `out` still has. A blended edge leaves nothing
+/// along its old line; the section build could hand one back untouched and
+/// call it done, a notch corner that stayed sharp without a word.
+fn still_sharp(out: &Shape, edges: &[Shape]) -> Vec<Shape> {
+    let after = crate::kernel::subshapes(out, crate::kernel::Kind::Edge);
+    edges
+        .iter()
+        .filter(|e| {
+            let Ok(ent) = EdgeEnt::new((*e).clone()) else {
+                return false;
+            };
+            let mid = ent.mid.to_array();
+            after.iter().any(|a| {
+                crate::kernel::distance_to_point(a, mid).is_some_and(|d| d < 1e-4)
+                    && (crate::kernel::length(a) - ent.length).abs() < 0.5 * ent.length
+            })
+        })
+        .cloned()
+        .collect()
+}
+
 /// `_sequential_blend`: the survivors blended one by one to a fixpoint.
 pub(crate) fn sequential_blend(
     shape: &Shape,
@@ -448,6 +480,7 @@ pub(crate) fn sequential_blend(
     let base = t.pos_drift + t.rel_drift * opencascade::select_access::bbox_diagonal(shape);
     let max_mid_dist = 1.5 * blend_size + base;
     let tol_pos = base.max(blend_size);
+    let on_curve = 0.01_f64.max(0.01 * blend_size);
 
     let mut current = shape.clone();
     let mut progressed = true;
@@ -461,6 +494,7 @@ pub(crate) fn sequential_blend(
             }
             let Some(target) = crate::bench::phase("blend_rematch", || {
                 rematch_edge(&current, &fp, max_mid_dist, tol_pos)
+                    .filter(|t| still_on(&orig, t, on_curve))
             }) else {
                 still.push((orig, fp));
                 continue;
@@ -644,11 +678,20 @@ fn blend_edges(
         refuse_seam_edges(&body_shape, &edges, label)?;
         refuse_smooth_edges(&body_shape, &edges, label)?;
         let try_section = |shape: &Shape, es: &[Shape]| -> Option<Shape> {
-            section.and_then(|s| s(shape, es).ok())
+            section
+                .and_then(|s| s(shape, es).ok())
+                .filter(|out| still_sharp(out, es).is_empty())
         };
         if section_only {
             match section.map(|s| s(&body_shape, &edges)) {
                 Some(Ok(out)) => {
+                    let sharp = still_sharp(&out, &edges);
+                    if !sharp.is_empty() {
+                        return Err(Fail::msg(format!(
+                            "{label} failed on {body_name}: {} of the edges could not be blended at this size",
+                            sharp.len()
+                        )));
+                    }
                     staged.push((index, out));
                     continue;
                 }
@@ -716,7 +759,7 @@ fn blend_edges(
             }
         };
         checkpoint()?;
-        let new_shape = if overlap::folds_over_itself(&work, &new_shape) {
+        let new_shape = if overlap::folds_over_itself(&work, &new_shape, blend_size) {
             match try_section(&body_shape, &edges) {
                 Some(built) => built,
                 None => return Err(fold_error(&body_name)),

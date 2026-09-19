@@ -722,6 +722,39 @@ pub fn edge_fingerprint(edge: &Shape, part: &Shape) -> FResult<Value> {
 }
 
 pub fn edge_fingerprint_with(t: &Tuning, edge: &Shape, part: &Shape) -> FResult<Value> {
+    let mut siblings = PartEdges::new(part);
+    fingerprint_among(t, edge, &mut siblings)
+}
+
+/// Fingerprints of many edges of one part. A circle's fingerprint ranks it
+/// among the part's circles, which fingerprinting one edge at a time measured
+/// every edge of the part again for: inspect on a 55 face import took 73 s.
+pub fn edge_fingerprints(edges: &[Shape], part: &Shape) -> FResult<Vec<Value>> {
+    let t = Tuning::shipped();
+    let mut siblings = PartEdges::new(part);
+    edges.iter().map(|e| fingerprint_among(t, e, &mut siblings)).collect()
+}
+
+/// The part's edges and size, measured the first time a circle needs them.
+struct PartEdges<'a> {
+    part: &'a Shape,
+    measured: Option<(Vec<EdgeEnt>, f64)>,
+}
+
+impl<'a> PartEdges<'a> {
+    fn new(part: &'a Shape) -> Self {
+        PartEdges { part, measured: None }
+    }
+
+    fn get(&mut self) -> FResult<&(Vec<EdgeEnt>, f64)> {
+        if self.measured.is_none() {
+            self.measured = Some((edges_of(self.part)?, sa::bbox_diagonal(self.part)));
+        }
+        Ok(self.measured.as_ref().expect("just measured"))
+    }
+}
+
+fn fingerprint_among(t: &Tuning, edge: &Shape, siblings: &mut PartEdges<'_>) -> FResult<Value> {
     let e = EdgeEnt::new(edge.clone())?;
     let (m, d) = (e.mid, e.dir());
     let mut fp = json!({
@@ -738,8 +771,8 @@ pub fn edge_fingerprint_with(t: &Tuning, edge: &Shape, part: &Shape) -> FResult<
             if let Some(c) = e.centre() {
                 o.insert("center".into(), json!([c.x, c.y, c.z]));
             }
-            let tol = t.pos_tol(sa::bbox_diagonal(part));
-            if let Some((rank, size)) = rank_in_centre_group(&e, &edges_of(part)?, tol) {
+            let (all, diag) = siblings.get()?;
+            if let Some((rank, size)) = rank_in_centre_group(&e, all, t.pos_tol(*diag)) {
                 o.insert("radius_rank".into(), json!(rank));
                 o.insert("radius_group".into(), json!(size));
             }
