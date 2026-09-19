@@ -358,3 +358,25 @@ fn a_joints_body_id_and_mode_are_not_mistaken_for_parameters() {
         "{problems:?}"
     );
 }
+
+#[test]
+fn text_fields_are_not_mistaken_for_parameters() {
+    // A STEP import carries its colour and a G2 fillet its continuity as text;
+    // both built fine and were reported as problems that WILL fail a build.
+    let mut d = m::new_document();
+    m::add_feature(
+        &mut d,
+        &json!({"id": "f1", "type": "import", "format": "step", "geom": "abc", "source": "a.step",
+                "solid": true, "color": "#3f0276"}),
+        None,
+    )
+    .unwrap();
+    m::add_feature(
+        &mut d,
+        &json!({"id": "fil1", "type": "fillet", "edges": [], "radius": 1, "continuity": "G2",
+                "sizeType": "chord"}),
+        None,
+    )
+    .unwrap();
+    assert_eq!(m::validate(&mut d), Vec::<String>::new());
+}

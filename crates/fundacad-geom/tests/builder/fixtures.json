@@ -8265,7 +8265,12 @@
    },
    "datumPlanes": {},
    "diagnostics": [],
-   "errors": []
+   "errors": [
+    {
+     "feature_id": "f2",
+     "message": "Fillet failed on Box: 1 of the edges could not be blended at this size"
+    }
+   ]
   }
  },
  "fillet_smooth_edge": {

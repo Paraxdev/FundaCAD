@@ -560,7 +560,8 @@ const REFERENCE_FIELDS: &[(&str, &[(&str, &str)])] = &[
 /// Fields that hold a string which is never a number: an id, a mode, a hash.
 const NOT_NUMERIC: &[&str] = &[
     "id", "type", "name", "operation", "sketch", "profile", "path", "body", "target", "keep",
-    "axis", "text", "planeId", "plane", "format", "geom", "source", "moving", "mode",
+    "axis", "text", "planeId", "plane", "format", "geom", "source", "moving", "mode", "color",
+    "continuity", "sizeType", "chamferType", "datum", "brep", "plugin", "stamp",
 ];
 
 /// Everything wrong with the document that can be seen without building it.

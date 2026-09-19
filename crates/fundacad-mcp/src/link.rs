@@ -428,6 +428,13 @@ impl EngineLink {
     }
 
     async fn start(&self, state: &mut LinkState) -> io::Result<()> {
+        // A child that died (killed, crashed, reaped) left a port nothing listens
+        // on, and every call after it was refused until the host restarted us.
+        if let Some(child) = state.child.as_mut() {
+            if !matches!(child.try_wait(), Ok(None)) {
+                state.child = None;
+            }
+        }
         if self.attached || state.child.is_some() {
             return Ok(());
         }

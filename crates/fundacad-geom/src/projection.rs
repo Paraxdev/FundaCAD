@@ -24,7 +24,7 @@ use crate::builder::{self, BuiltBody, Ctx, FResult, Fail, Watch};
 use crate::features::sketch::entity_curve_edges;
 use crate::kernel::{self, Frame, Kind};
 use crate::select::entity::{edges_of, py_round};
-use crate::select::{edge_fingerprint, Resolver};
+use crate::select::{edge_fingerprints, Resolver};
 
 const POLY_MIN_SEGS: usize = 16;
 const POLY_MAX_SEGS: usize = 128;
@@ -545,9 +545,11 @@ fn project_source(
                     .unwrap_or("low-confidence match");
                 return Err(Fail::msg(format!("the source selection is ambiguous on this body, {reason}")));
             }
+            let fps = edge_fingerprints(&edges, shape)?;
             edges
                 .iter()
-                .map(|e| Ok(json!({"fp": edge_fingerprint(e, shape)?, "curve": project_edge(e, plane)?})))
+                .zip(fps)
+                .map(|(e, fp)| Ok(json!({"fp": fp, "curve": project_edge(e, plane)?})))
                 .collect()
         }
         Some("sketchCurve") => {
