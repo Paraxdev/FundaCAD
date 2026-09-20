@@ -283,6 +283,16 @@
   gap: 6px;
   min-height: 0;
   overflow-y: auto;
+  /* overflow-y: auto clips to this box's edge unconditionally, even when the
+     list isn't actually scrolling, which flattens --float-shadow's ~26px bleed
+     against the first/last tile and both sides instead of letting it fade out
+     (overflow-y: auto also silently turns overflow-x auto too, the CSS rule
+     that a paired "visible" axis becomes "auto", so the sides need it as well).
+     Padding pushes the clip edge past the shadow on all four sides; the
+     negative margin cancels the padding back out so nothing shifts position or
+     changes how much the list can actually scroll. */
+  padding: 32px;
+  margin: -32px;
   scrollbar-width: none;
   pointer-events: none;
 }
