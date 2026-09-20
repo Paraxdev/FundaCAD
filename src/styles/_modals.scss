@@ -244,6 +244,28 @@
   background-color: var(--panel-2, #1c1f26);
   color: var(--text, #e6e8ec);
 }
+/* .select-trigger is a <button> standing in for a <select> (see Select.vue):
+   everything above still applies since it shares the .sm-select class, this
+   only covers what a <select> gets from the UA for free and a plain button
+   does not. */
+.select-trigger {
+  display: block;
+  width: 100%;
+  text-align: left;
+}
+.select-trigger .select-value {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.select-trigger:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.select-trigger.open {
+  border-color: var(--accent, #ff7a3c);
+}
 /* A TEXT field on a settings screen. Everything .sm-select has except the
    caret and its clearance, because a caret on something you type into says the
    value is one of a fixed set and it is not. Its own rule rather than an

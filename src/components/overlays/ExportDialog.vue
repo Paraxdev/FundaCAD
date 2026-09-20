@@ -10,6 +10,7 @@ import {
   type BodyScope, type Faceting, type Refinement,
 } from "../../io/exportSettings";
 import ModalFrame from "./ModalFrame.vue";
+import Select from "../ui/Select.vue";
 
 const dialog = useExportDialogStore();
 const bodies = dialog.request?.bodies ?? [];
@@ -22,8 +23,13 @@ const scope = ref<BodyScope>("all");
 const mesh = computed(() => isMeshFormat(settings.value.format));
 const unitShown = computed(() => takesUnit(settings.value.format));
 
-function onRefinement(ev: Event) {
-  const r = (ev.target as HTMLSelectElement).value as Refinement;
+const REFINEMENT_OPTIONS: { value: Refinement; label: string }[] = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+  { value: "custom", label: "Custom" },
+];
+function onRefinement(r: Refinement) {
   settings.value.refinement = r;
   if (r === "custom") settings.value.showAdvanced = true;
   else settings.value.faceting = { ...REFINEMENTS[r] };
@@ -48,7 +54,7 @@ function onKey(e: KeyboardEvent) {
     e.preventDefault();
     e.stopImmediatePropagation();
     cancel();
-  } else if (e.key === "Enter" && !(e.target instanceof HTMLSelectElement)) {
+  } else if (e.key === "Enter" && !(e.target instanceof HTMLSelectElement) && !(e.target as HTMLElement)?.closest(".select-trigger, .select-pop")) {
     e.preventDefault();
     confirm();
   }
@@ -64,9 +70,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
     <div class="modal-body prefs export-body">
       <label class="prefs-row">
         <span class="prefs-label">Type</span>
-        <select v-model="settings.format" class="sm-select" data-testid="export-format">
-          <option v-for="f in FORMATS" :key="f.value" :value="f.value">{{ f.label }}</option>
-        </select>
+        <Select v-model="settings.format" :options="FORMATS" testid="export-format" />
       </label>
       <label v-if="bodies.length > 1" class="prefs-row">
         <span class="prefs-label">Bodies</span>
@@ -81,9 +85,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
         <div class="sm-section">Output</div>
         <label v-if="unitShown" class="prefs-row">
           <span class="prefs-label">Unit</span>
-          <select v-model="settings.unit" class="sm-select" data-testid="export-unit">
-            <option v-for="u in UNITS" :key="u.value" :value="u.value">{{ u.label }}</option>
-          </select>
+          <Select v-model="settings.unit" :options="UNITS" testid="export-unit" />
         </label>
         <label v-if="settings.format === 'stl'" class="prefs-row">
           <span class="prefs-label">Format</span>
@@ -94,17 +96,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
         </label>
         <label class="prefs-row">
           <span class="prefs-label">Refinement</span>
-          <select
-            class="sm-select"
-            data-testid="export-refinement"
-            :value="settings.refinement"
-            @change="onRefinement"
-          >
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-            <option value="custom">Custom</option>
-          </select>
+          <Select :model-value="settings.refinement" :options="REFINEMENT_OPTIONS" testid="export-refinement" @update:model-value="onRefinement" />
         </label>
         <label class="prefs-row">
           <span class="prefs-label">Advanced</span>
