@@ -520,7 +520,8 @@ pub fn length(s: &Shape) -> f64 {
 /// build123d `loft(sections)`, smooth.
 pub fn loft(sections: &[Shape]) -> KResult<Shape> {
     let c = compound(sections);
-    run("BRepOffsetAPI_ThruSections", || format!("sections=[{}]", sections.iter().map(describe).collect::<Vec<_>>().join("; ")), || fo::fo_loft(c.raw(), false))
+    let ruled = sections.len() == 2;
+    run("BRepOffsetAPI_ThruSections", || format!("sections=[{}]", sections.iter().map(describe).collect::<Vec<_>>().join("; ")), || fo::fo_loft(c.raw(), ruled))
 }
 
 /// build123d `sweep` with `Transition.RIGHT` and no Frenet frame.
