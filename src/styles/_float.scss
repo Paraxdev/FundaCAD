@@ -463,6 +463,11 @@
 .float-popover.vc-pop {
   width: 272px;
 }
+.float-popover.select-pop {
+  min-width: 180px;
+  max-height: min(60vh, 360px);
+  padding: 6px;
+}
 .pop-section {
   margin: var(--s-1) var(--s-1) 6px;
   font-size: 12.5px;
@@ -641,6 +646,7 @@
   height: 2px;
   border-radius: var(--r-pill);
   background: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
 }
 
 /* ---- versions ---------------------------------------------------------------- */
