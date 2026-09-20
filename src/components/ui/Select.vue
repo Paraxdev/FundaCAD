@@ -17,8 +17,11 @@ const props = withDefaults(
     testid?: string;
     disabled?: boolean;
   }>(),
-  { id: undefined, testid: undefined, disabled: false },
+  {
+    disabled: false,
+  },
 );
+
 const emit = defineEmits<{ "update:modelValue": [T] }>();
 
 const open = ref(false);
@@ -27,6 +30,7 @@ const btn = useTemplateRef<HTMLButtonElement>("btn");
 function toggle() {
   if (!props.disabled) open.value = !open.value;
 }
+
 function pick(v: T) {
   open.value = false;
   if (v !== props.modelValue) emit("update:modelValue", v);
@@ -46,9 +50,24 @@ function pick(v: T) {
     :aria-expanded="open"
     @click="toggle"
   >
-    <span class="select-value">{{ options.find((o) => o.value === modelValue)?.label ?? modelValue }}</span>
+    <span class="select-value">
+      {{ options.find((o) => o.value === modelValue)?.label ?? modelValue }}
+    </span>
   </button>
-  <Popover v-if="open" :anchor="btn" side="bottom" align="start" kind="select-pop" @close="open = false" :style="{ zIndex: 99999 }">
-    <ChoiceList  :options="options" :model-value="modelValue" @update:model-value="pick" />
+
+  <Popover
+    v-if="open"
+    :anchor="btn"
+    side="bottom"
+    align="start"
+    kind="select-pop"
+    :style="{ zIndex: 99999 }"
+    @close="open = false"
+  >
+    <ChoiceList
+      :options="options"
+      :model-value="modelValue"
+      @update:model-value="pick"
+    />
   </Popover>
 </template>
