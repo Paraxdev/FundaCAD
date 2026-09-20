@@ -16,6 +16,12 @@
   flex-direction: column;
   gap: var(--s-4);
   min-height: 0;
+  /* .welcome-body's main axis is width (row, the default); without this a flex
+     item won't shrink below its content's own min-content width, so the long
+     paths in .welcome-recent-dir pushed this wider than the panel and forced
+     a horizontal scrollbar on .modal-body even though the ellipsis rules below
+     were working fine inside that width. */
+  min-width: 0;
 }
 .welcome-actions {
   display: flex;
@@ -38,6 +44,7 @@
   flex-direction: column;
   gap: var(--s-0);
   overflow-y: auto;
+  overflow-x: hidden;
   min-height: 0;
 }
 .welcome-recent {
@@ -54,16 +61,23 @@
   cursor: pointer;
   text-align: left;
   color: var(--text, #e6e8ec);
+  /* Without this a flex column child refuses to shrink below its own content's
+     width, so a long absolute path never reaches the ellipsis below, it just
+     pushes the row wider than the dialog and forces a horizontal scrollbar. */
+  width: 100%;
+  min-width: 0;
 }
 .welcome-recent:hover {
   background: var(--raised, #22262e);
 }
 .welcome-recent-name {
   font-size: 12px;
+  max-width: 100%;
 }
 .welcome-recent-dir {
   font-size: 10px;
   color: var(--text-dim, #9aa3af);
+  width: 100%;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;

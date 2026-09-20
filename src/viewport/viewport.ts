@@ -282,6 +282,7 @@ export class Viewport {
       invalidateThemeColors();
       this.scene.grid.applyTheme();
       this.scene.applyRenderPrefs();
+      this.cube.applyTheme();
       this.requestRender();
     });
     this.loop();
