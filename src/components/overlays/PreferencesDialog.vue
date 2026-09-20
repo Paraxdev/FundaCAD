@@ -27,7 +27,7 @@ import PluginsSection from "./PluginsSection.vue";
 import {
   addCustomTheme,
   asThemeId,
-  BUILTIN_THEME,
+  customThemes,
   getTheme,
   onThemeChange,
   removeCustomTheme,
@@ -72,7 +72,9 @@ const themeList = ref(themes());
 // last upload was fine or there has not been one.
 const themeError = ref("");
 const fileInput = ref<HTMLInputElement | null>(null);
-const activeIsCustom = computed(() => theme.value !== BUILTIN_THEME.id);
+// Only an uploaded palette is removable; the built-in theme and the shipped
+// ones (Dracula, Solarized Light) sit in the picker the same way but stay put.
+const activeIsCustom = computed(() => customThemes().some((t) => t.id === theme.value));
 const pack = ref(getIconPack());
 const unit = ref(getUnit());
 const render = ref(renderPrefs());
@@ -211,9 +213,10 @@ function onMotion(ev: Event) { setMotion((ev.target as HTMLInputElement).checked
                 </select>
               </div>
               <p class="pref-hint">
-                One theme ships with FundaCAD. Upload a JSON palette to add your own, it
-                is stored in this browser's preferences. Keys are colour tokens like
-                <code>--bg</code> and <code>--accent</code>, values are hex or rgb().
+                FundaCAD Noir, Dracula, Solarized Light and the Noir Blue/Red/Orange tints ship
+                with FundaCAD. Upload a JSON palette to add your own, it is stored in this
+                browser's preferences. Keys are colour tokens like <code>--bg</code> and
+                <code>--accent</code>, values are hex or rgb().
               </p>
               <div class="prefs-actions">
                 <input

@@ -12,7 +12,11 @@
   background: var(--panel, #16181d);
   border: 1px solid var(--line, #262a31);
   border-radius: var(--r-lg, 10px);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  /* The same flat, zero-blur elevation every other overlay in the app uses
+     (menus, palette, timeline, prefs): a soft 60px blur was a one-off here and,
+     against the backdrop's own dark tint, read as an oddly-edged halo rather
+     than a clean shadow. */
+  box-shadow: var(--shadow-3);
   width: min(720px, 92vw);
   max-height: 88vh;
   display: flex;

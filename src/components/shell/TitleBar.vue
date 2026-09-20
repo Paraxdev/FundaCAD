@@ -9,10 +9,18 @@ import WorkspaceToggle from "./WorkspaceToggle.vue";
 import MenuBar from "./MenuBar.vue";
 import LiveSessionPill from "./LiveSessionPill.vue";
 import ErrorNotice from "./ErrorNotice.vue";
-import brandLockup from "../../../assets/brand/fundacad-lockup-app.svg";
+import { getTheme, onThemeChange, themeMode } from "../../ui/theme";
+import brandLockupDark from "../../../assets/brand/fundacad-lockup-app.svg";
+import brandLockupLight from "../../../assets/brand/fundacad-lockup-app-light.svg";
 
 const engine = useEngine();
 const ui = useUiStore();
+
+// The wordmark is baked as light-on-dark text (fundacad-lockup-app.svg): fine
+// for FundaCAD Noir and Dracula, invisible against a light theme's panel. An
+// <img> can't repaint from CSS across the SVG boundary, so the fix is a second
+// asset with dark-text ink, picked from the theme's mode.
+const brandLockup = ref(themeMode(getTheme()) === "light" ? brandLockupLight : brandLockupDark);
 
 // Rebuilt only when what the plugins contribute changes. Everything dynamic
 // WITHIN the tree (Undo greying out, a capability's own mode checkmarks) is a
@@ -31,10 +39,14 @@ const ui = useUiStore();
 // markRaw because every onClick closes over the raw engine.
 const menus = ref(markRaw(buildMenubar(engine)));
 let offPlugins: (() => void) | null = null;
+let offTheme: (() => void) | null = null;
 onMounted(() => {
   offPlugins = onContribChange(() => { menus.value = markRaw(buildMenubar(engine)); });
+  offTheme = onThemeChange(() => {
+    brandLockup.value = themeMode(getTheme()) === "light" ? brandLockupLight : brandLockupDark;
+  });
 });
-onUnmounted(() => offPlugins?.());
+onUnmounted(() => { offPlugins?.(); offTheme?.(); });
 
 </script>
 

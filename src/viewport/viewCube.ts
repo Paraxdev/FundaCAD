@@ -42,32 +42,33 @@ export const FACE_VIEWS: Record<
   bottom: { view: "bottom", normal: new THREE.Vector3(0, 0, -1), up: new THREE.Vector3(0, -1, 0), label: "BOTTOM" },
 };
 
-// The cube's own surfaces, and why every one of these numbers changed.
+// The cube's own surfaces, read from the theme rather than fixed, so a light
+// theme gets a cube that still contrasts against its (also themed) viewport
+// background instead of the dark-viewport greys this used to be hardcoded to.
 //
 // A face plate is painted WHOLE into its canvas texture, background and label
 // together, and its material carries no tint. That is the fix, not a tidy-up. A
 // MeshBasicMaterial's `color` MULTIPLIES its map, and the label canvas was
 // cleared to rgba(0,0,0,0) with `transparent: false`, so the alpha was discarded
-// and every face rendered as texRGB x COLOR_FACE: solid black where the canvas
+// and every face rendered as texRGB x face fill: solid black where the canvas
 // was clear, and #cdd4de x #2b313c, about #222934, where the text was. Near-black
 // text on black. Multiplying can only ever darken, so no choice of label colour
 // could have rescued it; the tint had to go.
 //
-// The other two were the rest of the same complaint. The filler cube under the
-// plates was 0x161a20, near-black, so the gaps between plates read as holes
-// rather than as a cube. The wireframe was 0x05070a: a black outline around a
-// dark cube on a dark viewport draws nothing at all.
-export const COLOR_FACE = 0x2b313c;
-/** The filler cube under the plates. Light enough to read as one solid object. */
-export const COLOR_BODY = 0x39414f;
-/** The wireframe silhouette. Light enough to be a silhouette. */
-export const COLOR_OUTLINE = 0x6b7686;
-const COLOR_EDGE = 0x3a4250;
+// All read per call, not captured, and re-read into every material by
+// applyTheme() below when the theme changes while the app is running.
+const faceFill = () => themeColor("--raised-2", 0x2b313c);
+/** The filler cube under the plates: a shade off the face fill so gaps between
+ *  plates read as one solid object rather than as holes. */
+const bodyFill = () => themeColor("--raised", 0x39414f);
+/** The wireframe silhouette. */
+const outlineFill = () => themeColor("--line-strong", 0x6b7686);
+const edgeFill = () => themeColor("--line-strong", 0x3a4250);
 
 /** Label ink on an unhovered face, and on a hovered one, which is filled with
  *  the accent and needs dark ink to stay readable. */
-export const LABEL_INK = "#e8edf5";
-export const LABEL_INK_HOVER = "#10141a";
+const inkFill = () => themeColor("--text", 0xe8edf5);
+const inkHoverFill = () => themeColor("--on-accent", 0x10141a);
 
 /** The edge and corner nubs were opacity 0 until hovered, which is to say
  *  invisible: nothing on screen said they could be clicked at all. Quiet, but
@@ -122,6 +123,8 @@ export class ViewCube {
   private ndc = new THREE.Vector2();
   private hovered: Part | null = null;
   private faceTextures = new Map<ViewCubeSide, { canvas: HTMLCanvasElement; texture: THREE.CanvasTexture }>();
+  private bodyMesh!: THREE.Mesh;
+  private outlineMesh!: THREE.LineSegments;
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -156,7 +159,7 @@ export class ViewCube {
       const tex = this.makeLabelTexture(side);
       const geo = new THREE.PlaneGeometry(0.78, 0.78);
       // No tint: the plate's canvas already holds its final colours (see the
-      // COLOR_FACE note, a tint here multiplies the map and can only darken).
+      // faceFill note above, a tint here multiplies the map and can only darken).
       const mat = new THREE.MeshBasicMaterial({ map: tex, color: 0xffffff, transparent: false });
       const mesh = new THREE.Mesh(geo, mat);
       // orient the plate so its +Z points along the face normal, at the surface
@@ -169,7 +172,7 @@ export class ViewCube {
         dir: f.normal.clone(),
         up: f.up.clone(),
         mesh,
-        baseColor: COLOR_FACE,
+        baseColor: faceFill(),
         hoverColor: faceHover(),
       });
     }
@@ -177,24 +180,26 @@ export class ViewCube {
     // a solid filler cube under the plates so the body looks solid + occludes
     const body = new THREE.Mesh(
       new THREE.BoxGeometry(0.97, 0.97, 0.97),
-      new THREE.MeshBasicMaterial({ color: COLOR_BODY }),
+      new THREE.MeshBasicMaterial({ color: bodyFill() }),
     );
     this.group.add(body);
+    this.bodyMesh = body;
 
     // edges (12) and corners (8): small clickable nubs for diagonal views.
     for (const dir of edgeDirs()) {
-      this.addNub("edge", dir, 0.16, COLOR_EDGE, edgeHover());
+      this.addNub("edge", dir, 0.16, edgeFill(), edgeHover());
     }
     for (const dir of cornerDirs()) {
-      this.addNub("corner", dir, 0.18, COLOR_EDGE, edgeHover());
+      this.addNub("corner", dir, 0.18, edgeFill(), edgeHover());
     }
 
     // crisp wireframe outline around the cube
     const outline = new THREE.LineSegments(
       new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)),
-      new THREE.LineBasicMaterial({ color: COLOR_OUTLINE }),
+      new THREE.LineBasicMaterial({ color: outlineFill() }),
     );
     this.group.add(outline);
+    this.outlineMesh = outline;
   }
 
   private addNub(kind: "edge" | "corner", dir: THREE.Vector3, s: number, base: number, hover: number) {
@@ -242,9 +247,9 @@ export class ViewCube {
     // and the ink for something readable on it, rather than multiplying a colour
     // over the top, which could only darken.
     ctx.clearRect(0, 0, W, W);
-    ctx.fillStyle = hovered ? hex(faceHover()) : hex(COLOR_FACE);
+    ctx.fillStyle = hovered ? hex(faceHover()) : hex(faceFill());
     ctx.fillRect(0, 0, W, W);
-    ctx.fillStyle = hovered ? LABEL_INK_HOVER : LABEL_INK;
+    ctx.fillStyle = hovered ? hex(inkHoverFill()) : hex(inkFill());
     ctx.font = "600 56px Inter, system-ui, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -252,7 +257,7 @@ export class ViewCube {
     if (redefined) {
       // small accent dot marking a user-redefined side
       ctx.beginPath();
-      ctx.fillStyle = hovered ? LABEL_INK_HOVER : hex(faceHover());
+      ctx.fillStyle = hovered ? hex(inkHoverFill()) : hex(faceHover());
       ctx.arc(W / 2, W * 0.78, 9, 0, Math.PI * 2);
       ctx.fill();
     }
@@ -270,6 +275,23 @@ export class ViewCube {
     for (const side of Object.keys(FACE_VIEWS) as ViewCubeSide[]) {
       this.paintLabel(side, !!ov[side], this.hovered?.side === side);
     }
+  }
+
+  /** Re-read every surface from the theme (call when it changes; the cube
+   *  cannot re-cascade CSS the way the chrome does). Repaints face labels and
+   *  re-tints the body, outline and any idle edge/corner nubs; a hovered nub
+   *  keeps its current on-screen colour, setHover swaps it back on leave. */
+  applyTheme() {
+    (this.bodyMesh.material as THREE.MeshBasicMaterial).color.setHex(bodyFill());
+    (this.outlineMesh.material as THREE.LineBasicMaterial).color.setHex(outlineFill());
+    for (const part of this.parts) {
+      part.baseColor = part.kind === "face" ? faceFill() : edgeFill();
+      part.hoverColor = part.kind === "face" ? faceHover() : edgeHover();
+      if (part.kind !== "face" && part !== this.hovered) {
+        (part.mesh.material as THREE.MeshBasicMaterial).color.setHex(part.baseColor);
+      }
+    }
+    this.refreshOverrideMarks();
   }
 
   // ---- per-frame render ----------------------------------------------------

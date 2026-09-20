@@ -23,9 +23,145 @@ export interface CustomTheme extends Theme {
   palette: Record<string, string>;
 }
 
+/** A palette FundaCAD ships with, selectable like the built-in theme but, like it,
+ *  not removable: only an uploaded theme (custom: true) gets a Remove button. */
+export interface ShippedTheme extends Theme {
+  custom: false;
+  palette: Record<string, string>;
+}
+
 export const BUILTIN_THEME: Theme = { id: "fundacad", label: "FundaCAD Noir", mode: "dark", custom: false };
 
 export const DEFAULT_THEME_ID = BUILTIN_THEME.id;
+
+/** FundaCAD Noir's surfaces, shared by the Noir <Color> variants below: only
+ *  the accent changes, for someone who wants the same dark shell without the
+ *  default mint-green (or Dracula's purple). */
+const NOIR_SURFACE = {
+  "--bg": "#050409",
+  "--panel": "#1b1826",
+  "--panel-2": "#272233",
+  "--raised": "#322c42",
+  "--raised-2": "#3d3651",
+  "--viewport-bg": "#0b0912",
+  "--line": "#322c42",
+  "--line-strong": "#5c5470",
+  "--text": "#f6f0e4",
+  "--text-dim": "#aaa1b5",
+  "--text-mute": "#7d7590",
+  "--ok": "#17c99a",
+  "--warn": "#ffab2e",
+  "--error": "#ff5c5c",
+  "--error-tint": "rgba(255, 92, 92, 0.14)",
+};
+
+function noirTint(
+  id: string,
+  label: string,
+  accent: { accent: string; accentHot: string; onAccent: string },
+): ShippedTheme {
+  const rgb = accent.accent
+    .slice(1)
+    .match(/.{2}/g)!
+    .map((h) => Number.parseInt(h, 16))
+    .join(", ");
+  return {
+    id,
+    label,
+    mode: "dark",
+    custom: false,
+    palette: {
+      ...NOIR_SURFACE,
+      "--accent": accent.accent,
+      "--accent-hot": accent.accentHot,
+      "--accent-tint": `rgba(${rgb}, 0.14)`,
+      "--accent-tint-2": `rgba(${rgb}, 0.24)`,
+      "--accent-glow": `rgba(${rgb}, 0.35)`,
+      "--on-accent": accent.onAccent,
+      "--accent-blue": accent.accent,
+    },
+  };
+}
+
+/** A couple of well-known palettes, plus dark Noir variants that keep the
+ *  built-in theme's shell but swap its mint-green accent for another hue. */
+const SHIPPED_THEMES: ShippedTheme[] = [
+  {
+    id: "dracula",
+    label: "Dracula",
+    mode: "dark",
+    custom: false,
+    palette: {
+      "--bg": "#282a36",
+      "--panel": "#2b2d3a",
+      "--panel-2": "#343746",
+      "--raised": "#3d4052",
+      "--raised-2": "#454858",
+      "--viewport-bg": "#1e1f29",
+      "--line": "#44475a",
+      "--line-strong": "#6272a4",
+      "--text": "#f8f8f2",
+      "--text-dim": "#c9c7cc",
+      "--text-mute": "#9aa0b0",
+      "--accent": "#bd93f9",
+      "--accent-hot": "#d6acff",
+      "--accent-tint": "rgba(189, 147, 249, 0.14)",
+      "--accent-tint-2": "rgba(189, 147, 249, 0.24)",
+      "--accent-glow": "rgba(189, 147, 249, 0.35)",
+      "--on-accent": "#1b0f2e",
+      "--ok": "#50fa7b",
+      "--warn": "#ffb86c",
+      "--error": "#ff5555",
+      "--error-tint": "rgba(255, 85, 85, 0.14)",
+      "--accent-blue": "#8be9fd",
+    },
+  },
+  {
+    id: "solarized-light",
+    label: "Solarized Light",
+    mode: "light",
+    custom: false,
+    palette: {
+      "--bg": "#fdf6e3",
+      "--panel": "#eee8d5",
+      "--panel-2": "#e3ddc7",
+      "--raised": "#ffffff",
+      "--raised-2": "#f5efdc",
+      "--viewport-bg": "#eee8d5",
+      "--line": "#d6cfb4",
+      "--line-strong": "#93a1a1",
+      "--text": "#073642",
+      "--text-dim": "#586e75",
+      "--text-mute": "#839496",
+      "--accent": "#268bd2",
+      "--accent-hot": "#4aa3e0",
+      "--accent-tint": "rgba(38, 139, 210, 0.14)",
+      "--accent-tint-2": "rgba(38, 139, 210, 0.24)",
+      "--accent-glow": "rgba(38, 139, 210, 0.35)",
+      "--on-accent": "#fdf6e3",
+      "--ok": "#859900",
+      "--warn": "#b58900",
+      "--error": "#dc322f",
+      "--error-tint": "rgba(220, 50, 47, 0.14)",
+      "--accent-blue": "#268bd2",
+    },
+  },
+  noirTint("noir-blue", "Noir Blue", {
+    accent: "#3fa9f5",
+    accentHot: "#7ecbff",
+    onAccent: "#001522",
+  }),
+  noirTint("noir-red", "Noir Red", {
+    accent: "#ff4d6d",
+    accentHot: "#ff8098",
+    onAccent: "#2a0008",
+  }),
+  noirTint("noir-orange", "Noir Orange", {
+    accent: "#ff8a3d",
+    accentHot: "#ffb374",
+    onAccent: "#2b1200",
+  }),
+];
 
 const KEY = "fundacad.theme";
 const LEGACY_KEYS = ["neocad.theme", "sindricad.theme"];
@@ -66,7 +202,7 @@ function readLibrary(): CustomTheme[] {
   if (!Array.isArray(parsed)) return [];
   // Stored entries are as untrusted as an upload: other builds and hand edits write here.
   const out: CustomTheme[] = [];
-  const seen = new Set<string>([BUILTIN_THEME.id]);
+  const seen = new Set<string>([BUILTIN_THEME.id, ...SHIPPED_THEMES.map((t) => t.id)]);
   for (const entry of parsed) {
     const t = coerceStored(entry);
     if (t && !seen.has(t.id)) {
@@ -88,7 +224,7 @@ function writeLibrary(list: CustomTheme[]) {
 let library: CustomTheme[] = readLibrary();
 
 export function themes(): Theme[] {
-  return [BUILTIN_THEME, ...library];
+  return [BUILTIN_THEME, ...SHIPPED_THEMES, ...library];
 }
 
 export function customThemes(): CustomTheme[] {
@@ -96,7 +232,8 @@ export function customThemes(): CustomTheme[] {
 }
 
 function findTheme(id: string): Theme | undefined {
-  return id === BUILTIN_THEME.id ? BUILTIN_THEME : library.find((t) => t.id === id);
+  if (id === BUILTIN_THEME.id) return BUILTIN_THEME;
+  return SHIPPED_THEMES.find((t) => t.id === id) ?? library.find((t) => t.id === id);
 }
 
 /** A theme id that exists right now, or null. */
@@ -125,13 +262,17 @@ function apply(id: string) {
   const root = document.documentElement;
   for (const prop of appliedProps) root.style.removeProperty(prop);
   appliedProps = [];
+  root.style.removeProperty("color-scheme");
   const theme = findTheme(id);
-  if (!theme || !theme.custom) return;
-  const palette = (theme as CustomTheme).palette;
+  // The built-in theme lives on :root in _tokens.scss, nothing to apply here.
+  if (!theme || !("palette" in theme)) return;
+  const palette = (theme as CustomTheme | ShippedTheme).palette;
   for (const [token, value] of Object.entries(palette)) {
     root.style.setProperty(token, value);
     appliedProps.push(token);
   }
+  // Native controls (selects, scrollbars) need to know a light palette is no longer dark.
+  root.style.setProperty("color-scheme", theme.mode);
 }
 
 export function setTheme(id: string) {

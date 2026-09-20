@@ -40,7 +40,7 @@ describe("asThemeId", () => {
   });
 
   it("rejects anything unknown", () => {
-    expect(asThemeId("dracula")).toBeNull();
+    expect(asThemeId("not-a-real-theme")).toBeNull();
     expect(asThemeId("")).toBeNull();
     expect(asThemeId(null)).toBeNull();
     expect(asThemeId(7)).toBeNull();
@@ -60,6 +60,35 @@ describe("the theme roster", () => {
     addCustomTheme({ label: "two", "--accent": "#112233" });
     const ids = themes().map((t) => t.id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("ships Dracula (dark) and Solarized Light (light) alongside the built-in theme", () => {
+    const list = themes();
+    expect(list.find((t) => t.id === "dracula")).toMatchObject({ label: "Dracula", mode: "dark", custom: false });
+    expect(list.find((t) => t.id === "solarized-light")).toMatchObject({
+      label: "Solarized Light",
+      mode: "light",
+      custom: false,
+    });
+  });
+
+  it("cannot remove a shipped theme", () => {
+    setTheme("dracula");
+    removeCustomTheme("dracula");
+    expect(getTheme()).toBe("dracula");
+    expect(asThemeId("dracula")).toBe("dracula");
+  });
+
+  it("ships three dark Noir tints, each with its own accent", () => {
+    const list = themes();
+    const blue = list.find((t) => t.id === "noir-blue");
+    const red = list.find((t) => t.id === "noir-red");
+    const orange = list.find((t) => t.id === "noir-orange");
+    expect(blue).toMatchObject({ label: "Noir Blue", mode: "dark", custom: false });
+    expect(red).toMatchObject({ label: "Noir Red", mode: "dark", custom: false });
+    expect(orange).toMatchObject({ label: "Noir Orange", mode: "dark", custom: false });
+    const accents = new Set([blue, red, orange].map((t) => (t as { palette: Record<string, string> }).palette["--accent"]));
+    expect(accents.size).toBe(3);
   });
 });
 

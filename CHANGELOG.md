@@ -25,6 +25,15 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **Two more built-in themes: Dracula and Solarized Light**, sitting in the
+  theme picker next to FundaCAD Noir with no upload needed. Dracula is dark,
+  Solarized Light is the app's first built-in light theme, both drawn from
+  their well-known canonical palettes.
+
+- **Three Noir tints: Noir Blue, Noir Red and Noir Orange**, the built-in
+  theme's same dark shell with only the accent swapped, for anyone who wants
+  FundaCAD Noir's look without its mint-green (or Dracula's purple).
+
 - The Funda Engine begins: a root Cargo workspace and a `fundacad-geom` crate
   that links OpenCASCADE 7.8.1 statically through the vendored bindings and
   runs real kernel tests (volume, boolean cut, per-face tessellation in the

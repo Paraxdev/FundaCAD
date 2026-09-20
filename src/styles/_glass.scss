@@ -260,7 +260,27 @@
   -webkit-backdrop-filter: var(--float-blur);
           backdrop-filter: var(--float-blur);
   border: 1px solid var(--float-line);
+}
+.cmdk-card,
+.menu-popup,
+.toast,
+.logcon,
+.measure-panel,
+.tgt-panel,
+.shortcut-hud-card,
+#renderdock,
+.ne-overlay,
+.areachip {
   box-shadow: var(--glass-inset), var(--float-shadow);
+}
+/* Everything else in the list above floats directly over the viewport, where
+   --float-shadow's soft dark blur reads fine. .modal-panel instead sits on
+   .modal-overlay's full-screen dark scrim, so that same soft black shadow has
+   no contrast to show against and the panel just looks like it stops dead at
+   the edge. This rule loads after _modals.scss's --shadow-3 on purpose, or
+   this would still be silently overridden by the shared rule above. */
+.modal-panel {
+  box-shadow: var(--glass-inset), var(--shadow-3);
 }
 .modal-panel,
 .cmdk-card,

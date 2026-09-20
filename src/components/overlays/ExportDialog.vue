@@ -176,6 +176,14 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
 </template>
 
 <style scoped>
+.modal-body.prefs.export-body {
+  display: flex;
+  flex: 0 1 auto;
+  gap: var(--s-2);
+  min-width: 340px;
+  padding: var(--s-5);
+  overflow: auto;
+}
 .export-body .prefs-row {
   grid-template-columns: 130px 1fr;
 }

@@ -14,12 +14,18 @@ import { useModalGate } from "../../composables/useModalGate";
 import { welcomeOnStartup, setWelcomeOnStartup } from "../../ui/welcome";
 import { forgetRecent, getRecentFiles, type RecentFile } from "../../io/recentFiles";
 import ModalFrame from "./ModalFrame.vue";
-import logoUrl from "../../../assets/brand/fundacad-lockup-app.svg";
+import { getTheme, onThemeChange, themeMode } from "../../ui/theme";
+import logoDarkUrl from "../../../assets/brand/fundacad-lockup-app.svg";
+import logoLightUrl from "../../../assets/brand/fundacad-lockup-app-light.svg";
 
 const dialogs = useDialogStore();
 // Non-null whenever this component is rendered: App.vue gates it on the same
 // field, because a welcome screen with no callbacks has nothing to do.
 const cb = dialogs.welcomeCallbacks!;
+
+// The wordmark is baked as light-on-dark ink, invisible on a light theme's
+// panel; see TitleBar.vue for the same swap.
+const logoUrl = ref(themeMode(getTheme()) === "light" ? logoLightUrl : logoDarkUrl);
 
 const close = () => { dialogs.welcome = false; };
 
@@ -58,6 +64,11 @@ watch(showOnStartup, setWelcomeOnStartup);
 
 onMounted(() => window.addEventListener("keydown", onKey, true));
 onUnmounted(() => window.removeEventListener("keydown", onKey, true));
+
+const offTheme = onThemeChange(() => {
+  logoUrl.value = themeMode(getTheme()) === "light" ? logoLightUrl : logoDarkUrl;
+});
+onUnmounted(() => offTheme());
 </script>
 
 <template>
