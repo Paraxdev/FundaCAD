@@ -467,6 +467,10 @@
   min-width: 180px;
   max-height: min(60vh, 360px);
   padding: 6px;
+  /* These fields live inside dialogs (Export, Preferences), which sit at
+     --z-modal; a picker's list has to clear the dialog it belongs to, so it
+     ranks just above modals rather than at the popover layer below them. */
+  z-index: calc(var(--z-modal) + 1);
 }
 .pop-section {
   margin: var(--s-1) var(--s-1) 6px;

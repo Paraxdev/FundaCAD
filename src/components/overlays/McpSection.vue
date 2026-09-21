@@ -5,6 +5,7 @@ import type { LiveState } from "../../live/liveSession";
 import { asMcpHost, MCP_HOSTS, mcpServerPath, mcpSetupFor, type McpHost } from "../../live/mcpConnect";
 import { asLiveEditingMode, liveEditingMode, onLiveEditingChange, setLiveEditingMode } from "../../ui/liveEditing";
 import { toast } from "../../ui/toast";
+import Select from "../ui/Select.vue";
 
 // Injected rather than useEngine(): the section still has to render its
 // settings where no engine was provided, and then simply has no status to show.
@@ -28,13 +29,20 @@ onMounted(async () => {
 });
 onUnmounted(() => { for (const stop of stops) stop(); });
 
-function onLive(ev: Event) {
-  const v = asLiveEditingMode((ev.target as HTMLSelectElement).value);
+const LIVE_OPTIONS = [
+  { value: "off", label: "Do not share" },
+  { value: "read", label: "Share, read only" },
+  { value: "edit", label: "Share, and allow edits" },
+];
+const hostOptions = computed(() => MCP_HOSTS.map((h) => ({ value: h.id, label: h.label })));
+
+function onLive(id: string) {
+  const v = asLiveEditingMode(id);
   if (v) setLiveEditingMode(v);
 }
 
-function onHost(ev: Event) {
-  const v = asMcpHost((ev.target as HTMLSelectElement).value);
+function onHost(id: string) {
+  const v = asMcpHost(id);
   if (v) host.value = v;
 }
 
@@ -62,11 +70,7 @@ async function copy(text: string) {
   <div class="sm-section">AI assistants (MCP)</div>
   <label class="prefs-row">
     <span class="prefs-label">Live document</span>
-    <select id="prefs-live" class="sm-select" :value="live" @change="onLive">
-      <option value="off">Do not share</option>
-      <option value="read">Share, read only</option>
-      <option value="edit">Share, and allow edits</option>
-    </select>
+    <Select id="prefs-live" :model-value="live" :options="LIVE_OPTIONS" @update:model-value="onLive" />
   </label>
   <div class="sm-hint">
     An assistant works on the open document rather than on a copy. Each edit is
@@ -84,9 +88,7 @@ async function copy(text: string) {
   <template v-else-if="setup">
     <label class="prefs-row">
       <span class="prefs-label">Assistant</span>
-      <select id="prefs-mcp-host" class="sm-select" :value="host" @change="onHost">
-        <option v-for="h in MCP_HOSTS" :key="h.id" :value="h.id">{{ h.label }}</option>
-      </select>
+      <Select id="prefs-mcp-host" :model-value="host" :options="hostOptions" @update:model-value="onHost" />
     </label>
     <div class="mcp-setup">
       <div class="sm-hint">{{ setup.hint }}</div>

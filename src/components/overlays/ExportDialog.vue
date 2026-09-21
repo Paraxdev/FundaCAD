@@ -4,6 +4,7 @@
 
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useModalGate } from "../../composables/useModalGate";
+import { escapeClaimed } from "../../ui/escapeClaim";
 import { useExportDialogStore } from "../../stores/exportDialog";
 import {
   clampFaceting, FORMATS, isMeshFormat, loadExportSettings, REFINEMENTS, refinementOf, takesUnit, UNITS,
@@ -29,6 +30,17 @@ const REFINEMENT_OPTIONS: { value: Refinement; label: string }[] = [
   { value: "high", label: "High" },
   { value: "custom", label: "Custom" },
 ];
+const scopeOptions = computed(() => [
+  { value: "all", label: "All in one file" },
+  { value: "separate", label: "Each body as its own file" },
+  ...bodies.map((b) => ({ value: b.id, label: b.name })),
+]);
+// The picker speaks strings; STL's binary flag is a bool, so it rides through
+// one either way.
+const BINARY_OPTIONS = [
+  { value: "binary", label: "Binary" },
+  { value: "ascii", label: "ASCII" },
+];
 function onRefinement(r: Refinement) {
   settings.value.refinement = r;
   if (r === "custom") settings.value.showAdvanced = true;
@@ -50,7 +62,10 @@ function confirm() {
 const cancel = () => dialog.finish(null);
 
 function onKey(e: KeyboardEvent) {
-  if (e.key === "Escape") {
+  // A picker's popover opens after this listener is bound, so it cannot stop
+  // this one from hearing the key first; escapeClaimed is how it says the
+  // Escape is already spoken for (ui/escapeClaim).
+  if (e.key === "Escape" && !escapeClaimed()) {
     e.preventDefault();
     e.stopImmediatePropagation();
     cancel();
@@ -74,11 +89,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
       </label>
       <label v-if="bodies.length > 1" class="prefs-row">
         <span class="prefs-label">Bodies</span>
-        <select v-model="scope" class="sm-select" data-testid="export-scope">
-          <option value="all">All in one file</option>
-          <option value="separate">Each body as its own file</option>
-          <option v-for="b in bodies" :key="b.id" :value="b.id">{{ b.name }}</option>
-        </select>
+        <Select v-model="scope" :options="scopeOptions" testid="export-scope" />
       </label>
 
       <template v-if="mesh">
@@ -89,10 +100,12 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
         </label>
         <label v-if="settings.format === 'stl'" class="prefs-row">
           <span class="prefs-label">Format</span>
-          <select v-model="settings.binary" class="sm-select" data-testid="export-binary">
-            <option :value="true">Binary</option>
-            <option :value="false">ASCII</option>
-          </select>
+          <Select
+            :model-value="settings.binary ? 'binary' : 'ascii'"
+            :options="BINARY_OPTIONS"
+            testid="export-binary"
+            @update:model-value="settings.binary = $event === 'binary'"
+          />
         </label>
         <label class="prefs-row">
           <span class="prefs-label">Refinement</span>

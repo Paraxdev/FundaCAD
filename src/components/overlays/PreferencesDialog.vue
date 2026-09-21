@@ -22,6 +22,7 @@ import { contributedSettings, onContribChange } from "../../plugins/contrib";
 import { useDialogStore } from "../../stores/dialogs";
 import { useModalGate } from "../../composables/useModalGate";
 import ModalFrame from "./ModalFrame.vue";
+import Select from "../ui/Select.vue";
 import McpSection from "./McpSection.vue";
 import PluginsSection from "./PluginsSection.vue";
 import {
@@ -128,9 +129,14 @@ const TANGENT = [
 
 const value = (ev: Event) => (ev.target as HTMLSelectElement).value;
 
-// Every write goes through the module's own gate, so an <option> that no longer
+// The pickers take {value,label}; these rosters are all keyed by id.
+const themeOptions = computed(() => themeList.value.map((t) => ({ value: t.id, label: t.label })));
+const packOptions = computed(() => iconPacks().map((p) => ({ value: p.id, label: p.label })));
+const environmentOptions = ENVIRONMENTS_LIST.map((e) => ({ value: e.id, label: e.label, hint: e.note }));
+
+// Every write goes through the module's own gate, so a choice that no longer
 // matches anything is refused at the same place a corrupt stored value is.
-function onTheme(ev: Event) { const v = asThemeId(value(ev)); if (v) setTheme(v); }
+function onTheme(id: string) { const v = asThemeId(id); if (v) setTheme(v); }
 
 // Opening the native file picker from a real button, the <input> itself is
 // hidden: a bare file input reads as a mystery control on a settings screen,
@@ -171,9 +177,9 @@ function onRemoveTheme() {
   // and refreshes both refs.
   if (activeIsCustom.value) removeCustomTheme(theme.value);
 }
-function onPack(ev: Event) { const v = asIconPackId(value(ev)); if (v) setIconPack(v); }
+function onPack(id: string) { const v = asIconPackId(id); if (v) setIconPack(v); }
 function pickUnit(id: string) { const v = asUnit(id); if (v) setUnit(v); }
-function onEnvironment(ev: Event) { const v = asEnvironment(value(ev)); if (v) setRenderPref("environment", v); }
+function onEnvironment(id: string) { const v = asEnvironment(id); if (v) setRenderPref("environment", v); }
 function pickBackground(id: string) { const v = asBackground(id); if (v) setRenderPref("background", v); }
 function onBrightness(ev: Event) { setRenderPref("brightness", Number.parseFloat(value(ev))); }
 function onDwell(ev: Event) { setHoverDwellMs(Number.parseFloat(value(ev))); }
@@ -208,9 +214,7 @@ function onMotion(ev: Event) { setMotion((ev.target as HTMLInputElement).checked
             <div class="pref-card wide">
               <div class="pref-head">
                 <label class="pref-title" for="prefs-theme">Theme</label>
-                <select id="prefs-theme" class="sm-select" :value="theme" @change="onTheme">
-                  <option v-for="t in themeList" :key="t.id" :value="t.id">{{ t.label }}</option>
-                </select>
+                <Select id="prefs-theme" :model-value="theme" :options="themeOptions" @update:model-value="onTheme" />
               </div>
               <p class="pref-hint">
                 FundaCAD Noir, Dracula, Solarized Light and the Noir Blue/Red/Orange tints ship
@@ -235,9 +239,7 @@ function onMotion(ev: Event) { setMotion((ev.target as HTMLInputElement).checked
             <div class="pref-card">
               <div class="pref-head">
                 <label class="pref-title" for="prefs-iconpack">Icons</label>
-                <select id="prefs-iconpack" class="sm-select" :value="pack" @change="onPack">
-                  <option v-for="p in iconPacks()" :key="p.id" :value="p.id">{{ p.label }}</option>
-                </select>
+                <Select id="prefs-iconpack" :model-value="pack" :options="packOptions" @update:model-value="onPack" />
               </div>
             </div>
             <div class="pref-card">
@@ -266,9 +268,12 @@ function onMotion(ev: Event) { setMotion((ev.target as HTMLInputElement).checked
             <div class="pref-card">
               <div class="pref-head">
                 <label class="pref-title" for="prefs-environment">Reflections</label>
-                <select id="prefs-environment" class="sm-select" :value="render.environment" @change="onEnvironment">
-                  <option v-for="e in ENVIRONMENTS_LIST" :key="e.id" :value="e.id">{{ e.label }}</option>
-                </select>
+                <Select
+                  id="prefs-environment"
+                  :model-value="render.environment"
+                  :options="environmentOptions"
+                  @update:model-value="onEnvironment"
+                />
               </div>
               <p class="pref-hint">
                 A metal is almost entirely reflection, so with none it renders nearly
