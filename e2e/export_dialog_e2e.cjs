@@ -44,6 +44,21 @@ const check = (name, ok, detail) => {
   });
   const has = (id) => page.$(`[data-testid=${id}]`).then((el) => !!el);
   const value = (id) => page.$eval(`[data-testid=${id}]`, (el) => el.value);
+  // The type/unit/refinement/binary pickers are the themed Select now (a button
+  // that opens a teleported popover), not a native <select>: its current value is
+  // on data-value, and choosing means opening it and clicking an option by label.
+  const selValue = (id) => page.$eval(`[data-testid=${id}]`, (el) => el.dataset.value);
+  const pick = async (id, label) => {
+    await page.click(`[data-testid=${id}]`);
+    await page.waitForTimeout(150);
+    const ok = await page.evaluate((lbl) => {
+      const row = [...document.querySelectorAll(".select-pop .opt-row")].find((r) => r.textContent.trim() === lbl);
+      if (row) { row.click(); return true; }
+      return false;
+    }, label);
+    await page.waitForTimeout(150);
+    return ok;
+  };
   const open = async () => {
     await page.evaluate(() => window.__fundacad.handleAction("export"));
     await page.waitForTimeout(400);
@@ -59,25 +74,22 @@ const check = (name, ok, detail) => {
   check("the Advanced toggle reveals the three faceting settings",
     (await has("export-surface-deviation")) && (await has("export-normal-deviation")) && (await has("export-max-edge")));
 
-  await page.selectOption("[data-testid=export-refinement]", "high");
-  await page.waitForTimeout(150);
+  await pick("export-refinement", "High");
   check("a preset fills the values", (await value("export-surface-deviation")) === "0.005" && (await value("export-normal-deviation")) === "5",
     JSON.stringify([await value("export-surface-deviation"), await value("export-normal-deviation")]));
 
   await page.fill("[data-testid=export-max-edge]", "2");
   await page.press("[data-testid=export-max-edge]", "Tab");
   await page.waitForTimeout(150);
-  check("editing one turns the refinement to Custom", (await value("export-refinement")) === "custom", await value("export-refinement"));
+  check("editing one turns the refinement to Custom", (await selValue("export-refinement")) === "custom", await selValue("export-refinement"));
 
-  await page.selectOption("[data-testid=export-unit]", "in");
-  await page.selectOption("[data-testid=export-binary]", "false");
+  await pick("export-unit", "Inch");
+  await pick("export-binary", "ASCII");
   await page.screenshot({ path: path.join(OUT, "01_stl_advanced.png") });
 
-  await page.selectOption("[data-testid=export-format]", "step");
-  await page.waitForTimeout(150);
+  await pick("export-format", "STEP (*.step)");
   check("STEP hides the mesh settings", !(await has("export-unit")) && !(await has("export-refinement")));
-  await page.selectOption("[data-testid=export-format]", "stl");
-  await page.waitForTimeout(150);
+  await pick("export-format", "STL (*.stl)");
 
   await page.click("[data-testid=export-confirm]");
   await page.waitForTimeout(400);
@@ -85,9 +97,9 @@ const check = (name, ok, detail) => {
 
   await open();
   const back = await page.evaluate(() => ({
-    format: document.querySelector("[data-testid=export-format]")?.value,
-    unit: document.querySelector("[data-testid=export-unit]")?.value,
-    refinement: document.querySelector("[data-testid=export-refinement]")?.value,
+    format: document.querySelector("[data-testid=export-format]")?.dataset.value,
+    unit: document.querySelector("[data-testid=export-unit]")?.dataset.value,
+    refinement: document.querySelector("[data-testid=export-refinement]")?.dataset.value,
     maxEdge: document.querySelector("[data-testid=export-max-edge]")?.value,
   }));
   check("the next Export remembers the choices", back.format === "stl" && back.unit === "in" && back.refinement === "custom" && back.maxEdge === "2", JSON.stringify(back));

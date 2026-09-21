@@ -26,9 +26,14 @@ const emit = defineEmits<{ "update:modelValue": [T] }>();
 
 const open = ref(false);
 const btn = useTemplateRef<HTMLButtonElement>("btn");
+/** Measured on open: the list reads as this field's list when it is at least as
+ *  wide as the field, and these fields stretch to fill their row. */
+const width = ref(0);
 
 function toggle() {
-  if (!props.disabled) open.value = !open.value;
+  if (props.disabled) return;
+  width.value = btn.value?.offsetWidth ?? 0;
+  open.value = !open.value;
 }
 
 function pick(v: T) {
@@ -46,6 +51,7 @@ function pick(v: T) {
     :class="{ open }"
     :disabled="disabled"
     :data-testid="testid"
+    :data-value="modelValue"
     :aria-haspopup="true"
     :aria-expanded="open"
     @click="toggle"
@@ -61,7 +67,7 @@ function pick(v: T) {
     side="bottom"
     align="start"
     kind="select-pop"
-    :style="{ zIndex: 99999 }"
+    :min-width="width"
     @close="open = false"
   >
     <ChoiceList

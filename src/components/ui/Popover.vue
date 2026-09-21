@@ -16,8 +16,11 @@ const props = withDefaults(
     kind?: string;
     /** an element beside the anchor the card must also stay clear of */
     clear?: HTMLElement | null;
+    /** px floor for the card, for a card that should not be narrower than what
+     *  opened it (a picker sitting under a full-width field) */
+    minWidth?: number | null;
   }>(),
-  { side: "right", align: "start", gap: 8, kind: "", clear: null },
+  { side: "right", align: "start", gap: 8, kind: "", clear: null, minWidth: null },
 );
 const emit = defineEmits<{ close: [] }>();
 
@@ -83,7 +86,7 @@ defineExpose({ place });
       ref="el"
       class="float-popover"
       :class="kind"
-      :style="{ left: `${pos.left}px`, top: `${pos.top}px` }"
+      :style="{ left: `${pos.left}px`, top: `${pos.top}px`, ...(minWidth ? { minWidth: `${minWidth}px` } : {}) }"
     >
       <slot />
     </div>

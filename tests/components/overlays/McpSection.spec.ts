@@ -53,6 +53,19 @@ async function mounted(engine?: Engine) {
   return w;
 }
 
+// The picker is now a Select (a button that opens a teleported popover), not a
+// native <select>: open it, then click the option row by its label. The rows
+// live under document.body because the popover teleports there.
+async function pick(w: Awaited<ReturnType<typeof mounted>>, trigger: string, label: string) {
+  await w.get(trigger).trigger("click");
+  await flushPromises();
+  const row = Array.from(document.body.querySelectorAll<HTMLElement>(".opt-row"))
+    .find((r) => r.textContent?.trim() === label);
+  if (!row) throw new Error(`no option "${label}" for ${trigger}`);
+  row.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  await flushPromises();
+}
+
 const inTauri = (on: boolean) => {
   const g = globalThis as unknown as Record<string, unknown>;
   if (on) g.__TAURI_INTERNALS__ = {};
@@ -73,11 +86,10 @@ afterEach(() => {
 describe("sharing the live document", () => {
   it("is a core setting, there with no plugin installed, and it changes the mode", async () => {
     const w = await mounted();
-    const select = w.get<HTMLSelectElement>("#prefs-live");
-    expect(select.element.value).toBe("edit");
-    await select.setValue("read");
+    expect(w.get("#prefs-live").text()).toBe("Share, and allow edits");
+    await pick(w, "#prefs-live", "Share, read only");
     expect(liveEditingMode()).toBe("read");
-    await select.setValue("off");
+    await pick(w, "#prefs-live", "Do not share");
     expect(liveEditingMode()).toBe("off");
   });
 
@@ -85,7 +97,7 @@ describe("sharing the live document", () => {
     const w = await mounted();
     setLiveEditingMode("off");
     await flushPromises();
-    expect(w.get<HTMLSelectElement>("#prefs-live").element.value).toBe("off");
+    expect(w.get("#prefs-live").text()).toBe("Do not share");
   });
 });
 
@@ -117,10 +129,10 @@ describe("how to connect it", () => {
     const server = "C:\\Program Files\\FundaCAD\\fundacad.exe";
     expect(w.get("#prefs-mcp-config").text()).toBe(`claude mcp add --scope user fundacad -- "${server}" --mcp`);
 
-    await w.get("#prefs-mcp-host").setValue("claude-desktop");
+    await pick(w, "#prefs-mcp-host", "Claude Desktop");
     expect(JSON.parse(w.get("#prefs-mcp-config").text()).mcpServers.fundacad.command).toBe(server);
 
-    await w.get("#prefs-mcp-host").setValue("other");
+    await pick(w, "#prefs-mcp-host", "Another MCP host");
     expect(w.get("#prefs-mcp-config").text()).toBe(`"${server}" --mcp`);
   });
 
