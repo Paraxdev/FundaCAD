@@ -236,10 +236,17 @@ export function commitParamExpr(doc: CadDocument, name: string, expr: string, un
   else defs[name] = { expr, value: 0, unit: unit ?? "mm" }; // new user parameter; value set by recompute
 }
 
+const OBJECT_PROTO_NAMES = new Set([
+  "constructor", "toString", "valueOf", "hasOwnProperty",
+  "isPrototypeOf", "propertyIsEnumerable", "toLocaleString",
+  "__proto__", "__defineGetter__", "__defineSetter__", "__lookupGetter__", "__lookupSetter__",
+]);
+
 /** Reject bad user-parameter names in one place. Returns an error or null. */
 export function validateName(defs: Record<string, ParamDef>, name: string): string | null {
   if (!isIdentName(name)) return "names are letters, digits and _ (not starting with a digit)";
   if (isReservedName(name)) return `"${name}" is a reserved name`;
+  if (OBJECT_PROTO_NAMES.has(name)) return `"${name}" is a reserved name`;
   if (name in defs) return `"${name}" already exists`;
   if (/^d\d+$/.test(name)) return "dN names are reserved for model parameters";
   return null;
