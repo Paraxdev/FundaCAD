@@ -219,6 +219,9 @@ pub fn update_feature(
     } else {
         let mut out = existing.as_object().cloned().unwrap_or_default();
         for (k, v) in patch {
+            if k == "id" || k == "type" {
+                continue;
+            }
             if v.is_null() {
                 out.remove(&k);
             } else {

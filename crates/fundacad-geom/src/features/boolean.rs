@@ -375,6 +375,11 @@ pub fn do_boolean(ctx: &mut Ctx, f: &BooleanFeature) -> FResult {
             .map(|b| b.id.clone())
             .collect(),
     };
+    if tool_ids.iter().all(|id| id == &target_id) {
+        return Err(Fail::msg(
+            "Boolean: a body cannot be both the target and the tool.",
+        ));
+    }
     let tools: Vec<usize> = tool_ids
         .iter()
         .filter_map(|id| ctx.find_body(id))

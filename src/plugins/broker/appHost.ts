@@ -257,6 +257,7 @@ export function appHost(opts: AppHostOptions): BrokerHost {
             const before = features().find((f) => f.id === id)! as unknown as Record<string, unknown>;
             const out: Record<string, unknown> = { ...before };
             for (const [k, v] of Object.entries(patch)) {
+              if (k === "id" || k === "type") continue;
               if (v === null) delete out[k];
               else out[k] = clone(v);
             }

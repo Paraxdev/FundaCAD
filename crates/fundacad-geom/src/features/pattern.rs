@@ -7,14 +7,16 @@ use fundacad_core::schema::{Axis3, PatternCircular, PatternLinear, PatternRect};
 use opencascade::primitives::Shape;
 
 use super::primitives::require_positive;
-use crate::builder::{Ctx, FResult};
+use crate::builder::{Ctx, FResult, Fail};
 use crate::kernel::{self, BoolKind};
+
+const MAX_PATTERN_COUNT: usize = 10_000;
 
 /// Python `max(1, int(round(n)))`.
 fn copies(n: f64) -> usize {
     let r = n.round_ties_even();
     if r.is_finite() && r >= 1.0 {
-        r as usize
+        (r as usize).min(MAX_PATTERN_COUNT)
     } else {
         1
     }
@@ -116,6 +118,13 @@ pub fn pattern_rect(ctx: &mut Ctx, f: &PatternRect) -> FResult {
     let act = ctx.require_active("Pattern")?;
     let (cx, cy) = (ctx.val(&f.count_x)?, ctx.val(&f.count_y)?);
     require_positive("Pattern", &[("countX", cx), ("countY", cy)])?;
+    for (name, n) in [("countX", cx), ("countY", cy)] {
+        if n.round_ties_even() as usize > MAX_PATTERN_COUNT {
+            return Err(Fail::msg(format!(
+                "Pattern: {name} must be at most {MAX_PATTERN_COUNT} (got {n})"
+            )));
+        }
+    }
     let (dx, dy) = (ctx.val(&f.spacing_x)?, ctx.val(&f.spacing_y)?);
     let out = pattern_rect_shape(ctx.bodies[act].shape(), cx, cy, dx, dy)?;
     ctx.set_shape(act, out);
@@ -140,6 +149,11 @@ fn targets(ctx: &mut Ctx, id: &str, kind: &str, ids: Option<&Vec<String>>) -> FR
 pub fn pattern_linear(ctx: &mut Ctx, f: &PatternLinear) -> FResult {
     let n = ctx.val(&f.count)?;
     require_positive("Pattern", &[("count", n)])?;
+    if n.round_ties_even() as usize > MAX_PATTERN_COUNT {
+        return Err(Fail::msg(format!(
+            "Pattern: count must be at most {MAX_PATTERN_COUNT} (got {n})"
+        )));
+    }
     let spacing = ctx.val(&f.spacing)?;
     for i in targets(ctx, &f.id, "patternLinear", f.bodies.as_ref())? {
         let out = pattern_linear_shape(ctx.bodies[i].shape(), n, spacing, &f.axis)?;
@@ -151,6 +165,11 @@ pub fn pattern_linear(ctx: &mut Ctx, f: &PatternLinear) -> FResult {
 pub fn pattern_circular(ctx: &mut Ctx, f: &PatternCircular) -> FResult {
     let n = ctx.val(&f.count)?;
     require_positive("Pattern", &[("count", n)])?;
+    if n.round_ties_even() as usize > MAX_PATTERN_COUNT {
+        return Err(Fail::msg(format!(
+            "Pattern: count must be at most {MAX_PATTERN_COUNT} (got {n})"
+        )));
+    }
     let angle = ctx.val(&f.angle)?;
     for i in targets(ctx, &f.id, "patternCircular", f.bodies.as_ref())? {
         let out = pattern_circular_shape(ctx.bodies[i].shape(), n, angle, &f.axis)?;
