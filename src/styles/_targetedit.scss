@@ -8,30 +8,30 @@
    A panel that moved to sit over the next edge you wanted would be a panel that
    ate the gesture it exists to collect.
 
-   Absolute inside #viewport rather than fixed to the window, which is what makes
-   "top-left" mean the top-left of the 3D VIEW in every arrangement of the shell.
-   The browser pane, the ribbon and the history strip each move between layouts;
-   a window-anchored panel sits on top of one of them in some arrangement. Top-
-   left is the corner nothing else uses: the prompt is centred, the view pill and
-   the feature's own values are bottom-left, the readout is bottom-right.
+   Docked at the bottom of the left column, under the Items browser (which
+   shrinks) and beside the tool rail, where the fillet/chamfer edge list also
+   sits, so "what this is applied on" reads the same whichever route opened it.
+   It stretches to the column's width (the Items pane's) and caps its own height,
+   the list inside scrolling, so a face set of dozens never grows past a Done
+   button.
    ============================================================================ */
 
 .tgt-panel {
-  position: absolute;
-  left: var(--s-4);
-  top: var(--s-4);
-  z-index: 20; /* over the view pill and the readout, which are 15 */
-  width: 208px;
+  flex: 0 0 auto;
+  margin-top: auto; /* dock to the bottom of the column */
+  min-width: 208px; /* usable alone; stretches to the Items width beside it */
+  max-height: min(46vh, 360px);
   display: flex;
   flex-direction: column;
   gap: var(--s-2);
   padding: var(--s-3);
-  border-radius: var(--r-md);
+  border-radius: var(--float-tile-radius, var(--r-md));
   border: 1px solid var(--line-strong);
   background: var(--panel-2);
   -webkit-backdrop-filter: blur(14px) saturate(1.3);
           backdrop-filter: blur(14px) saturate(1.3);
   box-shadow: var(--shadow-3);
+  pointer-events: auto;
   animation: pop-in var(--t-fast) var(--ease);
 }
 
@@ -93,7 +93,8 @@
   list-style: none;
   margin: 0;
   padding: 0;
-  max-height: 220px;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -113,9 +114,13 @@
 /* The row lights up with the geometry it names, so the pairing is visible from
    either end, point at the row, the edge glows; point at the edge, you can see
    which row it is. */
-.tgt-item:hover {
+.tgt-item:hover,
+.tgt-item.tgt-held {
   background: var(--accent-tint);
   border-color: var(--accent);
+}
+.tgt-item {
+  cursor: pointer;
 }
 /* An entry this build cannot place on screen. Kept and carried through the
    commit, the engine resolves these better than the viewport does, so it is

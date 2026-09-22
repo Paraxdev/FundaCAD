@@ -477,6 +477,15 @@ function openMenu(e: MouseEvent, id: string, i: number) {
                   @blur="finishRename($event, true)"
                 />
                 <span v-else class="t-name">{{ f.name || metaFor(f).label }}</span>
+                <button
+                  type="button"
+                  class="t-edit"
+                  title="Edit this feature"
+                  aria-label="Edit this feature"
+                  @click.stop="timeline.edit(f.id)"
+                  @dblclick.stop
+                  @pointerdown.stop
+                ><Icon name="pen" :size="13" /></button>
                 <Icon class="t-caret" :name="selection.featureId === f.id ? 'caretDown' : 'caretRight'" :size="12" />
               </div>
               <!-- The feature's own values, under the chip you clicked. The
