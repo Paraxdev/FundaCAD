@@ -104,10 +104,13 @@
     var(--float-bg);
   border-color: color-mix(in srgb, var(--accent) 55%, transparent);
   color: var(--accent-hot);
+  /* An even halo, not a downward drop: the rail tiles sit tight against their
+     neighbours, so a bloom offset to one side reads as a glow that has been
+     sliced off. Symmetric and modest keeps it a clean ring on every side. */
   box-shadow:
     var(--glass-inset),
     0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent),
-    0 8px 22px -8px var(--accent-glow);
+    0 0 16px 1px var(--accent-glow);
 }
 .rail-pill {
   padding: 3px 9px;
