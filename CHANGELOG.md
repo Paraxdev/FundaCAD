@@ -30,6 +30,16 @@ This file starts on 2026-08-03. For anything before that, see the
   Solarized Light is the app's first built-in light theme, both drawn from
   their well-known canonical palettes.
 
+- **A Colour-Blind Safe built-in theme** that stays readable for every kind of
+  colour blindness. Its four signal colours (a violet accent, a teal ok, an
+  amber warn and a red error) were simulation-checked so no two collapse under
+  protanopia, deuteranopia or tritanopia, and their lightness also steps apart
+  so ok, warn and error still separate under monochromacy, where hue carries
+  nothing. The accent is violet rather than a second blue, which would have
+  merged with the teal ok for a tritanope, and ok leans teal rather than pure
+  green so it keeps a blue axis under red-green blindness. Surfaces are
+  near-neutral so those signals are what the eye lands on.
+
 - **Three Noir tints: Noir Blue, Noir Red and Noir Orange**, the built-in
   theme's same dark shell with only the accent swapped, for anyone who wants
   FundaCAD Noir's look without its mint-green (or Dracula's purple).

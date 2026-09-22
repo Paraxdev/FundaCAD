@@ -106,6 +106,23 @@ describe("the theme roster", () => {
     });
   });
 
+  it("ships a colour-blind safe theme whose status colours are all distinct", () => {
+    const theme = themes().find((t) => t.id === "colorblind-safe");
+
+    expect(theme).toMatchObject({
+      label: "Colour-Blind Safe",
+      mode: "dark",
+      custom: false,
+    });
+
+    const { palette } = theme as ShippedTheme;
+
+    // ok/warn/error must never collapse to one colour: that is the whole point.
+    const status = new Set([palette["--ok"], palette["--warn"], palette["--error"]]);
+
+    expect(status.size).toBe(3);
+  });
+
   it("cannot remove a shipped theme", () => {
     setTheme("dracula");
 

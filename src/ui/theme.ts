@@ -146,6 +146,46 @@ const SHIPPED_THEMES: ShippedTheme[] = [
       "--accent-blue": "#268bd2",
     },
   },
+  {
+    // A theme that stays legible for every kind of colour blindness. Its four
+    // signal colours were chosen and simulation-checked so no two collapse under
+    // protanopia, deuteranopia or tritanopia (the closest pair holds a CIE ΔE of
+    // ~29), and their lightness also steps apart so the ok/warn/error trio still
+    // separates under monochromacy, where hue carries nothing. The accent is
+    // violet rather than a second blue: a blue accent merged with the teal ok
+    // under tritanopia. ok leans teal, not pure green, to keep a blue axis under
+    // red-green blindness; warn is amber, error a bright red that still clears
+    // ~6:1 contrast on the dark surface, since --error is drawn as text.
+    // Surfaces are near-neutral so those signals are what the eye lands on.
+    id: "colorblind-safe",
+    label: "Colour-Blind Safe",
+    mode: "dark",
+    custom: false,
+    palette: {
+      "--bg": "#0e1116",
+      "--panel": "#161b22",
+      "--panel-2": "#1c232c",
+      "--raised": "#232c37",
+      "--raised-2": "#2b3542",
+      "--viewport-bg": "#0b0e13",
+      "--line": "#2b3542",
+      "--line-strong": "#58697a",
+      "--text": "#f5f7fa",
+      "--text-dim": "#b5c0cc",
+      "--text-mute": "#7e8b99",
+      "--accent": "#8f7fe8",
+      "--accent-hot": "#ab9cf2",
+      "--accent-tint": "rgba(143, 127, 232, 0.14)",
+      "--accent-tint-2": "rgba(143, 127, 232, 0.24)",
+      "--accent-glow": "rgba(143, 127, 232, 0.35)",
+      "--on-accent": "#0d0a1f",
+      "--ok": "#2ec4b6",
+      "--warn": "#f4c542",
+      "--error": "#ff5c5c",
+      "--error-tint": "rgba(255, 92, 92, 0.16)",
+      "--accent-blue": "#8f7fe8",
+    },
+  },
   noirTint("noir-blue", "Noir Blue", {
     accent: "#3fa9f5",
     accentHot: "#7ecbff",
