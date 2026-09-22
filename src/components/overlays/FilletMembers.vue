@@ -5,6 +5,11 @@
 // the only way to reach the UNRESOLVED members, saved selectors whose edge the
 // current geometry no longer draws, so they have no line to click.
 //
+// It sits at the bottom of the left column, under the Items browser (which
+// shrinks to make room) and beside the tool rail, so it is a docked card rather
+// than a panel floating over the model. Renders nothing until a blend is being
+// edited.
+//
 // A poll rather than a subscription, the same shape useSelectionOffers uses: the
 // tool is plain imperative code that mutates its member array on pointer events,
 // and the loop runs only while a blend is being edited.
@@ -73,70 +78,50 @@ const unresolvedCount = () => rows.value.filter((r) => !r.resolved).length;
 </script>
 
 <template>
-  <Teleport to="body">
-    <div v-if="active && rows.length" class="fm-panel" role="group" aria-label="Blend edges">
-      <div class="fm-head">
-        <span class="fm-title">{{ kind === "fillet" ? "Fillet" : "Chamfer" }}</span>
-        <span class="fm-count">{{ resolvedCount() }} edge{{ resolvedCount() === 1 ? "" : "s" }}</span>
-        <span v-if="unresolvedCount()" class="fm-warn-count">{{ unresolvedCount() }} unresolved</span>
-      </div>
-      <ul class="fm-list">
-        <li v-for="r in rows" :key="r.key" class="fm-row" :class="{ unresolved: !r.resolved }">
-          <Icon :name="r.resolved ? 'edge' : 'warning'" :size="15" class="fm-mark" />
-          <span class="fm-label">{{ r.label }}</span>
-          <button
-            type="button"
-            class="fm-x"
-            :title="`Remove ${r.label}`"
-            :aria-label="`Remove ${r.label}`"
-            @pointerdown.prevent.stop="remove(r.key)"
-          >
-            <Icon name="close" :size="13" />
-          </button>
-        </li>
-      </ul>
+  <aside v-if="active && rows.length" class="float-card fm-card" role="group" aria-label="Blend edges">
+    <div class="float-card-head">
+      <span class="float-card-title">{{ kind === "fillet" ? "Fillet" : "Chamfer" }}</span>
+      <span class="fm-count">{{ resolvedCount() }} edge{{ resolvedCount() === 1 ? "" : "s" }}</span>
+      <span v-if="unresolvedCount()" class="fm-warn-count">{{ unresolvedCount() }} unresolved</span>
+    </div>
+    <ul class="fm-list">
+      <li v-for="r in rows" :key="r.key" class="fm-row" :class="{ unresolved: !r.resolved }">
+        <Icon :name="r.resolved ? 'edge' : 'warning'" :size="15" class="fm-mark" />
+        <span class="fm-label">{{ r.label }}</span>
+        <button
+          type="button"
+          class="fm-x"
+          :title="`Remove ${r.label}`"
+          :aria-label="`Remove ${r.label}`"
+          @pointerdown.prevent.stop="remove(r.key)"
+        >
+          <Icon name="close" :size="13" />
+        </button>
+      </li>
+    </ul>
+    <div class="fm-foot">
       <button type="button" class="fm-add" @pointerdown.prevent.stop="add()">
         <Icon name="plus" :size="14" /> Add edge
       </button>
     </div>
-  </Teleport>
+  </aside>
 </template>
 
 <style scoped>
-.fm-panel {
-  position: fixed;
-  top: 76px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 60;
+/* A docked card in the left column: sticks to the bottom (margin-top:auto), and
+   is capped so a long edge list scrolls rather than pushing the Items browser
+   out of the column. */
+.fm-card {
+  flex: 0 0 auto;
+  margin-top: auto;
   width: 220px;
-  max-height: calc(100vh - 140px);
-  display: flex;
-  flex-direction: column;
-  padding: 8px;
-  background: var(--float-bg-solid, var(--panel));
-  -webkit-backdrop-filter: var(--float-blur);
-          backdrop-filter: var(--float-blur);
-  border: 1px solid var(--float-line, var(--line));
-  border-radius: var(--float-tile-radius, 10px);
-  box-shadow: var(--float-shadow);
-  color: var(--text);
-  font: 12px var(--ui, system-ui, sans-serif);
+  max-height: min(46vh, 360px);
   pointer-events: auto;
-}
-.fm-head {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  padding: 2px 4px 6px;
-}
-.fm-title {
-  font-weight: 700;
-  letter-spacing: 0.02em;
 }
 .fm-count {
   color: var(--text-dim);
   font-size: 11px;
+  font-weight: 400;
 }
 .fm-warn-count {
   margin-left: auto;
@@ -147,15 +132,17 @@ const unresolvedCount = () => rows.value.filter((r) => !r.resolved).length;
 .fm-list {
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 2px 8px;
   overflow-y: auto;
   min-height: 0;
+  font: 12px var(--ui, system-ui, sans-serif);
+  color: var(--text);
 }
 .fm-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 4px;
+  padding: 4px;
   border-radius: 5px;
 }
 .fm-row + .fm-row {
@@ -199,18 +186,22 @@ const unresolvedCount = () => rows.value.filter((r) => !r.resolved).length;
   background: var(--error-tint);
   color: var(--error);
 }
+.fm-foot {
+  flex: none;
+  padding: 6px 8px 8px;
+}
 .fm-add {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  margin-top: 6px;
+  width: 100%;
   padding: 6px;
   background: var(--raised);
   border: 1px solid var(--line);
   border-radius: 6px;
   color: var(--text);
-  font: inherit;
+  font: 12px var(--ui, system-ui, sans-serif);
   cursor: pointer;
 }
 .fm-add:hover {
