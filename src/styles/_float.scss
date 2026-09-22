@@ -35,6 +35,21 @@
   left: var(--float-gap);
   align-items: stretch;
 }
+/* Items and the blend's edge list stacked in one column. The layer takes no
+   pointer events (the gaps pass clicks to the model); the cards inside re-arm
+   their own. Items grows to fill; the edge card is capped and sits at the
+   bottom, so it eats into Items rather than the reverse. */
+.float-left-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--float-gap);
+  min-height: 0;
+  pointer-events: none;
+}
+.float-left-stack > #browser {
+  flex: 1 1 auto;
+  min-height: 0;
+}
 .float-right {
   right: var(--float-gap);
   align-items: flex-start;

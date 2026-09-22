@@ -81,7 +81,12 @@ onUnmounted(() => offContrib?.());
       <ViewportPane />
       <div id="float-layer">
         <div class="float-left">
-          <BrowserPane v-if="shell.itemsOpen" />
+          <!-- Items on top, the blend's edge list docked under it (shrinking
+               Items while a fillet/chamfer is being edited), the rail beside. -->
+          <div class="float-left-stack">
+            <BrowserPane v-if="shell.itemsOpen" />
+            <FilletMembers />
+          </div>
           <ToolRail />
         </div>
         <div class="float-right">
@@ -125,7 +130,6 @@ onUnmounted(() => offContrib?.());
   <SketchDimLayer />
   <SketchGlyphLayer />
   <TextToolPanel v-if="toolPanels.text" :key="toolPanels.text.id" :req="toolPanels.text" />
-  <FilletMembers />
   <ProjectFilterBar v-if="toolPanels.projectAnchor" />
 
   <!-- Modal dialogs. v-if rather than an `open` prop on purpose: mount IS open
