@@ -290,6 +290,11 @@
   gap: var(--float-gap);
   min-height: 0;
   pointer-events: none;
+  /* Paint above the Items browser beside it: that card is `position: relative`,
+     so without this it stacks over the rail and swallows the left of an active
+     tile's glow. */
+  position: relative;
+  z-index: 1;
 }
 .rail-list {
   display: flex;
@@ -381,6 +386,13 @@
   background: var(--accent-tint-2);
   border-color: var(--accent);
   color: var(--accent-hot);
+}
+/* Lift the lit tile over its neighbours (the tile above it, the pills) so its
+   glow paints on top of them rather than being swallowed. */
+.rail-btn.active,
+.rail-btn.holding {
+  position: relative;
+  z-index: 1;
 }
 .rail-btn.disabled {
   opacity: 0.45;
