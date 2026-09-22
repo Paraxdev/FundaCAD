@@ -24,6 +24,7 @@
 // different picker behind it.
 
 import { computed } from "vue";
+import Icon from "./Icon.vue";
 import { useEngine } from "../../app/engineKey";
 import { useDocValue } from "../../app/useDoc";
 import { describeTarget, readTarget, type TargetField } from "../../features/selectionTargets";
@@ -78,6 +79,7 @@ function edit() {
         :title="editing ? 'Editing this selection' : `Change which ${target.kind}s this acts on`"
         @click="edit"
       >
+        <Icon name="pen" :size="12" />
         Edit
       </button>
     </div>
