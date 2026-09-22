@@ -34,12 +34,15 @@ This file starts on 2026-08-03. For anything before that, see the
 
 - **History clicks: single to inspect, double to edit.** A single click on a
   history step now only selects it, opening its values and lighting the datum it
-  made, without moving the model. A double-click edits it, rolling the view back
-  to just before that step so its own inputs are on screen, and finishing or
-  Escape returns the model to the tip. This replaces the older behaviour where a
-  single click quietly opened the editor and a double-click scrubbed the view. A
-  history click is ignored while an edit or sketch is already in progress, so
-  clicking another step no longer swaps it out from under a running tool.
+  made, without moving the model. A double-click edits it: the rollback marker
+  drops onto that step (the steps after it roll away, so the timeline reads the
+  same as the view), its own inputs come on screen, and finishing or Escape
+  springs the marker back to the tip. The saved marker is left untouched
+  throughout, so a save mid-edit still records the latest. This replaces the
+  older behaviour where a single click quietly opened the editor and a
+  double-click scrubbed the view. A history click, the transport buttons and the
+  marker drag are all inert while an edit or sketch is in progress, so nothing
+  gets swapped out from under a running tool.
 
 - **The geometry Edit button carries a pencil.** The "Edit" on a feature's
   Edges / Faces / Bodies row (the one that opens the affected-geometry editor)

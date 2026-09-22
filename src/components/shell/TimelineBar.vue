@@ -78,7 +78,27 @@ const unit = ref(getUnit());
 const offUnit = onUnitChange(() => { unit.value = getUnit(); });
 onUnmounted(offUnit);
 
-const rollback = useDocValue(() => store.rollbackIndex);
+// The SAVED marker, from the document. Transport buttons and the marker drag
+// act on this, and it is what a save records.
+const docRollback = useDocValue(() => store.rollbackIndex);
+// A bump on every edit-preview change (which does not touch the document, so
+// useDocValue would not see it), so `editing` and the marker below re-read.
+const editTick = ref(0);
+const editing = computed(() => {
+  editTick.value;
+  return store.editPreviewId !== null;
+});
+// The marker AS DRAWN. While a feature is being edited it drops onto that
+// feature, since the preview shows the model as of that step with everything
+// after it rolled away; the saved marker (docRollback) stays put and finishing
+// the edit springs the drawn marker back to it.
+const rollback = computed(() => {
+  if (editing.value) {
+    const i = features.value.findIndex((f) => f.id === store.editPreviewId);
+    if (i >= 0) return i + 1;
+  }
+  return docRollback.value;
+});
 const suppressed = useDocValue(() => new Set(features.value.filter((f) => store.isSuppressed(f.id)).map((f) => f.id)));
 
 /** Every failing feature this build: id -> message. Continue-past-errors can
@@ -236,11 +256,14 @@ function onRenameKey(e: KeyboardEvent) {
   startRename(selection.featureId);
 }
 
+let offEditPreview: (() => void) | null = null;
 onMounted(() => {
   window.addEventListener("keydown", onRenameKey);
+  offEditPreview = store.onEditPreview(() => { editTick.value++; });
 });
 onUnmounted(() => {
   window.removeEventListener("keydown", onRenameKey);
+  offEditPreview?.();
 });
 
 // --- scrolling -----------------------------------------------------------
@@ -312,6 +335,9 @@ function jumpToNextError() {
 // --- rollback marker (drag to roll the model back/forward) ---------------
 // Stays imperative: it is a pointer drag resolved against measured chip rects.
 function onMarkerDown(e: PointerEvent) {
+  // The drawn marker sits on the edited step during an edit; it is not the saved
+  // marker and must not be dragged. Finish or Escape first.
+  if (editing.value) return;
   e.preventDefault();
   e.stopPropagation();
   const m = e.currentTarget as HTMLElement;
@@ -400,11 +426,14 @@ function openMenu(e: MouseEvent, id: string, i: number) {
       ><Icon name="warning" :size="14" /> {{ errors.size }}</button>
       <button class="float-card-close" title="Hide the history (Ctrl Alt H)" @click="shellStore.setHistory(false)"><Icon name="close" :size="14" /></button>
     </div>
+    <!-- Transport moves the SAVED marker (docRollback), and stands down while a
+         feature is being edited: the drawn marker is on the edited step then, and
+         scrubbing out from under a live edit is the "bugs out" case. -->
     <div class="timeline-transport">
-      <button class="tl-btn" title="Roll back to the start" :disabled="rollback <= 0" @click="store.setRollback(0)"><Icon name="skipStart" /></button>
-      <button class="tl-btn" title="Step one feature back" :disabled="rollback <= 0" @click="store.setRollback(Math.max(0, rollback, 1))"><Icon name="stepBack" /></button>
-      <button class="tl-btn" title="Step one feature forward" :disabled="rollback >= features.length" @click="store.setRollback(Math.min(features.length, rollback + 1))"><Icon name="stepForward" /></button>
-      <button class="tl-btn" title="Roll forward to the end" :disabled="rollback >= features.length" @click="store.setRollback(features.length)"><Icon name="skipEnd" /></button>
+      <button class="tl-btn" title="Roll back to the start" :disabled="editing || docRollback <= 0" @click="store.setRollback(0)"><Icon name="skipStart" /></button>
+      <button class="tl-btn" title="Step one feature back" :disabled="editing || docRollback <= 0" @click="store.setRollback(Math.max(0, docRollback - 1))"><Icon name="stepBack" /></button>
+      <button class="tl-btn" title="Step one feature forward" :disabled="editing || docRollback >= features.length" @click="store.setRollback(Math.min(features.length, docRollback + 1))"><Icon name="stepForward" /></button>
+      <button class="tl-btn" title="Roll forward to the end" :disabled="editing || docRollback >= features.length" @click="store.setRollback(features.length)"><Icon name="skipEnd" /></button>
     </div>
 
     <div ref="scroller" class="timeline-scroll" @dragover="onDragOverScroller">
