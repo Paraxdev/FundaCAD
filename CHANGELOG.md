@@ -32,6 +32,16 @@ This file starts on 2026-08-03. For anything before that, see the
   the app's tools plus a labelled subset per plugin rather than one long mixed
   list.
 
+- **An edit pencil on every History row**, so a feature opens in its own editor
+  from one click on the row rather than a double-click on the chip.
+
+- **The selection editor (what a feature is applied to) is docked bottom-left.**
+  The list of a feature's affected edges, faces or bodies now sits under the
+  Items browser at the same width, beside the tool rail, where the fillet edge
+  list also lives, rather than floating over the model. It scrolls when long,
+  and clicking a row pins the highlight on the geometry it names (hover still
+  lights it too).
+
 - **A member list for the Fillet and Chamfer tools.** While sizing a blend, a
   panel lists every edge in it with a button to drop each one and an "Add edge"
   affordance, which is easier than hunting orange lines in the view when a blend

@@ -86,6 +86,7 @@ onUnmounted(() => offContrib?.());
           <div class="float-left-stack">
             <BrowserPane v-if="shell.itemsOpen" />
             <FilletMembers />
+            <TargetEditPanel />
           </div>
           <ToolRail />
         </div>
@@ -109,7 +110,6 @@ onUnmounted(() => offContrib?.());
   <ShortcutHud />
   <ContextMenuHost />
   <ConsolePanel />
-  <TargetEditPanel />
   <AreaFilterChip />
   <CommandPalette />
 

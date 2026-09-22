@@ -229,6 +229,32 @@
   border-radius: 6px;
   outline: none;
 }
+#timeline .timeline-node .t-edit {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  color: var(--text-mute);
+  cursor: pointer;
+  /* Quiet until the row is hovered, so the strip stays a list of names rather
+     than a wall of buttons; always shown on the open row. */
+  opacity: 0;
+  transition: opacity var(--t-fast) var(--ease), color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
+}
+#timeline .timeline-node:hover .t-edit,
+#timeline .timeline-node.selected .t-edit {
+  opacity: 1;
+}
+#timeline .timeline-node .t-edit:hover {
+  background: var(--accent-tint);
+  color: var(--accent-hot);
+}
 #timeline .timeline-node .t-caret {
   flex: none;
   color: var(--text-mute);

@@ -114,7 +114,8 @@ const unresolvedCount = () => rows.value.filter((r) => !r.resolved).length;
 .fm-card {
   flex: 0 0 auto;
   margin-top: auto;
-  width: 220px;
+  /* Stretches to the column's width (the Items pane beside it), usable alone. */
+  min-width: 220px;
   max-height: min(46vh, 360px);
   pointer-events: auto;
 }
