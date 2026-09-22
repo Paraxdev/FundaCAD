@@ -23,6 +23,7 @@ import {
   type SelectionCounts,
   type ToolId,
 } from "../features/toolCapabilities";
+import { contributedToolOwner } from "../plugins/contrib";
 import { keyHint } from "../input/shortcuts";
 
 /** Which kind wins when a selection holds several. See the header, this is
@@ -70,6 +71,9 @@ export interface ToolOffer {
   hint: string | undefined;
   /** The selection actually satisfies this tool's minimum. */
   enabled: boolean;
+  /** The plugin that contributed this tool, or undefined for an app tool. What
+   *  the rail groups a plugin's tools under its own heading by. */
+  pluginId: string | undefined;
 }
 
 /** Tool id → icon name in ui/icons.ts.
@@ -152,6 +156,7 @@ export function selectionOffers(sel: SelectionCounts): ToolOffer[] {
       action: ACTIONLESS.has(tool) ? null : tool,
       hint: keyHint(tool),
       enabled: live.has(tool),
+      pluginId: contributedToolOwner(tool) ?? undefined,
     };
   });
 }

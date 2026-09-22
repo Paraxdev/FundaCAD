@@ -5,7 +5,8 @@
 // features/toolCapabilities.ts was written to end, now one layer further up
 // where the buttons are.
 
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect } from "vitest";
+import { contribute, resetContributions } from "../../src/plugins/contrib";
 import { TOOL_CAPABILITIES, TOOL_IDS } from "../../src/features/toolCapabilities";
 import { allCommands } from "../../src/ui/commands";
 import { iconPaths } from "../../src/ui/icons";
@@ -105,6 +106,33 @@ describe("what a selection offers", () => {
     // than on the component remembering to check.
     expect(selectionOffers({})).toEqual([]);
     expect(toolbarOffers({})).toEqual([]);
+  });
+});
+
+describe("who owns an offer", () => {
+  afterEach(() => resetContributions());
+
+  it("stamps a contributed tool with its plugin and leaves the app's own blank", () => {
+    // The rail groups a plugin's tools under its own heading, so every offer has
+    // to say where it came from. An app tool says nothing (undefined); a
+    // contributed one carries the plugin id contribute() was called with.
+    contribute("Acme.Widgets", {
+      tools: [{ id: "acme-emboss", label: "Emboss", iconName: "dot", consumes: ["face"], source: "selection" }],
+    });
+    const offers = selectionOffers({ face: 1 });
+    const app = offers.find((o) => o.tool === "presspull");
+    const plugin = offers.find((o) => o.tool === "acme-emboss");
+    expect(app?.pluginId).toBeUndefined();
+    expect(plugin?.pluginId).toBe("Acme.Widgets");
+  });
+
+  it("drops the stamp when the plugin is switched off", () => {
+    const off = contribute("Acme.Widgets", {
+      tools: [{ id: "acme-emboss", label: "Emboss", iconName: "dot", consumes: ["face"], source: "selection" }],
+    });
+    expect(selectionOffers({ face: 1 }).some((o) => o.tool === "acme-emboss")).toBe(true);
+    off();
+    expect(selectionOffers({ face: 1 }).some((o) => o.tool === "acme-emboss")).toBe(false);
   });
 });
 

@@ -15,7 +15,15 @@ import {
 import { contextMenu } from "../ui/menu";
 import { materialMenu } from "../ui/browserTree";
 import type { SelectionCounts } from "../features/toolCapabilities";
+import { shippedPluginName } from "../plugins/shipped";
 import { describeSelection, type Pt3 } from "../ui/selectionMeasure";
+
+/** A plugin's tools, grouped under its own heading in the selection rail. */
+export interface PluginToolGroup {
+  pluginId: string;
+  name: string;
+  offers: ToolOffer[];
+}
 
 function readCounts(engine: Engine): { counts: SelectionCounts; signature: string } {
   const edges = engine.viewport.selectedEdgeLines();
@@ -40,6 +48,24 @@ export function useSelectionOffers(engine: Engine) {
 
   const kind = computed(() => primaryKind(counts.value));
   const offers = computed(() => toolbarOffers(counts.value));
+  // The app's own tools sit flat at the top; a plugin's tools fold under its
+  // name (see the rail). `offers` stays the full flat list so run() can resolve
+  // any tool id, plugin or not, from the one place.
+  const appOffers = computed(() => offers.value.filter((o) => !o.pluginId));
+  const pluginGroups = computed<PluginToolGroup[]>(() => {
+    const byPlugin = new Map<string, ToolOffer[]>();
+    for (const o of offers.value) {
+      if (!o.pluginId) continue;
+      let list = byPlugin.get(o.pluginId);
+      if (!list) byPlugin.set(o.pluginId, (list = []));
+      list.push(o);
+    }
+    return [...byPlugin].map(([pluginId, os]) => ({
+      pluginId,
+      name: shippedPluginName(pluginId),
+      offers: os,
+    }));
+  });
   const looks = computed(() => appearanceOffers(counts.value));
   const describe = (withNumbers: boolean) => {
     const k = kind.value;
@@ -137,5 +163,5 @@ export function useSelectionOffers(engine: Engine) {
     wake();
   }
 
-  return { counts, kind, offers, looks, summary, readout, toolOwns, run, look, clear, wake };
+  return { counts, kind, offers, appOffers, pluginGroups, looks, summary, readout, toolOwns, run, look, clear, wake };
 }

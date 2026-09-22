@@ -416,6 +416,19 @@ export function contributedTools(): ToolContribution[] {
   return all("tools").flat();
 }
 
+/** The plugin that contributed a tool id, or null when the app owns it.
+ *
+ *  `contributedTools()` flattens the entries and drops which plugin each tool
+ *  came from, which is exactly what the selection rail needs to group a
+ *  plugin's tools under its own heading. Kept as a lookup rather than baked into
+ *  the flattened list so nothing else has to carry a field it does not read. */
+export function contributedToolOwner(toolId: string): string | null {
+  for (const e of entries) {
+    for (const t of e.c.tools ?? []) if (t.id === toolId) return e.plugin;
+  }
+  return null;
+}
+
 /** Is any contributed tool holding the window?
  *
  *  What app/toolBusy.ts adds to its list of eleven `.active` fields. A plugin
