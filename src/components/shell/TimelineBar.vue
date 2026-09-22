@@ -15,7 +15,6 @@ import { contextMenu } from "../../ui/menu";
 import { buildProgress, CANCEL_DELAY_MS } from "../../ui/buildProgress";
 import { featureNotes } from "../../ui/featureNotes";
 import { gapIndexIn } from "../../ui/trackGaps";
-import { ClickOrDouble, HistoryPeek } from "../../ui/historyPeek";
 import { getUnit, onUnitChange } from "../../ui/units";
 import FeatureProperties from "./FeatureProperties.vue";
 import { useSelectionOffers } from "../../composables/useSelectionOffers";
@@ -184,41 +183,27 @@ function chipTitle(f: { id: string; type: string; inactive?: boolean }, i: numbe
   );
 }
 
-// One click EDITS a step. A double-click PEEKS: the model rolls to just after
-// that feature, every later step dimmed, and Escape (or the same double-click
-// again) puts it back exactly as it was before the peek, the tip or wherever
-// the marker stood. A peek is a look, not a move, which is why it remembers
-// where it came from; moving the marker any other way ends it (ui/historyPeek.ts).
+// A single click SELECTS a step: its values open under the chip and the datum
+// it made lights up, but the MODEL DOES NOT MOVE. A double-click EDITS it, which
+// rolls the view back to just before the feature (its own tool then shows the
+// inputs it was built from) and opens that tool; finishing or Escape puts the
+// model back at the tip. There is no separate "peek": the edit's own rollback is
+// the look back in time, and one gesture that moves the model is clearer than a
+// single click that quietly did.
 //
-// The chip is selected at once on either, so the values panel answers the click
-// immediately; only the editor waits out the double-click window, or the first
-// click of every peek would open a form.
-const peek = new HistoryPeek({
-  get: () => store.rollbackIndex,
-  set: (i) => store.setRollback(i),
-  length: () => store.document.features.length,
-});
-watch(rollback, (i) => peek.observe(i));
-const clicks = new ClickOrDouble<string>(
-  (id) => timeline.edit(id),
-  (id) => {
-    const i = features.value.findIndex((f) => f.id === id);
-    if (i >= 0) peek.peek(i);
-  },
-);
-function onChipClick(id: string, e: MouseEvent) {
-  timeline.select(id);
-  clicks.click(id, e.detail);
+// Both are ignored while a tool already owns the screen (an edit in progress, a
+// sketch): a click that swapped the open feature out from under a running editor
+// is exactly the "clicking around bugs out" case. Finish or Escape first.
+function busyElsewhere(): boolean {
+  return engine.toolBusy() || engine.sketch.active;
 }
-
-/** Escape releases a peek, unless something with a better claim to the key is
- *  up: a tool mid-gesture, a sketch, or a field being typed in. */
-function onPeekKey(e: KeyboardEvent) {
-  if (e.key !== "Escape" || e.defaultPrevented || !peek.active) return;
-  if (engine.toolBusy() || engine.sketch.active) return;
-  const t = e.target as HTMLElement | null;
-  if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
-  if (peek.release()) e.preventDefault();
+function onChipClick(id: string) {
+  if (busyElsewhere()) return;
+  timeline.select(id);
+}
+function onChipDblclick(id: string) {
+  if (busyElsewhere()) return;
+  timeline.edit(id);
 }
 // --- renaming ------------------------------------------------------------
 const renamingId = ref<string | null>(null);
@@ -252,13 +237,10 @@ function onRenameKey(e: KeyboardEvent) {
 }
 
 onMounted(() => {
-  window.addEventListener("keydown", onPeekKey);
   window.addEventListener("keydown", onRenameKey);
 });
 onUnmounted(() => {
-  window.removeEventListener("keydown", onPeekKey);
   window.removeEventListener("keydown", onRenameKey);
-  clicks.cancel();
 });
 
 // --- scrolling -----------------------------------------------------------
@@ -455,8 +437,8 @@ function openMenu(e: MouseEvent, id: string, i: number) {
                 }"
                 :title="chipTitle(f, i)"
                 draggable="true"
-                @click="onChipClick(f.id, $event)"
-                @dblclick="clicks.dblclick(f.id)"
+                @click="onChipClick(f.id)"
+                @dblclick="onChipDblclick(f.id)"
                 @contextmenu="openMenu($event, f.id, i)"
                 @dragstart="onDragStart(f.id, $event)"
                 @dragover="onDragOver(f.id, $event)"
@@ -477,15 +459,6 @@ function openMenu(e: MouseEvent, id: string, i: number) {
                   @blur="finishRename($event, true)"
                 />
                 <span v-else class="t-name">{{ f.name || metaFor(f).label }}</span>
-                <button
-                  type="button"
-                  class="t-edit"
-                  title="Edit this feature"
-                  aria-label="Edit this feature"
-                  @click.stop="timeline.edit(f.id)"
-                  @dblclick.stop
-                  @pointerdown.stop
-                ><Icon name="pen" :size="13" /></button>
                 <Icon class="t-caret" :name="selection.featureId === f.id ? 'caretDown' : 'caretRight'" :size="12" />
               </div>
               <!-- The feature's own values, under the chip you clicked. The

@@ -370,7 +370,10 @@
 }
 .target-edit {
   flex: 0 0 auto;
-  padding: 2px var(--s-2);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px var(--s-2) 2px 5px;
   font: inherit;
   font-size: 11px;
   color: var(--text-dim);
