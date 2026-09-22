@@ -270,16 +270,35 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   // editable scalar offset), and enters the sketch BY ID, so changing the offset
   // in the value rows moves the sketch with it.
   function offsetPlane() {
+    // A face already selected is the reference: skip the pick and offset from
+    // its plane, the same shortcut startSketch takes. The face keeps following
+    // (its selector rides onto the datum), and clearing the selection stops a
+    // stale press/pull offer sitting behind the plane once the sketch opens.
+    if (!toolBusy()) {
+      const face = viewport.selectedFaceSketchPlane();
+      if (face) {
+        viewport.clearSelection();
+        startOffsetFrom(face.plane, { face: face.anchor.selector });
+        return;
+      }
+    }
     pickPlaneInteractive("Select a plane or face to offset from", (spec, face) => {
-      const src = new SketchPlane(spec);
-      planeOffset.start(src, (def) => {
-        if (!def) return;
-        const id = store.nextId();
-        store.addFeature({
-          id, type: "datumPlane", plane: spec, offset: offsetAlong(def, src), ...faceRef(face),
-        } as Feature);
-        sketch.enter(def, store, undefined, id);
-      });
+      startOffsetFrom(spec, faceRef(face));
+    });
+  }
+
+  /** Offset from a resolved source plane, save the parametric datum, sketch on
+   *  it. Shared by the pick route and the selected-face shortcut so both build
+   *  the same feature. */
+  function startOffsetFrom(spec: PlaneSpec, ref: { face?: Selector; at?: Vec3 }) {
+    const src = new SketchPlane(spec);
+    planeOffset.start(src, (def) => {
+      if (!def) return;
+      const id = store.nextId();
+      store.addFeature({
+        id, type: "datumPlane", plane: spec, offset: offsetAlong(def, src), ...ref,
+      } as Feature);
+      sketch.enter(def, store, undefined, id);
     });
   }
 
