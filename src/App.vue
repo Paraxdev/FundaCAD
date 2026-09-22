@@ -28,6 +28,7 @@ import BugReportDialog from "./components/overlays/BugReportDialog.vue";
 import SketchDimLayer from "./components/overlays/SketchDimLayer.vue";
 import SketchGlyphLayer from "./components/overlays/SketchGlyphLayer.vue";
 import TextToolPanel from "./components/overlays/TextToolPanel.vue";
+import FilletMembers from "./components/overlays/FilletMembers.vue";
 import ProjectFilterBar from "./components/overlays/ProjectFilterBar.vue";
 import MeasureReadout from "./components/overlays/MeasureReadout.vue";
 import { onMounted, onUnmounted, shallowRef } from "vue";
@@ -124,6 +125,7 @@ onUnmounted(() => offContrib?.());
   <SketchDimLayer />
   <SketchGlyphLayer />
   <TextToolPanel v-if="toolPanels.text" :key="toolPanels.text.id" :req="toolPanels.text" />
+  <FilletMembers />
   <ProjectFilterBar v-if="toolPanels.projectAnchor" />
 
   <!-- Modal dialogs. v-if rather than an `open` prop on purpose: mount IS open

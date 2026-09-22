@@ -25,6 +25,25 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **A plugin's tools fold under its own heading in the selection rail.** Pick a
+  face and the app's own verbs (Fillet, Press/Pull, Shell, …) stay flat at the
+  top, while a plugin's tools sit under a collapsible section named after the
+  plugin, "3D Printing Toolbox", "Surface Texture", so a busy selection reads as
+  the app's tools plus a labelled subset per plugin rather than one long mixed
+  list.
+
+- **A member list for the Fillet and Chamfer tools.** While sizing a blend, a
+  panel lists every edge in it with a button to drop each one and an "Add edge"
+  affordance, which is easier than hunting orange lines in the view when a blend
+  has many edges. It also surfaces the unresolved members, saved edges the
+  current geometry no longer draws, that were previously invisible, so a blend
+  carrying a stale reference can be cleaned up.
+
+- **Offset Plane starts from a selected face.** With a planar face selected,
+  the Offset Plane tool skips the pick step and offsets from that face directly,
+  keeping the face as the datum's reference so the plane follows it, the same
+  shortcut sketching on a selected face already takes.
+
 - **Two more built-in themes: Dracula and Solarized Light**, sitting in the
   theme picker next to FundaCAD Noir with no upload needed. Dracula is dark,
   Solarized Light is the app's first built-in light theme, both drawn from

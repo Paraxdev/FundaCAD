@@ -89,11 +89,23 @@ const GHOST_ERROR = 0xe23b3b;
  *  unit, recorded at add time because the preview may consume the edges,
  *  making the chain unrecomputable from the displayed model). */
 interface GhostEdge {
+  /** stable per-member id, the key the member panel removes a row by */
+  id: number;
   sel: Selector;
   mid: Vec3;
   points: Vec3[];
   line: Line2;
   chain: number;
+}
+
+/** One row in the member panel (ui side of the ghost list). A resolved row is a
+ *  member the tool could match to a real edge on screen; an unresolved one is a
+ *  saved selector whose edge the current geometry no longer shows, still part of
+ *  the feature and still removable, but with no line to click in the view. */
+export interface EdgeMemberRow {
+  key: string;
+  label: string;
+  resolved: boolean;
 }
 
 export class EdgeFeatureTool {
@@ -497,6 +509,7 @@ export class EdgeFeatureTool {
   }
 
   private chainCounter = 0; // one id per add gesture (chain toggles as a unit)
+  private memberSeq = 0; // one id per member, stable for the panel's row keys
 
   private addGhost(sel: Selector, points: Vec3[], chain?: number) {
     const mid = polylineMid(points);
@@ -517,7 +530,66 @@ export class EdgeFeatureTool {
     const line = new Line2(geo, mat);
     line.renderOrder = 998;
     this.viewport.addToScene(line);
-    this.ghosts.push({ sel, mid, points, line, chain: chain ?? ++this.chainCounter });
+    this.ghosts.push({ id: ++this.memberSeq, sel, mid, points, line, chain: chain ?? ++this.chainCounter });
+  }
+
+  // --- member panel (ui/FilletMembers.vue) ----------------------------------
+  //
+  // The same ghost list, read as rows and edited by row key rather than by a
+  // click in the view: what the request wants for a blend with a lot of member
+  // edges, and the only way to reach the unresolved ones, which have no line.
+
+  /** True while a blend is being sized, so its members are settled enough to
+   *  list. The pick phase (no members yet) shows nothing. */
+  editingMembers(): boolean {
+    return this.active && this.phase === "drag";
+  }
+
+  /** Which blend the panel is titling, fillet or chamfer. Follows a Tab flip. */
+  blendKind(): "fillet" | "chamfer" {
+    return this.kind;
+  }
+
+  /** The member rows: every matched edge, then every unresolved saved
+   *  selector, in that order. Read fresh each poll, so it follows adds and
+   *  removes made in the viewport as well as from the panel. */
+  memberRows(): EdgeMemberRow[] {
+    const rows: EdgeMemberRow[] = this.ghosts.map((g, i) => ({
+      key: `m${g.id}`,
+      label: `Edge ${i + 1}`,
+      resolved: true,
+    }));
+    this.unmatchedSels.forEach((_, i) => {
+      rows.push({ key: `u${i}`, label: "Unresolved edge", resolved: false });
+    });
+    return rows;
+  }
+
+  /** Drop a member the panel names. A resolved row takes its whole tangent
+   *  chain with it, exactly as clicking its line does, because a blend cannot
+   *  terminate mid-tangency; an unresolved row removes only itself. */
+  removeMemberByKey(key: string) {
+    if (this.phase !== "drag") return;
+    if (key.startsWith("m")) {
+      const id = Number(key.slice(1));
+      const g = this.ghosts.find((x) => x.id === id);
+      if (!g) return;
+      this.removeWithChain(g);
+    } else if (key.startsWith("u")) {
+      const i = Number(key.slice(1));
+      if (i < 0 || i >= this.unmatchedSels.length) return;
+      this.unmatchedSels.splice(i, 1);
+    } else {
+      return;
+    }
+    this.afterMembershipChange();
+  }
+
+  /** The panel's "add" affordance: adding is already a click on an edge in the
+   *  view (edges are emphasized for the whole gesture), so this only says so. */
+  promptAddMember() {
+    if (this.phase !== "drag") return;
+    setPrompt(`Click an edge in the view to add it to the ${this.kind}`);
   }
 
   private removeGhost(g: GhostEdge) {
