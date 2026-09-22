@@ -414,6 +414,54 @@
   color: var(--accent-hot);
 }
 
+/* A plugin's tool group: a caret tile + a name pill that folds its tools away.
+   The tools below it (.rail-child) are nudged in so the grouping reads without
+   a container box the floating tiles could not sit inside. */
+.rail-group {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: max-content;
+  padding: 0;
+  margin-top: 2px;
+  background: none;
+  border: 0;
+  color: var(--text-dim);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.rail-group-tile {
+  color: var(--text-mute);
+}
+.rail-group:hover .rail-group-tile {
+  background: var(--raised);
+  color: var(--text);
+}
+.rail-group-pill {
+  flex-direction: row;
+  align-items: center;
+  min-height: 24px;
+}
+.rail-group-name {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.rail-group:hover .rail-group-name {
+  color: var(--text);
+}
+.rail-child {
+  margin-left: 14px;
+}
+.tool-rail.compact .rail-child {
+  margin-left: 10px;
+}
+
 .key-chip {
   display: inline-flex;
   gap: 2px;

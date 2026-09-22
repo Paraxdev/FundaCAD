@@ -19,6 +19,7 @@ import { useSelectionOffers } from "../../composables/useSelectionOffers";
 import { runningTool } from "../../ui/runningTool";
 import RailButton from "../ui/RailButton.vue";
 import Popover from "../ui/Popover.vue";
+import Icon from "./Icon.vue";
 
 const engine = useEngine();
 const ribbon = useRibbonStore();
@@ -51,6 +52,20 @@ let offPlugins: (() => void) | null = null;
 onMounted(() => { offPlugins = onContribChange(() => pluginTick.value++); });
 onUnmounted(() => offPlugins?.());
 
+// A plugin's tool group starts open; folding it away is remembered by plugin id
+// for the session. Collapsing changes the list height, so the fit is remeasured.
+const collapsedGroups = ref<Set<string>>(new Set());
+function isCollapsed(id: string): boolean {
+  return collapsedGroups.value.has(id);
+}
+function toggleGroup(id: string) {
+  const next = new Set(collapsedGroups.value);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  collapsedGroups.value = next;
+  void nextTick(measureFit);
+}
+
 // While a modelling tool holds the screen the rail steps back to that one tool,
 // so nothing competes with the model for attention mid drag.
 const running = computed(() => {
@@ -70,9 +85,11 @@ const entries = computed<RailEntry[]>(() => {
   if (mode.value === "running") return [];
   if (mode.value === "selection") {
     const onFace = sel.kind.value === "face" && engine.viewport.selectedFaceSketchPlane() ? sketchTool() : null;
+    // App tools flat here; a plugin's tools are drawn below as their own
+    // collapsible groups (see the template), so they are left out of this list.
     return [
       ...(onFace ? [onFace] : []),
-      ...sel.offers.value.map((o): RailTool => ({
+      ...sel.appOffers.value.map((o): RailTool => ({
         kind: "tool", action: `offer:${o.tool}`, label: o.label, icon: o.iconName, ...(o.hint ? { keys: o.hint } : {}),
       })),
       ...sel.looks.value.map((o): RailTool => ({ kind: "tool", action: `look:${o.id}`, label: o.label, icon: o.iconName })),
@@ -344,6 +361,36 @@ function toggleIsolate() {
           @pointerdown="onFamilyDown($event, e)"
           @click="onFamilyClick($event, e)"
           @contextmenu="onFamilyContext($event, e)"
+        />
+      </template>
+
+      <!-- A plugin's tools, folded under its own name (selection mode only). -->
+      <template v-for="g in (mode === 'selection' ? sel.pluginGroups.value : [])" :key="`grp:${g.pluginId}`">
+        <button
+          type="button"
+          class="rail-group"
+          :class="{ collapsed: isCollapsed(g.pluginId) }"
+          :title="`${g.name} · ${g.offers.length} tool${g.offers.length === 1 ? '' : 's'}`"
+          :aria-expanded="!isCollapsed(g.pluginId)"
+          :data-group="g.pluginId"
+          @click="toggleGroup(g.pluginId)"
+        >
+          <span class="rail-tile rail-group-tile">
+            <Icon :name="isCollapsed(g.pluginId) ? 'caretRight' : 'caretDown'" :size="18" />
+          </span>
+          <span class="rail-pill rail-group-pill">
+            <span class="rail-group-name">{{ g.name }}</span>
+          </span>
+        </button>
+        <RailButton
+          v-for="o in (isCollapsed(g.pluginId) ? [] : g.offers)"
+          :key="`offer:${o.tool}`"
+          class="rail-child"
+          :icon="o.iconName"
+          :label="o.label"
+          :keys="o.hint"
+          :data-action="`offer:${o.tool}`"
+          @click="run(`offer:${o.tool}`, $event)"
         />
       </template>
     </div>

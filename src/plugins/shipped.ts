@@ -92,3 +92,10 @@ export function shippedPlugins(): ShippedPlugin[] {
 export function bundleAsset(id: string): string {
   return `plugin-${id}.zip`;
 }
+
+/** A shipped plugin's human name (manifest `name`), or the id itself when
+ *  nothing ships under it. What the selection rail heads a plugin's group with,
+ *  so "FundaCAD.PrintToolbox" reads as "3D Printing Toolbox". */
+export function shippedPluginName(id: string): string {
+  return shippedPlugins().find((p) => p.dir === id)?.manifest.name ?? id;
+}
